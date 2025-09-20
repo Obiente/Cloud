@@ -1,0 +1,9 @@
+{
+  "_hash": "nDA5EPrEW1IV-oiRJL3R9Sxd5jUUOrZSYCRyCAnDH3g",
+  "project": {
+    "rootDir": "/home/crunchy/dev/obiente/cloud/apps/dashboard"
+  },
+  "versions": {
+    "nuxt": "4.1.2"
+  }
+}

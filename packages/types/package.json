@@ -1,0 +1,13 @@
+{
+  "name": "@obiente/types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared TypeScript types for Obiente Cloud",
+  "types": "src/index.d.ts",
+  "files": ["src"],
+  "scripts": {},
+  "devDependencies": {
+    "@obiente/config": "workspace:*",
+    "typescript": "^5.9.2"
+  }
+}

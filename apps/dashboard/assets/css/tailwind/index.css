@@ -1,0 +1,24 @@
+/**
+ * Obiente UI - Tailwind v4 Main Entry Point
+ * 
+ * This imports the Tailwind configuration with OUI theme mappings.
+ * Use this as your main CSS import when using Tailwind with OUI themes.
+ * 
+/* Main Tailwind configuration with OUI theme mappings */
+@import './config.css';
+
+/* Custom utilities that Tailwind can't generate automatically */
+@import './utilities/base.css';
+
+@import './compositions/button.css';
+@import './compositions/input.css';
+@import './compositions/card.css';
+@import './compositions/badge.css';
+@import './compositions/avatar.css';
+@import './compositions/progress.css';
+@import './compositions/skeleton.css';
+@import './compositions/text.css';
+/* @import './components/compositions.css'; */
+/* Component examples (optional - these show usage patterns) */
+@import './components/button.css';
+@import './components/card.css';

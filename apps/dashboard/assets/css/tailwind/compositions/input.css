@@ -1,0 +1,260 @@
+/**
+ * Obiente UI - Input Compositions
+ * 
+ * Input component styles using OUI theming variables with oui- prefix
+ */
+
+@layer components {
+  /* Input Base */
+  .oui-input-base {
+    @apply flex rounded-md px-3 py-2 text-base w-full;
+    @apply transition-colors border;
+    @apply focus:oui-focus-ring;
+    @apply disabled:cursor-not-allowed disabled:opacity-60;
+    background-color: var(--oui-surface-base);
+    border-color: var(--oui-border-default);
+    color: var(--oui-text-primary);
+  }
+
+  .oui-input-base::placeholder {
+    color: var(--oui-text-tertiary);
+  }
+
+  .oui-input-base:hover:not(:disabled) {
+    border-color: var(--oui-border-strong);
+  }
+
+  .oui-input-base:focus {
+    border-color: var(--oui-accent-primary);
+  }
+
+  .oui-input-base:disabled {
+    background-color: var(--oui-interactive-disabled);
+    color: var(--oui-text-disabled);
+  }
+
+  /* Input Sizes */
+  .oui-input-sm {
+    @apply flex rounded-md px-2 py-1 text-sm h-8 w-full;
+    @apply transition-colors border;
+    @apply focus:oui-focus-ring;
+    @apply disabled:cursor-not-allowed disabled:opacity-60;
+    background-color: var(--oui-surface-base);
+    border-color: var(--oui-border-default);
+    color: var(--oui-text-primary);
+  }
+
+  .oui-input-sm::placeholder {
+    color: var(--oui-text-tertiary);
+  }
+  .oui-input-sm:hover:not(:disabled) {
+    border-color: var(--oui-border-strong);
+  }
+  .oui-input-sm:focus {
+    border-color: var(--oui-accent-primary);
+  }
+  .oui-input-sm:disabled {
+    background-color: var(--oui-interactive-disabled);
+    color: var(--oui-text-disabled);
+  }
+
+  .oui-input-md {
+    @apply flex rounded-md px-3 py-2 text-base h-10 w-full;
+    @apply transition-colors border;
+    @apply focus:oui-focus-ring;
+    @apply disabled:cursor-not-allowed disabled:opacity-60;
+    background-color: var(--oui-surface-base);
+    border-color: var(--oui-border-default);
+    color: var(--oui-text-primary);
+  }
+
+  .oui-input-md::placeholder {
+    color: var(--oui-text-tertiary);
+  }
+  .oui-input-md:hover:not(:disabled) {
+    border-color: var(--oui-border-strong);
+  }
+  .oui-input-md:focus {
+    border-color: var(--oui-accent-primary);
+  }
+  .oui-input-md:disabled {
+    background-color: var(--oui-interactive-disabled);
+    color: var(--oui-text-disabled);
+  }
+
+  .oui-input-lg {
+    @apply flex rounded-md px-4 py-3 text-lg h-12 w-full;
+    @apply transition-colors border;
+    @apply focus:oui-focus-ring;
+    @apply disabled:cursor-not-allowed disabled:opacity-60;
+    background-color: var(--oui-surface-base);
+    border-color: var(--oui-border-default);
+    color: var(--oui-text-primary);
+  }
+
+  .oui-input-lg::placeholder {
+    color: var(--oui-text-tertiary);
+  }
+  .oui-input-lg:hover:not(:disabled) {
+    border-color: var(--oui-border-strong);
+  }
+  .oui-input-lg:focus {
+    border-color: var(--oui-accent-primary);
+  }
+  .oui-input-lg:disabled {
+    background-color: var(--oui-interactive-disabled);
+    color: var(--oui-text-disabled);
+  }
+
+  /* Input Variants that extend base */
+  .oui-input-filled {
+    @apply flex rounded-md px-3 py-2 text-base w-full;
+    @apply transition-colors border;
+    @apply focus:oui-focus-ring;
+    @apply disabled:cursor-not-allowed disabled:opacity-60;
+    background-color: var(--oui-surface-muted);
+    border-color: transparent;
+    color: var(--oui-text-primary);
+  }
+
+  .oui-input-filled::placeholder {
+    color: var(--oui-text-tertiary);
+  }
+  .oui-input-filled:hover:not(:disabled) {
+    background-color: var(--oui-surface-overlay);
+  }
+  .oui-input-filled:focus {
+    background-color: var(--oui-surface-base);
+    border-color: var(--oui-accent-primary);
+  }
+  .oui-input-filled:disabled {
+    background-color: var(--oui-interactive-disabled);
+    color: var(--oui-text-disabled);
+  }
+
+  .oui-input-outline {
+    @apply flex rounded-md px-3 py-2 text-base w-full;
+    @apply transition-colors border;
+    @apply focus:oui-focus-ring;
+    @apply disabled:cursor-not-allowed disabled:opacity-60;
+    background-color: transparent;
+    border-color: var(--oui-border-default);
+    color: var(--oui-text-primary);
+  }
+
+  .oui-input-outline::placeholder {
+    color: var(--oui-text-tertiary);
+  }
+  .oui-input-outline:hover:not(:disabled) {
+    border-color: var(--oui-border-strong);
+  }
+  .oui-input-outline:focus {
+    border-color: var(--oui-accent-primary);
+  }
+  .oui-input-outline:disabled {
+    background-color: var(--oui-interactive-disabled);
+    color: var(--oui-text-disabled);
+  }
+
+  /* Input States */
+  .oui-input-error {
+    border-color: var(--oui-accent-danger);
+    color: var(--oui-accent-danger);
+  }
+
+  .oui-input-error:focus {
+    border-color: var(--oui-accent-danger);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--oui-accent-danger) 20%, transparent);
+  }
+
+  .oui-input-success {
+    border-color: var(--oui-accent-success);
+  }
+
+  .oui-input-success:focus {
+    border-color: var(--oui-accent-success);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--oui-accent-success) 20%, transparent);
+  }
+
+  .oui-input-warning {
+    border-color: var(--oui-accent-warning);
+  }
+
+  .oui-input-warning:focus {
+    border-color: var(--oui-accent-warning);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--oui-accent-warning) 20%, transparent);
+  }
+
+  /* Textarea */
+  .oui-textarea {
+    @apply flex rounded-md px-3 py-2 text-base w-full;
+    @apply transition-colors border resize-y min-h-16 pt-3 pb-3;
+    @apply focus:oui-focus-ring;
+    @apply disabled:cursor-not-allowed disabled:opacity-60;
+    background-color: var(--oui-surface-base);
+    border-color: var(--oui-border-default);
+    color: var(--oui-text-primary);
+  }
+
+  .oui-textarea::placeholder {
+    color: var(--oui-text-tertiary);
+  }
+  .oui-textarea:hover:not(:disabled) {
+    border-color: var(--oui-border-strong);
+  }
+  .oui-textarea:focus {
+    border-color: var(--oui-accent-primary);
+  }
+  .oui-textarea:disabled {
+    background-color: var(--oui-interactive-disabled);
+    color: var(--oui-text-disabled);
+  }
+
+  .oui-textarea-sm {
+    @apply flex rounded-md px-2 py-1 text-sm w-full;
+    @apply transition-colors border resize-y min-h-12 pt-2 pb-2;
+    @apply focus:oui-focus-ring;
+    @apply disabled:cursor-not-allowed disabled:opacity-60;
+    background-color: var(--oui-surface-base);
+    border-color: var(--oui-border-default);
+    color: var(--oui-text-primary);
+  }
+
+  .oui-textarea-sm::placeholder {
+    color: var(--oui-text-tertiary);
+  }
+  .oui-textarea-sm:hover:not(:disabled) {
+    border-color: var(--oui-border-strong);
+  }
+  .oui-textarea-sm:focus {
+    border-color: var(--oui-accent-primary);
+  }
+  .oui-textarea-sm:disabled {
+    background-color: var(--oui-interactive-disabled);
+    color: var(--oui-text-disabled);
+  }
+
+  .oui-textarea-lg {
+    @apply flex rounded-md px-4 py-3 text-lg w-full;
+    @apply transition-colors border resize-y min-h-24 pt-4 pb-4;
+    @apply focus:oui-focus-ring;
+    @apply disabled:cursor-not-allowed disabled:opacity-60;
+    background-color: var(--oui-surface-base);
+    border-color: var(--oui-border-default);
+    color: var(--oui-text-primary);
+  }
+
+  .oui-textarea-lg::placeholder {
+    color: var(--oui-text-tertiary);
+  }
+  .oui-textarea-lg:hover:not(:disabled) {
+    border-color: var(--oui-border-strong);
+  }
+  .oui-textarea-lg:focus {
+    border-color: var(--oui-accent-primary);
+  }
+  .oui-textarea-lg:disabled {
+    background-color: var(--oui-interactive-disabled);
+    color: var(--oui-text-disabled);
+  }
+}

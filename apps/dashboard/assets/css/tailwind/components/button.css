@@ -1,0 +1,52 @@
+/**
+ * Obiente UI - Button Component Examples
+ * 
+ * Examples showing how to compose buttons using standard Tailwind utilities
+ * with OUI theming. These are examples, not required styles.
+ */
+
+/* Example button compositions using standard Tailwind utilities */
+
+/* Primary Button: bg-primary text-foreground px-4 py-2 rounded-md focus-ring */
+/* Secondary Button: bg-surface-raised text-primary border border px-4 py-2 rounded-md focus-ring */
+/* Outline Button: border border-primary text-primary bg-transparent px-4 py-2 rounded-md hover:bg-primary hover:text-foreground focus-ring */
+/* Ghost Button: bg-transparent text-primary hover:bg-surface-overlay px-4 py-2 rounded-md focus-ring */
+/* Destructive Button: bg-danger text-foreground px-4 py-2 rounded-md focus-ring */
+
+/* Loading state example: loading */
+/* Interactive state example: interactive */
+
+/* Size variations using standard Tailwind spacing:
+ * Small: px-3 py-1.5 text-sm
+ * Medium: px-4 py-2 text-base
+ * Large: px-6 py-3 text-lg
+ */
+
+/* Component-specific utilities for complex patterns */
+@utility btn-group {
+  display: inline-flex;
+  
+  & > * {
+    border-radius: 0;
+    border-right-width: 0;
+  }
+  
+  & > *:first-child {
+    border-top-left-radius: 0.375rem;
+    border-bottom-left-radius: 0.375rem;
+  }
+  
+  & > *:last-child {
+    border-top-right-radius: 0.375rem;
+    border-bottom-right-radius: 0.375rem;
+    border-right-width: 1px;
+  }
+}
+
+@utility btn-icon-only {
+  aspect-ratio: 1;
+  padding: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

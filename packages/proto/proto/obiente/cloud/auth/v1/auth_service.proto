@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package obiente.cloud.auth.v1;
+
+import "google/protobuf/timestamp.proto";
+
+service AuthService {
+  // Initiate OIDC login flow
+  rpc InitiateLogin(InitiateLoginRequest) returns (InitiateLoginResponse);
+  
+  // Handle OIDC callback and exchange tokens
+  rpc HandleCallback(HandleCallbackRequest) returns (HandleCallbackResponse);
+  
+  // Refresh access token
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+  
+  // Logout user
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+}
+
+message InitiateLoginRequest {
+  string redirect_uri = 1;
+}
+
+message InitiateLoginResponse {
+  string login_url = 1;
+  string state = 2;
+}
+
+message HandleCallbackRequest {
+  string code = 1;
+  string state = 2;
+}
+
+message HandleCallbackResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_in = 3;
+  User user = 4;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message RefreshTokenResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_in = 3;
+}
+
+message LogoutRequest {
+  string access_token = 1;
+}
+
+message LogoutResponse {
+  bool success = 1;
+}
+
+message User {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string avatar_url = 4;
+  google.protobuf.Timestamp created_at = 5;
+  string timezone = 6;
+}

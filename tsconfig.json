@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "preserve",
+    "allowJs": true,
+    "checkJs": false,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "useDefineForClassFields": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@obiente/types": ["./packages/types/src"],
+      "@obiente/ui": ["./packages/ui/src"],
+      "@obiente/proto": ["./packages/proto/src"],
+      "@obiente/database": ["./packages/database/src"],
+      "@obiente/config/*": ["./packages/config/*"],
+    },
+    
+  },
+  
+  "include": [
+    "apps/**/*",
+    "packages/**/*",
+    ".**",
+  ],
+  "exclude": ["node_modules", "dist"]
+}

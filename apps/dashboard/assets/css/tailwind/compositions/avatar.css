@@ -1,0 +1,74 @@
+/**
+ * Obiente UI - Avatar Compositions
+ * 
+ * Avatar component styles using OUI theming variables with oui- prefix
+ */
+
+@layer components {
+  /* Avatar Base */
+  .oui-avatar-base {
+    @apply relative inline-flex items-center justify-center overflow-hidden rounded-full;
+    background-color: var(--oui-surface-muted);
+  }
+
+  /* Avatar Sizes */
+  .oui-avatar-sm {
+    @apply w-8 h-8;
+  }
+
+  .oui-avatar-md {
+    @apply w-10 h-10;
+  }
+
+  .oui-avatar-lg {
+    @apply w-12 h-12;
+  }
+
+  .oui-avatar-xl {
+    @apply w-16 h-16;
+  }
+
+  /* Avatar Fallback */
+  .oui-avatar-fallback {
+    @apply flex items-center justify-center font-medium;
+    color: var(--oui-text-secondary);
+    background-color: var(--oui-surface-muted);
+  }
+
+  .oui-avatar-fallback-sm {
+    @apply text-xs;
+  }
+
+  .oui-avatar-fallback-md {
+    @apply text-sm;
+  }
+
+  .oui-avatar-fallback-lg {
+    @apply text-base;
+  }
+
+  .oui-avatar-fallback-xl {
+    @apply text-lg;
+  }
+
+  /* Avatar Image */
+  .oui-avatar-image {
+    @apply w-full h-full object-cover;
+  }
+
+  .oui-avatar-image-sm {
+    @apply w-8 h-8;
+  }
+
+  .oui-avatar-image-md {
+    @apply w-10 h-10;
+  }
+
+  .oui-avatar-image-lg {
+    @apply w-12 h-12;
+  }
+
+  .oui-avatar-image-xl {
+    @apply w-16 h-16;
+  }
+}

@@ -1,0 +1,52 @@
+/**
+ * Obiente UI - Badge Compositions
+ * 
+ * Badge component styles using OUI theming variables with oui- prefix
+ */
+
+@layer utilities {
+  .oui-badge {
+    @apply inline-flex items-center rounded-full px-2 py-1 text-xs font-medium;
+  }
+
+  .oui-badge-primary {
+    @apply border;
+    background-color: color-mix(in srgb, var(--oui-accent-primary) 10%, transparent);
+    color: var(--oui-accent-primary);
+    border-color: color-mix(in srgb, var(--oui-accent-primary) 20%, transparent);
+  }
+
+  .oui-badge-secondary {
+    @apply border;
+    background-color: var(--oui-surface-muted);
+    color: var(--oui-text-secondary);
+    border-color: var(--oui-surface-muted);
+  }
+
+  .oui-badge-success {
+    @apply border;
+    background-color: color-mix(in srgb, var(--oui-accent-success) 10%, transparent);
+    color: var(--oui-accent-success);
+    border-color: color-mix(in srgb, var(--oui-accent-success) 20%, transparent);
+  }
+
+  .oui-badge-warning {
+    @apply border;
+    background-color: color-mix(in srgb, var(--oui-accent-warning) 10%, transparent);
+    color: var(--oui-accent-warning);
+    border-color: color-mix(in srgb, var(--oui-accent-warning) 20%, transparent);
+  }
+
+  .oui-badge-danger {
+    @apply border;
+    background-color: color-mix(in srgb, var(--oui-accent-danger) 10%, transparent);
+    color: var(--oui-accent-danger);
+    border-color: color-mix(in srgb, var(--oui-accent-danger) 20%, transparent);
+  }
+
+  .oui-badge-outline {
+    @apply border;
+    background-color: transparent;
+    border-color: currentColor;
+  }
+}

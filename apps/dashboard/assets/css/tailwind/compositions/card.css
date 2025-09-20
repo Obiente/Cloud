@@ -1,0 +1,65 @@
+/**
+ * Obiente UI - Card Compositions
+ * 
+ * Only truly reusable card patterns - apply variants directly in components
+ */
+
+@layer components {
+  /* Card Base - reusable across all card types */
+  .oui-card-base {
+    @apply rounded-lg shadow overflow-hidden;
+    background-color: var(--oui-surface-base);
+    border: 1px solid var(--oui-border-default);
+    color: var(--oui-text-primary);
+  }
+
+  /* Card Parts - reusable layouts */
+  .oui-card-header {
+    @apply p-6;
+    border-bottom: 1px solid var(--oui-border-muted);
+  }
+
+  .oui-card-header:last-child {
+    border-bottom: none;
+  }
+
+  .oui-card-body {
+    @apply p-6;
+  }
+
+  .oui-card-footer {
+    @apply p-6;
+    border-top: 1px solid var(--oui-border-muted);
+  }
+
+  .oui-card-footer:first-child {
+    border-top: none;
+  }
+
+  .oui-card-title {
+    @apply text-lg font-semibold m-0;
+    color: var(--oui-text-primary);
+  }
+
+  .oui-card-description {
+    @apply text-sm m-0;
+    color: var(--oui-text-secondary);
+  }
+
+  /* Status styles - reusable across components */
+  .oui-card-status-success {
+    border-left: 4px solid var(--oui-accent-success);
+  }
+
+  .oui-card-status-warning {
+    border-left: 4px solid var(--oui-accent-warning);
+  }
+
+  .oui-card-status-danger {
+    border-left: 4px solid var(--oui-accent-danger);
+  }
+
+  .oui-card-status-info {
+    border-left: 4px solid var(--oui-accent-info);
+  }
+}

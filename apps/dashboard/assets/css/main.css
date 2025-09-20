@@ -1,0 +1,42 @@
+@import "tailwindcss";
+@import "./tailwind/index.css";
+/* Layout Components */
+.sidebar {
+  @apply w-64 bg-surface border-r border-border-muted h-screen sticky top-0 flex flex-col;
+}
+
+.main-content {
+  @apply flex-1 p-6 bg-background min-h-screen;
+}
+
+:root {
+  --oui-spacing-base: 1;
+  --oui-sizing-base: 1;
+  --oui-radius-base: 1;
+  --oui-typography-base: 1;
+  --oui-elevation-base: 1;
+
+  --oui-background: #303446;
+  --oui-foreground: #c6d0f5;
+  --oui-surface-base: #303446;
+  --oui-surface-raised: #292c3c;
+  --oui-surface-overlay: #414559;
+  --oui-surface-muted: #51576d;
+  --oui-text-primary: #c6d0f5;
+  --oui-text-secondary: #b5bfe2;
+  --oui-text-tertiary: #a5adce;
+  --oui-text-disabled: #737994;
+  --oui-border-default: #737994;
+  --oui-border-muted: #626880;
+  --oui-border-strong: #838ba7;
+  --oui-accent-primary: #8caaee;
+  --oui-accent-secondary: #ca9ee6;
+  --oui-accent-success: #a6d189;
+  --oui-accent-warning: #e5c890;
+  --oui-accent-danger: #e78284;
+  --oui-accent-info: #99d1db;
+  --oui-interactive-hover: #232634;
+  --oui-interactive-active: #626880;
+  --oui-interactive-disabled: #737994;
+  --oui-interactive-focus: #8caaee;
+}

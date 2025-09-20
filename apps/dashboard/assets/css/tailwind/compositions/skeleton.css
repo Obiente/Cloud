@@ -1,0 +1,71 @@
+/**
+ * Obiente UI - Skeleton Compositions
+ * 
+ * Skeleton loading component styles using OUI theming variables
+ */
+
+@layer components {
+  /* Skeleton Base */
+  .oui-skeleton-base {
+    @apply relative overflow-hidden;
+    background-color: var(--oui-surface-muted);
+  }
+
+  /* Skeleton Variants */
+  .oui-skeleton-rectangle {
+    @apply rounded;
+  }
+
+  .oui-skeleton-circle {
+    @apply rounded-full;
+  }
+
+  .oui-skeleton-text {
+    @apply rounded h-4;
+  }
+
+  .oui-skeleton-rounded {
+    @apply rounded-lg;
+  }
+
+  /* Skeleton Animation */
+  .oui-skeleton-animated {
+    background: linear-gradient(
+      90deg,
+      var(--oui-surface-muted) 25%,
+      var(--oui-surface-overlay) 50%,
+      var(--oui-surface-muted) 75%
+    );
+    background-size: 200% 100%;
+    animation: oui-skeleton-loading 2s infinite;
+  }
+
+  .oui-skeleton-shimmer {
+    @apply absolute inset-0 opacity-30;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.4),
+      transparent
+    );
+    animation: oui-skeleton-shimmer 2s infinite;
+  }
+
+  @keyframes oui-skeleton-loading {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  @keyframes oui-skeleton-shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+}

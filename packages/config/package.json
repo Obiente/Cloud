@@ -1,0 +1,16 @@
+{
+  "name": "@obiente/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared configuration for Obiente Cloud monorepo",
+  "main": "index.js",
+  "files": ["tsconfig.json", "eslint.config.js", "prettier.config.ts"],
+  "exports": {
+    "./prettier": "./prettier.config.ts",
+    "./tsconfig": "./tsconfig.json",
+    "./eslint": "./eslint.config.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

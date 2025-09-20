@@ -1,0 +1,79 @@
+/**
+ * Obiente UI - Progress Compositions
+ * 
+ * Progress component styles using OUI theming variables with oui- prefix
+ */
+
+@layer components {
+  /* Progress Base */
+  .oui-progress-base {
+    @apply flex items-center gap-3;
+  }
+
+  /* Progress Track */
+  .oui-progress-track {
+    @apply relative flex-1 overflow-hidden rounded-full;
+    background-color: var(--oui-surface-muted);
+  }
+
+  /* Progress Sizes */
+  .oui-progress-sm .oui-progress-track {
+    @apply h-1;
+  }
+
+  .oui-progress-md .oui-progress-track {
+    @apply h-2;
+  }
+
+  .oui-progress-lg .oui-progress-track {
+    @apply h-3;
+  }
+
+  /* Progress Bar */
+  .oui-progress-bar {
+    @apply h-full transition-all duration-300 ease-out rounded-full relative overflow-hidden;
+  }
+
+  .oui-progress-bar-primary {
+    background-color: var(--oui-accent-primary);
+  }
+
+  .oui-progress-bar-success {
+    background-color: var(--oui-accent-success);
+  }
+
+  .oui-progress-bar-warning {
+    background-color: var(--oui-accent-warning);
+  }
+
+  .oui-progress-bar-danger {
+    background-color: var(--oui-accent-danger);
+  }
+
+  /* Progress Label */
+  .oui-progress-label {
+    @apply text-sm font-medium tabular-nums;
+    color: var(--oui-text-secondary);
+  }
+
+  /* Animated Progress */
+  .oui-progress-animated {
+    @apply absolute inset-0 opacity-30;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.4),
+      transparent
+    );
+    animation: oui-progress-shimmer 2s infinite;
+  }
+
+  @keyframes oui-progress-shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+}

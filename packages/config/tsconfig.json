@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "dist",
+    "paths": {
+      "@obiente/types": ["../types/src"],
+      "@obiente/ui": ["../ui/src"],
+      "@obiente/proto": ["../proto/src"],
+      "@obiente/database": ["../database/src"]
+    }
+  },
+  "include": ["src/**/*", "**/*.ts", "**/*.js"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+}

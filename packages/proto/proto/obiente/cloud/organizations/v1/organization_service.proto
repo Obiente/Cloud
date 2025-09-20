@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+package obiente.cloud.organizations.v1;
+
+import "google/protobuf/timestamp.proto";
+import "obiente/cloud/auth/v1/auth_service.proto";
+
+service OrganizationService {
+  // List user's organizations
+  rpc ListOrganizations(ListOrganizationsRequest) returns (ListOrganizationsResponse);
+  
+  // Create new organization
+  rpc CreateOrganization(CreateOrganizationRequest) returns (CreateOrganizationResponse);
+  
+  // Get organization details
+  rpc GetOrganization(GetOrganizationRequest) returns (GetOrganizationResponse);
+  
+  // Update organization
+  rpc UpdateOrganization(UpdateOrganizationRequest) returns (UpdateOrganizationResponse);
+  
+  // List organization members
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse);
+  
+  // Invite user to organization
+  rpc InviteMember(InviteMemberRequest) returns (InviteMemberResponse);
+  
+  // Update member role/permissions
+  rpc UpdateMember(UpdateMemberRequest) returns (UpdateMemberResponse);
+  
+  // Remove member from organization
+  rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
+}
+
+message ListOrganizationsRequest {
+  int32 page = 1;
+  int32 per_page = 2;
+}
+
+message ListOrganizationsResponse {
+  repeated Organization organizations = 1;
+  Pagination pagination = 2;
+}
+
+message CreateOrganizationRequest {
+  string name = 1;
+  string slug = 2;
+  string plan = 3; // starter, pro, enterprise
+}
+
+message CreateOrganizationResponse {
+  Organization organization = 1;
+}
+
+message GetOrganizationRequest {
+  string organization_id = 1;
+}
+
+message GetOrganizationResponse {
+  Organization organization = 1;
+}
+
+message UpdateOrganizationRequest {
+  string organization_id = 1;
+  optional string name = 2;
+  optional string domain = 3;
+}
+
+message UpdateOrganizationResponse {
+  Organization organization = 1;
+}
+
+message ListMembersRequest {
+  string organization_id = 1;
+  int32 page = 2;
+  int32 per_page = 3;
+}
+
+message ListMembersResponse {
+  repeated OrganizationMember members = 1;
+  Pagination pagination = 2;
+}
+
+message InviteMemberRequest {
+  string organization_id = 1;
+  string email = 2;
+  string role = 3; // admin, member, viewer
+}
+
+message InviteMemberResponse {
+  OrganizationMember member = 1;
+}
+
+message UpdateMemberRequest {
+  string organization_id = 1;
+  string member_id = 2;
+  optional string role = 3;
+}
+
+message UpdateMemberResponse {
+  OrganizationMember member = 1;
+}
+
+message RemoveMemberRequest {
+  string organization_id = 1;
+  string member_id = 2;
+}
+
+message RemoveMemberResponse {
+  bool success = 1;
+}
+
+message Organization {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  optional string domain = 4;
+  string plan = 5;
+  string status = 6;
+  google.protobuf.Timestamp created_at = 7;
+  int32 max_deployments = 8;
+  int32 max_vps_instances = 9;
+  int32 max_team_members = 10;
+}
+
+message OrganizationMember {
+  string id = 1;
+  obiente.cloud.auth.v1.User user = 2;
+  string role = 3;
+  string status = 4;
+  google.protobuf.Timestamp joined_at = 5;
+}
+
+message Pagination {
+  int32 page = 1;
+  int32 per_page = 2;
+  int32 total = 3;
+  int32 total_pages = 4;
+}

@@ -1,0 +1,1 @@
+export { default } from "file:///home/crunchy/dev/obiente/cloud/node_modules/.pnpm/@nuxt+vite-builder@4.1.2_@types+node@24.5.1_eslint@9.35.0_jiti@2.5.1__lightningcss@1.30_41ef0e5160b2211291d192a77bdbd48a/node_modules/@nuxt/vite-builder/dist/runtime/client.manifest.mjs"

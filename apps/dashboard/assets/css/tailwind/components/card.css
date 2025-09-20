@@ -1,0 +1,85 @@
+/**
+ * Obiente UI - Card Component Examples
+ * 
+ * Examples showing how to compose cards using standard Tailwind utilities
+ * with OUI theming. These are examples, not required styles.
+ */
+
+/* Example card compositions using standard Tailwind utilities */
+
+/* Basic Card: bg-surface-base border border rounded-lg overflow-hidden */
+/* Raised Card: bg-surface-raised border border-muted rounded-lg shadow-md overflow-hidden */
+/* Overlay Card: bg-surface-overlay border border-strong rounded-lg shadow-lg overflow-hidden */
+
+/* Interactive Card: hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 cursor-pointer focus-ring */
+
+/* Card sections:
+ * Header: p-6 border-b border-muted
+ * Body: p-6  
+ * Footer: p-6 border-t border-muted bg-surface-muted
+ * Compact: p-4 (instead of p-6)
+ */
+
+/* Card content:
+ * Title: text-xl font-semibold text-primary
+ * Description: text-sm text-secondary mt-2
+ * Content: text-base text-primary
+ */
+
+/* Status variants:
+ * Success: border-success with tinted header
+ * Warning: border-warning with tinted header  
+ * Danger: border-danger with tinted header
+ * Info: border-info with tinted header
+ */
+
+/* Component-specific utilities for complex patterns */
+@utility card-hover {
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+@utility card-status-success {
+  border-color: var(--oui-accent-success);
+  
+  & .card-header {
+    background-color: color-mix(in srgb, var(--oui-accent-success) 10%, transparent);
+    border-bottom-color: var(--oui-accent-success);
+  }
+}
+
+@utility card-status-warning {
+  border-color: var(--oui-accent-warning);
+  
+  & .card-header {
+    background-color: color-mix(in srgb, var(--oui-accent-warning) 10%, transparent);
+    border-bottom-color: var(--oui-accent-warning);
+  }
+}
+
+@utility card-status-danger {
+  border-color: var(--oui-accent-danger);
+  
+  & .card-header {
+    background-color: color-mix(in srgb, var(--oui-accent-danger) 10%, transparent);
+    border-bottom-color: var(--oui-accent-danger);
+  }
+}
+
+@utility card-status-info {
+  border-color: var(--oui-accent-info);
+  
+  & .card-header {
+    background-color: color-mix(in srgb, var(--oui-accent-info) 10%, transparent);
+    border-bottom-color: var(--oui-accent-info);
+  }
+}

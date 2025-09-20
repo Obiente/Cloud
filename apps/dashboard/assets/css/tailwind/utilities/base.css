@@ -1,0 +1,219 @@
+/**
+ * Obiente UI - Custom Utilities
+ * 
+ * Only custom utilities that Tailwind can't generate automatically.
+ * Standard utilities (text-*, bg-*, p-*, etc.) are handled by Tailwind's built-in system.
+ */
+
+/* Custom focus ring utilities using OUI variables */
+@utility focus-ring {
+  outline: 2px solid var(--oui-interactive-focus);
+  outline-offset: 2px;
+}
+
+@utility focus-ring-inset {
+  outline: 2px solid var(--oui-interactive-focus);
+  outline-offset: -2px;
+}
+
+/* Accessibility utilities */
+@utility sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@utility not-sr-only {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* Interactive state utility */
+@utility interactive {
+  transition: all 0.2s ease-in-out;
+
+  &:hover {
+    background-color: var(--oui-interactive-hover);
+  }
+
+  &:active {
+    background-color: var(--oui-interactive-active);
+  }
+
+  &:disabled {
+    background-color: var(--oui-interactive-disabled);
+    color: var(--oui-text-disabled);
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--oui-interactive-focus);
+    outline-offset: 2px;
+  }
+}
+
+/* Loading state with spinner */
+@utility loading {
+  position: relative;
+  color: transparent;
+
+  &::after {
+    content: '';
+    position: absolute;
+    width: 1rem;
+    height: 1rem;
+    top: 50%;
+    left: 50%;
+    margin-left: -0.5rem;
+    margin-top: -0.5rem;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    border-right-color: transparent;
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Background Utilities */
+@utility bg-background {
+  background-color: var(--oui-background);
+}
+
+@utility bg-foreground {
+  background-color: var(--oui-foreground);
+}
+
+@utility bg-surface-base {
+  background-color: var(--oui-surface-base);
+}
+
+@utility bg-surface-raised {
+  background-color: var(--oui-surface-raised);
+}
+
+@utility bg-surface-overlay {
+  background-color: var(--oui-surface-overlay);
+}
+
+@utility bg-surface-muted {
+  background-color: var(--oui-surface-muted);
+}
+
+@utility bg-accent-primary {
+  background-color: var(--oui-accent-primary);
+}
+
+@utility bg-accent-secondary {
+  background-color: var(--oui-accent-secondary);
+}
+
+@utility bg-success {
+  background-color: var(--oui-accent-success);
+}
+
+@utility bg-warning {
+  background-color: var(--oui-accent-warning);
+}
+
+@utility bg-danger {
+  background-color: var(--oui-accent-danger);
+}
+
+@utility bg-info {
+  background-color: var(--oui-accent-info);
+}
+
+@utility bg-interactive-hover {
+  background-color: var(--oui-interactive-hover);
+}
+
+@utility bg-interactive-active {
+  background-color: var(--oui-interactive-active);
+}
+
+@utility bg-interactive-disabled {
+  background-color: var(--oui-interactive-disabled);
+}
+
+/* Border Utilities */
+@utility border-default {
+  border-color: var(--oui-border-default);
+}
+
+@utility border-muted {
+  border-color: var(--oui-border-muted);
+}
+
+@utility border-strong {
+  border-color: var(--oui-border-strong);
+}
+
+@utility border-accent-primary {
+  border-color: var(--oui-accent-primary);
+}
+
+@utility border-accent-secondary {
+  border-color: var(--oui-accent-secondary);
+}
+
+@utility border-success {
+  border-color: var(--oui-accent-success);
+}
+
+@utility border-warning {
+  border-color: var(--oui-accent-warning);
+}
+
+@utility border-danger {
+  border-color: var(--oui-accent-danger);
+}
+
+@utility border-info {
+  border-color: var(--oui-accent-info);
+}
+
+/* Shadow/Elevation utilities */
+@utility shadow-sm {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / calc(0.05 * var(--oui-elevation-base, 1)));
+}
+
+@utility shadow {
+  box-shadow:
+    0 1px 3px 0 rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1))),
+    0 1px 2px -1px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1)));
+}
+
+@utility shadow-md {
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1))),
+    0 2px 4px -2px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1)));
+}
+
+@utility shadow-lg {
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1))),
+    0 4px 6px -4px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1)));
+}
+
+@utility shadow-xl {
+  box-shadow:
+    0 20px 25px -5px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1))),
+    0 8px 10px -6px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1)));
+}

@@ -1,0 +1,128 @@
+syntax = "proto3";
+
+package obiente.cloud.deployments.v1;
+
+import "google/protobuf/timestamp.proto";
+import "obiente/cloud/organizations/v1/organization_service.proto";
+
+service DeploymentService {
+  // List organization deployments
+  rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse);
+  
+  // Create new deployment
+  rpc CreateDeployment(CreateDeploymentRequest) returns (CreateDeploymentResponse);
+  
+  // Get deployment details
+  rpc GetDeployment(GetDeploymentRequest) returns (GetDeploymentResponse);
+  
+  // Update deployment configuration
+  rpc UpdateDeployment(UpdateDeploymentRequest) returns (UpdateDeploymentResponse);
+  
+  // Trigger deployment
+  rpc TriggerDeployment(TriggerDeploymentRequest) returns (TriggerDeploymentResponse);
+  
+  // Stream deployment status updates
+  rpc StreamDeploymentStatus(StreamDeploymentStatusRequest) returns (stream DeploymentStatusUpdate);
+  
+  // Get deployment logs
+  rpc GetDeploymentLogs(GetDeploymentLogsRequest) returns (GetDeploymentLogsResponse);
+}
+
+message ListDeploymentsRequest {
+  string organization_id = 1;
+  optional string status = 2;
+  int32 page = 3;
+  int32 per_page = 4;
+}
+
+message ListDeploymentsResponse {
+  repeated Deployment deployments = 1;
+  obiente.cloud.organizations.v1.Pagination pagination = 2;
+}
+
+message CreateDeploymentRequest {
+  string organization_id = 1;
+  string name = 2;
+  string type = 3; // static, nodejs, python, docker
+  optional string repository_url = 4;
+  string branch = 5;
+  optional string build_command = 6;
+  optional string install_command = 7;
+}
+
+message CreateDeploymentResponse {
+  Deployment deployment = 1;
+}
+
+message GetDeploymentRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+}
+
+message GetDeploymentResponse {
+  Deployment deployment = 1;
+}
+
+message UpdateDeploymentRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  optional string name = 3;
+  optional string branch = 4;
+  optional string build_command = 5;
+  optional string install_command = 6;
+}
+
+message UpdateDeploymentResponse {
+  Deployment deployment = 1;
+}
+
+message TriggerDeploymentRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+}
+
+message TriggerDeploymentResponse {
+  string deployment_id = 1;
+  string status = 2;
+}
+
+message StreamDeploymentStatusRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+}
+
+message DeploymentStatusUpdate {
+  string deployment_id = 1;
+  string status = 2;
+  string health_status = 3;
+  optional string message = 4;
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+message GetDeploymentLogsRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  optional int32 lines = 3;
+}
+
+message GetDeploymentLogsResponse {
+  repeated string logs = 1;
+}
+
+message Deployment {
+  string id = 1;
+  string name = 2;
+  string domain = 3;
+  repeated string custom_domains = 4;
+  string type = 5;
+  optional string repository_url = 6;
+  string branch = 7;
+  optional string build_command = 8;
+  optional string install_command = 9;
+  string status = 10;
+  string health_status = 11;
+  google.protobuf.Timestamp last_deployed_at = 12;
+  int64 bandwidth_usage = 13;
+  int64 storage_usage = 14;
+  google.protobuf.Timestamp created_at = 15;
+}

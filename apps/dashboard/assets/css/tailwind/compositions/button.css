@@ -1,0 +1,18 @@
+/**
+ * Obiente UI - Button Compositions
+ * 
+ * Only truly reusable button patterns - apply sizes/variants directly in components
+ */
+
+@layer components {
+  /* Button Base - Common styles for all buttons */
+  .oui-btn-base {
+    @apply inline-flex items-center justify-center rounded-md font-medium;
+    @apply transition-colors disabled:pointer-events-none disabled:opacity-50;
+    @apply text-base;
+  }
+
+  .oui-btn-base:focus-visible {
+    @apply oui-focus-ring;
+  }
+}
