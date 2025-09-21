@@ -2,7 +2,7 @@
   <button
     :class="[
       // Base button composition (reusable)
-      'oui-btn-base',
+      'oui-btn-base oui-text',
       // Size utilities applied directly  
       {
         'px-2 py-1 text-xs': size === 'xs',
@@ -13,7 +13,7 @@
       },
       // Variant styles applied directly
       {
-        'bg-primary text-white hover:bg-primary-dark active:bg-primary-darker': variant === 'primary',
+        'bg-primary text-white hover:bg-interactive-hover active:bg-primary': variant === 'primary',
         'bg-secondary text-primary hover:bg-secondary-dark active:bg-secondary-darker': variant === 'secondary',
         'bg-transparent border border-primary text-primary hover:bg-primary hover:text-white': variant === 'outline',
         'bg-transparent text-primary hover:bg-primary/10 active:bg-primary/20': variant === 'ghost',

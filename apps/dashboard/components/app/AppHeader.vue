@@ -19,7 +19,6 @@
         <OuiSelect
           :items="organizationOptions"
           :modelValue="currentOrganization?.id"
-          @update:modelValue="handleOrganizationChange"
           placeholder="Select Organization"
           class="min-w-48"
         />
@@ -80,9 +79,9 @@ const emit = defineEmits<{
   'notifications-click': []
 }>()
 
-const handleOrganizationChange = (organizationId: string) => {
-  emit('organization-change', organizationId)
-}
+// const handleOrganizationChange = (organizationId: string) => {
+//   emit('organization-change', organizationId)
+// }
 
 const handleNotificationsClick = () => {
   emit('notifications-click')

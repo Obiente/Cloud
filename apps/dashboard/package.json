@@ -19,7 +19,6 @@
     "@connectrpc/connect": "^2.1.0",
     "@connectrpc/connect-web": "^2.1.0",
     "@heroicons/vue": "^2.2.0",
-    "@obiente/proto": "workspace:*",
     "@obiente/types": "workspace:*",
     "@pinia/nuxt": "^0.11.2",
     "@tailwindcss/vite": "^4.1.13",

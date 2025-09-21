@@ -1,28 +1,14 @@
 <template>
   <div class="w-full">
-    <Select.Root 
-      :collection="collection"
-      :value="selectedValue" 
-      @value-change="handleValueChange"
-      v-bind="$attrs"
-    >
-      <Select.Label 
-        v-if="label" 
-        class="block text-sm font-medium text-secondary mb-2"
-      >
+    <Select.RootProvider :collection="collection" :value="select" v-bind="$attrs">
+      <Select.Label v-if="label" class="block text-sm font-medium text-secondary mb-2">
         {{ label }}
       </Select.Label>
-      
       <Select.Control class="relative">
-        <Select.Trigger
-          class="oui-input-base w-full flex items-center justify-between text-left"
-        >
-          <Select.ValueText 
-            :placeholder="placeholder || 'Select an option...'" 
-            class="truncate"
-          />
+        <Select.Trigger class="oui-input w-full flex items-center justify-between text-left">
+          <Select.ValueText :placeholder="placeholder || 'Select an option...'" class="truncate" />
           <Select.Indicator class="ml-2 flex-shrink-0">
-            <ChevronDownIcon class="h-4 w-4 text-secondary" />
+            <ChevronUpDownIcon class="h-4 w-4 text-secondary" />
           </Select.Indicator>
         </Select.Trigger>
       </Select.Control>
@@ -50,47 +36,48 @@
           </Select.Content>
         </Select.Positioner>
       </Teleport>
-      
+
       <Select.HiddenSelect />
-    </Select.Root>
+    </Select.RootProvider>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Select, createListCollection } from '@ark-ui/vue/select'
-import { ChevronDownIcon, CheckIcon } from '@heroicons/vue/24/outline'
-import { computed } from 'vue'
+import { Select, SelectItem, createListCollection, useSelect } from '@ark-ui/vue/select';
+import { CheckIcon, ChevronUpDownIcon } from '@heroicons/vue/24/outline';
 
 interface SelectItem {
-  label: string
-  value: string | number
-  disabled?: boolean
+  label: string;
+  value: string | number;
+  disabled?: boolean;
 }
 
 interface Props {
-  label?: string
-  placeholder?: string
-  modelValue?: any
-  items: SelectItem[]
+  label?: string;
+  placeholder?: string;
+  items: SelectItem[];
 }
 
-const props = defineProps<Props>()
-const emit = defineEmits<{
-  'update:modelValue': [value: any]
-}>()
+const props = defineProps<Props>();
 
-const collection = computed(() => createListCollection({
-  items: props.items
-}))
+const collection = createListCollection({
+  items: props.items,
+});
 
-const selectedValue = computed(() => props.modelValue ? [props.modelValue] : [])
-
-const handleValueChange = (details: any) => {
-  const value = details.value[0] || ''
-  emit('update:modelValue', value)
-}
-
+const select = useSelect({
+  collection: collection,
+  multiple: false,
+});
+defineModel<string | string[]>({
+  get: () => select.value.value,
+  set: (val) => {
+    if (!Array.isArray(val)) {
+      val = [val];
+    }
+    select.value.setValue(val);
+  },
+});
 defineOptions({
-  inheritAttrs: false
-})
+  inheritAttrs: false,
+});
 </script>

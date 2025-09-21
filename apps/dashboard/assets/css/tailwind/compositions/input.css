@@ -6,26 +6,25 @@
 
 @layer components {
   /* Input Base */
-  .oui-input-base {
+  .oui-input {
     @apply flex rounded-md px-3 py-2 text-base w-full;
     @apply transition-colors border;
-    @apply focus:oui-focus-ring;
     @apply disabled:cursor-not-allowed disabled:opacity-60;
     background-color: var(--oui-surface-base);
     border-color: var(--oui-border-default);
     color: var(--oui-text-primary);
+
+    &[data-state='open'] {
+      border-color: var(--oui-accent-primary);
+    }
   }
 
   .oui-input-base::placeholder {
     color: var(--oui-text-tertiary);
   }
 
-  .oui-input-base:hover:not(:disabled) {
-    border-color: var(--oui-border-strong);
-  }
-
-  .oui-input-base:focus {
-    border-color: var(--oui-accent-primary);
+  .oui-input:hover:not(:disabled) {
+    @apply border-strong;
   }
 
   .oui-input-base:disabled {

@@ -5,10 +5,6 @@
   "description": "Multi-tenant cloud dashboard platform for Obiente Cloud",
   "author": "Obiente Team",
   "license": "MIT",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",

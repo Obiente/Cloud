@@ -36,7 +36,7 @@
       <OuiCard variant="raised" hoverable>
         <OuiCardBody>
           <div class="flex items-center">
-            <div class="p-2 bg-accent-primary/10 rounded-lg">
+            <div class="p-2 bg-primary/10 rounded-lg">
               <RocketLaunchIcon class="w-6 h-6 text-accent-primary" />
             </div>
             <div class="ml-4 flex-1">

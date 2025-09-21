@@ -23,12 +23,22 @@
   --color-surface-muted: var(--oui-surface-muted);
 
   /* Text colors */
+  --text-color-primary: var(--oui-text-primary);
+  --text-color-secondary: var(--oui-text-secondary);
+  --text-color-tertiary: var(--oui-text-tertiary);
+  --text-color-disabled: var(--oui-text-disabled);
   --color-text-primary: var(--oui-text-primary);
   --color-text-secondary: var(--oui-text-secondary);
   --color-text-tertiary: var(--oui-text-tertiary);
   --color-text-disabled: var(--oui-text-disabled);
 
-  /* Accent colors - using standard names */
+  /* Accent colors */
+  --color-accent-primary: var(--oui-accent-primary);
+  --color-accent-secondary: var(--oui-accent-secondary);
+  --color-accent-success: var(--oui-accent-success);
+  --color-accent-warning: var(--oui-accent-warning);
+  --color-accent-danger: var(--oui-accent-danger);
+  --color-accent-info: var(--oui-accent-info);
   --color-primary: var(--oui-accent-primary);
   --color-secondary: var(--oui-accent-secondary);
   --color-success: var(--oui-accent-success);
@@ -37,6 +47,9 @@
   --color-info: var(--oui-accent-info);
 
   /* Border colors */
+  --border-color-border-default: var(--oui-border-default);
+  --border-color-border-muted: var(--oui-border-muted);
+  --border-color-border-strong: var(--oui-border-strong);
   --color-border-default: var(--oui-border-default);
   --color-border-muted: var(--oui-border-muted);
   --color-border-strong: var(--oui-border-strong);
@@ -123,16 +136,6 @@
   --leading-loose: 2;
 }
 
-@utility text-* {
-  color: --value(--color-text-*);
-}
-@utility border-* {
-  border-top-color: --modifier(--color-border-*, [color]);
-  border-bottom-color: --modifier(--color-border-*, [color]);
-  border-left-color: --modifier(--color-border-*, [color]);
-  border-right-color: --modifier(--color-border-*, [color]);
-  border-color: --value(--color-border-*, [color]);
-}
 /* 
 @utility border-?-* {
   border-color: --value(--color-border-*, [color]);

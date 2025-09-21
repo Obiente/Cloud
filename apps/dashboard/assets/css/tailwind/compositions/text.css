@@ -1,144 +1,89 @@
-@layer components {
-  .oui-text {
-    /* Base text styling */
-    @apply antialiased;
+@utility oui-text {
+  /* Base text styling */
+  @apply antialiased;
 
-    /* Responsive line heights for readability */
-    &.text-xs {
-      @apply leading-4;
-    }
-    &.text-sm {
-      @apply leading-5;
-    }
-    &.text-base {
-      @apply leading-6;
-    }
-    &.text-lg {
-      @apply leading-7;
-    }
-    &.text-xl {
-      @apply leading-7;
-    }
-    &.text-2xl {
-      @apply leading-8;
-    }
-    &.text-3xl {
-      @apply leading-9;
-    }
-    &.text-4xl {
-      @apply leading-10;
-    }
-    &.text-5xl {
-      @apply leading-none;
-    }
-    &.text-6xl {
-      @apply leading-none;
+  /* Responsive line heights for readability */
+  &.text-xs {
+    @apply leading-4;
+  }
+
+  &.text-sm {
+    @apply leading-5;
+  }
+  &.text-base {
+    @apply leading-6;
+  }
+  &.text-lg {
+    @apply leading-7;
+  }
+  &.text-xl {
+    @apply leading-7;
+  }
+  &.text-2xl {
+    @apply leading-8;
+  }
+  &.text-3xl {
+    @apply leading-9;
+  }
+  &.text-4xl {
+    @apply leading-10;
+  }
+  &.text-5xl {
+    @apply leading-none;
+  }
+  &.text-6xl {
+    @apply leading-none;
+  }
+
+  /* Text balance for better typography */
+  &.text-balance {
+    text-wrap: balance;
+  }
+
+  /* Improved truncation with proper overflow handling */
+  &.truncate {
+    @apply overflow-hidden text-ellipsis whitespace-nowrap;
+    min-width: 0; /* Fix for flex containers */
+  }
+
+  /* Smooth text rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Selection styling */
+  &::selection {
+    @apply bg-primary/20;
+  }
+
+  /* Focus styling for interactive text elements */
+  &:focus-visible {
+    @apply outline-2 outline-offset-2 rounded-sm;
+  }
+
+  /* Link-specific styling when used as anchor */
+  &[href] {
+    @apply transition-colors duration-200;
+
+    &:hover {
+      @apply text-accent-primary;
     }
 
-    /* Text balance for better typography */
-    &.text-balance {
-      text-wrap: balance;
-    }
-
-    /* Improved truncation with proper overflow handling */
-    &.truncate {
-      @apply overflow-hidden text-ellipsis whitespace-nowrap;
-      min-width: 0; /* Fix for flex containers */
-    }
-
-    /* Smooth text rendering */
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-
-    /* Selection styling */
-    &::selection {
-      @apply bg-accent-primary/20;
-    }
-
-    /* Focus styling for interactive text elements */
     &:focus-visible {
-      @apply outline-2 outline-offset-2 outline-accent-primary rounded-sm;
-    }
-
-    /* Link-specific styling when used as anchor */
-    &[href] {
-      @apply transition-colors duration-200;
-
-      &:hover {
-        @apply text-accent-primary;
-      }
-
-      &:focus-visible {
-        @apply text-accent-primary;
-      }
-    }
-
-    /* Enhanced readability modifiers */
-    &.readable {
-      max-width: 65ch; /* Optimal line length for reading */
-    }
-
-    /* Semantic color variants with proper contrast */
-    &.text-primary {
-      color: var(--color-text-primary);
-    }
-
-    &.text-secondary {
-      color: var(--color-text-secondary);
-    }
-
-    &.text-muted {
-      color: var(--color-text-muted);
-    }
-
-    /* Interactive states for clickable text */
-    &[role='button'],
-    &.cursor-pointer {
-      @apply transition-colors duration-200;
-
-      &:hover {
-        @apply text-accent-primary;
-      }
-
-      &:active {
-        @apply text-accent-primary/80;
-      }
-    }
-
-    /* Dark mode adjustments */
-    @media (prefers-color-scheme: dark) {
-      &.text-primary {
-        color: var(--color-text-primary-dark, var(--oui-text-primary));
-      }
-
-      &.text-secondary {
-        color: var(--color-text-secondary-dark, var(--oui-text-secondary));
-      }
-
-      &.text-muted {
-        color: var(--color-text-muted-dark, var(--oui-text-tertiary));
-      }
+      @apply text-accent-primary;
     }
   }
 
-  /* Typography scale helpers */
-  .oui-text-display {
-    @apply oui-text font-bold tracking-tight;
-  }
+  /* Interactive states for clickable text */
+  &[role='button'],
+  &.cursor-pointer {
+    @apply transition-colors duration-200;
 
-  .oui-text-heading {
-    @apply oui-text font-semibold tracking-tight;
-  }
+    &:hover {
+      @apply text-accent-primary;
+    }
 
-  .oui-text-body {
-    @apply oui-text font-normal;
-  }
-
-  .oui-text-caption {
-    @apply oui-text text-sm text-secondary;
-  }
-
-  .oui-text-overline {
-    @apply oui-text text-xs font-medium uppercase tracking-wider text-muted;
+    &:active {
+      @apply text-accent-primary/80;
+    }
   }
 }
