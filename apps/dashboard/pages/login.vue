@@ -140,8 +140,8 @@ const errors = ref({
 
 const isLoading = ref(false);
 
-// Composables
-const { login } = useAuth();
+import { useUserStore } from '~/stores/user';
+const userStore = useUserStore();
 
 // Handle form login
 const handleLogin = async () => {
@@ -176,7 +176,7 @@ const handleLogin = async () => {
 // Handle SSO login
 const handleSsoLogin = async () => {
   try {
-    await login();
+    await userStore.login();
   } catch (error) {
     console.error('SSO login failed:', error);
   }

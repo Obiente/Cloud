@@ -13,8 +13,18 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center">
               <div class="p-2 bg-danger/10 rounded-lg mr-4">
-                <svg class="w-6 h-6 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <svg
+                  class="w-6 h-6 text-danger"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
               </div>
               <div>
@@ -22,9 +32,7 @@
                 <p class="text-secondary text-sm">Unable to load dashboard data</p>
               </div>
             </div>
-            <OuiButton @click="retryLoad" variant="outline" size="sm">
-              Retry
-            </OuiButton>
+            <OuiButton @click="retryLoad" variant="outline" size="sm"> Retry </OuiButton>
           </div>
         </OuiCardBody>
       </OuiCard>
@@ -108,7 +116,9 @@
                 <OuiSkeleton width="5rem" height="1rem" variant="text" />
               </div>
               <div v-else>
-                <h3 class="text-lg font-semibold text-primary">{{ formatCurrency(stats.monthlySpend) }}</h3>
+                <h3 class="text-lg font-semibold text-primary">
+                  {{ formatCurrency(stats.monthlySpend) }}
+                </h3>
                 <p class="text-sm text-secondary">This Month</p>
               </div>
             </div>
@@ -146,8 +156,18 @@
           </div>
           <div v-else-if="recentDeployments.length === 0" class="text-secondary text-center py-8">
             <div class="mb-4">
-              <svg class="w-12 h-12 mx-auto text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+              <svg
+                class="w-12 h-12 mx-auto text-muted"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1"
+                  d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+                />
               </svg>
             </div>
             <p>No deployments yet</p>
@@ -165,9 +185,15 @@
               </div>
               <div class="flex items-center space-x-2">
                 <OuiBadge
-                  :variant="deployment.status === 'RUNNING' ? 'success' : 
-                           deployment.status === 'BUILDING' ? 'warning' : 
-                           deployment.status === 'ERROR' ? 'danger' : 'secondary'"
+                  :variant="
+                    deployment.status === 'RUNNING'
+                      ? 'success'
+                      : deployment.status === 'BUILDING'
+                        ? 'warning'
+                        : deployment.status === 'ERROR'
+                          ? 'danger'
+                          : 'secondary'
+                  "
                 >
                   {{ deployment.status }}
                 </OuiBadge>
@@ -202,8 +228,18 @@
           </div>
           <div v-else-if="activityFeed.length === 0" class="text-secondary text-center py-8">
             <div class="mb-4">
-              <svg class="w-12 h-12 mx-auto text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              <svg
+                class="w-12 h-12 mx-auto text-muted"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1"
+                  d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                />
               </svg>
             </div>
             <p>No recent activity</p>
@@ -243,6 +279,7 @@ import OuiText from '~/components/oui/Text.vue';
 // Page meta
 definePageMeta({
   layout: 'default',
+  // middleware: 'auth',
 });
 
 // Loading state
@@ -258,35 +295,39 @@ const stats = ref({
 });
 
 // Recent deployments with loading state
-const recentDeployments = ref<Array<{
-  id: string;
-  name: string;
-  domain: string;
-  status: 'RUNNING' | 'BUILDING' | 'STOPPED' | 'PENDING' | 'ERROR';
-}>>([]);
+const recentDeployments = ref<
+  Array<{
+    id: string;
+    name: string;
+    domain: string;
+    status: 'RUNNING' | 'BUILDING' | 'STOPPED' | 'PENDING' | 'ERROR';
+  }>
+>([]);
 
 // Activity feed with loading state
-const activityFeed = ref<Array<{
-  id: string;
-  message: string;
-  timestamp: Date;
-}>>([]);
+const activityFeed = ref<
+  Array<{
+    id: string;
+    message: string;
+    timestamp: Date;
+  }>
+>([]);
 
 // Simulated API call for stats
 const loadDashboardStats = async () => {
   try {
     isLoading.value = true;
     statsError.value = null;
-    
+
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
+
     // Mock data - in real app this would come from API
     stats.value = {
       deployments: 12,
       vpsInstances: 4,
       databases: 3,
-      monthlySpend: 145.50,
+      monthlySpend: 145.5,
     };
 
     recentDeployments.value = [

@@ -17,13 +17,13 @@ export default defineNuxtConfig({
   // Runtime config
   runtimeConfig: {
     // Private keys (only available on server-side)
-    apiSecret: process.env.API_SECRET || '',
+    apiSecret: '',
 
     // Public keys (exposed to client-side)
     public: {
-      apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:3001',
-      zitadelUrl: process.env.ZITADEL_URL || 'https://your-zitadel.domain.com',
-      zitadelClientId: process.env.ZITADEL_CLIENT_ID || '',
+      apiBaseUrl: 'http://localhost:3001',
+      oidcBase: 'https://auth.obiente.cloud',
+      oidcClientId: '',
     },
   },
 

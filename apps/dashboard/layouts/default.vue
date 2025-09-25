@@ -11,7 +11,6 @@
       <div class="flex-1 flex flex-col">
         <!-- Top bar -->
         <AppHeader
-          :current-organization="currentOrganization"
           :organization-options="organizationOptions"
           :notification-count="notificationCount"
           @organization-change="switchOrganization"
@@ -32,8 +31,11 @@
 </template>
 
 <script setup lang="ts">
-// Composables
-const { user, currentOrganization, logout } = useAuth();
+// Pinia user store
+import { useUserStore } from '~/stores/user';
+const userStore = useUserStore();
+const user = userStore.user;
+const logout = userStore.logout;
 
 // Notification count (TODO: Replace with actual notification system)
 const notificationCount = ref(3);
@@ -43,8 +45,8 @@ const organizationOptions = computed(() => {
   // TODO: Replace with actual organizations from API
   return [
     {
-      label: currentOrganization.value?.name || 'Personal',
-      value: currentOrganization.value?.id || '1',
+      label: 'Personal',
+      value: '1',
     },
     { label: 'Acme Corp', value: '2' },
     { label: 'Development Team', value: '3' },
