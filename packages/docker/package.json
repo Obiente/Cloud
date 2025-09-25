@@ -4,12 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "pnpx @openapitools/openapi-generator-cli generate -i schema.yaml -g typescript-node -o tmp/test/ -c config.yaml"
+    "build": "pnpx @openapitools/openapi-generator-cli generate -i schema.yaml -g typescript-axios -o api"
   },
   "exports": {
     ".": {
-      "import": "./api/api.ts",
-      "require": "./api/api.ts"
+      "import": "./api/index.ts",
+      "require": "./api/index.ts"
     }
   },
   "keywords": [],
@@ -18,5 +18,8 @@
   "packageManager": "pnpm@10.17.0",
   "devDependencies": {
     "@openapitools/openapi-generator-cli": "^2.23.4"
+  },
+  "dependencies": {
+    "axios": "^1.12.2"
   }
 }
