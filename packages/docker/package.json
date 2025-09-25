@@ -1,0 +1,22 @@
+{
+  "name": "@obiente/docker-engine",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "pnpx @openapitools/openapi-generator-cli generate -i schema.yaml -g typescript-node -o tmp/test/ -c config.yaml"
+  },
+  "exports": {
+    ".": {
+      "import": "./api/api.ts",
+      "require": "./api/api.ts"
+    }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.17.0",
+  "devDependencies": {
+    "@openapitools/openapi-generator-cli": "^2.23.4"
+  }
+}
