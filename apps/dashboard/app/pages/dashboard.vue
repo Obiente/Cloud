@@ -279,7 +279,7 @@ import OuiText from '~/components/oui/Text.vue';
 // Page meta
 definePageMeta({
   layout: 'default',
-  // middleware: 'auth',
+  middleware: 'auth',
 });
 
 // Loading state

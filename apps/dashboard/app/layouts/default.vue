@@ -1,11 +1,8 @@
 <template>
   <div class="bg-background">
-    <div class="flex">
+    <div v-if="user" class="flex">
       <!-- Sidebar -->
-      <AppSidebar 
-        :user="user" 
-        @logout="logout" 
-      />
+      <AppSidebar :user="user" @logout="logout" />
 
       <!-- Main content -->
       <div class="flex-1 flex flex-col">
@@ -27,14 +24,18 @@
         </main>
       </div>
     </div>
+    <div v-else class="main-content flex justify-center items-center">
+      {{ user }}
+      <OuiText size="2xl" weight="extrabold">please log in</OuiText>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 // Pinia user store
-import { useUserStore } from '~/stores/user';
 const userStore = useUserStore();
 const user = userStore.user;
+
 const logout = userStore.logout;
 
 // Notification count (TODO: Replace with actual notification system)

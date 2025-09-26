@@ -1,16 +1,16 @@
 import { defineStore } from 'pinia';
 
-// TODO: Replace with your Zitadel OIDC config
-const OIDC_CONFIG = {
-  authority: 'https://auth.obiente.cloud/oauth/v2',
-  clientId: 'your-client-id',
-  redirectUri: '/auth/callback',
-  postLogoutRedirectUri: '/',
-  scope: 'openid profile email',
-  responseType: 'code',
-};
-const config = useRuntimeConfig();
 export const useUserStore = defineStore('user', () => {
+  const config = useRuntimeConfig();
+  const OIDC = {
+    authority: config.public.oidcBase + '/oauth/v2',
+    redirectPath: '/auth/callback',
+    postLogoutRedirectUri: '/',
+    scope: 'openid profile email',
+    responseType: 'code',
+    clientId: config.public.oidcClientId,
+  };
+
   // State
   const isAuthenticated = ref(false);
   const user = ref<any>(null);
@@ -33,12 +33,12 @@ export const useUserStore = defineStore('user', () => {
   function login() {
     // Redirect to Zitadel OIDC authorize endpoint
     const params = new URLSearchParams({
-      client_id: config.public.oidcClientId,
-      redirect_uri: config.public.oidcBase + OIDC_CONFIG.redirectUri,
-      response_type: OIDC_CONFIG.responseType,
-      scope: OIDC_CONFIG.scope,
+      client_id: OIDC.clientId,
+      redirect_uri: window.location.origin + OIDC.redirectPath,
+      response_type: OIDC.responseType,
+      scope: OIDC.scope,
     });
-    window.location.href = `${OIDC_CONFIG.authority}/authorize?${params.toString()}`;
+    return `${OIDC.authority}/authorize?${params.toString()}`;
   }
 
   async function handleCallback() {
@@ -52,14 +52,14 @@ export const useUserStore = defineStore('user', () => {
     loading.value = true;
     try {
       // Exchange code for tokens
-      const tokenRes = await fetch(`${OIDC_CONFIG.authority}/token`, {
+      const tokenRes = await fetch(`${OIDC.authority}/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           grant_type: 'authorization_code',
           code,
-          redirect_uri: OIDC_CONFIG.redirectUri,
-          client_id: OIDC_CONFIG.clientId,
+          redirect_uri: OIDC.redirectPath,
+          client_id: OIDC.clientId,
         }),
       });
       const tokenData = await tokenRes.json();
@@ -73,7 +73,6 @@ export const useUserStore = defineStore('user', () => {
       isAuthenticated.value = true;
       error.value = null;
       // Clean up URL
-      router.replace({ path: '/' });
     } catch (e: any) {
       error.value = e.message || 'OAuth callback failed.';
       isAuthenticated.value = false;
@@ -92,10 +91,10 @@ export const useUserStore = defineStore('user', () => {
     expiresAt.value = null;
     // Redirect to Zitadel logout
     const params = new URLSearchParams({
-      client_id: OIDC_CONFIG.clientId,
-      post_logout_redirect_uri: OIDC_CONFIG.postLogoutRedirectUri,
+      client_id: OIDC.clientId,
+      post_logout_redirect_uri: OIDC.postLogoutRedirectUri,
     });
-    window.location.href = `${OIDC_CONFIG.authority}/logout?${params.toString()}`;
+    window.location.href = `${OIDC.authority}/logout?${params.toString()}`;
   }
 
   function parseJwt(token: string | null) {
@@ -116,13 +115,13 @@ export const useUserStore = defineStore('user', () => {
   async function refreshTokens() {
     if (!refreshToken.value) return;
     try {
-      const res = await fetch(`${OIDC_CONFIG.authority}/token`, {
+      const res = await fetch(`${OIDC.authority}/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           grant_type: 'refresh_token',
           refresh_token: refreshToken.value,
-          client_id: OIDC_CONFIG.clientId,
+          client_id: OIDC.clientId,
         }),
       });
       const data = await res.json();
@@ -156,9 +155,8 @@ export const useUserStore = defineStore('user', () => {
 
   // SSR/SPA hydration: try to restore session from localStorage (optional)
   function restoreSession() {
-    if (typeof window === 'undefined') return;
     try {
-      const stored = window.localStorage.getItem('obiente_user');
+      const stored = localStorage.getItem('obiente_user');
       if (stored) {
         const parsed = JSON.parse(stored);
         accessToken.value = parsed.accessToken;
@@ -173,8 +171,7 @@ export const useUserStore = defineStore('user', () => {
 
   // Persist session to localStorage
   watch([accessToken, idToken, refreshToken, expiresAt, user], () => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(
+    localStorage.setItem(
       'obiente_user',
       JSON.stringify({
         accessToken: accessToken.value,

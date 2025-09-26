@@ -8,7 +8,7 @@ export default defineNuxtConfig({
 
   // CSS Framework - using Nuxt UI (built on Tailwind CSS)
   css: ['~/assets/css/main.css'],
-  watch: ['composables/**', 'stores/**', 'utils/**', 'components/**'],
+  // watch: ['composables/**', 'stores/**', 'utils/**', 'components/**'],
   // TypeScript configuration
   typescript: {
     typeCheck: true,
@@ -23,17 +23,17 @@ export default defineNuxtConfig({
     public: {
       apiBaseUrl: 'http://localhost:3001',
       oidcBase: 'https://auth.obiente.cloud',
-      oidcClientId: '',
+      oidcClientId: '339499954043158530',
     },
   },
 
   // SSR configuration
   ssr: true,
 
-  // Auto-import configuration
-  imports: {
-    dirs: ['composables/**', 'stores/**', 'utils/**'],
-  },
+  // // Auto-import configuration
+  // imports: {
+  //   dirs: ['composables/**', 'stores/**', 'utils/**'],
+  // },
 
   // Development server
   devServer: {
