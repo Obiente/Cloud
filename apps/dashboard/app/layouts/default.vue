@@ -1,8 +1,8 @@
 <template>
   <div class="bg-background">
-    <div v-if="user" class="flex">
+    <div v-if="userStore.isLoggedIn && userStore.user" class="flex">
       <!-- Sidebar -->
-      <AppSidebar :user="user" @logout="logout" />
+      <AppSidebar :user="userStore.user" @logout="logout" />
 
       <!-- Main content -->
       <div class="flex-1 flex flex-col">
@@ -24,17 +24,18 @@
         </main>
       </div>
     </div>
-    <div v-else class="main-content flex justify-center items-center">
-      {{ user }}
-      <OuiText size="2xl" weight="extrabold">please log in</OuiText>
+    <div v-else class="main-content flex flex-col justify-center items-center">
+      <OuiText v-if="userStore.error" size="2xl" color="danger" weight="extrabold">{{ userStore.error }}</OuiText>
+      <OuiText v-else-if="userStore.loading" size="2xl" weight="extrabold">loading</OuiText>
+      <OuiText v-else-if="userStore.isAuthenticated" size="2xl" weight="extrabold">...</OuiText>
+      <OuiText v-else size="2xl" weight="extrabold">please log in</OuiText>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 // Pinia user store
-const userStore = useUserStore();
-const user = userStore.user;
+const userStore = useUser();
 
 const logout = userStore.logout;
 

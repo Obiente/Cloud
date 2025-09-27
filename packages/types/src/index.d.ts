@@ -286,3 +286,5 @@ export interface InviteMemberForm {
   email: string;
   role: OrganizationMember['role'];
 }
+
+export * from './zitadel'

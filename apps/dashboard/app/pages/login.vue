@@ -140,8 +140,8 @@ const errors = ref({
 
 const isLoading = ref(false);
 
-import { useUserStore } from '~/stores/user';
-const userStore = useUserStore();
+import { useUser } from '~/stores/user';
+const userStore = useUser();
 
 // Handle form login
 const handleLogin = async () => {

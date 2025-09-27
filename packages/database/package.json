@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch",
+    "_dev": "tsc --watch",
     "clean": "rm -rf dist",
     "db:generate": "drizzle-kit generate:pg",
     "db:migrate": "tsx src/migrate.ts",

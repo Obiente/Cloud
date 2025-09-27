@@ -11,47 +11,22 @@
 
       <!-- Navigation -->
       <nav class="space-y-2">
-        <AppNavigationLink 
-          to="/dashboard" 
-          label="Dashboard" 
-          :icon="HomeIcon" 
-          exact-match 
-        />
+        <AppNavigationLink to="/dashboard" label="Dashboard" :icon="HomeIcon" exact-match />
 
-        <AppNavigationLink 
-          to="/deployments" 
-          label="Deployments" 
-          :icon="RocketLaunchIcon" 
-        />
+        <AppNavigationLink to="/deployments" label="Deployments" :icon="RocketLaunchIcon" />
 
-        <AppNavigationLink 
-          to="/vps" 
-          label="VPS Instances" 
-          :icon="ServerIcon" 
-        />
+        <AppNavigationLink to="/vps" label="VPS Instances" :icon="ServerIcon" />
 
-        <AppNavigationLink 
-          to="/databases" 
-          label="Databases" 
-          :icon="CircleStackIcon" 
-        />
+        <AppNavigationLink to="/databases" label="Databases" :icon="CircleStackIcon" />
 
-        <AppNavigationLink 
-          to="/billing" 
-          label="Billing" 
-          :icon="CreditCardIcon" 
-        />
+        <AppNavigationLink to="/billing" label="Billing" :icon="CreditCardIcon" />
 
-        <AppNavigationLink 
-          to="/settings" 
-          label="Settings" 
-          :icon="Cog6ToothIcon" 
-        />
+        <AppNavigationLink to="/settings" label="Settings" :icon="Cog6ToothIcon" />
       </nav>
     </div>
 
     <!-- User section -->
-    <AppUserProfile v-if="user" :user="user" @logout="handleLogout" />
+    <AppUserProfile @logout="handleLogout" />
   </nav>
 </template>
 
@@ -64,16 +39,6 @@ import {
   CreditCardIcon,
   Cog6ToothIcon,
 } from '@heroicons/vue/24/outline';
-
-interface Props {
-  user?: {
-    name?: string;
-    email?: string;
-    avatarUrl?: string;
-  } | null;
-}
-
-defineProps<Props>();
 
 const emit = defineEmits<{
   logout: [];

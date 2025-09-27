@@ -4,7 +4,7 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   vite: { plugins: [tailwindcss()] },
   // Modules
-  modules: ['@pinia/nuxt'],
+  modules: ['@pinia/nuxt', "@vueuse/nuxt"],
 
   // CSS Framework - using Nuxt UI (built on Tailwind CSS)
   css: ['~/assets/css/main.css'],
@@ -22,6 +22,7 @@ export default defineNuxtConfig({
     // Public keys (exposed to client-side)
     public: {
       apiBaseUrl: 'http://localhost:3001',
+      oidcIssuer: 'https://obiente.cloud',
       oidcBase: 'https://auth.obiente.cloud',
       oidcClientId: '339499954043158530',
     },

@@ -1,6 +1,10 @@
-import { defineStore } from 'pinia';
+import type { RouteLocationNormalizedLoadedGeneric } from 'vue-router';
+import type { ZitadelTokenResponse, ZitadelUserProfile } from '@obiente/types';
+import type { User } from '@zitadel/proto/zitadel/user_pb';
 
-export const useUserStore = defineStore('user', () => {
+const AUTH_COOKIE_NAME = 'obiente_auth';
+const REFRESH_COOKIE_NAME = 'obiente_refresh';
+export const useUser = defineStore('user', () => {
   const config = useRuntimeConfig();
   const OIDC = {
     authority: config.public.oidcBase + '/oauth/v2',
@@ -13,57 +17,62 @@ export const useUserStore = defineStore('user', () => {
 
   // State
   const isAuthenticated = ref(false);
-  const user = ref<any>(null);
-  const accessToken = ref<string | null>(null);
-  const idToken = ref<string | null>(null);
-  const refreshToken = ref<string | null>(null);
-  const expiresAt = ref<number | null>(null);
-  const loading = ref(false);
-  const error = ref<string | null>(null);
-
-  const router = useRouter();
+  const user = useState<User | undefined>('user', () => undefined);
+  const accessToken = useCookie<string | undefined>(AUTH_COOKIE_NAME);
+  const idToken = useState<string | undefined>();
+  const refreshToken = useState<string | undefined>();
+  const expiresAt = useState<number | undefined>();
+  const loading = ref<boolean>();
+  const error = ref<string>();
 
   // Getters
   const isLoggedIn = computed(() => isAuthenticated.value && !!user.value);
-  const userName = computed(
-    () => user.value?.name || user.value?.preferred_username || user.value?.email || ''
-  );
+  const userName = computed(() => user.value?.userName || user.value?.preferredLoginName);
 
   // Actions
-  function login() {
+  async function login() {
     // Redirect to Zitadel OIDC authorize endpoint
+    const verifier = await handlePKCE();
     const params = new URLSearchParams({
       client_id: OIDC.clientId,
       redirect_uri: window.location.origin + OIDC.redirectPath,
       response_type: OIDC.responseType,
       scope: OIDC.scope,
+      code_challenge: verifier.code_challenge!,
+      code_challenge_method: verifier.code_challenge_method!,
+      prompt: 'none',
     });
     return `${OIDC.authority}/authorize?${params.toString()}`;
   }
 
-  async function handleCallback() {
-    // Parse code from URL
-    const url = new URL(window.location.href);
-    const code = url.searchParams.get('code');
-    if (!code) {
+  async function handleCallback(route: RouteLocationNormalizedLoadedGeneric) {
+    const { code_verifier } = await handlePKCE(true);
+    const code = route.query.code;
+    if (typeof code !== 'string') {
       error.value = 'No code found in callback URL.';
       return;
     }
     loading.value = true;
     try {
       // Exchange code for tokens
-      const tokenRes = await fetch(`${OIDC.authority}/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          code,
-          redirect_uri: OIDC.redirectPath,
-          client_id: OIDC.clientId,
-        }),
-      });
-      const tokenData = await tokenRes.json();
-      if (!tokenRes.ok) throw new Error(tokenData.error_description || 'Token exchange failed');
+      const { data: tokenResponse } = await useFetch<ZitadelTokenResponse>(
+        `${OIDC.authority}/token`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: window.location.origin + OIDC.redirectPath,
+            client_id: OIDC.clientId,
+            code_verifier,
+          }),
+        }
+      );
+
+      if (!tokenResponse.value) throw new Error('Token exchange failed');
+      const tokenData = tokenResponse.value;
+
       accessToken.value = tokenData.access_token;
       idToken.value = tokenData.id_token;
       refreshToken.value = tokenData.refresh_token;
@@ -71,7 +80,7 @@ export const useUserStore = defineStore('user', () => {
       // Decode user info from id_token (JWT)
       user.value = idToken.value ? parseJwt(idToken.value) : null;
       isAuthenticated.value = true;
-      error.value = null;
+      delete error.value;
       // Clean up URL
     } catch (e: any) {
       error.value = e.message || 'OAuth callback failed.';
@@ -84,11 +93,11 @@ export const useUserStore = defineStore('user', () => {
   function logout() {
     // Clear state
     isAuthenticated.value = false;
-    user.value = null;
-    accessToken.value = null;
-    idToken.value = null;
-    refreshToken.value = null;
-    expiresAt.value = null;
+    delete user.value;
+    delete accessToken.value;
+    delete idToken.value;
+    delete refreshToken.value;
+    delete expiresAt.value;
     // Redirect to Zitadel logout
     const params = new URLSearchParams({
       client_id: OIDC.clientId,
@@ -115,21 +124,26 @@ export const useUserStore = defineStore('user', () => {
   async function refreshTokens() {
     if (!refreshToken.value) return;
     try {
-      const res = await fetch(`${OIDC.authority}/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: refreshToken.value,
-          client_id: OIDC.clientId,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error_description || 'Token refresh failed');
-      accessToken.value = data.access_token;
-      idToken.value = data.id_token;
-      refreshToken.value = data.refresh_token;
-      expiresAt.value = Date.now() + data.expires_in * 1000;
+      const { data: refreshResponse } = await useFetch<ZitadelTokenResponse>(
+        `${OIDC.authority}/token`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: refreshToken.value,
+            client_id: OIDC.clientId,
+          }),
+        }
+      );
+
+      if (!refreshResponse.value) throw new Error('Token refresh failed');
+      const refreshData = refreshResponse.value;
+
+      accessToken.value = refreshData.access_token;
+      idToken.value = refreshData.id_token;
+      refreshToken.value = refreshData.refresh_token;
+      expiresAt.value = Date.now() + refreshData.expires_in * 1000;
       user.value = idToken.value ? parseJwt(idToken.value) : null;
       isAuthenticated.value = true;
     } catch (e: any) {
@@ -168,7 +182,38 @@ export const useUserStore = defineStore('user', () => {
       }
     } catch {}
   }
+  // Fetch current user from Zitadel
+  async function fetchUser() {
+    if (!accessToken.value) return undefined;
 
+    try {
+      const { data, error: fetchError } = await useFetch<User>('/api/auth/me', {
+        headers: {
+          Authorization: `Bearer ${accessToken.value}`,
+        },
+      });
+
+      if (fetchError) {
+        error.value = 'Failed to fetch user profile';
+        return undefined;
+      }
+
+      return data.value;
+    } catch (e: any) {
+      error.value = e.message || 'Failed to fetch user profile';
+      return undefined;
+    }
+  }
+
+  // // Check auth status on hydration
+  // async function restoreSession() {
+  //   const { data: session } = await useFetch('/api/auth/session');
+  //   if (session.value?.authenticated) {
+  //     isAuthenticated.value = true;
+  //     user.value = session.value.user;
+  //     expiresAt.value = session.value.expiresAt;
+  //   }
+  // }
   // Persist session to localStorage
   watch([accessToken, idToken, refreshToken, expiresAt, user], () => {
     localStorage.setItem(
@@ -199,5 +244,9 @@ export const useUserStore = defineStore('user', () => {
     logout,
     refreshTokens,
     restoreSession,
+    fetchUser,
   };
 });
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useUser, import.meta.hot));
+}
