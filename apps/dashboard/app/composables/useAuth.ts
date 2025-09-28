@@ -1,68 +1,54 @@
-import type { User, Organization } from '@obiente/types';
+import { appendResponseHeader } from 'h3';
+import type { User, Organization, UserSession } from '@obiente/types';
 
 export const useAuth = () => {
+  const serverEvent = import.meta.server ? useRequestEvent() : null;
+
   // Reactive state
-  const user = ref<User | null>(null);
+  const sessionState = useState<UserSession | null>('obiente-session', () => null);
+  const authReadyState = useState('obiente-auth-ready', () => false);
+  const user = computed(() => sessionState.value?.user || null);
   const currentOrganization = ref<Organization | null>(null);
-  const isAuthenticated = computed(() => !!user.value);
+  const isAuthenticated = computed(() => sessionState.value && user.value);
   const isLoading = ref(false);
 
-  // Get current user
-  const getCurrentUser = async () => {
+  // Get current user session
+  const fetch = async () => {
     try {
       isLoading.value = true;
-      // TODO: Implement actual API call to get current user
-      // const response = await $fetch('/api/auth/me');
-      // user.value = response.user;
-      
-      // Placeholder for development
-      user.value = {
-        id: '1',
-        externalId: 'zitadel-user-123',
-        email: 'admin@example.com',
-        name: 'Admin User',
-        avatarUrl: 'https://avatar.iran.liara.run/public',
-        // preferences: {},
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      sessionState.value = await useRequestFetch()<UserSession>('/auth/session', {
+        headers: {
+          accept: 'application/json',
+        },
+        retry: false,
+      }).catch(() => null);
+
+      if (!authReadyState.value) {
+        authReadyState.value = true;
+      }
     } catch (error) {
       console.error('Failed to get current user:', error);
-      user.value = null;
+      sessionState.value = null;
     } finally {
       isLoading.value = false;
     }
   };
 
-  // Login function
-  const login = async (redirectUrl?: string) => {
-    try {
-      // TODO: Implement Zitadel OIDC login
-      const config = useRuntimeConfig();
-      const loginUrl = `${config.public.zitadelUrl}/oauth/v2/authorize?client_id=${config.public.zitadelClientId}&response_type=code&scope=openid email profile&redirect_uri=${encodeURIComponent(redirectUrl || window.location.origin + '/auth/callback')}`;
-      
-      // Redirect to Zitadel
-      window.location.href = loginUrl;
-    } catch (error) {
-      console.error('Login failed:', error);
-      throw error;
-    }
-  };
-
   // Logout function
   const logout = async () => {
-    try {
-      // TODO: Implement actual logout
-      // await $fetch('/api/auth/logout', { method: 'POST' });
-      
-      user.value = null;
-      currentOrganization.value = null;
-      
-      // Redirect to login
-      await navigateTo('/login');
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
+    await useRequestFetch()('/auth/session', {
+      method: 'DELETE',
+      onResponse({ response: { headers } }) {
+        if (import.meta.server && serverEvent) {
+          for (const setCookie of headers.getSetCookie()) {
+            appendResponseHeader(serverEvent, 'Set-Cookie', setCookie);
+          }
+        }
+      },
+    });
+    sessionState.value = null;
+    currentOrganization.value = null;
+    authReadyState.value = false;
   };
 
   // Switch organization
@@ -73,7 +59,7 @@ export const useAuth = () => {
       //   method: 'POST'
       // });
       // currentOrganization.value = response.organization;
-      
+
       console.log('Switching to organization:', organizationId);
     } catch (error) {
       console.error('Failed to switch organization:', error);
@@ -81,19 +67,44 @@ export const useAuth = () => {
     }
   };
 
+  // Popup authentication support
+  const popupListener = (e: StorageEvent) => {
+    if (e.key === 'temp-nuxt-auth-utils-popup') {
+      fetch();
+      window.removeEventListener('storage', popupListener);
+    }
+  };
+
+  const openInPopup = (route: string, size: { width?: number; height?: number } = {}) => {
+    const width = size.width ?? 960;
+    const height = size.height ?? 600;
+    const top = (window.top?.outerHeight ?? 0) / 2 + (window.top?.screenY ?? 0) - height / 2;
+    const left = (window.top?.outerWidth ?? 0) / 2 + (window.top?.screenX ?? 0) - width / 2;
+
+    window.open(
+      route,
+      '_blank',
+      `width=${width}, height=${height}, top=${top}, left=${left}, toolbar=no, location=no, directories=no, status=no, menubar=no, scrollbars=no, resizable=no, copyhistory=no`
+    );
+  };
+
   // Initialize auth state
   onMounted(() => {
-    getCurrentUser();
+    fetch();
   });
 
   return {
-    user: readonly(user),
+    // State
+    user: user,
     currentOrganization: readonly(currentOrganization),
+    session: readonly(sessionState),
+    ready: computed(() => authReadyState.value),
     isAuthenticated,
     isLoading: readonly(isLoading),
-    login,
+    fetch,
     logout,
     switchOrganization,
-    getCurrentUser,
+    getCurrentUser: fetch,
+    openInPopup,
   };
 };

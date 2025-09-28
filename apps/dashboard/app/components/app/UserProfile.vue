@@ -21,10 +21,10 @@
       <!-- User info -->
       <div class="flex-1 min-w-0">
         <p class="text-sm font-medium text-text-primary truncate">
-          {{ user?.userName || 'User' }}
+          {{ user?.preferred_username }}
         </p>
         <p class="text-xs text-text-secondary truncate">
-          {{ user?.preferredLoginName || 'user@example.com' }}
+          {{ user?.email }}
         </p>
       </div>
 
@@ -32,7 +32,7 @@
       <OuiButton
         variant="ghost"
         size="sm"
-        @click="handleLogout"
+        @click="auth.logout()"
         title="Logout"
         class="!p-1.5 hover:bg-danger/10 hover:text-danger"
       >
@@ -44,14 +44,5 @@
 
 <script setup lang="ts">
 import { UserIcon, ArrowRightOnRectangleIcon } from '@heroicons/vue/24/outline';
-
-const { user } = useUser();
-
-const emit = defineEmits<{
-  logout: [];
-}>();
-
-const handleLogout = () => {
-  emit('logout');
-};
+const { user, ...auth } = useAuth();
 </script>

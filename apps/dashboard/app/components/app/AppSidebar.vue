@@ -26,7 +26,7 @@
     </div>
 
     <!-- User section -->
-    <AppUserProfile @logout="handleLogout" />
+    <AppUserProfile />
   </nav>
 </template>
 
@@ -39,12 +39,4 @@ import {
   CreditCardIcon,
   Cog6ToothIcon,
 } from '@heroicons/vue/24/outline';
-
-const emit = defineEmits<{
-  logout: [];
-}>();
-
-const handleLogout = () => {
-  emit('logout');
-};
 </script>

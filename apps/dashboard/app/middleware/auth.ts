@@ -1,15 +1,8 @@
-import { useUser } from '~/stores/user';
-import { defineNuxtRouteMiddleware } from '#app';
 export default defineNuxtRouteMiddleware(async (to, from) => {
-  const userStore = useUser();
-  userStore.restoreSession();
-  if (!userStore.isLoggedIn) {
-    if (to.path === '/auth/callback') userStore.handleCallback(to);
-    else window?.open(await userStore.login(), '_blank', 'width=500,height=700');
-    //  router.(, {
-    //     external: true,
-    //     open: { target: '_blank', windowFeatures: { popup: true } },
-    //   });
-    //   navigateTo('test');
+  if (import.meta.server) return;
+  const user = useAuth();
+  await user.fetch();
+  if (!user.session.value || !user.user.value) {
+    user.openInPopup('/auth/login', { height: 700, width: 500 });
   }
 });

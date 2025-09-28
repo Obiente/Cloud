@@ -4,7 +4,7 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   vite: { plugins: [tailwindcss()] },
   // Modules
-  modules: ['@pinia/nuxt', "@vueuse/nuxt"],
+  modules: ['@pinia/nuxt', '@vueuse/nuxt'],
 
   // CSS Framework - using Nuxt UI (built on Tailwind CSS)
   css: ['~/assets/css/main.css'],
@@ -18,7 +18,13 @@ export default defineNuxtConfig({
   runtimeConfig: {
     // Private keys (only available on server-side)
     apiSecret: '',
-
+    session: {
+      password: 'changeme_' + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters
+      cookie: {
+        secure: false, // Set to true if using HTTPS
+      },
+    },
+    requestHost: undefined,
     // Public keys (exposed to client-side)
     public: {
       apiBaseUrl: 'http://localhost:3001',

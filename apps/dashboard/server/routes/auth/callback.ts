@@ -1,15 +1,49 @@
+import type { ZitadelTokenResponse } from '@obiente/types';
+
 export default defineEventHandler(async event => {
-  const body = await readBody(event);
-  const { code, code_verifier, redirect_uri } = body;
-
-  if (!code || !code_verifier) {
-    throw createError({ statusCode: 400, message: 'Missing code or code_verifier' });
+  const { code, state, error } = getQuery<{ code?: string; state?: string; error?: string }>(event);
+  const config = useRuntimeConfig();
+  if (!code) {
+    throw createError({ statusCode: 400, message: 'Missing code' });
   }
+  const { code_verifier } = await handlePKCE(event);
+  console.log(code_verifier, code);
 
-  const tokenResponse = await exchangeCodeForTokens(code, code_verifier, redirect_uri);
+  const tokenResponse = await $fetch<ZitadelTokenResponse>(
+    `${config.public.oidcBase}/oauth/v2/token`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        code_verifier,
+        redirect_uri: config.requestHost + '/auth/callback',
+        client_id: config.public.oidcClientId,
+      }),
+    }
+  );
 
   // Set secure HTTP-only cookies
-  setAuthCookies(event, tokenResponse);
 
-  // Return minimal response (tokens are in cookies)
+  await getUserData(
+    event,
+    await setUserSession(event, {
+      secure: {
+        scope: tokenResponse.scope,
+        token_type: tokenResponse.token_type,
+        expires_in: tokenResponse.expires_in,
+        refresh_token: tokenResponse.refresh_token,
+        access_token: tokenResponse.access_token,
+      },
+    })
+  );
+  return `<!DOCTYPE html>
+<html>
+<body>
+  <script>
+    window.close();
+  </script>
+</body>
+</html>`;
 });

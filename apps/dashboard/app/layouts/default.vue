@@ -1,8 +1,9 @@
 <template>
+  <!-- {{user}} -->
   <div class="bg-background">
-    <div v-if="userStore.isLoggedIn && userStore.user" class="flex">
+    <div v-if="user.user.value && user.isAuthenticated.value" class="flex">
       <!-- Sidebar -->
-      <AppSidebar :user="userStore.user" @logout="logout" />
+      <AppSidebar />
 
       <!-- Main content -->
       <div class="flex-1 flex flex-col">
@@ -25,9 +26,9 @@
       </div>
     </div>
     <div v-else class="main-content flex flex-col justify-center items-center">
-      <OuiText v-if="userStore.error" size="2xl" color="danger" weight="extrabold">{{ userStore.error }}</OuiText>
-      <OuiText v-else-if="userStore.loading" size="2xl" weight="extrabold">loading</OuiText>
-      <OuiText v-else-if="userStore.isAuthenticated" size="2xl" weight="extrabold">...</OuiText>
+      <!-- {{ user }} -->
+      <OuiText v-if="user.isLoading" size="2xl" weight="extrabold">loading</OuiText>
+      <OuiText v-else-if="user.isAuthenticated" size="2xl" weight="extrabold">...</OuiText>
       <OuiText v-else size="2xl" weight="extrabold">please log in</OuiText>
     </div>
   </div>
@@ -35,9 +36,7 @@
 
 <script setup lang="ts">
 // Pinia user store
-const userStore = useUser();
-
-const logout = userStore.logout;
+const user = useAuth();
 
 // Notification count (TODO: Replace with actual notification system)
 const notificationCount = ref(3);
