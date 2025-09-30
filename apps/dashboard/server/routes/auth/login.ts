@@ -10,13 +10,13 @@ export default eventHandler(async event => {
   };
   const { code_challenge, code_challenge_method } = await handlePKCE(event);
   const params = new URLSearchParams({
+    prompt: 'none',
     client_id: OIDC.clientId,
     redirect_uri: useRuntimeConfig().requestHost + '/auth/callback',
     response_type: OIDC.responseType,
     scope: OIDC.scope,
     code_challenge: code_challenge!,
     code_challenge_method: code_challenge_method!,
-    prompt: 'none',
   });
   sendRedirect(event, `${OIDC.authority}/authorize?${params.toString()}`);
 });
