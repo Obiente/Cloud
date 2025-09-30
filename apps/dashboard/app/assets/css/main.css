@@ -19,7 +19,7 @@
   --oui-background: #303446;
   --oui-foreground: #c6d0f5;
   --oui-surface-base: #303446;
-  --oui-surface-raised: #292c3c;
+  --oui-surface-raised: #414559;
   --oui-surface-overlay: #414559;
   --oui-surface-muted: #51576d;
   --oui-text-primary: #c6d0f5;
@@ -35,7 +35,7 @@
   --oui-accent-warning: #e5c890;
   --oui-accent-danger: #e78284;
   --oui-accent-info: #99d1db;
-  --oui-interactive-hover: #232634;
+  --oui-interactive-hover: #51576d;
   --oui-interactive-active: #626880;
   --oui-interactive-disabled: #737994;
   --oui-interactive-focus: #8caaee;

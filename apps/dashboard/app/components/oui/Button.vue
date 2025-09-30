@@ -13,7 +13,7 @@
       },
       // Variant styles applied directly
       {
-        'bg-primary text-white hover:bg-interactive-hover active:bg-primary': variant === 'primary',
+        'bg-surface-raised text-primary hover:bg-interactive-hover active:bg-interactive-active': variant === 'primary',
         'bg-secondary text-primary hover:bg-secondary-dark active:bg-secondary-darker': variant === 'secondary',
         'bg-transparent border border-primary text-primary hover:bg-primary hover:text-white': variant === 'outline',
         'bg-transparent text-primary hover:bg-primary/10 active:bg-primary/20': variant === 'ghost',
