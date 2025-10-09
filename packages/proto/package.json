@@ -4,10 +4,7 @@
   "private": true,
   "description": "Protocol Buffer definitions and generated code for Obiente Cloud",
   "type": "module",
-  "files": [
-    "dist",
-    "proto"
-  ],
+  "files": ["dist", "proto"],
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
@@ -17,9 +14,7 @@
   "types": "./src/generated",
   "scripts": {
     "build": "rm -r src/generated ; buf generate",
-    "clean": "rm -r src/generated",
-    "generate:proto": "node scripts/generate.js",
-    "typecheck": "tsc --noEmit"
+    "clean": "rm -r src/generated"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.8.0",
