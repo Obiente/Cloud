@@ -61,7 +61,7 @@ test-results/
 *.tsbuildinfo
 
 # Editor/IDE
-.vscode/
+# .vscode/ ## blank settings.json file is there but whatever
 .idea/
 *.sublime-*
 .history/

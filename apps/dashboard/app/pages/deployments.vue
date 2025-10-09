@@ -51,109 +51,189 @@
       </OuiButton>
     </div>
 
-    <div v-else class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+    <div v-else class="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
       <OuiCard
         v-for="deployment in filteredDeployments"
         :key="deployment.id"
         variant="raised"
         hoverable
-        class="group"
+        :data-status="deployment.status"
+        class="group relative overflow-hidden border border-transparent transition-all duration-300 ease-out hover:-translate-y-1 hover:border-primary/20 hover:shadow-2xl focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/20"
+        :class="getStatusMeta(deployment.status).ring"
       >
-        <OuiCardHeader>
-          <div class="flex items-start justify-between">
-            <div class="flex-1 min-w-0">
-              <h3 class="oui-card-title truncate">{{ deployment.name }}</h3>
-              <p class="oui-card-description truncate">{{ deployment.domain }}</p>
-            </div>
-            <OuiBadge :variant="getStatusVariant(deployment.status)">
-              {{ deployment.status }}
-            </OuiBadge>
-          </div>
-        </OuiCardHeader>
+        <span
+          class="pointer-events-none absolute inset-x-0 -top-12 h-32 rounded-b-[44%] bg-gradient-to-br opacity-70 transition-all duration-500 group-hover:opacity-100"
+          :class="getStatusMeta(deployment.status).gradient"
+        />
+        <span
+          class="pointer-events-none absolute -inset-px rounded-2xl opacity-0 blur-3xl transition-all duration-700 group-hover:opacity-100"
+          :class="getStatusMeta(deployment.status).halo"
+        />
 
-        <OuiCardBody class="space-y-3">
-          <div class="flex items-center text-sm text-secondary">
-            <CodeBracketIcon class="h-4 w-4 mr-2" />
-            <span class="truncate">{{ deployment.framework }}</span>
-          </div>
+        <div class="relative flex h-full flex-col">
+          <OuiCardHeader class="pb-6">
+            <div class="flex items-start justify-between gap-4">
+              <div class="min-w-0 flex-1 space-y-2">
+                <div
+                  class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide"
+                  :class="getStatusMeta(deployment.status).text"
+                >
+                  <component
+                    :is="getStatusMeta(deployment.status).icon"
+                    class="h-4 w-4"
+                    :class="getStatusMeta(deployment.status).iconClass"
+                  />
+                  <span>{{ getStatusMeta(deployment.status).label }}</span>
+                </div>
 
-          <div class="flex items-center text-sm text-secondary">
-            <CalendarIcon class="h-4 w-4 mr-2" />
-            <span>{{ formatDate(deployment.lastDeployedAt) }}</span>
-          </div>
+                <div class="flex items-center gap-2">
+                  <h3 class="oui-card-title truncate text-lg font-semibold">
+                    {{ deployment.name }}
+                  </h3>
+                  <span v-if="deployment.environment === 'production'" class="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600">
+                    Live
+                  </span>
+                </div>
 
-          <div class="flex items-center text-sm text-secondary">
-            <CpuChipIcon class="h-4 w-4 mr-2" />
-            <span>{{ deployment.environment }}</span>
-          </div>
+                <p class="flex items-center gap-2 text-sm text-secondary">
+                  <span class="inline-flex items-center gap-1 rounded-full border border-muted bg-muted px-2.5 py-1 text-xs font-medium text-primary transition-colors group-hover:border-primary">
+                    <ArrowTopRightOnSquareIcon class="h-3.5 w-3.5 opacity-70" />
+                    {{ deployment.domain }}
+                  </span>
+                </p>
+              </div>
 
-          <!-- Quick Stats -->
-          <div class="grid grid-cols-2 gap-4 pt-2 border-t border-muted">
-            <div class="text-center">
-              <div class="text-lg font-semibold text-primary">{{ deployment.buildTime }}s</div>
-              <div class="text-xs text-secondary">Build Time</div>
-            </div>
-            <div class="text-center">
-              <div class="text-lg font-semibold text-primary">{{ deployment.size }}</div>
-              <div class="text-xs text-secondary">Bundle Size</div>
-            </div>
-          </div>
-        </OuiCardBody>
-
-        <OuiCardFooter>
-          <div class="flex items-center justify-between">
-            <div class="flex space-x-2">
-              <OuiButton
-                v-if="deployment.status === 'RUNNING'"
-                variant="ghost"
-                size="sm"
-                @click="stopDeployment(deployment.id)"
-                title="Stop deployment"
+              <OuiBadge
+                :variant="getStatusMeta(deployment.status).badge"
+                class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide"
               >
-                <StopIcon class="w-4 h-4" />
-              </OuiButton>
+                <span class="flex items-center gap-2">
+                  <span class="h-2 w-2 rounded-full" :class="getStatusMeta(deployment.status).dot" />
+                  {{ deployment.status }}
+                </span>
+              </OuiBadge>
+            </div>
+          </OuiCardHeader>
 
-              <OuiButton
-                v-if="deployment.status === 'STOPPED'"
-                variant="ghost"
-                size="sm"
-                @click="startDeployment(deployment.id)"
-                title="Start deployment"
-              >
-                <PlayIcon class="w-4 h-4" />
-              </OuiButton>
-
-              <OuiButton
-                variant="ghost"
-                size="sm"
-                @click="redeployApp(deployment.id)"
-                title="Redeploy"
-              >
-                <ArrowPathIcon class="w-4 h-4" />
-              </OuiButton>
+          <OuiCardBody class="flex-1 space-y-6">
+            <div class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+              <div class="flex items-center gap-2 text-secondary">
+                <CodeBracketIcon class="h-4 w-4 text-primary" />
+                <span class="truncate font-medium text-primary">
+                  {{ deployment.framework }}
+                </span>
+              </div>
+              <div class="flex items-center gap-2 text-secondary sm:justify-end">
+                <CalendarIcon class="h-4 w-4 text-primary" />
+                <span class="text-xs uppercase tracking-wide">Last deployed</span>
+                <span class="text-sm font-medium text-primary">
+                  {{ formatDate(deployment.lastDeployedAt) }}
+                </span>
+              </div>
             </div>
 
-            <div class="flex space-x-2">
-              <OuiButton
-                variant="ghost"
-                size="sm"
-                @click="openUrl(deployment.domain)"
-                title="Open site"
+            <div class="flex flex-wrap gap-2">
+              <span
+                class="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs font-semibold uppercase tracking-wide text-secondary"
               >
-                <ArrowTopRightOnSquareIcon class="w-4 h-4" />
-              </OuiButton>
+                <CpuChipIcon class="h-4 w-4 text-primary" />
+                {{ formatEnvironment(deployment.environment) }}
+              </span>
 
-              <OuiButton
-                variant="ghost"
-                size="sm"
-                @click="viewDeployment(deployment.id)"
-                title="View details"
+              <span
+                v-if="deployment.repositoryUrl"
+                class="inline-flex items-center gap-2 rounded-full border border-muted px-3 py-1 text-xs font-medium text-secondary transition-colors hover:border-primary hover:text-primary"
               >
-                <EyeIcon class="w-4 h-4" />
-              </OuiButton>
+                <span class="h-2 w-2 rounded-full bg-primary" />
+                {{ cleanRepositoryName(deployment.repositoryUrl) }}
+              </span>
             </div>
-          </div>
-        </OuiCardFooter>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div class="rounded-xl border border-muted bg-muted p-4 shadow-inner">
+                <p class="text-xs font-semibold uppercase tracking-wide text-secondary">Build Time</p>
+                <p class="mt-1 text-2xl font-semibold text-primary">{{ deployment.buildTime }}s</p>
+              </div>
+              <div class="rounded-xl border border-muted bg-muted p-4 shadow-inner">
+                <p class="text-xs font-semibold uppercase tracking-wide text-secondary">Bundle Size</p>
+                <p class="mt-1 text-2xl font-semibold text-primary">{{ deployment.size }}</p>
+              </div>
+            </div>
+
+            <div
+              v-if="deployment.status === 'BUILDING'"
+              class="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200"
+            >
+              <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+                <Cog6ToothIcon class="h-4 w-4 animate-spin" />
+                <span>Deployment in progress</span>
+              </div>
+              <div class="h-1.5 w-full overflow-hidden rounded-full bg-amber-200/70 dark:bg-amber-500/30">
+                <div class="h-full w-full animate-pulse rounded-full bg-amber-500/80 dark:bg-amber-300/70" />
+              </div>
+            </div>
+          </OuiCardBody>
+
+          <OuiCardFooter class="mt-auto border-t border-muted pt-4">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2">
+                <OuiButton
+                  v-if="deployment.status === 'RUNNING'"
+                  variant="ghost"
+                  size="sm"
+                  @click="stopDeployment(deployment.id)"
+                  title="Stop deployment"
+                  :aria-label="`Stop deployment ${deployment.name}`"
+                >
+                  <StopIcon class="h-4 w-4" />
+                </OuiButton>
+
+                <OuiButton
+                  v-if="deployment.status === 'STOPPED'"
+                  variant="ghost"
+                  size="sm"
+                  @click="startDeployment(deployment.id)"
+                  title="Start deployment"
+                  :aria-label="`Start deployment ${deployment.name}`"
+                >
+                  <PlayIcon class="h-4 w-4" />
+                </OuiButton>
+
+                <OuiButton
+                  variant="ghost"
+                  size="sm"
+                  @click="redeployApp(deployment.id)"
+                  title="Redeploy deployment"
+                  :aria-label="`Redeploy deployment ${deployment.name}`"
+                >
+                  <ArrowPathIcon class="h-4 w-4" />
+                </OuiButton>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <OuiButton
+                  variant="ghost"
+                  size="sm"
+                  @click="openUrl(deployment.domain)"
+                  title="Open deployed site"
+                  :aria-label="`Open ${deployment.domain} in a new tab`"
+                >
+                  <ArrowTopRightOnSquareIcon class="h-4 w-4" />
+                </OuiButton>
+
+                <OuiButton
+                  variant="ghost"
+                  size="sm"
+                  @click="viewDeployment(deployment.id)"
+                  title="View deployment details"
+                  :aria-label="`View ${deployment.name} details`"
+                >
+                  <EyeIcon class="h-4 w-4" />
+                </OuiButton>
+              </div>
+            </div>
+          </OuiCardFooter>
+        </div>
       </OuiCard>
     </div>
 
@@ -217,6 +297,11 @@ import {
   CalendarIcon,
   CpuChipIcon,
   ArrowTopRightOnSquareIcon,
+  BoltIcon,
+  PauseCircleIcon,
+  Cog6ToothIcon,
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
 } from '@heroicons/vue/24/outline';
 
 // Reactive state
@@ -256,6 +341,64 @@ const frameworkOptions = [
   { label: 'Static HTML', value: 'static' },
   { label: 'Node.js', value: 'nodejs' },
 ];
+
+const STATUS_META = {
+  RUNNING: {
+    badge: 'success',
+    gradient: 'from-emerald-400/30 via-emerald-400/10 to-transparent',
+    halo: 'bg-emerald-400/20',
+    ring: 'ring-1 ring-emerald-500/20',
+    text: 'text-emerald-600 dark:text-emerald-300',
+    icon: BoltIcon,
+    iconClass: 'text-emerald-500 dark:text-emerald-300',
+    label: 'Running smoothly',
+    dot: 'bg-emerald-400',
+  },
+  STOPPED: {
+    badge: 'secondary',
+    gradient: 'from-slate-400/20 via-slate-400/10 to-transparent',
+    halo: 'bg-slate-400/15',
+    ring: 'ring-1 ring-slate-400/20',
+    text: 'text-slate-600 dark:text-slate-300',
+    icon: PauseCircleIcon,
+    iconClass: 'text-slate-400 dark:text-slate-300',
+    label: 'Deployment paused',
+    dot: 'bg-slate-400',
+  },
+  BUILDING: {
+    badge: 'warning',
+    gradient: 'from-amber-400/30 via-amber-400/15 to-transparent',
+    halo: 'bg-amber-400/15',
+    ring: 'ring-1 ring-amber-400/30',
+    text: 'text-amber-600 dark:text-amber-300',
+    icon: Cog6ToothIcon,
+    iconClass: 'text-amber-500 dark:text-amber-300',
+    label: 'Building new release',
+    dot: 'bg-amber-400',
+  },
+  FAILED: {
+    badge: 'danger',
+    gradient: 'from-rose-500/25 via-rose-500/10 to-transparent',
+    halo: 'bg-rose-500/20',
+    ring: 'ring-1 ring-rose-500/30',
+    text: 'text-rose-600 dark:text-rose-300',
+    icon: ExclamationTriangleIcon,
+    iconClass: 'text-rose-500 dark:text-rose-300',
+    label: 'Deployment failed',
+    dot: 'bg-rose-500',
+  },
+  DEFAULT: {
+    badge: 'secondary',
+    gradient: 'from-slate-400/15 via-slate-400/5 to-transparent',
+    halo: 'bg-slate-400/15',
+    ring: 'ring-1 ring-slate-400/15',
+    text: 'text-slate-600 dark:text-slate-400',
+    icon: InformationCircleIcon,
+    iconClass: 'text-slate-400 dark:text-slate-300',
+    label: 'Status unknown',
+    dot: 'bg-slate-400',
+  },
+} as const;
 
 // Mock data for now
 const deployments = ref([
@@ -309,6 +452,24 @@ const deployments = ref([
   },
 ]);
 
+const getStatusMeta = (status: string) =>
+  STATUS_META[status as keyof typeof STATUS_META] ?? STATUS_META.DEFAULT;
+
+const formatEnvironment = (environment: string) =>
+  environment ? environment.charAt(0).toUpperCase() + environment.slice(1) : 'Unknown';
+
+const cleanRepositoryName = (url: string) => {
+  if (!url) return '';
+
+  try {
+    const parsed = new URL(url);
+    const repoPath = parsed.pathname.replace(/\.git$/, '').replace(/^\//, '');
+    return repoPath || parsed.hostname;
+  } catch (error) {
+    return url.replace(/^https?:\/\//, '').replace(/\.git$/, '');
+  }
+};
+
 const filteredDeployments = computed(() => {
   let filtered = deployments.value;
 
@@ -335,22 +496,6 @@ const filteredDeployments = computed(() => {
 
   return filtered;
 });
-
-// Status badge variant helper
-const getStatusVariant = (status: string) => {
-  switch (status) {
-    case 'RUNNING':
-      return 'success';
-    case 'STOPPED':
-      return 'secondary';
-    case 'BUILDING':
-      return 'warning';
-    case 'FAILED':
-      return 'danger';
-    default:
-      return 'secondary';
-  }
-};
 
 // Actions
 const stopDeployment = (id: string) => {
