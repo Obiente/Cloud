@@ -1,36 +1,32 @@
-import type { FastifyInstance } from 'fastify';
-import fp from 'fastify-plugin';
-
-// Import ConnectRPC service implementations (will be created later)
-// import { authRoutes } from './auth.js';
-// import { organizationRoutes } from './organization.js';
-// import { deploymentRoutes } from './deployment.js';
-// import { vpsRoutes } from './vps.js';
-// import { databaseRoutes } from './database.js';
-// import { billingRoutes } from './billing.js';
-
-async function connectRoutes(fastify: FastifyInstance) {
-  // Register ConnectRPC routes
-  // These will be implemented as we progress through the tasks
-  
-  fastify.log.info('Setting up ConnectRPC routes...');
-  
-  // Placeholder route for testing
-  fastify.get('/api/ping', async () => {
-    return { message: 'ConnectRPC API is running', timestamp: new Date().toISOString() };
+import type { ConnectRouter } from "@connectrpc/connect";
+import { OrganizationService } from "@obiente/proto";
+import auth from "./auth.js";
+export default (router: ConnectRouter) => {
+  auth(router);
+  router.service(OrganizationService, {
+    async listMembers(req) {
+      return {
+        members: [
+          {
+            id: "member-1",
+            name: "John Doe",
+            email: "john.doe@example.com",
+            role: "admin",
+          },
+          {
+            id: "member-2",
+            name: "Jane Smith",
+            email: "jane.smith@example.com",
+            role: "user",
+          },
+        ],
+      };
+    },
+    async updateMember(req) {
+      return {
+        success: true,
+        message: `Member updated: ${req}`,
+      };
+    },
   });
-  
-  // TODO: Register actual ConnectRPC service handlers
-  // await fastify.register(authRoutes, { prefix: '/api' });
-  // await fastify.register(organizationRoutes, { prefix: '/api' });
-  // await fastify.register(deploymentRoutes, { prefix: '/api' });
-  // await fastify.register(vpsRoutes, { prefix: '/api' });
-  // await fastify.register(databaseRoutes, { prefix: '/api' });
-  // await fastify.register(billingRoutes, { prefix: '/api' });
-  
-  fastify.log.info('ConnectRPC routes registered');
-}
-
-export default fp(connectRoutes, {
-  name: 'connect-routes',
-});
+};

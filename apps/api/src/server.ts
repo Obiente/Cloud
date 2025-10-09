@@ -1,117 +1,115 @@
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
-import helmet from '@fastify/helmet';
-import multipart from '@fastify/multipart';
-import rateLimit from '@fastify/rate-limit';
-import swagger from '@fastify/swagger';
-import swaggerUI from '@fastify/swagger-ui';
-import { connectRoutes } from './routes/index.js';
-import { config } from './config/index.js';
-import { authPlugin } from './plugins/auth.js';
-import { errorHandler } from './plugins/error-handler.js';
-import { requestLogger } from './plugins/request-logger.js';
+import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import multipart from "@fastify/multipart";
+import rateLimit from "@fastify/rate-limit";
+import swagger from "@fastify/swagger";
+import swaggerUI from "@fastify/swagger-ui";
+import routes from "./routes/index";
+import { config } from "./config/index";
+// import authPlugin from "./plugins/auth";
+// import errorHandler from "./plugins/error-handler";
+// import requestLogger from "./plugins/request-logger";
+import { fastify } from "fastify";
+import { fastifyConnectPlugin } from "@connectrpc/connect-fastify";
 
-const fastify = Fastify({
+
+const server = fastify({
   logger: {
     level: config.logLevel,
-    transport: config.isDev ? {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-      },
-    } : undefined,
+    // transport: config.isDev
+    //   ? {
+    //     target: "pino-pretty",
+    //     options: {
+    //       colorize: true,
+    //     },
+    //   }
+    //   : undefined,
   },
 });
 
-// Register plugins
-await fastify.register(cors, {
-  origin: config.cors.origin,
-  credentials: true,
-});
+// // Register plugins
 
-await fastify.register(helmet, {
+await server.register(helmet, {
   contentSecurityPolicy: false,
 });
 
-await fastify.register(multipart);
+await server.register(multipart);
 
-await fastify.register(rateLimit, {
+await server.register(rateLimit, {
   max: 100,
-  timeWindow: '1 minute',
+  timeWindow: "1 minute",
 });
 
 if (config.isDev) {
-  await fastify.register(swagger, {
+  await server.register(swagger, {
     swagger: {
       info: {
-        title: 'Obiente Cloud API',
-        description: 'Multi-tenant cloud dashboard API',
-        version: '0.1.0',
+        title: "Obiente Cloud API",
+        description: "Multi-tenant cloud dashboard API",
+        version: "0.1.0",
       },
-      host: `localhost:${config.port}`,
-      schemes: ['http'],
-      consumes: ['application/json'],
-      produces: ['application/json'],
+      host: `${config.hostname}`,
+      schemes: ["http", "https"],
+      consumes: ["application/json"],
+      produces: ["application/json"],
+      methods: ["POST"],
     },
   });
 
-  await fastify.register(swaggerUI, {
-    routePrefix: '/docs',
+  await server.register(swaggerUI, {
+    routePrefix: "/docs",
     uiConfig: {
-      docExpansion: 'full',
-      deepLinking: false,
+      docExpansion: "full",
+      deepLinking: true,
     },
+  });
+} else {
+  await server.register(cors, {
+    origin: config.cors.origin,
+    credentials: true,
   });
 }
-
-// Register custom plugins
-await fastify.register(requestLogger);
-await fastify.register(errorHandler);
-await fastify.register(authPlugin);
+await server.register(fastifyConnectPlugin, {
+  routes,
+});
+// // Register custom plugins
+// await server.register(requestLogger);
+// await server.register(errorHandler);
+// await server.register(authPlugin);
 
 // Register ConnectRPC routes
-await fastify.register(connectRoutes);
 
-// Health check endpoint
-fastify.get('/health', async () => {
-  return { status: 'ok', timestamp: new Date().toISOString() };
-});
+try {
+  await server.listen({
+    port: config.port,
+    host: config.host,
+  });
 
-// Start server
-const start = async () => {
-  try {
-    await fastify.listen({
-      port: config.port,
-      host: config.host,
-    });
-    
-    fastify.log.info(`Server running on http://${config.host}:${config.port}`);
-    
-    if (config.isDev) {
-      fastify.log.info(`API Documentation available at http://${config.host}:${config.port}/docs`);
-    }
-  } catch (err) {
-    fastify.log.error(err);
-    process.exit(1);
+  server.log.info(`Server running on http://${config.host}:${config.port}`);
+
+  if (config.isDev) {
+    server.log.info(
+      `API Documentation available at http://${config.hostname}/docs`,
+    );
   }
-};
+} catch (err) {
+  server.log.error(err);
+  process.exit(1);
+}
 
 // Graceful shutdown
 const gracefulShutdown = async (signal: string) => {
-  fastify.log.info(`Received ${signal}, shutting down gracefully`);
-  
+  server.log.info(`Received ${signal}, shutting down gracefully`);
+
   try {
-    await fastify.close();
-    fastify.log.info('Server closed successfully');
+    await server.close();
+    server.log.info("Server closed successfully");
     process.exit(0);
   } catch (err) {
-    fastify.log.error('Error during shutdown:', err);
+    server.log.error("Error during shutdown:", err);
     process.exit(1);
   }
 };
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-// Start the server
-start();
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));

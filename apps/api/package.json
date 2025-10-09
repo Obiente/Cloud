@@ -1,5 +1,5 @@
 {
-  "name": "obiente-cloud-api",
+  "name": "@obiente/api",
   "version": "0.1.0",
   "private": true,
   "description": "Obiente Cloud API Server",
@@ -16,9 +16,12 @@
     "db:seed": "pnpm --filter @obiente/database db:seed"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "^2.9.0",
     "@connectrpc/connect": "^2.1.0",
     "@connectrpc/connect-express": "^2.1.0",
+    "@connectrpc/connect-fastify": "^2.1.0",
     "@connectrpc/connect-node": "^2.1.0",
+    "@connectrpc/connect-web": "^2.1.0",
     "@fastify/cors": "^11.1.0",
     "@fastify/helmet": "^13.0.1",
     "@fastify/multipart": "^9.2.1",
