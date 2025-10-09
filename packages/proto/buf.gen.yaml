@@ -1,0 +1,9 @@
+version: v2
+plugins:
+  - local: protoc-gen-es
+    out: src/generated
+    include_imports: true
+    include_wkt: true
+    opt: target=ts
+    
+   

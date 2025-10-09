@@ -3,29 +3,36 @@
   "version": "0.1.0",
   "private": true,
   "description": "Protocol Buffer definitions and generated code for Obiente Cloud",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "type": "module",
   "files": [
     "dist",
     "proto"
   ],
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./utils": "./src/utils.ts",
+    "./*": "./src/generated/*"
+  },
+  "types": "./src/generated",
   "scripts": {
-    "build": "npm run generate:proto && tsc",
-    "dev": "npm run generate:proto && tsc --watch",
-    "clean": "rm -rf dist generated",
+    "build": "rm -r src/generated ; buf generate",
+    "clean": "rm -r src/generated",
     "generate:proto": "node scripts/generate.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.8.0",
-    "@bufbuild/protoc-gen-es": "^2.8.0",
     "@connectrpc/connect": "^2.1.0",
     "@connectrpc/connect-node": "^2.1.0",
     "@connectrpc/protoc-gen-connect-es": "^1.7.0"
   },
   "devDependencies": {
+    "@bufbuild/buf": "^1.57.2",
+    "@bufbuild/protoc-gen-es": "^2.8.0",
     "@obiente/config": "workspace:*",
     "@obiente/types": "workspace:*",
+    "rolldown": "1.0.0-beta.42",
     "typescript": "^5.9.2"
   }
 }

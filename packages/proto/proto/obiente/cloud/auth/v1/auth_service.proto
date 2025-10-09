@@ -5,6 +5,9 @@ package obiente.cloud.auth.v1;
 import "google/protobuf/timestamp.proto";
 
 service AuthService {
+  // Get current authenticated user
+  rpc GetCurrentUser(GetCurrentUserRequest) returns (GetCurrentUserResponse);
+  
   // Initiate OIDC login flow
   rpc InitiateLogin(InitiateLoginRequest) returns (InitiateLoginResponse);
   
@@ -16,6 +19,13 @@ service AuthService {
   
   // Logout user
   rpc Logout(LogoutRequest) returns (LogoutResponse);
+}
+
+// Empty request for getting current user
+message GetCurrentUserRequest {}
+
+message GetCurrentUserResponse {
+  User user = 1;
 }
 
 message InitiateLoginRequest {

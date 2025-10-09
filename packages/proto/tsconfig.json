@@ -1,16 +1,16 @@
 {
   "extends": "@obiente/config/tsconfig.json",
   "compilerOptions": {
-    "composite": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Node",
     "declaration": true,
-    "declarationMap": true,
-    "emitDeclarationOnly": false,
-    "outDir": "dist",
-    "rootDir": "src"
+    "declarationDir": "src/generated",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true
   },
   "include": [
     "src/**/*",
-    "generated/**/*"
   ],
   "exclude": [
     "node_modules",

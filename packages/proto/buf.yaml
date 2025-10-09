@@ -1,0 +1,12 @@
+version: v2
+modules:
+  - path: proto
+deps:
+  - buf.build/googleapis/googleapis
+  - buf.build/connectrpc/connectrpc
+lint:
+  use:
+    - DEFAULT
+breaking:
+  use:
+    - FILE
