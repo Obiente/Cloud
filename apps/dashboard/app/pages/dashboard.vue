@@ -41,86 +41,90 @@
     <!-- Quick Stats -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       <!-- Deployments Card -->
-      <OuiCard variant="raised" hoverable>
+      <OuiCard variant="raised" hoverable @click="navigateTo('/deployments')">
         <OuiCardBody>
           <div class="flex items-center">
             <div class="p-2 bg-primary/10 rounded-lg">
               <RocketLaunchIcon class="w-6 h-6 text-accent-primary" />
             </div>
             <div class="ml-4 flex-1">
-              <div v-if="isLoading" class="space-y-2">
-                <OuiSkeleton width="3rem" height="1.5rem" variant="text" />
-                <OuiSkeleton width="5rem" height="1rem" variant="text" />
-              </div>
-              <div v-else>
-                <h3 class="text-lg font-semibold text-primary">{{ stats.deployments }}</h3>
-                <p class="text-sm text-secondary">Deployments</p>
-              </div>
+              <OuiSkeleton
+                v-if="isLoading"
+                class="mb-1"
+                width="3rem"
+                height="1.5rem"
+                variant="text"
+              />
+              <h3 v-else class="text-lg font-semibold text-primary">{{ stats.deployments }}</h3>
+              <p class="text-sm text-secondary">Deployments</p>
             </div>
           </div>
         </OuiCardBody>
       </OuiCard>
 
       <!-- VPS Instances Card -->
-      <OuiCard variant="raised" hoverable>
+      <OuiCard variant="raised" hoverable @click="navigateTo('/vps')">
         <OuiCardBody>
           <div class="flex items-center">
             <div class="p-2 bg-success/10 rounded-lg">
               <ServerIcon class="w-6 h-6 text-success" />
             </div>
             <div class="ml-4 flex-1">
-              <div v-if="isLoading" class="space-y-2">
-                <OuiSkeleton width="2rem" height="1.5rem" variant="text" />
-                <OuiSkeleton width="6rem" height="1rem" variant="text" />
-              </div>
-              <div v-else>
-                <h3 class="text-lg font-semibold text-primary">{{ stats.vpsInstances }}</h3>
-                <p class="text-sm text-secondary">VPS Instances</p>
-              </div>
+              <OuiSkeleton
+                v-if="isLoading"
+                class="mb-1"
+                width="2rem"
+                height="1.5rem"
+                variant="text"
+              />
+              <h3 v-else class="text-lg font-semibold text-primary">{{ stats.vpsInstances }}</h3>
+              <p class="text-sm text-secondary">VPS Instances</p>
             </div>
           </div>
         </OuiCardBody>
       </OuiCard>
 
       <!-- Databases Card -->
-      <OuiCard variant="raised" hoverable>
+      <OuiCard variant="raised" hoverable @click="navigateTo('/databases')">
         <OuiCardBody>
           <div class="flex items-center">
             <div class="p-2 bg-accent-secondary/10 rounded-lg">
               <CircleStackIcon class="w-6 h-6 text-accent-secondary" />
             </div>
             <div class="ml-4 flex-1">
-              <div v-if="isLoading" class="space-y-2">
-                <OuiSkeleton width="2rem" height="1.5rem" variant="text" />
-                <OuiSkeleton width="5rem" height="1rem" variant="text" />
-              </div>
-              <div v-else>
-                <h3 class="text-lg font-semibold text-primary">{{ stats.databases }}</h3>
-                <p class="text-sm text-secondary">Databases</p>
-              </div>
+              <OuiSkeleton
+                v-if="isLoading"
+                class="mb-1"
+                width="2rem"
+                height="1.5rem"
+                variant="text"
+              />
+              <h3 v-else class="text-lg font-semibold text-primary">{{ stats.databases }}</h3>
+              <p class="text-sm text-secondary">Databases</p>
             </div>
           </div>
         </OuiCardBody>
       </OuiCard>
 
       <!-- Monthly Spend Card -->
-      <OuiCard variant="raised" hoverable>
+      <OuiCard variant="raised" hoverable @click="navigateTo('/billing')">
         <OuiCardBody>
           <div class="flex items-center">
             <div class="p-2 bg-warning/10 rounded-lg">
               <CreditCardIcon class="w-6 h-6 text-warning" />
             </div>
             <div class="ml-4 flex-1">
-              <div v-if="isLoading" class="space-y-2">
-                <OuiSkeleton width="4rem" height="1.5rem" variant="text" />
-                <OuiSkeleton width="5rem" height="1rem" variant="text" />
-              </div>
-              <div v-else>
-                <h3 class="text-lg font-semibold text-primary">
-                  {{ formatCurrency(stats.monthlySpend) }}
-                </h3>
-                <p class="text-sm text-secondary">This Month</p>
-              </div>
+              <OuiSkeleton
+                v-if="isLoading"
+                class="mb-1"
+                width="4rem"
+                height="1.5rem"
+                variant="text"
+              />
+              <h3 v-else class="text-lg font-semibold text-primary">
+                {{ formatCurrency(stats.monthlySpend) }}
+              </h3>
+              <p class="text-sm text-secondary">This Month</p>
             </div>
           </div>
         </OuiCardBody>
