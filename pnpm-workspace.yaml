@@ -1,5 +1,7 @@
 packages:
-  - "!**/_**/**"
-  - 'apps/*'
-  - 'packages/*'
-  - "!packages/proto"
+  - '!**/_**/**'
+  - apps/*
+  - packages/*
+
+onlyBuiltDependencies:
+  - '@bufbuild/buf'
