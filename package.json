@@ -6,10 +6,11 @@
   "private": true,
   "packageManager": "pnpm@10.12.1",
   "devDependencies": {
-    "@nx-go/nx-go": "^3.3.1",
+    "@nx/docker": "21.6.4",
     "@nx/js": "21.6.4",
     "@nx/nuxt": "^21.6.4",
     "@nx/vite": "21.6.4",
+    "@obiente-lab/nx-go": "^3.4.1",
     "@obiente/config": "workspace:*",
     "@swc-node/register": "~1.9.2",
     "@swc/core": "~1.5.29",
@@ -20,6 +21,5 @@
     "prettier": "^2.8.8",
     "tslib": "^2.8.1",
     "typescript": "~5.9.3"
-  },
-  "dependencies": {}
+  }
 }
