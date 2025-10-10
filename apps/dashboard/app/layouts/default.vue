@@ -9,29 +9,29 @@
         aria-modal="true"
       >
         <div class="absolute inset-0 bg-background/80 backdrop-blur-sm" @click="closeSidebar" />
+      </div>
+    </Transition>
 
-        <Transition name="sidebar-panel" appear>
-          <div
-            v-if="isSidebarOpen"
-            :id="mobileSidebarId"
-            class="relative z-50 flex h-full w-72 max-w-[80vw] flex-col"
-          >
-            <AppSidebar
-              class="sidebar-drawer relative h-full overflow-y-auto border-r border-border-muted bg-surface-base shadow-2xl"
-              @navigate="closeSidebar"
-            />
+    <Transition name="sidebar-panel" appear>
+      <div
+        v-if="isSidebarOpen"
+        :id="mobileSidebarId"
+        class="fixed inset-y-0 left-0 z-50 flex h-full w-72 max-w-[80vw] flex-col lg:hidden"
+      >
+        <AppSidebar
+          class="sidebar-drawer relative h-full overflow-y-auto border-r border-border-muted bg-surface-base shadow-2xl"
+          @navigate="closeSidebar"
+        />
 
-            <OuiButton
-              variant="ghost"
-              size="sm"
-              class="absolute right-3 top-3 z-50 !p-2 text-text-secondary hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
-              @click="closeSidebar"
-              aria-label="Close navigation"
-            >
-              <XMarkIcon class="h-5 w-5" />
-            </OuiButton>
-          </div>
-        </Transition>
+        <OuiButton
+          variant="ghost"
+          size="sm"
+          class="absolute right-3 top-3 z-50 !p-2 text-text-secondary hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
+          @click="closeSidebar"
+          aria-label="Close navigation"
+        >
+          <XMarkIcon class="h-5 w-5" />
+        </OuiButton>
       </div>
     </Transition>
 
