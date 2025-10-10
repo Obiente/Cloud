@@ -1,12 +1,10 @@
 <template>
   <div :class="['oui-progress-base', `oui-progress-${size}`]" v-bind="$attrs">
     <div class="oui-progress-track">
-      <div 
+      <div
         class="oui-progress-bar"
         :style="{ width: `${clampedValue}%` }"
-        :class="[
-          `oui-progress-bar-${variant}`,
-        ]"
+        :class="[`oui-progress-bar-${variant}`]"
       >
         <div v-if="animated" class="oui-progress-animated" />
       </div>
@@ -21,8 +19,8 @@
 interface Props {
   value?: number;
   max?: number;
-  size?: 'sm' | 'md' | 'lg';
-  variant?: 'primary' | 'success' | 'warning' | 'danger';
+  size?: "sm" | "md" | "lg";
+  variant?: "primary" | "success" | "warning" | "danger";
   showValue?: boolean;
   animated?: boolean;
 }
@@ -30,8 +28,8 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   value: 0,
   max: 100,
-  size: 'md',
-  variant: 'primary',
+  size: "md",
+  variant: "primary",
   showValue: false,
   animated: false,
 });

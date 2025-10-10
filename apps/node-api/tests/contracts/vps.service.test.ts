@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { ConnectRouter } from '@connectrpc/connect';
-import { VPSService } from '../../src/generated/obiente/cloud/vps/v1/vps_service_connect';
+import { describe, it, expect, beforeEach } from "vitest";
+import { ConnectRouter } from "@connectrpc/connect";
+import { VPSService } from "../../src/generated/obiente/cloud/vps/v1/vps_service_connect";
 import {
   ListVPSInstancesRequest,
   ListVPSInstancesResponse,
@@ -20,25 +20,25 @@ import {
   VPSMetricsUpdate,
   VPSInstance,
   Pagination,
-} from '../../src/generated/obiente/cloud/vps/v1/vps_service_pb';
+} from "../../src/generated/obiente/cloud/vps/v1/vps_service_pb";
 
 /**
  * Contract tests for VPSService protobuf interface
  * These tests validate VPS instance management and metrics streaming
  * Tests should FAIL initially until VPSService is implemented
  */
-describe('VPSService Contract Tests', () => {
+describe("VPSService Contract Tests", () => {
   let vpsService: VPSService;
-  const mockOrgId = 'org_123';
-  const mockInstanceId = 'vps_456';
+  const mockOrgId = "org_123";
+  const mockInstanceId = "vps_456";
 
   beforeEach(() => {
     // This will fail until VPSService is properly implemented
     vpsService = new VPSService();
   });
 
-  describe('ListVPSInstances', () => {
-    it('should accept ListVPSInstancesRequest and return ListVPSInstancesResponse', async () => {
+  describe("ListVPSInstances", () => {
+    it("should accept ListVPSInstancesRequest and return ListVPSInstancesResponse", async () => {
       const request = new ListVPSInstancesRequest({
         organizationId: mockOrgId,
         page: 1,
@@ -55,10 +55,10 @@ describe('VPSService Contract Tests', () => {
       expect(response.pagination.perPage).toBe(10);
     });
 
-    it('should filter by VPS status when provided', async () => {
+    it("should filter by VPS status when provided", async () => {
       const request = new ListVPSInstancesRequest({
         organizationId: mockOrgId,
-        status: 'running',
+        status: "running",
         page: 1,
         perPage: 10,
       });
@@ -67,21 +67,23 @@ describe('VPSService Contract Tests', () => {
 
       // All returned instances should have 'running' status
       for (const instance of response.instances) {
-        expect(instance.status).toBe('running');
+        expect(instance.status).toBe("running");
       }
     });
 
-    it('should respect organization-scoped access', async () => {
+    it("should respect organization-scoped access", async () => {
       const request = new ListVPSInstancesRequest({
-        organizationId: 'unauthorized_org',
+        organizationId: "unauthorized_org",
         page: 1,
         perPage: 10,
       });
 
-      await expect(vpsService.listVPSInstances(request)).rejects.toThrow(/not found|unauthorized/i);
+      await expect(vpsService.listVPSInstances(request)).rejects.toThrow(
+        /not found|unauthorized/i
+      );
     });
 
-    it('should return VPS instances with complete specifications', async () => {
+    it("should return VPS instances with complete specifications", async () => {
       const request = new ListVPSInstancesRequest({
         organizationId: mockOrgId,
         page: 1,
@@ -93,28 +95,34 @@ describe('VPSService Contract Tests', () => {
       for (const instance of response.instances) {
         expect(instance.id).toBeDefined();
         expect(instance.name).toBeDefined();
-        expect(['small', 'medium', 'large', 'xlarge']).toContain(instance.plan);
+        expect(["small", "medium", "large", "xlarge"]).toContain(instance.plan);
         expect(instance.cpuCores).toBeGreaterThan(0);
         expect(instance.memoryGb).toBeGreaterThan(0);
         expect(instance.diskGb).toBeGreaterThan(0);
         expect(instance.operatingSystem).toBeDefined();
         expect(instance.region).toBeDefined();
         expect(instance.ipAddress).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
-        expect(['starting', 'running', 'stopped', 'error', 'terminated']).toContain(instance.status);
+        expect([
+          "starting",
+          "running",
+          "stopped",
+          "error",
+          "terminated",
+        ]).toContain(instance.status);
         expect(instance.uptimePercentage).toBeGreaterThanOrEqual(0);
         expect(instance.uptimePercentage).toBeLessThanOrEqual(100);
       }
     });
   });
 
-  describe('CreateVPSInstance', () => {
-    it('should accept CreateVPSInstanceRequest and return CreateVPSInstanceResponse', async () => {
+  describe("CreateVPSInstance", () => {
+    it("should accept CreateVPSInstanceRequest and return CreateVPSInstanceResponse", async () => {
       const request = new CreateVPSInstanceRequest({
         organizationId: mockOrgId,
-        name: 'Web Server',
-        plan: 'small',
-        operatingSystem: 'Ubuntu 22.04',
-        region: 'us-east-1',
+        name: "Web Server",
+        plan: "small",
+        operatingSystem: "Ubuntu 22.04",
+        region: "us-east-1",
       });
 
       // This will fail - no implementation yet
@@ -122,91 +130,101 @@ describe('VPSService Contract Tests', () => {
 
       expect(response).toBeInstanceOf(CreateVPSInstanceResponse);
       expect(response.instance).toBeInstanceOf(VPSInstance);
-      expect(response.instance.name).toBe('Web Server');
-      expect(response.instance.plan).toBe('small');
-      expect(response.instance.operatingSystem).toBe('Ubuntu 22.04');
-      expect(response.instance.region).toBe('us-east-1');
-      expect(response.instance.status).toBe('starting');
+      expect(response.instance.name).toBe("Web Server");
+      expect(response.instance.plan).toBe("small");
+      expect(response.instance.operatingSystem).toBe("Ubuntu 22.04");
+      expect(response.instance.region).toBe("us-east-1");
+      expect(response.instance.status).toBe("starting");
       expect(response.instance.id).toBeDefined();
       expect(response.instance.ipAddress).toBeDefined();
     });
 
-    it('should validate VPS instance name requirements', async () => {
+    it("should validate VPS instance name requirements", async () => {
       const request = new CreateVPSInstanceRequest({
         organizationId: mockOrgId,
-        name: '', // Empty name
-        plan: 'small',
-        operatingSystem: 'Ubuntu 22.04',
-        region: 'us-east-1',
+        name: "", // Empty name
+        plan: "small",
+        operatingSystem: "Ubuntu 22.04",
+        region: "us-east-1",
       });
 
-      await expect(vpsService.createVPSInstance(request)).rejects.toThrow(/name/i);
+      await expect(vpsService.createVPSInstance(request)).rejects.toThrow(
+        /name/i
+      );
     });
 
-    it('should validate VPS plan types', async () => {
+    it("should validate VPS plan types", async () => {
       const request = new CreateVPSInstanceRequest({
         organizationId: mockOrgId,
-        name: 'Test Server',
-        plan: 'invalid-plan',
-        operatingSystem: 'Ubuntu 22.04',
-        region: 'us-east-1',
+        name: "Test Server",
+        plan: "invalid-plan",
+        operatingSystem: "Ubuntu 22.04",
+        region: "us-east-1",
       });
 
-      await expect(vpsService.createVPSInstance(request)).rejects.toThrow(/plan/i);
+      await expect(vpsService.createVPSInstance(request)).rejects.toThrow(
+        /plan/i
+      );
     });
 
-    it('should validate operating system availability', async () => {
+    it("should validate operating system availability", async () => {
       const request = new CreateVPSInstanceRequest({
         organizationId: mockOrgId,
-        name: 'Test Server',
-        plan: 'small',
-        operatingSystem: 'InvalidOS 99.99',
-        region: 'us-east-1',
+        name: "Test Server",
+        plan: "small",
+        operatingSystem: "InvalidOS 99.99",
+        region: "us-east-1",
       });
 
-      await expect(vpsService.createVPSInstance(request)).rejects.toThrow(/operating system/i);
+      await expect(vpsService.createVPSInstance(request)).rejects.toThrow(
+        /operating system/i
+      );
     });
 
-    it('should validate region availability', async () => {
+    it("should validate region availability", async () => {
       const request = new CreateVPSInstanceRequest({
         organizationId: mockOrgId,
-        name: 'Test Server',
-        plan: 'small',
-        operatingSystem: 'Ubuntu 22.04',
-        region: 'invalid-region',
+        name: "Test Server",
+        plan: "small",
+        operatingSystem: "Ubuntu 22.04",
+        region: "invalid-region",
       });
 
-      await expect(vpsService.createVPSInstance(request)).rejects.toThrow(/region/i);
+      await expect(vpsService.createVPSInstance(request)).rejects.toThrow(
+        /region/i
+      );
     });
 
-    it('should respect organization VPS limits', async () => {
+    it("should respect organization VPS limits", async () => {
       // Mock organization with VPS limit reached
       const request = new CreateVPSInstanceRequest({
         organizationId: mockOrgId,
-        name: 'Over Limit Server',
-        plan: 'small',
-        operatingSystem: 'Ubuntu 22.04',
-        region: 'us-east-1',
+        name: "Over Limit Server",
+        plan: "small",
+        operatingSystem: "Ubuntu 22.04",
+        region: "us-east-1",
       });
 
-      await expect(vpsService.createVPSInstance(request)).rejects.toThrow(/limit/i);
+      await expect(vpsService.createVPSInstance(request)).rejects.toThrow(
+        /limit/i
+      );
     });
 
-    it('should assign unique IP addresses', async () => {
+    it("should assign unique IP addresses", async () => {
       const request1 = new CreateVPSInstanceRequest({
         organizationId: mockOrgId,
-        name: 'Server One',
-        plan: 'small',
-        operatingSystem: 'Ubuntu 22.04',
-        region: 'us-east-1',
+        name: "Server One",
+        plan: "small",
+        operatingSystem: "Ubuntu 22.04",
+        region: "us-east-1",
       });
 
       const request2 = new CreateVPSInstanceRequest({
         organizationId: mockOrgId,
-        name: 'Server Two',
-        plan: 'small',
-        operatingSystem: 'Ubuntu 22.04',
-        region: 'us-east-1',
+        name: "Server Two",
+        plan: "small",
+        operatingSystem: "Ubuntu 22.04",
+        region: "us-east-1",
       });
 
       const [response1, response2] = await Promise.all([
@@ -214,26 +232,28 @@ describe('VPSService Contract Tests', () => {
         vpsService.createVPSInstance(request2),
       ]);
 
-      expect(response1.instance.ipAddress).not.toBe(response2.instance.ipAddress);
+      expect(response1.instance.ipAddress).not.toBe(
+        response2.instance.ipAddress
+      );
       expect(response1.instance.ipAddress).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
       expect(response2.instance.ipAddress).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
     });
 
-    it('should set correct resource specifications based on plan', async () => {
+    it("should set correct resource specifications based on plan", async () => {
       const smallRequest = new CreateVPSInstanceRequest({
         organizationId: mockOrgId,
-        name: 'Small Server',
-        plan: 'small',
-        operatingSystem: 'Ubuntu 22.04',
-        region: 'us-east-1',
+        name: "Small Server",
+        plan: "small",
+        operatingSystem: "Ubuntu 22.04",
+        region: "us-east-1",
       });
 
       const largeRequest = new CreateVPSInstanceRequest({
         organizationId: mockOrgId,
-        name: 'Large Server',
-        plan: 'large',
-        operatingSystem: 'Ubuntu 22.04',
-        region: 'us-east-1',
+        name: "Large Server",
+        plan: "large",
+        operatingSystem: "Ubuntu 22.04",
+        region: "us-east-1",
       });
 
       const [smallResponse, largeResponse] = await Promise.all([
@@ -242,14 +262,20 @@ describe('VPSService Contract Tests', () => {
       ]);
 
       // Large plan should have more resources than small
-      expect(largeResponse.instance.cpuCores).toBeGreaterThan(smallResponse.instance.cpuCores);
-      expect(largeResponse.instance.memoryGb).toBeGreaterThan(smallResponse.instance.memoryGb);
-      expect(largeResponse.instance.diskGb).toBeGreaterThan(smallResponse.instance.diskGb);
+      expect(largeResponse.instance.cpuCores).toBeGreaterThan(
+        smallResponse.instance.cpuCores
+      );
+      expect(largeResponse.instance.memoryGb).toBeGreaterThan(
+        smallResponse.instance.memoryGb
+      );
+      expect(largeResponse.instance.diskGb).toBeGreaterThan(
+        smallResponse.instance.diskGb
+      );
     });
   });
 
-  describe('GetVPSInstance', () => {
-    it('should accept GetVPSInstanceRequest and return GetVPSInstanceResponse', async () => {
+  describe("GetVPSInstance", () => {
+    it("should accept GetVPSInstanceRequest and return GetVPSInstanceResponse", async () => {
       const request = new GetVPSInstanceRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
@@ -263,16 +289,18 @@ describe('VPSService Contract Tests', () => {
       expect(response.instance.id).toBe(mockInstanceId);
     });
 
-    it('should enforce organization-scoped access', async () => {
+    it("should enforce organization-scoped access", async () => {
       const request = new GetVPSInstanceRequest({
-        organizationId: 'wrong_org',
+        organizationId: "wrong_org",
         instanceId: mockInstanceId,
       });
 
-      await expect(vpsService.getVPSInstance(request)).rejects.toThrow(/not found|unauthorized/i);
+      await expect(vpsService.getVPSInstance(request)).rejects.toThrow(
+        /not found|unauthorized/i
+      );
     });
 
-    it('should return complete VPS instance details with metrics', async () => {
+    it("should return complete VPS instance details with metrics", async () => {
       const request = new GetVPSInstanceRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
@@ -292,55 +320,61 @@ describe('VPSService Contract Tests', () => {
     });
   });
 
-  describe('UpdateVPSInstance', () => {
-    it('should accept UpdateVPSInstanceRequest and return UpdateVPSInstanceResponse', async () => {
+  describe("UpdateVPSInstance", () => {
+    it("should accept UpdateVPSInstanceRequest and return UpdateVPSInstanceResponse", async () => {
       const request = new UpdateVPSInstanceRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
-        name: 'Updated Server Name',
+        name: "Updated Server Name",
       });
 
       // This will fail - no implementation yet
       const response = await vpsService.updateVPSInstance(request);
 
       expect(response).toBeInstanceOf(UpdateVPSInstanceResponse);
-      expect(response.instance.name).toBe('Updated Server Name');
+      expect(response.instance.name).toBe("Updated Server Name");
     });
 
-    it('should require VPS management permissions', async () => {
+    it("should require VPS management permissions", async () => {
       const request = new UpdateVPSInstanceRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
-        name: 'Unauthorized Update',
+        name: "Unauthorized Update",
       });
 
       // Mock user without VPS permissions
-      await expect(vpsService.updateVPSInstance(request)).rejects.toThrow(/permission/i);
+      await expect(vpsService.updateVPSInstance(request)).rejects.toThrow(
+        /permission/i
+      );
     });
 
-    it('should validate updated name requirements', async () => {
+    it("should validate updated name requirements", async () => {
       const request = new UpdateVPSInstanceRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
-        name: '', // Invalid empty name
+        name: "", // Invalid empty name
       });
 
-      await expect(vpsService.updateVPSInstance(request)).rejects.toThrow(/name/i);
+      await expect(vpsService.updateVPSInstance(request)).rejects.toThrow(
+        /name/i
+      );
     });
 
-    it('should prevent updates to terminated instances', async () => {
+    it("should prevent updates to terminated instances", async () => {
       const request = new UpdateVPSInstanceRequest({
         organizationId: mockOrgId,
-        instanceId: 'terminated_instance_id',
-        name: 'Should Not Update',
+        instanceId: "terminated_instance_id",
+        name: "Should Not Update",
       });
 
-      await expect(vpsService.updateVPSInstance(request)).rejects.toThrow(/terminated|state/i);
+      await expect(vpsService.updateVPSInstance(request)).rejects.toThrow(
+        /terminated|state/i
+      );
     });
   });
 
-  describe('StartVPSInstance', () => {
-    it('should accept StartVPSInstanceRequest and return StartVPSInstanceResponse', async () => {
+  describe("StartVPSInstance", () => {
+    it("should accept StartVPSInstanceRequest and return StartVPSInstanceResponse", async () => {
       const request = new StartVPSInstanceRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
@@ -353,39 +387,43 @@ describe('VPSService Contract Tests', () => {
       expect(response.success).toBe(true);
     });
 
-    it('should require VPS control permissions', async () => {
+    it("should require VPS control permissions", async () => {
       const request = new StartVPSInstanceRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
       });
 
-      await expect(vpsService.startVPSInstance(request)).rejects.toThrow(/permission/i);
+      await expect(vpsService.startVPSInstance(request)).rejects.toThrow(
+        /permission/i
+      );
     });
 
-    it('should only start stopped instances', async () => {
+    it("should only start stopped instances", async () => {
       const request = new StartVPSInstanceRequest({
         organizationId: mockOrgId,
-        instanceId: 'running_instance_id',
+        instanceId: "running_instance_id",
       });
 
-      await expect(vpsService.startVPSInstance(request)).rejects.toThrow(/already running|state/i);
+      await expect(vpsService.startVPSInstance(request)).rejects.toThrow(
+        /already running|state/i
+      );
     });
 
-    it('should handle start failures gracefully', async () => {
+    it("should handle start failures gracefully", async () => {
       const request = new StartVPSInstanceRequest({
         organizationId: mockOrgId,
-        instanceId: 'problematic_instance_id',
+        instanceId: "problematic_instance_id",
       });
 
       const response = await vpsService.startVPSInstance(request);
 
       // Should return success status even if start takes time
-      expect(typeof response.success).toBe('boolean');
+      expect(typeof response.success).toBe("boolean");
     });
   });
 
-  describe('StopVPSInstance', () => {
-    it('should accept StopVPSInstanceRequest and return StopVPSInstanceResponse', async () => {
+  describe("StopVPSInstance", () => {
+    it("should accept StopVPSInstanceRequest and return StopVPSInstanceResponse", async () => {
       const request = new StopVPSInstanceRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
@@ -398,25 +436,29 @@ describe('VPSService Contract Tests', () => {
       expect(response.success).toBe(true);
     });
 
-    it('should require VPS control permissions', async () => {
+    it("should require VPS control permissions", async () => {
       const request = new StopVPSInstanceRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
       });
 
-      await expect(vpsService.stopVPSInstance(request)).rejects.toThrow(/permission/i);
+      await expect(vpsService.stopVPSInstance(request)).rejects.toThrow(
+        /permission/i
+      );
     });
 
-    it('should only stop running instances', async () => {
+    it("should only stop running instances", async () => {
       const request = new StopVPSInstanceRequest({
         organizationId: mockOrgId,
-        instanceId: 'stopped_instance_id',
+        instanceId: "stopped_instance_id",
       });
 
-      await expect(vpsService.stopVPSInstance(request)).rejects.toThrow(/already stopped|state/i);
+      await expect(vpsService.stopVPSInstance(request)).rejects.toThrow(
+        /already stopped|state/i
+      );
     });
 
-    it('should handle graceful shutdown', async () => {
+    it("should handle graceful shutdown", async () => {
       const request = new StopVPSInstanceRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
@@ -432,8 +474,8 @@ describe('VPSService Contract Tests', () => {
     });
   });
 
-  describe('RestartVPSInstance', () => {
-    it('should accept RestartVPSInstanceRequest and return RestartVPSInstanceResponse', async () => {
+  describe("RestartVPSInstance", () => {
+    it("should accept RestartVPSInstanceRequest and return RestartVPSInstanceResponse", async () => {
       const request = new RestartVPSInstanceRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
@@ -446,25 +488,29 @@ describe('VPSService Contract Tests', () => {
       expect(response.success).toBe(true);
     });
 
-    it('should require VPS control permissions', async () => {
+    it("should require VPS control permissions", async () => {
       const request = new RestartVPSInstanceRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
       });
 
-      await expect(vpsService.restartVPSInstance(request)).rejects.toThrow(/permission/i);
+      await expect(vpsService.restartVPSInstance(request)).rejects.toThrow(
+        /permission/i
+      );
     });
 
-    it('should only restart running instances', async () => {
+    it("should only restart running instances", async () => {
       const request = new RestartVPSInstanceRequest({
         organizationId: mockOrgId,
-        instanceId: 'stopped_instance_id',
+        instanceId: "stopped_instance_id",
       });
 
-      await expect(vpsService.restartVPSInstance(request)).rejects.toThrow(/not running|state/i);
+      await expect(vpsService.restartVPSInstance(request)).rejects.toThrow(
+        /not running|state/i
+      );
     });
 
-    it('should handle restart operation atomically', async () => {
+    it("should handle restart operation atomically", async () => {
       const request = new RestartVPSInstanceRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
@@ -477,8 +523,8 @@ describe('VPSService Contract Tests', () => {
     });
   });
 
-  describe('StreamVPSMetrics', () => {
-    it('should accept StreamVPSMetricsRequest and return stream', async () => {
+  describe("StreamVPSMetrics", () => {
+    it("should accept StreamVPSMetricsRequest and return stream", async () => {
       const request = new StreamVPSMetricsRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
@@ -488,10 +534,10 @@ describe('VPSService Contract Tests', () => {
       const stream = vpsService.streamVPSMetrics(request);
 
       expect(stream).toBeDefined();
-      expect(typeof stream[Symbol.asyncIterator]).toBe('function');
+      expect(typeof stream[Symbol.asyncIterator]).toBe("function");
     });
 
-    it('should stream VPS metrics updates', async () => {
+    it("should stream VPS metrics updates", async () => {
       const request = new StreamVPSMetricsRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
@@ -509,7 +555,7 @@ describe('VPSService Contract Tests', () => {
       }
 
       expect(metrics.length).toBeGreaterThan(0);
-      
+
       for (const metric of metrics) {
         expect(metric).toBeInstanceOf(VPSMetricsUpdate);
         expect(metric.instanceId).toBe(mockInstanceId);
@@ -523,9 +569,9 @@ describe('VPSService Contract Tests', () => {
       }
     });
 
-    it('should enforce organization access for streaming', async () => {
+    it("should enforce organization access for streaming", async () => {
       const request = new StreamVPSMetricsRequest({
-        organizationId: 'wrong_org',
+        organizationId: "wrong_org",
         instanceId: mockInstanceId,
       });
 
@@ -539,7 +585,7 @@ describe('VPSService Contract Tests', () => {
       }).rejects.toThrow(/not found|unauthorized/i);
     });
 
-    it('should provide real-time metrics updates', async () => {
+    it("should provide real-time metrics updates", async () => {
       const request = new StreamVPSMetricsRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
@@ -563,7 +609,7 @@ describe('VPSService Contract Tests', () => {
       }
     });
 
-    it('should handle stream interruption gracefully', async () => {
+    it("should handle stream interruption gracefully", async () => {
       const request = new StreamVPSMetricsRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
@@ -588,10 +634,10 @@ describe('VPSService Contract Tests', () => {
       }
     });
 
-    it('should only stream metrics for running instances', async () => {
+    it("should only stream metrics for running instances", async () => {
       const request = new StreamVPSMetricsRequest({
         organizationId: mockOrgId,
-        instanceId: 'stopped_instance_id',
+        instanceId: "stopped_instance_id",
       });
 
       const stream = vpsService.streamVPSMetrics(request);
@@ -605,12 +651,34 @@ describe('VPSService Contract Tests', () => {
     });
   });
 
-  describe('Security and Validation', () => {
-    it('should validate all organizationId parameters', async () => {
+  describe("Security and Validation", () => {
+    it("should validate all organizationId parameters", async () => {
       const requests = [
-        () => vpsService.listVPSInstances(new ListVPSInstancesRequest({ organizationId: '', page: 1, perPage: 10 })),
-        () => vpsService.createVPSInstance(new CreateVPSInstanceRequest({ organizationId: '', name: 'test', plan: 'small', operatingSystem: 'Ubuntu', region: 'us-east-1' })),
-        () => vpsService.getVPSInstance(new GetVPSInstanceRequest({ organizationId: '', instanceId: 'test' })),
+        () =>
+          vpsService.listVPSInstances(
+            new ListVPSInstancesRequest({
+              organizationId: "",
+              page: 1,
+              perPage: 10,
+            })
+          ),
+        () =>
+          vpsService.createVPSInstance(
+            new CreateVPSInstanceRequest({
+              organizationId: "",
+              name: "test",
+              plan: "small",
+              operatingSystem: "Ubuntu",
+              region: "us-east-1",
+            })
+          ),
+        () =>
+          vpsService.getVPSInstance(
+            new GetVPSInstanceRequest({
+              organizationId: "",
+              instanceId: "test",
+            })
+          ),
       ];
 
       for (const request of requests) {
@@ -618,53 +686,59 @@ describe('VPSService Contract Tests', () => {
       }
     });
 
-    it('should sanitize VPS instance names', async () => {
+    it("should sanitize VPS instance names", async () => {
       const request = new CreateVPSInstanceRequest({
         organizationId: mockOrgId,
         name: '<script>alert("xss")</script>Web Server',
-        plan: 'small',
-        operatingSystem: 'Ubuntu 22.04',
-        region: 'us-east-1',
+        plan: "small",
+        operatingSystem: "Ubuntu 22.04",
+        region: "us-east-1",
       });
 
       const response = await vpsService.createVPSInstance(request);
 
       // Should sanitize harmful content
-      expect(response.instance.name).not.toContain('<script>');
-      expect(response.instance.name).toContain('Web Server');
+      expect(response.instance.name).not.toContain("<script>");
+      expect(response.instance.name).toContain("Web Server");
     });
 
-    it('should rate limit VPS operations', async () => {
-      const requests = Array.from({ length: 10 }, () =>
-        new StartVPSInstanceRequest({
-          organizationId: mockOrgId,
-          instanceId: mockInstanceId,
-        })
+    it("should rate limit VPS operations", async () => {
+      const requests = Array.from(
+        { length: 10 },
+        () =>
+          new StartVPSInstanceRequest({
+            organizationId: mockOrgId,
+            instanceId: mockInstanceId,
+          })
       );
 
       // Should implement rate limiting for rapid operations
-      const promises = requests.map(req => vpsService.startVPSInstance(req));
-      
+      const promises = requests.map((req) => vpsService.startVPSInstance(req));
+
       // Some later requests should be rate limited
-      await expect(Promise.all(promises)).rejects.toThrow(/rate limit|too many/i);
+      await expect(Promise.all(promises)).rejects.toThrow(
+        /rate limit|too many/i
+      );
     });
 
-    it('should validate resource limits based on organization plan', async () => {
+    it("should validate resource limits based on organization plan", async () => {
       const request = new CreateVPSInstanceRequest({
         organizationId: mockOrgId,
-        name: 'Huge Server',
-        plan: 'xlarge',
-        operatingSystem: 'Ubuntu 22.04',
-        region: 'us-east-1',
+        name: "Huge Server",
+        plan: "xlarge",
+        operatingSystem: "Ubuntu 22.04",
+        region: "us-east-1",
       });
 
       // Starter plan should not allow xlarge instances
-      await expect(vpsService.createVPSInstance(request)).rejects.toThrow(/plan|limit|upgrade/i);
+      await expect(vpsService.createVPSInstance(request)).rejects.toThrow(
+        /plan|limit|upgrade/i
+      );
     });
   });
 
-  describe('Performance Requirements', () => {
-    it('should respond to list VPS instances within performance target', async () => {
+  describe("Performance Requirements", () => {
+    it("should respond to list VPS instances within performance target", async () => {
       const request = new ListVPSInstancesRequest({
         organizationId: mockOrgId,
         page: 1,
@@ -679,16 +753,18 @@ describe('VPSService Contract Tests', () => {
       expect(endTime - startTime).toBeLessThan(200);
     });
 
-    it('should handle concurrent VPS operations', async () => {
-      const requests = Array.from({ length: 5 }, (_, i) =>
-        new GetVPSInstanceRequest({
-          organizationId: mockOrgId,
-          instanceId: `instance_${i}`,
-        })
+    it("should handle concurrent VPS operations", async () => {
+      const requests = Array.from(
+        { length: 5 },
+        (_, i) =>
+          new GetVPSInstanceRequest({
+            organizationId: mockOrgId,
+            instanceId: `instance_${i}`,
+          })
       );
 
       const startTime = Date.now();
-      const promises = requests.map(req => vpsService.getVPSInstance(req));
+      const promises = requests.map((req) => vpsService.getVPSInstance(req));
       await Promise.allSettled(promises); // Allow some to fail
       const endTime = Date.now();
 
@@ -696,7 +772,7 @@ describe('VPSService Contract Tests', () => {
       expect(endTime - startTime).toBeLessThan(500);
     });
 
-    it('should stream metrics efficiently', async () => {
+    it("should stream metrics efficiently", async () => {
       const request = new StreamVPSMetricsRequest({
         organizationId: mockOrgId,
         instanceId: mockInstanceId,
@@ -704,7 +780,7 @@ describe('VPSService Contract Tests', () => {
 
       const stream = vpsService.streamVPSMetrics(request);
       const startTime = Date.now();
-      
+
       let count = 0;
       for await (const metric of stream) {
         count++;

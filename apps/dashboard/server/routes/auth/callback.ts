@@ -1,26 +1,28 @@
-import type { ZitadelTokenResponse } from '@obiente/types';
+import type { ZitadelTokenResponse } from "@obiente/types";
 
-export default defineEventHandler(async event => {
+export default defineEventHandler(async (event) => {
   try {
-    const { code, state, error } = getQuery<{ code?: string; state?: string; error?: string }>(
-      event
-    );
+    const { code, state, error } = getQuery<{
+      code?: string;
+      state?: string;
+      error?: string;
+    }>(event);
     const config = useRuntimeConfig();
     if (!code) {
-      throw createError({ statusCode: 400, message: 'Missing code' });
+      throw createError({ statusCode: 400, message: "Missing code" });
     }
     const { code_verifier } = await handlePKCE(event);
 
     const tokenResponse = await $fetch<ZitadelTokenResponse>(
       `${config.public.oidcBase}/oauth/v2/token`,
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
-          grant_type: 'authorization_code',
+          grant_type: "authorization_code",
           code,
           code_verifier,
-          redirect_uri: config.requestHost + '/auth/callback',
+          redirect_uri: config.requestHost + "/auth/callback",
           client_id: config.public.oidcClientId,
         }),
       }

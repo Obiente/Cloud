@@ -4,9 +4,15 @@ packages:
   - packages/*
 
 autoInstallPeers: true
-strictPeerDependencies: false
 
 onlyBuiltDependencies:
   - '@bufbuild/buf'
+  - '@nestjs/core'
+  - '@openapitools/openapi-generator-cli'
+  - '@parcel/watcher'
+  - '@swc/core'
+  - '@tailwindcss/oxide'
+  - esbuild
+  - nx
 
-
+strictPeerDependencies: false

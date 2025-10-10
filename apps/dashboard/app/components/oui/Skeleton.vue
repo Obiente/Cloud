@@ -1,12 +1,12 @@
 <template>
-  <div 
+  <div
     :class="[
       'oui-skeleton-base',
       `oui-skeleton-${variant}`,
       {
         'oui-skeleton-animated': animated,
         'oui-skeleton-rounded': rounded,
-      }
+      },
     ]"
     :style="{
       width: width,
@@ -22,13 +22,13 @@
 interface Props {
   width?: string;
   height?: string;
-  variant?: 'rectangle' | 'circle' | 'text';
+  variant?: "rectangle" | "circle" | "text";
   animated?: boolean;
   rounded?: boolean;
 }
 
 withDefaults(defineProps<Props>(), {
-  variant: 'rectangle',
+  variant: "rectangle",
   animated: true,
   rounded: false,
 });

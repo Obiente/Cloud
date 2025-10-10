@@ -70,7 +70,7 @@
   color: transparent;
 
   &::after {
-    content: '';
+    content: "";
     position: absolute;
     width: 1rem;
     height: 1rem;
@@ -195,25 +195,24 @@
 }
 
 @utility shadow {
-  box-shadow:
-    0 1px 3px 0 rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1))),
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1))),
     0 1px 2px -1px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1)));
 }
 
 @utility shadow-md {
-  box-shadow:
-    0 4px 6px -1px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1))),
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 /
+          calc(0.1 * var(--oui-elevation-base, 1))),
     0 2px 4px -2px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1)));
 }
 
 @utility shadow-lg {
-  box-shadow:
-    0 10px 15px -3px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1))),
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 /
+          calc(0.1 * var(--oui-elevation-base, 1))),
     0 4px 6px -4px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1)));
 }
 
 @utility shadow-xl {
-  box-shadow:
-    0 20px 25px -5px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1))),
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 /
+          calc(0.1 * var(--oui-elevation-base, 1))),
     0 8px 10px -6px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1)));
 }

@@ -1,1 +1,1 @@
-export { default } from './packages/config/prettier.config.ts';
+export { default } from "@obiente/config/prettier";

@@ -18,7 +18,8 @@ export const config = {
 
   // Database
   database: {
-    url: process.env.DATABASE_URL ||
+    url:
+      process.env.DATABASE_URL ||
       "postgresql://user:password@localhost:5432/obiente_cloud",
   },
 
@@ -27,8 +28,8 @@ export const config = {
     zitadelUrl: process.env.ZITADEL_URL || "https://your-zitadel.domain.com",
     clientId: process.env.ZITADEL_CLIENT_ID || "",
     clientSecret: process.env.ZITADEL_CLIENT_SECRET || "",
-    redirectUri: process.env.ZITADEL_REDIRECT_URI ||
-      "http://localhost:3000/auth/callback",
+    redirectUri:
+      process.env.ZITADEL_REDIRECT_URI || "http://localhost:3000/auth/callback",
     jwksUri: process.env.ZITADEL_JWKS_URI || "",
   },
 
@@ -54,7 +55,7 @@ export const config = {
   // Security
   security: {
     jwtSecret: process.env.JWT_SECRET || "your-super-secret-jwt-key",
-    sessionSecret: process.env.SESSION_SECRET ||
-      "your-super-secret-session-key",
+    sessionSecret:
+      process.env.SESSION_SECRET || "your-super-secret-session-key",
   },
 } as const;

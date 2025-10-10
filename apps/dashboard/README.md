@@ -9,12 +9,14 @@ This is the main user interface for the Obiente Cloud multi-tenant dashboard. It
 ## Tech Stack
 
 ### Core Framework
+
 - **Nuxt 3** - Vue.js meta-framework with SSR/SSG
 - **Vue 3** - Progressive JavaScript framework
 - **TypeScript** - Type safety throughout the application
 - **Pinia** - State management for Vue
 
 ### UI & Styling
+
 - **Nuxt UI** - Component library built on Tailwind CSS
 - **Tailwind CSS** - Utility-first CSS framework
 - **Headless UI** - Unstyled, accessible UI components
@@ -22,6 +24,7 @@ This is the main user interface for the Obiente Cloud multi-tenant dashboard. It
 - **@obiente/ui** - Custom component library with Ark UI
 
 ### Development Tools
+
 - **Vue DevTools** - Browser extension for debugging
 - **ESLint** - Code linting and formatting
 - **TypeScript compiler** - Type checking
@@ -29,23 +32,27 @@ This is the main user interface for the Obiente Cloud multi-tenant dashboard. It
 ## Features
 
 ### Multi-tenant Architecture
+
 - Organization-based tenant isolation
 - Dynamic organization switching
 - Role-based access control (RBAC)
 
 ### Authentication & Authorization
+
 - Zitadel OIDC/OAuth2 integration
 - JWT token management
 - SSO (Single Sign-On) support
 - Secure session handling
 
 ### Resource Management
+
 - **Deployments**: Web application hosting management
 - **VPS Instances**: Virtual private server administration
 - **Databases**: Managed database service control
 - **Billing**: Subscription and usage tracking
 
 ### User Experience
+
 - Responsive design for all devices
 - Real-time status updates
 - Intuitive navigation and workflows
@@ -71,15 +78,18 @@ This is the main user interface for the Obiente Cloud multi-tenant dashboard. It
 ## Development
 
 ### Prerequisites
+
 - Node.js 18+
 - pnpm (package manager)
 
 ### Environment Setup
+
 1. Copy `.env.example` to `.env`
 2. Configure API and authentication endpoints
 3. Set up Zitadel OIDC configuration
 
 ### Available Scripts
+
 ```bash
 # Development
 pnpm dev              # Start development server
@@ -95,11 +105,13 @@ pnpm clean            # Clean build artifacts
 ```
 
 ### Development Server
+
 The application runs on `http://localhost:3000` by default.
 
 ## Configuration
 
 ### Runtime Config
+
 Environment variables are managed through Nuxt's runtime config:
 
 ```typescript
@@ -107,7 +119,7 @@ Environment variables are managed through Nuxt's runtime config:
 runtimeConfig: {
   // Private (server-side only)
   apiSecret: process.env.API_SECRET,
-  
+
   // Public (client-side)
   public: {
     apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:3001',
@@ -118,6 +130,7 @@ runtimeConfig: {
 ```
 
 ### Key Environment Variables
+
 - `API_BASE_URL` - Backend API endpoint
 - `ZITADEL_URL` - Zitadel authentication server
 - `ZITADEL_CLIENT_ID` - OAuth2 client identifier
@@ -132,11 +145,13 @@ runtimeConfig: {
 ## State Management
 
 ### Pinia Stores
+
 - **Auth Store**: User authentication and session
 - **Organization Store**: Current organization context
 - **Resource Stores**: Deployments, VPS, databases state
 
 ### Composables
+
 - `useAuth()` - Authentication logic
 - `useApi()` - API communication
 - `useNotifications()` - User feedback system
@@ -144,11 +159,13 @@ runtimeConfig: {
 ## Styling Guidelines
 
 ### Tailwind CSS Classes
+
 - Use utility classes for styling
 - Custom components in `@obiente/ui` package
 - Consistent color palette and spacing
 
 ### Component Architecture
+
 - Small, focused components
 - Props and events for communication
 - TypeScript interfaces for type safety
@@ -156,27 +173,32 @@ runtimeConfig: {
 ## Deployment
 
 ### Production Build
+
 ```bash
 pnpm build
 pnpm preview
 ```
 
 ### Static Generation
+
 ```bash
 pnpm generate
 ```
 
 ### Environment Variables
+
 Ensure all required environment variables are set in production.
 
 ## Security
 
 ### Content Security Policy
+
 - Configured in `nuxt.config.ts`
 - Prevents XSS attacks
 - Restricts resource loading
 
 ### Authentication
+
 - JWT tokens stored securely
 - Automatic token refresh
 - Secure HTTP-only cookies

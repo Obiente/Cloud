@@ -1,7 +1,7 @@
-import type { H3Event, SessionConfig } from 'h3';
-import { useSession, createError, isEvent } from 'h3';
-import { defu } from 'defu';
-import type { UserSession } from '@obiente/types';
+import type { H3Event, SessionConfig } from "h3";
+import { useSession, createError, isEvent } from "h3";
+import { defu } from "defu";
+import type { UserSession } from "@obiente/types";
 
 type UseSessionEvent = Parameters<typeof useSession>[0];
 
@@ -10,7 +10,9 @@ type UseSessionEvent = Parameters<typeof useSession>[0];
  * @param event The Request (h3) event
  * @returns The user session
  */
-export async function getUserSession(event: UseSessionEvent): Promise<UserSession> {
+export async function getUserSession(
+  event: UseSessionEvent
+): Promise<UserSession> {
   const session = await _useSession(event);
   return {
     ...session.data,
@@ -25,11 +27,11 @@ export async function getUserSession(event: UseSessionEvent): Promise<UserSessio
  */
 export async function setUserSession(
   event: H3Event,
-  data: Omit<UserSession, 'id'>,
+  data: Omit<UserSession, "id">,
   config?: Partial<SessionConfig>
 ): Promise<UserSession> {
   const session = await _useSession(event, config);
-  await session.update(defu(data, session.data as Omit<UserSession, 'id'>));
+  await session.update(defu(data, session.data as Omit<UserSession, "id">));
 
   return session.data;
 }
@@ -41,7 +43,7 @@ export async function setUserSession(
  */
 export async function replaceUserSession(
   event: H3Event,
-  data: Omit<UserSession, 'id'>,
+  data: Omit<UserSession, "id">,
   config?: Partial<SessionConfig>
 ): Promise<UserSession> {
   const session = await _useSession(event, config);
@@ -86,10 +88,10 @@ export async function requireUserSession(
     if (isEvent(event)) {
       throw createError({
         statusCode: opts.statusCode || 401,
-        message: opts.message || 'Unauthorized',
+        message: opts.message || "Unauthorized",
       });
     } else {
-      throw new Response(opts.message || 'Unauthorized', {
+      throw new Response(opts.message || "Unauthorized", {
         status: opts.statusCode || 401,
       });
     }
@@ -107,12 +109,17 @@ export function _useSession<T extends Record<string, any> = UserSession>(
   if (!sessionConfig) {
     const runtimeConfig = useRuntimeConfig(isEvent(event) ? event : undefined);
     console.log(runtimeConfig.session);
-    sessionConfig = defu({ password: runtimeConfig.session.password }, runtimeConfig.session);
+    sessionConfig = defu(
+      { password: runtimeConfig.session.password },
+      runtimeConfig.session
+    );
     if (!sessionConfig.password) {
       console.error(`[obiente-auth] NUXT_SESSION_PASSWORD was not set.`);
     }
-    if (sessionConfig.password.startsWith('changeme_')) {
-      console.warn(`[obiente-auth] NUXT_SESSION_PASSWORD was set to the default value.`);
+    if (sessionConfig.password.startsWith("changeme_")) {
+      console.warn(
+        `[obiente-auth] NUXT_SESSION_PASSWORD was set to the default value.`
+      );
     }
   }
   const finalConfig = defu(config, sessionConfig) as SessionConfig;

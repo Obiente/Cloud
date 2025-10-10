@@ -5,8 +5,8 @@ export interface Organization {
   name: string;
   slug: string;
   domain?: string;
-  plan: 'starter' | 'pro' | 'enterprise';
-  status: 'active' | 'suspended' | 'trial';
+  plan: "starter" | "pro" | "enterprise";
+  status: "active" | "suspended" | "trial";
   createdAt: Date;
   updatedAt: Date;
   billingEmail: string;
@@ -33,8 +33,8 @@ export interface OrganizationMember {
   id: string;
   organizationId: string;
   userId: string;
-  role: 'owner' | 'admin' | 'member' | 'viewer';
-  status: 'active' | 'invited' | 'suspended';
+  role: "owner" | "admin" | "member" | "viewer";
+  status: "active" | "invited" | "suspended";
   invitedBy?: string;
   invitedAt?: Date;
   joinedAt?: Date;
@@ -49,14 +49,14 @@ export interface Deployment {
   name: string;
   domain: string;
   customDomains: string[];
-  type: 'static' | 'nodejs' | 'python' | 'docker';
+  type: "static" | "nodejs" | "python" | "docker";
   repositoryUrl?: string;
   branch: string;
   buildCommand?: string;
   installCommand?: string;
   outputDirectory?: string;
-  status: 'building' | 'ready' | 'error' | 'stopped';
-  healthStatus: 'healthy' | 'degraded' | 'unhealthy';
+  status: "building" | "ready" | "error" | "stopped";
+  healthStatus: "healthy" | "degraded" | "unhealthy";
   lastDeployedAt?: Date;
   bandwidthUsage: number;
   storageUsage: number;
@@ -69,7 +69,7 @@ export interface VPSInstance {
   id: string;
   organizationId: string;
   name: string;
-  plan: 'small' | 'medium' | 'large' | 'xlarge';
+  plan: "small" | "medium" | "large" | "xlarge";
   cpuCores: number;
   memoryGb: number;
   diskGb: number;
@@ -77,7 +77,7 @@ export interface VPSInstance {
   region: string;
   ipAddress: string;
   privateIp?: string;
-  status: 'starting' | 'running' | 'stopped' | 'error' | 'terminated';
+  status: "starting" | "running" | "stopped" | "error" | "terminated";
   uptimePercentage: number;
   cpuUsagePercent: number;
   memoryUsagePercent: number;
@@ -93,14 +93,14 @@ export interface Database {
   organizationId: string;
   deploymentId?: string;
   name: string;
-  type: 'postgresql' | 'mysql' | 'redis' | 'mongodb';
+  type: "postgresql" | "mysql" | "redis" | "mongodb";
   version: string;
-  plan: 'shared' | 'dedicated-small' | 'dedicated-medium' | 'dedicated-large';
+  plan: "shared" | "dedicated-small" | "dedicated-medium" | "dedicated-large";
   host: string;
   port: number;
   username: string;
   databaseName: string;
-  status: 'creating' | 'available' | 'maintenance' | 'error';
+  status: "creating" | "available" | "maintenance" | "error";
   storageUsageGb: number;
   connectionCount: number;
   createdAt: Date;
@@ -133,7 +133,7 @@ export interface Invoice {
   currency: string;
   periodStart: Date;
   periodEnd: Date;
-  status: 'draft' | 'open' | 'paid' | 'void' | 'uncollectible';
+  status: "draft" | "open" | "paid" | "void" | "uncollectible";
   dueDate: Date;
   paidAt?: Date;
   createdAt: Date;
@@ -143,7 +143,7 @@ export interface Invoice {
 export interface Permission {
   id: string;
   organizationMemberId: string;
-  resourceType: 'deployment' | 'vps' | 'database' | 'billing';
+  resourceType: "deployment" | "vps" | "database" | "billing";
   resourceId: string;
   permissions: string[];
   createdAt: Date;
@@ -231,8 +231,8 @@ export interface OrganizationMembership {
   organizationId: string;
   organizationName: string;
   organizationSlug: string;
-  role: OrganizationMember['role'];
-  status: OrganizationMember['status'];
+  role: OrganizationMember["role"];
+  status: OrganizationMember["status"];
 }
 
 export interface AuthTokens {
@@ -243,24 +243,34 @@ export interface AuthTokens {
 
 // Utility types
 
-export type ResourceType = 'organization' | 'deployment' | 'vps' | 'database' | 'billing';
-export type PermissionAction = 'read' | 'write' | 'delete' | 'deploy' | 'manage';
-export type OrganizationRole = OrganizationMember['role'];
-export type DeploymentStatus = Deployment['status'];
-export type VPSStatus = VPSInstance['status'];
-export type DatabaseStatus = Database['status'];
+export type ResourceType =
+  | "organization"
+  | "deployment"
+  | "vps"
+  | "database"
+  | "billing";
+export type PermissionAction =
+  | "read"
+  | "write"
+  | "delete"
+  | "deploy"
+  | "manage";
+export type OrganizationRole = OrganizationMember["role"];
+export type DeploymentStatus = Deployment["status"];
+export type VPSStatus = VPSInstance["status"];
+export type DatabaseStatus = Database["status"];
 
 // Form types
 
 export interface CreateOrganizationForm {
   name: string;
   slug: string;
-  plan: Organization['plan'];
+  plan: Organization["plan"];
 }
 
 export interface CreateDeploymentForm {
   name: string;
-  type: Deployment['type'];
+  type: Deployment["type"];
   repositoryUrl?: string;
   branch: string;
   buildCommand?: string;
@@ -270,21 +280,19 @@ export interface CreateDeploymentForm {
 
 export interface CreateVPSForm {
   name: string;
-  plan: VPSInstance['plan'];
+  plan: VPSInstance["plan"];
   operatingSystem: string;
   region: string;
 }
 
 export interface CreateDatabaseForm {
   name: string;
-  type: Database['type'];
-  plan: Database['plan'];
+  type: Database["type"];
+  plan: Database["plan"];
   deploymentId?: string;
 }
 
 export interface InviteMemberForm {
   email: string;
-  role: OrganizationMember['role'];
+  role: OrganizationMember["role"];
 }
-
-

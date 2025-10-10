@@ -5,5 +5,3 @@ plugins:
     include_imports: true
     include_wkt: true
     opt: target=ts
-    
-   

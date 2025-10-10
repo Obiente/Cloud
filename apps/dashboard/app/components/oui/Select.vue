@@ -1,12 +1,24 @@
 <template>
   <div class="w-full">
-    <Select.RootProvider :collection="collection" :value="select" v-bind="$attrs">
-      <Select.Label v-if="label" class="block text-sm font-medium text-secondary mb-2">
+    <Select.RootProvider
+      :collection="collection"
+      :value="select"
+      v-bind="$attrs"
+    >
+      <Select.Label
+        v-if="label"
+        class="block text-sm font-medium text-secondary mb-2"
+      >
         {{ label }}
       </Select.Label>
       <Select.Control class="relative">
-        <Select.Trigger class="oui-input w-full flex items-center justify-between text-left">
-          <Select.ValueText :placeholder="placeholder || 'Select an option...'" class="truncate" />
+        <Select.Trigger
+          class="oui-input w-full flex items-center justify-between text-left"
+        >
+          <Select.ValueText
+            :placeholder="placeholder || 'Select an option...'"
+            class="truncate"
+          />
           <Select.Indicator class="ml-2 flex-shrink-0">
             <ChevronUpDownIcon class="h-4 w-4 text-secondary" />
           </Select.Indicator>
@@ -25,7 +37,9 @@
                 :item="item"
                 class="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm text-text-primary outline-none hover:bg-surface-muted focus:bg-surface-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
               >
-                <span class="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                <span
+                  class="absolute left-2 flex h-3.5 w-3.5 items-center justify-center"
+                >
                   <Select.ItemIndicator>
                     <CheckIcon class="h-4 w-4" />
                   </Select.ItemIndicator>
@@ -43,8 +57,13 @@
 </template>
 
 <script setup lang="ts">
-import { Select, SelectItem, createListCollection, useSelect } from '@ark-ui/vue/select';
-import { CheckIcon, ChevronUpDownIcon } from '@heroicons/vue/24/outline';
+import {
+  Select,
+  SelectItem,
+  createListCollection,
+  useSelect,
+} from "@ark-ui/vue/select";
+import { CheckIcon, ChevronUpDownIcon } from "@heroicons/vue/24/outline";
 
 interface SelectItem {
   label: string;

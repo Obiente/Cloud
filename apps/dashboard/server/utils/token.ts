@@ -1,6 +1,6 @@
-import type { H3Event } from 'h3';
-import type { ZitadelErrorResponse, ZitadelTokenClaims } from '@obiente/types';
-import { jwtVerify, decodeJwt, createRemoteJWKSet } from 'jose';
+import type { H3Event } from "h3";
+import type { ZitadelErrorResponse, ZitadelTokenClaims } from "@obiente/types";
+import { jwtVerify, decodeJwt, createRemoteJWKSet } from "jose";
 
 /**
  * Get the access token from a cookie
@@ -37,22 +37,22 @@ export function decodeToken<T extends ZitadelTokenClaims>(token: string): T {
  * Helper to handle Zitadel errors
  */
 export function handleZitadelError(error: unknown): ZitadelErrorResponse {
-  if (typeof error === 'string') {
+  if (typeof error === "string") {
     return {
-      error: 'server_error',
+      error: "server_error",
       error_description: error,
     };
   }
 
   if (error instanceof Error) {
     return {
-      error: 'server_error',
+      error: "server_error",
       error_description: error.message,
     };
   }
 
   return {
-    error: 'unknown_error',
-    error_description: 'An unknown error occurred',
+    error: "unknown_error",
+    error_description: "An unknown error occurred",
   };
 }

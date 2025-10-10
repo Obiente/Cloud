@@ -4,7 +4,10 @@
   "private": true,
   "description": "Protocol Buffer definitions and generated code for Obiente Cloud",
   "type": "module",
-  "files": ["dist", "proto"],
+  "files": [
+    "dist",
+    "proto"
+  ],
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",

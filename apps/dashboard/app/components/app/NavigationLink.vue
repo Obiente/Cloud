@@ -12,14 +12,16 @@
     <component
       :is="icon"
       class="w-5 h-5 transition-colors"
-      :class="[isActive ? 'text-primary' : 'text-secondary group-hover:text-primary']"
+      :class="[
+        isActive ? 'text-primary' : 'text-secondary group-hover:text-primary',
+      ]"
     />
     <span>{{ label }}</span>
   </NuxtLink>
 </template>
 
 <script setup lang="ts">
-import type { Component } from 'vue';
+import type { Component } from "vue";
 
 interface Props {
   to: string;
@@ -46,6 +48,6 @@ const isActive = computed(() => {
 });
 
 const handleClick = () => {
-  emit('navigate');
+  emit("navigate");
 };
 </script>

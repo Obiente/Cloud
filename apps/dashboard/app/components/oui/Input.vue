@@ -1,10 +1,14 @@
 <template>
   <div class="space-y-1">
-    <label v-if="label" :for="inputId" class="block text-sm font-medium text-primary">
+    <label
+      v-if="label"
+      :for="inputId"
+      class="block text-sm font-medium text-primary"
+    >
       {{ label }}
       <span v-if="required" class="text-danger">*</span>
     </label>
-    
+
     <div class="relative">
       <input
         :id="inputId"
@@ -22,16 +26,22 @@
           {
             'pl-10': $slots.prefix,
             'pr-10': $slots.suffix || clearable,
-          }
+          },
         ]"
         v-bind="$attrs"
       />
-      
-      <div v-if="$slots.prefix" class="absolute inset-y-0 left-0 flex items-center pl-3">
+
+      <div
+        v-if="$slots.prefix"
+        class="absolute inset-y-0 left-0 flex items-center pl-3"
+      >
         <slot name="prefix" />
       </div>
-      
-      <div v-if="$slots.suffix || clearable" class="absolute inset-y-0 right-0 flex items-center pr-3">
+
+      <div
+        v-if="$slots.suffix || clearable"
+        class="absolute inset-y-0 right-0 flex items-center pr-3"
+      >
         <button
           v-if="clearable && modelValue"
           type="button"
@@ -43,11 +53,11 @@
         <slot v-else name="suffix" />
       </div>
     </div>
-    
+
     <p v-if="error" class="text-sm text-danger">
       {{ error }}
     </p>
-    
+
     <p v-else-if="helperText" class="text-sm text-text-secondary">
       {{ helperText }}
     </p>
@@ -55,56 +65,56 @@
 </template>
 
 <script setup lang="ts">
-import { XMarkIcon } from '@heroicons/vue/24/outline'
+import { XMarkIcon } from "@heroicons/vue/24/outline";
 
 interface Props {
-  modelValue?: string
-  type?: 'text' | 'email' | 'password' | 'search' | 'url' | 'tel'
-  label?: string
-  placeholder?: string
-  helperText?: string
-  error?: string
-  required?: boolean
-  disabled?: boolean
-  readonly?: boolean
-  clearable?: boolean
+  modelValue?: string;
+  type?: "text" | "email" | "password" | "search" | "url" | "tel";
+  label?: string;
+  placeholder?: string;
+  helperText?: string;
+  error?: string;
+  required?: boolean;
+  disabled?: boolean;
+  readonly?: boolean;
+  clearable?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  type: 'text',
-  clearable: false
-})
+  type: "text",
+  clearable: false,
+});
 
 const emit = defineEmits<{
-  'update:modelValue': [value: string]
-  blur: [event: FocusEvent]
-  focus: [event: FocusEvent]
-}>()
+  "update:modelValue": [value: string];
+  blur: [event: FocusEvent];
+  focus: [event: FocusEvent];
+}>();
 
-const inputId = `input-${Math.random().toString(36).substr(2, 9)}`
+const inputId = `input-${Math.random().toString(36).substr(2, 9)}`;
 
 const inputClasses = computed(() => [
-  props.error ? 'oui-input-error' : 'oui-input-base'
-])
+  props.error ? "oui-input-error" : "oui-input-base",
+]);
 
 const handleInput = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  emit('update:modelValue', target.value)
-}
+  const target = event.target as HTMLInputElement;
+  emit("update:modelValue", target.value);
+};
 
 const handleBlur = (event: FocusEvent) => {
-  emit('blur', event)
-}
+  emit("blur", event);
+};
 
 const handleFocus = (event: FocusEvent) => {
-  emit('focus', event)
-}
+  emit("focus", event);
+};
 
 const handleClear = () => {
-  emit('update:modelValue', '')
-}
+  emit("update:modelValue", "");
+};
 
 defineOptions({
-  inheritAttrs: false
-})
+  inheritAttrs: false,
+});
 </script>

@@ -1,9 +1,13 @@
 <template>
-  <div class="absolute bottom-0 left-0 right-0 p-6 border-t border-border-muted bg-surface-base">
+  <div
+    class="absolute bottom-0 left-0 right-0 p-6 border-t border-border-muted bg-surface-base"
+  >
     <div class="flex items-center space-x-3">
       <!-- Avatar -->
       <div class="relative">
-        <div class="w-8 h-8 bg-surface-muted rounded-full flex items-center justify-center">
+        <div
+          class="w-8 h-8 bg-surface-muted rounded-full flex items-center justify-center"
+        >
           <UserIcon class="w-5 h-5 text-text-secondary" />
         </div>
         <!-- <img
@@ -43,6 +47,6 @@
 </template>
 
 <script setup lang="ts">
-import { UserIcon, ArrowRightOnRectangleIcon } from '@heroicons/vue/24/outline';
+import { UserIcon, ArrowRightOnRectangleIcon } from "@heroicons/vue/24/outline";
 const { user, ...auth } = useAuth();
 </script>

@@ -1,0 +1,5 @@
+packages/docker
+packages/proto/src/generated
+node_modules/
+dist/
+*.min.js

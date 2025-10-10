@@ -2,8 +2,12 @@
   <div>
     <!-- Page Header -->
     <div class="mb-8">
-      <OuiText as="h1" size="3xl" weight="bold" color="primary">Dashboard</OuiText>
-      <OuiText color="secondary" class="mt-2">Welcome to your Obiente Cloud dashboard</OuiText>
+      <OuiText as="h1" size="3xl" weight="bold" color="primary"
+        >Dashboard</OuiText
+      >
+      <OuiText color="secondary" class="mt-2"
+        >Welcome to your Obiente Cloud dashboard</OuiText
+      >
     </div>
 
     <!-- Error State -->
@@ -29,10 +33,14 @@
               </div>
               <div>
                 <h3 class="text-danger font-medium">{{ statsError }}</h3>
-                <p class="text-secondary text-sm">Unable to load dashboard data</p>
+                <p class="text-secondary text-sm">
+                  Unable to load dashboard data
+                </p>
               </div>
             </div>
-            <OuiButton @click="retryLoad" variant="outline" size="sm"> Retry </OuiButton>
+            <OuiButton @click="retryLoad" variant="outline" size="sm">
+              Retry
+            </OuiButton>
           </div>
         </OuiCardBody>
       </OuiCard>
@@ -55,7 +63,9 @@
                 height="1.5rem"
                 variant="text"
               />
-              <h3 v-else class="text-lg font-semibold text-primary">{{ stats.deployments }}</h3>
+              <h3 v-else class="text-lg font-semibold text-primary">
+                {{ stats.deployments }}
+              </h3>
               <p class="text-sm text-secondary">Deployments</p>
             </div>
           </div>
@@ -77,7 +87,9 @@
                 height="1.5rem"
                 variant="text"
               />
-              <h3 v-else class="text-lg font-semibold text-primary">{{ stats.vpsInstances }}</h3>
+              <h3 v-else class="text-lg font-semibold text-primary">
+                {{ stats.vpsInstances }}
+              </h3>
               <p class="text-sm text-secondary">VPS Instances</p>
             </div>
           </div>
@@ -99,7 +111,9 @@
                 height="1.5rem"
                 variant="text"
               />
-              <h3 v-else class="text-lg font-semibold text-primary">{{ stats.databases }}</h3>
+              <h3 v-else class="text-lg font-semibold text-primary">
+                {{ stats.databases }}
+              </h3>
               <p class="text-sm text-secondary">Databases</p>
             </div>
           </div>
@@ -139,26 +153,41 @@
           <div class="flex items-center justify-between">
             <h2 class="oui-card-title">Recent Deployments</h2>
             <div class="flex items-center space-x-2">
-              <div v-if="!isLoading" class="w-2 h-2 bg-success rounded-full"></div>
+              <div
+                v-if="!isLoading"
+                class="w-2 h-2 bg-success rounded-full"
+              ></div>
               <span class="text-xs text-secondary">
-                {{ isLoading ? 'Loading...' : 'Live' }}
+                {{ isLoading ? "Loading..." : "Live" }}
               </span>
             </div>
           </div>
         </OuiCardHeader>
         <OuiCardBody>
           <div v-if="isLoading" class="space-y-4">
-            <div v-for="i in 3" :key="i" class="p-3 border border-default rounded-lg">
+            <div
+              v-for="i in 3"
+              :key="i"
+              class="p-3 border border-default rounded-lg"
+            >
               <div class="flex items-center justify-between">
                 <div class="space-y-2 flex-1">
                   <OuiSkeleton width="8rem" height="1rem" variant="text" />
                   <OuiSkeleton width="12rem" height="0.75rem" variant="text" />
                 </div>
-                <OuiSkeleton width="4rem" height="1.5rem" variant="rectangle" rounded />
+                <OuiSkeleton
+                  width="4rem"
+                  height="1.5rem"
+                  variant="rectangle"
+                  rounded
+                />
               </div>
             </div>
           </div>
-          <div v-else-if="recentDeployments.length === 0" class="text-secondary text-center py-8">
+          <div
+            v-else-if="recentDeployments.length === 0"
+            class="text-secondary text-center py-8"
+          >
             <div class="mb-4">
               <svg
                 class="w-12 h-12 mx-auto text-muted"
@@ -175,7 +204,9 @@
               </svg>
             </div>
             <p>No deployments yet</p>
-            <p class="text-xs mt-1">Deploy your first application to get started</p>
+            <p class="text-xs mt-1">
+              Deploy your first application to get started
+            </p>
           </div>
           <div v-else class="space-y-4">
             <div
@@ -193,10 +224,10 @@
                     deployment.status === 'RUNNING'
                       ? 'success'
                       : deployment.status === 'BUILDING'
-                        ? 'warning'
-                        : deployment.status === 'ERROR'
-                          ? 'danger'
-                          : 'secondary'
+                      ? 'warning'
+                      : deployment.status === 'ERROR'
+                      ? 'danger'
+                      : 'secondary'
                   "
                 >
                   {{ deployment.status }}
@@ -213,9 +244,12 @@
           <div class="flex items-center justify-between">
             <h2 class="oui-card-title">Activity Feed</h2>
             <div class="flex items-center space-x-2">
-              <div v-if="!isLoading" class="w-2 h-2 bg-success rounded-full"></div>
+              <div
+                v-if="!isLoading"
+                class="w-2 h-2 bg-success rounded-full"
+              ></div>
               <span class="text-xs text-secondary">
-                {{ isLoading ? 'Loading...' : 'Live' }}
+                {{ isLoading ? "Loading..." : "Live" }}
               </span>
             </div>
           </div>
@@ -223,14 +257,22 @@
         <OuiCardBody>
           <div v-if="isLoading" class="space-y-4">
             <div v-for="i in 3" :key="i" class="flex items-start space-x-3">
-              <OuiSkeleton width="0.5rem" height="0.5rem" variant="circle" class="mt-2" />
+              <OuiSkeleton
+                width="0.5rem"
+                height="0.5rem"
+                variant="circle"
+                class="mt-2"
+              />
               <div class="space-y-2 flex-1">
                 <OuiSkeleton width="10rem" height="1rem" variant="text" />
                 <OuiSkeleton width="5rem" height="0.75rem" variant="text" />
               </div>
             </div>
           </div>
-          <div v-else-if="activityFeed.length === 0" class="text-secondary text-center py-8">
+          <div
+            v-else-if="activityFeed.length === 0"
+            class="text-secondary text-center py-8"
+          >
             <div class="mb-4">
               <svg
                 class="w-12 h-12 mx-auto text-muted"
@@ -247,7 +289,9 @@
               </svg>
             </div>
             <p>No recent activity</p>
-            <p class="text-xs mt-1">Activity will appear here as you use the platform</p>
+            <p class="text-xs mt-1">
+              Activity will appear here as you use the platform
+            </p>
           </div>
           <div v-else class="space-y-4">
             <div
@@ -255,10 +299,16 @@
               :key="activity.id"
               class="flex items-start space-x-3 hover:bg-surface-hover transition-colors rounded-lg p-2 -m-2"
             >
-              <div class="w-2 h-2 bg-accent-primary rounded-full mt-2 flex-shrink-0"></div>
+              <div
+                class="w-2 h-2 bg-accent-primary rounded-full mt-2 flex-shrink-0"
+              ></div>
               <div class="flex-1 min-w-0">
-                <p class="text-sm text-primary break-words">{{ activity.message }}</p>
-                <p class="text-xs text-secondary">{{ formatDate(activity.timestamp) }}</p>
+                <p class="text-sm text-primary break-words">
+                  {{ activity.message }}
+                </p>
+                <p class="text-xs text-secondary">
+                  {{ formatDate(activity.timestamp) }}
+                </p>
               </div>
             </div>
           </div>
@@ -274,16 +324,16 @@ import {
   ServerIcon,
   CircleStackIcon,
   CreditCardIcon,
-} from '@heroicons/vue/24/outline';
+} from "@heroicons/vue/24/outline";
 
 // Import OUI components
-import OuiSkeleton from '../components/oui/Skeleton.vue';
-import OuiText from '../components/oui/Text.vue';
+import OuiSkeleton from "../components/oui/Skeleton.vue";
+import OuiText from "../components/oui/Text.vue";
 
 // Page meta
 definePageMeta({
-  layout: 'default',
-  middleware: 'auth',
+  layout: "default",
+  middleware: "auth",
 });
 
 // Loading state
@@ -304,7 +354,7 @@ const recentDeployments = ref<
     id: string;
     name: string;
     domain: string;
-    status: 'RUNNING' | 'BUILDING' | 'STOPPED' | 'PENDING' | 'ERROR';
+    status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR";
   }>
 >([]);
 
@@ -324,7 +374,7 @@ const loadDashboardStats = async () => {
     statsError.value = null;
 
     // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Mock data - in real app this would come from API
     stats.value = {
@@ -336,45 +386,45 @@ const loadDashboardStats = async () => {
 
     recentDeployments.value = [
       {
-        id: '1',
-        name: 'My App',
-        domain: 'myapp.obiente.cloud',
-        status: 'RUNNING',
+        id: "1",
+        name: "My App",
+        domain: "myapp.obiente.cloud",
+        status: "RUNNING",
       },
       {
-        id: '2',
-        name: 'Marketing Site',
-        domain: 'marketing.example.com',
-        status: 'BUILDING',
+        id: "2",
+        name: "Marketing Site",
+        domain: "marketing.example.com",
+        status: "BUILDING",
       },
       {
-        id: '3',
-        name: 'API Server',
-        domain: 'api.example.com',
-        status: 'STOPPED',
+        id: "3",
+        name: "API Server",
+        domain: "api.example.com",
+        status: "STOPPED",
       },
     ];
 
     activityFeed.value = [
       {
-        id: '1',
+        id: "1",
         message: 'Deployment "My App" was updated',
         timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
       },
       {
-        id: '2',
+        id: "2",
         message: 'VPS instance "web-server-1" was created',
         timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
       },
       {
-        id: '3',
+        id: "3",
         message: 'Database "prod-db" backup completed',
         timestamp: new Date(Date.now() - 1000 * 60 * 60 * 6), // 6 hours ago
       },
     ];
   } catch (error) {
-    statsError.value = 'Failed to load dashboard data';
-    console.error('Dashboard loading error:', error);
+    statsError.value = "Failed to load dashboard data";
+    console.error("Dashboard loading error:", error);
   } finally {
     isLoading.value = false;
   }
@@ -398,32 +448,32 @@ onUnmounted(() => {
 // Helper functions
 const getStatusClass = (status: string) => {
   switch (status) {
-    case 'RUNNING':
-      return 'bg-success/10 text-success border border-success/20';
-    case 'STOPPED':
-      return 'bg-danger/10 text-danger border border-danger/20';
-    case 'BUILDING':
-      return 'bg-warning/10 text-warning border border-warning/20';
-    case 'PENDING':
-      return 'bg-info/10 text-info border border-info/20';
-    case 'ERROR':
-      return 'bg-danger/10 text-danger border border-danger/20';
+    case "RUNNING":
+      return "bg-success/10 text-success border border-success/20";
+    case "STOPPED":
+      return "bg-danger/10 text-danger border border-danger/20";
+    case "BUILDING":
+      return "bg-warning/10 text-warning border border-warning/20";
+    case "PENDING":
+      return "bg-info/10 text-info border border-info/20";
+    case "ERROR":
+      return "bg-danger/10 text-danger border border-danger/20";
     default:
-      return 'bg-surface-muted text-secondary border border-muted';
+      return "bg-surface-muted text-secondary border border-muted";
   }
 };
 
 const formatDate = (date: Date) => {
   return new Intl.RelativeTimeFormat().format(
     Math.floor((date.getTime() - Date.now()) / (1000 * 60)),
-    'minute'
+    "minute"
   );
 };
 
 const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
   }).format(amount);
 };
 

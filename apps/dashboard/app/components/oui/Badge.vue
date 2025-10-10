@@ -6,11 +6,17 @@
 
 <script setup lang="ts">
 interface Props {
-  variant?: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'outline';
+  variant?:
+    | "primary"
+    | "secondary"
+    | "success"
+    | "warning"
+    | "danger"
+    | "outline";
 }
 
 withDefaults(defineProps<Props>(), {
-  variant: 'secondary',
+  variant: "secondary",
 });
 
 defineOptions({

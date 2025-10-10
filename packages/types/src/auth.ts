@@ -1,4 +1,4 @@
-import type { User } from './user';
+import type { User } from "./user";
 
 export interface UserSession {
   /** Session ID */
@@ -19,5 +19,5 @@ export interface SecureSessionData {
 }
 export interface SessionResponse {
   session: UserSession | null;
-  status: 'authenticated' | 'unauthenticated';
+  status: "authenticated" | "unauthenticated";
 }

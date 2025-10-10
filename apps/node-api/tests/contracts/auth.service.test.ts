@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { ConnectRouter } from '@connectrpc/connect';
-import { AuthService } from '../../src/generated/obiente/cloud/auth/v1/auth_service_connect';
+import { describe, it, expect, beforeEach } from "vitest";
+import { ConnectRouter } from "@connectrpc/connect";
+import { AuthService } from "../../src/generated/obiente/cloud/auth/v1/auth_service_connect";
 import {
   InitiateLoginRequest,
   InitiateLoginResponse,
@@ -10,14 +10,14 @@ import {
   RefreshTokenResponse,
   LogoutRequest,
   LogoutResponse,
-} from '../../src/generated/obiente/cloud/auth/v1/auth_service_pb';
+} from "../../src/generated/obiente/cloud/auth/v1/auth_service_pb";
 
 /**
  * Contract tests for AuthService protobuf interface
  * These tests validate the service contract without implementation
  * Tests should FAIL initially until AuthService is implemented
  */
-describe('AuthService Contract Tests', () => {
+describe("AuthService Contract Tests", () => {
   let authService: AuthService;
 
   beforeEach(() => {
@@ -25,10 +25,10 @@ describe('AuthService Contract Tests', () => {
     authService = new AuthService();
   });
 
-  describe('InitiateLogin', () => {
-    it('should accept InitiateLoginRequest and return InitiateLoginResponse', async () => {
+  describe("InitiateLogin", () => {
+    it("should accept InitiateLoginRequest and return InitiateLoginResponse", async () => {
       const request = new InitiateLoginRequest({
-        redirectUri: 'http://localhost:3000/auth/callback',
+        redirectUri: "http://localhost:3000/auth/callback",
       });
 
       // This will fail - no implementation yet
@@ -41,21 +41,21 @@ describe('AuthService Contract Tests', () => {
       expect(response.state).toHaveLength(32); // 32-character state
     });
 
-    it('should validate redirect_uri format', async () => {
+    it("should validate redirect_uri format", async () => {
       const request = new InitiateLoginRequest({
-        redirectUri: 'invalid-url',
+        redirectUri: "invalid-url",
       });
 
       // Should throw validation error
       await expect(authService.initiateLogin(request)).rejects.toThrow();
     });
 
-    it('should generate unique state for each request', async () => {
+    it("should generate unique state for each request", async () => {
       const request1 = new InitiateLoginRequest({
-        redirectUri: 'http://localhost:3000/auth/callback',
+        redirectUri: "http://localhost:3000/auth/callback",
       });
       const request2 = new InitiateLoginRequest({
-        redirectUri: 'http://localhost:3000/auth/callback',
+        redirectUri: "http://localhost:3000/auth/callback",
       });
 
       const [response1, response2] = await Promise.all([
@@ -67,11 +67,11 @@ describe('AuthService Contract Tests', () => {
     });
   });
 
-  describe('HandleCallback', () => {
-    it('should accept HandleCallbackRequest and return HandleCallbackResponse', async () => {
+  describe("HandleCallback", () => {
+    it("should accept HandleCallbackRequest and return HandleCallbackResponse", async () => {
       const request = new HandleCallbackRequest({
-        code: 'auth_code_123',
-        state: 'state_abc_123',
+        code: "auth_code_123",
+        state: "state_abc_123",
       });
 
       // This will fail - no implementation yet
@@ -86,42 +86,42 @@ describe('AuthService Contract Tests', () => {
       expect(response.user?.email).toMatch(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
     });
 
-    it('should reject invalid authorization code', async () => {
+    it("should reject invalid authorization code", async () => {
       const request = new HandleCallbackRequest({
-        code: 'invalid_code',
-        state: 'valid_state',
+        code: "invalid_code",
+        state: "valid_state",
       });
 
       await expect(authService.handleCallback(request)).rejects.toThrow();
     });
 
-    it('should reject invalid state parameter', async () => {
+    it("should reject invalid state parameter", async () => {
       const request = new HandleCallbackRequest({
-        code: 'valid_code',
-        state: 'invalid_state',
+        code: "valid_code",
+        state: "invalid_state",
       });
 
       await expect(authService.handleCallback(request)).rejects.toThrow();
     });
 
-    it('should return valid JWT tokens', async () => {
+    it("should return valid JWT tokens", async () => {
       const request = new HandleCallbackRequest({
-        code: 'auth_code_123',
-        state: 'state_abc_123',
+        code: "auth_code_123",
+        state: "state_abc_123",
       });
 
       const response = await authService.handleCallback(request);
 
       // Validate JWT format (3 parts separated by dots)
-      expect(response.accessToken.split('.')).toHaveLength(3);
-      expect(response.refreshToken.split('.')).toHaveLength(3);
+      expect(response.accessToken.split(".")).toHaveLength(3);
+      expect(response.refreshToken.split(".")).toHaveLength(3);
     });
   });
 
-  describe('RefreshToken', () => {
-    it('should accept RefreshTokenRequest and return RefreshTokenResponse', async () => {
+  describe("RefreshToken", () => {
+    it("should accept RefreshTokenRequest and return RefreshTokenResponse", async () => {
       const request = new RefreshTokenRequest({
-        refreshToken: 'valid.refresh.token',
+        refreshToken: "valid.refresh.token",
       });
 
       // This will fail - no implementation yet
@@ -133,25 +133,25 @@ describe('AuthService Contract Tests', () => {
       expect(response.expiresIn).toBeGreaterThan(0);
     });
 
-    it('should reject expired refresh token', async () => {
+    it("should reject expired refresh token", async () => {
       const request = new RefreshTokenRequest({
-        refreshToken: 'expired.refresh.token',
+        refreshToken: "expired.refresh.token",
       });
 
       await expect(authService.refreshToken(request)).rejects.toThrow();
     });
 
-    it('should reject malformed refresh token', async () => {
+    it("should reject malformed refresh token", async () => {
       const request = new RefreshTokenRequest({
-        refreshToken: 'malformed-token',
+        refreshToken: "malformed-token",
       });
 
       await expect(authService.refreshToken(request)).rejects.toThrow();
     });
 
-    it('should return new tokens with valid expiry', async () => {
+    it("should return new tokens with valid expiry", async () => {
       const request = new RefreshTokenRequest({
-        refreshToken: 'valid.refresh.token',
+        refreshToken: "valid.refresh.token",
       });
 
       const response = await authService.refreshToken(request);
@@ -161,10 +161,10 @@ describe('AuthService Contract Tests', () => {
     });
   });
 
-  describe('Logout', () => {
-    it('should accept LogoutRequest and return LogoutResponse', async () => {
+  describe("Logout", () => {
+    it("should accept LogoutRequest and return LogoutResponse", async () => {
       const request = new LogoutRequest({
-        accessToken: 'valid.access.token',
+        accessToken: "valid.access.token",
       });
 
       // This will fail - no implementation yet
@@ -174,9 +174,9 @@ describe('AuthService Contract Tests', () => {
       expect(response.success).toBe(true);
     });
 
-    it('should handle logout with invalid token gracefully', async () => {
+    it("should handle logout with invalid token gracefully", async () => {
       const request = new LogoutRequest({
-        accessToken: 'invalid.token',
+        accessToken: "invalid.token",
       });
 
       const response = await authService.logout(request);
@@ -185,9 +185,9 @@ describe('AuthService Contract Tests', () => {
       expect(response.success).toBe(true);
     });
 
-    it('should invalidate token after logout', async () => {
-      const accessToken = 'valid.access.token';
-      
+    it("should invalidate token after logout", async () => {
+      const accessToken = "valid.access.token";
+
       const logoutRequest = new LogoutRequest({
         accessToken,
       });
@@ -203,31 +203,31 @@ describe('AuthService Contract Tests', () => {
     });
   });
 
-  describe('Error Handling', () => {
-    it('should return standardized error format', async () => {
+  describe("Error Handling", () => {
+    it("should return standardized error format", async () => {
       const request = new InitiateLoginRequest({
-        redirectUri: '', // Invalid empty URL
+        redirectUri: "", // Invalid empty URL
       });
 
       try {
         await authService.initiateLogin(request);
-        expect.fail('Should have thrown an error');
+        expect.fail("Should have thrown an error");
       } catch (error: any) {
         expect(error.code).toBeDefined();
         expect(error.message).toBeDefined();
-        expect(typeof error.message).toBe('string');
+        expect(typeof error.message).toBe("string");
       }
     });
 
-    it('should handle network timeouts gracefully', async () => {
+    it("should handle network timeouts gracefully", async () => {
       // Mock network timeout scenario
       const request = new InitiateLoginRequest({
-        redirectUri: 'http://localhost:3000/auth/callback',
+        redirectUri: "http://localhost:3000/auth/callback",
       });
 
       // Should implement timeout handling
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Timeout')), 100);
+        setTimeout(() => reject(new Error("Timeout")), 100);
       });
 
       await expect(
@@ -236,35 +236,37 @@ describe('AuthService Contract Tests', () => {
     });
   });
 
-  describe('Security Requirements', () => {
-    it('should not expose sensitive information in errors', async () => {
+  describe("Security Requirements", () => {
+    it("should not expose sensitive information in errors", async () => {
       const request = new HandleCallbackRequest({
-        code: 'malicious_code',
-        state: 'malicious_state',
+        code: "malicious_code",
+        state: "malicious_state",
       });
 
       try {
         await authService.handleCallback(request);
-        expect.fail('Should have thrown an error');
+        expect.fail("Should have thrown an error");
       } catch (error: any) {
         // Error message should not contain sensitive details
-        expect(error.message).not.toContain('malicious_code');
-        expect(error.message).not.toContain('internal');
-        expect(error.message).not.toContain('database');
+        expect(error.message).not.toContain("malicious_code");
+        expect(error.message).not.toContain("internal");
+        expect(error.message).not.toContain("database");
       }
     });
 
-    it('should rate limit authentication attempts', async () => {
-      const requests = Array.from({ length: 10 }, () =>
-        new HandleCallbackRequest({
-          code: 'invalid_code',
-          state: 'invalid_state',
-        })
+    it("should rate limit authentication attempts", async () => {
+      const requests = Array.from(
+        { length: 10 },
+        () =>
+          new HandleCallbackRequest({
+            code: "invalid_code",
+            state: "invalid_state",
+          })
       );
 
       // Should implement rate limiting after multiple failures
-      const promises = requests.map(req => authService.handleCallback(req));
-      
+      const promises = requests.map((req) => authService.handleCallback(req));
+
       // Later requests should be rate limited
       await expect(Promise.all(promises)).rejects.toThrow(/rate limit/i);
     });

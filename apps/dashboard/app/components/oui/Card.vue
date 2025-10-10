@@ -23,10 +23,10 @@
 
 <script setup lang="ts">
 interface Props {
-  variant?: 'default' | 'raised' | 'overlay' | 'outline';
+  variant?: "default" | "raised" | "overlay" | "outline";
   interactive?: boolean;
   hoverable?: boolean;
-  status?: 'success' | 'warning' | 'danger' | 'info';
+  status?: "success" | "warning" | "danger" | "info";
 }
 
 defineProps<Props>();

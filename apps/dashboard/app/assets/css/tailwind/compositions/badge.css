@@ -11,9 +11,17 @@
 
   .oui-badge-primary {
     @apply border;
-    background-color: color-mix(in srgb, var(--oui-accent-primary) 10%, transparent);
+    background-color: color-mix(
+      in srgb,
+      var(--oui-accent-primary) 10%,
+      transparent
+    );
     color: var(--oui-accent-primary);
-    border-color: color-mix(in srgb, var(--oui-accent-primary) 20%, transparent);
+    border-color: color-mix(
+      in srgb,
+      var(--oui-accent-primary) 20%,
+      transparent
+    );
   }
 
   .oui-badge-secondary {
@@ -25,21 +33,41 @@
 
   .oui-badge-success {
     @apply border;
-    background-color: color-mix(in srgb, var(--oui-accent-success) 10%, transparent);
+    background-color: color-mix(
+      in srgb,
+      var(--oui-accent-success) 10%,
+      transparent
+    );
     color: var(--oui-accent-success);
-    border-color: color-mix(in srgb, var(--oui-accent-success) 20%, transparent);
+    border-color: color-mix(
+      in srgb,
+      var(--oui-accent-success) 20%,
+      transparent
+    );
   }
 
   .oui-badge-warning {
     @apply border;
-    background-color: color-mix(in srgb, var(--oui-accent-warning) 10%, transparent);
+    background-color: color-mix(
+      in srgb,
+      var(--oui-accent-warning) 10%,
+      transparent
+    );
     color: var(--oui-accent-warning);
-    border-color: color-mix(in srgb, var(--oui-accent-warning) 20%, transparent);
+    border-color: color-mix(
+      in srgb,
+      var(--oui-accent-warning) 20%,
+      transparent
+    );
   }
 
   .oui-badge-danger {
     @apply border;
-    background-color: color-mix(in srgb, var(--oui-accent-danger) 10%, transparent);
+    background-color: color-mix(
+      in srgb,
+      var(--oui-accent-danger) 10%,
+      transparent
+    );
     color: var(--oui-accent-danger);
     border-color: color-mix(in srgb, var(--oui-accent-danger) 20%, transparent);
   }

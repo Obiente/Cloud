@@ -15,6 +15,7 @@ This API server provides the backend services for the multi-tenant cloud dashboa
 ## Architecture
 
 ### Tech Stack
+
 - **Framework**: Fastify for HTTP server
 - **RPC Protocol**: ConnectRPC with Protocol Buffers
 - **Authentication**: Zitadel OIDC/OAuth2
@@ -23,6 +24,7 @@ This API server provides the backend services for the multi-tenant cloud dashboa
 - **Security**: JWT tokens, rate limiting, CORS
 
 ### Project Structure
+
 ```
 src/
 ├── config/           # Configuration management
@@ -36,23 +38,27 @@ src/
 ## Features
 
 ### Multi-tenancy
+
 - Organization-based tenant isolation
 - Row Level Security (RLS) in database
 - Tenant-specific resource access control
 
 ### Authentication & Authorization
+
 - Zitadel integration for OIDC/OAuth2
 - JWT token validation
 - Role-based access control (RBAC)
 - API key authentication for service-to-service calls
 
 ### API Protocol
+
 - ConnectRPC for type-safe communication
 - Protocol Buffer schema definitions
 - Automatic TypeScript client generation
 - Streaming support for real-time updates
 
 ### Security
+
 - Rate limiting per IP/user
 - CORS configuration
 - Request validation with Zod
@@ -62,17 +68,20 @@ src/
 ## Development
 
 ### Prerequisites
-- Node.js 18+ 
+
+- Node.js 18+
 - PostgreSQL 14+
 - Zitadel instance (for authentication)
 
 ### Environment Setup
+
 1. Copy `.env.example` to `.env`
 2. Configure database connection
 3. Set up Zitadel authentication
 4. Configure Stripe for billing (optional)
 
 ### Available Scripts
+
 ```bash
 # Development
 pnpm dev              # Start development server with hot reload
@@ -89,21 +98,26 @@ pnpm clean            # Clean build artifacts
 ```
 
 ### API Documentation
+
 When running in development mode, Swagger documentation is available at:
+
 - http://localhost:3001/docs
 
 ## Deployment
 
 ### Production Build
+
 ```bash
 pnpm build
 pnpm start
 ```
 
 ### Environment Variables
+
 See `.env.example` for all required environment variables.
 
 ### Health Checks
+
 - `GET /health` - Basic health check endpoint
 
 ## Future Enhancements

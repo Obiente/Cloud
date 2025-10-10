@@ -4,8 +4,8 @@
   "private": true,
   "description": "Obiente Cloud Dashboard - Multi-tenant cloud management interface",
   "scripts": {
-    "build": "nuxt build",
-    "dev": "nuxt dev",
+    "build": "nx nuxt:build",
+    "dev": "nx serve",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",

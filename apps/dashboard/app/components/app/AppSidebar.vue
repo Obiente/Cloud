@@ -3,7 +3,9 @@
     <div class="p-6">
       <!-- Logo -->
       <div class="flex items-center space-x-2 mb-8">
-        <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+        <div
+          class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center"
+        >
           <span class="text-white font-bold text-lg">O</span>
         </div>
         <span class="text-xl font-bold text-text-primary">Obiente</span>
@@ -68,13 +70,13 @@ import {
   CircleStackIcon,
   CreditCardIcon,
   Cog6ToothIcon,
-} from '@heroicons/vue/24/outline';
+} from "@heroicons/vue/24/outline";
 
 const emit = defineEmits<{
   navigate: [];
 }>();
 
 const handleNavigate = () => {
-  emit('navigate');
+  emit("navigate");
 };
 </script>

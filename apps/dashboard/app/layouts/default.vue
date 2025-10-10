@@ -11,7 +11,7 @@
         <div class="absolute inset-0 bg-background/80 backdrop-blur-sm" @click="closeSidebar" />
       </div>
     </Transition>
-
+ 
     <Transition name="sidebar-panel" appear>
       <div
         v-if="isSidebarOpen"
@@ -75,18 +75,22 @@
     </div>
     <div v-else class="main-content flex flex-col justify-center items-center">
       <!-- {{ user }} -->
-      <OuiText v-if="user.isLoading" size="2xl" weight="extrabold">loading</OuiText>
+      <OuiText v-if="user.isLoading" size="2xl" weight="extrabold"
+        >loading</OuiText
+      >
       <OuiText v-else-if="user.isAuthenticated" size="2xl" weight="extrabold"
         >logging you in</OuiText
       >
-      <OuiButton v-else size="xl" weight="extrabold" @click="user.popupLogin()">Log In</OuiButton>
+      <OuiButton v-else size="xl" weight="extrabold" @click="user.popupLogin()"
+        >Log In</OuiButton
+      >
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue';
-import { Bars3Icon, XMarkIcon } from '@heroicons/vue/24/outline';
+import { onBeforeUnmount, onMounted } from "vue";
+import { Bars3Icon, XMarkIcon } from "@heroicons/vue/24/outline";
 
 // Pinia user store
 const user = useAuth();
@@ -94,7 +98,7 @@ const user = useAuth();
 const notificationCount = ref(3);
 
 const isSidebarOpen = ref(false);
-const mobileSidebarId = 'mobile-primary-navigation';
+const mobileSidebarId = "mobile-primary-navigation";
 
 const closeSidebar = () => {
   isSidebarOpen.value = false;
@@ -105,13 +109,13 @@ const toggleSidebar = () => {
 };
 
 const handleKeydown = (event: KeyboardEvent) => {
-  if (event.key === 'Escape') {
+  if (event.key === "Escape") {
     closeSidebar();
   }
 };
 
 const handleBreakpointChange = () => {
-  if (import.meta.client && window.matchMedia('(min-width: 1024px)').matches) {
+  if (import.meta.client && window.matchMedia("(min-width: 1024px)").matches) {
     isSidebarOpen.value = false;
   }
 };
@@ -119,13 +123,13 @@ const handleBreakpointChange = () => {
 if (import.meta.client) {
   onMounted(() => {
     handleBreakpointChange();
-    window.addEventListener('keydown', handleKeydown);
-    window.addEventListener('resize', handleBreakpointChange);
+    window.addEventListener("keydown", handleKeydown);
+    window.addEventListener("resize", handleBreakpointChange);
   });
 
   onBeforeUnmount(() => {
-    window.removeEventListener('keydown', handleKeydown);
-    window.removeEventListener('resize', handleBreakpointChange);
+    window.removeEventListener("keydown", handleKeydown);
+    window.removeEventListener("resize", handleBreakpointChange);
   });
 }
 
@@ -134,21 +138,21 @@ const organizationOptions = computed(() => {
   // TODO: Replace with actual organizations from API
   return [
     {
-      label: 'Personal',
-      value: '1',
+      label: "Personal",
+      value: "1",
     },
-    { label: 'Acme Corp', value: '2' },
-    { label: 'Development Team', value: '3' },
+    { label: "Acme Corp", value: "2" },
+    { label: "Development Team", value: "3" },
   ];
 });
 
 const switchOrganization = async (organizationId: string) => {
   // TODO: Implement organization switching logic
-  console.log('Switching to organization:', organizationId);
+  console.log("Switching to organization:", organizationId);
 };
 
 const handleNotificationsClick = () => {
   // TODO: Implement notifications panel/modal
-  console.log('Opening notifications');
+  console.log("Opening notifications");
 };
 </script>

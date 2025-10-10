@@ -1,13 +1,13 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
-import tailwindcss from '@tailwindcss/vite';
+import tailwindcss from "@tailwindcss/vite";
 export default defineNuxtConfig({
   devtools: { enabled: true },
   vite: { plugins: [tailwindcss()] },
   // Modules
-  modules: ['@pinia/nuxt', '@vueuse/nuxt'],
+  modules: ["@pinia/nuxt", "@vueuse/nuxt"],
 
   // CSS Framework - using Nuxt UI (built on Tailwind CSS)
-  css: ['~/assets/css/main.css'],
+  css: ["~/assets/css/main.css"],
   // watch: ['composables/**', 'stores/**', 'utils/**', 'components/**'],
   // TypeScript configuration
   typescript: {
@@ -17,9 +17,9 @@ export default defineNuxtConfig({
   // Runtime config
   runtimeConfig: {
     // Private keys (only available on server-side)
-    apiSecret: '',
+    apiSecret: "",
     session: {
-      password: 'changeme_' + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters
+      password: "changeme_" + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters
       cookie: {
         secure: false, // Set to true if using HTTPS
       },
@@ -27,10 +27,10 @@ export default defineNuxtConfig({
     requestHost: undefined,
     // Public keys (exposed to client-side)
     public: {
-      apiBaseUrl: 'http://localhost:3001',
-      oidcIssuer: 'https://obiente.cloud',
-      oidcBase: 'https://auth.obiente.cloud',
-      oidcClientId: '339499954043158530',
+      apiBaseUrl: "http://localhost:3001",
+      oidcIssuer: "https://obiente.cloud",
+      oidcBase: "https://auth.obiente.cloud",
+      oidcClientId: "339499954043158530",
     },
   },
 
@@ -45,19 +45,22 @@ export default defineNuxtConfig({
   // Development server
   devServer: {
     port: 3000,
-    host: '0.0.0.0',
+    host: "0.0.0.0",
   },
 
   // App configuration
   app: {
     head: {
-      title: 'Obiente Cloud',
+      title: "Obiente Cloud",
       meta: [
-        { charset: 'utf-8' },
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        { name: 'description', content: 'Multi-tenant cloud dashboard platform' },
+        { charset: "utf-8" },
+        { name: "viewport", content: "width=device-width, initial-scale=1" },
+        {
+          name: "description",
+          content: "Multi-tenant cloud dashboard platform",
+        },
       ],
-      link: [{ rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' }],
+      link: [{ rel: "icon", type: "image/x-icon", href: "/favicon.ico" }],
     },
   },
 

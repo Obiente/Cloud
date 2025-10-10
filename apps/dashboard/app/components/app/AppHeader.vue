@@ -30,24 +30,20 @@
         />
 
         <!-- Notifications -->
-        <OuiButton 
-          variant="ghost" 
-          size="sm" 
-          title="Notifications" 
+        <OuiButton
+          variant="ghost"
+          size="sm"
+          title="Notifications"
           class="!p-2 relative"
           @click="handleNotificationsClick"
         >
           <BellIcon class="w-5 h-5" />
           <!-- Notification badge -->
-          <span 
+          <span
             v-if="notificationCount > 0"
-            class="
-              absolute -top-1 -right-1 w-5 h-5 bg-danger text-white 
-              text-xs font-medium rounded-full 
-              flex items-center justify-center
-            "
+            class="absolute -top-1 -right-1 w-5 h-5 bg-danger text-white text-xs font-medium rounded-full flex items-center justify-center"
           >
-            {{ notificationCount > 99 ? '99+' : notificationCount }}
+            {{ notificationCount > 99 ? "99+" : notificationCount }}
           </span>
         </OuiButton>
 
@@ -59,37 +55,37 @@
 </template>
 
 <script setup lang="ts">
-import { BellIcon } from '@heroicons/vue/24/outline'
+import { BellIcon } from "@heroicons/vue/24/outline";
 
 interface Organization {
-  id: string
-  name: string
+  id: string;
+  name: string;
 }
 
 interface Props {
-  title?: string
-  subtitle?: string
-  currentOrganization?: Organization | null
-  organizationOptions?: Array<{ label: string; value: string }>
-  notificationCount?: number
+  title?: string;
+  subtitle?: string;
+  currentOrganization?: Organization | null;
+  organizationOptions?: Array<{ label: string; value: string }>;
+  notificationCount?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'Dashboard',
+  title: "Dashboard",
   notificationCount: 0,
-  organizationOptions: () => []
-})
+  organizationOptions: () => [],
+});
 
 const emit = defineEmits<{
-  'organization-change': [organizationId: string]
-  'notifications-click': []
-}>()
+  "organization-change": [organizationId: string];
+  "notifications-click": [];
+}>();
 
 // const handleOrganizationChange = (organizationId: string) => {
 //   emit('organization-change', organizationId)
 // }
 
 const handleNotificationsClick = () => {
-  emit('notifications-click')
-}
+  emit("notifications-click");
+};
 </script>

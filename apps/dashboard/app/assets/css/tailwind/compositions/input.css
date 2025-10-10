@@ -14,7 +14,7 @@
     border-color: var(--oui-border-default);
     color: var(--oui-text-primary);
 
-    &[data-state='open'] {
+    &[data-state="open"] {
       border-color: var(--oui-accent-primary);
     }
   }
@@ -163,7 +163,8 @@
 
   .oui-input-error:focus {
     border-color: var(--oui-accent-danger);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--oui-accent-danger) 20%, transparent);
+    box-shadow: 0 0 0 2px
+      color-mix(in srgb, var(--oui-accent-danger) 20%, transparent);
   }
 
   .oui-input-success {
@@ -172,7 +173,8 @@
 
   .oui-input-success:focus {
     border-color: var(--oui-accent-success);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--oui-accent-success) 20%, transparent);
+    box-shadow: 0 0 0 2px
+      color-mix(in srgb, var(--oui-accent-success) 20%, transparent);
   }
 
   .oui-input-warning {
@@ -181,7 +183,8 @@
 
   .oui-input-warning:focus {
     border-color: var(--oui-accent-warning);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--oui-accent-warning) 20%, transparent);
+    box-shadow: 0 0 0 2px
+      color-mix(in srgb, var(--oui-accent-warning) 20%, transparent);
   }
 
   /* Textarea */

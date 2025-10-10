@@ -1,23 +1,23 @@
-import { ContainerApi } from '@obiente/docker-engine';
-import { config } from '../../docker-config';
+import { ContainerApi } from "@obiente/docker-engine";
+import { config } from "../../docker-config";
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
-  const { all = 'false', size = 'false' } = query;
-  
+  const { all = "false", size = "false" } = query;
+
   try {
     const api = new ContainerApi(config);
-    
+
     // List containers (all=true includes stopped containers)
     const response = await api.containerList(
-      all === 'true',     // all containers or just running
-      undefined,          // limit
-      size === 'true',    // include size information
-      undefined           // filters
+      all === "true", // all containers or just running
+      undefined, // limit
+      size === "true", // include size information
+      undefined // filters
     );
 
     // Transform the response to include useful information
-    const containers = response.data.map(container => ({
+    const containers = response.data.map((container) => ({
       id: container.Id,
       names: container.Names,
       image: container.Image,
@@ -32,20 +32,19 @@ export default defineEventHandler(async (event) => {
       networkSettings: container.NetworkSettings,
       mounts: container.Mounts,
       size: container.SizeRw || 0,
-      sizeRootFs: container.SizeRootFs || 0
+      sizeRootFs: container.SizeRootFs || 0,
     }));
 
     return {
       success: true,
       containers,
-      count: containers.length
+      count: containers.length,
     };
-    
   } catch (error) {
-    console.error('Error listing containers:', error);
+    console.error("Error listing containers:", error);
     throw createError({
       statusCode: 500,
-      statusMessage: 'Failed to list containers: ' + (error as Error).message
+      statusMessage: "Failed to list containers: " + (error as Error).message,
     });
   }
 });

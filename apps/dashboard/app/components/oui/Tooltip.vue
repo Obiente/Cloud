@@ -4,12 +4,7 @@
       <slot name="trigger" />
     </ArkTooltip.Trigger>
     <ArkTooltip.Positioner>
-      <ArkTooltip.Content
-        :class="[
-          'tooltip-content',
-          `tooltip-${variant}`
-        ]"
-      >
+      <ArkTooltip.Content :class="['tooltip-content', `tooltip-${variant}`]">
         <ArkTooltip.Arrow class="tooltip-arrow" />
         <slot />
       </ArkTooltip.Content>
@@ -18,15 +13,15 @@
 </template>
 
 <script setup lang="ts">
-import { Tooltip as ArkTooltip } from '@ark-ui/vue'
+import { Tooltip as ArkTooltip } from "@ark-ui/vue";
 
 interface Props {
-  variant?: 'default' | 'dark' | 'light'
-  triggerProps?: Record<string, any>
+  variant?: "default" | "dark" | "light";
+  triggerProps?: Record<string, any>;
 }
 
 withDefaults(defineProps<Props>(), {
-  variant: 'default',
-  triggerProps: () => ({})
-})
+  variant: "default",
+  triggerProps: () => ({}),
+});
 </script>

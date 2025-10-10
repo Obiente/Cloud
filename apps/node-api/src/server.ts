@@ -12,7 +12,6 @@ import { config } from "./config/index";
 import { fastify } from "fastify";
 import { fastifyConnectPlugin } from "@connectrpc/connect-fastify";
 
-
 const server = fastify({
   logger: {
     level: config.logLevel,
@@ -89,7 +88,7 @@ try {
 
   if (config.isDev) {
     server.log.info(
-      `API Documentation available at http://${config.hostname}/docs`,
+      `API Documentation available at http://${config.hostname}/docs`
     );
   }
 } catch (err) {
