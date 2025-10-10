@@ -8,10 +8,13 @@
         role="dialog"
         aria-modal="true"
       >
-        <div class="absolute inset-0 bg-background/80 backdrop-blur-sm" @click="closeSidebar" />
+        <div
+          class="absolute inset-0 bg-background/80 backdrop-blur-sm"
+          @click="closeSidebar"
+        />
       </div>
     </Transition>
- 
+
     <Transition name="sidebar-panel" appear>
       <div
         v-if="isSidebarOpen"
@@ -20,7 +23,10 @@
       >
         <AppSidebar
           class="sidebar-drawer relative h-full overflow-y-auto border-r border-border-muted bg-surface-base shadow-2xl"
+          :organization-options="organizationOptions"
+          :current-organization="currentOrganization"
           @navigate="closeSidebar"
+          @organization-change="switchOrganization"
         />
 
         <OuiButton
@@ -37,15 +43,19 @@
 
     <div v-if="user.user && user.isAuthenticated" class="flex min-h-screen">
       <!-- Sidebar -->
-      <AppSidebar class="desktop-sidebar" @navigate="closeSidebar" />
+      <AppSidebar
+        class="desktop-sidebar"
+        :organization-options="organizationOptions"
+        :current-organization="currentOrganization"
+        @navigate="closeSidebar"
+        @organization-change="switchOrganization"
+      />
 
       <!-- Main content -->
       <div class="flex-1 flex flex-col">
         <!-- Top bar -->
         <AppHeader
-          :organization-options="organizationOptions"
           :notification-count="notificationCount"
-          @organization-change="switchOrganization"
           @notifications-click="handleNotificationsClick"
         >
           <template #leading>
@@ -146,9 +156,28 @@ const organizationOptions = computed(() => {
   ];
 });
 
-const switchOrganization = async (organizationId: string) => {
+const currentOrganization = computed(() => {
+  // TODO: Replace with actual current organization from user store/API
+  return organizationOptions.value[0]
+    ? {
+        id: organizationOptions.value[0].value,
+        name: organizationOptions.value[0].label,
+      }
+    : null;
+});
+
+const switchOrganization = async (
+  organizationId: string | string[] | undefined
+) => {
+  // normalise
+  const id = Array.isArray(organizationId) ? organizationId[0] : organizationId;
+  if (!id) {
+    console.warn("No organization id provided to switchOrganization");
+    return;
+  }
+
   // TODO: Implement organization switching logic
-  console.log("Switching to organization:", organizationId);
+  console.log("Switching to organization:", id);
 };
 
 const handleNotificationsClick = () => {

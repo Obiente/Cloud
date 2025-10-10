@@ -21,14 +21,6 @@
 
       <!-- Actions -->
       <div class="flex items-center space-x-4">
-        <!-- Organization switcher -->
-        <OuiSelect
-          :items="organizationOptions"
-          :modelValue="currentOrganization?.id"
-          placeholder="Select Organization"
-          class="min-w-48"
-        />
-
         <!-- Notifications -->
         <OuiButton
           variant="ghost"
@@ -57,33 +49,20 @@
 <script setup lang="ts">
 import { BellIcon } from "@heroicons/vue/24/outline";
 
-interface Organization {
-  id: string;
-  name: string;
-}
-
 interface Props {
   title?: string;
   subtitle?: string;
-  currentOrganization?: Organization | null;
-  organizationOptions?: Array<{ label: string; value: string }>;
   notificationCount?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   title: "Dashboard",
   notificationCount: 0,
-  organizationOptions: () => [],
 });
 
 const emit = defineEmits<{
-  "organization-change": [organizationId: string];
   "notifications-click": [];
 }>();
-
-// const handleOrganizationChange = (organizationId: string) => {
-//   emit('organization-change', organizationId)
-// }
 
 const handleNotificationsClick = () => {
   emit("notifications-click");
