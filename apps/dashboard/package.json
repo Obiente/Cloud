@@ -1,5 +1,5 @@
 {
-  "name": "obiente-cloud-dashboard",
+  "name": "@obiente/dashboard",
   "version": "0.1.0",
   "private": true,
   "description": "Obiente Cloud Dashboard - Multi-tenant cloud management interface",

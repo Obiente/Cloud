@@ -19,13 +19,20 @@
     //   ]
     // }
   },
-  "include": [
-    "apps/**/*",
-    "packages/**/*",
-    ".**"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
+  "include": ["apps/**/*", "packages/**/*", ".**"],
+  "exclude": ["node_modules", "dist"],
+  "references": [
+    {
+      "path": "./packages/database"
+    },
+    {
+      "path": "./packages/config"
+    },
+    {
+      "path": "./packages/proto"
+    },
+    {
+      "path": "./packages/types"
+    }
   ]
 }

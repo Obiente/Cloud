@@ -277,8 +277,8 @@ import {
 } from '@heroicons/vue/24/outline';
 
 // Import OUI components
-import OuiSkeleton from '~/components/oui/Skeleton.vue';
-import OuiText from '~/components/oui/Text.vue';
+import OuiSkeleton from '../components/oui/Skeleton.vue';
+import OuiText from '../components/oui/Text.vue';
 
 // Page meta
 definePageMeta({

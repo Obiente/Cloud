@@ -2,6 +2,15 @@
   "files": [],
   "references": [
     {
+      "path": "../../packages/proto"
+    },
+    {
+      "path": "../../packages/config"
+    },
+    {
+      "path": "../../packages/types"
+    },
+    {
       "path": "./.nuxt/tsconfig.app.json"
     },
     {

@@ -211,7 +211,7 @@
 
 <script setup lang="ts">
 // Import OUI components
-import OuiText from '~/components/oui/Text.vue';
+import OuiText from '../components/oui/Text.vue';
 
 // Page meta
 definePageMeta({
