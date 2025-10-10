@@ -1,9 +1,9 @@
 {
-  "extends": "@obiente/config/tsconfig.json",
+  "extends": "@obiente/config/tsconfig",
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Node",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "declaration": true,
     "declarationDir": "src/generated",
     "esModuleInterop": true,

@@ -1,35 +1,21 @@
 {
-  "name": "obiente-cloud",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Multi-tenant cloud dashboard platform for Obiente Cloud",
-  "author": "Obiente Team",
+  "name": "@obiente/cloud",
+  "version": "0.0.0",
   "license": "MIT",
-  "scripts": {
-    "build": "turbo build",
-    "dev": "turbo dev",
-    "lint": "turbo lint",
-    "format": "turbo format",
-    "test": "turbo test",
-    "test:contracts": "turbo test:contracts",
-    "test:e2e": "turbo test:e2e",
-    "clean": "turbo clean",
-    "generate:proto": "turbo generate:proto",
-    "db:migrate": "turbo db:migrate",
-    "db:seed": "turbo db:seed",
-    "typecheck": "turbo typecheck"
-  },
+  "scripts": {},
+  "private": true,
   "devDependencies": {
+    "@nx-go/nx-go": "^3.3.1",
+    "@nx/js": "21.6.4",
+    "@nx/nuxt": "^21.6.4",
     "@obiente/config": "workspace:*",
-    "@types/node": "^24.7.0",
-    "eslint": "^9.37.0",
-    "prettier": "^3.6.2",
-    "turbo": "^2.5.8",
-    "typescript": "^5.9.3"
-  },
-  "packageManager": "pnpm@10.17.0",
-  "engines": {
-    "node": ">=20.0.0",
-    "pnpm": ">=10.0.0"
+    "@swc-node/register": "~1.9.1",
+    "@swc/core": "~1.5.7",
+    "@swc/helpers": "~0.5.11",
+    "go": "^3.0.1",
+    "nx": "21.6.4",
+    "prettier": "^2.6.2",
+    "tslib": "^2.3.0",
+    "typescript": "~5.9.2"
   }
 }

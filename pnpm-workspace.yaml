@@ -3,5 +3,10 @@ packages:
   - apps/*
   - packages/*
 
+autoInstallPeers: true
+strictPeerDependencies: false
+
 onlyBuiltDependencies:
   - '@bufbuild/buf'
+
+
