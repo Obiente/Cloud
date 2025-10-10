@@ -2,9 +2,5 @@
   "extends": ["@obiente/config/tsconfig"],
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"],
-  "references": [
-    {
-      "path": "../config"
-    }
-  ]
+  "references": []
 }

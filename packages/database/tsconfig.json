@@ -21,12 +21,5 @@
     "**/*.spec.ts",
     "migrations"
   ],
-  "references": [
-    {
-      "path": "../types"
-    },
-    {
-      "path": "../config"
-    }
-  ]
+  "references": []
 }
