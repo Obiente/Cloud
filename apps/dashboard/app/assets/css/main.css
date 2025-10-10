@@ -1,8 +1,56 @@
 @import "tailwindcss";
 @import "./tailwind/index.css";
 /* Layout Components */
-.sidebar {
-  @apply w-64 bg-surface border-r border-border-muted h-screen sticky top-0 flex flex-col;
+.sidebar-nav {
+  @apply flex-col min-h-screen;
+}
+
+.sidebar-nav.desktop-sidebar {
+  @apply flex w-64 bg-surface border-r border-border-muted sticky top-0 h-screen flex-shrink-0;
+}
+
+@media (max-width: 1023px) {
+  .sidebar-nav.desktop-sidebar {
+    display: none !important;
+  }
+}
+
+.sidebar-nav.sidebar-drawer {
+  @apply flex w-full bg-surface-base;
+}
+
+.hamburger-button {
+  display: block;
+}
+
+@media (min-width: 1024px) {
+  .hamburger-button {
+    display: none !important;
+  }
+}
+
+.sidebar-drawer {
+  @apply flex flex-col bg-surface;
+}
+
+.sidebar-overlay-enter-active,
+.sidebar-overlay-leave-active {
+  @apply transition-opacity duration-300;
+}
+
+.sidebar-overlay-enter-from,
+.sidebar-overlay-leave-to {
+  @apply opacity-0;
+}
+
+.sidebar-panel-enter-active,
+.sidebar-panel-leave-active {
+  @apply transition-transform duration-300 ease-in-out;
+}
+
+.sidebar-panel-enter-from,
+.sidebar-panel-leave-to {
+  @apply -translate-x-full;
 }
 
 .main-content {

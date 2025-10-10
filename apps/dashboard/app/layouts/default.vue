@@ -1,9 +1,43 @@
 <template>
   <!-- {{user}} -->
-  <div class="bg-background">
-    <div v-if="user.user && user.isAuthenticated" class="flex">
+  <div class="bg-background min-h-screen">
+    <Transition name="sidebar-overlay">
+      <div
+        v-if="isSidebarOpen && user.user && user.isAuthenticated"
+        class="fixed inset-0 z-40 flex lg:hidden"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div class="absolute inset-0 bg-background/80 backdrop-blur-sm" @click="closeSidebar" />
+
+        <Transition name="sidebar-panel" appear>
+          <div
+            v-if="isSidebarOpen"
+            :id="mobileSidebarId"
+            class="relative z-50 flex h-full w-72 max-w-[80vw] flex-col"
+          >
+            <AppSidebar
+              class="sidebar-drawer relative h-full overflow-y-auto border-r border-border-muted bg-surface-base shadow-2xl"
+              @navigate="closeSidebar"
+            />
+
+            <OuiButton
+              variant="ghost"
+              size="sm"
+              class="absolute right-3 top-3 z-50 !p-2 text-text-secondary hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
+              @click="closeSidebar"
+              aria-label="Close navigation"
+            >
+              <XMarkIcon class="h-5 w-5" />
+            </OuiButton>
+          </div>
+        </Transition>
+      </div>
+    </Transition>
+
+    <div v-if="user.user && user.isAuthenticated" class="flex min-h-screen">
       <!-- Sidebar -->
-      <AppSidebar />
+      <AppSidebar class="desktop-sidebar" @navigate="closeSidebar" />
 
       <!-- Main content -->
       <div class="flex-1 flex flex-col">
@@ -14,6 +48,20 @@
           @organization-change="switchOrganization"
           @notifications-click="handleNotificationsClick"
         >
+          <template #leading>
+            <OuiButton
+              variant="ghost"
+              size="sm"
+              class="hamburger-button !p-2 text-text-secondary hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
+              @click="toggleSidebar"
+              :aria-expanded="isSidebarOpen"
+              :aria-controls="mobileSidebarId"
+              aria-label="Toggle navigation menu"
+            >
+              <Bars3Icon class="h-5 w-5" />
+            </OuiButton>
+          </template>
+
           <template #title>
             <slot name="title">Dashboard</slot>
           </template>
@@ -37,10 +85,49 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted } from 'vue';
+import { Bars3Icon, XMarkIcon } from '@heroicons/vue/24/outline';
+
 // Pinia user store
 const user = useAuth();
 // Notification count (TODO: Replace with actual notification system)
 const notificationCount = ref(3);
+
+const isSidebarOpen = ref(false);
+const mobileSidebarId = 'mobile-primary-navigation';
+
+const closeSidebar = () => {
+  isSidebarOpen.value = false;
+};
+
+const toggleSidebar = () => {
+  isSidebarOpen.value = !isSidebarOpen.value;
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape') {
+    closeSidebar();
+  }
+};
+
+const handleBreakpointChange = () => {
+  if (import.meta.client && window.matchMedia('(min-width: 1024px)').matches) {
+    isSidebarOpen.value = false;
+  }
+};
+
+if (import.meta.client) {
+  onMounted(() => {
+    handleBreakpointChange();
+    window.addEventListener('keydown', handleKeydown);
+    window.addEventListener('resize', handleBreakpointChange);
+  });
+
+  onBeforeUnmount(() => {
+    window.removeEventListener('keydown', handleKeydown);
+    window.removeEventListener('resize', handleBreakpointChange);
+  });
+}
 
 // Organization switcher data and methods
 const organizationOptions = computed(() => {

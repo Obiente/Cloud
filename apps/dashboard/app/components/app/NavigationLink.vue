@@ -7,6 +7,7 @@
         ? 'bg-primary/10 text-primary border border-primary/20'
         : 'text-secondary hover:bg-hover hover:text-primary',
     ]"
+    @click="handleClick"
   >
     <component
       :is="icon"
@@ -33,10 +34,18 @@ const props = withDefaults(defineProps<Props>(), {
 
 const route = useRoute();
 
+const emit = defineEmits<{
+  navigate: [];
+}>();
+
 const isActive = computed(() => {
   if (props.exactMatch) {
     return route.path === props.to;
   }
   return route.path.startsWith(props.to);
 });
+
+const handleClick = () => {
+  emit('navigate');
+};
 </script>

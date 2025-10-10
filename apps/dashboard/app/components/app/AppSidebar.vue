@@ -1,5 +1,5 @@
 <template>
-  <nav class="sidebar">
+  <nav class="sidebar-nav" :class="$attrs.class">
     <div class="p-6">
       <!-- Logo -->
       <div class="flex items-center space-x-2 mb-8">
@@ -11,17 +11,47 @@
 
       <!-- Navigation -->
       <nav class="space-y-2">
-        <AppNavigationLink to="/dashboard" label="Dashboard" :icon="HomeIcon" exact-match />
+        <AppNavigationLink
+          to="/dashboard"
+          label="Dashboard"
+          :icon="HomeIcon"
+          exact-match
+          @navigate="handleNavigate"
+        />
+        <AppNavigationLink
+          to="/deployments"
+          label="Deployments"
+          :icon="RocketLaunchIcon"
+          @navigate="handleNavigate"
+        />
 
-        <AppNavigationLink to="/deployments" label="Deployments" :icon="RocketLaunchIcon" />
+        <AppNavigationLink
+          to="/vps"
+          label="VPS Instances"
+          :icon="ServerIcon"
+          @navigate="handleNavigate"
+        />
 
-        <AppNavigationLink to="/vps" label="VPS Instances" :icon="ServerIcon" />
+        <AppNavigationLink
+          to="/databases"
+          label="Databases"
+          :icon="CircleStackIcon"
+          @navigate="handleNavigate"
+        />
 
-        <AppNavigationLink to="/databases" label="Databases" :icon="CircleStackIcon" />
+        <AppNavigationLink
+          to="/billing"
+          label="Billing"
+          :icon="CreditCardIcon"
+          @navigate="handleNavigate"
+        />
 
-        <AppNavigationLink to="/billing" label="Billing" :icon="CreditCardIcon" />
-
-        <AppNavigationLink to="/settings" label="Settings" :icon="Cog6ToothIcon" />
+        <AppNavigationLink
+          to="/settings"
+          label="Settings"
+          :icon="Cog6ToothIcon"
+          @navigate="handleNavigate"
+        />
       </nav>
     </div>
 
@@ -39,4 +69,12 @@ import {
   CreditCardIcon,
   Cog6ToothIcon,
 } from '@heroicons/vue/24/outline';
+
+const emit = defineEmits<{
+  navigate: [];
+}>();
+
+const handleNavigate = () => {
+  emit('navigate');
+};
 </script>

@@ -3,14 +3,20 @@
     <div class="flex items-center justify-between">
       <!-- Page title -->
       <div>
-        <h1 class="text-2xl font-bold text-text-primary">
-          <slot name="title">
-            {{ title }}
-          </slot>
-        </h1>
-        <p v-if="subtitle" class="text-sm text-text-secondary mt-1">
-          {{ subtitle }}
-        </p>
+        <div class="flex items-center gap-3">
+          <slot name="leading" />
+
+          <div>
+            <h1 class="text-2xl font-bold text-text-primary">
+              <slot name="title">
+                {{ title }}
+              </slot>
+            </h1>
+            <p v-if="subtitle" class="text-sm text-text-secondary mt-1">
+              {{ subtitle }}
+            </p>
+          </div>
+        </div>
       </div>
 
       <!-- Actions -->
