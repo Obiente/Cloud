@@ -41,7 +41,7 @@
       </div>
     </Transition>
 
-    <div v-if="user.user && user.isAuthenticated" class="flex min-h-screen">
+    <div v-show="user.user && user.isAuthenticated" class="flex min-h-screen">
       <!-- Sidebar -->
       <AppSidebar
         class="desktop-sidebar"
@@ -83,7 +83,7 @@
         </main>
       </div>
     </div>
-    <div v-else class="main-content flex flex-col justify-center items-center">
+    <div v-show="!user.user || !user.isAuthenticated" class="main-content flex flex-col justify-center items-center">
       <!-- {{ user }} -->
       <OuiText v-if="user.isLoading" size="2xl" weight="extrabold"
         >loading</OuiText
