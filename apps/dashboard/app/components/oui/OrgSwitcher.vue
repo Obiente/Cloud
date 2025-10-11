@@ -1,17 +1,15 @@
 <template>
   <div class="oui-org-switcher">
-    <Select.RootProvider
-      :collection="collection"
-      :value="select"
-      v-bind="$attrs"
-    >
+    <Select.RootProvider :collection="props.collection" :value="select">
       <Select.Control class="relative">
         <Select.Trigger
           class="inline-flex items-center gap-2 cursor-pointer rounded-md p-1 hover:bg-surface-variant"
         >
           <Select.ValueText class="sr-only" />
           <Select.Indicator>
-            <ChevronUpDownIcon class="h-5 w-5 text-secondary" />
+            <slot name="icon">
+              <ChevronUpDownIcon class="h-5 w-5 text-secondary" />
+            </slot>
           </Select.Indicator>
         </Select.Trigger>
       </Select.Control>
@@ -22,11 +20,11 @@
             class="z-50 min-w-[12rem] overflow-hidden rounded-lg border border-border-default bg-surface-base shadow-lg animate-in duration-150 transform-gpu data-[side=bottom]:slide-in-from-top-2"
           >
             <!-- Header -->
-            <div
+            <OuiText
               class="px-4 pt-3 pb-2 text-xs font-semibold text-secondary uppercase"
             >
               Organizations
-            </div>
+            </OuiText>
 
             <Select.ItemGroup>
               <Select.Item
@@ -43,7 +41,6 @@
                 </Select.ItemIndicator>
               </Select.Item>
             </Select.ItemGroup>
-
             <div class="border-t border-border-muted">
               <button
                 href="#"
@@ -62,32 +59,17 @@
 </template>
 
 <script setup lang="ts">
-import { Select, createListCollection, useSelect } from "@ark-ui/vue/select";
-import { CheckIcon, ChevronUpDownIcon } from "@heroicons/vue/24/outline";
+  import { Select, useSelect, type SelectRootProps } from "@ark-ui/vue/select";
+  import { CheckIcon, ChevronUpDownIcon } from "@heroicons/vue/24/outline";
 
-interface SelectItem {
-  label: string;
-  value: string | number;
-  disabled?: boolean;
-}
+  interface SelectItem {
+    label: string;
+    value: string | number;
+  }
 
-interface Props {
-  items: SelectItem[];
-}
+  const props = defineProps<SelectRootProps<SelectItem>>();
+  const select = useSelect({ collection: props.collection });
+  // const modelValue = defineModel<string[]>();
 
-const props = defineProps<Props>();
-
-const collection = createListCollection({ items: props.items });
-
-const select = useSelect({ collection, multiple: false });
-
-defineModel<string | string[]>({
-  get: () => select.value.value,
-  set: (val) => {
-    if (!Array.isArray(val)) val = [val];
-    select.value.setValue(val);
-  },
-});
-
-defineOptions({ inheritAttrs: false });
+  defineOptions({ inheritAttrs: false });
 </script>

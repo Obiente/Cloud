@@ -20,11 +20,7 @@
         </div>
 
         <div class="ml-2">
-          <OrgSwitcher
-            :items="organizationOptions"
-            :modelValue="selectedOrgId"
-            @update:modelValue="onPopoverSelect"
-          />
+          <OrgSwitcher :collection="organization" :multiple="false" />
         </div>
       </div>
 
@@ -84,56 +80,40 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
-import {
-  HomeIcon,
-  RocketLaunchIcon,
-  ServerIcon,
-  CircleStackIcon,
-  CreditCardIcon,
-  Cog6ToothIcon,
-} from "@heroicons/vue/24/outline";
-import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
+  import {
+    HomeIcon,
+    RocketLaunchIcon,
+    ServerIcon,
+    CircleStackIcon,
+    CreditCardIcon,
+    Cog6ToothIcon,
+  } from "@heroicons/vue/24/outline";
+  import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
+  import { createListCollection, useListCollection } from "@ark-ui/vue";
 
-interface Organization {
-  id: string;
-  name: string;
-}
-
-interface Props {
-  currentOrganization?: Organization | null;
-  organizationOptions?: Array<{ label: string; value: string }>;
-}
-
-const props = withDefaults(defineProps<Props>(), {
-  organizationOptions: () => [],
-});
-
-const emit = defineEmits<{
-  navigate: [];
-  "organization-change": [organizationId: string | string[] | undefined];
-}>();
-
-const handleNavigate = () => {
-  emit("navigate");
-};
-
-const selectedOrgId = ref<string | undefined>(
-  props.currentOrganization?.id ?? undefined
-);
-
-watch(
-  () => props.currentOrganization,
-  (v) => {
-    selectedOrgId.value = v?.id ?? undefined;
+  interface Organization {
+    id: string;
+    name: string;
   }
-);
 
-const onPopoverSelect = (val: string | string[] | undefined) => {
-  const id = Array.isArray(val) ? val[0] : val;
-  selectedOrgId.value = id;
-  // cosmetic only: do NOT emit organization-change here
-};
+  interface Props {
+    currentOrganization?: Organization | null;
+    organizationOptions?: Array<{ label: string; value: string | number }>;
+  }
 
-const components = { OrgSwitcher };
+  const props = withDefaults(defineProps<Props>(), {
+    organizationOptions: () => [],
+  });
+
+  const organization = createListCollection({
+    items: props.organizationOptions,
+  });
+  const emit = defineEmits<{
+    navigate: [];
+    "organization-change": [organizationId: string | string[] | undefined];
+  }>();
+
+  const handleNavigate = () => {
+    emit("navigate");
+  };
 </script>
