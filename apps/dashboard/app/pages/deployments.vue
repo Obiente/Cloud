@@ -1,26 +1,39 @@
 <template>
-  <div class="container flex flex-col col-auto columns-4">
-    <!-- Page Header -->
-    <div class="flex items-center justify-between mb-8">
-      <div>
-        <h1 class="text-3xl font-bold text-primary">Deployments</h1>
-        <p class="text-secondary mt-2">
-          Manage your web application deployments
-        </p>
+  <div class="min-h-screen">
+    <div class="mb-8">
+      <div class="flex items-start justify-between gap-6">
+        <div class="flex-1">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="p-2.5 rounded-xl bg-primary/10 ring-1 ring-primary/20">
+              <RocketLaunchIcon class="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h1 class="text-3xl font-bold text-primary tracking-tight">
+                Deployments
+              </h1>
+            </div>
+          </div>
+          <p class="text-secondary text-base ml-14">
+            Manage and monitor your web application deployments
+          </p>
+        </div>
+        <OuiButton 
+          variant="primary" 
+          @click="showCreateDialog = true"
+          class="shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all"
+        >
+          <PlusIcon class="w-4 h-4 mr-2" />
+          New Deployment
+        </OuiButton>
       </div>
-      <OuiButton variant="primary" @click="showCreateDialog = true">
-        <PlusIcon class="w-4 h-4 mr-2" />
-        New Deployment
-      </OuiButton>
     </div>
 
-    <!-- Filters and Search -->
-    <OuiCard class="mb-6">
+    <OuiCard variant="raised" class="mb-8 backdrop-blur-sm">
       <OuiCardBody>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <OuiInput
             v-model="searchQuery"
-            placeholder="Search deployments..."
+            placeholder="Search by name, domain, or framework..."
             clearable
           >
             <template #prefix>
@@ -44,20 +57,25 @@
       </OuiCardBody>
     </OuiCard>
 
-    <!-- Deployments Grid -->
-    <div v-if="filteredDeployments.length === 0" class="text-center py-16">
-      <RocketLaunchIcon class="mx-auto h-16 w-16 text-secondary mb-4" />
-      <h3 class="text-xl font-medium text-primary mb-2">
+    <div v-if="filteredDeployments.length === 0" class="text-center py-20">
+      <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-surface-muted/50 ring-1 ring-border-muted mb-6">
+        <RocketLaunchIcon class="h-10 w-10 text-secondary" />
+      </div>
+      <h3 class="text-xl font-semibold text-primary mb-2">
         No deployments found
       </h3>
-      <p class="text-secondary mb-6">
+      <p class="text-secondary max-w-md mx-auto mb-8">
         {{
           searchQuery || statusFilter || environmentFilter
             ? "Try adjusting your filters to see more results."
             : "Get started by creating your first deployment."
         }}
       </p>
-      <OuiButton variant="primary" @click="showCreateDialog = true">
+      <OuiButton 
+        variant="primary" 
+        @click="showCreateDialog = true"
+        class="shadow-lg shadow-primary/20"
+      >
         <PlusIcon class="w-4 h-4 mr-2" />
         Create Your First Deployment
       </OuiButton>
@@ -70,159 +88,154 @@
         variant="raised"
         hoverable
         :data-status="deployment.status"
-        class="group relative overflow-hidden border border-transparent transition-all duration-300 ease-out hover:-translate-y-1 hover:border-primary/20 hover:shadow-2xl focus-within:border-primary/40 focus-within:ring-2 focus-within:ring-primary/20"
-        :class="getStatusMeta(deployment.status).ring"
+        class="group relative overflow-hidden transition-all duration-300 hover:shadow-2xl"
+        :class="[
+          getStatusMeta(deployment.status).cardClass,
+          'before:absolute before:inset-0 before:rounded-lg before:p-[1px] before:-z-10',
+          'before:bg-gradient-to-br before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-300',
+          getStatusMeta(deployment.status).beforeGradient
+        ]"
       >
-        <span
-          class="pointer-events-none absolute inset-x-0 -top-12 h-32 rounded-b-[44%] bg-gradient-to-br opacity-70 transition-all duration-500 group-hover:opacity-100"
-          :class="getStatusMeta(deployment.status).gradient"
-        />
-        <span
-          class="pointer-events-none absolute -inset-px rounded-2xl opacity-0 blur-3xl transition-all duration-700 group-hover:opacity-100"
-          :class="getStatusMeta(deployment.status).halo"
+        <div 
+          class="absolute top-0 left-0 right-0 h-1"
+          :class="getStatusMeta(deployment.status).barClass"
         />
 
         <div class="relative flex h-full flex-col">
-          <OuiCardHeader class="pb-6">
-            <div class="flex items-start justify-between gap-4">
-              <div class="min-w-0 flex-1 space-y-2">
-                <div
-                  class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide"
-                  :class="getStatusMeta(deployment.status).text"
-                >
-                  <component
-                    :is="getStatusMeta(deployment.status).icon"
-                    class="h-4 w-4"
-                    :class="getStatusMeta(deployment.status).iconClass"
-                  />
-                  <span>{{ getStatusMeta(deployment.status).label }}</span>
-                </div>
-
+          <OuiCardHeader>
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 flex-1 space-y-3">
                 <div class="flex items-center gap-2">
-                  <h3 class="oui-card-title truncate text-lg font-semibold">
-                    {{ deployment.name }}
-                  </h3>
+                  <OuiBadge
+                    :variant="getStatusMeta(deployment.status).badge"
+                    class="inline-flex items-center px-2.5 py-1 text-xs font-semibold uppercase tracking-wide rounded-full"
+                    :class="deployment.status === 'BUILDING' ? 'gap-1.5' : 'gap-1'"
+                  >
+                    <span
+                      class="inline-flex h-1.5 w-1.5 rounded-full"
+                      :class="[
+                        getStatusMeta(deployment.status).dotClass,
+                        deployment.status === 'RUNNING' || deployment.status === 'BUILDING' ? 'animate-pulse' : ''
+                      ]"
+                    />
+                    {{ deployment.status }}
+                  </OuiBadge>
+                  
                   <span
                     v-if="deployment.environment === 'production'"
-                    class="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600"
+                    class="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-success ring-1 ring-success/20"
                   >
+                    <BoltIcon class="h-3 w-3" />
                     Live
                   </span>
                 </div>
 
-                <p class="flex items-center gap-2 text-sm text-secondary">
-                  <span
-                    class="inline-flex items-center gap-1 rounded-full border border-muted bg-muted px-2.5 py-1 text-xs font-medium text-primary transition-colors group-hover:border-primary"
+                <div>
+                  <h3 class="oui-card-title text-xl font-bold text-primary mb-1.5 truncate group-hover:text-primary/90 transition-colors">
+                    {{ deployment.name }}
+                  </h3>
+                  
+                  <a
+                    :href="`https://${deployment.domain}`"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1.5 text-sm text-secondary hover:text-primary transition-colors group/link"
+                    @click.stop
                   >
-                    <ArrowTopRightOnSquareIcon class="h-3.5 w-3.5 opacity-70" />
-                    {{ deployment.domain }}
-                  </span>
-                </p>
+                    <span class="truncate max-w-[200px]">{{ deployment.domain }}</span>
+                    <ArrowTopRightOnSquareIcon class="h-3.5 w-3.5 opacity-0 group-hover/link:opacity-100 transition-opacity" />
+                  </a>
+                </div>
               </div>
-
-              <OuiBadge
-                :variant="getStatusMeta(deployment.status).badge"
-                class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide"
-              >
-                <span class="flex items-center gap-2">
-                  <span
-                    class="h-2 w-2 rounded-full"
-                    :class="getStatusMeta(deployment.status).dot"
-                  />
-                  {{ deployment.status }}
-                </span>
-              </OuiBadge>
             </div>
           </OuiCardHeader>
 
-          <OuiCardBody class="flex-1 space-y-6">
-            <div class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-              <div class="flex items-center gap-2 text-secondary">
-                <CodeBracketIcon class="h-4 w-4 text-primary" />
-                <span class="truncate font-medium text-primary">
+          <OuiCardBody class="flex-1 space-y-5">
+            <div class="flex items-center justify-between text-sm">
+              <div class="flex items-center gap-2">
+                <div class="p-1.5 rounded-lg bg-surface-muted/50 ring-1 ring-border-muted">
+                  <CodeBracketIcon class="h-4 w-4 text-primary" />
+                </div>
+                <span class="font-medium text-primary">
                   {{ deployment.framework }}
                 </span>
               </div>
-              <div
-                class="flex items-center gap-2 text-secondary sm:justify-end"
-              >
-                <CalendarIcon class="h-4 w-4 text-primary" />
-                <span class="text-xs uppercase tracking-wide"
-                  >Last deployed</span
-                >
-                <span class="text-sm font-medium text-primary">
-                  {{ formatDate(deployment.lastDeployedAt) }}
+              <div class="flex items-center gap-1.5 text-xs text-secondary">
+                <CalendarIcon class="h-3.5 w-3.5" />
+                <span>{{ formatRelativeTime(deployment.lastDeployedAt) }}</span>
+              </div>
+            </div>
+
+            <div 
+              v-if="deployment.repositoryUrl"
+              class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-muted/30 ring-1 ring-border-muted"
+            >
+              <div class="flex items-center gap-2 min-w-0 flex-1">
+                <svg class="h-4 w-4 text-secondary flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                </svg>
+                <span class="text-xs text-secondary truncate font-mono">
+                  {{ cleanRepositoryName(deployment.repositoryUrl) }}
                 </span>
               </div>
             </div>
 
-            <div class="flex flex-wrap gap-2">
+            <div class="flex items-center gap-2">
               <span
-                class="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs font-semibold uppercase tracking-wide text-secondary"
+                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide"
+                :class="getEnvironmentClass(deployment.environment)"
               >
-                <CpuChipIcon class="h-4 w-4 text-primary" />
+                <CpuChipIcon class="h-3.5 w-3.5" />
                 {{ formatEnvironment(deployment.environment) }}
-              </span>
-
-              <span
-                v-if="deployment.repositoryUrl"
-                class="inline-flex items-center gap-2 rounded-full border border-muted px-3 py-1 text-xs font-medium text-secondary transition-colors hover:border-primary hover:text-primary"
-              >
-                <span class="h-2 w-2 rounded-full bg-primary" />
-                {{ cleanRepositoryName(deployment.repositoryUrl) }}
               </span>
             </div>
 
             <div class="grid grid-cols-2 gap-3">
-              <div
-                class="rounded-xl border border-muted bg-muted p-4 shadow-inner"
-              >
-                <p
-                  class="text-xs font-semibold uppercase tracking-wide text-secondary"
-                >
-                  Build Time
-                </p>
-                <p class="mt-1 text-2xl font-semibold text-primary">
-                  {{ deployment.buildTime }}s
-                </p>
+              <div class="group/stat relative overflow-hidden rounded-xl bg-surface-muted/40 p-4 ring-1 ring-border-muted backdrop-blur-sm transition-all hover:bg-surface-muted/60 hover:ring-border-default">
+                <div class="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover/stat:opacity-100 transition-opacity" />
+                <div class="relative">
+                  <p class="text-[10px] font-bold uppercase tracking-wider text-secondary mb-1.5">
+                    Build Time
+                  </p>
+                  <p class="text-2xl font-bold text-primary">
+                    {{ deployment.buildTime }}<span class="text-sm text-secondary ml-0.5">s</span>
+                  </p>
+                </div>
               </div>
-              <div
-                class="rounded-xl border border-muted bg-muted p-4 shadow-inner"
-              >
-                <p
-                  class="text-xs font-semibold uppercase tracking-wide text-secondary"
-                >
-                  Bundle Size
-                </p>
-                <p class="mt-1 text-2xl font-semibold text-primary">
-                  {{ deployment.size }}
-                </p>
+              <div class="group/stat relative overflow-hidden rounded-xl bg-surface-muted/40 p-4 ring-1 ring-border-muted backdrop-blur-sm transition-all hover:bg-surface-muted/60 hover:ring-border-default">
+                <div class="absolute inset-0 bg-gradient-to-br from-secondary/5 to-transparent opacity-0 group-hover/stat:opacity-100 transition-opacity" />
+                <div class="relative">
+                  <p class="text-[10px] font-bold uppercase tracking-wider text-secondary mb-1.5">
+                    Bundle Size
+                  </p>
+                  <p class="text-2xl font-bold text-primary">
+                    {{ deployment.size }}
+                  </p>
+                </div>
               </div>
             </div>
 
             <div
               v-if="deployment.status === 'BUILDING'"
-              class="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200"
+              class="space-y-2.5 rounded-xl border p-4 backdrop-blur-sm"
+              :class="getStatusMeta(deployment.status).progressClass"
             >
-              <div
-                class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide"
-              >
+              <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider">
                 <Cog6ToothIcon class="h-4 w-4 animate-spin" />
-                <span>Deployment in progress</span>
+                <span>Building deployment</span>
               </div>
-              <div
-                class="h-1.5 w-full overflow-hidden rounded-full bg-amber-200/70 dark:bg-amber-500/30"
-              >
-                <div
-                  class="h-full w-full animate-pulse rounded-full bg-amber-500/80 dark:bg-amber-300/70"
-                />
+              <div class="relative h-2 w-full overflow-hidden rounded-full bg-warning/20">
+                <div class="absolute inset-0 flex">
+                  <div class="h-full w-1/3 animate-pulse rounded-full bg-gradient-to-r from-transparent via-warning to-transparent" 
+                       style="animation: shimmer 2s infinite; background-size: 200% 100%;" />
+                </div>
               </div>
             </div>
           </OuiCardBody>
 
-          <OuiCardFooter class="mt-auto border-t border-muted pt-4">
+          <OuiCardFooter class="mt-auto">
             <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-1">
                 <OuiButton
                   v-if="deployment.status === 'RUNNING'"
                   variant="ghost"
@@ -230,6 +243,7 @@
                   @click="stopDeployment(deployment.id)"
                   title="Stop deployment"
                   :aria-label="`Stop deployment ${deployment.name}`"
+                  class="hover:bg-danger/10 hover:text-danger transition-colors"
                 >
                   <StopIcon class="h-4 w-4" />
                 </OuiButton>
@@ -241,6 +255,7 @@
                   @click="startDeployment(deployment.id)"
                   title="Start deployment"
                   :aria-label="`Start deployment ${deployment.name}`"
+                  class="hover:bg-success/10 hover:text-success transition-colors"
                 >
                   <PlayIcon class="h-4 w-4" />
                 </OuiButton>
@@ -249,32 +264,36 @@
                   variant="ghost"
                   size="sm"
                   @click="redeployApp(deployment.id)"
-                  title="Redeploy deployment"
+                  title="Redeploy"
                   :aria-label="`Redeploy deployment ${deployment.name}`"
+                  class="hover:bg-primary/10 hover:text-primary transition-colors"
                 >
                   <ArrowPathIcon class="h-4 w-4" />
                 </OuiButton>
               </div>
 
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-1">
                 <OuiButton
                   variant="ghost"
                   size="sm"
                   @click="openUrl(deployment.domain)"
-                  title="Open deployed site"
+                  title="Open site"
                   :aria-label="`Open ${deployment.domain} in a new tab`"
+                  class="hover:bg-info/10 hover:text-info transition-colors"
                 >
                   <ArrowTopRightOnSquareIcon class="h-4 w-4" />
                 </OuiButton>
 
                 <OuiButton
-                  variant="ghost"
+                  variant="primary"
                   size="sm"
                   @click="viewDeployment(deployment.id)"
-                  title="View deployment details"
+                  title="View details"
                   :aria-label="`View ${deployment.name} details`"
+                  class="shadow-sm hover:shadow-md transition-shadow"
                 >
-                  <EyeIcon class="h-4 w-4" />
+                  <EyeIcon class="h-4 w-4 mr-1.5" />
+                  <span class="text-xs font-semibold">Details</span>
                 </OuiButton>
               </div>
             </div>
@@ -283,13 +302,12 @@
       </OuiCard>
     </div>
 
-    <!-- Create Deployment Dialog -->
     <OuiDialog
       v-model:open="showCreateDialog"
       title="Create New Deployment"
-      description="Deploy your application to Obiente Cloud"
+      description="Deploy your application to Obiente Cloud with automated builds and deployments"
     >
-      <form @submit.prevent="createDeployment" class="space-y-4">
+      <form @submit.prevent="createDeployment" class="space-y-5">
         <OuiInput
           v-model="newDeployment.name"
           label="Project Name"
@@ -320,13 +338,19 @@
       </form>
 
       <template #footer>
-        <OuiButton variant="ghost" @click="showCreateDialog = false">
-          Cancel
-        </OuiButton>
-        <OuiButton variant="primary" @click="createDeployment">
-          <RocketLaunchIcon class="w-4 h-4 mr-2" />
-          Deploy Now
-        </OuiButton>
+        <div class="flex items-center justify-end gap-3">
+          <OuiButton variant="ghost" @click="showCreateDialog = false">
+            Cancel
+          </OuiButton>
+          <OuiButton 
+            variant="primary" 
+            @click="createDeployment"
+            class="shadow-lg shadow-primary/20"
+          >
+            <RocketLaunchIcon class="w-4 h-4 mr-2" />
+            Deploy Now
+          </OuiButton>
+        </div>
       </template>
     </OuiDialog>
   </div>
@@ -393,58 +417,83 @@ const frameworkOptions = [
 const STATUS_META = {
   RUNNING: {
     badge: "success",
-    gradient: "from-emerald-400/30 via-emerald-400/10 to-transparent",
-    halo: "bg-emerald-400/20",
-    ring: "ring-1 ring-emerald-500/20",
-    text: "text-emerald-600 dark:text-emerald-300",
+    gradient: "from-success/40 via-success/10 to-transparent",
+    halo: "bg-success/20",
+    ring: "ring-1 ring-success/30",
+    text: "text-success",
     icon: BoltIcon,
-    iconClass: "text-emerald-500 dark:text-emerald-300",
+    iconClass: "text-success",
     label: "Running smoothly",
-    dot: "bg-emerald-400",
+    dot: "bg-success",
+    dotClass: "bg-success",
+    barClass: "bg-gradient-to-r from-success to-success/70",
+    cardClass: "hover:ring-1 hover:ring-success/30",
+    beforeGradient: "before:from-success/20 before:to-success/10",
+    progressClass: "border-success/30 bg-success/10 text-success",
   },
   STOPPED: {
     badge: "secondary",
-    gradient: "from-slate-400/20 via-slate-400/10 to-transparent",
-    halo: "bg-slate-400/15",
-    ring: "ring-1 ring-slate-400/20",
-    text: "text-slate-600 dark:text-slate-300",
+    gradient: "from-secondary/30 via-secondary/10 to-transparent",
+    halo: "bg-secondary/20",
+    ring: "ring-1 ring-secondary/20",
+    text: "text-secondary",
     icon: PauseCircleIcon,
-    iconClass: "text-slate-400 dark:text-slate-300",
+    iconClass: "text-secondary",
     label: "Deployment paused",
-    dot: "bg-slate-400",
+    dot: "bg-secondary",
+    dotClass: "bg-secondary",
+    barClass: "bg-gradient-to-r from-secondary to-secondary/60",
+    cardClass: "hover:ring-1 hover:ring-secondary/30",
+    beforeGradient: "before:from-secondary/20 before:to-secondary/10",
+    progressClass: "border-secondary/30 bg-secondary/10 text-secondary",
   },
   BUILDING: {
     badge: "warning",
-    gradient: "from-amber-400/30 via-amber-400/15 to-transparent",
-    halo: "bg-amber-400/15",
-    ring: "ring-1 ring-amber-400/30",
-    text: "text-amber-600 dark:text-amber-300",
+    gradient: "from-warning/40 via-warning/20 to-transparent",
+    halo: "bg-warning/20",
+    ring: "ring-1 ring-warning/30",
+    text: "text-warning",
     icon: Cog6ToothIcon,
-    iconClass: "text-amber-500 dark:text-amber-300",
+    iconClass: "text-warning",
     label: "Building new release",
-    dot: "bg-amber-400",
+    dot: "bg-warning",
+    dotClass: "bg-warning",
+    barClass: "bg-gradient-to-r from-warning to-warning/60 animate-pulse",
+    cardClass: "hover:ring-1 hover:ring-warning/30",
+    beforeGradient: "before:from-warning/20 before:to-warning/10",
+    progressClass: "border-warning/30 bg-warning/10 text-warning",
   },
   FAILED: {
     badge: "danger",
-    gradient: "from-rose-500/25 via-rose-500/10 to-transparent",
-    halo: "bg-rose-500/20",
-    ring: "ring-1 ring-rose-500/30",
-    text: "text-rose-600 dark:text-rose-300",
+    gradient: "from-danger/40 via-danger/20 to-transparent",
+    halo: "bg-danger/20",
+    ring: "ring-1 ring-danger/30",
+    text: "text-danger",
     icon: ExclamationTriangleIcon,
-    iconClass: "text-rose-500 dark:text-rose-300",
+    iconClass: "text-danger",
     label: "Deployment failed",
-    dot: "bg-rose-500",
+    dot: "bg-danger",
+    dotClass: "bg-danger",
+    barClass: "bg-gradient-to-r from-danger to-danger/60",
+    cardClass: "hover:ring-1 hover:ring-danger/30",
+    beforeGradient: "before:from-danger/20 before:to-danger/10",
+    progressClass: "border-danger/30 bg-danger/10 text-danger",
   },
   DEFAULT: {
     badge: "secondary",
-    gradient: "from-slate-400/15 via-slate-400/5 to-transparent",
-    halo: "bg-slate-400/15",
-    ring: "ring-1 ring-slate-400/15",
-    text: "text-slate-600 dark:text-slate-400",
+    gradient: "from-surface-muted/50 via-surface-muted/20 to-transparent",
+    halo: "bg-surface-muted/30",
+    ring: "ring-1 ring-border-muted",
+    text: "text-secondary",
     icon: InformationCircleIcon,
-    iconClass: "text-slate-400 dark:text-slate-300",
+    iconClass: "text-secondary",
     label: "Status unknown",
-    dot: "bg-slate-400",
+    dot: "bg-secondary",
+    dotClass: "bg-secondary",
+    barClass: "bg-gradient-to-r from-surface-muted to-surface-muted/70",
+    cardClass: "hover:ring-1 hover:ring-border-muted",
+    beforeGradient: "before:from-surface-muted/40 before:to-surface-muted/10",
+    progressClass: "border-border-muted bg-surface-muted/40 text-secondary",
   },
 } as const;
 
@@ -508,6 +557,15 @@ const formatEnvironment = (environment: string) =>
     ? environment.charAt(0).toUpperCase() + environment.slice(1)
     : "Unknown";
 
+const getEnvironmentClass = (environment: string) => {
+  const classes = {
+    production: "bg-success/10 text-success ring-1 ring-success/20",
+    staging: "bg-warning/10 text-warning ring-1 ring-warning/20",
+    development: "bg-info/10 text-info ring-1 ring-info/20",
+  };
+  return classes[environment as keyof typeof classes] || "bg-surface-muted text-secondary ring-1 ring-border-muted";
+};
+
 const cleanRepositoryName = (url: string) => {
   if (!url) return "";
 
@@ -518,6 +576,25 @@ const cleanRepositoryName = (url: string) => {
   } catch (error) {
     return url.replace(/^https?:\/\//, "").replace(/\.git$/, "");
   }
+};
+
+const formatRelativeTime = (date: Date) => {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffSec < 60) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  if (diffDay < 7) return `${diffDay}d ago`;
+  
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(date);
 };
 
 const filteredDeployments = computed(() => {
@@ -616,3 +693,14 @@ const formatDate = (date: Date) => {
   }).format(date);
 };
 </script>
+
+<style scoped>
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+</style>
