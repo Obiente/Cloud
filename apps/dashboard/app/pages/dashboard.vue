@@ -32,10 +32,10 @@
                 </svg>
               </div>
               <div>
-                <h3 class="text-danger font-medium">{{ statsError }}</h3>
-                <p class="text-secondary text-sm">
+                <OuiText as="h3" class="text-danger font-medium">{{ statsError }}</OuiText>
+                <OuiText class="text-secondary text-sm">
                   Unable to load dashboard data
-                </p>
+                </OuiText>
               </div>
             </div>
             <OuiButton @click="retryLoad" variant="outline" size="sm">
@@ -63,10 +63,10 @@
                 height="1.5rem"
                 variant="text"
               />
-              <h3 v-else class="text-lg font-semibold text-primary">
+              <OuiText v-else as="h3" size="lg" weight="semibold" color="primary">
                 {{ stats.deployments }}
-              </h3>
-              <p class="text-sm text-secondary">Deployments</p>
+              </OuiText>
+              <OuiText size="sm" color="secondary">Deployments</OuiText>
             </div>
           </div>
         </OuiCardBody>
@@ -87,10 +87,10 @@
                 height="1.5rem"
                 variant="text"
               />
-              <h3 v-else class="text-lg font-semibold text-primary">
+              <OuiText v-else as="h3" size="lg" weight="semibold" color="primary">
                 {{ stats.vpsInstances }}
-              </h3>
-              <p class="text-sm text-secondary">VPS Instances</p>
+              </OuiText>
+              <OuiText size="sm" color="secondary">VPS Instances</OuiText>
             </div>
           </div>
         </OuiCardBody>
@@ -111,10 +111,10 @@
                 height="1.5rem"
                 variant="text"
               />
-              <h3 v-else class="text-lg font-semibold text-primary">
+                            <OuiText v-else as="h3" size="lg" weight="semibold" color="primary">
                 {{ stats.databases }}
-              </h3>
-              <p class="text-sm text-secondary">Databases</p>
+              </OuiText>
+              <OuiText size="sm" color="secondary">Databases</OuiText>
             </div>
           </div>
         </OuiCardBody>
@@ -135,10 +135,10 @@
                 height="1.5rem"
                 variant="text"
               />
-              <h3 v-else class="text-lg font-semibold text-primary">
+                            <OuiText v-else as="h3" size="lg" weight="semibold" color="primary">
                 {{ formatCurrency(stats.monthlySpend) }}
-              </h3>
-              <p class="text-sm text-secondary">This Month</p>
+              </OuiText>
+              <OuiText size="sm" color="secondary">This Month</OuiText>
             </div>
           </div>
         </OuiCardBody>
@@ -151,15 +151,15 @@
       <OuiCard>
         <OuiCardHeader>
           <div class="flex items-center justify-between">
-            <h2 class="oui-card-title">Recent Deployments</h2>
+            <OuiText as="h2" class="oui-card-title">Recent Deployments</OuiText>
             <div class="flex items-center space-x-2">
               <div
                 v-if="!isLoading"
                 class="w-2 h-2 bg-success rounded-full"
               ></div>
-              <span class="text-xs text-secondary">
+              <OuiText size="xs" color="secondary">
                 {{ isLoading ? "Loading..." : "Live" }}
-              </span>
+              </OuiText>
             </div>
           </div>
         </OuiCardHeader>
@@ -203,10 +203,10 @@
                 />
               </svg>
             </div>
-            <p>No deployments yet</p>
-            <p class="text-xs mt-1">
+            <OuiText>No deployments yet</OuiText>
+            <OuiText size="xs" class="mt-1">
               Deploy your first application to get started
-            </p>
+            </OuiText>
           </div>
           <div v-else class="space-y-4">
             <div
@@ -215,8 +215,8 @@
               class="flex items-center justify-between p-3 border border-default rounded-lg hover:bg-surface-hover transition-colors cursor-pointer"
             >
               <div class="flex-1">
-                <h3 class="font-medium text-primary">{{ deployment.name }}</h3>
-                <p class="text-sm text-secondary">{{ deployment.domain }}</p>
+                <OuiText as="h3" weight="medium" color="primary">{{ deployment.name }}</OuiText>
+                <OuiText size="sm" color="secondary">{{ deployment.domain }}</OuiText>
               </div>
               <div class="flex items-center space-x-2">
                 <OuiBadge
@@ -242,15 +242,15 @@
       <OuiCard>
         <OuiCardHeader>
           <div class="flex items-center justify-between">
-            <h2 class="oui-card-title">Activity Feed</h2>
+            <OuiText as="h2" class="oui-card-title">Activity Feed</OuiText>
             <div class="flex items-center space-x-2">
               <div
                 v-if="!isLoading"
                 class="w-2 h-2 bg-success rounded-full"
               ></div>
-              <span class="text-xs text-secondary">
+              <OuiText size="xs" color="secondary">
                 {{ isLoading ? "Loading..." : "Live" }}
-              </span>
+              </OuiText>
             </div>
           </div>
         </OuiCardHeader>
@@ -288,10 +288,10 @@
                 />
               </svg>
             </div>
-            <p>No recent activity</p>
-            <p class="text-xs mt-1">
+            <OuiText>No recent activity</OuiText>
+            <OuiText size="xs" class="mt-1">
               Activity will appear here as you use the platform
-            </p>
+            </OuiText>
           </div>
           <div v-else class="space-y-4">
             <div
@@ -303,12 +303,12 @@
                 class="w-2 h-2 bg-accent-primary rounded-full mt-2 flex-shrink-0"
               ></div>
               <div class="flex-1 min-w-0">
-                <p class="text-sm text-primary break-words">
+                <OuiText size="sm" color="primary" class="break-words">
                   {{ activity.message }}
-                </p>
-                <p class="text-xs text-secondary">
+                </OuiText>
+                <OuiText size="xs" color="secondary">
                   {{ formatDate(activity.timestamp) }}
-                </p>
+                </OuiText>
               </div>
             </div>
           </div>

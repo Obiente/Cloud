@@ -1,4 +1,7 @@
 <script setup lang="ts">
+// Import OUI components
+import OuiText from "../components/oui/Text.vue";
+
 definePageMeta({
   layout: false,
 });
@@ -178,16 +181,16 @@ onUnmounted(() => {
       <div class="bg-surface-base rounded-lg shadow-lg">
         <!-- Header -->
         <div class="border-b border-border-muted p-6">
-          <h1 class="text-2xl font-bold text-primary mb-6">
+          <OuiText as="h1" size="2xl" weight="bold" color="primary" class="mb-6">
             Docker Container Log Viewer
-          </h1>
+          </OuiText>
 
           <!-- Container Selection -->
           <div v-if="!selectedContainer" class="space-y-4">
             <div class="flex items-center justify-between">
-              <h2 class="text-lg font-medium text-primary">
+              <OuiText as="h2" size="lg" weight="medium" color="primary">
                 Select a Container
-              </h2>
+              </OuiText>
               <button
                 @click="loadContainers"
                 :disabled="isLoadingContainers"
@@ -197,19 +200,23 @@ onUnmounted(() => {
               </button>
             </div>
 
-            <div
+            <OuiText
               v-if="isLoadingContainers"
-              class="text-center py-8 text-secondary"
+              align="center"
+              color="secondary"
+              class="py-8"
             >
               Loading containers...
-            </div>
+            </OuiText>
 
-            <div
+            <OuiText
               v-else-if="availableContainers.length === 0"
-              class="text-center py-8 text-secondary"
+              align="center"
+              color="secondary"
+              class="py-8"
             >
               No containers found
-            </div>
+            </OuiText>
 
             <div v-else class="grid gap-4">
               <div
@@ -220,16 +227,16 @@ onUnmounted(() => {
               >
                 <div class="flex items-center justify-between">
                   <div class="flex-1">
-                    <div class="font-medium text-primary">
+                    <OuiText weight="medium" color="primary">
                       {{
                         container.names[0]?.replace(/^\//, "") ||
                         "Unnamed Container"
                       }}
-                    </div>
-                    <div class="text-sm text-secondary mt-1">
+                    </OuiText>
+                    <OuiText size="sm" color="secondary" class="mt-1">
                       ID: {{ container.id.substring(0, 12) }} • Image:
                       {{ container.image }}
-                    </div>
+                    </OuiText>
                   </div>
                   <div class="text-right">
                     <span
@@ -254,16 +261,16 @@ onUnmounted(() => {
           <div v-else class="space-y-4">
             <div class="flex items-center justify-between">
               <div>
-                <h2 class="text-lg font-medium text-primary">
+                <OuiText as="h2" size="lg" weight="medium" color="primary">
                   {{
                     selectedContainer.names[0]?.replace(/^\//, "") ||
                     "Unnamed Container"
                   }}
-                </h2>
-                <div class="text-sm text-secondary">
+                </OuiText>
+                <OuiText size="sm" color="secondary">
                   {{ selectedContainer.id.substring(0, 12) }} •
                   {{ selectedContainer.image }}
-                </div>
+                </OuiText>
               </div>
               <div class="flex items-center gap-4">
                 <span
@@ -369,16 +376,18 @@ onUnmounted(() => {
             ref="logContainer"
             class="h-96 overflow-auto bg-surface-overlay text-success font-mono text-sm p-4"
           >
-            <div
+            <OuiText
               v-if="logs.length === 0 && !isLoading"
-              class="text-secondary text-center py-8"
+              color="secondary"
+              align="center"
+              class="py-8"
             >
               No logs to display. Click "Connect to Logs" to start streaming.
-            </div>
+            </OuiText>
 
-            <div v-if="isLoading" class="text-warning text-center py-8">
+            <OuiText v-if="isLoading" color="warning" align="center" class="py-8">
               Connecting to container...
-            </div>
+            </OuiText>
 
             <div
               v-for="(log, index) in logs"

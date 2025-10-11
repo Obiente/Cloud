@@ -54,18 +54,19 @@
       </div>
     </div>
 
-    <p v-if="error" class="text-sm text-danger">
+    <OuiText v-if="error" size="sm" color="danger">
       {{ error }}
-    </p>
+    </OuiText>
 
-    <p v-else-if="helperText" class="text-sm text-text-secondary">
+    <OuiText v-else-if="helperText" size="sm" color="secondary">
       {{ helperText }}
-    </p>
+    </OuiText>
   </div>
 </template>
 
 <script setup lang="ts">
 import { XMarkIcon } from "@heroicons/vue/24/outline";
+import OuiText from "./Text.vue";
 
 interface Props {
   modelValue?: string;

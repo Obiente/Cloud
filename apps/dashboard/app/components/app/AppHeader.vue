@@ -7,14 +7,14 @@
           <slot name="leading" />
 
           <div>
-            <h1 class="text-2xl font-bold text-text-primary">
+            <OuiText as="h1" size="2xl" weight="bold" color="primary">
               <slot name="title">
                 {{ title }}
               </slot>
-            </h1>
-            <p v-if="subtitle" class="text-sm text-text-secondary mt-1">
+            </OuiText>
+            <OuiText v-if="subtitle" size="sm" color="secondary" class="mt-1">
               {{ subtitle }}
-            </p>
+            </OuiText>
           </div>
         </div>
       </div>
@@ -48,6 +48,7 @@
 
 <script setup lang="ts">
 import { BellIcon } from "@heroicons/vue/24/outline";
+import OuiText from "../oui/Text.vue";
 
 interface Props {
   title?: string;

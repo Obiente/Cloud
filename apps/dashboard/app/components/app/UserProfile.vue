@@ -24,12 +24,12 @@
 
       <!-- User info -->
       <div class="flex-1 min-w-0">
-        <p class="text-sm font-medium text-text-primary truncate">
+        <OuiText size="sm" weight="medium" color="primary" truncate>
           {{ user?.preferred_username }}
-        </p>
-        <p class="text-xs text-text-secondary truncate">
+        </OuiText>
+        <OuiText size="xs" color="secondary" truncate>
           {{ user?.email }}
-        </p>
+        </OuiText>
       </div>
 
       <!-- Logout button -->
@@ -48,5 +48,6 @@
 
 <script setup lang="ts">
 import { UserIcon, ArrowRightOnRectangleIcon } from "@heroicons/vue/24/outline";
+import OuiText from "../oui/Text.vue";
 const { user, ...auth } = useAuth();
 </script>
