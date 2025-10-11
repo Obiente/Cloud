@@ -1,26 +1,23 @@
 <template>
-  <div class="space-y-1">
-    <label
-      v-if="label"
-      :for="inputId"
-      class="block text-sm font-medium text-primary"
-    >
+  <Field.Root
+    :id="fieldId"
+    :invalid="!!error"
+    :required="required"
+    :disabled="disabled"
+    :read-only="$props.readonly"
+    class="oui-field space-y-1"
+  >
+    <Field.Label v-if="label" class="block text-sm font-medium text-primary">
       {{ label }}
-      <span v-if="required" class="text-danger">*</span>
-    </label>
+      <Field.RequiredIndicator v-if="required" class="text-danger">
+        *
+      </Field.RequiredIndicator>
+    </Field.Label>
 
     <div class="relative">
-      <input
-        :id="inputId"
+      <Field.Input
         :type="type"
-        :value="modelValue"
         :placeholder="placeholder"
-        :required="required"
-        :disabled="disabled"
-        :readonly="readonly"
-        @input="handleInput"
-        @blur="handleBlur"
-        @focus="handleFocus"
         :class="[
           inputClasses,
           {
@@ -28,12 +25,15 @@
             'pr-10': $slots.suffix || clearable,
           },
         ]"
+        v-model="modelValue"
+        @blur="handleBlur"
+        @focus="handleFocus"
         v-bind="$attrs"
       />
 
       <div
         v-if="$slots.prefix"
-        class="absolute inset-y-0 left-0 flex items-center pl-3"
+        class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none"
       >
         <slot name="prefix" />
       </div>
@@ -50,72 +50,80 @@
         >
           <XMarkIcon class="h-4 w-4" />
         </button>
-        <slot v-else name="suffix" />
+        <div v-else class="pointer-events-none">
+          <slot name="suffix" />
+        </div>
       </div>
     </div>
 
-    <OuiText v-if="error" size="sm" color="danger">
+    <Field.ErrorText v-if="error" class="text-sm text-danger">
       {{ error }}
-    </OuiText>
+    </Field.ErrorText>
 
-    <OuiText v-else-if="helperText" size="sm" color="secondary">
+    <Field.HelperText v-else-if="helperText" class="text-sm text-secondary">
       {{ helperText }}
-    </OuiText>
-  </div>
+    </Field.HelperText>
+  </Field.Root>
 </template>
 
 <script setup lang="ts">
-import { XMarkIcon } from "@heroicons/vue/24/outline";
-import OuiText from "./Text.vue";
+  import { XMarkIcon } from "@heroicons/vue/24/outline";
+  import { Field } from "@ark-ui/vue/field";
+  import type { InputHTMLAttributes } from "vue";
 
-interface Props {
-  modelValue?: string;
-  type?: "text" | "email" | "password" | "search" | "url" | "tel";
-  label?: string;
-  placeholder?: string;
-  helperText?: string;
-  error?: string;
-  required?: boolean;
-  disabled?: boolean;
-  readonly?: boolean;
-  clearable?: boolean;
-}
+  interface Props extends InputHTMLAttributes {
+    modelValue?: string;
+    label?: string;
+    placeholder?: string;
+    helperText?: string;
+    error?: string;
+    required?: boolean;
+    disabled?: boolean;
+    readonly?: boolean;
+    clearable?: boolean;
+    size?: "sm" | "md" | "lg";
+  }
 
-const props = withDefaults(defineProps<Props>(), {
-  type: "text",
-  clearable: false,
-});
+  const props = withDefaults(defineProps<Props>(), {
+    type: "text",
+    clearable: false,
+    size: "md",
+  });
 
-const emit = defineEmits<{
-  "update:modelValue": [value: string];
-  blur: [event: FocusEvent];
-  focus: [event: FocusEvent];
-}>();
+  const emit = defineEmits<{
+    "update:modelValue": [value: string];
+    blur: [event: FocusEvent];
+    focus: [event: FocusEvent];
+  }>();
 
-const inputId = `input-${Math.random().toString(36).substr(2, 9)}`;
+  const fieldId = computed(
+    () => `field-${Math.random().toString(36).substr(2, 9)}`
+  );
 
-const inputClasses = computed(() => [
-  props.error ? "oui-input-error" : "oui-input-base",
-]);
+  const modelValue = computed({
+    get: () => props.modelValue,
+    set: (value: string) => emit("update:modelValue", value),
+  });
 
-const handleInput = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  emit("update:modelValue", target.value);
-};
+  const inputClasses = computed(() => [
+    "oui-input",
+    `oui-input-${props.size}`,
+    props.error ? "oui-input-error" : "oui-input-base",
+  ]);
 
-const handleBlur = (event: FocusEvent) => {
-  emit("blur", event);
-};
+  const handleBlur = (event: FocusEvent) => {
+    emit("blur", event);
+  };
 
-const handleFocus = (event: FocusEvent) => {
-  emit("focus", event);
-};
+  const handleFocus = (event: FocusEvent) => {
+    emit("focus", event);
+  };
 
-const handleClear = () => {
-  emit("update:modelValue", "");
-};
+  const handleClear = () => {
+    emit("update:modelValue", "");
+  };
 
-defineOptions({
-  inheritAttrs: false,
-});
+  defineOptions({
+    inheritAttrs: false,
+  });
 </script>
