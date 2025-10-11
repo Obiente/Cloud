@@ -17,11 +17,11 @@
           variant === 'primary',
         'bg-secondary text-primary hover:bg-secondary-dark active:bg-secondary-darker':
           variant === 'secondary',
-        'bg-transparent border border-primary text-primary hover:bg-primary hover:text-white':
+        'bg-transparent border border-primary text-primary hover:bg-primary hover:text-foreground':
           variant === 'outline',
         'bg-transparent text-primary hover:bg-primary/10 active:bg-primary/20':
           variant === 'ghost',
-        'bg-danger text-white hover:bg-danger-dark active:bg-danger-darker':
+        'bg-danger text-foreground hover:bg-danger-dark active:bg-danger-darker':
           variant === 'danger',
       },
       {

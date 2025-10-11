@@ -38,7 +38,7 @@
               v-for="item in collection.items"
               :key="typeof item === 'string' ? item : item.value"
               :item="item"
-              class="relative flex items-center px-3 py-2 text-sm cursor-pointer select-none text-primary hover:bg-hover data-[highlighted]:bg-hover data-[highlighted]:text-primary data-[state=checked]:bg-primary data-[state=checked]:text-white"
+              class="relative flex items-center px-3 py-2 text-sm cursor-pointer select-none text-primary hover:bg-hover data-[highlighted]:bg-hover data-[highlighted]:text-primary data-[state=checked]:bg-primary data-[state=checked]:text-foreground"
             >
               <Combobox.ItemText>
                 {{ typeof item === "string" ? item : item.label }}

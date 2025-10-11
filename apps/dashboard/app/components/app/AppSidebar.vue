@@ -6,7 +6,7 @@
           <div
             class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center mt-1"
           >
-            <span class="text-white font-bold text-lg">O</span>
+            <span class="text-foreground font-bold text-lg">O</span>
           </div>
           <div class="leading-tight">
             <div class="text-xl font-bold text-text-primary">Obiente</div>

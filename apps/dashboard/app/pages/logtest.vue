@@ -152,17 +152,17 @@ const formatTimestamp = (timestamp: string) => {
 const getLogTypeClass = (type: string) => {
   switch (type) {
     case "connected":
-      return "text-green-400";
+      return "text-success";
     case "disconnected":
-      return "text-yellow-400";
+      return "text-warning";
     case "error":
-      return "text-red-400";
+      return "text-danger";
     case "stdout":
-      return "text-green-400";
+      return "text-success";
     case "stderr":
-      return "text-red-400";
+      return "text-danger";
     default:
-      return "text-green-400";
+      return "text-success";
   }
 };
 
@@ -173,25 +173,25 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-100 p-6">
+  <div class="min-h-screen bg-background p-6">
     <div class="max-w-6xl mx-auto">
-      <div class="bg-white rounded-lg shadow-lg">
+      <div class="bg-surface-base rounded-lg shadow-lg">
         <!-- Header -->
-        <div class="border-b border-gray-200 p-6">
-          <h1 class="text-2xl font-bold text-gray-900 mb-6">
+        <div class="border-b border-border-muted p-6">
+          <h1 class="text-2xl font-bold text-primary mb-6">
             Docker Container Log Viewer
           </h1>
 
           <!-- Container Selection -->
           <div v-if="!selectedContainer" class="space-y-4">
             <div class="flex items-center justify-between">
-              <h2 class="text-lg font-medium text-gray-900">
+              <h2 class="text-lg font-medium text-primary">
                 Select a Container
               </h2>
               <button
                 @click="loadContainers"
                 :disabled="isLoadingContainers"
-                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                class="px-4 py-2 bg-primary text-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
               >
                 {{ isLoadingContainers ? "Loading..." : "Refresh" }}
               </button>
@@ -199,14 +199,14 @@ onUnmounted(() => {
 
             <div
               v-if="isLoadingContainers"
-              class="text-center py-8 text-gray-500"
+              class="text-center py-8 text-secondary"
             >
               Loading containers...
             </div>
 
             <div
               v-else-if="availableContainers.length === 0"
-              class="text-center py-8 text-gray-500"
+              class="text-center py-8 text-secondary"
             >
               No containers found
             </div>
@@ -216,17 +216,17 @@ onUnmounted(() => {
                 v-for="container in availableContainers"
                 :key="container.id"
                 @click="selectContainer(container)"
-                class="p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition-colors"
+                class="p-4 border border-border-muted rounded-lg hover:border-primary hover:bg-surface-muted/40 cursor-pointer transition-colors"
               >
                 <div class="flex items-center justify-between">
                   <div class="flex-1">
-                    <div class="font-medium text-gray-900">
+                    <div class="font-medium text-primary">
                       {{
                         container.names[0]?.replace(/^\//, "") ||
                         "Unnamed Container"
                       }}
                     </div>
-                    <div class="text-sm text-gray-500 mt-1">
+                    <div class="text-sm text-secondary mt-1">
                       ID: {{ container.id.substring(0, 12) }} • Image:
                       {{ container.image }}
                     </div>
@@ -236,10 +236,10 @@ onUnmounted(() => {
                       class="inline-flex px-3 py-1 text-xs font-semibold rounded-full"
                       :class="
                         container.state === 'running'
-                          ? 'bg-green-100 text-green-800'
+                          ? 'bg-success/10 text-success'
                           : container.state === 'exited'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-danger/10 text-danger'
+                          : 'bg-surface-muted/40 text-secondary'
                       "
                     >
                       {{ container.state }}
@@ -254,13 +254,13 @@ onUnmounted(() => {
           <div v-else class="space-y-4">
             <div class="flex items-center justify-between">
               <div>
-                <h2 class="text-lg font-medium text-gray-900">
+                <h2 class="text-lg font-medium text-primary">
                   {{
                     selectedContainer.names[0]?.replace(/^\//, "") ||
                     "Unnamed Container"
                   }}
                 </h2>
-                <div class="text-sm text-gray-500">
+                <div class="text-sm text-secondary">
                   {{ selectedContainer.id.substring(0, 12) }} •
                   {{ selectedContainer.image }}
                 </div>
@@ -270,10 +270,10 @@ onUnmounted(() => {
                   class="inline-flex px-3 py-1 text-xs font-semibold rounded-full"
                   :class="
                     selectedContainer.state === 'running'
-                      ? 'bg-green-100 text-green-800'
+                      ? 'bg-success/10 text-success'
                       : selectedContainer.state === 'exited'
-                      ? 'bg-red-100 text-red-800'
-                      : 'bg-gray-100 text-gray-800'
+                      ? 'bg-danger/10 text-danger'
+                      : 'bg-surface-muted/40 text-secondary'
                   "
                 >
                   {{ selectedContainer.state }}
@@ -283,7 +283,7 @@ onUnmounted(() => {
                     selectedContainer = null;
                     disconnect();
                   "
-                  class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                  class="px-4 py-2 bg-secondary text-foreground rounded-md hover:bg-secondary-dark"
                 >
                   Change Container
                 </button>
@@ -294,7 +294,7 @@ onUnmounted(() => {
               <button
                 @click="connectToContainer"
                 :disabled="isLoading || isConnected"
-                class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-6 py-2 bg-primary text-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span v-if="isLoading">Connecting...</span>
                 <span v-else-if="isConnected">Connected</span>
@@ -304,7 +304,7 @@ onUnmounted(() => {
               <button
                 v-if="isConnected"
                 @click="disconnect"
-                class="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                class="px-6 py-2 bg-danger text-foreground rounded-md hover:bg-danger/90"
               >
                 Disconnect
               </button>
@@ -314,10 +314,10 @@ onUnmounted(() => {
           <!-- Error Display -->
           <div
             v-if="error"
-            class="bg-red-50 border border-red-200 rounded-md p-4 mt-4"
+            class="bg-danger/10 border border-danger/20 rounded-md p-4 mt-4"
           >
             <div class="flex">
-              <div class="text-red-800">
+              <div class="text-danger">
                 <strong>Error:</strong> {{ error }}
               </div>
             </div>
@@ -327,35 +327,35 @@ onUnmounted(() => {
         <!-- Log Controls -->
         <div
           v-if="selectedContainer"
-          class="border-b border-gray-200 p-4 bg-gray-50"
+          class="border-b border-border-muted p-4 bg-surface-muted/30"
         >
           <div class="flex justify-between items-center">
             <div class="flex items-center gap-4">
               <div class="flex items-center">
-                <span class="text-sm text-gray-600">Status:</span>
+                <span class="text-sm text-secondary">Status:</span>
                 <span class="ml-2 inline-flex items-center">
                   <div
                     class="w-2 h-2 rounded-full mr-2"
-                    :class="isConnected ? 'bg-green-500' : 'bg-red-500'"
+                    :class="isConnected ? 'bg-success' : 'bg-danger'"
                   ></div>
                   {{ isConnected ? "Connected" : "Disconnected" }}
                 </span>
               </div>
 
-              <div class="text-sm text-gray-600">
+              <div class="text-sm text-secondary">
                 Messages: {{ logs.length }}
               </div>
             </div>
 
             <div class="flex gap-2">
-              <label class="flex items-center text-sm text-gray-600">
+              <label class="flex items-center text-sm text-secondary">
                 <input type="checkbox" v-model="autoScroll" class="mr-2" />
                 Auto-scroll
               </label>
 
               <button
                 @click="clearLogs"
-                class="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700"
+                class="px-3 py-1 bg-secondary text-foreground text-sm rounded hover:bg-secondary-dark"
               >
                 Clear Logs
               </button>
@@ -367,16 +367,16 @@ onUnmounted(() => {
         <div v-if="selectedContainer" class="relative">
           <div
             ref="logContainer"
-            class="h-96 overflow-auto bg-black text-green-400 font-mono text-sm p-4"
+            class="h-96 overflow-auto bg-surface-overlay text-success font-mono text-sm p-4"
           >
             <div
               v-if="logs.length === 0 && !isLoading"
-              class="text-gray-500 text-center py-8"
+              class="text-secondary text-center py-8"
             >
               No logs to display. Click "Connect to Logs" to start streaming.
             </div>
 
-            <div v-if="isLoading" class="text-yellow-400 text-center py-8">
+            <div v-if="isLoading" class="text-warning text-center py-8">
               Connecting to container...
             </div>
 
@@ -386,11 +386,11 @@ onUnmounted(() => {
               class="mb-1 leading-relaxed"
               :class="getLogTypeClass(log.type)"
             >
-              <span class="text-gray-500 mr-2">
+              <span class="text-secondary mr-2">
                 [{{ formatTimestamp(log.timestamp) }}]
               </span>
 
-              <span class="text-blue-400 mr-2"> [{{ log.type }}] </span>
+              <span class="text-primary mr-2"> [{{ log.type }}] </span>
 
               <span class="whitespace-pre-wrap">{{ log.data }}</span>
             </div>
@@ -408,15 +408,15 @@ onUnmounted(() => {
 }
 
 .overflow-auto::-webkit-scrollbar-track {
-  background: #1f2937;
+  background: var(--oui-surface-muted);
 }
 
 .overflow-auto::-webkit-scrollbar-thumb {
-  background: #4b5563;
+  background: var(--oui-border-default);
   border-radius: 4px;
 }
 
 .overflow-auto::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+  background: var(--oui-border-strong);
 }
 </style>

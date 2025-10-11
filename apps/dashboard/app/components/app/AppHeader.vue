@@ -33,7 +33,7 @@
           <!-- Notification badge -->
           <span
             v-if="notificationCount > 0"
-            class="absolute -top-1 -right-1 w-5 h-5 bg-danger text-white text-xs font-medium rounded-full flex items-center justify-center"
+            class="absolute -top-1 -right-1 w-5 h-5 bg-danger text-foreground text-xs font-medium rounded-full flex items-center justify-center"
           >
             {{ notificationCount > 99 ? "99+" : notificationCount }}
           </span>

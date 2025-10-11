@@ -133,7 +133,7 @@ const textClasses = computed(() => {
     success: "text-success",
     warning: "text-warning",
     danger: "text-danger",
-    white: "text-white",
+    white: "text-foreground",
     inherit: "text-inherit",
   };
   classes.push(colorClasses[props.color]);
