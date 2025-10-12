@@ -1,20 +1,25 @@
 <template>
-  <div class="min-h-screen">
-    <div class="mb-8">
-      <div class="flex items-start justify-between gap-6">
-        <div class="flex-1">
-          <div class="flex items-center gap-3 mb-2">
-            <div class="p-2.5 rounded-xl bg-primary/10 ring-1 ring-primary/20">
+  <OuiContainer size="7xl" class="min-h-screen">
+    <OuiStack gap="xl" class="mb-8">
+      <OuiFlex justify="between" align="start" gap="lg">
+        <OuiStack gap="sm" class="OuiFlex-1">
+          <OuiFlex align="center" gap="md">
+            <OuiBox
+              p="sm"
+              rounded="xl"
+              bg="accent-primary"
+              class="bg-primary/10 ring-1 ring-primary/20"
+            >
               <RocketLaunchIcon class="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <OuiText as="h1" size="3xl" weight="bold"> Deployments </OuiText>
-            </div>
-          </div>
-          <OuiText color="secondary" size="base" class="ml-14">
-            Manage and monitor your web application deployments
-          </OuiText>
-        </div>
+            </OuiBox>
+            <OuiText as="h1" size="3xl" weight="bold"> Deployments </OuiText>
+          </OuiFlex>
+          <OuiBox ml="3xl">
+            <OuiText color="secondary" size="base">
+              Manage and monitor your web application deployments
+            </OuiText>
+          </OuiBox>
+        </OuiStack>
         <OuiButton
           variant="primary"
           @click="showCreateDialog = true"
@@ -23,12 +28,12 @@
           <PlusIcon class="w-4 h-4 mr-2" />
           New Deployment
         </OuiButton>
-      </div>
-    </div>
+      </OuiFlex>
+    </OuiStack>
 
     <OuiCard variant="raised" class="mb-8 backdrop-blur-sm">
       <OuiCardBody>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <OuiGrid cols="1" gap="md" cols-md="3">
           <OuiInput
             v-model="searchQuery"
             placeholder="Search by name, domain, or framework..."
@@ -51,26 +56,35 @@
             placeholder="All Environments"
             clearable
           />
-        </div>
+        </OuiGrid>
       </OuiCardBody>
     </OuiCard>
 
-    <div v-if="filteredDeployments.length === 0" class="text-center py-20">
-      <div
-        class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-surface-muted/50 ring-1 ring-border-muted mb-6"
+    <OuiStack
+      v-if="filteredDeployments.length === 0"
+      align="center"
+      gap="lg"
+      class="text-center py-20"
+    >
+      <OuiBox
+        class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-surface-muted/50 ring-1 ring-border-muted"
       >
         <RocketLaunchIcon class="h-10 w-10 text-secondary" />
-      </div>
-      <OuiText as="h3" size="xl" weight="semibold" color="primary" class="mb-2">
-        No deployments found
-      </OuiText>
-      <OuiText color="secondary" class="max-w-md mx-auto mb-8">
-        {{
-          searchQuery || statusFilter || environmentFilter
-            ? "Try adjusting your filters to see more results."
-            : "Get started by creating your first deployment."
-        }}
-      </OuiText>
+      </OuiBox>
+      <OuiStack align="center" gap="sm">
+        <OuiText as="h3" size="xl" weight="semibold" color="primary">
+          No deployments found
+        </OuiText>
+        <OuiBox class="max-w-md">
+          <OuiText color="secondary">
+            {{
+              searchQuery || statusFilter || environmentFilter
+                ? "Try adjusting your filters to see more results."
+                : "Get started by creating your first deployment."
+            }}
+          </OuiText>
+        </OuiBox>
+      </OuiStack>
       <OuiButton
         variant="primary"
         @click="showCreateDialog = true"
@@ -79,9 +93,9 @@
         <PlusIcon class="w-4 h-4 mr-2" />
         Create Your First Deployment
       </OuiButton>
-    </div>
+    </OuiStack>
 
-    <div v-else class="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+    <OuiGrid v-else cols="2" gap="lg"  class="sm:grid-cols-2">
       <OuiCard
         v-for="deployment in filteredDeployments"
         :key="deployment.id"
@@ -101,11 +115,11 @@
           :class="getStatusMeta(deployment.status).barClass"
         />
 
-        <div class="relative flex h-full flex-col">
+        <OuiFlex direction="col" h="full" class="relative">
           <OuiCardHeader>
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0 flex-1 space-y-3">
-                <div class="flex items-center gap-2">
+            <OuiFlex justify="between" align="start" gap="md">
+              <OuiStack gap="md" class="min-w-0 OuiFlex-1">
+                <OuiFlex align="center" gap="sm">
                   <OuiBadge
                     :variant="getStatusMeta(deployment.status).badge"
                     class="inline-flex items-center px-2.5 py-1 text-xs font-semibold uppercase tracking-wide rounded-full"
@@ -133,16 +147,16 @@
                     <BoltIcon class="h-3 w-3" />
                     Live
                   </span>
-                </div>
+                </OuiFlex>
 
-                <div>
+                <OuiStack gap="xs">
                   <OuiText
                     as="h3"
                     size="xl"
-                    weight="bold" 
+                    weight="bold"
                     color="primary"
                     truncate
-                    class="oui-card-title mb-1.5 group-hover:text-primary/90 transition-colors"
+                    class="oui-card-title group-hover:text-primary/90 transition-colors"
                   >
                     {{ deployment.name }}
                   </OuiText>
@@ -161,135 +175,157 @@
                       class="h-3.5 w-3.5 opacity-0 group-hover/link:opacity-100 transition-opacity"
                     />
                   </a>
-                </div>
-              </div>
-            </div>
+                </OuiStack>
+              </OuiStack>
+            </OuiFlex>
           </OuiCardHeader>
 
-          <OuiCardBody class="flex-1 space-y-5">
-            <div class="flex items-center justify-between text-sm">
-              <div class="flex items-center gap-2">
-                <div
-                  class="p-1.5 rounded-lg bg-surface-muted/50 ring-1 ring-border-muted"
-                >
-                  <CodeBracketIcon class="h-4 w-4 text-primary" />
-                </div>
-                <span class="font-medium text-primary">
-                  {{ deployment.framework }}
-                </span>
-              </div>
-              <div class="flex items-center gap-1.5 text-xs text-secondary">
-                <CalendarIcon class="h-3.5 w-3.5" />
-                <span>{{ formatRelativeTime(deployment.lastDeployedAt) }}</span>
-              </div>
-            </div>
-
-            <div
-              v-if="deployment.repositoryUrl"
-              class="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-muted/30 ring-1 ring-border-muted"
-            >
-              <div class="flex items-center gap-2 min-w-0 flex-1">
-                <svg
-                  class="h-4 w-4 text-secondary flex-shrink-0"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
-                  />
-                </svg>
-                <span class="text-xs text-secondary truncate font-mono">
-                  {{ cleanRepositoryName(deployment.repositoryUrl) }}
-                </span>
-              </div>
-            </div>
-
-            <div class="flex items-center gap-2">
-              <span
-                class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide"
-                :class="getEnvironmentClass(deployment.environment)"
-              >
-                <CpuChipIcon class="h-3.5 w-3.5" />
-                {{ formatEnvironment(deployment.environment) }}
-              </span>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3">
-              <div
-                class="group/stat relative overflow-hidden rounded-xl bg-surface-muted/40 p-4 ring-1 ring-border-muted backdrop-blur-sm transition-all hover:bg-surface-muted/60 hover:ring-border-default"
-              >
-                <div
-                  class="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover/stat:opacity-100 transition-opacity"
-                />
-                <div class="relative">
-                  <OuiText
-                    size="xs"
-                    weight="bold"
-                    transform="uppercase"
-                    color="secondary"
-                    class="tracking-wider mb-1.5"
+          <OuiCardBody class="OuiFlex-1">
+            <OuiStack gap="lg">
+              <OuiFlex justify="between" align="center" class="text-sm">
+                <OuiFlex align="center" gap="sm">
+                  <OuiBox
+                    p="xs"
+                    rounded="lg"
+                    bg="surface-muted"
+                    class="bg-surface-muted/50 ring-1 ring-border-muted"
                   >
-                    Build Time
-                  </OuiText>
-                  <OuiText size="2xl" weight="bold" color="primary">
-                    {{ deployment.buildTime
-                    }}<span class="text-sm text-secondary ml-0.5">s</span>
-                  </OuiText>
-                </div>
-              </div>
-              <div
-                class="group/stat relative overflow-hidden rounded-xl bg-surface-muted/40 p-4 ring-1 ring-border-muted backdrop-blur-sm transition-all hover:bg-surface-muted/60 hover:ring-border-default"
-              >
-                <div
-                  class="absolute inset-0 bg-gradient-to-br from-secondary/5 to-transparent opacity-0 group-hover/stat:opacity-100 transition-opacity"
-                />
-                <div class="relative">
-                  <OuiText
-                    size="xs"
-                    weight="bold"
-                    transform="uppercase"
-                    color="secondary"
-                    class="tracking-wider mb-1.5"
-                  >
-                    Bundle Size
-                  </OuiText>
-                  <OuiText size="2xl" weight="bold" color="primary">
-                    {{ deployment.size }}
-                  </OuiText>
-                </div>
-              </div>
-            </div>
+                    <CodeBracketIcon class="h-4 w-4 text-primary" />
+                  </OuiBox>
+                  <span class="font-medium text-primary">
+                    {{ deployment.framework }}
+                  </span>
+                </OuiFlex>
+                <OuiFlex align="center" gap="xs" class="text-xs text-secondary">
+                  <CalendarIcon class="h-3.5 w-3.5" />
+                  <span>{{
+                    formatRelativeTime(deployment.lastDeployedAt)
+                  }}</span>
+                </OuiFlex>
+              </OuiFlex>
 
-            <div
-              v-if="deployment.status === 'BUILDING'"
-              class="space-y-2.5 rounded-xl border p-4 backdrop-blur-sm"
-              :class="getStatusMeta(deployment.status).progressClass"
-            >
-              <div
-                class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider"
+              <OuiBox
+                v-if="deployment.repositoryUrl"
+                p="sm"
+                rounded="lg"
+                bg="surface-muted"
+                class="bg-surface-muted/30 ring-1 ring-border-muted"
               >
-                <Cog6ToothIcon class="h-4 w-4 animate-spin" />
-                <span>Building deployment</span>
-              </div>
-              <div
-                class="relative h-2 w-full overflow-hidden rounded-full bg-warning/20"
-              >
-                <div class="absolute inset-0 flex">
+                <OuiFlex align="center" gap="sm" class="min-w-0">
+                  <svg
+                    class="h-4 w-4 text-secondary OuiFlex-shrink-0"
+                    fill="currentColor"
+                    viewOuiBox="0 0 24 24"
+                  >
+                    <path
+                      d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
+                    />
+                  </svg>
+                  <span class="text-xs text-secondary truncate font-mono">
+                    {{ cleanRepositoryName(deployment.repositoryUrl) }}
+                  </span>
+                </OuiFlex>
+              </OuiBox>
+
+              <OuiFlex align="center" gap="sm">
+                <span
+                  class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide"
+                  :class="getEnvironmentClass(deployment.environment)"
+                >
+                  <CpuChipIcon class="h-3.5 w-3.5" />
+                  {{ formatEnvironment(deployment.environment) }}
+                </span>
+              </OuiFlex>
+
+              <OuiGrid cols="2" gap="md">
+                <OuiBox
+                  p="md"
+                  rounded="xl"
+                  bg="surface-muted"
+                  class="group/stat relative overflow-hidden bg-surface-muted/40 ring-1 ring-border-muted backdrop-blur-sm transition-all hover:bg-surface-muted/60 hover:ring-border-default"
+                >
                   <div
-                    class="h-full w-1/3 animate-pulse rounded-full bg-gradient-to-r from-transparent via-warning to-transparent"
-                    style="
-                      animation: shimmer 2s infinite;
-                      background-size: 200% 100%;
-                    "
+                    class="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover/stat:opacity-100 transition-opacity"
                   />
-                </div>
-              </div>
-            </div>
+                  <OuiStack gap="xs" class="relative">
+                    <OuiText
+                      size="xs"
+                      weight="bold"
+                      transform="uppercase"
+                      color="secondary"
+                      class="tracking-wider"
+                    >
+                      Build Time
+                    </OuiText>
+                    <OuiText size="2xl" weight="bold" color="primary">
+                      {{ deployment.buildTime
+                      }}<span class="text-sm text-secondary ml-0.5">s</span>
+                    </OuiText>
+                  </OuiStack>
+                </OuiBox>
+                <OuiBox
+                  p="md"
+                  rounded="xl"
+                  bg="surface-muted"
+                  class="group/stat relative overflow-hidden bg-surface-muted/40 ring-1 ring-border-muted backdrop-blur-sm transition-all hover:bg-surface-muted/60 hover:ring-border-default"
+                >
+                  <div
+                    class="absolute inset-0 bg-gradient-to-br from-secondary/5 to-transparent opacity-0 group-hover/stat:opacity-100 transition-opacity"
+                  />
+                  <OuiStack gap="xs" class="relative">
+                    <OuiText
+                      size="xs"
+                      weight="bold"
+                      transform="uppercase"
+                      color="secondary"
+                      class="tracking-wider"
+                    >
+                      Bundle Size
+                    </OuiText>
+                    <OuiText size="2xl" weight="bold" color="primary">
+                      {{ deployment.size }}
+                    </OuiText>
+                  </OuiStack>
+                </OuiBox>
+              </OuiGrid>
+
+              <OuiBox
+                v-if="deployment.status === 'BUILDING'"
+                p="md"
+                rounded="xl"
+                class="border backdrop-blur-sm"
+                :class="getStatusMeta(deployment.status).progressClass"
+              >
+                <OuiStack gap="sm">
+                  <OuiFlex
+                    align="center"
+                    gap="sm"
+                    class="text-xs font-bold uppercase tracking-wider"
+                  >
+                    <Cog6ToothIcon class="h-4 w-4 animate-spin" />
+                    <span>Building deployment</span>
+                  </OuiFlex>
+                  <div
+                    class="relative h-2 w-full overflow-hidden rounded-full bg-warning/20"
+                  >
+                    <div class="absolute inset-0 OuiFlex">
+                      <div
+                        class="h-full w-1/3 animate-pulse rounded-full bg-gradient-to-r from-transparent via-warning to-transparent"
+                        style="
+                          animation: shimmer 2s infinite;
+                          background-size: 200% 100%;
+                        "
+                      />
+                    </div>
+                  </div>
+                </OuiStack>
+              </OuiBox>
+            </OuiStack>
           </OuiCardBody>
 
           <OuiCardFooter class="mt-auto">
-            <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-1">
+            <OuiFlex justify="between" align="center" gap="md">
+              <OuiFlex align="center" gap="xs">
                 <OuiButton
                   v-if="deployment.status === 'RUNNING'"
                   variant="ghost"
@@ -324,9 +360,9 @@
                 >
                   <ArrowPathIcon class="h-4 w-4" />
                 </OuiButton>
-              </div>
+              </OuiFlex>
 
-              <div class="flex items-center gap-1">
+              <OuiFlex align="center" gap="xs">
                 <OuiButton
                   variant="ghost"
                   size="sm"
@@ -349,50 +385,52 @@
                   <EyeIcon class="h-4 w-4 mr-1.5" />
                   <span class="text-xs font-semibold">Details</span>
                 </OuiButton>
-              </div>
-            </div>
+              </OuiFlex>
+            </OuiFlex>
           </OuiCardFooter>
-        </div>
+        </OuiFlex>
       </OuiCard>
-    </div>
+    </OuiGrid>
 
     <OuiDialog
       v-model:open="showCreateDialog"
       title="Create New Deployment"
       description="Deploy your application to Obiente Cloud with automated builds and deployments"
     >
-      <form @submit.prevent="createDeployment" class="space-y-5">
-        <OuiInput
-          v-model="newDeployment.name"
-          label="Project Name"
-          placeholder="my-awesome-app"
-          required
-        />
+      <form @submit.prevent="createDeployment">
+        <OuiStack gap="lg">
+          <OuiInput
+            v-model="newDeployment.name"
+            label="Project Name"
+            placeholder="my-awesome-app"
+            required
+          />
 
-        <OuiInput
-          v-model="newDeployment.repositoryUrl"
-          label="Repository URL"
-          placeholder="https://github.com/username/repo"
-          required
-        />
+          <OuiInput
+            v-model="newDeployment.repositoryUrl"
+            label="Repository URL"
+            placeholder="https://github.com/username/repo"
+            required
+          />
 
-        <OuiSelect
-          v-model="newDeployment.framework"
-          :items="frameworkOptions"
-          label="Framework"
-          placeholder="Select framework"
-        />
+          <OuiSelect
+            v-model="newDeployment.framework"
+            :items="frameworkOptions"
+            label="Framework"
+            placeholder="Select framework"
+          />
 
-        <OuiSelect
-          v-model="newDeployment.environment"
-          :items="environmentOptions"
-          label="Environment"
-          placeholder="Select environment"
-        />
+          <OuiSelect
+            v-model="newDeployment.environment"
+            :items="environmentOptions"
+            label="Environment"
+            placeholder="Select environment"
+          />
+        </OuiStack>
       </form>
 
       <template #footer>
-        <div class="flex items-center justify-end gap-3">
+        <OuiFlex justify="end" align="center" gap="md">
           <OuiButton variant="ghost" @click="showCreateDialog = false">
             Cancel
           </OuiButton>
@@ -404,10 +442,10 @@
             <RocketLaunchIcon class="w-4 h-4 mr-2" />
             Deploy Now
           </OuiButton>
-        </div>
+        </OuiFlex>
       </template>
     </OuiDialog>
-  </div>
+  </OuiContainer>
 </template>
 
 <script setup lang="ts">
