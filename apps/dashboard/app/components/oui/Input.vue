@@ -71,7 +71,7 @@
   import { Field } from "@ark-ui/vue/field";
   import type { InputHTMLAttributes } from "vue";
 
-  interface Props extends InputHTMLAttributes {
+  interface Props extends /* @vue-ignore */ InputHTMLAttributes {
     modelValue?: string;
     label?: string;
     placeholder?: string;
