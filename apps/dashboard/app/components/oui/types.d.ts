@@ -126,22 +126,21 @@ export type GridRows = NumericRangeWithSuffixes<
 
 export type FlexDirection = "row" | "row-reverse" | "col" | "col-reverse";
 export type FlexWrap = "nowrap" | "wrap" | "wrap-reverse";
-export type FlexJustify =
+
+export type AxisJustify =
     | "start"
     | "end"
     | "center"
     | "between"
     | "around"
     | "evenly";
-export type FlexAlign = "start" | "end" | "center" | "baseline" | "stretch";
-export type FlexAlignContent =
-    | "start"
-    | "end"
-    | "center"
-    | "between"
-    | "around"
-    | "evenly"
-    | "stretch";
+
+export type AxisAlign = "start" | "end" | "center" | "stretch";
+export type AxisAlignWithBaseline = AxisAlign | "baseline";
+
+export type AxisAlignContent = AxisJustify;
+export type AxisAlignContentWithStretch = AxisJustify | "stretch";
+
 
 export type ContainerSize = SizeRange<"xs", "7xl"> | "full" | "default";
 export type ContainerBreakpoint = "always" | SizeRange<"sm", "2xl">;
