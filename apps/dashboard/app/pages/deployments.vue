@@ -95,7 +95,7 @@
       </OuiButton>
     </OuiStack>
 
-    <OuiGrid v-else cols="1" gap="lg" cols-lg="2" :cols-xl="3">
+    <OuiGrid v-else cols="1" gap="lg" cols-md="2" :cols-2xl="3">
       <OuiCard
         v-for="deployment in filteredDeployments"
         :key="deployment.id"
