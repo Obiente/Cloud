@@ -73,6 +73,11 @@ interface GridProps {
   colsXl?: GridColumns;
 
   /**
+   * Responsive columns - 2xl screens
+   */
+  cols2xl?: GridColumns;
+
+  /**
    * Gap between grid items using OUI spacing scale
    */
   gap?: OUISpacing;
@@ -198,21 +203,25 @@ const gridClasses = computed(() => {
   }
 
   // Responsive columns
-  if (props.colsSm) {
-    classes.push(props.colsSm === 'none' ? 'sm:grid-cols-none' : `sm:grid-cols-${props.colsSm}`);
-  }
+  const responsiveCols: Record<string, GridColumns | undefined> = {
+    sm: props.colsSm,
+    md: props.colsMd,
+    lg: props.colsLg,
+    xl: props.colsXl,
+    '2xl': props.cols2xl,
+  };
 
-  if (props.colsMd) {
-    classes.push(props.colsMd === 'none' ? 'md:grid-cols-none' : `md:grid-cols-${props.colsMd}`);
-  }
-
-  if (props.colsLg) {
-    classes.push(props.colsLg === 'none' ? 'lg:grid-cols-none' : `lg:grid-cols-${props.colsLg}`);
-  }
-
-  if (props.colsXl) {
-    classes.push(props.colsXl === 'none' ? 'xl:grid-cols-none' : `xl:grid-cols-${props.colsXl}`);
-  }
+  Object.entries(responsiveCols).forEach(([breakpoint, value]) => {
+    if (!value) return;
+    const prefix = breakpoint === '2xl' ? '2xl' : breakpoint;
+    if (value === 'none') {
+      classes.push(`${prefix}:grid-cols-none`);
+    } else if (value === 'subgrid') {
+      classes.push(`${prefix}:grid-cols-subgrid`);
+    } else {
+      classes.push(`${prefix}:grid-cols-${value}`);
+    }
+  });
 
   // Auto-fit and auto-fill
   if (props.autoFit) {

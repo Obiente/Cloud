@@ -2,13 +2,22 @@
 import tailwindcss from "@tailwindcss/vite";
 export default defineNuxtConfig({
   devtools: { enabled: true },
-  vite: { plugins: [tailwindcss()] },
+  vite: {
+    plugins: [tailwindcss()],
+    server: {
+      hmr: {
+        port: 24678, // Use a different port for HMR
+      },
+      watch: {
+        usePolling: true,
+      }
+    },
+  },
   // Modules
   modules: ["@pinia/nuxt", "@vueuse/nuxt"],
 
   // CSS Framework - using Nuxt UI (built on Tailwind CSS)
   css: ["~/assets/css/main.css"],
-  // watch: ['composables/**', 'stores/**', 'utils/**', 'components/**'],
   // TypeScript configuration
   typescript: {
     typeCheck: true,
