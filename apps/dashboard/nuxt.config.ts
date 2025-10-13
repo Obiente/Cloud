@@ -14,7 +14,7 @@ export default defineNuxtConfig({
     },
   },
   // Modules
-  modules: ["@pinia/nuxt", "@vueuse/nuxt"],
+  modules: ["@pinia/nuxt", "@vueuse/nuxt", "@nuxt/icon"],
 
   // CSS Framework - using Nuxt UI (built on Tailwind CSS)
   css: ["~/assets/css/main.css"],
