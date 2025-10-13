@@ -13,8 +13,7 @@ import (
 	deploymentsv1connect "api/gen/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
 	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 )
 
 const (
@@ -44,7 +43,7 @@ func main() {
 		panic(err)
 	}
 
-	containers, err := cli.ContainerList(context.Background(), container.ListOptions{All: true})
+	containers, err := cli.ContainerList(context.Background(), client.ContainerListOptions{All: true})
 	if err != nil {
 		panic(err)
 	}
