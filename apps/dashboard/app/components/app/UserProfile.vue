@@ -25,10 +25,10 @@
       <!-- User info -->
       <div class="flex-1 min-w-0">
         <OuiText size="sm" weight="medium" color="primary" truncate>
-          {{ user?.preferred_username }}
+          {{ auth.user?.preferred_username }}
         </OuiText>
         <OuiText size="xs" color="secondary" truncate>
-          {{ user?.email }}
+          {{ auth.user?.email }}
         </OuiText>
       </div>
 
@@ -49,5 +49,5 @@
 <script setup lang="ts">
 import { UserIcon, ArrowRightOnRectangleIcon } from "@heroicons/vue/24/outline";
 import OuiText from "../oui/Text.vue";
-const { user, ...auth } = useAuth();
+const auth = useAuth();
 </script>
