@@ -9,11 +9,13 @@ import (
 	"os"
 	"time"
 
+	"api/docker"
 	authv1connect "api/gen/proto/obiente/cloud/auth/v1/authv1connect"
+	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	deploymentsv1connect "api/gen/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
 	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
 
-	"github.com/moby/moby/client"
+	"connectrpc.com/connect"
 )
 
 const (
@@ -30,26 +32,17 @@ func main() {
 		port = defaultPort
 	}
 
+	if err := docker.InitClient(); err != nil {
+		log.Fatalf("Failed to initialize Docker client: %v", err)
+	}
+	log.Println("Docker client initialized successfully")
+
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           newServeMux(),
 		ReadHeaderTimeout: readHeaderTimeout,
 		WriteTimeout:      writeTimeout,
 		IdleTimeout:       idleTimeout,
-	}
-
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		panic(err)
-	}
-
-	containers, err := cli.ContainerList(context.Background(), client.ContainerListOptions{All: true})
-	if err != nil {
-		panic(err)
-	}
-
-	for _, ctr := range containers {
-		fmt.Printf("%s %s\n", ctr.ID, ctr.Image)
 	}
 
 	log.Printf("Connect RPC API listening on %s", server.Addr)
@@ -104,6 +97,25 @@ type deploymentService struct {
 
 func newDeploymentService() deploymentsv1connect.DeploymentServiceHandler {
 	return &deploymentService{}
+}
+
+// ListDeployments implements the ListDeployments RPC method
+func (s *deploymentService) ListDeployments(
+	ctx context.Context,
+	req *connect.Request[deploymentsv1.ListDeploymentsRequest],
+) (*connect.Response[deploymentsv1.ListDeploymentsResponse], error) {
+	log.Printf("ListDeployments called for organization: %s", req.Msg.OrganizationId)
+
+	deployments, err := docker.ListContainersAsDeployments(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list deployments: %w", err))
+	}
+
+	res := connect.NewResponse(&deploymentsv1.ListDeploymentsResponse{
+		Deployments: deployments,
+	})
+
+	return res, nil
 }
 
 type organizationService struct {
