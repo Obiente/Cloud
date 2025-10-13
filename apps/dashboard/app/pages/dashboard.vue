@@ -19,7 +19,7 @@
             Refresh
           </OuiButton>
           <OuiButton
-            variant="primary"
+            color="primary"
             size="sm"
             class="gap-2 shadow-md"
             @click="navigateTo('/deployments')"
