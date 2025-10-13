@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package obiente.cloud.organizations.v1;
 
+option go_package = "api/gen/proto/obiente/cloud/organizations/v1;organizationsv1";
+
 import "google/protobuf/timestamp.proto";
 import "obiente/cloud/auth/v1/auth_service.proto";
 
