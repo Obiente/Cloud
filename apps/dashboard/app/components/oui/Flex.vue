@@ -1,9 +1,5 @@
 <template>
-  <component
-    :is="as"
-    :class="flexClasses"
-    v-bind="$attrs"
-  >
+  <component :is="as" :class="flexClasses" v-bind="$attrs">
     <slot />
   </component>
 </template>
@@ -20,7 +16,7 @@ import type {
   OUIColor,
   OUIBorderRadius,
   OUISpacing,
-} from './types';
+} from "./types";
 import {
   alignContentWithStretchClass,
   alignWithBaselineClass,
@@ -31,7 +27,7 @@ import {
   marginClass,
   spacingClass,
   widthClass,
-} from './classMaps';
+} from "./classMaps";
 
 interface FlexProps {
   /**
@@ -148,86 +144,89 @@ interface FlexProps {
 }
 
 const props = withDefaults(defineProps<FlexProps>(), {
-  as: 'div',
-  direction: 'row',
-  wrap: 'nowrap',
-  justify: 'start',
-  align: 'stretch',
+  as: "div",
+  direction: "row",
+  wrap: "nowrap",
+  justify: "start",
+  align: "stretch",
   grow: false,
   shrink: true,
 });
 
 const flexClasses = computed(() => {
-  const classes = ['oui-flex', 'flex'];
+  const classes = ["oui-flex", "flex"];
 
   // Direction classes
   const directionMap = {
-    row: 'flex-row',
-    'row-reverse': 'flex-row-reverse',
-    col: 'flex-col',
-    'col-reverse': 'flex-col-reverse',
+    row: "flex-row",
+    "row-reverse": "flex-row-reverse",
+    col: "flex-col",
+    "col-reverse": "flex-col-reverse",
   };
   classes.push(directionMap[props.direction]);
 
   // Wrap classes
   const wrapMap = {
-    nowrap: 'flex-nowrap',
-    wrap: 'flex-wrap',
-    'wrap-reverse': 'flex-wrap-reverse',
+    nowrap: "flex-nowrap",
+    wrap: "flex-wrap",
+    "wrap-reverse": "flex-wrap-reverse",
   };
   classes.push(wrapMap[props.wrap]);
 
   // Justify content classes
-  const justify = justifyClass(props.justify, 'justify');
+  const justify = justifyClass(props.justify, "justify");
   if (justify) classes.push(justify);
 
   // Align items classes
-  const align = alignWithBaselineClass(props.align, 'items');
+  const align = alignWithBaselineClass(props.align, "items");
   if (align) classes.push(align);
 
   // Align content classes
   if (props.alignContent) {
-    const alignContent = alignContentWithStretchClass(props.alignContent, 'content');
+    const alignContent = alignContentWithStretchClass(
+      props.alignContent,
+      "content"
+    );
     if (alignContent) classes.push(alignContent);
   }
 
   // Gap classes
-  const gap = spacingClass(props.gap, 'gap');
+  const gap = spacingClass(props.gap, "gap");
   if (gap) classes.push(gap);
 
-  const gapX = spacingClass(props.gapX, 'gap-x');
+  const gapX = spacingClass(props.gapX, "gap-x");
   if (gapX) classes.push(gapX);
 
-  const gapY = spacingClass(props.gapY, 'gap-y');
+  const gapY = spacingClass(props.gapY, "gap-y");
   if (gapY) classes.push(gapY);
 
   // Flex grow/shrink
   if (props.grow) {
-    classes.push('flex-1');
+    classes.push("flex-1");
   }
 
   if (!props.shrink) {
-    classes.push('flex-shrink-0');
+    classes.push("flex-shrink-0");
   }
 
   // Padding classes
-  const padding = spacingClass(props.p, 'p');
+  const padding = spacingClass(props.p, "p");
   if (padding) classes.push(padding);
 
-  const paddingX = spacingClass(props.px, 'px');
+  const paddingX = spacingClass(props.px, "px");
   if (paddingX) classes.push(paddingX);
 
-  const paddingY = spacingClass(props.py, 'py');
+  const paddingY = spacingClass(props.py, "py");
   if (paddingY) classes.push(paddingY);
 
   // Margin classes
-  const margin = marginClass(props.m, 'm');
+  const margin = marginClass(props.m, "m");
   if (margin) classes.push(margin);
 
-  const marginX = marginClass(props.mx, 'mx');
+  const marginX = marginClass(props.mx, "mx");
   if (marginX) classes.push(marginX);
 
-  const marginY = marginClass(props.my, 'my');
+  const marginY = marginClass(props.my, "my");
   if (marginY) classes.push(marginY);
 
   // Background classes
@@ -246,7 +245,7 @@ const flexClasses = computed(() => {
   const height = heightClass(props.h);
   if (height) classes.push(height);
 
-  return classes.join(' ');
+  return classes.join(" ");
 });
 
 defineOptions({

@@ -83,7 +83,10 @@
         </main>
       </div>
     </div>
-    <div v-show="!user.user || !user.isAuthenticated" class="main-content flex flex-col justify-center items-center">
+    <div
+      v-show="!user.user || !user.isAuthenticated"
+      class="main-content flex flex-col justify-center items-center"
+    >
       <!-- {{ user }} -->
       <OuiText v-if="user.isLoading" size="2xl" weight="extrabold"
         >loading</OuiText

@@ -1,9 +1,5 @@
 <template>
-  <component
-    :is="as"
-    :class="containerClasses"
-    v-bind="$attrs"
-  >
+  <component :is="as" :class="containerClasses" v-bind="$attrs">
     <slot />
   </component>
 </template>
@@ -16,14 +12,14 @@ import type {
   OUIColor,
   OUIBorderRadius,
   OUISpacing,
-} from './types';
+} from "./types";
 import {
   backgroundClass,
   borderRadiusClass,
   marginClass,
   shadowClass,
   spacingClass,
-} from './classMaps';
+} from "./classMaps";
 
 interface ContainerProps {
   /**
@@ -88,7 +84,7 @@ interface ContainerProps {
   /**
    * Shadow/elevation variant using OUI elevation system
    */
-  shadow?: 'none' | 'sm' | 'md' | 'lg' | 'xl' | '2xl';
+  shadow?: "none" | "sm" | "md" | "lg" | "xl" | "2xl";
 
   /**
    * Whether the container should be fluid (100% width)
@@ -103,77 +99,77 @@ interface ContainerProps {
 }
 
 const props = withDefaults(defineProps<ContainerProps>(), {
-  as: 'div',
-  size: 'default',
+  as: "div",
+  size: "default",
   centered: true,
-  p: 'md',
+  p: "md",
   fluid: false,
-  breakpoint: 'always',
+  breakpoint: "always",
 });
 
 const containerClasses = computed(() => {
-  const classes = ['oui-container'];
+  const classes = ["oui-container"];
 
   // Base container behavior
   if (props.fluid) {
-    classes.push('w-full');
+    classes.push("w-full");
   } else {
     // Max width classes based on size
     const sizeMap = {
-      xs: 'max-w-xs',        // 20rem (320px)
-      sm: 'max-w-sm',        // 24rem (384px)
-      md: 'max-w-md',        // 28rem (448px)
-      lg: 'max-w-lg',        // 32rem (512px)
-      xl: 'max-w-xl',        // 36rem (576px)
-      '2xl': 'max-w-2xl',    // 42rem (672px)
-      '3xl': 'max-w-3xl',    // 48rem (768px)
-      '4xl': 'max-w-4xl',    // 56rem (896px)
-      '5xl': 'max-w-5xl',    // 64rem (1024px)
-      '6xl': 'max-w-6xl',    // 72rem (1152px)
-      '7xl': 'max-w-7xl',    // 80rem (1280px)
-      full: 'max-w-full',    // 100%
-      default: 'max-w-7xl',  // Default to 7xl
+      xs: "max-w-xs", // 20rem (320px)
+      sm: "max-w-sm", // 24rem (384px)
+      md: "max-w-md", // 28rem (448px)
+      lg: "max-w-lg", // 32rem (512px)
+      xl: "max-w-xl", // 36rem (576px)
+      "2xl": "max-w-2xl", // 42rem (672px)
+      "3xl": "max-w-3xl", // 48rem (768px)
+      "4xl": "max-w-4xl", // 56rem (896px)
+      "5xl": "max-w-5xl", // 64rem (1024px)
+      "6xl": "max-w-6xl", // 72rem (1152px)
+      "7xl": "max-w-7xl", // 80rem (1280px)
+      full: "max-w-full", // 100%
+      default: "max-w-7xl", // Default to 7xl
     };
     classes.push(sizeMap[props.size]);
   }
 
   // Centering
   if (props.centered) {
-    classes.push('mx-auto');
+    classes.push("mx-auto");
   }
 
   // Responsive behavior
-  if (props.breakpoint !== 'always') {
+  if (props.breakpoint !== "always") {
     const breakpointMap = {
-      sm: 'sm:container',
-      md: 'md:container',
-      lg: 'lg:container',
-      xl: 'xl:container',
-      '2xl': '2xl:container',
+      sm: "sm:container",
+      md: "md:container",
+      lg: "lg:container",
+      xl: "xl:container",
+      "2xl": "2xl:container",
     };
     classes.push(breakpointMap[props.breakpoint as keyof typeof breakpointMap]);
   }
 
   // Padding classes
-  const padding = spacingClass(props.p, 'p');
+  const padding = spacingClass(props.p, "p");
   if (padding) classes.push(padding);
 
-  const paddingX = spacingClass(props.px, 'px');
+  const paddingX = spacingClass(props.px, "px");
   if (paddingX) classes.push(paddingX);
 
-  const paddingY = spacingClass(props.py, 'py');
+  const paddingY = spacingClass(props.py, "py");
   if (paddingY) classes.push(paddingY);
 
   // Margin classes (only if not using auto centering)
   if (!props.centered) {
-    const margin = marginClass(props.m, 'm');
+    const margin = marginClass(props.m, "m");
     if (margin) classes.push(margin);
 
-    const marginX = marginClass(props.mx, 'mx');
+    const marginX = marginClass(props.mx, "mx");
     if (marginX) classes.push(marginX);
   }
 
-  const marginY = marginClass(props.my, 'my');
+  const marginY = marginClass(props.my, "my");
   if (marginY) classes.push(marginY);
 
   // Background classes
@@ -188,7 +184,7 @@ const containerClasses = computed(() => {
   const shadow = shadowClass(props.shadow);
   if (shadow) classes.push(shadow);
 
-  return classes.join(' ');
+  return classes.join(" ");
 });
 
 defineOptions({

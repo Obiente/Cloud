@@ -109,7 +109,9 @@ const props = withDefaults(defineProps<BadgeProps>(), {
 
 const slots = useSlots();
 
-const normalizedVariant = computed<BadgeVariant>(() => props.variant ?? "secondary");
+const normalizedVariant = computed<BadgeVariant>(
+  () => props.variant ?? "secondary"
+);
 
 const badgeClasses = computed(() => {
   const classes = [
@@ -157,7 +159,11 @@ const hasContent = computed(() => {
         if (typeof child === "string") {
           return child.trim().length > 0;
         }
-        if (typeof child === "object" && child !== null && "children" in child) {
+        if (
+          typeof child === "object" &&
+          child !== null &&
+          "children" in child
+        ) {
           const value = (child as { children?: unknown }).children;
           return typeof value === "string" ? value.trim().length > 0 : true;
         }
@@ -172,44 +178,60 @@ const hasContent = computed(() => {
 const variantStyleMap: Record<BadgeVariant, Record<string, string>> = {
   primary: {
     "--oui-badge-accent": "var(--oui-accent-primary)",
-    "--oui-badge-soft-surface": "color-mix(in srgb, var(--oui-accent-primary) 12%, transparent)",
-    "--oui-badge-soft-border": "color-mix(in srgb, var(--oui-accent-primary) 24%, transparent)",
-    "--oui-badge-outline-border": "color-mix(in srgb, var(--oui-accent-primary) 40%, transparent)",
+    "--oui-badge-soft-surface":
+      "color-mix(in srgb, var(--oui-accent-primary) 12%, transparent)",
+    "--oui-badge-soft-border":
+      "color-mix(in srgb, var(--oui-accent-primary) 24%, transparent)",
+    "--oui-badge-outline-border":
+      "color-mix(in srgb, var(--oui-accent-primary) 40%, transparent)",
     "--oui-badge-on-solid": "var(--oui-foreground)",
   },
   secondary: {
     "--oui-badge-accent": "var(--oui-text-secondary)",
     "--oui-badge-soft-surface": "var(--oui-surface-muted)",
-    "--oui-badge-soft-border": "color-mix(in srgb, var(--oui-text-secondary) 20%, transparent)",
-    "--oui-badge-outline-border": "color-mix(in srgb, var(--oui-text-secondary) 35%, transparent)",
+    "--oui-badge-soft-border":
+      "color-mix(in srgb, var(--oui-text-secondary) 20%, transparent)",
+    "--oui-badge-outline-border":
+      "color-mix(in srgb, var(--oui-text-secondary) 35%, transparent)",
     "--oui-badge-on-solid": "var(--oui-background)",
   },
   success: {
     "--oui-badge-accent": "var(--oui-accent-success)",
-    "--oui-badge-soft-surface": "color-mix(in srgb, var(--oui-accent-success) 12%, transparent)",
-    "--oui-badge-soft-border": "color-mix(in srgb, var(--oui-accent-success) 24%, transparent)",
-    "--oui-badge-outline-border": "color-mix(in srgb, var(--oui-accent-success) 40%, transparent)",
+    "--oui-badge-soft-surface":
+      "color-mix(in srgb, var(--oui-accent-success) 12%, transparent)",
+    "--oui-badge-soft-border":
+      "color-mix(in srgb, var(--oui-accent-success) 24%, transparent)",
+    "--oui-badge-outline-border":
+      "color-mix(in srgb, var(--oui-accent-success) 40%, transparent)",
     "--oui-badge-on-solid": "var(--oui-foreground)",
   },
   warning: {
     "--oui-badge-accent": "var(--oui-accent-warning)",
-    "--oui-badge-soft-surface": "color-mix(in srgb, var(--oui-accent-warning) 14%, transparent)",
-    "--oui-badge-soft-border": "color-mix(in srgb, var(--oui-accent-warning) 28%, transparent)",
-    "--oui-badge-outline-border": "color-mix(in srgb, var(--oui-accent-warning) 45%, transparent)",
+    "--oui-badge-soft-surface":
+      "color-mix(in srgb, var(--oui-accent-warning) 14%, transparent)",
+    "--oui-badge-soft-border":
+      "color-mix(in srgb, var(--oui-accent-warning) 28%, transparent)",
+    "--oui-badge-outline-border":
+      "color-mix(in srgb, var(--oui-accent-warning) 45%, transparent)",
     "--oui-badge-on-solid": "var(--oui-background)",
   },
   danger: {
     "--oui-badge-accent": "var(--oui-accent-danger)",
-    "--oui-badge-soft-surface": "color-mix(in srgb, var(--oui-accent-danger) 14%, transparent)",
-    "--oui-badge-soft-border": "color-mix(in srgb, var(--oui-accent-danger) 28%, transparent)",
-    "--oui-badge-outline-border": "color-mix(in srgb, var(--oui-accent-danger) 45%, transparent)",
+    "--oui-badge-soft-surface":
+      "color-mix(in srgb, var(--oui-accent-danger) 14%, transparent)",
+    "--oui-badge-soft-border":
+      "color-mix(in srgb, var(--oui-accent-danger) 28%, transparent)",
+    "--oui-badge-outline-border":
+      "color-mix(in srgb, var(--oui-accent-danger) 45%, transparent)",
     "--oui-badge-on-solid": "var(--oui-foreground)",
   },
   outline: {
     "--oui-badge-accent": "var(--oui-text-secondary)",
     "--oui-badge-soft-surface": "transparent",
-    "--oui-badge-soft-border": "color-mix(in srgb, var(--oui-text-secondary) 25%, transparent)",
-    "--oui-badge-outline-border": "color-mix(in srgb, var(--oui-text-secondary) 40%, transparent)",
+    "--oui-badge-soft-border":
+      "color-mix(in srgb, var(--oui-text-secondary) 25%, transparent)",
+    "--oui-badge-outline-border":
+      "color-mix(in srgb, var(--oui-text-secondary) 40%, transparent)",
     "--oui-badge-on-solid": "var(--oui-foreground)",
   },
 };

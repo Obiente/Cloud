@@ -59,17 +59,17 @@
 </template>
 
 <script setup lang="ts">
-  import { Select, useSelect, type SelectRootProps } from "@ark-ui/vue/select";
-  import { CheckIcon, ChevronUpDownIcon } from "@heroicons/vue/24/outline";
+import { Select, useSelect, type SelectRootProps } from "@ark-ui/vue/select";
+import { CheckIcon, ChevronUpDownIcon } from "@heroicons/vue/24/outline";
 
-  interface SelectItem {
-    label: string;
-    value: string | number;
-  }
+interface SelectItem {
+  label: string;
+  value: string | number;
+}
 
-  const props = defineProps<SelectRootProps<SelectItem>>();
-  const select = useSelect({ collection: props.collection });
-  // const modelValue = defineModel<string[]>();
+const props = defineProps<SelectRootProps<SelectItem>>();
+const select = useSelect({ collection: props.collection });
+// const modelValue = defineModel<string[]>();
 
-  defineOptions({ inheritAttrs: false });
+defineOptions({ inheritAttrs: false });
 </script>

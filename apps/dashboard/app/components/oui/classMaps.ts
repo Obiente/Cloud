@@ -29,7 +29,7 @@ const mapSpacingToken = (value: OUISpacing) =>
 
 const dimensionUtility = (
   value: DimensionVariant | undefined,
-  prefix: "w" | "h",
+  prefix: "w" | "h"
 ) => {
   if (!value) return undefined;
 
@@ -58,7 +58,7 @@ export const spacingClass = (value: OUISpacing | undefined, prefix: string) => {
 
 export const marginClass = (
   value: MarginVariant | undefined,
-  prefix: "m" | "mx" | "my",
+  prefix: "m" | "mx" | "my"
 ) => {
   if (!value) return undefined;
   if (value === "auto") {
@@ -95,33 +95,31 @@ export const borderWidthClass = (value: OUIBorderWidth | undefined) => {
   return `border-${value}`;
 };
 
-export const borderColorClass = (
-  value: OUIBorderColor | undefined,
-) => (value ? `border-${value}` : undefined);
+export const borderColorClass = (value: OUIBorderColor | undefined) =>
+  value ? `border-${value}` : undefined;
 
-export const overflowClass = (
-  value: OUIOverflow | undefined,
-) => (value ? `overflow-${value}` : undefined);
+export const overflowClass = (value: OUIOverflow | undefined) =>
+  value ? `overflow-${value}` : undefined;
 
 export const alignClass = (value: AxisAlign | undefined, prefix: string) =>
   prefixedAxisClass(value, prefix);
 
 export const alignWithBaselineClass = (
   value: AxisAlignWithBaseline | undefined,
-  prefix: string,
+  prefix: string
 ) => prefixedAxisClass(value, prefix);
 
 export const justifyClass = (
   value: AxisJustify | AxisAlignContent | undefined,
-  prefix: string,
+  prefix: string
 ) => prefixedAxisClass(value, prefix);
 
 export const alignContentClass = (
   value: AxisAlignContent | undefined,
-  prefix: string,
+  prefix: string
 ) => prefixedAxisClass(value, prefix);
 
 export const alignContentWithStretchClass = (
   value: AxisAlignContentWithStretch | undefined,
-  prefix: string,
+  prefix: string
 ) => prefixedAxisClass(value, prefix);

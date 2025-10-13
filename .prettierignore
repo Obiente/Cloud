@@ -3,3 +3,4 @@ packages/proto/src/generated
 node_modules/
 dist/
 *.min.js
+pnpm-lock.yaml

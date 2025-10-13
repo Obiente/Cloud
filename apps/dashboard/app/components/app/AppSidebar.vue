@@ -80,40 +80,40 @@
 </template>
 
 <script setup lang="ts">
-  import {
-    HomeIcon,
-    RocketLaunchIcon,
-    ServerIcon,
-    CircleStackIcon,
-    CreditCardIcon,
-    Cog6ToothIcon,
-  } from "@heroicons/vue/24/outline";
-  import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
-  import { createListCollection, useListCollection } from "@ark-ui/vue";
+import {
+  HomeIcon,
+  RocketLaunchIcon,
+  ServerIcon,
+  CircleStackIcon,
+  CreditCardIcon,
+  Cog6ToothIcon,
+} from "@heroicons/vue/24/outline";
+import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
+import { createListCollection, useListCollection } from "@ark-ui/vue";
 
-  interface Organization {
-    id: string;
-    name: string;
-  }
+interface Organization {
+  id: string;
+  name: string;
+}
 
-  interface Props {
-    currentOrganization?: Organization | null;
-    organizationOptions?: Array<{ label: string; value: string | number }>;
-  }
+interface Props {
+  currentOrganization?: Organization | null;
+  organizationOptions?: Array<{ label: string; value: string | number }>;
+}
 
-  const props = withDefaults(defineProps<Props>(), {
-    organizationOptions: () => [],
-  });
+const props = withDefaults(defineProps<Props>(), {
+  organizationOptions: () => [],
+});
 
-  const organization = createListCollection({
-    items: props.organizationOptions,
-  });
-  const emit = defineEmits<{
-    navigate: [];
-    "organization-change": [organizationId: string | string[] | undefined];
-  }>();
+const organization = createListCollection({
+  items: props.organizationOptions,
+});
+const emit = defineEmits<{
+  navigate: [];
+  "organization-change": [organizationId: string | string[] | undefined];
+}>();
 
-  const handleNavigate = () => {
-    emit("navigate");
-  };
+const handleNavigate = () => {
+  emit("navigate");
+};
 </script>

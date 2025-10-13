@@ -1,17 +1,17 @@
 packages:
-  - '!**/_**/**'
+  - "!**/_**/**"
   - apps/*
   - packages/*
 
 autoInstallPeers: true
 
 onlyBuiltDependencies:
-  - '@bufbuild/buf'
-  - '@nestjs/core'
-  - '@openapitools/openapi-generator-cli'
-  - '@parcel/watcher'
-  - '@swc/core'
-  - '@tailwindcss/oxide'
+  - "@bufbuild/buf"
+  - "@nestjs/core"
+  - "@openapitools/openapi-generator-cli"
+  - "@parcel/watcher"
+  - "@swc/core"
+  - "@tailwindcss/oxide"
   - esbuild
   - nx
 

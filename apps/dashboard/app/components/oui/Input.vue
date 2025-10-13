@@ -67,63 +67,63 @@
 </template>
 
 <script setup lang="ts">
-  import { XMarkIcon } from "@heroicons/vue/24/outline";
-  import { Field } from "@ark-ui/vue/field";
-  import type { InputHTMLAttributes } from "vue";
+import { XMarkIcon } from "@heroicons/vue/24/outline";
+import { Field } from "@ark-ui/vue/field";
+import type { InputHTMLAttributes } from "vue";
 
-  interface Props extends /* @vue-ignore */ InputHTMLAttributes {
-    modelValue?: string;
-    label?: string;
-    placeholder?: string;
-    helperText?: string;
-    error?: string;
-    required?: boolean;
-    disabled?: boolean;
-    readonly?: boolean;
-    clearable?: boolean;
-    size?: "sm" | "md" | "lg";
-  }
+interface Props extends /* @vue-ignore */ InputHTMLAttributes {
+  modelValue?: string;
+  label?: string;
+  placeholder?: string;
+  helperText?: string;
+  error?: string;
+  required?: boolean;
+  disabled?: boolean;
+  readonly?: boolean;
+  clearable?: boolean;
+  size?: "sm" | "md" | "lg";
+}
 
-  const props = withDefaults(defineProps<Props>(), {
-    type: "text",
-    clearable: false,
-    size: "md",
-  });
+const props = withDefaults(defineProps<Props>(), {
+  type: "text",
+  clearable: false,
+  size: "md",
+});
 
-  const emit = defineEmits<{
-    "update:modelValue": [value: string];
-    blur: [event: FocusEvent];
-    focus: [event: FocusEvent];
-  }>();
+const emit = defineEmits<{
+  "update:modelValue": [value: string];
+  blur: [event: FocusEvent];
+  focus: [event: FocusEvent];
+}>();
 
-  const fieldId = computed(
-    () => `field-${Math.random().toString(36).substr(2, 9)}`
-  );
+const fieldId = computed(
+  () => `field-${Math.random().toString(36).substr(2, 9)}`
+);
 
-  const modelValue = computed({
-    get: () => props.modelValue,
-    set: (value: string) => emit("update:modelValue", value),
-  });
+const modelValue = computed({
+  get: () => props.modelValue,
+  set: (value: string) => emit("update:modelValue", value),
+});
 
-  const inputClasses = computed(() => [
-    "oui-input",
-    `oui-input-${props.size}`,
-    props.error ? "oui-input-error" : "oui-input-base",
-  ]);
+const inputClasses = computed(() => [
+  "oui-input",
+  `oui-input-${props.size}`,
+  props.error ? "oui-input-error" : "oui-input-base",
+]);
 
-  const handleBlur = (event: FocusEvent) => {
-    emit("blur", event);
-  };
+const handleBlur = (event: FocusEvent) => {
+  emit("blur", event);
+};
 
-  const handleFocus = (event: FocusEvent) => {
-    emit("focus", event);
-  };
+const handleFocus = (event: FocusEvent) => {
+  emit("focus", event);
+};
 
-  const handleClear = () => {
-    emit("update:modelValue", "");
-  };
+const handleClear = () => {
+  emit("update:modelValue", "");
+};
 
-  defineOptions({
-    inheritAttrs: false,
-  });
+defineOptions({
+  inheritAttrs: false,
+});
 </script>

@@ -1,9 +1,5 @@
 <template>
-  <component
-    :is="as"
-    :class="stackClasses"
-    v-bind="$attrs"
-  >
+  <component :is="as" :class="stackClasses" v-bind="$attrs">
     <slot />
   </component>
 </template>
@@ -17,7 +13,7 @@ import type {
   OUIColor,
   OUIBorderRadius,
   OUISpacing,
-} from './types';
+} from "./types";
 import {
   alignClass,
   justifyClass,
@@ -27,7 +23,7 @@ import {
   marginClass,
   spacingClass,
   widthClass,
-} from './classMaps';
+} from "./classMaps";
 
 interface StackProps {
   /**
@@ -40,7 +36,7 @@ interface StackProps {
    * Stack direction
    * @default 'vertical'
    */
-  direction?: 'vertical' | 'horizontal';
+  direction?: "vertical" | "horizontal";
 
   /**
    * Gap between stack items using OUI spacing scale
@@ -124,81 +120,81 @@ interface StackProps {
   /**
    * Divider color using OUI color system
    */
-  dividerColor?: 'default' | 'muted' | 'strong';
+  dividerColor?: "default" | "muted" | "strong";
 }
 
 const props = withDefaults(defineProps<StackProps>(), {
-  as: 'div',
-  direction: 'vertical',
-  gap: 'md',
-  align: 'stretch',
-  justify: 'start',
+  as: "div",
+  direction: "vertical",
+  gap: "md",
+  align: "stretch",
+  justify: "start",
   wrap: false,
   divider: false,
-  dividerColor: 'muted',
+  dividerColor: "muted",
 });
 
 const stackClasses = computed(() => {
-  const classes = ['oui-stack', 'flex'];
+  const classes = ["oui-stack", "flex"];
 
   // Direction classes
-  if (props.direction === 'horizontal') {
-    classes.push('flex-row');
+  if (props.direction === "horizontal") {
+    classes.push("flex-row");
   } else {
-    classes.push('flex-col');
+    classes.push("flex-col");
   }
 
   // Wrap classes
   if (props.wrap) {
-    classes.push('flex-wrap');
+    classes.push("flex-wrap");
   }
 
   // Gap classes
-  const gap = spacingClass(props.gap, 'gap');
+  const gap = spacingClass(props.gap, "gap");
   if (gap) classes.push(gap);
 
   // Alignment classes
-  const align = alignClass(props.align, 'items');
+  const align = alignClass(props.align, "items");
   if (align) classes.push(align);
 
   // Justify classes
-  const justify = justifyClass(props.justify, 'justify');
+  const justify = justifyClass(props.justify, "justify");
   if (justify) classes.push(justify);
 
   // Divider classes
   if (props.divider) {
-    if (props.direction === 'horizontal') {
-      classes.push('divide-x');
+    if (props.direction === "horizontal") {
+      classes.push("divide-x");
     } else {
-      classes.push('divide-y');
+      classes.push("divide-y");
     }
 
     const dividerColorMap = {
-      default: 'divide-default',
-      muted: 'divide-muted',
-      strong: 'divide-strong',
+      default: "divide-default",
+      muted: "divide-muted",
+      strong: "divide-strong",
     };
     classes.push(dividerColorMap[props.dividerColor]);
   }
 
   // Padding classes
-  const padding = spacingClass(props.p, 'p');
+  const padding = spacingClass(props.p, "p");
   if (padding) classes.push(padding);
 
-  const paddingX = spacingClass(props.px, 'px');
+  const paddingX = spacingClass(props.px, "px");
   if (paddingX) classes.push(paddingX);
 
-  const paddingY = spacingClass(props.py, 'py');
+  const paddingY = spacingClass(props.py, "py");
   if (paddingY) classes.push(paddingY);
 
   // Margin classes
-  const margin = marginClass(props.m, 'm');
+  const margin = marginClass(props.m, "m");
   if (margin) classes.push(margin);
 
-  const marginX = marginClass(props.mx, 'mx');
+  const marginX = marginClass(props.mx, "mx");
   if (marginX) classes.push(marginX);
 
-  const marginY = marginClass(props.my, 'my');
+  const marginY = marginClass(props.my, "my");
   if (marginY) classes.push(marginY);
 
   // Background classes
@@ -217,7 +213,7 @@ const stackClasses = computed(() => {
   const height = heightClass(props.h);
   if (height) classes.push(height);
 
-  return classes.join(' ');
+  return classes.join(" ");
 });
 
 defineOptions({

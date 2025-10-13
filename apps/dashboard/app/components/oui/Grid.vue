@@ -1,9 +1,5 @@
 <template>
-  <component
-    :is="as"
-    :class="gridClasses"
-    v-bind="$attrs"
-  >
+  <component :is="as" :class="gridClasses" v-bind="$attrs">
     <slot />
   </component>
 </template>
@@ -21,7 +17,7 @@ import type {
   OUIColor,
   OUIBorderRadius,
   OUISpacing,
-} from './types';
+} from "./types";
 import {
   alignClass,
   alignContentClass,
@@ -33,7 +29,7 @@ import {
   spacingClass,
   widthClass,
   heightClass,
-} from './classMaps';
+} from "./classMaps";
 
 interface GridProps {
   /**
@@ -115,12 +111,12 @@ interface GridProps {
   /**
    * Auto-fit columns with minimum width
    */
-  autoFit?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  autoFit?: "xs" | "sm" | "md" | "lg" | "xl";
 
   /**
    * Auto-fill columns with minimum width
    */
-  autoFill?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  autoFill?: "xs" | "sm" | "md" | "lg" | "xl";
 
   /**
    * Padding variant using OUI spacing scale
@@ -174,18 +170,18 @@ interface GridProps {
 }
 
 const props = withDefaults(defineProps<GridProps>(), {
-  as: 'div',
+  as: "div",
 });
 
 const gridClasses = computed(() => {
-  const classes = ['oui-grid', 'grid'];
+  const classes = ["oui-grid", "grid"];
 
   // Column classes
   if (props.cols) {
-    if (props.cols === 'none') {
-      classes.push('grid-cols-none');
-    } else if (props.cols === 'subgrid') {
-      classes.push('grid-cols-subgrid');
+    if (props.cols === "none") {
+      classes.push("grid-cols-none");
+    } else if (props.cols === "subgrid") {
+      classes.push("grid-cols-subgrid");
     } else {
       classes.push(`grid-cols-${props.cols}`);
     }
@@ -193,10 +189,10 @@ const gridClasses = computed(() => {
 
   // Row classes
   if (props.rows) {
-    if (props.rows === 'none') {
-      classes.push('grid-rows-none');
-    } else if (props.rows === 'subgrid') {
-      classes.push('grid-rows-subgrid');
+    if (props.rows === "none") {
+      classes.push("grid-rows-none");
+    } else if (props.rows === "subgrid") {
+      classes.push("grid-rows-subgrid");
     } else {
       classes.push(`grid-rows-${props.rows}`);
     }
@@ -208,15 +204,15 @@ const gridClasses = computed(() => {
     md: props.colsMd,
     lg: props.colsLg,
     xl: props.colsXl,
-    '2xl': props.cols2xl,
+    "2xl": props.cols2xl,
   };
 
   Object.entries(responsiveCols).forEach(([breakpoint, value]) => {
     if (!value) return;
-    const prefix = breakpoint === '2xl' ? '2xl' : breakpoint;
-    if (value === 'none') {
+    const prefix = breakpoint === "2xl" ? "2xl" : breakpoint;
+    if (value === "none") {
       classes.push(`${prefix}:grid-cols-none`);
-    } else if (value === 'subgrid') {
+    } else if (value === "subgrid") {
       classes.push(`${prefix}:grid-cols-subgrid`);
     } else {
       classes.push(`${prefix}:grid-cols-${value}`);
@@ -226,75 +222,75 @@ const gridClasses = computed(() => {
   // Auto-fit and auto-fill
   if (props.autoFit) {
     const autoFitMap = {
-      xs: 'grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]',
-      sm: 'grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]',
-      md: 'grid-cols-[repeat(auto-fit,minmax(24rem,1fr))]',
-      lg: 'grid-cols-[repeat(auto-fit,minmax(28rem,1fr))]',
-      xl: 'grid-cols-[repeat(auto-fit,minmax(32rem,1fr))]',
+      xs: "grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]",
+      sm: "grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]",
+      md: "grid-cols-[repeat(auto-fit,minmax(24rem,1fr))]",
+      lg: "grid-cols-[repeat(auto-fit,minmax(28rem,1fr))]",
+      xl: "grid-cols-[repeat(auto-fit,minmax(32rem,1fr))]",
     };
     classes.push(autoFitMap[props.autoFit]);
   }
 
   if (props.autoFill) {
     const autoFillMap = {
-      xs: 'grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]',
-      sm: 'grid-cols-[repeat(auto-fill,minmax(20rem,1fr))]',
-      md: 'grid-cols-[repeat(auto-fill,minmax(24rem,1fr))]',
-      lg: 'grid-cols-[repeat(auto-fill,minmax(28rem,1fr))]',
-      xl: 'grid-cols-[repeat(auto-fill,minmax(32rem,1fr))]',
+      xs: "grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]",
+      sm: "grid-cols-[repeat(auto-fill,minmax(20rem,1fr))]",
+      md: "grid-cols-[repeat(auto-fill,minmax(24rem,1fr))]",
+      lg: "grid-cols-[repeat(auto-fill,minmax(28rem,1fr))]",
+      xl: "grid-cols-[repeat(auto-fill,minmax(32rem,1fr))]",
     };
     classes.push(autoFillMap[props.autoFill]);
   }
 
   // Gap classes
-  const gap = spacingClass(props.gap, 'gap');
+  const gap = spacingClass(props.gap, "gap");
   if (gap) classes.push(gap);
 
-  const gapX = spacingClass(props.gapX, 'gap-x');
+  const gapX = spacingClass(props.gapX, "gap-x");
   if (gapX) classes.push(gapX);
 
-  const gapY = spacingClass(props.gapY, 'gap-y');
+  const gapY = spacingClass(props.gapY, "gap-y");
   if (gapY) classes.push(gapY);
 
   // Justify and align
   if (props.justifyItems) {
-    const justifyItems = alignClass(props.justifyItems, 'justify-items');
+    const justifyItems = alignClass(props.justifyItems, "justify-items");
     if (justifyItems) classes.push(justifyItems);
   }
 
   if (props.alignItems) {
-    const alignItems = alignWithBaselineClass(props.alignItems, 'items');
+    const alignItems = alignWithBaselineClass(props.alignItems, "items");
     if (alignItems) classes.push(alignItems);
   }
 
   if (props.justifyContent) {
-    const justifyContent = justifyClass(props.justifyContent, 'justify');
+    const justifyContent = justifyClass(props.justifyContent, "justify");
     if (justifyContent) classes.push(justifyContent);
   }
 
   if (props.alignContent) {
-    const alignContent = alignContentClass(props.alignContent, 'content');
+    const alignContent = alignContentClass(props.alignContent, "content");
     if (alignContent) classes.push(alignContent);
   }
 
   // Padding classes
-  const padding = spacingClass(props.p, 'p');
+  const padding = spacingClass(props.p, "p");
   if (padding) classes.push(padding);
 
-  const paddingX = spacingClass(props.px, 'px');
+  const paddingX = spacingClass(props.px, "px");
   if (paddingX) classes.push(paddingX);
 
-  const paddingY = spacingClass(props.py, 'py');
+  const paddingY = spacingClass(props.py, "py");
   if (paddingY) classes.push(paddingY);
 
   // Margin classes
-  const margin = marginClass(props.m, 'm');
+  const margin = marginClass(props.m, "m");
   if (margin) classes.push(margin);
 
-  const marginX = marginClass(props.mx, 'mx');
+  const marginX = marginClass(props.mx, "mx");
   if (marginX) classes.push(marginX);
 
-  const marginY = marginClass(props.my, 'my');
+  const marginY = marginClass(props.my, "my");
   if (marginY) classes.push(marginY);
 
   // Background classes
@@ -313,7 +309,7 @@ const gridClasses = computed(() => {
   const height = heightClass(props.h);
   if (height) classes.push(height);
 
-  return classes.join(' ');
+  return classes.join(" ");
 });
 
 defineOptions({

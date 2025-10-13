@@ -181,7 +181,13 @@ onUnmounted(() => {
       <div class="bg-surface-base rounded-lg shadow-lg">
         <!-- Header -->
         <div class="border-b border-border-muted p-6">
-          <OuiText as="h1" size="2xl" weight="bold" color="primary" class="mb-6">
+          <OuiText
+            as="h1"
+            size="2xl"
+            weight="bold"
+            color="primary"
+            class="mb-6"
+          >
             Docker Container Log Viewer
           </OuiText>
 
@@ -324,9 +330,7 @@ onUnmounted(() => {
             class="bg-danger/10 border border-danger/20 rounded-md p-4 mt-4"
           >
             <div class="flex">
-              <div class="text-danger">
-                <strong>Error:</strong> {{ error }}
-              </div>
+              <div class="text-danger"><strong>Error:</strong> {{ error }}</div>
             </div>
           </div>
         </div>
@@ -385,7 +389,12 @@ onUnmounted(() => {
               No logs to display. Click "Connect to Logs" to start streaming.
             </OuiText>
 
-            <OuiText v-if="isLoading" color="warning" align="center" class="py-8">
+            <OuiText
+              v-if="isLoading"
+              color="warning"
+              align="center"
+              class="py-8"
+            >
               Connecting to container...
             </OuiText>
 

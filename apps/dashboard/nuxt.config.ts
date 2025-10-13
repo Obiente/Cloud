@@ -10,7 +10,7 @@ export default defineNuxtConfig({
       },
       watch: {
         usePolling: true,
-      }
+      },
     },
   },
   // Modules

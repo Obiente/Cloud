@@ -19,7 +19,7 @@
               </Dialog.Title>
               <Dialog.CloseTrigger>
                 <OuiButton
-                  variant="ghost" 
+                  variant="ghost"
                   size="sm"
                   class="hover:bg-surface-hover transition-colors"
                   aria-label="Close dialog"
@@ -39,7 +39,10 @@
               <slot />
             </OuiCardBody>
 
-            <OuiCardFooter v-if="$slots.footer" class="flex justify-end space-x-3">
+            <OuiCardFooter
+              v-if="$slots.footer"
+              class="flex justify-end space-x-3"
+            >
               <slot name="footer" />
             </OuiCardFooter>
           </OuiCard>
