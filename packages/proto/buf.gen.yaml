@@ -12,4 +12,6 @@ plugins:
     out: src/generated
     include_imports: true
     include_wkt: true
-    opt: target=ts
+    opt:
+      - target=ts
+      - import_extension=js
