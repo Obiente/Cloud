@@ -16,6 +16,9 @@ import (
 	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
 
 	"connectrpc.com/connect"
+	"connectrpc.com/grpcreflect"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 const (
@@ -39,7 +42,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              ":" + port,
-		Handler:           newServeMux(),
+		Handler:           newConnectHandler(),
 		ReadHeaderTimeout: readHeaderTimeout,
 		WriteTimeout:      writeTimeout,
 		IdleTimeout:       idleTimeout,
@@ -55,7 +58,12 @@ func main() {
 	}
 }
 
-func newServeMux() *http.ServeMux {
+func newConnectHandler() http.Handler {
+	mux := buildMux()
+	return h2c.NewHandler(mux, &http2.Server{})
+}
+
+func buildMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +87,17 @@ func newServeMux() *http.ServeMux {
 
 	organizationsPath, organizationsHandler := organizationsv1connect.NewOrganizationServiceHandler(newOrganizationService())
 	mux.Handle(organizationsPath, organizationsHandler)
+
+	reflector := grpcreflect.NewStaticReflector(
+		authv1connect.AuthServiceName,
+		deploymentsv1connect.DeploymentServiceName,
+		organizationsv1connect.OrganizationServiceName,
+	)
+
+	grpcPath, grpcHandler := grpcreflect.NewHandlerV1(reflector)
+	mux.Handle(grpcPath, grpcHandler)
+	grpcAlphaPath, grpcAlphaHandler := grpcreflect.NewHandlerV1Alpha(reflector)
+	mux.Handle(grpcAlphaPath, grpcAlphaHandler)
 
 	return mux
 }

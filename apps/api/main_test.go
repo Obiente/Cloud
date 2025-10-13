@@ -7,8 +7,8 @@ import (
 	"testing"
 )
 
-func TestNewServeMuxRoot(t *testing.T) {
-	mux := newServeMux()
+func TestBuildMuxRoot(t *testing.T) {
+	mux := buildMux()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
@@ -23,8 +23,8 @@ func TestNewServeMuxRoot(t *testing.T) {
 	}
 }
 
-func TestNewServeMuxRegistersConnectHandlers(t *testing.T) {
-	mux := newServeMux()
+func TestBuildMuxRegistersConnectHandlers(t *testing.T) {
+	mux := buildMux()
 	req := httptest.NewRequest(http.MethodPost, "/obiente.cloud.auth.v1.AuthService/GetCurrentUser", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
