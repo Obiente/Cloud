@@ -1,80 +1,198 @@
 /**
  * Obiente UI - Badge Compositions
- * 
- * Badge component styles using OUI theming variables with oui- prefix
+ *
+ * Flexible badge tokens driven by CSS variables
  */
 
 @layer utilities {
   .oui-badge {
-    @apply inline-flex items-center rounded-full px-2 py-1 text-xs font-medium;
+    --oui-badge-accent: var(--oui-text-secondary);
+    --oui-badge-soft-surface: color-mix(
+      in srgb,
+      var(--oui-text-secondary) 12%,
+      transparent
+    );
+    --oui-badge-soft-border: color-mix(
+      in srgb,
+      var(--oui-text-secondary) 24%,
+      transparent
+    );
+    --oui-badge-outline-border: color-mix(
+      in srgb,
+      var(--oui-text-secondary) 38%,
+      transparent
+    );
+    --oui-badge-on-solid: var(--oui-background);
+
+    @apply inline-flex select-none items-center justify-center whitespace-nowrap font-medium leading-tight transition-colors duration-200;
+  }
+
+  .oui-badge-size-xs {
+    @apply gap-1 rounded-md px-2 py-0.5 text-[11px] leading-4;
+  }
+
+  .oui-badge-size-sm {
+    @apply gap-1.5 rounded-md px-2.5 py-1 text-xs leading-4;
+  }
+
+  .oui-badge-size-md {
+    @apply gap-2 rounded-lg px-3 py-1.5 text-sm leading-5;
+  }
+
+  .oui-badge-shape-pill {
+    @apply rounded-full;
+  }
+
+  .oui-badge-shape-rounded {
+    @apply rounded-lg;
+  }
+
+  .oui-badge-uppercase {
+    @apply uppercase tracking-wide;
+  }
+
+  .oui-badge-interactive {
+    @apply cursor-pointer hover:brightness-110 active:brightness-95 focus-visible:oui-focus-ring;
+  }
+
+  .oui-badge__icon {
+    @apply h-3.5 w-3.5 flex-shrink-0;
+  }
+
+  .oui-badge-icon-only {
+    @apply gap-0 px-2;
+  }
+
+  .oui-badge-tone-soft {
+    @apply border;
+    background-color: var(--oui-badge-soft-surface);
+    border-color: var(--oui-badge-soft-border);
+    color: var(--oui-badge-accent);
+  }
+
+  .oui-badge-tone-solid {
+    @apply border shadow-sm;
+    background-color: var(--oui-badge-accent);
+    border-color: color-mix(in srgb, var(--oui-badge-accent) 70%, transparent);
+    color: var(--oui-badge-on-solid);
+  }
+
+  .oui-badge-tone-outline {
+    @apply border;
+    background-color: transparent;
+    border-color: var(--oui-badge-outline-border);
+    color: var(--oui-badge-accent);
   }
 
   .oui-badge-primary {
-    @apply border;
-    background-color: color-mix(
+    --oui-badge-accent: var(--oui-accent-primary);
+    --oui-badge-soft-surface: color-mix(
       in srgb,
-      var(--oui-accent-primary) 10%,
+      var(--oui-accent-primary) 12%,
       transparent
     );
-    color: var(--oui-accent-primary);
-    border-color: color-mix(
+    --oui-badge-soft-border: color-mix(
       in srgb,
-      var(--oui-accent-primary) 20%,
+      var(--oui-accent-primary) 24%,
       transparent
     );
+    --oui-badge-outline-border: color-mix(
+      in srgb,
+      var(--oui-accent-primary) 40%,
+      transparent
+    );
+    --oui-badge-on-solid: var(--oui-foreground);
   }
 
   .oui-badge-secondary {
-    @apply border;
-    background-color: var(--oui-surface-muted);
-    color: var(--oui-text-secondary);
-    border-color: var(--oui-surface-muted);
+    --oui-badge-accent: var(--oui-text-secondary);
+    --oui-badge-soft-surface: var(--oui-surface-muted);
+    --oui-badge-soft-border: color-mix(
+      in srgb,
+      var(--oui-text-secondary) 20%,
+      transparent
+    );
+    --oui-badge-outline-border: color-mix(
+      in srgb,
+      var(--oui-text-secondary) 35%,
+      transparent
+    );
+    --oui-badge-on-solid: var(--oui-background);
   }
 
   .oui-badge-success {
-    @apply border;
-    background-color: color-mix(
+    --oui-badge-accent: var(--oui-accent-success);
+    --oui-badge-soft-surface: color-mix(
       in srgb,
-      var(--oui-accent-success) 10%,
+      var(--oui-accent-success) 12%,
       transparent
     );
-    color: var(--oui-accent-success);
-    border-color: color-mix(
+    --oui-badge-soft-border: color-mix(
       in srgb,
-      var(--oui-accent-success) 20%,
+      var(--oui-accent-success) 24%,
       transparent
     );
+    --oui-badge-outline-border: color-mix(
+      in srgb,
+      var(--oui-accent-success) 40%,
+      transparent
+    );
+    --oui-badge-on-solid: var(--oui-foreground);
   }
 
   .oui-badge-warning {
-    @apply border;
-    background-color: color-mix(
+    --oui-badge-accent: var(--oui-accent-warning);
+    --oui-badge-soft-surface: color-mix(
       in srgb,
-      var(--oui-accent-warning) 10%,
+      var(--oui-accent-warning) 14%,
       transparent
     );
-    color: var(--oui-accent-warning);
-    border-color: color-mix(
+    --oui-badge-soft-border: color-mix(
       in srgb,
-      var(--oui-accent-warning) 20%,
+      var(--oui-accent-warning) 28%,
       transparent
     );
+    --oui-badge-outline-border: color-mix(
+      in srgb,
+      var(--oui-accent-warning) 45%,
+      transparent
+    );
+    --oui-badge-on-solid: var(--oui-background);
   }
 
   .oui-badge-danger {
-    @apply border;
-    background-color: color-mix(
+    --oui-badge-accent: var(--oui-accent-danger);
+    --oui-badge-soft-surface: color-mix(
       in srgb,
-      var(--oui-accent-danger) 10%,
+      var(--oui-accent-danger) 14%,
       transparent
     );
-    color: var(--oui-accent-danger);
-    border-color: color-mix(in srgb, var(--oui-accent-danger) 20%, transparent);
+    --oui-badge-soft-border: color-mix(
+      in srgb,
+      var(--oui-accent-danger) 28%,
+      transparent
+    );
+    --oui-badge-outline-border: color-mix(
+      in srgb,
+      var(--oui-accent-danger) 45%,
+      transparent
+    );
+    --oui-badge-on-solid: var(--oui-foreground);
   }
 
   .oui-badge-outline {
-    @apply border;
-    background-color: transparent;
-    border-color: currentColor;
+    --oui-badge-accent: var(--oui-text-secondary);
+    --oui-badge-soft-surface: transparent;
+    --oui-badge-soft-border: color-mix(
+      in srgb,
+      var(--oui-text-secondary) 25%,
+      transparent
+    );
+    --oui-badge-outline-border: color-mix(
+      in srgb,
+      var(--oui-text-secondary) 40%,
+      transparent
+    );
+    --oui-badge-on-solid: var(--oui-foreground);
   }
 }
