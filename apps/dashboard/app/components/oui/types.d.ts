@@ -38,6 +38,20 @@ export type NumericRangeWithSuffixes<
  *  Core design tokens
  *  ------------------------------------------------------------------ */
 
+export type OUIShadow = "none" | "sm" | "md" | "lg" | "xl" | "2xl";
+export type OUIBorderWidth = "none" | "1" | "2" | "4" | "8";
+export type OUIBorderColor =
+    | "default"
+    | "muted"
+    | "strong"
+    | "accent-primary"
+    | "accent-secondary"
+    | "success"
+    | "warning"
+    | "danger"
+    | "info";
+export type OUIOverflow = "visible" | "hidden" | "auto" | "scroll";
+
 export type OUISpacing =
     | "none"
     | "xs"
@@ -141,9 +155,12 @@ export type AxisAlignWithBaseline = AxisAlign | "baseline";
 export type AxisAlignContent = AxisJustify;
 export type AxisAlignContentWithStretch = AxisJustify | "stretch";
 
-
 export type ContainerSize = SizeRange<"xs", "7xl"> | "full" | "default";
 export type ContainerBreakpoint = "always" | SizeRange<"sm", "2xl">;
 
-export type DimensionVariant = "auto" | "full" | "fit" | "screen";
+export type DimensionVariant =
+    | "auto"
+    | "fit"
+    | "screen"
+    | SizeRange<"xs", "full">;
 export type MarginVariant = OUISpacing | "auto";
