@@ -5,14 +5,16 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	apisrv "api/internal/server"
 )
 
-func TestBuildMuxRoot(t *testing.T) {
-	mux := buildMux()
+func TestServerServesRoot(t *testing.T) {
+	handler := apisrv.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
-	mux.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d", rec.Code)
@@ -23,13 +25,13 @@ func TestBuildMuxRoot(t *testing.T) {
 	}
 }
 
-func TestBuildMuxRegistersConnectHandlers(t *testing.T) {
-	mux := buildMux()
+func TestServerRegistersConnectHandlers(t *testing.T) {
+	handler := apisrv.New()
 	req := httptest.NewRequest(http.MethodPost, "/obiente.cloud.auth.v1.AuthService/GetCurrentUser", strings.NewReader("{}"))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	mux.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, req)
 
 	if rec.Code == http.StatusNotFound {
 		t.Fatalf("expected RPC handler to be registered, received 404")

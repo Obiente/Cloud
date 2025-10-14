@@ -1,24 +1,13 @@
 package main
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
-	"api/docker"
-	authv1connect "api/gen/proto/obiente/cloud/auth/v1/authv1connect"
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
-	deploymentsv1connect "api/gen/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
-	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
-
-	"connectrpc.com/connect"
-	"connectrpc.com/grpcreflect"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
+	apisrv "api/internal/server"
 )
 
 const (
@@ -35,21 +24,16 @@ func main() {
 		port = defaultPort
 	}
 
-	if err := docker.InitClient(); err != nil {
-		log.Fatalf("Failed to initialize Docker client: %v", err)
-	}
-	log.Println("Docker client initialized successfully")
-
-	server := &http.Server{
+	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           newConnectHandler(),
+		Handler:           apisrv.New(),
 		ReadHeaderTimeout: readHeaderTimeout,
 		WriteTimeout:      writeTimeout,
 		IdleTimeout:       idleTimeout,
 	}
 
-	log.Printf("Connect RPC API listening on %s", server.Addr)
-	if err := server.ListenAndServe(); err != nil {
+	log.Printf("Connect RPC API listening on %s", srv.Addr)
+	if err := srv.ListenAndServe(); err != nil {
 		if errors.Is(err, http.ErrServerClosed) {
 			log.Print(gracefulShutdownMessage)
 			return
@@ -57,98 +41,3 @@ func main() {
 		log.Fatalf("server failed: %v", err)
 	}
 }
-
-func newConnectHandler() http.Handler {
-	mux := buildMux()
-	return h2c.NewHandler(mux, &http2.Server{})
-}
-
-func buildMux() *http.ServeMux {
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		if r.Method != http.MethodGet {
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("obiente-cloud-api"))
-	})
-
-	authPath, authHandler := authv1connect.NewAuthServiceHandler(newAuthService())
-	mux.Handle(authPath, authHandler)
-
-	deploymentsPath, deploymentsHandler := deploymentsv1connect.NewDeploymentServiceHandler(newDeploymentService())
-	mux.Handle(deploymentsPath, deploymentsHandler)
-
-	organizationsPath, organizationsHandler := organizationsv1connect.NewOrganizationServiceHandler(newOrganizationService())
-	mux.Handle(organizationsPath, organizationsHandler)
-
-	reflector := grpcreflect.NewStaticReflector(
-		authv1connect.AuthServiceName,
-		deploymentsv1connect.DeploymentServiceName,
-		organizationsv1connect.OrganizationServiceName,
-	)
-
-	grpcPath, grpcHandler := grpcreflect.NewHandlerV1(reflector)
-	mux.Handle(grpcPath, grpcHandler)
-	grpcAlphaPath, grpcAlphaHandler := grpcreflect.NewHandlerV1Alpha(reflector)
-	mux.Handle(grpcAlphaPath, grpcAlphaHandler)
-
-	return mux
-}
-
-type authService struct {
-	authv1connect.UnimplementedAuthServiceHandler
-}
-
-func newAuthService() authv1connect.AuthServiceHandler {
-	return &authService{}
-}
-
-type deploymentService struct {
-	deploymentsv1connect.UnimplementedDeploymentServiceHandler
-}
-
-func newDeploymentService() deploymentsv1connect.DeploymentServiceHandler {
-	return &deploymentService{}
-}
-
-// ListDeployments implements the ListDeployments RPC method
-func (s *deploymentService) ListDeployments(
-	ctx context.Context,
-	req *connect.Request[deploymentsv1.ListDeploymentsRequest],
-) (*connect.Response[deploymentsv1.ListDeploymentsResponse], error) {
-	log.Printf("ListDeployments called for organization: %s", req.Msg.OrganizationId)
-
-	deployments, err := docker.ListContainersAsDeployments(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list deployments: %w", err))
-	}
-
-	res := connect.NewResponse(&deploymentsv1.ListDeploymentsResponse{
-		Deployments: deployments,
-	})
-
-	return res, nil
-}
-
-type organizationService struct {
-	organizationsv1connect.UnimplementedOrganizationServiceHandler
-}
-
-func newOrganizationService() organizationsv1connect.OrganizationServiceHandler {
-	return &organizationService{}
-}
-
-// These compile-time assertions ensure that our service structs satisfy the generated handler
-// interfaces. The blank identifier assignments make failures easy to spot during builds.
-var (
-	_ authv1connect.AuthServiceHandler                  = (*authService)(nil)
-	_ deploymentsv1connect.DeploymentServiceHandler     = (*deploymentService)(nil)
-	_ organizationsv1connect.OrganizationServiceHandler = (*organizationService)(nil)
-)

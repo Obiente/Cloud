@@ -1,0 +1,14 @@
+{
+  "executors": {
+    "echo": {
+      "implementation": "./src/executors/echo/echo",
+      "schema": "./src/executors/echo/schema.json",
+      "description": "echo executor"
+    },
+    "run-sh": {
+      "implementation": "./src/executors/run-sh/run-sh",
+      "schema": "./src/executors/run-sh/schema.json",
+      "description": "Execute a shell script with TTY output"
+    }
+  }
+}

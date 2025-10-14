@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "RunShExecutorSchema",
+  "title": "Run shell script",
+  "description": "Execute a shell script with TTY output for Nx targets.",
+  "type": "object",
+  "properties": {
+    "script": {
+      "type": "string",
+      "description": "Path to the shell script to execute (relative to workspace root unless absolute)."
+    },
+    "args": {
+      "type": "array",
+      "description": "Arguments passed to the script.",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "command": {
+      "type": "string",
+      "description": "Interpreter or command to invoke. Defaults to 'bash'.",
+      "default": "bash"
+    },
+    "useInterpreter": {
+      "type": "boolean",
+      "description": "When true (default) the command is treated as an interpreter and the script path is passed as the first argument. When false the script is executed directly (useful for scripts with a shebang).",
+      "default": true
+    },
+    "cwd": {
+      "type": "string",
+      "description": "Working directory for the process (relative to the workspace root)."
+    },
+    "env": {
+      "type": "object",
+      "description": "Additional environment variables to pass to the process.",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "forwardAllEnv": {
+      "type": "boolean",
+      "description": "Forward the current Nx process env to the child process. Defaults to true.",
+      "default": true
+    }
+  },
+  "required": ["script"],
+  "additionalProperties": false
+}
