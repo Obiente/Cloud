@@ -184,8 +184,8 @@ func (s *Service) StreamDeploymentStatus(_ context.Context, req *connect.Request
 		},
 	}
 
-	for _, update := range updates {
-		if err := stream.Send(&update); err != nil {
+	for i := range updates {
+		if err := stream.Send(&updates[i]); err != nil {
 			return err
 		}
 	}
@@ -239,27 +239,36 @@ func cloneDeployment(src *deploymentsv1.Deployment) *deploymentsv1.Deployment {
 	if src == nil {
 		return nil
 	}
-
-	clone := *src
-	clone.CustomDomains = append([]string(nil), src.GetCustomDomains()...)
+	// Avoid copying internal mutex fields by constructing a fresh message
+	out := &deploymentsv1.Deployment{
+		Id:             src.GetId(),
+		Name:           src.GetName(),
+		Domain:         src.GetDomain(),
+		Type:           src.GetType(),
+		Branch:         src.GetBranch(),
+		Status:         src.GetStatus(),
+		HealthStatus:   src.GetHealthStatus(),
+		BandwidthUsage: src.GetBandwidthUsage(),
+		StorageUsage:   src.GetStorageUsage(),
+	}
+	out.CustomDomains = append([]string(nil), src.GetCustomDomains()...)
 	if src.RepositoryUrl != nil {
 		repo := src.GetRepositoryUrl()
-		clone.RepositoryUrl = proto.String(repo)
+		out.RepositoryUrl = proto.String(repo)
 	}
 	if src.BuildCommand != nil {
 		build := src.GetBuildCommand()
-		clone.BuildCommand = proto.String(build)
+		out.BuildCommand = proto.String(build)
 	}
 	if src.InstallCommand != nil {
 		install := src.GetInstallCommand()
-		clone.InstallCommand = proto.String(install)
+		out.InstallCommand = proto.String(install)
 	}
-	if src.GetLastDeployedAt() != nil {
-		clone.LastDeployedAt = timestamppb.New(src.GetLastDeployedAt().AsTime())
+	if ts := src.GetLastDeployedAt(); ts != nil {
+		out.LastDeployedAt = timestamppb.New(ts.AsTime())
 	}
-	if src.GetCreatedAt() != nil {
-		clone.CreatedAt = timestamppb.New(src.GetCreatedAt().AsTime())
+	if ts := src.GetCreatedAt(); ts != nil {
+		out.CreatedAt = timestamppb.New(ts.AsTime())
 	}
-
-	return &clone
+	return out
 }

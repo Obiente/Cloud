@@ -306,46 +306,57 @@ func cloneOrganization(src *organizationsv1.Organization) *organizationsv1.Organ
 	if src == nil {
 		return nil
 	}
-
-	clone := *src
-	if src.Domain != nil {
-		domain := *src.Domain
-		clone.Domain = &domain
+	out := &organizationsv1.Organization{
+		Id:              src.GetId(),
+		Name:            src.GetName(),
+		Slug:            src.GetSlug(),
+		Plan:            src.GetPlan(),
+		Status:          src.GetStatus(),
+		MaxDeployments:  src.GetMaxDeployments(),
+		MaxVpsInstances: src.GetMaxVpsInstances(),
+		MaxTeamMembers:  src.GetMaxTeamMembers(),
 	}
-	if src.GetCreatedAt() != nil {
-		clone.CreatedAt = timestamppb.New(src.GetCreatedAt().AsTime())
+	if d := src.GetDomain(); d != "" {
+		out.Domain = &d
 	}
-
-	return &clone
+	if ts := src.GetCreatedAt(); ts != nil {
+		out.CreatedAt = timestamppb.New(ts.AsTime())
+	}
+	return out
 }
 
 func cloneMember(src *organizationsv1.OrganizationMember) *organizationsv1.OrganizationMember {
 	if src == nil {
 		return nil
 	}
-
-	clone := *src
-	if src.GetUser() != nil {
-		clone.User = cloneUser(src.GetUser())
+	out := &organizationsv1.OrganizationMember{
+		Id:     src.GetId(),
+		Role:   src.GetRole(),
+		Status: src.GetStatus(),
 	}
-	if src.GetJoinedAt() != nil {
-		clone.JoinedAt = timestamppb.New(src.GetJoinedAt().AsTime())
+	if u := src.GetUser(); u != nil {
+		out.User = cloneUser(u)
 	}
-
-	return &clone
+	if ts := src.GetJoinedAt(); ts != nil {
+		out.JoinedAt = timestamppb.New(ts.AsTime())
+	}
+	return out
 }
 
 func cloneUser(src *authv1.User) *authv1.User {
 	if src == nil {
 		return nil
 	}
-
-	clone := *src
-	if src.GetCreatedAt() != nil {
-		clone.CreatedAt = timestamppb.New(src.GetCreatedAt().AsTime())
+	out := &authv1.User{
+		Id:        src.GetId(),
+		Email:     src.GetEmail(),
+		Name:      src.GetName(),
+		AvatarUrl: src.GetAvatarUrl(),
 	}
-
-	return &clone
+	if ts := src.GetCreatedAt(); ts != nil {
+		out.CreatedAt = timestamppb.New(ts.AsTime())
+	}
+	return out
 }
 
 func normalizeSlug(input string) string {

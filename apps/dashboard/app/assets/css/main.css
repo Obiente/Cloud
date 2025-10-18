@@ -65,28 +65,33 @@
   --oui-typography-base: 1;
   --oui-elevation-base: 1;
 
-  /* NO MORE BURNT EYES! */
-  --oui-background: #1a1b26;
-  --oui-foreground: #e2e8f0;
-  --oui-surface-base: #24283b;
-  --oui-surface-raised: #2d3247;
-  --oui-surface-overlay: #343b58;
-  --oui-surface-muted: #414868;
-  --oui-text-primary: #f1f5f9;
-  --oui-text-secondary: #cbd5e1;
-  --oui-text-tertiary: #94a3b8;
-  --oui-text-disabled: #64748b;
-  --oui-border-default: #475569;
-  --oui-border-muted: #334155;
-  --oui-border-strong: #64748b;
-  --oui-accent-primary: #3b82f6;
-  --oui-accent-secondary: #a855f7;
-  --oui-accent-success: #10b981;
-  --oui-accent-warning: #f59e0b;
-  --oui-accent-danger: #ef4444;
-  --oui-accent-info: #06b6d4;
-  --oui-interactive-hover: #374151;
-  --oui-interactive-active: #4b5563;
-  --oui-interactive-disabled: #6b7280;
-  --oui-interactive-focus: #60a5fa;
+  /* Dark Black Purple Neon Theme */
+  --oui-background: #0b0b12; /* near-black with a hint of purple */
+  --oui-foreground: #f5f3ff; /* soft off-white with lilac tint */
+  --oui-surface-base: #121022; /* deep indigo base */
+  --oui-surface-raised: #181533; /* slightly lifted panel */
+  --oui-surface-overlay: #201b3f; /* overlays/menus */
+  --oui-surface-muted: #2a2450; /* muted blocks, chips */
+
+  --oui-text-primary: #f5f3ff;
+  --oui-text-secondary: #c7b8ff; /* lavender */
+  --oui-text-tertiary: #9e8cff; /* dimmer lavender */
+  --oui-text-disabled: #6b6396; /* muted purple-grey */
+
+  --oui-border-default: #3a2f5c; /* subtle purple border */
+  --oui-border-muted: #2a2347; /* very subdued border */
+  --oui-border-strong: #5b4a8f; /* stronger accents */
+
+  /* Neon-ish accents */
+  --oui-accent-primary: #a855f7; /* electric purple */
+  --oui-accent-secondary: #22d3ee; /* neon cyan */
+  --oui-accent-success: #22c55e; /* vivid green */
+  --oui-accent-warning: #f59e0b; /* amber */
+  --oui-accent-danger: #f43f5e; /* hot rose */
+  --oui-accent-info: #60a5fa; /* bright blue */
+
+  --oui-interactive-hover: #241d47; /* hover lifts with purple tint */
+  --oui-interactive-active: #2e2663; /* active press */
+  --oui-interactive-disabled: #3f3a66; /* disabled controls */
+  --oui-interactive-focus: #d946ef; /* fuchsia focus ring */
 }

@@ -19,7 +19,7 @@
 <script setup lang="ts">
   import { computed } from "vue";
   import type { Component } from "vue";
-import type { SizeRange } from "./types";
+  import type { SizeRange } from "./types";
 
   export type OUIButtonSize = SizeRange<"xs", "xl">;
   export type OUIButtonTone =

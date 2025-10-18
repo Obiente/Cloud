@@ -55,8 +55,8 @@
       <div class="flex-1 flex flex-col">
         <!-- Top bar -->
         <AppHeader
-          :notification-count="notificationCount"
-          @notifications-click="handleNotificationsClick"
+          :notification-count="unreadCount"
+          @notifications-click="isNotificationsOpen = !isNotificationsOpen"
         >
           <template #leading>
             <OuiButton
@@ -81,6 +81,14 @@
         <main class="main-content">
           <slot />
         </main>
+
+        <!-- Notifications Modal -->
+        <AppNotifications
+          v-model="isNotificationsOpen"
+          :items="notifications"
+          @update:items="(val) => (notifications = val.map(n => ({ ...n, read: !!n.read })))"
+          @close="isNotificationsOpen = false"
+        />
       </div>
     </div>
     <div
@@ -94,7 +102,12 @@
       <OuiText v-else-if="user.isAuthenticated" size="2xl" weight="extrabold"
         >logging you in</OuiText
       >
-      <OuiButton v-else size="xl" weight="extrabold" @click="user.popupLogin()"
+      <OuiButton
+        v-else
+        size="xl"
+        weight="extrabold"
+        color="neutral"
+        @click="user.popupLogin()"
         >Log In</OuiButton
       >
     </div>
@@ -102,89 +115,96 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from "vue";
-import { Bars3Icon, XMarkIcon } from "@heroicons/vue/24/outline";
+  import { onBeforeUnmount, onMounted, computed, ref } from "vue";
+  import { Bars3Icon, XMarkIcon } from "@heroicons/vue/24/outline";
 
-// Pinia user store
-const user = useAuth();
-// Notification count (TODO: Replace with actual notification system)
-const notificationCount = ref(3);
+  // Pinia user store
+  const user = useAuth();
+  // Notifications state
+  const isNotificationsOpen = ref(false);
+  const notifications = ref<Array<{ id: string; title: string; message: string; timestamp: Date; read: boolean }>>([
+    { id: "1", title: "Deployment complete", message: "Your app is live at app.obiente.cloud", timestamp: new Date(), read: false },
+    { id: "2", title: "New member joined", message: "Alex added to Acme Corp", timestamp: new Date(Date.now() - 3600_000), read: true },
+    { id: "3", title: "Build started", message: "Re-deploy triggered for dashboard", timestamp: new Date(Date.now() - 600_000), read: false },
+  ]);
+  const unreadCount = computed(() => notifications.value.filter(n => !n.read).length);
 
-const isSidebarOpen = ref(false);
-const mobileSidebarId = "mobile-primary-navigation";
+  const isSidebarOpen = ref(false);
+  const mobileSidebarId = "mobile-primary-navigation";
 
-const closeSidebar = () => {
-  isSidebarOpen.value = false;
-};
-
-const toggleSidebar = () => {
-  isSidebarOpen.value = !isSidebarOpen.value;
-};
-
-const handleKeydown = (event: KeyboardEvent) => {
-  if (event.key === "Escape") {
-    closeSidebar();
-  }
-};
-
-const handleBreakpointChange = () => {
-  if (import.meta.client && window.matchMedia("(min-width: 1024px)").matches) {
+  const closeSidebar = () => {
     isSidebarOpen.value = false;
-  }
-};
+  };
 
-if (import.meta.client) {
-  onMounted(() => {
-    handleBreakpointChange();
-    window.addEventListener("keydown", handleKeydown);
-    window.addEventListener("resize", handleBreakpointChange);
-  });
+  const toggleSidebar = () => {
+    isSidebarOpen.value = !isSidebarOpen.value;
+  };
 
-  onBeforeUnmount(() => {
-    window.removeEventListener("keydown", handleKeydown);
-    window.removeEventListener("resize", handleBreakpointChange);
-  });
-}
+  const handleKeydown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      closeSidebar();
+    }
+  };
 
-// Organization switcher data and methods
-const organizationOptions = computed(() => {
-  // TODO: Replace with actual organizations from API
-  return [
-    {
-      label: "Personal",
-      value: "1",
-    },
-    { label: "Acme Corp", value: "2" },
-    { label: "Development Team", value: "3" },
-  ];
-});
+  const handleBreakpointChange = () => {
+    if (
+      import.meta.client &&
+      window.matchMedia("(min-width: 1024px)").matches
+    ) {
+      isSidebarOpen.value = false;
+    }
+  };
 
-const currentOrganization = computed(() => {
-  // TODO: Replace with actual current organization from user store/API
-  return organizationOptions.value[0]
-    ? {
-        id: organizationOptions.value[0].value,
-        name: organizationOptions.value[0].label,
-      }
-    : null;
-});
+  if (import.meta.client) {
+    onMounted(() => {
+      handleBreakpointChange();
+      window.addEventListener("keydown", handleKeydown);
+      window.addEventListener("resize", handleBreakpointChange);
+    });
 
-const switchOrganization = async (
-  organizationId: string | string[] | undefined
-) => {
-  // normalise
-  const id = Array.isArray(organizationId) ? organizationId[0] : organizationId;
-  if (!id) {
-    console.warn("No organization id provided to switchOrganization");
-    return;
+    onBeforeUnmount(() => {
+      window.removeEventListener("keydown", handleKeydown);
+      window.removeEventListener("resize", handleBreakpointChange);
+    });
   }
 
-  // TODO: Implement organization switching logic
-  console.log("Switching to organization:", id);
-};
+  // Organization switcher data and methods
+  const organizationOptions = computed(() => {
+    // TODO: Replace with actual organizations from API
+    return [
+      {
+        label: "Personal",
+        value: "1",
+      },
+      { label: "Acme Corp", value: "2" },
+      { label: "Development Team", value: "3" },
+    ];
+  });
 
-const handleNotificationsClick = () => {
-  // TODO: Implement notifications panel/modal
-  console.log("Opening notifications");
-};
+  const currentOrganization = computed(() => {
+    // TODO: Replace with actual current organization from user store/API
+    return organizationOptions.value[0]
+      ? {
+          id: organizationOptions.value[0].value,
+          name: organizationOptions.value[0].label,
+        }
+      : null;
+  });
+
+  const switchOrganization = async (
+    organizationId: string | string[] | undefined
+  ) => {
+    // normalise
+    const id = Array.isArray(organizationId)
+      ? organizationId[0]
+      : organizationId;
+    if (!id) {
+      console.warn("No organization id provided to switchOrganization");
+      return;
+    }
+
+    // TODO: Implement organization switching logic
+    console.log("Switching to organization:", id);
+  };
+
 </script>

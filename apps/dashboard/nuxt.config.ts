@@ -7,10 +7,7 @@ export default defineNuxtConfig({
     server: {
       hmr: {
         port: 24678, // Use a different port for HMR
-      },
-      watch: {
-        usePolling: true,
-      },
+      }
     },
   },
   // Modules

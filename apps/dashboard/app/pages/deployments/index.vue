@@ -327,7 +327,11 @@
             </OuiCardBody>
 
             <OuiCardFooter class="mt-auto">
-              <OuiFlex justify="between" align="center" gap="md" wrap="wrap">
+              <OuiFlex
+                justify="between"
+                align="center"
+                gap="none"
+              >
                 <OuiButton
                   v-if="deployment.status === 'RUNNING'"
                   variant="ghost"
