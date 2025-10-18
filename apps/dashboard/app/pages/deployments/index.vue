@@ -237,7 +237,7 @@
                     p="md"
                     rounded="xl"
                     bg="surface-muted"
-                    class="group/stat relative overflow-hidden bg-surface-muted/40 ring-1 ring-border-muted backdrop-blur-sm transition-all hover:bg-surface-muted/60 hover:ring-border-default"
+                    class="group/stat overflow-hidden bg-surface-muted/40 ring-1 ring-border-muted backdrop-blur-sm transition-all hover:bg-surface-muted/60 hover:ring-border-default"
                   >
                     <div
                       class="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover/stat:opacity-100 transition-opacity"
@@ -387,7 +387,8 @@
                   variant="ghost"
                   color="secondary"
                   size="sm"
-                  @click="viewDeployment(deployment.id)"
+                  :as="NuxtLink"
+                  :to="`/deployments/${deployment.id}`"
                   title="View details"
                   :aria-label="`View ${deployment.name} details`"
                   class="gap-2"
@@ -415,25 +416,11 @@
               required
             />
 
-            <OuiInput
-              v-model="newDeployment.repositoryUrl"
-              label="Repository URL"
-              placeholder="https://github.com/username/repo"
-              required
-            />
-
             <OuiSelect
-              v-model="newDeployment.framework"
-              :items="frameworkOptions"
-              label="Framework"
-              placeholder="Select framework"
-            />
-
-            <OuiSelect
-              v-model="newDeployment.environment"
-              :items="environmentOptions"
-              label="Environment"
-              placeholder="Select environment"
+              v-model="newDeployment.type"
+              :items="typeOptions"
+              label="Type"
+              placeholder="Select type"
             />
           </OuiStack>
         </form>
@@ -459,342 +446,383 @@
 </template>
 
 <script setup lang="ts">
-import {
-  ArrowPathIcon,
-  ArrowTopRightOnSquareIcon,
-  BoltIcon,
-  CalendarIcon,
-  CodeBracketIcon,
-  Cog6ToothIcon,
-  CpuChipIcon,
-  EyeIcon,
-  ExclamationTriangleIcon,
-  InformationCircleIcon,
-  MagnifyingGlassIcon,
-  PauseCircleIcon,
-  PlayIcon,
-  PlusIcon,
-  RocketLaunchIcon,
-  StopIcon,
-} from "@heroicons/vue/24/outline";
+  import { ref, computed, reactive } from "vue";
+  import { useRouter } from "vue-router";
+  import { NuxtLink } from "#components";
+  import {
+    ArrowPathIcon,
+    ArrowTopRightOnSquareIcon,
+    BoltIcon,
+    CalendarIcon,
+    CodeBracketIcon,
+    Cog6ToothIcon,
+    CpuChipIcon,
+    EyeIcon,
+    ExclamationTriangleIcon,
+    InformationCircleIcon,
+    MagnifyingGlassIcon,
+    PauseCircleIcon,
+    PlayIcon,
+    PlusIcon,
+    RocketLaunchIcon,
+    StopIcon,
+  } from "@heroicons/vue/24/outline";
 
-const searchQuery = ref("");
-const statusFilter = ref("");
-const environmentFilter = ref("");
-const showCreateDialog = ref(false);
+  const searchQuery = ref("");
+  const statusFilter = ref("");
+  const environmentFilter = ref("");
+  const showCreateDialog = ref(false);
 
-const newDeployment = ref({
-  name: "",
-  repositoryUrl: "",
-  framework: "",
-  environment: "",
-});
-
-const statusFilterOptions = [
-  { label: "All Status", value: "" },
-  { label: "Running", value: "RUNNING" },
-  { label: "Stopped", value: "STOPPED" },
-  { label: "Building", value: "BUILDING" },
-  { label: "Failed", value: "FAILED" },
-];
-
-const environmentOptions = [
-  { label: "Production", value: "production" },
-  { label: "Staging", value: "staging" },
-  { label: "Development", value: "development" },
-];
-
-const frameworkOptions = [
-  { label: "Next.js", value: "nextjs" },
-  { label: "Nuxt.js", value: "nuxtjs" },
-  { label: "React (Vite)", value: "react-vite" },
-  { label: "Vue.js (Vite)", value: "vue-vite" },
-  { label: "Static HTML", value: "static" },
-  { label: "Node.js", value: "nodejs" },
-];
-
-const STATUS_META = {
-  RUNNING: {
-    badge: "success",
-    label: "Running",
-    description: "This deployment is serving traffic.",
-    cardClass: "hover:ring-1 hover:ring-success/30",
-    beforeGradient:
-      "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-success/20 before:via-success/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-    barClass: "bg-gradient-to-r from-success to-success/70",
-    dotClass: "bg-success",
-    icon: BoltIcon,
-    iconClass: "text-success",
-    progressClass: "border-success/30 bg-success/10 text-success",
-    pulseDot: true,
-  },
-  STOPPED: {
-    badge: "danger",
-    label: "Stopped",
-    description: "Deployment is currently paused.",
-    cardClass: "hover:ring-1 hover:ring-danger/30",
-    beforeGradient:
-      "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-danger/20 before:via-danger/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-    barClass: "bg-gradient-to-r from-danger to-danger/60",
-    dotClass: "bg-danger",
-    icon: PauseCircleIcon,
-    iconClass: "text-danger",
-    progressClass: "border-danger/30 bg-danger/10 text-danger",
-    pulseDot: false,
-  },
-  BUILDING: {
-    badge: "warning",
-    label: "Building",
-    description: "A new build is in progress.",
-    cardClass: "hover:ring-1 hover:ring-warning/30",
-    beforeGradient:
-      "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-warning/20 before:via-warning/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-    barClass: "bg-gradient-to-r from-warning to-warning/60 animate-pulse",
-    dotClass: "bg-warning",
-    icon: Cog6ToothIcon,
-    iconClass: "text-warning",
-    progressClass: "border-warning/30 bg-warning/10 text-warning",
-    pulseDot: true,
-  },
-  FAILED: {
-    badge: "danger",
-    label: "Failed",
-    description: "The last build encountered an error.",
-    cardClass: "hover:ring-1 hover:ring-danger/30",
-    beforeGradient:
-      "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-danger/20 before:via-danger/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-    barClass: "bg-gradient-to-r from-danger to-danger/60",
-    dotClass: "bg-danger",
-    icon: ExclamationTriangleIcon,
-    iconClass: "text-danger",
-    progressClass: "border-danger/30 bg-danger/10 text-danger",
-    pulseDot: false,
-  },
-  DEFAULT: {
-    badge: "success",
-    label: "Unknown",
-    description: "Status information is unavailable.",
-    cardClass: "hover:ring-1 hover:ring-border-muted",
-    beforeGradient:
-      "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-surface-muted/30 before:via-surface-muted/20 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
-    barClass: "bg-gradient-to-r from-surface-muted to-surface-muted/70",
-    dotClass: "bg-secondary",
-    icon: InformationCircleIcon,
-    iconClass: "text-secondary",
-    progressClass: "border-border-muted bg-surface-muted/40 text-secondary",
-    pulseDot: false,
-  },
-} as const;
-
-type StatusKey = keyof typeof STATUS_META;
-
-const getStatusMeta = (status: string) =>
-  STATUS_META[status as StatusKey] ?? STATUS_META.DEFAULT;
-
-const ENVIRONMENT_META = {
-  production: {
-    label: "Production",
-    badge: "success",
-    chipClass: "bg-success/10 text-success ring-1 ring-success/20",
-    highlightIcon: BoltIcon,
-    highlightClass: "bg-success/10 text-success ring-1 ring-success/20",
-  },
-  staging: {
-    label: "Staging",
-    badge: "warning",
-    chipClass: "bg-warning/10 text-warning ring-1 ring-warning/20",
-    highlightIcon: null,
-    highlightClass: "",
-  },
-  development: {
-    label: "Development",
-    badge: "secondary",
-    chipClass: "bg-info/10 text-info ring-1 ring-info/20",
-    highlightIcon: null,
-    highlightClass: "",
-  },
-  DEFAULT: {
-    label: "Environment",
-    badge: "secondary",
-    chipClass: "bg-surface-muted text-secondary ring-1 ring-border-muted",
-    highlightIcon: null,
-    highlightClass: "",
-  },
-} as const;
-
-type EnvironmentKey = keyof typeof ENVIRONMENT_META;
-
-const getEnvironmentMeta = (environment: string) =>
-  ENVIRONMENT_META[environment as EnvironmentKey] ?? ENVIRONMENT_META.DEFAULT;
-
-const deployments = ref([
-  {
-    id: "1",
-    name: "My Portfolio",
-    domain: "portfolio.obiente.cloud",
-    repositoryUrl: "https://github.com/user/portfolio",
-    status: "RUNNING",
-    lastDeployedAt: new Date("2024-01-15T10:30:00Z"),
-    framework: "Next.js",
-    environment: "production",
-    buildTime: 45,
-    size: "2.1MB",
-  },
-  {
-    id: "2",
-    name: "E-commerce Site",
-    domain: "shop.obiente.cloud",
-    repositoryUrl: "https://github.com/user/ecommerce",
-    status: "BUILDING",
-    lastDeployedAt: new Date("2024-01-14T14:20:00Z"),
-    framework: "Nuxt.js",
-    environment: "production",
-    buildTime: 67,
-    size: "3.4MB",
-  },
-  {
-    id: "3",
-    name: "Blog",
-    domain: "blog.obiente.cloud",
-    repositoryUrl: "https://github.com/user/blog",
-    status: "STOPPED",
-    lastDeployedAt: new Date("2024-01-13T09:15:00Z"),
-    framework: "Static HTML",
-    environment: "staging",
-    buildTime: 12,
-    size: "850KB",
-  },
-  {
-    id: "4",
-    name: "Dashboard App",
-    domain: "dashboard.obiente.cloud",
-    repositoryUrl: "https://github.com/user/dashboard",
-    status: "RUNNING",
-    lastDeployedAt: new Date("2024-01-16T08:45:00Z"),
-    framework: "Vue.js (Vite)",
-    environment: "development",
-    buildTime: 32,
-    size: "1.8MB",
-  },
-]);
-
-const cleanRepositoryName = (url: string) => {
-  if (!url) return "";
-
-  try {
-    const parsed = new URL(url);
-    const repoPath = parsed.pathname.replace(/\.git$/, "").replace(/^\//, "");
-    return repoPath || parsed.hostname;
-  } catch (error) {
-    return url.replace(/^https?:\/\//, "").replace(/\.git$/, "");
-  }
-};
-
-const formatRelativeTime = (date: Date) => {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
-
-  if (diffSec < 60) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHour < 24) return `${diffHour}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-  }).format(date);
-};
-
-const filteredDeployments = computed(() => {
-  let filtered = deployments.value;
-
-  if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase();
-    filtered = filtered.filter(
-      (deployment) =>
-        deployment.name.toLowerCase().includes(query) ||
-        deployment.domain.toLowerCase().includes(query) ||
-        deployment.framework.toLowerCase().includes(query)
-    );
-  }
-
-  if (statusFilter.value) {
-    filtered = filtered.filter(
-      (deployment) => deployment.status === statusFilter.value
-    );
-  }
-
-  if (environmentFilter.value) {
-    filtered = filtered.filter(
-      (deployment) => deployment.environment === environmentFilter.value
-    );
-  }
-
-  return filtered;
-});
-
-const stopDeployment = (id: string) => {
-  const deployment = deployments.value.find((d) => d.id === id);
-  if (deployment) {
-    deployment.status = "STOPPED";
-  }
-};
-
-const startDeployment = (id: string) => {
-  const deployment = deployments.value.find((d) => d.id === id);
-  if (deployment) {
-    deployment.status = "BUILDING";
-    setTimeout(() => {
-      const dep = deployments.value.find((d) => d.id === id);
-      if (dep) dep.status = "RUNNING";
-    }, 2000);
-  }
-};
-
-const redeployApp = (id: string) => {
-  const deployment = deployments.value.find((d) => d.id === id);
-  if (deployment) {
-    deployment.status = "BUILDING";
-    deployment.lastDeployedAt = new Date();
-    setTimeout(() => {
-      const dep = deployments.value.find((d) => d.id === id);
-      if (dep) dep.status = "RUNNING";
-    }, 3000);
-  }
-};
-
-const viewDeployment = (id: string) => {
-  navigateTo(`/deployments/${id}`);
-};
-
-const openUrl = (domain: string) => {
-  window.open(`https://${domain}`, "_blank");
-};
-
-const createDeployment = () => {
-  console.log("Creating deployment:", newDeployment.value);
-
-  newDeployment.value = {
+  const newDeployment = ref({
     name: "",
-    repositoryUrl: "",
-    framework: "",
-    environment: "",
+    type: "docker" as "docker" | "static" | "node" | "go",
+  });
+
+  const statusFilterOptions = [
+    { label: "All Status", value: "" },
+    { label: "Running", value: "RUNNING" },
+    { label: "Stopped", value: "STOPPED" },
+    { label: "Building", value: "BUILDING" },
+    { label: "Failed", value: "FAILED" },
+  ];
+
+  const environmentOptions = [
+    { label: "Production", value: "production" },
+    { label: "Staging", value: "staging" },
+    { label: "Development", value: "development" },
+  ];
+
+  const typeOptions = [
+    { label: "Docker", value: "docker" },
+    { label: "Static Site", value: "static" },
+    { label: "Node.js", value: "node" },
+    { label: "Go", value: "go" },
+  ];
+
+  const STATUS_META = {
+    RUNNING: {
+      badge: "success",
+      label: "Running",
+      description: "This deployment is serving traffic.",
+      cardClass: "hover:ring-1 hover:ring-success/30",
+      beforeGradient:
+        "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-success/20 before:via-success/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
+      barClass: "bg-gradient-to-r from-success to-success/70",
+      dotClass: "bg-success",
+      icon: BoltIcon,
+      iconClass: "text-success",
+      progressClass: "border-success/30 bg-success/10 text-success",
+      pulseDot: true,
+    },
+    STOPPED: {
+      badge: "danger",
+      label: "Stopped",
+      description: "Deployment is currently paused.",
+      cardClass: "hover:ring-1 hover:ring-danger/30",
+      beforeGradient:
+        "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-danger/20 before:via-danger/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
+      barClass: "bg-gradient-to-r from-danger to-danger/60",
+      dotClass: "bg-danger",
+      icon: PauseCircleIcon,
+      iconClass: "text-danger",
+      progressClass: "border-danger/30 bg-danger/10 text-danger",
+      pulseDot: false,
+    },
+    BUILDING: {
+      badge: "warning",
+      label: "Building",
+      description: "A new build is in progress.",
+      cardClass: "hover:ring-1 hover:ring-warning/30",
+      beforeGradient:
+        "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-warning/20 before:via-warning/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
+      barClass: "bg-gradient-to-r from-warning to-warning/60 animate-pulse",
+      dotClass: "bg-warning",
+      icon: Cog6ToothIcon,
+      iconClass: "text-warning",
+      progressClass: "border-warning/30 bg-warning/10 text-warning",
+      pulseDot: true,
+    },
+    FAILED: {
+      badge: "danger",
+      label: "Failed",
+      description: "The last build encountered an error.",
+      cardClass: "hover:ring-1 hover:ring-danger/30",
+      beforeGradient:
+        "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-danger/20 before:via-danger/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
+      barClass: "bg-gradient-to-r from-danger to-danger/60",
+      dotClass: "bg-danger",
+      icon: ExclamationTriangleIcon,
+      iconClass: "text-danger",
+      progressClass: "border-danger/30 bg-danger/10 text-danger",
+      pulseDot: false,
+    },
+    DEFAULT: {
+      badge: "success",
+      label: "Unknown",
+      description: "Status information is unavailable.",
+      cardClass: "hover:ring-1 hover:ring-border-muted",
+      beforeGradient:
+        "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-surface-muted/30 before:via-surface-muted/20 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
+      barClass: "bg-gradient-to-r from-surface-muted to-surface-muted/70",
+      dotClass: "bg-secondary",
+      icon: InformationCircleIcon,
+      iconClass: "text-secondary",
+      progressClass: "border-border-muted bg-surface-muted/40 text-secondary",
+      pulseDot: false,
+    },
+  } as const;
+
+  type StatusKey = keyof typeof STATUS_META;
+
+  const getStatusMeta = (status: string) =>
+    STATUS_META[status as StatusKey] ?? STATUS_META.DEFAULT;
+
+  const ENVIRONMENT_META = {
+    production: {
+      label: "Production",
+      badge: "success",
+      chipClass: "bg-success/10 text-success ring-1 ring-success/20",
+      highlightIcon: BoltIcon,
+      highlightClass: "bg-success/10 text-success ring-1 ring-success/20",
+    },
+    staging: {
+      label: "Staging",
+      badge: "warning",
+      chipClass: "bg-warning/10 text-warning ring-1 ring-warning/20",
+      highlightIcon: null,
+      highlightClass: "",
+    },
+    development: {
+      label: "Development",
+      badge: "secondary",
+      chipClass: "bg-info/10 text-info ring-1 ring-info/20",
+      highlightIcon: null,
+      highlightClass: "",
+    },
+    DEFAULT: {
+      label: "Environment",
+      badge: "secondary",
+      chipClass: "bg-surface-muted text-secondary ring-1 ring-border-muted",
+      highlightIcon: null,
+      highlightClass: "",
+    },
+  } as const;
+
+  type EnvironmentKey = keyof typeof ENVIRONMENT_META;
+
+  const getEnvironmentMeta = (environment: string) =>
+    ENVIRONMENT_META[environment as EnvironmentKey] ?? ENVIRONMENT_META.DEFAULT;
+
+  type DeploymentCard = {
+    id: string;
+    name: string;
+    domain: string;
+    repositoryUrl: string;
+    status: "RUNNING" | "STOPPED" | "BUILDING" | "FAILED";
+    lastDeployedAt: Date;
+    framework: string;
+    environment: "production" | "staging" | "development";
+    buildTime: number;
+    size: string;
   };
-  showCreateDialog.value = false;
-};
+
+  const deployments = ref<DeploymentCard[]>([
+    {
+      id: "1",
+      name: "My Portfolio",
+      domain: "portfolio.obiente.cloud",
+      repositoryUrl: "https://github.com/user/portfolio",
+      status: "RUNNING",
+      lastDeployedAt: new Date("2024-01-15T10:30:00Z"),
+      framework: "Next.js",
+      environment: "production",
+      buildTime: 45,
+      size: "2.1MB",
+    },
+    {
+      id: "2",
+      name: "E-commerce Site",
+      domain: "shop.obiente.cloud",
+      repositoryUrl: "https://github.com/user/ecommerce",
+      status: "BUILDING",
+      lastDeployedAt: new Date("2024-01-14T14:20:00Z"),
+      framework: "Nuxt.js",
+      environment: "production",
+      buildTime: 67,
+      size: "3.4MB",
+    },
+    {
+      id: "3",
+      name: "Blog",
+      domain: "blog.obiente.cloud",
+      repositoryUrl: "https://github.com/user/blog",
+      status: "STOPPED",
+      lastDeployedAt: new Date("2024-01-13T09:15:00Z"),
+      framework: "Static HTML",
+      environment: "staging",
+      buildTime: 12,
+      size: "850KB",
+    },
+    {
+      id: "4",
+      name: "Dashboard App",
+      domain: "dashboard.obiente.cloud",
+      repositoryUrl: "https://github.com/user/dashboard",
+      status: "RUNNING",
+      lastDeployedAt: new Date("2024-01-16T08:45:00Z"),
+      framework: "Vue.js (Vite)",
+      environment: "development",
+      buildTime: 32,
+      size: "1.8MB",
+    },
+  ]);
+
+  const cleanRepositoryName = (url: string) => {
+    if (!url) return "";
+
+    try {
+      const parsed = new URL(url);
+      const repoPath = parsed.pathname.replace(/\.git$/, "").replace(/^\//, "");
+      return repoPath || parsed.hostname;
+    } catch (error) {
+      return url.replace(/^https?:\/\//, "").replace(/\.git$/, "");
+    }
+  };
+
+  const formatRelativeTime = (date: Date) => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHour = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHour / 24);
+
+    if (diffSec < 60) return "just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHour < 24) return `${diffHour}h ago`;
+    if (diffDay < 7) return `${diffDay}d ago`;
+
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+    }).format(date);
+  };
+
+  const filteredDeployments = computed<DeploymentCard[]>(() => {
+    let filtered: DeploymentCard[] = deployments.value;
+
+    if (searchQuery.value) {
+      const query = searchQuery.value.toLowerCase();
+      filtered = filtered.filter(
+        (deployment) =>
+          deployment.name.toLowerCase().includes(query) ||
+          deployment.domain.toLowerCase().includes(query) ||
+          deployment.framework.toLowerCase().includes(query)
+      );
+    }
+
+    if (statusFilter.value) {
+      filtered = filtered.filter(
+        (deployment) => deployment.status === statusFilter.value
+      );
+    }
+
+    if (environmentFilter.value) {
+      filtered = filtered.filter(
+        (deployment) => deployment.environment === environmentFilter.value
+      );
+    }
+
+    return filtered;
+  });
+
+  const stopDeployment = (id: string) => {
+    const deployment = deployments.value.find((d) => d.id === id);
+    if (deployment) {
+      deployment.status = "STOPPED";
+    }
+  };
+
+  const startDeployment = (id: string) => {
+    const deployment = deployments.value.find((d) => d.id === id);
+    if (deployment) {
+      deployment.status = "BUILDING";
+      setTimeout(() => {
+        const dep = deployments.value.find((d) => d.id === id);
+        if (dep) dep.status = "RUNNING";
+      }, 2000);
+    }
+  };
+
+  const redeployApp = (id: string) => {
+    const deployment = deployments.value.find((d) => d.id === id);
+    if (deployment) {
+      deployment.status = "BUILDING";
+      deployment.lastDeployedAt = new Date();
+      setTimeout(() => {
+        const dep = deployments.value.find((d) => d.id === id);
+        if (dep) dep.status = "RUNNING";
+      }, 3000);
+    }
+  };
+
+  const viewDeployment = (id: string) => {
+    const router = useRouter();
+    router.push(`/deployments/${id}`);
+  };
+
+  const openUrl = (domain: string) => {
+    window.open(`https://${domain}`, "_blank");
+  };
+
+  const createDeployment = () => {
+    const id = Date.now().toString();
+    const slug = newDeployment.value.name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9-\s]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-");
+
+    // Map type to a friendly framework label for the cards
+    const typeToFramework: Record<string, string> = {
+      docker: "Docker",
+      static: "Static Site",
+      node: "Node.js",
+      go: "Go",
+    };
+
+    // Add a placeholder deployment entry (optional for list UX)
+    deployments.value.push({
+      id,
+      name: newDeployment.value.name || "New Deployment",
+      domain: `${slug || "new-app"}.obiente.cloud`,
+      repositoryUrl: "",
+      status: "BUILDING",
+      lastDeployedAt: new Date(),
+      framework: typeToFramework[newDeployment.value.type] ?? "Custom",
+      environment: "development",
+      buildTime: 0,
+      size: "--",
+    });
+
+    showCreateDialog.value = false;
+    // Reset form for next time
+    newDeployment.value = { name: "", type: "docker" };
+
+    // Navigate to the detail page to finish configuration
+    const router = useRouter();
+    router.push(`/deployments/${id}`);
+  };
 </script>
 
 <style scoped>
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(300%);
+    }
   }
-  100% {
-    transform: translateX(300%);
-  }
-}
 </style>
