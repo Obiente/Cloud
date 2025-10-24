@@ -12,7 +12,7 @@ export type NumericWithString<T extends number | string> = T | `${T & number}`;
 // Build a tuple of length N
 type BuildTuple<
   N extends number,
-  Acc extends unknown[] = []
+  Acc extends unknown[] = [],
 > = Acc["length"] extends N ? Acc : BuildTuple<N, [...Acc, unknown]>;
 
 // Extract only numeric indices from a tuple
@@ -33,7 +33,7 @@ export type Range<Start extends number, End extends number> =
 // Range with optional string suffixes (e.g. "subgrid")
 export type NumericRangeWithSuffixes<
   T extends number,
-  Suffixes extends string = never
+  Suffixes extends string = never,
 > = NumericWithString<T> | Suffixes;
 
 /** ------------------------------------------------------------------
@@ -54,7 +54,7 @@ export type OUIBorderColor =
   | "info";
 export type OUIOverflow = "visible" | "hidden" | "auto" | "scroll";
 
-export type OUISpacing = "none" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
+export type OUISpacing = SizeRange<"none", "7xl">;
 
 export type OUIColor =
   | "transparent"
@@ -114,7 +114,7 @@ type KeysMatchingValue<T, V> = {
 // Map enum values back to key names within a range
 export type SizeRange<
   Start extends keyof typeof SizeScale,
-  End extends keyof typeof SizeScale
+  End extends keyof typeof SizeScale,
 > = KeysMatchingValue<
   typeof SizeScale,
   Range<EnumValue<typeof SizeScale, Start>, EnumValue<typeof SizeScale, End>>

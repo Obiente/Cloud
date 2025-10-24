@@ -22,6 +22,11 @@ const spacingScaleMap: Record<Exclude<OUISpacing, "none">, string> = {
   lg: "6",
   xl: "8",
   "2xl": "12",
+  "3xl": "16",
+  "4xl": "20",
+  "5xl": "24",
+  "6xl": "32",
+  "7xl": "40",
 };
 
 const mapSpacingToken = (value: OUISpacing) =>
