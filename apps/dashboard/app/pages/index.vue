@@ -35,7 +35,7 @@
             Deploy, Scale, and Manage Your Cloud Infrastructure <br />
             With
             <span
-              class="bg-gradient-to-r from-accent-primary to-accent-primary bg-clip-text text-transparent"
+              class="bg-linear-to-r from-accent-primary to-accent-primary bg-clip-text text-transparent"
             >
               Obiente Cloud
             </span>
@@ -113,7 +113,7 @@
             <OuiCardBody class="text-center">
               <OuiStack gap="lg">
                 <OuiBox
-                  class="mx-auto w-16 h-16 bg-gradient-to-r from-accent-primary/20 to-accent-primary/10 rounded-2xl flex items-center justify-center group-hover:from-accent-primary/30 group-hover:to-accent-primary/20 transition-colors"
+                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-primary/20 to-accent-primary/10 rounded-2xl flex items-center justify-center group-hover:from-accent-primary/30 group-hover:to-accent-primary/20 transition-colors"
                 >
                   <RocketLaunchIcon class="h-8 w-8 text-accent-primary" />
                 </OuiBox>
@@ -139,7 +139,7 @@
             <OuiCardBody class="text-center">
               <OuiStack gap="lg">
                 <OuiBox
-                  class="mx-auto w-16 h-16 bg-gradient-to-r from-accent-warning/20 to-accent-warning/10 rounded-2xl flex items-center justify-center group-hover:from-accent-warning/30 group-hover:to-accent-warning/20 transition-colors"
+                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-warning/20 to-accent-warning/10 rounded-2xl flex items-center justify-center group-hover:from-accent-warning/30 group-hover:to-accent-warning/20 transition-colors"
                 >
                   <svg
                     class="h-8 w-8 text-accent-warning"
@@ -174,7 +174,7 @@
             <OuiCardBody class="text-center">
               <OuiStack gap="lg">
                 <OuiBox
-                  class="mx-auto w-16 h-16 bg-gradient-to-r from-accent-secondary/20 to-accent-secondary/10 rounded-2xl flex items-center justify-center group-hover:from-accent-secondary/30 group-hover:to-accent-secondary/20 transition-colors"
+                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-secondary/20 to-accent-secondary/10 rounded-2xl flex items-center justify-center group-hover:from-accent-secondary/30 group-hover:to-accent-secondary/20 transition-colors"
                 >
                   <ServerIcon class="h-8 w-8 text-accent-secondary" />
                 </OuiBox>
@@ -200,7 +200,7 @@
             <OuiCardBody class="text-center">
               <OuiStack gap="lg">
                 <OuiBox
-                  class="mx-auto w-16 h-16 bg-gradient-to-r from-accent-success/20 to-accent-success/10 rounded-2xl flex items-center justify-center group-hover:from-accent-success/30 group-hover:to-accent-success/20 transition-colors"
+                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-success/20 to-accent-success/10 rounded-2xl flex items-center justify-center group-hover:from-accent-success/30 group-hover:to-accent-success/20 transition-colors"
                 >
                   <CircleStackIcon class="h-8 w-8 text-accent-success" />
                 </OuiBox>
@@ -226,7 +226,7 @@
             <OuiCardBody class="text-center">
               <OuiStack gap="lg">
                 <OuiBox
-                  class="mx-auto w-16 h-16 bg-gradient-to-r from-accent-info/20 to-accent-info/10 rounded-2xl flex items-center justify-center group-hover:from-accent-info/30 group-hover:to-accent-info/20 transition-colors"
+                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-info/20 to-accent-info/10 rounded-2xl flex items-center justify-center group-hover:from-accent-info/30 group-hover:to-accent-info/20 transition-colors"
                 >
                   <ChartBarIcon class="h-8 w-8 text-accent-info" />
                 </OuiBox>
@@ -252,7 +252,7 @@
             <OuiCardBody class="text-center">
               <OuiStack gap="lg">
                 <OuiBox
-                  class="mx-auto w-16 h-16 bg-gradient-to-r from-accent-danger/20 to-accent-danger/10 rounded-2xl flex items-center justify-center group-hover:from-accent-danger/30 group-hover:to-accent-danger/20 transition-colors"
+                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-danger/20 to-accent-danger/10 rounded-2xl flex items-center justify-center group-hover:from-accent-danger/30 group-hover:to-accent-danger/20 transition-colors"
                 >
                   <ShieldCheckIcon class="h-8 w-8 text-accent-danger" />
                 </OuiBox>
@@ -316,7 +316,7 @@
                 <OuiStack gap="sm" align="start" class="text-left">
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary"
                       >1 web deployment</OuiText
@@ -324,7 +324,7 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary"
                       >1 game server slot</OuiText
@@ -332,7 +332,7 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary"
                       >1 shared vCPU (Ryzen 7 7900x)</OuiText
@@ -340,19 +340,19 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary">512MB RAM</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary">2GB storage</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary">Free support</OuiText>
                   </OuiFlex>
@@ -400,7 +400,7 @@
                 <OuiStack gap="sm" align="start" class="text-left">
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary"
                       >10 web deployments</OuiText
@@ -408,7 +408,7 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary"
                       >5 game servers</OuiText
@@ -416,7 +416,7 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary"
                       >2 shared vCPUs (Ryzen 7 7900x)</OuiText
@@ -424,7 +424,7 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary"
                       >2GB RAM per instance</OuiText
@@ -432,13 +432,13 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary">50GB storage</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary"
                       >Custom configurations</OuiText
@@ -446,7 +446,7 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary">Free support</OuiText>
                   </OuiFlex>
@@ -493,7 +493,7 @@
                 <OuiStack gap="sm" align="start" class="text-left">
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary"
                       >Unlimited deployments</OuiText
@@ -501,7 +501,7 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary"
                       >Unlimited game servers</OuiText
@@ -509,7 +509,7 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary"
                       >Scale resources as needed</OuiText
@@ -517,7 +517,7 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary"
                       >Premium hardware</OuiText
@@ -525,7 +525,7 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon
-                      class="h-4 w-4 text-accent-success flex-shrink-0"
+                      class="h-4 w-4 text-accent-success shrink-0"
                     />
                     <OuiText size="sm" color="secondary">Free support</OuiText>
                   </OuiFlex>
@@ -583,148 +583,7 @@
     </OuiContainer>
 
     <!-- Footer -->
-    <footer class="py-20 bg-surface-base border-t border-border-muted">
-      <OuiContainer size="7xl">
-        <OuiStack gap="xl">
-          <OuiGrid cols="2" cols-md="4" gap="xl">
-            <OuiStack gap="md">
-              <OuiBox class="flex items-center gap-2">
-                <OuiText weight="semibold" color="primary"
-                  >Obiente Cloud</OuiText
-                >
-              </OuiBox>
-              <OuiText size="sm" color="secondary" class="max-w-xs">
-                Deploy web applications, host game servers, and manage VPS
-                infrastructure all in one platform.
-              </OuiText>
-            </OuiStack>
-
-            <OuiStack gap="md">
-              <OuiText weight="semibold" color="primary">Hosting</OuiText>
-              <OuiStack gap="sm">
-                <OuiText
-                  size="sm"
-                  color="secondary"
-                  class="hover:text-primary cursor-pointer transition-colors"
-                  >Web Deployment</OuiText
-                >
-                <OuiText
-                  size="sm"
-                  color="secondary"
-                  class="hover:text-primary cursor-pointer transition-colors"
-                  >Game Servers</OuiText
-                >
-                <OuiText
-                  size="sm"
-                  color="secondary"
-                  class="hover:text-primary cursor-pointer transition-colors"
-                  >VPS Instances</OuiText
-                >
-                <OuiText
-                  size="sm"
-                  color="secondary"
-                  class="hover:text-primary cursor-pointer transition-colors"
-                  >Databases</OuiText
-                >
-              </OuiStack>
-            </OuiStack>
-
-            <OuiStack gap="md">
-              <OuiText weight="semibold" color="primary">Games</OuiText>
-              <OuiStack gap="sm">
-                <OuiText
-                  size="sm"
-                  color="secondary"
-                  class="hover:text-primary cursor-pointer transition-colors"
-                  >Minecraft</OuiText
-                >
-                <OuiText
-                  size="sm"
-                  color="secondary"
-                  class="hover:text-primary cursor-pointer transition-colors"
-                  >CS2</OuiText
-                >
-                <OuiText
-                  size="sm"
-                  color="secondary"
-                  class="hover:text-primary cursor-pointer transition-colors"
-                  >Rust</OuiText
-                >
-                <OuiText
-                  size="sm"
-                  color="secondary"
-                  class="hover:text-primary cursor-pointer transition-colors"
-                  >ARK</OuiText
-                >
-              </OuiStack>
-            </OuiStack>
-
-            <OuiStack gap="md">
-              <OuiText weight="semibold" color="primary">Company</OuiText>
-              <OuiStack gap="sm">
-                <OuiText
-                  size="sm"
-                  color="secondary"
-                  class="hover:text-primary cursor-pointer transition-colors"
-                  >About</OuiText
-                >
-                <OuiText
-                  size="sm"
-                  color="secondary"
-                  class="hover:text-primary cursor-pointer transition-colors"
-                  >Careers</OuiText
-                >
-                <OuiText
-                  size="sm"
-                  color="secondary"
-                  class="hover:text-primary cursor-pointer transition-colors"
-                  >Contact</OuiText
-                >
-                <OuiText
-                  size="sm"
-                  color="secondary"
-                  class="hover:text-primary cursor-pointer transition-colors"
-                  >Legal</OuiText
-                >
-              </OuiStack>
-            </OuiStack>
-          </OuiGrid>
-
-          <OuiFlex
-            justify="between"
-            align="center"
-            wrap="wrap"
-            gap="md"
-            class="pt-8 border-t border-border-muted"
-          >
-            <OuiText size="sm" color="secondary">
-              © 2025 Obiente Cloud. All rights reserved.
-            </OuiText>
-
-            <OuiFlex gap="md">
-              <OuiText
-                size="sm"
-                color="secondary"
-                class="hover:text-primary cursor-pointer transition-colors"
-                >Privacy</OuiText
-              >
-              <OuiText
-                size="sm"
-                color="secondary"
-                class="hover:text-primary cursor-pointer transition-colors"
-                >Terms</OuiText
-              >
-              <OuiText
-                size="sm"
-                color="secondary"
-                class="hover:text-primary cursor-pointer transition-colors"
-                >Security</OuiText
-              >
-            </OuiFlex>
-          </OuiFlex>
-        </OuiStack>
-      </OuiContainer>
-    </footer>
+<AppFooter/>
   </div>
 </template>
 
