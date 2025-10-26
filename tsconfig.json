@@ -24,6 +24,9 @@
   "references": [
     {
       "path": "./packages/database"
+    },
+    {
+      "path": "./tools/nxsh"
     }
   ]
 }

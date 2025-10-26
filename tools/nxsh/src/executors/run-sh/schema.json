@@ -2,12 +2,16 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "RunShExecutorSchema",
   "title": "Run shell script",
-  "description": "Execute a shell script with TTY output for Nx targets.",
+  "description": "Execute a shell script or inline shell command with TTY output for Nx targets.",
   "type": "object",
   "properties": {
     "script": {
       "type": "string",
       "description": "Path to the shell script to execute (relative to workspace root unless absolute)."
+    },
+    "inlineScript": {
+      "type": "string",
+      "description": "Inline shell command to execute instead of a script file."
     },
     "args": {
       "type": "array",
@@ -24,7 +28,7 @@
     },
     "useInterpreter": {
       "type": "boolean",
-      "description": "When true (default) the command is treated as an interpreter and the script path is passed as the first argument. When false the script is executed directly (useful for scripts with a shebang).",
+      "description": "When true (default), the command is treated as an interpreter and the script path is passed as the first argument. When false, the script is executed directly (useful for scripts with a shebang).",
       "default": true
     },
     "cwd": {
@@ -42,8 +46,13 @@
       "type": "boolean",
       "description": "Forward the current Nx process env to the child process. Defaults to true.",
       "default": true
+    },
+    "shell": {
+      "type": "boolean",
+      "description": "Enable shell mode for advanced syntax (e.g., globbing, pipes, &&). Defaults to false.",
+      "default": false
     }
   },
-  "required": ["script"],
+  "oneOf": [{ "required": ["script"] }, { "required": ["inlineScript"] }],
   "additionalProperties": false
 }
