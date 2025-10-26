@@ -1,5 +1,4 @@
 import type { User, UserSession, ZitadelTokenResponse } from "@obiente/types";
-import { useRequestEvent } from "nuxt/app";
 import type { H3Event } from "h3";
 
 export const AUTH_COOKIE_NAME = "obiente_auth";
@@ -9,7 +8,7 @@ const config = useRuntimeConfig();
 export async function exchangeCodeForTokens(
   code: string,
   code_verifier: string,
-  redirect_uri: string
+  redirect_uri: string,
 ): Promise<ZitadelTokenResponse> {
   const response = await $fetch<ZitadelTokenResponse>(
     `${config.public.oidcBase}/oauth/v2/token`,
@@ -23,7 +22,7 @@ export async function exchangeCodeForTokens(
         redirect_uri,
         client_id: config.public.oidcClientId,
       }),
-    }
+    },
   ).catch((error) => {
     throw new Error(error);
   });
@@ -32,17 +31,17 @@ export async function exchangeCodeForTokens(
 
 export async function getUserData(
   event: H3Event,
-  session: UserSession
+  session: UserSession,
 ): Promise<void> {
+  if (!session.secure?.access_token) return;
   const config = useRuntimeConfig();
-
   const response = await $fetch<User>(
     `${config.public.oidcBase}/oidc/v1/userinfo`,
     {
       headers: {
         Authorization: `Bearer ${session.secure?.access_token}`,
       },
-    }
-  ).catch(() => null);
+    },
+  ).catch((e) => console.error("Failed to fetch user data:", e));
   if (response) await setUserSession(event, { user: response });
 }

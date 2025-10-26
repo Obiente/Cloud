@@ -8,15 +8,21 @@ export default eventHandler(async (event) => {
     responseType: "code",
     clientId: config.public.oidcClientId,
   };
+
   const { code_challenge, code_challenge_method } = await handlePKCE(event);
+
+  const session = getCookie(event, "access_token");
+  const isSilent = !session;
+
   const params = new URLSearchParams({
-    prompt: "none",
+    prompt: isSilent ? "none" : "login",
     client_id: OIDC.clientId,
-    redirect_uri: useRuntimeConfig().requestHost + "/auth/callback",
+    redirect_uri: config.requestHost + OIDC.redirectPath,
     response_type: OIDC.responseType,
     scope: OIDC.scope,
     code_challenge: code_challenge!,
     code_challenge_method: code_challenge_method!,
   });
+
   sendRedirect(event, `${OIDC.authority}/authorize?${params.toString()}`);
 });
