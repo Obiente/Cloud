@@ -2,7 +2,7 @@
   "name": "@obiente/api",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
-  "sourceRoot": "api",
+  "sourceRoot": "apps/api",
   "tags": [],
   "targets": {
     "build": {
@@ -13,10 +13,13 @@
       }
     },
     "serve": {
-      "executor": "@obiente-lab/nx-go:serve",
+      "executor": "@obiente/nxsh:run-sh",
       "options": {
-        "main": "{projectRoot}/main.go"
-      }
+        "script": "apps/api/scripts/serve-dev.sh",
+        "cwd": "apps/api",
+        "shell": true
+      },
+      "cache": false
     },
     "test": {
       "executor": "@obiente-lab/nx-go:test"

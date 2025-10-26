@@ -12,6 +12,5 @@ if ! command -v air >/dev/null 2>&1; then
   go install github.com/air-verse/air@latest
 fi
 
-# Run Air without exec so Nx can capture logs
 # Add -v for verbose logging
-exec air -c .air.toml -v
+air
