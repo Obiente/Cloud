@@ -21,7 +21,7 @@
       </OuiFlex>
 
       <!-- Quick Links -->
-      <OuiCard variant="raised">
+      <OuiCard variant="default">
         <OuiCardBody>
           <OuiFlex wrap="wrap" gap="sm" align="center">
             <OuiButton variant="ghost" size="sm" class="gap-1.5" @click="navigateTo('/deployments')">Deployments</OuiButton>
@@ -35,7 +35,7 @@
 
       <!-- KPI Overview -->
       <OuiGrid cols="1" cols-sm="2" cols-lg="4" gap="lg">
-        <OuiCard v-for="card in kpiCards" :key="card.label" variant="raised" hoverable class="cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl" @click="card.href && navigateTo(card.href)">
+        <OuiCard v-for="card in kpiCards" :key="card.label" variant="default" hoverable class="cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl" @click="card.href && navigateTo(card.href)">
           <OuiCardBody>
             <OuiFlex align="center" gap="md">
               <OuiBox p="sm" rounded="lg" :class="card.iconBg" class="flex items-center justify-center">
@@ -135,7 +135,7 @@
                 <OuiFlex align="start" gap="md">
                   <OuiBox w="fit" h="fit" rounded="full" class="h-2 w-2 bg-accent-primary mt-2" />
                   <OuiStack gap="xs" class="flex-1 min-w-0">
-                    <OuiText size="sm" color="primary" class="break-words">{{ activity.message }}</OuiText>
+                    <OuiText size="sm" color="primary" class="wrap-break-word">{{ activity.message }}</OuiText>
                     <OuiText size="xs" color="secondary">{{ formatRelative(activity.timestamp) }}</OuiText>
                   </OuiStack>
                 </OuiFlex>

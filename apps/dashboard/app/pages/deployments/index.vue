@@ -31,7 +31,7 @@
       </OuiFlex>
 
       <OuiCard
-        variant="raised"
+        variant="default"
         class="backdrop-blur-sm border border-border-muted/60"
       >
         <OuiCardBody>
@@ -103,7 +103,7 @@
         <OuiCard
           v-for="deployment in filteredDeployments"
           :key="deployment.id"
-          variant="raised"
+          variant="default"
           hoverable
           :data-status="deployment.status"
           :class="[
@@ -210,7 +210,7 @@
                     <OuiFlex align="center" gap="sm" class="min-w-0">
                       <Icon
                         name="uil:github"
-                        class="h-4 w-4 text-secondary flex-shrink-0"
+                        class="h-4 w-4 text-secondary shrink-0"
                       />
                       <OuiText
                         size="xs"
@@ -240,7 +240,7 @@
                     class="group/stat overflow-hidden bg-surface-muted/40 ring-1 ring-border-muted backdrop-blur-sm transition-all hover:bg-surface-muted/60 hover:ring-border-default"
                   >
                     <div
-                      class="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover/stat:opacity-100 transition-opacity"
+                      class="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent opacity-0 group-hover/stat:opacity-100 transition-opacity"
                     />
                     <OuiStack gap="xs" class="relative">
                       <OuiText
@@ -273,7 +273,7 @@
                     class="group/stat relative overflow-hidden bg-surface-muted/40 ring-1 ring-border-muted backdrop-blur-sm transition-all hover:bg-surface-muted/60 hover:ring-border-default"
                   >
                     <div
-                      class="absolute inset-0 bg-gradient-to-br from-secondary/5 to-transparent opacity-0 group-hover/stat:opacity-100 transition-opacity"
+                      class="absolute inset-0 bg-linear-to-br from-secondary/5 to-transparent opacity-0 group-hover/stat:opacity-100 transition-opacity"
                     />
                     <OuiStack gap="xs" class="relative">
                       <OuiText
@@ -313,7 +313,7 @@
                     >
                       <div class="absolute inset-0 flex">
                         <div
-                          class="h-full w-1/3 animate-pulse rounded-full bg-gradient-to-r from-transparent via-warning to-transparent"
+                          class="h-full w-1/3 animate-pulse rounded-full bg-linear-to-r from-transparent via-warning to-transparent"
                           style="
                             animation: shimmer 2s infinite;
                             background-size: 200% 100%;

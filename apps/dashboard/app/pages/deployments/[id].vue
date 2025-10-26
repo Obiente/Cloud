@@ -46,7 +46,7 @@
         <!-- Main column -->
         <div class="xl:col-span-2 space-y-6">
           <!-- Overview -->
-          <OuiCard variant="raised">
+          <OuiCard variant="default">
             <OuiCardHeader>
               <OuiText as="h2" size="lg" weight="semibold">Overview</OuiText>
             </OuiCardHeader>
@@ -82,7 +82,7 @@
           </OuiCard>
 
           <!-- Configuration -->
-          <OuiCard variant="raised">
+          <OuiCard variant="default">
             <OuiCardHeader>
               <OuiFlex justify="between" align="center">
                 <OuiText as="h3" size="lg" weight="semibold">Configuration</OuiText>
@@ -105,7 +105,7 @@
           </OuiCard>
 
           <!-- Logs -->
-          <OuiCard variant="raised">
+          <OuiCard variant="default">
             <OuiCardHeader>
               <OuiText as="h3" size="lg" weight="semibold">Recent Logs</OuiText>
             </OuiCardHeader>
@@ -117,7 +117,7 @@
 
         <!-- Sidebar column -->
         <div class="space-y-6">
-          <OuiCard variant="raised">
+          <OuiCard variant="default">
             <OuiCardHeader>
               <OuiText as="h3" size="base" weight="semibold">Actions</OuiText>
             </OuiCardHeader>
@@ -136,7 +136,7 @@
             </OuiCardBody>
           </OuiCard>
 
-          <OuiCard variant="raised">
+          <OuiCard variant="default">
             <OuiCardHeader>
               <OuiText as="h3" size="base" weight="semibold">Build Info</OuiText>
             </OuiCardHeader>
