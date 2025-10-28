@@ -7,7 +7,10 @@ import (
 	"os"
 	"time"
 
+	"api/internal/database"
 	apisrv "api/internal/server"
+
+	_ "github.com/joho/godotenv/autoload"
 )
 
 const (
@@ -19,6 +22,16 @@ const (
 )
 
 func main() {
+	// Initialize database
+	if err := database.InitDatabase(); err != nil {
+		log.Fatalf("failed to initialize database: %v", err)
+	}
+
+	// Initialize Redis
+	if err := database.InitRedis(); err != nil {
+		log.Printf("Redis initialization failed: %v", err)
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = defaultPort

@@ -54,6 +54,15 @@ const (
 	// DeploymentServiceGetDeploymentLogsProcedure is the fully-qualified name of the
 	// DeploymentService's GetDeploymentLogs RPC.
 	DeploymentServiceGetDeploymentLogsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetDeploymentLogs"
+	// DeploymentServiceStartDeploymentProcedure is the fully-qualified name of the DeploymentService's
+	// StartDeployment RPC.
+	DeploymentServiceStartDeploymentProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StartDeployment"
+	// DeploymentServiceStopDeploymentProcedure is the fully-qualified name of the DeploymentService's
+	// StopDeployment RPC.
+	DeploymentServiceStopDeploymentProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StopDeployment"
+	// DeploymentServiceDeleteDeploymentProcedure is the fully-qualified name of the DeploymentService's
+	// DeleteDeployment RPC.
+	DeploymentServiceDeleteDeploymentProcedure = "/obiente.cloud.deployments.v1.DeploymentService/DeleteDeployment"
 )
 
 // DeploymentServiceClient is a client for the obiente.cloud.deployments.v1.DeploymentService
@@ -73,6 +82,12 @@ type DeploymentServiceClient interface {
 	StreamDeploymentStatus(context.Context, *connect.Request[v1.StreamDeploymentStatusRequest]) (*connect.ServerStreamForClient[v1.DeploymentStatusUpdate], error)
 	// Get deployment logs
 	GetDeploymentLogs(context.Context, *connect.Request[v1.GetDeploymentLogsRequest]) (*connect.Response[v1.GetDeploymentLogsResponse], error)
+	// Start a stopped deployment
+	StartDeployment(context.Context, *connect.Request[v1.StartDeploymentRequest]) (*connect.Response[v1.StartDeploymentResponse], error)
+	// Stop a running deployment
+	StopDeployment(context.Context, *connect.Request[v1.StopDeploymentRequest]) (*connect.Response[v1.StopDeploymentResponse], error)
+	// Delete a deployment
+	DeleteDeployment(context.Context, *connect.Request[v1.DeleteDeploymentRequest]) (*connect.Response[v1.DeleteDeploymentResponse], error)
 }
 
 // NewDeploymentServiceClient constructs a client for the
@@ -129,6 +144,24 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentLogs")),
 			connect.WithClientOptions(opts...),
 		),
+		startDeployment: connect.NewClient[v1.StartDeploymentRequest, v1.StartDeploymentResponse](
+			httpClient,
+			baseURL+DeploymentServiceStartDeploymentProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("StartDeployment")),
+			connect.WithClientOptions(opts...),
+		),
+		stopDeployment: connect.NewClient[v1.StopDeploymentRequest, v1.StopDeploymentResponse](
+			httpClient,
+			baseURL+DeploymentServiceStopDeploymentProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("StopDeployment")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteDeployment: connect.NewClient[v1.DeleteDeploymentRequest, v1.DeleteDeploymentResponse](
+			httpClient,
+			baseURL+DeploymentServiceDeleteDeploymentProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("DeleteDeployment")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -141,6 +174,9 @@ type deploymentServiceClient struct {
 	triggerDeployment      *connect.Client[v1.TriggerDeploymentRequest, v1.TriggerDeploymentResponse]
 	streamDeploymentStatus *connect.Client[v1.StreamDeploymentStatusRequest, v1.DeploymentStatusUpdate]
 	getDeploymentLogs      *connect.Client[v1.GetDeploymentLogsRequest, v1.GetDeploymentLogsResponse]
+	startDeployment        *connect.Client[v1.StartDeploymentRequest, v1.StartDeploymentResponse]
+	stopDeployment         *connect.Client[v1.StopDeploymentRequest, v1.StopDeploymentResponse]
+	deleteDeployment       *connect.Client[v1.DeleteDeploymentRequest, v1.DeleteDeploymentResponse]
 }
 
 // ListDeployments calls obiente.cloud.deployments.v1.DeploymentService.ListDeployments.
@@ -179,6 +215,21 @@ func (c *deploymentServiceClient) GetDeploymentLogs(ctx context.Context, req *co
 	return c.getDeploymentLogs.CallUnary(ctx, req)
 }
 
+// StartDeployment calls obiente.cloud.deployments.v1.DeploymentService.StartDeployment.
+func (c *deploymentServiceClient) StartDeployment(ctx context.Context, req *connect.Request[v1.StartDeploymentRequest]) (*connect.Response[v1.StartDeploymentResponse], error) {
+	return c.startDeployment.CallUnary(ctx, req)
+}
+
+// StopDeployment calls obiente.cloud.deployments.v1.DeploymentService.StopDeployment.
+func (c *deploymentServiceClient) StopDeployment(ctx context.Context, req *connect.Request[v1.StopDeploymentRequest]) (*connect.Response[v1.StopDeploymentResponse], error) {
+	return c.stopDeployment.CallUnary(ctx, req)
+}
+
+// DeleteDeployment calls obiente.cloud.deployments.v1.DeploymentService.DeleteDeployment.
+func (c *deploymentServiceClient) DeleteDeployment(ctx context.Context, req *connect.Request[v1.DeleteDeploymentRequest]) (*connect.Response[v1.DeleteDeploymentResponse], error) {
+	return c.deleteDeployment.CallUnary(ctx, req)
+}
+
 // DeploymentServiceHandler is an implementation of the
 // obiente.cloud.deployments.v1.DeploymentService service.
 type DeploymentServiceHandler interface {
@@ -196,6 +247,12 @@ type DeploymentServiceHandler interface {
 	StreamDeploymentStatus(context.Context, *connect.Request[v1.StreamDeploymentStatusRequest], *connect.ServerStream[v1.DeploymentStatusUpdate]) error
 	// Get deployment logs
 	GetDeploymentLogs(context.Context, *connect.Request[v1.GetDeploymentLogsRequest]) (*connect.Response[v1.GetDeploymentLogsResponse], error)
+	// Start a stopped deployment
+	StartDeployment(context.Context, *connect.Request[v1.StartDeploymentRequest]) (*connect.Response[v1.StartDeploymentResponse], error)
+	// Stop a running deployment
+	StopDeployment(context.Context, *connect.Request[v1.StopDeploymentRequest]) (*connect.Response[v1.StopDeploymentResponse], error)
+	// Delete a deployment
+	DeleteDeployment(context.Context, *connect.Request[v1.DeleteDeploymentRequest]) (*connect.Response[v1.DeleteDeploymentResponse], error)
 }
 
 // NewDeploymentServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -247,6 +304,24 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentLogs")),
 		connect.WithHandlerOptions(opts...),
 	)
+	deploymentServiceStartDeploymentHandler := connect.NewUnaryHandler(
+		DeploymentServiceStartDeploymentProcedure,
+		svc.StartDeployment,
+		connect.WithSchema(deploymentServiceMethods.ByName("StartDeployment")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceStopDeploymentHandler := connect.NewUnaryHandler(
+		DeploymentServiceStopDeploymentProcedure,
+		svc.StopDeployment,
+		connect.WithSchema(deploymentServiceMethods.ByName("StopDeployment")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceDeleteDeploymentHandler := connect.NewUnaryHandler(
+		DeploymentServiceDeleteDeploymentProcedure,
+		svc.DeleteDeployment,
+		connect.WithSchema(deploymentServiceMethods.ByName("DeleteDeployment")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.deployments.v1.DeploymentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DeploymentServiceListDeploymentsProcedure:
@@ -263,6 +338,12 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceStreamDeploymentStatusHandler.ServeHTTP(w, r)
 		case DeploymentServiceGetDeploymentLogsProcedure:
 			deploymentServiceGetDeploymentLogsHandler.ServeHTTP(w, r)
+		case DeploymentServiceStartDeploymentProcedure:
+			deploymentServiceStartDeploymentHandler.ServeHTTP(w, r)
+		case DeploymentServiceStopDeploymentProcedure:
+			deploymentServiceStopDeploymentHandler.ServeHTTP(w, r)
+		case DeploymentServiceDeleteDeploymentProcedure:
+			deploymentServiceDeleteDeploymentHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -298,4 +379,16 @@ func (UnimplementedDeploymentServiceHandler) StreamDeploymentStatus(context.Cont
 
 func (UnimplementedDeploymentServiceHandler) GetDeploymentLogs(context.Context, *connect.Request[v1.GetDeploymentLogsRequest]) (*connect.Response[v1.GetDeploymentLogsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetDeploymentLogs is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) StartDeployment(context.Context, *connect.Request[v1.StartDeploymentRequest]) (*connect.Response[v1.StartDeploymentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.StartDeployment is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) StopDeployment(context.Context, *connect.Request[v1.StopDeploymentRequest]) (*connect.Response[v1.StopDeploymentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.StopDeployment is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) DeleteDeployment(context.Context, *connect.Request[v1.DeleteDeploymentRequest]) (*connect.Response[v1.DeleteDeploymentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.DeleteDeployment is not implemented"))
 }
