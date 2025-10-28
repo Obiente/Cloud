@@ -7,6 +7,32 @@ option go_package = "api/gen/proto/obiente/cloud/deployments/v1;deploymentsv1";
 import "google/protobuf/timestamp.proto";
 import "obiente/cloud/organizations/v1/organization_service.proto";
 
+// Enumerations for typed fields used by the frontend
+enum DeploymentType {
+  DEPLOYMENT_TYPE_UNSPECIFIED = 0;
+  DOCKER = 1;
+  STATIC = 2;
+  NODE = 3;
+  GO = 4;
+}
+
+enum Environment {
+  ENVIRONMENT_UNSPECIFIED = 0;
+  PRODUCTION = 1;
+  STAGING = 2;
+  DEVELOPMENT = 3;
+}
+
+enum DeploymentStatus {
+  DEPLOYMENT_STATUS_UNSPECIFIED = 0;
+  CREATED = 1;
+  BUILDING = 2;
+  RUNNING = 3;
+  STOPPED = 4;
+  FAILED = 5;
+  DEPLOYING = 6;
+}
+
 service DeploymentService {
   // List organization deployments
   rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse);
@@ -28,11 +54,20 @@ service DeploymentService {
   
   // Get deployment logs
   rpc GetDeploymentLogs(GetDeploymentLogsRequest) returns (GetDeploymentLogsResponse);
+
+  // Start a stopped deployment
+  rpc StartDeployment(StartDeploymentRequest) returns (StartDeploymentResponse);
+
+  // Stop a running deployment
+  rpc StopDeployment(StopDeploymentRequest) returns (StopDeploymentResponse);
+
+  // Delete a deployment
+  rpc DeleteDeployment(DeleteDeploymentRequest) returns (DeleteDeploymentResponse);
 }
 
 message ListDeploymentsRequest {
   string organization_id = 1;
-  optional string status = 2;
+  optional DeploymentStatus status = 2;
   int32 page = 3;
   int32 per_page = 4;
 }
@@ -45,7 +80,7 @@ message ListDeploymentsResponse {
 message CreateDeploymentRequest {
   string organization_id = 1;
   string name = 2;
-  string type = 3; // static, nodejs, python, docker
+  DeploymentType type = 3; // deployment type enum
   optional string repository_url = 4;
   string branch = 5;
   optional string build_command = 6;
@@ -95,7 +130,7 @@ message StreamDeploymentStatusRequest {
 
 message DeploymentStatusUpdate {
   string deployment_id = 1;
-  string status = 2;
+  DeploymentStatus status = 2;
   string health_status = 3;
   optional string message = 4;
   google.protobuf.Timestamp timestamp = 5;
@@ -111,20 +146,53 @@ message GetDeploymentLogsResponse {
   repeated string logs = 1;
 }
 
+message StartDeploymentRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+}
+
+message StartDeploymentResponse {
+  Deployment deployment = 1;
+}
+
+message StopDeploymentRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+}
+
+message StopDeploymentResponse {
+  Deployment deployment = 1;
+}
+
+message DeleteDeploymentRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+}
+
+message DeleteDeploymentResponse {
+  bool success = 1;
+}
+
 message Deployment {
   string id = 1;
   string name = 2;
   string domain = 3;
   repeated string custom_domains = 4;
-  string type = 5;
+  DeploymentType type = 5;
   optional string repository_url = 6;
   string branch = 7;
   optional string build_command = 8;
   optional string install_command = 9;
-  string status = 10;
+  DeploymentStatus status = 10;
   string health_status = 11;
   google.protobuf.Timestamp last_deployed_at = 12;
   int64 bandwidth_usage = 13;
   int64 storage_usage = 14;
   google.protobuf.Timestamp created_at = 15;
+  // Build time in seconds
+  int32 build_time = 16;
+  // Human-readable bundle size (e.g. "3.4MB")
+  string size = 17;
+  // Environment enum (production/staging/development)
+  Environment environment = 18;
 }
