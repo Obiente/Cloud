@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
           grant_type: "authorization_code",
           code,
           code_verifier,
-          redirect_uri: config.requestHost + "/auth/callback",
+          redirect_uri: config.public.requestHost + "/auth/callback",
           client_id: config.public.oidcClientId,
         }),
       }

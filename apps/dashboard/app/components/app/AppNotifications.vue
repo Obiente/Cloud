@@ -3,7 +3,7 @@
     <Teleport to="body">
       <FloatingPanel.Positioner>
         <FloatingPanel.Content
-          class="z-[60]"
+          class="z-60"
           :style="panelStyle"
         >
           <FloatingPanel.DragTrigger>

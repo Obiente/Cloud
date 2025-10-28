@@ -5,9 +5,16 @@ export default defineNuxtConfig({
   vite: {
     plugins: [tailwindcss()],
     server: {
+      proxy: {
+        "/api": {
+          target: "http://localhost:3001",
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api/, ""),
+        },
+      },
       hmr: {
         port: 24678, // Use a different port for HMR
-      }
+      },
     },
   },
   // Modules
@@ -30,10 +37,10 @@ export default defineNuxtConfig({
         secure: false, // Set to true if using HTTPS
       },
     },
-    requestHost: undefined,
     // Public keys (exposed to client-side)
     public: {
-      apiBaseUrl: "http://localhost:3001",
+      requestHost: "http://localhost:3000",
+      apiBaseUrl: "/api",
       oidcIssuer: "https://obiente.cloud",
       oidcBase: "https://auth.obiente.cloud",
       oidcClientId: "339499954043158530",

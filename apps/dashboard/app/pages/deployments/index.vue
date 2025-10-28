@@ -184,7 +184,7 @@
                       <CodeBracketIcon class="h-4 w-4 text-primary" />
                     </OuiBox>
                     <OuiText size="sm" weight="medium" color="primary">
-                      {{ deployment.framework }}
+                      {{ getTypeLabel(deployment.type) }}
                     </OuiText>
                   </OuiFlex>
                   <OuiFlex
@@ -194,7 +194,7 @@
                   >
                     <CalendarIcon class="h-3.5 w-3.5" />
                     <span>{{
-                      formatRelativeTime(deployment.lastDeployedAt)
+                      formatRelativeTime(date(deployment.lastDeployedAt!))
                     }}</span>
                   </OuiFlex>
                 </OuiFlex>
@@ -293,7 +293,7 @@
                 </OuiGrid>
 
                 <OuiBox
-                  v-if="deployment.status === 'BUILDING'"
+                  v-if="deployment.status === DeploymentStatus.BUILDING || deployment.status === DeploymentStatus.DEPLOYING"
                   p="md"
                   rounded="xl"
                   class="border backdrop-blur-sm"
@@ -327,13 +327,9 @@
             </OuiCardBody>
 
             <OuiCardFooter class="mt-auto">
-              <OuiFlex
-                justify="between"
-                align="center"
-                gap="none"
-              >
+              <OuiFlex justify="between" align="center" gap="none">
                 <OuiButton
-                  v-if="deployment.status === 'RUNNING'"
+                  v-if="deployment.status === DeploymentStatus.RUNNING"
                   variant="ghost"
                   size="sm"
                   color="danger"
@@ -347,7 +343,7 @@
                 </OuiButton>
 
                 <OuiButton
-                  v-if="deployment.status === 'STOPPED'"
+                  v-if="deployment.status === DeploymentStatus.STOPPED"
                   variant="ghost"
                   color="success"
                   size="sm"
@@ -428,7 +424,6 @@
             />
           </OuiStack>
         </form>
-
         <template #footer>
           <OuiFlex justify="end" align="center" gap="md">
             <OuiButton variant="ghost" @click="showCreateDialog = false">
@@ -472,6 +467,16 @@
     StopIcon,
   } from "@heroicons/vue/24/outline";
 
+  import {
+    DeploymentService,
+    type Deployment,
+    DeploymentType,
+    DeploymentStatus,
+    Environment as EnvEnum,
+  } from "@obiente/proto";
+  import { date, timestamp } from "@obiente/proto/utils";
+  import { useConnectClient } from "~/lib/connect-client";
+  import { useDeploymentActions } from "~/composables/useDeploymentActions";
   const searchQuery = ref("");
   const statusFilter = ref("");
   const environmentFilter = ref("");
@@ -479,28 +484,29 @@
 
   const newDeployment = ref({
     name: "",
-    type: "docker" as "docker" | "static" | "node" | "go",
+    // store enum value as string for OuiSelect
+    type: String(DeploymentType.DOCKER),
   });
 
   const statusFilterOptions = [
     { label: "All Status", value: "" },
-    { label: "Running", value: "RUNNING" },
-    { label: "Stopped", value: "STOPPED" },
-    { label: "Building", value: "BUILDING" },
-    { label: "Failed", value: "FAILED" },
+    { label: "Running", value: String(DeploymentStatus.RUNNING) },
+    { label: "Stopped", value: String(DeploymentStatus.STOPPED) },
+    { label: "Building", value: String(DeploymentStatus.BUILDING) },
+    { label: "Failed", value: String(DeploymentStatus.FAILED) },
   ];
 
   const environmentOptions = [
-    { label: "Production", value: "production" },
-    { label: "Staging", value: "staging" },
-    { label: "Development", value: "development" },
+    { label: "Production", value: String(EnvEnum.PRODUCTION) },
+    { label: "Staging", value: String(EnvEnum.STAGING) },
+    { label: "Development", value: String(EnvEnum.DEVELOPMENT) },
   ];
 
   const typeOptions = [
-    { label: "Docker", value: "docker" },
-    { label: "Static Site", value: "static" },
-    { label: "Node.js", value: "node" },
-    { label: "Go", value: "go" },
+    { label: "Docker", value: String(DeploymentType.DOCKER) },
+    { label: "Static Site", value: String(DeploymentType.STATIC) },
+    { label: "Node.js", value: String(DeploymentType.NODE) },
+    { label: "Go", value: String(DeploymentType.GO) },
   ];
 
   const STATUS_META = {
@@ -576,10 +582,21 @@
     },
   } as const;
 
-  type StatusKey = keyof typeof STATUS_META;
-
-  const getStatusMeta = (status: string) =>
-    STATUS_META[status as StatusKey] ?? STATUS_META.DEFAULT;
+  const getStatusMeta = (status: number) => {
+    switch (status) {
+      case DeploymentStatus.RUNNING:
+        return STATUS_META.RUNNING;
+      case DeploymentStatus.STOPPED:
+        return STATUS_META.STOPPED;
+      case DeploymentStatus.BUILDING:
+      case DeploymentStatus.DEPLOYING:
+        return STATUS_META.BUILDING;
+      case DeploymentStatus.FAILED:
+        return STATUS_META.FAILED;
+      default:
+        return STATUS_META.DEFAULT;
+    }
+  };
 
   const ENVIRONMENT_META = {
     production: {
@@ -614,73 +631,68 @@
 
   type EnvironmentKey = keyof typeof ENVIRONMENT_META;
 
-  const getEnvironmentMeta = (environment: string) =>
-    ENVIRONMENT_META[environment as EnvironmentKey] ?? ENVIRONMENT_META.DEFAULT;
+  const getEnvironmentMeta = (environment: string | EnvEnum) => {
+    // Accept either enum numeric or string key
+    if (typeof environment === "number") {
+      switch (environment) {
+        case EnvEnum.PRODUCTION:
+          return ENVIRONMENT_META.production;
+        case EnvEnum.STAGING:
+          return ENVIRONMENT_META.staging;
+        case EnvEnum.DEVELOPMENT:
+          return ENVIRONMENT_META.development;
+        default:
+          return ENVIRONMENT_META.DEFAULT;
+      }
+    }
 
-  type DeploymentCard = {
-    id: string;
-    name: string;
-    domain: string;
-    repositoryUrl: string;
-    status: "RUNNING" | "STOPPED" | "BUILDING" | "FAILED";
-    lastDeployedAt: Date;
-    framework: string;
-    environment: "production" | "staging" | "development";
-    buildTime: number;
-    size: string;
+    return (
+      ENVIRONMENT_META[environment as EnvironmentKey] ??
+      ENVIRONMENT_META.DEFAULT
+    );
   };
 
-  const deployments = ref<DeploymentCard[]>([
-    {
-      id: "1",
-      name: "My Portfolio",
-      domain: "portfolio.obiente.cloud",
-      repositoryUrl: "https://github.com/user/portfolio",
-      status: "RUNNING",
-      lastDeployedAt: new Date("2024-01-15T10:30:00Z"),
-      framework: "Next.js",
-      environment: "production",
-      buildTime: 45,
-      size: "2.1MB",
-    },
-    {
-      id: "2",
-      name: "E-commerce Site",
-      domain: "shop.obiente.cloud",
-      repositoryUrl: "https://github.com/user/ecommerce",
-      status: "BUILDING",
-      lastDeployedAt: new Date("2024-01-14T14:20:00Z"),
-      framework: "Nuxt.js",
-      environment: "production",
-      buildTime: 67,
-      size: "3.4MB",
-    },
-    {
-      id: "3",
-      name: "Blog",
-      domain: "blog.obiente.cloud",
-      repositoryUrl: "https://github.com/user/blog",
-      status: "STOPPED",
-      lastDeployedAt: new Date("2024-01-13T09:15:00Z"),
-      framework: "Static HTML",
-      environment: "staging",
-      buildTime: 12,
-      size: "850KB",
-    },
-    {
-      id: "4",
-      name: "Dashboard App",
-      domain: "dashboard.obiente.cloud",
-      repositoryUrl: "https://github.com/user/dashboard",
-      status: "RUNNING",
-      lastDeployedAt: new Date("2024-01-16T08:45:00Z"),
-      framework: "Vue.js (Vite)",
-      environment: "development",
-      buildTime: 32,
-      size: "1.8MB",
-    },
-  ]);
+  const getTypeLabel = (t: DeploymentType | number | undefined) => {
+    switch (t) {
+      case DeploymentType.DOCKER:
+        return "Docker";
+      case DeploymentType.STATIC:
+        return "Static Site";
+      case DeploymentType.NODE:
+        return "Node.js";
+      case DeploymentType.GO:
+        return "Go";
+      default:
+        return "Custom";
+    }
+  };
 
+  const getEnvironmentLabel = (env: string | EnvEnum | number) => {
+    if (typeof env === "number") {
+      switch (env) {
+        case EnvEnum.PRODUCTION:
+          return "Production";
+        case EnvEnum.STAGING:
+          return "Staging";
+        case EnvEnum.DEVELOPMENT:
+          return "Development";
+        default:
+          return "Environment";
+      }
+    }
+
+    return String(env);
+  };
+
+  // Fetch deployments via Nuxt's useAsyncData so the request runs during SSR and
+  // the transport injected by the server plugin is available.
+  const client = useConnectClient(DeploymentService);
+  const deploymentActions = useDeploymentActions();
+
+  const { data: deployments } = await useAsyncData(
+    "deployments-list",
+    async () => (await client.listDeployments({})).deployments
+  );
   const cleanRepositoryName = (url: string) => {
     if (!url) return "";
 
@@ -712,62 +724,52 @@
     }).format(date);
   };
 
-  const filteredDeployments = computed<DeploymentCard[]>(() => {
-    let filtered: DeploymentCard[] = deployments.value;
+  const filteredDeployments = computed<Deployment[]>(() => {
+    let filtered: Deployment[] = (deployments.value ?? []) as Deployment[];
 
     if (searchQuery.value) {
       const query = searchQuery.value.toLowerCase();
-      filtered = filtered.filter(
-        (deployment) =>
-          deployment.name.toLowerCase().includes(query) ||
-          deployment.domain.toLowerCase().includes(query) ||
-          deployment.framework.toLowerCase().includes(query)
-      );
+      filtered = filtered.filter((deployment) => {
+        const nameMatch = deployment.name.toLowerCase().includes(query);
+        const domainMatch = deployment.domain.toLowerCase().includes(query);
+        const frameworkLabel = getTypeLabel((deployment as any).type)
+          .toLowerCase()
+          .includes(query);
+        return nameMatch || domainMatch || frameworkLabel;
+      });
     }
 
     if (statusFilter.value) {
+      const filterStatus = Number(statusFilter.value);
       filtered = filtered.filter(
-        (deployment) => deployment.status === statusFilter.value
+        (deployment) => deployment.status === filterStatus
       );
     }
 
     if (environmentFilter.value) {
-      filtered = filtered.filter(
-        (deployment) => deployment.environment === environmentFilter.value
-      );
+      const filterEnv = Number(environmentFilter.value);
+      filtered = filtered.filter((deployment) => {
+        const deploymentEnv =
+          typeof (deployment as any).environment === "number"
+            ? (deployment as any).environment
+            : EnvEnum.ENVIRONMENT_UNSPECIFIED;
+        return deploymentEnv === filterEnv;
+      });
     }
 
     return filtered;
   });
 
   const stopDeployment = (id: string) => {
-    const deployment = deployments.value.find((d) => d.id === id);
-    if (deployment) {
-      deployment.status = "STOPPED";
-    }
+    deploymentActions.stopDeployment(id, deployments.value ?? []);
   };
 
   const startDeployment = (id: string) => {
-    const deployment = deployments.value.find((d) => d.id === id);
-    if (deployment) {
-      deployment.status = "BUILDING";
-      setTimeout(() => {
-        const dep = deployments.value.find((d) => d.id === id);
-        if (dep) dep.status = "RUNNING";
-      }, 2000);
-    }
+    deploymentActions.startDeployment(id, deployments.value ?? []);
   };
 
   const redeployApp = (id: string) => {
-    const deployment = deployments.value.find((d) => d.id === id);
-    if (deployment) {
-      deployment.status = "BUILDING";
-      deployment.lastDeployedAt = new Date();
-      setTimeout(() => {
-        const dep = deployments.value.find((d) => d.id === id);
-        if (dep) dep.status = "RUNNING";
-      }, 3000);
-    }
+    deploymentActions.redeployDeployment(id, deployments.value ?? []);
   };
 
   const viewDeployment = (id: string) => {
@@ -779,44 +781,29 @@
     window.open(`https://${domain}`, "_blank");
   };
 
-  const createDeployment = () => {
-    const id = Date.now().toString();
-    const slug = newDeployment.value.name
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9-\s]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-");
+  const createDeployment = async () => {
+    try {
+      const deployment = await deploymentActions.createDeployment({
+        name: newDeployment.value.name,
+        type: Number(newDeployment.value.type),
+        branch: 'main',
+      });
+      
+      if (!deployment) {
+        throw new Error('Failed to create deployment');
+      }
+      
+      showCreateDialog.value = false;
+      // Reset form for next time
+      newDeployment.value = { name: "", type: String(DeploymentType.DOCKER) };
 
-    // Map type to a friendly framework label for the cards
-    const typeToFramework: Record<string, string> = {
-      docker: "Docker",
-      static: "Static Site",
-      node: "Node.js",
-      go: "Go",
-    };
-
-    // Add a placeholder deployment entry (optional for list UX)
-    deployments.value.push({
-      id,
-      name: newDeployment.value.name || "New Deployment",
-      domain: `${slug || "new-app"}.obiente.cloud`,
-      repositoryUrl: "",
-      status: "BUILDING",
-      lastDeployedAt: new Date(),
-      framework: typeToFramework[newDeployment.value.type] ?? "Custom",
-      environment: "development",
-      buildTime: 0,
-      size: "--",
-    });
-
-    showCreateDialog.value = false;
-    // Reset form for next time
-    newDeployment.value = { name: "", type: "docker" };
-
-    // Navigate to the detail page to finish configuration
-    const router = useRouter();
-    router.push(`/deployments/${id}`);
+      // Navigate to the detail page to finish configuration
+      const router = useRouter();
+      router.push(`/deployments/${deployment.id}`);
+    } catch (error) {
+      console.error('Failed to create deployment:', error);
+      alert('Failed to create deployment. Please try again.');
+    }
   };
 </script>
 

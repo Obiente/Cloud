@@ -17,7 +17,7 @@ export default eventHandler(async (event) => {
   const params = new URLSearchParams({
     prompt: isSilent ? "none" : "login",
     client_id: OIDC.clientId,
-    redirect_uri: config.requestHost + OIDC.redirectPath,
+    redirect_uri: config.public.requestHost + OIDC.redirectPath,
     response_type: OIDC.responseType,
     scope: OIDC.scope,
     code_challenge: code_challenge!,

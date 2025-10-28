@@ -35,6 +35,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@bufbuild/protobuf": "^2.10.0",
     "@nuxt/devtools": "latest",
     "@obiente/config": "workspace:*",
     "@pinia/colada": "^0.17.6",
