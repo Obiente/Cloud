@@ -34,13 +34,13 @@ export default defineNuxtConfig({
     session: {
       password: "changeme_" + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters
       cookie: {
-        secure: false, // Set to true if using HTTPS
+        secure: true, // Set to true if using HTTPS
       },
     },
     // Public keys (exposed to client-side)
     public: {
       requestHost: "http://localhost:3000",
-      apiBaseUrl: "/api",
+      apiBaseUrl: "http://localhost:3000",
       oidcIssuer: "https://obiente.cloud",
       oidcBase: "https://auth.obiente.cloud",
       oidcClientId: "339499954043158530",
