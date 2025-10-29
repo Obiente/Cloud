@@ -18,6 +18,7 @@
   "dependencies": {
     "@ark-ui/vue": "^5.26.2",
     "@connectrpc/connect": "^2.1.0",
+    "@connectrpc/connect-node": "^2.1.0",
     "@connectrpc/connect-web": "^2.1.0",
     "@heroicons/vue": "^2.2.0",
     "@nuxt/icon": "2.0.0",
