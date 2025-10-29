@@ -1,0 +1,157 @@
+package middleware
+
+import (
+	"log"
+	"net/http"
+	"os"
+	"strings"
+)
+
+// CORSConfig holds CORS configuration
+type CORSConfig struct {
+	AllowedOrigins   []string
+	AllowedMethods   []string
+	AllowedHeaders   []string
+	ExposedHeaders   []string
+	AllowCredentials bool
+	MaxAge           string
+}
+
+// DefaultCORSConfig returns a default CORS configuration
+func DefaultCORSConfig() *CORSConfig {
+	// Get allowed origins from environment
+	originsEnv := os.Getenv("CORS_ORIGIN")
+	allowedOrigins := []string{"*"}
+	if originsEnv != "" {
+		allowedOrigins = strings.Split(originsEnv, ",")
+		// Trim spaces
+		for i, origin := range allowedOrigins {
+			allowedOrigins[i] = strings.TrimSpace(origin)
+		}
+	}
+
+	return &CORSConfig{
+		AllowedOrigins: allowedOrigins,
+		AllowedMethods: []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+			http.MethodOptions,
+			http.MethodHead,
+		},
+		AllowedHeaders: []string{
+			"Accept",
+			"Accept-Encoding",
+			"Authorization",
+			"Content-Type",
+			"Content-Length",
+			"Origin",
+			"X-Requested-With",
+			"X-CSRF-Token",
+			// Connect-RPC specific headers
+			"Connect-Protocol-Version",
+			"Connect-Timeout-Ms",
+			"Grpc-Timeout",
+			"X-Grpc-Web",
+			"X-User-Agent",
+		},
+		ExposedHeaders: []string{
+			"Content-Length",
+			"Content-Type",
+			// Connect-RPC specific headers
+			"Connect-Protocol-Version",
+			"Grpc-Status",
+			"Grpc-Message",
+			"Grpc-Status-Details-Bin",
+		},
+		AllowCredentials: true,
+		MaxAge:           "7200", // 2 hours
+	}
+}
+
+// CORS creates a CORS middleware with the given configuration
+func CORS(config *CORSConfig) func(http.Handler) http.Handler {
+	if config == nil {
+		config = DefaultCORSConfig()
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+
+			// Check if origin is allowed
+			allowedOrigin := ""
+
+			// If wildcard is configured
+			if len(config.AllowedOrigins) == 1 && config.AllowedOrigins[0] == "*" {
+				// When credentials are enabled, we MUST echo the origin, not use "*"
+				// Browsers reject "Access-Control-Allow-Origin: *" with credentials
+				if config.AllowCredentials && origin != "" {
+					allowedOrigin = origin
+				} else if !config.AllowCredentials {
+					allowedOrigin = "*"
+				} else {
+					// No origin header but credentials enabled, allow anyway
+					allowedOrigin = "*"
+				}
+			} else if origin != "" {
+				// Check if the specific origin is in the allowed list
+				for _, allowed := range config.AllowedOrigins {
+					if allowed == origin || allowed == "*" {
+						allowedOrigin = origin
+						break
+					}
+				}
+			}
+
+			// Set CORS headers if origin is allowed
+			if allowedOrigin != "" {
+				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+
+				// Vary header is important when echoing origin
+				if allowedOrigin != "*" {
+					w.Header().Add("Vary", "Origin")
+				}
+
+				if config.AllowCredentials {
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+				}
+
+				if len(config.AllowedMethods) > 0 {
+					w.Header().Set("Access-Control-Allow-Methods", strings.Join(config.AllowedMethods, ", "))
+				}
+
+				if len(config.AllowedHeaders) > 0 {
+					w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowedHeaders, ", "))
+				}
+
+				if len(config.ExposedHeaders) > 0 {
+					w.Header().Set("Access-Control-Expose-Headers", strings.Join(config.ExposedHeaders, ", "))
+				}
+
+				if config.MaxAge != "" {
+					w.Header().Set("Access-Control-Max-Age", config.MaxAge)
+				}
+			}
+
+			// Handle preflight OPTIONS request
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+
+			// Continue to next handler
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// CORSHandler wraps an http.Handler with CORS middleware
+func CORSHandler(handler http.Handler) http.Handler {
+	config := DefaultCORSConfig()
+	log.Printf("[Middleware] CORS initialized - AllowedOrigins: %v, AllowCredentials: %v",
+		config.AllowedOrigins, config.AllowCredentials)
+	return CORS(config)(handler)
+}

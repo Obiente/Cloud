@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log"
 	"net/http"
 
 	authv1connect "api/gen/proto/obiente/cloud/auth/v1/authv1connect"
@@ -8,6 +9,7 @@ import (
 	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/middleware"
 	authsvc "api/internal/services/auth"
 	deploymentsvc "api/internal/services/deployments"
 	orgsvc "api/internal/services/organizations"
@@ -20,15 +22,29 @@ import (
 
 // New constructs the primary Connect handler with all service registrations and reflection.
 func New() http.Handler {
+	log.Println("[Server] Registering routes...")
 	mux := http.NewServeMux()
 	registerRoot(mux)
 	registerServices(mux)
 	registerReflection(mux)
 
-	return h2c.NewHandler(mux, &http2.Server{})
+	log.Println("[Server] Wrapping with h2c for HTTP/2...")
+	// Wrap with h2c for HTTP/2
+	h2cHandler := h2c.NewHandler(mux, &http2.Server{})
+	
+	log.Println("[Server] Applying middleware stack...")
+	// Wrap with middleware (order matters: logging -> CORS -> handler)
+	handler := h2cHandler
+	handler = middleware.CORSHandler(handler)
+	handler = middleware.CORSDebugLogger(handler)
+	handler = middleware.RequestLogger(handler)
+	
+	log.Println("[Server] Handler chain complete")
+	return handler
 }
 
 func registerRoot(mux *http.ServeMux) {
+	// Root endpoint
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -40,6 +56,27 @@ func registerRoot(mux *http.ServeMux) {
 		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("obiente-cloud-api"))
+	})
+
+	// Health check endpoint (no auth required)
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+		
+		// Check database connection
+		sqlDB, err := database.DB.DB()
+		if err != nil || sqlDB.Ping() != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"unhealthy","message":"database unavailable"}`))
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"healthy","version":"1.0.0"}`))
 	})
 }
 
