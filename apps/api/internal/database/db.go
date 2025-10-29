@@ -58,6 +58,13 @@ func InitDatabase() error {
 
 	log.Println("Database schema migrated")
 
+	// Initialize deployment tracking tables
+	if err := InitDeploymentTracking(); err != nil {
+		return fmt.Errorf("failed to initialize deployment tracking: %w", err)
+	}
+
+	log.Println("Deployment tracking initialized")
+
 	return nil
 }
 
