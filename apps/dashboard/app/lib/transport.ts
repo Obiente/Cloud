@@ -3,19 +3,12 @@ import type { Transport } from "@connectrpc/connect";
 import type { Interceptor } from "@connectrpc/connect";
 
 /**
- * Pure factory for creating a connect transport instance.
- * Keep this file under `app/` so it can be imported in both
- * client plugins and server code without pulling in Nuxt server-only helpers.
- * 
- * @param baseUrl - The base URL for the API
- * @param getToken - Optional function to retrieve the auth token
+ * Create auth interceptor for adding tokens to requests
  */
-export function createTransport(
-  baseUrl: string, 
+export function createAuthInterceptor(
   getToken?: () => string | undefined | Promise<string | undefined>
-): Transport {
-  // Create interceptor to add auth token if available
-  const authInterceptor: Interceptor = (next) => async (req) => {
+): Interceptor {
+  return (next) => async (req) => {
     // Only add auth header if getToken is provided and returns a token
     if (getToken) {
       try {
@@ -32,12 +25,15 @@ export function createTransport(
     }
     return next(req);
   };
-  
-  // Create transport with auth interceptor
-  return createGrpcWebTransport({
-    baseUrl,
-    interceptors: [authInterceptor],
-  });
 }
 
-export default createTransport;
+// Export client-side transport factory
+export function createWebTransport(
+  baseUrl: string,
+  interceptor: Interceptor
+): Transport {
+  return createGrpcWebTransport({
+    baseUrl,
+    interceptors: [interceptor],
+  });
+}
