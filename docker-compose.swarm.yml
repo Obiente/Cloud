@@ -4,7 +4,6 @@ version: '3.8'
 # This is a simplified setup. For high availability, use docker-compose.swarm.ha.yml
 
 services:
-  # PostgreSQL Database (Single instance - for HA use docker-compose.swarm.ha.yml)
   postgres:
     image: postgres:16-alpine
     environment:
@@ -34,7 +33,6 @@ services:
     networks:
       - obiente-network
 
-  # Redis Cache
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
@@ -61,7 +59,6 @@ services:
     networks:
       - obiente-network
 
-  # API Service (Runs on every node to manage deployments)
   api:
     image: obiente/cloud-api:latest
     build:
@@ -87,8 +84,8 @@ services:
       DEPLOYMENT_STRATEGY: ${DEPLOYMENT_STRATEGY:-least-loaded}
       MAX_DEPLOYMENTS_PER_NODE: ${MAX_DEPLOYMENTS_PER_NODE:-50}
     volumes:
-      # Mount Docker socket to manage containers
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Mount Docker socket to manage containers (read-write required)
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - postgres
       - redis
@@ -127,7 +124,6 @@ services:
     networks:
       - obiente-network
 
-  # Traefik - Dynamic reverse proxy with service discovery
   traefik:
     image: traefik:v3.0
     command:
@@ -155,7 +151,7 @@ services:
       - "80:80"
       - "443:443"
       - "8000:8000"  # User deployments
-      - "8080:8080"  # Traefik dashboard
+      # 8080 (Traefik dashboard) intentionally not exposed in Swarm by default
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt

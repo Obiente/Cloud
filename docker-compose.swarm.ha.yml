@@ -292,7 +292,7 @@ services:
       SWARM_MANAGER_URL: ${SWARM_MANAGER_URL}
     volumes:
       # Mount Docker socket for managing deployments
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - pgpool
       - redis-1
@@ -394,9 +394,9 @@ services:
       - "80:80"
       - "443:443"
       - "8000:8000"  # User deployments
-      - "8080:8080"  # Traefik dashboard
+      # 8080 (Traefik dashboard) intentionally not exposed in Swarm by default
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
       - traefik_letsencrypt:/letsencrypt
     depends_on:
       - etcd
