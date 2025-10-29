@@ -79,7 +79,7 @@ Deploying in production? Start here:
 
 ## License
 
-[Your license here]
+[GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0)
 
 ---
 

@@ -97,6 +97,9 @@ jkl012         obiente_traefik       global       3/3        traefik:v2.11
 
 ## Service Configuration
 
+API domain
+- The API is exposed via Traefik at `api.${DOMAIN}` (from your `.env`).
+
 ### API Service
 
 The Go API runs in **global mode**, meaning one instance per node:

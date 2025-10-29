@@ -64,6 +64,25 @@ go build -o bin/api main.go
 docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
 ```
 
+### Rebuilding Docker Images
+
+**Important:** Docker Compose does NOT automatically rebuild images when code changes. After making code changes, you must rebuild:
+
+```bash
+# Build and restart in one command (recommended)
+docker-compose up -d --build api
+
+# Or rebuild separately
+docker-compose build api
+docker-compose restart api
+
+# Force full rebuild (ignores cache)
+docker-compose build --no-cache api
+docker-compose restart api
+```
+
+**Note:** If running the API locally (not in Docker), code changes are picked up automatically on restart.
+
 ### Hot Reload
 
 Use air for automatic reloading:
@@ -79,9 +98,18 @@ Create a `.env` file in the project root:
 
 ```bash
 LOG_LEVEL=debug
-CORS_ORIGIN=*
+# For local development with frontend on localhost:3000
+CORS_ORIGIN=http://localhost:3000
 DISABLE_AUTH=true
+
+# If using non-standard ports for API
+PUBLIC_HTTPS_PORT=2443
 ```
+
+**Important for CORS:**
+- When your frontend runs on `http://localhost:3000`, set `CORS_ORIGIN=http://localhost:3000` (with port)
+- The browser sends the exact origin including port in cross-origin requests
+- Multiple origins: `CORS_ORIGIN=http://localhost:3000,https://app.example.com`
 
 ## Debugging
 

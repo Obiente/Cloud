@@ -1,7 +1,7 @@
 {
   "name": "@obiente/cloud",
   "version": "0.0.0",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "scripts": {},
   "private": true,
   "packageManager": "pnpm@10.12.1",

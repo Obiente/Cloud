@@ -2,7 +2,7 @@
 
 > **A distributed Platform-as-a-Service (PaaS) for deploying and managing applications across multiple nodes**
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org/)
 [![Docker](https://img.shields.io/badge/Docker-24.0+-blue.svg)](https://www.docker.com/)
 
@@ -153,7 +153,7 @@ See [Contributing Guide](docs/reference/contributing.md) for details.
 
 ## License
 
-[MIT License](LICENSE)
+[GNU Affero General Public License v3.0](LICENSE)
 
 ## Support
 
