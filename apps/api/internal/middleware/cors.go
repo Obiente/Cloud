@@ -90,6 +90,7 @@ func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 				// Browsers reject "Access-Control-Allow-Origin: *" with credentials
 				if config.AllowCredentials && origin != "" {
 					allowedOrigin = origin
+					log.Printf("[CORS] Wildcard mode: echoing origin %s", origin)
 				} else if !config.AllowCredentials {
 					allowedOrigin = "*"
 				} else {
@@ -99,10 +100,25 @@ func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 			} else if origin != "" {
 				// Check if the specific origin is in the allowed list
 				for _, allowed := range config.AllowedOrigins {
-					if allowed == origin || allowed == "*" {
+					// Normalize origins for comparison (trim trailing slashes)
+					normalizedOrigin := strings.TrimSuffix(origin, "/")
+					normalizedAllowed := strings.TrimSuffix(allowed, "/")
+					
+					if normalizedAllowed == normalizedOrigin || allowed == "*" {
 						allowedOrigin = origin
+						log.Printf("[CORS] Origin %s matched allowed origin %s", origin, allowed)
 						break
 					}
+				}
+				
+				if allowedOrigin == "" {
+					log.Printf("[CORS] Origin %s NOT in allowed list: %v", origin, config.AllowedOrigins)
+				}
+			} else {
+				// No Origin header - might be same-origin request or browser didn't send it
+				// Still allow OPTIONS for preflight from same-origin
+				if r.Method == http.MethodOptions {
+					log.Printf("[CORS] OPTIONS request with no Origin header")
 				}
 			}
 
