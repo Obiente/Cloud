@@ -2,38 +2,6 @@
 
 @import "./tailwind/index.css";
 /* Layout Components */
-.sidebar-nav {
-  @apply flex-col min-h-screen;
-}
-
-.sidebar-nav.desktop-sidebar {
-  @apply flex w-64 bg-surface border-r border-border-muted sticky top-0 h-screen flex-shrink-0;
-}
-
-@media (max-width: 1023px) {
-  .sidebar-nav.desktop-sidebar {
-    display: none !important;
-  }
-}
-
-.sidebar-nav.sidebar-drawer {
-  @apply flex w-full bg-surface-base;
-}
-
-.hamburger-button {
-  display: block;
-}
-
-@media (min-width: 1024px) {
-  .hamburger-button {
-    display: none !important;
-  }
-}
-
-.sidebar-drawer {
-  @apply flex flex-col bg-surface;
-}
-
 .sidebar-overlay-enter-active,
 .sidebar-overlay-leave-active {
   @apply transition-opacity duration-300;
@@ -54,9 +22,7 @@
   @apply -translate-x-full;
 }
 
-.main-content {
-  @apply flex-1 p-6 bg-background min-h-screen;
-}
+/* Main content styles moved to Tailwind classes directly in templates */
 
 :root {
   --oui-spacing-base: 1;

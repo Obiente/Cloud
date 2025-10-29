@@ -1,5 +1,5 @@
 <template>
-  <OuiContainer size="7xl" py="xl" class="min-h-screen">
+  <OuiContainer class="min-h-screen">
     <OuiStack gap="xl">
       <OuiFlex justify="between" align="start" wrap="wrap" gap="lg">
         <OuiStack gap="sm" class="max-w-xl">
@@ -29,6 +29,14 @@
           <OuiText as="span" size="sm" weight="medium">New Deployment</OuiText>
         </OuiButton>
       </OuiFlex>
+
+      <!-- Show error alert if there was a problem loading deployments -->
+      <ErrorAlert
+        v-if="listError"
+        :error="listError"
+        title="Failed to load deployments"
+        hint="Please try refreshing the page. If the problem persists, contact support."
+      />
 
       <OuiCard
         variant="default"
@@ -145,6 +153,13 @@
                       class="h-3.5 w-3.5 opacity-0 group-hover/link:opacity-100 transition-opacity"
                     />
                   </a>
+                  <!-- Show ownership information if we implement it later -->
+                  <OuiFlex v-if="false" align="center" gap="xs" class="mt-0.5">
+                    <UserIcon class="h-3 w-3 text-secondary" />
+                    <OuiText size="xs" color="secondary"
+                      >Created by you</OuiText
+                    >
+                  </OuiFlex>
                 </OuiStack>
                 <OuiFlex gap="sm" justify="end">
                   <OuiBadge :variant="getStatusMeta(deployment.status).badge">
@@ -293,7 +308,10 @@
                 </OuiGrid>
 
                 <OuiBox
-                  v-if="deployment.status === DeploymentStatus.BUILDING || deployment.status === DeploymentStatus.DEPLOYING"
+                  v-if="
+                    deployment.status === DeploymentStatus.BUILDING ||
+                    deployment.status === DeploymentStatus.DEPLOYING
+                  "
                   p="md"
                   rounded="xl"
                   class="border backdrop-blur-sm"
@@ -409,6 +427,14 @@
       >
         <form @submit.prevent="createDeployment">
           <OuiStack gap="lg">
+            <!-- Error display for permission/authentication issues -->
+            <ErrorAlert
+              v-if="createError"
+              :error="createError"
+              title="Unable to create deployment"
+              hint="Make sure you're logged in and have permission to create deployments."
+            />
+
             <OuiInput
               v-model="newDeployment.name"
               label="Project Name"
@@ -465,6 +491,7 @@
     PlusIcon,
     RocketLaunchIcon,
     StopIcon,
+    UserIcon,
   } from "@heroicons/vue/24/outline";
 
   import {
@@ -477,6 +504,13 @@
   import { date, timestamp } from "@obiente/proto/utils";
   import { useConnectClient } from "~/lib/connect-client";
   import { useDeploymentActions } from "~/composables/useDeploymentActions";
+  import ErrorAlert from "~/components/ErrorAlert.vue";
+
+  // Error handling
+  const createError = ref<Error | null>(null);
+  const listError = ref<Error | null>(null);
+
+  // Filters
   const searchQuery = ref("");
   const statusFilter = ref("");
   const environmentFilter = ref("");
@@ -567,9 +601,9 @@
       pulseDot: false,
     },
     DEFAULT: {
-      badge: "success",
-      label: "Unknown",
-      description: "Status information is unavailable.",
+      badge: "primary",
+      label: "New deployment",
+      description: "This deployment is being created.",
       cardClass: "hover:ring-1 hover:ring-border-muted",
       beforeGradient:
         "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-surface-muted/30 before:via-surface-muted/20 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
@@ -691,7 +725,16 @@
 
   const { data: deployments } = await useAsyncData(
     "deployments-list",
-    async () => (await client.listDeployments({})).deployments
+    async () => {
+      try {
+        const response = await client.listDeployments({});
+        return response.deployments;
+      } catch (error) {
+        console.error("Failed to list deployments:", error);
+        listError.value = error as Error;
+        return [];
+      }
+    }
   );
   const cleanRepositoryName = (url: string) => {
     if (!url) return "";
@@ -782,27 +825,41 @@
   };
 
   const createDeployment = async () => {
+    if (!newDeployment.value.name.trim()) {
+      alert("Please enter a project name");
+      return;
+    }
+
+    // Clear previous errors
+    createError.value = null;
+
     try {
       const deployment = await deploymentActions.createDeployment({
         name: newDeployment.value.name,
         type: Number(newDeployment.value.type),
-        branch: 'main',
+        branch: "main",
       });
-      
-      if (!deployment) {
-        throw new Error('Failed to create deployment');
-      }
-      
+
       showCreateDialog.value = false;
       // Reset form for next time
       newDeployment.value = { name: "", type: String(DeploymentType.DOCKER) };
 
+      // Add to local deployments list if it's not there already
+      if (
+        deployment &&
+        !deployments.value?.find((d) => d.id === deployment.id)
+      ) {
+        deployments.value = [...(deployments.value || []), deployment];
+      }
+
       // Navigate to the detail page to finish configuration
-      const router = useRouter();
-      router.push(`/deployments/${deployment.id}`);
+      if (deployment) {
+        const router = useRouter();
+        router.push(`/deployments/${deployment.id}`);
+      }
     } catch (error) {
-      console.error('Failed to create deployment:', error);
-      alert('Failed to create deployment. Please try again.');
+      console.error("Failed to create deployment:", error);
+      createError.value = error as Error;
     }
   };
 </script>

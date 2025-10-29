@@ -2,32 +2,38 @@
   <div class="min-h-screen bg-background">
     <!-- Hero Section -->
 
-    <OuiContainer size="7xl" class="relative">
+    <OuiContainer
+      as="nav"
+      :size="isScrolled ? '5xl' : '7xl'"
+      class="flex items-center rounded-xl justify-between w-full mx-auto transform-gpu transition-all duration-500 ease-out border relative sticky top-5 z-30 transition-all duration-500 ease-out transform-gpu will-change-transform"
+      :class="
+        isScrolled
+          ? 'py-2 px-2 bg-background/80 backdrop-blur-md shadow-sm border-border-muted'
+          : 'p-0 bg-background border-transparent'
+      "
+    >
       <!-- Navigation -->
-      <nav class="flex items-center justify-between py-6">
-        <OuiFlex align="center" gap="md">
-          <OuiBox class="flex items-center gap-2">
-            <OuiText size="xl" weight="bold" color="primary"
-              >Obiente Cloud</OuiText
-            >
-          </OuiBox>
-        </OuiFlex>
 
-        <OuiFlex align="center" gap="md" class="md:flex">
-          <OuiButton variant="ghost" size="sm">Web Hosting</OuiButton>
-          <OuiButton variant="ghost" size="sm">Game Hosting</OuiButton>
-          <OuiButton variant="ghost" size="sm">VPS</OuiButton>
-          <OuiButton variant="ghost" size="sm">Pricing</OuiButton>
-          <OuiButton variant="ghost" size="sm">Docs</OuiButton>
-          <OuiButton
-            variant="outline"
-            size="sm"
-            @click="navigateTo('/dashboard')"
-            >Sign In</OuiButton
+      <OuiFlex align="center" gap="md">
+        <OuiBox class="flex items-center gap-2">
+          <OuiText size="xl" weight="bold" color="primary"
+            >Obiente Cloud</OuiText
           >
-        </OuiFlex>
-      </nav>
+        </OuiBox>
+      </OuiFlex>
 
+      <OuiFlex align="center" gap="md" class="md:flex">
+        <OuiButton variant="ghost" size="sm">Web Hosting</OuiButton>
+        <OuiButton variant="ghost" size="sm">Game Hosting</OuiButton>
+        <OuiButton variant="ghost" size="sm">VPS</OuiButton>
+        <OuiButton variant="ghost" size="sm">Pricing</OuiButton>
+        <OuiButton variant="ghost" size="sm">Docs</OuiButton>
+        <OuiButton variant="outline" size="sm" @click="navigateTo('/dashboard')"
+          >Sign In</OuiButton
+        >
+      </OuiFlex>
+    </OuiContainer>
+    <OuiContainer size="7xl" class="relative">
       <!-- Hero Content -->
       <OuiStack gap="2xl" align="center" class="text-center py-32 md:py-40">
         <OuiStack gap="lg" align="center" class="max-w-4xl">
@@ -315,45 +321,33 @@
 
                 <OuiStack gap="sm" align="start" class="text-left">
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
                       >1 web deployment</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
                       >1 game server slot</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
                       >1 shared vCPU (Ryzen 7 7900x)</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary">512MB RAM</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary">2GB storage</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary">Free support</OuiText>
                   </OuiFlex>
                 </OuiStack>
@@ -399,55 +393,41 @@
 
                 <OuiStack gap="sm" align="start" class="text-left">
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
                       >10 web deployments</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
                       >5 game servers</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
                       >2 shared vCPUs (Ryzen 7 7900x)</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
                       >2GB RAM per instance</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary">50GB storage</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
                       >Custom configurations</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary">Free support</OuiText>
                   </OuiFlex>
                 </OuiStack>
@@ -492,41 +472,31 @@
 
                 <OuiStack gap="sm" align="start" class="text-left">
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
                       >Unlimited deployments</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
                       >Unlimited game servers</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
                       >Scale resources as needed</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
                       >Premium hardware</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
-                    <CheckIcon
-                      class="h-4 w-4 text-accent-success shrink-0"
-                    />
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary">Free support</OuiText>
                   </OuiFlex>
                 </OuiStack>
@@ -583,11 +553,13 @@
     </OuiContainer>
 
     <!-- Footer -->
-<AppFooter/>
+    <AppFooter />
   </div>
 </template>
 
 <script setup lang="ts">
+  import { computed } from "vue";
+  import { useWindowScroll } from "@vueuse/core";
   import {
     RocketLaunchIcon,
     PlayIcon,
@@ -603,6 +575,10 @@
   definePageMeta({
     layout: false, // Use custom layout for homepage
   });
+
+  // Scroll state for header effect using VueUse
+  const { y: scrollY } = useWindowScroll();
+  const isScrolled = computed(() => scrollY.value > 10);
 
   // SEO meta
   useHead({
