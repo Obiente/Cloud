@@ -337,7 +337,10 @@
   import { date, timestamp } from "@obiente/proto/utils";
   import { useConnectClient } from "~/lib/connect-client";
   import { useDeploymentActions } from "~/composables/useDeploymentActions";
-
+  definePageMeta({
+    layout: "default",
+    middleware: "auth",
+  });
   const route = useRoute();
   const id = computed(() => String(route.params.id));
 

@@ -95,7 +95,8 @@
                 </template>
               </AppHeader>
               <!-- Two-color inside-out notch at header bottom-left -->
-              <div class="pointer-events-none relative left-0 w-14 h-14">
+               <!-- TODO: make this use a mask-image to create the notch -->
+              <div class="pointer-events-none relative left-0 w-14 h-14 -z-20">
                 <!-- small top-left cap that matches sidebar/header color -->
                 <div class="absolute inset-0 bg-surface-base"></div>
                 <!-- concave quarter-circle using main content background -->

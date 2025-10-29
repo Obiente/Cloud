@@ -12,7 +12,6 @@ export default eventHandler(async (event) => {
   }
 
   const token = session.secure.access_token;
-  console.log("token", token);
   // Validate that the token is a non-empty string
   if (typeof token !== "string" || token.trim() === "") {
     console.warn("Invalid token found in session");

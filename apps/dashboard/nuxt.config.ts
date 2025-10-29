@@ -6,10 +6,10 @@ export default defineNuxtConfig({
     plugins: [tailwindcss()],
     server: {
       proxy: {
-        "/api": {
+        "/go-api": {
           target: "http://localhost:3001",
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, ""),
+          rewrite: (path) => path.replace(/^\/go-api/, ""),
         },
       },
       hmr: {
@@ -40,7 +40,7 @@ export default defineNuxtConfig({
     // Public keys (exposed to client-side)
     public: {
       requestHost: "http://localhost:3000",
-      apiBaseUrl: "http://localhost:3000",
+      apiHost: "http://localhost:3001",
       oidcIssuer: "https://obiente.cloud",
       oidcBase: "https://auth.obiente.cloud",
       oidcClientId: "339499954043158530",

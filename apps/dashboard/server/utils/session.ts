@@ -108,7 +108,6 @@ export function _useSession<T extends Record<string, any> = UserSession>(
 ) {
   if (!sessionConfig) {
     const runtimeConfig = useRuntimeConfig(isEvent(event) ? event : undefined);
-    console.log(runtimeConfig.session);
     sessionConfig = defu(
       { password: runtimeConfig.session.password },
       runtimeConfig.session
