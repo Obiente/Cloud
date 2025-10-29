@@ -2,6 +2,9 @@ import type { H3Event } from "h3";
 import type { ZitadelErrorResponse, ZitadelTokenClaims } from "@obiente/types";
 import { jwtVerify, decodeJwt, createRemoteJWKSet } from "jose";
 
+// Import directly from the relative path to avoid module resolution issues
+import { AUTH_COOKIE_NAME } from "./auth";
+
 /**
  * Get the access token from a cookie
  */
@@ -10,7 +13,9 @@ export function getAccessToken(event: H3Event): string | undefined {
 }
 
 /**
- * Verify and decode a Zitadel access token
+ * Verify and decode a Zitadel access token (JWT)
+ * NOTE: If access tokens are bearer tokens (not JWTs), this function should NOT be used.
+ * Bearer tokens should be validated by the API backend, not in the middleware.
  */
 export async function verifyAccessToken(token: string) {
   const config = useRuntimeConfig();
@@ -27,7 +32,8 @@ export async function verifyAccessToken(token: string) {
 }
 
 /**
- * Decode token without verifying (useful for getting expiration)
+ * Decode JWT token without verifying (useful for getting expiration)
+ * NOTE: This only works for JWT tokens. Bearer tokens cannot be decoded.
  */
 export function decodeToken<T extends ZitadelTokenClaims>(token: string): T {
   return decodeJwt<T>(token);
