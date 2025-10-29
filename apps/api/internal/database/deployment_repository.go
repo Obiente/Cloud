@@ -55,9 +55,17 @@ func (r *DeploymentRepository) GetAll(ctx context.Context, organizationID string
 	query := r.db.WithContext(ctx).Where("organization_id = ?", organizationID)
 
 	if filters != nil {
+		// Apply status filter if provided
 		if filters.Status != nil {
 			query = query.Where("status = ?", *filters.Status)
 		}
+
+		// Apply user ID filter if provided and not in "include all" mode
+		if filters.UserID != "" && !filters.IncludeAll {
+			query = query.Where("created_by = ?", filters.UserID)
+		}
+
+		// Apply pagination
 		if filters.Limit > 0 {
 			query = query.Limit(int(filters.Limit))
 		}
@@ -105,15 +113,31 @@ func (r *DeploymentRepository) Delete(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Delete(&Deployment{}, "id = ?", id).Error
 }
 
-func (r *DeploymentRepository) Count(ctx context.Context, organizationID string) (int64, error) {
+func (r *DeploymentRepository) Count(ctx context.Context, organizationID string, filters *DeploymentFilters) (int64, error) {
+	query := r.db.WithContext(ctx).Model(&Deployment{}).
+		Where("organization_id = ?", organizationID)
+	
+	// Apply additional filters if provided
+	if filters != nil {
+		// Apply status filter
+		if filters.Status != nil {
+			query = query.Where("status = ?", *filters.Status)
+		}
+		
+		// Apply user ID filter if provided and not in "include all" mode
+		if filters.UserID != "" && !filters.IncludeAll {
+			query = query.Where("created_by = ?", filters.UserID)
+		}
+	}
+	
 	var count int64
-	return count, r.db.WithContext(ctx).Model(&Deployment{}).
-		Where("organization_id = ?", organizationID).
-		Count(&count).Error
+	return count, query.Count(&count).Error
 }
 
 type DeploymentFilters struct {
-	Status *int32
-	Limit  int
-	Offset int
+	Status     *int32
+	Limit      int
+	Offset     int
+	UserID     string // Filter by creator user ID
+	IncludeAll bool   // Include all deployments regardless of creator (for admins)
 }
