@@ -505,7 +505,10 @@
   import { useConnectClient } from "~/lib/connect-client";
   import { useDeploymentActions } from "~/composables/useDeploymentActions";
   import ErrorAlert from "~/components/ErrorAlert.vue";
-
+  definePageMeta({
+    layout: "default",
+    middleware: "auth",
+  });
   // Error handling
   const createError = ref<Error | null>(null);
   const listError = ref<Error | null>(null);
@@ -734,7 +737,8 @@
         listError.value = error as Error;
         return [];
       }
-    }
+    },
+    { server: true }
   );
   const cleanRepositoryName = (url: string) => {
     if (!url) return "";
