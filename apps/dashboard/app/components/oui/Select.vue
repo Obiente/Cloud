@@ -1,20 +1,17 @@
 <template>
-  <div class="w-full">
-    <Select.RootProvider
-      :collection="collection"
-      :value="select"
-      v-bind="$attrs"
-    >
-      <Select.Label
-        v-if="label"
-        class="block text-sm font-medium text-secondary mb-2"
-      >
-        {{ label }}
-      </Select.Label>
+  <Field.Root
+    :invalid="!!error"
+    :required="required"
+    :disabled="disabled"
+    class="oui-field space-y-1 w-full"
+  >
+    <Field.Label v-if="label" class="block text-sm font-medium text-primary">
+      {{ label }}
+    </Field.Label>
+
+    <Select.Root :collection="collection" :disabled="disabled" v-bind="$attrs">
       <Select.Control class="relative">
-        <Select.Trigger
-          class="oui-input w-full flex items-center justify-between text-left"
-        >
+        <Select.Trigger :class="triggerClasses" :disabled="disabled">
           <Select.ValueText
             :placeholder="placeholder || 'Select an option...'"
             class="truncate"
@@ -26,9 +23,9 @@
       </Select.Control>
 
       <Teleport to="body">
-        <Select.Positioner>
+        <Select.Positioner class="w-[--reference-width]">
           <Select.Content
-            class="z-50 min-w-[8rem] overflow-hidden rounded-md border border-border-default bg-surface-base p-1 shadow-md animate-in data-[side=bottom]:slide-in-from-top-2"
+            class="z-50 min-w-[8rem] w-[--reference-width] overflow-hidden rounded-md border border-border-default bg-surface-base p-1 shadow-md animate-in data-[side=bottom]:slide-in-from-top-2"
           >
             <Select.ItemGroup>
               <Select.Item
@@ -41,7 +38,7 @@
                   class="absolute left-2 flex h-3.5 w-3.5 items-center justify-center"
                 >
                   <Select.ItemIndicator>
-                    <CheckIcon class="h-4 w-4" />
+                    <CheckIcon class="h-4 w-4 text-primary" />
                   </Select.ItemIndicator>
                 </span>
                 <Select.ItemText>{{ item.label }}</Select.ItemText>
@@ -52,51 +49,77 @@
       </Teleport>
 
       <Select.HiddenSelect />
-    </Select.RootProvider>
-  </div>
+    </Select.Root>
+
+    <Field.ErrorText v-if="error" class="text-sm text-danger">
+      {{ error }}
+    </Field.ErrorText>
+    <Field.HelperText v-else-if="helperText" class="text-sm text-secondary">
+      {{ helperText }}
+    </Field.HelperText>
+  </Field.Root>
 </template>
 
 <script setup lang="ts">
-import {
-  Select,
-  SelectItem,
-  createListCollection,
-  useSelect,
-} from "@ark-ui/vue/select";
-import { CheckIcon, ChevronUpDownIcon } from "@heroicons/vue/24/outline";
+  import { computed } from "vue";
+  import {
+    Select,
+    SelectItem,
+    createListCollection,
+    useSelect,
+  } from "@ark-ui/vue/select";
+  import { Field } from "@ark-ui/vue/field";
+  import { CheckIcon, ChevronUpDownIcon } from "@heroicons/vue/24/outline";
 
-interface SelectItem {
-  label: string;
-  value: string | number;
-  disabled?: boolean;
-}
+  interface SelectItem {
+    label: string;
+    value: string | number;
+    disabled?: boolean;
+  }
 
-interface Props {
-  label?: string;
-  placeholder?: string;
-  items: SelectItem[];
-}
+  interface Props {
+    label?: string;
+    placeholder?: string;
+    items: SelectItem[];
+    helperText?: string;
+    error?: string;
+    required?: boolean;
+    disabled?: boolean;
+    size?: "sm" | "md" | "lg";
+  }
 
-const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    size: "md",
+    required: false,
+    disabled: false,
+  });
 
-const collection = createListCollection({
-  items: props.items,
-});
+  const collection = createListCollection({
+    items: props.items,
+  });
 
-const select = useSelect({
-  collection: collection,
-  multiple: false,
-});
-defineModel<string | string[]>({
-  get: () => select.value.value,
-  set: (val) => {
-    if (!Array.isArray(val)) {
-      val = [val];
-    }
-    select.value.setValue(val);
-  },
-});
-defineOptions({
-  inheritAttrs: false,
-});
+  const select = useSelect({
+    collection: collection,
+    multiple: false,
+  });
+  const triggerClasses = computed(() => [
+    "oui-input",
+    `oui-input-${props.size}`,
+    props.error ? "oui-input-error" : "oui-input-base",
+    "w-full flex items-center justify-between text-left",
+  ]);
+
+  defineModel<string | string[]>({
+    get: () => select.value.value,
+    set: (val) => {
+      if (!Array.isArray(val)) {
+        val = [val];
+      }
+      select.value.setValue(val);
+    },
+  });
+
+  defineOptions({
+    inheritAttrs: false,
+  });
 </script>

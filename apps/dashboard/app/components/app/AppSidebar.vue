@@ -1,5 +1,5 @@
 <template>
-  <nav class="sidebar-nav" :class="$attrs.class">
+  <nav class="flex flex-col min-h-screen bg-surface-base" :class="$attrs.class">
     <div class="p-6">
       <div class="flex items-center justify-between mb-6">
         <div class="flex items-start space-x-3">
