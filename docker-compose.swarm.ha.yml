@@ -1,0 +1,539 @@
+version: '3.8'
+
+# Obiente Cloud - High Availability Docker Swarm Configuration
+# This setup supports distributed deployments across multiple nodes
+
+services:
+  # ============================================================================
+  # DISTRIBUTED DATABASE CLUSTER (PostgreSQL + Patroni)
+  # ============================================================================
+  
+  # etcd - Distributed consensus for Patroni
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.12
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd
+      - --initial-advertise-peer-urls=http://etcd:2380
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+      - --initial-cluster=etcd=http://etcd:2380
+      - --initial-cluster-state=new
+      - --initial-cluster-token=obiente-cluster
+    deploy:
+      replicas: 3
+      placement:
+        max_replicas_per_node: 1
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    volumes:
+      - etcd_data:/etcd-data
+    networks:
+      - obiente-network
+
+  # HAProxy - PostgreSQL connection pooler and load balancer
+  pgpool:
+    image: bitnami/pgpool:4
+    environment:
+      PGPOOL_BACKEND_NODES: 0:patroni-1:5432,1:patroni-2:5432,2:patroni-3:5432
+      PGPOOL_SR_CHECK_USER: ${POSTGRES_USER:-obiente-postgres}
+      PGPOOL_SR_CHECK_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      PGPOOL_ENABLE_LDAP: 'no'
+      PGPOOL_POSTGRES_USERNAME: ${POSTGRES_USER:-obiente-postgres}
+      PGPOOL_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      PGPOOL_ADMIN_USERNAME: admin
+      PGPOOL_ADMIN_PASSWORD: ${PGPOOL_ADMIN_PASSWORD:-adminpassword}
+      PGPOOL_ENABLE_LOAD_BALANCING: 'yes'
+      PGPOOL_MAX_POOL: 100
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "/opt/bitnami/scripts/pgpool/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - obiente-network
+
+  # Patroni PostgreSQL - Node 1 (Leader)
+  patroni-1:
+    image: patroni/patroni:3.2.2
+    hostname: patroni-1
+    environment:
+      PATRONI_NAME: patroni-1
+      PATRONI_SCOPE: obiente-cluster
+      PATRONI_ETCD3_HOSTS: etcd:2379
+      PATRONI_RESTAPI_CONNECT_ADDRESS: patroni-1:8008
+      PATRONI_RESTAPI_LISTEN: 0.0.0.0:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: patroni-1:5432
+      PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
+      PATRONI_POSTGRESQL_DATA_DIR: /var/lib/postgresql/data
+      PATRONI_POSTGRESQL_PGPASS: /tmp/pgpass
+      PATRONI_SUPERUSER_USERNAME: ${POSTGRES_USER:-obiente-postgres}
+      PATRONI_SUPERUSER_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      PATRONI_REPLICATION_USERNAME: replicator
+      PATRONI_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator-password}
+      PATRONI_admin_PASSWORD: ${PATRONI_ADMIN_PASSWORD:-admin}
+      PATRONI_admin_OPTIONS: 'createdb,createrole'
+    volumes:
+      - patroni_1_data:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.postgres.replica == 1
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    networks:
+      - obiente-network
+
+  # Patroni PostgreSQL - Node 2 (Replica)
+  patroni-2:
+    image: patroni/patroni:3.2.2
+    hostname: patroni-2
+    environment:
+      PATRONI_NAME: patroni-2
+      PATRONI_SCOPE: obiente-cluster
+      PATRONI_ETCD3_HOSTS: etcd:2379
+      PATRONI_RESTAPI_CONNECT_ADDRESS: patroni-2:8008
+      PATRONI_RESTAPI_LISTEN: 0.0.0.0:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: patroni-2:5432
+      PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
+      PATRONI_POSTGRESQL_DATA_DIR: /var/lib/postgresql/data
+      PATRONI_POSTGRESQL_PGPASS: /tmp/pgpass
+      PATRONI_SUPERUSER_USERNAME: ${POSTGRES_USER:-obiente-postgres}
+      PATRONI_SUPERUSER_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      PATRONI_REPLICATION_USERNAME: replicator
+      PATRONI_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator-password}
+      PATRONI_admin_PASSWORD: ${PATRONI_ADMIN_PASSWORD:-admin}
+      PATRONI_admin_OPTIONS: 'createdb,createrole'
+    volumes:
+      - patroni_2_data:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.postgres.replica == 2
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    networks:
+      - obiente-network
+
+  # Patroni PostgreSQL - Node 3 (Replica)
+  patroni-3:
+    image: patroni/patroni:3.2.2
+    hostname: patroni-3
+    environment:
+      PATRONI_NAME: patroni-3
+      PATRONI_SCOPE: obiente-cluster
+      PATRONI_ETCD3_HOSTS: etcd:2379
+      PATRONI_RESTAPI_CONNECT_ADDRESS: patroni-3:8008
+      PATRONI_RESTAPI_LISTEN: 0.0.0.0:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: patroni-3:5432
+      PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
+      PATRONI_POSTGRESQL_DATA_DIR: /var/lib/postgresql/data
+      PATRONI_POSTGRESQL_PGPASS: /tmp/pgpass
+      PATRONI_SUPERUSER_USERNAME: ${POSTGRES_USER:-obiente-postgres}
+      PATRONI_SUPERUSER_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      PATRONI_REPLICATION_USERNAME: replicator
+      PATRONI_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator-password}
+      PATRONI_admin_PASSWORD: ${PATRONI_ADMIN_PASSWORD:-admin}
+      PATRONI_admin_OPTIONS: 'createdb,createrole'
+    volumes:
+      - patroni_3_data:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.postgres.replica == 3
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    networks:
+      - obiente-network
+
+  # ============================================================================
+  # REDIS CLUSTER (for caching, sessions, job queues)
+  # ============================================================================
+  
+  redis-1:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --appendonly yes
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --port 6379
+    volumes:
+      - redis_1_data:/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.redis == 1
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - obiente-network
+
+  redis-2:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --appendonly yes
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --port 6379
+    volumes:
+      - redis_2_data:/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.redis == 2
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - obiente-network
+
+  redis-3:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --appendonly yes
+      --cluster-enabled yes
+      --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000
+      --port 6379
+    volumes:
+      - redis_3_data:/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.redis == 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - obiente-network
+
+  # ============================================================================
+  # OBIENTE CLOUD API SERVICES
+  # ============================================================================
+  
+  # Go API - ConnectRPC service for deployments
+  api:
+    image: obiente/cloud-api:latest
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      PORT: ${GO_API_PORT:-3001}
+      # Connect to PostgreSQL via PgPool
+      DB_HOST: pgpool
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-obiente-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      DB_NAME: ${POSTGRES_DB:-obiente}
+      # Redis cluster endpoints
+      REDIS_CLUSTER_NODES: redis-1:6379,redis-2:6379,redis-3:6379
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      # CORS Configuration
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      # Docker Swarm API
+      DOCKER_HOST: unix:///var/run/docker.sock
+      # Deployment tracking
+      NODE_ID: ${NODE_ID}
+      SWARM_MANAGER_URL: ${SWARM_MANAGER_URL}
+    volumes:
+      # Mount Docker socket for managing deployments
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - pgpool
+      - redis-1
+    deploy:
+      mode: global  # One instance per node
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '1'
+          memory: 512M
+      labels:
+        - "com.obiente.service=api"
+        - "com.obiente.role=control-plane"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${GO_API_PORT:-3001}/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - obiente-network
+
+  # ============================================================================
+  # DEPLOYMENT ORCHESTRATOR
+  # ============================================================================
+  
+  # Deployment orchestrator - manages user deployments across nodes
+  deployment-orchestrator:
+    image: obiente/deployment-orchestrator:latest
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-obiente-postgres}:${POSTGRES_PASSWORD:-obiente-postgres}@pgpool:5432/${POSTGRES_DB:-obiente}
+      REDIS_CLUSTER_NODES: redis-1:6379,redis-2:6379,redis-3:6379
+      DOCKER_HOST: unix:///var/run/docker.sock
+      # Scheduling strategy
+      DEPLOYMENT_STRATEGY: ${DEPLOYMENT_STRATEGY:-least-loaded}
+      MAX_DEPLOYMENTS_PER_NODE: ${MAX_DEPLOYMENTS_PER_NODE:-50}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - pgpool
+      - redis-1
+      - api
+    deploy:
+      replicas: 2
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        order: start-first
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+      labels:
+        - "com.obiente.service=orchestrator"
+        - "com.obiente.role=control-plane"
+    networks:
+      - obiente-network
+
+  # ============================================================================
+  # SERVICE DISCOVERY & ROUTING
+  # ============================================================================
+  
+  # Traefik - Dynamic reverse proxy with service discovery
+  traefik:
+    image: traefik:v3.0
+    command:
+      - --api.dashboard=true
+      - --api.insecure=false
+      - --providers.docker.swarmmode=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=obiente-network
+      - --providers.etcd.endpoints=etcd:2379
+      - --providers.etcd.rootkey=traefik
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.deployments.address=:8000
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --metrics.prometheus=true
+      - --accesslog=true
+      - --log.level=INFO
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8000:8000"  # User deployments
+      - "8080:8080"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    depends_on:
+      - etcd
+    deploy:
+      replicas: 2
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        order: start-first
+      resources:
+        limits:
+          cpus: '1'
+          memory: 256M
+        reservations:
+          cpus: '0.5'
+          memory: 128M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
+        - "traefik.http.routers.traefik.entrypoints=websecure"
+        - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.traefik.service=api@internal"
+        - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+        # API routing
+        - "traefik.http.routers.api.rule=Host(`api.${DOMAIN}`)"
+        - "traefik.http.routers.api.entrypoints=websecure"
+        - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+        - "traefik.http.services.api.loadbalancer.server.port=3001"
+    networks:
+      - obiente-network
+
+  # ============================================================================
+  # MONITORING & OBSERVABILITY
+  # ============================================================================
+  
+  # Prometheus - Metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+    volumes:
+      - prometheus_data:/prometheus
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - obiente-network
+
+  # Grafana - Visualization
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN}`)"
+        - "traefik.http.routers.grafana.entrypoints=websecure"
+        - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+        - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    networks:
+      - obiente-network
+
+# ============================================================================
+# VOLUMES
+# ============================================================================
+
+volumes:
+  # etcd
+  etcd_data:
+    driver: local
+  
+  # PostgreSQL Patroni
+  patroni_1_data:
+    driver: local
+  patroni_2_data:
+    driver: local
+  patroni_3_data:
+    driver: local
+  
+  # Redis Cluster
+  redis_1_data:
+    driver: local
+  redis_2_data:
+    driver: local
+  redis_3_data:
+    driver: local
+  
+  # Traefik
+  traefik_letsencrypt:
+    driver: local
+  
+  # Monitoring
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# ============================================================================
+# NETWORKS
+# ============================================================================
+
+networks:
+  obiente-network:
+    driver: overlay
+    attachable: true
+    ipam:
+      config:
+        - subnet: 10.0.9.0/24
+
