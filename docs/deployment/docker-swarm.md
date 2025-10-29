@@ -1,0 +1,326 @@
+# Docker Swarm Deployment
+
+This guide explains how to deploy Obiente Cloud using Docker Swarm for distributed, production-ready deployments.
+
+## Overview
+
+Docker Swarm deployment provides:
+- ✅ Distributed architecture across multiple nodes
+- ✅ Automatic load balancing
+- ✅ Service discovery
+- ✅ Rolling updates with zero downtime
+- ✅ Simple high availability setup
+
+## Prerequisites
+
+- Docker Engine 20.10+ with Swarm mode
+- At least 1 manager node (recommended: 3 managers for HA)
+- Worker nodes as needed for load distribution
+- Domain name with DNS pointing to your nodes
+- SSL certificates (auto-handled by Traefik)
+
+## Initial Setup
+
+### 1. Initialize Docker Swarm
+
+On your first manager node:
+
+```bash
+docker swarm init --advertise-addr <MANAGER-IP>
+```
+
+To get the join token for additional managers:
+
+```bash
+docker swarm join-token manager
+```
+
+To get the join token for workers:
+
+```bash
+docker swarm join-token worker
+```
+
+### 2. Join Additional Nodes
+
+On additional manager nodes:
+
+```bash
+docker swarm join --token <MANAGER-TOKEN> <MANAGER-IP>:2377
+```
+
+On worker nodes:
+
+```bash
+docker swarm join --token <WORKER-TOKEN> <MANAGER-IP>:2377
+```
+
+### 3. Create Environment File
+
+Copy the example environment file:
+
+```bash
+cp env.swarm.example .env
+```
+
+Edit `.env` with your configuration:
+- Update database passwords
+- Configure Zitadel authentication
+- Set your domain name
+- Generate secrets for JWT and sessions
+
+### 4. Deploy the Stack
+
+Deploy to the Swarm cluster:
+
+```bash
+docker stack deploy -c docker-compose.swarm.yml obiente
+```
+
+### 5. Verify Deployment
+
+Check service status:
+
+```bash
+docker service ls
+```
+
+Expected output:
+
+```
+ID             NAME                MODE         REPLICAS   IMAGE
+abc123         obiente_api        global       3/3        obiente/cloud-api:latest
+def456         obiente_postgres      replicated   1/1        postgres:16-alpine
+ghi789         obiente_redis         replicated   1/1        redis:7-alpine
+jkl012         obiente_traefik       global       3/3        traefik:v2.11
+```
+
+## Service Configuration
+
+### API Service
+
+The Go API runs in **global mode**, meaning one instance per node:
+
+```bash
+# Check API replicas per node
+docker service ps obiente_api
+
+# View logs
+docker service logs obiente_api
+```
+
+### Database Configuration
+
+PostgreSQL runs as a single replica with health checks:
+
+```bash
+# Check database status
+docker service ps obiente_postgres
+
+# Check logs
+docker service logs obiente_postgres
+```
+
+### Scaling Services
+
+Scale services as needed:
+
+```bash
+# Scale a specific service
+docker service scale obiente_postgres=2
+
+# Note: API runs in global mode, so scaling requires adding more nodes
+```
+
+## Service Updates
+
+### Update Services
+
+To update after code changes:
+
+```bash
+# Redeploy the stack
+docker stack deploy -c docker-compose.swarm.yml obiente
+
+# Force immediate update
+docker service update --force obiente_api
+```
+
+### Rolling Updates
+
+Docker Swarm handles rolling updates automatically:
+- Starts new containers before stopping old ones
+- Waits for health checks to pass
+- Gradually replaces instances
+
+## Health Checks
+
+All services include health checks:
+
+- **PostgreSQL**: `pg_isready`
+- **Redis**: `redis-cli ping`
+- **Go API**: HTTP endpoint at `/health`
+
+Check health status:
+
+```bash
+docker service ps obiente_api
+```
+
+## Resource Limits
+
+Default resource allocations:
+
+| Service | CPU | Memory |
+|---------|-----|--------|
+| PostgreSQL | 2.0 | 2GB |
+| Redis | 0.5 | 256MB |
+| Go API | 2.0 | 1GB |
+| Traefik | 1.0 | 256MB |
+
+Adjust these in `docker-compose.swarm.yml` based on your cluster.
+
+## Networking
+
+All services communicate over the `obiente-network` overlay network, enabling:
+
+- Service discovery by name (e.g., `postgres`, `redis`)
+- Automatic load balancing across replicas
+- Secure communication between services
+
+## Volumes and Persistence
+
+Data persists through Docker volumes:
+
+- `postgres_data`: PostgreSQL database data
+- `redis_data`: Redis persistence
+- `traefik_letsencrypt`: SSL certificates
+
+Volumes are created automatically and persist across restarts.
+
+## Traefik Configuration
+
+Traefik automatically:
+- Discovers services in the Swarm
+- Provides HTTPS via Let's Encrypt
+- Load balances across replicas
+- Exposes routes based on service labels
+
+Configure custom routes by adding Traefik labels in the compose file.
+
+## Security
+
+1. **Change Default Passwords**: Update all passwords in `.env`
+2. **Use Secrets**: For sensitive data, use Docker secrets
+3. **Network Security**: Configure firewall rules
+4. **SSL Certificates**: Let's Encrypt provides automatic HTTPS
+5. **Resource Limits**: Prevent resource exhaustion
+
+## Troubleshooting
+
+### Service Won't Start
+
+```bash
+# Check service logs
+docker service logs -f obiente_api
+
+# Check service status
+docker service ps obiente_api
+```
+
+### Database Connection Issues
+
+```bash
+# Verify PostgreSQL is healthy
+docker service ps obiente_postgres
+docker service logs obiente_postgres
+
+# Test connection from within network
+docker exec -it $(docker ps -qf name=postgres) psql -U obiente-postgres -c "\l"
+```
+
+### Health Check Failures
+
+Ensure health endpoints respond:
+- API: `GET /health`
+
+Test manually:
+
+```bash
+curl http://<node-ip>:3001/health
+```
+
+### High Memory Usage
+
+Monitor resource usage:
+
+```bash
+docker stats
+```
+
+Adjust resource limits in `docker-compose.swarm.yml`.
+
+## Backup and Recovery
+
+### Backing Up PostgreSQL
+
+```bash
+# Create backup
+docker exec $(docker ps -qf name=postgres) \
+  pg_dump -U obiente-postgres obiente > backup_$(date +%Y%m%d).sql
+
+# Restore backup
+docker exec -i $(docker ps -qf name=postgres) \
+  psql -U obiente-postgres obiente < backup_20240101.sql
+```
+
+### Backing Up Redis
+
+```bash
+# Create backup
+docker exec $(docker ps -qf name=redis) redis-cli BGSAVE
+docker cp $(docker ps -qf name=redis):/data/dump.rdb ./redis-backup.rdb
+```
+
+## Maintenance
+
+### Zero-Downtime Updates
+
+Updates are zero-downtime by default:
+
+```bash
+docker stack deploy -c docker-compose.swarm.yml obiente
+```
+
+### Graceful Shutdown
+
+All services handle shutdown gracefully:
+- API: HTTP server with proper timeouts
+- Databases: PostgreSQL and Redis handle connections properly
+
+## Production Checklist
+
+Before deploying to production:
+
+- [ ] Change all default passwords
+- [ ] Configure proper CORS origins
+- [ ] Set up SSL certificates
+- [ ] Configure authentication (Zitadel)
+- [ ] Set up monitoring
+- [ ] Configure backups
+- Rolling updates tested
+- [ ] Document recovery procedures
+- [ ] Set up log aggregation
+
+## Next Steps
+
+After deployment:
+
+1. [Configure Authentication](../guides/authentication.md)
+2. [Set up Monitoring](../guides/monitoring.md)
+3. [Configure Custom Domains](../guides/routing.md)
+
+---
+
+[← Back to Deployment Guide](index.md)
+

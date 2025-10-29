@@ -1,78 +1,166 @@
-# ObienteCloud
+# Obiente Cloud
 
-<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
+> **A distributed Platform-as-a-Service (PaaS) for deploying and managing applications across multiple nodes**
 
-✨ Your new, shiny [Nx workspace](https://nx.dev) is almost ready ✨.
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Go Version](https://img.shields.io/badge/Go-1.21+-blue.svg)](https://golang.org/)
+[![Docker](https://img.shields.io/badge/Docker-24.0+-blue.svg)](https://www.docker.com/)
 
-run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
+## Features
 
-## Generate a library
+- 🚀 **Multi-Node Deployments** - Distribute applications across multiple servers
+- 🌐 **Dynamic Routing** - Automatic traffic routing with custom domains
+- 🔒 **Integrated Auth** - Built-in Zitadel authentication support
+- 📊 **Real-Time Monitoring** - Track deployments with Prometheus and Grafana
+- 🔄 **Auto Scaling** - Automatic scaling based on load
+- 💾 **High Availability** - Optional HA setup for production
+- 🎯 **Smart Orchestration** - Intelligent node selection and load balancing
 
-```sh
-npx nx g @nx/js:lib packages/pkg1 --publishable --importPath=@my-org/pkg1
+## Quick Start
+
+### Docker Compose (Local Development)
+
+```bash
+# Clone the repository
+git clone https://github.com/obiente/cloud.git
+cd cloud
+
+# Start services
+docker-compose up -d
+
+# Check status
+docker-compose ps
 ```
 
-## Run tasks
+### Docker Swarm (Production)
 
-To build the library use:
+```bash
+# Initialize Swarm
+docker swarm init
 
-```sh
-npx nx build pkg1
+# Deploy
+docker stack deploy -c docker-compose.swarm.yml obiente
+
+# Verify
+docker service ls
 ```
 
-To run any task with Nx use:
+See the [Installation Guide](docs/getting-started/installation.md) for detailed instructions.
 
-```sh
-npx nx <target> <project-name>
+## Documentation
+
+📚 **[Full Documentation](docs/README.md)**
+
+### Quick Links
+
+- [Getting Started](docs/getting-started/installation.md)
+- [Architecture](docs/architecture/overview.md)
+- [Deployment Guide](docs/deployment/index.md)
+- [Self-Hosting](docs/self-hosting/index.md)
+- [Reference](docs/reference/index.md)
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Obiente Cloud                        │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
+│  │   Go API     │  │   Traefik    │  │ Orchestrator │ │
+│  └──────────────┘  └──────────────┘  └──────────────┘ │
+│         │                 │                  │         │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │    PostgreSQL Cluster (HA) / Single Instance     │  │
+│  └──────────────────────────────────────────────────┘  │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
 ```
 
-These targets are either [inferred automatically](https://nx.dev/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
+Learn more: [Architecture Overview](docs/architecture/overview.md)
 
-[More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+## Use Cases
 
-## Versioning and releasing
+### 🏠 Self-Hosting for Hobbyists
+Deploy your personal projects on your own infrastructure. Perfect for:
+- Home lab deployments
+- Personal project hosting
+- Learning distributed systems
 
-To version and release the library use
+### 🏢 Production IaaS
+Sell Obiente Cloud as Infrastructure-as-a-Service:
+- Multi-tenant deployments
+- Custom domains per customer
+- Resource management and billing
+
+### 🚀 Development Team
+Use Obiente Cloud internally:
+- Staging and production environments
+- Testing distributed applications
+- CI/CD integration
+
+## Requirements
+
+- **Docker**: 24.0+
+- **OS**: Linux (Ubuntu 22.04+ recommended)
+- **RAM**: 4GB minimum (8GB+ recommended)
+- **Storage**: 20GB minimum
+
+See [Requirements](docs/self-hosting/requirements.md) for detailed specifications.
+
+## Project Structure
 
 ```
-npx nx release
+cloud/
+├── apps/
+│   └── api/                 # Go ConnectRPC API
+├── docs/                    # Documentation
+├── monitoring/              # Prometheus & Grafana configs
+├── docker-compose.yml       # Local development
+├── docker-compose.swarm.yml # Simple swarm deployment
+└── docker-compose.swarm.ha.yml # HA production deployment
 ```
 
-Pass `--dry-run` to see what would happen without actually releasing the library.
+## Development
 
-[Learn more about Nx release &raquo;](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+```bash
+# Install dependencies
+go mod download
 
-## Keep TypeScript project references up to date
+# Run API locally
+cd apps/api
+go run main.go
 
-Nx automatically updates TypeScript [project references](https://www.typescriptlang.org/docs/handbook/project-references.html) in `tsconfig.json` files to ensure they remain accurate based on your project dependencies (`import` or `require` statements). This sync is automatically done when running tasks such as `build` or `typecheck`, which require updated references to function correctly.
+# Run tests
+go test ./...
 
-To manually trigger the process to sync the project graph dependencies information to the TypeScript project references, run the following command:
-
-```sh
-npx nx sync
+# Build Docker image
+docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
 ```
 
-You can enforce that the TypeScript project references are always in the correct state when running in CI by adding a step to your CI job configuration that runs the following command:
+See [Development Guide](docs/getting-started/development.md) for more details.
 
-```sh
-npx nx sync:check
-```
+## Contributing
 
-[Learn more about nx sync](https://nx.dev/reference/nx-commands#sync)
+We welcome contributions! Please see our contributing guidelines:
 
-[Learn more about Nx on CI](https://nx.dev/ci/intro/ci-with-nx#ready-get-started-with-your-provider?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
-## Install Nx Console
+See [Contributing Guide](docs/reference/contributing.md) for details.
 
-Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
+## License
 
-[Install Nx Console &raquo;](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+[MIT License](LICENSE)
 
-## Useful links
+## Support
 
-Learn more:
+- 📖 [Documentation](docs/README.md)
+- 💬 [GitHub Discussions](https://github.com/obiente/cloud/discussions)
+- 🐛 [Issue Tracker](https://github.com/obiente/cloud/issues)
 
-- [Learn more about this workspace setup](https://nx.dev/nx-api/js?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Learn about Nx on CI](https://nx.dev/ci/intro/ci-with-nx?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Releasing Packages with Nx release](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [What are Nx plugins?](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+---
+
+**Made with ❤️ by the Obiente Team**
