@@ -2,8 +2,11 @@ package auth
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -12,38 +15,35 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/lestrrat-go/jwx/v2/jws"
-	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
-// Constants for JWT validation
+// Constants for auth validation
 const (
-	AuthorizationHeader = "Authorization"
-	BearerPrefix        = "Bearer "
-	JWKSRefreshInterval = 30 * time.Minute
+	AuthorizationHeader   = "Authorization"
+	BearerPrefix          = "Bearer "
+	UserInfoCacheDuration = 5 * time.Minute // Cache userinfo for 5 minutes
 )
 
+// Common errors
 var (
-	ErrNoToken         = errors.New("no token provided")
-	ErrInvalidToken    = errors.New("invalid or malformed token")
-	ErrTokenExpired    = errors.New("token expired")
-	ErrInvalidAudience = errors.New("invalid audience")
-	ErrInvalidIssuer   = errors.New("invalid issuer")
-	ErrMissingUserID   = errors.New("user ID not found in token")
+	ErrNoToken        = errors.New("no authorization token provided")
+	ErrInvalidToken   = errors.New("invalid authorization token")
+	ErrUserInfoFailed = errors.New("failed to fetch user info")
 )
 
-// UserInfo holds the authenticated user information
+// UserInfo represents the user information from Zitadel userinfo endpoint
 type UserInfo struct {
-	ID             string   `json:"id"`
-	Email          string   `json:"email"`
-	Name           string   `json:"name"`
-	Picture        string   `json:"picture"`
-	GivenName      string   `json:"given_name"`
-	FamilyName     string   `json:"family_name"`
-	OrganizationID string   `json:"organization_id"`
-	Roles          []string `json:"roles"`
-	Locale         string   `json:"locale"`
+	Sub               string   `json:"sub"`                // User ID
+	Name              string   `json:"name"`               // Full name
+	GivenName         string   `json:"given_name"`         // First name
+	FamilyName        string   `json:"family_name"`        // Last name
+	PreferredUsername string   `json:"preferred_username"` // Username
+	Email             string   `json:"email"`              // Email
+	EmailVerified     bool     `json:"email_verified"`     // Email verified status
+	Locale            string   `json:"locale"`             // User locale
+	Picture           string   `json:"picture"`            // Profile picture URL
+	UpdatedAt         int64    `json:"updated_at"`         // Last update timestamp
+	Roles             []string // Custom roles (if needed)
 }
 
 // contextKey is a private type for context keys
@@ -51,135 +51,144 @@ type contextKey int
 
 const userInfoKey contextKey = 0
 
-// JWKSCache manages caching and refreshing the JWKS
-type JWKSCache struct {
-	keySet    jwk.Set
-	mutex     sync.RWMutex
-	lastFetch time.Time
-	jwksURL   string
+// UserInfoCache manages caching of validated tokens
+type UserInfoCache struct {
+	cache map[string]*CachedUserInfo
+	mutex sync.RWMutex
 }
 
-// NewJWKSCache creates a new JWKS cache with auto-refresh capability
-func NewJWKSCache(jwksURL string) *JWKSCache {
-	cache := &JWKSCache{
-		jwksURL: jwksURL,
+// CachedUserInfo stores user info with expiration
+type CachedUserInfo struct {
+	UserInfo  *UserInfo
+	ExpiresAt time.Time
+}
+
+// NewUserInfoCache creates a new user info cache
+func NewUserInfoCache() *UserInfoCache {
+	cache := &UserInfoCache{
+		cache: make(map[string]*CachedUserInfo),
 	}
 
-	// Initial fetch
-	err := cache.refreshKeys()
-	if err != nil {
-		log.Printf("Warning: Initial JWKS fetch failed: %v\n", err)
-	}
-
-	// Start background refresh
-	go cache.startAutoRefresh()
+	// Start cleanup goroutine
+	go cache.cleanup()
 
 	return cache
 }
 
-// GetKeySet returns the current JWKS, fetching if needed
-func (c *JWKSCache) GetKeySet() (jwk.Set, error) {
+// Get retrieves cached user info if valid
+func (c *UserInfoCache) Get(token string) (*UserInfo, bool) {
 	c.mutex.RLock()
-	keySet := c.keySet
-	lastFetch := c.lastFetch
-	c.mutex.RUnlock()
+	defer c.mutex.RUnlock()
 
-	// If we haven't fetched keys yet or they're stale, refresh them
-	if keySet == nil || time.Since(lastFetch) > JWKSRefreshInterval {
-		err := c.refreshKeys()
-		if err != nil {
-			return nil, fmt.Errorf("failed to refresh JWKS: %w", err)
-		}
-
-		c.mutex.RLock()
-		keySet = c.keySet
-		c.mutex.RUnlock()
+	cached, exists := c.cache[token]
+	if !exists {
+		return nil, false
 	}
 
-	return keySet, nil
+	if time.Now().After(cached.ExpiresAt) {
+		return nil, false
+	}
+
+	return cached.UserInfo, true
 }
 
-// refreshKeys fetches a fresh copy of the JWKS
-func (c *JWKSCache) refreshKeys() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	keySet, err := jwk.Fetch(ctx, c.jwksURL)
-	if err != nil {
-		return err
-	}
-
+// Set stores user info in cache
+func (c *UserInfoCache) Set(token string, userInfo *UserInfo) {
 	c.mutex.Lock()
-	c.keySet = keySet
-	c.lastFetch = time.Now()
-	c.mutex.Unlock()
+	defer c.mutex.Unlock()
 
-	log.Println("JWKS refreshed successfully")
-	return nil
+	c.cache[token] = &CachedUserInfo{
+		UserInfo:  userInfo,
+		ExpiresAt: time.Now().Add(UserInfoCacheDuration),
+	}
 }
 
-// startAutoRefresh periodically refreshes the JWKS
-func (c *JWKSCache) startAutoRefresh() {
-	ticker := time.NewTicker(JWKSRefreshInterval)
+// cleanup removes expired entries
+func (c *UserInfoCache) cleanup() {
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for {
-		<-ticker.C
-		err := c.refreshKeys()
-		if err != nil {
-			log.Printf("Error refreshing JWKS: %v\n", err)
+	for range ticker.C {
+		c.mutex.Lock()
+		now := time.Now()
+		for token, cached := range c.cache {
+			if now.After(cached.ExpiresAt) {
+				delete(c.cache, token)
+			}
 		}
+		c.mutex.Unlock()
 	}
 }
 
-// AuthConfig holds the configuration for the auth middleware
+// AuthConfig holds configuration for authentication
 type AuthConfig struct {
-	JWKSCache      *JWKSCache
-	Issuer         string
-	Audience       string
+	UserInfoCache  *UserInfoCache
+	UserInfoURL    string
+	HTTPClient     *http.Client
 	SkipPaths      []string
 	ExposeUserInfo bool // Whether to expose user info in response headers
 }
 
 // NewAuthConfig creates a new auth config with default values
 func NewAuthConfig() *AuthConfig {
-	// Get values from environment
-	jwksURL := os.Getenv("ZITADEL_JWKS_URL")
-	if jwksURL == "" {
-		zitadelURL := os.Getenv("ZITADEL_URL")
-		if zitadelURL != "" {
-			jwksURL = zitadelURL + "/.well-known/jwks.json"
-		} else {
-			jwksURL = "https://obiente.cloud/.well-known/jwks.json" // Default fallback
-			log.Println("Warning: ZITADEL_JWKS_URL or ZITADEL_URL not set, using default")
+	// Check if auth is disabled for development
+	if os.Getenv("DISABLE_AUTH") == "true" {
+		log.Println("⚠️  WARNING: Authentication is DISABLED (DISABLE_AUTH=true)")
+		log.Println("⚠️  This should ONLY be used in development!")
+		return &AuthConfig{
+			UserInfoCache:  nil,
+			UserInfoURL:    "",
+			HTTPClient:     nil,
+			SkipPaths:      []string{"/"},  // Skip all paths
+			ExposeUserInfo: false,
 		}
 	}
 
-	issuer := os.Getenv("ZITADEL_ISSUER")
-	if issuer == "" {
-		issuer = "https://obiente.cloud" // Default fallback
-		log.Println("Warning: ZITADEL_ISSUER not set, using default")
+	// Get Zitadel URL from environment
+	zitadelURL := os.Getenv("ZITADEL_URL")
+	if zitadelURL == "" {
+		zitadelURL = "https://auth.obiente.cloud" // Default fallback
+		log.Println("⚠️  Warning: ZITADEL_URL not set, using default")
 	}
 
-	audience := os.Getenv("ZITADEL_CLIENT_ID")
-	if audience == "" {
-		audience = "339499954043158530" // Default fallback
-		log.Println("Warning: ZITADEL_CLIENT_ID not set, using default")
+	// Build userinfo URL
+	userInfoURL := strings.TrimSuffix(zitadelURL, "/") + "/oidc/v1/userinfo"
+
+	// Create HTTP client with optional TLS skip verification for development
+	httpClient := &http.Client{
+		Timeout: 10 * time.Second,
 	}
+	
+	if os.Getenv("SKIP_TLS_VERIFY") == "true" {
+		log.Println("⚠️  Warning: TLS verification disabled (SKIP_TLS_VERIFY=true)")
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
+
+	log.Printf("🔐 Auth Configuration:")
+	log.Printf("  Zitadel URL: %s", zitadelURL)
+	log.Printf("  UserInfo URL: %s", userInfoURL)
+	log.Printf("  Skip TLS Verify: %s", os.Getenv("SKIP_TLS_VERIFY"))
 
 	return &AuthConfig{
-		JWKSCache:      NewJWKSCache(jwksURL),
-		Issuer:         issuer,
-		Audience:       audience,
+		UserInfoCache:  NewUserInfoCache(),
+		UserInfoURL:    userInfoURL,
+		HTTPClient:     httpClient,
 		SkipPaths:      []string{"/health", "/metrics", "/.well-known"},
 		ExposeUserInfo: false,
 	}
 }
 
-// MiddlewareInterceptor creates a Connect interceptor for JWT authentication
+// MiddlewareInterceptor creates a Connect interceptor for token authentication
 func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			// If auth is disabled (development only), skip all checks
+			if config.UserInfoCache == nil {
+				return next(ctx, req)
+			}
+
 			// Skip auth for specified paths
 			for _, path := range config.SkipPaths {
 				if strings.HasPrefix(req.Spec().Procedure, path) {
@@ -206,34 +215,22 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 				return nil, connect.NewError(connect.CodeUnauthenticated, ErrNoToken)
 			}
 
-			// Get the key set for validation
-			keySet, err := config.JWKSCache.GetKeySet()
+			// Validate token against userinfo endpoint
+			userInfo, err := config.validateToken(ctx, token)
 			if err != nil {
-				log.Printf("Error getting JWKS: %v", err)
-				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("error validating token: %w", err))
+				log.Printf("Token validation failed: %v", err)
+				return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("error validating token: %w", err))
 			}
 
-			// Parse and verify token
-			parsedToken, err := ValidateToken(token, keySet, config.Issuer, config.Audience)
-			if err != nil {
-				return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid token: %w", err))
-			}
-
-			// Extract user info
-			userInfo, err := extractUserInfo(parsedToken)
-			if err != nil {
-				return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("failed to extract user info: %w", err))
-			}
-
-			// Create a new context with user info
+			// Add user info to context
 			ctx = context.WithValue(ctx, userInfoKey, userInfo)
 
-			// Call the next handler
+			// Call next handler
 			resp, err := next(ctx, req)
 
 			// Optionally add user info to response headers (for debugging)
 			if config.ExposeUserInfo && resp != nil && err == nil {
-				resp.Header().Set("X-User-ID", userInfo.ID)
+				resp.Header().Set("X-User-ID", userInfo.Sub)
 				resp.Header().Set("X-User-Email", userInfo.Email)
 			}
 
@@ -242,30 +239,52 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 	}
 }
 
-// ValidateToken validates a JWT token against the provided JWKS
-func ValidateToken(tokenString string, keySet jwk.Set, issuer, audience string) (jwt.Token, error) {
-	// Verify token signature
-	payload, err := jws.Verify([]byte(tokenString), jws.WithKeySet(keySet))
+// validateToken validates a token against Zitadel's userinfo endpoint
+func (c *AuthConfig) validateToken(ctx context.Context, token string) (*UserInfo, error) {
+	// Check cache first
+	if cachedUserInfo, found := c.UserInfoCache.Get(token); found {
+		log.Printf("✓ Token validated (cached) for user: %s (%s)", cachedUserInfo.Sub, cachedUserInfo.Email)
+		return cachedUserInfo, nil
+	}
+
+	// Create request to userinfo endpoint
+	req, err := http.NewRequestWithContext(ctx, "GET", c.UserInfoURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidToken, err)
+		return nil, fmt.Errorf("failed to create userinfo request: %w", err)
 	}
 
-	// Parse token
-	token, err := jwt.Parse(payload,
-		jwt.WithValidate(true),
-		jwt.WithIssuer(issuer),
-		jwt.WithAudience(audience),
-	)
+	// Add bearer token
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	// Make request
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidToken, err)
+		return nil, fmt.Errorf("%w: %v", ErrUserInfoFailed, err)
+	}
+	defer resp.Body.Close()
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("UserInfo request failed: status=%d, body=%s", resp.StatusCode, string(body))
+		
+		if resp.StatusCode == http.StatusUnauthorized {
+			return nil, ErrInvalidToken
+		}
+		return nil, fmt.Errorf("%w: status %d", ErrUserInfoFailed, resp.StatusCode)
 	}
 
-	// Check expiration
-	if token.Expiration().Before(time.Now()) {
-		return nil, ErrTokenExpired
+	// Parse response
+	var userInfo UserInfo
+	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+		return nil, fmt.Errorf("failed to parse userinfo response: %w", err)
 	}
 
-	return token, nil
+	// Cache the result
+	c.UserInfoCache.Set(token, &userInfo)
+
+	log.Printf("✓ Token validated for user: %s (%s)", userInfo.Sub, userInfo.Email)
+	return &userInfo, nil
 }
 
 // GetUserFromContext extracts user info from context
@@ -277,122 +296,23 @@ func GetUserFromContext(ctx context.Context) (*UserInfo, error) {
 	return userInfo, nil
 }
 
-// extractUserInfo extracts user information from JWT token
-func extractUserInfo(token jwt.Token) (*UserInfo, error) {
-	// Extract the subject (user ID)
-	sub, ok := token.Get("sub")
+// UserIDFromContext extracts user ID from context
+func UserIDFromContext(ctx context.Context) (string, bool) {
+	userInfo, ok := ctx.Value(userInfoKey).(*UserInfo)
 	if !ok {
-		return nil, ErrMissingUserID
+		return "", false
 	}
-
-	subStr, ok := sub.(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid subject format in token")
-	}
-
-	userInfo := &UserInfo{
-		ID: subStr,
-	}
-
-	// Extract optional fields
-	if email, ok := token.Get("email"); ok {
-		if emailStr, ok := email.(string); ok {
-			userInfo.Email = emailStr
-		}
-	}
-
-	if name, ok := token.Get("name"); ok {
-		if nameStr, ok := name.(string); ok {
-			userInfo.Name = nameStr
-		}
-	}
-
-	if givenName, ok := token.Get("given_name"); ok {
-		if givenNameStr, ok := givenName.(string); ok {
-			userInfo.GivenName = givenNameStr
-		}
-	}
-
-	if familyName, ok := token.Get("family_name"); ok {
-		if familyNameStr, ok := familyName.(string); ok {
-			userInfo.FamilyName = familyNameStr
-		}
-	}
-
-	if picture, ok := token.Get("picture"); ok {
-		if pictureStr, ok := picture.(string); ok {
-			userInfo.Picture = pictureStr
-		}
-	}
-
-	if locale, ok := token.Get("locale"); ok {
-		if localeStr, ok := locale.(string); ok {
-			userInfo.Locale = localeStr
-		}
-	}
-
-	// Extract organization ID (if present in a custom claim)
-	if orgID, ok := token.Get("organization_id"); ok {
-		if orgIDStr, ok := orgID.(string); ok {
-			userInfo.OrganizationID = orgIDStr
-		}
-	}
-
-	// Extract roles
-	userInfo.Roles = extractRoles(token)
-
-	return userInfo, nil
-}
-
-// extractRoles extracts roles from various potential claim formats
-func extractRoles(token jwt.Token) []string {
-	roles := []string{}
-
-	// Try standard roles claim
-	if rolesIface, ok := token.Get("roles"); ok {
-		if rolesArray, ok := rolesIface.([]interface{}); ok {
-			for _, role := range rolesArray {
-				if roleStr, ok := role.(string); ok {
-					roles = append(roles, roleStr)
-				}
-			}
-		}
-	}
-
-	// Try Zitadel-specific project roles format
-	zitadelRolesKey := "urn:zitadel:iam:org:project:roles"
-	if zitadelRoles, ok := token.Get(zitadelRolesKey); ok {
-		if zitadelRolesArray, ok := zitadelRoles.([]interface{}); ok {
-			for _, role := range zitadelRolesArray {
-				if roleStr, ok := role.(string); ok {
-					roles = append(roles, roleStr)
-				}
-			}
-		}
-	}
-
-	// Try Zitadel project-specific roles
-	zitadelProjectsKey := "urn:zitadel:iam:org:projects"
-	if projectsIface, ok := token.Get(zitadelProjectsKey); ok {
-		if projects, ok := projectsIface.(map[string]interface{}); ok {
-			for _, projectRoles := range projects {
-				if rolesArray, ok := projectRoles.([]interface{}); ok {
-					for _, role := range rolesArray {
-						if roleStr, ok := role.(string); ok {
-							roles = append(roles, roleStr)
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return roles
+	return userInfo.Sub, true
 }
 
 // AuthenticateHTTPRequest authenticates an HTTP request outside of Connect RPC
 // This can be used for regular HTTP handlers that need authentication
-func AuthenticateHTTPRequest(config *AuthConfig, w http.ResponseWriter, r *http.Request) (*UserInfo, error) {
+func AuthenticateHTTPRequest(config *AuthConfig, r *http.Request) (*UserInfo, error) {
+	// If auth is disabled, return nil
+	if config.UserInfoCache == nil {
+		return nil, nil
+	}
+
 	// Extract token from Authorization header
 	authHeader := r.Header.Get(AuthorizationHeader)
 	if authHeader == "" || !strings.HasPrefix(authHeader, BearerPrefix) {
@@ -404,18 +324,6 @@ func AuthenticateHTTPRequest(config *AuthConfig, w http.ResponseWriter, r *http.
 		return nil, ErrNoToken
 	}
 
-	// Get the key set for validation
-	keySet, err := config.JWKSCache.GetKeySet()
-	if err != nil {
-		return nil, fmt.Errorf("error getting JWKS: %w", err)
-	}
-
-	// Parse and verify token
-	parsedToken, err := ValidateToken(token, keySet, config.Issuer, config.Audience)
-	if err != nil {
-		return nil, fmt.Errorf("invalid token: %w", err)
-	}
-
-	// Extract user info
-	return extractUserInfo(parsedToken)
+	// Validate token
+	return config.validateToken(r.Context(), token)
 }

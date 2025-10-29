@@ -49,7 +49,7 @@ func (s *Service) checkDeploymentPermission(ctx context.Context, deploymentID st
 	}
 	
 	// Check if user is the resource owner
-	if deployment.CreatedBy == userInfo.ID {
+	if deployment.CreatedBy == userInfo.Sub {
 		return nil // Resource owners have full access to their resources
 	}
 	
@@ -76,7 +76,7 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 
 	// Create filters with user ID
 	filters := &database.DeploymentFilters{
-		UserID: userInfo.ID,
+		UserID: userInfo.Sub,
 		// Admin users can see all deployments
 		IncludeAll: auth.HasRole(userInfo, auth.RoleAdmin),
 	}
@@ -164,7 +164,7 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 	}
 
 	// Convert to database model with authenticated user ID as creator
-	dbDeployment := protoToDBDeployment(deployment, orgID, userInfo.ID)
+	dbDeployment := protoToDBDeployment(deployment, orgID, userInfo.Sub)
 	
 	// Save to database
 	if err := s.repo.Create(ctx, dbDeployment); err != nil {
@@ -176,15 +176,9 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 }
 
 func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploymentsv1.GetDeploymentRequest]) (*connect.Response[deploymentsv1.GetDeploymentResponse], error) {
-	// Get authenticated user from context
-	userInfo, err := auth.GetUserFromContext(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
-	}
-
 	// Check if user has view permission for this deployment
 	deploymentID := req.Msg.GetDeploymentId()
-	if err := s.checkDeploymentPermission(ctx, deploymentID, userInfo.ID, auth.PermissionViewDeployment); err != nil {
+	if err := s.checkDeploymentPermission(ctx, deploymentID, "view"); err != nil {
 		return nil, err
 	}
 
@@ -201,15 +195,9 @@ func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploy
 }
 
 func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[deploymentsv1.UpdateDeploymentRequest]) (*connect.Response[deploymentsv1.UpdateDeploymentResponse], error) {
-	// Get authenticated user from context
-	userInfo, err := auth.GetUserFromContext(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
-	}
-
 	// Check if user has edit permission for this deployment
 	deploymentID := req.Msg.GetDeploymentId()
-	if err := s.checkDeploymentPermission(ctx, deploymentID, userInfo.ID, auth.PermissionEditDeployment); err != nil {
+	if err := s.checkDeploymentPermission(ctx, deploymentID, "edit"); err != nil {
 		return nil, err
 	}
 	
@@ -260,15 +248,9 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 }
 
 func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[deploymentsv1.TriggerDeploymentRequest]) (*connect.Response[deploymentsv1.TriggerDeploymentResponse], error) {
-	// Get authenticated user from context
-	userInfo, err := auth.GetUserFromContext(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
-	}
-
 	// Check if user has deploy permission for this deployment
 	deploymentID := req.Msg.GetDeploymentId()
-	if err := s.checkDeploymentPermission(ctx, deploymentID, userInfo.ID, auth.PermissionDeployDeployment); err != nil {
+	if err := s.checkDeploymentPermission(ctx, deploymentID, "deploy"); err != nil {
 		return nil, err
 	}
 	
@@ -393,15 +375,9 @@ func (s *Service) StopDeployment(ctx context.Context, req *connect.Request[deplo
 }
 
 func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[deploymentsv1.DeleteDeploymentRequest]) (*connect.Response[deploymentsv1.DeleteDeploymentResponse], error) {
-	// Get authenticated user from context
-	userInfo, err := auth.GetUserFromContext(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
-	}
-
 	// Check if user has delete permission for this deployment
 	deploymentID := req.Msg.GetDeploymentId()
-	if err := s.checkDeploymentPermission(ctx, deploymentID, userInfo.ID, auth.PermissionDeleteDeployment); err != nil {
+	if err := s.checkDeploymentPermission(ctx, deploymentID, "delete"); err != nil {
 		return nil, err
 	}
 	

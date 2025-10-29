@@ -40,7 +40,7 @@ func (s *Service) GetCurrentUser(ctx context.Context, _ *connect.Request[authv1.
 	if err == nil {
 		// User found in context, use the real user info
 		user := &authv1.User{
-			Id:        userInfo.ID,
+			Id:        userInfo.Sub,
 			Email:     userInfo.Email,
 			Name:      userInfo.Name,
 			AvatarUrl: userInfo.Picture,

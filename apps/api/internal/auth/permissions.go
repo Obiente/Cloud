@@ -88,7 +88,7 @@ func (pc *PermissionChecker) CheckOwnership(ctx context.Context, resourceType Re
 	}
 
 	// Check if the user is the owner
-	if userInfo.ID == ownerID {
+	if userInfo.Sub == ownerID {
 		return nil
 	}
 
