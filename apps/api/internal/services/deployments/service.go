@@ -8,6 +8,7 @@ import (
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	deploymentsv1connect "api/gen/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
 	organizationsv1 "api/gen/proto/obiente/cloud/organizations/v1"
+	"api/internal/auth"
 	"api/internal/database"
 
 	"connectrpc.com/connect"
@@ -17,13 +18,48 @@ import (
 
 type Service struct {
 	deploymentsv1connect.UnimplementedDeploymentServiceHandler
-	repo *database.DeploymentRepository
+	repo              *database.DeploymentRepository
+	permissionChecker *auth.PermissionChecker
 }
 
 func NewService(repo *database.DeploymentRepository) deploymentsv1connect.DeploymentServiceHandler {
 	return &Service{
-		repo: repo,
+		repo:              repo,
+		permissionChecker: auth.NewPermissionChecker(),
 	}
+}
+
+// checkDeploymentPermission is a helper to verify user permissions
+func (s *Service) checkDeploymentPermission(ctx context.Context, deploymentID string, permission string) error {
+	// Get deployment by ID to check ownership
+	deployment, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil {
+		return connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+	
+	// Get user from context
+	userInfo, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
+	}
+	
+	// First check if user is admin (always has access)
+	if auth.HasRole(userInfo, auth.RoleAdmin) {
+		return nil
+	}
+	
+	// Check if user is the resource owner
+	if deployment.CreatedBy == userInfo.ID {
+		return nil // Resource owners have full access to their resources
+	}
+	
+	// For more complex permissions (organization-based, team-based, etc.)
+	err = s.permissionChecker.CheckPermission(ctx, auth.ResourceTypeDeployment, deploymentID, permission)
+	if err != nil {
+		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: %w", err))
+	}
+	
+	return nil
 }
 
 func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[deploymentsv1.ListDeploymentsRequest]) (*connect.Response[deploymentsv1.ListDeploymentsResponse], error) {
@@ -32,27 +68,44 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 		orgID = "default"
 	}
 
-	filters := &database.DeploymentFilters{}
+	// Get authenticated user from context
+	userInfo, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
+	}
+
+	// Create filters with user ID
+	filters := &database.DeploymentFilters{
+		UserID: userInfo.ID,
+		// Admin users can see all deployments
+		IncludeAll: auth.HasRole(userInfo, auth.RoleAdmin),
+	}
+
+	// Add status filter if provided
 	if status := req.Msg.Status; status != nil {
 		statusVal := int32(*status)
 		filters.Status = &statusVal
 	}
 
+	// Get deployments filtered by organization and user ID
 	dbDeployments, err := s.repo.GetAll(ctx, orgID, filters)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list deployments: %w", err))
 	}
 
+	// Convert DB models to proto models
 	items := make([]*deploymentsv1.Deployment, 0, len(dbDeployments))
 	for _, dbDep := range dbDeployments {
 		items = append(items, dbDeploymentToProto(dbDep))
 	}
 
-	total, err := s.repo.Count(ctx, orgID)
+	// Get total count with same filters
+	total, err := s.repo.Count(ctx, orgID, filters)
 	if err != nil {
 		total = int64(len(dbDeployments))
 	}
 
+	// Create response with pagination
 	res := connect.NewResponse(&deploymentsv1.ListDeploymentsResponse{
 		Deployments: items,
 		Pagination: &organizationsv1.Pagination{
@@ -66,12 +119,19 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 }
 
 func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[deploymentsv1.CreateDeploymentRequest]) (*connect.Response[deploymentsv1.CreateDeploymentResponse], error) {
+	// Get organization ID from request or default
 	orgID := req.Msg.GetOrganizationId()
 	if orgID == "" {
 		orgID = "default"
 	}
 
-	// Generate ID
+	// Get authenticated user from context
+	userInfo, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
+	}
+
+	// Generate unique deployment ID
 	id := fmt.Sprintf("deploy-%d", time.Now().Unix())
 
 	// Create deployment in proto format first
@@ -103,8 +163,8 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 		deployment.InstallCommand = proto.String(install)
 	}
 
-	// Convert to database model
-	dbDeployment := protoToDBDeployment(deployment, orgID, "system")
+	// Convert to database model with authenticated user ID as creator
+	dbDeployment := protoToDBDeployment(deployment, orgID, userInfo.ID)
 	
 	// Save to database
 	if err := s.repo.Create(ctx, dbDeployment); err != nil {
@@ -116,22 +176,50 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 }
 
 func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploymentsv1.GetDeploymentRequest]) (*connect.Response[deploymentsv1.GetDeploymentResponse], error) {
-	dbDeployment, err := s.repo.GetByID(ctx, req.Msg.GetDeploymentId())
+	// Get authenticated user from context
+	userInfo, err := auth.GetUserFromContext(ctx)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", req.Msg.GetDeploymentId()))
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
 	}
 
+	// Check if user has view permission for this deployment
+	deploymentID := req.Msg.GetDeploymentId()
+	if err := s.checkDeploymentPermission(ctx, deploymentID, userInfo.ID, auth.PermissionViewDeployment); err != nil {
+		return nil, err
+	}
+
+	// Get deployment by ID
+	dbDeployment, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+
+	// Convert to proto and return
 	deployment := dbDeploymentToProto(dbDeployment)
 	res := connect.NewResponse(&deploymentsv1.GetDeploymentResponse{Deployment: deployment})
 	return res, nil
 }
 
 func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[deploymentsv1.UpdateDeploymentRequest]) (*connect.Response[deploymentsv1.UpdateDeploymentResponse], error) {
-	dbDeployment, err := s.repo.GetByID(ctx, req.Msg.GetDeploymentId())
+	// Get authenticated user from context
+	userInfo, err := auth.GetUserFromContext(ctx)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", req.Msg.GetDeploymentId()))
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
 	}
 
+	// Check if user has edit permission for this deployment
+	deploymentID := req.Msg.GetDeploymentId()
+	if err := s.checkDeploymentPermission(ctx, deploymentID, userInfo.ID, auth.PermissionEditDeployment); err != nil {
+		return nil, err
+	}
+	
+	// Get deployment by ID
+	dbDeployment, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+
+	// Update deployment fields
 	if req.Msg.Name != nil {
 		dbDeployment.Name = req.Msg.GetName()
 	}
@@ -155,21 +243,37 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 		}
 	}
 
+	// Update status fields
 	dbDeployment.Status = int32(deploymentsv1.DeploymentStatus_BUILDING)
 	dbDeployment.HealthStatus = "pending"
 	dbDeployment.LastDeployedAt = time.Now()
 
+	// Save changes to database
 	if err := s.repo.Update(ctx, dbDeployment); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update deployment: %w", err))
 	}
 
+	// Return updated deployment
 	protoDeployment := dbDeploymentToProto(dbDeployment)
 	res := connect.NewResponse(&deploymentsv1.UpdateDeploymentResponse{Deployment: protoDeployment})
 	return res, nil
 }
 
 func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[deploymentsv1.TriggerDeploymentRequest]) (*connect.Response[deploymentsv1.TriggerDeploymentResponse], error) {
-	if err := s.repo.UpdateStatus(ctx, req.Msg.GetDeploymentId(), int32(deploymentsv1.DeploymentStatus_DEPLOYING)); err != nil {
+	// Get authenticated user from context
+	userInfo, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
+	}
+
+	// Check if user has deploy permission for this deployment
+	deploymentID := req.Msg.GetDeploymentId()
+	if err := s.checkDeploymentPermission(ctx, deploymentID, userInfo.ID, auth.PermissionDeployDeployment); err != nil {
+		return nil, err
+	}
+	
+	// Update deployment status to deploying
+	if err := s.repo.UpdateStatus(ctx, deploymentID, int32(deploymentsv1.DeploymentStatus_DEPLOYING)); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to trigger deployment: %w", err))
 	}
 
@@ -289,8 +393,20 @@ func (s *Service) StopDeployment(ctx context.Context, req *connect.Request[deplo
 }
 
 func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[deploymentsv1.DeleteDeploymentRequest]) (*connect.Response[deploymentsv1.DeleteDeploymentResponse], error) {
-	if err := s.repo.Delete(ctx, req.Msg.GetDeploymentId()); err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", req.Msg.GetDeploymentId()))
+	// Get authenticated user from context
+	userInfo, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
+	}
+
+	// Check if user has delete permission for this deployment
+	deploymentID := req.Msg.GetDeploymentId()
+	if err := s.checkDeploymentPermission(ctx, deploymentID, userInfo.ID, auth.PermissionDeleteDeployment); err != nil {
+		return nil, err
+	}
+	
+	if err := s.repo.Delete(ctx, deploymentID); err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
 
 	res := connect.NewResponse(&deploymentsv1.DeleteDeploymentResponse{Success: true})

@@ -6,11 +6,13 @@ import (
 	authv1connect "api/gen/proto/obiente/cloud/auth/v1/authv1connect"
 	deploymentsv1connect "api/gen/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
 	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
+	"api/internal/auth"
 	"api/internal/database"
 	authsvc "api/internal/services/auth"
 	deploymentsvc "api/internal/services/deployments"
 	orgsvc "api/internal/services/organizations"
 
+	"connectrpc.com/connect"
 	"connectrpc.com/grpcreflect"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -42,16 +44,33 @@ func registerRoot(mux *http.ServeMux) {
 }
 
 func registerServices(mux *http.ServeMux) {
-	authPath, authHandler := authv1connect.NewAuthServiceHandler(authsvc.NewService())
+	// Create auth configuration with JWKS from Zitadel
+	authConfig := auth.NewAuthConfig()
+	
+	// Create auth interceptor for JWT validation
+	authInterceptor := auth.MiddlewareInterceptor(authConfig)
+	
+	// Configure services with authentication middleware
+	authPath, authHandler := authv1connect.NewAuthServiceHandler(
+		authsvc.NewService(),
+		connect.WithInterceptors(authInterceptor),
+	)
 	mux.Handle(authPath, authHandler)
 
 	// Create deployment repository and service
 	deploymentRepo := database.NewDeploymentRepository(database.DB, database.RedisClient)
 	deploymentService := deploymentsvc.NewService(deploymentRepo)
-	deploymentsPath, deploymentsHandler := deploymentsv1connect.NewDeploymentServiceHandler(deploymentService)
+	deploymentsPath, deploymentsHandler := deploymentsv1connect.NewDeploymentServiceHandler(
+		deploymentService,
+		connect.WithInterceptors(authInterceptor),
+	)
 	mux.Handle(deploymentsPath, deploymentsHandler)
 
-	organizationsPath, organizationsHandler := organizationsv1connect.NewOrganizationServiceHandler(orgsvc.NewService())
+	// Organization service with auth
+	organizationsPath, organizationsHandler := organizationsv1connect.NewOrganizationServiceHandler(
+		orgsvc.NewService(),
+		connect.WithInterceptors(authInterceptor),
+	)
 	mux.Handle(organizationsPath, organizationsHandler)
 }
 

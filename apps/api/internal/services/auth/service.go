@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"time"
 
 	authv1 "api/gen/proto/obiente/cloud/auth/v1"
 	authv1connect "api/gen/proto/obiente/cloud/auth/v1/authv1connect"
+	"api/internal/auth"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -32,9 +34,31 @@ func NewService() authv1connect.AuthServiceHandler {
 	}
 }
 
-func (s *Service) GetCurrentUser(_ context.Context, _ *connect.Request[authv1.GetCurrentUserRequest]) (*connect.Response[authv1.GetCurrentUserResponse], error) {
-	res := connect.NewResponse(&authv1.GetCurrentUserResponse{User: s.cloneUser()})
-	return res, nil
+func (s *Service) GetCurrentUser(ctx context.Context, _ *connect.Request[authv1.GetCurrentUserRequest]) (*connect.Response[authv1.GetCurrentUserResponse], error) {
+	// Try to get user from context first (from auth middleware)
+	userInfo, err := auth.GetUserFromContext(ctx)
+	if err == nil {
+		// User found in context, use the real user info
+		user := &authv1.User{
+			Id:        userInfo.ID,
+			Email:     userInfo.Email,
+			Name:      userInfo.Name,
+			AvatarUrl: userInfo.Picture,
+			CreatedAt: timestamppb.Now(), // We don't have created_at in the token
+			Timezone:  "UTC",             // Default timezone
+		}
+		res := connect.NewResponse(&authv1.GetCurrentUserResponse{User: user})
+		return res, nil
+	}
+
+	// Fall back to mock user if not in context or in development mode
+	if os.Getenv("NODE_ENV") != "production" {
+		res := connect.NewResponse(&authv1.GetCurrentUserResponse{User: s.cloneUser()})
+		return res, nil
+	}
+
+	// In production with no valid user, return unauthenticated error
+	return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user not authenticated"))
 }
 
 func (s *Service) InitiateLogin(_ context.Context, req *connect.Request[authv1.InitiateLoginRequest]) (*connect.Response[authv1.InitiateLoginResponse], error) {
