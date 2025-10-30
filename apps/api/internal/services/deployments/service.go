@@ -14,6 +14,7 @@ import (
 	"api/internal/database"
 	"api/internal/orchestrator"
 	"api/internal/quota"
+	githubclient "api/internal/services/github"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/proto"
@@ -622,6 +623,117 @@ func (s *Service) UpdateDeploymentCompose(ctx context.Context, req *connect.Requ
 		res.Msg.ValidationError = &validationErr
 	}
 	return res, nil
+}
+
+func (s *Service) ListGitHubRepos(ctx context.Context, req *connect.Request[deploymentsv1.ListGitHubReposRequest]) (*connect.Response[deploymentsv1.ListGitHubReposResponse], error) {
+	_, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required"))
+	}
+	
+	// TODO: Get GitHub token from user profile/auth context
+	// For now, return empty list if no token configured
+	// In production, this would come from OAuth integration
+	ghToken := "" // userInfo.GitHubToken or from session
+	
+	ghClient := githubclient.NewClient(ghToken)
+	page := int(req.Msg.GetPage())
+	if page < 1 {
+		page = 1
+	}
+	perPage := int(req.Msg.GetPerPage())
+	if perPage < 1 || perPage > 100 {
+		perPage = 30
+	}
+	
+	repos, err := ghClient.ListRepos(ctx, page, perPage)
+	if err != nil {
+		// If GitHub API fails (e.g., no token), return empty list
+		return connect.NewResponse(&deploymentsv1.ListGitHubReposResponse{
+			Repos: []*deploymentsv1.GitHubRepo{},
+			Total: 0,
+		}), nil
+	}
+	
+	protoRepos := make([]*deploymentsv1.GitHubRepo, 0, len(repos))
+	for _, r := range repos {
+		protoRepos = append(protoRepos, &deploymentsv1.GitHubRepo{
+			Id:            fmt.Sprintf("%d", r.ID),
+			Name:          r.Name,
+			FullName:      r.FullName,
+			Description:   r.Description,
+			Url:           r.URL,
+			IsPrivate:     r.IsPrivate,
+			DefaultBranch: r.DefaultBranch,
+		})
+	}
+	
+	return connect.NewResponse(&deploymentsv1.ListGitHubReposResponse{
+		Repos: protoRepos,
+		Total: int32(len(protoRepos)),
+	}), nil
+}
+
+func (s *Service) GetGitHubBranches(ctx context.Context, req *connect.Request[deploymentsv1.GetGitHubBranchesRequest]) (*connect.Response[deploymentsv1.GetGitHubBranchesResponse], error) {
+	_, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required"))
+	}
+	
+	repoFullName := req.Msg.GetRepoFullName()
+	if repoFullName == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("repo_full_name is required"))
+	}
+	
+	ghToken := "" // TODO: Get from user context
+	ghClient := githubclient.NewClient(ghToken)
+	
+	branches, err := ghClient.ListBranches(ctx, repoFullName)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to fetch branches: %w", err))
+	}
+	
+	protoBranches := make([]*deploymentsv1.GitHubBranch, 0, len(branches))
+	for i, b := range branches {
+		protoBranches = append(protoBranches, &deploymentsv1.GitHubBranch{
+			Name:      b.Name,
+			IsDefault: i == 0, // First branch is often default
+			Sha:       b.Commit.SHA,
+		})
+	}
+	
+	return connect.NewResponse(&deploymentsv1.GetGitHubBranchesResponse{
+		Branches: protoBranches,
+	}), nil
+}
+
+func (s *Service) GetGitHubFile(ctx context.Context, req *connect.Request[deploymentsv1.GetGitHubFileRequest]) (*connect.Response[deploymentsv1.GetGitHubFileResponse], error) {
+	_, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required"))
+	}
+	
+	repoFullName := req.Msg.GetRepoFullName()
+	branch := req.Msg.GetBranch()
+	path := req.Msg.GetPath()
+	
+	if repoFullName == "" || branch == "" || path == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("repo_full_name, branch, and path are required"))
+	}
+	
+	ghToken := "" // TODO: Get from user context
+	ghClient := githubclient.NewClient(ghToken)
+	
+	fileContent, err := ghClient.GetFile(ctx, repoFullName, branch, path)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to fetch file: %w", err))
+	}
+	
+	return connect.NewResponse(&deploymentsv1.GetGitHubFileResponse{
+		Content:  fileContent.Content,
+		Encoding: fileContent.Encoding,
+		Size:     fileContent.Size,
+	}), nil
 }
 
 func getStatusName(status int32) string {

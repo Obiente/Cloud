@@ -84,6 +84,16 @@ service DeploymentService {
 
   // Update deployment docker compose configuration
   rpc UpdateDeploymentCompose(UpdateDeploymentComposeRequest) returns (UpdateDeploymentComposeResponse);
+
+  // GitHub integration
+  // List GitHub repositories for the authenticated user
+  rpc ListGitHubRepos(ListGitHubReposRequest) returns (ListGitHubReposResponse);
+  
+  // Get branches for a GitHub repository
+  rpc GetGitHubBranches(GetGitHubBranchesRequest) returns (GetGitHubBranchesResponse);
+  
+  // Get file content from a GitHub repository
+  rpc GetGitHubFile(GetGitHubFileRequest) returns (GetGitHubFileResponse);
 }
 
 message ListDeploymentsRequest {
@@ -272,6 +282,52 @@ message UpdateDeploymentComposeRequest {
 message UpdateDeploymentComposeResponse {
   Deployment deployment = 1;
   optional string validation_error = 2;
+}
+
+message ListGitHubReposRequest {
+  int32 page = 1;
+  int32 per_page = 2;
+}
+
+message GitHubRepo {
+  string id = 1;
+  string name = 2;
+  string full_name = 3;
+  string description = 4;
+  string url = 5;
+  bool is_private = 6;
+  string default_branch = 7;
+}
+
+message ListGitHubReposResponse {
+  repeated GitHubRepo repos = 1;
+  int32 total = 2;
+}
+
+message GetGitHubBranchesRequest {
+  string repo_full_name = 1; // e.g., "owner/repo"
+}
+
+message GitHubBranch {
+  string name = 1;
+  bool is_default = 2;
+  string sha = 3;
+}
+
+message GetGitHubBranchesResponse {
+  repeated GitHubBranch branches = 1;
+}
+
+message GetGitHubFileRequest {
+  string repo_full_name = 1; // e.g., "owner/repo"
+  string branch = 2;
+  string path = 3; // e.g., "docker-compose.yml"
+}
+
+message GetGitHubFileResponse {
+  string content = 1;
+  string encoding = 2; // "base64" or "text"
+  int64 size = 3;
 }
 
 message Deployment {
