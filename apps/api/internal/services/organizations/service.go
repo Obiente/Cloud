@@ -3,14 +3,14 @@ package organizations
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	authv1 "api/gen/proto/obiente/cloud/auth/v1"
 	organizationsv1 "api/gen/proto/obiente/cloud/organizations/v1"
 	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
+	"api/internal/auth"
+	"api/internal/database"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -18,165 +18,126 @@ import (
 
 type Service struct {
 	organizationsv1connect.UnimplementedOrganizationServiceHandler
-
-	mu             sync.RWMutex
-	organizations  map[string]*organizationsv1.Organization
-	members        map[string]map[string]*organizationsv1.OrganizationMember
-	organizationID int
-	memberID       int
 }
 
-func NewService() organizationsv1connect.OrganizationServiceHandler {
-	svc := &Service{
-		organizations: make(map[string]*organizationsv1.Organization),
-		members:       make(map[string]map[string]*organizationsv1.OrganizationMember),
+func NewService() organizationsv1connect.OrganizationServiceHandler { return &Service{} }
+
+func (s *Service) ListOrganizations(ctx context.Context, _ *connect.Request[organizationsv1.ListOrganizationsRequest]) (*connect.Response[organizationsv1.ListOrganizationsResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-
-	svc.bootstrap()
-	return svc
-}
-
-func (s *Service) ListOrganizations(_ context.Context, _ *connect.Request[organizationsv1.ListOrganizationsRequest]) (*connect.Response[organizationsv1.ListOrganizationsResponse], error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	organizations := make([]*organizationsv1.Organization, 0, len(s.organizations))
-	for _, org := range s.organizations {
-		organizations = append(organizations, cloneOrganization(org))
+	// Ensure personal org exists
+	ensurePersonalOrg(user.Id)
+	// Fetch orgs for user
+	type row struct {
+		Id, Name, Slug, Plan, Status string
+		Domain                       *string
+		CreatedAt                    time.Time
 	}
-
-	sort.Slice(organizations, func(i, j int) bool {
-		return organizations[i].GetId() < organizations[j].GetId()
-	})
-
-	pagination := &organizationsv1.Pagination{
-		Page:       1,
-		PerPage:    int32(len(organizations)),
-		Total:      int32(len(organizations)),
-		TotalPages: 1,
+	var rows []row
+	database.DB.Raw(`
+        SELECT o.id, o.name, o.slug, o.plan, o.status, o.domain, o.created_at
+        FROM organizations o
+        JOIN organization_members m ON m.organization_id = o.id
+        WHERE m.user_id = ?
+    `, user.Id).Scan(&rows)
+	orgs := make([]*organizationsv1.Organization, 0, len(rows))
+	for _, r := range rows {
+		po := &organizationsv1.Organization{
+			Id: r.Id, Name: r.Name, Slug: r.Slug, Plan: strings.ToLower(r.Plan), Status: r.Status,
+			CreatedAt: timestamppb.New(r.CreatedAt),
+		}
+		if r.Domain != nil {
+			po.Domain = r.Domain
+		}
+		orgs = append(orgs, po)
 	}
-
 	res := connect.NewResponse(&organizationsv1.ListOrganizationsResponse{
-		Organizations: organizations,
-		Pagination:    pagination,
+		Organizations: orgs,
+		Pagination:    &organizationsv1.Pagination{Page: 1, PerPage: int32(len(orgs)), Total: int32(len(orgs)), TotalPages: 1},
 	})
 	return res, nil
 }
 
-func (s *Service) CreateOrganization(_ context.Context, req *connect.Request[organizationsv1.CreateOrganizationRequest]) (*connect.Response[organizationsv1.CreateOrganizationResponse], error) {
+func (s *Service) CreateOrganization(ctx context.Context, req *connect.Request[organizationsv1.CreateOrganizationRequest]) (*connect.Response[organizationsv1.CreateOrganizationResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
 	name := strings.TrimSpace(req.Msg.GetName())
 	if name == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization name is required"))
 	}
-
-	plan := req.Msg.GetPlan()
-	if plan == "" {
-		plan = "starter"
-	}
-
 	slug := req.Msg.GetSlug()
 	if slug == "" {
 		slug = normalizeSlug(name)
 	}
-
-	domain := fmt.Sprintf("%s.obiente.cloud", slug)
-
-	maxDeployments, maxVps, maxMembers := planLimits(plan)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	id := s.nextOrganizationID()
-	org := &organizationsv1.Organization{
-		Id:              id,
-		Name:            name,
-		Slug:            slug,
-		Plan:            strings.ToLower(plan),
-		Status:          "active",
-		CreatedAt:       timestamppb.Now(),
-		MaxDeployments:  maxDeployments,
-		MaxVpsInstances: maxVps,
-		MaxTeamMembers:  maxMembers,
+	plan := req.Msg.GetPlan()
+	if plan == "" {
+		plan = "starter"
 	}
-
-	if domain != "" {
-		org.Domain = &domain
+	now := time.Now()
+	org := &database.Organization{ID: generateID("org"), Name: name, Slug: slug, Plan: plan, Status: "active", CreatedAt: now}
+	if err := database.DB.Create(org).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create org: %w", err))
 	}
-
-	s.organizations[id] = org
-	s.members[id] = make(map[string]*organizationsv1.OrganizationMember)
-
-	res := connect.NewResponse(&organizationsv1.CreateOrganizationResponse{Organization: cloneOrganization(org)})
-	return res, nil
+	// add creator as owner
+	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: user.Id, Role: "owner", Status: "active", JoinedAt: now}
+	_ = database.DB.Create(m).Error
+	po := &organizationsv1.Organization{Id: org.ID, Name: org.Name, Slug: org.Slug, Plan: strings.ToLower(org.Plan), Status: org.Status, CreatedAt: timestamppb.New(org.CreatedAt)}
+	return connect.NewResponse(&organizationsv1.CreateOrganizationResponse{Organization: po}), nil
 }
 
 func (s *Service) GetOrganization(_ context.Context, req *connect.Request[organizationsv1.GetOrganizationRequest]) (*connect.Response[organizationsv1.GetOrganizationResponse], error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	org, ok := s.organizations[req.Msg.GetOrganizationId()]
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization %s not found", req.Msg.GetOrganizationId()))
+	var r database.Organization
+	if err := database.DB.First(&r, "id = ?", req.Msg.GetOrganizationId()).Error; err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
 	}
-
-	res := connect.NewResponse(&organizationsv1.GetOrganizationResponse{Organization: cloneOrganization(org)})
-	return res, nil
+	po := &organizationsv1.Organization{Id: r.ID, Name: r.Name, Slug: r.Slug, Plan: strings.ToLower(r.Plan), Status: r.Status, CreatedAt: timestamppb.New(r.CreatedAt)}
+	if r.Domain != nil {
+		po.Domain = r.Domain
+	}
+	return connect.NewResponse(&organizationsv1.GetOrganizationResponse{Organization: po}), nil
 }
 
 func (s *Service) UpdateOrganization(_ context.Context, req *connect.Request[organizationsv1.UpdateOrganizationRequest]) (*connect.Response[organizationsv1.UpdateOrganizationResponse], error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	org, ok := s.organizations[req.Msg.GetOrganizationId()]
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization %s not found", req.Msg.GetOrganizationId()))
+	var org database.Organization
+	if err := database.DB.First(&org, "id = ?", req.Msg.GetOrganizationId()).Error; err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
 	}
-
 	if name := strings.TrimSpace(req.Msg.GetName()); name != "" {
 		org.Name = name
 	}
-
-	if domain := req.Msg.GetDomain(); domain != "" {
-		org.Domain = &domain
+	if req.Msg.Domain != nil {
+		d := req.Msg.GetDomain()
+		if d == "" {
+			org.Domain = nil
+		} else {
+			org.Domain = &d
+		}
 	}
-
-	if req.Msg.GetDomain() == "" && req.Msg.Domain != nil {
-		org.Domain = nil
+	if err := database.DB.Save(&org).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update org: %w", err))
 	}
-
-	res := connect.NewResponse(&organizationsv1.UpdateOrganizationResponse{Organization: cloneOrganization(org)})
-	return res, nil
+	po := &organizationsv1.Organization{Id: org.ID, Name: org.Name, Slug: org.Slug, Plan: strings.ToLower(org.Plan), Status: org.Status, CreatedAt: timestamppb.New(org.CreatedAt)}
+	if org.Domain != nil {
+		po.Domain = org.Domain
+	}
+	return connect.NewResponse(&organizationsv1.UpdateOrganizationResponse{Organization: po}), nil
 }
 
 func (s *Service) ListMembers(_ context.Context, req *connect.Request[organizationsv1.ListMembersRequest]) (*connect.Response[organizationsv1.ListMembersResponse], error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	members, ok := s.members[req.Msg.GetOrganizationId()]
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization %s not found", req.Msg.GetOrganizationId()))
+	var rows []database.OrganizationMember
+	if err := database.DB.Where("organization_id = ?", req.Msg.GetOrganizationId()).Find(&rows).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list members: %w", err))
 	}
-
-	list := make([]*organizationsv1.OrganizationMember, 0, len(members))
-	for _, member := range members {
-		list = append(list, cloneMember(member))
+	list := make([]*organizationsv1.OrganizationMember, 0, len(rows))
+	for _, m := range rows {
+		om := &organizationsv1.OrganizationMember{Id: m.ID, Role: m.Role, Status: m.Status, JoinedAt: timestamppb.New(m.JoinedAt), User: &authv1.User{Id: m.UserID}}
+		list = append(list, om)
 	}
-
-	sort.Slice(list, func(i, j int) bool {
-		return list[i].GetId() < list[j].GetId()
-	})
-
-	pagination := &organizationsv1.Pagination{
-		Page:       1,
-		PerPage:    int32(len(list)),
-		Total:      int32(len(list)),
-		TotalPages: 1,
-	}
-
-	res := connect.NewResponse(&organizationsv1.ListMembersResponse{
-		Members:    list,
-		Pagination: pagination,
-	})
+	res := connect.NewResponse(&organizationsv1.ListMembersResponse{Members: list, Pagination: &organizationsv1.Pagination{Page: 1, PerPage: int32(len(list)), Total: int32(len(list)), TotalPages: 1}})
 	return res, nil
 }
 
@@ -185,179 +146,87 @@ func (s *Service) InviteMember(_ context.Context, req *connect.Request[organizat
 	if email == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("member email is required"))
 	}
-
 	role := req.Msg.GetRole()
 	if role == "" {
 		role = "member"
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	orgMembers, ok := s.members[req.Msg.GetOrganizationId()]
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization %s not found", req.Msg.GetOrganizationId()))
+	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: req.Msg.GetOrganizationId(), UserID: "pending:" + email, Role: strings.ToLower(role), Status: "invited", JoinedAt: time.Now()}
+	if err := database.DB.Create(m).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invite member: %w", err))
 	}
-
-	id := s.nextMemberID()
-	member := &organizationsv1.OrganizationMember{
-		Id:     id,
-		User:   &authv1.User{Id: fmt.Sprintf("user-%s", id), Email: email, Name: deriveNameFromEmail(email)},
-		Role:   strings.ToLower(role),
-		Status: "invited",
-	}
-	member.JoinedAt = timestamppb.Now()
-
-	orgMembers[id] = member
-
-	res := connect.NewResponse(&organizationsv1.InviteMemberResponse{Member: cloneMember(member)})
-	return res, nil
+	om := &organizationsv1.OrganizationMember{Id: m.ID, Role: m.Role, Status: m.Status, JoinedAt: timestamppb.New(m.JoinedAt), User: &authv1.User{Id: m.UserID, Email: email, Name: deriveNameFromEmail(email)}}
+	return connect.NewResponse(&organizationsv1.InviteMemberResponse{Member: om}), nil
 }
 
 func (s *Service) UpdateMember(_ context.Context, req *connect.Request[organizationsv1.UpdateMemberRequest]) (*connect.Response[organizationsv1.UpdateMemberResponse], error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	orgMembers, ok := s.members[req.Msg.GetOrganizationId()]
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization %s not found", req.Msg.GetOrganizationId()))
+	var m database.OrganizationMember
+	if err := database.DB.First(&m, "id = ? AND organization_id = ?", req.Msg.GetMemberId(), req.Msg.GetOrganizationId()).Error; err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("member not found"))
 	}
-
-	member, ok := orgMembers[req.Msg.GetMemberId()]
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("member %s not found", req.Msg.GetMemberId()))
-	}
-
 	if role := req.Msg.GetRole(); role != "" {
-		member.Role = strings.ToLower(role)
+		m.Role = strings.ToLower(role)
 	}
-
-	member.Status = "active"
-
-	res := connect.NewResponse(&organizationsv1.UpdateMemberResponse{Member: cloneMember(member)})
-	return res, nil
+	m.Status = "active"
+	if err := database.DB.Save(&m).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update member: %w", err))
+	}
+	om := &organizationsv1.OrganizationMember{Id: m.ID, Role: m.Role, Status: m.Status, JoinedAt: timestamppb.New(m.JoinedAt), User: &authv1.User{Id: m.UserID}}
+	return connect.NewResponse(&organizationsv1.UpdateMemberResponse{Member: om}), nil
 }
 
-func (s *Service) RemoveMember(_ context.Context, req *connect.Request[organizationsv1.RemoveMemberRequest]) (*connect.Response[organizationsv1.RemoveMemberResponse], error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	orgMembers, ok := s.members[req.Msg.GetOrganizationId()]
-	if !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization %s not found", req.Msg.GetOrganizationId()))
+func (s *Service) RemoveMember(ctx context.Context, req *connect.Request[organizationsv1.RemoveMemberRequest]) (*connect.Response[organizationsv1.RemoveMemberResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	if _, ok := orgMembers[req.Msg.GetMemberId()]; !ok {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("member %s not found", req.Msg.GetMemberId()))
+	var member database.OrganizationMember
+	if err := database.DB.First(&member, "id = ? AND organization_id = ?", req.Msg.GetMemberId(), req.Msg.GetOrganizationId()).Error; err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("member not found"))
 	}
 
-	delete(orgMembers, req.Msg.GetMemberId())
+	if member.UserID == user.Id {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("cannot remove yourself from the organization"))
+	}
 
-	res := connect.NewResponse(&organizationsv1.RemoveMemberResponse{Success: true})
-	return res, nil
+	if strings.EqualFold(member.Role, "owner") {
+		var ownerCount int64
+		if err := database.DB.Model(&database.OrganizationMember{}).
+			Where("organization_id = ? AND role = ?", req.Msg.GetOrganizationId(), "owner").
+			Count(&ownerCount).Error; err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check owners: %w", err))
+		}
+		if ownerCount <= 1 {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("organization must retain at least one owner"))
+		}
+	}
+
+	if err := database.DB.Delete(&member).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("remove member: %w", err))
+	}
+	return connect.NewResponse(&organizationsv1.RemoveMemberResponse{Success: true}), nil
 }
 
-func (s *Service) bootstrap() {
-	org := &organizationsv1.Organization{
-		Id:              "org-001",
-		Name:            "Obiente Cloud",
-		Slug:            "obiente-cloud",
-		Plan:            "pro",
-		Status:          "active",
-		CreatedAt:       timestamppb.New(time.Now().Add(-720 * time.Hour)),
-		MaxDeployments:  25,
-		MaxVpsInstances: 10,
-		MaxTeamMembers:  50,
+func ensurePersonalOrg(userID string) {
+	// Check membership
+	var count int64
+	database.DB.Model(&database.OrganizationMember{}).Where("user_id = ?", userID).Count(&count)
+	if count > 0 {
+		return
 	}
-	domain := "obiente.cloud"
-	org.Domain = &domain
-
-	s.organizations[org.Id] = org
-	s.organizationID = 1
-
-	member := &organizationsv1.OrganizationMember{
-		Id: "mem-001",
-		User: &authv1.User{
-			Id:        "user_mock_123",
-			Email:     "developer@obiente.cloud",
-			Name:      "Obiente Developer",
-			AvatarUrl: "https://cdn.obiente.cloud/assets/avatar/mock.png",
-		},
-		Role:     "owner",
-		Status:   "active",
-		JoinedAt: timestamppb.New(time.Now().Add(-700 * time.Hour)),
+	// Create personal org
+	now := time.Now()
+	org := &database.Organization{ID: generateID("org"), Name: "Personal", Slug: "personal-" + userID, Plan: "personal", Status: "active", CreatedAt: now}
+	if err := database.DB.Create(org).Error; err != nil {
+		return
 	}
-
-	s.members[org.Id] = map[string]*organizationsv1.OrganizationMember{member.Id: member}
-	s.memberID = 1
+	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: userID, Role: "owner", Status: "active", JoinedAt: now}
+	_ = database.DB.Create(m).Error
 }
 
-func (s *Service) nextOrganizationID() string {
-	s.organizationID++
-	return fmt.Sprintf("org-%03d", s.organizationID)
-}
+func generateID(prefix string) string { return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano()) }
 
-func (s *Service) nextMemberID() string {
-	s.memberID++
-	return fmt.Sprintf("mem-%03d", s.memberID)
-}
-
-func cloneOrganization(src *organizationsv1.Organization) *organizationsv1.Organization {
-	if src == nil {
-		return nil
-	}
-	out := &organizationsv1.Organization{
-		Id:              src.GetId(),
-		Name:            src.GetName(),
-		Slug:            src.GetSlug(),
-		Plan:            src.GetPlan(),
-		Status:          src.GetStatus(),
-		MaxDeployments:  src.GetMaxDeployments(),
-		MaxVpsInstances: src.GetMaxVpsInstances(),
-		MaxTeamMembers:  src.GetMaxTeamMembers(),
-	}
-	if d := src.GetDomain(); d != "" {
-		out.Domain = &d
-	}
-	if ts := src.GetCreatedAt(); ts != nil {
-		out.CreatedAt = timestamppb.New(ts.AsTime())
-	}
-	return out
-}
-
-func cloneMember(src *organizationsv1.OrganizationMember) *organizationsv1.OrganizationMember {
-	if src == nil {
-		return nil
-	}
-	out := &organizationsv1.OrganizationMember{
-		Id:     src.GetId(),
-		Role:   src.GetRole(),
-		Status: src.GetStatus(),
-	}
-	if u := src.GetUser(); u != nil {
-		out.User = cloneUser(u)
-	}
-	if ts := src.GetJoinedAt(); ts != nil {
-		out.JoinedAt = timestamppb.New(ts.AsTime())
-	}
-	return out
-}
-
-func cloneUser(src *authv1.User) *authv1.User {
-	if src == nil {
-		return nil
-	}
-	out := &authv1.User{
-		Id:        src.GetId(),
-		Email:     src.GetEmail(),
-		Name:      src.GetName(),
-		AvatarUrl: src.GetAvatarUrl(),
-	}
-	if ts := src.GetCreatedAt(); ts != nil {
-		out.CreatedAt = timestamppb.New(ts.AsTime())
-	}
-	return out
-}
+// legacy helpers removed after DB-backed refactor
 
 func normalizeSlug(input string) string {
 	lowered := strings.ToLower(strings.TrimSpace(input))
@@ -387,16 +256,7 @@ func normalizeSlug(input string) string {
 	return slug
 }
 
-func planLimits(plan string) (deployments, vps, members int32) {
-	switch strings.ToLower(plan) {
-	case "pro":
-		return 25, 10, 50
-	case "enterprise":
-		return 200, 100, 500
-	default:
-		return 5, 2, 10
-	}
-}
+// plan limits are enforced via quotas; not needed here
 
 func deriveNameFromEmail(email string) string {
 	parts := strings.Split(email, "@")

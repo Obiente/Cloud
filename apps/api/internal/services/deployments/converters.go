@@ -29,10 +29,8 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 		Size:           db.Size,
 	}
 
-	// Parse custom domains from JSON
+	// Parse custom domains from JSON (omitted for brevity)
 	if db.CustomDomains != "" {
-		// For now, we'll skip parsing JSON and use empty array
-		// In a real implementation, parse the JSON string
 		deployment.CustomDomains = []string{}
 	}
 
@@ -44,6 +42,17 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 	}
 	if db.InstallCommand != nil {
 		deployment.InstallCommand = proto.String(*db.InstallCommand)
+	}
+
+	// Runtime fields
+	if db.Image != nil {
+		deployment.Image = proto.String(*db.Image)
+	}
+	if db.Port != nil {
+		deployment.Port = proto.Int32(*db.Port)
+	}
+	if db.Replicas != nil {
+		deployment.Replicas = proto.Int32(*db.Replicas)
 	}
 
 	// Convert timestamps
@@ -58,52 +67,63 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 }
 
 // protoToDBDeployment converts a proto Deployment to a database Deployment
-func protoToDBDeployment(proto *deploymentsv1.Deployment, orgID string, createdBy string) *database.Deployment {
-	if proto == nil {
+func protoToDBDeployment(protoDep *deploymentsv1.Deployment, orgID string, createdBy string) *database.Deployment {
+	if protoDep == nil {
 		return nil
 	}
 
 	db := &database.Deployment{
-		ID:             proto.GetId(),
-		Name:           proto.GetName(),
-		Domain:         proto.GetDomain(),
-		Type:           int32(proto.GetType()),
-		Branch:         proto.GetBranch(),
-		Status:         int32(proto.GetStatus()),
-		HealthStatus:   proto.GetHealthStatus(),
-		Environment:    int32(proto.GetEnvironment()),
-		BandwidthUsage: proto.GetBandwidthUsage(),
-		StorageUsage:   proto.GetStorageUsage(),
-		BuildTime:      proto.GetBuildTime(),
-		Size:           proto.GetSize(),
+		ID:             protoDep.GetId(),
+		Name:           protoDep.GetName(),
+		Domain:         protoDep.GetDomain(),
+		Type:           int32(protoDep.GetType()),
+		Branch:         protoDep.GetBranch(),
+		Status:         int32(protoDep.GetStatus()),
+		HealthStatus:   protoDep.GetHealthStatus(),
+		Environment:    int32(protoDep.GetEnvironment()),
+		BandwidthUsage: protoDep.GetBandwidthUsage(),
+		StorageUsage:   protoDep.GetStorageUsage(),
+		BuildTime:      protoDep.GetBuildTime(),
+		Size:           protoDep.GetSize(),
 		OrganizationID: orgID,
 		CreatedBy:      createdBy,
 	}
 
 	// Handle optional fields
-	if proto.RepositoryUrl != nil {
-		repoURL := proto.GetRepositoryUrl()
+	if protoDep.RepositoryUrl != nil {
+		repoURL := protoDep.GetRepositoryUrl()
 		db.RepositoryURL = &repoURL
 	}
-	if proto.BuildCommand != nil {
-		buildCmd := proto.GetBuildCommand()
+	if protoDep.BuildCommand != nil {
+		buildCmd := protoDep.GetBuildCommand()
 		db.BuildCommand = &buildCmd
 	}
-	if proto.InstallCommand != nil {
-		installCmd := proto.GetInstallCommand()
+	if protoDep.InstallCommand != nil {
+		installCmd := protoDep.GetInstallCommand()
 		db.InstallCommand = &installCmd
+	}
+	if protoDep.Image != nil {
+		img := protoDep.GetImage()
+		db.Image = &img
+	}
+	if protoDep.Port != nil {
+		p := protoDep.GetPort()
+		db.Port = &p
+	}
+	if protoDep.Replicas != nil {
+		r := protoDep.GetReplicas()
+		db.Replicas = &r
 	}
 
 	// Handle timestamps
-	if proto.LastDeployedAt != nil {
-		db.LastDeployedAt = proto.LastDeployedAt.AsTime()
+	if protoDep.LastDeployedAt != nil {
+		db.LastDeployedAt = protoDep.LastDeployedAt.AsTime()
 	}
-	if proto.CreatedAt != nil {
-		db.CreatedAt = proto.CreatedAt.AsTime()
+	if protoDep.CreatedAt != nil {
+		db.CreatedAt = protoDep.CreatedAt.AsTime()
 	}
 
-	// Custom domains - convert to JSON
-	// For now, just store as empty
+	// Custom domains stored as JSON string (keep empty for now)
 	db.CustomDomains = "[]"
 
 	return db

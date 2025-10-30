@@ -103,429 +103,29 @@ func (x *GetCurrentUserResponse) GetUser() *User {
 	return nil
 }
 
-type InitiateLoginRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RedirectUri   string                 `protobuf:"bytes,1,opt,name=redirect_uri,json=redirectUri,proto3" json:"redirect_uri,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *InitiateLoginRequest) Reset() {
-	*x = InitiateLoginRequest{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *InitiateLoginRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*InitiateLoginRequest) ProtoMessage() {}
-
-func (x *InitiateLoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use InitiateLoginRequest.ProtoReflect.Descriptor instead.
-func (*InitiateLoginRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *InitiateLoginRequest) GetRedirectUri() string {
-	if x != nil {
-		return x.RedirectUri
-	}
-	return ""
-}
-
-type InitiateLoginResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	LoginUrl      string                 `protobuf:"bytes,1,opt,name=login_url,json=loginUrl,proto3" json:"login_url,omitempty"`
-	State         string                 `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *InitiateLoginResponse) Reset() {
-	*x = InitiateLoginResponse{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *InitiateLoginResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*InitiateLoginResponse) ProtoMessage() {}
-
-func (x *InitiateLoginResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use InitiateLoginResponse.ProtoReflect.Descriptor instead.
-func (*InitiateLoginResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *InitiateLoginResponse) GetLoginUrl() string {
-	if x != nil {
-		return x.LoginUrl
-	}
-	return ""
-}
-
-func (x *InitiateLoginResponse) GetState() string {
-	if x != nil {
-		return x.State
-	}
-	return ""
-}
-
-type HandleCallbackRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
-	State         string                 `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *HandleCallbackRequest) Reset() {
-	*x = HandleCallbackRequest{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *HandleCallbackRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*HandleCallbackRequest) ProtoMessage() {}
-
-func (x *HandleCallbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use HandleCallbackRequest.ProtoReflect.Descriptor instead.
-func (*HandleCallbackRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *HandleCallbackRequest) GetCode() string {
-	if x != nil {
-		return x.Code
-	}
-	return ""
-}
-
-func (x *HandleCallbackRequest) GetState() string {
-	if x != nil {
-		return x.State
-	}
-	return ""
-}
-
-type HandleCallbackResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AccessToken   string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
-	RefreshToken  string                 `protobuf:"bytes,2,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
-	ExpiresIn     int64                  `protobuf:"varint,3,opt,name=expires_in,json=expiresIn,proto3" json:"expires_in,omitempty"`
-	User          *User                  `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *HandleCallbackResponse) Reset() {
-	*x = HandleCallbackResponse{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *HandleCallbackResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*HandleCallbackResponse) ProtoMessage() {}
-
-func (x *HandleCallbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use HandleCallbackResponse.ProtoReflect.Descriptor instead.
-func (*HandleCallbackResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *HandleCallbackResponse) GetAccessToken() string {
-	if x != nil {
-		return x.AccessToken
-	}
-	return ""
-}
-
-func (x *HandleCallbackResponse) GetRefreshToken() string {
-	if x != nil {
-		return x.RefreshToken
-	}
-	return ""
-}
-
-func (x *HandleCallbackResponse) GetExpiresIn() int64 {
-	if x != nil {
-		return x.ExpiresIn
-	}
-	return 0
-}
-
-func (x *HandleCallbackResponse) GetUser() *User {
-	if x != nil {
-		return x.User
-	}
-	return nil
-}
-
-type RefreshTokenRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RefreshToken  string                 `protobuf:"bytes,1,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RefreshTokenRequest) Reset() {
-	*x = RefreshTokenRequest{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RefreshTokenRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RefreshTokenRequest) ProtoMessage() {}
-
-func (x *RefreshTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RefreshTokenRequest.ProtoReflect.Descriptor instead.
-func (*RefreshTokenRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *RefreshTokenRequest) GetRefreshToken() string {
-	if x != nil {
-		return x.RefreshToken
-	}
-	return ""
-}
-
-type RefreshTokenResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AccessToken   string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
-	RefreshToken  string                 `protobuf:"bytes,2,opt,name=refresh_token,json=refreshToken,proto3" json:"refresh_token,omitempty"`
-	ExpiresIn     int64                  `protobuf:"varint,3,opt,name=expires_in,json=expiresIn,proto3" json:"expires_in,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *RefreshTokenResponse) Reset() {
-	*x = RefreshTokenResponse{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RefreshTokenResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RefreshTokenResponse) ProtoMessage() {}
-
-func (x *RefreshTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RefreshTokenResponse.ProtoReflect.Descriptor instead.
-func (*RefreshTokenResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *RefreshTokenResponse) GetAccessToken() string {
-	if x != nil {
-		return x.AccessToken
-	}
-	return ""
-}
-
-func (x *RefreshTokenResponse) GetRefreshToken() string {
-	if x != nil {
-		return x.RefreshToken
-	}
-	return ""
-}
-
-func (x *RefreshTokenResponse) GetExpiresIn() int64 {
-	if x != nil {
-		return x.ExpiresIn
-	}
-	return 0
-}
-
-type LogoutRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AccessToken   string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LogoutRequest) Reset() {
-	*x = LogoutRequest{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LogoutRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LogoutRequest) ProtoMessage() {}
-
-func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LogoutRequest.ProtoReflect.Descriptor instead.
-func (*LogoutRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *LogoutRequest) GetAccessToken() string {
-	if x != nil {
-		return x.AccessToken
-	}
-	return ""
-}
-
-type LogoutResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LogoutResponse) Reset() {
-	*x = LogoutResponse{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LogoutResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LogoutResponse) ProtoMessage() {}
-
-func (x *LogoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LogoutResponse.ProtoReflect.Descriptor instead.
-func (*LogoutResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *LogoutResponse) GetSuccess() bool {
-	if x != nil {
-		return x.Success
-	}
-	return false
-}
-
 type User struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	AvatarUrl     string                 `protobuf:"bytes,4,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	Timezone      string                 `protobuf:"bytes,6,opt,name=timezone,proto3" json:"timezone,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Email     string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	Name      string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	AvatarUrl string                 `protobuf:"bytes,4,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	Timezone  string                 `protobuf:"bytes,6,opt,name=timezone,proto3" json:"timezone,omitempty"`
+	// Extended Zitadel userinfo fields
+	GivenName         string                 `protobuf:"bytes,7,opt,name=given_name,json=givenName,proto3" json:"given_name,omitempty"`
+	FamilyName        string                 `protobuf:"bytes,8,opt,name=family_name,json=familyName,proto3" json:"family_name,omitempty"`
+	PreferredUsername string                 `protobuf:"bytes,9,opt,name=preferred_username,json=preferredUsername,proto3" json:"preferred_username,omitempty"`
+	EmailVerified     bool                   `protobuf:"varint,10,opt,name=email_verified,json=emailVerified,proto3" json:"email_verified,omitempty"`
+	Locale            string                 `protobuf:"bytes,11,opt,name=locale,proto3" json:"locale,omitempty"`
+	UpdatedAt         *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Roles             []string               `protobuf:"bytes,13,rep,name=roles,proto3" json:"roles,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *User) Reset() {
 	*x = User{}
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[10]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -537,7 +137,7 @@ func (x *User) String() string {
 func (*User) ProtoMessage() {}
 
 func (x *User) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[10]
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -550,7 +150,7 @@ func (x *User) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use User.ProtoReflect.Descriptor instead.
 func (*User) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{10}
+	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *User) GetId() string {
@@ -595,6 +195,55 @@ func (x *User) GetTimezone() string {
 	return ""
 }
 
+func (x *User) GetGivenName() string {
+	if x != nil {
+		return x.GivenName
+	}
+	return ""
+}
+
+func (x *User) GetFamilyName() string {
+	if x != nil {
+		return x.FamilyName
+	}
+	return ""
+}
+
+func (x *User) GetPreferredUsername() string {
+	if x != nil {
+		return x.PreferredUsername
+	}
+	return ""
+}
+
+func (x *User) GetEmailVerified() bool {
+	if x != nil {
+		return x.EmailVerified
+	}
+	return false
+}
+
+func (x *User) GetLocale() string {
+	if x != nil {
+		return x.Locale
+	}
+	return ""
+}
+
+func (x *User) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *User) GetRoles() []string {
+	if x != nil {
+		return x.Roles
+	}
+	return nil
+}
+
 var File_obiente_cloud_auth_v1_auth_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_auth_v1_auth_service_proto_rawDesc = "" +
@@ -602,32 +251,7 @@ const file_obiente_cloud_auth_v1_auth_service_proto_rawDesc = "" +
 	"(obiente/cloud/auth/v1/auth_service.proto\x12\x15obiente.cloud.auth.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x17\n" +
 	"\x15GetCurrentUserRequest\"I\n" +
 	"\x16GetCurrentUserResponse\x12/\n" +
-	"\x04user\x18\x01 \x01(\v2\x1b.obiente.cloud.auth.v1.UserR\x04user\"9\n" +
-	"\x14InitiateLoginRequest\x12!\n" +
-	"\fredirect_uri\x18\x01 \x01(\tR\vredirectUri\"J\n" +
-	"\x15InitiateLoginResponse\x12\x1b\n" +
-	"\tlogin_url\x18\x01 \x01(\tR\bloginUrl\x12\x14\n" +
-	"\x05state\x18\x02 \x01(\tR\x05state\"A\n" +
-	"\x15HandleCallbackRequest\x12\x12\n" +
-	"\x04code\x18\x01 \x01(\tR\x04code\x12\x14\n" +
-	"\x05state\x18\x02 \x01(\tR\x05state\"\xb0\x01\n" +
-	"\x16HandleCallbackResponse\x12!\n" +
-	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
-	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12\x1d\n" +
-	"\n" +
-	"expires_in\x18\x03 \x01(\x03R\texpiresIn\x12/\n" +
-	"\x04user\x18\x04 \x01(\v2\x1b.obiente.cloud.auth.v1.UserR\x04user\":\n" +
-	"\x13RefreshTokenRequest\x12#\n" +
-	"\rrefresh_token\x18\x01 \x01(\tR\frefreshToken\"}\n" +
-	"\x14RefreshTokenResponse\x12!\n" +
-	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12#\n" +
-	"\rrefresh_token\x18\x02 \x01(\tR\frefreshToken\x12\x1d\n" +
-	"\n" +
-	"expires_in\x18\x03 \x01(\x03R\texpiresIn\"2\n" +
-	"\rLogoutRequest\x12!\n" +
-	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\"*\n" +
-	"\x0eLogoutResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xb6\x01\n" +
+	"\x04user\x18\x01 \x01(\v2\x1b.obiente.cloud.auth.v1.UserR\x04user\"\xb5\x03\n" +
 	"\x04User\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12\x12\n" +
@@ -636,13 +260,20 @@ const file_obiente_cloud_auth_v1_auth_service_proto_rawDesc = "" +
 	"avatar_url\x18\x04 \x01(\tR\tavatarUrl\x129\n" +
 	"\n" +
 	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1a\n" +
-	"\btimezone\x18\x06 \x01(\tR\btimezone2\x97\x04\n" +
+	"\btimezone\x18\x06 \x01(\tR\btimezone\x12\x1d\n" +
+	"\n" +
+	"given_name\x18\a \x01(\tR\tgivenName\x12\x1f\n" +
+	"\vfamily_name\x18\b \x01(\tR\n" +
+	"familyName\x12-\n" +
+	"\x12preferred_username\x18\t \x01(\tR\x11preferredUsername\x12%\n" +
+	"\x0eemail_verified\x18\n" +
+	" \x01(\bR\remailVerified\x12\x16\n" +
+	"\x06locale\x18\v \x01(\tR\x06locale\x129\n" +
+	"\n" +
+	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x14\n" +
+	"\x05roles\x18\r \x03(\tR\x05roles2|\n" +
 	"\vAuthService\x12m\n" +
-	"\x0eGetCurrentUser\x12,.obiente.cloud.auth.v1.GetCurrentUserRequest\x1a-.obiente.cloud.auth.v1.GetCurrentUserResponse\x12j\n" +
-	"\rInitiateLogin\x12+.obiente.cloud.auth.v1.InitiateLoginRequest\x1a,.obiente.cloud.auth.v1.InitiateLoginResponse\x12m\n" +
-	"\x0eHandleCallback\x12,.obiente.cloud.auth.v1.HandleCallbackRequest\x1a-.obiente.cloud.auth.v1.HandleCallbackResponse\x12g\n" +
-	"\fRefreshToken\x12*.obiente.cloud.auth.v1.RefreshTokenRequest\x1a+.obiente.cloud.auth.v1.RefreshTokenResponse\x12U\n" +
-	"\x06Logout\x12$.obiente.cloud.auth.v1.LogoutRequest\x1a%.obiente.cloud.auth.v1.LogoutResponseB,Z*api/gen/proto/obiente/cloud/auth/v1;authv1b\x06proto3"
+	"\x0eGetCurrentUser\x12,.obiente.cloud.auth.v1.GetCurrentUserRequest\x1a-.obiente.cloud.auth.v1.GetCurrentUserResponseB,Z*api/gen/proto/obiente/cloud/auth/v1;authv1b\x06proto3"
 
 var (
 	file_obiente_cloud_auth_v1_auth_service_proto_rawDescOnce sync.Once
@@ -656,40 +287,24 @@ func file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP() []byte {
 	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescData
 }
 
-var file_obiente_cloud_auth_v1_auth_service_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_obiente_cloud_auth_v1_auth_service_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_obiente_cloud_auth_v1_auth_service_proto_goTypes = []any{
 	(*GetCurrentUserRequest)(nil),  // 0: obiente.cloud.auth.v1.GetCurrentUserRequest
 	(*GetCurrentUserResponse)(nil), // 1: obiente.cloud.auth.v1.GetCurrentUserResponse
-	(*InitiateLoginRequest)(nil),   // 2: obiente.cloud.auth.v1.InitiateLoginRequest
-	(*InitiateLoginResponse)(nil),  // 3: obiente.cloud.auth.v1.InitiateLoginResponse
-	(*HandleCallbackRequest)(nil),  // 4: obiente.cloud.auth.v1.HandleCallbackRequest
-	(*HandleCallbackResponse)(nil), // 5: obiente.cloud.auth.v1.HandleCallbackResponse
-	(*RefreshTokenRequest)(nil),    // 6: obiente.cloud.auth.v1.RefreshTokenRequest
-	(*RefreshTokenResponse)(nil),   // 7: obiente.cloud.auth.v1.RefreshTokenResponse
-	(*LogoutRequest)(nil),          // 8: obiente.cloud.auth.v1.LogoutRequest
-	(*LogoutResponse)(nil),         // 9: obiente.cloud.auth.v1.LogoutResponse
-	(*User)(nil),                   // 10: obiente.cloud.auth.v1.User
-	(*timestamppb.Timestamp)(nil),  // 11: google.protobuf.Timestamp
+	(*User)(nil),                   // 2: obiente.cloud.auth.v1.User
+	(*timestamppb.Timestamp)(nil),  // 3: google.protobuf.Timestamp
 }
 var file_obiente_cloud_auth_v1_auth_service_proto_depIdxs = []int32{
-	10, // 0: obiente.cloud.auth.v1.GetCurrentUserResponse.user:type_name -> obiente.cloud.auth.v1.User
-	10, // 1: obiente.cloud.auth.v1.HandleCallbackResponse.user:type_name -> obiente.cloud.auth.v1.User
-	11, // 2: obiente.cloud.auth.v1.User.created_at:type_name -> google.protobuf.Timestamp
-	0,  // 3: obiente.cloud.auth.v1.AuthService.GetCurrentUser:input_type -> obiente.cloud.auth.v1.GetCurrentUserRequest
-	2,  // 4: obiente.cloud.auth.v1.AuthService.InitiateLogin:input_type -> obiente.cloud.auth.v1.InitiateLoginRequest
-	4,  // 5: obiente.cloud.auth.v1.AuthService.HandleCallback:input_type -> obiente.cloud.auth.v1.HandleCallbackRequest
-	6,  // 6: obiente.cloud.auth.v1.AuthService.RefreshToken:input_type -> obiente.cloud.auth.v1.RefreshTokenRequest
-	8,  // 7: obiente.cloud.auth.v1.AuthService.Logout:input_type -> obiente.cloud.auth.v1.LogoutRequest
-	1,  // 8: obiente.cloud.auth.v1.AuthService.GetCurrentUser:output_type -> obiente.cloud.auth.v1.GetCurrentUserResponse
-	3,  // 9: obiente.cloud.auth.v1.AuthService.InitiateLogin:output_type -> obiente.cloud.auth.v1.InitiateLoginResponse
-	5,  // 10: obiente.cloud.auth.v1.AuthService.HandleCallback:output_type -> obiente.cloud.auth.v1.HandleCallbackResponse
-	7,  // 11: obiente.cloud.auth.v1.AuthService.RefreshToken:output_type -> obiente.cloud.auth.v1.RefreshTokenResponse
-	9,  // 12: obiente.cloud.auth.v1.AuthService.Logout:output_type -> obiente.cloud.auth.v1.LogoutResponse
-	8,  // [8:13] is the sub-list for method output_type
-	3,  // [3:8] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	2, // 0: obiente.cloud.auth.v1.GetCurrentUserResponse.user:type_name -> obiente.cloud.auth.v1.User
+	3, // 1: obiente.cloud.auth.v1.User.created_at:type_name -> google.protobuf.Timestamp
+	3, // 2: obiente.cloud.auth.v1.User.updated_at:type_name -> google.protobuf.Timestamp
+	0, // 3: obiente.cloud.auth.v1.AuthService.GetCurrentUser:input_type -> obiente.cloud.auth.v1.GetCurrentUserRequest
+	1, // 4: obiente.cloud.auth.v1.AuthService.GetCurrentUser:output_type -> obiente.cloud.auth.v1.GetCurrentUserResponse
+	4, // [4:5] is the sub-list for method output_type
+	3, // [3:4] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_auth_v1_auth_service_proto_init() }
@@ -703,7 +318,7 @@ func file_obiente_cloud_auth_v1_auth_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_auth_v1_auth_service_proto_rawDesc), len(file_obiente_cloud_auth_v1_auth_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -28,6 +28,13 @@ type Deployment struct {
 	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
 	OrganizationID string    `gorm:"column:organization_id;index" json:"organization_id"`
 	CreatedBy      string    `gorm:"column:created_by;index" json:"created_by"`
+
+	// Runtime/resource config for quotas/orchestrator
+	Image        *string `gorm:"column:image" json:"image"`
+	Port         *int32  `gorm:"column:port" json:"port"`
+	Replicas     *int32  `gorm:"column:replicas" json:"replicas"`
+	MemoryBytes  *int64  `gorm:"column:memory_bytes" json:"memory_bytes"`
+	CPUShares    *int64  `gorm:"column:cpu_shares" json:"cpu_shares"`
 }
 
 func (Deployment) TableName() string {
@@ -51,3 +58,109 @@ func (d *Deployment) BeforeUpdate(tx *gorm.DB) error {
 	d.LastDeployedAt = time.Now()
 	return nil
 }
+
+// OrganizationPlan defines default limits for an organization plan
+type OrganizationPlan struct {
+	ID                 string `gorm:"primaryKey" json:"id"`
+	Name               string `gorm:"uniqueIndex" json:"name"`
+	CPUCores           int    `json:"cpu_cores"`
+	MemoryBytes        int64  `json:"memory_bytes"`
+	DeploymentsMax     int    `json:"deployments_max"`
+	BandwidthBytesMonth int64 `json:"bandwidth_bytes_month"`
+	StorageBytes       int64  `json:"storage_bytes"`
+}
+
+func (OrganizationPlan) TableName() string { return "organization_plans" }
+
+// OrgQuota allows per-organization overrides of plan limits
+type OrgQuota struct {
+	OrganizationID     string `gorm:"primaryKey" json:"organization_id"`
+	PlanID             string `gorm:"index" json:"plan_id"`
+	CPUCoresOverride   *int   `json:"cpu_cores_override"`
+	MemoryBytesOverride *int64 `json:"memory_bytes_override"`
+	DeploymentsMaxOverride *int `json:"deployments_max_override"`
+	BandwidthBytesMonthOverride *int64 `json:"bandwidth_bytes_month_override"`
+	StorageBytesOverride *int64 `json:"storage_bytes_override"`
+}
+
+func (OrgQuota) TableName() string { return "org_quotas" }
+
+// OrgRole represents a reusable role definition within an organization (scoped permissions)
+type OrgRole struct {
+	ID             string `gorm:"primaryKey" json:"id"`
+	OrganizationID string `gorm:"index" json:"organization_id"`
+	Name           string `gorm:"index" json:"name"`
+	// JSON-encoded list of permission strings, e.g., ["deployments.view","deployments.create","deployments.scale"]
+	Permissions    string `gorm:"type:jsonb" json:"permissions"`
+}
+
+func (OrgRole) TableName() string { return "org_roles" }
+
+// OrgRoleBinding binds a user to roles (optionally limited to a resource)
+type OrgRoleBinding struct {
+	ID             string `gorm:"primaryKey" json:"id"`
+	OrganizationID string `gorm:"index" json:"organization_id"`
+	UserID         string `gorm:"index" json:"user_id"`
+	RoleID         string `gorm:"index" json:"role_id"`
+	// Optional scoping to a deployment/resource; empty means org-wide
+	ResourceType string `json:"resource_type"`
+	ResourceID   string `gorm:"index" json:"resource_id"`
+    // Optional selector for richer scoping (e.g., {"environment":"production"})
+    ResourceSelector string `gorm:"type:jsonb" json:"resource_selector"`
+}
+
+func (OrgRoleBinding) TableName() string { return "org_role_bindings" }
+
+// UsageMonthly stores aggregated usage per month for billing
+type UsageMonthly struct {
+	ID                  uint   `gorm:"primaryKey" json:"id"`
+	OrganizationID      string `gorm:"index" json:"organization_id"`
+	Month               string `gorm:"index" json:"month"` // YYYY-MM
+	CPUCoreSeconds      int64  `json:"cpu_core_seconds"`
+	MemoryByteSeconds   int64  `json:"memory_byte_seconds"`
+	BandwidthRxBytes    int64  `json:"bandwidth_rx_bytes"`
+	BandwidthTxBytes    int64  `json:"bandwidth_tx_bytes"`
+	StorageBytes        int64  `json:"storage_bytes"`
+	DeploymentsActivePeak int  `json:"deployments_active_peak"`
+}
+
+func (UsageMonthly) TableName() string { return "usage_monthly" }
+
+// UsageWeekly stores aggregated usage per week for billing/reporting
+type UsageWeekly struct {
+	ID                  uint   `gorm:"primaryKey" json:"id"`
+	OrganizationID      string `gorm:"index" json:"organization_id"`
+	Week                string `gorm:"index" json:"week"` // ISO week, e.g., 2025-W44
+	CPUCoreSeconds      int64  `json:"cpu_core_seconds"`
+	MemoryByteSeconds   int64  `json:"memory_byte_seconds"`
+	BandwidthRxBytes    int64  `json:"bandwidth_rx_bytes"`
+	BandwidthTxBytes    int64  `json:"bandwidth_tx_bytes"`
+	StorageBytes        int64  `json:"storage_bytes"`
+	DeploymentsActivePeak int  `json:"deployments_active_peak"`
+}
+
+func (UsageWeekly) TableName() string { return "usage_weekly" }
+
+// Organization and members
+type Organization struct {
+    ID        string    `gorm:"primaryKey" json:"id"`
+    Name      string    `json:"name"`
+    Slug      string    `gorm:"uniqueIndex" json:"slug"`
+    Plan      string    `json:"plan"`
+    Status    string    `json:"status"`
+    Domain    *string   `json:"domain"`
+    CreatedAt time.Time `json:"created_at"`
+}
+
+func (Organization) TableName() string { return "organizations" }
+
+type OrganizationMember struct {
+    ID             string    `gorm:"primaryKey" json:"id"`
+    OrganizationID string    `gorm:"index" json:"organization_id"`
+    UserID         string    `gorm:"index" json:"user_id"`
+    Role           string    `json:"role"`
+    Status         string    `json:"status"`
+    JoinedAt       time.Time `json:"joined_at"`
+}
+
+func (OrganizationMember) TableName() string { return "organization_members" }

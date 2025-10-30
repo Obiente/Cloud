@@ -146,6 +146,13 @@ func areTypesCompatible(modelType, protoType reflect.Type) bool {
 		return true
 	}
 	
+	// Allow JSON string columns that store string arrays to map to repeated string proto fields
+	if modelType.Kind() == reflect.String &&
+		(protoType.Kind() == reflect.Slice || protoType.Kind() == reflect.Array) &&
+		protoType.Elem().Kind() == reflect.String {
+		return true
+	}
+	
 	// Check for integers
 	if (modelType.Kind() == reflect.Int || modelType.Kind() == reflect.Int32 || modelType.Kind() == reflect.Int64) &&
 		(protoType.Kind() == reflect.Int || protoType.Kind() == reflect.Int32 || protoType.Kind() == reflect.Int64) {

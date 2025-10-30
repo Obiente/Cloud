@@ -36,31 +36,12 @@ const (
 	// AuthServiceGetCurrentUserProcedure is the fully-qualified name of the AuthService's
 	// GetCurrentUser RPC.
 	AuthServiceGetCurrentUserProcedure = "/obiente.cloud.auth.v1.AuthService/GetCurrentUser"
-	// AuthServiceInitiateLoginProcedure is the fully-qualified name of the AuthService's InitiateLogin
-	// RPC.
-	AuthServiceInitiateLoginProcedure = "/obiente.cloud.auth.v1.AuthService/InitiateLogin"
-	// AuthServiceHandleCallbackProcedure is the fully-qualified name of the AuthService's
-	// HandleCallback RPC.
-	AuthServiceHandleCallbackProcedure = "/obiente.cloud.auth.v1.AuthService/HandleCallback"
-	// AuthServiceRefreshTokenProcedure is the fully-qualified name of the AuthService's RefreshToken
-	// RPC.
-	AuthServiceRefreshTokenProcedure = "/obiente.cloud.auth.v1.AuthService/RefreshToken"
-	// AuthServiceLogoutProcedure is the fully-qualified name of the AuthService's Logout RPC.
-	AuthServiceLogoutProcedure = "/obiente.cloud.auth.v1.AuthService/Logout"
 )
 
 // AuthServiceClient is a client for the obiente.cloud.auth.v1.AuthService service.
 type AuthServiceClient interface {
 	// Get current authenticated user
 	GetCurrentUser(context.Context, *connect.Request[v1.GetCurrentUserRequest]) (*connect.Response[v1.GetCurrentUserResponse], error)
-	// Initiate OIDC login flow
-	InitiateLogin(context.Context, *connect.Request[v1.InitiateLoginRequest]) (*connect.Response[v1.InitiateLoginResponse], error)
-	// Handle OIDC callback and exchange tokens
-	HandleCallback(context.Context, *connect.Request[v1.HandleCallbackRequest]) (*connect.Response[v1.HandleCallbackResponse], error)
-	// Refresh access token
-	RefreshToken(context.Context, *connect.Request[v1.RefreshTokenRequest]) (*connect.Response[v1.RefreshTokenResponse], error)
-	// Logout user
-	Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the obiente.cloud.auth.v1.AuthService service. By
@@ -80,40 +61,12 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("GetCurrentUser")),
 			connect.WithClientOptions(opts...),
 		),
-		initiateLogin: connect.NewClient[v1.InitiateLoginRequest, v1.InitiateLoginResponse](
-			httpClient,
-			baseURL+AuthServiceInitiateLoginProcedure,
-			connect.WithSchema(authServiceMethods.ByName("InitiateLogin")),
-			connect.WithClientOptions(opts...),
-		),
-		handleCallback: connect.NewClient[v1.HandleCallbackRequest, v1.HandleCallbackResponse](
-			httpClient,
-			baseURL+AuthServiceHandleCallbackProcedure,
-			connect.WithSchema(authServiceMethods.ByName("HandleCallback")),
-			connect.WithClientOptions(opts...),
-		),
-		refreshToken: connect.NewClient[v1.RefreshTokenRequest, v1.RefreshTokenResponse](
-			httpClient,
-			baseURL+AuthServiceRefreshTokenProcedure,
-			connect.WithSchema(authServiceMethods.ByName("RefreshToken")),
-			connect.WithClientOptions(opts...),
-		),
-		logout: connect.NewClient[v1.LogoutRequest, v1.LogoutResponse](
-			httpClient,
-			baseURL+AuthServiceLogoutProcedure,
-			connect.WithSchema(authServiceMethods.ByName("Logout")),
-			connect.WithClientOptions(opts...),
-		),
 	}
 }
 
 // authServiceClient implements AuthServiceClient.
 type authServiceClient struct {
 	getCurrentUser *connect.Client[v1.GetCurrentUserRequest, v1.GetCurrentUserResponse]
-	initiateLogin  *connect.Client[v1.InitiateLoginRequest, v1.InitiateLoginResponse]
-	handleCallback *connect.Client[v1.HandleCallbackRequest, v1.HandleCallbackResponse]
-	refreshToken   *connect.Client[v1.RefreshTokenRequest, v1.RefreshTokenResponse]
-	logout         *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
 }
 
 // GetCurrentUser calls obiente.cloud.auth.v1.AuthService.GetCurrentUser.
@@ -121,38 +74,10 @@ func (c *authServiceClient) GetCurrentUser(ctx context.Context, req *connect.Req
 	return c.getCurrentUser.CallUnary(ctx, req)
 }
 
-// InitiateLogin calls obiente.cloud.auth.v1.AuthService.InitiateLogin.
-func (c *authServiceClient) InitiateLogin(ctx context.Context, req *connect.Request[v1.InitiateLoginRequest]) (*connect.Response[v1.InitiateLoginResponse], error) {
-	return c.initiateLogin.CallUnary(ctx, req)
-}
-
-// HandleCallback calls obiente.cloud.auth.v1.AuthService.HandleCallback.
-func (c *authServiceClient) HandleCallback(ctx context.Context, req *connect.Request[v1.HandleCallbackRequest]) (*connect.Response[v1.HandleCallbackResponse], error) {
-	return c.handleCallback.CallUnary(ctx, req)
-}
-
-// RefreshToken calls obiente.cloud.auth.v1.AuthService.RefreshToken.
-func (c *authServiceClient) RefreshToken(ctx context.Context, req *connect.Request[v1.RefreshTokenRequest]) (*connect.Response[v1.RefreshTokenResponse], error) {
-	return c.refreshToken.CallUnary(ctx, req)
-}
-
-// Logout calls obiente.cloud.auth.v1.AuthService.Logout.
-func (c *authServiceClient) Logout(ctx context.Context, req *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error) {
-	return c.logout.CallUnary(ctx, req)
-}
-
 // AuthServiceHandler is an implementation of the obiente.cloud.auth.v1.AuthService service.
 type AuthServiceHandler interface {
 	// Get current authenticated user
 	GetCurrentUser(context.Context, *connect.Request[v1.GetCurrentUserRequest]) (*connect.Response[v1.GetCurrentUserResponse], error)
-	// Initiate OIDC login flow
-	InitiateLogin(context.Context, *connect.Request[v1.InitiateLoginRequest]) (*connect.Response[v1.InitiateLoginResponse], error)
-	// Handle OIDC callback and exchange tokens
-	HandleCallback(context.Context, *connect.Request[v1.HandleCallbackRequest]) (*connect.Response[v1.HandleCallbackResponse], error)
-	// Refresh access token
-	RefreshToken(context.Context, *connect.Request[v1.RefreshTokenRequest]) (*connect.Response[v1.RefreshTokenResponse], error)
-	// Logout user
-	Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -168,42 +93,10 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("GetCurrentUser")),
 		connect.WithHandlerOptions(opts...),
 	)
-	authServiceInitiateLoginHandler := connect.NewUnaryHandler(
-		AuthServiceInitiateLoginProcedure,
-		svc.InitiateLogin,
-		connect.WithSchema(authServiceMethods.ByName("InitiateLogin")),
-		connect.WithHandlerOptions(opts...),
-	)
-	authServiceHandleCallbackHandler := connect.NewUnaryHandler(
-		AuthServiceHandleCallbackProcedure,
-		svc.HandleCallback,
-		connect.WithSchema(authServiceMethods.ByName("HandleCallback")),
-		connect.WithHandlerOptions(opts...),
-	)
-	authServiceRefreshTokenHandler := connect.NewUnaryHandler(
-		AuthServiceRefreshTokenProcedure,
-		svc.RefreshToken,
-		connect.WithSchema(authServiceMethods.ByName("RefreshToken")),
-		connect.WithHandlerOptions(opts...),
-	)
-	authServiceLogoutHandler := connect.NewUnaryHandler(
-		AuthServiceLogoutProcedure,
-		svc.Logout,
-		connect.WithSchema(authServiceMethods.ByName("Logout")),
-		connect.WithHandlerOptions(opts...),
-	)
 	return "/obiente.cloud.auth.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceGetCurrentUserProcedure:
 			authServiceGetCurrentUserHandler.ServeHTTP(w, r)
-		case AuthServiceInitiateLoginProcedure:
-			authServiceInitiateLoginHandler.ServeHTTP(w, r)
-		case AuthServiceHandleCallbackProcedure:
-			authServiceHandleCallbackHandler.ServeHTTP(w, r)
-		case AuthServiceRefreshTokenProcedure:
-			authServiceRefreshTokenHandler.ServeHTTP(w, r)
-		case AuthServiceLogoutProcedure:
-			authServiceLogoutHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -215,20 +108,4 @@ type UnimplementedAuthServiceHandler struct{}
 
 func (UnimplementedAuthServiceHandler) GetCurrentUser(context.Context, *connect.Request[v1.GetCurrentUserRequest]) (*connect.Response[v1.GetCurrentUserResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.auth.v1.AuthService.GetCurrentUser is not implemented"))
-}
-
-func (UnimplementedAuthServiceHandler) InitiateLogin(context.Context, *connect.Request[v1.InitiateLoginRequest]) (*connect.Response[v1.InitiateLoginResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.auth.v1.AuthService.InitiateLogin is not implemented"))
-}
-
-func (UnimplementedAuthServiceHandler) HandleCallback(context.Context, *connect.Request[v1.HandleCallbackRequest]) (*connect.Response[v1.HandleCallbackResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.auth.v1.AuthService.HandleCallback is not implemented"))
-}
-
-func (UnimplementedAuthServiceHandler) RefreshToken(context.Context, *connect.Request[v1.RefreshTokenRequest]) (*connect.Response[v1.RefreshTokenResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.auth.v1.AuthService.RefreshToken is not implemented"))
-}
-
-func (UnimplementedAuthServiceHandler) Logout(context.Context, *connect.Request[v1.LogoutRequest]) (*connect.Response[v1.LogoutResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.auth.v1.AuthService.Logout is not implemented"))
 }

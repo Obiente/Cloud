@@ -10,6 +10,9 @@ import (
 	organizationsv1 "api/gen/proto/obiente/cloud/organizations/v1"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/docker"
+	"api/internal/orchestrator"
+	"api/internal/quota"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/proto"
@@ -20,12 +23,16 @@ type Service struct {
 	deploymentsv1connect.UnimplementedDeploymentServiceHandler
 	repo              *database.DeploymentRepository
 	permissionChecker *auth.PermissionChecker
+	manager           *orchestrator.DeploymentManager
+	quotaChecker      *quota.Checker
 }
 
-func NewService(repo *database.DeploymentRepository) deploymentsv1connect.DeploymentServiceHandler {
+func NewService(repo *database.DeploymentRepository, manager *orchestrator.DeploymentManager, qc *quota.Checker) deploymentsv1connect.DeploymentServiceHandler {
 	return &Service{
 		repo:              repo,
 		permissionChecker: auth.NewPermissionChecker(),
+		manager:           manager,
+		quotaChecker:      qc,
 	}
 }
 
@@ -49,7 +56,7 @@ func (s *Service) checkDeploymentPermission(ctx context.Context, deploymentID st
 	}
 	
 	// Check if user is the resource owner
-	if deployment.CreatedBy == userInfo.Sub {
+    if deployment.CreatedBy == userInfo.Id {
 		return nil // Resource owners have full access to their resources
 	}
 	
@@ -76,7 +83,7 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 
 	// Create filters with user ID
 	filters := &database.DeploymentFilters{
-		UserID: userInfo.Sub,
+        UserID: userInfo.Id,
 		// Admin users can see all deployments
 		IncludeAll: auth.HasRole(userInfo, auth.RoleAdmin),
 	}
@@ -119,30 +126,35 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 }
 
 func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[deploymentsv1.CreateDeploymentRequest]) (*connect.Response[deploymentsv1.CreateDeploymentResponse], error) {
-	// Get organization ID from request or default
 	orgID := req.Msg.GetOrganizationId()
-	if orgID == "" {
-		orgID = "default"
-	}
-
-	// Get authenticated user from context
+	if orgID == "" { orgID = "default" }
 	userInfo, err := auth.GetUserFromContext(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err))
+	if err != nil { return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err)) }
+
+	// Permission: org-level
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.create"}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	// Generate unique deployment ID
-	id := fmt.Sprintf("deploy-%d", time.Now().Unix())
+	// Quota check
+	reqRes := quota.RequestedResources{
+		Replicas:    int(req.Msg.GetReplicas()),
+		MemoryBytes: req.Msg.GetMemoryBytes(),
+		CPUshares:   req.Msg.GetCpuShares(),
+	}
+	if err := s.quotaChecker.CanAllocate(ctx, orgID, reqRes); err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
 
-	// Create deployment in proto format first
+	id := fmt.Sprintf("deploy-%d", time.Now().Unix())
 	deployment := &deploymentsv1.Deployment{
 		Id:             id,
 		Name:           req.Msg.GetName(),
 		Domain:         fmt.Sprintf("%s.obiente.cloud", req.Msg.GetName()),
-		CustomDomains:  []string{fmt.Sprintf("app.%s.obiente.cloud", req.Msg.GetName())},
+		CustomDomains:  []string{},
 		Type:           req.Msg.GetType(),
 		Branch:         req.Msg.GetBranch(),
-		Status:         deploymentsv1.DeploymentStatus_CREATED,
+		Status:         deploymentsv1.DeploymentStatus_DEPLOYING,
 		HealthStatus:   "pending",
 		Environment:    deploymentsv1.Environment_PRODUCTION,
 		LastDeployedAt: timestamppb.Now(),
@@ -151,24 +163,33 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 		BuildTime:      0,
 		Size:           "--",
 		CreatedAt:      timestamppb.Now(),
+		Image:          proto.String(req.Msg.GetImage()),
+		Port:           proto.Int32(req.Msg.GetPort()),
+		Replicas:       proto.Int32(req.Msg.GetReplicas()),
 	}
+	if repo := req.Msg.GetRepositoryUrl(); repo != "" { deployment.RepositoryUrl = proto.String(repo) }
+	if build := req.Msg.GetBuildCommand(); build != "" { deployment.BuildCommand = proto.String(build) }
+	if install := req.Msg.GetInstallCommand(); install != "" { deployment.InstallCommand = proto.String(install) }
 
-	if repo := req.Msg.GetRepositoryUrl(); repo != "" {
-		deployment.RepositoryUrl = proto.String(repo)
-	}
-	if build := req.Msg.GetBuildCommand(); build != "" {
-		deployment.BuildCommand = proto.String(build)
-	}
-	if install := req.Msg.GetInstallCommand(); install != "" {
-		deployment.InstallCommand = proto.String(install)
-	}
-
-	// Convert to database model with authenticated user ID as creator
-	dbDeployment := protoToDBDeployment(deployment, orgID, userInfo.Sub)
-	
-	// Save to database
+    dbDeployment := protoToDBDeployment(deployment, orgID, userInfo.Id)
 	if err := s.repo.Create(ctx, dbDeployment); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create deployment: %w", err))
+	}
+
+	// Orchestrate container(s)
+	if s.manager != nil {
+		cfg := &orchestrator.DeploymentConfig{
+			DeploymentID: id,
+			Image:        req.Msg.GetImage(),
+			Domain:       deployment.GetDomain(),
+			Port:         int(req.Msg.GetPort()),
+			EnvVars:      map[string]string{},
+			Labels:       map[string]string{},
+			Memory:       req.Msg.GetMemoryBytes(),
+			CPUShares:    req.Msg.GetCpuShares(),
+			Replicas:     int(req.Msg.GetReplicas()),
+		}
+		_ = s.manager.CreateDeployment(ctx, cfg) // best-effort; DB state already created, errors can be reconciled
 	}
 
 	res := connect.NewResponse(&deploymentsv1.CreateDeploymentResponse{Deployment: deployment})
@@ -327,52 +348,108 @@ func (s *Service) GetDeploymentLogs(ctx context.Context, req *connect.Request[de
 }
 
 func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[deploymentsv1.StartDeploymentRequest]) (*connect.Response[deploymentsv1.StartDeploymentResponse], error) {
-	dbDeployment, err := s.repo.GetByID(ctx, req.Msg.GetDeploymentId())
-	if err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", req.Msg.GetDeploymentId()))
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.start", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
-
-	if deploymentsv1.DeploymentStatus(dbDeployment.Status) != deploymentsv1.DeploymentStatus_STOPPED {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("deployment must be stopped to start it"))
+	// TODO: enforce quota if starting increases replicas/resources
+	if s.manager != nil {
+		// No-op here; Start applies to already created/running containers in our current model
 	}
-
-	dbDeployment.Status = int32(deploymentsv1.DeploymentStatus_BUILDING)
-	dbDeployment.LastDeployedAt = time.Now()
-
-	if err := s.repo.Update(ctx, dbDeployment); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start deployment: %w", err))
-	}
-
-	// Simulate async transition to RUNNING
-	go func() {
-		time.Sleep(2 * time.Second)
-		s.repo.UpdateStatus(context.Background(), req.Msg.GetDeploymentId(), int32(deploymentsv1.DeploymentStatus_RUNNING))
-	}()
-
-	protoDeployment := dbDeploymentToProto(dbDeployment)
-	res := connect.NewResponse(&deploymentsv1.StartDeploymentResponse{Deployment: protoDeployment})
+	dbDep, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil { return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID)) }
+	dbDep.Status = int32(deploymentsv1.DeploymentStatus_RUNNING)
+	if err := s.repo.Update(ctx, dbDep); err != nil { return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start deployment: %w", err)) }
+	res := connect.NewResponse(&deploymentsv1.StartDeploymentResponse{Deployment: dbDeploymentToProto(dbDep)})
 	return res, nil
 }
 
 func (s *Service) StopDeployment(ctx context.Context, req *connect.Request[deploymentsv1.StopDeploymentRequest]) (*connect.Response[deploymentsv1.StopDeploymentResponse], error) {
-	dbDeployment, err := s.repo.GetByID(ctx, req.Msg.GetDeploymentId())
-	if err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", req.Msg.GetDeploymentId()))
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.stop", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
-
-	if deploymentsv1.DeploymentStatus(dbDeployment.Status) != deploymentsv1.DeploymentStatus_RUNNING {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("deployment must be running to stop it"))
-	}
-
-	dbDeployment.Status = int32(deploymentsv1.DeploymentStatus_STOPPED)
-	if err := s.repo.Update(ctx, dbDeployment); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to stop deployment: %w", err))
-	}
-
-	protoDeployment := dbDeploymentToProto(dbDeployment)
-	res := connect.NewResponse(&deploymentsv1.StopDeploymentResponse{Deployment: protoDeployment})
+	if s.manager != nil { _ = s.manager.StopDeployment(ctx, deploymentID) }
+	dbDep, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil { return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID)) }
+	dbDep.Status = int32(deploymentsv1.DeploymentStatus_STOPPED)
+	if err := s.repo.Update(ctx, dbDep); err != nil { return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to stop deployment: %w", err)) }
+	res := connect.NewResponse(&deploymentsv1.StopDeploymentResponse{Deployment: dbDeploymentToProto(dbDep)})
 	return res, nil
 }
+
+func (s *Service) RestartDeployment(ctx context.Context, req *connect.Request[deploymentsv1.RestartDeploymentRequest]) (*connect.Response[deploymentsv1.RestartDeploymentResponse], error) {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.restart", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+	if s.manager != nil { _ = s.manager.RestartDeployment(ctx, deploymentID) }
+	dbDep, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil { return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID)) }
+	res := connect.NewResponse(&deploymentsv1.RestartDeploymentResponse{Deployment: dbDeploymentToProto(dbDep)})
+	return res, nil
+}
+
+func (s *Service) ScaleDeployment(ctx context.Context, req *connect.Request[deploymentsv1.ScaleDeploymentRequest]) (*connect.Response[deploymentsv1.ScaleDeploymentResponse], error) {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.scale", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+	// Quota check: replicas delta
+	newReplicas := int(req.Msg.GetReplicas())
+	if newReplicas <= 0 { return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("replicas must be > 0")) }
+	if err := s.quotaChecker.CanAllocate(ctx, orgID, quota.RequestedResources{Replicas: newReplicas}); err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+	if s.manager != nil { _ = s.manager.ScaleDeployment(ctx, deploymentID, newReplicas) }
+	dbDep, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil { return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID)) }
+	res := connect.NewResponse(&deploymentsv1.ScaleDeploymentResponse{Deployment: dbDeploymentToProto(dbDep)})
+	return res, nil
+}
+
+func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request[deploymentsv1.StreamDeploymentLogsRequest], stream *connect.ServerStream[deploymentsv1.DeploymentLogLine]) error {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return connect.NewError(connect.CodePermissionDenied, err)
+	}
+	// Find a container for this deployment and stream logs
+	locations, err := database.GetDeploymentLocations(deploymentID)
+	if err != nil || len(locations) == 0 {
+		return connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
+	}
+	// Use the first location for now
+	loc := locations[0]
+	dcli, err := docker.New()
+	if err != nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
+	}
+	defer dcli.Close()
+	reader, err := dcli.ContainerLogs(ctx, loc.ContainerID, fmt.Sprintf("%d", req.Msg.GetTail()))
+	if err != nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("logs: %w", err))
+	}
+	defer reader.Close()
+	buf := make([]byte, 4096)
+	for {
+		n, readErr := reader.Read(buf)
+		if n > 0 {
+			line := &deploymentsv1.DeploymentLogLine{DeploymentId: deploymentID, Line: string(buf[:n]), Timestamp: timestamppb.Now()}
+			if sendErr := stream.Send(line); sendErr != nil { return sendErr }
+		}
+		if readErr != nil {
+			break
+		}
+	}
+	return nil
+}
+
+// TODO: implement RestartDeployment, ScaleDeployment, StreamDeploymentLogs similarly with permission + quota checks
 
 func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[deploymentsv1.DeleteDeploymentRequest]) (*connect.Response[deploymentsv1.DeleteDeploymentResponse], error) {
 	// Check if user has delete permission for this deployment

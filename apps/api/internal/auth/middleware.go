@@ -14,7 +14,10 @@ import (
 	"sync"
 	"time"
 
+	authv1 "api/gen/proto/obiente/cloud/auth/v1"
+
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Constants for auth validation
@@ -31,19 +34,19 @@ var (
 	ErrUserInfoFailed = errors.New("failed to fetch user info")
 )
 
-// UserInfo represents the user information from Zitadel userinfo endpoint
-type UserInfo struct {
-	Sub               string   `json:"sub"`                // User ID
-	Name              string   `json:"name"`               // Full name
-	GivenName         string   `json:"given_name"`         // First name
-	FamilyName        string   `json:"family_name"`        // Last name
-	PreferredUsername string   `json:"preferred_username"` // Username
-	Email             string   `json:"email"`              // Email
-	EmailVerified     bool     `json:"email_verified"`     // Email verified status
-	Locale            string   `json:"locale"`             // User locale
-	Picture           string   `json:"picture"`            // Profile picture URL
-	UpdatedAt         int64    `json:"updated_at"`         // Last update timestamp
-	Roles             []string // Custom roles (if needed)
+// Use protobuf-defined user type for userinfo
+// We will decode Zitadel userinfo JSON into an internal struct and map to authv1.User
+type zitadelUserInfo struct {
+    Sub               string `json:"sub"`
+    Name              string `json:"name"`
+    GivenName         string `json:"given_name"`
+    FamilyName        string `json:"family_name"`
+    PreferredUsername string `json:"preferred_username"`
+    Email             string `json:"email"`
+    EmailVerified     bool   `json:"email_verified"`
+    Locale            string `json:"locale"`
+    Picture           string `json:"picture"`
+    UpdatedAt         int64  `json:"updated_at"`
 }
 
 // contextKey is a private type for context keys
@@ -53,14 +56,14 @@ const userInfoKey contextKey = 0
 
 // UserInfoCache manages caching of validated tokens
 type UserInfoCache struct {
-	cache map[string]*CachedUserInfo
+    cache map[string]*CachedUserInfo
 	mutex sync.RWMutex
 }
 
 // CachedUserInfo stores user info with expiration
 type CachedUserInfo struct {
-	UserInfo  *UserInfo
-	ExpiresAt time.Time
+    User      *authv1.User
+    ExpiresAt time.Time
 }
 
 // NewUserInfoCache creates a new user info cache
@@ -76,7 +79,7 @@ func NewUserInfoCache() *UserInfoCache {
 }
 
 // Get retrieves cached user info if valid
-func (c *UserInfoCache) Get(token string) (*UserInfo, bool) {
+func (c *UserInfoCache) Get(token string) (*authv1.User, bool) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
@@ -89,16 +92,16 @@ func (c *UserInfoCache) Get(token string) (*UserInfo, bool) {
 		return nil, false
 	}
 
-	return cached.UserInfo, true
+    return cached.User, true
 }
 
 // Set stores user info in cache
-func (c *UserInfoCache) Set(token string, userInfo *UserInfo) {
+func (c *UserInfoCache) Set(token string, user *authv1.User) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	c.cache[token] = &CachedUserInfo{
-		UserInfo:  userInfo,
+        User:      user,
 		ExpiresAt: time.Now().Add(UserInfoCacheDuration),
 	}
 }
@@ -228,10 +231,10 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 			// Call next handler
 			resp, err := next(ctx, req)
 
-			// Optionally add user info to response headers (for debugging)
+            // Optionally add user info to response headers (for debugging)
 			if config.ExposeUserInfo && resp != nil && err == nil {
-				resp.Header().Set("X-User-ID", userInfo.Sub)
-				resp.Header().Set("X-User-Email", userInfo.Email)
+                resp.Header().Set("X-User-ID", userInfo.Id)
+                resp.Header().Set("X-User-Email", userInfo.Email)
 			}
 
 			return resp, err
@@ -240,11 +243,11 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 }
 
 // validateToken validates a token against Zitadel's userinfo endpoint
-func (c *AuthConfig) validateToken(ctx context.Context, token string) (*UserInfo, error) {
+func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.User, error) {
 	// Check cache first
-	if cachedUserInfo, found := c.UserInfoCache.Get(token); found {
-		log.Printf("✓ Token validated (cached) for user: %s (%s)", cachedUserInfo.Sub, cachedUserInfo.Email)
-		return cachedUserInfo, nil
+    if cachedUser, found := c.UserInfoCache.Get(token); found {
+        log.Printf("✓ Token validated (cached) for user: %s (%s)", cachedUser.Id, cachedUser.Email)
+        return cachedUser, nil
 	}
 
 	// Create request to userinfo endpoint
@@ -275,21 +278,37 @@ func (c *AuthConfig) validateToken(ctx context.Context, token string) (*UserInfo
 	}
 
 	// Parse response
-	var userInfo UserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+    var zui zitadelUserInfo
+    if err := json.NewDecoder(resp.Body).Decode(&zui); err != nil {
 		return nil, fmt.Errorf("failed to parse userinfo response: %w", err)
 	}
 
-	// Cache the result
-	c.UserInfoCache.Set(token, &userInfo)
+    // Map to proto user
+    user := &authv1.User{
+        Id:                zui.Sub,
+        Email:             zui.Email,
+        Name:              zui.Name,
+        AvatarUrl:         zui.Picture,
+        GivenName:         zui.GivenName,
+        FamilyName:        zui.FamilyName,
+        PreferredUsername: zui.PreferredUsername,
+        EmailVerified:     zui.EmailVerified,
+        Locale:            zui.Locale,
+    }
+    if zui.UpdatedAt > 0 {
+        user.UpdatedAt = timestamppb.New(time.Unix(zui.UpdatedAt, 0))
+    }
 
-	log.Printf("✓ Token validated for user: %s (%s)", userInfo.Sub, userInfo.Email)
-	return &userInfo, nil
+    // Cache the result
+    c.UserInfoCache.Set(token, user)
+
+    log.Printf("✓ Token validated for user: %s (%s)", user.Id, user.Email)
+    return user, nil
 }
 
 // GetUserFromContext extracts user info from context
-func GetUserFromContext(ctx context.Context) (*UserInfo, error) {
-	userInfo, ok := ctx.Value(userInfoKey).(*UserInfo)
+func GetUserFromContext(ctx context.Context) (*authv1.User, error) {
+    userInfo, ok := ctx.Value(userInfoKey).(*authv1.User)
 	if !ok {
 		return nil, errors.New("user not found in context")
 	}
@@ -298,16 +317,16 @@ func GetUserFromContext(ctx context.Context) (*UserInfo, error) {
 
 // UserIDFromContext extracts user ID from context
 func UserIDFromContext(ctx context.Context) (string, bool) {
-	userInfo, ok := ctx.Value(userInfoKey).(*UserInfo)
+    userInfo, ok := ctx.Value(userInfoKey).(*authv1.User)
 	if !ok {
 		return "", false
 	}
-	return userInfo.Sub, true
+    return userInfo.Id, true
 }
 
 // AuthenticateHTTPRequest authenticates an HTTP request outside of Connect RPC
 // This can be used for regular HTTP handlers that need authentication
-func AuthenticateHTTPRequest(config *AuthConfig, r *http.Request) (*UserInfo, error) {
+func AuthenticateHTTPRequest(config *AuthConfig, r *http.Request) (*authv1.User, error) {
 	// If auth is disabled, return nil
 	if config.UserInfoCache == nil {
 		return nil, nil

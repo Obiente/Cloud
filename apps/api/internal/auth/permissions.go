@@ -1,6 +1,7 @@
 package auth
 
 import (
+	authv1 "api/gen/proto/obiente/cloud/auth/v1"
 	"context"
 	"errors"
 )
@@ -88,7 +89,7 @@ func (pc *PermissionChecker) CheckOwnership(ctx context.Context, resourceType Re
 	}
 
 	// Check if the user is the owner
-	if userInfo.Sub == ownerID {
+    if userInfo.Id == ownerID {
 		return nil
 	}
 
@@ -99,7 +100,7 @@ func (pc *PermissionChecker) CheckOwnership(ctx context.Context, resourceType Re
 }
 
 // HasRole checks if the user has a specific role
-func (pc *PermissionChecker) HasRole(userInfo *UserInfo, role string) bool {
+func (pc *PermissionChecker) HasRole(userInfo *authv1.User, role string) bool {
 	for _, r := range userInfo.Roles {
 		if r == role {
 			return true
@@ -109,7 +110,7 @@ func (pc *PermissionChecker) HasRole(userInfo *UserInfo, role string) bool {
 }
 
 // checkDeploymentPermission checks permissions for deployment resources
-func (pc *PermissionChecker) checkDeploymentPermission(ctx context.Context, userInfo *UserInfo, deploymentID, permission string) error {
+func (pc *PermissionChecker) checkDeploymentPermission(ctx context.Context, userInfo *authv1.User, deploymentID, permission string) error {
 	// In a real implementation, you would query the database to check:
 	// 1. If user is the deployment creator (full access)
 	// 2. If user is organization admin/owner with access to this deployment
@@ -138,7 +139,7 @@ func (pc *PermissionChecker) checkDeploymentPermission(ctx context.Context, user
 }
 
 // checkOrganizationPermission checks permissions for organization resources
-func (pc *PermissionChecker) checkOrganizationPermission(ctx context.Context, userInfo *UserInfo, orgID, permission string) error {
+func (pc *PermissionChecker) checkOrganizationPermission(ctx context.Context, userInfo *authv1.User, orgID, permission string) error {
 	// Check if user has the required role within this organization
 	// This would require a database query in a real implementation
 
@@ -171,7 +172,7 @@ func (pc *PermissionChecker) checkOrganizationPermission(ctx context.Context, us
 }
 
 // checkRolePermission does a general role-based permission check
-func (pc *PermissionChecker) checkRolePermission(userInfo *UserInfo, permission string) error {
+func (pc *PermissionChecker) checkRolePermission(userInfo *authv1.User, permission string) error {
 	// Define which roles have which permissions by default
 	switch permission {
 	case PermissionCreate:
@@ -212,13 +213,13 @@ func RequireOwnership(ctx context.Context, resourceType ResourceType, resourceID
 }
 
 // GetUserRole gets the user's highest role
-func GetUserRole(userInfo *UserInfo) string {
+func GetUserRole(userInfo *authv1.User) string {
 	if userInfo == nil {
 		return ""
 	}
 
 	// Check from highest to lowest privilege
-	if HasRole(userInfo, RoleAdmin) {
+    if HasRole(userInfo, RoleAdmin) {
 		return RoleAdmin
 	}
 
@@ -238,7 +239,7 @@ func GetUserRole(userInfo *UserInfo) string {
 }
 
 // HasRole is a helper function to check if a user has a specific role
-func HasRole(userInfo *UserInfo, role string) bool {
+func HasRole(userInfo *authv1.User, role string) bool {
 	if userInfo == nil {
 		return false
 	}
@@ -253,7 +254,7 @@ func HasRole(userInfo *UserInfo, role string) bool {
 }
 
 // HasAnyRole checks if a user has any of the specified roles
-func HasAnyRole(userInfo *UserInfo, roles ...string) bool {
+func HasAnyRole(userInfo *authv1.User, roles ...string) bool {
 	if userInfo == nil {
 		return false
 	}
