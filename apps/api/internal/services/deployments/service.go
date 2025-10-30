@@ -70,10 +70,13 @@ func (s *Service) checkDeploymentPermission(ctx context.Context, deploymentID st
 }
 
 func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[deploymentsv1.ListDeploymentsRequest]) (*connect.Response[deploymentsv1.ListDeploymentsResponse], error) {
-	orgID := req.Msg.GetOrganizationId()
-	if orgID == "" {
-		orgID = "default"
-	}
+    orgID := req.Msg.GetOrganizationId()
+    if orgID == "" {
+        // Resolve to a real organization the user belongs to
+        if eff, ok := resolveUserDefaultOrgID(ctx); ok {
+            orgID = eff
+        }
+    }
 
 	// Get authenticated user from context
 	userInfo, err := auth.GetUserFromContext(ctx)
@@ -126,8 +129,12 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 }
 
 func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[deploymentsv1.CreateDeploymentRequest]) (*connect.Response[deploymentsv1.CreateDeploymentResponse], error) {
-	orgID := req.Msg.GetOrganizationId()
-	if orgID == "" { orgID = "default" }
+    orgID := req.Msg.GetOrganizationId()
+    if orgID == "" {
+        if eff, ok := resolveUserDefaultOrgID(ctx); ok {
+            orgID = eff
+        }
+    }
 	userInfo, err := auth.GetUserFromContext(ctx)
 	if err != nil { return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("user authentication required: %w", err)) }
 
@@ -194,6 +201,31 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 
 	res := connect.NewResponse(&deploymentsv1.CreateDeploymentResponse{Deployment: deployment})
 	return res, nil
+}
+
+// resolveUserDefaultOrgID returns a membership org id for the authenticated user, if any
+func resolveUserDefaultOrgID(ctx context.Context) (string, bool) {
+    userInfo, err := auth.GetUserFromContext(ctx)
+    if err != nil || userInfo == nil {
+        return "", false
+    }
+    // Pick any organization the user belongs to (first by created_at desc)
+    type row struct{ OrganizationID string }
+    var r row
+    if err := database.DB.Raw(`
+        SELECT m.organization_id
+        FROM organization_members m
+        JOIN organizations o ON o.id = m.organization_id
+        WHERE m.user_id = ?
+        ORDER BY o.created_at DESC
+        LIMIT 1
+    `, userInfo.Id).Scan(&r).Error; err != nil {
+        return "", false
+    }
+    if r.OrganizationID == "" {
+        return "", false
+    }
+    return r.OrganizationID, true
 }
 
 func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploymentsv1.GetDeploymentRequest]) (*connect.Response[deploymentsv1.GetDeploymentResponse], error) {
