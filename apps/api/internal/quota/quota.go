@@ -54,11 +54,11 @@ func (c *Checker) getQuota(orgID string) (*database.OrgQuota, error) {
 func (c *Checker) currentAllocations(orgID string) (replicas int, memBytes int64, cpuCores int, err error) {
 	// Count running replicas
 	var count int64
-	if err = database.DB.Model(&database.DeploymentLocation{}).
-		Where("status = ?", "running").
-		Joins("JOIN deployments d ON d.id = deployment_locations.deployment_id").
-		Where("d.organization_id = ?", orgID).
-		Count(&count).Error; err != nil { return }
+    if err = database.DB.Model(&database.DeploymentLocation{}).
+        Where("deployment_locations.status = ?", "running").
+        Joins("JOIN deployments d ON d.id = deployment_locations.deployment_id").
+        Where("d.organization_id = ?", orgID).
+        Count(&count).Error; err != nil { return }
 	// Sum requested memory and CPU across org deployments (nil treated as 0)
 	type agg struct{ Mem int64; CPU int64 }
 	var a agg
