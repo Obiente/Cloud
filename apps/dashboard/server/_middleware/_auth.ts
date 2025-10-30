@@ -3,7 +3,7 @@
  * Access tokens are bearer tokens, not JWTs, so validation is handled by the API
  */
 export default defineEventHandler(async (event) => {
-  const { getAccessToken } = await import('../utils/token');
+  const { getAccessToken } = await import("../utils/token");
   // Skip auth for public routes
   const publicRoutes = ["/auth/callback", "/auth/login"];
   if (publicRoutes.includes(event.path)) {

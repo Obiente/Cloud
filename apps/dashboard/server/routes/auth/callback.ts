@@ -41,24 +41,24 @@ export default defineEventHandler(async (event) => {
         },
       })
     );
-    
+
     // Also set the auth cookie directly for easier access
     // Calculate expiry time (in seconds)
     const expirySeconds = tokenResponse.expires_in || 3600;
     const maxAge = expirySeconds - 60; // Subtract a minute for safety
-    
+
     // Import the cookie name from auth utils
-    const { AUTH_COOKIE_NAME } = await import('../../utils/auth');
-    
+    const { AUTH_COOKIE_NAME } = await import("../../utils/auth");
+
     // Set the cookie with the token - using specific settings for SSR compatibility
     setCookie(event, AUTH_COOKIE_NAME, tokenResponse.access_token, {
       httpOnly: false, // Allow JavaScript access
-      path: '/',
+      path: "/",
       maxAge,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
       // Make sure domain is set correctly for SSR
-      domain: undefined // Let the browser determine the domain
+      domain: undefined, // Let the browser determine the domain
     });
   } finally {
     return `<!DOCTYPE html>
