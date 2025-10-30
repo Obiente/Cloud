@@ -7,6 +7,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/moby/moby/api/types"
 	"github.com/moby/moby/client"
 )
 
@@ -121,4 +122,15 @@ func (c *Client) ContainerLogs(ctx context.Context, containerID string, tail str
 		return nil, fmt.Errorf("docker: logs for %s: %w", containerID, err)
 	}
 	return logs, nil
+}
+
+// ContainerExec creates an interactive exec session in the container
+// Note: This is a placeholder - actual implementation requires proper moby API types
+func (c *Client) ContainerExec(ctx context.Context, containerID string, cols, rows int) (io.ReadWriteCloser, error) {
+	if c == nil || c.api == nil {
+		return nil, ErrUninitialized
+	}
+	// TODO: Implement terminal exec using proper moby API types
+	// This requires checking the exact API surface of the moby client version being used
+	return nil, fmt.Errorf("terminal exec not yet implemented - requires moby API type definitions")
 }

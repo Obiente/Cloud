@@ -3,7 +3,7 @@ import { type Deployment, DeploymentStatus } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { DeploymentService } from "@obiente/proto";
 import { timestamp } from "@obiente/proto/utils";
-import { useOrganizationsStore } from "~/app/stores/organizations";
+import { useOrganizationsStore } from "~/stores/organizations";
 
 export function useDeploymentActions(organizationId: string = "default") {
   const client = useConnectClient(DeploymentService);

@@ -103,24 +103,15 @@
           </Tabs.Content>
 
           <Tabs.Content value="logs">
-            <DeploymentLogs
-              :deployment-id="id"
-              :organization-id="orgId"
-            />
+            <DeploymentLogs :deployment-id="id" :organization-id="orgId" />
           </Tabs.Content>
 
           <Tabs.Content value="terminal">
-            <DeploymentTerminal
-              :deployment-id="id"
-              :organization-id="orgId"
-            />
+            <DeploymentTerminal :deployment-id="id" :organization-id="orgId" />
           </Tabs.Content>
 
           <Tabs.Content value="files">
-            <DeploymentFiles
-              :deployment-id="id"
-              :organization-id="orgId"
-            />
+            <DeploymentFiles :deployment-id="id" :organization-id="orgId" />
           </Tabs.Content>
 
           <Tabs.Content value="compose">
@@ -166,12 +157,6 @@
   import { useConnectClient } from "~/lib/connect-client";
   import { useDeploymentActions } from "~/composables/useDeploymentActions";
   import { useOrganizationsStore } from "~/stores/organizations";
-import DeploymentOverview from "~/components/deployments/DeploymentOverview.vue";
-import DeploymentLogs from "~/components/deployments/DeploymentLogs.vue";
-import DeploymentTerminal from "~/components/deployments/DeploymentTerminal.vue";
-import DeploymentFiles from "~/components/deployments/DeploymentFiles.vue";
-import DeploymentCompose from "~/components/deployments/DeploymentCompose.vue";
-import DeploymentEnvVars from "~/components/deployments/DeploymentEnvVars.vue";
 
   definePageMeta({
     layout: "default",

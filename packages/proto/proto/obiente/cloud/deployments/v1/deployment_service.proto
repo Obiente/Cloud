@@ -94,6 +94,11 @@ service DeploymentService {
   
   // Get file content from a GitHub repository
   rpc GetGitHubFile(GetGitHubFileRequest) returns (GetGitHubFileResponse);
+
+  // Terminal access
+  // Open an interactive terminal session to a deployment container
+  // This is a bidirectional stream for interactive terminal communication
+  rpc StreamTerminal(stream TerminalInput) returns (stream TerminalOutput);
 }
 
 message ListDeploymentsRequest {
@@ -328,6 +333,19 @@ message GetGitHubFileResponse {
   string content = 1;
   string encoding = 2; // "base64" or "text"
   int64 size = 3;
+}
+
+message TerminalInput {
+  string organization_id = 1;
+  string deployment_id = 2;
+  bytes input = 3; // User keyboard input
+  int32 cols = 4; // Terminal width
+  int32 rows = 5; // Terminal height
+}
+
+message TerminalOutput {
+  bytes output = 1; // Terminal stdout/stderr
+  bool exit = 2; // Whether the terminal session has ended
 }
 
 message Deployment {

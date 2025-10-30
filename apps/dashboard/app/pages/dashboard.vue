@@ -411,8 +411,12 @@ definePageMeta({
   middleware: "auth",
 });
 
-// Dashboard stats with loading simulation
-interface DashboardData {
+// Live stats via ConnectRPC
+import { useConnectClient } from "~/lib/connect-client";
+import { useOrganizationsStore } from "~/stores/organizations";
+import { DeploymentService, DeploymentStatus, Environment as EnvEnum } from "@obiente/proto";
+
+type DashboardData = {
   stats: {
     deployments: number;
     vpsInstances: number;
@@ -424,23 +428,88 @@ interface DashboardData {
     id: string;
     name: string;
     domain: string;
-    status: string;
+    status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR";
     updatedAt: string;
     environment: string;
   }>;
-  activity: Array<{
-    id: string;
-    message: string;
-    timestamp: string;
-  }>;
-}
+  activity: Array<{ id: string; message: string; timestamp: string }>;
+};
 
-const {
-  data,
-  status,
-  refresh: refreshDashboard,
-} = await useAsyncData<DashboardData>("dashboard", () =>
-  $fetch("/api/cloud", { headers: { accept: "application/json" } })
+const deploymentClient = useConnectClient(DeploymentService);
+const orgsStore = useOrganizationsStore();
+const organizationId = computed(() => orgsStore.currentOrgId || "");
+
+const toMs = (s: number | bigint | undefined | null) => Number(s ?? 0) * 1000;
+
+const { data, status, refresh: refreshDashboard } = await useAsyncData<DashboardData>(
+  () => `dashboard-${organizationId.value}`,
+  async () => {
+    // Fetch deployments for selected org (server will resolve if empty)
+    const res = await deploymentClient.listDeployments({ organizationId: organizationId.value });
+    const deployments = res.deployments ?? [];
+
+    // Status breakdown
+    const statusesMap: Record<string, number> = {};
+    for (const d of deployments) {
+      let s: string = "PENDING";
+      switch (d.status) {
+        case DeploymentStatus.RUNNING: s = "RUNNING"; break;
+        case DeploymentStatus.BUILDING: s = "BUILDING"; break;
+        case DeploymentStatus.STOPPED: s = "STOPPED"; break;
+        case DeploymentStatus.FAILED: s = "ERROR"; break;
+        default: s = "PENDING";
+      }
+      statusesMap[s] = (statusesMap[s] || 0) + 1;
+    }
+    const statuses = Object.entries(statusesMap).map(([status, count]) => ({ status, count }));
+
+    // Recent deployments
+    const recentDeployments = [...deployments]
+      .sort((a, b) => {
+        const at = toMs(a.lastDeployedAt?.seconds ?? a.createdAt?.seconds);
+        const bt = toMs(b.lastDeployedAt?.seconds ?? b.createdAt?.seconds);
+        return bt - at;
+      })
+      .slice(0, 5)
+      .map((d) => {
+        let env = "production";
+        switch (d.environment) {
+          case EnvEnum.STAGING: env = "staging"; break;
+          case EnvEnum.DEVELOPMENT: env = "development"; break;
+          default: env = "production";
+        }
+        const status = (() => {
+          switch (d.status) {
+            case DeploymentStatus.RUNNING: return "RUNNING" as const;
+            case DeploymentStatus.BUILDING: return "BUILDING" as const;
+            case DeploymentStatus.STOPPED: return "STOPPED" as const;
+            case DeploymentStatus.FAILED: return "ERROR" as const;
+            default: return "PENDING" as const;
+          }
+        })();
+        return {
+          id: d.id,
+          name: d.name,
+          domain: d.domain,
+          status,
+          environment: env,
+          updatedAt: new Date(toMs(d.lastDeployedAt?.seconds ?? d.createdAt?.seconds)).toISOString(),
+        };
+      });
+
+    const stats = {
+      deployments: deployments.length,
+      vpsInstances: 0,
+      databases: 0,
+      monthlySpend: 0,
+      statuses,
+    };
+
+    const activity: Array<{ id: string; message: string; timestamp: string }> = [];
+
+    return { stats, recentDeployments, activity };
+  },
+  { watch: [organizationId] }
 );
 const isLoading = computed(
   () => status.value === "pending" || status.value === "idle"

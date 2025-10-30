@@ -3,6 +3,7 @@ package deployments
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -734,6 +735,109 @@ func (s *Service) GetGitHubFile(ctx context.Context, req *connect.Request[deploy
 		Encoding: fileContent.Encoding,
 		Size:     fileContent.Size,
 	}), nil
+}
+
+func (s *Service) StreamTerminal(ctx context.Context, stream *connect.BidiStream[deploymentsv1.TerminalInput, deploymentsv1.TerminalOutput]) error {
+	// Receive first message to get deployment info
+	input, err := stream.Receive()
+	if err != nil {
+		return fmt.Errorf("failed to receive terminal setup: %w", err)
+	}
+
+	deploymentID := input.GetDeploymentId()
+	orgID := input.GetOrganizationId()
+
+	// Check permissions
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	// Find container for this deployment
+	locations, err := database.GetDeploymentLocations(deploymentID)
+	if err != nil || len(locations) == 0 {
+		return connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
+	}
+
+	loc := locations[0]
+	dcli, err := docker.New()
+	if err != nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
+	}
+	defer dcli.Close()
+
+	// Create terminal connection
+	cols := int(input.GetCols())
+	rows := int(input.GetRows())
+	if cols == 0 {
+		cols = 80
+	}
+	if rows == 0 {
+		rows = 24
+	}
+
+	conn, err := dcli.ContainerExec(ctx, loc.ContainerID, cols, rows)
+	if err != nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create terminal: %w", err))
+	}
+	defer conn.Close()
+
+	// Handle bidirectional communication
+	errChan := make(chan error, 2)
+
+	// Read from container stdout/stderr and send to client
+	go func() {
+		defer close(errChan)
+		buf := make([]byte, 4096)
+		for {
+			n, err := conn.Read(buf)
+			if n > 0 {
+				if sendErr := stream.Send(&deploymentsv1.TerminalOutput{
+					Output: buf[:n],
+					Exit:   false,
+				}); sendErr != nil {
+					errChan <- sendErr
+					return
+				}
+			}
+			if err != nil {
+				// Terminal closed
+				_ = stream.Send(&deploymentsv1.TerminalOutput{
+					Output: []byte("\r\n[Terminal session closed]\r\n"),
+					Exit:   true,
+				})
+				return
+			}
+		}
+	}()
+
+	// Read from client and write to container stdin
+	go func() {
+		for {
+			msg, err := stream.Receive()
+			if err != nil {
+				errChan <- err
+				return
+			}
+			// Update terminal size if provided
+			if msg.GetCols() > 0 && msg.GetRows() > 0 {
+				// TODO: Resize terminal (would need exec ID)
+			}
+			// Write input to container
+			if len(msg.GetInput()) > 0 {
+				if _, writeErr := conn.Write(msg.GetInput()); writeErr != nil {
+					errChan <- writeErr
+					return
+				}
+			}
+		}
+	}()
+
+	// Wait for either goroutine to finish
+	if err := <-errChan; err != nil && err != io.EOF {
+		return err
+	}
+
+	return nil
 }
 
 func getStatusName(status int32) string {

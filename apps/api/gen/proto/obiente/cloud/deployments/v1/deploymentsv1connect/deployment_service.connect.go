@@ -84,6 +84,18 @@ const (
 	// DeploymentServiceUpdateDeploymentComposeProcedure is the fully-qualified name of the
 	// DeploymentService's UpdateDeploymentCompose RPC.
 	DeploymentServiceUpdateDeploymentComposeProcedure = "/obiente.cloud.deployments.v1.DeploymentService/UpdateDeploymentCompose"
+	// DeploymentServiceListGitHubReposProcedure is the fully-qualified name of the DeploymentService's
+	// ListGitHubRepos RPC.
+	DeploymentServiceListGitHubReposProcedure = "/obiente.cloud.deployments.v1.DeploymentService/ListGitHubRepos"
+	// DeploymentServiceGetGitHubBranchesProcedure is the fully-qualified name of the
+	// DeploymentService's GetGitHubBranches RPC.
+	DeploymentServiceGetGitHubBranchesProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetGitHubBranches"
+	// DeploymentServiceGetGitHubFileProcedure is the fully-qualified name of the DeploymentService's
+	// GetGitHubFile RPC.
+	DeploymentServiceGetGitHubFileProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetGitHubFile"
+	// DeploymentServiceStreamTerminalProcedure is the fully-qualified name of the DeploymentService's
+	// StreamTerminal RPC.
+	DeploymentServiceStreamTerminalProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StreamTerminal"
 )
 
 // DeploymentServiceClient is a client for the obiente.cloud.deployments.v1.DeploymentService
@@ -123,6 +135,17 @@ type DeploymentServiceClient interface {
 	GetDeploymentCompose(context.Context, *connect.Request[v1.GetDeploymentComposeRequest]) (*connect.Response[v1.GetDeploymentComposeResponse], error)
 	// Update deployment docker compose configuration
 	UpdateDeploymentCompose(context.Context, *connect.Request[v1.UpdateDeploymentComposeRequest]) (*connect.Response[v1.UpdateDeploymentComposeResponse], error)
+	// GitHub integration
+	// List GitHub repositories for the authenticated user
+	ListGitHubRepos(context.Context, *connect.Request[v1.ListGitHubReposRequest]) (*connect.Response[v1.ListGitHubReposResponse], error)
+	// Get branches for a GitHub repository
+	GetGitHubBranches(context.Context, *connect.Request[v1.GetGitHubBranchesRequest]) (*connect.Response[v1.GetGitHubBranchesResponse], error)
+	// Get file content from a GitHub repository
+	GetGitHubFile(context.Context, *connect.Request[v1.GetGitHubFileRequest]) (*connect.Response[v1.GetGitHubFileResponse], error)
+	// Terminal access
+	// Open an interactive terminal session to a deployment container
+	// This is a bidirectional stream for interactive terminal communication
+	StreamTerminal(context.Context) *connect.BidiStreamForClient[v1.TerminalInput, v1.TerminalOutput]
 }
 
 // NewDeploymentServiceClient constructs a client for the
@@ -239,6 +262,30 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(deploymentServiceMethods.ByName("UpdateDeploymentCompose")),
 			connect.WithClientOptions(opts...),
 		),
+		listGitHubRepos: connect.NewClient[v1.ListGitHubReposRequest, v1.ListGitHubReposResponse](
+			httpClient,
+			baseURL+DeploymentServiceListGitHubReposProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("ListGitHubRepos")),
+			connect.WithClientOptions(opts...),
+		),
+		getGitHubBranches: connect.NewClient[v1.GetGitHubBranchesRequest, v1.GetGitHubBranchesResponse](
+			httpClient,
+			baseURL+DeploymentServiceGetGitHubBranchesProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("GetGitHubBranches")),
+			connect.WithClientOptions(opts...),
+		),
+		getGitHubFile: connect.NewClient[v1.GetGitHubFileRequest, v1.GetGitHubFileResponse](
+			httpClient,
+			baseURL+DeploymentServiceGetGitHubFileProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("GetGitHubFile")),
+			connect.WithClientOptions(opts...),
+		),
+		streamTerminal: connect.NewClient[v1.TerminalInput, v1.TerminalOutput](
+			httpClient,
+			baseURL+DeploymentServiceStreamTerminalProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("StreamTerminal")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -261,6 +308,10 @@ type deploymentServiceClient struct {
 	updateDeploymentEnvVars *connect.Client[v1.UpdateDeploymentEnvVarsRequest, v1.UpdateDeploymentEnvVarsResponse]
 	getDeploymentCompose    *connect.Client[v1.GetDeploymentComposeRequest, v1.GetDeploymentComposeResponse]
 	updateDeploymentCompose *connect.Client[v1.UpdateDeploymentComposeRequest, v1.UpdateDeploymentComposeResponse]
+	listGitHubRepos         *connect.Client[v1.ListGitHubReposRequest, v1.ListGitHubReposResponse]
+	getGitHubBranches       *connect.Client[v1.GetGitHubBranchesRequest, v1.GetGitHubBranchesResponse]
+	getGitHubFile           *connect.Client[v1.GetGitHubFileRequest, v1.GetGitHubFileResponse]
+	streamTerminal          *connect.Client[v1.TerminalInput, v1.TerminalOutput]
 }
 
 // ListDeployments calls obiente.cloud.deployments.v1.DeploymentService.ListDeployments.
@@ -351,6 +402,26 @@ func (c *deploymentServiceClient) UpdateDeploymentCompose(ctx context.Context, r
 	return c.updateDeploymentCompose.CallUnary(ctx, req)
 }
 
+// ListGitHubRepos calls obiente.cloud.deployments.v1.DeploymentService.ListGitHubRepos.
+func (c *deploymentServiceClient) ListGitHubRepos(ctx context.Context, req *connect.Request[v1.ListGitHubReposRequest]) (*connect.Response[v1.ListGitHubReposResponse], error) {
+	return c.listGitHubRepos.CallUnary(ctx, req)
+}
+
+// GetGitHubBranches calls obiente.cloud.deployments.v1.DeploymentService.GetGitHubBranches.
+func (c *deploymentServiceClient) GetGitHubBranches(ctx context.Context, req *connect.Request[v1.GetGitHubBranchesRequest]) (*connect.Response[v1.GetGitHubBranchesResponse], error) {
+	return c.getGitHubBranches.CallUnary(ctx, req)
+}
+
+// GetGitHubFile calls obiente.cloud.deployments.v1.DeploymentService.GetGitHubFile.
+func (c *deploymentServiceClient) GetGitHubFile(ctx context.Context, req *connect.Request[v1.GetGitHubFileRequest]) (*connect.Response[v1.GetGitHubFileResponse], error) {
+	return c.getGitHubFile.CallUnary(ctx, req)
+}
+
+// StreamTerminal calls obiente.cloud.deployments.v1.DeploymentService.StreamTerminal.
+func (c *deploymentServiceClient) StreamTerminal(ctx context.Context) *connect.BidiStreamForClient[v1.TerminalInput, v1.TerminalOutput] {
+	return c.streamTerminal.CallBidiStream(ctx)
+}
+
 // DeploymentServiceHandler is an implementation of the
 // obiente.cloud.deployments.v1.DeploymentService service.
 type DeploymentServiceHandler interface {
@@ -388,6 +459,17 @@ type DeploymentServiceHandler interface {
 	GetDeploymentCompose(context.Context, *connect.Request[v1.GetDeploymentComposeRequest]) (*connect.Response[v1.GetDeploymentComposeResponse], error)
 	// Update deployment docker compose configuration
 	UpdateDeploymentCompose(context.Context, *connect.Request[v1.UpdateDeploymentComposeRequest]) (*connect.Response[v1.UpdateDeploymentComposeResponse], error)
+	// GitHub integration
+	// List GitHub repositories for the authenticated user
+	ListGitHubRepos(context.Context, *connect.Request[v1.ListGitHubReposRequest]) (*connect.Response[v1.ListGitHubReposResponse], error)
+	// Get branches for a GitHub repository
+	GetGitHubBranches(context.Context, *connect.Request[v1.GetGitHubBranchesRequest]) (*connect.Response[v1.GetGitHubBranchesResponse], error)
+	// Get file content from a GitHub repository
+	GetGitHubFile(context.Context, *connect.Request[v1.GetGitHubFileRequest]) (*connect.Response[v1.GetGitHubFileResponse], error)
+	// Terminal access
+	// Open an interactive terminal session to a deployment container
+	// This is a bidirectional stream for interactive terminal communication
+	StreamTerminal(context.Context, *connect.BidiStream[v1.TerminalInput, v1.TerminalOutput]) error
 }
 
 // NewDeploymentServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -499,6 +581,30 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		connect.WithSchema(deploymentServiceMethods.ByName("UpdateDeploymentCompose")),
 		connect.WithHandlerOptions(opts...),
 	)
+	deploymentServiceListGitHubReposHandler := connect.NewUnaryHandler(
+		DeploymentServiceListGitHubReposProcedure,
+		svc.ListGitHubRepos,
+		connect.WithSchema(deploymentServiceMethods.ByName("ListGitHubRepos")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceGetGitHubBranchesHandler := connect.NewUnaryHandler(
+		DeploymentServiceGetGitHubBranchesProcedure,
+		svc.GetGitHubBranches,
+		connect.WithSchema(deploymentServiceMethods.ByName("GetGitHubBranches")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceGetGitHubFileHandler := connect.NewUnaryHandler(
+		DeploymentServiceGetGitHubFileProcedure,
+		svc.GetGitHubFile,
+		connect.WithSchema(deploymentServiceMethods.ByName("GetGitHubFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceStreamTerminalHandler := connect.NewBidiStreamHandler(
+		DeploymentServiceStreamTerminalProcedure,
+		svc.StreamTerminal,
+		connect.WithSchema(deploymentServiceMethods.ByName("StreamTerminal")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.deployments.v1.DeploymentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DeploymentServiceListDeploymentsProcedure:
@@ -535,6 +641,14 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceGetDeploymentComposeHandler.ServeHTTP(w, r)
 		case DeploymentServiceUpdateDeploymentComposeProcedure:
 			deploymentServiceUpdateDeploymentComposeHandler.ServeHTTP(w, r)
+		case DeploymentServiceListGitHubReposProcedure:
+			deploymentServiceListGitHubReposHandler.ServeHTTP(w, r)
+		case DeploymentServiceGetGitHubBranchesProcedure:
+			deploymentServiceGetGitHubBranchesHandler.ServeHTTP(w, r)
+		case DeploymentServiceGetGitHubFileProcedure:
+			deploymentServiceGetGitHubFileHandler.ServeHTTP(w, r)
+		case DeploymentServiceStreamTerminalProcedure:
+			deploymentServiceStreamTerminalHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -610,4 +724,20 @@ func (UnimplementedDeploymentServiceHandler) GetDeploymentCompose(context.Contex
 
 func (UnimplementedDeploymentServiceHandler) UpdateDeploymentCompose(context.Context, *connect.Request[v1.UpdateDeploymentComposeRequest]) (*connect.Response[v1.UpdateDeploymentComposeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentCompose is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) ListGitHubRepos(context.Context, *connect.Request[v1.ListGitHubReposRequest]) (*connect.Response[v1.ListGitHubReposResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.ListGitHubRepos is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) GetGitHubBranches(context.Context, *connect.Request[v1.GetGitHubBranchesRequest]) (*connect.Response[v1.GetGitHubBranchesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetGitHubBranches is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) GetGitHubFile(context.Context, *connect.Request[v1.GetGitHubFileRequest]) (*connect.Response[v1.GetGitHubFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetGitHubFile is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) StreamTerminal(context.Context, *connect.BidiStream[v1.TerminalInput, v1.TerminalOutput]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.StreamTerminal is not implemented"))
 }
