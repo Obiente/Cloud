@@ -73,13 +73,24 @@
         </OuiBox>
       </OuiGrid>
 
+      <!-- GitHub Integration -->
+      <OuiCard v-if="!config.repositoryUrl" variant="subtle">
+        <OuiCardBody>
+          <GitHubRepoPicker
+            v-model="selectedGitHubRepo"
+            v-model:branch="selectedGitHubBranch"
+            @compose-loaded="handleComposeFromGitHub"
+          />
+        </OuiCardBody>
+      </OuiCard>
+
       <!-- Configuration -->
       <OuiStack gap="md">
         <OuiText as="h3" size="md" weight="semibold">Configuration</OuiText>
         <OuiInput
           v-model="config.repositoryUrl"
           label="Repository URL"
-          placeholder="https://github.com/org/repo"
+          placeholder="https://github.com/org/repo or select from GitHub"
           @update:model-value="markDirty"
         />
         <OuiGrid cols="1" :cols-md="2" gap="md">
@@ -126,12 +137,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watchEffect } from "vue";
+import { ref, reactive, watchEffect, watch } from "vue";
 import { CodeBracketIcon, CpuChipIcon } from "@heroicons/vue/24/outline";
 import type { Deployment } from "@obiente/proto";
 import { DeploymentType, Environment as EnvEnum } from "@obiente/proto";
 import { useDeploymentActions } from "~/composables/useDeploymentActions";
 import { useRoute } from "vue-router";
+import GitHubRepoPicker from "~/components/deployments/GitHubRepoPicker.vue";
 
 interface Props {
   deployment: Deployment;
@@ -141,6 +153,8 @@ const props = defineProps<Props>();
 const route = useRoute();
 const deploymentActions = useDeploymentActions();
 const isConfigDirty = ref(false);
+const selectedGitHubRepo = ref("");
+const selectedGitHubBranch = ref("");
 
 const config = reactive({
   repositoryUrl: "",
@@ -157,8 +171,36 @@ watchEffect(() => {
     config.installCommand = props.deployment.installCommand ?? "";
     config.buildCommand = props.deployment.buildCommand ?? "";
     isConfigDirty.value = false;
+    
+    // Extract GitHub repo from URL if present
+    if (config.repositoryUrl && config.repositoryUrl.includes("github.com")) {
+      const match = config.repositoryUrl.match(/github\.com\/([^\/]+\/[^\/]+)/);
+      if (match) {
+        selectedGitHubRepo.value = match[1].replace(/\.git$/, "");
+      }
+    }
   }
 });
+
+watch(selectedGitHubRepo, (repo) => {
+  if (repo) {
+    config.repositoryUrl = `https://github.com/${repo}`;
+    markDirty();
+  }
+});
+
+watch(selectedGitHubBranch, (branch) => {
+  if (branch) {
+    config.branch = branch;
+    markDirty();
+  }
+});
+
+const handleComposeFromGitHub = (composeContent: string) => {
+  // Emit event to parent to update compose tab
+  // This could trigger a notification or auto-switch to compose tab
+  console.log("Compose loaded from GitHub:", composeContent.length, "bytes");
+};
 
 const markDirty = () => {
   isConfigDirty.value = true;

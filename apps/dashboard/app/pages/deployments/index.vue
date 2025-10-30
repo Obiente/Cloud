@@ -448,6 +448,12 @@
               label="Type"
               placeholder="Select type"
             />
+
+            <GitHubRepoPicker
+              v-model="newDeployment.githubRepo"
+              v-model:branch="newDeployment.githubBranch"
+              @compose-loaded="handleComposeFromGitHub"
+            />
           </OuiStack>
         </form>
         <template #footer>
@@ -505,6 +511,7 @@
   import { useConnectClient } from "~/lib/connect-client";
   import { useDeploymentActions } from "~/composables/useDeploymentActions";
   import ErrorAlert from "~/components/ErrorAlert.vue";
+  import GitHubRepoPicker from "~/components/deployments/GitHubRepoPicker.vue";
   definePageMeta({
     layout: "default",
     middleware: "auth",
@@ -523,6 +530,8 @@
     name: "",
     // store enum value as string for OuiSelect
     type: String(DeploymentType.DOCKER),
+    githubRepo: "",
+    githubBranch: "",
   });
 
   const statusFilterOptions = [
@@ -837,15 +846,26 @@
     createError.value = null;
 
     try {
+      const branch = newDeployment.value.githubBranch || "main";
+      const repoUrl = newDeployment.value.githubRepo
+        ? `https://github.com/${newDeployment.value.githubRepo}`
+        : undefined;
+
       const deployment = await deploymentActions.createDeployment({
         name: newDeployment.value.name,
         type: Number(newDeployment.value.type),
-        branch: "main",
+        branch: branch,
+        repositoryUrl: repoUrl,
       });
 
       showCreateDialog.value = false;
       // Reset form for next time
-      newDeployment.value = { name: "", type: String(DeploymentType.DOCKER) };
+      newDeployment.value = {
+        name: "",
+        type: String(DeploymentType.DOCKER),
+        githubRepo: "",
+        githubBranch: "",
+      };
 
       // Add to local deployments list if it's not there already
       if (
@@ -864,6 +884,13 @@
       console.error("Failed to create deployment:", error);
       createError.value = error as Error;
     }
+  };
+
+  const handleComposeFromGitHub = (composeContent: string) => {
+    // Store compose content for when deployment is created
+    // Could be passed to createDeployment or saved after creation
+    console.log("Compose file loaded from GitHub:", composeContent.length, "bytes");
+    // TODO: Save compose after deployment creation
   };
 </script>
 
