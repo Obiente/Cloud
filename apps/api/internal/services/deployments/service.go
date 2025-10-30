@@ -173,6 +173,7 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 		Image:          proto.String(req.Msg.GetImage()),
 		Port:           proto.Int32(req.Msg.GetPort()),
 		Replicas:       proto.Int32(req.Msg.GetReplicas()),
+		EnvVars:        req.Msg.GetEnv(),
 	}
 	if repo := req.Msg.GetRepositoryUrl(); repo != "" { deployment.RepositoryUrl = proto.String(repo) }
 	if build := req.Msg.GetBuildCommand(); build != "" { deployment.BuildCommand = proto.String(build) }
@@ -190,8 +191,8 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 			Image:        req.Msg.GetImage(),
 			Domain:       deployment.GetDomain(),
 			Port:         int(req.Msg.GetPort()),
-			EnvVars:      map[string]string{},
-			Labels:       map[string]string{},
+			EnvVars:      req.Msg.GetEnv(),
+			Labels:       req.Msg.GetLabels(),
 			Memory:       req.Msg.GetMemoryBytes(),
 			CPUShares:    req.Msg.GetCpuShares(),
 			Replicas:     int(req.Msg.GetReplicas()),
@@ -527,6 +528,45 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 	}
 
 	res := connect.NewResponse(&deploymentsv1.DeleteDeploymentResponse{Success: true})
+	return res, nil
+}
+
+func (s *Service) GetDeploymentEnvVars(ctx context.Context, req *connect.Request[deploymentsv1.GetDeploymentEnvVarsRequest]) (*connect.Response[deploymentsv1.GetDeploymentEnvVarsResponse], error) {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+	dbDep, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+	protoDep := dbDeploymentToProto(dbDep)
+	return connect.NewResponse(&deploymentsv1.GetDeploymentEnvVarsResponse{EnvVars: protoDep.EnvVars}), nil
+}
+
+func (s *Service) UpdateDeploymentEnvVars(ctx context.Context, req *connect.Request[deploymentsv1.UpdateDeploymentEnvVarsRequest]) (*connect.Response[deploymentsv1.UpdateDeploymentEnvVarsResponse], error) {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.update", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+	dbDep, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+	// Update env vars in proto, then convert back to DB
+	protoDep := dbDeploymentToProto(dbDep)
+	protoDep.EnvVars = req.Msg.GetEnvVars()
+	updatedDB := protoToDBDeployment(protoDep, dbDep.OrganizationID, dbDep.CreatedBy)
+	updatedDB.ID = dbDep.ID
+	updatedDB.CreatedAt = dbDep.CreatedAt
+	if err := s.repo.Update(ctx, updatedDB); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update env vars: %w", err))
+	}
+	// Reload to get updated state
+	dbDep, _ = s.repo.GetByID(ctx, deploymentID)
+	res := connect.NewResponse(&deploymentsv1.UpdateDeploymentEnvVarsResponse{Deployment: dbDeploymentToProto(dbDep)})
 	return res, nil
 }
 

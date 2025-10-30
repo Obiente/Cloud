@@ -35,6 +35,7 @@ type Deployment struct {
 	Replicas     *int32  `gorm:"column:replicas" json:"replicas"`
 	MemoryBytes  *int64  `gorm:"column:memory_bytes" json:"memory_bytes"`
 	CPUShares    *int64  `gorm:"column:cpu_shares" json:"cpu_shares"`
+	EnvVars      string  `gorm:"column:env_vars;type:jsonb" json:"env_vars"` // Stored as JSON object {"KEY": "value"}
 }
 
 func (Deployment) TableName() string {

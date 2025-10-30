@@ -1,6 +1,8 @@
 package deployments
 
 import (
+	"encoding/json"
+
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/database"
 
@@ -53,6 +55,18 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 	}
 	if db.Replicas != nil {
 		deployment.Replicas = proto.Int32(*db.Replicas)
+	}
+
+	// Parse env vars from JSON
+	if db.EnvVars != "" {
+		var envMap map[string]string
+		if err := json.Unmarshal([]byte(db.EnvVars), &envMap); err == nil {
+			deployment.EnvVars = envMap
+		} else {
+			deployment.EnvVars = make(map[string]string)
+		}
+	} else {
+		deployment.EnvVars = make(map[string]string)
 	}
 
 	// Convert timestamps
@@ -125,6 +139,14 @@ func protoToDBDeployment(protoDep *deploymentsv1.Deployment, orgID string, creat
 
 	// Custom domains stored as JSON string (keep empty for now)
 	db.CustomDomains = "[]"
+
+	// Env vars stored as JSON object
+	if len(protoDep.GetEnvVars()) > 0 {
+		envJSON, _ := json.Marshal(protoDep.GetEnvVars())
+		db.EnvVars = string(envJSON)
+	} else {
+		db.EnvVars = "{}"
+	}
 
 	return db
 }

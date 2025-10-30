@@ -72,6 +72,12 @@ service DeploymentService {
 
   // Scale a deployment
   rpc ScaleDeployment(ScaleDeploymentRequest) returns (ScaleDeploymentResponse);
+
+  // Get deployment environment variables
+  rpc GetDeploymentEnvVars(GetDeploymentEnvVarsRequest) returns (GetDeploymentEnvVarsResponse);
+
+  // Update deployment environment variables
+  rpc UpdateDeploymentEnvVars(UpdateDeploymentEnvVarsRequest) returns (UpdateDeploymentEnvVarsResponse);
 }
 
 message ListDeploymentsRequest {
@@ -223,6 +229,25 @@ message ScaleDeploymentResponse {
   Deployment deployment = 1;
 }
 
+message GetDeploymentEnvVarsRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+}
+
+message GetDeploymentEnvVarsResponse {
+  map<string, string> env_vars = 1;
+}
+
+message UpdateDeploymentEnvVarsRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  map<string, string> env_vars = 3;
+}
+
+message UpdateDeploymentEnvVarsResponse {
+  Deployment deployment = 1;
+}
+
 message Deployment {
   string id = 1;
   string name = 2;
@@ -252,4 +277,6 @@ message Deployment {
   repeated string container_ids = 22;
   optional string node_id = 23;
   optional string node_hostname = 24;
+  // Environment variables
+  map<string, string> env_vars = 25;
 }

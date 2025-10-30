@@ -10,7 +10,11 @@
         Manage environment variables for this deployment. Changes take effect on the next deployment.
       </OuiText>
 
-      <OuiStack v-if="envVars.length === 0" gap="sm">
+      <div v-if="isLoading" class="flex justify-center py-8">
+        <OuiText color="secondary">Loading environment variables...</OuiText>
+      </div>
+
+      <OuiStack v-else-if="envVars.length === 0" gap="sm">
         <OuiText color="secondary" class="text-center py-4">
           No environment variables set. Click "Add Variable" to add one.
         </OuiText>
@@ -49,8 +53,8 @@
       </OuiStack>
 
       <OuiFlex justify="end">
-        <OuiButton @click="saveEnvVars" :disabled="!isDirty" size="sm">
-          Save Changes
+        <OuiButton @click="saveEnvVars" :disabled="!isDirty || isLoading" size="sm">
+          {{ isLoading ? "Saving..." : "Save Changes" }}
         </OuiButton>
       </OuiFlex>
     </OuiStack>
@@ -58,8 +62,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from "vue";
+import { ref, watch, onMounted, computed } from "vue";
+import { useConnectClient } from "~/lib/connect-client";
+import { DeploymentService } from "@obiente/proto";
 import type { Deployment } from "@obiente/proto";
+import { useOrganizationsStore } from "~/stores/organizations";
 
 interface Props {
   deployment: Deployment;
@@ -76,21 +83,32 @@ const emit = defineEmits<{
   save: [envVars: Record<string, string>];
 }>();
 
+const client = useConnectClient(DeploymentService);
+const orgsStore = useOrganizationsStore();
+const organizationId = computed(() => orgsStore.currentOrgId || "");
 const envVars = ref<EnvVar[]>([]);
 const isDirty = ref(false);
+const isLoading = ref(false);
 
-// Load existing env vars
-watch(
-  () => props.deployment,
-  (deployment) => {
-    // TODO: Parse from deployment.env if it exists in proto
-    // For now, initialize empty
-    if (envVars.value.length === 0) {
-      envVars.value = [];
-    }
-  },
-  { immediate: true }
-);
+const loadEnvVars = async () => {
+  isLoading.value = true;
+  try {
+    const res = await client.getDeploymentEnvVars({
+      organizationId: organizationId.value,
+      deploymentId: props.deployment.id,
+    });
+    const vars = res.envVars || {};
+    envVars.value = Object.entries(vars).map(([key, value]) => ({
+      key,
+      value: value || "",
+    }));
+    isDirty.value = false;
+  } catch (error) {
+    console.error("Failed to load env vars:", error);
+  } finally {
+    isLoading.value = false;
+  }
+};
 
 const markDirty = () => {
   isDirty.value = true;
@@ -106,15 +124,36 @@ const removeVariable = (idx: number) => {
   markDirty();
 };
 
-const saveEnvVars = () => {
+const saveEnvVars = async () => {
   const vars: Record<string, string> = {};
   for (const env of envVars.value) {
     if (env.key.trim()) {
       vars[env.key.trim()] = env.value || "";
     }
   }
-  emit("save", vars);
-  isDirty.value = false;
-};
-</script>
 
+  isLoading.value = true;
+  try {
+    await client.updateDeploymentEnvVars({
+      organizationId: organizationId.value,
+      deploymentId: props.deployment.id,
+      envVars: vars,
+    });
+    emit("save", vars);
+    isDirty.value = false;
+  } catch (error) {
+    console.error("Failed to save env vars:", error);
+    alert("Failed to save environment variables. Please try again.");
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+watch(() => props.deployment.id, () => {
+  loadEnvVars();
+}, { immediate: true });
+
+onMounted(() => {
+  loadEnvVars();
+});
+</script>
