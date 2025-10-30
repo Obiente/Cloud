@@ -96,6 +96,12 @@ const (
 	// DeploymentServiceStreamTerminalProcedure is the fully-qualified name of the DeploymentService's
 	// StreamTerminal RPC.
 	DeploymentServiceStreamTerminalProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StreamTerminal"
+	// DeploymentServiceListContainerFilesProcedure is the fully-qualified name of the
+	// DeploymentService's ListContainerFiles RPC.
+	DeploymentServiceListContainerFilesProcedure = "/obiente.cloud.deployments.v1.DeploymentService/ListContainerFiles"
+	// DeploymentServiceGetContainerFileProcedure is the fully-qualified name of the DeploymentService's
+	// GetContainerFile RPC.
+	DeploymentServiceGetContainerFileProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetContainerFile"
 )
 
 // DeploymentServiceClient is a client for the obiente.cloud.deployments.v1.DeploymentService
@@ -146,6 +152,11 @@ type DeploymentServiceClient interface {
 	// Open an interactive terminal session to a deployment container
 	// This is a bidirectional stream for interactive terminal communication
 	StreamTerminal(context.Context) *connect.BidiStreamForClient[v1.TerminalInput, v1.TerminalOutput]
+	// File browser
+	// List files in a deployment container
+	ListContainerFiles(context.Context, *connect.Request[v1.ListContainerFilesRequest]) (*connect.Response[v1.ListContainerFilesResponse], error)
+	// Get file content from a deployment container
+	GetContainerFile(context.Context, *connect.Request[v1.GetContainerFileRequest]) (*connect.Response[v1.GetContainerFileResponse], error)
 }
 
 // NewDeploymentServiceClient constructs a client for the
@@ -286,6 +297,18 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(deploymentServiceMethods.ByName("StreamTerminal")),
 			connect.WithClientOptions(opts...),
 		),
+		listContainerFiles: connect.NewClient[v1.ListContainerFilesRequest, v1.ListContainerFilesResponse](
+			httpClient,
+			baseURL+DeploymentServiceListContainerFilesProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("ListContainerFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		getContainerFile: connect.NewClient[v1.GetContainerFileRequest, v1.GetContainerFileResponse](
+			httpClient,
+			baseURL+DeploymentServiceGetContainerFileProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("GetContainerFile")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -312,6 +335,8 @@ type deploymentServiceClient struct {
 	getGitHubBranches       *connect.Client[v1.GetGitHubBranchesRequest, v1.GetGitHubBranchesResponse]
 	getGitHubFile           *connect.Client[v1.GetGitHubFileRequest, v1.GetGitHubFileResponse]
 	streamTerminal          *connect.Client[v1.TerminalInput, v1.TerminalOutput]
+	listContainerFiles      *connect.Client[v1.ListContainerFilesRequest, v1.ListContainerFilesResponse]
+	getContainerFile        *connect.Client[v1.GetContainerFileRequest, v1.GetContainerFileResponse]
 }
 
 // ListDeployments calls obiente.cloud.deployments.v1.DeploymentService.ListDeployments.
@@ -422,6 +447,16 @@ func (c *deploymentServiceClient) StreamTerminal(ctx context.Context) *connect.B
 	return c.streamTerminal.CallBidiStream(ctx)
 }
 
+// ListContainerFiles calls obiente.cloud.deployments.v1.DeploymentService.ListContainerFiles.
+func (c *deploymentServiceClient) ListContainerFiles(ctx context.Context, req *connect.Request[v1.ListContainerFilesRequest]) (*connect.Response[v1.ListContainerFilesResponse], error) {
+	return c.listContainerFiles.CallUnary(ctx, req)
+}
+
+// GetContainerFile calls obiente.cloud.deployments.v1.DeploymentService.GetContainerFile.
+func (c *deploymentServiceClient) GetContainerFile(ctx context.Context, req *connect.Request[v1.GetContainerFileRequest]) (*connect.Response[v1.GetContainerFileResponse], error) {
+	return c.getContainerFile.CallUnary(ctx, req)
+}
+
 // DeploymentServiceHandler is an implementation of the
 // obiente.cloud.deployments.v1.DeploymentService service.
 type DeploymentServiceHandler interface {
@@ -470,6 +505,11 @@ type DeploymentServiceHandler interface {
 	// Open an interactive terminal session to a deployment container
 	// This is a bidirectional stream for interactive terminal communication
 	StreamTerminal(context.Context, *connect.BidiStream[v1.TerminalInput, v1.TerminalOutput]) error
+	// File browser
+	// List files in a deployment container
+	ListContainerFiles(context.Context, *connect.Request[v1.ListContainerFilesRequest]) (*connect.Response[v1.ListContainerFilesResponse], error)
+	// Get file content from a deployment container
+	GetContainerFile(context.Context, *connect.Request[v1.GetContainerFileRequest]) (*connect.Response[v1.GetContainerFileResponse], error)
 }
 
 // NewDeploymentServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -605,6 +645,18 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		connect.WithSchema(deploymentServiceMethods.ByName("StreamTerminal")),
 		connect.WithHandlerOptions(opts...),
 	)
+	deploymentServiceListContainerFilesHandler := connect.NewUnaryHandler(
+		DeploymentServiceListContainerFilesProcedure,
+		svc.ListContainerFiles,
+		connect.WithSchema(deploymentServiceMethods.ByName("ListContainerFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceGetContainerFileHandler := connect.NewUnaryHandler(
+		DeploymentServiceGetContainerFileProcedure,
+		svc.GetContainerFile,
+		connect.WithSchema(deploymentServiceMethods.ByName("GetContainerFile")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.deployments.v1.DeploymentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DeploymentServiceListDeploymentsProcedure:
@@ -649,6 +701,10 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceGetGitHubFileHandler.ServeHTTP(w, r)
 		case DeploymentServiceStreamTerminalProcedure:
 			deploymentServiceStreamTerminalHandler.ServeHTTP(w, r)
+		case DeploymentServiceListContainerFilesProcedure:
+			deploymentServiceListContainerFilesHandler.ServeHTTP(w, r)
+		case DeploymentServiceGetContainerFileProcedure:
+			deploymentServiceGetContainerFileHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -740,4 +796,12 @@ func (UnimplementedDeploymentServiceHandler) GetGitHubFile(context.Context, *con
 
 func (UnimplementedDeploymentServiceHandler) StreamTerminal(context.Context, *connect.BidiStream[v1.TerminalInput, v1.TerminalOutput]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.StreamTerminal is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) ListContainerFiles(context.Context, *connect.Request[v1.ListContainerFilesRequest]) (*connect.Response[v1.ListContainerFilesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.ListContainerFiles is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) GetContainerFile(context.Context, *connect.Request[v1.GetContainerFileRequest]) (*connect.Response[v1.GetContainerFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetContainerFile is not implemented"))
 }

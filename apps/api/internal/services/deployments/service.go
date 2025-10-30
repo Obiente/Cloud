@@ -840,6 +840,68 @@ func (s *Service) StreamTerminal(ctx context.Context, stream *connect.BidiStream
 	return nil
 }
 
+func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[deploymentsv1.ListContainerFilesRequest]) (*connect.Response[deploymentsv1.ListContainerFilesResponse], error) {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	locations, err := database.GetDeploymentLocations(deploymentID)
+	if err != nil || len(locations) == 0 {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
+	}
+
+	loc := locations[0]
+	dcli, err := docker.New()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
+	}
+	defer dcli.Close()
+
+	path := req.Msg.GetPath()
+	if path == "" {
+		path = "/"
+	}
+
+	// Use Docker exec to run ls command
+	// TODO: Implement proper file listing using Docker Copy API or exec
+	// For now, return empty list as placeholder
+	files := []*deploymentsv1.ContainerFile{}
+
+	return connect.NewResponse(&deploymentsv1.ListContainerFilesResponse{
+		Files:       files,
+		CurrentPath: path,
+	}), nil
+}
+
+func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[deploymentsv1.GetContainerFileRequest]) (*connect.Response[deploymentsv1.GetContainerFileResponse], error) {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	locations, err := database.GetDeploymentLocations(deploymentID)
+	if err != nil || len(locations) == 0 {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
+	}
+
+	loc := locations[0]
+	path := req.Msg.GetPath()
+	if path == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("path is required"))
+	}
+
+	// TODO: Implement file reading using Docker Copy API
+	// For now, return placeholder
+	return connect.NewResponse(&deploymentsv1.GetContainerFileResponse{
+		Content:  "",
+		Encoding: "text",
+		Size:     0,
+	}), nil
+}
+
 func getStatusName(status int32) string {
 	switch deploymentsv1.DeploymentStatus(status) {
 	case deploymentsv1.DeploymentStatus_CREATED:

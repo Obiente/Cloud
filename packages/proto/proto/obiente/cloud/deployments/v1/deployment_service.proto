@@ -99,6 +99,13 @@ service DeploymentService {
   // Open an interactive terminal session to a deployment container
   // This is a bidirectional stream for interactive terminal communication
   rpc StreamTerminal(stream TerminalInput) returns (stream TerminalOutput);
+
+  // File browser
+  // List files in a deployment container
+  rpc ListContainerFiles(ListContainerFilesRequest) returns (ListContainerFilesResponse);
+  
+  // Get file content from a deployment container
+  rpc GetContainerFile(GetContainerFileRequest) returns (GetContainerFileResponse);
 }
 
 message ListDeploymentsRequest {
@@ -346,6 +353,38 @@ message TerminalInput {
 message TerminalOutput {
   bytes output = 1; // Terminal stdout/stderr
   bool exit = 2; // Whether the terminal session has ended
+}
+
+message ListContainerFilesRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string path = 3; // Directory path (default: "/")
+}
+
+message ContainerFile {
+  string name = 1;
+  string path = 2;
+  bool is_directory = 3;
+  int64 size = 4;
+  string permissions = 5;
+  optional string modified_at = 6;
+}
+
+message ListContainerFilesResponse {
+  repeated ContainerFile files = 1;
+  string current_path = 2;
+}
+
+message GetContainerFileRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string path = 3; // File path
+}
+
+message GetContainerFileResponse {
+  string content = 1;
+  string encoding = 2; // "text" or "base64"
+  int64 size = 3;
 }
 
 message Deployment {
