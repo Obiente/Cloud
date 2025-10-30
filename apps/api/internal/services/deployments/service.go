@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
+	"api/docker"
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	deploymentsv1connect "api/gen/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
 	organizationsv1 "api/gen/proto/obiente/cloud/organizations/v1"
 	"api/internal/auth"
 	"api/internal/database"
-	"api/docker"
 	"api/internal/orchestrator"
 	"api/internal/quota"
 
@@ -223,9 +223,41 @@ func resolveUserDefaultOrgID(ctx context.Context) (string, bool) {
         return "", false
     }
     if r.OrganizationID == "" {
+        // No membership found; ensure a personal org exists, then retry lookup
+        if id, ok := ensurePersonalOrgForUser(ctx, userInfo.Id); ok {
+            return id, true
+        }
         return "", false
     }
     return r.OrganizationID, true
+}
+
+// ensurePersonalOrgForUser creates a personal org and membership if user has none
+func ensurePersonalOrgForUser(ctx context.Context, userID string) (string, bool) {
+    // Double-check if any membership exists
+    var cnt int64
+    if err := database.DB.Model(&database.OrganizationMember{}).Where("user_id = ?", userID).Count(&cnt).Error; err != nil {
+        return "", false
+    }
+    if cnt > 0 {
+        // Race: someone created in between; fetch latest
+        type row struct{ OrganizationID string }
+        var r row
+        _ = database.DB.Raw(`
+            SELECT m.organization_id FROM organization_members m
+            JOIN organizations o ON o.id = m.organization_id
+            WHERE m.user_id = ? ORDER BY o.created_at DESC LIMIT 1
+        `, userID).Scan(&r).Error
+        if r.OrganizationID != "" { return r.OrganizationID, true }
+        return "", false
+    }
+    now := time.Now()
+    orgID := fmt.Sprintf("%s-%d", "org", now.UnixNano())
+    org := &database.Organization{ID: orgID, Name: "Personal", Slug: "personal-" + userID, Plan: "personal", Status: "active", CreatedAt: now}
+    if err := database.DB.Create(org).Error; err != nil { return "", false }
+    mem := &database.OrganizationMember{ID: fmt.Sprintf("%s-%d", "mem", now.UnixNano()), OrganizationID: orgID, UserID: userID, Role: "owner", Status: "active", JoinedAt: now}
+    if err := database.DB.Create(mem).Error; err != nil { return "", false }
+    return orgID, true
 }
 
 func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploymentsv1.GetDeploymentRequest]) (*connect.Response[deploymentsv1.GetDeploymentResponse], error) {
