@@ -13,15 +13,15 @@ const DEFAULT_COMMAND = "bash";
 
 export default async function runShExecutor(
   options: RunShExecutorSchema,
-  context: ExecutorContext,
+  context: ExecutorContext
 ): Promise<SuccessResult> {
   const projectName = context.projectName ?? "unknown";
   const workspaceRoot = context.root ?? process.cwd();
 
   const projectRoot =
     context.projectsConfigurations?.projects?.[projectName]?.root ??
-      context.projectGraph?.nodes?.[projectName]?.data?.root ??
-      "";
+    context.projectGraph?.nodes?.[projectName]?.data?.root ??
+    "";
 
   const cwdBase = options.cwd
     ? resolve(workspaceRoot, options.cwd)
@@ -45,10 +45,11 @@ export default async function runShExecutor(
   }
 
   if (
-    !options.inlineScript && (!resolvedScript || !existsSync(resolvedScript))
+    !options.inlineScript &&
+    (!resolvedScript || !existsSync(resolvedScript))
   ) {
     throw new Error(
-      `run-sh executor: script not found at ${resolvedScript} (project: ${projectName}, cwd: ${cwdBase})`,
+      `run-sh executor: script not found at ${resolvedScript} (project: ${projectName}, cwd: ${cwdBase})`
     );
   }
 

@@ -55,10 +55,10 @@ func addCustomFields(db *gorm.DB) error {
     if db.Migrator().HasColumn("deployments", "custom_field") {
         return nil
     }
-    
+
     // Add the column
     return db.Exec(`
-        ALTER TABLE deployments 
+        ALTER TABLE deployments
         ADD COLUMN custom_field TEXT DEFAULT '';
     `).Error
 }

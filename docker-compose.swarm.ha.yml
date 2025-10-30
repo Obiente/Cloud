@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 # Obiente Cloud - High Availability Docker Swarm Configuration
 # This setup supports distributed deployments across multiple nodes
@@ -7,7 +7,7 @@ services:
   # ============================================================================
   # DISTRIBUTED DATABASE CLUSTER (PostgreSQL + Patroni)
   # ============================================================================
-  
+
   # etcd - Distributed consensus for Patroni
   etcd:
     image: quay.io/coreos/etcd:v3.5.12
@@ -27,10 +27,10 @@ services:
         max_replicas_per_node: 1
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 256M
         reservations:
-          cpus: '0.25'
+          cpus: "0.25"
           memory: 128M
     volumes:
       - etcd_data:/etcd-data
@@ -44,21 +44,21 @@ services:
       PGPOOL_BACKEND_NODES: 0:patroni-1:5432,1:patroni-2:5432,2:patroni-3:5432
       PGPOOL_SR_CHECK_USER: ${POSTGRES_USER:-obiente-postgres}
       PGPOOL_SR_CHECK_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
-      PGPOOL_ENABLE_LDAP: 'no'
+      PGPOOL_ENABLE_LDAP: "no"
       PGPOOL_POSTGRES_USERNAME: ${POSTGRES_USER:-obiente-postgres}
       PGPOOL_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
       PGPOOL_ADMIN_USERNAME: admin
       PGPOOL_ADMIN_PASSWORD: ${PGPOOL_ADMIN_PASSWORD:-adminpassword}
-      PGPOOL_ENABLE_LOAD_BALANCING: 'yes'
+      PGPOOL_ENABLE_LOAD_BALANCING: "yes"
       PGPOOL_MAX_POOL: 100
     deploy:
       replicas: 2
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 256M
         reservations:
-          cpus: '0.25'
+          cpus: "0.25"
           memory: 128M
     healthcheck:
       test: ["CMD", "/opt/bitnami/scripts/pgpool/healthcheck.sh"]
@@ -87,7 +87,7 @@ services:
       PATRONI_REPLICATION_USERNAME: replicator
       PATRONI_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator-password}
       PATRONI_admin_PASSWORD: ${PATRONI_ADMIN_PASSWORD:-admin}
-      PATRONI_admin_OPTIONS: 'createdb,createrole'
+      PATRONI_admin_OPTIONS: "createdb,createrole"
     volumes:
       - patroni_1_data:/var/lib/postgresql/data
     deploy:
@@ -97,10 +97,10 @@ services:
           - node.labels.postgres.replica == 1
       resources:
         limits:
-          cpus: '2'
+          cpus: "2"
           memory: 2G
         reservations:
-          cpus: '1'
+          cpus: "1"
           memory: 1G
     networks:
       - obiente-network
@@ -124,7 +124,7 @@ services:
       PATRONI_REPLICATION_USERNAME: replicator
       PATRONI_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator-password}
       PATRONI_admin_PASSWORD: ${PATRONI_ADMIN_PASSWORD:-admin}
-      PATRONI_admin_OPTIONS: 'createdb,createrole'
+      PATRONI_admin_OPTIONS: "createdb,createrole"
     volumes:
       - patroni_2_data:/var/lib/postgresql/data
     deploy:
@@ -134,10 +134,10 @@ services:
           - node.labels.postgres.replica == 2
       resources:
         limits:
-          cpus: '2'
+          cpus: "2"
           memory: 2G
         reservations:
-          cpus: '1'
+          cpus: "1"
           memory: 1G
     networks:
       - obiente-network
@@ -161,7 +161,7 @@ services:
       PATRONI_REPLICATION_USERNAME: replicator
       PATRONI_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator-password}
       PATRONI_admin_PASSWORD: ${PATRONI_ADMIN_PASSWORD:-admin}
-      PATRONI_admin_OPTIONS: 'createdb,createrole'
+      PATRONI_admin_OPTIONS: "createdb,createrole"
     volumes:
       - patroni_3_data:/var/lib/postgresql/data
     deploy:
@@ -171,10 +171,10 @@ services:
           - node.labels.postgres.replica == 3
       resources:
         limits:
-          cpus: '2'
+          cpus: "2"
           memory: 2G
         reservations:
-          cpus: '1'
+          cpus: "1"
           memory: 1G
     networks:
       - obiente-network
@@ -182,7 +182,7 @@ services:
   # ============================================================================
   # REDIS CLUSTER (for caching, sessions, job queues)
   # ============================================================================
-  
+
   redis-1:
     image: redis:7-alpine
     command: >
@@ -201,10 +201,10 @@ services:
           - node.labels.redis == 1
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 512M
         reservations:
-          cpus: '0.25'
+          cpus: "0.25"
           memory: 256M
     networks:
       - obiente-network
@@ -227,10 +227,10 @@ services:
           - node.labels.redis == 2
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 512M
         reservations:
-          cpus: '0.25'
+          cpus: "0.25"
           memory: 256M
     networks:
       - obiente-network
@@ -253,10 +253,10 @@ services:
           - node.labels.redis == 3
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 512M
         reservations:
-          cpus: '0.25'
+          cpus: "0.25"
           memory: 256M
     networks:
       - obiente-network
@@ -264,7 +264,7 @@ services:
   # ============================================================================
   # OBIENTE CLOUD API SERVICES
   # ============================================================================
-  
+
   # Go API - ConnectRPC service for deployments
   api:
     image: obiente/cloud-api:latest
@@ -297,7 +297,7 @@ services:
       - pgpool
       - redis-1
     deploy:
-      mode: global  # One instance per node
+      mode: global # One instance per node
       update_config:
         parallelism: 1
         delay: 10s
@@ -308,16 +308,20 @@ services:
         max_attempts: 3
       resources:
         limits:
-          cpus: '2'
+          cpus: "2"
           memory: 1G
         reservations:
-          cpus: '1'
+          cpus: "1"
           memory: 512M
       labels:
         - "com.obiente.service=api"
         - "com.obiente.role=control-plane"
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${GO_API_PORT:-3001}/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:${GO_API_PORT:-3001}/health || exit 1",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -328,7 +332,7 @@ services:
   # ============================================================================
   # DEPLOYMENT ORCHESTRATOR
   # ============================================================================
-  
+
   # Deployment orchestrator - manages user deployments across nodes
   deployment-orchestrator:
     image: obiente/deployment-orchestrator:latest
@@ -355,10 +359,10 @@ services:
         order: start-first
       resources:
         limits:
-          cpus: '1'
+          cpus: "1"
           memory: 512M
         reservations:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 256M
       labels:
         - "com.obiente.service=orchestrator"
@@ -369,7 +373,7 @@ services:
   # ============================================================================
   # SERVICE DISCOVERY & ROUTING
   # ============================================================================
-  
+
   # Traefik - Dynamic reverse proxy with service discovery
   traefik:
     image: traefik:v3.0
@@ -393,7 +397,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8000:8000"  # User deployments
+      - "8000:8000" # User deployments
       # 8080 (Traefik dashboard) intentionally not exposed in Swarm by default
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -410,10 +414,10 @@ services:
         order: start-first
       resources:
         limits:
-          cpus: '1'
+          cpus: "1"
           memory: 256M
         reservations:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 128M
       labels:
         - "traefik.enable=true"
@@ -433,14 +437,14 @@ services:
   # ============================================================================
   # MONITORING & OBSERVABILITY
   # ============================================================================
-  
+
   # Prometheus - Metrics collection
   prometheus:
     image: prom/prometheus:latest
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=15d'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
     volumes:
       - prometheus_data:/prometheus
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -451,10 +455,10 @@ services:
           - node.role == manager
       resources:
         limits:
-          cpus: '1'
+          cpus: "1"
           memory: 1G
         reservations:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 512M
     networks:
       - obiente-network
@@ -476,10 +480,10 @@ services:
           - node.role == manager
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 256M
         reservations:
-          cpus: '0.25'
+          cpus: "0.25"
           memory: 128M
       labels:
         - "traefik.enable=true"
@@ -498,7 +502,7 @@ volumes:
   # etcd
   etcd_data:
     driver: local
-  
+
   # PostgreSQL Patroni
   patroni_1_data:
     driver: local
@@ -506,7 +510,7 @@ volumes:
     driver: local
   patroni_3_data:
     driver: local
-  
+
   # Redis Cluster
   redis_1_data:
     driver: local
@@ -514,11 +518,11 @@ volumes:
     driver: local
   redis_3_data:
     driver: local
-  
+
   # Traefik
   traefik_letsencrypt:
     driver: local
-  
+
   # Monitoring
   prometheus_data:
     driver: local
@@ -536,4 +540,3 @@ networks:
     ipam:
       config:
         - subnet: 10.0.9.0/24
-

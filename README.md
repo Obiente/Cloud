@@ -26,10 +26,10 @@ git clone https://github.com/obiente/cloud.git
 cd cloud
 
 # Start services
-docker-compose up -d
+docker compose up -d
 
 # Check status
-docker-compose ps
+docker compose ps
 ```
 
 ### Docker Swarm (Production)
@@ -82,19 +82,25 @@ Learn more: [Architecture Overview](docs/architecture/overview.md)
 ## Use Cases
 
 ### 🏠 Self-Hosting for Hobbyists
+
 Deploy your personal projects on your own infrastructure. Perfect for:
+
 - Home lab deployments
 - Personal project hosting
 - Learning distributed systems
 
 ### 🏢 Production IaaS
+
 Sell Obiente Cloud as Infrastructure-as-a-Service:
+
 - Multi-tenant deployments
 - Custom domains per customer
 - Resource management and billing
 
 ### 🚀 Development Team
+
 Use Obiente Cloud internally:
+
 - Staging and production environments
 - Testing distributed applications
 - CI/CD integration

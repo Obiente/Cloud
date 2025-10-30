@@ -4,7 +4,7 @@
   "license": "AGPL-3.0-only",
   "scripts": {},
   "private": true,
-  "packageManager": "pnpm@10.12.1",
+  "packageManager": "pnpm@10.20.0",
   "devDependencies": {
     "@nx/devkit": "21.6.4",
     "@nx/docker": "21.6.4",
@@ -27,6 +27,5 @@
     "prettier": "^2.8.8",
     "tslib": "^2.8.1",
     "typescript": "~5.9.3"
-  },
-  "dependencies": {}
+  }
 }

@@ -5,11 +5,13 @@ This document describes how to set up PostgreSQL and Redis for the Obiente Cloud
 ## Quick Start
 
 1. **Start PostgreSQL and Redis with Docker Compose:**
+
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 2. **Create a `.env` file (optional):**
+
 ```bash
 # Copy this into a .env file in the project root
 DB_HOST=localhost
@@ -22,6 +24,7 @@ PORT=3001
 ```
 
 The API will automatically load environment variables from `.env` file or use these defaults:
+
 - `DB_HOST=localhost`
 - `DB_PORT=5432`
 - `DB_USER=obiente-postgres`
@@ -30,6 +33,7 @@ The API will automatically load environment variables from `.env` file or use th
 - `REDIS_URL=redis://localhost:6379`
 
 3. **Run the API:**
+
 ```bash
 nx dev api
 ```
@@ -44,6 +48,7 @@ The database schema will be automatically migrated on first run.
 ## Database Schema
 
 The `deployments` table is automatically created with the following columns:
+
 - `id` - Primary key
 - `name` - Deployment name
 - `domain` - Deployment domain
@@ -64,13 +69,14 @@ The `deployments` table is automatically created with the following columns:
 ## Manual Setup (without Docker)
 
 ### PostgreSQL
+
 ```bash
 createdb obiente
 psql obiente < schema.sql
 ```
 
 ### Redis
+
 ```bash
 redis-server
 ```
-

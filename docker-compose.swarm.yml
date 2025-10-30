@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 # Obiente Cloud - Docker Swarm Deployment
 # This is a simplified setup. For high availability, use docker-compose.swarm.ha.yml
@@ -25,10 +25,10 @@ services:
           - node.role == manager
       resources:
         limits:
-          cpus: '2'
+          cpus: "2"
           memory: 2G
         reservations:
-          cpus: '1'
+          cpus: "1"
           memory: 1G
     networks:
       - obiente-network
@@ -51,10 +51,10 @@ services:
           - node.role == manager
       resources:
         limits:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 256M
         reservations:
-          cpus: '0.25'
+          cpus: "0.25"
           memory: 128M
     networks:
       - obiente-network
@@ -90,7 +90,7 @@ services:
       - postgres
       - redis
     deploy:
-      mode: global  # One instance per node for local Docker access
+      mode: global # One instance per node for local Docker access
       update_config:
         parallelism: 1
         delay: 10s
@@ -102,10 +102,10 @@ services:
         window: 120s
       resources:
         limits:
-          cpus: '2'
+          cpus: "2"
           memory: 1G
         reservations:
-          cpus: '1'
+          cpus: "1"
           memory: 512M
       labels:
         - "com.obiente.service=api"
@@ -116,7 +116,11 @@ services:
         - "traefik.http.routers.api.tls.certresolver=letsencrypt"
         - "traefik.http.services.api.loadbalancer.server.port=3001"
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:${GO_API_PORT:-3001}/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:${GO_API_PORT:-3001}/health || exit 1",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -150,7 +154,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8000:8000"  # User deployments
+      - "8000:8000" # User deployments
       # 8080 (Traefik dashboard) intentionally not exposed in Swarm by default
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -165,10 +169,10 @@ services:
         order: start-first
       resources:
         limits:
-          cpus: '1'
+          cpus: "1"
           memory: 256M
         reservations:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 128M
       labels:
         - "traefik.enable=true"
@@ -192,4 +196,3 @@ networks:
   obiente-network:
     driver: overlay
     attachable: true
-

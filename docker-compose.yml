@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   api:
@@ -39,6 +39,8 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: obiente-postgres
+    ports:
+      - "127.0.0.1:5433:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-obiente-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
@@ -93,7 +95,6 @@ services:
     networks:
       - obiente-network
 
-
 volumes:
   postgres_data:
   redis_data:
@@ -101,5 +102,3 @@ volumes:
 networks:
   obiente-network:
     driver: bridge
-
-

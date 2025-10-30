@@ -2,7 +2,7 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    cluster: 'obiente-cloud'
+    cluster: "obiente-cloud"
 
 # Alertmanager configuration
 alerting:
@@ -16,21 +16,21 @@ rule_files:
 
 scrape_configs:
   # Prometheus itself
-  - job_name: 'prometheus'
+  - job_name: "prometheus"
     static_configs:
-      - targets: ['localhost:9090']
+      - targets: ["localhost:9090"]
 
   # Traefik metrics
-  - job_name: 'traefik'
+  - job_name: "traefik"
     dns_sd_configs:
       - names:
-          - 'tasks.traefik'
-        type: 'A'
+          - "tasks.traefik"
+        type: "A"
         port: 8080
     metrics_path: /metrics
 
   # Docker Swarm nodes
-  - job_name: 'docker-swarm-nodes'
+  - job_name: "docker-swarm-nodes"
     dockerswarm_sd_configs:
       - host: unix:///var/run/docker.sock
         role: nodes
@@ -41,7 +41,7 @@ scrape_configs:
         target_label: node_id
 
   # Docker Swarm services
-  - job_name: 'docker-swarm-services'
+  - job_name: "docker-swarm-services"
     dockerswarm_sd_configs:
       - host: unix:///var/run/docker.sock
         role: services
@@ -52,32 +52,31 @@ scrape_configs:
         target_label: obiente_service
 
   # API instances
-  - job_name: 'api'
+  - job_name: "api"
     dns_sd_configs:
       - names:
-          - 'tasks.api'
-        type: 'A'
+          - "tasks.api"
+        type: "A"
         port: 3001
     metrics_path: /metrics
 
   # Former Node API removed
 
   # PostgreSQL (via pg_exporter would be added here)
-  - job_name: 'postgresql'
+  - job_name: "postgresql"
     static_configs:
-      - targets: []  # Add pg_exporter endpoints
+      - targets: [] # Add pg_exporter endpoints
 
   # Redis (via redis_exporter would be added here)
-  - job_name: 'redis'
+  - job_name: "redis"
     static_configs:
-      - targets: []  # Add redis_exporter endpoints
+      - targets: [] # Add redis_exporter endpoints
 
   # etcd cluster
-  - job_name: 'etcd'
+  - job_name: "etcd"
     dns_sd_configs:
       - names:
-          - 'tasks.etcd'
-        type: 'A'
+          - "tasks.etcd"
+        type: "A"
         port: 2379
     metrics_path: /metrics
-
