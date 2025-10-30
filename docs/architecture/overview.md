@@ -11,6 +11,7 @@ Obiente Cloud is a **Platform-as-a-Service (PaaS)** similar to Vercel, designed 
 These are the core services that manage the platform:
 
 #### API Services
+
 - **API (`api`)**: ConnectRPC service handling deployment operations
   - Manages Docker containers via Docker API
   - Tracks deployment locations across nodes
@@ -20,6 +21,7 @@ These are the core services that manage the platform:
   - One instance per node (global mode) for direct Docker access
 
 #### Deployment Orchestrator
+
 - Decides which node should host new deployments
 - Strategies: least-loaded, round-robin, resource-based
 - Monitors node health and capacity
@@ -29,6 +31,7 @@ These are the core services that manage the platform:
 ### 2. Data Plane (High Availability Storage)
 
 #### PostgreSQL Cluster (Patroni + etcd)
+
 - **3-node PostgreSQL cluster** with automatic failover
 - **Patroni**: Manages PostgreSQL replication and failover
 - **etcd**: Distributed consensus for leader election
@@ -41,6 +44,7 @@ These are the core services that manage the platform:
   - Routing configuration
 
 #### Redis Cluster
+
 - **3-node Redis cluster** for distributed caching
 - Use cases:
   - Session storage
@@ -61,6 +65,7 @@ Node 1:              Node 2:              Node 3:
 ```
 
 Each deployment is tracked in the database:
+
 ```sql
 deployment_locations table:
 - deployment_id
@@ -84,6 +89,7 @@ deployment_locations table:
 - **Middleware**: Rate limiting, authentication, compression
 
 Routing flow:
+
 ```
 User Request (app.example.com)
        ↓
@@ -112,12 +118,14 @@ User's deployed application
 ### Deployment Flow
 
 1. **User initiates deployment** via API
+
    ```
    POST /api/v1/deployments
    { project_id, git_repo, branch, env_vars }
    ```
 
 2. **Orchestrator selects target node**
+
    ```go
    func SelectNode(strategy string) (*Node, error) {
        nodes := GetAvailableNodes()
@@ -131,12 +139,14 @@ User's deployed application
    ```
 
 3. **Go API on target node creates container**
+
    ```go
    container := dockerClient.CreateContainer(deployment.Image, deployment.Config)
    dockerClient.StartContainer(container.ID)
    ```
 
 4. **Location is recorded in database**
+
    ```go
    location := DeploymentLocation{
        DeploymentID: deployment.ID,
@@ -149,6 +159,7 @@ User's deployed application
    ```
 
 5. **Routing is configured**
+
    ```go
    routing := DeploymentRouting{
        DeploymentID: deployment.ID,
@@ -174,18 +185,21 @@ The system maintains several tracking mechanisms:
 #### 1. Database Tables
 
 **`deployment_locations`**: Real-time deployment locations
+
 ```sql
 SELECT * FROM deployment_locations WHERE deployment_id = 'dep_123';
 -- Result: node_id='node-worker-2', container_id='abc123', status='running'
 ```
 
 **`node_metadata`**: Cluster node information
+
 ```sql
 SELECT * FROM node_metadata WHERE availability='active' ORDER BY deployment_count ASC;
 -- Returns nodes sorted by current load
 ```
 
 **`deployment_routing`**: Traffic routing configuration
+
 ```sql
 SELECT * FROM deployment_routing WHERE domain = 'myapp.com';
 -- Returns: deployment_id, target_port, load_balancer_algo
@@ -194,6 +208,7 @@ SELECT * FROM deployment_routing WHERE domain = 'myapp.com';
 #### 2. Docker Swarm API
 
 The Go API queries Docker Swarm directly:
+
 ```go
 // Get all nodes in the cluster
 nodes, _ := dockerClient.NodeList(ctx, types.NodeListOptions{})
@@ -209,21 +224,22 @@ containers, _ := dockerClient.ContainerList(ctx, types.ContainerListOptions{
 #### 3. Periodic Reconciliation
 
 Background job runs every minute:
+
 ```go
 func ReconcileDeployments() {
     // 1. Query actual containers from Docker
     actualContainers := getAllContainersFromAllNodes()
-    
+
     // 2. Compare with database records
     dbRecords := db.GetAllDeploymentLocations()
-    
+
     // 3. Update discrepancies
     for _, container := range actualContainers {
         if !existsInDB(container) {
             db.RecordDeploymentLocation(container)
         }
     }
-    
+
     // 4. Clean up stale records
     for _, record := range dbRecords {
         if !existsInCluster(record) {
@@ -259,20 +275,24 @@ docker node update --label-add compute=true node-6
 ### Horizontal Scaling
 
 **Control Plane Services:**
+
 - API services: Scale replicas based on request load
 - Orchestrator: 2-3 replicas for redundancy
 
 **Data Plane:**
+
 - PostgreSQL: 3-5 replicas (1 primary + 2-4 replicas)
 - Redis: 3-6 nodes for cluster
 
 **User Deployments:**
+
 - Add more worker nodes as capacity increases
 - Each node can handle 50-100 deployments (configurable)
 
 ### Vertical Scaling
 
 Increase resources per node based on workload:
+
 - Manager nodes: 4-8 CPU, 8-16GB RAM
 - Worker nodes: 8-16 CPU, 16-32GB RAM
 - Database nodes: 4-8 CPU, 16-32GB RAM
@@ -298,11 +318,13 @@ Increase resources per node based on workload:
 ## Disaster Recovery
 
 ### Backup Strategy
+
 - **PostgreSQL**: Continuous archiving + daily snapshots
 - **Redis**: AOF persistence + periodic snapshots
 - **Deployment metadata**: Replicated across 3 nodes
 
 ### Recovery Procedures
+
 1. Database failover: Automatic via Patroni (< 30 seconds)
 2. Node failure: Swarm reschedules containers automatically
 3. Complete cluster failure: Restore from backups
@@ -310,18 +332,21 @@ Increase resources per node based on workload:
 ## Monitoring Dashboards
 
 ### Node Health Dashboard
+
 - CPU usage per node
 - Memory usage per node
 - Deployment count per node
 - Network throughput
 
 ### Deployment Dashboard
+
 - Total deployments
 - Deployments per project
 - Resource usage per deployment
 - Request latency per deployment
 
 ### Platform Health Dashboard
+
 - API response times
 - Database query performance
 - Cache hit rates
@@ -353,4 +378,3 @@ Increase resources per node based on workload:
 5. **Blue-green deployments**: Zero-downtime deployment updates
 6. **A/B testing**: Traffic splitting between deployment versions
 7. **Cost analytics**: Per-deployment resource usage and billing
-

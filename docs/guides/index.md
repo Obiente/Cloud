@@ -17,6 +17,7 @@ Step-by-step guides for common tasks with Obiente Cloud.
 ## Additional Guides
 
 More guides coming soon:
+
 - Monitoring setup
 - Backup and restore
 - Scaling deployments
@@ -25,4 +26,3 @@ More guides coming soon:
 ---
 
 [← Back to Documentation](../README.md)
-

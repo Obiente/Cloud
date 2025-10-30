@@ -137,6 +137,7 @@ target := selectTarget(healthyInstances, algorithm)
 ```
 
 Health status is checked:
+
 - Every 30 seconds via `/health` endpoint
 - On request failure (marked unhealthy immediately)
 - After 3 consecutive successes (marked healthy again)
@@ -146,6 +147,7 @@ Health status is checked:
 ### Setting Up a Custom Domain
 
 1. **User adds domain** via API:
+
 ```bash
 POST /api/v1/deployments/dep_abc123/domains
 {
@@ -154,6 +156,7 @@ POST /api/v1/deployments/dep_abc123/domains
 ```
 
 2. **System creates routing**:
+
 ```go
 routing := &DeploymentRouting{
     DeploymentID: "dep_abc123",
@@ -164,9 +167,10 @@ database.UpsertDeploymentRouting(routing)
 ```
 
 3. **Traefik discovers via labels**:
-The deployment container gets updated labels automatically
+   The deployment container gets updated labels automatically
 
 4. **User configures DNS**:
+
 ```
 A    myapp.com           →  <swarm-manager-ip>
 CNAME www.myapp.com      →  myapp.com
@@ -183,6 +187,7 @@ traefik.http.routers.app.rule: "Host(`*.example.com`)"
 ```
 
 Database routing:
+
 ```go
 routing := &DeploymentRouting{
     Domain: "*.app.example.com",
@@ -200,7 +205,7 @@ Route different paths to different deployments:
 # API deployment
 traefik.http.routers.api.rule: "Host(`example.com`) && PathPrefix(`/api`)"
 
-# Frontend deployment  
+# Frontend deployment
 traefik.http.routers.frontend.rule: "Host(`example.com`) && PathPrefix(`/`)"
 ```
 
@@ -272,6 +277,7 @@ GET /api/v1/deployments/:id/routing
 ```
 
 Response:
+
 ```json
 {
   "deployment_id": "dep_abc123",
@@ -301,6 +307,7 @@ GET /api/v1/routing/stats
 ```
 
 Response:
+
 ```json
 {
   "total_routes": 1523,
@@ -365,6 +372,7 @@ proxy.Transport = &http.Transport{
 ### Proxy Caching
 
 Reverse proxies are cached per target:
+
 ```go
 cacheKey := fmt.Sprintf("%s:%d", nodeIP, port)
 proxyCache.Store(cacheKey, proxy)
@@ -381,6 +389,7 @@ Traefik caches DNS lookups for service discovery.
 **Symptom**: `404 Not Found` for a deployed app
 
 **Checks**:
+
 1. Verify routing exists in database
 2. Check Traefik discovered the route
 3. Verify DNS points to cluster
@@ -400,6 +409,7 @@ curl http://traefik.obiente.example.com/api/http/routers
 **Symptom**: `502 Bad Gateway` error
 
 **Causes**:
+
 1. Container not running
 2. Container unhealthy
 3. Wrong port mapping
@@ -423,6 +433,7 @@ docker logs <container-id>
 **Symptom**: `503 Service Unavailable`
 
 **Causes**:
+
 1. No healthy instances
 2. All replicas down
 3. Deployment not found
@@ -437,6 +448,7 @@ curl https://api.obiente.example.com/api/v1/deployments/dep_abc123/locations
 **Symptom**: SSL handshake errors
 
 **Fixes**:
+
 1. Check Let's Encrypt rate limits
 2. Verify DNS is correct
 3. Check Traefik logs
@@ -465,4 +477,3 @@ docker service logs obiente_traefik | grep acme
 - **Request retry**: Automatic retry on failures
 - **WebSocket support**: Long-lived connection handling
 - **gRPC routing**: Support for gRPC services
-

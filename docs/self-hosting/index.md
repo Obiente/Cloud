@@ -15,12 +15,14 @@ Self-hosting means running Obiente Cloud on your own servers rather than using a
 ## Who Should Self-Host?
 
 ### Perfect For:
+
 - 🏠 **Home Lab Enthusiasts** - Personal projects and learning
 - 🏢 **Small Businesses** - Internal development and testing
 - 🎓 **Educational Institutions** - Teaching distributed systems
 - 🔧 **Developers** - Local development and testing
 
 ### Consider Managed Service If:
+
 - You need 24/7 support
 - You prefer someone else managing infrastructure
 - You don't have time for maintenance
@@ -35,7 +37,7 @@ Perfect for development and testing:
 ```bash
 git clone https://github.com/obiente/cloud.git
 cd cloud
-docker-compose up -d
+docker compose up -d
 ```
 
 See [Installation Guide](../getting-started/installation.md) for details.
@@ -65,18 +67,21 @@ See [High Availability Setup](../deployment/high-availability.md).
 ## Requirements
 
 ### Minimum Requirements (Single Server)
+
 - **CPU**: 2 cores
 - **RAM**: 4GB
 - **Storage**: 50GB
 - **OS**: Linux (Ubuntu 22.04+)
 
 ### Recommended (Small Production)
+
 - **CPU**: 4 cores per server
 - **RAM**: 8GB per server
 - **Storage**: 100GB per server
 - **Network**: 100 Mbps
 
 ### Production HA
+
 - **CPU**: 8+ cores per server
 - **RAM**: 16GB+ per server
 - **Storage**: 200GB+ SSD per server
@@ -119,19 +124,25 @@ See [Detailed Requirements](requirements.md).
 ## Common Use Cases
 
 ### Home Lab
+
 Deploy personal projects on your home server:
+
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Development Team
+
 Internal staging environment:
+
 ```bash
 docker stack deploy -c docker-compose.swarm.yml obiente
 ```
 
 ### Small Business
+
 Customer-facing deployments:
+
 ```bash
 docker stack deploy -c docker-compose.swarm.ha.yml obiente
 ```
@@ -152,4 +163,3 @@ docker stack deploy -c docker-compose.swarm.ha.yml obiente
 ---
 
 [← Back to Documentation](../README.md)
-

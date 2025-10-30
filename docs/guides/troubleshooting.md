@@ -8,7 +8,7 @@ Common issues and solutions when using Obiente Cloud.
 
 ```bash
 # Docker Compose
-docker-compose ps
+docker compose ps
 
 # Docker Swarm
 docker service ls
@@ -18,10 +18,10 @@ docker service ls
 
 ```bash
 # All compose services
-docker-compose logs
+docker compose logs
 
 # Specific service (compose)
-docker-compose logs postgres
+docker compose logs postgres
 
 # API logs
 # If running API locally: view the terminal running `go run`
@@ -36,6 +36,7 @@ docker-compose logs postgres
 **Problem**: Services crash on startup
 
 **Solution**:
+
 ```bash
 # Check logs for errors
 # If API is local, view the terminal output; if in Swarm, use docker service logs
@@ -52,12 +53,13 @@ cat .env
 **Problem**: API can't connect to database
 
 **Solution**:
+
 ```bash
 # Verify PostgreSQL is running
-docker-compose ps postgres
+docker compose ps postgres
 
 # Check PostgreSQL logs
-docker-compose logs postgres
+docker compose logs postgres
 
 # Test connection
 docker exec -it obiente-postgres psql -U obiente-postgres -d obiente
@@ -68,6 +70,7 @@ docker exec -it obiente-postgres psql -U obiente-postgres -d obiente
 **Problem**: Getting authentication failures
 
 **Solution**:
+
 ```bash
 # Disable auth for development
 echo "DISABLE_AUTH=true" >> .env
@@ -88,6 +91,7 @@ See [Authentication Guide](authentication.md) for detailed troubleshooting.
 **Problem**: Browser shows "CORS Failed" or "Response body is not available to scripts"
 
 **Common Causes:**
+
 1. Origin mismatch - Browser sends exact origin including port
 2. Missing CORS_ORIGIN env variable
 3. API not rebuilt after CORS_ORIGIN change
@@ -95,40 +99,47 @@ See [Authentication Guide](authentication.md) for detailed troubleshooting.
 **Solutions:**
 
 1. **Check what origin browser is sending:**
+
    - Open browser DevTools → Network tab
    - Look at request headers for `Origin: http://localhost:3000`
    - This must exactly match an entry in `CORS_ORIGIN`
 
 2. **Set CORS_ORIGIN with exact origin including port:**
+
    ```bash
    # For frontend on localhost:3000
    echo "CORS_ORIGIN=http://localhost:3000" >> .env
-   
+
    # Multiple origins (comma-separated)
    echo "CORS_ORIGIN=http://localhost:3000,https://app.example.com" >> .env
    ```
 
 3. **Rebuild API after changing CORS_ORIGIN:**
+
    ```bash
-   docker-compose up -d --build api
+   docker compose up -d --build api
    ```
 
 4. **Check CORS logs:**
+
    ```bash
-   docker-compose logs api | grep CORS
+   docker compose logs api | grep CORS
    ```
+
    You should see:
+
    - `[CORS] Origin http://localhost:3000 matched allowed origin`
    - `[CORS] Origin ... NOT in allowed list` (if mismatch)
 
 5. **Temporary: Allow all origins (development only):**
    ```bash
    echo "CORS_ORIGIN=*" >> .env
-   docker-compose up -d --build api
+   docker compose up -d --build api
    ```
    **Warning:** Only use `*` in development. With credentials enabled, the API will echo the origin anyway.
 
 **Example for local development:**
+
 ```bash
 # .env file
 CORS_ORIGIN=http://localhost:3000
@@ -140,6 +151,7 @@ PUBLIC_HTTPS_PORT=2443
 **Problem**: Port 3001 or 5432 already in use
 
 **Solution**:
+
 ```bash
 # Find process using port
 sudo lsof -i :3001
@@ -155,6 +167,7 @@ sudo kill -9 <PID>
 **Problem**: Docker runs out of disk space
 
 **Solution**:
+
 ```bash
 # Clean up Docker
 docker system prune -a
@@ -228,4 +241,3 @@ echo "LOG_LEVEL=debug" >> .env
 ---
 
 [← Back to Guides](index.md)
-

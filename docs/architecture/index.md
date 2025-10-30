@@ -11,21 +11,25 @@ Obiente Cloud's architecture is designed for distributed, production-grade deplo
 ## Core Principles
 
 ### 1. Distributed by Default
+
 - Deployments run across multiple nodes
 - No single point of failure
 - Automatic load balancing
 
 ### 2. Simple to Operate
+
 - Docker-first approach
 - Standard Docker Compose and Swarm
 - No complex orchestration needed
 
 ### 3. Self-Hostable Abilities
+
 - Runs on any Docker-capable infrastructure
 - From single server to multi-node clusters
 - Support for both HA and simple setups
 
 ### 4. Developer-Friendly
+
 - Open source and extensible
 - RESTful ConnectRPC API
 - Comprehensive documentation
@@ -33,46 +37,52 @@ Obiente Cloud's architecture is designed for distributed, production-grade deplo
 ## Architecture Layers
 
 ```
-┌────────────────────────────────────────────────────┐
-│              User Applications                      │
-│         (Deployed Applications)                     │
-└──────────────────┬─────────────────────────────────┘
+┌──────────────────▼──────────────────┐
+│          User Applications          │
+│       (Deployed Applications)       │
+└──────────────────┬──────────────────┘
                    │
-┌──────────────────▼─────────────────────────────────┐
-│              Routing Layer                          │
-│           (Traefik Reverse Proxy)                   │
-└──────────────────┬─────────────────────────────────┘
+┌──────────────────▼──────────────────┐
+│           Routing Layer             │
+│        (Traefik Reverse Proxy)       │
+└──────────────────┬──────────────────┘
                    │
-┌──────────────────▼─────────────────────────────────┐
-│              Control Plane                          │
-│    ┌────────────┐  ┌────────────┐                  │
-│    │  Go API   │  │Orchestrator│                  │
-│    └────────────┘  └────────────┘                  │
-└──────────────────┬─────────────────────────────────┘
+┌──────────────────▼──────────────────┐
+│           Control Plane             │
+│   ┌────────────┐  ┌────────────┐    │
+│   │  Go API    │  │Orchestrator│    │
+│   └────────────┘  └────────────┘    │
+└──────────────────┬──────────────────┘
                    │
-┌──────────────────▼─────────────────────────────────┐
-│           Data Plane                                │
-│    ┌────────────┐  ┌────────────┐                  │
-│    │PostgreSQL  │  │   Redis    │                  │
-│    └────────────┘  └────────────┘                  │
-└─────────────────────────────────────────────────────┘
+┌──────────────────▼──────────────────┐
+│             Data Plane              │
+│   ┌────────────┐  ┌────────────┐    │
+│   │PostgreSQL  │  │   Redis    │    │
+│   └────────────┘  └────────────┘    │
+└─────────────────────────────────────┘
 ```
 
 ## Key Components
 
 ### Control Plane
+
 Services that manage the platform:
+
 - **Go API** - Main application API
 - **Orchestrator** - Node selection and deployment management
 - **Service Registry** - Tracking deployment locations
 
 ### Data Plane
+
 Storage and caching layer:
+
 - **PostgreSQL** - Primary database
 - **Redis** - Caching and sessions
 
 ### Routing
+
 Traffic management:
+
 - **Traefik** - Reverse proxy and load balancer
 
 Learn more: [Architecture Overview](overview.md)
@@ -80,4 +90,3 @@ Learn more: [Architecture Overview](overview.md)
 ---
 
 [← Back to Documentation](../README.md)
-

@@ -21,4 +21,3 @@ Technical reference documentation for Obiente Cloud.
 ---
 
 [← Back to Documentation](../README.md)
-

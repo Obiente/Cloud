@@ -17,7 +17,7 @@ Before installing, ensure you have:
 
 ```bash
 docker --version
-docker compose version  # Or docker-compose --version
+docker compose version  # Or docker compose --version
 ```
 
 ## Installation Methods
@@ -44,10 +44,10 @@ cp env.swarm.example .env
 nano .env
 
 # Start services
-docker-compose up -d
+docker compose up -d
 
 # Verify installation
-docker-compose ps
+docker compose ps
 ```
 
 ## Production Install (Docker Swarm)
@@ -76,7 +76,7 @@ After installation, verify everything is working:
 
 ```bash
 # Docker Compose (databases/services)
-docker-compose ps
+docker compose ps
 
 # Docker Swarm (if using Swarm deployment)
 docker service ls
@@ -113,7 +113,7 @@ After successful installation:
 1. **[Configure Authentication](guides/authentication.md)** - Set up Zitadel
 2. **[Configure Domains](guides/routing.md)** - Set up custom domains
 3. **[Set up Monitoring](../guides/index.md)** - Configure Prometheus and Grafana
-See the [Troubleshooting](../guides/troubleshooting.md) guide
+   See the [Troubleshooting](../guides/troubleshooting.md) guide
 
 ## Common Issues
 
@@ -143,7 +143,7 @@ Edit `docker-compose.yml` or `docker-compose.swarm.yml` and change the port mapp
 ### Docker Compose
 
 ```bash
-docker-compose down -v
+docker compose down -v
 ```
 
 ### Docker Swarm
@@ -165,4 +165,3 @@ Having trouble? Check out:
 ---
 
 Next: [Configuration](configuration.md)
-

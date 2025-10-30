@@ -14,6 +14,7 @@ No JWKS, no local JWT validation - just a simple userinfo check.
 ## Error: TLS Certificate Verification Failed
 
 If you're seeing this error:
+
 ```
 failed to fetch user info: x509: certificate is valid for [traefik-default], not obiente.cloud
 ```
@@ -125,6 +126,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 **Problem**: Userinfo fetch is failing
 
 **Solution**: Check the userinfo URL is accessible:
+
 ```bash
 curl -H "Authorization: Bearer YOUR_TOKEN" \
   https://auth.obiente.cloud/oidc/v1/userinfo
@@ -135,12 +137,14 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 **Problem**: Token validation failed
 
 **Causes**:
+
 - Token expired
 - Token revoked
 - Wrong Zitadel URL
 - Network/firewall issue
 
 **Debug**:
+
 ```bash
 # Enable detailed logging
 LOG_LEVEL=debug
@@ -154,7 +158,9 @@ docker service logs obiente_api | grep -E "(Auth|token|validated)"
 **Problem**: Network/firewall blocking JWKS fetch
 
 **Solution**:
+
 1. Check Zitadel is accessible from the API (if running in a container):
+
 ```bash
 docker exec -it <api-container> wget -O- https://auth.obiente.cloud/oidc/v1/userinfo
 # Replace <api-container> with your container ID or name
@@ -234,4 +240,3 @@ docker service logs obiente_traefik | grep certificate
 # 6. Test
 curl https://api.your-domain.com/health
 ```
-

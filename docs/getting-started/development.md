@@ -23,10 +23,10 @@ cd cloud
 Start database and other dependencies:
 
 ```bash
-docker-compose up -d postgres
+docker compose up -d postgres
 
 # Optional: enable Redis in docker-compose.yml first, then start it
-# docker-compose up -d redis
+# docker compose up -d redis
 ```
 
 ### 3. Run API Locally
@@ -70,15 +70,15 @@ docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
 
 ```bash
 # Build and restart in one command (recommended)
-docker-compose up -d --build api
+docker compose up -d --build api
 
 # Or rebuild separately
-docker-compose build api
-docker-compose restart api
+docker compose build api
+docker compose restart api
 
 # Force full rebuild (ignores cache)
-docker-compose build --no-cache api
-docker-compose restart api
+docker compose build --no-cache api
+docker compose restart api
 ```
 
 **Note:** If running the API locally (not in Docker), code changes are picked up automatically on restart.
@@ -107,6 +107,7 @@ PUBLIC_HTTPS_PORT=2443
 ```
 
 **Important for CORS:**
+
 - When your frontend runs on `http://localhost:3000`, set `CORS_ORIGIN=http://localhost:3000` (with port)
 - The browser sends the exact origin including port in cross-origin requests
 - Multiple origins: `CORS_ORIGIN=http://localhost:3000,https://app.example.com`
@@ -117,7 +118,7 @@ PUBLIC_HTTPS_PORT=2443
 
 ```bash
 # Container logs
-docker-compose logs postgres
+docker compose logs postgres
 ```
 
 ### Database Access
@@ -134,4 +135,3 @@ See [Troubleshooting Guide](../guides/troubleshooting.md) for common issues.
 ---
 
 [← Back to Getting Started](index.md)
-

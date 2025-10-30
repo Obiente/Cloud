@@ -58,6 +58,7 @@ docs/
 ### Getting Started
 
 New users should start here:
+
 1. [Installation Guide](getting-started/installation.md)
 2. [Configuration Guide](getting-started/configuration.md)
 3. [Architecture Overview](architecture/overview.md)
@@ -65,6 +66,7 @@ New users should start here:
 ### Self-Hosting
 
 For self-hosting enthusiasts:
+
 1. [Self-Hosting Guide](self-hosting/index.md)
 2. [Requirements](self-hosting/requirements.md)
 3. [Deployment Guide](deployment/index.md)
@@ -72,6 +74,7 @@ For self-hosting enthusiasts:
 ### Production Deployment
 
 For production deployments:
+
 1. [Deployment Methods](deployment/index.md)
 2. [High Availability](deployment/high-availability.md)
 3. [Monitoring Guide](guides/monitoring.md)
@@ -92,7 +95,9 @@ When adding new documentation:
 
 ```markdown
 # Main Title
+
 ## Section
+
 ### Subsection
 ```
 
@@ -139,4 +144,3 @@ When updating documentation:
 ---
 
 [← Back to Documentation](README.md)
-

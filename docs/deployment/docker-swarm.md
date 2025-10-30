@@ -5,6 +5,7 @@ This guide explains how to deploy Obiente Cloud using Docker Swarm for distribut
 ## Overview
 
 Docker Swarm deployment provides:
+
 - ✅ Distributed architecture across multiple nodes
 - ✅ Automatic load balancing
 - ✅ Service discovery
@@ -64,6 +65,7 @@ cp env.swarm.example .env
 ```
 
 Edit `.env` with your configuration:
+
 - Update database passwords
 - Configure Zitadel authentication
 - Set your domain name
@@ -98,6 +100,7 @@ jkl012         obiente_traefik       global       3/3        traefik:v2.11
 ## Service Configuration
 
 API domain
+
 - The API is exposed via Traefik at `api.${DOMAIN}` (from your `.env`).
 
 ### API Service
@@ -152,6 +155,7 @@ docker service update --force obiente_api
 ### Rolling Updates
 
 Docker Swarm handles rolling updates automatically:
+
 - Starts new containers before stopping old ones
 - Waits for health checks to pass
 - Gradually replaces instances
@@ -174,12 +178,12 @@ docker service ps obiente_api
 
 Default resource allocations:
 
-| Service | CPU | Memory |
-|---------|-----|--------|
-| PostgreSQL | 2.0 | 2GB |
-| Redis | 0.5 | 256MB |
-| Go API | 2.0 | 1GB |
-| Traefik | 1.0 | 256MB |
+| Service    | CPU | Memory |
+| ---------- | --- | ------ |
+| PostgreSQL | 2.0 | 2GB    |
+| Redis      | 0.5 | 256MB  |
+| Go API     | 2.0 | 1GB    |
+| Traefik    | 1.0 | 256MB  |
 
 Adjust these in `docker-compose.swarm.yml` based on your cluster.
 
@@ -204,6 +208,7 @@ Volumes are created automatically and persist across restarts.
 ## Traefik Configuration
 
 Traefik automatically:
+
 - Discovers services in the Swarm
 - Provides HTTPS via Let's Encrypt
 - Load balances across replicas
@@ -245,6 +250,7 @@ docker exec -it $(docker ps -qf name=postgres) psql -U obiente-postgres -c "\l"
 ### Health Check Failures
 
 Ensure health endpoints respond:
+
 - API: `GET /health`
 
 Test manually:
@@ -298,6 +304,7 @@ docker stack deploy -c docker-compose.swarm.yml obiente
 ### Graceful Shutdown
 
 All services handle shutdown gracefully:
+
 - API: HTTP server with proper timeouts
 - Databases: PostgreSQL and Redis handle connections properly
 
@@ -326,4 +333,3 @@ After deployment:
 ---
 
 [← Back to Deployment Guide](index.md)
-

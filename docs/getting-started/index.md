@@ -15,7 +15,7 @@ Welcome to Obiente Cloud! These guides will help you get up and running quickly.
 ```bash
 git clone https://github.com/obiente/cloud.git
 cd cloud
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Docker Swarm
@@ -30,4 +30,3 @@ See [Installation Guide](installation.md) for detailed instructions.
 ---
 
 [← Back to Documentation](../README.md)
-
