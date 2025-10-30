@@ -32,6 +32,7 @@
                 :key="item.value"
                 :item="item"
                 class="relative flex w-full cursor-pointer select-none items-center justify-between gap-2 py-2 px-4 text-sm text-text-primary hover:bg-surface-raised transition-colors duration-150"
+              @click="emit('change', item.value)"
               >
                 <Select.ItemText class="truncate">{{
                   item.label
@@ -45,6 +46,7 @@
               <button
                 href="#"
                 class="w-full text-left text-sm text-primary font-medium px-4 py-3 hover:bg-surface-raised cursor-pointer"
+                @click="emit('create')"
               >
                 + New Org
               </button>
@@ -72,4 +74,9 @@ const select = useSelect({ collection: props.collection });
 // const modelValue = defineModel<string[]>();
 
 defineOptions({ inheritAttrs: false });
+
+const emit = defineEmits<{
+  (e: 'change', value: string | number): void
+  (e: 'create'): void
+}>();
 </script>

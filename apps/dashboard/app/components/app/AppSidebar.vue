@@ -20,7 +20,7 @@
         </div>
 
         <div class="ml-2">
-          <OrgSwitcher :collection="organization" :multiple="false" />
+          <OrgSwitcher :collection="organization" :multiple="false" @change="(v:any)=>emit('organization-change', v)" @create="emit('new-organization')" />
         </div>
       </div>
 
@@ -67,6 +67,34 @@
           :icon="Cog6ToothIcon"
           @navigate="handleNavigate"
         />
+
+        <AppNavigationLink
+          to="/organizations"
+          label="Organizations"
+          :icon="UsersIcon"
+          @navigate="handleNavigate"
+        />
+
+        <!-- Admin -->
+        <div class="mt-4 text-xs uppercase tracking-wide text-text-secondary px-2">Admin</div>
+        <AppNavigationLink
+          to="/admin/quotas"
+          label="Quotas"
+          :icon="Cog6ToothIcon"
+          @navigate="handleNavigate"
+        />
+        <AppNavigationLink
+          to="/admin/roles"
+          label="Roles"
+          :icon="Cog6ToothIcon"
+          @navigate="handleNavigate"
+        />
+        <AppNavigationLink
+          to="/admin/bindings"
+          label="Bindings"
+          :icon="Cog6ToothIcon"
+          @navigate="handleNavigate"
+        />
       </nav>
     </div>
 
@@ -87,13 +115,15 @@ import {
   CircleStackIcon,
   CreditCardIcon,
   Cog6ToothIcon,
+  UsersIcon,
 } from "@heroicons/vue/24/outline";
 import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
-import { createListCollection, useListCollection } from "@ark-ui/vue";
+import { createListCollection } from "@ark-ui/vue";
+import { computed } from 'vue';
 
 interface Organization {
   id: string;
-  name: string;
+  name?: string | null;
 }
 
 interface Props {
@@ -105,12 +135,14 @@ const props = withDefaults(defineProps<Props>(), {
   organizationOptions: () => [],
 });
 
-const organization = createListCollection({
-  items: props.organizationOptions,
-});
+// Recompute the Ark collection whenever options change to ensure OrgSwitcher updates
+const organization = computed(() =>
+  createListCollection({ items: props.organizationOptions })
+);
 const emit = defineEmits<{
   navigate: [];
   "organization-change": [organizationId: string | string[] | undefined];
+  "new-organization": [];
 }>();
 
 const handleNavigate = () => {

@@ -441,27 +441,27 @@
 </template>
 
 <script setup lang="ts">
-  import {
-    PlusIcon,
-    CreditCardIcon,
-    PencilIcon,
-    ArrowDownTrayIcon,
-  } from "@heroicons/vue/24/outline";
+import {
+  PlusIcon,
+  CreditCardIcon,
+  PencilIcon,
+  ArrowDownTrayIcon,
+} from "@heroicons/vue/24/outline";
 
-  // Page meta
-  definePageMeta({
-    layout: false,
-  });
+// Page meta
+definePageMeta({
+  layout: false,
+});
 
-  // SEO
-  useHead({
-    title: "Billing & Usage - Obiente Cloud",
-    meta: [
-      {
-        name: "description",
-        content:
-          "Monitor your usage, manage payment methods, and view billing history for your Obiente Cloud services.",
-      },
-    ],
-  });
+// SEO
+useHead({
+  title: "Billing & Usage - Obiente Cloud",
+  meta: [
+    {
+      name: "description",
+      content:
+        "Monitor your usage, manage payment methods, and view billing history for your Obiente Cloud services.",
+    },
+  ],
+});
 </script>

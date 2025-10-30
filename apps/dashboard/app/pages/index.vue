@@ -558,53 +558,53 @@
 </template>
 
 <script setup lang="ts">
-  import { computed } from "vue";
-  import { useWindowScroll } from "@vueuse/core";
-  import {
-    RocketLaunchIcon,
-    PlayIcon,
-    ServerIcon,
-    CircleStackIcon,
-    ChartBarIcon,
-    ShieldCheckIcon,
-    CheckIcon,
-    ChatBubbleLeftRightIcon,
-  } from "@heroicons/vue/24/outline";
+import { computed } from "vue";
+import { useWindowScroll } from "@vueuse/core";
+import {
+  RocketLaunchIcon,
+  PlayIcon,
+  ServerIcon,
+  CircleStackIcon,
+  ChartBarIcon,
+  ShieldCheckIcon,
+  CheckIcon,
+  ChatBubbleLeftRightIcon,
+} from "@heroicons/vue/24/outline";
 
-  // Page meta - no auth required for homepage
-  definePageMeta({
-    layout: false, // Use custom layout for homepage
-  });
+// Page meta - no auth required for homepage
+definePageMeta({
+  layout: false, // Use custom layout for homepage
+});
 
-  // Scroll state for header effect using VueUse
-  const { y: scrollY } = useWindowScroll();
-  const isScrolled = computed(() => scrollY.value > 10);
+// Scroll state for header effect using VueUse
+const { y: scrollY } = useWindowScroll();
+const isScrolled = computed(() => scrollY.value > 10);
 
-  // SEO meta
-  useHead({
-    title: "Obiente Cloud - Web Apps, Game Servers & VPS Hosting",
-    meta: [
-      {
-        name: "description",
-        content:
-          "Deploy web apps, host game servers, and manage VPS infrastructure with Obiente Cloud. Like Vercel, but for everything.",
-      },
-      {
-        name: "keywords",
-        content:
-          "web hosting, game hosting, minecraft hosting, vps, cloud platform, deployment, vercel alternative",
-      },
-      {
-        property: "og:title",
-        content: "Obiente Cloud - Web Apps, Game Servers & VPS Hosting",
-      },
-      {
-        property: "og:description",
-        content:
-          "Deploy web apps, host game servers, and manage VPS infrastructure with Obiente Cloud. Like Vercel, but for everything.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  });
+// SEO meta
+useHead({
+  title: "Obiente Cloud - Web Apps, Game Servers & VPS Hosting",
+  meta: [
+    {
+      name: "description",
+      content:
+        "Deploy web apps, host game servers, and manage VPS infrastructure with Obiente Cloud. Like Vercel, but for everything.",
+    },
+    {
+      name: "keywords",
+      content:
+        "web hosting, game hosting, minecraft hosting, vps, cloud platform, deployment, vercel alternative",
+    },
+    {
+      property: "og:title",
+      content: "Obiente Cloud - Web Apps, Game Servers & VPS Hosting",
+    },
+    {
+      property: "og:description",
+      content:
+        "Deploy web apps, host game servers, and manage VPS infrastructure with Obiente Cloud. Like Vercel, but for everything.",
+    },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary_large_image" },
+  ],
+});
 </script>

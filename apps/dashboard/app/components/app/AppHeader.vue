@@ -1,7 +1,5 @@
 <template>
-  <header
-    class="bg-surface-base outline-border-muted px-6 py-4"
-  >
+  <header class="bg-surface-base outline-border-muted px-6 py-4">
     <div class="flex items-center justify-between">
       <!-- Page title -->
       <div>
@@ -49,25 +47,25 @@
 </template>
 
 <script setup lang="ts">
-  import { BellIcon } from "@heroicons/vue/24/outline";
-  import OuiText from "../oui/Text.vue";
+import { BellIcon } from "@heroicons/vue/24/outline";
+import OuiText from "../oui/Text.vue";
 
-  interface Props {
-    title?: string;
-    subtitle?: string;
-    notificationCount?: number;
-  }
+interface Props {
+  title?: string;
+  subtitle?: string;
+  notificationCount?: number;
+}
 
-  const props = withDefaults(defineProps<Props>(), {
-    title: "Dashboard",
-    notificationCount: 0,
-  });
+const props = withDefaults(defineProps<Props>(), {
+  title: "Dashboard",
+  notificationCount: 0,
+});
 
-  const emit = defineEmits<{
-    "notifications-click": [];
-  }>();
+const emit = defineEmits<{
+  "notifications-click": [];
+}>();
 
-  const handleNotificationsClick = () => {
-    emit("notifications-click");
-  };
+const handleNotificationsClick = () => {
+  emit("notifications-click");
+};
 </script>

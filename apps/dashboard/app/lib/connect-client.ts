@@ -13,6 +13,6 @@ import type { DescService } from "@bufbuild/protobuf";
 export function useConnectClient<T extends DescService>(service: T): Client<T> {
   const nuxtApp = useNuxtApp();
   const transport = nuxtApp.$connect;
-  
+
   return createClient(service, transport);
 }

@@ -2,8 +2,8 @@ import { createAuthInterceptor, createWebTransport } from "~/lib/transport";
 
 // Client-side plugin
 export default defineNuxtPlugin({
-  name: 'connect-transport-client',
-  enforce: 'pre', // Run early
+  name: "connect-transport-client",
+  enforce: "pre", // Run early
   setup(nuxtApp) {
     const config = useRuntimeConfig();
 
@@ -20,7 +20,10 @@ export default defineNuxtPlugin({
     };
 
     const authInterceptor = createAuthInterceptor(getToken);
-    const transport = createWebTransport(config.public.apiHost, authInterceptor);
+    const transport = createWebTransport(
+      config.public.apiHost,
+      authInterceptor
+    );
 
     return {
       provide: {
@@ -29,4 +32,3 @@ export default defineNuxtPlugin({
     };
   },
 });
-

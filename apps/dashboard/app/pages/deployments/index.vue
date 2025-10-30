@@ -14,7 +14,7 @@
             </OuiBox>
             <OuiText as="h1" size="3xl" weight="bold"> Deployments </OuiText>
           </OuiFlex>
-          <OuiText color="secondary" size="base">
+          <OuiText color="secondary" size="md">
             Manage and monitor your web application deployments with real-time
             insights.
           </OuiText>
@@ -271,7 +271,7 @@
                         {{ deployment.buildTime }}
                         <OuiText
                           as="span"
-                          size="base"
+                          size="md"
                           color="secondary"
                           weight="semibold"
                         >
@@ -737,8 +737,7 @@
         listError.value = error as Error;
         return [];
       }
-    },
-    { server: true }
+    }
   );
   const cleanRepositoryName = (url: string) => {
     if (!url) return "";

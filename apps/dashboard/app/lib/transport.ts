@@ -13,13 +13,13 @@ export function createAuthInterceptor(
     if (getToken) {
       try {
         const token = await Promise.resolve(getToken());
-        if (token && typeof token === 'string' && token.trim() !== '') {
+        if (token && typeof token === "string" && token.trim() !== "") {
           req.header.append("Authorization", `Bearer ${token}`);
         } else {
-          console.debug('No valid token available for request');
+          console.debug("No valid token available for request");
         }
       } catch (error) {
-        console.error('Error getting auth token:', error);
+        console.error("Error getting auth token:", error);
         // Continue without token
       }
     }

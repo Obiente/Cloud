@@ -28,8 +28,8 @@
             <OuiText size="sm">Small text for secondary information</OuiText>
           </div>
           <div class="flex items-center gap-4">
-            <OuiText size="base" color="muted" class="w-12">base</OuiText>
-            <OuiText size="base"
+            <OuiText size="md" color="muted" class="w-12">md</OuiText>
+            <OuiText size="md"
               >Base text for body content and paragraphs</OuiText
             >
           </div>

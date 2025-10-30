@@ -17,12 +17,14 @@ export function useDeploymentActions(organizationId: string = "default") {
     newStatus: DeploymentStatus
   ) => {
     if (!deployments) return null;
-    
+
     // Handle both single deployment and array of deployments
     const deployment = Array.isArray(deployments)
       ? deployments.find((d) => d.id === deploymentId)
-      : (deployments as Deployment).id === deploymentId ? (deployments as Deployment) : null;
-      
+      : (deployments as Deployment).id === deploymentId
+      ? (deployments as Deployment)
+      : null;
+
     if (deployment) {
       deployment.status = newStatus;
       return deployment;
@@ -60,7 +62,7 @@ export function useDeploymentActions(organizationId: string = "default") {
           deployment.status = DeploymentStatus.RUNNING;
         }
       }, 2000);
-      
+
       return res.deployment;
     } catch (error) {
       console.error("Failed to start deployment:", error);

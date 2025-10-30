@@ -5,8 +5,8 @@ import { createAuthInterceptor } from "~/lib/transport";
 
 // Server-side plugin for SSR
 export default defineNuxtPlugin({
-  name: 'connect-transport-server',
-  enforce: 'pre', // Run early
+  name: "connect-transport-server",
+  enforce: "pre", // Run early
   setup(nuxtApp) {
     const config = useRuntimeConfig();
 

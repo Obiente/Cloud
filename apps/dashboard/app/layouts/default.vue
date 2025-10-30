@@ -27,12 +27,13 @@
           :current-organization="currentOrganization"
           @navigate="closeSidebar"
           @organization-change="switchOrganization"
+          @new-organization="$router.push('/organizations')"
         />
 
         <OuiButton
           variant="ghost"
           size="sm"
-          class="absolute right-3 top-3 z-50 !p-2 text-text-secondary hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
+          class="absolute right-3 top-3 z-50 p-2! text-text-secondary hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
           @click="closeSidebar"
           aria-label="Close navigation"
         >
@@ -48,7 +49,7 @@
       <!-- Unified Layout -->
       <div class="flex w-full">
         <!-- Sidebar for Desktop -->
-        <div class="hidden lg:block lg:w-64 lg:flex-shrink-0">
+        <div class="hidden lg:block lg:w-64 lg:shrink-0">
           <div class="sticky top-0 h-screen overflow-y-auto">
             <div
               class="relative w-full h-full bg-surface-base overflow-visible"
@@ -59,6 +60,7 @@
                 :current-organization="currentOrganization"
                 @navigate="closeSidebar"
                 @organization-change="switchOrganization"
+                @new-organization="$router.push('/organizations')"
               />
             </div>
           </div>
@@ -80,7 +82,7 @@
                   <OuiButton
                     variant="ghost"
                     size="sm"
-                    class="lg:hidden !p-2 text-text-secondary hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
+                    class="lg:hidden p-2! text-text-secondary hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
                     @click="toggleSidebar"
                     :aria-expanded="isSidebarOpen"
                     :aria-controls="mobileSidebarId"
@@ -95,7 +97,7 @@
                 </template>
               </AppHeader>
               <!-- Two-color inside-out notch at header bottom-left -->
-               <!-- TODO: make this use a mask-image to create the notch -->
+              <!-- TODO: make this use a mask-image to create the notch -->
               <div class="pointer-events-none relative left-0 w-14 h-14 -z-20">
                 <!-- small top-left cap that matches sidebar/header color -->
                 <div class="absolute inset-0 bg-surface-base"></div>
@@ -151,123 +153,127 @@
 </template>
 
 <script setup lang="ts">
-  import { onBeforeUnmount, onMounted, computed, ref } from "vue";
-  import { Bars3Icon, XMarkIcon } from "@heroicons/vue/24/outline";
+import { onBeforeUnmount, onMounted, computed, ref } from "vue";
+import { Bars3Icon, XMarkIcon } from "@heroicons/vue/24/outline";
 
-  // Pinia user store
-  const user = useAuth();
-  // Notifications state
-  const isNotificationsOpen = ref(false);
-  const notifications = ref<
-    Array<{
-      id: string;
-      title: string;
-      message: string;
-      timestamp: Date;
-      read: boolean;
-    }>
-  >([
-    {
-      id: "1",
-      title: "Deployment complete",
-      message: "Your app is live at app.obiente.cloud",
-      timestamp: new Date(),
-      read: false,
-    },
-    {
-      id: "2",
-      title: "New member joined",
-      message: "Alex added to Acme Corp",
-      timestamp: new Date(Date.now() - 3600_000),
-      read: true,
-    },
-    {
-      id: "3",
-      title: "Build started",
-      message: "Re-deploy triggered for dashboard",
-      timestamp: new Date(Date.now() - 600_000),
-      read: false,
-    },
-  ]);
-  const unreadCount = computed(
-    () => notifications.value.filter((n) => !n.read).length
-  );
+// Pinia user store
+const user = useAuth();
+// Notifications state
+const isNotificationsOpen = ref(false);
+const notifications = ref<
+  Array<{
+    id: string;
+    title: string;
+    message: string;
+    timestamp: Date;
+    read: boolean;
+  }>
+>([
+  {
+    id: "1",
+    title: "Deployment complete",
+    message: "Your app is live at app.obiente.cloud",
+    timestamp: new Date(),
+    read: false,
+  },
+  {
+    id: "2",
+    title: "New member joined",
+    message: "Alex added to Acme Corp",
+    timestamp: new Date(Date.now() - 3600_000),
+    read: true,
+  },
+  {
+    id: "3",
+    title: "Build started",
+    message: "Re-deploy triggered for dashboard",
+    timestamp: new Date(Date.now() - 600_000),
+    read: false,
+  },
+]);
+const unreadCount = computed(
+  () => notifications.value.filter((n) => !n.read).length
+);
 
-  const isSidebarOpen = ref(false);
-  const mobileSidebarId = "mobile-primary-navigation";
+const isSidebarOpen = ref(false);
+const mobileSidebarId = "mobile-primary-navigation";
 
-  const closeSidebar = () => {
-    isSidebarOpen.value = false;
-  };
+const closeSidebar = () => {
+  isSidebarOpen.value = false;
+};
 
-  const toggleSidebar = () => {
-    isSidebarOpen.value = !isSidebarOpen.value;
-  };
+const toggleSidebar = () => {
+  isSidebarOpen.value = !isSidebarOpen.value;
+};
 
-  const handleKeydown = (event: KeyboardEvent) => {
-    if (event.key === "Escape") {
-      closeSidebar();
-    }
-  };
+const handleKeydown = (event: KeyboardEvent) => {
+  if (event.key === "Escape") {
+    closeSidebar();
+  }
+};
 
-  const handleBreakpointChange = () => {
+const handleBreakpointChange = () => {
     if (
       import.meta.client &&
       window.matchMedia("(min-width: 1024px)").matches
     ) {
-      isSidebarOpen.value = false;
-    }
-  };
-
-  if (import.meta.client) {
-    onMounted(() => {
-      handleBreakpointChange();
-      window.addEventListener("keydown", handleKeydown);
-      window.addEventListener("resize", handleBreakpointChange);
-    });
-
-    onBeforeUnmount(() => {
-      window.removeEventListener("keydown", handleKeydown);
-      window.removeEventListener("resize", handleBreakpointChange);
-    });
+    isSidebarOpen.value = false;
   }
+};
 
-  // Organization switcher data and methods
-  const organizationOptions = computed(() => {
-    // TODO: Replace with actual organizations from API
-    return [
-      {
-        label: "Personal",
-        value: "1",
-      },
-      { label: "Acme Corp", value: "2" },
-      { label: "Development Team", value: "3" },
-    ];
+if (import.meta.client) {
+  onMounted(() => {
+    handleBreakpointChange();
+    window.addEventListener("keydown", handleKeydown);
+    window.addEventListener("resize", handleBreakpointChange);
   });
 
-  const currentOrganization = computed(() => {
-    // TODO: Replace with actual current organization from user store/API
-    return organizationOptions.value[0]
-      ? {
-          id: organizationOptions.value[0].value,
-          name: organizationOptions.value[0].label,
-        }
-      : null;
+  onBeforeUnmount(() => {
+    window.removeEventListener("keydown", handleKeydown);
+    window.removeEventListener("resize", handleBreakpointChange);
+  });
+}
+
+  // Organization switcher data and methods (Connect)
+  import { useConnectClient } from "~/lib/connect-client";
+  import { OrganizationService } from "@obiente/proto";
+  const orgClient = useConnectClient(OrganizationService);
+  const organizationOptions = computed(() =>
+    (user.organizations || []).map((o: any) => ({
+      label: o.name || o.slug || o.id,
+      value: o.id,
+    }))
+  );
+  const currentOrganization = computed(() => user.currentOrganization || null);
+  const selectedOrgId = computed({
+    get: () => user.currentOrganizationId || undefined,
+    set: (id: string | undefined) => {
+      if (id) {
+        user.switchOrganization(id);
+      }
+    },
   });
 
-  const switchOrganization = async (
-    organizationId: string | string[] | undefined
-  ) => {
-    // normalise
+  const { refresh: refreshOrganizations } = await useAsyncData(
+    "organizations",
+    async () => {
+      if (!user.isAuthenticated) return [];
+      const res = await orgClient.listOrganizations({});
+      user.setOrganizations(res.organizations || []);
+      return res.organizations || [];
+    },
+    {
+      watch: [() => user.isAuthenticated],
+    }
+  );
+
+const switchOrganization = async (
+  organizationId: string | string[] | undefined
+) => {
     const id = Array.isArray(organizationId)
       ? organizationId[0]
       : organizationId;
-    if (!id) {
-      console.warn("No organization id provided to switchOrganization");
-      return;
-    }
-
-    // TODO: Implement organization switching logic
-    console.log("Switching to organization:", id);
-  };
+    if (!id) return;
+    await user.switchOrganization(id);
+};
 </script>

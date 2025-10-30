@@ -80,83 +80,83 @@
 </template>
 
 <script setup lang="ts">
-  import { computed } from "vue";
-  import { Combobox, useListCollection } from "@ark-ui/vue/combobox";
-  import { Field } from "@ark-ui/vue/field";
-  import { useFilter } from "@ark-ui/vue/locale";
-  import {
-    ChevronDownIcon,
-    CheckIcon,
-    XMarkIcon,
-  } from "@heroicons/vue/24/outline";
+import { computed } from "vue";
+import { Combobox, useListCollection } from "@ark-ui/vue/combobox";
+import { Field } from "@ark-ui/vue/field";
+import { useFilter } from "@ark-ui/vue/locale";
+import {
+  ChevronDownIcon,
+  CheckIcon,
+  XMarkIcon,
+} from "@heroicons/vue/24/outline";
 
-  interface Option {
-    label: string;
-    value: string;
+interface Option {
+  label: string;
+  value: string;
+}
+
+interface Props {
+  modelValue?: string;
+  placeholder?: string;
+  label?: string;
+  options: (string | Option)[];
+  showClear?: boolean;
+  helperText?: string;
+  error?: string;
+  required?: boolean;
+  disabled?: boolean;
+  size?: "sm" | "md" | "lg";
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  showClear: true,
+  size: "md",
+  required: false,
+  disabled: false,
+});
+
+const emit = defineEmits<{
+  "update:modelValue": [value: string];
+}>();
+
+const filters = useFilter({ sensitivity: "base" });
+
+const { collection, filter } = useListCollection({
+  initialItems: props.options,
+  filter: filters.value.contains,
+});
+
+// Controlled value for Ark UI Combobox (expects an array)
+const comboboxValue = computed(() => {
+  if (!props.modelValue) return [] as (string | Option)[];
+  const match = props.options.find((opt) =>
+    typeof opt === "string"
+      ? opt === props.modelValue
+      : opt.value === props.modelValue
+  );
+  return match ? [match] : [];
+});
+
+const inputClasses = computed(() => [
+  "oui-input",
+  `oui-input-${props.size}`,
+  props.error ? "oui-input-error" : "oui-input-base",
+]);
+
+const handleInputChange = (details: Combobox.InputValueChangeDetails) => {
+  filter(details.inputValue);
+};
+
+const handleValueChange = (details: Combobox.ValueChangeDetails) => {
+  const value = details.value[0];
+  if (!value) {
+    emit("update:modelValue", "");
+    return;
   }
-
-  interface Props {
-    modelValue?: string;
-    placeholder?: string;
-    label?: string;
-    options: (string | Option)[];
-    showClear?: boolean;
-    helperText?: string;
-    error?: string;
-    required?: boolean;
-    disabled?: boolean;
-    size?: "sm" | "md" | "lg";
+  if (typeof value === "string") {
+    emit("update:modelValue", value);
+  } else if (typeof value === "object" && "value" in value) {
+    emit("update:modelValue", (value as Option).value);
   }
-
-  const props = withDefaults(defineProps<Props>(), {
-    showClear: true,
-    size: "md",
-    required: false,
-    disabled: false,
-  });
-
-  const emit = defineEmits<{
-    "update:modelValue": [value: string];
-  }>();
-
-  const filters = useFilter({ sensitivity: "base" });
-
-  const { collection, filter } = useListCollection({
-    initialItems: props.options,
-    filter: filters.value.contains,
-  });
-
-  // Controlled value for Ark UI Combobox (expects an array)
-  const comboboxValue = computed(() => {
-    if (!props.modelValue) return [] as (string | Option)[];
-    const match = props.options.find((opt) =>
-      typeof opt === "string"
-        ? opt === props.modelValue
-        : opt.value === props.modelValue
-    );
-    return match ? [match] : [];
-  });
-
-  const inputClasses = computed(() => [
-    "oui-input",
-    `oui-input-${props.size}`,
-    props.error ? "oui-input-error" : "oui-input-base",
-  ]);
-
-  const handleInputChange = (details: Combobox.InputValueChangeDetails) => {
-    filter(details.inputValue);
-  };
-
-  const handleValueChange = (details: Combobox.ValueChangeDetails) => {
-    const value = details.value[0];
-    if (!value) {
-      emit("update:modelValue", "");
-      return;
-    }
-    if (typeof value === "string") {
-      emit("update:modelValue", value);
-    } else if (typeof value === "object" && "value" in value) {
-      emit("update:modelValue", (value as Option).value);
-    }
-  };
+};
 </script>

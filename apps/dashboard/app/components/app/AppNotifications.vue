@@ -2,21 +2,24 @@
   <FloatingPanel.Root v-model:open="open" :draggable="false" :resizable="false">
     <Teleport to="body">
       <FloatingPanel.Positioner>
-        <FloatingPanel.Content
-          class="z-60"
-          :style="panelStyle"
-        >
+        <FloatingPanel.Content class="z-60" :style="panelStyle">
           <FloatingPanel.DragTrigger>
             <FloatingPanel.Header>
               <FloatingPanel.Title>
-                <OuiText as="h3" size="lg" weight="semibold">Notifications</OuiText>
+                <OuiText as="h3" size="lg" weight="semibold"
+                  >Notifications</OuiText
+                >
                 <template v-if="description">
-                  <OuiText as="p" size="xs" color="secondary">{{ description }}</OuiText>
+                  <OuiText as="p" size="xs" color="secondary">{{
+                    description
+                  }}</OuiText>
                 </template>
               </FloatingPanel.Title>
               <FloatingPanel.Control>
                 <FloatingPanel.CloseTrigger>
-                  <OuiButton variant="ghost" size="xs" @click="emit('close')">Close</OuiButton>
+                  <OuiButton variant="ghost" size="xs" @click="emit('close')"
+                    >Close</OuiButton
+                  >
                 </FloatingPanel.CloseTrigger>
               </FloatingPanel.Control>
             </FloatingPanel.Header>
@@ -59,12 +62,19 @@
                   <OuiCardBody>
                     <OuiFlex justify="between" align="start" gap="md">
                       <OuiStack gap="xs" class="min-w-0">
-                        <OuiText size="sm" weight="medium" color="primary" truncate>{{
-                          n.title
-                        }}</OuiText>
-                        <OuiText size="xs" color="secondary" class="break-words">{{
-                          n.message
-                        }}</OuiText>
+                        <OuiText
+                          size="sm"
+                          weight="medium"
+                          color="primary"
+                          truncate
+                          >{{ n.title }}</OuiText
+                        >
+                        <OuiText
+                          size="xs"
+                          color="secondary"
+                          class="break-words"
+                          >{{ n.message }}</OuiText
+                        >
                         <OuiText size="xs" color="secondary">{{
                           formatRelativeTime(n.timestamp)
                         }}</OuiText>
@@ -74,7 +84,7 @@
                           variant="ghost"
                           size="xs"
                           @click="toggleRead(n.id)"
-                          >{{ n.read ? 'Unread' : 'Read' }}</OuiButton
+                          >{{ n.read ? "Unread" : "Read" }}</OuiButton
                         >
                         <OuiButton
                           variant="ghost"
@@ -100,93 +110,93 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, watch, type CSSProperties } from "vue";
-  import { FloatingPanel } from "@ark-ui/vue/floating-panel";
+import { computed, watch, type CSSProperties } from "vue";
+import { FloatingPanel } from "@ark-ui/vue/floating-panel";
 
-  interface NotificationItem {
-    id: string;
-    title: string;
-    message: string;
-    timestamp: Date;
-    read?: boolean;
-  }
+interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: Date;
+  read?: boolean;
+}
 
-  const props = defineProps<{
-    modelValue: boolean;
-    items: NotificationItem[];
-    description?: string;
-  }>();
+const props = defineProps<{
+  modelValue: boolean;
+  items: NotificationItem[];
+  description?: string;
+}>();
 
-  const emit = defineEmits<{
-    "update:modelValue": [value: boolean];
-    close: [];
-    "update:items": [items: NotificationItem[]];
-  }>();
+const emit = defineEmits<{
+  "update:modelValue": [value: boolean];
+  close: [];
+  "update:items": [items: NotificationItem[]];
+}>();
 
-  const open = computed({
-    get: () => props.modelValue,
-    set: (v: boolean) => emit("update:modelValue", v),
-  });
+const open = computed({
+  get: () => props.modelValue,
+  set: (v: boolean) => emit("update:modelValue", v),
+});
 
-  // Position panel at top-right of the viewport with some padding
-  const panelStyle = computed<CSSProperties>(() => ({
-    position: 'fixed',
-    top: '80px',
-    right: '20px',
-    maxHeight: 'calc(100vh - 120px)',
-    overflow: 'auto',
-    borderRadius: '0.75rem',
-    background: 'var(--color-surface-overlay)',
-    boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
-    border: '1px solid var(--color-border-muted)'
-  }));
+// Position panel at top-right of the viewport with some padding
+const panelStyle = computed<CSSProperties>(() => ({
+  position: "fixed",
+  top: "80px",
+  right: "20px",
+  maxHeight: "calc(100vh - 120px)",
+  overflow: "auto",
+  borderRadius: "0.75rem",
+  background: "var(--color-surface-overlay)",
+  boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
+  border: "1px solid var(--color-border-muted)",
+}));
 
-  // Emit close event when panel closes to preserve existing API contract
-  watch(open, (val, oldVal) => {
-    if (!val && oldVal) emit('close')
-  });
+// Emit close event when panel closes to preserve existing API contract
+watch(open, (val, oldVal) => {
+  if (!val && oldVal) emit("close");
+});
 
-  const unreadCount = computed(() => props.items.filter((n) => !n.read).length);
+const unreadCount = computed(() => props.items.filter((n) => !n.read).length);
 
-  function markAllRead() {
-    emit(
-      "update:items",
-      props.items.map((n) => ({ ...n, read: true }))
-    );
-  }
+function markAllRead() {
+  emit(
+    "update:items",
+    props.items.map((n) => ({ ...n, read: true }))
+  );
+}
 
-  function clearAll() {
-    emit("update:items", []);
-  }
+function clearAll() {
+  emit("update:items", []);
+}
 
-  function toggleRead(id: string) {
-    emit(
-      "update:items",
-      props.items.map((n) => (n.id === id ? { ...n, read: !n.read } : n))
-    );
-  }
+function toggleRead(id: string) {
+  emit(
+    "update:items",
+    props.items.map((n) => (n.id === id ? { ...n, read: !n.read } : n))
+  );
+}
 
-  function remove(id: string) {
-    emit(
-      "update:items",
-      props.items.filter((n) => n.id !== id)
-    );
-  }
+function remove(id: string) {
+  emit(
+    "update:items",
+    props.items.filter((n) => n.id !== id)
+  );
+}
 
-  function formatRelativeTime(date: Date) {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHour = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHour / 24);
-    if (diffSec < 60) return "just now";
-    if (diffMin < 60) return `${diffMin}m ago`;
-    if (diffHour < 24) return `${diffHour}h ago`;
-    if (diffDay < 7) return `${diffDay}d ago`;
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-    }).format(date);
-  }
+function formatRelativeTime(date: Date) {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffSec < 60) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
 </script>

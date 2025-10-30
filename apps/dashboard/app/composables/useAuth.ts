@@ -1,5 +1,6 @@
 import { appendResponseHeader } from "h3";
-import type { User, Organization, UserSession } from "@obiente/types";
+import type { User, UserSession } from "@obiente/types";
+import { useOrganizationsStore } from "~/stores/organizations";
 
 export const useAuth = () => {
   const serverEvent = import.meta.server ? useRequestEvent() : null;
@@ -14,9 +15,13 @@ export const useAuth = () => {
   const tokenExpiry = useState<number | null>("token-expiry", () => null);
   const isRefreshing = useState<boolean>("is-refreshing", () => false);
   const user = computed(() => sessionState.value?.user || null);
-  const currentOrganization = ref<Organization | null>(null);
-  const isAuthenticated = computed(() => sessionState.value && user.value);
+  const isAuthenticated = computed(
+    () => Boolean(sessionState.value && user.value)
+  );
   const isLoading = ref(false);
+
+  const orgStore = useOrganizationsStore();
+  orgStore.hydrate();
 
   // Get current user session
   const fetch = async () => {
@@ -56,24 +61,8 @@ export const useAuth = () => {
       },
     });
     sessionState.value = null;
-    currentOrganization.value = null;
     authReadyState.value = false;
-  };
-
-  // Switch organization
-  const switchOrganization = async (organizationId: string) => {
-    try {
-      // TODO: Implement organization switching
-      // const response = await $fetch(`/api/organizations/${organizationId}/switch`, {
-      //   method: 'POST'
-      // });
-      // currentOrganization.value = response.organization;
-
-      console.log("Switching to organization:", organizationId);
-    } catch (error) {
-      console.error("Failed to switch organization:", error);
-      throw error;
-    }
+    orgStore.reset();
   };
 
   // Popup authentication support
@@ -111,12 +100,10 @@ export const useAuth = () => {
   const getAccessToken = async (
     forceRefresh = false
   ): Promise<string | null> => {
-    // If we're on the server, we can access the secure token directly
     if (import.meta.server) {
       return sessionState.value?.secure?.access_token || null;
     }
 
-    // On client side, we need to use our cached token or fetch it
     if (
       !accessToken.value ||
       forceRefresh ||
@@ -131,42 +118,38 @@ export const useAuth = () => {
   // Refresh the access token
   const refreshAccessToken = async (force = false): Promise<void> => {
     try {
-      // Prevent multiple simultaneous refresh attempts
       if (isRefreshing.value && !force) {
         return;
       }
 
       isRefreshing.value = true;
 
-      // If token is not expired and force is false, just get the current token
       if (!force && tokenExpiry.value && Date.now() < tokenExpiry.value) {
-        const response = await $fetch<{ accessToken: string; expiresIn?: number }>("/auth/token");
-        if (response.accessToken) {
-          accessToken.value = response.accessToken;
+        return;
+      }
 
-          // Update expiry time from expiresIn field
-          if (response.expiresIn) {
-            // Convert to milliseconds and subtract 30 seconds buffer
-            tokenExpiry.value = Date.now() + response.expiresIn * 1000 - 30000;
-          }
-        }
-      } else {
-        // Token is expired or force refresh, use refresh endpoint
+      try {
         const response = await $fetch<{
           accessToken: string;
           expiresIn?: number;
-        }>("/auth/refresh", {
-          method: "POST",
-        });
-
-        if (response.accessToken) {
+        }>("/auth/token");
+        if (response?.accessToken) {
           accessToken.value = response.accessToken;
-
-          // Calculate expiry time from expiresIn field
           if (response.expiresIn) {
-            // Convert to milliseconds and subtract 30 seconds buffer
             tokenExpiry.value = Date.now() + response.expiresIn * 1000 - 30000;
           }
+          return;
+        }
+      } catch {}
+
+        const response = await $fetch<{
+          accessToken: string;
+          expiresIn?: number;
+      }>("/auth/refresh", { method: "POST" });
+        if (response.accessToken) {
+          accessToken.value = response.accessToken;
+          if (response.expiresIn) {
+            tokenExpiry.value = Date.now() + response.expiresIn * 1000 - 30000;
         }
       }
     } catch (error) {
@@ -174,12 +157,11 @@ export const useAuth = () => {
       accessToken.value = null;
       tokenExpiry.value = null;
 
-      // If authentication failed, log out
       if (
         error &&
         typeof error === "object" &&
         "statusCode" in error &&
-        error.statusCode === 401
+        (error as any).statusCode === 401
       ) {
         logout();
       }
@@ -188,25 +170,21 @@ export const useAuth = () => {
     }
   };
 
-  // Update token when session changes
   watch(
     () => sessionState.value,
     async (newSession) => {
       if (newSession) {
-        // When session changes, fetch the token from the token endpoint
         try {
-          // Only on client side
           if (import.meta.client) {
-            const response = await $fetch<{ accessToken: string; expiresIn?: number }>(
-              "/auth/token"
-            );
+            const response = await $fetch<{
+              accessToken: string;
+              expiresIn?: number;
+            }>("/auth/token");
             if (response.accessToken) {
               accessToken.value = response.accessToken;
-
-              // Update expiry time from expiresIn field
               if (response.expiresIn) {
-                // Convert to milliseconds and subtract 30 seconds buffer
-                tokenExpiry.value = Date.now() + response.expiresIn * 1000 - 30000;
+                tokenExpiry.value =
+                  Date.now() + response.expiresIn * 1000 - 30000;
               }
             }
           }
@@ -221,11 +199,9 @@ export const useAuth = () => {
     { immediate: true }
   );
 
-  // Initialize auth state
   onMounted(() => {
     fetch();
 
-    // Set up token refresh before expiration
     if (import.meta.client) {
       const tokenCheckInterval = setInterval(() => {
         if (tokenExpiry.value && Date.now() >= tokenExpiry.value) {
@@ -233,7 +209,6 @@ export const useAuth = () => {
         }
       }, 60 * 1000);
 
-      // Clean up interval on component unmount
       onUnmounted(() => {
         clearInterval(tokenCheckInterval);
       });
@@ -241,22 +216,23 @@ export const useAuth = () => {
   });
 
   return reactive({
-    // State
     user: user,
-    currentOrganization: readonly(currentOrganization),
+    currentOrganization: computed(() => orgStore.currentOrg),
+    organizations: computed(() => orgStore.orgs),
+    currentOrganizationId: computed(() => orgStore.currentOrgId),
     session: readonly(sessionState),
     ready: computed(() => authReadyState.value),
     isAuthenticated,
     isLoading: readonly(isLoading),
 
-    // Methods
     fetch,
     logout,
-    switchOrganization,
+    switchOrganization: orgStore.switchOrganization,
+    setOrganizations: orgStore.setOrganizations,
+    notifyOrganizationsUpdated: orgStore.notifyOrganizationsUpdated,
     getCurrentUser: fetch,
     popupLogin,
 
-    // Token management
     getAccessToken,
     refreshAccessToken,
   });

@@ -397,196 +397,197 @@
 </template>
 
 <script setup lang="ts">
-  import {
-    ArrowPathIcon,
-    CreditCardIcon,
-    RocketLaunchIcon,
-    ServerIcon,
-    CircleStackIcon,
-  } from "@heroicons/vue/24/outline";
+import {
+  ArrowPathIcon,
+  CreditCardIcon,
+  RocketLaunchIcon,
+  ServerIcon,
+  CircleStackIcon,
+} from "@heroicons/vue/24/outline";
 
-  // Page meta
-  definePageMeta({
-    layout: "default",
-    middleware: "auth",
-  });
+// Page meta
+definePageMeta({
+  layout: "default",
+  middleware: "auth",
+});
 
-  // Dashboard stats with loading simulation
-  interface DashboardData {
-    stats: {
-      deployments: number;
-      vpsInstances: number;
-      databases: number;
-      monthlySpend: number;
-      statuses: Array<{ status: string; count: number }>;
-    };
-    recentDeployments: Array<{
+// Dashboard stats with loading simulation
+interface DashboardData {
+  stats: {
+    deployments: number;
+    vpsInstances: number;
+    databases: number;
+    monthlySpend: number;
+    statuses: Array<{ status: string; count: number }>;
+  };
+  recentDeployments: Array<{
+    id: string;
+    name: string;
+    domain: string;
+    status: string;
+    updatedAt: string;
+    environment: string;
+  }>;
+  activity: Array<{
+    id: string;
+    message: string;
+    timestamp: string;
+  }>;
+}
+
+const {
+  data,
+  status,
+  refresh: refreshDashboard,
+} = await useAsyncData<DashboardData>("dashboard", () =>
+  $fetch("/api/cloud", { headers: { accept: "application/json" } })
+);
+const isLoading = computed(
+  () => status.value === "pending" || status.value === "idle"
+);
+const stats = computed(
+  () =>
+    data.value?.stats ?? {
+      deployments: 0,
+      vpsInstances: 0,
+      databases: 0,
+      monthlySpend: 0,
+    }
+);
+const statusBreakdown = computed(
+  () =>
+    (data.value?.stats?.statuses ?? []) as Array<{
+      status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR";
+      count: number;
+    }>
+);
+
+const formatNumber = (value: number) =>
+  new Intl.NumberFormat("en-US").format(value);
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
+
+const kpiCards = computed(() => [
+  {
+    label: "Deployments",
+    value: formatNumber(stats.value.deployments),
+    icon: RocketLaunchIcon,
+    iconBg: "bg-primary/10",
+    iconColor: "text-accent-primary",
+    href: "/deployments",
+  },
+  {
+    label: "VPS Instances",
+    value: formatNumber(stats.value.vpsInstances),
+    icon: ServerIcon,
+    iconBg: "bg-success/10",
+    iconColor: "text-success",
+    href: "/vps",
+  },
+  {
+    label: "Databases",
+    value: formatNumber(stats.value.databases),
+    icon: CircleStackIcon,
+    iconBg: "bg-accent-secondary/10",
+    iconColor: "text-accent-secondary",
+    href: "/databases",
+  },
+  {
+    label: "This Month",
+    value: formatCurrency(stats.value.monthlySpend),
+    icon: CreditCardIcon,
+    iconBg: "bg-warning/10",
+    iconColor: "text-warning",
+    href: "/billing",
+  },
+]);
+
+// Recent deployments with loading state
+const recentDeployments = computed(
+  () =>
+    (data.value?.recentDeployments ?? []) as Array<{
       id: string;
       name: string;
       domain: string;
-      status: string;
+      status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR";
       updatedAt: string;
       environment: string;
-    }>;
-    activity: Array<{
+    }>
+);
+
+// Activity feed with loading state
+const activityFeed = computed(
+  () =>
+    (data.value?.activity ?? []) as Array<{
       id: string;
       message: string;
       timestamp: string;
-    }>;
-  }
+    }>
+);
 
-  const {
-    data,
-    status,
-    refresh: refreshDashboard,
-  } = await useAsyncData<DashboardData>(
-    "dashboard",
-    () => $fetch("/api/cloud", { headers: { accept: "application/json" } }),
-  );
-  const isLoading = computed(() => status.value === "pending" || status.value === "idle");
-  const stats = computed(
-    () =>
-      data.value?.stats ?? {
-        deployments: 0,
-        vpsInstances: 0,
-        databases: 0,
-        monthlySpend: 0,
-      }
-  );
-  const statusBreakdown = computed(
-    () =>
-      (data.value?.stats?.statuses ?? []) as Array<{
-        status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR";
-        count: number;
-      }>
-  );
+// Health metrics
+const runningCount = computed(
+  () => statusBreakdown.value.find((s) => s.status === "RUNNING")?.count ?? 0
+);
+const buildingCount = computed(
+  () => statusBreakdown.value.find((s) => s.status === "BUILDING")?.count ?? 0
+);
+const stoppedCount = computed(
+  () => statusBreakdown.value.find((s) => s.status === "STOPPED")?.count ?? 0
+);
+const errorCount = computed(
+  () => statusBreakdown.value.find((s) => s.status === "ERROR")?.count ?? 0
+);
+const allHealthy = computed(() => errorCount.value === 0);
+const attentionDeployments = computed(() =>
+  recentDeployments.value
+    .filter((d) => ["ERROR", "STOPPED", "BUILDING"].includes(d.status))
+    .slice(0, 4)
+);
 
-  const formatNumber = (value: number) =>
-    new Intl.NumberFormat("en-US").format(value);
-
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount);
-
-  const kpiCards = computed(() => [
-    {
-      label: "Deployments",
-      value: formatNumber(stats.value.deployments),
-      icon: RocketLaunchIcon,
-      iconBg: "bg-primary/10",
-      iconColor: "text-accent-primary",
-      href: "/deployments",
-    },
-    {
-      label: "VPS Instances",
-      value: formatNumber(stats.value.vpsInstances),
-      icon: ServerIcon,
-      iconBg: "bg-success/10",
-      iconColor: "text-success",
-      href: "/vps",
-    },
-    {
-      label: "Databases",
-      value: formatNumber(stats.value.databases),
-      icon: CircleStackIcon,
-      iconBg: "bg-accent-secondary/10",
-      iconColor: "text-accent-secondary",
-      href: "/databases",
-    },
-    {
-      label: "This Month",
-      value: formatCurrency(stats.value.monthlySpend),
-      icon: CreditCardIcon,
-      iconBg: "bg-warning/10",
-      iconColor: "text-warning",
-      href: "/billing",
-    },
-  ]);
-
-  // Recent deployments with loading state
-  const recentDeployments = computed(
-    () =>
-      (data.value?.recentDeployments ?? []) as Array<{
-        id: string;
-        name: string;
-        domain: string;
-        status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR";
-        updatedAt: string;
-        environment: string;
-      }>
-  );
-
-  // Activity feed with loading state
-  const activityFeed = computed(
-    () =>
-      (data.value?.activity ?? []) as Array<{
-        id: string;
-        message: string;
-        timestamp: string;
-      }>
-  );
-
-  // Health metrics
-  const runningCount = computed(
-    () => statusBreakdown.value.find((s) => s.status === "RUNNING")?.count ?? 0
-  );
-  const buildingCount = computed(
-    () => statusBreakdown.value.find((s) => s.status === "BUILDING")?.count ?? 0
-  );
-  const stoppedCount = computed(
-    () => statusBreakdown.value.find((s) => s.status === "STOPPED")?.count ?? 0
-  );
-  const errorCount = computed(
-    () => statusBreakdown.value.find((s) => s.status === "ERROR")?.count ?? 0
-  );
-  const allHealthy = computed(() => errorCount.value === 0);
-  const attentionDeployments = computed(() =>
-    recentDeployments.value
-      .filter((d) => ["ERROR", "STOPPED", "BUILDING"].includes(d.status))
-      .slice(0, 4)
-  );
-
-  // Auto-refresh using useAsyncData refresh
-  const refreshInterval = ref<ReturnType<typeof setInterval> | null>(null);
-  onMounted(() => {
-    refreshInterval.value = setInterval(() => {
-      refreshDashboard();
-    }, 30000);
-  });
-  onUnmounted(() => {
-    if (refreshInterval.value) clearInterval(refreshInterval.value);
-  });
-
-  const formatRelative = (dateISO: string | Date) => {
-    const date = typeof dateISO === "string" ? new Date(dateISO) : dateISO;
-    const diffMs = date.getTime() - Date.now();
-    const minutes = Math.round(diffMs / (1000 * 60));
-    // Prefer minutes for recent events; could expand to hours/days if needed
-    return new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(
-      minutes,
-      "minute"
-    );
-  };
-
-  const statusVariant = (
-    status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR"
-  ) => {
-    switch (status) {
-      case "RUNNING":
-        return "success";
-      case "BUILDING":
-        return "warning";
-      case "ERROR":
-        return "danger";
-      default:
-        return "secondary";
-    }
-  };
-
-  // Retry function for error states
-  const retryLoad = () => {
+// Auto-refresh using useAsyncData refresh
+const refreshInterval = ref<ReturnType<typeof setInterval> | null>(null);
+onMounted(() => {
+  refreshInterval.value = setInterval(() => {
     refreshDashboard();
-  };
+  }, 30000);
+});
+onUnmounted(() => {
+  if (refreshInterval.value) clearInterval(refreshInterval.value);
+});
+
+const formatRelative = (dateISO: string | Date) => {
+  const date = typeof dateISO === "string" ? new Date(dateISO) : dateISO;
+  const diffMs = date.getTime() - Date.now();
+  const minutes = Math.round(diffMs / (1000 * 60));
+  // Prefer minutes for recent events; could expand to hours/days if needed
+  return new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(
+    minutes,
+    "minute"
+  );
+};
+
+const statusVariant = (
+  status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR"
+) => {
+  switch (status) {
+    case "RUNNING":
+      return "success";
+    case "BUILDING":
+      return "warning";
+    case "ERROR":
+      return "danger";
+    default:
+      return "secondary";
+  }
+};
+
+// Retry function for error states
+const retryLoad = () => {
+  refreshDashboard();
+};
 </script>
