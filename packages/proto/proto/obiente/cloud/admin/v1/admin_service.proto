@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package obiente.cloud.admin.v1;
+
+option go_package = "api/gen/proto/obiente/cloud/admin/v1;adminv1";
+
+message UpsertOrgQuotaRequest {
+  string organization_id = 1;
+  int32 deployments_max_override = 2; // 0 = unlimited
+  int32 cpu_cores_override = 3;       // 0 = unlimited
+  int64 memory_bytes_override = 4;    // 0 = unlimited
+  int64 bandwidth_bytes_month_override = 5; // 0 = unlimited
+  int64 storage_bytes_override = 6;   // 0 = unlimited
+}
+
+message UpsertOrgQuotaResponse { bool success = 1; }
+
+service AdminService {
+  rpc UpsertOrgQuota(UpsertOrgQuotaRequest) returns (UpsertOrgQuotaResponse);
+
+  // Permissions catalog for UI (comes from server definitions)
+  rpc ListPermissions(ListPermissionsRequest) returns (ListPermissionsResponse);
+
+  // Roles CRUD
+  rpc ListRoles(ListRolesRequest) returns (ListRolesResponse);
+  rpc CreateRole(CreateRoleRequest) returns (CreateRoleResponse);
+  rpc UpdateRole(UpdateRoleRequest) returns (UpdateRoleResponse);
+  rpc DeleteRole(DeleteRoleRequest) returns (DeleteRoleResponse);
+
+  // Role bindings CRUD (assign roles to users, scoped to resources)
+  rpc ListRoleBindings(ListRoleBindingsRequest) returns (ListRoleBindingsResponse);
+  rpc CreateRoleBinding(CreateRoleBindingRequest) returns (CreateRoleBindingResponse);
+  rpc DeleteRoleBinding(DeleteRoleBindingRequest) returns (DeleteRoleBindingResponse);
+}
+
+message ListPermissionsRequest {}
+message PermissionDefinition {
+  string id = 1;              // e.g., deployments.read
+  string description = 2;     // human friendly
+  string resource_type = 3;   // deployment | environment | admin
+}
+message ListPermissionsResponse { repeated PermissionDefinition permissions = 1; }
+
+message ListRolesRequest { string organization_id = 1; }
+message Role { string id = 1; string name = 2; string permissions_json = 3; }
+message ListRolesResponse { repeated Role roles = 1; }
+message CreateRoleRequest { string organization_id = 1; string name = 2; string permissions_json = 3; }
+message CreateRoleResponse { Role role = 1; }
+message UpdateRoleRequest { string id = 1; string organization_id = 2; string name = 3; string permissions_json = 4; }
+message UpdateRoleResponse { Role role = 1; }
+message DeleteRoleRequest { string id = 1; }
+message DeleteRoleResponse { bool success = 1; }
+
+message ListRoleBindingsRequest { string organization_id = 1; }
+message RoleBinding {
+  string id = 1;
+  string organization_id = 2;
+  string user_id = 3;
+  string role_id = 4;
+  string resource_type = 5;
+  string resource_id = 6;
+  string resource_selector = 7; // JSON
+}
+message ListRoleBindingsResponse { repeated RoleBinding bindings = 1; }
+message CreateRoleBindingRequest {
+  string organization_id = 1;
+  string user_id = 2;
+  string role_id = 3;
+  string resource_type = 4;
+  string resource_id = 5;
+  string resource_selector = 6;
+}
+message CreateRoleBindingResponse { RoleBinding binding = 1; }
+message DeleteRoleBindingRequest { string id = 1; }
+message DeleteRoleBindingResponse { bool success = 1; }

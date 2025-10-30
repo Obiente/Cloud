@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/auth/v1/auth_service.proto.
  */
 export const file_obiente_cloud_auth_v1_auth_service: GenFile = /*@__PURE__*/
-  fileDesc("CihvYmllbnRlL2Nsb3VkL2F1dGgvdjEvYXV0aF9zZXJ2aWNlLnByb3RvEhVvYmllbnRlLmNsb3VkLmF1dGgudjEiFwoVR2V0Q3VycmVudFVzZXJSZXF1ZXN0IkMKFkdldEN1cnJlbnRVc2VyUmVzcG9uc2USKQoEdXNlchgBIAEoCzIbLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Vc2VyIiwKFEluaXRpYXRlTG9naW5SZXF1ZXN0EhQKDHJlZGlyZWN0X3VyaRgBIAEoCSI5ChVJbml0aWF0ZUxvZ2luUmVzcG9uc2USEQoJbG9naW5fdXJsGAEgASgJEg0KBXN0YXRlGAIgASgJIjQKFUhhbmRsZUNhbGxiYWNrUmVxdWVzdBIMCgRjb2RlGAEgASgJEg0KBXN0YXRlGAIgASgJIoQBChZIYW5kbGVDYWxsYmFja1Jlc3BvbnNlEhQKDGFjY2Vzc190b2tlbhgBIAEoCRIVCg1yZWZyZXNoX3Rva2VuGAIgASgJEhIKCmV4cGlyZXNfaW4YAyABKAMSKQoEdXNlchgEIAEoCzIbLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Vc2VyIiwKE1JlZnJlc2hUb2tlblJlcXVlc3QSFQoNcmVmcmVzaF90b2tlbhgBIAEoCSJXChRSZWZyZXNoVG9rZW5SZXNwb25zZRIUCgxhY2Nlc3NfdG9rZW4YASABKAkSFQoNcmVmcmVzaF90b2tlbhgCIAEoCRISCgpleHBpcmVzX2luGAMgASgDIiUKDUxvZ291dFJlcXVlc3QSFAoMYWNjZXNzX3Rva2VuGAEgASgJIiEKDkxvZ291dFJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgihQEKBFVzZXISCgoCaWQYASABKAkSDQoFZW1haWwYAiABKAkSDAoEbmFtZRgDIAEoCRISCgphdmF0YXJfdXJsGAQgASgJEi4KCmNyZWF0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhAKCHRpbWV6b25lGAYgASgJMpcECgtBdXRoU2VydmljZRJtCg5HZXRDdXJyZW50VXNlchIsLm9iaWVudGUuY2xvdWQuYXV0aC52MS5HZXRDdXJyZW50VXNlclJlcXVlc3QaLS5vYmllbnRlLmNsb3VkLmF1dGgudjEuR2V0Q3VycmVudFVzZXJSZXNwb25zZRJqCg1Jbml0aWF0ZUxvZ2luEisub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkluaXRpYXRlTG9naW5SZXF1ZXN0Giwub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkluaXRpYXRlTG9naW5SZXNwb25zZRJtCg5IYW5kbGVDYWxsYmFjaxIsLm9iaWVudGUuY2xvdWQuYXV0aC52MS5IYW5kbGVDYWxsYmFja1JlcXVlc3QaLS5vYmllbnRlLmNsb3VkLmF1dGgudjEuSGFuZGxlQ2FsbGJhY2tSZXNwb25zZRJnCgxSZWZyZXNoVG9rZW4SKi5vYmllbnRlLmNsb3VkLmF1dGgudjEuUmVmcmVzaFRva2VuUmVxdWVzdBorLm9iaWVudGUuY2xvdWQuYXV0aC52MS5SZWZyZXNoVG9rZW5SZXNwb25zZRJVCgZMb2dvdXQSJC5vYmllbnRlLmNsb3VkLmF1dGgudjEuTG9nb3V0UmVxdWVzdBolLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Mb2dvdXRSZXNwb25zZUIsWiphcGkvZ2VuL3Byb3RvL29iaWVudGUvY2xvdWQvYXV0aC92MTthdXRodjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("CihvYmllbnRlL2Nsb3VkL2F1dGgvdjEvYXV0aF9zZXJ2aWNlLnByb3RvEhVvYmllbnRlLmNsb3VkLmF1dGgudjEiFwoVR2V0Q3VycmVudFVzZXJSZXF1ZXN0IkMKFkdldEN1cnJlbnRVc2VyUmVzcG9uc2USKQoEdXNlchgBIAEoCzIbLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Vc2VyIrECCgRVc2VyEgoKAmlkGAEgASgJEg0KBWVtYWlsGAIgASgJEgwKBG5hbWUYAyABKAkSEgoKYXZhdGFyX3VybBgEIAEoCRIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCgh0aW1lem9uZRgGIAEoCRISCgpnaXZlbl9uYW1lGAcgASgJEhMKC2ZhbWlseV9uYW1lGAggASgJEhoKEnByZWZlcnJlZF91c2VybmFtZRgJIAEoCRIWCg5lbWFpbF92ZXJpZmllZBgKIAEoCBIOCgZsb2NhbGUYCyABKAkSLgoKdXBkYXRlZF9hdBgMIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDQoFcm9sZXMYDSADKAkyfAoLQXV0aFNlcnZpY2USbQoOR2V0Q3VycmVudFVzZXISLC5vYmllbnRlLmNsb3VkLmF1dGgudjEuR2V0Q3VycmVudFVzZXJSZXF1ZXN0Gi0ub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkdldEN1cnJlbnRVc2VyUmVzcG9uc2VCLFoqYXBpL2dlbi9wcm90by9vYmllbnRlL2Nsb3VkL2F1dGgvdjE7YXV0aHYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * Empty request for getting current user
@@ -47,177 +47,6 @@ export const GetCurrentUserResponseSchema: GenMessage<GetCurrentUserResponse> = 
   messageDesc(file_obiente_cloud_auth_v1_auth_service, 1);
 
 /**
- * @generated from message obiente.cloud.auth.v1.InitiateLoginRequest
- */
-export type InitiateLoginRequest = Message<"obiente.cloud.auth.v1.InitiateLoginRequest"> & {
-  /**
-   * @generated from field: string redirect_uri = 1;
-   */
-  redirectUri: string;
-};
-
-/**
- * Describes the message obiente.cloud.auth.v1.InitiateLoginRequest.
- * Use `create(InitiateLoginRequestSchema)` to create a new message.
- */
-export const InitiateLoginRequestSchema: GenMessage<InitiateLoginRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 2);
-
-/**
- * @generated from message obiente.cloud.auth.v1.InitiateLoginResponse
- */
-export type InitiateLoginResponse = Message<"obiente.cloud.auth.v1.InitiateLoginResponse"> & {
-  /**
-   * @generated from field: string login_url = 1;
-   */
-  loginUrl: string;
-
-  /**
-   * @generated from field: string state = 2;
-   */
-  state: string;
-};
-
-/**
- * Describes the message obiente.cloud.auth.v1.InitiateLoginResponse.
- * Use `create(InitiateLoginResponseSchema)` to create a new message.
- */
-export const InitiateLoginResponseSchema: GenMessage<InitiateLoginResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 3);
-
-/**
- * @generated from message obiente.cloud.auth.v1.HandleCallbackRequest
- */
-export type HandleCallbackRequest = Message<"obiente.cloud.auth.v1.HandleCallbackRequest"> & {
-  /**
-   * @generated from field: string code = 1;
-   */
-  code: string;
-
-  /**
-   * @generated from field: string state = 2;
-   */
-  state: string;
-};
-
-/**
- * Describes the message obiente.cloud.auth.v1.HandleCallbackRequest.
- * Use `create(HandleCallbackRequestSchema)` to create a new message.
- */
-export const HandleCallbackRequestSchema: GenMessage<HandleCallbackRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 4);
-
-/**
- * @generated from message obiente.cloud.auth.v1.HandleCallbackResponse
- */
-export type HandleCallbackResponse = Message<"obiente.cloud.auth.v1.HandleCallbackResponse"> & {
-  /**
-   * @generated from field: string access_token = 1;
-   */
-  accessToken: string;
-
-  /**
-   * @generated from field: string refresh_token = 2;
-   */
-  refreshToken: string;
-
-  /**
-   * @generated from field: int64 expires_in = 3;
-   */
-  expiresIn: bigint;
-
-  /**
-   * @generated from field: obiente.cloud.auth.v1.User user = 4;
-   */
-  user?: User;
-};
-
-/**
- * Describes the message obiente.cloud.auth.v1.HandleCallbackResponse.
- * Use `create(HandleCallbackResponseSchema)` to create a new message.
- */
-export const HandleCallbackResponseSchema: GenMessage<HandleCallbackResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 5);
-
-/**
- * @generated from message obiente.cloud.auth.v1.RefreshTokenRequest
- */
-export type RefreshTokenRequest = Message<"obiente.cloud.auth.v1.RefreshTokenRequest"> & {
-  /**
-   * @generated from field: string refresh_token = 1;
-   */
-  refreshToken: string;
-};
-
-/**
- * Describes the message obiente.cloud.auth.v1.RefreshTokenRequest.
- * Use `create(RefreshTokenRequestSchema)` to create a new message.
- */
-export const RefreshTokenRequestSchema: GenMessage<RefreshTokenRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 6);
-
-/**
- * @generated from message obiente.cloud.auth.v1.RefreshTokenResponse
- */
-export type RefreshTokenResponse = Message<"obiente.cloud.auth.v1.RefreshTokenResponse"> & {
-  /**
-   * @generated from field: string access_token = 1;
-   */
-  accessToken: string;
-
-  /**
-   * @generated from field: string refresh_token = 2;
-   */
-  refreshToken: string;
-
-  /**
-   * @generated from field: int64 expires_in = 3;
-   */
-  expiresIn: bigint;
-};
-
-/**
- * Describes the message obiente.cloud.auth.v1.RefreshTokenResponse.
- * Use `create(RefreshTokenResponseSchema)` to create a new message.
- */
-export const RefreshTokenResponseSchema: GenMessage<RefreshTokenResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 7);
-
-/**
- * @generated from message obiente.cloud.auth.v1.LogoutRequest
- */
-export type LogoutRequest = Message<"obiente.cloud.auth.v1.LogoutRequest"> & {
-  /**
-   * @generated from field: string access_token = 1;
-   */
-  accessToken: string;
-};
-
-/**
- * Describes the message obiente.cloud.auth.v1.LogoutRequest.
- * Use `create(LogoutRequestSchema)` to create a new message.
- */
-export const LogoutRequestSchema: GenMessage<LogoutRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 8);
-
-/**
- * @generated from message obiente.cloud.auth.v1.LogoutResponse
- */
-export type LogoutResponse = Message<"obiente.cloud.auth.v1.LogoutResponse"> & {
-  /**
-   * @generated from field: bool success = 1;
-   */
-  success: boolean;
-};
-
-/**
- * Describes the message obiente.cloud.auth.v1.LogoutResponse.
- * Use `create(LogoutResponseSchema)` to create a new message.
- */
-export const LogoutResponseSchema: GenMessage<LogoutResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 9);
-
-/**
  * @generated from message obiente.cloud.auth.v1.User
  */
 export type User = Message<"obiente.cloud.auth.v1.User"> & {
@@ -250,6 +79,43 @@ export type User = Message<"obiente.cloud.auth.v1.User"> & {
    * @generated from field: string timezone = 6;
    */
   timezone: string;
+
+  /**
+   * Extended Zitadel userinfo fields
+   *
+   * @generated from field: string given_name = 7;
+   */
+  givenName: string;
+
+  /**
+   * @generated from field: string family_name = 8;
+   */
+  familyName: string;
+
+  /**
+   * @generated from field: string preferred_username = 9;
+   */
+  preferredUsername: string;
+
+  /**
+   * @generated from field: bool email_verified = 10;
+   */
+  emailVerified: boolean;
+
+  /**
+   * @generated from field: string locale = 11;
+   */
+  locale: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp updated_at = 12;
+   */
+  updatedAt?: Timestamp;
+
+  /**
+   * @generated from field: repeated string roles = 13;
+   */
+  roles: string[];
 };
 
 /**
@@ -257,7 +123,7 @@ export type User = Message<"obiente.cloud.auth.v1.User"> & {
  * Use `create(UserSchema)` to create a new message.
  */
 export const UserSchema: GenMessage<User> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 10);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 2);
 
 /**
  * @generated from service obiente.cloud.auth.v1.AuthService
@@ -272,46 +138,6 @@ export const AuthService: GenService<{
     methodKind: "unary";
     input: typeof GetCurrentUserRequestSchema;
     output: typeof GetCurrentUserResponseSchema;
-  },
-  /**
-   * Initiate OIDC login flow
-   *
-   * @generated from rpc obiente.cloud.auth.v1.AuthService.InitiateLogin
-   */
-  initiateLogin: {
-    methodKind: "unary";
-    input: typeof InitiateLoginRequestSchema;
-    output: typeof InitiateLoginResponseSchema;
-  },
-  /**
-   * Handle OIDC callback and exchange tokens
-   *
-   * @generated from rpc obiente.cloud.auth.v1.AuthService.HandleCallback
-   */
-  handleCallback: {
-    methodKind: "unary";
-    input: typeof HandleCallbackRequestSchema;
-    output: typeof HandleCallbackResponseSchema;
-  },
-  /**
-   * Refresh access token
-   *
-   * @generated from rpc obiente.cloud.auth.v1.AuthService.RefreshToken
-   */
-  refreshToken: {
-    methodKind: "unary";
-    input: typeof RefreshTokenRequestSchema;
-    output: typeof RefreshTokenResponseSchema;
-  },
-  /**
-   * Logout user
-   *
-   * @generated from rpc obiente.cloud.auth.v1.AuthService.Logout
-   */
-  logout: {
-    methodKind: "unary";
-    input: typeof LogoutRequestSchema;
-    output: typeof LogoutResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_obiente_cloud_auth_v1_auth_service, 0);

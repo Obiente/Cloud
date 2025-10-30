@@ -9,18 +9,6 @@ import "google/protobuf/timestamp.proto";
 service AuthService {
   // Get current authenticated user
   rpc GetCurrentUser(GetCurrentUserRequest) returns (GetCurrentUserResponse);
-  
-  // Initiate OIDC login flow
-  rpc InitiateLogin(InitiateLoginRequest) returns (InitiateLoginResponse);
-  
-  // Handle OIDC callback and exchange tokens
-  rpc HandleCallback(HandleCallbackRequest) returns (HandleCallbackResponse);
-  
-  // Refresh access token
-  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
-  
-  // Logout user
-  rpc Logout(LogoutRequest) returns (LogoutResponse);
 }
 
 // Empty request for getting current user
@@ -30,45 +18,6 @@ message GetCurrentUserResponse {
   User user = 1;
 }
 
-message InitiateLoginRequest {
-  string redirect_uri = 1;
-}
-
-message InitiateLoginResponse {
-  string login_url = 1;
-  string state = 2;
-}
-
-message HandleCallbackRequest {
-  string code = 1;
-  string state = 2;
-}
-
-message HandleCallbackResponse {
-  string access_token = 1;
-  string refresh_token = 2;
-  int64 expires_in = 3;
-  User user = 4;
-}
-
-message RefreshTokenRequest {
-  string refresh_token = 1;
-}
-
-message RefreshTokenResponse {
-  string access_token = 1;
-  string refresh_token = 2;
-  int64 expires_in = 3;
-}
-
-message LogoutRequest {
-  string access_token = 1;
-}
-
-message LogoutResponse {
-  bool success = 1;
-}
-
 message User {
   string id = 1;
   string email = 2;
@@ -76,4 +25,12 @@ message User {
   string avatar_url = 4;
   google.protobuf.Timestamp created_at = 5;
   string timezone = 6;
+  // Extended Zitadel userinfo fields
+  string given_name = 7;
+  string family_name = 8;
+  string preferred_username = 9;
+  bool email_verified = 10;
+  string locale = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  repeated string roles = 13;
 }

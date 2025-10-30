@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/deployments/v1/deployment_service.proto.
  */
 export const file_obiente_cloud_deployments_v1_deployment_service: GenFile = /*@__PURE__*/
-  fileDesc("CjVvYmllbnRlL2Nsb3VkL2RlcGxveW1lbnRzL3YxL2RlcGxveW1lbnRfc2VydmljZS5wcm90bxIcb2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MSKhAQoWTGlzdERlcGxveW1lbnRzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSQwoGc3RhdHVzGAIgASgOMi4ub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5EZXBsb3ltZW50U3RhdHVzSACIAQESDAoEcGFnZRgDIAEoBRIQCghwZXJfcGFnZRgEIAEoBUIJCgdfc3RhdHVzIpgBChdMaXN0RGVwbG95bWVudHNSZXNwb25zZRI9CgtkZXBsb3ltZW50cxgBIAMoCzIoLm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuRGVwbG95bWVudBI+CgpwYWdpbmF0aW9uGAIgASgLMioub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlBhZ2luYXRpb24inAIKF0NyZWF0ZURlcGxveW1lbnRSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIMCgRuYW1lGAIgASgJEjoKBHR5cGUYAyABKA4yLC5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRUeXBlEhsKDnJlcG9zaXRvcnlfdXJsGAQgASgJSACIAQESDgoGYnJhbmNoGAUgASgJEhoKDWJ1aWxkX2NvbW1hbmQYBiABKAlIAYgBARIcCg9pbnN0YWxsX2NvbW1hbmQYByABKAlIAogBAUIRCg9fcmVwb3NpdG9yeV91cmxCEAoOX2J1aWxkX2NvbW1hbmRCEgoQX2luc3RhbGxfY29tbWFuZCJYChhDcmVhdGVEZXBsb3ltZW50UmVzcG9uc2USPAoKZGVwbG95bWVudBgBIAEoCzIoLm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuRGVwbG95bWVudCJGChRHZXREZXBsb3ltZW50UmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFQoNZGVwbG95bWVudF9pZBgCIAEoCSJVChVHZXREZXBsb3ltZW50UmVzcG9uc2USPAoKZGVwbG95bWVudBgBIAEoCzIoLm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuRGVwbG95bWVudCLlAQoXVXBkYXRlRGVwbG95bWVudFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhUKDWRlcGxveW1lbnRfaWQYAiABKAkSEQoEbmFtZRgDIAEoCUgAiAEBEhMKBmJyYW5jaBgEIAEoCUgBiAEBEhoKDWJ1aWxkX2NvbW1hbmQYBSABKAlIAogBARIcCg9pbnN0YWxsX2NvbW1hbmQYBiABKAlIA4gBAUIHCgVfbmFtZUIJCgdfYnJhbmNoQhAKDl9idWlsZF9jb21tYW5kQhIKEF9pbnN0YWxsX2NvbW1hbmQiWAoYVXBkYXRlRGVwbG95bWVudFJlc3BvbnNlEjwKCmRlcGxveW1lbnQYASABKAsyKC5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnQiSgoYVHJpZ2dlckRlcGxveW1lbnRSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIVCg1kZXBsb3ltZW50X2lkGAIgASgJIkIKGVRyaWdnZXJEZXBsb3ltZW50UmVzcG9uc2USFQoNZGVwbG95bWVudF9pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkiTwodU3RyZWFtRGVwbG95bWVudFN0YXR1c1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhUKDWRlcGxveW1lbnRfaWQYAiABKAki1wEKFkRlcGxveW1lbnRTdGF0dXNVcGRhdGUSFQoNZGVwbG95bWVudF9pZBgBIAEoCRI+CgZzdGF0dXMYAiABKA4yLi5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRTdGF0dXMSFQoNaGVhbHRoX3N0YXR1cxgDIAEoCRIUCgdtZXNzYWdlGAQgASgJSACIAQESLQoJdGltZXN0YW1wGAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEIKCghfbWVzc2FnZSJoChhHZXREZXBsb3ltZW50TG9nc1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhUKDWRlcGxveW1lbnRfaWQYAiABKAkSEgoFbGluZXMYAyABKAVIAIgBAUIICgZfbGluZXMiKQoZR2V0RGVwbG95bWVudExvZ3NSZXNwb25zZRIMCgRsb2dzGAEgAygJIkgKFlN0YXJ0RGVwbG95bWVudFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhUKDWRlcGxveW1lbnRfaWQYAiABKAkiVwoXU3RhcnREZXBsb3ltZW50UmVzcG9uc2USPAoKZGVwbG95bWVudBgBIAEoCzIoLm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuRGVwbG95bWVudCJHChVTdG9wRGVwbG95bWVudFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhUKDWRlcGxveW1lbnRfaWQYAiABKAkiVgoWU3RvcERlcGxveW1lbnRSZXNwb25zZRI8CgpkZXBsb3ltZW50GAEgASgLMigub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5EZXBsb3ltZW50IkkKF0RlbGV0ZURlcGxveW1lbnRSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIVCg1kZXBsb3ltZW50X2lkGAIgASgJIisKGERlbGV0ZURlcGxveW1lbnRSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIIvkECgpEZXBsb3ltZW50EgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDgoGZG9tYWluGAMgASgJEhYKDmN1c3RvbV9kb21haW5zGAQgAygJEjoKBHR5cGUYBSABKA4yLC5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRUeXBlEhsKDnJlcG9zaXRvcnlfdXJsGAYgASgJSACIAQESDgoGYnJhbmNoGAcgASgJEhoKDWJ1aWxkX2NvbW1hbmQYCCABKAlIAYgBARIcCg9pbnN0YWxsX2NvbW1hbmQYCSABKAlIAogBARI+CgZzdGF0dXMYCiABKA4yLi5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRTdGF0dXMSFQoNaGVhbHRoX3N0YXR1cxgLIAEoCRI0ChBsYXN0X2RlcGxveWVkX2F0GAwgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIXCg9iYW5kd2lkdGhfdXNhZ2UYDSABKAMSFQoNc3RvcmFnZV91c2FnZRgOIAEoAxIuCgpjcmVhdGVkX2F0GA8gASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgpidWlsZF90aW1lGBAgASgFEgwKBHNpemUYESABKAkSPgoLZW52aXJvbm1lbnQYEiABKA4yKS5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkVudmlyb25tZW50QhEKD19yZXBvc2l0b3J5X3VybEIQCg5fYnVpbGRfY29tbWFuZEISChBfaW5zdGFsbF9jb21tYW5kKlsKDkRlcGxveW1lbnRUeXBlEh8KG0RFUExPWU1FTlRfVFlQRV9VTlNQRUNJRklFRBAAEgoKBkRPQ0tFUhABEgoKBlNUQVRJQxACEggKBE5PREUQAxIGCgJHTxAEKlgKC0Vudmlyb25tZW50EhsKF0VOVklST05NRU5UX1VOU1BFQ0lGSUVEEAASDgoKUFJPRFVDVElPThABEgsKB1NUQUdJTkcQAhIPCgtERVZFTE9QTUVOVBADKoUBChBEZXBsb3ltZW50U3RhdHVzEiEKHURFUExPWU1FTlRfU1RBVFVTX1VOU1BFQ0lGSUVEEAASCwoHQ1JFQVRFRBABEgwKCEJVSUxESU5HEAISCwoHUlVOTklORxADEgsKB1NUT1BQRUQQBBIKCgZGQUlMRUQQBRINCglERVBMT1lJTkcQBjK0CgoRRGVwbG95bWVudFNlcnZpY2USfgoPTGlzdERlcGxveW1lbnRzEjQub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5MaXN0RGVwbG95bWVudHNSZXF1ZXN0GjUub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5MaXN0RGVwbG95bWVudHNSZXNwb25zZRKBAQoQQ3JlYXRlRGVwbG95bWVudBI1Lm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuQ3JlYXRlRGVwbG95bWVudFJlcXVlc3QaNi5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkNyZWF0ZURlcGxveW1lbnRSZXNwb25zZRJ4Cg1HZXREZXBsb3ltZW50EjIub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5HZXREZXBsb3ltZW50UmVxdWVzdBozLm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuR2V0RGVwbG95bWVudFJlc3BvbnNlEoEBChBVcGRhdGVEZXBsb3ltZW50EjUub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5VcGRhdGVEZXBsb3ltZW50UmVxdWVzdBo2Lm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuVXBkYXRlRGVwbG95bWVudFJlc3BvbnNlEoQBChFUcmlnZ2VyRGVwbG95bWVudBI2Lm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuVHJpZ2dlckRlcGxveW1lbnRSZXF1ZXN0Gjcub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5UcmlnZ2VyRGVwbG95bWVudFJlc3BvbnNlEo0BChZTdHJlYW1EZXBsb3ltZW50U3RhdHVzEjsub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5TdHJlYW1EZXBsb3ltZW50U3RhdHVzUmVxdWVzdBo0Lm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuRGVwbG95bWVudFN0YXR1c1VwZGF0ZTABEoQBChFHZXREZXBsb3ltZW50TG9ncxI2Lm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuR2V0RGVwbG95bWVudExvZ3NSZXF1ZXN0Gjcub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5HZXREZXBsb3ltZW50TG9nc1Jlc3BvbnNlEn4KD1N0YXJ0RGVwbG95bWVudBI0Lm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuU3RhcnREZXBsb3ltZW50UmVxdWVzdBo1Lm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuU3RhcnREZXBsb3ltZW50UmVzcG9uc2USewoOU3RvcERlcGxveW1lbnQSMy5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLlN0b3BEZXBsb3ltZW50UmVxdWVzdBo0Lm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuU3RvcERlcGxveW1lbnRSZXNwb25zZRKBAQoQRGVsZXRlRGVwbG95bWVudBI1Lm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuRGVsZXRlRGVwbG95bWVudFJlcXVlc3QaNi5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlbGV0ZURlcGxveW1lbnRSZXNwb25zZUI6WjhhcGkvZ2VuL3Byb3RvL29iaWVudGUvY2xvdWQvZGVwbG95bWVudHMvdjE7ZGVwbG95bWVudHN2MWIGcHJvdG8z", [file_google_protobuf_timestamp, file_obiente_cloud_organizations_v1_organization_service]);
+  fileDesc("CjVvYmllbnRlL2Nsb3VkL2RlcGxveW1lbnRzL3YxL2RlcGxveW1lbnRfc2VydmljZS5wcm90bxIcb2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MSKhAQoWTGlzdERlcGxveW1lbnRzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSQwoGc3RhdHVzGAIgASgOMi4ub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5EZXBsb3ltZW50U3RhdHVzSACIAQESDAoEcGFnZRgDIAEoBRIQCghwZXJfcGFnZRgEIAEoBUIJCgdfc3RhdHVzIpgBChdMaXN0RGVwbG95bWVudHNSZXNwb25zZRI9CgtkZXBsb3ltZW50cxgBIAMoCzIoLm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuRGVwbG95bWVudBI+CgpwYWdpbmF0aW9uGAIgASgLMioub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlBhZ2luYXRpb24iyQUKF0NyZWF0ZURlcGxveW1lbnRSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIMCgRuYW1lGAIgASgJEjoKBHR5cGUYAyABKA4yLC5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRUeXBlEhsKDnJlcG9zaXRvcnlfdXJsGAQgASgJSACIAQESDgoGYnJhbmNoGAUgASgJEhoKDWJ1aWxkX2NvbW1hbmQYBiABKAlIAYgBARIcCg9pbnN0YWxsX2NvbW1hbmQYByABKAlIAogBARISCgVpbWFnZRgIIAEoCUgDiAEBEhEKBHBvcnQYCSABKAVIBIgBARJLCgNlbnYYCiADKAsyPi5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkNyZWF0ZURlcGxveW1lbnRSZXF1ZXN0LkVudkVudHJ5ElEKBmxhYmVscxgLIAMoCzJBLm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuQ3JlYXRlRGVwbG95bWVudFJlcXVlc3QuTGFiZWxzRW50cnkSGQoMbWVtb3J5X2J5dGVzGAwgASgDSAWIAQESFwoKY3B1X3NoYXJlcxgNIAEoA0gGiAEBEhUKCHJlcGxpY2FzGA4gASgFSAeIAQEaKgoIRW52RW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ARotCgtMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBQhEKD19yZXBvc2l0b3J5X3VybEIQCg5fYnVpbGRfY29tbWFuZEISChBfaW5zdGFsbF9jb21tYW5kQggKBl9pbWFnZUIHCgVfcG9ydEIPCg1fbWVtb3J5X2J5dGVzQg0KC19jcHVfc2hhcmVzQgsKCV9yZXBsaWNhcyJYChhDcmVhdGVEZXBsb3ltZW50UmVzcG9uc2USPAoKZGVwbG95bWVudBgBIAEoCzIoLm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuRGVwbG95bWVudCJGChRHZXREZXBsb3ltZW50UmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFQoNZGVwbG95bWVudF9pZBgCIAEoCSJVChVHZXREZXBsb3ltZW50UmVzcG9uc2USPAoKZGVwbG95bWVudBgBIAEoCzIoLm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuRGVwbG95bWVudCLlAQoXVXBkYXRlRGVwbG95bWVudFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhUKDWRlcGxveW1lbnRfaWQYAiABKAkSEQoEbmFtZRgDIAEoCUgAiAEBEhMKBmJyYW5jaBgEIAEoCUgBiAEBEhoKDWJ1aWxkX2NvbW1hbmQYBSABKAlIAogBARIcCg9pbnN0YWxsX2NvbW1hbmQYBiABKAlIA4gBAUIHCgVfbmFtZUIJCgdfYnJhbmNoQhAKDl9idWlsZF9jb21tYW5kQhIKEF9pbnN0YWxsX2NvbW1hbmQiWAoYVXBkYXRlRGVwbG95bWVudFJlc3BvbnNlEjwKCmRlcGxveW1lbnQYASABKAsyKC5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnQiSgoYVHJpZ2dlckRlcGxveW1lbnRSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIVCg1kZXBsb3ltZW50X2lkGAIgASgJIkIKGVRyaWdnZXJEZXBsb3ltZW50UmVzcG9uc2USFQoNZGVwbG95bWVudF9pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkiTwodU3RyZWFtRGVwbG95bWVudFN0YXR1c1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhUKDWRlcGxveW1lbnRfaWQYAiABKAki1wEKFkRlcGxveW1lbnRTdGF0dXNVcGRhdGUSFQoNZGVwbG95bWVudF9pZBgBIAEoCRI+CgZzdGF0dXMYAiABKA4yLi5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRTdGF0dXMSFQoNaGVhbHRoX3N0YXR1cxgDIAEoCRIUCgdtZXNzYWdlGAQgASgJSACIAQESLQoJdGltZXN0YW1wGAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEIKCghfbWVzc2FnZSKIAQoYR2V0RGVwbG95bWVudExvZ3NSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIVCg1kZXBsb3ltZW50X2lkGAIgASgJEhIKBWxpbmVzGAMgASgFSACIAQESEwoGZm9sbG93GAQgASgISAGIAQFCCAoGX2xpbmVzQgkKB19mb2xsb3ciKQoZR2V0RGVwbG95bWVudExvZ3NSZXNwb25zZRIMCgRsb2dzGAEgAygJImkKG1N0cmVhbURlcGxveW1lbnRMb2dzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFQoNZGVwbG95bWVudF9pZBgCIAEoCRIRCgR0YWlsGAMgASgFSACIAQFCBwoFX3RhaWwidwoRRGVwbG95bWVudExvZ0xpbmUSFQoNZGVwbG95bWVudF9pZBgBIAEoCRIMCgRsaW5lGAIgASgJEi0KCXRpbWVzdGFtcBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDgoGc3RkZXJyGAQgASgIIkgKFlN0YXJ0RGVwbG95bWVudFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhUKDWRlcGxveW1lbnRfaWQYAiABKAkiVwoXU3RhcnREZXBsb3ltZW50UmVzcG9uc2USPAoKZGVwbG95bWVudBgBIAEoCzIoLm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuRGVwbG95bWVudCJHChVTdG9wRGVwbG95bWVudFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhUKDWRlcGxveW1lbnRfaWQYAiABKAkiVgoWU3RvcERlcGxveW1lbnRSZXNwb25zZRI8CgpkZXBsb3ltZW50GAEgASgLMigub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5EZXBsb3ltZW50IkkKF0RlbGV0ZURlcGxveW1lbnRSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIVCg1kZXBsb3ltZW50X2lkGAIgASgJIisKGERlbGV0ZURlcGxveW1lbnRSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIIkoKGFJlc3RhcnREZXBsb3ltZW50UmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFQoNZGVwbG95bWVudF9pZBgCIAEoCSJZChlSZXN0YXJ0RGVwbG95bWVudFJlc3BvbnNlEjwKCmRlcGxveW1lbnQYASABKAsyKC5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnQiWgoWU2NhbGVEZXBsb3ltZW50UmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFQoNZGVwbG95bWVudF9pZBgCIAEoCRIQCghyZXBsaWNhcxgDIAEoBSJXChdTY2FsZURlcGxveW1lbnRSZXNwb25zZRI8CgpkZXBsb3ltZW50GAEgASgLMigub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5EZXBsb3ltZW50Ir4GCgpEZXBsb3ltZW50EgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDgoGZG9tYWluGAMgASgJEhYKDmN1c3RvbV9kb21haW5zGAQgAygJEjoKBHR5cGUYBSABKA4yLC5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRUeXBlEhsKDnJlcG9zaXRvcnlfdXJsGAYgASgJSACIAQESDgoGYnJhbmNoGAcgASgJEhoKDWJ1aWxkX2NvbW1hbmQYCCABKAlIAYgBARIcCg9pbnN0YWxsX2NvbW1hbmQYCSABKAlIAogBARI+CgZzdGF0dXMYCiABKA4yLi5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRTdGF0dXMSFQoNaGVhbHRoX3N0YXR1cxgLIAEoCRI0ChBsYXN0X2RlcGxveWVkX2F0GAwgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIXCg9iYW5kd2lkdGhfdXNhZ2UYDSABKAMSFQoNc3RvcmFnZV91c2FnZRgOIAEoAxIuCgpjcmVhdGVkX2F0GA8gASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBISCgpidWlsZF90aW1lGBAgASgFEgwKBHNpemUYESABKAkSPgoLZW52aXJvbm1lbnQYEiABKA4yKS5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkVudmlyb25tZW50EhIKBWltYWdlGBMgASgJSAOIAQESEQoEcG9ydBgUIAEoBUgEiAEBEhUKCHJlcGxpY2FzGBUgASgFSAWIAQESFQoNY29udGFpbmVyX2lkcxgWIAMoCRIUCgdub2RlX2lkGBcgASgJSAaIAQESGgoNbm9kZV9ob3N0bmFtZRgYIAEoCUgHiAEBQhEKD19yZXBvc2l0b3J5X3VybEIQCg5fYnVpbGRfY29tbWFuZEISChBfaW5zdGFsbF9jb21tYW5kQggKBl9pbWFnZUIHCgVfcG9ydEILCglfcmVwbGljYXNCCgoIX25vZGVfaWRCEAoOX25vZGVfaG9zdG5hbWUqWwoORGVwbG95bWVudFR5cGUSHwobREVQTE9ZTUVOVF9UWVBFX1VOU1BFQ0lGSUVEEAASCgoGRE9DS0VSEAESCgoGU1RBVElDEAISCAoETk9ERRADEgYKAkdPEAQqWAoLRW52aXJvbm1lbnQSGwoXRU5WSVJPTk1FTlRfVU5TUEVDSUZJRUQQABIOCgpQUk9EVUNUSU9OEAESCwoHU1RBR0lORxACEg8KC0RFVkVMT1BNRU5UEAMqhQEKEERlcGxveW1lbnRTdGF0dXMSIQodREVQTE9ZTUVOVF9TVEFUVVNfVU5TUEVDSUZJRUQQABILCgdDUkVBVEVEEAESDAoIQlVJTERJTkcQAhILCgdSVU5OSU5HEAMSCwoHU1RPUFBFRBAEEgoKBkZBSUxFRBAFEg0KCURFUExPWUlORxAGMsINChFEZXBsb3ltZW50U2VydmljZRJ+Cg9MaXN0RGVwbG95bWVudHMSNC5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkxpc3REZXBsb3ltZW50c1JlcXVlc3QaNS5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkxpc3REZXBsb3ltZW50c1Jlc3BvbnNlEoEBChBDcmVhdGVEZXBsb3ltZW50EjUub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5DcmVhdGVEZXBsb3ltZW50UmVxdWVzdBo2Lm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuQ3JlYXRlRGVwbG95bWVudFJlc3BvbnNlEngKDUdldERlcGxveW1lbnQSMi5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkdldERlcGxveW1lbnRSZXF1ZXN0GjMub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5HZXREZXBsb3ltZW50UmVzcG9uc2USgQEKEFVwZGF0ZURlcGxveW1lbnQSNS5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLlVwZGF0ZURlcGxveW1lbnRSZXF1ZXN0GjYub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5VcGRhdGVEZXBsb3ltZW50UmVzcG9uc2UShAEKEVRyaWdnZXJEZXBsb3ltZW50EjYub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5UcmlnZ2VyRGVwbG95bWVudFJlcXVlc3QaNy5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLlRyaWdnZXJEZXBsb3ltZW50UmVzcG9uc2USjQEKFlN0cmVhbURlcGxveW1lbnRTdGF0dXMSOy5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLlN0cmVhbURlcGxveW1lbnRTdGF0dXNSZXF1ZXN0GjQub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5EZXBsb3ltZW50U3RhdHVzVXBkYXRlMAEShAEKEUdldERlcGxveW1lbnRMb2dzEjYub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5HZXREZXBsb3ltZW50TG9nc1JlcXVlc3QaNy5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkdldERlcGxveW1lbnRMb2dzUmVzcG9uc2UShAEKFFN0cmVhbURlcGxveW1lbnRMb2dzEjkub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5TdHJlYW1EZXBsb3ltZW50TG9nc1JlcXVlc3QaLy5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRMb2dMaW5lMAESfgoPU3RhcnREZXBsb3ltZW50EjQub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5TdGFydERlcGxveW1lbnRSZXF1ZXN0GjUub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5TdGFydERlcGxveW1lbnRSZXNwb25zZRJ7Cg5TdG9wRGVwbG95bWVudBIzLm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuU3RvcERlcGxveW1lbnRSZXF1ZXN0GjQub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5TdG9wRGVwbG95bWVudFJlc3BvbnNlEoEBChBEZWxldGVEZXBsb3ltZW50EjUub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5EZWxldGVEZXBsb3ltZW50UmVxdWVzdBo2Lm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuRGVsZXRlRGVwbG95bWVudFJlc3BvbnNlEoQBChFSZXN0YXJ0RGVwbG95bWVudBI2Lm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuUmVzdGFydERlcGxveW1lbnRSZXF1ZXN0Gjcub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5SZXN0YXJ0RGVwbG95bWVudFJlc3BvbnNlEn4KD1NjYWxlRGVwbG95bWVudBI0Lm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuU2NhbGVEZXBsb3ltZW50UmVxdWVzdBo1Lm9iaWVudGUuY2xvdWQuZGVwbG95bWVudHMudjEuU2NhbGVEZXBsb3ltZW50UmVzcG9uc2VCOlo4YXBpL2dlbi9wcm90by9vYmllbnRlL2Nsb3VkL2RlcGxveW1lbnRzL3YxO2RlcGxveW1lbnRzdjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_obiente_cloud_organizations_v1_organization_service]);
 
 /**
  * @generated from message obiente.cloud.deployments.v1.ListDeploymentsRequest
@@ -110,6 +110,43 @@ export type CreateDeploymentRequest = Message<"obiente.cloud.deployments.v1.Crea
    * @generated from field: optional string install_command = 7;
    */
   installCommand?: string;
+
+  /**
+   * Docker/runtime specific
+   *
+   * @generated from field: optional string image = 8;
+   */
+  image?: string;
+
+  /**
+   * @generated from field: optional int32 port = 9;
+   */
+  port?: number;
+
+  /**
+   * @generated from field: map<string, string> env = 10;
+   */
+  env: { [key: string]: string };
+
+  /**
+   * @generated from field: map<string, string> labels = 11;
+   */
+  labels: { [key: string]: string };
+
+  /**
+   * @generated from field: optional int64 memory_bytes = 12;
+   */
+  memoryBytes?: bigint;
+
+  /**
+   * @generated from field: optional int64 cpu_shares = 13;
+   */
+  cpuShares?: bigint;
+
+  /**
+   * @generated from field: optional int32 replicas = 14;
+   */
+  replicas?: number;
 };
 
 /**
@@ -355,6 +392,11 @@ export type GetDeploymentLogsRequest = Message<"obiente.cloud.deployments.v1.Get
    * @generated from field: optional int32 lines = 3;
    */
   lines?: number;
+
+  /**
+   * @generated from field: optional bool follow = 4;
+   */
+  follow?: boolean;
 };
 
 /**
@@ -382,6 +424,67 @@ export const GetDeploymentLogsResponseSchema: GenMessage<GetDeploymentLogsRespon
   messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 13);
 
 /**
+ * @generated from message obiente.cloud.deployments.v1.StreamDeploymentLogsRequest
+ */
+export type StreamDeploymentLogsRequest = Message<"obiente.cloud.deployments.v1.StreamDeploymentLogsRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string deployment_id = 2;
+   */
+  deploymentId: string;
+
+  /**
+   * number of lines to tail before following
+   *
+   * @generated from field: optional int32 tail = 3;
+   */
+  tail?: number;
+};
+
+/**
+ * Describes the message obiente.cloud.deployments.v1.StreamDeploymentLogsRequest.
+ * Use `create(StreamDeploymentLogsRequestSchema)` to create a new message.
+ */
+export const StreamDeploymentLogsRequestSchema: GenMessage<StreamDeploymentLogsRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 14);
+
+/**
+ * @generated from message obiente.cloud.deployments.v1.DeploymentLogLine
+ */
+export type DeploymentLogLine = Message<"obiente.cloud.deployments.v1.DeploymentLogLine"> & {
+  /**
+   * @generated from field: string deployment_id = 1;
+   */
+  deploymentId: string;
+
+  /**
+   * @generated from field: string line = 2;
+   */
+  line: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp timestamp = 3;
+   */
+  timestamp?: Timestamp;
+
+  /**
+   * @generated from field: bool stderr = 4;
+   */
+  stderr: boolean;
+};
+
+/**
+ * Describes the message obiente.cloud.deployments.v1.DeploymentLogLine.
+ * Use `create(DeploymentLogLineSchema)` to create a new message.
+ */
+export const DeploymentLogLineSchema: GenMessage<DeploymentLogLine> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 15);
+
+/**
  * @generated from message obiente.cloud.deployments.v1.StartDeploymentRequest
  */
 export type StartDeploymentRequest = Message<"obiente.cloud.deployments.v1.StartDeploymentRequest"> & {
@@ -401,7 +504,7 @@ export type StartDeploymentRequest = Message<"obiente.cloud.deployments.v1.Start
  * Use `create(StartDeploymentRequestSchema)` to create a new message.
  */
 export const StartDeploymentRequestSchema: GenMessage<StartDeploymentRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 14);
+  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 16);
 
 /**
  * @generated from message obiente.cloud.deployments.v1.StartDeploymentResponse
@@ -418,7 +521,7 @@ export type StartDeploymentResponse = Message<"obiente.cloud.deployments.v1.Star
  * Use `create(StartDeploymentResponseSchema)` to create a new message.
  */
 export const StartDeploymentResponseSchema: GenMessage<StartDeploymentResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 15);
+  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 17);
 
 /**
  * @generated from message obiente.cloud.deployments.v1.StopDeploymentRequest
@@ -440,7 +543,7 @@ export type StopDeploymentRequest = Message<"obiente.cloud.deployments.v1.StopDe
  * Use `create(StopDeploymentRequestSchema)` to create a new message.
  */
 export const StopDeploymentRequestSchema: GenMessage<StopDeploymentRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 16);
+  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 18);
 
 /**
  * @generated from message obiente.cloud.deployments.v1.StopDeploymentResponse
@@ -457,7 +560,7 @@ export type StopDeploymentResponse = Message<"obiente.cloud.deployments.v1.StopD
  * Use `create(StopDeploymentResponseSchema)` to create a new message.
  */
 export const StopDeploymentResponseSchema: GenMessage<StopDeploymentResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 17);
+  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 19);
 
 /**
  * @generated from message obiente.cloud.deployments.v1.DeleteDeploymentRequest
@@ -479,7 +582,7 @@ export type DeleteDeploymentRequest = Message<"obiente.cloud.deployments.v1.Dele
  * Use `create(DeleteDeploymentRequestSchema)` to create a new message.
  */
 export const DeleteDeploymentRequestSchema: GenMessage<DeleteDeploymentRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 18);
+  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 20);
 
 /**
  * @generated from message obiente.cloud.deployments.v1.DeleteDeploymentResponse
@@ -496,7 +599,90 @@ export type DeleteDeploymentResponse = Message<"obiente.cloud.deployments.v1.Del
  * Use `create(DeleteDeploymentResponseSchema)` to create a new message.
  */
 export const DeleteDeploymentResponseSchema: GenMessage<DeleteDeploymentResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 19);
+  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 21);
+
+/**
+ * @generated from message obiente.cloud.deployments.v1.RestartDeploymentRequest
+ */
+export type RestartDeploymentRequest = Message<"obiente.cloud.deployments.v1.RestartDeploymentRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string deployment_id = 2;
+   */
+  deploymentId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.deployments.v1.RestartDeploymentRequest.
+ * Use `create(RestartDeploymentRequestSchema)` to create a new message.
+ */
+export const RestartDeploymentRequestSchema: GenMessage<RestartDeploymentRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 22);
+
+/**
+ * @generated from message obiente.cloud.deployments.v1.RestartDeploymentResponse
+ */
+export type RestartDeploymentResponse = Message<"obiente.cloud.deployments.v1.RestartDeploymentResponse"> & {
+  /**
+   * @generated from field: obiente.cloud.deployments.v1.Deployment deployment = 1;
+   */
+  deployment?: Deployment;
+};
+
+/**
+ * Describes the message obiente.cloud.deployments.v1.RestartDeploymentResponse.
+ * Use `create(RestartDeploymentResponseSchema)` to create a new message.
+ */
+export const RestartDeploymentResponseSchema: GenMessage<RestartDeploymentResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 23);
+
+/**
+ * @generated from message obiente.cloud.deployments.v1.ScaleDeploymentRequest
+ */
+export type ScaleDeploymentRequest = Message<"obiente.cloud.deployments.v1.ScaleDeploymentRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string deployment_id = 2;
+   */
+  deploymentId: string;
+
+  /**
+   * @generated from field: int32 replicas = 3;
+   */
+  replicas: number;
+};
+
+/**
+ * Describes the message obiente.cloud.deployments.v1.ScaleDeploymentRequest.
+ * Use `create(ScaleDeploymentRequestSchema)` to create a new message.
+ */
+export const ScaleDeploymentRequestSchema: GenMessage<ScaleDeploymentRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 24);
+
+/**
+ * @generated from message obiente.cloud.deployments.v1.ScaleDeploymentResponse
+ */
+export type ScaleDeploymentResponse = Message<"obiente.cloud.deployments.v1.ScaleDeploymentResponse"> & {
+  /**
+   * @generated from field: obiente.cloud.deployments.v1.Deployment deployment = 1;
+   */
+  deployment?: Deployment;
+};
+
+/**
+ * Describes the message obiente.cloud.deployments.v1.ScaleDeploymentResponse.
+ * Use `create(ScaleDeploymentResponseSchema)` to create a new message.
+ */
+export const ScaleDeploymentResponseSchema: GenMessage<ScaleDeploymentResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 25);
 
 /**
  * @generated from message obiente.cloud.deployments.v1.Deployment
@@ -597,6 +783,38 @@ export type Deployment = Message<"obiente.cloud.deployments.v1.Deployment"> & {
    * @generated from field: obiente.cloud.deployments.v1.Environment environment = 18;
    */
   environment: Environment;
+
+  /**
+   * Docker/runtime specific view
+   *
+   * @generated from field: optional string image = 19;
+   */
+  image?: string;
+
+  /**
+   * @generated from field: optional int32 port = 20;
+   */
+  port?: number;
+
+  /**
+   * @generated from field: optional int32 replicas = 21;
+   */
+  replicas?: number;
+
+  /**
+   * @generated from field: repeated string container_ids = 22;
+   */
+  containerIds: string[];
+
+  /**
+   * @generated from field: optional string node_id = 23;
+   */
+  nodeId?: string;
+
+  /**
+   * @generated from field: optional string node_hostname = 24;
+   */
+  nodeHostname?: string;
 };
 
 /**
@@ -604,7 +822,7 @@ export type Deployment = Message<"obiente.cloud.deployments.v1.Deployment"> & {
  * Use `create(DeploymentSchema)` to create a new message.
  */
 export const DeploymentSchema: GenMessage<Deployment> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 20);
+  messageDesc(file_obiente_cloud_deployments_v1_deployment_service, 26);
 
 /**
  * Enumerations for typed fields used by the frontend
@@ -796,6 +1014,16 @@ export const DeploymentService: GenService<{
     output: typeof GetDeploymentLogsResponseSchema;
   },
   /**
+   * Stream deployment logs (tail/follow)
+   *
+   * @generated from rpc obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentLogs
+   */
+  streamDeploymentLogs: {
+    methodKind: "server_streaming";
+    input: typeof StreamDeploymentLogsRequestSchema;
+    output: typeof DeploymentLogLineSchema;
+  },
+  /**
    * Start a stopped deployment
    *
    * @generated from rpc obiente.cloud.deployments.v1.DeploymentService.StartDeployment
@@ -824,6 +1052,26 @@ export const DeploymentService: GenService<{
     methodKind: "unary";
     input: typeof DeleteDeploymentRequestSchema;
     output: typeof DeleteDeploymentResponseSchema;
+  },
+  /**
+   * Restart a deployment
+   *
+   * @generated from rpc obiente.cloud.deployments.v1.DeploymentService.RestartDeployment
+   */
+  restartDeployment: {
+    methodKind: "unary";
+    input: typeof RestartDeploymentRequestSchema;
+    output: typeof RestartDeploymentResponseSchema;
+  },
+  /**
+   * Scale a deployment
+   *
+   * @generated from rpc obiente.cloud.deployments.v1.DeploymentService.ScaleDeployment
+   */
+  scaleDeployment: {
+    methodKind: "unary";
+    input: typeof ScaleDeploymentRequestSchema;
+    output: typeof ScaleDeploymentResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_obiente_cloud_deployments_v1_deployment_service, 0);

@@ -55,6 +55,9 @@ service DeploymentService {
   // Get deployment logs
   rpc GetDeploymentLogs(GetDeploymentLogsRequest) returns (GetDeploymentLogsResponse);
 
+  // Stream deployment logs (tail/follow)
+  rpc StreamDeploymentLogs(StreamDeploymentLogsRequest) returns (stream DeploymentLogLine);
+
   // Start a stopped deployment
   rpc StartDeployment(StartDeploymentRequest) returns (StartDeploymentResponse);
 
@@ -63,6 +66,12 @@ service DeploymentService {
 
   // Delete a deployment
   rpc DeleteDeployment(DeleteDeploymentRequest) returns (DeleteDeploymentResponse);
+
+  // Restart a deployment
+  rpc RestartDeployment(RestartDeploymentRequest) returns (RestartDeploymentResponse);
+
+  // Scale a deployment
+  rpc ScaleDeployment(ScaleDeploymentRequest) returns (ScaleDeploymentResponse);
 }
 
 message ListDeploymentsRequest {
@@ -85,6 +94,14 @@ message CreateDeploymentRequest {
   string branch = 5;
   optional string build_command = 6;
   optional string install_command = 7;
+  // Docker/runtime specific
+  optional string image = 8;
+  optional int32 port = 9;
+  map<string, string> env = 10;
+  map<string, string> labels = 11;
+  optional int64 memory_bytes = 12;
+  optional int64 cpu_shares = 13;
+  optional int32 replicas = 14;
 }
 
 message CreateDeploymentResponse {
@@ -140,10 +157,24 @@ message GetDeploymentLogsRequest {
   string organization_id = 1;
   string deployment_id = 2;
   optional int32 lines = 3;
+  optional bool follow = 4;
 }
 
 message GetDeploymentLogsResponse {
   repeated string logs = 1;
+}
+
+message StreamDeploymentLogsRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  optional int32 tail = 3; // number of lines to tail before following
+}
+
+message DeploymentLogLine {
+  string deployment_id = 1;
+  string line = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  bool stderr = 4;
 }
 
 message StartDeploymentRequest {
@@ -173,6 +204,25 @@ message DeleteDeploymentResponse {
   bool success = 1;
 }
 
+message RestartDeploymentRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+}
+
+message RestartDeploymentResponse {
+  Deployment deployment = 1;
+}
+
+message ScaleDeploymentRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  int32 replicas = 3;
+}
+
+message ScaleDeploymentResponse {
+  Deployment deployment = 1;
+}
+
 message Deployment {
   string id = 1;
   string name = 2;
@@ -195,4 +245,11 @@ message Deployment {
   string size = 17;
   // Environment enum (production/staging/development)
   Environment environment = 18;
+  // Docker/runtime specific view
+  optional string image = 19;
+  optional int32 port = 20;
+  optional int32 replicas = 21;
+  repeated string container_ids = 22;
+  optional string node_id = 23;
+  optional string node_hostname = 24;
 }
