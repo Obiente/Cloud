@@ -55,14 +55,27 @@ func HasOrgRole(ctx context.Context, orgID, role string) bool {
 	return false
 }
 
+// isOrgOwner checks organization_members table for an 'owner' member
+func isOrgOwner(ctx context.Context, orgID string) bool {
+    user, err := GetUserFromContext(ctx)
+    if err != nil || user == nil {
+        return false
+    }
+    var cnt int64
+    _ = database.DB.Model(&database.OrganizationMember{}).
+        Where("organization_id = ? AND user_id = ? AND role = ?", orgID, user.Id, "owner").
+        Count(&cnt).Error
+    return cnt > 0
+}
+
 // CheckScopedPermission verifies user has permission in org, optionally scoped to resource
 func (p *PermissionChecker) CheckScopedPermission(ctx context.Context, orgID string, sp ScopedPermission) error {
 	user, err := GetUserFromContext(ctx)
 	if err != nil {
 		return fmt.Errorf("unauthenticated")
 	}
-	// Global admin or org manager permitted
-	if HasRole(user, RoleAdmin) || HasOrgRole(ctx, orgID, RoleOrgManager) {
+    // Global admin or org-level owners/managers/admins permitted
+    if HasRole(user, RoleAdmin) || isOrgOwner(ctx, orgID) || HasOrgRole(ctx, orgID, RoleOrgManager) || HasOrgRole(ctx, orgID, RoleOrgAdmin) {
 		return nil
 	}
 	// Load bindings and roles
