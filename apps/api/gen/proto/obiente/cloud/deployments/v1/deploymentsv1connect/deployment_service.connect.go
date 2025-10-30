@@ -72,6 +72,18 @@ const (
 	// DeploymentServiceScaleDeploymentProcedure is the fully-qualified name of the DeploymentService's
 	// ScaleDeployment RPC.
 	DeploymentServiceScaleDeploymentProcedure = "/obiente.cloud.deployments.v1.DeploymentService/ScaleDeployment"
+	// DeploymentServiceGetDeploymentEnvVarsProcedure is the fully-qualified name of the
+	// DeploymentService's GetDeploymentEnvVars RPC.
+	DeploymentServiceGetDeploymentEnvVarsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetDeploymentEnvVars"
+	// DeploymentServiceUpdateDeploymentEnvVarsProcedure is the fully-qualified name of the
+	// DeploymentService's UpdateDeploymentEnvVars RPC.
+	DeploymentServiceUpdateDeploymentEnvVarsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/UpdateDeploymentEnvVars"
+	// DeploymentServiceGetDeploymentComposeProcedure is the fully-qualified name of the
+	// DeploymentService's GetDeploymentCompose RPC.
+	DeploymentServiceGetDeploymentComposeProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetDeploymentCompose"
+	// DeploymentServiceUpdateDeploymentComposeProcedure is the fully-qualified name of the
+	// DeploymentService's UpdateDeploymentCompose RPC.
+	DeploymentServiceUpdateDeploymentComposeProcedure = "/obiente.cloud.deployments.v1.DeploymentService/UpdateDeploymentCompose"
 )
 
 // DeploymentServiceClient is a client for the obiente.cloud.deployments.v1.DeploymentService
@@ -103,6 +115,14 @@ type DeploymentServiceClient interface {
 	RestartDeployment(context.Context, *connect.Request[v1.RestartDeploymentRequest]) (*connect.Response[v1.RestartDeploymentResponse], error)
 	// Scale a deployment
 	ScaleDeployment(context.Context, *connect.Request[v1.ScaleDeploymentRequest]) (*connect.Response[v1.ScaleDeploymentResponse], error)
+	// Get deployment environment variables
+	GetDeploymentEnvVars(context.Context, *connect.Request[v1.GetDeploymentEnvVarsRequest]) (*connect.Response[v1.GetDeploymentEnvVarsResponse], error)
+	// Update deployment environment variables
+	UpdateDeploymentEnvVars(context.Context, *connect.Request[v1.UpdateDeploymentEnvVarsRequest]) (*connect.Response[v1.UpdateDeploymentEnvVarsResponse], error)
+	// Get deployment docker compose configuration
+	GetDeploymentCompose(context.Context, *connect.Request[v1.GetDeploymentComposeRequest]) (*connect.Response[v1.GetDeploymentComposeResponse], error)
+	// Update deployment docker compose configuration
+	UpdateDeploymentCompose(context.Context, *connect.Request[v1.UpdateDeploymentComposeRequest]) (*connect.Response[v1.UpdateDeploymentComposeResponse], error)
 }
 
 // NewDeploymentServiceClient constructs a client for the
@@ -195,24 +215,52 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(deploymentServiceMethods.ByName("ScaleDeployment")),
 			connect.WithClientOptions(opts...),
 		),
+		getDeploymentEnvVars: connect.NewClient[v1.GetDeploymentEnvVarsRequest, v1.GetDeploymentEnvVarsResponse](
+			httpClient,
+			baseURL+DeploymentServiceGetDeploymentEnvVarsProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentEnvVars")),
+			connect.WithClientOptions(opts...),
+		),
+		updateDeploymentEnvVars: connect.NewClient[v1.UpdateDeploymentEnvVarsRequest, v1.UpdateDeploymentEnvVarsResponse](
+			httpClient,
+			baseURL+DeploymentServiceUpdateDeploymentEnvVarsProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("UpdateDeploymentEnvVars")),
+			connect.WithClientOptions(opts...),
+		),
+		getDeploymentCompose: connect.NewClient[v1.GetDeploymentComposeRequest, v1.GetDeploymentComposeResponse](
+			httpClient,
+			baseURL+DeploymentServiceGetDeploymentComposeProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentCompose")),
+			connect.WithClientOptions(opts...),
+		),
+		updateDeploymentCompose: connect.NewClient[v1.UpdateDeploymentComposeRequest, v1.UpdateDeploymentComposeResponse](
+			httpClient,
+			baseURL+DeploymentServiceUpdateDeploymentComposeProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("UpdateDeploymentCompose")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // deploymentServiceClient implements DeploymentServiceClient.
 type deploymentServiceClient struct {
-	listDeployments        *connect.Client[v1.ListDeploymentsRequest, v1.ListDeploymentsResponse]
-	createDeployment       *connect.Client[v1.CreateDeploymentRequest, v1.CreateDeploymentResponse]
-	getDeployment          *connect.Client[v1.GetDeploymentRequest, v1.GetDeploymentResponse]
-	updateDeployment       *connect.Client[v1.UpdateDeploymentRequest, v1.UpdateDeploymentResponse]
-	triggerDeployment      *connect.Client[v1.TriggerDeploymentRequest, v1.TriggerDeploymentResponse]
-	streamDeploymentStatus *connect.Client[v1.StreamDeploymentStatusRequest, v1.DeploymentStatusUpdate]
-	getDeploymentLogs      *connect.Client[v1.GetDeploymentLogsRequest, v1.GetDeploymentLogsResponse]
-	streamDeploymentLogs   *connect.Client[v1.StreamDeploymentLogsRequest, v1.DeploymentLogLine]
-	startDeployment        *connect.Client[v1.StartDeploymentRequest, v1.StartDeploymentResponse]
-	stopDeployment         *connect.Client[v1.StopDeploymentRequest, v1.StopDeploymentResponse]
-	deleteDeployment       *connect.Client[v1.DeleteDeploymentRequest, v1.DeleteDeploymentResponse]
-	restartDeployment      *connect.Client[v1.RestartDeploymentRequest, v1.RestartDeploymentResponse]
-	scaleDeployment        *connect.Client[v1.ScaleDeploymentRequest, v1.ScaleDeploymentResponse]
+	listDeployments         *connect.Client[v1.ListDeploymentsRequest, v1.ListDeploymentsResponse]
+	createDeployment        *connect.Client[v1.CreateDeploymentRequest, v1.CreateDeploymentResponse]
+	getDeployment           *connect.Client[v1.GetDeploymentRequest, v1.GetDeploymentResponse]
+	updateDeployment        *connect.Client[v1.UpdateDeploymentRequest, v1.UpdateDeploymentResponse]
+	triggerDeployment       *connect.Client[v1.TriggerDeploymentRequest, v1.TriggerDeploymentResponse]
+	streamDeploymentStatus  *connect.Client[v1.StreamDeploymentStatusRequest, v1.DeploymentStatusUpdate]
+	getDeploymentLogs       *connect.Client[v1.GetDeploymentLogsRequest, v1.GetDeploymentLogsResponse]
+	streamDeploymentLogs    *connect.Client[v1.StreamDeploymentLogsRequest, v1.DeploymentLogLine]
+	startDeployment         *connect.Client[v1.StartDeploymentRequest, v1.StartDeploymentResponse]
+	stopDeployment          *connect.Client[v1.StopDeploymentRequest, v1.StopDeploymentResponse]
+	deleteDeployment        *connect.Client[v1.DeleteDeploymentRequest, v1.DeleteDeploymentResponse]
+	restartDeployment       *connect.Client[v1.RestartDeploymentRequest, v1.RestartDeploymentResponse]
+	scaleDeployment         *connect.Client[v1.ScaleDeploymentRequest, v1.ScaleDeploymentResponse]
+	getDeploymentEnvVars    *connect.Client[v1.GetDeploymentEnvVarsRequest, v1.GetDeploymentEnvVarsResponse]
+	updateDeploymentEnvVars *connect.Client[v1.UpdateDeploymentEnvVarsRequest, v1.UpdateDeploymentEnvVarsResponse]
+	getDeploymentCompose    *connect.Client[v1.GetDeploymentComposeRequest, v1.GetDeploymentComposeResponse]
+	updateDeploymentCompose *connect.Client[v1.UpdateDeploymentComposeRequest, v1.UpdateDeploymentComposeResponse]
 }
 
 // ListDeployments calls obiente.cloud.deployments.v1.DeploymentService.ListDeployments.
@@ -281,6 +329,28 @@ func (c *deploymentServiceClient) ScaleDeployment(ctx context.Context, req *conn
 	return c.scaleDeployment.CallUnary(ctx, req)
 }
 
+// GetDeploymentEnvVars calls obiente.cloud.deployments.v1.DeploymentService.GetDeploymentEnvVars.
+func (c *deploymentServiceClient) GetDeploymentEnvVars(ctx context.Context, req *connect.Request[v1.GetDeploymentEnvVarsRequest]) (*connect.Response[v1.GetDeploymentEnvVarsResponse], error) {
+	return c.getDeploymentEnvVars.CallUnary(ctx, req)
+}
+
+// UpdateDeploymentEnvVars calls
+// obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentEnvVars.
+func (c *deploymentServiceClient) UpdateDeploymentEnvVars(ctx context.Context, req *connect.Request[v1.UpdateDeploymentEnvVarsRequest]) (*connect.Response[v1.UpdateDeploymentEnvVarsResponse], error) {
+	return c.updateDeploymentEnvVars.CallUnary(ctx, req)
+}
+
+// GetDeploymentCompose calls obiente.cloud.deployments.v1.DeploymentService.GetDeploymentCompose.
+func (c *deploymentServiceClient) GetDeploymentCompose(ctx context.Context, req *connect.Request[v1.GetDeploymentComposeRequest]) (*connect.Response[v1.GetDeploymentComposeResponse], error) {
+	return c.getDeploymentCompose.CallUnary(ctx, req)
+}
+
+// UpdateDeploymentCompose calls
+// obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentCompose.
+func (c *deploymentServiceClient) UpdateDeploymentCompose(ctx context.Context, req *connect.Request[v1.UpdateDeploymentComposeRequest]) (*connect.Response[v1.UpdateDeploymentComposeResponse], error) {
+	return c.updateDeploymentCompose.CallUnary(ctx, req)
+}
+
 // DeploymentServiceHandler is an implementation of the
 // obiente.cloud.deployments.v1.DeploymentService service.
 type DeploymentServiceHandler interface {
@@ -310,6 +380,14 @@ type DeploymentServiceHandler interface {
 	RestartDeployment(context.Context, *connect.Request[v1.RestartDeploymentRequest]) (*connect.Response[v1.RestartDeploymentResponse], error)
 	// Scale a deployment
 	ScaleDeployment(context.Context, *connect.Request[v1.ScaleDeploymentRequest]) (*connect.Response[v1.ScaleDeploymentResponse], error)
+	// Get deployment environment variables
+	GetDeploymentEnvVars(context.Context, *connect.Request[v1.GetDeploymentEnvVarsRequest]) (*connect.Response[v1.GetDeploymentEnvVarsResponse], error)
+	// Update deployment environment variables
+	UpdateDeploymentEnvVars(context.Context, *connect.Request[v1.UpdateDeploymentEnvVarsRequest]) (*connect.Response[v1.UpdateDeploymentEnvVarsResponse], error)
+	// Get deployment docker compose configuration
+	GetDeploymentCompose(context.Context, *connect.Request[v1.GetDeploymentComposeRequest]) (*connect.Response[v1.GetDeploymentComposeResponse], error)
+	// Update deployment docker compose configuration
+	UpdateDeploymentCompose(context.Context, *connect.Request[v1.UpdateDeploymentComposeRequest]) (*connect.Response[v1.UpdateDeploymentComposeResponse], error)
 }
 
 // NewDeploymentServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -397,6 +475,30 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		connect.WithSchema(deploymentServiceMethods.ByName("ScaleDeployment")),
 		connect.WithHandlerOptions(opts...),
 	)
+	deploymentServiceGetDeploymentEnvVarsHandler := connect.NewUnaryHandler(
+		DeploymentServiceGetDeploymentEnvVarsProcedure,
+		svc.GetDeploymentEnvVars,
+		connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentEnvVars")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceUpdateDeploymentEnvVarsHandler := connect.NewUnaryHandler(
+		DeploymentServiceUpdateDeploymentEnvVarsProcedure,
+		svc.UpdateDeploymentEnvVars,
+		connect.WithSchema(deploymentServiceMethods.ByName("UpdateDeploymentEnvVars")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceGetDeploymentComposeHandler := connect.NewUnaryHandler(
+		DeploymentServiceGetDeploymentComposeProcedure,
+		svc.GetDeploymentCompose,
+		connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentCompose")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceUpdateDeploymentComposeHandler := connect.NewUnaryHandler(
+		DeploymentServiceUpdateDeploymentComposeProcedure,
+		svc.UpdateDeploymentCompose,
+		connect.WithSchema(deploymentServiceMethods.ByName("UpdateDeploymentCompose")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.deployments.v1.DeploymentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DeploymentServiceListDeploymentsProcedure:
@@ -425,6 +527,14 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceRestartDeploymentHandler.ServeHTTP(w, r)
 		case DeploymentServiceScaleDeploymentProcedure:
 			deploymentServiceScaleDeploymentHandler.ServeHTTP(w, r)
+		case DeploymentServiceGetDeploymentEnvVarsProcedure:
+			deploymentServiceGetDeploymentEnvVarsHandler.ServeHTTP(w, r)
+		case DeploymentServiceUpdateDeploymentEnvVarsProcedure:
+			deploymentServiceUpdateDeploymentEnvVarsHandler.ServeHTTP(w, r)
+		case DeploymentServiceGetDeploymentComposeProcedure:
+			deploymentServiceGetDeploymentComposeHandler.ServeHTTP(w, r)
+		case DeploymentServiceUpdateDeploymentComposeProcedure:
+			deploymentServiceUpdateDeploymentComposeHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -484,4 +594,20 @@ func (UnimplementedDeploymentServiceHandler) RestartDeployment(context.Context, 
 
 func (UnimplementedDeploymentServiceHandler) ScaleDeployment(context.Context, *connect.Request[v1.ScaleDeploymentRequest]) (*connect.Response[v1.ScaleDeploymentResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.ScaleDeployment is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) GetDeploymentEnvVars(context.Context, *connect.Request[v1.GetDeploymentEnvVarsRequest]) (*connect.Response[v1.GetDeploymentEnvVarsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetDeploymentEnvVars is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) UpdateDeploymentEnvVars(context.Context, *connect.Request[v1.UpdateDeploymentEnvVarsRequest]) (*connect.Response[v1.UpdateDeploymentEnvVarsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentEnvVars is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) GetDeploymentCompose(context.Context, *connect.Request[v1.GetDeploymentComposeRequest]) (*connect.Response[v1.GetDeploymentComposeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetDeploymentCompose is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) UpdateDeploymentCompose(context.Context, *connect.Request[v1.UpdateDeploymentComposeRequest]) (*connect.Response[v1.UpdateDeploymentComposeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentCompose is not implemented"))
 }

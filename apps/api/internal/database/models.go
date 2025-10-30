@@ -36,6 +36,7 @@ type Deployment struct {
 	MemoryBytes  *int64  `gorm:"column:memory_bytes" json:"memory_bytes"`
 	CPUShares    *int64  `gorm:"column:cpu_shares" json:"cpu_shares"`
 	EnvVars      string  `gorm:"column:env_vars;type:jsonb" json:"env_vars"` // Stored as JSON object {"KEY": "value"}
+	ComposeYaml  string  `gorm:"column:compose_yaml;type:text" json:"compose_yaml"` // Docker Compose YAML content
 }
 
 func (Deployment) TableName() string {

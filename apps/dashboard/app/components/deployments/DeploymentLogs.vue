@@ -69,6 +69,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 import { useConnectClient } from "~/lib/connect-client";
 import { DeploymentService } from "@obiente/proto";
+import { useOrganizationsStore } from "~/stores/organizations";
 
 interface Props {
   deploymentId: string;
@@ -124,7 +125,7 @@ const startStream = async () => {
     streamController = new AbortController();
     const stream = await client.streamDeploymentLogs(
       {
-        organizationId: props.organizationId,
+        organizationId: effectiveOrgId.value,
         deploymentId: props.deploymentId,
         tail: tailLines.value,
       },

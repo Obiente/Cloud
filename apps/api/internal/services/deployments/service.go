@@ -3,6 +3,7 @@ package deployments
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"api/docker"
@@ -567,6 +568,59 @@ func (s *Service) UpdateDeploymentEnvVars(ctx context.Context, req *connect.Requ
 	// Reload to get updated state
 	dbDep, _ = s.repo.GetByID(ctx, deploymentID)
 	res := connect.NewResponse(&deploymentsv1.UpdateDeploymentEnvVarsResponse{Deployment: dbDeploymentToProto(dbDep)})
+	return res, nil
+}
+
+func (s *Service) GetDeploymentCompose(ctx context.Context, req *connect.Request[deploymentsv1.GetDeploymentComposeRequest]) (*connect.Response[deploymentsv1.GetDeploymentComposeResponse], error) {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+	dbDep, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+	return connect.NewResponse(&deploymentsv1.GetDeploymentComposeResponse{ComposeYaml: dbDep.ComposeYaml}), nil
+}
+
+func (s *Service) UpdateDeploymentCompose(ctx context.Context, req *connect.Request[deploymentsv1.UpdateDeploymentComposeRequest]) (*connect.Response[deploymentsv1.UpdateDeploymentComposeResponse], error) {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.update", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+	dbDep, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+	
+	composeYaml := req.Msg.GetComposeYaml()
+	// Basic validation: check for required compose fields
+	var validationErr string
+	if composeYaml != "" {
+		// Basic YAML structure checks
+		if !strings.Contains(composeYaml, "services:") && !strings.Contains(composeYaml, "version:") {
+			// Allow compose files without version (v3.8+), but require services
+			if !strings.Contains(composeYaml, "services:") {
+				validationErr = "Docker Compose must include a 'services:' section"
+			}
+		}
+	}
+	
+	dbDep.ComposeYaml = composeYaml
+	if err := s.repo.Update(ctx, dbDep); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update compose: %w", err))
+	}
+	
+	// Reload to get updated state
+	dbDep, _ = s.repo.GetByID(ctx, deploymentID)
+	res := connect.NewResponse(&deploymentsv1.UpdateDeploymentComposeResponse{
+		Deployment: dbDeploymentToProto(dbDep),
+	})
+	if validationErr != "" {
+		res.Msg.ValidationError = &validationErr
+	}
 	return res, nil
 }
 

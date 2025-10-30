@@ -7,17 +7,25 @@
           <OuiButton variant="ghost" size="sm" @click="validateCompose">
             Validate
           </OuiButton>
-          <OuiButton size="sm" @click="saveCompose" :disabled="!isDirty">
-            Save & Apply
+          <OuiButton
+            size="sm"
+            @click="saveCompose"
+            :disabled="!isDirty || isLoading"
+          >
+            {{ isLoading ? "Saving..." : "Save & Apply" }}
           </OuiButton>
         </OuiFlex>
       </OuiFlex>
 
       <OuiText size="sm" color="secondary">
-        Edit your docker-compose.yml configuration. Changes will be applied on save.
+        Edit your docker-compose.yml configuration. Changes will be applied on the next deployment.
       </OuiText>
 
-      <div class="relative">
+      <div v-if="isLoading && !composeYaml" class="flex justify-center py-8">
+        <OuiText color="secondary">Loading compose file...</OuiText>
+      </div>
+
+      <div v-else class="relative">
         <textarea
           v-model="composeYaml"
           class="w-full h-96 p-4 bg-black text-green-400 font-mono text-sm rounded-xl border border-border-default focus:outline-none focus:ring-2 focus:ring-primary"
@@ -32,7 +40,7 @@
         </OuiCardBody>
       </OuiCard>
 
-      <OuiCard v-if="validationSuccess" variant="success">
+      <OuiCard v-if="validationSuccess && !validationError" variant="success">
         <OuiCardBody>
           <OuiText size="sm" color="success">✓ Compose file is valid</OuiText>
         </OuiCardBody>
@@ -42,8 +50,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, watch, onMounted, computed } from "vue";
+import { useConnectClient } from "~/lib/connect-client";
+import { DeploymentService } from "@obiente/proto";
 import type { Deployment } from "@obiente/proto";
+import { useOrganizationsStore } from "~/stores/organizations";
 
 interface Props {
   deployment: Deployment;
@@ -55,33 +66,50 @@ const emit = defineEmits<{
   save: [composeYaml: string];
 }>();
 
+const client = useConnectClient(DeploymentService);
+const orgsStore = useOrganizationsStore();
+const organizationId = computed(() => orgsStore.currentOrgId || "");
 const composeYaml = ref("");
 const isDirty = ref(false);
+const isLoading = ref(false);
 const validationError = ref("");
 const validationSuccess = ref(false);
 
-// Load existing compose if available
-watch(
-  () => props.deployment,
-  (deployment) => {
-    // TODO: Fetch compose from deployment config
+const loadCompose = async () => {
+  isLoading.value = true;
+  try {
+    const res = await client.getDeploymentCompose({
+      organizationId: organizationId.value,
+      deploymentId: props.deployment.id,
+    });
+    composeYaml.value = res.composeYaml || "";
     if (!composeYaml.value) {
-      composeYaml.value = `version: '3.8'
+      // Generate default compose based on deployment
+      composeYaml.value = generateDefaultCompose();
+    }
+    isDirty.value = false;
+  } catch (error) {
+    console.error("Failed to load compose:", error);
+    composeYaml.value = generateDefaultCompose();
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const generateDefaultCompose = () => {
+  return `version: '3.8'
 
 services:
   app:
-    image: ${deployment.image || "nginx"}
+    image: ${props.deployment.image || "nginx"}
     ports:
-      - "${deployment.port || 8080}:${deployment.port || 8080}"
+      - "${props.deployment.port || 8080}:${props.deployment.port || 8080}"
     environment:
       # Add your environment variables here
     volumes:
       # Add volume mounts here
 `;
-    }
-  },
-  { immediate: true }
-);
+};
 
 const markDirty = () => {
   isDirty.value = true;
@@ -91,21 +119,20 @@ const markDirty = () => {
 
 const validateCompose = () => {
   try {
-    // Basic YAML validation (can be enhanced with yaml parser)
     if (!composeYaml.value.trim()) {
       validationError.value = "Compose file cannot be empty";
       validationSuccess.value = false;
       return;
     }
 
-    // Check for basic structure
+    // Basic structure validation
     if (!composeYaml.value.includes("services:")) {
       validationError.value = "Missing 'services:' section";
       validationSuccess.value = false;
       return;
     }
 
-    // TODO: Use yaml parser for proper validation
+    // TODO: Use proper YAML parser for full validation
     validationError.value = "";
     validationSuccess.value = true;
   } catch (error: any) {
@@ -116,10 +143,40 @@ const validateCompose = () => {
 
 const saveCompose = async () => {
   validateCompose();
-  if (!validationError.value && validationSuccess.value) {
-    emit("save", composeYaml.value);
-    isDirty.value = false;
+  if (validationError.value) {
+    return;
+  }
+
+  isLoading.value = true;
+  try {
+    const res = await client.updateDeploymentCompose({
+      organizationId: organizationId.value,
+      deploymentId: props.deployment.id,
+      composeYaml: composeYaml.value,
+    });
+    
+    if (res.validationError) {
+      validationError.value = res.validationError;
+      validationSuccess.value = false;
+    } else {
+      emit("save", composeYaml.value);
+      isDirty.value = false;
+      validationSuccess.value = true;
+    }
+  } catch (error) {
+    console.error("Failed to save compose:", error);
+    validationError.value = "Failed to save compose file. Please try again.";
+    validationSuccess.value = false;
+  } finally {
+    isLoading.value = false;
   }
 };
-</script>
 
+watch(() => props.deployment.id, () => {
+  loadCompose();
+}, { immediate: true });
+
+onMounted(() => {
+  loadCompose();
+});
+</script>
