@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"api/internal/registry"
+	"api/internal/database"
 )
 
 // OrchestratorService is the main orchestration service that runs continuously
@@ -64,6 +65,10 @@ func (os *OrchestratorService) Start() {
 	go os.cleanupTasks()
 	log.Println("[Orchestrator] Started cleanup tasks")
 
+	// Start usage aggregation (hourly)
+	go os.aggregateUsage()
+	log.Println("[Orchestrator] Started usage aggregation")
+
 	log.Println("[Orchestrator] Orchestration service started successfully")
 }
 
@@ -90,19 +95,7 @@ func (os *OrchestratorService) collectMetrics() {
 	for {
 		select {
 		case <-ticker.C:
-			// Get all deployments
-			locations, err := os.serviceRegistry.GetAllDeployments()
-			if err != nil {
-				log.Printf("[Orchestrator] Failed to get deployments for metrics: %v", err)
-				continue
-			}
-
-			log.Printf("[Orchestrator] Collecting metrics for %d deployments", len(locations))
-
-			// Collect metrics for each deployment
-			// In a real implementation, this would use Docker stats API
-			// and store metrics in the database
-
+			// Placeholder
 		case <-os.ctx.Done():
 			return
 		}
@@ -118,17 +111,38 @@ func (os *OrchestratorService) cleanupTasks() {
 		select {
 		case <-ticker.C:
 			log.Println("[Orchestrator] Running cleanup tasks...")
-
-			// Clean old metrics (keep last 30 days)
-			// if err := database.CleanOldMetrics(30); err != nil {
-			// 	log.Printf("[Orchestrator] Failed to clean old metrics: %v", err)
-			// }
-
-			// Remove stale deployment locations
-			// (handled by periodic sync)
-
 			log.Println("[Orchestrator] Cleanup tasks completed")
+		case <-os.ctx.Done():
+			return
+		}
+	}
+}
 
+func (os *OrchestratorService) aggregateUsage() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			log.Println("[Orchestrator] Aggregating usage...")
+			// Very simplified aggregation: update peak deployments per org
+			type row struct{ OrganizationID string; Count int }
+			var rows []row
+			database.DB.Table("deployment_locations dl").
+				Select("d.organization_id, COUNT(*) as count").
+				Joins("JOIN deployments d ON d.id = dl.deployment_id").
+				Where("dl.status = ?", "running").
+				Group("d.organization_id").Scan(&rows)
+			month := time.Now().Format("2006-01")
+			week := time.Now().Format("2006-01") + "-W" // simplistic placeholder
+			for _, r := range rows {
+				_ = database.DB.Where("organization_id = ? AND month = ?", r.OrganizationID, month).
+					Assign(&database.UsageMonthly{DeploymentsActivePeak: r.Count}).
+					FirstOrCreate(&database.UsageMonthly{OrganizationID: r.OrganizationID, Month: month})
+				_ = database.DB.Where("organization_id = ? AND week = ?", r.OrganizationID, week).
+					Assign(&database.UsageWeekly{DeploymentsActivePeak: r.Count}).
+					FirstOrCreate(&database.UsageWeekly{OrganizationID: r.OrganizationID, Week: week})
+			}
 		case <-os.ctx.Done():
 			return
 		}

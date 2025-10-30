@@ -10,15 +10,13 @@ import (
 
 	"api/internal/database"
 
-	"github.com/moby/moby/api/types"
-	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/client"
 )
 
 // ServiceRegistry tracks all deployments across the cluster
 type ServiceRegistry struct {
-	dockerClient *client.Client
+    dockerClient client.APIClient
 	cache        sync.Map // In-memory cache for fast lookups
 	mu           sync.RWMutex
 	nodeID       string
@@ -182,7 +180,7 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 	filterArgs := filters.NewArgs()
 	filterArgs.Add("label", "com.obiente.managed=true")
 
-	containers, err := sr.dockerClient.ContainerList(ctx, container.ListOptions{
+	containers, err := sr.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
 		Filters: filterArgs,
 	})
@@ -190,10 +188,10 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 		return fmt.Errorf("failed to list containers: %w", err)
 	}
 
-	// Build map of actual containers
-	actualContainers := make(map[string]types.Container)
-	for _, c := range containers {
-		actualContainers[c.ID] = c
+	// Build fast-lookup index of actual containers by ID
+	actualIndex := make(map[string]int, len(containers))
+	for i, c := range containers {
+		actualIndex[c.ID] = i
 	}
 
 	// Get all locations from database for this node
@@ -204,7 +202,7 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 
 	// Check for containers that exist in DB but not in Docker (cleanup needed)
 	for _, location := range dbLocations {
-		if _, exists := actualContainers[location.ContainerID]; !exists {
+		if _, exists := actualIndex[location.ContainerID]; !exists {
 			log.Printf("[Registry] Container %s no longer exists, removing from registry", location.ContainerID)
 			if err := database.RemoveDeploymentLocation(location.ContainerID); err != nil {
 				log.Printf("[Registry] Error removing stale location: %v", err)
@@ -218,7 +216,8 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 		dbContainerIDs[location.ContainerID] = true
 	}
 
-	for containerID, c := range actualContainers {
+	for _, c := range containers {
+		containerID := c.ID
 		if !dbContainerIDs[containerID] {
 			// Extract deployment info from labels
 			deploymentID := c.Labels["com.obiente.deployment_id"]
@@ -259,7 +258,7 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 		}
 	}
 
-	log.Printf("[Registry] Sync completed. Found %d containers", len(actualContainers))
+	log.Printf("[Registry] Sync completed. Found %d containers", len(containers))
 	return nil
 }
 

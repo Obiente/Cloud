@@ -61,28 +61,28 @@ func (h *Handler) ListContainersAsDeployments(ctx context.Context) ([]*deploymen
 			}
 		}
 
-		status := "unknown"
+		var depStatus deploymentsv1.DeploymentStatus
 		switch ctr.State {
-			case "running":
-				status = "deployed"
-			case "exited":
-				status = "stopped"
-			case "paused":
-				status = "paused"
-			default:
-				status = ctr.State
+		case "running":
+			depStatus = deploymentsv1.DeploymentStatus_RUNNING
+		case "exited":
+			depStatus = deploymentsv1.DeploymentStatus_STOPPED
+		case "paused":
+			depStatus = deploymentsv1.DeploymentStatus_STOPPED
+		default:
+			depStatus = deploymentsv1.DeploymentStatus_DEPLOYMENT_STATUS_UNSPECIFIED
 		}
 
 		createdTime := time.Unix(ctr.Created, 0)
 
 		deployment := &deploymentsv1.Deployment{
-			Id:             ctr.ID[:12],
-			Name:           name,
-			Domain:         fmt.Sprintf("%s.local", name),
-			Type:           "docker",
-			Status:         status,
-			HealthStatus:   ctr.Status,
-			CreatedAt:      timestamppb.New(createdTime),
+			Id:           ctr.ID[:12],
+			Name:         name,
+			Domain:       fmt.Sprintf("%s.local", name),
+			Type:         deploymentsv1.DeploymentType_DOCKER,
+			Status:       depStatus,
+			HealthStatus: ctr.Status,
+			CreatedAt:    timestamppb.New(createdTime),
 		}
 
 		deployments = append(deployments, deployment)

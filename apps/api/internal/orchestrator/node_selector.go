@@ -7,7 +7,6 @@ import (
 
 	"api/internal/database"
 
-	"github.com/moby/moby/api/types"
 	"github.com/moby/moby/client"
 )
 
@@ -15,7 +14,7 @@ import (
 type NodeSelector struct {
 	strategy              string
 	maxDeploymentsPerNode int
-	dockerClient          *client.Client
+    dockerClient          client.APIClient
 }
 
 // NewNodeSelector creates a new node selector
@@ -120,7 +119,7 @@ func (ns *NodeSelector) selectByResources(nodes []database.NodeMetadata) *databa
 // syncNodeMetadata synchronizes node metadata from Docker Swarm to the database
 func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 	// Get nodes from Docker Swarm
-	nodes, err := ns.dockerClient.NodeList(ctx, types.NodeListOptions{})
+	nodes, err := ns.dockerClient.NodeList(ctx, client.NodeListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to list Docker nodes: %w", err)
 	}

@@ -3,15 +3,16 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"strconv"
 	"time"
 
+	"api/docker"
 	"api/internal/database"
 	"api/internal/registry"
 
 	"github.com/docker/go-connections/nat"
-	"github.com/moby/moby/api/types"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
@@ -19,12 +20,22 @@ import (
 
 // DeploymentManager manages the lifecycle of user deployments
 type DeploymentManager struct {
-	dockerClient *client.Client
-	nodeSelector *NodeSelector
-	registry     *registry.ServiceRegistry
-	networkName  string
-	nodeID       string
-	nodeHostname string
+    dockerClient client.APIClient
+    dockerHelper dockerHelper
+    nodeSelector *NodeSelector
+    registry     *registry.ServiceRegistry
+    networkName  string
+    nodeID       string
+    nodeHostname string
+}
+
+// dockerHelper defines the subset of docker helper methods used here.
+type dockerHelper interface {
+    StartContainer(ctx context.Context, containerID string) error
+    StopContainer(ctx context.Context, containerID string, timeout time.Duration) error
+    RemoveContainer(ctx context.Context, containerID string, force bool) error
+    RestartContainer(ctx context.Context, containerID string, timeout time.Duration) error
+    ContainerLogs(ctx context.Context, containerID string, tail string) (io.ReadCloser, error)
 }
 
 // DeploymentConfig holds configuration for a new deployment
@@ -47,7 +58,7 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
 
-	nodeSelector, err := NewNodeSelector(strategy, maxDeploymentsPerNode)
+    nodeSelector, err := NewNodeSelector(strategy, maxDeploymentsPerNode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create node selector: %w", err)
 	}
@@ -57,14 +68,20 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 		return nil, fmt.Errorf("failed to create service registry: %w", err)
 	}
 
-	// Get node info
+    // Get node info
 	info, err := cli.Info(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Docker info: %w", err)
 	}
 
+    helper, err := docker.New()
+    if err != nil {
+        return nil, fmt.Errorf("failed to init docker helper: %w", err)
+    }
+
 	return &DeploymentManager{
-		dockerClient: cli,
+        dockerClient: cli,
+        dockerHelper: helper,
 		nodeSelector: nodeSelector,
 		registry:     serviceRegistry,
 		networkName:  "obiente-network",
@@ -102,8 +119,8 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 			return fmt.Errorf("failed to create container: %w", err)
 		}
 
-		// Start container
-		if err := dm.dockerClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
+        // Start container
+        if err := dm.dockerHelper.StartContainer(ctx, containerID); err != nil {
 			return fmt.Errorf("failed to start container: %w", err)
 		}
 
@@ -265,9 +282,9 @@ func (dm *DeploymentManager) StopDeployment(ctx context.Context, deploymentID st
 			continue
 		}
 
-		// Stop container
-		timeout := int(30) // 30 seconds
-		if err := dm.dockerClient.ContainerStop(ctx, location.ContainerID, container.StopOptions{Timeout: &timeout}); err != nil {
+        // Stop container
+        timeout := int(30) // 30 seconds
+        if err := dm.dockerHelper.StopContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second); err != nil {
 			log.Printf("[DeploymentManager] Failed to stop container %s: %v", location.ContainerID, err)
 			continue
 		}
@@ -298,14 +315,12 @@ func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID 
 			continue
 		}
 
-		// Stop container first
-		timeout := int(10)
-		dm.dockerClient.ContainerStop(ctx, location.ContainerID, container.StopOptions{Timeout: &timeout})
+        // Stop container first
+        timeout := int(10)
+        _ = dm.dockerHelper.StopContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second)
 
-		// Remove container
-		if err := dm.dockerClient.ContainerRemove(ctx, location.ContainerID, container.RemoveOptions{
-			Force: true,
-		}); err != nil {
+        // Remove container
+        if err := dm.dockerHelper.RemoveContainer(ctx, location.ContainerID, true); err != nil {
 			log.Printf("[DeploymentManager] Failed to remove container %s: %v", location.ContainerID, err)
 			continue
 		}
@@ -336,8 +351,8 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 			continue
 		}
 
-		timeout := int(30)
-		if err := dm.dockerClient.ContainerRestart(ctx, location.ContainerID, container.StopOptions{Timeout: &timeout}); err != nil {
+        timeout := int(30)
+        if err := dm.dockerHelper.RestartContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second); err != nil {
 			log.Printf("[DeploymentManager] Failed to restart container %s: %v", location.ContainerID, err)
 			continue
 		}
@@ -380,11 +395,11 @@ func (dm *DeploymentManager) ScaleDeployment(ctx context.Context, deploymentID s
 				continue
 			}
 
-			// Stop and remove container
-			timeout := int(10)
-			dm.dockerClient.ContainerStop(ctx, location.ContainerID, container.StopOptions{Timeout: &timeout})
-			dm.dockerClient.ContainerRemove(ctx, location.ContainerID, container.RemoveOptions{Force: true})
-			dm.registry.UnregisterDeployment(ctx, location.ContainerID)
+            // Stop and remove container
+            timeout := int(10)
+            _ = dm.dockerHelper.StopContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second)
+            _ = dm.dockerHelper.RemoveContainer(ctx, location.ContainerID, true)
+            dm.registry.UnregisterDeployment(ctx, location.ContainerID)
 
 			log.Printf("[DeploymentManager] Removed replica %s", location.ContainerID[:12])
 		}
@@ -407,13 +422,7 @@ func (dm *DeploymentManager) GetDeploymentLogs(ctx context.Context, deploymentID
 	// Get logs from first container on this node
 	for _, location := range locations {
 		if location.NodeID == dm.nodeID {
-			options := container.LogsOptions{
-				ShowStdout: true,
-				ShowStderr: true,
-				Tail:       tail,
-			}
-
-			logs, err := dm.dockerClient.ContainerLogs(ctx, location.ContainerID, options)
+            logs, err := dm.dockerHelper.ContainerLogs(ctx, location.ContainerID, tail)
 			if err != nil {
 				return "", fmt.Errorf("failed to get logs: %w", err)
 			}
@@ -430,32 +439,10 @@ func (dm *DeploymentManager) GetDeploymentLogs(ctx context.Context, deploymentID
 }
 
 // GetDeploymentStats retrieves resource usage statistics
-func (dm *DeploymentManager) GetDeploymentStats(ctx context.Context, deploymentID string) ([]types.StatsJSON, error) {
-	locations, err := dm.registry.GetDeploymentLocations(deploymentID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get deployment locations: %w", err)
-	}
-
-	var stats []types.StatsJSON
-	for _, location := range locations {
-		if location.NodeID != dm.nodeID {
-			continue
-		}
-
-		containerStats, err := dm.dockerClient.ContainerStats(ctx, location.ContainerID, false)
-		if err != nil {
-			log.Printf("[DeploymentManager] Failed to get stats for %s: %v", location.ContainerID, err)
-			continue
-		}
-		defer containerStats.Body.Close()
-
-		var stat types.StatsJSON
-		// In production, properly decode the stats JSON
-		stats = append(stats, stat)
-	}
-
-	return stats, nil
-}
+// GetDeploymentStats is currently not implemented; stats streaming will be added later.
+// func (dm *DeploymentManager) GetDeploymentStats(ctx context.Context, deploymentID string) ([]types.StatsJSON, error) {
+// 	return nil, fmt.Errorf("not implemented")
+// }
 
 // Close closes all connections
 func (dm *DeploymentManager) Close() error {
