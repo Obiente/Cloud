@@ -3,10 +3,21 @@ import { type Deployment, DeploymentStatus } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { DeploymentService } from "@obiente/proto";
 import { timestamp } from "@obiente/proto/utils";
+import { useOrganizationsStore } from "~/app/stores/organizations";
 
 export function useDeploymentActions(organizationId: string = "default") {
   const client = useConnectClient(DeploymentService);
   const isProcessing = ref(false);
+  const orgsStore = useOrganizationsStore();
+
+  const getOrgId = () => {
+    // Prefer explicit org id when provided and not the legacy "default"
+    if (organizationId && organizationId !== "default") return organizationId;
+    // Fall back to global selected org id from store
+    if (orgsStore?.currentOrgId) return orgsStore.currentOrgId;
+    // Let API resolve if still empty
+    return "";
+  };
 
   /**
    * Optimistically update deployment status
@@ -51,7 +62,7 @@ export function useDeploymentActions(organizationId: string = "default") {
 
     try {
       const res = await client.startDeployment({
-        organizationId,
+        organizationId: getOrgId(),
         deploymentId,
       });
 
@@ -95,7 +106,7 @@ export function useDeploymentActions(organizationId: string = "default") {
 
     try {
       const res = await client.stopDeployment({
-        organizationId,
+        organizationId: getOrgId(),
         deploymentId,
       });
 
@@ -140,7 +151,7 @@ export function useDeploymentActions(organizationId: string = "default") {
 
     try {
       const res = await client.triggerDeployment({
-        organizationId,
+        organizationId: getOrgId(),
         deploymentId,
       });
 
@@ -176,7 +187,7 @@ export function useDeploymentActions(organizationId: string = "default") {
 
     try {
       const res = await client.deleteDeployment({
-        organizationId,
+        organizationId: getOrgId(),
         deploymentId,
       });
 
@@ -213,7 +224,7 @@ export function useDeploymentActions(organizationId: string = "default") {
 
     try {
       const res = await client.updateDeployment({
-        organizationId,
+        organizationId: getOrgId(),
         deploymentId,
         branch: updates.branch,
         buildCommand: updates.buildCommand,
@@ -245,7 +256,7 @@ export function useDeploymentActions(organizationId: string = "default") {
 
     try {
       const res = await client.createDeployment({
-        organizationId,
+        organizationId: getOrgId(),
         name: deployment.name,
         type: deployment.type,
         repositoryUrl: deployment.repositoryUrl,
