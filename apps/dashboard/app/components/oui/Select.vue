@@ -9,14 +9,14 @@
       {{ label }}
     </Field.Label>
 
-    <Select.Root :collection="collection" :disabled="disabled" v-bind="$attrs">
+    <Select.Root :collection="collection" :disabled="disabled" v-model="inner">
       <Select.Control class="relative">
         <Select.Trigger :class="triggerClasses" :disabled="disabled">
           <Select.ValueText
             :placeholder="placeholder || 'Select an option...'"
             class="truncate"
           />
-          <Select.Indicator class="ml-2 flex-shrink-0">
+          <Select.Indicator class="ml-2 shrink-0">
             <ChevronUpDownIcon class="h-4 w-4 text-secondary" />
           </Select.Indicator>
         </Select.Trigger>
@@ -25,23 +25,20 @@
       <Teleport to="body">
         <Select.Positioner class="w-[--reference-width]">
           <Select.Content
-            class="z-50 min-w-[8rem] w-[--reference-width] overflow-hidden rounded-md border border-border-default bg-surface-base p-1 shadow-md animate-in data-[side=bottom]:slide-in-from-top-2"
+            class="z-50 min-w-[12rem] w-[--reference-width] overflow-hidden rounded-md border border-border-default bg-surface-base shadow-md animate-in data-[side=bottom]:slide-in-from-top-2"
           >
             <Select.ItemGroup>
               <Select.Item
                 v-for="item in collection.items"
                 :key="item.value"
                 :item="item"
-                class="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm text-text-primary outline-none hover:bg-surface-muted focus:bg-surface-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                class="relative flex w-full cursor-pointer select-none items-center justify-between gap-2 py-2 px-4 text-sm text-text-primary hover:bg-surface-raised transition-colors duration-150"
               >
-                <span
-                  class="absolute left-2 flex h-3.5 w-3.5 items-center justify-center"
-                >
-                  <Select.ItemIndicator>
-                    <CheckIcon class="h-4 w-4 text-primary" />
-                  </Select.ItemIndicator>
-                </span>
                 <Select.ItemText>{{ item.label }}</Select.ItemText>
+
+                <Select.ItemIndicator>
+                  <CheckIcon class="h-4 w-4 text-primary" />
+                </Select.ItemIndicator>
               </Select.Item>
             </Select.ItemGroup>
           </Select.Content>
@@ -61,17 +58,12 @@
 </template>
 
 <script setup lang="ts">
-  import { computed } from "vue";
-  import {
-    Select,
-    SelectItem,
-    createListCollection,
-    useSelect,
-  } from "@ark-ui/vue/select";
+  import { computed, ref, watch } from "vue";
+  import { Select, createListCollection } from "@ark-ui/vue/select";
   import { Field } from "@ark-ui/vue/field";
   import { CheckIcon, ChevronUpDownIcon } from "@heroicons/vue/24/outline";
 
-  interface SelectItem {
+  interface Item {
     label: string;
     value: string | number;
     disabled?: boolean;
@@ -80,7 +72,7 @@
   interface Props {
     label?: string;
     placeholder?: string;
-    items: SelectItem[];
+    items: Item[];
     helperText?: string;
     error?: string;
     required?: boolean;
@@ -94,14 +86,10 @@
     disabled: false,
   });
 
-  const collection = createListCollection({
-    items: props.items,
-  });
+  const collection = computed(() =>
+    createListCollection({ items: props.items })
+  );
 
-  const select = useSelect({
-    collection: collection,
-    multiple: false,
-  });
   const triggerClasses = computed(() => [
     "oui-input",
     `oui-input-${props.size}`,
@@ -109,17 +97,34 @@
     "w-full flex items-center justify-between text-left",
   ]);
 
-  defineModel<string | string[]>({
-    get: () => select.value.value,
-    set: (val) => {
-      if (!Array.isArray(val)) {
-        val = [val];
-      }
-      select.value.setValue(val);
-    },
-  });
+  // External v-model (single value or array for multi); internal always string[] for Ark UI
+  const model = defineModel<any>();
+  const inner = ref<string[]>([]);
 
-  defineOptions({
-    inheritAttrs: false,
-  });
+  // Sync external -> internal
+  watch(
+    () => model.value,
+    (val) => {
+      if (Array.isArray(val)) inner.value = val.map(String);
+      else if (val === null || val === undefined || val === "")
+        inner.value = [];
+      else inner.value = [String(val)];
+    },
+    { immediate: true }
+  );
+
+  // Sync internal -> external (emit single value for single-select)
+  watch(
+    () => inner.value,
+    (arr) => {
+      const next: any = !arr?.length
+        ? null
+        : arr.length === 1
+        ? arr[0]
+        : [...arr];
+      (model as any).value = next as any;
+    }
+  );
+
+  defineOptions({ inheritAttrs: false });
 </script>
