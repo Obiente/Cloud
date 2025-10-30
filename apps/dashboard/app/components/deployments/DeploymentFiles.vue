@@ -51,6 +51,14 @@
         </OuiCardBody>
       </OuiCard>
 
+      <!-- File Viewer Modal -->
+      <FileViewerModal
+        v-model:open="fileViewerOpen"
+        :deployment-id="deploymentId"
+        :file-path="selectedFilePath"
+        :organization-id="organizationId"
+      />
+
       <OuiStack v-if="uploadedFilesCount > 0" gap="sm">
         <OuiText size="sm" weight="semibold">
           Recent Uploads ({{ uploadedFilesCount }})
@@ -70,6 +78,7 @@ import { useConnectClient } from "~/lib/connect-client";
 import { DeploymentService } from "@obiente/proto";
 import { useOrganizationsStore } from "~/stores/organizations";
 import FileUploader from "~/components/deployments/FileUploader.vue";
+import FileViewerModal from "~/components/deployments/FileViewerModal.vue";
 
 interface Props {
   deploymentId: string;
@@ -122,18 +131,12 @@ const navigateUp = () => {
   }
 };
 
+const fileViewerOpen = ref(false);
+const selectedFilePath = ref("");
+
 const openFile = async (path: string) => {
-  try {
-    const res = await client.getContainerFile({
-      organizationId: organizationId.value,
-      deploymentId: props.deploymentId,
-      path: path,
-    });
-    // TODO: Open file in modal/viewer
-    console.log("File content:", res.content.substring(0, 100));
-  } catch (error) {
-    console.error("Failed to open file:", error);
-  }
+  selectedFilePath.value = path;
+  fileViewerOpen.value = true;
 };
 
 const formatSize = (bytes: number | bigint) => {
