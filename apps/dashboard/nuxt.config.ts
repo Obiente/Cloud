@@ -5,13 +5,6 @@ export default defineNuxtConfig({
   vite: {
     plugins: [tailwindcss()],
     server: {
-      proxy: {
-        "/go-api": {
-          target: "http://localhost:3001",
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/go-api/, ""),
-        },
-      },
       hmr: {
         port: 24678, // Use a different port for HMR
       },
@@ -31,19 +24,21 @@ export default defineNuxtConfig({
   runtimeConfig: {
     // Private keys (only available on server-side)
     apiSecret: "",
+    githubClientSecret: process.env.GITHUB_CLIENT_SECRET || "", // Server-side only - never expose to client
     session: {
-      password: "changeme_" + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters
+      password: process.env.NUXT_SESSION_PASSWORD || "changeme_" + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters
       cookie: {
         secure: true, // Set to true if using HTTPS
       },
     },
     // Public keys (exposed to client-side)
     public: {
-      requestHost: "http://localhost:3000",
-      apiHost: "http://localhost:3001",
-      oidcIssuer: "https://obiente.cloud",
-      oidcBase: "https://auth.obiente.cloud",
-      oidcClientId: "339499954043158530",
+      requestHost: process.env.NUXT_REQUEST_HOST || "http://localhost:3000",
+      apiHost: process.env.NUXT_PUBLIC_API_HOST || "http://localhost:3001",
+      oidcIssuer: process.env.NUXT_PUBLIC_OIDC_ISSUER || "https://obiente.cloud",
+      oidcBase: process.env.NUXT_PUBLIC_OIDC_BASE || "https://auth.obiente.cloud",
+      oidcClientId: process.env.NUXT_PUBLIC_OIDC_CLIENT_ID || "339499954043158530",
+      githubClientId: process.env.NUXT_PUBLIC_GITHUB_CLIENT_ID || "",
     },
   },
 
