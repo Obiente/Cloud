@@ -5,7 +5,6 @@
       <OuiCardBody>
         <form @submit.prevent="create">
           <OuiGrid cols="1" colsMd="2" gap="md">
-            {{selectedOrg}}
             <OuiSelect
               label="Organization"
               v-model="selectedOrg"

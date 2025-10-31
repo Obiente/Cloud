@@ -189,7 +189,6 @@
             <OuiCard v-for="m in members" :key="m.id">
               <OuiCardBody>
                 <OuiStack gap="xs">
-                  {{m.user}}
                   <OuiText size="sm" weight="medium">{{
                     m.user?.name || m.user?.email || m.user?.id
                   }}</OuiText>
