@@ -35,7 +35,8 @@ type Deployment struct {
 	Replicas     *int32  `gorm:"column:replicas" json:"replicas"`
 	MemoryBytes  *int64  `gorm:"column:memory_bytes" json:"memory_bytes"`
 	CPUShares    *int64  `gorm:"column:cpu_shares" json:"cpu_shares"`
-	EnvVars      string  `gorm:"column:env_vars;type:jsonb" json:"env_vars"` // Stored as JSON object {"KEY": "value"}
+	EnvVars      string  `gorm:"column:env_vars;type:jsonb" json:"env_vars"` // Legacy: Stored as JSON object {"KEY": "value"} for backward compatibility
+	EnvFileContent string `gorm:"column:env_file_content;type:text" json:"env_file_content"` // Raw .env file content with comments
 	ComposeYaml  string  `gorm:"column:compose_yaml;type:text" json:"compose_yaml"` // Docker Compose YAML content
 }
 
@@ -166,3 +167,17 @@ type OrganizationMember struct {
 }
 
 func (OrganizationMember) TableName() string { return "organization_members" }
+
+// GitHubIntegration stores GitHub OAuth tokens for users and organizations
+type GitHubIntegration struct {
+	ID          string    `gorm:"primaryKey" json:"id"`
+	UserID      *string   `gorm:"index;uniqueIndex:idx_user_github" json:"user_id"`      // Zitadel user ID (nullable)
+	OrganizationID *string `gorm:"index;uniqueIndex:idx_org_github" json:"organization_id"` // Organization ID (nullable)
+	Token       string    `gorm:"column:token" json:"token"`                             // Encrypted GitHub access token
+	Username    string    `gorm:"column:username" json:"username"`                       // GitHub username
+	Scope       string    `gorm:"column:scope" json:"scope"`                             // Granted OAuth scopes
+	ConnectedAt time.Time `gorm:"column:connected_at" json:"connected_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (GitHubIntegration) TableName() string { return "github_integrations" }
