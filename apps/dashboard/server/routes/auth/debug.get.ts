@@ -1,5 +1,6 @@
-import { eventHandler } from "h3";
+import { eventHandler, getCookie } from "h3";
 import { getServerToken } from "../../utils/serverAuth";
+import { getUserSession } from "../../utils/session";
 
 /**
  * Debug endpoint to check authentication state
@@ -8,7 +9,7 @@ import { getServerToken } from "../../utils/serverAuth";
  */
 export default eventHandler(async (event) => {
   const session = await getUserSession(event);
-  const directToken = getServerToken(event);
+  const directToken = await getServerToken(event);
 
   // Don't return the actual tokens in production!
   return {

@@ -3,6 +3,12 @@
  * Access tokens are bearer tokens, not JWTs, so validation is handled by the API
  */
 export default defineEventHandler(async (event) => {
+  // If DISABLE_AUTH is enabled, skip all authentication checks
+  if (process.env.DISABLE_AUTH === "true") {
+    console.log("⚠️  WARNING: DISABLE_AUTH=true, skipping authentication middleware");
+    return;
+  }
+
   const { getAccessToken } = await import("../utils/token");
   // Skip auth for public routes
   const publicRoutes = ["/auth/callback", "/auth/login"];
