@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/auth/v1/auth_service.proto.
  */
 export const file_obiente_cloud_auth_v1_auth_service: GenFile = /*@__PURE__*/
-  fileDesc("CihvYmllbnRlL2Nsb3VkL2F1dGgvdjEvYXV0aF9zZXJ2aWNlLnByb3RvEhVvYmllbnRlLmNsb3VkLmF1dGgudjEiFwoVR2V0Q3VycmVudFVzZXJSZXF1ZXN0IkMKFkdldEN1cnJlbnRVc2VyUmVzcG9uc2USKQoEdXNlchgBIAEoCzIbLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Vc2VyIrECCgRVc2VyEgoKAmlkGAEgASgJEg0KBWVtYWlsGAIgASgJEgwKBG5hbWUYAyABKAkSEgoKYXZhdGFyX3VybBgEIAEoCRIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCgh0aW1lem9uZRgGIAEoCRISCgpnaXZlbl9uYW1lGAcgASgJEhMKC2ZhbWlseV9uYW1lGAggASgJEhoKEnByZWZlcnJlZF91c2VybmFtZRgJIAEoCRIWCg5lbWFpbF92ZXJpZmllZBgKIAEoCBIOCgZsb2NhbGUYCyABKAkSLgoKdXBkYXRlZF9hdBgMIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDQoFcm9sZXMYDSADKAkyfAoLQXV0aFNlcnZpY2USbQoOR2V0Q3VycmVudFVzZXISLC5vYmllbnRlLmNsb3VkLmF1dGgudjEuR2V0Q3VycmVudFVzZXJSZXF1ZXN0Gi0ub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkdldEN1cnJlbnRVc2VyUmVzcG9uc2VCLFoqYXBpL2dlbi9wcm90by9vYmllbnRlL2Nsb3VkL2F1dGgvdjE7YXV0aHYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("CihvYmllbnRlL2Nsb3VkL2F1dGgvdjEvYXV0aF9zZXJ2aWNlLnByb3RvEhVvYmllbnRlLmNsb3VkLmF1dGgudjEiFwoVR2V0Q3VycmVudFVzZXJSZXF1ZXN0IkMKFkdldEN1cnJlbnRVc2VyUmVzcG9uc2USKQoEdXNlchgBIAEoCzIbLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Vc2VyIrECCgRVc2VyEgoKAmlkGAEgASgJEg0KBWVtYWlsGAIgASgJEgwKBG5hbWUYAyABKAkSEgoKYXZhdGFyX3VybBgEIAEoCRIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCgh0aW1lem9uZRgGIAEoCRISCgpnaXZlbl9uYW1lGAcgASgJEhMKC2ZhbWlseV9uYW1lGAggASgJEhoKEnByZWZlcnJlZF91c2VybmFtZRgJIAEoCRIWCg5lbWFpbF92ZXJpZmllZBgKIAEoCBIOCgZsb2NhbGUYCyABKAkSLgoKdXBkYXRlZF9hdBgMIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDQoFcm9sZXMYDSADKAkiTQoUQ29ubmVjdEdpdEh1YlJlcXVlc3QSFAoMYWNjZXNzX3Rva2VuGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEg0KBXNjb3BlGAMgASgJIjoKFUNvbm5lY3RHaXRIdWJSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEhAKCHVzZXJuYW1lGAIgASgJIhkKF0Rpc2Nvbm5lY3RHaXRIdWJSZXF1ZXN0IisKGERpc2Nvbm5lY3RHaXRIdWJSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIIhgKFkdldEdpdEh1YlN0YXR1c1JlcXVlc3QiPgoXR2V0R2l0SHViU3RhdHVzUmVzcG9uc2USEQoJY29ubmVjdGVkGAEgASgIEhAKCHVzZXJuYW1lGAIgASgJInIKIENvbm5lY3RPcmdhbml6YXRpb25HaXRIdWJSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIUCgxhY2Nlc3NfdG9rZW4YAiABKAkSEAoIdXNlcm5hbWUYAyABKAkSDQoFc2NvcGUYBCABKAkiRgohQ29ubmVjdE9yZ2FuaXphdGlvbkdpdEh1YlJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSEAoIdXNlcm5hbWUYAiABKAkiPgojRGlzY29ubmVjdE9yZ2FuaXphdGlvbkdpdEh1YlJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJIjcKJERpc2Nvbm5lY3RPcmdhbml6YXRpb25HaXRIdWJSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIIh8KHUxpc3RHaXRIdWJJbnRlZ3JhdGlvbnNSZXF1ZXN0IrsBChVHaXRIdWJJbnRlZ3JhdGlvbkluZm8SCgoCaWQYASABKAkSEAoIdXNlcm5hbWUYAiABKAkSDQoFc2NvcGUYAyABKAkSDwoHaXNfdXNlchgEIAEoCBIXCg9vcmdhbml6YXRpb25faWQYBSABKAkSGQoRb3JnYW5pemF0aW9uX25hbWUYBiABKAkSMAoMY29ubmVjdGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJkCh5MaXN0R2l0SHViSW50ZWdyYXRpb25zUmVzcG9uc2USQgoMaW50ZWdyYXRpb25zGAEgAygLMiwub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkdpdEh1YkludGVncmF0aW9uSW5mbzKCBwoLQXV0aFNlcnZpY2USbQoOR2V0Q3VycmVudFVzZXISLC5vYmllbnRlLmNsb3VkLmF1dGgudjEuR2V0Q3VycmVudFVzZXJSZXF1ZXN0Gi0ub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkdldEN1cnJlbnRVc2VyUmVzcG9uc2USagoNQ29ubmVjdEdpdEh1YhIrLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Db25uZWN0R2l0SHViUmVxdWVzdBosLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Db25uZWN0R2l0SHViUmVzcG9uc2UScwoQRGlzY29ubmVjdEdpdEh1YhIuLm9iaWVudGUuY2xvdWQuYXV0aC52MS5EaXNjb25uZWN0R2l0SHViUmVxdWVzdBovLm9iaWVudGUuY2xvdWQuYXV0aC52MS5EaXNjb25uZWN0R2l0SHViUmVzcG9uc2UScAoPR2V0R2l0SHViU3RhdHVzEi0ub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkdldEdpdEh1YlN0YXR1c1JlcXVlc3QaLi5vYmllbnRlLmNsb3VkLmF1dGgudjEuR2V0R2l0SHViU3RhdHVzUmVzcG9uc2USjgEKGUNvbm5lY3RPcmdhbml6YXRpb25HaXRIdWISNy5vYmllbnRlLmNsb3VkLmF1dGgudjEuQ29ubmVjdE9yZ2FuaXphdGlvbkdpdEh1YlJlcXVlc3QaOC5vYmllbnRlLmNsb3VkLmF1dGgudjEuQ29ubmVjdE9yZ2FuaXphdGlvbkdpdEh1YlJlc3BvbnNlEpcBChxEaXNjb25uZWN0T3JnYW5pemF0aW9uR2l0SHViEjoub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkRpc2Nvbm5lY3RPcmdhbml6YXRpb25HaXRIdWJSZXF1ZXN0Gjsub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkRpc2Nvbm5lY3RPcmdhbml6YXRpb25HaXRIdWJSZXNwb25zZRKFAQoWTGlzdEdpdEh1YkludGVncmF0aW9ucxI0Lm9iaWVudGUuY2xvdWQuYXV0aC52MS5MaXN0R2l0SHViSW50ZWdyYXRpb25zUmVxdWVzdBo1Lm9iaWVudGUuY2xvdWQuYXV0aC52MS5MaXN0R2l0SHViSW50ZWdyYXRpb25zUmVzcG9uc2VCLFoqYXBpL2dlbi9wcm90by9vYmllbnRlL2Nsb3VkL2F1dGgvdjE7YXV0aHYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * Empty request for getting current user
@@ -126,6 +126,313 @@ export const UserSchema: GenMessage<User> = /*@__PURE__*/
   messageDesc(file_obiente_cloud_auth_v1_auth_service, 2);
 
 /**
+ * GitHub Integration Messages
+ *
+ * @generated from message obiente.cloud.auth.v1.ConnectGitHubRequest
+ */
+export type ConnectGitHubRequest = Message<"obiente.cloud.auth.v1.ConnectGitHubRequest"> & {
+  /**
+   * GitHub OAuth access token
+   *
+   * @generated from field: string access_token = 1;
+   */
+  accessToken: string;
+
+  /**
+   * GitHub username
+   *
+   * @generated from field: string username = 2;
+   */
+  username: string;
+
+  /**
+   * Granted OAuth scopes
+   *
+   * @generated from field: string scope = 3;
+   */
+  scope: string;
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.ConnectGitHubRequest.
+ * Use `create(ConnectGitHubRequestSchema)` to create a new message.
+ */
+export const ConnectGitHubRequestSchema: GenMessage<ConnectGitHubRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 3);
+
+/**
+ * @generated from message obiente.cloud.auth.v1.ConnectGitHubResponse
+ */
+export type ConnectGitHubResponse = Message<"obiente.cloud.auth.v1.ConnectGitHubResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * GitHub username
+   *
+   * @generated from field: string username = 2;
+   */
+  username: string;
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.ConnectGitHubResponse.
+ * Use `create(ConnectGitHubResponseSchema)` to create a new message.
+ */
+export const ConnectGitHubResponseSchema: GenMessage<ConnectGitHubResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 4);
+
+/**
+ * @generated from message obiente.cloud.auth.v1.DisconnectGitHubRequest
+ */
+export type DisconnectGitHubRequest = Message<"obiente.cloud.auth.v1.DisconnectGitHubRequest"> & {
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.DisconnectGitHubRequest.
+ * Use `create(DisconnectGitHubRequestSchema)` to create a new message.
+ */
+export const DisconnectGitHubRequestSchema: GenMessage<DisconnectGitHubRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 5);
+
+/**
+ * @generated from message obiente.cloud.auth.v1.DisconnectGitHubResponse
+ */
+export type DisconnectGitHubResponse = Message<"obiente.cloud.auth.v1.DisconnectGitHubResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.DisconnectGitHubResponse.
+ * Use `create(DisconnectGitHubResponseSchema)` to create a new message.
+ */
+export const DisconnectGitHubResponseSchema: GenMessage<DisconnectGitHubResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 6);
+
+/**
+ * @generated from message obiente.cloud.auth.v1.GetGitHubStatusRequest
+ */
+export type GetGitHubStatusRequest = Message<"obiente.cloud.auth.v1.GetGitHubStatusRequest"> & {
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.GetGitHubStatusRequest.
+ * Use `create(GetGitHubStatusRequestSchema)` to create a new message.
+ */
+export const GetGitHubStatusRequestSchema: GenMessage<GetGitHubStatusRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 7);
+
+/**
+ * @generated from message obiente.cloud.auth.v1.GetGitHubStatusResponse
+ */
+export type GetGitHubStatusResponse = Message<"obiente.cloud.auth.v1.GetGitHubStatusResponse"> & {
+  /**
+   * @generated from field: bool connected = 1;
+   */
+  connected: boolean;
+
+  /**
+   * GitHub username if connected
+   *
+   * @generated from field: string username = 2;
+   */
+  username: string;
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.GetGitHubStatusResponse.
+ * Use `create(GetGitHubStatusResponseSchema)` to create a new message.
+ */
+export const GetGitHubStatusResponseSchema: GenMessage<GetGitHubStatusResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 8);
+
+/**
+ * Organization GitHub Integration Messages
+ *
+ * @generated from message obiente.cloud.auth.v1.ConnectOrganizationGitHubRequest
+ */
+export type ConnectOrganizationGitHubRequest = Message<"obiente.cloud.auth.v1.ConnectOrganizationGitHubRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * GitHub OAuth access token
+   *
+   * @generated from field: string access_token = 2;
+   */
+  accessToken: string;
+
+  /**
+   * GitHub username
+   *
+   * @generated from field: string username = 3;
+   */
+  username: string;
+
+  /**
+   * Granted OAuth scopes
+   *
+   * @generated from field: string scope = 4;
+   */
+  scope: string;
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.ConnectOrganizationGitHubRequest.
+ * Use `create(ConnectOrganizationGitHubRequestSchema)` to create a new message.
+ */
+export const ConnectOrganizationGitHubRequestSchema: GenMessage<ConnectOrganizationGitHubRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 9);
+
+/**
+ * @generated from message obiente.cloud.auth.v1.ConnectOrganizationGitHubResponse
+ */
+export type ConnectOrganizationGitHubResponse = Message<"obiente.cloud.auth.v1.ConnectOrganizationGitHubResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * GitHub username
+   *
+   * @generated from field: string username = 2;
+   */
+  username: string;
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.ConnectOrganizationGitHubResponse.
+ * Use `create(ConnectOrganizationGitHubResponseSchema)` to create a new message.
+ */
+export const ConnectOrganizationGitHubResponseSchema: GenMessage<ConnectOrganizationGitHubResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 10);
+
+/**
+ * @generated from message obiente.cloud.auth.v1.DisconnectOrganizationGitHubRequest
+ */
+export type DisconnectOrganizationGitHubRequest = Message<"obiente.cloud.auth.v1.DisconnectOrganizationGitHubRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.DisconnectOrganizationGitHubRequest.
+ * Use `create(DisconnectOrganizationGitHubRequestSchema)` to create a new message.
+ */
+export const DisconnectOrganizationGitHubRequestSchema: GenMessage<DisconnectOrganizationGitHubRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 11);
+
+/**
+ * @generated from message obiente.cloud.auth.v1.DisconnectOrganizationGitHubResponse
+ */
+export type DisconnectOrganizationGitHubResponse = Message<"obiente.cloud.auth.v1.DisconnectOrganizationGitHubResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.DisconnectOrganizationGitHubResponse.
+ * Use `create(DisconnectOrganizationGitHubResponseSchema)` to create a new message.
+ */
+export const DisconnectOrganizationGitHubResponseSchema: GenMessage<DisconnectOrganizationGitHubResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 12);
+
+/**
+ * @generated from message obiente.cloud.auth.v1.ListGitHubIntegrationsRequest
+ */
+export type ListGitHubIntegrationsRequest = Message<"obiente.cloud.auth.v1.ListGitHubIntegrationsRequest"> & {
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.ListGitHubIntegrationsRequest.
+ * Use `create(ListGitHubIntegrationsRequestSchema)` to create a new message.
+ */
+export const ListGitHubIntegrationsRequestSchema: GenMessage<ListGitHubIntegrationsRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 13);
+
+/**
+ * @generated from message obiente.cloud.auth.v1.GitHubIntegrationInfo
+ */
+export type GitHubIntegrationInfo = Message<"obiente.cloud.auth.v1.GitHubIntegrationInfo"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string username = 2;
+   */
+  username: string;
+
+  /**
+   * @generated from field: string scope = 3;
+   */
+  scope: string;
+
+  /**
+   * true if user integration, false if organization
+   *
+   * @generated from field: bool is_user = 4;
+   */
+  isUser: boolean;
+
+  /**
+   * Only set if is_user is false
+   *
+   * @generated from field: string organization_id = 5;
+   */
+  organizationId: string;
+
+  /**
+   * Only set if is_user is false
+   *
+   * @generated from field: string organization_name = 6;
+   */
+  organizationName: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp connected_at = 7;
+   */
+  connectedAt?: Timestamp;
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.GitHubIntegrationInfo.
+ * Use `create(GitHubIntegrationInfoSchema)` to create a new message.
+ */
+export const GitHubIntegrationInfoSchema: GenMessage<GitHubIntegrationInfo> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 14);
+
+/**
+ * @generated from message obiente.cloud.auth.v1.ListGitHubIntegrationsResponse
+ */
+export type ListGitHubIntegrationsResponse = Message<"obiente.cloud.auth.v1.ListGitHubIntegrationsResponse"> & {
+  /**
+   * @generated from field: repeated obiente.cloud.auth.v1.GitHubIntegrationInfo integrations = 1;
+   */
+  integrations: GitHubIntegrationInfo[];
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.ListGitHubIntegrationsResponse.
+ * Use `create(ListGitHubIntegrationsResponseSchema)` to create a new message.
+ */
+export const ListGitHubIntegrationsResponseSchema: GenMessage<ListGitHubIntegrationsResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 15);
+
+/**
  * @generated from service obiente.cloud.auth.v1.AuthService
  */
 export const AuthService: GenService<{
@@ -138,6 +445,68 @@ export const AuthService: GenService<{
     methodKind: "unary";
     input: typeof GetCurrentUserRequestSchema;
     output: typeof GetCurrentUserResponseSchema;
+  },
+  /**
+   * GitHub Integration
+   * Connect GitHub account by storing OAuth token
+   *
+   * @generated from rpc obiente.cloud.auth.v1.AuthService.ConnectGitHub
+   */
+  connectGitHub: {
+    methodKind: "unary";
+    input: typeof ConnectGitHubRequestSchema;
+    output: typeof ConnectGitHubResponseSchema;
+  },
+  /**
+   * Disconnect GitHub account
+   *
+   * @generated from rpc obiente.cloud.auth.v1.AuthService.DisconnectGitHub
+   */
+  disconnectGitHub: {
+    methodKind: "unary";
+    input: typeof DisconnectGitHubRequestSchema;
+    output: typeof DisconnectGitHubResponseSchema;
+  },
+  /**
+   * Get GitHub connection status
+   *
+   * @generated from rpc obiente.cloud.auth.v1.AuthService.GetGitHubStatus
+   */
+  getGitHubStatus: {
+    methodKind: "unary";
+    input: typeof GetGitHubStatusRequestSchema;
+    output: typeof GetGitHubStatusResponseSchema;
+  },
+  /**
+   * Organization GitHub Integration
+   * Connect organization GitHub account by storing OAuth token
+   *
+   * @generated from rpc obiente.cloud.auth.v1.AuthService.ConnectOrganizationGitHub
+   */
+  connectOrganizationGitHub: {
+    methodKind: "unary";
+    input: typeof ConnectOrganizationGitHubRequestSchema;
+    output: typeof ConnectOrganizationGitHubResponseSchema;
+  },
+  /**
+   * Disconnect organization GitHub account
+   *
+   * @generated from rpc obiente.cloud.auth.v1.AuthService.DisconnectOrganizationGitHub
+   */
+  disconnectOrganizationGitHub: {
+    methodKind: "unary";
+    input: typeof DisconnectOrganizationGitHubRequestSchema;
+    output: typeof DisconnectOrganizationGitHubResponseSchema;
+  },
+  /**
+   * List all GitHub integrations (user and organizations)
+   *
+   * @generated from rpc obiente.cloud.auth.v1.AuthService.ListGitHubIntegrations
+   */
+  listGitHubIntegrations: {
+    methodKind: "unary";
+    input: typeof ListGitHubIntegrationsRequestSchema;
+    output: typeof ListGitHubIntegrationsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_obiente_cloud_auth_v1_auth_service, 0);

@@ -9,6 +9,26 @@ import "google/protobuf/timestamp.proto";
 service AuthService {
   // Get current authenticated user
   rpc GetCurrentUser(GetCurrentUserRequest) returns (GetCurrentUserResponse);
+  
+  // GitHub Integration
+  // Connect GitHub account by storing OAuth token
+  rpc ConnectGitHub(ConnectGitHubRequest) returns (ConnectGitHubResponse);
+  
+  // Disconnect GitHub account
+  rpc DisconnectGitHub(DisconnectGitHubRequest) returns (DisconnectGitHubResponse);
+  
+  // Get GitHub connection status
+  rpc GetGitHubStatus(GetGitHubStatusRequest) returns (GetGitHubStatusResponse);
+  
+  // Organization GitHub Integration
+  // Connect organization GitHub account by storing OAuth token
+  rpc ConnectOrganizationGitHub(ConnectOrganizationGitHubRequest) returns (ConnectOrganizationGitHubResponse);
+  
+  // Disconnect organization GitHub account
+  rpc DisconnectOrganizationGitHub(DisconnectOrganizationGitHubRequest) returns (DisconnectOrganizationGitHubResponse);
+  
+  // List all GitHub integrations (user and organizations)
+  rpc ListGitHubIntegrations(ListGitHubIntegrationsRequest) returns (ListGitHubIntegrationsResponse);
 }
 
 // Empty request for getting current user
@@ -33,4 +53,66 @@ message User {
   string locale = 11;
   google.protobuf.Timestamp updated_at = 12;
   repeated string roles = 13;
+}
+
+// GitHub Integration Messages
+message ConnectGitHubRequest {
+  string access_token = 1; // GitHub OAuth access token
+  string username = 2;     // GitHub username
+  string scope = 3;        // Granted OAuth scopes
+}
+
+message ConnectGitHubResponse {
+  bool success = 1;
+  string username = 2; // GitHub username
+}
+
+message DisconnectGitHubRequest {}
+
+message DisconnectGitHubResponse {
+  bool success = 1;
+}
+
+message GetGitHubStatusRequest {}
+
+message GetGitHubStatusResponse {
+  bool connected = 1;
+  string username = 2; // GitHub username if connected
+}
+
+// Organization GitHub Integration Messages
+message ConnectOrganizationGitHubRequest {
+  string organization_id = 1;
+  string access_token = 2; // GitHub OAuth access token
+  string username = 3;     // GitHub username
+  string scope = 4;        // Granted OAuth scopes
+}
+
+message ConnectOrganizationGitHubResponse {
+  bool success = 1;
+  string username = 2; // GitHub username
+}
+
+message DisconnectOrganizationGitHubRequest {
+  string organization_id = 1;
+}
+
+message DisconnectOrganizationGitHubResponse {
+  bool success = 1;
+}
+
+message ListGitHubIntegrationsRequest {}
+
+message GitHubIntegrationInfo {
+  string id = 1;
+  string username = 2;
+  string scope = 3;
+  bool is_user = 4; // true if user integration, false if organization
+  string organization_id = 5; // Only set if is_user is false
+  string organization_name = 6; // Only set if is_user is false
+  google.protobuf.Timestamp connected_at = 7;
+}
+
+message ListGitHubIntegrationsResponse {
+  repeated GitHubIntegrationInfo integrations = 1;
 }
