@@ -35,7 +35,7 @@ type dockerHelper interface {
     StopContainer(ctx context.Context, containerID string, timeout time.Duration) error
     RemoveContainer(ctx context.Context, containerID string, force bool) error
     RestartContainer(ctx context.Context, containerID string, timeout time.Duration) error
-    ContainerLogs(ctx context.Context, containerID string, tail string) (io.ReadCloser, error)
+    ContainerLogs(ctx context.Context, containerID string, tail string, follow bool) (io.ReadCloser, error)
 }
 
 // DeploymentConfig holds configuration for a new deployment
@@ -79,13 +79,20 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
         return nil, fmt.Errorf("failed to init docker helper: %w", err)
     }
 
+	// Determine node ID - use Swarm node ID if available, otherwise use synthetic local ID
+	nodeID := info.Swarm.NodeID
+	if nodeID == "" {
+		// Not in Swarm mode - use synthetic ID matching what node selector uses
+		nodeID = "local-" + info.Name
+	}
+
 	return &DeploymentManager{
         dockerClient: cli,
         dockerHelper: helper,
 		nodeSelector: nodeSelector,
 		registry:     serviceRegistry,
 		networkName:  "obiente-network",
-		nodeID:       info.Swarm.NodeID,
+		nodeID:       nodeID,
 		nodeHostname: info.Name,
 	}, nil
 }
@@ -97,6 +104,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 	// Select best node for deployment
 	targetNode, err := dm.nodeSelector.SelectNode(ctx)
 	if err != nil {
+		log.Printf("[DeploymentManager] ERROR: Failed to select node for deployment %s: %v", config.DeploymentID, err)
 		return fmt.Errorf("failed to select node: %w", err)
 	}
 
@@ -110,71 +118,101 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 			targetNode.ID, dm.nodeID)
 	}
 
-	// Create containers for each replica
-	for i := 0; i < config.Replicas; i++ {
-		containerName := fmt.Sprintf("%s-replica-%d", config.DeploymentID, i)
-
-		containerID, err := dm.createContainer(ctx, config, containerName, i)
-		if err != nil {
-			return fmt.Errorf("failed to create container: %w", err)
+	// Get routing rules to determine service names
+	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
+	serviceNames := []string{"default"}
+	if len(routings) > 0 {
+		// Extract unique service names from routing rules
+		serviceNameMap := make(map[string]bool)
+		for _, routing := range routings {
+			sn := routing.ServiceName
+			if sn == "" {
+				sn = "default"
+			}
+			serviceNameMap[sn] = true
 		}
-
-        // Start container
-        if err := dm.dockerHelper.StartContainer(ctx, containerID); err != nil {
-			return fmt.Errorf("failed to start container: %w", err)
+		serviceNames = make([]string, 0, len(serviceNameMap))
+		for sn := range serviceNameMap {
+			serviceNames = append(serviceNames, sn)
 		}
+	}
 
-		// Get container details
-		containerInfo, err := dm.dockerClient.ContainerInspect(ctx, containerID)
-		if err != nil {
-			return fmt.Errorf("failed to inspect container: %w", err)
-		}
+	// Create containers for each service and replica
+	for _, serviceName := range serviceNames {
+		for i := 0; i < config.Replicas; i++ {
+			containerName := fmt.Sprintf("%s-%s-replica-%d", config.DeploymentID, serviceName, i)
 
-		// Determine the public port
-		publicPort := config.Port
-		if len(containerInfo.NetworkSettings.Ports) > 0 {
-			for _, bindings := range containerInfo.NetworkSettings.Ports {
-				if len(bindings) > 0 {
-					if port, err := strconv.Atoi(bindings[0].HostPort); err == nil {
-						publicPort = port
+			containerID, err := dm.createContainer(ctx, config, containerName, i, serviceName)
+			if err != nil {
+				return fmt.Errorf("failed to create container: %w", err)
+			}
+
+			// Start container
+			if err := dm.dockerHelper.StartContainer(ctx, containerID); err != nil {
+				return fmt.Errorf("failed to start container: %w", err)
+			}
+
+			// Get container details
+			containerInfo, err := dm.dockerClient.ContainerInspect(ctx, containerID)
+			if err != nil {
+				return fmt.Errorf("failed to inspect container: %w", err)
+			}
+
+			// Determine the public port (find port for this service from routing)
+			publicPort := config.Port
+			for _, routing := range routings {
+				if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
+					publicPort = routing.TargetPort
+					break
+				}
+			}
+			if len(containerInfo.NetworkSettings.Ports) > 0 {
+				for _, bindings := range containerInfo.NetworkSettings.Ports {
+					if len(bindings) > 0 {
+						if port, err := strconv.Atoi(bindings[0].HostPort); err == nil {
+							publicPort = port
+						}
 					}
 				}
 			}
-		}
 
-		// Register deployment location
-		location := &database.DeploymentLocation{
-			DeploymentID: config.DeploymentID,
-			NodeID:       dm.nodeID,
-			NodeHostname: dm.nodeHostname,
-			ContainerID:  containerID,
-			Status:       "running",
-			Port:         publicPort,
-			Domain:       config.Domain,
-			HealthStatus: "unknown",
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
-		}
+			// Register deployment location
+			location := &database.DeploymentLocation{
+				DeploymentID: config.DeploymentID,
+				NodeID:       dm.nodeID,
+				NodeHostname: dm.nodeHostname,
+				ContainerID:  containerID,
+				Status:       "running",
+				Port:         publicPort,
+				Domain:       config.Domain,
+				HealthStatus: "unknown",
+				CreatedAt:    time.Now(),
+				UpdatedAt:    time.Now(),
+			}
 
-		if err := dm.registry.RegisterDeployment(ctx, location); err != nil {
-			log.Printf("[DeploymentManager] Warning: Failed to register deployment: %v", err)
-		}
+			if err := dm.registry.RegisterDeployment(ctx, location); err != nil {
+				log.Printf("[DeploymentManager] Warning: Failed to register deployment: %v", err)
+			}
 
-		log.Printf("[DeploymentManager] Successfully created container %s for deployment %s",
-			containerID[:12], config.DeploymentID)
+			log.Printf("[DeploymentManager] Successfully created container %s for deployment %s (service: %s)",
+				containerID[:12], config.DeploymentID, serviceName)
+		}
 	}
 
-	// Create deployment routing
+	// Create default deployment routing (for backward compatibility)
 	routing := &database.DeploymentRouting{
-		DeploymentID:     config.DeploymentID,
-		Domain:           config.Domain,
-		TargetPort:       config.Port,
-		Protocol:         "http",
-		LoadBalancerAlgo: "round-robin",
-		SSLEnabled:       true,
-		SSLCertResolver:  "letsencrypt",
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
+		ID:                fmt.Sprintf("route-%s", config.DeploymentID),
+		DeploymentID:      config.DeploymentID,
+		Domain:            config.Domain,
+		ServiceName:       "default",
+		TargetPort:        config.Port,
+		Protocol:          "http",
+		LoadBalancerAlgo:  "round-robin",
+		SSLEnabled:        true,
+		SSLCertResolver:   "letsencrypt",
+		Middleware:        "{}", // Empty JSON object for jsonb field
+		CreatedAt:         time.Now(),
+		UpdatedAt:         time.Now(),
 	}
 
 	if err := database.UpsertDeploymentRouting(routing); err != nil {
@@ -185,20 +223,88 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 	return nil
 }
 
+// generateTraefikLabels generates Traefik labels from routing rules
+func generateTraefikLabels(deploymentID string, serviceName string, routings []database.DeploymentRouting) map[string]string {
+	labels := make(map[string]string)
+	labels["traefik.enable"] = "true"
+	
+	// Filter routings for this service name
+	serviceRoutings := []database.DeploymentRouting{}
+	for _, routing := range routings {
+		if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
+			serviceRoutings = append(serviceRoutings, routing)
+		}
+	}
+	
+	// If no specific routing found, create default
+	if len(serviceRoutings) == 0 {
+		labels["traefik.http.routers."+deploymentID+"-default.rule"] = "Host(`localhost`)"
+		labels["traefik.http.routers."+deploymentID+"-default.entrypoints"] = "web"
+		labels["traefik.http.services."+deploymentID+"-default.loadbalancer.server.port"] = "80"
+		return labels
+	}
+	
+	// Generate labels for each routing rule
+	for idx, routing := range serviceRoutings {
+		routerName := deploymentID
+		if serviceName != "default" {
+			routerName = deploymentID + "-" + serviceName
+		}
+		if idx > 0 {
+			routerName = fmt.Sprintf("%s-%d", routerName, idx)
+		}
+		
+		// Build rule: Host or Host + PathPrefix
+		rule := "Host(`" + routing.Domain + "`)"
+		if routing.PathPrefix != "" {
+			rule = rule + " && PathPrefix(`" + routing.PathPrefix + "`)"
+		}
+		labels["traefik.http.routers."+routerName+".rule"] = rule
+		
+		// Entrypoints
+		if routing.SSLEnabled {
+			labels["traefik.http.routers."+routerName+".entrypoints"] = "websecure"
+			if routing.SSLCertResolver != "" && routing.SSLCertResolver != "internal" {
+				labels["traefik.http.routers."+routerName+".tls.certresolver"] = routing.SSLCertResolver
+			} else if routing.SSLCertResolver == "internal" {
+				// For internal SSL, don't set certresolver (let app handle it)
+				labels["traefik.http.routers."+routerName+".entrypoints"] = "web"
+			}
+		} else {
+			labels["traefik.http.routers."+routerName+".entrypoints"] = "web"
+		}
+		
+		// Service port
+		serviceNameLabel := routerName
+		labels["traefik.http.services."+serviceNameLabel+".loadbalancer.server.port"] = strconv.Itoa(routing.TargetPort)
+		
+		// Load balancer algorithm
+		if routing.LoadBalancerAlgo != "" && routing.LoadBalancerAlgo != "round-robin" {
+			labels["traefik.http.services."+serviceNameLabel+".loadbalancer.sticky.cookie"] = "true"
+		}
+	}
+	
+	return labels
+}
+
 // createContainer creates a single container
-func (dm *DeploymentManager) createContainer(ctx context.Context, config *DeploymentConfig, name string, replicaIndex int) (string, error) {
+func (dm *DeploymentManager) createContainer(ctx context.Context, config *DeploymentConfig, name string, replicaIndex int, serviceName string) (string, error) {
+	// Get routing rules for this deployment
+	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
+	
 	// Prepare labels
 	labels := map[string]string{
 		"com.obiente.managed":       "true",
 		"com.obiente.deployment_id": config.DeploymentID,
 		"com.obiente.domain":        config.Domain,
+		"com.obiente.service_name":  serviceName,
 		"com.obiente.replica":       strconv.Itoa(replicaIndex),
-		// Traefik labels for automatic routing
-		"traefik.enable": "true",
-		"traefik.http.routers." + config.DeploymentID + ".rule":                      "Host(`" + config.Domain + "`)",
-		"traefik.http.routers." + config.DeploymentID + ".entrypoints":               "websecure",
-		"traefik.http.routers." + config.DeploymentID + ".tls.certresolver":          "letsencrypt",
-		"traefik.http.services." + config.DeploymentID + ".loadbalancer.server.port": strconv.Itoa(config.Port),
+	}
+	
+	// Generate Traefik labels from routing rules
+	traefikLabels := generateTraefikLabels(config.DeploymentID, serviceName, routings)
+	for k, v := range traefikLabels {
+		labels[k] = v
 	}
 
 	// Add custom labels
@@ -265,6 +371,56 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	}
 
 	return resp.ID, nil
+}
+
+// StartDeployment starts all containers for a deployment
+func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID string) error {
+	log.Printf("[DeploymentManager] Starting deployment %s", deploymentID)
+
+	locations, err := dm.registry.GetDeploymentLocations(deploymentID)
+	if err != nil {
+		return fmt.Errorf("failed to get deployment locations: %w", err)
+	}
+
+	// Check if we have any containers for this deployment
+	if len(locations) == 0 {
+		log.Printf("[DeploymentManager] No containers found for deployment %s, need to create them", deploymentID)
+		return fmt.Errorf("no containers found for deployment %s - deployment may need to be created first", deploymentID)
+	}
+
+	for _, location := range locations {
+		// Only start containers on this node
+		if location.NodeID != dm.nodeID {
+			continue
+		}
+
+		// Check if container exists and is stopped
+		containerInfo, err := dm.dockerClient.ContainerInspect(ctx, location.ContainerID)
+		if err != nil {
+			log.Printf("[DeploymentManager] Container %s not found or error inspecting: %v", location.ContainerID[:12], err)
+			continue
+		}
+
+		// Only start if not already running
+		if !containerInfo.State.Running {
+			// Start container
+			if err := dm.dockerHelper.StartContainer(ctx, location.ContainerID); err != nil {
+				log.Printf("[DeploymentManager] Failed to start container %s: %v", location.ContainerID[:12], err)
+				continue
+			}
+
+			// Update status
+			database.DB.Model(&database.DeploymentLocation{}).
+				Where("container_id = ?", location.ContainerID).
+				Update("status", "running")
+
+			log.Printf("[DeploymentManager] Started container %s", location.ContainerID[:12])
+		} else {
+			log.Printf("[DeploymentManager] Container %s is already running", location.ContainerID[:12])
+		}
+	}
+
+	return nil
 }
 
 // StopDeployment stops all containers for a deployment
@@ -422,7 +578,7 @@ func (dm *DeploymentManager) GetDeploymentLogs(ctx context.Context, deploymentID
 	// Get logs from first container on this node
 	for _, location := range locations {
 		if location.NodeID == dm.nodeID {
-            logs, err := dm.dockerHelper.ContainerLogs(ctx, location.ContainerID, tail)
+            logs, err := dm.dockerHelper.ContainerLogs(ctx, location.ContainerID, tail, false) // follow=false for non-streaming logs
 			if err != nil {
 				return "", fmt.Errorf("failed to get logs: %w", err)
 			}

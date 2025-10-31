@@ -48,10 +48,12 @@ type NodeMetadata struct {
 }
 
 // DeploymentRouting stores routing configuration for deployments
+// Supports multiple routing rules per deployment (e.g., different services/ports on different domains)
 type DeploymentRouting struct {
 	ID               string    `gorm:"primaryKey" json:"id"`
-	DeploymentID     string    `gorm:"uniqueIndex;not null" json:"deployment_id"`
-	Domain           string    `gorm:"uniqueIndex;not null" json:"domain"`
+	DeploymentID     string    `gorm:"index:idx_deployment_domain_service;not null" json:"deployment_id"`
+	Domain           string    `gorm:"index:idx_deployment_domain_service;not null" json:"domain"`
+	ServiceName      string    `gorm:"index:idx_deployment_domain_service;default:default" json:"service_name"` // Service name (e.g., "api", "web", "admin")
 	PathPrefix       string    `json:"path_prefix"`
 	TargetPort       int       `gorm:"not null" json:"target_port"`
 	Protocol         string    `gorm:"default:'http'" json:"protocol"` // http, https, grpc
@@ -176,6 +178,20 @@ func RemoveDeploymentLocation(containerID string) error {
 func GetDeploymentRouting(deploymentID string) (*DeploymentRouting, error) {
 	var routing DeploymentRouting
 	result := DB.First(&routing, "deployment_id = ?", deploymentID)
+	return &routing, result.Error
+}
+
+// GetDeploymentRoutings returns all routing configurations for a deployment
+func GetDeploymentRoutings(deploymentID string) ([]DeploymentRouting, error) {
+	var routings []DeploymentRouting
+	result := DB.Where("deployment_id = ?", deploymentID).Find(&routings)
+	return routings, result.Error
+}
+
+// GetDeploymentRoutingByDomain returns routing configuration for a specific domain
+func GetDeploymentRoutingByDomain(domain string) (*DeploymentRouting, error) {
+	var routing DeploymentRouting
+	result := DB.Where("domain = ?", domain).First(&routing)
 	return &routing, result.Error
 }
 
