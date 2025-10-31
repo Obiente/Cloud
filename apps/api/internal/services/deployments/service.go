@@ -1,10 +1,15 @@
 package deployments
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"api/docker"
@@ -200,7 +205,15 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 			CPUShares:    req.Msg.GetCpuShares(),
 			Replicas:     int(req.Msg.GetReplicas()),
 		}
-		_ = s.manager.CreateDeployment(ctx, cfg) // best-effort; DB state already created, errors can be reconciled
+		if err := s.manager.CreateDeployment(ctx, cfg); err != nil {
+			log.Printf("[CreateDeployment] WARNING: Failed to create containers for deployment %s (DB entry created): %v", id, err)
+			// Update status to indicate deployment creation failed
+			_ = s.repo.UpdateStatus(ctx, id, int32(deploymentsv1.DeploymentStatus_FAILED))
+		} else {
+			log.Printf("[CreateDeployment] Successfully created containers for deployment %s", id)
+			// Update status to running
+			_ = s.repo.UpdateStatus(ctx, id, int32(deploymentsv1.DeploymentStatus_RUNNING))
+		}
 	}
 
 	res := connect.NewResponse(&deploymentsv1.CreateDeploymentResponse{Deployment: deployment})
@@ -296,9 +309,17 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
 
-	// Update deployment fields
+	// Update deployment fields (only update if provided)
 	if req.Msg.Name != nil {
 		dbDeployment.Name = req.Msg.GetName()
+	}
+	if req.Msg.RepositoryUrl != nil {
+		repoURL := req.Msg.GetRepositoryUrl()
+		if repoURL != "" {
+			dbDeployment.RepositoryURL = &repoURL
+		} else {
+			dbDeployment.RepositoryURL = nil
+		}
 	}
 	if req.Msg.Branch != nil {
 		dbDeployment.Branch = req.Msg.GetBranch()
@@ -319,11 +340,28 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 			dbDeployment.InstallCommand = nil
 		}
 	}
+	if req.Msg.Domain != nil {
+		dbDeployment.Domain = req.Msg.GetDomain()
+	}
+	if req.Msg.Port != nil {
+		port := req.Msg.GetPort()
+		dbDeployment.Port = &port
+	}
+	// Handle custom_domains (repeated string -> JSON array)
+	if len(req.Msg.GetCustomDomains()) > 0 {
+		customDomainsJSON, err := json.Marshal(req.Msg.GetCustomDomains())
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal custom domains: %w", err))
+		}
+		dbDeployment.CustomDomains = string(customDomainsJSON)
+	} else if req.Msg.CustomDomains != nil {
+		// Empty array was explicitly set
+		dbDeployment.CustomDomains = "[]"
+	}
 
-	// Update status fields
-	dbDeployment.Status = int32(deploymentsv1.DeploymentStatus_BUILDING)
-	dbDeployment.HealthStatus = "pending"
-	dbDeployment.LastDeployedAt = time.Now()
+	// NOTE: Do NOT update status fields on config save
+	// Status changes should only happen via explicit deploy/start/stop actions
+	// This allows users to save settings without triggering a build
 
 	// Save changes to database
 	if err := s.repo.Update(ctx, dbDeployment); err != nil {
@@ -421,14 +459,76 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.start", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
-	// TODO: enforce quota if starting increases replicas/resources
-	if s.manager != nil {
-		// No-op here; Start applies to already created/running containers in our current model
-	}
+	
 	dbDep, err := s.repo.GetByID(ctx, deploymentID)
-	if err != nil { return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID)) }
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+
+	// Check if deployment has containers created
+	locations, err := database.GetDeploymentLocations(deploymentID)
+	if err != nil || len(locations) == 0 {
+		// No containers exist - need to create them first
+		// This happens if CreateDeployment failed or was never called
+		// We should trigger container creation
+		if s.manager != nil {
+			// Get deployment config from database
+			image := ""
+			if dbDep.Image != nil {
+				image = *dbDep.Image
+			}
+			port := 8080
+			if dbDep.Port != nil {
+				port = int(*dbDep.Port)
+			}
+			memory := int64(512 * 1024 * 1024) // Default 512MB
+			if dbDep.MemoryBytes != nil {
+				memory = *dbDep.MemoryBytes
+			}
+			cpuShares := int64(1024) // Default
+			if dbDep.CPUShares != nil {
+				cpuShares = *dbDep.CPUShares
+			}
+			replicas := 1 // Default
+			if dbDep.Replicas != nil {
+				replicas = int(*dbDep.Replicas)
+			}
+
+			// Recreate containers using deployment config
+			cfg := &orchestrator.DeploymentConfig{
+				DeploymentID: deploymentID,
+				Image:        image,
+				Domain:       dbDep.Domain,
+				Port:         port,
+				EnvVars:      parseEnvVars(dbDep.EnvVars),
+				Labels:       map[string]string{},
+				Memory:       memory,
+				CPUShares:    cpuShares,
+				Replicas:     replicas,
+			}
+			if err := s.manager.CreateDeployment(ctx, cfg); err != nil {
+				log.Printf("[StartDeployment] Failed to create containers for deployment %s: %v", deploymentID, err)
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create containers: %w", err))
+			}
+			log.Printf("[StartDeployment] Successfully created containers for deployment %s", deploymentID)
+		} else {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("deployment has no containers and orchestrator is not available"))
+		}
+	} else {
+		// Containers exist - start them
+		if s.manager != nil {
+			if err := s.manager.StartDeployment(ctx, deploymentID); err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start containers: %w", err))
+			}
+		}
+	}
+
+	// Update deployment status
 	dbDep.Status = int32(deploymentsv1.DeploymentStatus_RUNNING)
-	if err := s.repo.Update(ctx, dbDep); err != nil { return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start deployment: %w", err)) }
+	if err := s.repo.Update(ctx, dbDep); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update deployment status: %w", err))
+	}
+
 	res := connect.NewResponse(&deploymentsv1.StartDeploymentResponse{Deployment: dbDeploymentToProto(dbDep)})
 	return res, nil
 }
@@ -491,14 +591,14 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	if err != nil || len(locations) == 0 {
 		return connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
 	}
-	// Use the first location for now
-	loc := locations[0]
-	dcli, err := docker.New()
+    // Use the first location for now
+    loc := locations[0]
+    dcli, err := docker.New()
 	if err != nil {
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
 	}
 	defer dcli.Close()
-	reader, err := dcli.ContainerLogs(ctx, loc.ContainerID, fmt.Sprintf("%d", req.Msg.GetTail()))
+    reader, err := dcli.ContainerLogs(ctx, loc.ContainerID, fmt.Sprintf("%d", req.Msg.GetTail()), true) // follow=true for streaming
 	if err != nil {
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("logs: %w", err))
 	}
@@ -544,8 +644,12 @@ func (s *Service) GetDeploymentEnvVars(ctx context.Context, req *connect.Request
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
-	protoDep := dbDeploymentToProto(dbDep)
-	return connect.NewResponse(&deploymentsv1.GetDeploymentEnvVarsResponse{EnvVars: protoDep.EnvVars}), nil
+	
+	envFileContent := dbDep.EnvFileContent
+	
+	return connect.NewResponse(&deploymentsv1.GetDeploymentEnvVarsResponse{
+		EnvFileContent: envFileContent,
+	}), nil
 }
 
 func (s *Service) UpdateDeploymentEnvVars(ctx context.Context, req *connect.Request[deploymentsv1.UpdateDeploymentEnvVarsRequest]) (*connect.Response[deploymentsv1.UpdateDeploymentEnvVarsResponse], error) {
@@ -558,15 +662,23 @@ func (s *Service) UpdateDeploymentEnvVars(ctx context.Context, req *connect.Requ
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
-	// Update env vars in proto, then convert back to DB
-	protoDep := dbDeploymentToProto(dbDep)
-	protoDep.EnvVars = req.Msg.GetEnvVars()
-	updatedDB := protoToDBDeployment(protoDep, dbDep.OrganizationID, dbDep.CreatedBy)
-	updatedDB.ID = dbDep.ID
-	updatedDB.CreatedAt = dbDep.CreatedAt
-	if err := s.repo.Update(ctx, updatedDB); err != nil {
+	
+	envFileContent := req.Msg.GetEnvFileContent()
+	
+	// Parse to generate env_vars map for backward compatibility with existing code
+	envVarsMap := parseEnvFileToMap(envFileContent)
+	
+	// Marshal env vars to JSON
+	envJSON, err := json.Marshal(envVarsMap)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal env vars: %w", err))
+	}
+	
+	// Update only the env vars fields using repository method
+	if err := s.repo.UpdateEnvVars(ctx, deploymentID, envFileContent, string(envJSON)); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update env vars: %w", err))
 	}
+	
 	// Reload to get updated state
 	dbDep, _ = s.repo.GetByID(ctx, deploymentID)
 	res := connect.NewResponse(&deploymentsv1.UpdateDeploymentEnvVarsResponse{Deployment: dbDeploymentToProto(dbDep)})
@@ -598,31 +710,59 @@ func (s *Service) UpdateDeploymentCompose(ctx context.Context, req *connect.Requ
 	}
 	
 	composeYaml := req.Msg.GetComposeYaml()
-	// Basic validation: check for required compose fields
-	var validationErr string
-	if composeYaml != "" {
-		// Basic YAML structure checks
-		if !strings.Contains(composeYaml, "services:") && !strings.Contains(composeYaml, "version:") {
-			// Allow compose files without version (v3.8+), but require services
-			if !strings.Contains(composeYaml, "services:") {
-				validationErr = "Docker Compose must include a 'services:' section"
+	
+	// Perform comprehensive validation using Docker Compose CLI
+	validationErrors := ValidateCompose(ctx, composeYaml)
+	
+	// Check if there are any errors (severity == "error")
+	hasErrors := false
+	var firstErrorMsg string
+	for _, ve := range validationErrors {
+		if ve.Severity == "error" {
+			hasErrors = true
+			if firstErrorMsg == "" {
+				firstErrorMsg = ve.Message
 			}
+			break
 		}
 	}
 	
-	dbDep.ComposeYaml = composeYaml
-	if err := s.repo.Update(ctx, dbDep); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update compose: %w", err))
+	// Only save if there are no errors (warnings are OK)
+	if !hasErrors {
+		dbDep.ComposeYaml = composeYaml
+		if err := s.repo.Update(ctx, dbDep); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update compose: %w", err))
+		}
 	}
 	
 	// Reload to get updated state
 	dbDep, _ = s.repo.GetByID(ctx, deploymentID)
-	res := connect.NewResponse(&deploymentsv1.UpdateDeploymentComposeResponse{
-		Deployment: dbDeploymentToProto(dbDep),
-	})
-	if validationErr != "" {
-		res.Msg.ValidationError = &validationErr
+	
+	// Convert validation errors to proto
+	protoErrors := make([]*deploymentsv1.ComposeValidationError, 0, len(validationErrors))
+	for _, ve := range validationErrors {
+		protoErrors = append(protoErrors, &deploymentsv1.ComposeValidationError{
+			Line:        ve.Line,
+			Column:      ve.Column,
+			Message:     ve.Message,
+			Severity:    ve.Severity,
+			StartLine:   ve.StartLine,
+			EndLine:     ve.EndLine,
+			StartColumn: ve.StartColumn,
+			EndColumn:   ve.EndColumn,
+		})
 	}
+	
+	res := connect.NewResponse(&deploymentsv1.UpdateDeploymentComposeResponse{
+		Deployment:       dbDeploymentToProto(dbDep),
+		ValidationErrors: protoErrors,
+	})
+	
+	// Set legacy validation_error for backward compatibility
+	if firstErrorMsg != "" {
+		res.Msg.ValidationError = &firstErrorMsg
+	}
+	
 	return res, nil
 }
 
@@ -737,15 +877,22 @@ func (s *Service) GetGitHubFile(ctx context.Context, req *connect.Request[deploy
 	}), nil
 }
 
-func (s *Service) StreamTerminal(ctx context.Context, stream *connect.BidiStream[deploymentsv1.TerminalInput, deploymentsv1.TerminalOutput]) error {
-	// Receive first message to get deployment info
-	input, err := stream.Receive()
-	if err != nil {
-		return fmt.Errorf("failed to receive terminal setup: %w", err)
-	}
+// TerminalSession represents an active terminal session
+type TerminalSession struct {
+	conn        io.ReadWriteCloser
+	containerID string
+	createdAt   time.Time
+}
 
-	deploymentID := input.GetDeploymentId()
-	orgID := input.GetOrganizationId()
+// terminalSessions stores active terminal sessions keyed by deploymentID
+var terminalSessions = make(map[string]*TerminalSession)
+var terminalSessionsMutex sync.RWMutex
+
+// StreamTerminalOutput streams terminal output from a deployment container
+// This is a server stream that works well with gRPC-Web in browsers
+func (s *Service) StreamTerminalOutput(ctx context.Context, req *connect.Request[deploymentsv1.StreamTerminalOutputRequest], stream *connect.ServerStream[deploymentsv1.TerminalOutput]) error {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
 
 	// Check permissions
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
@@ -765,9 +912,9 @@ func (s *Service) StreamTerminal(ctx context.Context, stream *connect.BidiStream
 	}
 	defer dcli.Close()
 
-	// Create terminal connection
-	cols := int(input.GetCols())
-	rows := int(input.GetRows())
+	// Get or create terminal connection
+	cols := int(req.Msg.GetCols())
+	rows := int(req.Msg.GetRows())
 	if cols == 0 {
 		cols = 80
 	}
@@ -775,69 +922,102 @@ func (s *Service) StreamTerminal(ctx context.Context, stream *connect.BidiStream
 		rows = 24
 	}
 
-	conn, err := dcli.ContainerExec(ctx, loc.ContainerID, cols, rows)
-	if err != nil {
-		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create terminal: %w", err))
+	// Check if session exists
+	terminalSessionsMutex.Lock()
+	session, exists := terminalSessions[deploymentID]
+	if !exists {
+		// Create new terminal connection
+		conn, err := dcli.ContainerExec(ctx, loc.ContainerID, cols, rows)
+		if err != nil {
+			terminalSessionsMutex.Unlock()
+			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create terminal: %w", err))
+		}
+		session = &TerminalSession{
+			conn:        conn,
+			containerID: loc.ContainerID,
+			createdAt:   time.Now(),
+		}
+		terminalSessions[deploymentID] = session
 	}
-	defer conn.Close()
+	terminalSessionsMutex.Unlock()
 
-	// Handle bidirectional communication
-	errChan := make(chan error, 2)
+	// Clean up session when stream ends
+	defer func() {
+		terminalSessionsMutex.Lock()
+		if s, exists := terminalSessions[deploymentID]; exists && s == session {
+			delete(terminalSessions, deploymentID)
+			session.conn.Close()
+		}
+		terminalSessionsMutex.Unlock()
+	}()
 
 	// Read from container stdout/stderr and send to client
-	go func() {
-		defer close(errChan)
-		buf := make([]byte, 4096)
-		for {
-			n, err := conn.Read(buf)
-			if n > 0 {
-				if sendErr := stream.Send(&deploymentsv1.TerminalOutput{
-					Output: buf[:n],
-					Exit:   false,
-				}); sendErr != nil {
-					errChan <- sendErr
-					return
-				}
+	buf := make([]byte, 4096)
+	for {
+		// Check if context is cancelled
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		n, err := session.conn.Read(buf)
+		if n > 0 {
+			if sendErr := stream.Send(&deploymentsv1.TerminalOutput{
+				Output: buf[:n],
+				Exit:   false,
+			}); sendErr != nil {
+				return sendErr
 			}
-			if err != nil {
+		}
+		if err != nil {
+			if err == io.EOF {
 				// Terminal closed
 				_ = stream.Send(&deploymentsv1.TerminalOutput{
 					Output: []byte("\r\n[Terminal session closed]\r\n"),
 					Exit:   true,
 				})
-				return
 			}
+			return err
 		}
-	}()
+	}
+}
 
-	// Read from client and write to container stdin
-	go func() {
-		for {
-			msg, err := stream.Receive()
-			if err != nil {
-				errChan <- err
-				return
-			}
-			// Update terminal size if provided
-			if msg.GetCols() > 0 && msg.GetRows() > 0 {
-				// TODO: Resize terminal (would need exec ID)
-			}
-			// Write input to container
-			if len(msg.GetInput()) > 0 {
-				if _, writeErr := conn.Write(msg.GetInput()); writeErr != nil {
-					errChan <- writeErr
-					return
-				}
-			}
-		}
-	}()
+// SendTerminalInput sends input to an active terminal session
+func (s *Service) SendTerminalInput(ctx context.Context, req *connect.Request[deploymentsv1.SendTerminalInputRequest]) (*connect.Response[deploymentsv1.SendTerminalInputResponse], error) {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
 
-	// Wait for either goroutine to finish
-	if err := <-errChan; err != nil && err != io.EOF {
-		return err
+	// Check permissions
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	return nil
+	// Get session
+	terminalSessionsMutex.RLock()
+	session, exists := terminalSessions[deploymentID]
+	terminalSessionsMutex.RUnlock()
+
+	if !exists {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no active terminal session for deployment"))
+	}
+
+	// Write input to container
+	if len(req.Msg.GetInput()) > 0 {
+		if _, err := session.conn.Write(req.Msg.GetInput()); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to write input: %w", err))
+		}
+	}
+
+	// Handle resize if dimensions changed
+	if req.Msg.GetCols() > 0 && req.Msg.GetRows() > 0 {
+		// TODO: Implement terminal resize via exec resize API
+		log.Printf("[Terminal] Resize requested: %dx%d (not implemented)", req.Msg.GetCols(), req.Msg.GetRows())
+	}
+
+	return connect.NewResponse(&deploymentsv1.SendTerminalInputResponse{
+		Success: true,
+	}), nil
 }
 
 func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[deploymentsv1.ListContainerFilesRequest]) (*connect.Response[deploymentsv1.ListContainerFilesResponse], error) {
@@ -851,27 +1031,137 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 	if err != nil || len(locations) == 0 {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
 	}
-
-	loc := locations[0]
 	dcli, err := docker.New()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
 	}
 	defer dcli.Close()
 
+	// Use the first location for now
+	loc := locations[0]
+
+	// Check container state
+	containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to inspect container: %w", err))
+	}
+	isRunning := containerInfo.State.Running
+
+	// If list_volumes is true, return list of volumes
+	if req.Msg.GetListVolumes() {
+		volumes, err := dcli.GetContainerVolumes(ctx, loc.ContainerID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get volumes: %w", err))
+		}
+
+		volumeInfos := make([]*deploymentsv1.VolumeInfo, len(volumes))
+		for i, vol := range volumes {
+			volumeInfos[i] = &deploymentsv1.VolumeInfo{
+				Name:        vol.Name,
+				MountPoint:  vol.MountPoint,
+				Source:      vol.Source,
+				IsPersistent: vol.IsNamed,
+			}
+		}
+
+		return connect.NewResponse(&deploymentsv1.ListContainerFilesResponse{
+			Volumes:        volumeInfos,
+			ContainerRunning: isRunning,
+		}), nil
+	}
+
+	// If volume_name is specified, list files from volume
+	volumeName := req.Msg.GetVolumeName()
+	if volumeName != "" {
+		volumes, err := dcli.GetContainerVolumes(ctx, loc.ContainerID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get volumes: %w", err))
+		}
+
+		var targetVolume *docker.VolumeMount
+		for _, vol := range volumes {
+			if vol.Name == volumeName {
+				targetVolume = &vol
+				break
+			}
+		}
+
+		if targetVolume == nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("volume not found: %s", volumeName))
+		}
+
+		path := req.Msg.GetPath()
+		if path == "" {
+			path = "/"
+		}
+
+		// List files directly from volume (works even if container is stopped)
+		fileInfos, err := dcli.ListVolumeFiles(targetVolume.Source, path)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list volume files: %w", err))
+		}
+
+		// Convert to proto format
+		files := make([]*deploymentsv1.ContainerFile, len(fileInfos))
+		for i, fi := range fileInfos {
+			volName := volumeName
+			files[i] = &deploymentsv1.ContainerFile{
+				Name:        fi.Name,
+				Path:        fi.Path,
+				IsDirectory: fi.IsDirectory,
+				Size:        fi.Size,
+				Permissions: fi.Permissions,
+				VolumeName:  &volName,
+			}
+			if fi.ModifiedAt != "" {
+				files[i].ModifiedAt = &fi.ModifiedAt
+			}
+		}
+
+		return connect.NewResponse(&deploymentsv1.ListContainerFilesResponse{
+			Files:          files,
+			CurrentPath:    path,
+			IsVolume:       true,
+			ContainerRunning: isRunning,
+		}), nil
+	}
+
+	// Otherwise, list files from container filesystem (only works if running)
+	if !isRunning {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running. Use volume_name parameter to access persistent volumes"))
+	}
+
 	path := req.Msg.GetPath()
 	if path == "" {
 		path = "/"
 	}
 
-	// Use Docker exec to run ls command
-	// TODO: Implement proper file listing using Docker Copy API or exec
-	// For now, return empty list as placeholder
-	files := []*deploymentsv1.ContainerFile{}
+	// List files using Docker exec (container must be running)
+	fileInfos, err := dcli.ContainerListFiles(ctx, loc.ContainerID, path)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list files: %w", err))
+	}
+
+	// Convert to proto format
+	files := make([]*deploymentsv1.ContainerFile, len(fileInfos))
+	for i, fi := range fileInfos {
+		files[i] = &deploymentsv1.ContainerFile{
+			Name:        fi.Name,
+			Path:        fi.Path,
+			IsDirectory: fi.IsDirectory,
+			Size:        fi.Size,
+			Permissions: fi.Permissions,
+		}
+		if fi.ModifiedAt != "" {
+			files[i].ModifiedAt = &fi.ModifiedAt
+		}
+	}
 
 	return connect.NewResponse(&deploymentsv1.ListContainerFilesResponse{
-		Files:       files,
-		CurrentPath: path,
+		Files:          files,
+		CurrentPath:    path,
+		IsVolume:       false,
+		ContainerRunning: isRunning,
 	}), nil
 }
 
@@ -887,19 +1177,207 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
 	}
 
-	loc := locations[0]
+	dcli, err := docker.New()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
+	}
+	defer dcli.Close()
+
 	path := req.Msg.GetPath()
 	if path == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("path is required"))
 	}
 
-	// TODO: Implement file reading using Docker Copy API
-	// For now, return placeholder
+	// Use the first location for now
+	loc := locations[0]
+
+	// If volume_name is specified, read file from volume
+	volumeName := req.Msg.GetVolumeName()
+	if volumeName != "" {
+		volumes, err := dcli.GetContainerVolumes(ctx, loc.ContainerID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get volumes: %w", err))
+		}
+
+		var targetVolume *docker.VolumeMount
+		for _, vol := range volumes {
+			if vol.Name == volumeName {
+				targetVolume = &vol
+				break
+			}
+		}
+
+		if targetVolume == nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("volume not found: %s", volumeName))
+		}
+
+		// Read file directly from volume (works even if container is stopped)
+		content, err := dcli.ReadVolumeFile(targetVolume.Source, path)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read volume file: %w", err))
+		}
+
+		return connect.NewResponse(&deploymentsv1.GetContainerFileResponse{
+			Content:  string(content),
+			Encoding: "text",
+			Size:     int64(len(content)),
+		}), nil
+	}
+
+	// Otherwise, read file from container filesystem (only works if running)
+	containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to inspect container: %w", err))
+	}
+
+	if !containerInfo.State.Running {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running. Use volume_name parameter to read files from persistent volumes"))
+	}
+
+	// Read file using Docker exec (container must be running)
+	content, err := dcli.ContainerReadFile(ctx, loc.ContainerID, path)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read file: %w", err))
+	}
+
 	return connect.NewResponse(&deploymentsv1.GetContainerFileResponse{
-		Content:  "",
+		Content:  string(content),
 		Encoding: "text",
-		Size:     0,
+		Size:     int64(len(content)),
 	}), nil
+}
+
+func (s *Service) UploadContainerFiles(ctx context.Context, stream *connect.ClientStream[deploymentsv1.UploadContainerFilesRequest]) (*connect.Response[deploymentsv1.UploadContainerFilesResponse], error) {
+	var metadata *deploymentsv1.UploadContainerFilesMetadata
+	var fileData bytes.Buffer
+
+	// Read all stream messages
+	for stream.Receive() {
+		msg := stream.Msg()
+		
+		switch d := msg.Data.(type) {
+		case *deploymentsv1.UploadContainerFilesRequest_Metadata:
+			metadata = d.Metadata
+		case *deploymentsv1.UploadContainerFilesRequest_Chunk:
+			fileData.Write(d.Chunk)
+		}
+	}
+
+	if err := stream.Err(); err != nil && err != io.EOF {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to receive stream: %w", err))
+	}
+
+	if metadata == nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("metadata is required"))
+	}
+
+	deploymentID := metadata.GetDeploymentId()
+	orgID := metadata.GetOrganizationId()
+	
+	// Check permissions
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.update", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	// Get deployment locations
+	locations, err := database.GetDeploymentLocations(deploymentID)
+	if err != nil || len(locations) == 0 {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
+	}
+
+	dcli, err := docker.New()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
+	}
+	defer dcli.Close()
+
+	// Use the first location
+	loc := locations[0]
+	destPath := metadata.GetDestinationPath()
+	if destPath == "" {
+		destPath = "/"
+	}
+
+	// Extract files from tar archive
+	files := make(map[string][]byte)
+	tarReader := tar.NewReader(&fileData)
+	for {
+		hdr, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read tar: %w", err))
+		}
+
+		content, err := io.ReadAll(tarReader)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read file from tar: %w", err))
+		}
+
+		files[hdr.Name] = content
+	}
+
+	// Upload files to container
+	err = dcli.ContainerUploadFiles(ctx, loc.ContainerID, destPath, files)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to upload files: %w", err))
+	}
+
+	return connect.NewResponse(&deploymentsv1.UploadContainerFilesResponse{
+		Success:      true,
+		FilesUploaded: int32(len(files)),
+	}), nil
+}
+
+// parseEnvVars parses environment variables from JSON string stored in database
+func parseEnvVars(envVarsJSON string) map[string]string {
+	if envVarsJSON == "" {
+		return make(map[string]string)
+	}
+	var envMap map[string]string
+	if err := json.Unmarshal([]byte(envVarsJSON), &envMap); err != nil {
+		return make(map[string]string)
+	}
+	return envMap
+}
+
+// parseEnvFileToMap parses a .env file content and extracts key-value pairs (ignores comments)
+// Used internally to maintain backward compatibility with EnvVars JSON field
+func parseEnvFileToMap(envFileContent string) map[string]string {
+	envMap := make(map[string]string)
+	if envFileContent == "" {
+		return envMap
+	}
+
+	lines := strings.Split(envFileContent, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip empty lines and comments
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		equalIndex := strings.Index(trimmed, "=")
+		if equalIndex == -1 {
+			continue
+		}
+
+		key := strings.TrimSpace(trimmed[:equalIndex])
+		value := strings.TrimSpace(trimmed[equalIndex+1:])
+
+		// Remove quotes if present
+		if len(value) >= 2 {
+			if (value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'') {
+				value = value[1 : len(value)-1]
+			}
+		}
+
+		// Uppercase key (env var standard)
+		envMap[strings.ToUpper(key)] = value
+	}
+
+	return envMap
 }
 
 func getStatusName(status int32) string {
@@ -919,5 +1397,169 @@ func getStatusName(status int32) string {
 	default:
 		return "UNSPECIFIED"
 	}
+}
+
+func (s *Service) GetDeploymentRoutings(ctx context.Context, req *connect.Request[deploymentsv1.GetDeploymentRoutingsRequest]) (*connect.Response[deploymentsv1.GetDeploymentRoutingsResponse], error) {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
+	
+	// Check permissions
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+	
+	// Verify deployment exists and belongs to organization
+	dbDeployment, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+	if dbDeployment.OrganizationID != orgID {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("deployment does not belong to organization"))
+	}
+	
+	// Get all routing rules
+	dbRoutings, err := database.GetDeploymentRoutings(deploymentID)
+	if err != nil {
+		// If no routing rules exist, return empty list (not an error)
+		return connect.NewResponse(&deploymentsv1.GetDeploymentRoutingsResponse{Rules: []*deploymentsv1.RoutingRule{}}), nil
+	}
+	
+	// Convert to proto
+	rules := make([]*deploymentsv1.RoutingRule, 0, len(dbRoutings))
+	for _, dbRouting := range dbRoutings {
+		rules = append(rules, &deploymentsv1.RoutingRule{
+			Id:                dbRouting.ID,
+			DeploymentId:      dbRouting.DeploymentID,
+			Domain:            dbRouting.Domain,
+			ServiceName:       dbRouting.ServiceName,
+			PathPrefix:        dbRouting.PathPrefix,
+			TargetPort:        int32(dbRouting.TargetPort),
+			Protocol:          dbRouting.Protocol,
+			LoadBalancerAlgo:  dbRouting.LoadBalancerAlgo,
+			SslEnabled:        dbRouting.SSLEnabled,
+			SslCertResolver:   dbRouting.SSLCertResolver,
+		})
+	}
+	
+	return connect.NewResponse(&deploymentsv1.GetDeploymentRoutingsResponse{Rules: rules}), nil
+}
+
+func (s *Service) UpdateDeploymentRoutings(ctx context.Context, req *connect.Request[deploymentsv1.UpdateDeploymentRoutingsRequest]) (*connect.Response[deploymentsv1.UpdateDeploymentRoutingsResponse], error) {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
+	
+	// Check permissions
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.update", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+	
+	// Verify deployment exists and belongs to organization
+	dbDeployment, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+	if dbDeployment.OrganizationID != orgID {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("deployment does not belong to organization"))
+	}
+	
+	// Delete all existing routing rules for this deployment
+	existingRoutings, _ := database.GetDeploymentRoutings(deploymentID)
+	for _, routing := range existingRoutings {
+		if err := database.DB.Delete(&routing).Error; err != nil {
+			log.Printf("[UpdateDeploymentRoutings] Warning: Failed to delete existing routing %s: %v", routing.ID, err)
+		}
+	}
+	
+	// Create new routing rules
+	newRules := make([]*deploymentsv1.RoutingRule, 0, len(req.Msg.GetRules()))
+	for _, rule := range req.Msg.GetRules() {
+		// Generate ID if not provided
+		ruleID := rule.GetId()
+		if ruleID == "" {
+			ruleID = fmt.Sprintf("route-%s-%s-%s-%d", deploymentID, rule.GetDomain(), rule.GetServiceName(), rule.GetTargetPort())
+		}
+		
+		// Set defaults
+		serviceName := rule.GetServiceName()
+		if serviceName == "" {
+			serviceName = "default"
+		}
+		protocol := rule.GetProtocol()
+		if protocol == "" {
+			protocol = "http"
+		}
+		loadBalancerAlgo := rule.GetLoadBalancerAlgo()
+		if loadBalancerAlgo == "" {
+			loadBalancerAlgo = "round-robin"
+		}
+		
+		dbRouting := &database.DeploymentRouting{
+			ID:                ruleID,
+			DeploymentID:     deploymentID,
+			Domain:            rule.GetDomain(),
+			ServiceName:       serviceName,
+			PathPrefix:        rule.GetPathPrefix(),
+			TargetPort:        int(rule.GetTargetPort()),
+			Protocol:          protocol,
+			LoadBalancerAlgo:  loadBalancerAlgo,
+			SSLEnabled:        rule.GetSslEnabled(),
+			SSLCertResolver:   rule.GetSslCertResolver(),
+			Middleware:        "{}",
+			CreatedAt:         time.Now(),
+			UpdatedAt:         time.Now(),
+		}
+		
+		if err := database.UpsertDeploymentRouting(dbRouting); err != nil {
+			log.Printf("[UpdateDeploymentRoutings] Warning: Failed to create routing rule for %s: %v", rule.GetDomain(), err)
+			continue
+		}
+		
+		// Convert back to proto for response
+		newRules = append(newRules, &deploymentsv1.RoutingRule{
+			Id:                dbRouting.ID,
+			DeploymentId:     dbRouting.DeploymentID,
+			Domain:            dbRouting.Domain,
+			ServiceName:       dbRouting.ServiceName,
+			PathPrefix:        dbRouting.PathPrefix,
+			TargetPort:        int32(dbRouting.TargetPort),
+			Protocol:          dbRouting.Protocol,
+			LoadBalancerAlgo:  dbRouting.LoadBalancerAlgo,
+			SslEnabled:        dbRouting.SSLEnabled,
+			SslCertResolver:   dbRouting.SSLCertResolver,
+		})
+	}
+	
+	return connect.NewResponse(&deploymentsv1.UpdateDeploymentRoutingsResponse{Rules: newRules}), nil
+}
+
+func (s *Service) GetDeploymentServiceNames(ctx context.Context, req *connect.Request[deploymentsv1.GetDeploymentServiceNamesRequest]) (*connect.Response[deploymentsv1.GetDeploymentServiceNamesResponse], error) {
+	deploymentID := req.Msg.GetDeploymentId()
+	orgID := req.Msg.GetOrganizationId()
+	
+	// Check permissions
+	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+	
+	// Verify deployment exists and belongs to organization
+	dbDeployment, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+	if dbDeployment.OrganizationID != orgID {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("deployment does not belong to organization"))
+	}
+	
+	// Extract service names from Docker Compose
+	serviceNames, err := ExtractServiceNames(dbDeployment.ComposeYaml)
+	if err != nil {
+		log.Printf("[GetDeploymentServiceNames] Warning: Failed to parse compose for deployment %s: %v", deploymentID, err)
+		// Return default service name on error
+		serviceNames = []string{"default"}
+	}
+	
+	return connect.NewResponse(&deploymentsv1.GetDeploymentServiceNamesResponse{
+		ServiceNames: serviceNames,
+	}), nil
 }
 
