@@ -96,9 +96,12 @@ service DeploymentService {
   rpc GetGitHubFile(GetGitHubFileRequest) returns (GetGitHubFileResponse);
 
   // Terminal access
-  // Open an interactive terminal session to a deployment container
-  // This is a bidirectional stream for interactive terminal communication
-  rpc StreamTerminal(stream TerminalInput) returns (stream TerminalOutput);
+  // Stream terminal output from a deployment container
+  // Input is sent via SendTerminalInput RPC
+  rpc StreamTerminalOutput(StreamTerminalOutputRequest) returns (stream TerminalOutput);
+  
+  // Send input to an active terminal session
+  rpc SendTerminalInput(SendTerminalInputRequest) returns (SendTerminalInputResponse);
 
   // File browser
   // List files in a deployment container
@@ -106,6 +109,19 @@ service DeploymentService {
   
   // Get file content from a deployment container
   rpc GetContainerFile(GetContainerFileRequest) returns (GetContainerFileResponse);
+  
+  // Upload files to a deployment container
+  rpc UploadContainerFiles(stream UploadContainerFilesRequest) returns (UploadContainerFilesResponse);
+
+  // Routing configuration
+  // Get all routing rules for a deployment
+  rpc GetDeploymentRoutings(GetDeploymentRoutingsRequest) returns (GetDeploymentRoutingsResponse);
+  
+  // Update routing rules for a deployment (replaces all existing rules)
+  rpc UpdateDeploymentRoutings(UpdateDeploymentRoutingsRequest) returns (UpdateDeploymentRoutingsResponse);
+  
+  // Get available service names from Docker Compose
+  rpc GetDeploymentServiceNames(GetDeploymentServiceNamesRequest) returns (GetDeploymentServiceNamesResponse);
 }
 
 message ListDeploymentsRequest {
@@ -155,9 +171,13 @@ message UpdateDeploymentRequest {
   string organization_id = 1;
   string deployment_id = 2;
   optional string name = 3;
-  optional string branch = 4;
-  optional string build_command = 5;
-  optional string install_command = 6;
+  optional string repository_url = 4;
+  optional string branch = 5;
+  optional string build_command = 6;
+  optional string install_command = 7;
+  optional string domain = 8;
+  repeated string custom_domains = 9;
+  optional int32 port = 10;
 }
 
 message UpdateDeploymentResponse {
@@ -263,13 +283,15 @@ message GetDeploymentEnvVarsRequest {
 }
 
 message GetDeploymentEnvVarsResponse {
-  map<string, string> env_vars = 1;
+  // Raw .env file content (preserves comments and formatting)
+  string env_file_content = 1;
 }
 
 message UpdateDeploymentEnvVarsRequest {
   string organization_id = 1;
   string deployment_id = 2;
-  map<string, string> env_vars = 3;
+  // Raw .env file content (preserves comments and formatting)
+  string env_file_content = 3;
 }
 
 message UpdateDeploymentEnvVarsResponse {
@@ -293,7 +315,19 @@ message UpdateDeploymentComposeRequest {
 
 message UpdateDeploymentComposeResponse {
   Deployment deployment = 1;
-  optional string validation_error = 2;
+  optional string validation_error = 2; // Deprecated: Use validation_errors instead
+  repeated ComposeValidationError validation_errors = 3;
+}
+
+message ComposeValidationError {
+  int32 line = 1; // 1-based line number
+  int32 column = 2; // 1-based column number
+  string message = 3;
+  string severity = 4; // "error" or "warning"
+  int32 start_line = 5; // Start line for multi-line errors
+  int32 end_line = 6; // End line for multi-line errors
+  int32 start_column = 7; // Start column
+  int32 end_column = 8; // End column
 }
 
 message ListGitHubReposRequest {
@@ -342,12 +376,23 @@ message GetGitHubFileResponse {
   int64 size = 3;
 }
 
-message TerminalInput {
+message StreamTerminalOutputRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  int32 cols = 3; // Terminal width
+  int32 rows = 4; // Terminal height
+}
+
+message SendTerminalInputRequest {
   string organization_id = 1;
   string deployment_id = 2;
   bytes input = 3; // User keyboard input
-  int32 cols = 4; // Terminal width
-  int32 rows = 5; // Terminal height
+  int32 cols = 4; // Terminal width (for resize)
+  int32 rows = 5; // Terminal height (for resize)
+}
+
+message SendTerminalInputResponse {
+  bool success = 1;
 }
 
 message TerminalOutput {
@@ -359,6 +404,8 @@ message ListContainerFilesRequest {
   string organization_id = 1;
   string deployment_id = 2;
   string path = 3; // Directory path (default: "/")
+  optional string volume_name = 4; // If specified, list files from this volume instead of container filesystem
+  bool list_volumes = 5; // If true, return list of available volumes instead of files
 }
 
 message ContainerFile {
@@ -368,23 +415,105 @@ message ContainerFile {
   int64 size = 4;
   string permissions = 5;
   optional string modified_at = 6;
+  optional string volume_name = 7; // If this file is in a volume, the volume name
 }
 
 message ListContainerFilesResponse {
   repeated ContainerFile files = 1;
   string current_path = 2;
+  repeated VolumeInfo volumes = 3; // Available persistent volumes (only when list_volumes=true)
+  bool is_volume = 4; // Whether the current listing is from a volume
+  bool container_running = 5; // Whether the container is currently running
+}
+
+message VolumeInfo {
+  string name = 1; // Volume name
+  string mount_point = 2; // Mount point inside container (e.g., "/data")
+  string source = 3; // Volume source path on host
+  bool is_persistent = 4; // Whether this is a persistent volume
 }
 
 message GetContainerFileRequest {
   string organization_id = 1;
   string deployment_id = 2;
   string path = 3; // File path
+  optional string volume_name = 4; // If specified, read file from this volume instead of container filesystem
 }
 
 message GetContainerFileResponse {
   string content = 1;
   string encoding = 2; // "text" or "base64"
   int64 size = 3;
+}
+
+message UploadContainerFilesRequest {
+  oneof data {
+    UploadContainerFilesMetadata metadata = 1; // First message contains metadata
+    bytes chunk = 2; // Subsequent messages contain file data chunks
+  }
+}
+
+message UploadContainerFilesMetadata {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string destination_path = 3; // Directory path where files should be extracted (default: "/")
+  repeated FileMetadata files = 4; // Metadata about files being uploaded
+  optional string volume_name = 5; // If specified, upload files to this volume instead of container filesystem
+}
+
+message FileMetadata {
+  string name = 1; // File name
+  int64 size = 2; // File size in bytes
+  bool is_directory = 3; // Whether this is a directory
+  string path = 4; // Relative path within the archive
+}
+
+message UploadContainerFilesResponse {
+  bool success = 1;
+  optional string error = 2;
+  int32 files_uploaded = 3; // Number of files successfully uploaded
+}
+
+// Routing configuration messages
+message RoutingRule {
+  string id = 1;
+  string deployment_id = 2;
+  string domain = 3;
+  string service_name = 4; // Service name (e.g., "api", "web", "admin", "default")
+  string path_prefix = 5; // Optional path prefix (e.g., "/api")
+  int32 target_port = 6;
+  string protocol = 7; // "http", "https", "grpc"
+  string load_balancer_algo = 8; // "round-robin", "least-conn", "ip-hash"
+  bool ssl_enabled = 9;
+  string ssl_cert_resolver = 10;
+}
+
+message GetDeploymentRoutingsRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+}
+
+message GetDeploymentRoutingsResponse {
+  repeated RoutingRule rules = 1;
+}
+
+message UpdateDeploymentRoutingsRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  repeated RoutingRule rules = 3; // Replace all existing rules with these
+}
+
+message UpdateDeploymentRoutingsResponse {
+  repeated RoutingRule rules = 1;
+}
+
+message GetDeploymentServiceNamesRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+}
+
+message GetDeploymentServiceNamesResponse {
+  repeated string service_names = 1;
 }
 
 message Deployment {
