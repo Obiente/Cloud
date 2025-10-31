@@ -6,6 +6,10 @@ Step-by-step guides for common tasks with Obiente Cloud.
 
 - [Authentication Setup](authentication.md) - Configure Zitadel authentication
 
+## Integrations
+
+- [GitHub Integration](github-integration.md) - Set up GitHub OAuth and automatic deployments
+
 ## Routing
 
 - [Traffic Routing & Domains](routing.md) - Set up custom domains and routing

@@ -32,7 +32,19 @@ This means the API is trying to call Zitadel's userinfo endpoint over HTTPS, but
 DISABLE_AUTH=true
 ```
 
-This completely bypasses authentication so you can develop without needing Zitadel configured.
+When `DISABLE_AUTH=true`, authentication is completely bypassed and a mock development user is automatically provided:
+
+- **User ID**: `mem-development`
+- **Email**: `dev@obiente.local`
+- **Name**: `Development User`
+- **Roles**: `admin` and `owner` (full permissions)
+
+This allows you to develop and test all features without needing Zitadel configured. All API endpoints work as if a fully authenticated dev user is logged in, including:
+- Creating and managing deployments
+- Accessing all organizations and resources
+- Full admin permissions for testing
+
+**Important**: Both the API and Dashboard must have `DISABLE_AUTH=true` set in their environment for this to work correctly.
 
 ### Option 2: Skip TLS Verification (Development)
 
@@ -206,14 +218,20 @@ DISABLE_AUTH=true
 LOG_LEVEL=debug
 CORS_ORIGIN=*
 
-# 2. Rebuild API
+# 2. For API (Docker)
 docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
-
-# 3. Restart service
 docker service update --force obiente_api
+
+# 3. For Dashboard (if running separately)
+# Make sure DISABLE_AUTH=true is set in your environment
+export DISABLE_AUTH=true
+pnpm --filter dashboard dev
 
 # 4. Test
 curl http://localhost:3001/health
+
+# The dashboard will automatically show you as "Development User" (mem-development)
+# All API calls will work without tokens
 ```
 
 ## Quick Start for Production
