@@ -20,6 +20,28 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// isAuthDisabled checks if authentication is disabled via environment variable
+func isAuthDisabled() bool {
+	return os.Getenv("DISABLE_AUTH") == "true"
+}
+
+// getMockDevUser returns a mock development user with appropriate permissions
+func getMockDevUser() *authv1.User {
+	return &authv1.User{
+		Id:                "mem-development",
+		Email:             "dev@obiente.local",
+		Name:              "Development User",
+		GivenName:         "Development",
+		FamilyName:        "User",
+		PreferredUsername: "dev",
+		EmailVerified:     true,
+		Locale:            "en",
+		AvatarUrl:         "",
+		Roles:             []string{RoleAdmin, RoleOwner}, // Give full permissions for development
+		UpdatedAt:         timestamppb.Now(),
+	}
+}
+
 // Constants for auth validation
 const (
 	AuthorizationHeader   = "Authorization"
@@ -135,9 +157,10 @@ type AuthConfig struct {
 // NewAuthConfig creates a new auth config with default values
 func NewAuthConfig() *AuthConfig {
 	// Check if auth is disabled for development
-	if os.Getenv("DISABLE_AUTH") == "true" {
+	if isAuthDisabled() {
 		log.Println("⚠️  WARNING: Authentication is DISABLED (DISABLE_AUTH=true)")
 		log.Println("⚠️  This should ONLY be used in development!")
+		log.Println("⚠️  Using mock development user: mem-development")
 		return &AuthConfig{
 			UserInfoCache:  nil,
 			UserInfoURL:    "",
@@ -187,8 +210,16 @@ func NewAuthConfig() *AuthConfig {
 func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-			// If auth is disabled (development only), skip all checks
+			// If auth is disabled (development only), inject mock user and continue
+			if config.UserInfoCache == nil && isAuthDisabled() {
+				mockUser := getMockDevUser()
+				ctx = context.WithValue(ctx, userInfoKey, mockUser)
+				return next(ctx, req)
+			}
+			
+			// If auth config is nil but DISABLE_AUTH is not set, this is an error state
 			if config.UserInfoCache == nil {
+				log.Println("⚠️  WARNING: Auth config is nil but DISABLE_AUTH is not set. This should not happen.")
 				return next(ctx, req)
 			}
 
@@ -307,18 +338,28 @@ func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.U
 }
 
 // GetUserFromContext extracts user info from context
+// When DISABLE_AUTH=true, returns a mock dev user if no user is in context
 func GetUserFromContext(ctx context.Context) (*authv1.User, error) {
     userInfo, ok := ctx.Value(userInfoKey).(*authv1.User)
 	if !ok {
+		// If auth is disabled, return mock user as fallback
+		if isAuthDisabled() {
+			return getMockDevUser(), nil
+		}
 		return nil, errors.New("user not found in context")
 	}
 	return userInfo, nil
 }
 
 // UserIDFromContext extracts user ID from context
+// When DISABLE_AUTH=true, returns mock dev user ID if no user is in context
 func UserIDFromContext(ctx context.Context) (string, bool) {
     userInfo, ok := ctx.Value(userInfoKey).(*authv1.User)
 	if !ok {
+		// If auth is disabled, return mock user ID as fallback
+		if isAuthDisabled() {
+			return getMockDevUser().Id, true
+		}
 		return "", false
 	}
     return userInfo.Id, true
@@ -326,10 +367,16 @@ func UserIDFromContext(ctx context.Context) (string, bool) {
 
 // AuthenticateHTTPRequest authenticates an HTTP request outside of Connect RPC
 // This can be used for regular HTTP handlers that need authentication
+// When DISABLE_AUTH=true, returns a mock dev user
 func AuthenticateHTTPRequest(config *AuthConfig, r *http.Request) (*authv1.User, error) {
-	// If auth is disabled, return nil
+	// If auth is disabled, return mock dev user
+	if config.UserInfoCache == nil && isAuthDisabled() {
+		return getMockDevUser(), nil
+	}
+	
+	// If auth config is nil but DISABLE_AUTH is not set, return error
 	if config.UserInfoCache == nil {
-		return nil, nil
+		return nil, errors.New("authentication not configured")
 	}
 
 	// Extract token from Authorization header

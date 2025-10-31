@@ -1,7 +1,10 @@
 package middleware
 
 import (
+	"bufio"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -9,6 +12,7 @@ import (
 )
 
 // responseWriter wraps http.ResponseWriter to capture status code
+// It also implements http.Flusher and http.Hijacker if the underlying writer does
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode int
@@ -28,6 +32,21 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 		rw.WriteHeader(http.StatusOK)
 	}
 	return rw.ResponseWriter.Write(b)
+}
+
+// Flush implements http.Flusher if the underlying ResponseWriter does
+func (rw *responseWriter) Flush() {
+	if flusher, ok := rw.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+// Hijack implements http.Hijacker if the underlying ResponseWriter does
+func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hijacker, ok := rw.ResponseWriter.(http.Hijacker); ok {
+		return hijacker.Hijack()
+	}
+	return nil, nil, fmt.Errorf("underlying ResponseWriter does not implement http.Hijacker")
 }
 
 // RequestLogger logs all incoming requests with detailed information

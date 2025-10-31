@@ -226,8 +226,6 @@ func ensurePersonalOrg(userID string) {
 
 func generateID(prefix string) string { return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano()) }
 
-// legacy helpers removed after DB-backed refactor
-
 func normalizeSlug(input string) string {
 	lowered := strings.ToLower(strings.TrimSpace(input))
 	if lowered == "" {
