@@ -1,0 +1,264 @@
+<template>
+  <div
+    ref="editorContainer"
+    :class="containerClass"
+  />
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted, watch, nextTick } from "vue";
+
+interface ValidationError {
+  line: number; // 1-based
+  column: number; // 1-based
+  message: string;
+  severity: "error" | "warning";
+  startLine?: number;
+  endLine?: number;
+  startColumn?: number;
+  endColumn?: number;
+}
+
+interface Props {
+  modelValue: string;
+  language?: string;
+  readOnly?: boolean;
+  height?: string;
+  fontSize?: number;
+  wordWrap?: "off" | "on" | "wordWrapColumn" | "bounded";
+  minimap?: { enabled: boolean };
+  folding?: boolean;
+  lineNumbers?: "on" | "off" | "relative" | "interval";
+  containerClass?: string;
+  // Editor-specific options
+  formatOnPaste?: boolean;
+  formatOnType?: boolean;
+  bracketPairColorization?: { enabled: boolean };
+  validationErrors?: ValidationError[]; // Inline validation errors
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  language: "plaintext",
+  readOnly: false,
+  height: "400px",
+  fontSize: 14,
+  wordWrap: "on",
+  minimap: () => ({ enabled: true }),
+  folding: true,
+  lineNumbers: "on",
+  containerClass: "w-full rounded-lg border border-border-default overflow-hidden",
+  formatOnPaste: false,
+  formatOnType: false,
+  bracketPairColorization: undefined,
+  validationErrors: () => [],
+});
+
+const emit = defineEmits<{
+  "update:modelValue": [value: string];
+  "save": [];
+  "change": [value: string];
+}>();
+
+const editorContainer = ref<HTMLElement | null>(null);
+let editor: any = null;
+let monaco: any = null;
+let resizeObserver: ResizeObserver | null = null;
+
+// Initialize Monaco Editor
+const initEditor = async () => {
+  if (typeof window === "undefined" || !editorContainer.value) return;
+
+  try {
+    // Lazy load Monaco Editor
+    if (!monaco) {
+      const monacoModule = await import("monaco-editor");
+      monaco = monacoModule;
+
+      // Register OUI theme
+      const { registerOUITheme } = await import("~/utils/monaco-theme");
+      registerOUITheme(monaco);
+
+      // Register dotenv language
+      monaco.languages.register({ id: "dotenv" });
+      monaco.languages.setMonarchTokensProvider("dotenv", {
+        tokenizer: {
+          root: [
+            [/#.*$/, "comment"],                         // Comments
+            [/^\s*[A-Z_][A-Z0-9_]*\s*=/, "key"],         // Keys
+            [/".*?"/, "string"],                         // Double-quoted strings
+            [/'.*?'/, "string"],                         // Single-quoted strings
+            [/[^#=\s]+/, "value"],                        // Unquoted values
+          ],
+        },
+      });
+    }
+
+    // Dispose existing editor if any
+    if (editor) {
+      editor.dispose();
+      editor = null;
+    }
+
+    // Create editor instance with common configuration
+    const editorOptions: any = {
+      value: props.modelValue || "",
+      language: props.language,
+      theme: "oui-dark",
+      automaticLayout: true,
+      fontSize: props.fontSize,
+      minimap: props.minimap,
+      scrollBeyondLastLine: false,
+      wordWrap: props.wordWrap,
+      readOnly: props.readOnly,
+      formatOnPaste: props.formatOnPaste,
+      formatOnType: props.formatOnType,
+      tabSize: 2,
+      insertSpaces: true,
+      lineNumbers: props.lineNumbers,
+      renderWhitespace: "selection",
+      folding: props.folding,
+      mouseWheelZoom: true, // Enable zoom with Ctrl+scroll (Cmd+scroll on Mac)
+      accessibilitySupport: "on", // Enable accessibility features
+    };
+
+    // Add optional bracket colorization
+    if (props.bracketPairColorization) {
+      editorOptions.bracketPairColorization = props.bracketPairColorization;
+    }
+
+    // Set container height if provided
+    if (props.height && editorContainer.value) {
+      editorContainer.value.style.height = props.height;
+    }
+
+    editor = monaco.editor.create(editorContainer.value, editorOptions);
+
+    // Handle content changes
+    editor.onDidChangeModelContent(() => {
+      const newValue = editor.getValue();
+      emit("update:modelValue", newValue);
+      emit("change", newValue);
+    });
+
+    // Handle Ctrl+S / Cmd+S to save
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+      emit("save");
+    });
+
+    // Handle resize
+    resizeObserver = new ResizeObserver(() => {
+      if (editor) {
+        editor.layout();
+      }
+    });
+
+    if (editorContainer.value) {
+      resizeObserver.observe(editorContainer.value);
+    }
+  } catch (err) {
+    console.error("Failed to initialize Monaco Editor:", err);
+  }
+};
+
+// Watch for model value changes (external updates)
+watch(
+  () => props.modelValue,
+  (newValue) => {
+    if (editor && editor.getValue() !== newValue) {
+      editor.setValue(newValue || "");
+    }
+  }
+);
+
+// Watch for language changes
+watch(
+  () => props.language,
+  (newLanguage) => {
+    if (editor && monaco) {
+      const model = editor.getModel();
+      if (model) {
+        monaco.editor.setModelLanguage(model, newLanguage);
+      }
+    }
+  }
+);
+
+// Watch for read-only changes
+watch(
+  () => props.readOnly,
+  (newReadOnly) => {
+    if (editor) {
+      editor.updateOptions({ readOnly: newReadOnly });
+    }
+  }
+);
+
+// Watch for validation errors and update markers
+watch(
+  () => props.validationErrors,
+  (errors) => {
+    if (!editor || !monaco) return;
+    
+    const model = editor.getModel();
+    if (!model) return;
+
+    if (!errors || errors.length === 0) {
+      // Clear all markers
+      monaco.editor.setModelMarkers(model, "validation", []);
+      return;
+    }
+
+    // Convert validation errors to Monaco markers
+    const markers = errors.map((err) => {
+      const startLine = err.startLine || err.line;
+      const endLine = err.endLine || err.line;
+      const startColumn = err.startColumn || err.column;
+      const endColumn = err.endColumn || err.column;
+
+      return {
+        startLineNumber: startLine,
+        startColumn: startColumn,
+        endLineNumber: endLine,
+        endColumn: endColumn,
+        message: err.message,
+        severity: err.severity === "error" 
+          ? monaco.MarkerSeverity.Error 
+          : monaco.MarkerSeverity.Warning,
+      };
+    });
+
+    // Set markers on the model
+    monaco.editor.setModelMarkers(model, "validation", markers);
+  },
+  { deep: true, immediate: true }
+);
+
+onMounted(async () => {
+  await nextTick();
+  await initEditor();
+});
+
+onUnmounted(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
+  if (editor) {
+    editor.dispose();
+    editor = null;
+  }
+});
+
+// Expose editor instance for advanced use cases
+defineExpose({
+  editor: () => editor,
+  monaco: () => monaco,
+  getValue: () => editor?.getValue() || "",
+  setValue: (value: string) => {
+    if (editor) {
+      editor.setValue(value);
+    }
+  },
+});
+</script>
+
