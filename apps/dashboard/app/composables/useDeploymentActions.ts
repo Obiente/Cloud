@@ -214,6 +214,8 @@ export function useDeploymentActions(organizationId: string = "default") {
   const updateDeployment = async (
     deploymentId: string,
     updates: {
+      name?: string;
+      repositoryUrl?: string;
       branch?: string;
       buildCommand?: string;
       installCommand?: string;
@@ -226,6 +228,8 @@ export function useDeploymentActions(organizationId: string = "default") {
       const res = await client.updateDeployment({
         organizationId: getOrgId(),
         deploymentId,
+        name: updates.name,
+        repositoryUrl: updates.repositoryUrl,
         branch: updates.branch,
         buildCommand: updates.buildCommand,
         installCommand: updates.installCommand,
