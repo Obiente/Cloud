@@ -1,5 +1,9 @@
 <template>
-  <Dialog.Root :open="open" @open-change="handleOpenChange">
+  <Dialog.Root 
+    :open="open" 
+    :closeOnInteractOutside="closeOnInteractOutside !== false"
+    @open-change="handleOpenChange"
+  >
     <Teleport to="body">
       <Dialog.Backdrop
         class="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm animate-in fade-in-0 duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
@@ -66,6 +70,7 @@ interface Props {
   open?: boolean;
   title: string;
   description?: string;
+  closeOnInteractOutside?: boolean;
 }
 
 defineProps<Props>();
