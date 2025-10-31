@@ -1,5 +1,5 @@
 <template>
-  <OuiContainer class="min-h-screen">
+  <OuiContainer >
     <OuiStack gap="xl">
       <OuiFlex justify="between" align="start" wrap="wrap" gap="lg">
         <OuiStack gap="sm" class="max-w-xl">
@@ -511,7 +511,7 @@
   import { useConnectClient } from "~/lib/connect-client";
   import { useDeploymentActions } from "~/composables/useDeploymentActions";
   import ErrorAlert from "~/components/ErrorAlert.vue";
-  import GitHubRepoPicker from "~/components/deployments/GitHubRepoPicker.vue";
+  import GitHubRepoPicker from "~/components/deployment/GitHubRepoPicker.vue";
   definePageMeta({
     layout: "default",
     middleware: "auth",
@@ -838,7 +838,11 @@
 
   const createDeployment = async () => {
     if (!newDeployment.value.name.trim()) {
-      alert("Please enter a project name");
+      const { showAlert } = useDialog();
+      await showAlert({
+        title: "Validation Error",
+        message: "Please enter a project name",
+      });
       return;
     }
 
