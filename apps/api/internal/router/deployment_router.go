@@ -194,6 +194,7 @@ func (dr *DeploymentRouter) UpdateRouting(ctx context.Context, deploymentID stri
 		LoadBalancerAlgo: "round-robin",
 		SSLEnabled:       true,
 		SSLCertResolver:  "letsencrypt",
+		Middleware:       "{}", // Empty JSON object for jsonb field
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
 	}
