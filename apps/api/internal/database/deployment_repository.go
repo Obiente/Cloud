@@ -93,6 +93,22 @@ func (r *DeploymentRepository) Update(ctx context.Context, deployment *Deploymen
 	return r.db.WithContext(ctx).Save(deployment).Error
 }
 
+// UpdateEnvVars updates only the environment variables fields
+func (r *DeploymentRepository) UpdateEnvVars(ctx context.Context, id string, envFileContent string, envVarsJSON string) error {
+	// Clear cache
+	if r.cache != nil {
+		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", id))
+	}
+
+	return r.db.WithContext(ctx).Model(&Deployment{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"env_file_content": envFileContent,
+			"env_vars":         envVarsJSON,
+			"last_deployed_at": time.Now(),
+		}).Error
+}
+
 func (r *DeploymentRepository) UpdateStatus(ctx context.Context, id string, status int32) error {
 	// Clear cache
 	if r.cache != nil {
