@@ -96,7 +96,8 @@ export const useAuth = () => {
     window.addEventListener("storage", popupListener);
   };
 
-  // Get the current access token
+  // Get the current access token with caching to prevent excessive fetches
+  let getAccessTokenPromise: Promise<string | null> | null = null;
   const getAccessToken = async (
     forceRefresh = false
   ): Promise<string | null> => {
@@ -104,12 +105,32 @@ export const useAuth = () => {
       return sessionState.value?.secure?.access_token || null;
     }
 
+    // If we have a valid cached token and not forcing refresh, return it immediately
+    if (
+      !forceRefresh &&
+      accessToken.value &&
+      tokenExpiry.value &&
+      Date.now() < tokenExpiry.value
+    ) {
+      return accessToken.value;
+    }
+
+    // If there's already a refresh in progress, wait for it instead of starting a new one
+    if (!forceRefresh && getAccessTokenPromise) {
+      return await getAccessTokenPromise;
+    }
+
+    // Only refresh if needed
     if (
       !accessToken.value ||
       forceRefresh ||
       (tokenExpiry.value && Date.now() >= tokenExpiry.value)
     ) {
-      await refreshAccessToken(forceRefresh);
+      getAccessTokenPromise = refreshAccessToken(forceRefresh).then(() => {
+        getAccessTokenPromise = null;
+        return accessToken.value;
+      });
+      return await getAccessTokenPromise;
     }
 
     return accessToken.value;
@@ -172,31 +193,39 @@ export const useAuth = () => {
 
   watch(
     () => sessionState.value,
-    async (newSession) => {
-      if (newSession) {
+    async (newSession, oldSession) => {
+      // Only fetch token if session actually changed (not just on mount)
+      if (newSession && newSession !== oldSession) {
         try {
           if (import.meta.client) {
-            const response = await $fetch<{
-              accessToken: string;
-              expiresIn?: number;
-            }>("/auth/token");
-            if (response.accessToken) {
-              accessToken.value = response.accessToken;
-              if (response.expiresIn) {
-                tokenExpiry.value =
-                  Date.now() + response.expiresIn * 1000 - 30000;
+            // Only fetch if we don't have a valid token already
+            if (
+              !accessToken.value ||
+              (tokenExpiry.value && Date.now() >= tokenExpiry.value)
+            ) {
+              const response = await $fetch<{
+                accessToken: string;
+                expiresIn?: number;
+              }>("/auth/token");
+              if (response.accessToken) {
+                accessToken.value = response.accessToken;
+                if (response.expiresIn) {
+                  tokenExpiry.value =
+                    Date.now() + response.expiresIn * 1000 - 30000;
+                }
               }
             }
           }
         } catch (e) {
           console.error("Failed to fetch token after session update:", e);
         }
-      } else {
+      } else if (!newSession && oldSession) {
+        // Session was cleared
         accessToken.value = null;
         tokenExpiry.value = null;
       }
     },
-    { immediate: true }
+    { immediate: false } // Don't run immediately - let onMounted handle initial fetch
   );
 
   onMounted(() => {
