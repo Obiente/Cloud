@@ -1,5 +1,5 @@
 <template>
-  <Menu.Separator class="my-1 h-px bg-border-muted" />
+  <Menu.Separator class="my-1 h-px border-t border-border-default" />
 </template>
 
 <script setup lang="ts">
