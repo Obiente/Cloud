@@ -119,7 +119,7 @@
             <OuiCardBody class="text-center">
               <OuiStack gap="lg">
                 <OuiBox
-                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-primary/20 to-accent-primary/10 rounded-2xl flex items-center justify-center group-hover:from-accent-primary/30 group-hover:to-accent-primary/20 transition-colors"
+                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-primary/20 to-accent-primary/10 rounded-xl flex items-center justify-center group-hover:from-accent-primary/30 group-hover:to-accent-primary/20 transition-colors"
                 >
                   <RocketLaunchIcon class="h-8 w-8 text-accent-primary" />
                 </OuiBox>
@@ -145,7 +145,7 @@
             <OuiCardBody class="text-center">
               <OuiStack gap="lg">
                 <OuiBox
-                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-warning/20 to-accent-warning/10 rounded-2xl flex items-center justify-center group-hover:from-accent-warning/30 group-hover:to-accent-warning/20 transition-colors"
+                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-warning/20 to-accent-warning/10 rounded-xl flex items-center justify-center group-hover:from-accent-warning/30 group-hover:to-accent-warning/20 transition-colors"
                 >
                   <svg
                     class="h-8 w-8 text-accent-warning"
@@ -180,7 +180,7 @@
             <OuiCardBody class="text-center">
               <OuiStack gap="lg">
                 <OuiBox
-                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-secondary/20 to-accent-secondary/10 rounded-2xl flex items-center justify-center group-hover:from-accent-secondary/30 group-hover:to-accent-secondary/20 transition-colors"
+                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-secondary/20 to-accent-secondary/10 rounded-xl flex items-center justify-center group-hover:from-accent-secondary/30 group-hover:to-accent-secondary/20 transition-colors"
                 >
                   <ServerIcon class="h-8 w-8 text-accent-secondary" />
                 </OuiBox>
@@ -206,7 +206,7 @@
             <OuiCardBody class="text-center">
               <OuiStack gap="lg">
                 <OuiBox
-                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-success/20 to-accent-success/10 rounded-2xl flex items-center justify-center group-hover:from-accent-success/30 group-hover:to-accent-success/20 transition-colors"
+                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-success/20 to-accent-success/10 rounded-xl flex items-center justify-center group-hover:from-accent-success/30 group-hover:to-accent-success/20 transition-colors"
                 >
                   <CircleStackIcon class="h-8 w-8 text-accent-success" />
                 </OuiBox>
@@ -232,7 +232,7 @@
             <OuiCardBody class="text-center">
               <OuiStack gap="lg">
                 <OuiBox
-                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-info/20 to-accent-info/10 rounded-2xl flex items-center justify-center group-hover:from-accent-info/30 group-hover:to-accent-info/20 transition-colors"
+                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-info/20 to-accent-info/10 rounded-xl flex items-center justify-center group-hover:from-accent-info/30 group-hover:to-accent-info/20 transition-colors"
                 >
                   <ChartBarIcon class="h-8 w-8 text-accent-info" />
                 </OuiBox>
@@ -258,7 +258,7 @@
             <OuiCardBody class="text-center">
               <OuiStack gap="lg">
                 <OuiBox
-                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-danger/20 to-accent-danger/10 rounded-2xl flex items-center justify-center group-hover:from-accent-danger/30 group-hover:to-accent-danger/20 transition-colors"
+                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-danger/20 to-accent-danger/10 rounded-xl flex items-center justify-center group-hover:from-accent-danger/30 group-hover:to-accent-danger/20 transition-colors"
                 >
                   <ShieldCheckIcon class="h-8 w-8 text-accent-danger" />
                 </OuiBox>

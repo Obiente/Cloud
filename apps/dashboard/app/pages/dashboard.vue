@@ -239,9 +239,9 @@
                       class="wrap-break-word"
                       >{{ activity.message }}</OuiText
                     >
-                    <OuiText size="xs" color="secondary">{{
-                      formatRelative(activity.timestamp)
-                    }}</OuiText>
+                    <OuiText size="xs" color="secondary">
+                      <OuiRelativeTime :value="activity.timestamp" :style="'short'" />
+                    </OuiText>
                   </OuiStack>
                 </OuiFlex>
               </OuiBox>
@@ -359,9 +359,9 @@
                     <OuiBadge :variant="statusVariant(deployment.status)">{{
                       deployment.status
                     }}</OuiBadge>
-                    <OuiText size="xs" color="secondary">{{
-                      formatRelative(deployment.updatedAt)
-                    }}</OuiText>
+                    <OuiText size="xs" color="secondary">
+                      <OuiRelativeTime :value="deployment.updatedAt" :style="'short'" />
+                    </OuiText>
                   </OuiFlex>
                 </OuiFlex>
               </OuiBox>
@@ -415,6 +415,7 @@ definePageMeta({
 import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { DeploymentService, DeploymentStatus, Environment as EnvEnum } from "@obiente/proto";
+import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 
 type DashboardData = {
   stats: {
@@ -629,16 +630,6 @@ onUnmounted(() => {
   if (refreshInterval.value) clearInterval(refreshInterval.value);
 });
 
-const formatRelative = (dateISO: string | Date) => {
-  const date = typeof dateISO === "string" ? new Date(dateISO) : dateISO;
-  const diffMs = date.getTime() - Date.now();
-  const minutes = Math.round(diffMs / (1000 * 60));
-  // Prefer minutes for recent events; could expand to hours/days if needed
-  return new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(
-    minutes,
-    "minute"
-  );
-};
 
 const statusVariant = (
   status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR"

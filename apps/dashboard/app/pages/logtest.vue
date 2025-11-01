@@ -178,7 +178,7 @@ onUnmounted(() => {
 <template>
   <div class="min-h-screen bg-background p-6">
     <div class="max-w-6xl mx-auto">
-      <div class="bg-surface-base rounded-lg shadow-lg">
+      <div class="bg-surface-base rounded-xl shadow-lg">
         <!-- Header -->
         <div class="border-b border-border-muted p-6">
           <OuiText
@@ -200,7 +200,7 @@ onUnmounted(() => {
               <button
                 @click="loadContainers"
                 :disabled="isLoadingContainers"
-                class="px-4 py-2 bg-primary text-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+                class="px-4 py-2 bg-primary text-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50"
               >
                 {{ isLoadingContainers ? "Loading..." : "Refresh" }}
               </button>
@@ -229,7 +229,7 @@ onUnmounted(() => {
                 v-for="container in availableContainers"
                 :key="container.id"
                 @click="selectContainer(container)"
-                class="p-4 border border-border-muted rounded-lg hover:border-primary hover:bg-surface-muted/40 cursor-pointer transition-colors"
+                class="p-4 border border-border-muted rounded-xl hover:border-primary hover:bg-surface-muted/40 cursor-pointer transition-colors"
               >
                 <div class="flex items-center justify-between">
                   <div class="flex-1">
@@ -296,7 +296,7 @@ onUnmounted(() => {
                     selectedContainer = null;
                     disconnect();
                   "
-                  class="px-4 py-2 bg-secondary text-foreground rounded-md hover:bg-secondary-dark"
+                  class="px-4 py-2 bg-secondary text-foreground rounded-xl hover:bg-secondary-dark"
                 >
                   Change Container
                 </button>
@@ -307,7 +307,7 @@ onUnmounted(() => {
               <button
                 @click="connectToContainer"
                 :disabled="isLoading || isConnected"
-                class="px-6 py-2 bg-primary text-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="px-6 py-2 bg-primary text-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span v-if="isLoading">Connecting...</span>
                 <span v-else-if="isConnected">Connected</span>
@@ -317,7 +317,7 @@ onUnmounted(() => {
               <button
                 v-if="isConnected"
                 @click="disconnect"
-                class="px-6 py-2 bg-danger text-foreground rounded-md hover:bg-danger/90"
+                class="px-6 py-2 bg-danger text-foreground rounded-xl hover:bg-danger/90"
               >
                 Disconnect
               </button>
@@ -327,7 +327,7 @@ onUnmounted(() => {
           <!-- Error Display -->
           <div
             v-if="error"
-            class="bg-danger/10 border border-danger/20 rounded-md p-4 mt-4"
+            class="bg-danger/10 border border-danger/20 rounded-xl p-4 mt-4"
           >
             <div class="flex">
               <div class="text-danger"><strong>Error:</strong> {{ error }}</div>
