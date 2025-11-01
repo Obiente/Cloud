@@ -1,28 +1,27 @@
 <template>
   <Field.Root
-    :id="fieldId"
-    :invalid="!!error"
-    :required="required"
-    :disabled="disabled"
-    :read-only="$props.readonly"
+    :invalid="!!props.error"
+    :required="props.required"
+    :disabled="props.disabled"
+    :read-only="props.readonly"
     class="oui-field space-y-1"
   >
-    <Field.Label v-if="label" class="block text-sm font-medium text-primary">
-      {{ label }}
-      <Field.RequiredIndicator v-if="required" class="text-danger">
+    <Field.Label v-if="props.label" class="block text-sm font-medium text-primary">
+      {{ props.label }}
+      <Field.RequiredIndicator v-if="props.required" class="text-danger">
         *
       </Field.RequiredIndicator>
     </Field.Label>
 
     <div class="relative">
       <Field.Input
-        :type="type"
-        :placeholder="placeholder"
+        :type="props.type"
+        :placeholder="props.placeholder"
         :class="[
           inputClasses,
           {
             'pl-10': $slots.prefix,
-            'pr-10': $slots.suffix || clearable,
+            'pr-10': $slots.suffix || props.clearable,
           },
         ]"
         v-model="modelValue"
@@ -39,11 +38,11 @@
       </div>
 
       <div
-        v-if="$slots.suffix || clearable"
+        v-if="$slots.suffix || props.clearable"
         class="absolute inset-y-0 right-0 flex items-center pr-3"
       >
         <button
-          v-if="clearable && modelValue"
+          v-if="props.clearable && modelValue"
           type="button"
           @click="handleClear"
           class="text-text-secondary hover:text-primary transition-colors"
@@ -56,17 +55,18 @@
       </div>
     </div>
 
-    <Field.ErrorText v-if="error" class="text-sm text-danger">
-      {{ error }}
+    <Field.ErrorText v-if="props.error" class="text-sm text-danger">
+      {{ props.error }}
     </Field.ErrorText>
 
-    <Field.HelperText v-else-if="helperText" class="text-sm text-secondary">
-      {{ helperText }}
+    <Field.HelperText v-else-if="props.helperText" class="text-sm text-secondary">
+      {{ props.helperText }}
     </Field.HelperText>
   </Field.Root>
 </template>
 
 <script setup lang="ts">
+import { ref, computed } from "vue";
 import { XMarkIcon } from "@heroicons/vue/24/outline";
 import { Field } from "@ark-ui/vue/field";
 import type { InputHTMLAttributes } from "vue";
@@ -96,9 +96,8 @@ const emit = defineEmits<{
   focus: [event: FocusEvent];
 }>();
 
-const fieldId = computed(
-  () => `field-${Math.random().toString(36).substr(2, 9)}`
-);
+// Let Ark UI Field generate its own stable IDs automatically
+// Removing manual ID prop to avoid SSR/client hydration mismatches
 
 const modelValue = computed({
   get: () => props.modelValue,
