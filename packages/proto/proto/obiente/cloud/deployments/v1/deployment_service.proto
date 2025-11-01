@@ -8,12 +8,30 @@ import "google/protobuf/timestamp.proto";
 import "obiente/cloud/organizations/v1/organization_service.proto";
 
 // Enumerations for typed fields used by the frontend
+// DeploymentType represents the runtime/language type of the application
 enum DeploymentType {
   DEPLOYMENT_TYPE_UNSPECIFIED = 0;
-  DOCKER = 1;
-  STATIC = 2;
-  NODE = 3;
-  GO = 4;
+  DOCKER = 1;          // Docker container (from Dockerfile or compose)
+  STATIC = 2;          // Static site hosting
+  NODE = 3;            // Node.js application
+  GO = 4;              // Go application
+  PYTHON = 5;          // Python application
+  RUBY = 6;            // Ruby/Rails application
+  RUST = 7;            // Rust application
+  JAVA = 8;            // Java application
+  PHP = 9;             // PHP application
+  GENERIC = 10;        // Generic/unknown runtime (use when can't detect)
+}
+
+// Build strategy determines how the deployment is built and deployed
+enum BuildStrategy {
+  BUILD_STRATEGY_UNSPECIFIED = 0;
+  RAILPACKS = 1;        // Railpacks (Nixpacks variant, can build any language including Rails)
+  NIXPACKS = 2;         // Nixpacks buildpacks (can build any language)
+  DOCKERFILE = 3;       // Build from Dockerfile
+  PLAIN_COMPOSE = 4;    // Plain Docker Compose (uses compose YAML from database, no repository)
+  COMPOSE_REPO = 6;     // Compose from Repository (clones repo and uses compose file from repo)
+  STATIC_SITE = 5;      // Static site hosting
 }
 
 enum Environment {
@@ -58,6 +76,9 @@ service DeploymentService {
   // Stream deployment logs (tail/follow)
   rpc StreamDeploymentLogs(StreamDeploymentLogsRequest) returns (stream DeploymentLogLine);
 
+  // Stream build logs during deployment (live build output)
+  rpc StreamBuildLogs(StreamBuildLogsRequest) returns (stream DeploymentLogLine);
+
   // Start a stopped deployment
   rpc StartDeployment(StartDeploymentRequest) returns (StartDeploymentResponse);
 
@@ -82,6 +103,9 @@ service DeploymentService {
   // Get deployment docker compose configuration
   rpc GetDeploymentCompose(GetDeploymentComposeRequest) returns (GetDeploymentComposeResponse);
 
+  // Validate deployment docker compose configuration (validation only, no save)
+  rpc ValidateDeploymentCompose(ValidateDeploymentComposeRequest) returns (ValidateDeploymentComposeResponse);
+
   // Update deployment docker compose configuration
   rpc UpdateDeploymentCompose(UpdateDeploymentComposeRequest) returns (UpdateDeploymentComposeResponse);
 
@@ -94,12 +118,21 @@ service DeploymentService {
   
   // Get file content from a GitHub repository
   rpc GetGitHubFile(GetGitHubFileRequest) returns (GetGitHubFileResponse);
+  
+  // List all available GitHub integrations for the current user
+  rpc ListAvailableGitHubIntegrations(ListAvailableGitHubIntegrationsRequest) returns (ListAvailableGitHubIntegrationsResponse);
 
   // Terminal access
+  // Stream terminal with bidirectional streaming (replaces StreamTerminalOutput + SendTerminalInput)
+  // Use this for better input/output synchronization
+  rpc StreamTerminal(stream TerminalInput) returns (stream TerminalOutput);
+  
+  // DEPRECATED: Use StreamTerminal instead for bidirectional streaming
   // Stream terminal output from a deployment container
   // Input is sent via SendTerminalInput RPC
   rpc StreamTerminalOutput(StreamTerminalOutputRequest) returns (stream TerminalOutput);
   
+  // DEPRECATED: Use StreamTerminal instead for bidirectional streaming
   // Send input to an active terminal session
   rpc SendTerminalInput(SendTerminalInputRequest) returns (SendTerminalInputResponse);
 
@@ -112,6 +145,18 @@ service DeploymentService {
   
   // Upload files to a deployment container
   rpc UploadContainerFiles(stream UploadContainerFilesRequest) returns (UploadContainerFilesResponse);
+
+  // Delete one or more files/directories in a deployment container
+  rpc DeleteContainerEntries(DeleteContainerEntriesRequest) returns (DeleteContainerEntriesResponse);
+
+  // Rename or move a file/directory within a deployment container
+  rpc RenameContainerEntry(RenameContainerEntryRequest) returns (RenameContainerEntryResponse);
+
+  // Create an empty file or directory within a deployment container
+  rpc CreateContainerEntry(CreateContainerEntryRequest) returns (CreateContainerEntryResponse);
+
+  // Write/update file contents in a deployment container
+  rpc WriteContainerFile(WriteContainerFileRequest) returns (WriteContainerFileResponse);
 
   // Routing configuration
   // Get all routing rules for a deployment
@@ -140,10 +185,14 @@ message CreateDeploymentRequest {
   string organization_id = 1;
   string name = 2;
   DeploymentType type = 3; // deployment type enum
+  BuildStrategy build_strategy = 15; // build strategy enum
   optional string repository_url = 4;
-  string branch = 5;
+  optional string github_integration_id = 18; // GitHub integration ID used for this deployment
+  optional string branch = 5;
   optional string build_command = 6;
   optional string install_command = 7;
+  optional string dockerfile_path = 16; // Path to Dockerfile (relative to repo root)
+  optional string compose_file_path = 17; // Path to compose file (relative to repo root)
   // Docker/runtime specific
   optional string image = 8;
   optional int32 port = 9;
@@ -172,12 +221,16 @@ message UpdateDeploymentRequest {
   string deployment_id = 2;
   optional string name = 3;
   optional string repository_url = 4;
+  optional string github_integration_id = 14; // GitHub integration ID used for this deployment
   optional string branch = 5;
   optional string build_command = 6;
   optional string install_command = 7;
+  optional string dockerfile_path = 12; // Path to Dockerfile (relative to repo root)
+  optional string compose_file_path = 13; // Path to compose file (relative to repo root)
   optional string domain = 8;
   repeated string custom_domains = 9;
   optional int32 port = 10;
+  optional BuildStrategy build_strategy = 11; // build strategy enum
 }
 
 message UpdateDeploymentResponse {
@@ -222,6 +275,11 @@ message StreamDeploymentLogsRequest {
   string organization_id = 1;
   string deployment_id = 2;
   optional int32 tail = 3; // number of lines to tail before following
+}
+
+message StreamBuildLogsRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
 }
 
 message DeploymentLogLine {
@@ -307,6 +365,17 @@ message GetDeploymentComposeResponse {
   string compose_yaml = 1;
 }
 
+message ValidateDeploymentComposeRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string compose_yaml = 3;
+}
+
+message ValidateDeploymentComposeResponse {
+  repeated ComposeValidationError validation_errors = 1;
+  optional string validation_error = 2; // Deprecated: Use validation_errors instead
+}
+
 message UpdateDeploymentComposeRequest {
   string organization_id = 1;
   string deployment_id = 2;
@@ -331,8 +400,10 @@ message ComposeValidationError {
 }
 
 message ListGitHubReposRequest {
-  int32 page = 1;
-  int32 per_page = 2;
+  string organization_id = 1; // Organization ID to use for GitHub token (optional, will use user token if not provided)
+  string integration_id = 2; // Optional: use specific GitHub integration ID
+  int32 page = 3;
+  int32 per_page = 4;
 }
 
 message GitHubRepo {
@@ -351,7 +422,9 @@ message ListGitHubReposResponse {
 }
 
 message GetGitHubBranchesRequest {
-  string repo_full_name = 1; // e.g., "owner/repo"
+  string organization_id = 1; // Organization ID to use for GitHub token (optional, will use user token if not provided)
+  string integration_id = 2; // Optional: use specific GitHub integration ID
+  string repo_full_name = 3; // e.g., "owner/repo"
 }
 
 message GitHubBranch {
@@ -365,15 +438,33 @@ message GetGitHubBranchesResponse {
 }
 
 message GetGitHubFileRequest {
-  string repo_full_name = 1; // e.g., "owner/repo"
-  string branch = 2;
-  string path = 3; // e.g., "docker-compose.yml"
+  string organization_id = 1; // Organization ID to use for GitHub token (optional, will use user token if not provided)
+  string integration_id = 2; // Optional: use specific GitHub integration ID
+  string repo_full_name = 3; // e.g., "owner/repo"
+  string branch = 4;
+  string path = 5; // e.g., "docker-compose.yml"
 }
 
 message GetGitHubFileResponse {
   string content = 1;
   string encoding = 2; // "base64" or "text"
   int64 size = 3;
+}
+
+message ListAvailableGitHubIntegrationsRequest {
+  string organization_id = 1; // Optional: filter integrations for this organization
+}
+
+message GitHubIntegrationOption {
+  string id = 1;
+  string username = 2;
+  bool is_user = 3; // true if user integration, false if organization
+  string obiente_org_id = 4; // Obiente cloud organization ID (only set if is_user is false)
+  string obiente_org_name = 5; // Obiente cloud organization name (only set if is_user is false)
+}
+
+message ListAvailableGitHubIntegrationsResponse {
+  repeated GitHubIntegrationOption integrations = 1;
 }
 
 message StreamTerminalOutputRequest {
@@ -395,9 +486,25 @@ message SendTerminalInputResponse {
   bool success = 1;
 }
 
+message TerminalInput {
+  string organization_id = 1;
+  string deployment_id = 2;
+  bytes input = 3; // User keyboard input
+  int32 cols = 4; // Terminal width (for resize/initial setup)
+  int32 rows = 5; // Terminal height (for resize/initial setup)
+}
+
 message TerminalOutput {
   bytes output = 1; // Terminal stdout/stderr
   bool exit = 2; // Whether the terminal session has ended
+}
+
+
+message VolumeInfo {
+  string name = 1; // Volume name
+  string mount_point = 2; // Mount point inside container (e.g., "/data")
+  string source = 3; // Volume source path on host
+  bool is_persistent = 4; // Whether this is a persistent volume
 }
 
 message ListContainerFilesRequest {
@@ -406,6 +513,8 @@ message ListContainerFilesRequest {
   string path = 3; // Directory path (default: "/")
   optional string volume_name = 4; // If specified, list files from this volume instead of container filesystem
   bool list_volumes = 5; // If true, return list of available volumes instead of files
+  optional string cursor = 6;
+  optional int32 page_size = 7;
 }
 
 message ContainerFile {
@@ -414,8 +523,15 @@ message ContainerFile {
   bool is_directory = 3;
   int64 size = 4;
   string permissions = 5;
-  optional string modified_at = 6;
-  optional string volume_name = 7; // If this file is in a volume, the volume name
+  optional string volume_name = 6; // If this file is in a volume, the volume name
+  optional string owner = 7;
+  optional string group = 8;
+  optional uint32 mode_octal = 9;
+  optional bool is_symlink = 10;
+  optional string symlink_target = 11;
+  optional string mime_type = 12;
+  optional google.protobuf.Timestamp modified_time = 13;
+  optional google.protobuf.Timestamp created_time = 14;
 }
 
 message ListContainerFilesResponse {
@@ -424,13 +540,8 @@ message ListContainerFilesResponse {
   repeated VolumeInfo volumes = 3; // Available persistent volumes (only when list_volumes=true)
   bool is_volume = 4; // Whether the current listing is from a volume
   bool container_running = 5; // Whether the container is currently running
-}
-
-message VolumeInfo {
-  string name = 1; // Volume name
-  string mount_point = 2; // Mount point inside container (e.g., "/data")
-  string source = 3; // Volume source path on host
-  bool is_persistent = 4; // Whether this is a persistent volume
+  bool has_more = 6;
+  optional string next_cursor = 7;
 }
 
 message GetContainerFileRequest {
@@ -444,6 +555,8 @@ message GetContainerFileResponse {
   string content = 1;
   string encoding = 2; // "text" or "base64"
   int64 size = 3;
+  optional bool truncated = 4;
+  optional ContainerFile metadata = 5;
 }
 
 message UploadContainerFilesRequest {
@@ -474,8 +587,81 @@ message UploadContainerFilesResponse {
   int32 files_uploaded = 3; // Number of files successfully uploaded
 }
 
-// Routing configuration messages
-message RoutingRule {
+enum ContainerEntryType {
+  CONTAINER_ENTRY_TYPE_UNSPECIFIED = 0;
+  CONTAINER_ENTRY_TYPE_FILE = 1;
+  CONTAINER_ENTRY_TYPE_DIRECTORY = 2;
+  CONTAINER_ENTRY_TYPE_SYMLINK = 3;
+}
+
+message DeleteContainerEntriesRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  repeated string paths = 3;
+  optional string volume_name = 4;
+  bool recursive = 5;
+  bool force = 6;
+}
+
+message DeleteContainerEntriesError {
+  string path = 1;
+  string message = 2;
+}
+
+message DeleteContainerEntriesResponse {
+  bool success = 1;
+  repeated string deleted_paths = 2;
+  repeated DeleteContainerEntriesError errors = 3;
+}
+
+message RenameContainerEntryRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string source_path = 3;
+  string target_path = 4;
+  optional string volume_name = 5;
+  bool overwrite = 6;
+}
+
+message RenameContainerEntryResponse {
+  bool success = 1;
+  optional ContainerFile entry = 2;
+}
+
+message CreateContainerEntryRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string parent_path = 3;
+  string name = 4;
+  ContainerEntryType type = 5;
+  optional string template = 6; // Optional template identifier for seeded content
+  optional string volume_name = 7;
+  optional uint32 mode_octal = 8;
+}
+
+message CreateContainerEntryResponse {
+  ContainerFile entry = 1;
+}
+
+message WriteContainerFileRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string path = 3;
+  optional string volume_name = 4;
+  string content = 5;
+  string encoding = 6; // "text" or "base64"
+  bool create_if_missing = 7;
+  optional uint32 mode_octal = 8;
+}
+
+message WriteContainerFileResponse {
+  bool success = 1;
+  optional ContainerFile entry = 2;
+  optional string error = 3;
+}
+ 
+ // Routing configuration messages
+ message RoutingRule {
   string id = 1;
   string deployment_id = 2;
   string domain = 3;
@@ -483,9 +669,8 @@ message RoutingRule {
   string path_prefix = 5; // Optional path prefix (e.g., "/api")
   int32 target_port = 6;
   string protocol = 7; // "http", "https", "grpc"
-  string load_balancer_algo = 8; // "round-robin", "least-conn", "ip-hash"
-  bool ssl_enabled = 9;
-  string ssl_cert_resolver = 10;
+  bool ssl_enabled = 8;
+  string ssl_cert_resolver = 9;
 }
 
 message GetDeploymentRoutingsRequest {
@@ -522,10 +707,13 @@ message Deployment {
   string domain = 3;
   repeated string custom_domains = 4;
   DeploymentType type = 5;
+  BuildStrategy build_strategy = 26; // build strategy enum
   optional string repository_url = 6;
   string branch = 7;
   optional string build_command = 8;
   optional string install_command = 9;
+  optional string dockerfile_path = 27; // Path to Dockerfile (relative to repo root, e.g., "Dockerfile", "backend/Dockerfile")
+  optional string compose_file_path = 28; // Path to compose file (relative to repo root, e.g., "docker-compose.yml", "compose/production.yml")
   DeploymentStatus status = 10;
   string health_status = 11;
   google.protobuf.Timestamp last_deployed_at = 12;
@@ -547,4 +735,5 @@ message Deployment {
   optional string node_hostname = 24;
   // Environment variables
   map<string, string> env_vars = 25;
+  optional string github_integration_id = 29; // GitHub integration ID used for this deployment
 }
