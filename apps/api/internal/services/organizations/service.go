@@ -47,7 +47,7 @@ func NewService(cfg Config) organizationsv1connect.OrganizationServiceHandler {
 	return &Service{mailer: cfg.EmailSender, consoleURL: consoleURL, supportEmail: strings.TrimSpace(cfg.SupportEmail)}
 }
 
-func (s *Service) ListOrganizations(ctx context.Context, _ *connect.Request[organizationsv1.ListOrganizationsRequest]) (*connect.Response[organizationsv1.ListOrganizationsResponse], error) {
+func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[organizationsv1.ListOrganizationsRequest]) (*connect.Response[organizationsv1.ListOrganizationsResponse], error) {
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -60,15 +60,11 @@ func (s *Service) ListOrganizations(ctx context.Context, _ *connect.Request[orga
 	}
 
 	var rows []row
-	if auth.HasRole(user, auth.RoleSuperAdmin) {
-		if err := database.DB.Raw(`
-			SELECT o.id, o.name, o.slug, o.plan, o.status, o.domain, o.created_at
-			FROM organizations o
-			ORDER BY o.created_at DESC
-		`).Scan(&rows).Error; err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list organizations: %w", err))
-		}
-	} else {
+	onlyMine := req.Msg.GetOnlyMine()
+	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+
+	// If onlyMine is true, or user is not a superadmin, filter to user's memberships
+	if onlyMine || !isSuperAdmin {
 		ensurePersonalOrg(user.Id)
 		if err := database.DB.Raw(`
 			SELECT o.id, o.name, o.slug, o.plan, o.status, o.domain, o.created_at
@@ -77,6 +73,15 @@ func (s *Service) ListOrganizations(ctx context.Context, _ *connect.Request[orga
 			WHERE m.user_id = ?
 			ORDER BY o.created_at DESC
 		`, user.Id).Scan(&rows).Error; err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list organizations: %w", err))
+		}
+	} else {
+		// Superadmin gets all organizations (when onlyMine is false/unset)
+		if err := database.DB.Raw(`
+			SELECT o.id, o.name, o.slug, o.plan, o.status, o.domain, o.created_at
+			FROM organizations o
+			ORDER BY o.created_at DESC
+		`).Scan(&rows).Error; err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list organizations: %w", err))
 		}
 	}

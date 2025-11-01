@@ -26,6 +26,7 @@
           class="sidebar-drawer relative h-full overflow-y-auto border-r border-border-muted bg-surface-base shadow-2xl"
           :organization-options="organizationOptions"
           :current-organization="currentOrganization"
+          :show-super-admin="showSuperAdmin"
           @navigate="closeSidebar"
           @organization-change="switchOrganization"
           @new-organization="$router.push('/organizations')"
@@ -51,6 +52,7 @@
             class="w-full relative z-0"
             :organization-options="organizationOptions"
             :current-organization="currentOrganization"
+            :show-super-admin="showSuperAdmin"
             @navigate="closeSidebar"
             @organization-change="switchOrganization"
             @new-organization="$router.push('/organizations')"
@@ -87,8 +89,10 @@
         </div>
 
         <!-- Framed Main Content -->
-        <main class="flex-1 bg-background overflow-hidden m-2 ml-0 rounded-4xl p-6 relative">
-          <div class="absolute inset-0 overflow-hidden rounded-2xl">
+        <main
+          class="flex-1 bg-background overflow-hidden m-2 ml-0 rounded-3xl border border-muted p-6 relative"
+        >
+          <div class="absolute inset-0 overflow-hidden rounded-xl">
             <div class="h-full w-full overflow-y-auto p-6">
               <slot />
             </div>
@@ -162,6 +166,14 @@
 
   // Pinia user store
   const user = useAuth();
+  const superAdmin = useSuperAdmin();
+
+  if (import.meta.server) {
+    await superAdmin.fetchOverview().catch(() => null);
+  } else {
+    superAdmin.fetchOverview().catch(() => null);
+  }
+  const showSuperAdmin = computed(() => superAdmin.allowed.value === true);
   // Notifications state
   const isNotificationsOpen = ref(false);
   const notifications = ref<
@@ -262,7 +274,8 @@
     "organizations",
     async () => {
       if (!user.isAuthenticated) return [];
-      const res = await orgClient.listOrganizations({});
+      // Only show user's own organizations in the select, even for superadmins
+      const res = await orgClient.listOrganizations({ onlyMine: true });
       user.setOrganizations(res.organizations || []);
       return res.organizations || [];
     },

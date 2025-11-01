@@ -31,11 +31,17 @@ service OrganizationService {
   
   // Remove member from organization
   rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
+
+  // Transfer organization ownership to another member
+  rpc TransferOwnership(TransferOwnershipRequest) returns (TransferOwnershipResponse);
 }
 
 message ListOrganizationsRequest {
   int32 page = 1;
   int32 per_page = 2;
+  // If true, only return organizations where the user is a member (even for superadmins)
+  // If false or unset, superadmins get all organizations, regular users get their memberships
+  optional bool only_mine = 3;
 }
 
 message ListOrganizationsResponse {
@@ -109,6 +115,20 @@ message RemoveMemberRequest {
 
 message RemoveMemberResponse {
   bool success = 1;
+}
+
+message TransferOwnershipRequest {
+  string organization_id = 1;
+  string new_owner_member_id = 2;
+  // Optional role for the previous owner after transfer (defaults to "admin")
+  string fallback_role = 3;
+}
+
+message TransferOwnershipResponse {
+  bool success = 1;
+  string previous_owner_member_id = 2;
+  string new_owner_member_id = 3;
+  string fallback_role = 4;
 }
 
 message Organization {

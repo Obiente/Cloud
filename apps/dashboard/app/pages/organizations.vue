@@ -48,7 +48,8 @@
   }
 
   if (!organizations.value.length && auth.isAuthenticated) {
-    const res = await orgClient.listOrganizations({});
+    // Only show user's own organizations in the select, even for superadmins
+    const res = await orgClient.listOrganizations({ onlyMine: true });
     auth.setOrganizations(res.organizations || []);
     // Ensure target org is set after organizations are loaded
     if (targetOrgId) {
