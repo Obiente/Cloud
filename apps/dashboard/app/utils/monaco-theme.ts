@@ -23,14 +23,19 @@ export function getOUIColors(): Record<string, string> {
 
   try {
     const root = document.documentElement;
-    const getStyle = (prop: string): string => {
-    try {
-      const style = getComputedStyle(root);
-      return style.getPropertyValue(prop).trim();
-    } catch {
-      return "";
+    // Ensure root is actually an Element before calling getComputedStyle
+    if (!root || !(root instanceof Element)) {
+      return {};
     }
-  };
+    
+    const getStyle = (prop: string): string => {
+      try {
+        const style = getComputedStyle(root);
+        return style.getPropertyValue(prop).trim();
+      } catch {
+        return "";
+      }
+    };
 
     const result: Record<string, string> = {
       background: getStyle("--oui-surface-base"),

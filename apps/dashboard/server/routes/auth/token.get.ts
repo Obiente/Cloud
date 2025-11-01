@@ -5,6 +5,13 @@ import { eventHandler } from "h3";
  * This is needed for client-side access to the token
  */
 export default eventHandler(async (event) => {
+  if (process.env.DISABLE_AUTH === "true") {
+    return {
+      accessToken: "dev-dummy-token",
+      expiresIn: 3600,
+    };
+  }
+
   const session = await getUserSession(event);
 
   if (!session || !session.secure?.access_token) {

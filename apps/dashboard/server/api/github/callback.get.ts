@@ -1,3 +1,5 @@
+import type { Transport } from "@connectrpc/connect";
+
 /**
  * GitHub OAuth Callback Handler
  * 
@@ -168,32 +170,19 @@ export default defineEventHandler(async (event) => {
 
     // Call Go API to store the GitHub token in database
     try {
-      const config = useRuntimeConfig();
-      const apiHost = config.public.apiHost;
-
-      // Import Connect client and message types
-      const { AuthService, ConnectGitHubRequestSchema, ConnectOrganizationGitHubRequestSchema } = await import("@obiente/proto");
-      const { create } = await import("@bufbuild/protobuf");
-      const { createConnectTransport } = await import("@connectrpc/connect-node");
-      const { createAuthInterceptor } = await import("~/lib/transport");
-      const { createClient } = await import("@connectrpc/connect");
-      
-      // Create transport with auth interceptor
-      // Ensure token is always defined
-      if (!userAccessToken) {
-        throw new Error("User access token is required to save GitHub integration");
+      const transport = (event as any)?.context?.$connect as Transport | undefined;
+      if (!transport) {
+        throw new Error("Connect transport is not available in server context");
       }
-      
-      const transport = createConnectTransport({
-        baseUrl: `${apiHost}`,
-        httpVersion: "2",
-        interceptors: [
-          createAuthInterceptor(() => Promise.resolve(userAccessToken!)),
-        ],
-      });
 
-      // Create client
+      const { createClient } = await import("@connectrpc/connect");
+      const { AuthService } = await import("@obiente/proto");
       const client = createClient(AuthService, transport);
+
+      const authHeaders = new Headers();
+      if (userAccessToken) {
+        authHeaders.set("Authorization", `Bearer ${userAccessToken}`);
+      }
 
       let success = false;
       const baseRedirectUrl = `/settings?tab=integrations&provider=github&success=true&username=${encodeURIComponent(userResponse.login)}`;
@@ -201,25 +190,24 @@ export default defineEventHandler(async (event) => {
 
       if (connectionType === "organization" && orgId) {
         // Connect as organization
-        const request = create(ConnectOrganizationGitHubRequestSchema, {
+        const response = await client.connectOrganizationGitHub({
           organizationId: orgId,
           accessToken: tokenResponse.access_token,
           username: userResponse.login,
           scope: tokenResponse.scope,
-        });
-
-        const connectResponse = await client.connectOrganizationGitHub(request);
-        success = connectResponse.success;
+        }, { headers: authHeaders });
+        success = response.success;
+        if (success && orgId) {
+          redirectUrl += `&orgId=${encodeURIComponent(orgId)}`;
+        }
       } else {
         // Connect as user
-        const request = create(ConnectGitHubRequestSchema, {
+        const response = await client.connectGitHub({
           accessToken: tokenResponse.access_token,
           username: userResponse.login,
           scope: tokenResponse.scope,
-        });
-
-        const connectResponse = await client.connectGitHub(request);
-        success = connectResponse.success;
+        }, { headers: authHeaders });
+        success = response.success;
       }
 
       if (!success) {
@@ -232,9 +220,10 @@ export default defineEventHandler(async (event) => {
       return sendRedirect(event, redirectUrl);
     } catch (apiErr: any) {
       console.error("[GitHub OAuth] Failed to save token to API:", apiErr);
+      const apiMessage = typeof apiErr?.message === "string" ? apiErr.message : "failed_to_save_token";
       return sendRedirect(
         event,
-        `/settings?tab=integrations&provider=github&error=${encodeURIComponent("failed_to_save_token")}`
+        `/settings?tab=integrations&provider=github&error=${encodeURIComponent(apiMessage)}`
       );
     }
   } catch (err: any) {

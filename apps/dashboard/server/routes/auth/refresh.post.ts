@@ -6,6 +6,13 @@ import { handleZitadelError } from "../../utils/token";
  * This is used when the access token expires
  */
 export default defineEventHandler(async (event) => {
+  if (process.env.DISABLE_AUTH === "true") {
+    return {
+      accessToken: "dev-dummy-token",
+      expiresIn: 3600,
+    };
+  }
+
   try {
     const session = await getUserSession(event);
     const refreshToken = session.secure?.refresh_token;

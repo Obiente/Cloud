@@ -33,12 +33,13 @@ export default defineNuxtConfig({
     },
     // Public keys (exposed to client-side)
     public: {
-      requestHost: process.env.NUXT_REQUEST_HOST || "http://localhost:3000",
-      apiHost: process.env.NUXT_PUBLIC_API_HOST || "http://localhost:3001",
-      oidcIssuer: process.env.NUXT_PUBLIC_OIDC_ISSUER || "https://obiente.cloud",
-      oidcBase: process.env.NUXT_PUBLIC_OIDC_BASE || "https://auth.obiente.cloud",
-      oidcClientId: process.env.NUXT_PUBLIC_OIDC_CLIENT_ID || "339499954043158530",
-      githubClientId: process.env.NUXT_PUBLIC_GITHUB_CLIENT_ID || "",
+      requestHost: "http://localhost:3000",
+      apiHost: "http://localhost:3001",
+      oidcIssuer: "https://obiente.cloud",
+      oidcBase: "https://auth.obiente.cloud",
+      oidcClientId: "339499954043158530",
+      githubClientId: "",
+      disableAuth: false,
     },
   },
 
