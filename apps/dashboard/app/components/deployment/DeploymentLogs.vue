@@ -109,6 +109,8 @@ const startStream = async () => {
   isLoading.value = true;
   logs.value = [];
 
+  let hasReceivedLogs = false;
+
   try {
     // Wait for auth to be ready before making the request
     if (!auth.ready) {
@@ -144,6 +146,7 @@ const startStream = async () => {
 
     for await (const update of stream) {
       if (update.line) {
+        hasReceivedLogs = true;
         logs.value.push({
           line: update.line,
           timestamp: update.timestamp
@@ -157,13 +160,31 @@ const startStream = async () => {
       }
     }
   } catch (error: any) {
-    if (error.name !== "AbortError") {
+    // Suppress "missing trailer" errors if we successfully received logs
+    // This is a benign Connect/gRPC-Web quirk where streams can end without
+    // proper HTTP trailers, but the stream itself worked correctly
+    const isMissingTrailerError =
+      error.message?.toLowerCase().includes("missing trailer") ||
+      error.message?.toLowerCase().includes("trailer") ||
+      error.code === "unknown";
+
+    if (error.name === "AbortError") {
+      // User intentionally cancelled - no error needed
+      return;
+    }
+
+    // Only show error if it's not a missing trailer error after successful streaming,
+    // or if it's a real error before receiving any logs
+    if (!isMissingTrailerError || !hasReceivedLogs) {
       console.error("Log stream error:", error);
       logs.value.push({
         line: `[error] Failed to stream logs: ${error.message}`,
         timestamp: new Date().toISOString(),
         stderr: true,
       });
+    } else {
+      // Log to console but don't show to user - this is expected behavior
+      console.debug("Stream ended with missing trailer (benign):", error.message);
     }
   } finally {
     isLoading.value = false;
