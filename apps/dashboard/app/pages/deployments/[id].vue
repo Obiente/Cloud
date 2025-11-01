@@ -85,47 +85,58 @@
         </OuiFlex>
 
         <!-- Tabbed Content -->
-        <OuiCard variant="default">
-          <OuiTabs v-model="activeTab" :tabs="tabs">
-            <template #overview>
-              <DeploymentOverview :deployment="deployment" />
-            </template>
-            <template #routing>
-              <DeploymentRouting :deployment="deployment" />
-            </template>
-            <template #logs>
-              <DeploymentLogs :deployment-id="id" :organization-id="orgId" />
-            </template>
-            <template #terminal>
-              <DeploymentTerminal
-                :deployment-id="id"
-                :organization-id="orgId"
-              />
-            </template>
-            <template #files>
-              <DeploymentFiles :deployment-id="id" :organization-id="orgId" />
-            </template>
-            <template #compose>
-              <DeploymentCompose
-                :deployment="deployment"
-                @save="handleComposeSave"
-              />
-            </template>
-            <template #env>
-              <DeploymentEnvVars
-                :deployment="deployment"
-                @save="handleEnvSave"
-              />
-            </template>
-          </OuiTabs>
-        </OuiCard>
+        <OuiStack gap="md">
+          <OuiTabs v-model="activeTab" :tabs="tabs" />
+          <OuiCard variant="default">
+            <OuiTabs v-model="activeTab" :tabs="tabs" :content-only="true">
+              <template #overview>
+                <DeploymentOverview :deployment="deployment" />
+              </template>
+              <template #routing>
+                <DeploymentRouting :deployment="deployment" />
+              </template>
+              <template #build-logs>
+                <DeploymentBuildLogs
+                  ref="buildLogsRef"
+                  :deployment-id="id"
+                  :organization-id="orgId"
+                  :auto-start="isBuildingOrDeploying"
+                />
+              </template>
+              <template #logs>
+                <DeploymentLogs :deployment-id="id" :organization-id="orgId" />
+              </template>
+              <template #terminal>
+                <DeploymentTerminal
+                  :deployment-id="id"
+                  :organization-id="orgId"
+                />
+              </template>
+              <template #files>
+                <DeploymentFiles :deployment-id="id" :organization-id="orgId" />
+              </template>
+              <template #compose>
+                <DeploymentCompose
+                  :deployment="deployment"
+                  @save="handleComposeSave"
+                />
+              </template>
+              <template #env>
+                <DeploymentEnvVars
+                  :deployment="deployment"
+                  @save="handleEnvSave"
+                />
+              </template>
+            </OuiTabs>
+          </OuiCard>
+        </OuiStack>
       </OuiStack>
     </OuiContainer>
   </div>
 </template>
 
 <script setup lang="ts">
-  import { ref, computed, watchEffect, watch } from "vue";
+  import { ref, computed, watchEffect, watch, nextTick } from "vue";
   import { useRoute, useRouter } from "vue-router";
   import type { TabItem } from "~/components/oui/Tabs.vue";
   import {
@@ -140,6 +151,7 @@
     StopIcon,
     VariableIcon,
     GlobeAltIcon,
+    Cog6ToothIcon,
   } from "@heroicons/vue/24/outline";
   import {
     DeploymentService,
@@ -147,11 +159,13 @@
     DeploymentType,
     DeploymentStatus,
     Environment as EnvEnum,
+    BuildStrategy,
   } from "@obiente/proto";
   import { date, timestamp } from "@obiente/proto/utils";
   import { useConnectClient } from "~/lib/connect-client";
   import { useDeploymentActions } from "~/composables/useDeploymentActions";
   import { useOrganizationsStore } from "~/stores/organizations";
+  import { useDialog } from "~/composables/useDialog";
 
   definePageMeta({
     layout: "default",
@@ -167,77 +181,28 @@
   const client = useConnectClient(DeploymentService);
   const deploymentActions = useDeploymentActions();
 
-  const tabs: TabItem[] = [
-    { id: "overview", label: "Overview", icon: RocketLaunchIcon },
-    { id: "routing", label: "Routing", icon: GlobeAltIcon },
-    { id: "logs", label: "Logs", icon: DocumentTextIcon },
-    { id: "terminal", label: "Terminal", icon: CommandLineIcon },
-    { id: "files", label: "Files", icon: FolderIcon },
-    { id: "compose", label: "Compose", icon: CodeBracketIcon },
-    { id: "env", label: "Environment", icon: VariableIcon },
-  ];
-
-  // Get initial tab from query parameter or default to "overview"
-  const getInitialTab = () => {
-    const tabParam = route.query.tab;
-    if (typeof tabParam === "string") {
-      // Validate that the tab exists
-      const tabIds = tabs.map((t) => t.id);
-      return tabIds.includes(tabParam) ? tabParam : "overview";
-    }
-    return "overview";
-  };
-
-  const activeTab = ref(getInitialTab());
-
-  // Watch for tab changes and update query parameter
-  watch(activeTab, (newTab) => {
-    if (route.query.tab !== newTab) {
-      router.replace({
-        query: {
-          ...route.query,
-          tab: newTab === "overview" ? undefined : newTab, // Remove query param for default tab
-        },
-      });
-    }
-  });
-
-  // Watch for query parameter changes (e.g., back/forward navigation)
-  watch(
-    () => route.query.tab,
-    (tabParam) => {
-      if (typeof tabParam === "string") {
-        const tabIds = tabs.map((t) => t.id);
-        if (tabIds.includes(tabParam) && activeTab.value !== tabParam) {
-          activeTab.value = tabParam;
-        }
-      } else if (!tabParam && activeTab.value !== "overview") {
-        activeTab.value = "overview";
-      }
-    }
-  );
-
-  // Fetch deployment data
-  const { data: deploymentData } = await useAsyncData(
-    () => `deployment-${id.value}`,
-    async () => {
-      try {
-        const res = await client.getDeployment({
-          organizationId: orgId.value,
-          deploymentId: id.value,
-        });
-        return res.deployment;
-      } catch (e) {
-        console.error("Failed to fetch deployment:", e);
-      }
-    },
-    { server: true, watch: [orgId] }
-  );
-
-  // Local reactive reference for mutations
+  // Initialize deployment with a placeholder to avoid temporal dead zone
   const localDeployment = ref<Deployment | null>(null);
+  
+  // Fetch deployment data
+  const { data: deploymentData, refresh: refreshDeployment } = useAsyncData(
+    `deployment-${id.value}`,
+    async () => {
+      if (!orgId.value) {
+        return null;
+      }
+      const response = await client.getDeployment({
+        organizationId: orgId.value,
+        deploymentId: id.value,
+      });
+      return response.deployment ?? null;
+    },
+    {
+      watch: [orgId, id],
+    }
+  );
 
-  // Sync with async data
+  // Sync deploymentData to localDeployment
   watchEffect(() => {
     if (deploymentData.value) {
       localDeployment.value = deploymentData.value;
@@ -259,6 +224,79 @@
         size: "--",
         branch: "main",
       } as Deployment)
+  );
+
+  // Computed tabs - conditionally show compose tab based on deployment type
+  const tabs = computed<TabItem[]>(() => {
+    const baseTabs: TabItem[] = [
+      { id: "overview", label: "Overview", icon: RocketLaunchIcon },
+      { id: "routing", label: "Routing", icon: GlobeAltIcon },
+      { id: "build-logs", label: "Build Logs", icon: Cog6ToothIcon },
+      { id: "logs", label: "Logs", icon: DocumentTextIcon },
+      { id: "terminal", label: "Terminal", icon: CommandLineIcon },
+      { id: "files", label: "Files", icon: FolderIcon },
+    ];
+    
+    // Show compose tab only for PLAIN_COMPOSE without repository (manual compose editing)
+    // Hide for repo-based compose (compose from repository)
+    const dep = deployment.value;
+    const isPlainComposeWithoutRepo = 
+      dep?.buildStrategy === BuildStrategy.PLAIN_COMPOSE &&
+      !dep?.repositoryUrl;
+    
+    if (isPlainComposeWithoutRepo) {
+      baseTabs.push({ id: "compose", label: "Compose", icon: CodeBracketIcon });
+    }
+    
+    baseTabs.push({ id: "env", label: "Environment", icon: VariableIcon });
+    
+    return baseTabs;
+  });
+
+  // Get initial tab from query parameter or default to "overview"
+  const getInitialTab = () => {
+    const tabParam = route.query.tab;
+    if (typeof tabParam === "string") {
+      // Validate that the tab exists
+      const tabIds = tabs.value.map((t: TabItem) => t.id);
+      return tabIds.includes(tabParam) ? tabParam : "overview";
+    }
+    return "overview";
+  };
+
+  const activeTab = ref(getInitialTab());
+
+  // Watch for tab changes and update query parameter
+  watch(activeTab, (newTab) => {
+    const availableTabs = tabs.value.map((t: TabItem) => t.id);
+    // If tab is removed from available tabs (e.g., compose tab hidden), switch to overview
+    if (!availableTabs.includes(newTab)) {
+      activeTab.value = "overview";
+      return;
+    }
+    if (route.query.tab !== newTab) {
+      router.replace({
+        query: {
+          ...route.query,
+          tab: newTab === "overview" ? undefined : newTab, // Remove query param for default tab
+        },
+      });
+    }
+  });
+
+  // Watch for query parameter changes (e.g., back/forward navigation)
+  watch(
+    () => route.query.tab,
+    (tabParam) => {
+      if (typeof tabParam === "string") {
+        const tabIds = tabs.value.map((t: TabItem) => t.id);
+        if (tabIds.includes(tabParam) && activeTab.value !== tabParam) {
+          activeTab.value = tabParam;
+        }
+      } else if (!tabParam && activeTab.value !== "overview") {
+        activeTab.value = "overview";
+      }
+    }
   );
 
   const getStatusMeta = (status: number) => {
@@ -331,19 +369,82 @@
     await deploymentActions.stopDeployment(id.value, localDeployment.value);
   }
 
+  const buildLogsRef = ref<{
+    startStream: () => void;
+    stopStream: () => void;
+    clearLogs: () => void;
+  } | null>(null);
+  const isBuildingOrDeploying = computed(() => {
+    const status = deployment.value?.status;
+    return (
+      status === DeploymentStatus.BUILDING ||
+      status === DeploymentStatus.DEPLOYING
+    );
+  });
+
   async function redeploy() {
     if (!localDeployment.value) return;
+    
+    // Switch to build logs tab and start streaming
+    activeTab.value = "build-logs";
+    
+    // Wait a tick for the component to mount, then start streaming
+    await nextTick();
+    if (buildLogsRef.value) {
+      buildLogsRef.value.startStream();
+    }
+    
+    // Trigger the redeployment
     await deploymentActions.redeployDeployment(id.value, localDeployment.value);
   }
 
   async function handleComposeSave(composeYaml: string) {
-    // TODO: Implement compose save
-    console.log("Saving compose:", composeYaml);
+    if (!localDeployment.value) return;
+    
+    try {
+      const res = await client.updateDeploymentCompose({
+        organizationId: orgId.value,
+        deploymentId: id.value,
+        composeYaml: composeYaml,
+      });
+      
+      // Update local deployment with response
+      if (res.deployment) {
+        localDeployment.value = res.deployment;
+      }
+      
+      // Refresh deployment data
+      await refreshDeployment();
+    } catch (error: any) {
+      console.error("Failed to save compose:", error);
+      const { showAlert } = useDialog();
+      await showAlert({
+        title: "Failed to Save",
+        message: error.message || "Failed to save Docker Compose configuration. Please try again.",
+      });
+    }
   }
 
-  async function handleEnvSave(envVars: Record<string, string>) {
-    // TODO: Implement env vars save
-    console.log("Saving env vars:", envVars);
+  async function handleEnvSave(envFileContent: string) {
+    // DeploymentEnvVars component already saves internally
+    // This handler is just for refresh/notification
+    if (!localDeployment.value) return;
+    
+    try {
+      // Refresh deployment data to get updated env vars
+      await refreshDeployment();
+      
+      // Reload deployment to sync local state
+      const res = await client.getDeployment({
+        organizationId: orgId.value,
+        deploymentId: id.value,
+      });
+      if (res.deployment) {
+        localDeployment.value = res.deployment;
+      }
+    } catch (error: any) {
+      console.error("Failed to refresh deployment after env vars save:", error);
+    }
   }
 
   // Expose DeploymentStatus enum to template
