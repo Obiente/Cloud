@@ -6,7 +6,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from "vue";
+import { ref, onMounted, onUnmounted, watch, nextTick, computed } from "vue";
+import { usePreferencesStore } from "~/stores/preferences";
 
 interface ValidationError {
   line: number; // 1-based
@@ -41,17 +42,26 @@ const props = withDefaults(defineProps<Props>(), {
   language: "plaintext",
   readOnly: false,
   height: "400px",
-  fontSize: 14,
-  wordWrap: "on",
-  minimap: () => ({ enabled: true }),
+  fontSize: undefined,
+  wordWrap: undefined,
+  minimap: undefined,
   folding: true,
-  lineNumbers: "on",
-  containerClass: "w-full rounded-lg border border-border-default overflow-hidden",
+  lineNumbers: undefined,
+  containerClass: "w-full rounded-xl border border-border-default overflow-hidden",
   formatOnPaste: false,
   formatOnType: false,
   bracketPairColorization: undefined,
   validationErrors: () => [],
 });
+
+const preferencesStore = usePreferencesStore();
+const editorPreferences = computed(() => preferencesStore.editorPreferences);
+
+// Use props if provided, otherwise fall back to preferences
+const effectiveFontSize = computed(() => props.fontSize ?? editorPreferences.value.fontSize);
+const effectiveWordWrap = computed(() => props.wordWrap ?? editorPreferences.value.wordWrap);
+const effectiveMinimap = computed(() => props.minimap ?? { enabled: editorPreferences.value.minimap });
+const effectiveLineNumbers = computed(() => props.lineNumbers ?? editorPreferences.value.lineNumbers);
 
 const emit = defineEmits<{
   "update:modelValue": [value: string];
@@ -64,9 +74,65 @@ let editor: any = null;
 let monaco: any = null;
 let resizeObserver: ResizeObserver | null = null;
 
+// Format the entire document
+const formatDocument = async () => {
+  if (!editor || props.readOnly) return;
+  
+  try {
+    const action = editor.getAction("editor.action.formatDocument");
+    if (action && action.isSupported()) {
+      await action.run();
+      // Emit change event after formatting
+      const newValue = editor.getValue();
+      emit("update:modelValue", newValue);
+      emit("change", newValue);
+    } else {
+      console.debug("Format document action not available for language:", props.language);
+    }
+  } catch (err) {
+    console.warn("Failed to format document:", err);
+  }
+};
+
+// Format the selected text
+const formatSelection = async () => {
+  if (!editor || props.readOnly) return;
+  
+  const selection = editor.getSelection();
+  if (!selection || selection.isEmpty()) {
+    // No selection, format entire document instead
+    await formatDocument();
+    return;
+  }
+  
+  try {
+    const action = editor.getAction("editor.action.formatSelection");
+    if (action && action.isSupported()) {
+      await action.run();
+      // Emit change event after formatting
+      const newValue = editor.getValue();
+      emit("update:modelValue", newValue);
+      emit("change", newValue);
+    } else {
+      console.debug("Format selection action not available for language:", props.language);
+    }
+  } catch (err) {
+    console.warn("Failed to format selection:", err);
+  }
+};
+
 // Initialize Monaco Editor
 const initEditor = async () => {
-  if (typeof window === "undefined" || !editorContainer.value) return;
+  // Guard against SSR and ensure container exists
+  if (typeof window === "undefined") return;
+  
+  // Wait for container to be available
+  await nextTick();
+  
+  // Double-check container is available and is an actual DOM element
+  if (!editorContainer.value || !(editorContainer.value instanceof HTMLElement)) {
+    return;
+  }
 
   try {
     // Lazy load Monaco Editor
@@ -99,23 +165,29 @@ const initEditor = async () => {
       editor = null;
     }
 
+    // Double-check container again before creating editor
+    if (!editorContainer.value || !(editorContainer.value instanceof HTMLElement)) {
+      console.warn("Editor container not available for Monaco initialization");
+      return;
+    }
+
     // Create editor instance with common configuration
     const editorOptions: any = {
       value: props.modelValue || "",
       language: props.language,
       theme: "oui-dark",
       automaticLayout: true,
-      fontSize: props.fontSize,
-      minimap: props.minimap,
+      fontSize: effectiveFontSize.value,
+      minimap: effectiveMinimap.value,
       scrollBeyondLastLine: false,
-      wordWrap: props.wordWrap,
+      wordWrap: effectiveWordWrap.value,
       readOnly: props.readOnly,
       formatOnPaste: props.formatOnPaste,
       formatOnType: props.formatOnType,
-      tabSize: 2,
-      insertSpaces: true,
-      lineNumbers: props.lineNumbers,
-      renderWhitespace: "selection",
+      tabSize: editorPreferences.value.tabSize,
+      insertSpaces: editorPreferences.value.insertSpaces,
+      lineNumbers: effectiveLineNumbers.value,
+      renderWhitespace: editorPreferences.value.renderWhitespace,
       folding: props.folding,
       mouseWheelZoom: true, // Enable zoom with Ctrl+scroll (Cmd+scroll on Mac)
       accessibilitySupport: "on", // Enable accessibility features
@@ -150,6 +222,28 @@ const initEditor = async () => {
       emit("save");
     });
 
+    // Format document: Shift+Alt+F (Windows/Linux) or Shift+Option+F (Mac)
+    // This is Monaco's default shortcut, we'll ensure it works
+    editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, async () => {
+      await formatDocument();
+    });
+
+    // Format selection shortcut: Ctrl+K Ctrl+F (Windows/Linux) or Cmd+K Cmd+F (Mac)
+    // Note: Monaco handles chord commands internally, but we can also trigger the action
+    // Users can use Command Palette (F1) and search "Format Selection"
+    // For convenience, we'll add an alternative: Ctrl+Shift+F (format selection if text selected, else format document)
+    editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF,
+      async () => {
+        const selection = editor.getSelection();
+        if (selection && !selection.isEmpty()) {
+          await formatSelection();
+        } else {
+          await formatDocument();
+        }
+      }
+    );
+
     // Handle resize
     resizeObserver = new ResizeObserver(() => {
       if (editor) {
@@ -175,6 +269,18 @@ watch(
   }
 );
 
+// Watch for container becoming available and initialize if needed
+watch(
+  () => editorContainer.value,
+  async (newContainer) => {
+    if (newContainer && newContainer instanceof HTMLElement && !editor) {
+      await nextTick();
+      await initEditor();
+    }
+  },
+  { immediate: true }
+);
+
 // Watch for language changes
 watch(
   () => props.language,
@@ -196,6 +302,25 @@ watch(
       editor.updateOptions({ readOnly: newReadOnly });
     }
   }
+);
+
+// Watch for editor preferences changes and update editor dynamically
+watch(
+  () => editorPreferences.value,
+  (newPrefs) => {
+    if (editor) {
+      editor.updateOptions({
+        fontSize: effectiveFontSize.value,
+        wordWrap: effectiveWordWrap.value,
+        minimap: effectiveMinimap.value,
+        lineNumbers: effectiveLineNumbers.value,
+        tabSize: newPrefs.tabSize,
+        insertSpaces: newPrefs.insertSpaces,
+        renderWhitespace: newPrefs.renderWhitespace,
+      });
+    }
+  },
+  { deep: true }
 );
 
 // Watch for validation errors and update markers
@@ -263,7 +388,24 @@ watch(
 );
 
 onMounted(async () => {
+  // Ensure we're on client side
+  if (typeof window === "undefined") return;
+  
+  // Wait for multiple ticks to ensure DOM is fully ready
   await nextTick();
+  await nextTick();
+  
+  // Check container is available before initializing
+  if (!editorContainer.value || !(editorContainer.value instanceof HTMLElement)) {
+    // If container not ready, wait a bit more and try again
+    setTimeout(async () => {
+      if (editorContainer.value && editorContainer.value instanceof HTMLElement && !editor) {
+        await initEditor();
+      }
+    }, 100);
+    return;
+  }
+  
   await initEditor();
 });
 
@@ -288,6 +430,8 @@ defineExpose({
       editor.setValue(value);
     }
   },
+  formatDocument,
+  formatSelection,
 });
 </script>
 
