@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{.Subject}}</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #f1f5f9;
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #0f172a;
+      }
+      a {
+        color: inherit;
+      }
+      .preview {
+        display: none;
+        visibility: hidden;
+        overflow: hidden;
+        opacity: 0;
+        height: 0;
+      }
+      .wrapper {
+        width: 100%;
+        background-color: #f1f5f9;
+        padding: 32px 0;
+      }
+      .container {
+        max-width: 640px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+      }
+      .header {
+        background-color: var(--accent-color, #2563eb);
+        color: #ffffff;
+        padding: 24px 32px;
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 12px;
+        border-radius: 999px;
+        background-color: rgba(255, 255, 255, 0.16);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 600;
+        margin-bottom: 12px;
+      }
+      .brand {
+        font-size: 18px;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+      .content {
+        padding: 32px;
+      }
+      .heading {
+        font-size: 28px;
+        line-height: 1.3;
+        margin: 0 0 16px 0;
+        color: #0f172a;
+      }
+      .greeting {
+        font-size: 16px;
+        margin-bottom: 16px;
+        color: #0f172a;
+      }
+      .intro p,
+      .section p,
+      .signature p,
+      .support p,
+      .footer p {
+        font-size: 16px;
+        line-height: 1.6;
+        margin: 0 0 16px 0;
+        color: #1e293b;
+      }
+      .highlights {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin: 24px 0;
+      }
+      .highlight {
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        border-radius: 12px;
+        padding: 16px;
+      }
+      .highlight span {
+        display: block;
+      }
+      .highlight .label {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+        margin-bottom: 6px;
+        font-weight: 600;
+      }
+      .highlight .value {
+        font-size: 16px;
+        font-weight: 600;
+        color: #0f172a;
+      }
+      .section + .section {
+        margin-top: 28px;
+      }
+      .section h3 {
+        font-size: 18px;
+        margin: 0 0 12px 0;
+        color: #0f172a;
+      }
+      .section ul {
+        padding-left: 18px;
+        margin: 0 0 16px 0;
+        color: #1e293b;
+      }
+      .cta {
+        margin: 32px 0 24px 0;
+        text-align: center;
+      }
+      .cta a {
+        display: inline-block;
+        padding: 16px 32px;
+        border-radius: 999px;
+        background-color: var(--accent-color, #2563eb);
+        color: #ffffff !important;
+        font-size: 16px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .cta p {
+        color: #475569;
+        margin-top: 12px;
+      }
+      .support {
+        margin-top: 32px;
+        border-top: 1px solid rgba(148, 163, 184, 0.3);
+        padding-top: 24px;
+      }
+      .footer {
+        background-color: #f8fafc;
+        padding: 24px 32px;
+        text-align: center;
+        color: #64748b;
+        font-size: 13px;
+      }
+      @media (max-width: 600px) {
+        .wrapper {
+          padding: 16px 0;
+        }
+        .container {
+          border-radius: 0;
+        }
+        .content,
+        .header,
+        .footer {
+          padding: 24px;
+        }
+        .heading {
+          font-size: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body style="--accent-color: {{.AccentColor}};">
+    <span class="preview">{{.PreviewText}}</span>
+    <div class="wrapper">
+      <div class="container">
+        <div class="header">
+          <div class="tag">{{.CategoryLabel}}</div>
+          <div class="brand">
+            {{if .BrandURL}}
+              <a href="{{.BrandURL}}" style="color: #ffffff; text-decoration: none;">{{.BrandName}}</a>
+            {{else}}
+              {{.BrandName}}
+            {{end}}
+          </div>
+        </div>
+        <div class="content">
+          {{if .Greeting}}
+            <p class="greeting">{{.Greeting}}</p>
+          {{end}}
+          {{if .Heading}}
+            <h1 class="heading">{{.Heading}}</h1>
+          {{end}}
+          {{if .IntroLines}}
+            <div class="intro">
+              {{range .IntroLines}}
+                {{if .}}
+                  <p>{{.}}</p>
+                {{end}}
+              {{end}}
+            </div>
+          {{end}}
+          {{if .Highlights}}
+            <div class="highlights">
+              {{range .Highlights}}
+                <div class="highlight">
+                  {{if .Label}}<span class="label">{{.Label}}</span>{{end}}
+                  {{if .Value}}<span class="value">{{.Value}}</span>{{end}}
+                </div>
+              {{end}}
+            </div>
+          {{end}}
+          {{if .Sections}}
+            {{range .Sections}}
+              <div class="section">
+                {{if .Title}}<h3>{{.Title}}</h3>{{end}}
+                {{range .Lines}}
+                  {{if .}}<p>{{.}}</p>{{end}}
+                {{end}}
+                {{if .Bullets}}
+                  <ul>
+                    {{range .Bullets}}
+                      <li>
+                        {{if .Label}}<strong>{{.Label}}</strong>{{end}}
+                        {{if and .Label .Description}} - {{end}}
+                        {{.Description}}
+                      </li>
+                    {{end}}
+                  </ul>
+                {{end}}
+              </div>
+            {{end}}
+          {{end}}
+          {{if .CTA}}
+            <div class="cta">
+              <a href="{{.CTA.URL}}">{{.CTA.Label}}</a>
+              {{if .CTA.Description}}<p>{{.CTA.Description}}</p>{{end}}
+            </div>
+          {{end}}
+          {{if .SignatureLines}}
+            <div class="signature">
+              {{range .SignatureLines}}
+                {{if .}}<p>{{.}}</p>{{end}}
+              {{end}}
+            </div>
+          {{end}}
+          {{if .SupportLines}}
+            <div class="support">
+              {{range .SupportLines}}
+                {{if .}}<p>{{.}}</p>{{end}}
+              {{end}}
+            </div>
+          {{end}}
+        </div>
+        <div class="footer">
+          {{if .FooterLines}}
+            {{range .FooterLines}}
+              {{if .}}<p>{{.}}</p>{{end}}
+            {{end}}
+          {{end}}
+          {{if .BaseURL}}
+            <p><a href="{{.BaseURL}}" style="color: inherit; text-decoration: none;">{{.BaseURL}}</a></p>
+          {{end}}
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+

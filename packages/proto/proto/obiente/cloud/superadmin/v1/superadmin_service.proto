@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package obiente.cloud.superadmin.v1;
+
+option go_package = "api/gen/proto/obiente/cloud/superadmin/v1;superadminv1";
+
+import "google/protobuf/timestamp.proto";
+import "obiente/cloud/deployments/v1/deployment_service.proto";
+
+service SuperadminService {
+  // Returns a system-wide overview for superadmin operators.
+  rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse);
+}
+
+message GetOverviewRequest {}
+
+message GetOverviewResponse {
+  OverviewCounts counts = 1;
+  repeated OrganizationOverview organizations = 2;
+  repeated PendingInvite pending_invites = 3;
+  repeated DeploymentOverview deployments = 4;
+  repeated OrganizationUsage usages = 5;
+}
+
+message OverviewCounts {
+  int64 total_organizations = 1;
+  int64 active_members = 2;
+  int64 pending_invites = 3;
+  int64 total_deployments = 4;
+}
+
+message OrganizationOverview {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  optional string domain = 4;
+  string plan = 5;
+  string status = 6;
+  google.protobuf.Timestamp created_at = 7;
+  int64 member_count = 8;
+  int64 invite_count = 9;
+  int64 deployment_count = 10;
+}
+
+message PendingInvite {
+  string id = 1;
+  string organization_id = 2;
+  string email = 3;
+  string role = 4;
+  google.protobuf.Timestamp invited_at = 5;
+}
+
+message DeploymentOverview {
+  string id = 1;
+  string organization_id = 2;
+  string name = 3;
+  obiente.cloud.deployments.v1.Environment environment = 4;
+  obiente.cloud.deployments.v1.DeploymentStatus status = 5;
+  optional string domain = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp last_deployed_at = 8;
+}
+
+message OrganizationUsage {
+  string organization_id = 1;
+  string organization_name = 2;
+  string month = 3;
+  int64 cpu_core_seconds = 4;
+  int64 memory_byte_seconds = 5;
+  int64 bandwidth_rx_bytes = 6;
+  int64 bandwidth_tx_bytes = 7;
+  int64 storage_bytes = 8;
+  int32 deployments_active_peak = 9;
+}
+
