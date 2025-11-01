@@ -74,6 +74,150 @@ let editor: any = null;
 let monaco: any = null;
 let resizeObserver: ResizeObserver | null = null;
 
+// Register Prettier formatters for languages that don't have built-in formatting
+const registerPrettierFormatters = async (monacoInstance: any) => {
+  try {
+    // Import Prettier - try standalone first (for browser), fallback to regular (for Node/Vite)
+    let prettier: any;
+    let prettierHtmlParser: any;
+    let prettierCssParser: any;
+    let prettierYamlParser: any;
+    let prettierMarkdownParser: any;
+    
+    try {
+      // Try standalone build first (browser-optimized)
+      // @ts-ignore - Prettier imports don't have perfect type definitions
+      const prettierModule = await import("prettier/standalone");
+      prettier = prettierModule.default || prettierModule;
+      // @ts-ignore
+      prettierHtmlParser = await import("prettier/parser-html");
+      // @ts-ignore
+      prettierCssParser = await import("prettier/parser-postcss");
+      // @ts-ignore
+      prettierYamlParser = await import("prettier/parser-yaml");
+      // @ts-ignore
+      prettierMarkdownParser = await import("prettier/parser-markdown");
+    } catch (standaloneErr) {
+      // Fallback to regular Prettier (Vite should bundle it correctly)
+      // @ts-ignore
+      const prettierModule = await import("prettier");
+      prettier = prettierModule.default || prettierModule;
+      // @ts-ignore
+      prettierHtmlParser = await import("prettier/parser-html");
+      // @ts-ignore
+      prettierCssParser = await import("prettier/parser-postcss");
+      // @ts-ignore
+      prettierYamlParser = await import("prettier/parser-yaml");
+      // @ts-ignore
+      prettierMarkdownParser = await import("prettier/parser-markdown");
+    }
+    
+    // Normalize parser imports
+    const plugins = [
+      prettierHtmlParser.default || prettierHtmlParser,
+      prettierCssParser.default || prettierCssParser,
+      prettierYamlParser.default || prettierYamlParser,
+      prettierMarkdownParser.default || prettierMarkdownParser,
+    ].filter(Boolean);
+    
+    // Load Prettier config - inline default config matching project settings
+    const prettierConfig: any = {
+      semi: true,
+      trailingComma: "es5",
+      singleQuote: true,
+      printWidth: 100,
+      tabWidth: 2,
+      useTabs: false,
+      quoteProps: "as-needed",
+      bracketSpacing: true,
+      bracketSameLine: false,
+      arrowParens: "avoid",
+      endOfLine: "lf",
+      embeddedLanguageFormatting: "auto",
+      htmlWhitespaceSensitivity: "css",
+    };
+
+    // Helper to format code with Prettier
+    const formatWithPrettier = async (
+      code: string,
+      parser: string,
+      options?: any
+    ): Promise<string> => {
+      try {
+        const formatted = await prettier.format(code, {
+          ...prettierConfig,
+          parser,
+          plugins,
+          ...options,
+        });
+        return formatted as string;
+      } catch (err) {
+        console.warn(`Prettier formatting failed for ${parser}:`, err);
+        return code; // Return original code if formatting fails
+      }
+    };
+
+    // Register HTML formatter
+    monacoInstance.languages.registerDocumentFormattingEditProvider("html", {
+      async provideDocumentFormattingEdits(model: any) {
+        const formatted = await formatWithPrettier(model.getValue(), "html");
+        return [
+          {
+            range: model.getFullModelRange(),
+            text: formatted,
+          },
+        ];
+      },
+    });
+
+    // Register CSS/SCSS/LESS formatter
+    const cssLanguages = ["css", "scss", "less"];
+    for (const lang of cssLanguages) {
+      monacoInstance.languages.registerDocumentFormattingEditProvider(lang, {
+        async provideDocumentFormattingEdits(model: any) {
+          const parser = lang === "scss" ? "scss" : lang === "less" ? "less" : "css";
+          const formatted = await formatWithPrettier(model.getValue(), parser);
+          return [
+            {
+              range: model.getFullModelRange(),
+              text: formatted,
+            },
+          ];
+        },
+      });
+    }
+
+    // Register YAML formatter
+    monacoInstance.languages.registerDocumentFormattingEditProvider("yaml", {
+      async provideDocumentFormattingEdits(model: any) {
+        const formatted = await formatWithPrettier(model.getValue(), "yaml");
+        return [
+          {
+            range: model.getFullModelRange(),
+            text: formatted,
+          },
+        ];
+      },
+    });
+
+    // Register Markdown formatter
+    monacoInstance.languages.registerDocumentFormattingEditProvider("markdown", {
+      async provideDocumentFormattingEdits(model: any) {
+        const formatted = await formatWithPrettier(model.getValue(), "markdown");
+        return [
+          {
+            range: model.getFullModelRange(),
+            text: formatted,
+          },
+        ];
+      },
+    });
+  } catch (err) {
+    console.warn("Failed to register Prettier formatters:", err);
+    // Formatters are optional, so we continue even if they fail
+  }
+};
+
 // Format the entire document
 const formatDocument = async () => {
   if (!editor || props.readOnly) return;
@@ -157,6 +301,9 @@ const initEditor = async () => {
           ],
         },
       });
+
+      // Register Prettier formatters for languages without built-in formatting
+      await registerPrettierFormatters(monaco);
     }
 
     // Dispose existing editor if any

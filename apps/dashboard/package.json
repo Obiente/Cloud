@@ -37,6 +37,7 @@
     "monaco-editor": "^0.54.0",
     "nuxt": "^4.2.0",
     "pinia": "^3.0.3",
+    "prettier": "^2.8.8",
     "tailwindcss": "^4.1.16",
     "vue": "^3.5.22",
     "vue-router": "^4.6.3",
