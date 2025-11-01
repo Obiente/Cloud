@@ -1,13 +1,17 @@
 <template>
-  <Menu.Root v-bind="$attrs" @open="emit('open')" @close="emit('close')">
+  <Menu.Root v-bind="$attrs" @open-change="handleOpenChange">
     <Menu.Trigger as-child>
       <slot name="trigger" />
     </Menu.Trigger>
-    <Menu.Positioner>
-      <Menu.Content class="oui-context-menu">
-        <slot />
-      </Menu.Content>
-    </Menu.Positioner>
+    <Teleport to="body">
+      <Menu.Positioner>
+        <Menu.Content
+          class="z-50 min-w-[12rem] max-h-[300px] overflow-y-auto rounded-md border border-border-default bg-surface-overlay shadow-lg animate-in fade-in-0 zoom-in-95 duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
+        >
+          <slot />
+        </Menu.Content>
+      </Menu.Positioner>
+    </Teleport>
   </Menu.Root>
 </template>
 
@@ -18,17 +22,9 @@ const emit = defineEmits<{
   (e: "open"): void;
   (e: "close"): void;
 }>();
-</script>
 
-<style scoped>
-.oui-context-menu {
-  min-width: 180px;
-  padding: 6px;
-  border-radius: 8px;
-  background: var(--oui-surface-overlay);
-  border: 1px solid var(--oui-border-default);
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
-  color: var(--oui-text-primary);
-  font-size: 13px;
+function handleOpenChange(details: { open: boolean }) {
+  if (details.open) emit("open");
+  else emit("close");
 }
-</style>
+</script>

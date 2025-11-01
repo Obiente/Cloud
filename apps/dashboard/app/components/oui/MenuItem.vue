@@ -1,14 +1,16 @@
 <template>
   <Menu.Item
-    class="oui-context-menu-item"
+    class="relative flex w-full cursor-pointer select-none items-center justify-between gap-3 rounded-sm py-2 px-3 text-sm text-primary transition-colors duration-150 data-[highlighted]:bg-surface-raised data-[disabled]:cursor-not-allowed data-[disabled]:text-text-muted data-[disabled]:opacity-60"
     :value="value ?? ''"
     :disabled="disabled"
     @select="emit('select', $event)"
   >
-    <span class="oui-context-menu-item__content">
+    <span class="flex items-center gap-2">
       <slot />
     </span>
-    <span v-if="shortcut" class="oui-context-menu-item__shortcut">{{ shortcut }}</span>
+    <span v-if="shortcut" class="text-xs text-text-tertiary ml-auto font-mono">
+      {{ shortcut }}
+    </span>
   </Menu.Item>
 </template>
 
@@ -27,32 +29,3 @@ const emit = defineEmits<{
 
 const { value, disabled, shortcut } = props;
 </script>
-
-<style scoped>
-.oui-context-menu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-  color: var(--oui-text-primary);
-}
-
-.oui-context-menu-item[data-disabled] {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.oui-context-menu-item:not([data-disabled]):hover,
-.oui-context-menu-item[data-highlighted] {
-  background: var(--oui-surface-hover);
-}
-
-.oui-context-menu-item__shortcut {
-  font-size: 11px;
-  color: var(--oui-text-tertiary);
-}
-</style>

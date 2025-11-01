@@ -1,15 +1,7 @@
 <template>
-  <Menu.Separator class="oui-context-menu-separator" />
+  <Menu.Separator class="my-1 h-px bg-border-muted" />
 </template>
 
 <script setup lang="ts">
 import { Menu } from "@ark-ui/vue/menu";
 </script>
-
-<style scoped>
-.oui-context-menu-separator {
-  height: 1px;
-  margin: 6px 4px;
-  background: var(--oui-border-muted);
-}
-</style>
