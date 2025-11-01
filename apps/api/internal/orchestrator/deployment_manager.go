@@ -572,6 +572,9 @@ func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID 
 		log.Printf("[DeploymentManager] Deleted container %s", location.ContainerID[:12])
 	}
 
+	// Clean up volumes and deployment data
+	dm.cleanupDeploymentData(deploymentID)
+
 	return nil
 }
 
@@ -977,14 +980,65 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 	return nil
 }
 
-// StopComposeDeployment stops containers created by a compose file
+// StopComposeDeployment stops containers created by a compose file using docker compose down
 func (dm *DeploymentManager) StopComposeDeployment(ctx context.Context, deploymentID string) error {
 	log.Printf("[DeploymentManager] Stopping compose deployment %s", deploymentID)
 
 	projectName := fmt.Sprintf("deploy-%s", deploymentID)
 
-	// Find compose file directory - we stored it, but since we clean up temp dirs,
-	// we need to find containers by label and stop them individually
+	// Find compose file directory using the same logic as DeployComposeFile
+	var deployDir string
+	possibleDirs := []string{
+		"/var/lib/obiente/deployments",
+		"/tmp/obiente-deployments",
+		os.TempDir(),
+	}
+
+	for _, baseDir := range possibleDirs {
+		testDir := filepath.Join(baseDir, deploymentID)
+		composeFile := filepath.Join(testDir, "docker-compose.yml")
+		// Check if compose file exists in this directory
+		if _, err := os.Stat(composeFile); err == nil {
+			deployDir = testDir
+			break
+		}
+	}
+
+	if deployDir == "" {
+		// Fallback: if we can't find the compose file, try to stop by project name
+		// This handles cases where the directory was cleaned up but containers still exist
+		log.Printf("[DeploymentManager] Compose file not found for deployment %s, falling back to container-based stop", deploymentID)
+		return dm.stopComposeContainersByLabel(ctx, projectName)
+	}
+
+	composeFile := filepath.Join(deployDir, "docker-compose.yml")
+
+	// Use docker compose down to stop all containers in the project
+	cmd := exec.CommandContext(ctx, "docker", "compose", "-p", projectName, "-f", composeFile, "down")
+	cmd.Dir = deployDir
+	var stderr bytes.Buffer
+	var stdout bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Stdout = &stdout
+
+	if err := cmd.Run(); err != nil {
+		errorOutput := stderr.String()
+		stdOutput := stdout.String()
+		log.Printf("[DeploymentManager] ERROR: Failed to stop compose deployment %s: %v\nStderr: %s\nStdout: %s", deploymentID, err, errorOutput, stdOutput)
+		// Fallback to individual container stop if compose down fails
+		log.Printf("[DeploymentManager] Falling back to container-based stop for deployment %s", deploymentID)
+		return dm.stopComposeContainersByLabel(ctx, projectName)
+	}
+
+	stdOutput := stdout.String()
+	log.Printf("[DeploymentManager] Docker compose down output for deployment %s:\n%s", deploymentID, stdOutput)
+	log.Printf("[DeploymentManager] Successfully stopped compose deployment %s (project: %s)", deploymentID, projectName)
+
+	return nil
+}
+
+// stopComposeContainersByLabel stops containers by compose project label (fallback method)
+func (dm *DeploymentManager) stopComposeContainersByLabel(ctx context.Context, projectName string) error {
 	filterArgs := filters.NewArgs()
 	filterArgs.Add("label", fmt.Sprintf("com.docker.compose.project=%s", projectName))
 	
@@ -994,6 +1048,11 @@ func (dm *DeploymentManager) StopComposeDeployment(ctx context.Context, deployme
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list compose containers: %w", err)
+	}
+
+	if len(containers) == 0 {
+		log.Printf("[DeploymentManager] No containers found for project %s", projectName)
+		return nil
 	}
 
 	for _, cnt := range containers {
@@ -1041,7 +1100,38 @@ func (dm *DeploymentManager) RemoveComposeDeployment(ctx context.Context, deploy
 		}
 	}
 
+	// Clean up volumes and deployment data
+	dm.cleanupDeploymentData(deploymentID)
+
 	return nil
+}
+
+// cleanupDeploymentData removes all volumes and data directories for a deployment
+func (dm *DeploymentManager) cleanupDeploymentData(deploymentID string) {
+	log.Printf("[DeploymentManager] Cleaning up data for deployment %s", deploymentID)
+
+	// List of directories to clean up
+	cleanupDirs := []string{
+		// Volumes directory
+		filepath.Join("/var/lib/obiente/volumes", deploymentID),
+		// Deployment directory (for compose files)
+		filepath.Join("/var/lib/obiente/deployments", deploymentID),
+		// Build directory
+		filepath.Join("/var/lib/obiente/builds", deploymentID),
+		// Fallback temp directories
+		filepath.Join("/tmp/obiente-volumes", deploymentID),
+		filepath.Join("/tmp/obiente-deployments", deploymentID),
+	}
+
+	for _, dir := range cleanupDirs {
+		if err := os.RemoveAll(dir); err != nil {
+			if !os.IsNotExist(err) {
+				log.Printf("[DeploymentManager] Failed to remove directory %s: %v", dir, err)
+			}
+		} else {
+			log.Printf("[DeploymentManager] Removed directory %s", dir)
+		}
+	}
 }
 
 // Close closes all connections
