@@ -160,12 +160,14 @@ const startStream = async () => {
       }
     }
   } catch (error: any) {
-    // Suppress "missing trailer" errors if we successfully received logs
-    // This is a benign Connect/gRPC-Web quirk where streams can end without
-    // proper HTTP trailers, but the stream itself worked correctly
-    const isMissingTrailerError =
+    // Suppress benign errors if we successfully received logs:
+    // - "missing trailer": Connect/gRPC-Web quirk where streams end without HTTP trailers
+    // - "invalid UTF-8": Docker logs can contain binary data (now sanitized server-side)
+    const isBenignError =
       error.message?.toLowerCase().includes("missing trailer") ||
       error.message?.toLowerCase().includes("trailer") ||
+      error.message?.toLowerCase().includes("invalid utf-8") ||
+      error.message?.toLowerCase().includes("marshal message") ||
       error.code === "unknown";
 
     if (error.name === "AbortError") {
@@ -173,9 +175,9 @@ const startStream = async () => {
       return;
     }
 
-    // Only show error if it's not a missing trailer error after successful streaming,
+    // Only show error if it's not a benign error after successful streaming,
     // or if it's a real error before receiving any logs
-    if (!isMissingTrailerError || !hasReceivedLogs) {
+    if (!isBenignError || !hasReceivedLogs) {
       console.error("Log stream error:", error);
       logs.value.push({
         line: `[error] Failed to stream logs: ${error.message}`,
@@ -184,7 +186,7 @@ const startStream = async () => {
       });
     } else {
       // Log to console but don't show to user - this is expected behavior
-      console.debug("Stream ended with missing trailer (benign):", error.message);
+      console.debug("Stream ended with benign error:", error.message);
     }
   } finally {
     isLoading.value = false;

@@ -3,6 +3,7 @@ package deployments
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
@@ -70,7 +71,15 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	for {
 		n, readErr := reader.Read(buf)
 		if n > 0 {
-			line := &deploymentsv1.DeploymentLogLine{DeploymentId: deploymentID, Line: string(buf[:n]), Timestamp: timestamppb.Now()}
+			// Docker logs can contain invalid UTF-8 sequences (binary data).
+			// Sanitize to valid UTF-8 before sending to protobuf, which requires valid UTF-8.
+			// Invalid sequences are replaced with the Unicode replacement character (U+FFFD).
+			sanitizedLine := strings.ToValidUTF8(string(buf[:n]), "")
+			line := &deploymentsv1.DeploymentLogLine{
+				DeploymentId: deploymentID,
+				Line:         sanitizedLine,
+				Timestamp:    timestamppb.Now(),
+			}
 			if sendErr := stream.Send(line); sendErr != nil {
 				return sendErr
 			}
