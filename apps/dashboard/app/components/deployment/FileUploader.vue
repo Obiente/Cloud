@@ -11,7 +11,7 @@
         <FileUpload.Context v-slot="api">
           <FileUpload.Dropzone
             :class="[
-              'border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors',
+              'border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors',
               api.dragging ? 'border-primary bg-primary/10' : 'border-border-default hover:border-primary/50',
             ]"
           >
@@ -37,11 +37,13 @@
               <OuiText size="xs" weight="semibold">
                 Selected Files ({{ api.acceptedFiles.length }})
               </OuiText>
-              <div
+              <OuiCard
                 v-for="file in api.acceptedFiles"
                 :key="file.name"
-                class="flex items-center gap-3 p-3 rounded-lg border border-border-default bg-surface-muted/30"
+                variant="outline"
+                class="p-3"
               >
+                <OuiFlex align="center" gap="md">
                 <FileUpload.Item :file="file">
                   <FileUpload.ItemPreview type="image/*">
                     <FileUpload.ItemPreviewImage class="h-10 w-10 rounded object-cover" />
@@ -49,17 +51,22 @@
                   <FileUpload.ItemPreview type=".*">
                     <DocumentIcon class="h-5 w-5 text-secondary" />
                   </FileUpload.ItemPreview>
-                  <div class="flex-1 min-w-0">
-                    <FileUpload.ItemName class="block text-sm font-medium truncate" />
-                    <FileUpload.ItemSizeText class="block text-xs text-secondary" />
-                  </div>
+                  <OuiStack gap="xs" class="flex-1 min-w-0">
+                    <OuiText size="sm" weight="medium" class="truncate">
+                      <FileUpload.ItemName />
+                    </OuiText>
+                    <OuiText size="xs" color="secondary">
+                      <FileUpload.ItemSizeText />
+                    </OuiText>
+                  </OuiStack>
                   <FileUpload.ItemDeleteTrigger asChild>
                     <OuiButton variant="ghost" size="xs" color="danger">
                       Remove
                     </OuiButton>
                   </FileUpload.ItemDeleteTrigger>
                 </FileUpload.Item>
-              </div>
+                </OuiFlex>
+              </OuiCard>
 
               <OuiFlex justify="end" gap="sm" class="mt-2">
                 <FileUpload.ClearTrigger asChild>
@@ -84,7 +91,7 @@
     </OuiFlex>
 
     <!-- Rejected Files -->
-    <div v-if="rejectedFiles.length > 0" class="space-y-2">
+    <OuiStack v-if="rejectedFiles.length > 0" gap="xs">
       <OuiText size="xs" weight="semibold" color="danger">Rejected Files:</OuiText>
       <OuiCard variant="default" class="border-danger" v-for="rejection in rejectedFiles" :key="rejection.file.name">
         <OuiCardBody class="py-2">
@@ -96,7 +103,7 @@
           </OuiStack>
         </OuiCardBody>
       </OuiCard>
-    </div>
+    </OuiStack>
 
     <OuiText v-if="uploadError" size="xs" color="danger">{{ uploadError }}</OuiText>
     <OuiText v-if="uploadSuccess" size="xs" color="success">{{ uploadSuccess }}</OuiText>
@@ -113,6 +120,8 @@ import { useOrganizationsStore } from "~/stores/organizations";
 
 interface Props {
   deploymentId: string;
+  destinationPath?: string;
+  volumeName?: string;
 }
 
 interface Emits {
@@ -232,7 +241,8 @@ const uploadFiles = async (api: any) => {
     const metadata = {
       organizationId: organizationId.value,
       deploymentId: props.deploymentId,
-      destinationPath: "/",
+      destinationPath: props.destinationPath || "/",
+      volumeName: props.volumeName,
       files: api.acceptedFiles.map((f: File) => ({
         name: f.name,
         size: BigInt(f.size),
@@ -241,15 +251,15 @@ const uploadFiles = async (api: any) => {
       })),
     };
     
-    // Create async generator for client streaming
-    const inputMessages = async function* () {
+    // Use Connect client streaming API with async generator
+    async function* inputStream() {
       // Send metadata first
       yield {
         data: {
-          case: "metadata",
+          case: "metadata" as const,
           value: metadata,
         },
-      };
+      } as any;
       
       // Send file data in chunks (64KB chunks)
       const chunkSize = 64 * 1024;
@@ -257,16 +267,16 @@ const uploadFiles = async (api: any) => {
         const chunk = tarData.slice(offset, offset + chunkSize);
         yield {
           data: {
-            case: "chunk",
-            value: Array.from(chunk),
+            case: "chunk" as const,
+            value: new Uint8Array(chunk),
           },
-        };
+        } as any;
       }
-    };
+    }
     
     // Call the upload RPC with the async generator
-    const response = await (client.uploadContainerFiles as any)(inputMessages());
-    
+    const response = await client.uploadContainerFiles(inputStream());
+
     if (response.success) {
       uploadSuccess.value = `Successfully uploaded ${response.filesUploaded} file(s)`;
       emit("uploaded", api.acceptedFiles);

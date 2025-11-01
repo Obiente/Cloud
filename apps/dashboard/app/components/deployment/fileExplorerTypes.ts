@@ -20,4 +20,5 @@ export interface ExplorerNode {
   hasLoaded: boolean;
   hasMore: boolean;
   nextCursor: string | null;
+  isExpanded: boolean;
 }

@@ -1,8 +1,8 @@
 <template>
   <OuiDialog v-model:open="isOpen" :title="fileName" size="4xl">
-    <div v-if="isLoading" class="flex justify-center py-8">
+    <OuiFlex v-if="isLoading" justify="center" class="py-8">
       <OuiText color="secondary">Loading file...</OuiText>
-    </div>
+    </OuiFlex>
 
     <div v-else-if="error" class="p-4">
       <OuiText color="danger">{{ error }}</OuiText>
@@ -33,7 +33,7 @@
       <!-- File Content -->
       <div
         ref="editorContainer"
-        class="w-full h-[600px] rounded-lg border border-border-default overflow-hidden"
+        class="w-full h-[600px] rounded-xl border border-border-default overflow-hidden"
       />
     </div>
 
@@ -167,7 +167,7 @@ const initEditor = async () => {
       minimap: { enabled: true },
       scrollBeyondLastLine: false,
       wordWrap: "on",
-      readOnly: true,
+      readOnly: false,
       lineNumbers: "on",
       renderWhitespace: "selection",
       folding: true,

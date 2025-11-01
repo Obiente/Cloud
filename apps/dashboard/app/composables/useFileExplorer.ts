@@ -54,6 +54,7 @@ export function useFileExplorer(options: ExplorerOptions) {
     hasLoaded: false,
     hasMore: false,
     nextCursor: null,
+    isExpanded: true,
   });
 
   const source = reactive<SourceState>({ type: "container" });
@@ -75,6 +76,7 @@ export function useFileExplorer(options: ExplorerOptions) {
     try {
       const orgId = getOrgId();
       if (!orgId) {
+        console.warn("fetchVolumes: No organizationId available");
         volumes.value = [];
         containerRunning.value = false;
         switchToContainer();
@@ -86,8 +88,18 @@ export function useFileExplorer(options: ExplorerOptions) {
         path: "/",
         listVolumes: true,
       });
+      
+      console.log("fetchVolumes: API response", res);
+      console.log("fetchVolumes: res.volumes", res.volumes);
+      console.log("fetchVolumes: res.volumes type", typeof res.volumes, Array.isArray(res.volumes));
+      
       volumes.value = res.volumes ?? [];
       containerRunning.value = !!res.containerRunning;
+      
+      console.log("fetchVolumes: Found volumes", volumes.value.length, volumes.value);
+      console.log("fetchVolumes: volumes.value after assignment", volumes.value);
+      console.log("fetchVolumes: Container running", containerRunning.value);
+      
       const firstVolume = volumes.value[0];
       if (!containerRunning.value && firstVolume) {
         switchToVolume(firstVolume.name ?? "");
@@ -96,7 +108,7 @@ export function useFileExplorer(options: ExplorerOptions) {
         delete source.volumeName;
       }
     } catch (err) {
-      console.error("fetchVolumes", err);
+      console.error("fetchVolumes error:", err);
       volumes.value = [];
       containerRunning.value = false;
     }
@@ -142,6 +154,7 @@ export function useFileExplorer(options: ExplorerOptions) {
       hasLoaded: false,
       hasMore: false,
       nextCursor: null,
+      isExpanded: false,
     };
   }
 
