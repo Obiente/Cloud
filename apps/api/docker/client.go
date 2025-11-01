@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -541,25 +542,40 @@ func parseLsOutput(output, basePath string) []FileInfo {
 		}
 
 		parts := strings.Fields(line)
-		if len(parts) < 9 {
+		if len(parts) < 8 {
 			continue
 		}
 
 		perms := parts[0]
+		if len(perms) == 0 {
+			continue
+		}
+
+		// Check file type from permissions string
+		// 'd' = directory, 'l' = symlink, '-' = regular file, and others like 'c', 'b', etc.
 		isDir := perms[0] == 'd'
 		isSymlink := perms[0] == 'l'
 
 		var size int64
-		fmt.Sscanf(parts[4], "%d", &size)
+		if len(parts) > 4 {
+			fmt.Sscanf(parts[4], "%d", &size)
+		}
 
-		rawName := strings.Join(parts[8:], " ")
+		// File name starts at index 8, but handle cases where it might be different
+		// Join all parts from index 8 onwards to handle spaces in filenames
+		nameStartIdx := 7
+		if len(parts) <= nameStartIdx {
+			continue
+		}
+
+		rawName := strings.Join(parts[nameStartIdx:], " ")
 
 		displayName := rawName
 		symlinkTarget := ""
 		if isSymlink {
 			if arrow := strings.Index(rawName, " -> "); arrow >= 0 {
-				displayName = rawName[:arrow]
-				symlinkTarget = rawName[arrow+4:]
+				displayName = strings.TrimSpace(rawName[:arrow])
+				symlinkTarget = strings.TrimSpace(rawName[arrow+4:])
 			}
 		}
 
@@ -576,15 +592,15 @@ func parseLsOutput(output, basePath string) []FileInfo {
 			}
 		}
 
-		// Build full path
-		fullPath := basePath
-		if !strings.HasSuffix(fullPath, "/") && fullPath != "/" {
-			fullPath += "/"
+		// Build full path with a leading slash so the UI has consistent absolute paths
+		cleanBase := strings.Trim(strings.TrimSpace(basePath), "/")
+		var fullPath string
+		if cleanBase == "" {
+			fullPath = path.Join("/", displayName)
+		} else {
+			fullPath = path.Join("/", cleanBase, displayName)
 		}
-		if fullPath == "/" {
-			fullPath = ""
-		}
-		fullPath += displayName
+		fullPath = path.Clean(fullPath)
 
 		owner := ""
 		if len(parts) > 2 {

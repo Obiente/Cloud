@@ -32,7 +32,7 @@
     (e: "load-more", node: ExplorerNode): void;
   }>();
 
-  const isDirectory = computed(() => props.node.type === "directory");
+  const isDirectory = computed(() => props.node.type === "directory" || !!props.node.children?.length);
   const isSymlink = computed(() => props.node.type === "symlink");
   const isSelected = computed(() => props.selectedPath === props.node.path);
   const depth = computed(() => Math.max(props.indexPath.length, 1));
@@ -97,15 +97,11 @@
     getNode: () => props.node,
   });
 
-  function handleBranchClick(event: Event) {
-    event.preventDefault();
-    event.stopPropagation();
+  function handleBranchClick() {
     emit("toggle", props.node);
   }
 
-  function handleItemClick(event: Event) {
-    event.preventDefault();
-    event.stopPropagation();
+  function handleItemClick() {
     emit("open", props.node);
   }
 
@@ -136,7 +132,7 @@
         :is="isDirectory ? TreeView.BranchTrigger : 'div'"
         :style="{ paddingLeft: iconPadding }"
         class="tree-trigger"
-        @click="isDirectory ? handleBranchClick($event) : handleItemClick($event)"
+        @click="isDirectory ? handleBranchClick() : handleItemClick()"
       >
         <span class="tree-trigger__chevron" v-if="isDirectory">
           <TreeView.BranchIndicator>

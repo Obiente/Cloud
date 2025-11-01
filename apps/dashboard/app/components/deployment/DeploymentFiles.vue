@@ -132,18 +132,27 @@
             </OuiFlex>
           </template>
           <template v-else>
-            <TreeNode
-              v-for="(child, idx) in root.children"
-              :key="child.id"
-              :node="child"
-              :indexPath="[idx]"
-              :selectedPath="selectedPath"
-              :allowEditing="allowEditing"
-              @toggle="handleToggle"
-              @open="handleOpen"
-              @action="handleContextAction"
-              @load-more="handleLoadMore"
-            />
+            <TreeView.Root
+              :collection="treeCollection"
+              selection-mode="single"
+              :selected-value="selectedPath ? [selectedPath] : []"
+              class="file-tree-root"
+            >
+              <TreeView.Tree>
+                <TreeNode
+                  v-for="(child, idx) in root.children"
+                  :key="child.id"
+                  :node="child"
+                  :indexPath="[idx]"
+                  :selectedPath="selectedPath"
+                  :allowEditing="allowEditing"
+                  @toggle="handleToggle"
+                  @open="handleOpen"
+                  @action="handleContextAction"
+                  @load-more="handleLoadMore"
+                />
+              </TreeView.Tree>
+            </TreeView.Root>
           </template>
         </div>
       </aside>
@@ -232,6 +241,8 @@
     CubeIcon,
     LinkIcon,
   } from "@heroicons/vue/24/outline";
+  import { TreeView } from "@ark-ui/vue/tree-view";
+  import { createTreeCollection, type TreeNode as ArkTreeNode } from "@ark-ui/vue/collection";
   import TreeNode from "./TreeNode.vue";
   import { useFileExplorer } from "~/composables/useFileExplorer";
   import { useConnectClient } from "~/lib/connect-client";
@@ -279,6 +290,53 @@
     getOrgId,
     setOrganizationId,
   } = explorer;
+
+  type ExplorerTreeNode = ArkTreeNode & {
+    value: ExplorerNode | null;
+    children?: ExplorerTreeNode[];
+  };
+
+  const treeCollection = computed(() => {
+    const visit = (
+      nodes: ExplorerNode[] | undefined,
+      parentId: string | null,
+      acc: ExplorerTreeNode[]
+    ) => {
+      if (!nodes?.length) return;
+      for (const node of nodes) {
+        const rawSegment =
+          node.name ||
+          (node.path ? node.path.split("/").filter(Boolean).pop() : "") ||
+          node.id ||
+          `node-${acc.length}`;
+        const segment = rawSegment?.split("/").filter(Boolean).join("-") || rawSegment;
+        const nodeId = parentId ? `${parentId}/${segment || rawSegment}` : segment || rawSegment;
+        const treeNode: ExplorerTreeNode = {
+          id: nodeId,
+          parentId: parentId ?? undefined,
+          value: node,
+          isBranch: node.type === "directory" || !!node.children?.length,
+          isLeaf: node.type !== "directory" && !node.children?.length,
+          children: [],
+        };
+        acc.push(treeNode);
+        if (node.children?.length) {
+          visit(node.children, nodeId, treeNode.children!);
+        }
+      }
+    };
+
+    const items: ExplorerTreeNode[] = [];
+    visit(root.children, "ROOT", items);
+
+    return createTreeCollection({
+      rootNode: {
+        id: "ROOT",
+        value: null,
+        children: items,
+      },
+    });
+  });
 
   const explorerClient = useConnectClient(DeploymentService);
 

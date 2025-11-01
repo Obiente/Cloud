@@ -113,9 +113,14 @@ export function useFileExplorer(options: ExplorerOptions) {
   }
 
   function convertFile(file: ContainerFile): ExplorerNode {
-    const type: ExplorerNode["type"] = file.isDirectory
+    // Convert the file to an ExplorerNode, ensuring directories are correctly identified
+    // Use explicit boolean check to handle any potential type coercion issues
+    const isDirectory = Boolean(file.isDirectory);
+    const isSymlink = Boolean(file.isSymlink);
+    
+    const type: ExplorerNode["type"] = isDirectory
       ? "directory"
-      : file.isSymlink ? "symlink" : "file";
+      : isSymlink ? "symlink" : "file";
     const size = file.size !== undefined && file.size !== null ? Number(file.size) : undefined;
     return {
       id: file.path,
