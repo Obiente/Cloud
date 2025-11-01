@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -282,7 +283,7 @@ func (c *Client) ContainerListFiles(ctx context.Context, containerID, path strin
 			return nil, fmt.Errorf("failed to start stopped container for file listing: %w", err)
 		}
 		wasStarted = true
-
+		
 		// Wait a moment for container to be ready
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -324,7 +325,7 @@ func (c *Client) ContainerReadFile(ctx context.Context, containerID, filePath st
 			return nil, fmt.Errorf("failed to start stopped container for file read: %w", err)
 		}
 		wasStarted = true
-
+		
 		// Wait a moment for container to be ready
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -352,7 +353,7 @@ func (c *Client) ContainerInspect(ctx context.Context, containerID string) (cont
 	if c == nil || c.api == nil {
 		return container.InspectResponse{}, ErrUninitialized
 	}
-
+	
 	return c.api.ContainerInspect(ctx, containerID)
 }
 
@@ -379,7 +380,7 @@ func (c *Client) ContainerUploadFiles(ctx context.Context, containerID, destPath
 		}); err != nil {
 			return fmt.Errorf("write tar header: %w", err)
 		}
-
+		
 		if _, err := tarWriter.Write(content); err != nil {
 			return fmt.Errorf("write tar content: %w", err)
 		}
@@ -558,7 +559,7 @@ func parseLsOutput(output, basePath string) []FileInfo {
 
 		var size int64
 		if len(parts) > 4 {
-			fmt.Sscanf(parts[4], "%d", &size)
+		fmt.Sscanf(parts[4], "%d", &size)
 		}
 
 		// File name starts at index 8, but handle cases where it might be different
@@ -655,65 +656,90 @@ func (c *Client) GetContainerVolumes(ctx context.Context, containerID string) ([
 	}
 
 	var volumes []VolumeMount
-	for _, mount := range containerInfo.Mounts {
-		// Only include named volumes (persistent volumes)
+	log.Printf("[GetContainerVolumes] Inspecting container %s, found %d mounts", containerID, len(containerInfo.Mounts))
+	
+	for i, mount := range containerInfo.Mounts {
+		log.Printf("[GetContainerVolumes] Mount %d: Type=%s, Name=%s, Source=%s, Destination=%s", i, mount.Type, mount.Name, mount.Source, mount.Destination)
+		
+		// Include all Docker volumes (both named and anonymous)
 		// Named volumes have Type="volume" and Name is set
-		if mount.Type == "volume" && mount.Name != "" {
+		// Anonymous volumes have Type="volume" but Name is empty (they're still Docker-managed)
+		if mount.Type == "volume" {
 			volumePath := mount.Source
+			log.Printf("[GetContainerVolumes] Processing volume mount: Name=%s, Source=%s", mount.Name, volumePath)
 
-			// Try to resolve the correct volume path
+			// For named volumes, try to resolve the correct volume path
 			// Docker volumes are typically at /var/lib/docker/volumes/<name>/_data
 			// but mount.Source might point to the volume directory or the _data subdirectory
-
-			// Check if the path exists as-is
-			if _, err := os.Stat(volumePath); os.IsNotExist(err) {
-				// Path doesn't exist, try common variations
-				// Try removing _data if it's in the path
-				if strings.HasSuffix(volumePath, "_data") {
-					volumePath = strings.TrimSuffix(volumePath, "_data")
-					volumePath = strings.TrimSuffix(volumePath, "/")
-				}
-
-				// Try appending _data
-				withData := filepath.Join(volumePath, "_data")
-				if _, err := os.Stat(withData); err == nil {
-					volumePath = withData
-				} else if _, err := os.Stat(volumePath); os.IsNotExist(err) {
-					// If still doesn't exist, construct from volume name
-					// This is a fallback if mount.Source is completely wrong
-					potentialPath := filepath.Join("/var/lib/docker/volumes", mount.Name, "_data")
-					if _, err := os.Stat(potentialPath); err == nil {
-						volumePath = potentialPath
+			// For anonymous volumes, mount.Source is the direct path to the volume data
+			
+			isNamedVolume := mount.Name != ""
+			if isNamedVolume {
+				// Check if the path exists as-is
+				if _, err := os.Stat(volumePath); os.IsNotExist(err) {
+					// Path doesn't exist, try common variations
+					// Try removing _data if it's in the path
+					if strings.HasSuffix(volumePath, "_data") {
+						volumePath = strings.TrimSuffix(volumePath, "_data")
+						volumePath = strings.TrimSuffix(volumePath, "/")
 					}
-				}
-			} else {
-				// Path exists, but check if it's a directory (might be the volume root)
-				// If it's not the _data directory, try appending _data
-				info, err := os.Stat(volumePath)
-				if err == nil && info.IsDir() {
-					// Check if _data subdirectory exists
+
+					// Try appending _data
 					withData := filepath.Join(volumePath, "_data")
 					if _, err := os.Stat(withData); err == nil {
-						// Prefer _data subdirectory as that's where actual files are
 						volumePath = withData
+					} else if _, err := os.Stat(volumePath); os.IsNotExist(err) {
+						// If still doesn't exist, construct from volume name
+						// This is a fallback if mount.Source is completely wrong
+						potentialPath := filepath.Join("/var/lib/docker/volumes", mount.Name, "_data")
+						if _, err := os.Stat(potentialPath); err == nil {
+							volumePath = potentialPath
+						}
+					}
+				} else {
+					// Path exists, but check if it's a directory (might be the volume root)
+					// If it's not the _data directory, try appending _data
+					info, err := os.Stat(volumePath)
+					if err == nil && info.IsDir() {
+						// Check if _data subdirectory exists
+						withData := filepath.Join(volumePath, "_data")
+						if _, err := os.Stat(withData); err == nil {
+							// Prefer _data subdirectory as that's where actual files are
+							volumePath = withData
+						}
 					}
 				}
 			}
+			// For anonymous volumes, use mount.Source directly as it's already the correct path
 
 			// Only include volumes with valid, accessible paths
 			// Skip if the path still doesn't exist after all attempts
 			if _, err := os.Stat(volumePath); err == nil {
-				volumes = append(volumes, VolumeMount{
-					Name:       mount.Name,
+				// Generate a display name for anonymous volumes
+				displayName := mount.Name
+				if displayName == "" {
+					// Use a hash of the mount point or source path as identifier
+					displayName = fmt.Sprintf("anonymous-%s", mount.Destination)
+				}
+				
+				volumeMount := VolumeMount{
+					Name:       displayName,
 					MountPoint: mount.Destination,
 					Source:     volumePath, // Host path where volume is stored
-					IsNamed:    true,
-				})
+					IsNamed:    isNamedVolume,
+				}
+				log.Printf("[GetContainerVolumes] Adding volume: Name=%s, MountPoint=%s, Source=%s, IsNamed=%v", volumeMount.Name, volumeMount.MountPoint, volumeMount.Source, volumeMount.IsNamed)
+				volumes = append(volumes, volumeMount)
+			} else {
+				log.Printf("[GetContainerVolumes] Skipping volume - path does not exist: %s (error: %v)", volumePath, err)
 			}
 			// If volume path doesn't exist, skip it (might be deleted or inaccessible)
+		} else {
+			log.Printf("[GetContainerVolumes] Skipping mount - not a volume type: Type=%s", mount.Type)
 		}
 	}
 
+	log.Printf("[GetContainerVolumes] Returning %d volumes", len(volumes))
 	return volumes, nil
 }
 
@@ -733,29 +759,41 @@ func (c *Client) ListVolumeFiles(volumePath, path string) ([]FileInfo, error) {
 		return nil, fmt.Errorf("volume path does not exist: %s (volume may have been deleted)", volumePath)
 	}
 
-	trimmed := strings.TrimPrefix(path, "/")
-	fullPath := filepath.Join(volumePath, trimmed)
-	if trimmed == "" {
-		fullPath = volumePath
+	// Resolve and validate the path to ensure it stays within the volume boundary
+	resolvedPath, err := resolvePathWithinVolume(volumePath, path)
+	if err != nil {
+		return nil, fmt.Errorf("invalid path: %w", err)
 	}
 
-	entries, err := os.ReadDir(fullPath)
+	entries, err := os.ReadDir(resolvedPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("directory does not exist: %s (volume path: %s)", fullPath, volumePath)
+			return nil, fmt.Errorf("directory does not exist: %s (volume path: %s)", resolvedPath, volumePath)
 		}
 		return nil, fmt.Errorf("read directory: %w", err)
 	}
 
 	var files []FileInfo
 	for _, entry := range entries {
-		entryPath := filepath.Join(fullPath, entry.Name())
+		entryPath := filepath.Join(resolvedPath, entry.Name())
+		
+		// Validate each entry path to prevent symlink attacks
+		if _, err := resolvePathWithinVolume(volumePath, entryPath); err != nil {
+			// Skip entries that escape the volume boundary (e.g., malicious symlinks)
+			continue
+		}
+		
 		info, err := os.Lstat(entryPath)
 		if err != nil {
 			continue
 		}
 
-		filePath := "/" + strings.TrimPrefix(filepath.Join(trimmed, entry.Name()), "/")
+		// Calculate relative path from volume root for display
+		relativePath := strings.TrimPrefix(entryPath, volumePath)
+		if relativePath == "" {
+			relativePath = "/"
+		}
+		filePath := "/" + strings.TrimPrefix(relativePath, "/")
 
 		owner := ""
 		group := ""
@@ -792,58 +830,67 @@ func (c *Client) ListVolumeFiles(volumePath, path string) ([]FileInfo, error) {
 	return files, nil
 }
 
+// resolvePathWithinVolume ensures a path stays within the volume boundary
+// This prevents directory traversal attacks
+func resolvePathWithinVolume(volumePath, requested string) (string, error) {
+	// Get absolute paths to prevent symlink and traversal attacks
+	absVolumePath, err := filepath.Abs(volumePath)
+	if err != nil {
+		return "", fmt.Errorf("invalid volume path: %w", err)
+	}
+
+	// Normalize the requested path
+	trimmed := strings.TrimPrefix(requested, "/")
+	if trimmed == "" {
+		return absVolumePath, nil
+	}
+
+	// Join and resolve to absolute path
+	joined := filepath.Join(absVolumePath, trimmed)
+	absRequested, err := filepath.Abs(joined)
+	if err != nil {
+		return "", fmt.Errorf("invalid path: %w", err)
+	}
+
+	// Ensure the resolved path is within the volume boundary
+	// Use string comparison with path separator to prevent escaping
+	if absRequested != absVolumePath && !strings.HasPrefix(absRequested+string(os.PathSeparator), absVolumePath+string(os.PathSeparator)) {
+		return "", fmt.Errorf("path escapes volume boundary: %s (volume: %s)", absRequested, absVolumePath)
+	}
+
+	return absRequested, nil
+}
+
 // ReadVolumeFile reads a file from a volume directly from the host filesystem
 // This works even when the container is stopped
 func (c *Client) ReadVolumeFile(volumePath, filePath string) ([]byte, error) {
-	// Remove leading slash if present
-	filePath = strings.TrimPrefix(filePath, "/")
-	fullPath := filepath.Join(volumePath, filePath)
-
-	// Security check: ensure the path is within the volume
-	absVolumePath, err := filepath.Abs(volumePath)
+	// Resolve and validate the path to ensure it stays within the volume boundary
+	resolvedPath, err := resolvePathWithinVolume(volumePath, filePath)
 	if err != nil {
-		return nil, fmt.Errorf("invalid volume path: %w", err)
-	}
-	absFilePath, err := filepath.Abs(fullPath)
-	if err != nil {
-		return nil, fmt.Errorf("invalid file path: %w", err)
-	}
-	if !strings.HasPrefix(absFilePath, absVolumePath) {
-		return nil, fmt.Errorf("file path outside volume boundary")
+		return nil, fmt.Errorf("invalid path: %w", err)
 	}
 
-	return os.ReadFile(fullPath)
+	return os.ReadFile(resolvedPath)
 }
 
 // UploadVolumeFiles uploads files directly to a volume on the host filesystem
 // This works even when the container is stopped
 func (c *Client) UploadVolumeFiles(volumePath string, files map[string][]byte) error {
 	for filePath, content := range files {
-		// Remove leading slash if present
-		filePath = strings.TrimPrefix(filePath, "/")
-		fullPath := filepath.Join(volumePath, filePath)
-
-		// Security check: ensure the path is within the volume
-		absVolumePath, err := filepath.Abs(volumePath)
+		// Resolve and validate the path to ensure it stays within the volume boundary
+		resolvedPath, err := resolvePathWithinVolume(volumePath, filePath)
 		if err != nil {
-			return fmt.Errorf("invalid volume path: %w", err)
-		}
-		absFilePath, err := filepath.Abs(fullPath)
-		if err != nil {
-			return fmt.Errorf("invalid file path: %w", err)
-		}
-		if !strings.HasPrefix(absFilePath, absVolumePath) {
-			return fmt.Errorf("file path outside volume boundary")
+			return fmt.Errorf("invalid path for file %s: %w", filePath, err)
 		}
 
 		// Create directory if needed
-		dir := filepath.Dir(fullPath)
+		dir := filepath.Dir(resolvedPath)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("create directory: %w", err)
 		}
 
 		// Write file
-		if err := os.WriteFile(fullPath, content, 0644); err != nil {
+		if err := os.WriteFile(resolvedPath, content, 0644); err != nil {
 			return fmt.Errorf("write file: %w", err)
 		}
 	}
@@ -856,13 +903,13 @@ func (c *Client) StatVolumeFile(volumePath, path string) (FileInfo, error) {
 		return FileInfo{}, fmt.Errorf("volume path does not exist: %s", volumePath)
 	}
 
-	trimmed := strings.TrimPrefix(path, "/")
-	fullPath := filepath.Join(volumePath, trimmed)
-	if trimmed == "" {
-		fullPath = volumePath
+	// Resolve and validate the path to ensure it stays within the volume boundary
+	resolvedPath, err := resolvePathWithinVolume(volumePath, path)
+	if err != nil {
+		return FileInfo{}, fmt.Errorf("invalid path: %w", err)
 	}
 
-	info, err := os.Lstat(fullPath)
+	info, err := os.Lstat(resolvedPath)
 	if err != nil {
 		return FileInfo{}, fmt.Errorf("stat: %w", err)
 	}
@@ -879,19 +926,24 @@ func (c *Client) StatVolumeFile(volumePath, path string) (FileInfo, error) {
 	isSymlink := info.Mode()&os.ModeSymlink != 0
 	symlinkTarget := ""
 	if isSymlink {
-		if target, err := os.Readlink(fullPath); err == nil {
-			symlinkTarget = target
+		if target, err := os.Readlink(resolvedPath); err == nil {
+			// Validate symlink target stays within volume
+			if resolvedTarget, err := resolvePathWithinVolume(volumePath, target); err == nil {
+				symlinkTarget = resolvedTarget
+			}
 		}
 	}
 
-	name := info.Name()
-	if trimmed == "" {
-		name = "/"
+	// Calculate relative path from volume root for display
+	relativePath := strings.TrimPrefix(resolvedPath, volumePath)
+	if relativePath == "" {
+		relativePath = "/"
 	}
-
-	filePath := "/" + strings.TrimPrefix(trimmed, "/")
-	if filePath == "/" && name != "/" {
-		filePath = filepath.Join("/", name)
+	filePath := "/" + strings.TrimPrefix(relativePath, "/")
+	
+	name := filepath.Base(filePath)
+	if name == "" || name == "." {
+		name = "/"
 	}
 
 	return FileInfo{

@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -85,10 +86,15 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	authDisabled := os.Getenv("DISABLE_AUTH") == "true"
 	if initMsg.Token == "" {
-		sendError("Authentication token is required")
-		conn.Close(websocket.StatusPolicyViolation, "missing token")
-		return
+		if authDisabled {
+			initMsg.Token = "dev-dummy-token"
+		} else {
+			sendError("Authentication token is required")
+			conn.Close(websocket.StatusPolicyViolation, "missing token")
+			return
+		}
 	}
 	if initMsg.DeploymentID == "" || initMsg.OrganizationID == "" {
 		sendError("deploymentId and organizationId are required")

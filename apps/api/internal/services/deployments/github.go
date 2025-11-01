@@ -19,6 +19,8 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 		return "", fmt.Errorf("authentication required")
 	}
 
+	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+
 	// First try specific integration ID if provided
 	if integrationID != "" {
 		var integration database.GitHubIntegration
@@ -29,6 +31,9 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 			}
 			if integration.OrganizationID != nil {
 				// Check if user is member of the organization
+				if isSuperAdmin {
+					return integration.Token, nil
+				}
 				var member database.OrganizationMember
 				if err := database.DB.Where("organization_id = ? AND user_id = ?", *integration.OrganizationID, user.Id).First(&member).Error; err == nil {
 					return integration.Token, nil
@@ -41,7 +46,13 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 	if orgID != "" {
 		var orgIntegration database.GitHubIntegration
 		if err := database.DB.Where("organization_id = ?", orgID).First(&orgIntegration).Error; err == nil {
-			return orgIntegration.Token, nil
+			if isSuperAdmin {
+				return orgIntegration.Token, nil
+			}
+			var member database.OrganizationMember
+			if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err == nil {
+				return orgIntegration.Token, nil
+			}
 		}
 	}
 

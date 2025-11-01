@@ -63,8 +63,10 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 	isRunning := containerInfo.State.Running
 
 	if req.Msg.GetListVolumes() {
+		log.Printf("[ListContainerFiles] Listing volumes for container %s (deployment %s)", loc.ContainerID, deploymentID)
 		volumes, err := dcli.GetContainerVolumes(ctx, loc.ContainerID)
 		if err != nil {
+			log.Printf("[ListContainerFiles] Error getting volumes: %v", err)
 			refreshedLocations, refreshErr := database.ValidateAndRefreshLocations(deploymentID)
 			if refreshErr != nil || len(refreshedLocations) == 0 {
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
@@ -76,8 +78,10 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 			}
 		}
 
+		log.Printf("[ListContainerFiles] Found %d volumes", len(volumes))
 		volumeInfos := make([]*deploymentsv1.VolumeInfo, len(volumes))
 		for i, vol := range volumes {
+			log.Printf("[ListContainerFiles] Volume %d: Name=%s, MountPoint=%s, Source=%s, IsNamed=%v", i, vol.Name, vol.MountPoint, vol.Source, vol.IsNamed)
 			volumeInfos[i] = &deploymentsv1.VolumeInfo{
 				Name:         vol.Name,
 				MountPoint:   vol.MountPoint,
@@ -90,6 +94,7 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 			Volumes:          volumeInfos,
 			ContainerRunning: isRunning,
 		}
+		log.Printf("[ListContainerFiles] Returning response with %d volumes", len(volumeInfos))
 		return connect.NewResponse(resp), nil
 	}
 
@@ -103,6 +108,14 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 	if path == "" {
 		path = "/"
 	}
+	
+	// Sanitize path to prevent directory traversal attacks
+	// Ensure path is absolute and normalized
+	path = filepath.Clean(path)
+	if !filepath.IsAbs(path) {
+		path = "/" + path
+	}
+	path = filepath.Clean(path)
 
 	volumeName := req.Msg.GetVolumeName()
 	if volumeName != "" {
@@ -121,6 +134,8 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 
 		var targetVolume *docker.VolumeMount
 		for _, vol := range volumes {
+			// Match by name (works for both named and anonymous volumes)
+			// Anonymous volumes have names like "anonymous-<mountpoint>"
 			if vol.Name == volumeName {
 				targetVolume = &vol
 				break
@@ -361,8 +376,6 @@ func (s *Service) UploadContainerFiles(ctx context.Context, stream *connect.Clie
 	}
 	defer dcli.Close()
 
-	// Use the first location
-	loc := locations[0]
 	destPath := metadata.GetDestinationPath()
 	if destPath == "" {
 		destPath = "/"
@@ -394,10 +407,46 @@ func (s *Service) UploadContainerFiles(ctx context.Context, stream *connect.Clie
 		files[hdr.Name] = content
 	}
 
-	// Upload files to container
-	err = dcli.ContainerUploadFiles(ctx, loc.ContainerID, destPath, files)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to upload files: %w", err))
+	volumeName := metadata.GetVolumeName()
+	if volumeName != "" {
+		// Upload to volume
+		volumes, err := dcli.GetContainerVolumes(ctx, deploymentID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get volumes: %w", err))
+		}
+
+		var targetVolume *docker.VolumeMount
+		for _, vol := range volumes {
+			if vol.Name == volumeName {
+				targetVolume = &vol
+				break
+			}
+		}
+
+		if targetVolume == nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("volume not found: %s", volumeName))
+		}
+
+		// Upload files directly to volume path
+		// Combine destination path with file paths from tar archive
+		uploadFiles := make(map[string][]byte)
+		for filePath, content := range files {
+			// Join destination path with the file path from archive
+			fullPath := filepath.Join(destPath, filePath)
+			uploadFiles[fullPath] = content
+		}
+		err = dcli.UploadVolumeFiles(targetVolume.Source, uploadFiles)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to upload files to volume: %w", err))
+		}
+	} else {
+		// Upload to container filesystem
+		// Use the first location
+		loc := locations[0]
+		err = dcli.ContainerUploadFiles(ctx, loc.ContainerID, destPath, files)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to upload files: %w", err))
+		}
 	}
 
 	return connect.NewResponse(&deploymentsv1.UploadContainerFilesResponse{
@@ -457,6 +506,8 @@ func (s *Service) DeleteContainerEntries(ctx context.Context, req *connect.Reque
 
 		var targetVolume *docker.VolumeMount
 		for _, vol := range volumes {
+			// Match by name (works for both named and anonymous volumes)
+			// Anonymous volumes have names like "anonymous-<mountpoint>"
 			if vol.Name == volumeName {
 				targetVolume = &vol
 				break
@@ -588,6 +639,8 @@ func (s *Service) CreateContainerEntry(ctx context.Context, req *connect.Request
 
 		var targetVolume *docker.VolumeMount
 		for _, vol := range volumes {
+			// Match by name (works for both named and anonymous volumes)
+			// Anonymous volumes have names like "anonymous-<mountpoint>"
 			if vol.Name == volumeName {
 				targetVolume = &vol
 				break
@@ -733,6 +786,8 @@ func (s *Service) WriteContainerFile(ctx context.Context, req *connect.Request[d
 
 		var targetVolume *docker.VolumeMount
 		for _, vol := range volumes {
+			// Match by name (works for both named and anonymous volumes)
+			// Anonymous volumes have names like "anonymous-<mountpoint>"
 			if vol.Name == volumeName {
 				targetVolume = &vol
 				break

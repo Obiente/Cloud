@@ -73,29 +73,29 @@ func (s *Service) checkDeploymentPermission(ctx context.Context, deploymentID st
 	if err != nil {
 		return connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
-
+	
 	// Get user from context
 	userInfo, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: %w", err))
 	}
-
+	
 	// First check if user is admin (always has access)
 	if auth.HasRole(userInfo, auth.RoleAdmin) {
 		return nil
 	}
-
+	
 	// Check if user is the resource owner
-	if deployment.CreatedBy == userInfo.Id {
+    if deployment.CreatedBy == userInfo.Id {
 		return nil // Resource owners have full access to their resources
 	}
-
+	
 	// For more complex permissions (organization-based, team-based, etc.)
 	err = s.permissionChecker.CheckPermission(ctx, auth.ResourceTypeDeployment, deploymentID, permission)
 	if err != nil {
 		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: %w", err))
 	}
-
+	
 	return nil
 }
 
