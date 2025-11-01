@@ -266,6 +266,7 @@ const connectTerminal = async () => {
 
     const config = useRuntimeConfig();
     const apiBase = config.public.apiHost || config.public.requestHost;
+    const disableAuth = Boolean(config.public.disableAuth);
     const wsUrlObject = new URL("/terminal/ws", apiBase);
     wsUrlObject.protocol = wsUrlObject.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = wsUrlObject.toString();
@@ -286,7 +287,11 @@ const connectTerminal = async () => {
         });
       }
 
-      const token = await auth.getAccessToken();
+      let token = await auth.getAccessToken();
+      if (!token && disableAuth) {
+        token = "dev-dummy-token";
+      }
+
       if (!token) {
         error.value = "Authentication required. Please log in.";
         websocket?.close();

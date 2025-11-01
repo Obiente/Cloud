@@ -25,12 +25,13 @@
         </OuiFlex>
       </OuiFlex>
 
-      <div
+      <OuiFlex
         v-if="isLoading && envVars.length === 0"
-        class="flex justify-center py-8"
+        justify="center"
+        class="py-8"
       >
         <OuiText color="secondary">Loading environment variables...</OuiText>
-      </div>
+      </OuiFlex>
 
       <!-- List View -->
       <OuiStack v-if="viewMode === 'list'" gap="sm">
@@ -41,60 +42,63 @@
         </OuiStack>
 
         <OuiStack v-else gap="sm">
-          <div
+          <OuiCard
             v-for="(env, idx) in envVars"
             :key="idx"
-            class="flex flex-col gap-2 p-3 rounded-lg border border-border-default bg-surface-muted/30"
+            variant="outline"
+            class="p-3"
           >
-            <div class="flex items-center gap-3">
-              <OuiInput
-                :model-value="env.key"
-                placeholder="KEY"
-                class="flex-1 uppercase"
-                size="sm"
-                @update:model-value="(val) => handleKeyUpdate(env, val)"
-              />
-              <OuiInput
-                v-model="env.value"
-                placeholder="value"
-                class="flex-1"
-                size="sm"
-                @update:model-value="markDirty"
-              />
+            <OuiStack gap="xs">
+              <OuiFlex align="center" gap="md">
+                <OuiInput
+                  :model-value="env.key"
+                  placeholder="KEY"
+                  class="flex-1 uppercase"
+                  size="sm"
+                  @update:model-value="(val) => handleKeyUpdate(env, val)"
+                />
+                <OuiInput
+                  v-model="env.value"
+                  placeholder="value"
+                  class="flex-1"
+                  size="sm"
+                  @update:model-value="markDirty"
+                />
+                <OuiButton
+                  variant="ghost"
+                  size="sm"
+                  color="danger"
+                  @click="removeVariable(idx)"
+                >
+                  Remove
+                </OuiButton>
+              </OuiFlex>
+              <OuiFlex v-if="env.description !== undefined" align="center" gap="xs">
+                <OuiText size="xs" color="secondary" class="w-4 shrink-0">#</OuiText>
+                <OuiInput
+                  v-model="env.description"
+                  placeholder="Description (will be saved as comment)"
+                  size="sm"
+                  class="flex-1 text-xs"
+                  @update:model-value="markDirty"
+                />
+              </OuiFlex>
               <OuiButton
+                v-else
                 variant="ghost"
-                size="sm"
-                color="danger"
-                @click="removeVariable(idx)"
+                size="xs"
+                @click="env.description = ''"
+                class="self-start"
               >
-                Remove
+                + Add description
               </OuiButton>
-            </div>
-            <div v-if="env.description !== undefined" class="flex items-center gap-2">
-              <OuiText size="xs" color="secondary" class="w-4 shrink-0">#</OuiText>
-              <OuiInput
-                v-model="env.description"
-                placeholder="Description (will be saved as comment)"
-                size="sm"
-                class="flex-1 text-xs"
-                @update:model-value="markDirty"
-              />
-            </div>
-            <OuiButton
-              v-else
-              variant="ghost"
-              size="xs"
-              @click="env.description = ''"
-              class="self-start"
-            >
-              + Add description
-            </OuiButton>
-          </div>
+            </OuiStack>
+          </OuiCard>
         </OuiStack>
       </OuiStack>
 
       <!-- File View -->
-      <div v-if="viewMode === 'file'" class="space-y-2">
+      <OuiStack v-if="viewMode === 'file'" gap="xs">
         <OuiText size="sm" weight="medium">Edit as .env file</OuiText>
         <OuiFileEditor
           v-model="envFileContent"
@@ -110,7 +114,7 @@
           Format: KEY=value (one per line). Empty lines are ignored. Press
           Ctrl+S to save.
         </OuiText>
-      </div>
+      </OuiStack>
 
       <OuiFlex justify="end">
         <OuiButton

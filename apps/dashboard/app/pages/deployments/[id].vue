@@ -33,8 +33,7 @@
                 >
               </OuiBadge>
               <OuiText size="sm" color="secondary"
-                >Last deployed
-                {{ formatRelativeTime(deployment.lastDeployedAt) }}</OuiText
+                >Last deployed <OuiRelativeTime :value="deployment.lastDeployedAt ? date(deployment.lastDeployedAt) : undefined" :style="'short'" /></OuiText
               >
             </OuiFlex>
           </OuiStack>
@@ -129,6 +128,42 @@
               </template>
             </OuiTabs>
           </OuiCard>
+
+          <!-- Danger Zone - Only show on overview tab -->
+          <OuiCard v-if="activeTab === 'overview'" variant="outline" class="border-danger/20">
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiStack gap="xs">
+                  <OuiText as="h3" size="lg" weight="semibold" color="danger">
+                    Danger Zone
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Irreversible and destructive actions
+                  </OuiText>
+                </OuiStack>
+                <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
+                  <OuiStack gap="xs" class="flex-1 min-w-0">
+                    <OuiText size="sm" weight="medium" color="primary">
+                      Delete Deployment
+                    </OuiText>
+                    <OuiText size="xs" color="secondary">
+                      Once you delete a deployment, there is no going back. This will permanently remove the deployment and all associated data.
+                    </OuiText>
+                  </OuiStack>
+                  <OuiButton
+                    variant="outline"
+                    color="danger"
+                    size="sm"
+                    @click="handleDelete"
+                    class="gap-2 shrink-0"
+                  >
+                    <TrashIcon class="h-4 w-4" />
+                    <OuiText as="span" size="xs" weight="medium">Delete Deployment</OuiText>
+                  </OuiButton>
+                </OuiFlex>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
         </OuiStack>
       </OuiStack>
     </OuiContainer>
@@ -139,6 +174,7 @@
   import { ref, computed, watchEffect, watch, nextTick } from "vue";
   import { useRoute, useRouter } from "vue-router";
   import type { TabItem } from "~/components/oui/Tabs.vue";
+  import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
   import {
     ArrowPathIcon,
     ArrowTopRightOnSquareIcon,
@@ -149,6 +185,7 @@
     PlayIcon,
     RocketLaunchIcon,
     StopIcon,
+    TrashIcon,
     VariableIcon,
     GlobeAltIcon,
     Cog6ToothIcon,
@@ -177,6 +214,7 @@
   const id = computed(() => String(route.params.id));
   const orgsStore = useOrganizationsStore();
   const orgId = computed(() => orgsStore.currentOrgId || "");
+  const { showAlert, showConfirm } = useDialog();
 
   const client = useConnectClient(DeploymentService);
   const deploymentActions = useDeploymentActions();
@@ -337,23 +375,6 @@
 
   const statusMeta = computed(() => getStatusMeta(deployment.value.status));
 
-  const formatRelativeTime = (ts: any) => {
-    const dateValue = ts ? date(ts) : new Date();
-    const now = new Date();
-    const diffMs = now.getTime() - dateValue.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHour = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHour / 24);
-    if (diffSec < 60) return "just now";
-    if (diffMin < 60) return `${diffMin}m ago`;
-    if (diffHour < 24) return `${diffHour}h ago`;
-    if (diffDay < 7) return `${diffDay}d ago`;
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-    }).format(dateValue);
-  };
 
   function openDomain() {
     window.open(`https://${deployment.value.domain}`, "_blank");
@@ -381,6 +402,35 @@
       status === DeploymentStatus.DEPLOYING
     );
   });
+
+  async function handleDelete() {
+    if (!localDeployment.value) return;
+
+    const confirmed = await showConfirm({
+      title: "Delete Deployment",
+      message: `Are you sure you want to delete "${localDeployment.value.name}"? This action cannot be undone and will permanently remove the deployment and all associated data.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      variant: "danger",
+    });
+
+    if (!confirmed) return;
+
+    try {
+      await deploymentActions.deleteDeployment(id.value, localDeployment.value);
+      await showAlert({
+        title: "Deployment Deleted",
+        message: `"${localDeployment.value.name}" has been successfully deleted.`,
+      });
+      // Navigate back to deployments list
+      router.push("/deployments");
+    } catch (error: any) {
+      await showAlert({
+        title: "Failed to Delete Deployment",
+        message: error.message || "An error occurred while deleting the deployment. Please try again.",
+      });
+    }
+  }
 
   async function redeploy() {
     if (!localDeployment.value) return;
@@ -417,7 +467,6 @@
       await refreshDeployment();
     } catch (error: any) {
       console.error("Failed to save compose:", error);
-      const { showAlert } = useDialog();
       await showAlert({
         title: "Failed to Save",
         message: error.message || "Failed to save Docker Compose configuration. Please try again.",

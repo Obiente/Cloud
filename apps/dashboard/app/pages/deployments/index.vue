@@ -77,7 +77,7 @@
         class="text-center py-20"
       >
         <OuiBox
-          class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-surface-muted/50 ring-1 ring-border-muted"
+          class="inline-flex items-center justify-center w-20 h-20 rounded-xl bg-surface-muted/50 ring-1 ring-border-muted"
         >
           <RocketLaunchIcon class="h-10 w-10 text-secondary" />
         </OuiBox>
@@ -208,9 +208,7 @@
                     class="text-xs text-secondary"
                   >
                     <CalendarIcon class="h-3.5 w-3.5" />
-                    <span>{{
-                      formatRelativeTime(date(deployment.lastDeployedAt!))
-                    }}</span>
+                    <OuiRelativeTime :value="deployment.lastDeployedAt ? date(deployment.lastDeployedAt) : undefined" :style="'short'" />
                   </OuiFlex>
                 </OuiFlex>
                 <OuiFlex justify="between">
@@ -238,7 +236,7 @@
                     </OuiFlex>
                   </OuiBox>
                   <span
-                    class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wide ml-auto"
+                    class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold uppercase tracking-wide ml-auto"
                     :class="
                       getEnvironmentMeta(deployment.environment).chipClass
                     "
@@ -511,17 +509,34 @@
   import ErrorAlert from "~/components/ErrorAlert.vue";
   import GitHubRepoPicker from "~/components/deployment/GitHubRepoPicker.vue";
   import { useOrganizationsStore } from "~/stores/organizations";
+  import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
+  import { useDialog } from "~/composables/useDialog";
   definePageMeta({
     layout: "default",
     middleware: "auth",
   });
+  
+  const route = useRoute();
+  
   // Error handling
   const createError = ref<Error | null>(null);
   const listError = ref<Error | null>(null);
   
   // Organizations
   const orgsStore = useOrganizationsStore();
-  const effectiveOrgId = computed(() => orgsStore.currentOrgId || "");
+  
+  // Check for organizationId in query params (from superadmin navigation)
+  if (route.query.organizationId && typeof route.query.organizationId === "string") {
+    orgsStore.switchOrganization(route.query.organizationId);
+  }
+  
+  const effectiveOrgId = computed(() => {
+    // Prefer query param if present, otherwise use store
+    if (route.query.organizationId && typeof route.query.organizationId === "string") {
+      return route.query.organizationId;
+    }
+    return orgsStore.currentOrgId || "";
+  });
 
   // Deployment service client
   const deploymentClient = useConnectClient(DeploymentService);
@@ -766,24 +781,6 @@
     }
   };
 
-  const formatRelativeTime = (date: Date) => {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHour = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHour / 24);
-
-    if (diffSec < 60) return "just now";
-    if (diffMin < 60) return `${diffMin}m ago`;
-    if (diffHour < 24) return `${diffHour}h ago`;
-    if (diffDay < 7) return `${diffDay}d ago`;
-
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-    }).format(date);
-  };
 
   const filteredDeployments = computed<Deployment[]>(() => {
     let filtered: Deployment[] = (deployments.value ?? []) as Deployment[];
@@ -842,9 +839,10 @@
     window.open(`https://${domain}`, "_blank");
   };
 
+  const { showAlert } = useDialog();
+
   const createDeployment = async () => {
     if (!newDeployment.value.name.trim()) {
-      const { showAlert } = useDialog();
       await showAlert({
         title: "Validation Error",
         message: "Please enter a project name",

@@ -186,12 +186,12 @@
 
               <!-- Manual URL Input -->
               <OuiStack v-if="repositorySource === 'manual'" gap="md">
-                <OuiInput
-                  v-model="config.repositoryUrl"
-                  label="Repository URL"
-                  placeholder="https://github.com/org/repo or https://gitlab.com/org/repo"
-                  @update:model-value="markDirty"
-                />
+              <OuiInput
+                v-model="config.repositoryUrl"
+                label="Repository URL"
+                placeholder="https://github.com/org/repo or https://gitlab.com/org/repo"
+                @update:model-value="markDirty"
+              />
                 <!-- Branch field for manual repository -->
                 <OuiInput
                   v-model="config.branch"
@@ -212,12 +212,12 @@
               />
               <!-- Branch field - different based on repository source -->
               <template v-if="repositorySource === 'manual'">
-                <OuiInput
-                  v-model="config.branch"
-                  label="Branch"
-                  placeholder="main"
-                  @update:model-value="markDirty"
-                />
+              <OuiInput
+                v-model="config.branch"
+                label="Branch"
+                placeholder="main"
+                @update:model-value="markDirty"
+              />
               </template>
               <!-- GitHub branch is handled by GitHubRepoPicker component -->
             </OuiGrid>

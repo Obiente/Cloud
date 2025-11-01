@@ -15,16 +15,18 @@
         </OuiButton>
       </OuiFlex>
 
-      <div v-if="isLoading" class="flex justify-center py-8">
+      <OuiFlex v-if="isLoading" justify="center" class="py-8">
         <OuiText color="secondary">Loading routing rules...</OuiText>
-      </div>
+      </OuiFlex>
 
-      <div v-else-if="rules.length === 0" class="flex flex-col items-center justify-center py-12">
-        <OuiText size="sm" color="secondary" class="mb-4">
-          No routing rules configured. Add your first rule to get started.
-        </OuiText>
-        <OuiButton size="sm" @click="addRule">Add First Rule</OuiButton>
-      </div>
+      <OuiFlex v-else-if="rules.length === 0" direction="col" align="center" justify="center" class="py-12">
+        <OuiStack gap="md" align="center">
+          <OuiText size="sm" color="secondary">
+            No routing rules configured. Add your first rule to get started.
+          </OuiText>
+          <OuiButton size="sm" @click="addRule">Add First Rule</OuiButton>
+        </OuiStack>
+      </OuiFlex>
 
       <OuiStack v-else gap="md">
         <OuiCard
