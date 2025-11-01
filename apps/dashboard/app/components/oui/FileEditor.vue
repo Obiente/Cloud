@@ -1,7 +1,7 @@
 <template>
   <div
     ref="editorContainer"
-    :class="containerClass"
+    :class="[containerClass, 'editor-container']"
   />
 </template>
 
@@ -119,6 +119,11 @@ const initEditor = async () => {
       folding: props.folding,
       mouseWheelZoom: true, // Enable zoom with Ctrl+scroll (Cmd+scroll on Mac)
       accessibilitySupport: "on", // Enable accessibility features
+      hover: {
+        enabled: true,
+        delay: 300,
+        sticky: true,
+      },
     };
 
     // Add optional bracket colorization
@@ -215,20 +220,44 @@ watch(
       const startColumn = err.startColumn || err.column;
       const endColumn = err.endColumn || err.column;
 
+      // Build a formatted message with severity prefix for clarity
+      const severityLabel = err.severity === "error" ? "Error" : "Warning";
+      const formattedMessage = `[${severityLabel}] ${err.message}`;
+
       return {
         startLineNumber: startLine,
         startColumn: startColumn,
         endLineNumber: endLine,
         endColumn: endColumn,
-        message: err.message,
+        message: formattedMessage,
         severity: err.severity === "error" 
           ? monaco.MarkerSeverity.Error 
           : monaco.MarkerSeverity.Warning,
+        source: "compose-validator",
+        tags: err.severity === "warning" ? [monaco.MarkerTag.Unnecessary] : undefined,
       };
     });
 
-    // Set markers on the model
+    // Set markers on the model - Monaco will automatically show hover tooltips
     monaco.editor.setModelMarkers(model, "validation", markers);
+    
+    // Ensure hover is enabled for the editor
+    if (editor && editor.updateOptions) {
+      try {
+        // Check if hover is enabled, and enable it if not
+        // Monaco Editor API varies by version, so we'll just ensure it's enabled
+        editor.updateOptions({ 
+          hover: { 
+            enabled: true, 
+            delay: 300, 
+            sticky: true 
+          } 
+        });
+      } catch (err) {
+        // Ignore errors if hover options can't be set (some Monaco versions handle this differently)
+        console.debug("Could not set hover options:", err);
+      }
+    }
   },
   { deep: true, immediate: true }
 );
@@ -262,3 +291,27 @@ defineExpose({
 });
 </script>
 
+<style scoped>
+/* Editor container - overflow-hidden is needed for rounded borders */
+.editor-container {
+  position: relative;
+}
+</style>
+
+<style>
+/* Global styles to ensure Monaco hover tooltips appear above all UI */
+/* Monaco hover tooltips are rendered outside the container (appended to body),
+   so they can escape overflow-hidden containers. We just need to ensure high z-index. */
+.monaco-hover,
+.monaco-hover-content,
+.monaco-editor-hover,
+.monaco-editor .monaco-hover,
+.monaco-editor .monaco-hover-content {
+  z-index: 99999 !important;
+}
+
+/* Ensure Monaco's hover widget container has high z-index */
+.monaco-editor .monaco-hover-content-container {
+  z-index: 99999 !important;
+}
+</style>
