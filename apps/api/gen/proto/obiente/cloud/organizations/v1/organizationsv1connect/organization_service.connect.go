@@ -57,6 +57,9 @@ const (
 	// OrganizationServiceRemoveMemberProcedure is the fully-qualified name of the OrganizationService's
 	// RemoveMember RPC.
 	OrganizationServiceRemoveMemberProcedure = "/obiente.cloud.organizations.v1.OrganizationService/RemoveMember"
+	// OrganizationServiceTransferOwnershipProcedure is the fully-qualified name of the
+	// OrganizationService's TransferOwnership RPC.
+	OrganizationServiceTransferOwnershipProcedure = "/obiente.cloud.organizations.v1.OrganizationService/TransferOwnership"
 )
 
 // OrganizationServiceClient is a client for the obiente.cloud.organizations.v1.OrganizationService
@@ -78,6 +81,8 @@ type OrganizationServiceClient interface {
 	UpdateMember(context.Context, *connect.Request[v1.UpdateMemberRequest]) (*connect.Response[v1.UpdateMemberResponse], error)
 	// Remove member from organization
 	RemoveMember(context.Context, *connect.Request[v1.RemoveMemberRequest]) (*connect.Response[v1.RemoveMemberResponse], error)
+	// Transfer organization ownership to another member
+	TransferOwnership(context.Context, *connect.Request[v1.TransferOwnershipRequest]) (*connect.Response[v1.TransferOwnershipResponse], error)
 }
 
 // NewOrganizationServiceClient constructs a client for the
@@ -140,6 +145,12 @@ func NewOrganizationServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(organizationServiceMethods.ByName("RemoveMember")),
 			connect.WithClientOptions(opts...),
 		),
+		transferOwnership: connect.NewClient[v1.TransferOwnershipRequest, v1.TransferOwnershipResponse](
+			httpClient,
+			baseURL+OrganizationServiceTransferOwnershipProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("TransferOwnership")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -153,6 +164,7 @@ type organizationServiceClient struct {
 	inviteMember       *connect.Client[v1.InviteMemberRequest, v1.InviteMemberResponse]
 	updateMember       *connect.Client[v1.UpdateMemberRequest, v1.UpdateMemberResponse]
 	removeMember       *connect.Client[v1.RemoveMemberRequest, v1.RemoveMemberResponse]
+	transferOwnership  *connect.Client[v1.TransferOwnershipRequest, v1.TransferOwnershipResponse]
 }
 
 // ListOrganizations calls obiente.cloud.organizations.v1.OrganizationService.ListOrganizations.
@@ -195,6 +207,11 @@ func (c *organizationServiceClient) RemoveMember(ctx context.Context, req *conne
 	return c.removeMember.CallUnary(ctx, req)
 }
 
+// TransferOwnership calls obiente.cloud.organizations.v1.OrganizationService.TransferOwnership.
+func (c *organizationServiceClient) TransferOwnership(ctx context.Context, req *connect.Request[v1.TransferOwnershipRequest]) (*connect.Response[v1.TransferOwnershipResponse], error) {
+	return c.transferOwnership.CallUnary(ctx, req)
+}
+
 // OrganizationServiceHandler is an implementation of the
 // obiente.cloud.organizations.v1.OrganizationService service.
 type OrganizationServiceHandler interface {
@@ -214,6 +231,8 @@ type OrganizationServiceHandler interface {
 	UpdateMember(context.Context, *connect.Request[v1.UpdateMemberRequest]) (*connect.Response[v1.UpdateMemberResponse], error)
 	// Remove member from organization
 	RemoveMember(context.Context, *connect.Request[v1.RemoveMemberRequest]) (*connect.Response[v1.RemoveMemberResponse], error)
+	// Transfer organization ownership to another member
+	TransferOwnership(context.Context, *connect.Request[v1.TransferOwnershipRequest]) (*connect.Response[v1.TransferOwnershipResponse], error)
 }
 
 // NewOrganizationServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -271,6 +290,12 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 		connect.WithSchema(organizationServiceMethods.ByName("RemoveMember")),
 		connect.WithHandlerOptions(opts...),
 	)
+	organizationServiceTransferOwnershipHandler := connect.NewUnaryHandler(
+		OrganizationServiceTransferOwnershipProcedure,
+		svc.TransferOwnership,
+		connect.WithSchema(organizationServiceMethods.ByName("TransferOwnership")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.organizations.v1.OrganizationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case OrganizationServiceListOrganizationsProcedure:
@@ -289,6 +314,8 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 			organizationServiceUpdateMemberHandler.ServeHTTP(w, r)
 		case OrganizationServiceRemoveMemberProcedure:
 			organizationServiceRemoveMemberHandler.ServeHTTP(w, r)
+		case OrganizationServiceTransferOwnershipProcedure:
+			organizationServiceTransferOwnershipHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -328,4 +355,8 @@ func (UnimplementedOrganizationServiceHandler) UpdateMember(context.Context, *co
 
 func (UnimplementedOrganizationServiceHandler) RemoveMember(context.Context, *connect.Request[v1.RemoveMemberRequest]) (*connect.Response[v1.RemoveMemberResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.RemoveMember is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) TransferOwnership(context.Context, *connect.Request[v1.TransferOwnershipRequest]) (*connect.Response[v1.TransferOwnershipResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.TransferOwnership is not implemented"))
 }

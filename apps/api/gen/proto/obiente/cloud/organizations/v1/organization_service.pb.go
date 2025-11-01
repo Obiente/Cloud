@@ -24,9 +24,12 @@ const (
 )
 
 type ListOrganizationsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
-	PerPage       int32                  `protobuf:"varint,2,opt,name=per_page,json=perPage,proto3" json:"per_page,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Page    int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
+	PerPage int32                  `protobuf:"varint,2,opt,name=per_page,json=perPage,proto3" json:"per_page,omitempty"`
+	// If true, only return organizations where the user is a member (even for superadmins)
+	// If false or unset, superadmins get all organizations, regular users get their memberships
+	OnlyMine      *bool `protobuf:"varint,3,opt,name=only_mine,json=onlyMine,proto3,oneof" json:"only_mine,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -73,6 +76,13 @@ func (x *ListOrganizationsRequest) GetPerPage() int32 {
 		return x.PerPage
 	}
 	return 0
+}
+
+func (x *ListOrganizationsRequest) GetOnlyMine() bool {
+	if x != nil && x.OnlyMine != nil {
+		return *x.OnlyMine
+	}
+	return false
 }
 
 type ListOrganizationsResponse struct {
@@ -839,6 +849,135 @@ func (x *RemoveMemberResponse) GetSuccess() bool {
 	return false
 }
 
+type TransferOwnershipRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId   string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	NewOwnerMemberId string                 `protobuf:"bytes,2,opt,name=new_owner_member_id,json=newOwnerMemberId,proto3" json:"new_owner_member_id,omitempty"`
+	// Optional role for the previous owner after transfer (defaults to "admin")
+	FallbackRole  string `protobuf:"bytes,3,opt,name=fallback_role,json=fallbackRole,proto3" json:"fallback_role,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TransferOwnershipRequest) Reset() {
+	*x = TransferOwnershipRequest{}
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransferOwnershipRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransferOwnershipRequest) ProtoMessage() {}
+
+func (x *TransferOwnershipRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransferOwnershipRequest.ProtoReflect.Descriptor instead.
+func (*TransferOwnershipRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *TransferOwnershipRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *TransferOwnershipRequest) GetNewOwnerMemberId() string {
+	if x != nil {
+		return x.NewOwnerMemberId
+	}
+	return ""
+}
+
+func (x *TransferOwnershipRequest) GetFallbackRole() string {
+	if x != nil {
+		return x.FallbackRole
+	}
+	return ""
+}
+
+type TransferOwnershipResponse struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Success               bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	PreviousOwnerMemberId string                 `protobuf:"bytes,2,opt,name=previous_owner_member_id,json=previousOwnerMemberId,proto3" json:"previous_owner_member_id,omitempty"`
+	NewOwnerMemberId      string                 `protobuf:"bytes,3,opt,name=new_owner_member_id,json=newOwnerMemberId,proto3" json:"new_owner_member_id,omitempty"`
+	FallbackRole          string                 `protobuf:"bytes,4,opt,name=fallback_role,json=fallbackRole,proto3" json:"fallback_role,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *TransferOwnershipResponse) Reset() {
+	*x = TransferOwnershipResponse{}
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransferOwnershipResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransferOwnershipResponse) ProtoMessage() {}
+
+func (x *TransferOwnershipResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransferOwnershipResponse.ProtoReflect.Descriptor instead.
+func (*TransferOwnershipResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *TransferOwnershipResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *TransferOwnershipResponse) GetPreviousOwnerMemberId() string {
+	if x != nil {
+		return x.PreviousOwnerMemberId
+	}
+	return ""
+}
+
+func (x *TransferOwnershipResponse) GetNewOwnerMemberId() string {
+	if x != nil {
+		return x.NewOwnerMemberId
+	}
+	return ""
+}
+
+func (x *TransferOwnershipResponse) GetFallbackRole() string {
+	if x != nil {
+		return x.FallbackRole
+	}
+	return ""
+}
+
 type Organization struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -857,7 +996,7 @@ type Organization struct {
 
 func (x *Organization) Reset() {
 	*x = Organization{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[16]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -869,7 +1008,7 @@ func (x *Organization) String() string {
 func (*Organization) ProtoMessage() {}
 
 func (x *Organization) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[16]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -882,7 +1021,7 @@ func (x *Organization) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Organization.ProtoReflect.Descriptor instead.
 func (*Organization) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{16}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Organization) GetId() string {
@@ -968,7 +1107,7 @@ type OrganizationMember struct {
 
 func (x *OrganizationMember) Reset() {
 	*x = OrganizationMember{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[17]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -980,7 +1119,7 @@ func (x *OrganizationMember) String() string {
 func (*OrganizationMember) ProtoMessage() {}
 
 func (x *OrganizationMember) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[17]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -993,7 +1132,7 @@ func (x *OrganizationMember) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrganizationMember.ProtoReflect.Descriptor instead.
 func (*OrganizationMember) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{17}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *OrganizationMember) GetId() string {
@@ -1043,7 +1182,7 @@ type Pagination struct {
 
 func (x *Pagination) Reset() {
 	*x = Pagination{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[18]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1055,7 +1194,7 @@ func (x *Pagination) String() string {
 func (*Pagination) ProtoMessage() {}
 
 func (x *Pagination) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[18]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1068,7 +1207,7 @@ func (x *Pagination) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pagination.ProtoReflect.Descriptor instead.
 func (*Pagination) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{18}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *Pagination) GetPage() int32 {
@@ -1103,10 +1242,13 @@ var File_obiente_cloud_organizations_v1_organization_service_proto protoreflect.
 
 const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "" +
 	"\n" +
-	"9obiente/cloud/organizations/v1/organization_service.proto\x12\x1eobiente.cloud.organizations.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a(obiente/cloud/auth/v1/auth_service.proto\"I\n" +
+	"9obiente/cloud/organizations/v1/organization_service.proto\x12\x1eobiente.cloud.organizations.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a(obiente/cloud/auth/v1/auth_service.proto\"y\n" +
 	"\x18ListOrganizationsRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x19\n" +
-	"\bper_page\x18\x02 \x01(\x05R\aperPage\"\xbb\x01\n" +
+	"\bper_page\x18\x02 \x01(\x05R\aperPage\x12 \n" +
+	"\tonly_mine\x18\x03 \x01(\bH\x00R\bonlyMine\x88\x01\x01B\f\n" +
+	"\n" +
+	"_only_mine\"\xbb\x01\n" +
 	"\x19ListOrganizationsResponse\x12R\n" +
 	"\rorganizations\x18\x01 \x03(\v2,.obiente.cloud.organizations.v1.OrganizationR\rorganizations\x12J\n" +
 	"\n" +
@@ -1156,7 +1298,16 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x1b\n" +
 	"\tmember_id\x18\x02 \x01(\tR\bmemberId\"0\n" +
 	"\x14RemoveMemberResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xd4\x02\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x97\x01\n" +
+	"\x18TransferOwnershipRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12-\n" +
+	"\x13new_owner_member_id\x18\x02 \x01(\tR\x10newOwnerMemberId\x12#\n" +
+	"\rfallback_role\x18\x03 \x01(\tR\ffallbackRole\"\xc2\x01\n" +
+	"\x19TransferOwnershipResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x127\n" +
+	"\x18previous_owner_member_id\x18\x02 \x01(\tR\x15previousOwnerMemberId\x12-\n" +
+	"\x13new_owner_member_id\x18\x03 \x01(\tR\x10newOwnerMemberId\x12#\n" +
+	"\rfallback_role\x18\x04 \x01(\tR\ffallbackRole\"\xd4\x02\n" +
 	"\fOrganization\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -1183,7 +1334,7 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\bper_page\x18\x02 \x01(\x05R\aperPage\x12\x14\n" +
 	"\x05total\x18\x03 \x01(\x05R\x05total\x12\x1f\n" +
 	"\vtotal_pages\x18\x04 \x01(\x05R\n" +
-	"totalPages2\xaa\b\n" +
+	"totalPages2\xb5\t\n" +
 	"\x13OrganizationService\x12\x88\x01\n" +
 	"\x11ListOrganizations\x128.obiente.cloud.organizations.v1.ListOrganizationsRequest\x1a9.obiente.cloud.organizations.v1.ListOrganizationsResponse\x12\x8b\x01\n" +
 	"\x12CreateOrganization\x129.obiente.cloud.organizations.v1.CreateOrganizationRequest\x1a:.obiente.cloud.organizations.v1.CreateOrganizationResponse\x12\x82\x01\n" +
@@ -1192,7 +1343,8 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\vListMembers\x122.obiente.cloud.organizations.v1.ListMembersRequest\x1a3.obiente.cloud.organizations.v1.ListMembersResponse\x12y\n" +
 	"\fInviteMember\x123.obiente.cloud.organizations.v1.InviteMemberRequest\x1a4.obiente.cloud.organizations.v1.InviteMemberResponse\x12y\n" +
 	"\fUpdateMember\x123.obiente.cloud.organizations.v1.UpdateMemberRequest\x1a4.obiente.cloud.organizations.v1.UpdateMemberResponse\x12y\n" +
-	"\fRemoveMember\x123.obiente.cloud.organizations.v1.RemoveMemberRequest\x1a4.obiente.cloud.organizations.v1.RemoveMemberResponseB>Z<api/gen/proto/obiente/cloud/organizations/v1;organizationsv1b\x06proto3"
+	"\fRemoveMember\x123.obiente.cloud.organizations.v1.RemoveMemberRequest\x1a4.obiente.cloud.organizations.v1.RemoveMemberResponse\x12\x88\x01\n" +
+	"\x11TransferOwnership\x128.obiente.cloud.organizations.v1.TransferOwnershipRequest\x1a9.obiente.cloud.organizations.v1.TransferOwnershipResponseB>Z<api/gen/proto/obiente/cloud/organizations/v1;organizationsv1b\x06proto3"
 
 var (
 	file_obiente_cloud_organizations_v1_organization_service_proto_rawDescOnce sync.Once
@@ -1206,7 +1358,7 @@ func file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(
 	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescData
 }
 
-var file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_obiente_cloud_organizations_v1_organization_service_proto_goTypes = []any{
 	(*ListOrganizationsRequest)(nil),   // 0: obiente.cloud.organizations.v1.ListOrganizationsRequest
 	(*ListOrganizationsResponse)(nil),  // 1: obiente.cloud.organizations.v1.ListOrganizationsResponse
@@ -1224,25 +1376,27 @@ var file_obiente_cloud_organizations_v1_organization_service_proto_goTypes = []a
 	(*UpdateMemberResponse)(nil),       // 13: obiente.cloud.organizations.v1.UpdateMemberResponse
 	(*RemoveMemberRequest)(nil),        // 14: obiente.cloud.organizations.v1.RemoveMemberRequest
 	(*RemoveMemberResponse)(nil),       // 15: obiente.cloud.organizations.v1.RemoveMemberResponse
-	(*Organization)(nil),               // 16: obiente.cloud.organizations.v1.Organization
-	(*OrganizationMember)(nil),         // 17: obiente.cloud.organizations.v1.OrganizationMember
-	(*Pagination)(nil),                 // 18: obiente.cloud.organizations.v1.Pagination
-	(*timestamppb.Timestamp)(nil),      // 19: google.protobuf.Timestamp
-	(*v1.User)(nil),                    // 20: obiente.cloud.auth.v1.User
+	(*TransferOwnershipRequest)(nil),   // 16: obiente.cloud.organizations.v1.TransferOwnershipRequest
+	(*TransferOwnershipResponse)(nil),  // 17: obiente.cloud.organizations.v1.TransferOwnershipResponse
+	(*Organization)(nil),               // 18: obiente.cloud.organizations.v1.Organization
+	(*OrganizationMember)(nil),         // 19: obiente.cloud.organizations.v1.OrganizationMember
+	(*Pagination)(nil),                 // 20: obiente.cloud.organizations.v1.Pagination
+	(*timestamppb.Timestamp)(nil),      // 21: google.protobuf.Timestamp
+	(*v1.User)(nil),                    // 22: obiente.cloud.auth.v1.User
 }
 var file_obiente_cloud_organizations_v1_organization_service_proto_depIdxs = []int32{
-	16, // 0: obiente.cloud.organizations.v1.ListOrganizationsResponse.organizations:type_name -> obiente.cloud.organizations.v1.Organization
-	18, // 1: obiente.cloud.organizations.v1.ListOrganizationsResponse.pagination:type_name -> obiente.cloud.organizations.v1.Pagination
-	16, // 2: obiente.cloud.organizations.v1.CreateOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
-	16, // 3: obiente.cloud.organizations.v1.GetOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
-	16, // 4: obiente.cloud.organizations.v1.UpdateOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
-	17, // 5: obiente.cloud.organizations.v1.ListMembersResponse.members:type_name -> obiente.cloud.organizations.v1.OrganizationMember
-	18, // 6: obiente.cloud.organizations.v1.ListMembersResponse.pagination:type_name -> obiente.cloud.organizations.v1.Pagination
-	17, // 7: obiente.cloud.organizations.v1.InviteMemberResponse.member:type_name -> obiente.cloud.organizations.v1.OrganizationMember
-	17, // 8: obiente.cloud.organizations.v1.UpdateMemberResponse.member:type_name -> obiente.cloud.organizations.v1.OrganizationMember
-	19, // 9: obiente.cloud.organizations.v1.Organization.created_at:type_name -> google.protobuf.Timestamp
-	20, // 10: obiente.cloud.organizations.v1.OrganizationMember.user:type_name -> obiente.cloud.auth.v1.User
-	19, // 11: obiente.cloud.organizations.v1.OrganizationMember.joined_at:type_name -> google.protobuf.Timestamp
+	18, // 0: obiente.cloud.organizations.v1.ListOrganizationsResponse.organizations:type_name -> obiente.cloud.organizations.v1.Organization
+	20, // 1: obiente.cloud.organizations.v1.ListOrganizationsResponse.pagination:type_name -> obiente.cloud.organizations.v1.Pagination
+	18, // 2: obiente.cloud.organizations.v1.CreateOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
+	18, // 3: obiente.cloud.organizations.v1.GetOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
+	18, // 4: obiente.cloud.organizations.v1.UpdateOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
+	19, // 5: obiente.cloud.organizations.v1.ListMembersResponse.members:type_name -> obiente.cloud.organizations.v1.OrganizationMember
+	20, // 6: obiente.cloud.organizations.v1.ListMembersResponse.pagination:type_name -> obiente.cloud.organizations.v1.Pagination
+	19, // 7: obiente.cloud.organizations.v1.InviteMemberResponse.member:type_name -> obiente.cloud.organizations.v1.OrganizationMember
+	19, // 8: obiente.cloud.organizations.v1.UpdateMemberResponse.member:type_name -> obiente.cloud.organizations.v1.OrganizationMember
+	21, // 9: obiente.cloud.organizations.v1.Organization.created_at:type_name -> google.protobuf.Timestamp
+	22, // 10: obiente.cloud.organizations.v1.OrganizationMember.user:type_name -> obiente.cloud.auth.v1.User
+	21, // 11: obiente.cloud.organizations.v1.OrganizationMember.joined_at:type_name -> google.protobuf.Timestamp
 	0,  // 12: obiente.cloud.organizations.v1.OrganizationService.ListOrganizations:input_type -> obiente.cloud.organizations.v1.ListOrganizationsRequest
 	2,  // 13: obiente.cloud.organizations.v1.OrganizationService.CreateOrganization:input_type -> obiente.cloud.organizations.v1.CreateOrganizationRequest
 	4,  // 14: obiente.cloud.organizations.v1.OrganizationService.GetOrganization:input_type -> obiente.cloud.organizations.v1.GetOrganizationRequest
@@ -1251,16 +1405,18 @@ var file_obiente_cloud_organizations_v1_organization_service_proto_depIdxs = []i
 	10, // 17: obiente.cloud.organizations.v1.OrganizationService.InviteMember:input_type -> obiente.cloud.organizations.v1.InviteMemberRequest
 	12, // 18: obiente.cloud.organizations.v1.OrganizationService.UpdateMember:input_type -> obiente.cloud.organizations.v1.UpdateMemberRequest
 	14, // 19: obiente.cloud.organizations.v1.OrganizationService.RemoveMember:input_type -> obiente.cloud.organizations.v1.RemoveMemberRequest
-	1,  // 20: obiente.cloud.organizations.v1.OrganizationService.ListOrganizations:output_type -> obiente.cloud.organizations.v1.ListOrganizationsResponse
-	3,  // 21: obiente.cloud.organizations.v1.OrganizationService.CreateOrganization:output_type -> obiente.cloud.organizations.v1.CreateOrganizationResponse
-	5,  // 22: obiente.cloud.organizations.v1.OrganizationService.GetOrganization:output_type -> obiente.cloud.organizations.v1.GetOrganizationResponse
-	7,  // 23: obiente.cloud.organizations.v1.OrganizationService.UpdateOrganization:output_type -> obiente.cloud.organizations.v1.UpdateOrganizationResponse
-	9,  // 24: obiente.cloud.organizations.v1.OrganizationService.ListMembers:output_type -> obiente.cloud.organizations.v1.ListMembersResponse
-	11, // 25: obiente.cloud.organizations.v1.OrganizationService.InviteMember:output_type -> obiente.cloud.organizations.v1.InviteMemberResponse
-	13, // 26: obiente.cloud.organizations.v1.OrganizationService.UpdateMember:output_type -> obiente.cloud.organizations.v1.UpdateMemberResponse
-	15, // 27: obiente.cloud.organizations.v1.OrganizationService.RemoveMember:output_type -> obiente.cloud.organizations.v1.RemoveMemberResponse
-	20, // [20:28] is the sub-list for method output_type
-	12, // [12:20] is the sub-list for method input_type
+	16, // 20: obiente.cloud.organizations.v1.OrganizationService.TransferOwnership:input_type -> obiente.cloud.organizations.v1.TransferOwnershipRequest
+	1,  // 21: obiente.cloud.organizations.v1.OrganizationService.ListOrganizations:output_type -> obiente.cloud.organizations.v1.ListOrganizationsResponse
+	3,  // 22: obiente.cloud.organizations.v1.OrganizationService.CreateOrganization:output_type -> obiente.cloud.organizations.v1.CreateOrganizationResponse
+	5,  // 23: obiente.cloud.organizations.v1.OrganizationService.GetOrganization:output_type -> obiente.cloud.organizations.v1.GetOrganizationResponse
+	7,  // 24: obiente.cloud.organizations.v1.OrganizationService.UpdateOrganization:output_type -> obiente.cloud.organizations.v1.UpdateOrganizationResponse
+	9,  // 25: obiente.cloud.organizations.v1.OrganizationService.ListMembers:output_type -> obiente.cloud.organizations.v1.ListMembersResponse
+	11, // 26: obiente.cloud.organizations.v1.OrganizationService.InviteMember:output_type -> obiente.cloud.organizations.v1.InviteMemberResponse
+	13, // 27: obiente.cloud.organizations.v1.OrganizationService.UpdateMember:output_type -> obiente.cloud.organizations.v1.UpdateMemberResponse
+	15, // 28: obiente.cloud.organizations.v1.OrganizationService.RemoveMember:output_type -> obiente.cloud.organizations.v1.RemoveMemberResponse
+	17, // 29: obiente.cloud.organizations.v1.OrganizationService.TransferOwnership:output_type -> obiente.cloud.organizations.v1.TransferOwnershipResponse
+	21, // [21:30] is the sub-list for method output_type
+	12, // [12:21] is the sub-list for method input_type
 	12, // [12:12] is the sub-list for extension type_name
 	12, // [12:12] is the sub-list for extension extendee
 	0,  // [0:12] is the sub-list for field type_name
@@ -1271,16 +1427,17 @@ func file_obiente_cloud_organizations_v1_organization_service_proto_init() {
 	if File_obiente_cloud_organizations_v1_organization_service_proto != nil {
 		return
 	}
+	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[0].OneofWrappers = []any{}
 	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[6].OneofWrappers = []any{}
 	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[12].OneofWrappers = []any{}
-	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[16].OneofWrappers = []any{}
+	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[18].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc), len(file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
