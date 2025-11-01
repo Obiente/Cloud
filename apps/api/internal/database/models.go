@@ -13,10 +13,14 @@ type Deployment struct {
 	Domain         string    `gorm:"column:domain" json:"domain"`
 	CustomDomains  string    `gorm:"column:custom_domains;type:jsonb" json:"custom_domains"` // Stored as JSON array
 	Type           int32     `gorm:"column:type" json:"type"`                                // DeploymentType enum
-	RepositoryURL  *string   `gorm:"column:repository_url" json:"repository_url"`
-	Branch         string    `gorm:"column:branch" json:"branch"`
-	BuildCommand   *string   `gorm:"column:build_command" json:"build_command"`
-	InstallCommand *string   `gorm:"column:install_command" json:"install_command"`
+	BuildStrategy  int32     `gorm:"column:build_strategy;default:0" json:"build_strategy"` // BuildStrategy enum
+	RepositoryURL     *string   `gorm:"column:repository_url" json:"repository_url"`
+	Branch            string    `gorm:"column:branch" json:"branch"`
+	BuildCommand      *string   `gorm:"column:build_command" json:"build_command"`
+	InstallCommand    *string   `gorm:"column:install_command" json:"install_command"`
+	DockerfilePath    *string   `gorm:"column:dockerfile_path" json:"dockerfile_path"` // Path to Dockerfile (relative to repo root)
+	ComposeFilePath   *string   `gorm:"column:compose_file_path" json:"compose_file_path"` // Path to compose file (relative to repo root)
+	GitHubIntegrationID *string `gorm:"column:github_integration_id;index" json:"github_integration_id"` // GitHub integration ID for autodeploys
 	Status         int32     `gorm:"column:status;default:0" json:"status"` // DeploymentStatus enum
 	HealthStatus   string    `gorm:"column:health_status" json:"health_status"`
 	Environment    int32     `gorm:"column:environment" json:"environment"` // Environment enum

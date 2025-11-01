@@ -57,6 +57,9 @@ const (
 	// DeploymentServiceStreamDeploymentLogsProcedure is the fully-qualified name of the
 	// DeploymentService's StreamDeploymentLogs RPC.
 	DeploymentServiceStreamDeploymentLogsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StreamDeploymentLogs"
+	// DeploymentServiceStreamBuildLogsProcedure is the fully-qualified name of the DeploymentService's
+	// StreamBuildLogs RPC.
+	DeploymentServiceStreamBuildLogsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StreamBuildLogs"
 	// DeploymentServiceStartDeploymentProcedure is the fully-qualified name of the DeploymentService's
 	// StartDeployment RPC.
 	DeploymentServiceStartDeploymentProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StartDeployment"
@@ -81,6 +84,9 @@ const (
 	// DeploymentServiceGetDeploymentComposeProcedure is the fully-qualified name of the
 	// DeploymentService's GetDeploymentCompose RPC.
 	DeploymentServiceGetDeploymentComposeProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetDeploymentCompose"
+	// DeploymentServiceValidateDeploymentComposeProcedure is the fully-qualified name of the
+	// DeploymentService's ValidateDeploymentCompose RPC.
+	DeploymentServiceValidateDeploymentComposeProcedure = "/obiente.cloud.deployments.v1.DeploymentService/ValidateDeploymentCompose"
 	// DeploymentServiceUpdateDeploymentComposeProcedure is the fully-qualified name of the
 	// DeploymentService's UpdateDeploymentCompose RPC.
 	DeploymentServiceUpdateDeploymentComposeProcedure = "/obiente.cloud.deployments.v1.DeploymentService/UpdateDeploymentCompose"
@@ -93,6 +99,12 @@ const (
 	// DeploymentServiceGetGitHubFileProcedure is the fully-qualified name of the DeploymentService's
 	// GetGitHubFile RPC.
 	DeploymentServiceGetGitHubFileProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetGitHubFile"
+	// DeploymentServiceListAvailableGitHubIntegrationsProcedure is the fully-qualified name of the
+	// DeploymentService's ListAvailableGitHubIntegrations RPC.
+	DeploymentServiceListAvailableGitHubIntegrationsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/ListAvailableGitHubIntegrations"
+	// DeploymentServiceStreamTerminalProcedure is the fully-qualified name of the DeploymentService's
+	// StreamTerminal RPC.
+	DeploymentServiceStreamTerminalProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StreamTerminal"
 	// DeploymentServiceStreamTerminalOutputProcedure is the fully-qualified name of the
 	// DeploymentService's StreamTerminalOutput RPC.
 	DeploymentServiceStreamTerminalOutputProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StreamTerminalOutput"
@@ -108,6 +120,18 @@ const (
 	// DeploymentServiceUploadContainerFilesProcedure is the fully-qualified name of the
 	// DeploymentService's UploadContainerFiles RPC.
 	DeploymentServiceUploadContainerFilesProcedure = "/obiente.cloud.deployments.v1.DeploymentService/UploadContainerFiles"
+	// DeploymentServiceDeleteContainerEntriesProcedure is the fully-qualified name of the
+	// DeploymentService's DeleteContainerEntries RPC.
+	DeploymentServiceDeleteContainerEntriesProcedure = "/obiente.cloud.deployments.v1.DeploymentService/DeleteContainerEntries"
+	// DeploymentServiceRenameContainerEntryProcedure is the fully-qualified name of the
+	// DeploymentService's RenameContainerEntry RPC.
+	DeploymentServiceRenameContainerEntryProcedure = "/obiente.cloud.deployments.v1.DeploymentService/RenameContainerEntry"
+	// DeploymentServiceCreateContainerEntryProcedure is the fully-qualified name of the
+	// DeploymentService's CreateContainerEntry RPC.
+	DeploymentServiceCreateContainerEntryProcedure = "/obiente.cloud.deployments.v1.DeploymentService/CreateContainerEntry"
+	// DeploymentServiceWriteContainerFileProcedure is the fully-qualified name of the
+	// DeploymentService's WriteContainerFile RPC.
+	DeploymentServiceWriteContainerFileProcedure = "/obiente.cloud.deployments.v1.DeploymentService/WriteContainerFile"
 	// DeploymentServiceGetDeploymentRoutingsProcedure is the fully-qualified name of the
 	// DeploymentService's GetDeploymentRoutings RPC.
 	DeploymentServiceGetDeploymentRoutingsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetDeploymentRoutings"
@@ -138,6 +162,8 @@ type DeploymentServiceClient interface {
 	GetDeploymentLogs(context.Context, *connect.Request[v1.GetDeploymentLogsRequest]) (*connect.Response[v1.GetDeploymentLogsResponse], error)
 	// Stream deployment logs (tail/follow)
 	StreamDeploymentLogs(context.Context, *connect.Request[v1.StreamDeploymentLogsRequest]) (*connect.ServerStreamForClient[v1.DeploymentLogLine], error)
+	// Stream build logs during deployment (live build output)
+	StreamBuildLogs(context.Context, *connect.Request[v1.StreamBuildLogsRequest]) (*connect.ServerStreamForClient[v1.DeploymentLogLine], error)
 	// Start a stopped deployment
 	StartDeployment(context.Context, *connect.Request[v1.StartDeploymentRequest]) (*connect.Response[v1.StartDeploymentResponse], error)
 	// Stop a running deployment
@@ -154,6 +180,8 @@ type DeploymentServiceClient interface {
 	UpdateDeploymentEnvVars(context.Context, *connect.Request[v1.UpdateDeploymentEnvVarsRequest]) (*connect.Response[v1.UpdateDeploymentEnvVarsResponse], error)
 	// Get deployment docker compose configuration
 	GetDeploymentCompose(context.Context, *connect.Request[v1.GetDeploymentComposeRequest]) (*connect.Response[v1.GetDeploymentComposeResponse], error)
+	// Validate deployment docker compose configuration (validation only, no save)
+	ValidateDeploymentCompose(context.Context, *connect.Request[v1.ValidateDeploymentComposeRequest]) (*connect.Response[v1.ValidateDeploymentComposeResponse], error)
 	// Update deployment docker compose configuration
 	UpdateDeploymentCompose(context.Context, *connect.Request[v1.UpdateDeploymentComposeRequest]) (*connect.Response[v1.UpdateDeploymentComposeResponse], error)
 	// GitHub integration
@@ -163,10 +191,17 @@ type DeploymentServiceClient interface {
 	GetGitHubBranches(context.Context, *connect.Request[v1.GetGitHubBranchesRequest]) (*connect.Response[v1.GetGitHubBranchesResponse], error)
 	// Get file content from a GitHub repository
 	GetGitHubFile(context.Context, *connect.Request[v1.GetGitHubFileRequest]) (*connect.Response[v1.GetGitHubFileResponse], error)
+	// List all available GitHub integrations for the current user
+	ListAvailableGitHubIntegrations(context.Context, *connect.Request[v1.ListAvailableGitHubIntegrationsRequest]) (*connect.Response[v1.ListAvailableGitHubIntegrationsResponse], error)
 	// Terminal access
+	// Stream terminal with bidirectional streaming (replaces StreamTerminalOutput + SendTerminalInput)
+	// Use this for better input/output synchronization
+	StreamTerminal(context.Context) *connect.BidiStreamForClient[v1.TerminalInput, v1.TerminalOutput]
+	// DEPRECATED: Use StreamTerminal instead for bidirectional streaming
 	// Stream terminal output from a deployment container
 	// Input is sent via SendTerminalInput RPC
 	StreamTerminalOutput(context.Context, *connect.Request[v1.StreamTerminalOutputRequest]) (*connect.ServerStreamForClient[v1.TerminalOutput], error)
+	// DEPRECATED: Use StreamTerminal instead for bidirectional streaming
 	// Send input to an active terminal session
 	SendTerminalInput(context.Context, *connect.Request[v1.SendTerminalInputRequest]) (*connect.Response[v1.SendTerminalInputResponse], error)
 	// File browser
@@ -176,6 +211,14 @@ type DeploymentServiceClient interface {
 	GetContainerFile(context.Context, *connect.Request[v1.GetContainerFileRequest]) (*connect.Response[v1.GetContainerFileResponse], error)
 	// Upload files to a deployment container
 	UploadContainerFiles(context.Context) *connect.ClientStreamForClient[v1.UploadContainerFilesRequest, v1.UploadContainerFilesResponse]
+	// Delete one or more files/directories in a deployment container
+	DeleteContainerEntries(context.Context, *connect.Request[v1.DeleteContainerEntriesRequest]) (*connect.Response[v1.DeleteContainerEntriesResponse], error)
+	// Rename or move a file/directory within a deployment container
+	RenameContainerEntry(context.Context, *connect.Request[v1.RenameContainerEntryRequest]) (*connect.Response[v1.RenameContainerEntryResponse], error)
+	// Create an empty file or directory within a deployment container
+	CreateContainerEntry(context.Context, *connect.Request[v1.CreateContainerEntryRequest]) (*connect.Response[v1.CreateContainerEntryResponse], error)
+	// Write/update file contents in a deployment container
+	WriteContainerFile(context.Context, *connect.Request[v1.WriteContainerFileRequest]) (*connect.Response[v1.WriteContainerFileResponse], error)
 	// Routing configuration
 	// Get all routing rules for a deployment
 	GetDeploymentRoutings(context.Context, *connect.Request[v1.GetDeploymentRoutingsRequest]) (*connect.Response[v1.GetDeploymentRoutingsResponse], error)
@@ -245,6 +288,12 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(deploymentServiceMethods.ByName("StreamDeploymentLogs")),
 			connect.WithClientOptions(opts...),
 		),
+		streamBuildLogs: connect.NewClient[v1.StreamBuildLogsRequest, v1.DeploymentLogLine](
+			httpClient,
+			baseURL+DeploymentServiceStreamBuildLogsProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("StreamBuildLogs")),
+			connect.WithClientOptions(opts...),
+		),
 		startDeployment: connect.NewClient[v1.StartDeploymentRequest, v1.StartDeploymentResponse](
 			httpClient,
 			baseURL+DeploymentServiceStartDeploymentProcedure,
@@ -293,6 +342,12 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentCompose")),
 			connect.WithClientOptions(opts...),
 		),
+		validateDeploymentCompose: connect.NewClient[v1.ValidateDeploymentComposeRequest, v1.ValidateDeploymentComposeResponse](
+			httpClient,
+			baseURL+DeploymentServiceValidateDeploymentComposeProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("ValidateDeploymentCompose")),
+			connect.WithClientOptions(opts...),
+		),
 		updateDeploymentCompose: connect.NewClient[v1.UpdateDeploymentComposeRequest, v1.UpdateDeploymentComposeResponse](
 			httpClient,
 			baseURL+DeploymentServiceUpdateDeploymentComposeProcedure,
@@ -315,6 +370,18 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			httpClient,
 			baseURL+DeploymentServiceGetGitHubFileProcedure,
 			connect.WithSchema(deploymentServiceMethods.ByName("GetGitHubFile")),
+			connect.WithClientOptions(opts...),
+		),
+		listAvailableGitHubIntegrations: connect.NewClient[v1.ListAvailableGitHubIntegrationsRequest, v1.ListAvailableGitHubIntegrationsResponse](
+			httpClient,
+			baseURL+DeploymentServiceListAvailableGitHubIntegrationsProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("ListAvailableGitHubIntegrations")),
+			connect.WithClientOptions(opts...),
+		),
+		streamTerminal: connect.NewClient[v1.TerminalInput, v1.TerminalOutput](
+			httpClient,
+			baseURL+DeploymentServiceStreamTerminalProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("StreamTerminal")),
 			connect.WithClientOptions(opts...),
 		),
 		streamTerminalOutput: connect.NewClient[v1.StreamTerminalOutputRequest, v1.TerminalOutput](
@@ -347,6 +414,30 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(deploymentServiceMethods.ByName("UploadContainerFiles")),
 			connect.WithClientOptions(opts...),
 		),
+		deleteContainerEntries: connect.NewClient[v1.DeleteContainerEntriesRequest, v1.DeleteContainerEntriesResponse](
+			httpClient,
+			baseURL+DeploymentServiceDeleteContainerEntriesProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("DeleteContainerEntries")),
+			connect.WithClientOptions(opts...),
+		),
+		renameContainerEntry: connect.NewClient[v1.RenameContainerEntryRequest, v1.RenameContainerEntryResponse](
+			httpClient,
+			baseURL+DeploymentServiceRenameContainerEntryProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("RenameContainerEntry")),
+			connect.WithClientOptions(opts...),
+		),
+		createContainerEntry: connect.NewClient[v1.CreateContainerEntryRequest, v1.CreateContainerEntryResponse](
+			httpClient,
+			baseURL+DeploymentServiceCreateContainerEntryProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("CreateContainerEntry")),
+			connect.WithClientOptions(opts...),
+		),
+		writeContainerFile: connect.NewClient[v1.WriteContainerFileRequest, v1.WriteContainerFileResponse](
+			httpClient,
+			baseURL+DeploymentServiceWriteContainerFileProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("WriteContainerFile")),
+			connect.WithClientOptions(opts...),
+		),
 		getDeploymentRoutings: connect.NewClient[v1.GetDeploymentRoutingsRequest, v1.GetDeploymentRoutingsResponse](
 			httpClient,
 			baseURL+DeploymentServiceGetDeploymentRoutingsProcedure,
@@ -370,34 +461,42 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 
 // deploymentServiceClient implements DeploymentServiceClient.
 type deploymentServiceClient struct {
-	listDeployments           *connect.Client[v1.ListDeploymentsRequest, v1.ListDeploymentsResponse]
-	createDeployment          *connect.Client[v1.CreateDeploymentRequest, v1.CreateDeploymentResponse]
-	getDeployment             *connect.Client[v1.GetDeploymentRequest, v1.GetDeploymentResponse]
-	updateDeployment          *connect.Client[v1.UpdateDeploymentRequest, v1.UpdateDeploymentResponse]
-	triggerDeployment         *connect.Client[v1.TriggerDeploymentRequest, v1.TriggerDeploymentResponse]
-	streamDeploymentStatus    *connect.Client[v1.StreamDeploymentStatusRequest, v1.DeploymentStatusUpdate]
-	getDeploymentLogs         *connect.Client[v1.GetDeploymentLogsRequest, v1.GetDeploymentLogsResponse]
-	streamDeploymentLogs      *connect.Client[v1.StreamDeploymentLogsRequest, v1.DeploymentLogLine]
-	startDeployment           *connect.Client[v1.StartDeploymentRequest, v1.StartDeploymentResponse]
-	stopDeployment            *connect.Client[v1.StopDeploymentRequest, v1.StopDeploymentResponse]
-	deleteDeployment          *connect.Client[v1.DeleteDeploymentRequest, v1.DeleteDeploymentResponse]
-	restartDeployment         *connect.Client[v1.RestartDeploymentRequest, v1.RestartDeploymentResponse]
-	scaleDeployment           *connect.Client[v1.ScaleDeploymentRequest, v1.ScaleDeploymentResponse]
-	getDeploymentEnvVars      *connect.Client[v1.GetDeploymentEnvVarsRequest, v1.GetDeploymentEnvVarsResponse]
-	updateDeploymentEnvVars   *connect.Client[v1.UpdateDeploymentEnvVarsRequest, v1.UpdateDeploymentEnvVarsResponse]
-	getDeploymentCompose      *connect.Client[v1.GetDeploymentComposeRequest, v1.GetDeploymentComposeResponse]
-	updateDeploymentCompose   *connect.Client[v1.UpdateDeploymentComposeRequest, v1.UpdateDeploymentComposeResponse]
-	listGitHubRepos           *connect.Client[v1.ListGitHubReposRequest, v1.ListGitHubReposResponse]
-	getGitHubBranches         *connect.Client[v1.GetGitHubBranchesRequest, v1.GetGitHubBranchesResponse]
-	getGitHubFile             *connect.Client[v1.GetGitHubFileRequest, v1.GetGitHubFileResponse]
-	streamTerminalOutput      *connect.Client[v1.StreamTerminalOutputRequest, v1.TerminalOutput]
-	sendTerminalInput         *connect.Client[v1.SendTerminalInputRequest, v1.SendTerminalInputResponse]
-	listContainerFiles        *connect.Client[v1.ListContainerFilesRequest, v1.ListContainerFilesResponse]
-	getContainerFile          *connect.Client[v1.GetContainerFileRequest, v1.GetContainerFileResponse]
-	uploadContainerFiles      *connect.Client[v1.UploadContainerFilesRequest, v1.UploadContainerFilesResponse]
-	getDeploymentRoutings     *connect.Client[v1.GetDeploymentRoutingsRequest, v1.GetDeploymentRoutingsResponse]
-	updateDeploymentRoutings  *connect.Client[v1.UpdateDeploymentRoutingsRequest, v1.UpdateDeploymentRoutingsResponse]
-	getDeploymentServiceNames *connect.Client[v1.GetDeploymentServiceNamesRequest, v1.GetDeploymentServiceNamesResponse]
+	listDeployments                 *connect.Client[v1.ListDeploymentsRequest, v1.ListDeploymentsResponse]
+	createDeployment                *connect.Client[v1.CreateDeploymentRequest, v1.CreateDeploymentResponse]
+	getDeployment                   *connect.Client[v1.GetDeploymentRequest, v1.GetDeploymentResponse]
+	updateDeployment                *connect.Client[v1.UpdateDeploymentRequest, v1.UpdateDeploymentResponse]
+	triggerDeployment               *connect.Client[v1.TriggerDeploymentRequest, v1.TriggerDeploymentResponse]
+	streamDeploymentStatus          *connect.Client[v1.StreamDeploymentStatusRequest, v1.DeploymentStatusUpdate]
+	getDeploymentLogs               *connect.Client[v1.GetDeploymentLogsRequest, v1.GetDeploymentLogsResponse]
+	streamDeploymentLogs            *connect.Client[v1.StreamDeploymentLogsRequest, v1.DeploymentLogLine]
+	streamBuildLogs                 *connect.Client[v1.StreamBuildLogsRequest, v1.DeploymentLogLine]
+	startDeployment                 *connect.Client[v1.StartDeploymentRequest, v1.StartDeploymentResponse]
+	stopDeployment                  *connect.Client[v1.StopDeploymentRequest, v1.StopDeploymentResponse]
+	deleteDeployment                *connect.Client[v1.DeleteDeploymentRequest, v1.DeleteDeploymentResponse]
+	restartDeployment               *connect.Client[v1.RestartDeploymentRequest, v1.RestartDeploymentResponse]
+	scaleDeployment                 *connect.Client[v1.ScaleDeploymentRequest, v1.ScaleDeploymentResponse]
+	getDeploymentEnvVars            *connect.Client[v1.GetDeploymentEnvVarsRequest, v1.GetDeploymentEnvVarsResponse]
+	updateDeploymentEnvVars         *connect.Client[v1.UpdateDeploymentEnvVarsRequest, v1.UpdateDeploymentEnvVarsResponse]
+	getDeploymentCompose            *connect.Client[v1.GetDeploymentComposeRequest, v1.GetDeploymentComposeResponse]
+	validateDeploymentCompose       *connect.Client[v1.ValidateDeploymentComposeRequest, v1.ValidateDeploymentComposeResponse]
+	updateDeploymentCompose         *connect.Client[v1.UpdateDeploymentComposeRequest, v1.UpdateDeploymentComposeResponse]
+	listGitHubRepos                 *connect.Client[v1.ListGitHubReposRequest, v1.ListGitHubReposResponse]
+	getGitHubBranches               *connect.Client[v1.GetGitHubBranchesRequest, v1.GetGitHubBranchesResponse]
+	getGitHubFile                   *connect.Client[v1.GetGitHubFileRequest, v1.GetGitHubFileResponse]
+	listAvailableGitHubIntegrations *connect.Client[v1.ListAvailableGitHubIntegrationsRequest, v1.ListAvailableGitHubIntegrationsResponse]
+	streamTerminal                  *connect.Client[v1.TerminalInput, v1.TerminalOutput]
+	streamTerminalOutput            *connect.Client[v1.StreamTerminalOutputRequest, v1.TerminalOutput]
+	sendTerminalInput               *connect.Client[v1.SendTerminalInputRequest, v1.SendTerminalInputResponse]
+	listContainerFiles              *connect.Client[v1.ListContainerFilesRequest, v1.ListContainerFilesResponse]
+	getContainerFile                *connect.Client[v1.GetContainerFileRequest, v1.GetContainerFileResponse]
+	uploadContainerFiles            *connect.Client[v1.UploadContainerFilesRequest, v1.UploadContainerFilesResponse]
+	deleteContainerEntries          *connect.Client[v1.DeleteContainerEntriesRequest, v1.DeleteContainerEntriesResponse]
+	renameContainerEntry            *connect.Client[v1.RenameContainerEntryRequest, v1.RenameContainerEntryResponse]
+	createContainerEntry            *connect.Client[v1.CreateContainerEntryRequest, v1.CreateContainerEntryResponse]
+	writeContainerFile              *connect.Client[v1.WriteContainerFileRequest, v1.WriteContainerFileResponse]
+	getDeploymentRoutings           *connect.Client[v1.GetDeploymentRoutingsRequest, v1.GetDeploymentRoutingsResponse]
+	updateDeploymentRoutings        *connect.Client[v1.UpdateDeploymentRoutingsRequest, v1.UpdateDeploymentRoutingsResponse]
+	getDeploymentServiceNames       *connect.Client[v1.GetDeploymentServiceNamesRequest, v1.GetDeploymentServiceNamesResponse]
 }
 
 // ListDeployments calls obiente.cloud.deployments.v1.DeploymentService.ListDeployments.
@@ -441,6 +540,11 @@ func (c *deploymentServiceClient) StreamDeploymentLogs(ctx context.Context, req 
 	return c.streamDeploymentLogs.CallServerStream(ctx, req)
 }
 
+// StreamBuildLogs calls obiente.cloud.deployments.v1.DeploymentService.StreamBuildLogs.
+func (c *deploymentServiceClient) StreamBuildLogs(ctx context.Context, req *connect.Request[v1.StreamBuildLogsRequest]) (*connect.ServerStreamForClient[v1.DeploymentLogLine], error) {
+	return c.streamBuildLogs.CallServerStream(ctx, req)
+}
+
 // StartDeployment calls obiente.cloud.deployments.v1.DeploymentService.StartDeployment.
 func (c *deploymentServiceClient) StartDeployment(ctx context.Context, req *connect.Request[v1.StartDeploymentRequest]) (*connect.Response[v1.StartDeploymentResponse], error) {
 	return c.startDeployment.CallUnary(ctx, req)
@@ -482,6 +586,12 @@ func (c *deploymentServiceClient) GetDeploymentCompose(ctx context.Context, req 
 	return c.getDeploymentCompose.CallUnary(ctx, req)
 }
 
+// ValidateDeploymentCompose calls
+// obiente.cloud.deployments.v1.DeploymentService.ValidateDeploymentCompose.
+func (c *deploymentServiceClient) ValidateDeploymentCompose(ctx context.Context, req *connect.Request[v1.ValidateDeploymentComposeRequest]) (*connect.Response[v1.ValidateDeploymentComposeResponse], error) {
+	return c.validateDeploymentCompose.CallUnary(ctx, req)
+}
+
 // UpdateDeploymentCompose calls
 // obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentCompose.
 func (c *deploymentServiceClient) UpdateDeploymentCompose(ctx context.Context, req *connect.Request[v1.UpdateDeploymentComposeRequest]) (*connect.Response[v1.UpdateDeploymentComposeResponse], error) {
@@ -501,6 +611,17 @@ func (c *deploymentServiceClient) GetGitHubBranches(ctx context.Context, req *co
 // GetGitHubFile calls obiente.cloud.deployments.v1.DeploymentService.GetGitHubFile.
 func (c *deploymentServiceClient) GetGitHubFile(ctx context.Context, req *connect.Request[v1.GetGitHubFileRequest]) (*connect.Response[v1.GetGitHubFileResponse], error) {
 	return c.getGitHubFile.CallUnary(ctx, req)
+}
+
+// ListAvailableGitHubIntegrations calls
+// obiente.cloud.deployments.v1.DeploymentService.ListAvailableGitHubIntegrations.
+func (c *deploymentServiceClient) ListAvailableGitHubIntegrations(ctx context.Context, req *connect.Request[v1.ListAvailableGitHubIntegrationsRequest]) (*connect.Response[v1.ListAvailableGitHubIntegrationsResponse], error) {
+	return c.listAvailableGitHubIntegrations.CallUnary(ctx, req)
+}
+
+// StreamTerminal calls obiente.cloud.deployments.v1.DeploymentService.StreamTerminal.
+func (c *deploymentServiceClient) StreamTerminal(ctx context.Context) *connect.BidiStreamForClient[v1.TerminalInput, v1.TerminalOutput] {
+	return c.streamTerminal.CallBidiStream(ctx)
 }
 
 // StreamTerminalOutput calls obiente.cloud.deployments.v1.DeploymentService.StreamTerminalOutput.
@@ -526,6 +647,27 @@ func (c *deploymentServiceClient) GetContainerFile(ctx context.Context, req *con
 // UploadContainerFiles calls obiente.cloud.deployments.v1.DeploymentService.UploadContainerFiles.
 func (c *deploymentServiceClient) UploadContainerFiles(ctx context.Context) *connect.ClientStreamForClient[v1.UploadContainerFilesRequest, v1.UploadContainerFilesResponse] {
 	return c.uploadContainerFiles.CallClientStream(ctx)
+}
+
+// DeleteContainerEntries calls
+// obiente.cloud.deployments.v1.DeploymentService.DeleteContainerEntries.
+func (c *deploymentServiceClient) DeleteContainerEntries(ctx context.Context, req *connect.Request[v1.DeleteContainerEntriesRequest]) (*connect.Response[v1.DeleteContainerEntriesResponse], error) {
+	return c.deleteContainerEntries.CallUnary(ctx, req)
+}
+
+// RenameContainerEntry calls obiente.cloud.deployments.v1.DeploymentService.RenameContainerEntry.
+func (c *deploymentServiceClient) RenameContainerEntry(ctx context.Context, req *connect.Request[v1.RenameContainerEntryRequest]) (*connect.Response[v1.RenameContainerEntryResponse], error) {
+	return c.renameContainerEntry.CallUnary(ctx, req)
+}
+
+// CreateContainerEntry calls obiente.cloud.deployments.v1.DeploymentService.CreateContainerEntry.
+func (c *deploymentServiceClient) CreateContainerEntry(ctx context.Context, req *connect.Request[v1.CreateContainerEntryRequest]) (*connect.Response[v1.CreateContainerEntryResponse], error) {
+	return c.createContainerEntry.CallUnary(ctx, req)
+}
+
+// WriteContainerFile calls obiente.cloud.deployments.v1.DeploymentService.WriteContainerFile.
+func (c *deploymentServiceClient) WriteContainerFile(ctx context.Context, req *connect.Request[v1.WriteContainerFileRequest]) (*connect.Response[v1.WriteContainerFileResponse], error) {
+	return c.writeContainerFile.CallUnary(ctx, req)
 }
 
 // GetDeploymentRoutings calls obiente.cloud.deployments.v1.DeploymentService.GetDeploymentRoutings.
@@ -564,6 +706,8 @@ type DeploymentServiceHandler interface {
 	GetDeploymentLogs(context.Context, *connect.Request[v1.GetDeploymentLogsRequest]) (*connect.Response[v1.GetDeploymentLogsResponse], error)
 	// Stream deployment logs (tail/follow)
 	StreamDeploymentLogs(context.Context, *connect.Request[v1.StreamDeploymentLogsRequest], *connect.ServerStream[v1.DeploymentLogLine]) error
+	// Stream build logs during deployment (live build output)
+	StreamBuildLogs(context.Context, *connect.Request[v1.StreamBuildLogsRequest], *connect.ServerStream[v1.DeploymentLogLine]) error
 	// Start a stopped deployment
 	StartDeployment(context.Context, *connect.Request[v1.StartDeploymentRequest]) (*connect.Response[v1.StartDeploymentResponse], error)
 	// Stop a running deployment
@@ -580,6 +724,8 @@ type DeploymentServiceHandler interface {
 	UpdateDeploymentEnvVars(context.Context, *connect.Request[v1.UpdateDeploymentEnvVarsRequest]) (*connect.Response[v1.UpdateDeploymentEnvVarsResponse], error)
 	// Get deployment docker compose configuration
 	GetDeploymentCompose(context.Context, *connect.Request[v1.GetDeploymentComposeRequest]) (*connect.Response[v1.GetDeploymentComposeResponse], error)
+	// Validate deployment docker compose configuration (validation only, no save)
+	ValidateDeploymentCompose(context.Context, *connect.Request[v1.ValidateDeploymentComposeRequest]) (*connect.Response[v1.ValidateDeploymentComposeResponse], error)
 	// Update deployment docker compose configuration
 	UpdateDeploymentCompose(context.Context, *connect.Request[v1.UpdateDeploymentComposeRequest]) (*connect.Response[v1.UpdateDeploymentComposeResponse], error)
 	// GitHub integration
@@ -589,10 +735,17 @@ type DeploymentServiceHandler interface {
 	GetGitHubBranches(context.Context, *connect.Request[v1.GetGitHubBranchesRequest]) (*connect.Response[v1.GetGitHubBranchesResponse], error)
 	// Get file content from a GitHub repository
 	GetGitHubFile(context.Context, *connect.Request[v1.GetGitHubFileRequest]) (*connect.Response[v1.GetGitHubFileResponse], error)
+	// List all available GitHub integrations for the current user
+	ListAvailableGitHubIntegrations(context.Context, *connect.Request[v1.ListAvailableGitHubIntegrationsRequest]) (*connect.Response[v1.ListAvailableGitHubIntegrationsResponse], error)
 	// Terminal access
+	// Stream terminal with bidirectional streaming (replaces StreamTerminalOutput + SendTerminalInput)
+	// Use this for better input/output synchronization
+	StreamTerminal(context.Context, *connect.BidiStream[v1.TerminalInput, v1.TerminalOutput]) error
+	// DEPRECATED: Use StreamTerminal instead for bidirectional streaming
 	// Stream terminal output from a deployment container
 	// Input is sent via SendTerminalInput RPC
 	StreamTerminalOutput(context.Context, *connect.Request[v1.StreamTerminalOutputRequest], *connect.ServerStream[v1.TerminalOutput]) error
+	// DEPRECATED: Use StreamTerminal instead for bidirectional streaming
 	// Send input to an active terminal session
 	SendTerminalInput(context.Context, *connect.Request[v1.SendTerminalInputRequest]) (*connect.Response[v1.SendTerminalInputResponse], error)
 	// File browser
@@ -602,6 +755,14 @@ type DeploymentServiceHandler interface {
 	GetContainerFile(context.Context, *connect.Request[v1.GetContainerFileRequest]) (*connect.Response[v1.GetContainerFileResponse], error)
 	// Upload files to a deployment container
 	UploadContainerFiles(context.Context, *connect.ClientStream[v1.UploadContainerFilesRequest]) (*connect.Response[v1.UploadContainerFilesResponse], error)
+	// Delete one or more files/directories in a deployment container
+	DeleteContainerEntries(context.Context, *connect.Request[v1.DeleteContainerEntriesRequest]) (*connect.Response[v1.DeleteContainerEntriesResponse], error)
+	// Rename or move a file/directory within a deployment container
+	RenameContainerEntry(context.Context, *connect.Request[v1.RenameContainerEntryRequest]) (*connect.Response[v1.RenameContainerEntryResponse], error)
+	// Create an empty file or directory within a deployment container
+	CreateContainerEntry(context.Context, *connect.Request[v1.CreateContainerEntryRequest]) (*connect.Response[v1.CreateContainerEntryResponse], error)
+	// Write/update file contents in a deployment container
+	WriteContainerFile(context.Context, *connect.Request[v1.WriteContainerFileRequest]) (*connect.Response[v1.WriteContainerFileResponse], error)
 	// Routing configuration
 	// Get all routing rules for a deployment
 	GetDeploymentRoutings(context.Context, *connect.Request[v1.GetDeploymentRoutingsRequest]) (*connect.Response[v1.GetDeploymentRoutingsResponse], error)
@@ -666,6 +827,12 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		connect.WithSchema(deploymentServiceMethods.ByName("StreamDeploymentLogs")),
 		connect.WithHandlerOptions(opts...),
 	)
+	deploymentServiceStreamBuildLogsHandler := connect.NewServerStreamHandler(
+		DeploymentServiceStreamBuildLogsProcedure,
+		svc.StreamBuildLogs,
+		connect.WithSchema(deploymentServiceMethods.ByName("StreamBuildLogs")),
+		connect.WithHandlerOptions(opts...),
+	)
 	deploymentServiceStartDeploymentHandler := connect.NewUnaryHandler(
 		DeploymentServiceStartDeploymentProcedure,
 		svc.StartDeployment,
@@ -714,6 +881,12 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentCompose")),
 		connect.WithHandlerOptions(opts...),
 	)
+	deploymentServiceValidateDeploymentComposeHandler := connect.NewUnaryHandler(
+		DeploymentServiceValidateDeploymentComposeProcedure,
+		svc.ValidateDeploymentCompose,
+		connect.WithSchema(deploymentServiceMethods.ByName("ValidateDeploymentCompose")),
+		connect.WithHandlerOptions(opts...),
+	)
 	deploymentServiceUpdateDeploymentComposeHandler := connect.NewUnaryHandler(
 		DeploymentServiceUpdateDeploymentComposeProcedure,
 		svc.UpdateDeploymentCompose,
@@ -736,6 +909,18 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		DeploymentServiceGetGitHubFileProcedure,
 		svc.GetGitHubFile,
 		connect.WithSchema(deploymentServiceMethods.ByName("GetGitHubFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceListAvailableGitHubIntegrationsHandler := connect.NewUnaryHandler(
+		DeploymentServiceListAvailableGitHubIntegrationsProcedure,
+		svc.ListAvailableGitHubIntegrations,
+		connect.WithSchema(deploymentServiceMethods.ByName("ListAvailableGitHubIntegrations")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceStreamTerminalHandler := connect.NewBidiStreamHandler(
+		DeploymentServiceStreamTerminalProcedure,
+		svc.StreamTerminal,
+		connect.WithSchema(deploymentServiceMethods.ByName("StreamTerminal")),
 		connect.WithHandlerOptions(opts...),
 	)
 	deploymentServiceStreamTerminalOutputHandler := connect.NewServerStreamHandler(
@@ -766,6 +951,30 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		DeploymentServiceUploadContainerFilesProcedure,
 		svc.UploadContainerFiles,
 		connect.WithSchema(deploymentServiceMethods.ByName("UploadContainerFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceDeleteContainerEntriesHandler := connect.NewUnaryHandler(
+		DeploymentServiceDeleteContainerEntriesProcedure,
+		svc.DeleteContainerEntries,
+		connect.WithSchema(deploymentServiceMethods.ByName("DeleteContainerEntries")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceRenameContainerEntryHandler := connect.NewUnaryHandler(
+		DeploymentServiceRenameContainerEntryProcedure,
+		svc.RenameContainerEntry,
+		connect.WithSchema(deploymentServiceMethods.ByName("RenameContainerEntry")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceCreateContainerEntryHandler := connect.NewUnaryHandler(
+		DeploymentServiceCreateContainerEntryProcedure,
+		svc.CreateContainerEntry,
+		connect.WithSchema(deploymentServiceMethods.ByName("CreateContainerEntry")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceWriteContainerFileHandler := connect.NewUnaryHandler(
+		DeploymentServiceWriteContainerFileProcedure,
+		svc.WriteContainerFile,
+		connect.WithSchema(deploymentServiceMethods.ByName("WriteContainerFile")),
 		connect.WithHandlerOptions(opts...),
 	)
 	deploymentServiceGetDeploymentRoutingsHandler := connect.NewUnaryHandler(
@@ -804,6 +1013,8 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceGetDeploymentLogsHandler.ServeHTTP(w, r)
 		case DeploymentServiceStreamDeploymentLogsProcedure:
 			deploymentServiceStreamDeploymentLogsHandler.ServeHTTP(w, r)
+		case DeploymentServiceStreamBuildLogsProcedure:
+			deploymentServiceStreamBuildLogsHandler.ServeHTTP(w, r)
 		case DeploymentServiceStartDeploymentProcedure:
 			deploymentServiceStartDeploymentHandler.ServeHTTP(w, r)
 		case DeploymentServiceStopDeploymentProcedure:
@@ -820,6 +1031,8 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceUpdateDeploymentEnvVarsHandler.ServeHTTP(w, r)
 		case DeploymentServiceGetDeploymentComposeProcedure:
 			deploymentServiceGetDeploymentComposeHandler.ServeHTTP(w, r)
+		case DeploymentServiceValidateDeploymentComposeProcedure:
+			deploymentServiceValidateDeploymentComposeHandler.ServeHTTP(w, r)
 		case DeploymentServiceUpdateDeploymentComposeProcedure:
 			deploymentServiceUpdateDeploymentComposeHandler.ServeHTTP(w, r)
 		case DeploymentServiceListGitHubReposProcedure:
@@ -828,6 +1041,10 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceGetGitHubBranchesHandler.ServeHTTP(w, r)
 		case DeploymentServiceGetGitHubFileProcedure:
 			deploymentServiceGetGitHubFileHandler.ServeHTTP(w, r)
+		case DeploymentServiceListAvailableGitHubIntegrationsProcedure:
+			deploymentServiceListAvailableGitHubIntegrationsHandler.ServeHTTP(w, r)
+		case DeploymentServiceStreamTerminalProcedure:
+			deploymentServiceStreamTerminalHandler.ServeHTTP(w, r)
 		case DeploymentServiceStreamTerminalOutputProcedure:
 			deploymentServiceStreamTerminalOutputHandler.ServeHTTP(w, r)
 		case DeploymentServiceSendTerminalInputProcedure:
@@ -838,6 +1055,14 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceGetContainerFileHandler.ServeHTTP(w, r)
 		case DeploymentServiceUploadContainerFilesProcedure:
 			deploymentServiceUploadContainerFilesHandler.ServeHTTP(w, r)
+		case DeploymentServiceDeleteContainerEntriesProcedure:
+			deploymentServiceDeleteContainerEntriesHandler.ServeHTTP(w, r)
+		case DeploymentServiceRenameContainerEntryProcedure:
+			deploymentServiceRenameContainerEntryHandler.ServeHTTP(w, r)
+		case DeploymentServiceCreateContainerEntryProcedure:
+			deploymentServiceCreateContainerEntryHandler.ServeHTTP(w, r)
+		case DeploymentServiceWriteContainerFileProcedure:
+			deploymentServiceWriteContainerFileHandler.ServeHTTP(w, r)
 		case DeploymentServiceGetDeploymentRoutingsProcedure:
 			deploymentServiceGetDeploymentRoutingsHandler.ServeHTTP(w, r)
 		case DeploymentServiceUpdateDeploymentRoutingsProcedure:
@@ -885,6 +1110,10 @@ func (UnimplementedDeploymentServiceHandler) StreamDeploymentLogs(context.Contex
 	return connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentLogs is not implemented"))
 }
 
+func (UnimplementedDeploymentServiceHandler) StreamBuildLogs(context.Context, *connect.Request[v1.StreamBuildLogsRequest], *connect.ServerStream[v1.DeploymentLogLine]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.StreamBuildLogs is not implemented"))
+}
+
 func (UnimplementedDeploymentServiceHandler) StartDeployment(context.Context, *connect.Request[v1.StartDeploymentRequest]) (*connect.Response[v1.StartDeploymentResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.StartDeployment is not implemented"))
 }
@@ -917,6 +1146,10 @@ func (UnimplementedDeploymentServiceHandler) GetDeploymentCompose(context.Contex
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetDeploymentCompose is not implemented"))
 }
 
+func (UnimplementedDeploymentServiceHandler) ValidateDeploymentCompose(context.Context, *connect.Request[v1.ValidateDeploymentComposeRequest]) (*connect.Response[v1.ValidateDeploymentComposeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.ValidateDeploymentCompose is not implemented"))
+}
+
 func (UnimplementedDeploymentServiceHandler) UpdateDeploymentCompose(context.Context, *connect.Request[v1.UpdateDeploymentComposeRequest]) (*connect.Response[v1.UpdateDeploymentComposeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentCompose is not implemented"))
 }
@@ -931,6 +1164,14 @@ func (UnimplementedDeploymentServiceHandler) GetGitHubBranches(context.Context, 
 
 func (UnimplementedDeploymentServiceHandler) GetGitHubFile(context.Context, *connect.Request[v1.GetGitHubFileRequest]) (*connect.Response[v1.GetGitHubFileResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetGitHubFile is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) ListAvailableGitHubIntegrations(context.Context, *connect.Request[v1.ListAvailableGitHubIntegrationsRequest]) (*connect.Response[v1.ListAvailableGitHubIntegrationsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.ListAvailableGitHubIntegrations is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) StreamTerminal(context.Context, *connect.BidiStream[v1.TerminalInput, v1.TerminalOutput]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.StreamTerminal is not implemented"))
 }
 
 func (UnimplementedDeploymentServiceHandler) StreamTerminalOutput(context.Context, *connect.Request[v1.StreamTerminalOutputRequest], *connect.ServerStream[v1.TerminalOutput]) error {
@@ -951,6 +1192,22 @@ func (UnimplementedDeploymentServiceHandler) GetContainerFile(context.Context, *
 
 func (UnimplementedDeploymentServiceHandler) UploadContainerFiles(context.Context, *connect.ClientStream[v1.UploadContainerFilesRequest]) (*connect.Response[v1.UploadContainerFilesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.UploadContainerFiles is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) DeleteContainerEntries(context.Context, *connect.Request[v1.DeleteContainerEntriesRequest]) (*connect.Response[v1.DeleteContainerEntriesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.DeleteContainerEntries is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) RenameContainerEntry(context.Context, *connect.Request[v1.RenameContainerEntryRequest]) (*connect.Response[v1.RenameContainerEntryResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.RenameContainerEntry is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) CreateContainerEntry(context.Context, *connect.Request[v1.CreateContainerEntryRequest]) (*connect.Response[v1.CreateContainerEntryResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.CreateContainerEntry is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) WriteContainerFile(context.Context, *connect.Request[v1.WriteContainerFileRequest]) (*connect.Response[v1.WriteContainerFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.WriteContainerFile is not implemented"))
 }
 
 func (UnimplementedDeploymentServiceHandler) GetDeploymentRoutings(context.Context, *connect.Request[v1.GetDeploymentRoutingsRequest]) (*connect.Response[v1.GetDeploymentRoutingsResponse], error) {

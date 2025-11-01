@@ -207,13 +207,17 @@ func NewAuthConfig() *AuthConfig {
 }
 
 // MiddlewareInterceptor creates a Connect interceptor for token authentication
+// This interceptor works for both unary and streaming RPCs
 func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			procedure := req.Spec().Procedure
+			
 			// If auth is disabled (development only), inject mock user and continue
 			if config.UserInfoCache == nil && isAuthDisabled() {
 				mockUser := getMockDevUser()
 				ctx = context.WithValue(ctx, userInfoKey, mockUser)
+				log.Printf("[Auth] Auth disabled - using mock user for: %s", procedure)
 				return next(ctx, req)
 			}
 			
@@ -225,36 +229,45 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 
 			// Skip auth for specified paths
 			for _, path := range config.SkipPaths {
-				if strings.HasPrefix(req.Spec().Procedure, path) {
+				if strings.HasPrefix(procedure, path) {
+					log.Printf("[Auth] Skipping auth for path: %s", procedure)
 					return next(ctx, req)
 				}
 			}
 
 			// Skip auth for authentication-related endpoints
-			if strings.Contains(req.Spec().Procedure, "AuthService") {
+			if strings.Contains(procedure, "AuthService") {
 				// Skip most auth service methods, but not GetCurrentUser
-				if !strings.Contains(req.Spec().Procedure, "GetCurrentUser") {
+				if !strings.Contains(procedure, "GetCurrentUser") {
+					log.Printf("[Auth] Skipping auth for AuthService: %s", procedure)
 					return next(ctx, req)
 				}
 			}
 
 			// Extract token from Authorization header
 			authHeader := req.Header().Get(AuthorizationHeader)
-			if authHeader == "" || !strings.HasPrefix(authHeader, BearerPrefix) {
+			hasAuthHeader := authHeader != "" && strings.HasPrefix(authHeader, BearerPrefix)
+			log.Printf("[Auth] Procedure: %s, Has auth header: %v", procedure, hasAuthHeader)
+			
+			if !hasAuthHeader {
+				log.Printf("[Auth] Missing Authorization header for: %s", procedure)
 				return nil, connect.NewError(connect.CodeUnauthenticated, ErrNoToken)
 			}
 
 			token := strings.TrimPrefix(authHeader, BearerPrefix)
 			if token == "" {
+				log.Printf("[Auth] Empty token after Bearer prefix for: %s", procedure)
 				return nil, connect.NewError(connect.CodeUnauthenticated, ErrNoToken)
 			}
 
 			// Validate token against userinfo endpoint
 			userInfo, err := config.validateToken(ctx, token)
 			if err != nil {
-				log.Printf("Token validation failed: %v", err)
+				log.Printf("[Auth] Token validation failed for %s: %v", procedure, err)
 				return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("error validating token: %w", err))
 			}
+
+			log.Printf("[Auth] Token validated successfully for %s, user: %s", procedure, userInfo.Id)
 
 			// Add user info to context
 			ctx = context.WithValue(ctx, userInfoKey, userInfo)
@@ -363,6 +376,33 @@ func UserIDFromContext(ctx context.Context) (string, bool) {
 		return "", false
 	}
     return userInfo.Id, true
+}
+
+// AuthenticateAndSetContext authenticates a request and adds the user to context
+// This is useful for streaming RPCs where the interceptor may not run
+func AuthenticateAndSetContext(ctx context.Context, authHeader string) (context.Context, *authv1.User, error) {
+	if authHeader == "" || !strings.HasPrefix(authHeader, BearerPrefix) {
+		return nil, nil, ErrNoToken
+	}
+	
+	token := strings.TrimPrefix(authHeader, BearerPrefix)
+	if token == "" {
+		return nil, nil, ErrNoToken
+	}
+	
+	// Get auth config
+	config := NewAuthConfig()
+	
+	// Validate token
+	userInfo, err := config.validateToken(ctx, token)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error validating token: %w", err)
+	}
+	
+	// Add user to context
+	ctx = context.WithValue(ctx, userInfoKey, userInfo)
+	
+	return ctx, userInfo, nil
 }
 
 // AuthenticateHTTPRequest authenticates an HTTP request outside of Connect RPC

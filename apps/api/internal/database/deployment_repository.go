@@ -90,7 +90,19 @@ func (r *DeploymentRepository) Update(ctx context.Context, deployment *Deploymen
 		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", deployment.ID))
 	}
 
-	return r.db.WithContext(ctx).Save(deployment).Error
+	// Use Select to explicitly update fields, including zero values like empty strings
+	return r.db.WithContext(ctx).
+		Model(deployment).
+		Select(
+			"name", "domain", "custom_domains", "type", "build_strategy",
+			"repository_url", "branch", "build_command", "install_command",
+			"dockerfile_path", "compose_file_path", "github_integration_id",
+			"status", "health_status", "environment",
+			"image", "port", "replicas", "memory_bytes", "cpu_shares",
+			"env_vars", "env_file_content", "compose_yaml",
+			"last_deployed_at", "updated_at",
+		).
+		Updates(deployment).Error
 }
 
 // UpdateEnvVars updates only the environment variables fields

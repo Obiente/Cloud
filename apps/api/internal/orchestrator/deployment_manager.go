@@ -1,11 +1,16 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"api/docker"
@@ -14,8 +19,10 @@ import (
 
 	"github.com/docker/go-connections/nat"
 	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
+	"gopkg.in/yaml.v3"
 )
 
 // DeploymentManager manages the lifecycle of user deployments
@@ -178,6 +185,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 
 			// Register deployment location
 			location := &database.DeploymentLocation{
+				ID:           fmt.Sprintf("loc-%s-%s", config.DeploymentID, containerID[:12]),
 				DeploymentID: config.DeploymentID,
 				NodeID:       dm.nodeID,
 				NodeHostname: dm.nodeHostname,
@@ -207,7 +215,6 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 		ServiceName:       "default",
 		TargetPort:        config.Port,
 		Protocol:          "http",
-		LoadBalancerAlgo:  "round-robin",
 		SSLEnabled:        true,
 		SSLCertResolver:   "letsencrypt",
 		Middleware:        "{}", // Empty JSON object for jsonb field
@@ -227,6 +234,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 func generateTraefikLabels(deploymentID string, serviceName string, routings []database.DeploymentRouting) map[string]string {
 	labels := make(map[string]string)
 	labels["traefik.enable"] = "true"
+	labels["com.obiente.traefik"] = "true" // Required for Traefik to discover this container
 	
 	// Filter routings for this service name
 	serviceRoutings := []database.DeploymentRouting{}
@@ -236,11 +244,9 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 		}
 	}
 	
-	// If no specific routing found, create default
+	// If no specific routing found, don't create any routing rules
+	// User must configure routing before the service will be accessible
 	if len(serviceRoutings) == 0 {
-		labels["traefik.http.routers."+deploymentID+"-default.rule"] = "Host(`localhost`)"
-		labels["traefik.http.routers."+deploymentID+"-default.entrypoints"] = "web"
-		labels["traefik.http.services."+deploymentID+"-default.loadbalancer.server.port"] = "80"
 		return labels
 	}
 	
@@ -277,14 +283,81 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 		// Service port
 		serviceNameLabel := routerName
 		labels["traefik.http.services."+serviceNameLabel+".loadbalancer.server.port"] = strconv.Itoa(routing.TargetPort)
-		
-		// Load balancer algorithm
-		if routing.LoadBalancerAlgo != "" && routing.LoadBalancerAlgo != "round-robin" {
-			labels["traefik.http.services."+serviceNameLabel+".loadbalancer.sticky.cookie"] = "true"
-		}
 	}
 	
 	return labels
+}
+
+// injectTraefikLabelsIntoCompose injects Traefik labels into a Docker Compose YAML string
+func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, deploymentID string, routings []database.DeploymentRouting) (string, error) {
+	// Parse YAML
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
+		return "", fmt.Errorf("failed to parse compose YAML: %w", err)
+	}
+
+	// Get deployment domain from routings if available
+	var deploymentDomain string
+	if len(routings) > 0 {
+		deploymentDomain = routings[0].Domain
+	}
+
+	// Inject labels into each service
+	if services, ok := compose["services"].(map[string]interface{}); ok {
+		for serviceName, serviceData := range services {
+			if service, ok := serviceData.(map[string]interface{}); ok {
+				// Generate Traefik labels for this service
+				traefikLabels := generateTraefikLabels(deploymentID, serviceName, routings)
+				
+				// Get or create labels map for this service
+				var labels map[string]interface{}
+				if existingLabels, ok := service["labels"].(map[string]interface{}); ok {
+					labels = existingLabels
+				} else if existingLabelsList, ok := service["labels"].([]interface{}); ok {
+					// Convert list format to map format
+					labels = make(map[string]interface{})
+					for _, labelItem := range existingLabelsList {
+						if labelStr, ok := labelItem.(string); ok {
+							// Parse "key=value" or "key: value" format
+							if strings.Contains(labelStr, "=") {
+								parts := strings.SplitN(labelStr, "=", 2)
+								if len(parts) == 2 {
+									labels[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+								}
+							}
+						}
+					}
+				} else {
+					labels = make(map[string]interface{})
+				}
+				
+				// Merge Traefik labels (Traefik labels take precedence)
+				for k, v := range traefikLabels {
+					labels[k] = v
+				}
+				
+				// Add management labels
+				labels["com.obiente.managed"] = "true"
+				labels["com.obiente.deployment_id"] = deploymentID
+				labels["com.obiente.service_name"] = serviceName
+				labels["com.obiente.traefik"] = "true" // Required for Traefik discovery
+				if deploymentDomain != "" {
+					labels["com.obiente.domain"] = deploymentDomain
+				}
+				
+				// Update service with labels
+				service["labels"] = labels
+			}
+		}
+	}
+
+	// Marshal back to YAML
+	labeledYaml, err := yaml.Marshal(compose)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal labeled compose YAML: %w", err)
+	}
+
+	return string(labeledYaml), nil
 }
 
 // createContainer creates a single container
@@ -299,6 +372,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		"com.obiente.domain":        config.Domain,
 		"com.obiente.service_name":  serviceName,
 		"com.obiente.replica":       strconv.Itoa(replicaIndex),
+		"com.obiente.traefik":       "true", // Required for Traefik discovery
 	}
 	
 	// Generate Traefik labels from routing rules
@@ -319,6 +393,8 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	}
 
 	// Prepare port bindings
+	// SECURITY: Always use random host ports (HostPort: "0") to prevent users from binding to specific host ports
+	// This prevents port conflicts and unauthorized access to host services
 	exposedPorts := nat.PortSet{}
 	portBindings := nat.PortMap{}
 
@@ -327,7 +403,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	portBindings[containerPort] = []nat.PortBinding{
 		{
 			HostIP:   "0.0.0.0",
-			HostPort: "0", // Let Docker assign a random port
+			HostPort: "0", // SECURITY: Docker assigns random port - users cannot bind to specific host ports
 		},
 	}
 
@@ -346,6 +422,9 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	}
 
 	// Host configuration
+	// SECURITY: No volumes or bind mounts are configured here by default
+	// If volumes are needed in the future, they MUST be sanitized through ComposeSanitizer
+	// to ensure they are contained within the user's safe directory structure
 	hostConfig := &container.HostConfig{
 		PortBindings: portBindings,
 		RestartPolicy: container.RestartPolicy{
@@ -355,6 +434,10 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 			Memory:    config.Memory,
 			CPUShares: config.CPUShares,
 		},
+		// SECURITY: Explicitly set network mode to bridge (default) to prevent host network access
+		NetworkMode: container.NetworkMode(dm.networkName),
+		// SECURITY: Disable privileged mode to prevent container from gaining host access
+		Privileged: false,
 	}
 
 	// Network configuration
@@ -600,6 +683,367 @@ func (dm *DeploymentManager) GetDeploymentLogs(ctx context.Context, deploymentID
 // 	return nil, fmt.Errorf("not implemented")
 // }
 
+// DeployComposeFile deploys a Docker Compose file for a deployment
+func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
+	log.Printf("[DeploymentManager] Deploying compose file for deployment %s", deploymentID)
+
+	// Sanitize compose file for security (transform volumes, remove host ports, etc.)
+	sanitizer := NewComposeSanitizer(deploymentID)
+	sanitizedYaml, err := sanitizer.SanitizeComposeYAML(composeYaml)
+	if err != nil {
+		log.Printf("[DeploymentManager] Warning: Failed to sanitize compose YAML for deployment %s: %v. Using original YAML.", deploymentID, err)
+		// Continue with original YAML if sanitization fails (but log the warning)
+		sanitizedYaml = composeYaml
+	} else {
+		log.Printf("[DeploymentManager] Sanitized compose YAML for deployment %s (volumes mapped to: %s)", deploymentID, sanitizer.GetSafeBaseDir())
+	}
+
+	// Get routing rules (create default if none exist)
+	routings, _ := database.GetDeploymentRoutings(deploymentID)
+	if len(routings) == 0 {
+		// Try to parse compose file to detect port, otherwise use default
+		var targetPort int = 8080
+		
+		// Parse compose to detect exposed ports from first service
+		var compose map[string]interface{}
+		if err := yaml.Unmarshal([]byte(composeYaml), &compose); err == nil {
+			if services, ok := compose["services"].(map[string]interface{}); ok {
+				// Get first service to detect port
+				for _, serviceData := range services {
+					if service, ok := serviceData.(map[string]interface{}); ok {
+						// Check for exposed port or port mapping
+						if ports, ok := service["ports"].([]interface{}); ok && len(ports) > 0 {
+							// Try to extract port from first port mapping
+							if portStr, ok := ports[0].(string); ok {
+								// Format: "host:container" or just "container"
+								parts := strings.Split(portStr, ":")
+								if len(parts) >= 2 {
+									if p, err := strconv.Atoi(parts[len(parts)-1]); err == nil {
+										targetPort = p
+									}
+								} else if len(parts) == 1 {
+									if p, err := strconv.Atoi(parts[0]); err == nil {
+										targetPort = p
+									}
+								}
+							}
+						} else if expose, ok := service["expose"].([]interface{}); ok && len(expose) > 0 {
+							// Check exposed ports
+							if portStr, ok := expose[0].(string); ok {
+								if p, err := strconv.Atoi(portStr); err == nil {
+									targetPort = p
+								}
+							}
+						}
+						break // Only check first service for default
+					}
+				}
+			}
+		}
+		
+		// Create default routing for compose deployment
+		defaultRouting := &database.DeploymentRouting{
+			ID:                fmt.Sprintf("route-%s-default", deploymentID),
+			DeploymentID:      deploymentID,
+			Domain:            "", // Domain can be set later through routing UI
+			ServiceName:       "default",
+			TargetPort:        targetPort,
+			Protocol:          "http",
+			SSLEnabled:        true,
+			SSLCertResolver:   "letsencrypt",
+			Middleware:        "{}",
+			CreatedAt:         time.Now(),
+			UpdatedAt:         time.Now(),
+		}
+		
+		if err := database.UpsertDeploymentRouting(defaultRouting); err != nil {
+			log.Printf("[DeploymentManager] Warning: Failed to create default routing: %v", err)
+		} else {
+			routings = []database.DeploymentRouting{*defaultRouting}
+			log.Printf("[DeploymentManager] Created default routing for compose deployment %s (port: %d)", deploymentID, targetPort)
+		}
+	}
+
+	// Inject Traefik labels into compose file based on routing rules
+	labeledYaml, err := dm.injectTraefikLabelsIntoCompose(sanitizedYaml, deploymentID, routings)
+	if err != nil {
+		log.Printf("[DeploymentManager] Warning: Failed to inject Traefik labels into compose YAML for deployment %s: %v. Using sanitized YAML without labels.", deploymentID, err)
+		labeledYaml = sanitizedYaml
+	} else {
+		log.Printf("[DeploymentManager] Injected Traefik labels into compose YAML for deployment %s", deploymentID)
+		sanitizedYaml = labeledYaml
+	}
+
+	// Create persistent directory for compose file
+	// Try multiple possible locations, fallback to temp if needed
+	var deployDir string
+	possibleDirs := []string{
+		"/var/lib/obiente/deployments",
+		"/tmp/obiente-deployments",
+		os.TempDir(),
+	}
+	
+	for _, baseDir := range possibleDirs {
+		testDir := filepath.Join(baseDir, deploymentID)
+		if err := os.MkdirAll(testDir, 0755); err == nil {
+			// Verify we can write to it
+			testFile := filepath.Join(testDir, ".test")
+			if err := os.WriteFile(testFile, []byte("test"), 0644); err == nil {
+				os.Remove(testFile)
+				deployDir = testDir
+				break
+			}
+		}
+	}
+	
+	if deployDir == "" {
+		return fmt.Errorf("failed to create deployment directory in any of the attempted locations")
+	}
+
+	composeFile := filepath.Join(deployDir, "docker-compose.yml")
+	if err := os.WriteFile(composeFile, []byte(sanitizedYaml), 0644); err != nil {
+		return fmt.Errorf("failed to write compose file: %w", err)
+	}
+
+	// Set project name to deployment ID to avoid conflicts
+	// Note: Docker Compose normalizes project names (lowercase, etc.), but we'll use the label to find containers
+	projectName := fmt.Sprintf("deploy-%s", deploymentID)
+
+	// Run docker compose up -d
+	cmd := exec.CommandContext(ctx, "docker", "compose", "-p", projectName, "-f", composeFile, "up", "-d")
+	cmd.Dir = deployDir
+	var stderr bytes.Buffer
+	var stdout bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Stdout = &stdout
+
+	if err := cmd.Run(); err != nil {
+		errorOutput := stderr.String()
+		stdOutput := stdout.String()
+		log.Printf("[DeploymentManager] ERROR: Failed to deploy compose file for deployment %s: %v\nStderr: %s\nStdout: %s", deploymentID, err, errorOutput, stdOutput)
+		return fmt.Errorf("failed to deploy compose file: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
+	}
+
+	stdOutput := stdout.String()
+	log.Printf("[DeploymentManager] Docker compose up output for deployment %s:\n%s", deploymentID, stdOutput)
+	log.Printf("[DeploymentManager] Successfully deployed compose file for deployment %s (project: %s)", deploymentID, projectName)
+
+	// Wait a moment for containers to be fully created and started
+	time.Sleep(1 * time.Second)
+
+	// List containers created by this compose project and register them
+	return dm.registerComposeContainers(ctx, deploymentID, projectName)
+}
+
+// registerComposeContainers finds containers created by a compose project and registers them
+func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, deploymentID string, projectName string) error {
+	// List containers with the project label
+	// Note: Docker Compose may normalize the project name (e.g., lowercase), so we try both
+	filterArgs := filters.NewArgs()
+	filterArgs.Add("label", fmt.Sprintf("com.docker.compose.project=%s", projectName))
+	
+	containers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+		All:     true,
+		Filters: filterArgs,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list compose containers: %w", err)
+	}
+
+	// If no containers found with exact project name, try lowercase version (Docker Compose normalization)
+	if len(containers) == 0 {
+		log.Printf("[DeploymentManager] No containers found with project name %s, trying lowercase version", projectName)
+		filterArgsLower := filters.NewArgs()
+		filterArgsLower.Add("label", fmt.Sprintf("com.docker.compose.project=%s", strings.ToLower(projectName)))
+		
+		containers, err = dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+			All:     true,
+			Filters: filterArgsLower,
+		})
+		if err != nil {
+			log.Printf("[DeploymentManager] Failed to list containers with lowercase project name: %v", err)
+		}
+	}
+
+	// Also try listing all containers with compose labels and filter manually (fallback)
+	if len(containers) == 0 {
+		log.Printf("[DeploymentManager] Still no containers found, listing all containers with compose labels")
+		allFilterArgs := filters.NewArgs()
+		allFilterArgs.Add("label", "com.docker.compose.project")
+		
+		allContainers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+			All:     true,
+			Filters: allFilterArgs,
+		})
+		if err == nil {
+			// Filter manually by checking labels
+			for _, cnt := range allContainers {
+				if projectLabel := cnt.Labels["com.docker.compose.project"]; projectLabel == projectName || projectLabel == strings.ToLower(projectName) {
+					containers = append(containers, cnt)
+					log.Printf("[DeploymentManager] Found container %s with project label: %s", cnt.ID[:12], projectLabel)
+				}
+			}
+		}
+	}
+
+	if len(containers) == 0 {
+		log.Printf("[DeploymentManager] WARNING: No containers found for compose project %s (deployment %s). "+
+			"This might indicate the compose file failed to create containers. Checking all containers...", projectName, deploymentID)
+		
+		// Last resort: list all containers to see what exists
+		allContainers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{All: true})
+		if err == nil {
+			log.Printf("[DeploymentManager] Total containers on system: %d", len(allContainers))
+			for i, cnt := range allContainers {
+				if i < 5 { // Log first 5 containers for debugging
+					projectLabel := cnt.Labels["com.docker.compose.project"]
+					log.Printf("[DeploymentManager] Container %s: compose project label = '%s'", cnt.ID[:12], projectLabel)
+				}
+			}
+		}
+		
+		return fmt.Errorf("no containers found for compose project %s", projectName)
+	}
+
+	log.Printf("[DeploymentManager] Found %d container(s) for compose project %s", len(containers), projectName)
+
+	// Get routing rules
+	routings, _ := database.GetDeploymentRoutings(deploymentID)
+
+	var runningCount int
+	for _, cnt := range containers {
+		// Verify container is actually running by inspecting it
+		containerInfo, err := dm.dockerClient.ContainerInspect(ctx, cnt.ID)
+		if err != nil {
+			log.Printf("[DeploymentManager] Warning: Failed to inspect container %s: %v", cnt.ID[:12], err)
+			continue
+		}
+
+		// Determine actual container status
+		containerStatus := "stopped"
+		if containerInfo.State.Running {
+			containerStatus = "running"
+			runningCount++
+		}
+
+		// Extract service name from container labels
+		serviceName := cnt.Labels["com.docker.compose.service"]
+		if serviceName == "" {
+			serviceName = "default"
+		}
+
+		// Determine public port
+		publicPort := 8080 // Default
+		for _, routing := range routings {
+			if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
+				publicPort = routing.TargetPort
+				break
+			}
+		}
+
+		// Extract port from container info if available
+		if len(cnt.Ports) > 0 {
+			publicPort = int(cnt.Ports[0].PublicPort)
+		}
+
+		// Register deployment location with actual status
+		location := &database.DeploymentLocation{
+			ID:           fmt.Sprintf("loc-%s-%s", deploymentID, cnt.ID[:12]),
+			DeploymentID: deploymentID,
+			NodeID:       dm.nodeID,
+			NodeHostname: dm.nodeHostname,
+			ContainerID:  cnt.ID,
+			Status:       containerStatus,
+			Port:         publicPort,
+			Domain:       "", // Will be set from deployment config
+			HealthStatus: "unknown",
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
+		}
+
+		if err := dm.registry.RegisterDeployment(ctx, location); err != nil {
+			log.Printf("[DeploymentManager] Warning: Failed to register compose container %s: %v", cnt.ID[:12], err)
+		} else {
+			log.Printf("[DeploymentManager] Registered compose container %s (service: %s, status: %s) for deployment %s",
+				cnt.ID[:12], serviceName, containerStatus, deploymentID)
+		}
+	}
+
+	if runningCount == 0 {
+		return fmt.Errorf("no running containers found for compose project %s (%d containers found but all are stopped)", projectName, len(containers))
+	}
+
+	log.Printf("[DeploymentManager] Successfully registered %d running container(s) for deployment %s", runningCount, deploymentID)
+	return nil
+}
+
+// StopComposeDeployment stops containers created by a compose file
+func (dm *DeploymentManager) StopComposeDeployment(ctx context.Context, deploymentID string) error {
+	log.Printf("[DeploymentManager] Stopping compose deployment %s", deploymentID)
+
+	projectName := fmt.Sprintf("deploy-%s", deploymentID)
+
+	// Find compose file directory - we stored it, but since we clean up temp dirs,
+	// we need to find containers by label and stop them individually
+	filterArgs := filters.NewArgs()
+	filterArgs.Add("label", fmt.Sprintf("com.docker.compose.project=%s", projectName))
+	
+	containers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+		All:     true,
+		Filters: filterArgs,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list compose containers: %w", err)
+	}
+
+	for _, cnt := range containers {
+		timeout := 30 * time.Second
+		if err := dm.dockerHelper.StopContainer(ctx, cnt.ID, timeout); err != nil {
+			log.Printf("[DeploymentManager] Failed to stop compose container %s: %v", cnt.ID[:12], err)
+		} else {
+			log.Printf("[DeploymentManager] Stopped compose container %s", cnt.ID[:12])
+		}
+	}
+
+	return nil
+}
+
+// RemoveComposeDeployment removes containers created by a compose file
+func (dm *DeploymentManager) RemoveComposeDeployment(ctx context.Context, deploymentID string) error {
+	log.Printf("[DeploymentManager] Removing compose deployment %s", deploymentID)
+
+	projectName := fmt.Sprintf("deploy-%s", deploymentID)
+
+	// Find containers by project label
+	filterArgs := filters.NewArgs()
+	filterArgs.Add("label", fmt.Sprintf("com.docker.compose.project=%s", projectName))
+	
+	containers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+		All:     true,
+		Filters: filterArgs,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list compose containers: %w", err)
+	}
+
+	for _, cnt := range containers {
+		// Stop first
+		timeout := 10 * time.Second
+		_ = dm.dockerHelper.StopContainer(ctx, cnt.ID, timeout)
+
+		// Remove
+		if err := dm.dockerHelper.RemoveContainer(ctx, cnt.ID, true); err != nil {
+			log.Printf("[DeploymentManager] Failed to remove compose container %s: %v", cnt.ID[:12], err)
+		} else {
+			log.Printf("[DeploymentManager] Removed compose container %s", cnt.ID[:12])
+			// Unregister
+			_ = dm.registry.UnregisterDeployment(ctx, cnt.ID)
+		}
+	}
+
+	return nil
+}
+
 // Close closes all connections
 func (dm *DeploymentManager) Close() error {
 	if err := dm.nodeSelector.Close(); err != nil {
@@ -610,3 +1054,4 @@ func (dm *DeploymentManager) Close() error {
 	}
 	return dm.dockerClient.Close()
 }
+

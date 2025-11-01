@@ -16,6 +16,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.0
+	nhooyr.io/websocket v1.8.10
 )
 
 require (

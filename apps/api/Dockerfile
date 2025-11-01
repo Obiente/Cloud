@@ -27,7 +27,11 @@ RUN go build -o /build/api ./main.go
 FROM alpine:latest
 
 # Install CA certificates for HTTPS requests
-RUN apk --no-cache add ca-certificates
+# Install docker CLI and docker-compose for deployment management
+RUN apk --no-cache add \
+    ca-certificates \
+    docker-cli \
+    docker-compose
 
 WORKDIR /app
 

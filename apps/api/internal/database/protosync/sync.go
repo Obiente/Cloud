@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"api/gen/proto/obiente/cloud/deployments/v1"
+	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 )
 
 // ProtoField represents a field in a protobuf message that corresponds to a GORM model field
@@ -183,6 +183,18 @@ func GetProtoEnumValue(enumType string, value string) (int32, error) {
 			return int32(deploymentsv1.DeploymentType_NODE), nil
 		case "GO":
 			return int32(deploymentsv1.DeploymentType_GO), nil
+		case "PYTHON":
+			return int32(deploymentsv1.DeploymentType_PYTHON), nil
+		case "RUBY":
+			return int32(deploymentsv1.DeploymentType_RUBY), nil
+		case "RUST":
+			return int32(deploymentsv1.DeploymentType_RUST), nil
+		case "JAVA":
+			return int32(deploymentsv1.DeploymentType_JAVA), nil
+		case "PHP":
+			return int32(deploymentsv1.DeploymentType_PHP), nil
+		case "GENERIC":
+			return int32(deploymentsv1.DeploymentType_GENERIC), nil
 		default:
 			return 0, fmt.Errorf("invalid DeploymentType value: %s", value)
 		}

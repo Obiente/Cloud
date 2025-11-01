@@ -21,6 +21,7 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 		Name:           db.Name,
 		Domain:         db.Domain,
 		Type:           deploymentsv1.DeploymentType(db.Type),
+		BuildStrategy:  deploymentsv1.BuildStrategy(db.BuildStrategy),
 		Branch:         db.Branch,
 		Status:         deploymentsv1.DeploymentStatus(db.Status),
 		HealthStatus:   db.HealthStatus,
@@ -39,11 +40,20 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 	if db.RepositoryURL != nil {
 		deployment.RepositoryUrl = proto.String(*db.RepositoryURL)
 	}
+	if db.GitHubIntegrationID != nil {
+		deployment.GithubIntegrationId = proto.String(*db.GitHubIntegrationID)
+	}
 	if db.BuildCommand != nil {
 		deployment.BuildCommand = proto.String(*db.BuildCommand)
 	}
 	if db.InstallCommand != nil {
 		deployment.InstallCommand = proto.String(*db.InstallCommand)
+	}
+	if db.DockerfilePath != nil {
+		deployment.DockerfilePath = proto.String(*db.DockerfilePath)
+	}
+	if db.ComposeFilePath != nil {
+		deployment.ComposeFilePath = proto.String(*db.ComposeFilePath)
 	}
 
 	// Runtime fields
@@ -91,6 +101,7 @@ func protoToDBDeployment(protoDep *deploymentsv1.Deployment, orgID string, creat
 		Name:           protoDep.GetName(),
 		Domain:         protoDep.GetDomain(),
 		Type:           int32(protoDep.GetType()),
+		BuildStrategy:  int32(protoDep.GetBuildStrategy()),
 		Branch:         protoDep.GetBranch(),
 		Status:         int32(protoDep.GetStatus()),
 		HealthStatus:   protoDep.GetHealthStatus(),
@@ -108,6 +119,10 @@ func protoToDBDeployment(protoDep *deploymentsv1.Deployment, orgID string, creat
 		repoURL := protoDep.GetRepositoryUrl()
 		db.RepositoryURL = &repoURL
 	}
+	if protoDep.GithubIntegrationId != nil {
+		integrationID := protoDep.GetGithubIntegrationId()
+		db.GitHubIntegrationID = &integrationID
+	}
 	if protoDep.BuildCommand != nil {
 		buildCmd := protoDep.GetBuildCommand()
 		db.BuildCommand = &buildCmd
@@ -115,6 +130,14 @@ func protoToDBDeployment(protoDep *deploymentsv1.Deployment, orgID string, creat
 	if protoDep.InstallCommand != nil {
 		installCmd := protoDep.GetInstallCommand()
 		db.InstallCommand = &installCmd
+	}
+	if protoDep.DockerfilePath != nil {
+		dockerfilePath := protoDep.GetDockerfilePath()
+		db.DockerfilePath = &dockerfilePath
+	}
+	if protoDep.ComposeFilePath != nil {
+		composeFilePath := protoDep.GetComposeFilePath()
+		db.ComposeFilePath = &composeFilePath
 	}
 	if protoDep.Image != nil {
 		img := protoDep.GetImage()

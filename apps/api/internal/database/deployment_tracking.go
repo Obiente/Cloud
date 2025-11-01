@@ -1,8 +1,13 @@
 package database
 
 import (
+	"context"
+	"fmt"
+	"log"
 	"time"
 
+	"github.com/moby/moby/api/types/filters"
+	"github.com/moby/moby/client"
 	"gorm.io/gorm"
 )
 
@@ -57,7 +62,6 @@ type DeploymentRouting struct {
 	PathPrefix       string    `json:"path_prefix"`
 	TargetPort       int       `gorm:"not null" json:"target_port"`
 	Protocol         string    `gorm:"default:'http'" json:"protocol"` // http, https, grpc
-	LoadBalancerAlgo string    `gorm:"default:'round-robin'" json:"load_balancer_algo"` // round-robin, least-conn, ip-hash
 	SSLEnabled       bool      `gorm:"default:true" json:"ssl_enabled"`
 	SSLCertResolver  string    `json:"ssl_cert_resolver"`
 	Middleware       string    `gorm:"type:jsonb" json:"middleware"` // Middleware configuration (JSON)
@@ -130,23 +134,146 @@ func UpdateNodeMetrics(nodeID string, usedCPU float64, usedMemory int64) error {
 }
 
 // RecordDeploymentLocation records a new deployment location
+// Uses upsert logic: if location with same container_id exists, update it; otherwise create new
 func RecordDeploymentLocation(location *DeploymentLocation) error {
 	return DB.Transaction(func(tx *gorm.DB) error {
-		// Create deployment location
-		if err := tx.Create(location).Error; err != nil {
-			return err
-		}
+		// Check if location with this container ID already exists
+		var existing DeploymentLocation
+		result := tx.Where("container_id = ?", location.ContainerID).First(&existing)
 		
-		// Increment deployment count on the node
-		if err := tx.Model(&NodeMetadata{}).
-			Where("id = ?", location.NodeID).
-			UpdateColumn("deployment_count", gorm.Expr("deployment_count + ?", 1)).
-			Error; err != nil {
-			return err
+		if result.Error == nil {
+			// Location exists - update it (don't change ID)
+			location.ID = existing.ID
+			if err := tx.Model(&existing).Updates(location).Error; err != nil {
+				return err
+			}
+		} else if result.Error == gorm.ErrRecordNotFound {
+			// Location doesn't exist - create new
+			// Ensure ID is set
+			if location.ID == "" {
+				location.ID = fmt.Sprintf("loc-%s-%s", location.DeploymentID, location.ContainerID[:12])
+			}
+			
+			if err := tx.Create(location).Error; err != nil {
+				return err
+			}
+			
+			// Increment deployment count on the node only for new locations
+			if err := tx.Model(&NodeMetadata{}).
+				Where("id = ?", location.NodeID).
+				UpdateColumn("deployment_count", gorm.Expr("deployment_count + ?", 1)).
+				Error; err != nil {
+				return err
+			}
+		} else {
+			// Other database error
+			return result.Error
 		}
 		
 		return nil
 	})
+}
+
+// ValidateAndRefreshLocations validates container IDs and removes stale entries
+// Returns fresh locations after cleanup
+func ValidateAndRefreshLocations(deploymentID string) ([]DeploymentLocation, error) {
+	// Use moby client directly
+	mobyClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create docker client: %w", err)
+	}
+	defer mobyClient.Close()
+
+	// Get current locations from DB
+	locations, err := GetDeploymentLocations(deploymentID)
+	if err != nil {
+		return nil, err
+	}
+
+	var validLocations []DeploymentLocation
+	for _, loc := range locations {
+		// Try to inspect the container to verify it exists
+		_, err := mobyClient.ContainerInspect(context.Background(), loc.ContainerID)
+		if err != nil {
+			// Container doesn't exist - remove from DB
+			log.Printf("[ValidateAndRefreshLocations] Container %s no longer exists, removing stale location", loc.ContainerID[:12])
+			if removeErr := RemoveDeploymentLocation(loc.ContainerID); removeErr != nil {
+				log.Printf("[ValidateAndRefreshLocations] Failed to remove stale location: %v", removeErr)
+			}
+			continue
+		}
+		validLocations = append(validLocations, loc)
+	}
+
+	// If we removed stale entries, try to find actual running containers for this deployment
+	if len(validLocations) == 0 && len(locations) > 0 {
+		log.Printf("[ValidateAndRefreshLocations] All containers were stale, attempting to discover actual containers for deployment %s", deploymentID)
+		
+		// Look for containers with deployment label using moby filters
+		filterArgs := filters.NewArgs()
+		filterArgs.Add("label", fmt.Sprintf("com.obiente.deployment_id=%s", deploymentID))
+		
+		containers, listErr := mobyClient.ContainerList(context.Background(), client.ContainerListOptions{
+			All:     true,
+			Filters: filterArgs,
+		})
+		
+		if listErr == nil && len(containers) > 0 {
+			log.Printf("[ValidateAndRefreshLocations] Found %d actual containers for deployment %s", len(containers), deploymentID)
+			// Register the actual containers
+			for _, c := range containers {
+				// Get container details to extract full info
+				info, infoErr := mobyClient.ContainerInspect(context.Background(), c.ID)
+				if infoErr != nil {
+					continue
+				}
+				
+				// Extract deployment ID from labels
+				var containerDeploymentID string
+				if info.Config != nil && info.Config.Labels != nil {
+					containerDeploymentID = info.Config.Labels["com.obiente.deployment_id"]
+				}
+				
+				if containerDeploymentID != deploymentID {
+					continue
+				}
+				
+				// Get node info for registration
+				// Note: InspectResponse doesn't have Node field in standard Docker API
+				// We'll use default values and let the registry sync handle proper node info
+				nodeID := "local-unknown"
+				nodeHostname := "unknown"
+				
+				// Get domain from labels
+				domain := ""
+				if info.Config != nil && info.Config.Labels != nil {
+					domain = info.Config.Labels["com.obiente.domain"]
+				}
+				
+				location := &DeploymentLocation{
+					ID:           fmt.Sprintf("loc-%s-%s", deploymentID, c.ID[:12]),
+					DeploymentID: deploymentID,
+					NodeID:       nodeID,
+					NodeHostname: nodeHostname,
+					ContainerID:  c.ID,
+					Status:       c.State,
+					Domain:       domain,
+				}
+				
+				// Extract port if available
+				if len(c.Ports) > 0 {
+					location.Port = int(c.Ports[0].PublicPort)
+				}
+				
+				if regErr := RecordDeploymentLocation(location); regErr == nil {
+					validLocations = append(validLocations, *location)
+					log.Printf("[ValidateAndRefreshLocations] Registered actual container %s for deployment %s", c.ID[:12], deploymentID)
+				}
+			}
+		}
+	}
+
+	return validLocations, nil
 }
 
 // RemoveDeploymentLocation removes a deployment location

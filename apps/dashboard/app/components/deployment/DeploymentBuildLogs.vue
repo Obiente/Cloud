@@ -1,20 +1,24 @@
 <template>
   <OuiCardBody>
     <OuiLogs
-      ref="logsComponent"
       :logs="formattedLogs"
       :is-loading="isLoading"
       :show-timestamps="showTimestamps"
-      :tail-lines="tailLines"
-      :show-tail-controls="true"
       :enable-ansi="true"
       :auto-scroll="true"
-      empty-message="No logs available. Start following to see real-time logs."
-      loading-message="Connecting..."
-      title="Deployment Logs"
-      @tail-change="handleTailChange"
+      empty-message="No build logs available. Build logs will appear here when a deployment is triggered."
+      loading-message="Connecting to build logs..."
+      title="Build Logs"
       @update:show-timestamps="showTimestamps = $event"
     >
+      <template #title>
+        <OuiFlex align="center" gap="sm">
+          <OuiText as="h3" size="md" weight="semibold">Build Logs</OuiText>
+          <OuiBadge v-if="isStreaming" color="info" size="sm">
+            <span class="animate-pulse">●</span> Live
+          </OuiBadge>
+        </OuiFlex>
+      </template>
       <template #actions>
         <OuiButton
           variant="ghost"
@@ -32,6 +36,13 @@
           Clear
         </OuiButton>
       </template>
+      <template #footer>
+        <div class="oui-logs-controls">
+          <OuiText size="xs" color="secondary" class="logs-count">
+            {{ logs.length }} line{{ logs.length !== 1 ? 's' : '' }}
+          </OuiText>
+        </div>
+      </template>
     </OuiLogs>
   </OuiCardBody>
 </template>
@@ -42,36 +53,36 @@ import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 import { useConnectClient } from "~/lib/connect-client";
 import { DeploymentService } from "@obiente/proto";
 import { useOrganizationsStore } from "~/stores/organizations";
-import { useAuth } from "~/composables/useAuth";
 import type { LogEntry } from "~/components/oui/Logs.vue";
 
 interface Props {
   deploymentId: string;
   organizationId: string;
+  autoStart?: boolean; // Automatically start streaming when component mounts
 }
+
+const props = withDefaults(defineProps<Props>(), {
+  autoStart: false,
+});
+
+const orgsStore = useOrganizationsStore();
+const effectiveOrgId = computed(
+  () => props.organizationId || orgsStore.currentOrgId || ""
+);
+
+const client = useConnectClient(DeploymentService);
+const logs = ref<LogLine[]>([]);
+const isFollowing = ref(false);
+const isStreaming = ref(false);
+const isLoading = ref(false);
+const showTimestamps = ref(true);
+let streamController: AbortController | null = null;
 
 interface LogLine {
   line: string;
   timestamp: string;
   stderr: boolean;
 }
-
-const props = defineProps<Props>();
-
-const orgsStore = useOrganizationsStore();
-const effectiveOrgId = computed(
-  () => props.organizationId || orgsStore.currentOrgId || ""
-);
-const auth = useAuth();
-
-const client = useConnectClient(DeploymentService);
-const logs = ref<LogLine[]>([]);
-const isFollowing = ref(false);
-const isLoading = ref(false);
-const tailLines = ref(200);
-const showTimestamps = ref(true);
-const logsComponent = ref<any>(null);
-let streamController: AbortController | null = null;
 
 // Convert internal logs to LogEntry format for OuiLogs component
 const formattedLogs = computed<LogEntry[]>(() => {
@@ -83,13 +94,6 @@ const formattedLogs = computed<LogEntry[]>(() => {
     level: log.stderr ? "error" : "info",
   }));
 });
-
-const handleTailChange = (value: number) => {
-  tailLines.value = value;
-  if (isFollowing.value) {
-    restartStream();
-  }
-};
 
 const clearLogs = () => {
   logs.value = [];
@@ -107,35 +111,14 @@ const startStream = async () => {
   if (isFollowing.value) return;
   isFollowing.value = true;
   isLoading.value = true;
-  logs.value = [];
+  isStreaming.value = true;
 
   try {
-    // Wait for auth to be ready before making the request
-    if (!auth.ready) {
-      await new Promise((resolve) => {
-        const checkReady = () => {
-          if (auth.ready) {
-            resolve(undefined);
-          } else {
-            setTimeout(checkReady, 100);
-          }
-        };
-        checkReady();
-      });
-    }
-
-    // Ensure we have a token before streaming
-    const token = await auth.getAccessToken();
-    if (!token) {
-      throw new Error("Authentication required. Please log in.");
-    }
-
     streamController = new AbortController();
-    const stream = await client.streamDeploymentLogs(
+    const stream = await client.streamBuildLogs(
       {
         organizationId: effectiveOrgId.value,
         deploymentId: props.deploymentId,
-        tail: tailLines.value,
       },
       { signal: streamController.signal }
     );
@@ -158,9 +141,9 @@ const startStream = async () => {
     }
   } catch (error: any) {
     if (error.name !== "AbortError") {
-      console.error("Log stream error:", error);
+      console.error("Build log stream error:", error);
       logs.value.push({
-        line: `[error] Failed to stream logs: ${error.message}`,
+        line: `[error] Failed to stream build logs: ${error.message}`,
         timestamp: new Date().toISOString(),
         stderr: true,
       });
@@ -168,6 +151,7 @@ const startStream = async () => {
   } finally {
     isLoading.value = false;
     isFollowing.value = false;
+    isStreaming.value = false;
   }
 };
 
@@ -177,6 +161,7 @@ const stopStream = () => {
     streamController = null;
   }
   isFollowing.value = false;
+  isStreaming.value = false;
 };
 
 const restartStream = () => {
@@ -184,9 +169,18 @@ const restartStream = () => {
   setTimeout(() => startStream(), 100);
 };
 
+// Expose methods for parent components
+defineExpose({
+  startStream,
+  stopStream,
+  clearLogs,
+});
+
 onMounted(() => {
-  // Auto-start following if deployment is running
-  startStream();
+  // Auto-start following if autoStart is enabled
+  if (props.autoStart) {
+    startStream();
+  }
 });
 
 onUnmounted(() => {
@@ -196,8 +190,16 @@ onUnmounted(() => {
 watch(() => props.deploymentId, () => {
   stopStream();
   logs.value = [];
-  if (isFollowing.value) {
+  if (props.autoStart) {
     startStream();
   }
 });
 </script>
+
+<style scoped>
+.logs-count {
+  white-space: nowrap;
+  user-select: none;
+}
+</style>
+

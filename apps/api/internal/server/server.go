@@ -110,6 +110,7 @@ func registerServices(mux *http.ServeMux) {
 	}
 
 	// Create auth interceptor for token validation
+	// Note: Unary interceptors work for both unary and streaming RPCs in Connect
 	authInterceptor := auth.MiddlewareInterceptor(authConfig)
 
 	// Configure services
@@ -134,6 +135,9 @@ func registerServices(mux *http.ServeMux) {
 		connect.WithInterceptors(authInterceptor),
 	)
 	mux.Handle(deploymentsPath, deploymentsHandler)
+
+	// WebSocket terminal endpoint (bypasses Connect RPC for direct access)
+	mux.HandleFunc("/terminal/ws", deploymentService.HandleTerminalWebSocket)
 
 	// Organization service with auth
 	organizationsPath, organizationsHandler := organizationsv1connect.NewOrganizationServiceHandler(

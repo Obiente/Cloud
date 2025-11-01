@@ -9,7 +9,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/moby/moby/api/types/container"
@@ -140,8 +142,9 @@ func (c *Client) ContainerExec(ctx context.Context, containerID string, cols, ro
 	}
 
 	// Create exec configuration for interactive TTY session
+	// Use interactive shell (-i) to ensure prompt is shown
 	execConfig := container.ExecOptions{
-		Cmd:          []string{"/bin/sh"}, // Default shell
+		Cmd:          []string{"/bin/sh", "-i"}, // Interactive shell to show prompt
 		AttachStdin:  true,
 		AttachStdout: true,
 		AttachStderr: true,
@@ -164,7 +167,10 @@ func (c *Client) ContainerExec(ctx context.Context, containerID string, cols, ro
 		return nil, fmt.Errorf("attach exec: %w", err)
 	}
 
-	// Start the exec instance
+	// For TTY mode, the connection is bidirectional:
+	// - Write to Conn to send input to the container
+	// - Read from Conn to receive output from the container (raw, no headers in TTY mode)
+	// Start the exec instance - this makes the connection active
 	if err := c.api.ContainerExecStart(ctx, execIDResp.ID, container.ExecStartOptions{
 		Detach: false,
 		Tty:    true,
@@ -174,8 +180,8 @@ func (c *Client) ContainerExec(ctx context.Context, containerID string, cols, ro
 	}
 
 	// Return the attach connection which implements ReadWriteCloser
-	// Note: Docker multiplexes stdout/stderr with 8-byte headers [stream_type(1) + 3 padding + size(4)]
-	// For TTY mode, output is raw without headers, but we need to handle both
+	// Note: In TTY mode, output is raw without headers (unlike non-TTY mode which has 8-byte headers)
+	// Conn is a bidirectional stream that can be used for both reading and writing
 	return attachResp.Conn, nil
 }
 
@@ -246,6 +252,14 @@ func (c *Client) ContainerExecRun(ctx context.Context, containerID string, cmd [
 		return "", fmt.Errorf("read output: %w", err)
 	}
 
+	inspect, err := c.api.ContainerExecInspect(ctx, execIDResp.ID)
+	if err != nil {
+		return "", fmt.Errorf("inspect exec: %w", err)
+	}
+	if inspect.ExitCode != 0 {
+		return stdout.String(), fmt.Errorf("command %q failed with exit code %d", strings.Join(cmd, " "), inspect.ExitCode)
+	}
+
 	return stdout.String(), nil
 }
 
@@ -267,7 +281,7 @@ func (c *Client) ContainerListFiles(ctx context.Context, containerID, path strin
 			return nil, fmt.Errorf("failed to start stopped container for file listing: %w", err)
 		}
 		wasStarted = true
-		
+
 		// Wait a moment for container to be ready
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -309,7 +323,7 @@ func (c *Client) ContainerReadFile(ctx context.Context, containerID, filePath st
 			return nil, fmt.Errorf("failed to start stopped container for file read: %w", err)
 		}
 		wasStarted = true
-		
+
 		// Wait a moment for container to be ready
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -337,7 +351,7 @@ func (c *Client) ContainerInspect(ctx context.Context, containerID string) (cont
 	if c == nil || c.api == nil {
 		return container.InspectResponse{}, ErrUninitialized
 	}
-	
+
 	return c.api.ContainerInspect(ctx, containerID)
 }
 
@@ -348,82 +362,162 @@ func (c *Client) ContainerUploadFiles(ctx context.Context, containerID, destPath
 		return ErrUninitialized
 	}
 
-	// Check if container is running
-	containerInfo, err := c.api.ContainerInspect(ctx, containerID)
-	if err != nil {
-		return fmt.Errorf("inspect container: %w", err)
+	if !strings.HasPrefix(destPath, "/") {
+		destPath = "/" + destPath
 	}
 
-	wasRunning := containerInfo.State.Running
-	wasStarted := false
-
-	// If stopped, temporarily start it
-	if !wasRunning {
-		if err := c.StartContainer(ctx, containerID); err != nil {
-			return fmt.Errorf("failed to start stopped container for upload: %w", err)
-		}
-		wasStarted = true
-		
-		// Wait a moment for container to be ready
-		time.Sleep(500 * time.Millisecond)
-	}
-
-	// Ensure we stop the container if we started it
-	defer func() {
-		if wasStarted && !wasRunning {
-			// Give it a moment before stopping
-			time.Sleep(100 * time.Millisecond)
-			_ = c.StopContainer(ctx, containerID, 5*time.Second)
-		}
-	}()
-
-	// Create a tar archive in memory
 	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
+	tarWriter := tar.NewWriter(&buf)
 
-	// Add files to tar archive
-	for filePath, content := range files {
-		// Normalize path
-		filePath = strings.TrimPrefix(filePath, "/")
-		
-		hdr := &tar.Header{
-			Name: filePath,
-			Mode: 0644,
-			Size: int64(len(content)),
-		}
-		
-		if err := tw.WriteHeader(hdr); err != nil {
-			tw.Close()
+	for name, content := range files {
+		if err := tarWriter.WriteHeader(&tar.Header{
+			Name:    name,
+			Mode:    0o644,
+			Size:    int64(len(content)),
+			ModTime: time.Now(),
+		}); err != nil {
 			return fmt.Errorf("write tar header: %w", err)
 		}
-		
-		if _, err := tw.Write(content); err != nil {
-			tw.Close()
+
+		if _, err := tarWriter.Write(content); err != nil {
 			return fmt.Errorf("write tar content: %w", err)
 		}
 	}
 
-	if err := tw.Close(); err != nil {
+	if err := tarWriter.Close(); err != nil {
 		return fmt.Errorf("close tar writer: %w", err)
 	}
 
-	// Upload tar archive to container
-	err = c.api.CopyToContainer(ctx, containerID, destPath, &buf, client.CopyToContainerOptions{})
-	if err != nil {
+	if err := c.api.CopyToContainer(ctx, containerID, destPath, &buf, client.CopyToContainerOptions{}); err != nil {
 		return fmt.Errorf("copy to container: %w", err)
 	}
 
 	return nil
 }
 
+func (c *Client) ContainerRemoveEntries(ctx context.Context, containerID string, paths []string, recursive, force bool) error {
+	if c == nil || c.api == nil {
+		return ErrUninitialized
+	}
+	if len(paths) == 0 {
+		return nil
+	}
+	cmd := []string{"rm"}
+	if recursive {
+		cmd = append(cmd, "-r")
+	}
+	if force {
+		cmd = append(cmd, "-f")
+	}
+	cmd = append(cmd, "--")
+	cmd = append(cmd, paths...)
+	if _, err := c.ContainerExecRun(ctx, containerID, cmd); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Client) ContainerRenameEntry(ctx context.Context, containerID, sourcePath, targetPath string, overwrite bool) error {
+	if c == nil || c.api == nil {
+		return ErrUninitialized
+	}
+	cmd := []string{"mv"}
+	if overwrite {
+		cmd = append(cmd, "-f")
+	}
+	cmd = append(cmd, sourcePath, targetPath)
+	if _, err := c.ContainerExecRun(ctx, containerID, cmd); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Client) ContainerCreateDirectory(ctx context.Context, containerID, path string, mode uint32) error {
+	if c == nil || c.api == nil {
+		return ErrUninitialized
+	}
+	if _, err := c.ContainerExecRun(ctx, containerID, []string{"mkdir", "-p", path}); err != nil {
+		return err
+	}
+	if mode != 0 {
+		chmod := fmt.Sprintf("%#o", mode)
+		if _, err := c.ContainerExecRun(ctx, containerID, []string{"chmod", chmod, path}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) ContainerWriteFile(ctx context.Context, containerID, filePath string, content []byte, mode uint32) error {
+	if c == nil || c.api == nil {
+		return ErrUninitialized
+	}
+	if !strings.HasPrefix(filePath, "/") {
+		filePath = "/" + filePath
+	}
+	destDir := filepath.Dir(filePath)
+	if destDir == "." {
+		destDir = "/"
+	}
+	var buf bytes.Buffer
+	tarWriter := tar.NewWriter(&buf)
+	fileMode := int64(0o644)
+	if mode != 0 {
+		fileMode = int64(mode)
+	}
+	if err := tarWriter.WriteHeader(&tar.Header{
+		Typeflag: tar.TypeReg,
+		Name:     filepath.Base(filePath),
+		Mode:     fileMode,
+		Size:     int64(len(content)),
+		ModTime:  time.Now(),
+	}); err != nil {
+		return fmt.Errorf("write tar header: %w", err)
+	}
+	if _, err := tarWriter.Write(content); err != nil {
+		return fmt.Errorf("write tar content: %w", err)
+	}
+	if err := tarWriter.Close(); err != nil {
+		return fmt.Errorf("close tar writer: %w", err)
+	}
+	if err := c.api.CopyToContainer(ctx, containerID, destDir, &buf, client.CopyToContainerOptions{AllowOverwriteDirWithFile: true}); err != nil {
+		return fmt.Errorf("copy to container: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) ContainerStat(ctx context.Context, containerID, path string) (*FileInfo, error) {
+	if c == nil || c.api == nil {
+		return nil, ErrUninitialized
+	}
+	base := filepath.Dir(path)
+	if base == "" {
+		base = "/"
+	}
+	output, err := c.ContainerExecRun(ctx, containerID, []string{"ls", "-ld", "--time-style=long-iso", path})
+	if err != nil {
+		return nil, err
+	}
+	infos := parseLsOutput(output, base)
+	if len(infos) == 0 {
+		return nil, fmt.Errorf("no metadata for path %s", path)
+	}
+	return &infos[0], nil
+}
+
 // FileInfo represents a file or directory
 type FileInfo struct {
-	Name        string
-	Path        string
-	IsDirectory bool
-	Size        int64
-	Permissions string
-	ModifiedAt  string
+	Name          string
+	Path          string
+	IsDirectory   bool
+	Size          int64
+	Permissions   string
+	Owner         string
+	Group         string
+	Mode          uint32
+	ModifiedAt    time.Time
+	IsSymlink     bool
+	SymlinkTarget string
 }
 
 // parseLsOutput parses ls -la output into FileInfo structs
@@ -431,8 +525,16 @@ func parseLsOutput(output, basePath string) []FileInfo {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	var files []FileInfo
 
-	// Skip header line (total X) and empty lines
-	for i := 1; i < len(lines); i++ {
+	if len(lines) == 0 {
+		return files
+	}
+
+	start := 0
+	if strings.HasPrefix(strings.TrimSpace(lines[0]), "total ") {
+		start = 1
+	}
+
+	for i := start; i < len(lines); i++ {
 		line := strings.TrimSpace(lines[i])
 		if line == "" {
 			continue
@@ -445,20 +547,33 @@ func parseLsOutput(output, basePath string) []FileInfo {
 
 		perms := parts[0]
 		isDir := perms[0] == 'd'
+		isSymlink := perms[0] == 'l'
 
 		var size int64
 		fmt.Sscanf(parts[4], "%d", &size)
 
-		name := strings.Join(parts[8:], " ")
+		rawName := strings.Join(parts[8:], " ")
+
+		displayName := rawName
+		symlinkTarget := ""
+		if isSymlink {
+			if arrow := strings.Index(rawName, " -> "); arrow >= 0 {
+				displayName = rawName[:arrow]
+				symlinkTarget = rawName[arrow+4:]
+			}
+		}
 
 		// Skip . and ..
-		if name == "." || name == ".." {
+		if displayName == "." || displayName == ".." {
 			continue
 		}
 
-		modifiedAt := ""
+		var modifiedAt time.Time
 		if len(parts) >= 7 {
-			modifiedAt = strings.Join(parts[5:7], " ")
+			timestamp := strings.Join(parts[5:7], " ")
+			if ts, err := time.Parse("2006-01-02 15:04", timestamp); err == nil {
+				modifiedAt = ts
+			}
 		}
 
 		// Build full path
@@ -469,19 +584,51 @@ func parseLsOutput(output, basePath string) []FileInfo {
 		if fullPath == "/" {
 			fullPath = ""
 		}
-		fullPath += name
+		fullPath += displayName
+
+		owner := ""
+		if len(parts) > 2 {
+			owner = parts[2]
+		}
+
+		group := ""
+		if len(parts) > 3 {
+			group = parts[3]
+		}
+
+		mode := permissionsToMode(perms)
 
 		files = append(files, FileInfo{
-			Name:        name,
-			Path:        fullPath,
-			IsDirectory: isDir,
-			Size:        size,
-			Permissions: perms,
-			ModifiedAt:  modifiedAt,
+			Name:          displayName,
+			Path:          fullPath,
+			IsDirectory:   isDir,
+			Size:          size,
+			Permissions:   perms,
+			Owner:         owner,
+			Group:         group,
+			Mode:          mode,
+			ModifiedAt:    modifiedAt,
+			IsSymlink:     isSymlink,
+			SymlinkTarget: symlinkTarget,
 		})
 	}
 
 	return files
+}
+
+func permissionsToMode(perms string) uint32 {
+	if len(perms) < 10 {
+		return 0
+	}
+	bits := []uint32{0400, 0200, 0100, 0040, 0020, 0010, 0004, 0002, 0001}
+	var mode uint32
+	for idx, bit := range bits {
+		// +1 to skip file type character
+		if perms[idx+1] != '-' {
+			mode |= bit
+		}
+	}
+	return mode
 }
 
 // GetContainerVolumes returns information about persistent volumes mounted in the container
@@ -496,12 +643,58 @@ func (c *Client) GetContainerVolumes(ctx context.Context, containerID string) ([
 		// Only include named volumes (persistent volumes)
 		// Named volumes have Type="volume" and Name is set
 		if mount.Type == "volume" && mount.Name != "" {
-			volumes = append(volumes, VolumeMount{
-				Name:       mount.Name,
-				MountPoint: mount.Destination,
-				Source:     mount.Source, // Host path where volume is stored
-				IsNamed:    true,
-			})
+			volumePath := mount.Source
+
+			// Try to resolve the correct volume path
+			// Docker volumes are typically at /var/lib/docker/volumes/<name>/_data
+			// but mount.Source might point to the volume directory or the _data subdirectory
+
+			// Check if the path exists as-is
+			if _, err := os.Stat(volumePath); os.IsNotExist(err) {
+				// Path doesn't exist, try common variations
+				// Try removing _data if it's in the path
+				if strings.HasSuffix(volumePath, "_data") {
+					volumePath = strings.TrimSuffix(volumePath, "_data")
+					volumePath = strings.TrimSuffix(volumePath, "/")
+				}
+
+				// Try appending _data
+				withData := filepath.Join(volumePath, "_data")
+				if _, err := os.Stat(withData); err == nil {
+					volumePath = withData
+				} else if _, err := os.Stat(volumePath); os.IsNotExist(err) {
+					// If still doesn't exist, construct from volume name
+					// This is a fallback if mount.Source is completely wrong
+					potentialPath := filepath.Join("/var/lib/docker/volumes", mount.Name, "_data")
+					if _, err := os.Stat(potentialPath); err == nil {
+						volumePath = potentialPath
+					}
+				}
+			} else {
+				// Path exists, but check if it's a directory (might be the volume root)
+				// If it's not the _data directory, try appending _data
+				info, err := os.Stat(volumePath)
+				if err == nil && info.IsDir() {
+					// Check if _data subdirectory exists
+					withData := filepath.Join(volumePath, "_data")
+					if _, err := os.Stat(withData); err == nil {
+						// Prefer _data subdirectory as that's where actual files are
+						volumePath = withData
+					}
+				}
+			}
+
+			// Only include volumes with valid, accessible paths
+			// Skip if the path still doesn't exist after all attempts
+			if _, err := os.Stat(volumePath); err == nil {
+				volumes = append(volumes, VolumeMount{
+					Name:       mount.Name,
+					MountPoint: mount.Destination,
+					Source:     volumePath, // Host path where volume is stored
+					IsNamed:    true,
+				})
+			}
+			// If volume path doesn't exist, skip it (might be deleted or inaccessible)
 		}
 	}
 
@@ -519,38 +712,64 @@ type VolumeMount struct {
 // ListVolumeFiles lists files in a volume directly from the host filesystem
 // This works even when the container is stopped
 func (c *Client) ListVolumeFiles(volumePath, path string) ([]FileInfo, error) {
-	fullPath := filepath.Join(volumePath, path)
-	if path == "/" || path == "" {
+	// Verify the volume path exists first
+	if _, err := os.Stat(volumePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("volume path does not exist: %s (volume may have been deleted)", volumePath)
+	}
+
+	trimmed := strings.TrimPrefix(path, "/")
+	fullPath := filepath.Join(volumePath, trimmed)
+	if trimmed == "" {
 		fullPath = volumePath
 	}
 
 	entries, err := os.ReadDir(fullPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("directory does not exist: %s (volume path: %s)", fullPath, volumePath)
+		}
 		return nil, fmt.Errorf("read directory: %w", err)
 	}
 
 	var files []FileInfo
 	for _, entry := range entries {
-		info, err := entry.Info()
+		entryPath := filepath.Join(fullPath, entry.Name())
+		info, err := os.Lstat(entryPath)
 		if err != nil {
 			continue
 		}
 
-		filePath := filepath.Join(path, entry.Name())
-		if path == "/" || path == "" {
-			filePath = "/" + entry.Name()
+		filePath := "/" + strings.TrimPrefix(filepath.Join(trimmed, entry.Name()), "/")
+
+		owner := ""
+		group := ""
+		mode := permissionsToMode(info.Mode().String())
+		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+			owner = strconv.FormatUint(uint64(stat.Uid), 10)
+			group = strconv.FormatUint(uint64(stat.Gid), 10)
+			mode = uint32(stat.Mode & 0o777)
 		}
-		if !strings.HasPrefix(filePath, "/") {
-			filePath = "/" + filePath
+
+		isSymlink := info.Mode()&os.ModeSymlink != 0
+		symlinkTarget := ""
+		if isSymlink {
+			if target, err := os.Readlink(entryPath); err == nil {
+				symlinkTarget = target
+			}
 		}
 
 		files = append(files, FileInfo{
-			Name:        entry.Name(),
-			Path:        filePath,
-			IsDirectory: entry.IsDir(),
-			Size:        info.Size(),
-			Permissions: info.Mode().String(),
-			ModifiedAt:  info.ModTime().Format("2006-01-02 15:04:05"),
+			Name:          entry.Name(),
+			Path:          filePath,
+			IsDirectory:   info.IsDir(),
+			Size:          info.Size(),
+			Permissions:   info.Mode().String(),
+			Owner:         owner,
+			Group:         group,
+			Mode:          mode,
+			ModifiedAt:    info.ModTime(),
+			IsSymlink:     isSymlink,
+			SymlinkTarget: symlinkTarget,
 		})
 	}
 
@@ -613,5 +832,78 @@ func (c *Client) UploadVolumeFiles(volumePath string, files map[string][]byte) e
 		}
 	}
 
+	return nil
+}
+
+func (c *Client) StatVolumeFile(volumePath, path string) (FileInfo, error) {
+	if _, err := os.Stat(volumePath); os.IsNotExist(err) {
+		return FileInfo{}, fmt.Errorf("volume path does not exist: %s", volumePath)
+	}
+
+	trimmed := strings.TrimPrefix(path, "/")
+	fullPath := filepath.Join(volumePath, trimmed)
+	if trimmed == "" {
+		fullPath = volumePath
+	}
+
+	info, err := os.Lstat(fullPath)
+	if err != nil {
+		return FileInfo{}, fmt.Errorf("stat: %w", err)
+	}
+
+	owner := ""
+	group := ""
+	mode := permissionsToMode(info.Mode().String())
+	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+		owner = strconv.FormatUint(uint64(stat.Uid), 10)
+		group = strconv.FormatUint(uint64(stat.Gid), 10)
+		mode = uint32(stat.Mode & 0o777)
+	}
+
+	isSymlink := info.Mode()&os.ModeSymlink != 0
+	symlinkTarget := ""
+	if isSymlink {
+		if target, err := os.Readlink(fullPath); err == nil {
+			symlinkTarget = target
+		}
+	}
+
+	name := info.Name()
+	if trimmed == "" {
+		name = "/"
+	}
+
+	filePath := "/" + strings.TrimPrefix(trimmed, "/")
+	if filePath == "/" && name != "/" {
+		filePath = filepath.Join("/", name)
+	}
+
+	return FileInfo{
+		Name:          name,
+		Path:          filePath,
+		IsDirectory:   info.IsDir(),
+		Size:          info.Size(),
+		Permissions:   info.Mode().String(),
+		Owner:         owner,
+		Group:         group,
+		Mode:          mode,
+		ModifiedAt:    info.ModTime(),
+		IsSymlink:     isSymlink,
+		SymlinkTarget: symlinkTarget,
+	}, nil
+}
+
+func (c *Client) ContainerCreateSymlink(ctx context.Context, containerID, target, linkPath string, overwrite bool) error {
+	if c == nil || c.api == nil {
+		return ErrUninitialized
+	}
+	cmd := []string{"ln", "-s"}
+	if overwrite {
+		cmd = append(cmd, "-f")
+	}
+	cmd = append(cmd, target, linkPath)
+	if _, err := c.ContainerExecRun(ctx, containerID, cmd); err != nil {
+		return err
+	}
 	return nil
 }

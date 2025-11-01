@@ -229,6 +229,7 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 
 			// Create location record
 			location := &database.DeploymentLocation{
+				ID:           fmt.Sprintf("loc-%s-%s", deploymentID, containerID[:12]),
 				DeploymentID: deploymentID,
 				NodeID:       sr.nodeID,
 				NodeHostname: sr.nodeHostname,
