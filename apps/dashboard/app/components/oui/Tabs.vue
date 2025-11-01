@@ -29,6 +29,7 @@
                   triggerClass,
                   tab.triggerClass,
                 ]"
+                @mouseenter="handleTabHover(tab.id)"
               >
                 <component
                   v-if="tab.icon"
@@ -75,9 +76,11 @@
       :value="tab.id"
       :class="['oui-tabs-panel', contentClass, tab.contentClass]"
     >
-      <slot :name="tab.id">
-        <component v-if="tab.component" :is="tab.component" v-bind="tab.props || {}" />
-      </slot>
+      <div v-if="shouldRenderTab(tab.id)">
+        <slot :name="tab.id">
+          <component v-if="tab.component" :is="tab.component" v-bind="tab.props || {}" />
+        </slot>
+      </div>
     </Tabs.Content>
   </Tabs.Root>
 </template>
@@ -121,8 +124,43 @@ const props = withDefaults(defineProps<Props>(), {
 
 const modelValue = defineModel<string>({ default: undefined })
 
+// Track which tabs have been loaded or prefetched
+const loadedTabs = ref(new Set<string>())
+const prefetchedTabs = ref(new Set<string>())
+
 // Define slots - slots are named by tab.id, but we can't enforce exact type safety for dynamic slot names
 defineSlots<Record<string, () => any>>()
+
+// Load initial tab
+watch(
+  () => modelValue.value,
+  (newValue) => {
+    if (newValue && !loadedTabs.value.has(newValue)) {
+      loadedTabs.value.add(newValue)
+    }
+  },
+  { immediate: true }
+)
+
+// Handle tab trigger hover for prefetching
+function handleTabHover(tabId: string) {
+  if (!loadedTabs.value.has(tabId) && !prefetchedTabs.value.has(tabId)) {
+    prefetchedTabs.value.add(tabId)
+  }
+}
+
+// Handle tab content hover for prefetching
+function handleTabContentHover(tabId: string) {
+  if (!loadedTabs.value.has(tabId) && !prefetchedTabs.value.has(tabId)) {
+    prefetchedTabs.value.add(tabId)
+  }
+}
+
+// Determine if tab should be rendered
+function shouldRenderTab(tabId: string): boolean {
+  // Render if active, already loaded, or prefetched
+  return modelValue.value === tabId || loadedTabs.value.has(tabId) || prefetchedTabs.value.has(tabId)
+}
 
 // Compute defaultValue from first tab if not provided and modelValue is not set
 // This is just derived state, Ark UI handles all reactivity internally
@@ -157,9 +195,18 @@ const setTabRef = (tabId: string, el: any) => {
   }
 }
 
+// Get the actual DOM element from the viewport ref
+const getViewportElement = (): HTMLElement | null => {
+  const viewport = scrollViewport.value
+  if (!viewport) return null
+  if (viewport instanceof HTMLElement) return viewport
+  if ('$el' in viewport && (viewport as any).$el instanceof HTMLElement) return (viewport as any).$el
+  return null
+}
+
 // Scroll active tab into view
 const updateScrollEdges = () => {
-  const viewport = scrollViewport.value
+  const viewport = getViewportElement()
   if (!viewport) {
     canScrollLeft.value = false
     canScrollRight.value = false
@@ -179,7 +226,7 @@ const handleViewportScroll = () => {
 }
 
 const scrollTabs = (direction: 'left' | 'right') => {
-  const viewport = scrollViewport.value
+  const viewport = getViewportElement()
   if (!viewport) return
 
   const offset = direction === 'left' ? -SCROLL_STEP : SCROLL_STEP
@@ -228,7 +275,7 @@ onMounted(() => {
     updateScrollEdges()
     scrollToActiveTab()
 
-    const viewport = scrollViewport.value
+    const viewport = getViewportElement()
     if (viewport) {
       viewport.addEventListener('scroll', handleViewportScroll, { passive: true })
     }
@@ -237,7 +284,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  const viewport = scrollViewport.value
+  const viewport = getViewportElement()
   if (viewport) {
     viewport.removeEventListener('scroll', handleViewportScroll)
   }
@@ -262,15 +309,23 @@ onUnmounted(() => {
   position: relative;
   border-bottom: 1px solid var(--oui-border-default, rgba(255, 255, 255, 0.1));
   margin-bottom: 0;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .oui-tabs-scroll-wrapper {
   position: relative;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  /* Ensure fade gradients align with tabs content, not buttons */
+  display: flex;
+  align-items: flex-end;
 }
 
 .oui-tabs-scroll {
   width: 100%;
+  overflow: hidden;
 }
 
 .oui-tabs-viewport {
@@ -280,6 +335,8 @@ onUnmounted(() => {
   scrollbar-width: none;
   -ms-overflow-style: none;
   padding: 0;
+  /* Prevent scrolling from propagating to parent */
+  overscroll-behavior-x: contain;
 }
 
 .oui-tabs-viewport::-webkit-scrollbar {
@@ -292,6 +349,8 @@ onUnmounted(() => {
   gap: 0;
   min-width: max-content;
   height: 100%;
+  /* Prevent list from causing overflow */
+  width: fit-content;
 }
 
 .oui-tab-trigger {
@@ -379,8 +438,8 @@ onUnmounted(() => {
 
 .oui-tabs-fade {
   position: absolute;
-  top: 0.15rem;
-  bottom: 0.15rem;
+  top: 0;
+  bottom: 0;
   width: 2.2rem;
   pointer-events: none;
   z-index: 2;

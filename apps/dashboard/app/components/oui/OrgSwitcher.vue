@@ -3,7 +3,7 @@
     <Select.RootProvider :collection="props.collection" :value="select">
       <Select.Control class="relative">
         <Select.Trigger
-          class="inline-flex items-center gap-2 cursor-pointer rounded-md p-1 hover:bg-surface-variant"
+          class="inline-flex items-center gap-2 cursor-pointer rounded-xl p-1 hover:bg-surface-variant"
         >
           <Select.ValueText class="sr-only" />
           <Select.Indicator>
@@ -17,7 +17,7 @@
       <Teleport to="body">
         <Select.Positioner>
           <Select.Content
-            class="z-50 min-w-[12rem] overflow-hidden rounded-lg border border-border-default bg-surface-base shadow-lg animate-in duration-150 transform-gpu data-[side=bottom]:slide-in-from-top-2"
+            class="z-50 min-w-[12rem] overflow-hidden rounded-xl border border-border-default bg-surface-base shadow-lg animate-in duration-150 transform-gpu data-[side=bottom]:slide-in-from-top-2"
           >
             <!-- Header -->
             <OuiText

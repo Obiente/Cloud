@@ -1,26 +1,24 @@
 <template>
-  <div
+  <OuiContainer
     v-if="error"
-    class="bg-danger/10 border border-danger/30 rounded-lg px-4 py-3 my-4"
+    class="bg-danger/10 border border-danger/30 rounded-xl px-4 py-3 my-4"
   >
-    <div class="flex items-start">
-      <div class="flex-shrink-0">
+    <OuiFlex align="start" gap="md">
+      <OuiBox class="flex-shrink-0">
         <ExclamationTriangleIcon
           class="h-5 w-5 text-danger"
           aria-hidden="true"
         />
-      </div>
-      <div class="ml-3 flex-1">
-        <h3 class="text-sm font-medium text-danger">{{ title || "Error" }}</h3>
-        <div class="mt-1 text-sm text-danger/80">
-          <p>{{ errorMessage }}</p>
-          <div v-if="hint" class="mt-2 text-sm">
-            <p>{{ hint }}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+      </OuiBox>
+      <OuiStack gap="xs" class="flex-1">
+        <OuiText size="sm" weight="medium" color="danger">{{ title || "Error" }}</OuiText>
+        <OuiStack gap="xs">
+          <OuiText size="sm" color="danger" class="opacity-80">{{ errorMessage }}</OuiText>
+          <OuiText v-if="hint" size="sm" color="danger" class="opacity-80">{{ hint }}</OuiText>
+        </OuiStack>
+      </OuiStack>
+    </OuiFlex>
+  </OuiContainer>
 </template>
 
 <script setup lang="ts">

@@ -25,14 +25,14 @@
       <Teleport to="body">
         <Select.Positioner class="w-[--reference-width]">
           <Select.Content
-            class="z-50 min-w-[12rem] max-h-[300px] w-[--reference-width] overflow-y-auto rounded-md border border-border-default bg-surface-base shadow-md animate-in data-[side=bottom]:slide-in-from-top-2"
+            class="z-50 min-w-[12rem] max-h-[300px] w-[--reference-width] overflow-y-auto rounded-xl border border-border-default bg-surface-base shadow-md animate-in data-[side=bottom]:slide-in-from-top-2"
           >
             <Select.ItemGroup>
               <Select.Item
                 v-for="item in collection.items"
                 :key="item.value"
                 :item="item"
-                class="relative flex w-full cursor-pointer select-none items-center justify-between gap-2 py-2 px-4 text-sm text-text-primary hover:bg-surface-raised transition-colors duration-150"
+                class="relative text-primary flex w-full cursor-pointer select-none items-center justify-between gap-2 py-2 px-4 text-sm transition-colors duration-150 hover:bg-surface-raised data-disabled:cursor-not-allowed data-disabled:text-text-muted data-disabled:opacity-60"
               >
                 <Select.ItemText>{{ item.label }}</Select.ItemText>
 
@@ -88,7 +88,7 @@
 
   const collection = computed(() => {
     // Ensure items are properly formatted for Ark UI
-    const items = props.items.map(item => ({
+    const items = props.items.map((item) => ({
       label: item.label,
       value: String(item.value), // Convert to string for Ark UI internal matching
       disabled: item.disabled,
@@ -132,14 +132,14 @@
         }
         return;
       }
-      
+
       // Get the string value from Ark UI
       const strVal = arr.length === 1 ? arr[0] : arr;
-      
+
       // Find matching item to preserve original value type
-      if (typeof strVal === 'string' && arr.length === 1) {
+      if (typeof strVal === "string" && arr.length === 1) {
         // Find by comparing string values
-        const matchingItem = props.items.find(item => {
+        const matchingItem = props.items.find((item) => {
           const itemValueStr = String(item.value);
           return itemValueStr === strVal;
         });
@@ -149,7 +149,7 @@
           return;
         }
       }
-      
+
       // Fallback: use the array or string value
       const newValue = arr.length === 1 ? strVal : [...arr];
       (model as any).value = newValue;

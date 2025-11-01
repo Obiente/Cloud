@@ -41,7 +41,7 @@
       <Teleport to="body">
         <Combobox.Positioner class="w-[--reference-width]">
           <Combobox.Content
-            class="z-50 min-w-[8rem] max-h-[300px] w-[--reference-width] overflow-y-auto rounded-md border border-border-default bg-surface-base p-1 shadow-md animate-in data-[side=bottom]:slide-in-from-top-2"
+            class="z-50 min-w-[8rem] max-h-[300px] w-[--reference-width] overflow-y-auto rounded-xl border border-border-default bg-surface-base p-1 shadow-md animate-in data-[side=bottom]:slide-in-from-top-2"
           >
             <Combobox.ItemGroup>
               <Combobox.Item

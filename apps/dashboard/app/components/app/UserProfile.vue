@@ -1,36 +1,32 @@
 <template>
-  <div
+  <OuiContainer
     class="absolute bottom-0 left-0 right-0 p-6 border-t border-border-muted bg-surface-base"
   >
-    <div class="flex items-center space-x-3">
+    <OuiFlex align="center" gap="md">
       <!-- Avatar -->
-      <div class="relative">
-        <div
-          class="w-8 h-8 bg-surface-muted rounded-full flex items-center justify-center"
+      <OuiBox class="relative">
+        <OuiBox
+          class="w-8 h-8 bg-surface-muted rounded-full"
         >
-          <UserIcon class="w-5 h-5 text-text-secondary" />
-        </div>
-        <!-- <img
-          v-else
-          :src="user.avatarUrl"
-          :alt="`${user.name || 'User'} avatar`"
-          class="w-8 h-8 rounded-full object-cover"
-        /> -->
+          <OuiFlex align="center" justify="center" class="h-full">
+            <UserIcon class="w-5 h-5 text-text-secondary" />
+          </OuiFlex>
+        </OuiBox>
         <!-- Online status indicator -->
-        <div
+        <OuiBox
           class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-success border-2 border-surface-base rounded-full"
-        ></div>
-      </div>
+        />
+      </OuiBox>
 
       <!-- User info -->
-      <div class="flex-1 min-w-0">
+      <OuiStack gap="xs" class="flex-1 min-w-0">
         <OuiText size="sm" weight="medium" color="primary" truncate>
           {{ auth.user?.preferred_username }}
         </OuiText>
         <OuiText size="xs" color="secondary" truncate>
           {{ auth.user?.email }}
         </OuiText>
-      </div>
+      </OuiStack>
 
       <!-- Logout button -->
       <OuiButton
@@ -42,8 +38,8 @@
       >
         <ArrowRightOnRectangleIcon class="w-4 h-4" />
       </OuiButton>
-    </div>
-  </div>
+    </OuiFlex>
+  </OuiContainer>
 </template>
 
 <script setup lang="ts">

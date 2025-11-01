@@ -1,28 +1,31 @@
 <template>
   <nav class="flex flex-col min-h-screen bg-surface-base" :class="$attrs.class">
     <div class="p-6">
-      <div class="flex items-center justify-between mb-6">
-        <div class="flex items-start space-x-3">
-          <div
-            class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center mt-1"
+      <OuiFlex align="center" justify="between" class="mb-6">
+        <OuiFlex align="start" gap="md">
+          <OuiBox
+            class="w-8 h-8 bg-primary rounded-xl mt-1"
           >
-            <span class="text-foreground font-bold text-lg">O</span>
-          </div>
-          <div class="leading-tight">
-            <div class="text-xl font-bold text-text-primary">Obiente</div>
-            <div
+            <OuiFlex align="center" justify="center" class="h-full">
+              <OuiText size="lg" weight="bold" color="primary">O</OuiText>
+            </OuiFlex>
+          </OuiBox>
+          <OuiStack gap="xs" class="leading-tight">
+            <OuiText size="xl" weight="bold" color="primary">Obiente</OuiText>
+            <OuiText
               v-if="props.currentOrganization"
-              class="text-sm text-text-secondary"
+              size="sm"
+              color="secondary"
             >
               {{ props.currentOrganization.name }}
-            </div>
-          </div>
-        </div>
+            </OuiText>
+          </OuiStack>
+        </OuiFlex>
 
         <div class="ml-2">
           <OrgSwitcher :collection="organization" :multiple="false" @change="(v:any)=>emit('organization-change', v)" @create="emit('new-organization')" />
         </div>
-      </div>
+      </OuiFlex>
 
       <!-- Navigation -->
       <nav class="space-y-2">
@@ -76,7 +79,9 @@
         />
 
         <!-- Admin -->
-        <div class="mt-4 text-xs uppercase tracking-wide text-text-secondary px-2">Admin</div>
+        <div class="mt-4">
+          <OuiText size="xs" transform="uppercase" class="tracking-wide px-2" color="secondary">Admin</OuiText>
+        </div>
         <AppNavigationLink
           to="/admin/quotas"
           label="Quotas"
@@ -95,6 +100,44 @@
           :icon="Cog6ToothIcon"
           @navigate="handleNavigate"
         />
+        <template v-if="props.showSuperAdmin">
+          <div class="mt-4">
+            <OuiText size="xs" transform="uppercase" class="tracking-wide px-2" color="secondary">
+              Superadmin
+            </OuiText>
+          </div>
+          <AppNavigationLink
+            to="/superadmin"
+            label="Overview"
+            :icon="ShieldCheckIcon"
+            @navigate="handleNavigate"
+            exact-match
+          />
+          <AppNavigationLink
+            to="/superadmin/organizations"
+            label="Organizations"
+            :icon="BuildingOfficeIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
+            to="/superadmin/deployments"
+            label="Deployments"
+            :icon="RocketLaunchIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
+            to="/superadmin/invites"
+            label="Invites"
+            :icon="UsersIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
+            to="/superadmin/usage"
+            label="Usage"
+            :icon="ChartBarIcon"
+            @navigate="handleNavigate"
+          />
+        </template>
       </nav>
     </div>
 
@@ -116,6 +159,9 @@ import {
   CreditCardIcon,
   Cog6ToothIcon,
   UsersIcon,
+  ShieldCheckIcon,
+  BuildingOfficeIcon,
+  ChartBarIcon,
 } from "@heroicons/vue/24/outline";
 import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
 import { createListCollection } from "@ark-ui/vue";
@@ -129,10 +175,12 @@ interface Organization {
 interface Props {
   currentOrganization?: Organization | null;
   organizationOptions?: Array<{ label: string; value: string | number }>;
+  showSuperAdmin?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   organizationOptions: () => [],
+  showSuperAdmin: false,
 });
 
 // Recompute the Ark collection whenever options change to ensure OrgSwitcher updates

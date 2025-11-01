@@ -72,12 +72,12 @@
                         <OuiText
                           size="xs"
                           color="secondary"
-                          class="break-words"
+                          class="wrap-break-word"
                           >{{ n.message }}</OuiText
                         >
-                        <OuiText size="xs" color="secondary">{{
-                          formatRelativeTime(n.timestamp)
-                        }}</OuiText>
+                        <OuiText size="xs" color="secondary">
+                          <OuiRelativeTime :value="n.timestamp" :style="'short'" />
+                        </OuiText>
                       </OuiStack>
                       <OuiFlex gap="xs">
                         <OuiButton
@@ -112,6 +112,7 @@
 <script setup lang="ts">
 import { computed, watch, type CSSProperties } from "vue";
 import { FloatingPanel } from "@ark-ui/vue/floating-panel";
+import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 
 interface NotificationItem {
   id: string;
@@ -183,20 +184,4 @@ function remove(id: string) {
   );
 }
 
-function formatRelativeTime(date: Date) {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
-  if (diffSec < 60) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  if (diffHour < 24) return `${diffHour}h ago`;
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-  }).format(date);
-}
 </script>

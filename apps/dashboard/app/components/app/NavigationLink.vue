@@ -1,7 +1,7 @@
 <template>
   <NuxtLink
     :to="to"
-    class="flex items-center space-x-3 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 cursor-pointer group"
+    class="w-full px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer group block"
     :class="[
       isActive
         ? 'bg-primary/10 text-primary border border-primary/20'
@@ -9,14 +9,16 @@
     ]"
     @click="handleClick"
   >
-    <component
-      :is="icon"
-      class="w-5 h-5 transition-colors"
-      :class="[
-        isActive ? 'text-primary' : 'text-secondary group-hover:text-primary',
-      ]"
-    />
-    <span>{{ label }}</span>
+    <OuiFlex align="center" gap="md">
+      <component
+        :is="icon"
+        class="w-5 h-5 shrink-0 transition-colors"
+        :class="[
+          isActive ? 'text-primary' : 'text-secondary group-hover:text-primary',
+        ]"
+      />
+      <OuiText class="flex-1 min-w-0">{{ label }}</OuiText>
+    </OuiFlex>
   </NuxtLink>
 </template>
 
