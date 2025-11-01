@@ -27,7 +27,7 @@ func isAuthDisabled() bool {
 
 // getMockDevUser returns a mock development user with appropriate permissions
 func getMockDevUser() *authv1.User {
-	return &authv1.User{
+	user := &authv1.User{
 		Id:                "mem-development",
 		Email:             "dev@obiente.local",
 		Name:              "Development User",
@@ -37,9 +37,21 @@ func getMockDevUser() *authv1.User {
 		EmailVerified:     true,
 		Locale:            "en",
 		AvatarUrl:         "",
-		Roles:             []string{RoleAdmin, RoleOwner}, // Give full permissions for development
+		Roles:             []string{},
 		UpdatedAt:         timestamppb.Now(),
 	}
+
+	superAdmins := loadSuperAdminEmails()
+	lowerEmail := strings.ToLower(user.Email)
+	if _, ok := superAdmins[lowerEmail]; ok {
+		ensureRole(user, RoleSuperAdmin)
+		log.Printf("Mock dev user promoted to superadmin via SUPERADMIN_EMAILS")
+	}
+
+	ensureRole(user, RoleAdmin)
+	ensureRole(user, RoleOwner)
+
+	return user
 }
 
 // Constants for auth validation
@@ -59,16 +71,16 @@ var (
 // Use protobuf-defined user type for userinfo
 // We will decode Zitadel userinfo JSON into an internal struct and map to authv1.User
 type zitadelUserInfo struct {
-    Sub               string `json:"sub"`
-    Name              string `json:"name"`
-    GivenName         string `json:"given_name"`
-    FamilyName        string `json:"family_name"`
-    PreferredUsername string `json:"preferred_username"`
-    Email             string `json:"email"`
-    EmailVerified     bool   `json:"email_verified"`
-    Locale            string `json:"locale"`
-    Picture           string `json:"picture"`
-    UpdatedAt         int64  `json:"updated_at"`
+	Sub               string `json:"sub"`
+	Name              string `json:"name"`
+	GivenName         string `json:"given_name"`
+	FamilyName        string `json:"family_name"`
+	PreferredUsername string `json:"preferred_username"`
+	Email             string `json:"email"`
+	EmailVerified     bool   `json:"email_verified"`
+	Locale            string `json:"locale"`
+	Picture           string `json:"picture"`
+	UpdatedAt         int64  `json:"updated_at"`
 }
 
 // contextKey is a private type for context keys
@@ -78,14 +90,14 @@ const userInfoKey contextKey = 0
 
 // UserInfoCache manages caching of validated tokens
 type UserInfoCache struct {
-    cache map[string]*CachedUserInfo
+	cache map[string]*CachedUserInfo
 	mutex sync.RWMutex
 }
 
 // CachedUserInfo stores user info with expiration
 type CachedUserInfo struct {
-    User      *authv1.User
-    ExpiresAt time.Time
+	User      *authv1.User
+	ExpiresAt time.Time
 }
 
 // NewUserInfoCache creates a new user info cache
@@ -114,7 +126,7 @@ func (c *UserInfoCache) Get(token string) (*authv1.User, bool) {
 		return nil, false
 	}
 
-    return cached.User, true
+	return cached.User, true
 }
 
 // Set stores user info in cache
@@ -123,7 +135,7 @@ func (c *UserInfoCache) Set(token string, user *authv1.User) {
 	defer c.mutex.Unlock()
 
 	c.cache[token] = &CachedUserInfo{
-        User:      user,
+		User:      user,
 		ExpiresAt: time.Now().Add(UserInfoCacheDuration),
 	}
 }
@@ -152,10 +164,13 @@ type AuthConfig struct {
 	HTTPClient     *http.Client
 	SkipPaths      []string
 	ExposeUserInfo bool // Whether to expose user info in response headers
+	SuperAdmins    map[string]struct{}
 }
 
 // NewAuthConfig creates a new auth config with default values
 func NewAuthConfig() *AuthConfig {
+	superAdmins := loadSuperAdminEmails()
+
 	// Check if auth is disabled for development
 	if isAuthDisabled() {
 		log.Println("⚠️  WARNING: Authentication is DISABLED (DISABLE_AUTH=true)")
@@ -165,8 +180,9 @@ func NewAuthConfig() *AuthConfig {
 			UserInfoCache:  nil,
 			UserInfoURL:    "",
 			HTTPClient:     nil,
-			SkipPaths:      []string{"/"},  // Skip all paths
+			SkipPaths:      []string{"/"}, // Skip all paths
 			ExposeUserInfo: false,
+			SuperAdmins:    superAdmins,
 		}
 	}
 
@@ -184,7 +200,7 @@ func NewAuthConfig() *AuthConfig {
 	httpClient := &http.Client{
 		Timeout: 10 * time.Second,
 	}
-	
+
 	if os.Getenv("SKIP_TLS_VERIFY") == "true" {
 		log.Println("⚠️  Warning: TLS verification disabled (SKIP_TLS_VERIFY=true)")
 		httpClient.Transport = &http.Transport{
@@ -203,6 +219,7 @@ func NewAuthConfig() *AuthConfig {
 		HTTPClient:     httpClient,
 		SkipPaths:      []string{"/health", "/metrics", "/.well-known"},
 		ExposeUserInfo: false,
+		SuperAdmins:    superAdmins,
 	}
 }
 
@@ -212,43 +229,32 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 			procedure := req.Spec().Procedure
-			
+
 			// If auth is disabled (development only), inject mock user and continue
 			if config.UserInfoCache == nil && isAuthDisabled() {
 				mockUser := getMockDevUser()
+				if mockUser != nil && config.SuperAdmins != nil {
+					if _, ok := config.SuperAdmins[strings.ToLower(mockUser.Email)]; ok {
+						ensureRole(mockUser, RoleSuperAdmin)
+						ensureRole(mockUser, RoleAdmin)
+					}
+				}
 				ctx = context.WithValue(ctx, userInfoKey, mockUser)
 				log.Printf("[Auth] Auth disabled - using mock user for: %s", procedure)
 				return next(ctx, req)
 			}
-			
+
 			// If auth config is nil but DISABLE_AUTH is not set, this is an error state
 			if config.UserInfoCache == nil {
 				log.Println("⚠️  WARNING: Auth config is nil but DISABLE_AUTH is not set. This should not happen.")
 				return next(ctx, req)
 			}
 
-			// Skip auth for specified paths
-			for _, path := range config.SkipPaths {
-				if strings.HasPrefix(procedure, path) {
-					log.Printf("[Auth] Skipping auth for path: %s", procedure)
-					return next(ctx, req)
-				}
-			}
-
-			// Skip auth for authentication-related endpoints
-			if strings.Contains(procedure, "AuthService") {
-				// Skip most auth service methods, but not GetCurrentUser
-				if !strings.Contains(procedure, "GetCurrentUser") {
-					log.Printf("[Auth] Skipping auth for AuthService: %s", procedure)
-					return next(ctx, req)
-				}
-			}
-
 			// Extract token from Authorization header
 			authHeader := req.Header().Get(AuthorizationHeader)
 			hasAuthHeader := authHeader != "" && strings.HasPrefix(authHeader, BearerPrefix)
 			log.Printf("[Auth] Procedure: %s, Has auth header: %v", procedure, hasAuthHeader)
-			
+
 			if !hasAuthHeader {
 				log.Printf("[Auth] Missing Authorization header for: %s", procedure)
 				return nil, connect.NewError(connect.CodeUnauthenticated, ErrNoToken)
@@ -275,10 +281,10 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 			// Call next handler
 			resp, err := next(ctx, req)
 
-            // Optionally add user info to response headers (for debugging)
+			// Optionally add user info to response headers (for debugging)
 			if config.ExposeUserInfo && resp != nil && err == nil {
-                resp.Header().Set("X-User-ID", userInfo.Id)
-                resp.Header().Set("X-User-Email", userInfo.Email)
+				resp.Header().Set("X-User-ID", userInfo.Id)
+				resp.Header().Set("X-User-Email", userInfo.Email)
 			}
 
 			return resp, err
@@ -289,9 +295,9 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 // validateToken validates a token against Zitadel's userinfo endpoint
 func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.User, error) {
 	// Check cache first
-    if cachedUser, found := c.UserInfoCache.Get(token); found {
-        log.Printf("✓ Token validated (cached) for user: %s (%s)", cachedUser.Id, cachedUser.Email)
-        return cachedUser, nil
+	if cachedUser, found := c.UserInfoCache.Get(token); found {
+		log.Printf("✓ Token validated (cached) for user: %s (%s)", cachedUser.Id, cachedUser.Email)
+		return cachedUser, nil
 	}
 
 	// Create request to userinfo endpoint
@@ -314,7 +320,7 @@ func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.U
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		log.Printf("UserInfo request failed: status=%d, body=%s", resp.StatusCode, string(body))
-		
+
 		if resp.StatusCode == http.StatusUnauthorized {
 			return nil, ErrInvalidToken
 		}
@@ -322,38 +328,75 @@ func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.U
 	}
 
 	// Parse response
-    var zui zitadelUserInfo
-    if err := json.NewDecoder(resp.Body).Decode(&zui); err != nil {
+	var zui zitadelUserInfo
+	if err := json.NewDecoder(resp.Body).Decode(&zui); err != nil {
 		return nil, fmt.Errorf("failed to parse userinfo response: %w", err)
 	}
 
-    // Map to proto user
-    user := &authv1.User{
-        Id:                zui.Sub,
-        Email:             zui.Email,
-        Name:              zui.Name,
-        AvatarUrl:         zui.Picture,
-        GivenName:         zui.GivenName,
-        FamilyName:        zui.FamilyName,
-        PreferredUsername: zui.PreferredUsername,
-        EmailVerified:     zui.EmailVerified,
-        Locale:            zui.Locale,
-    }
-    if zui.UpdatedAt > 0 {
-        user.UpdatedAt = timestamppb.New(time.Unix(zui.UpdatedAt, 0))
-    }
+	// Map to proto user
+	user := &authv1.User{
+		Id:                zui.Sub,
+		Email:             zui.Email,
+		Name:              zui.Name,
+		AvatarUrl:         zui.Picture,
+		GivenName:         zui.GivenName,
+		FamilyName:        zui.FamilyName,
+		PreferredUsername: zui.PreferredUsername,
+		EmailVerified:     zui.EmailVerified,
+		Locale:            zui.Locale,
+	}
+	if zui.UpdatedAt > 0 {
+		user.UpdatedAt = timestamppb.New(time.Unix(zui.UpdatedAt, 0))
+	}
 
-    // Cache the result
-    c.UserInfoCache.Set(token, user)
+	// Apply superadmin roles if configured via email match
+	if user.Email != "" && c.SuperAdmins != nil {
+		if _, ok := c.SuperAdmins[strings.ToLower(user.Email)]; ok {
+			ensureRole(user, RoleSuperAdmin)
+			ensureRole(user, RoleAdmin)
+		}
+	}
 
-    log.Printf("✓ Token validated for user: %s (%s)", user.Id, user.Email)
-    return user, nil
+	// Cache the result
+	c.UserInfoCache.Set(token, user)
+
+	log.Printf("✓ Token validated for user: %s (%s)", user.Id, user.Email)
+	return user, nil
+}
+
+func ensureRole(user *authv1.User, role string) {
+	if user == nil {
+		return
+	}
+	for _, existing := range user.Roles {
+		if existing == role {
+			return
+		}
+	}
+	user.Roles = append(user.Roles, role)
+}
+
+func loadSuperAdminEmails() map[string]struct{} {
+	superAdmins := make(map[string]struct{})
+	for _, raw := range strings.Split(os.Getenv("SUPERADMIN_EMAILS"), ",") {
+		email := strings.TrimSpace(raw)
+		email = strings.Trim(email, "\"'")
+		email = strings.ToLower(email)
+		if email == "" {
+			continue
+		}
+		superAdmins[email] = struct{}{}
+	}
+	if len(superAdmins) > 0 {
+		log.Printf("  Superadmins configured: %d", len(superAdmins))
+	}
+	return superAdmins
 }
 
 // GetUserFromContext extracts user info from context
 // When DISABLE_AUTH=true, returns a mock dev user if no user is in context
 func GetUserFromContext(ctx context.Context) (*authv1.User, error) {
-    userInfo, ok := ctx.Value(userInfoKey).(*authv1.User)
+	userInfo, ok := ctx.Value(userInfoKey).(*authv1.User)
 	if !ok {
 		// If auth is disabled, return mock user as fallback
 		if isAuthDisabled() {
@@ -367,7 +410,7 @@ func GetUserFromContext(ctx context.Context) (*authv1.User, error) {
 // UserIDFromContext extracts user ID from context
 // When DISABLE_AUTH=true, returns mock dev user ID if no user is in context
 func UserIDFromContext(ctx context.Context) (string, bool) {
-    userInfo, ok := ctx.Value(userInfoKey).(*authv1.User)
+	userInfo, ok := ctx.Value(userInfoKey).(*authv1.User)
 	if !ok {
 		// If auth is disabled, return mock user ID as fallback
 		if isAuthDisabled() {
@@ -375,33 +418,47 @@ func UserIDFromContext(ctx context.Context) (string, bool) {
 		}
 		return "", false
 	}
-    return userInfo.Id, true
+	return userInfo.Id, true
 }
 
 // AuthenticateAndSetContext authenticates a request and adds the user to context
 // This is useful for streaming RPCs where the interceptor may not run
 func AuthenticateAndSetContext(ctx context.Context, authHeader string) (context.Context, *authv1.User, error) {
+	if isAuthDisabled() {
+		mockUser := getMockDevUser()
+		if mockUser == nil {
+			return nil, nil, errors.New("mock user not available")
+		}
+		superAdmins := loadSuperAdminEmails()
+		if _, ok := superAdmins[strings.ToLower(mockUser.Email)]; ok {
+			ensureRole(mockUser, RoleSuperAdmin)
+			ensureRole(mockUser, RoleAdmin)
+		}
+		ctx = context.WithValue(ctx, userInfoKey, mockUser)
+		return ctx, mockUser, nil
+	}
+
 	if authHeader == "" || !strings.HasPrefix(authHeader, BearerPrefix) {
 		return nil, nil, ErrNoToken
 	}
-	
+
 	token := strings.TrimPrefix(authHeader, BearerPrefix)
 	if token == "" {
 		return nil, nil, ErrNoToken
 	}
-	
+
 	// Get auth config
 	config := NewAuthConfig()
-	
+
 	// Validate token
 	userInfo, err := config.validateToken(ctx, token)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error validating token: %w", err)
 	}
-	
+
 	// Add user to context
 	ctx = context.WithValue(ctx, userInfoKey, userInfo)
-	
+
 	return ctx, userInfo, nil
 }
 
@@ -413,7 +470,7 @@ func AuthenticateHTTPRequest(config *AuthConfig, r *http.Request) (*authv1.User,
 	if config.UserInfoCache == nil && isAuthDisabled() {
 		return getMockDevUser(), nil
 	}
-	
+
 	// If auth config is nil but DISABLE_AUTH is not set, return error
 	if config.UserInfoCache == nil {
 		return nil, errors.New("authentication not configured")

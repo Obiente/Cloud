@@ -9,10 +9,11 @@ import (
 // Standard role definitions
 const (
 	// System roles
-	RoleAdmin  = "admin"
-	RoleOwner  = "owner"
-	RoleMember = "member"
-	RoleViewer = "viewer"
+	RoleSuperAdmin = "superadmin"
+	RoleAdmin      = "admin"
+	RoleOwner      = "owner"
+	RoleMember     = "member"
+	RoleViewer     = "viewer"
 
 	// Resource-specific permissions
 	PermissionCreate = "create"
@@ -89,7 +90,7 @@ func (pc *PermissionChecker) CheckOwnership(ctx context.Context, resourceType Re
 	}
 
 	// Check if the user is the owner
-    if userInfo.Id == ownerID {
+	if userInfo.Id == ownerID {
 		return nil
 	}
 
@@ -101,8 +102,11 @@ func (pc *PermissionChecker) CheckOwnership(ctx context.Context, resourceType Re
 
 // HasRole checks if the user has a specific role
 func (pc *PermissionChecker) HasRole(userInfo *authv1.User, role string) bool {
+	if userInfo == nil {
+		return false
+	}
 	for _, r := range userInfo.Roles {
-		if r == role {
+		if r == role || (role == RoleAdmin && r == RoleSuperAdmin) {
 			return true
 		}
 	}
@@ -219,7 +223,11 @@ func GetUserRole(userInfo *authv1.User) string {
 	}
 
 	// Check from highest to lowest privilege
-    if HasRole(userInfo, RoleAdmin) {
+	if HasRole(userInfo, RoleSuperAdmin) {
+		return RoleSuperAdmin
+	}
+
+	if HasRole(userInfo, RoleAdmin) {
 		return RoleAdmin
 	}
 

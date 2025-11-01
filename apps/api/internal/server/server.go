@@ -3,13 +3,17 @@ package server
 import (
 	"log"
 	"net/http"
+	"os"
+	"strings"
 
 	adminv1connect "api/gen/proto/obiente/cloud/admin/v1/adminv1connect"
 	authv1connect "api/gen/proto/obiente/cloud/auth/v1/authv1connect"
 	deploymentsv1connect "api/gen/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
 	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
+	superadminv1connect "api/gen/proto/obiente/cloud/superadmin/v1/superadminv1connect"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/email"
 	"api/internal/middleware"
 	"api/internal/orchestrator"
 	"api/internal/quota"
@@ -17,6 +21,7 @@ import (
 	authsvc "api/internal/services/auth"
 	deploymentsvc "api/internal/services/deployments"
 	orgsvc "api/internal/services/organizations"
+	superadminsvc "api/internal/services/superadmin"
 
 	"connectrpc.com/connect"
 	"connectrpc.com/grpcreflect"
@@ -88,6 +93,15 @@ func registerServices(mux *http.ServeMux) {
 	// Create auth configuration with JWKS from Zitadel
 	authConfig := auth.NewAuthConfig()
 
+	// Configure email sender and shared links
+	mailer := email.NewSenderFromEnv()
+	consoleURL := firstNonEmpty(
+		os.Getenv("CONSOLE_URL"),
+		os.Getenv("DASHBOARD_URL"),
+		os.Getenv("APP_CONSOLE_URL"),
+	)
+	supportEmail := os.Getenv("SUPPORT_EMAIL")
+
 	// AutoMigrate new schemas (best-effort)
 	if database.DB != nil {
 		if err := database.DB.AutoMigrate(
@@ -141,10 +155,21 @@ func registerServices(mux *http.ServeMux) {
 
 	// Organization service with auth
 	organizationsPath, organizationsHandler := organizationsv1connect.NewOrganizationServiceHandler(
-		orgsvc.NewService(),
+		orgsvc.NewService(orgsvc.Config{
+			EmailSender:  mailer,
+			ConsoleURL:   consoleURL,
+			SupportEmail: supportEmail,
+		}),
 		connect.WithInterceptors(authInterceptor),
 	)
 	mux.Handle(organizationsPath, organizationsHandler)
+
+	// Superadmin service
+	superadminPath, superadminHandler := superadminv1connect.NewSuperadminServiceHandler(
+		superadminsvc.NewService(),
+		connect.WithInterceptors(authInterceptor),
+	)
+	mux.Handle(superadminPath, superadminHandler)
 
 	// Admin Connect service
 	adminPath, adminHandler := adminv1connect.NewAdminServiceHandler(
@@ -153,6 +178,16 @@ func registerServices(mux *http.ServeMux) {
 	)
 	mux.Handle(adminPath, adminHandler)
 
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func registerReflection(mux *http.ServeMux) {

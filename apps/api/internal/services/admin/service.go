@@ -26,6 +26,7 @@ var reservedRoleNames = map[string]struct{}{
 	auth.RoleOrgManager: {},
 	auth.RoleOrgAdmin:   {},
 	auth.RoleOrgMember:  {},
+	auth.RoleSuperAdmin: {},
 }
 
 func isReservedRoleName(name string) bool {
