@@ -5,12 +5,12 @@
     :disabled="disabled"
     @select="emit('select', $event)"
   >
-    <span class="flex items-center gap-2">
+    <OuiFlex align="center" gap="xs">
       <slot />
-    </span>
-    <span v-if="shortcut" class="text-xs text-text-tertiary ml-auto font-mono">
+    </OuiFlex>
+    <OuiText v-if="shortcut" size="xs" color="muted" class="ml-auto font-mono">
       {{ shortcut }}
-    </span>
+    </OuiText>
   </Menu.Item>
 </template>
 

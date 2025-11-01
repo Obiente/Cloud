@@ -7,7 +7,7 @@
       <Teleport to="body">
         <Menu.Positioner>
           <Menu.Content
-            class="z-50 min-w-[12rem] max-h-[300px] overflow-y-auto rounded-md border border-border-default bg-surface-base shadow-md animate-in fade-in-0 zoom-in-95 duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
+            class="z-50 min-w-[12rem] max-h-[300px] overflow-y-auto rounded-xl border border-border-default bg-surface-base shadow-md animate-in fade-in-0 zoom-in-95 duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
           >
             <slot />
           </Menu.Content>
@@ -18,7 +18,7 @@
       <!-- SSR fallback - render inline during SSR to avoid hydration mismatch -->
       <Menu.Positioner>
         <Menu.Content
-          class="z-50 min-w-[12rem] max-h-[300px] overflow-y-auto rounded-md border border-border-default bg-surface-base shadow-md hidden"
+          class="z-50 min-w-[12rem] max-h-[300px] overflow-y-auto rounded-xl border border-border-default bg-surface-base shadow-md hidden"
         >
           <slot />
         </Menu.Content>
