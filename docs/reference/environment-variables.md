@@ -4,13 +4,18 @@ Complete reference for all Obiente Cloud environment variables.
 
 ## Quick Reference
 
-| Variable            | Default                      | Required | Description          |
-| ------------------- | ---------------------------- | -------- | -------------------- |
-| `POSTGRES_USER`     | `obiente`                    | ❌       | PostgreSQL username  |
-| `POSTGRES_PASSWORD` | -                            | ✅       | PostgreSQL password  |
-| `ZITADEL_URL`       | `https://auth.obiente.cloud` | ❌       | Zitadel instance URL |
-| `LOG_LEVEL`         | `debug`                      | ❌       | Logging level        |
-| `CORS_ORIGIN`       | `*`                          | ❌       | Allowed CORS origins |
+| Variable             | Default                      | Required | Description                                      |
+| -------------------- | ---------------------------- | -------- | ------------------------------------------------ |
+| `POSTGRES_USER`      | `obiente`                    | ❌       | PostgreSQL username                              |
+| `POSTGRES_PASSWORD`  | -                            | ✅       | PostgreSQL password                              |
+| `ZITADEL_URL`        | `https://auth.obiente.cloud` | ❌       | Zitadel instance URL                             |
+| `LOG_LEVEL`          | `debug`                      | ❌       | Logging level                                    |
+| `CORS_ORIGIN`        | `*`                          | ❌       | Allowed CORS origins                             |
+| `SMTP_HOST`          | -                            | ❌       | SMTP server host (required to enable email)      |
+| `SMTP_FROM_ADDRESS`  | -                            | ❌       | From address used for outbound email             |
+| `CONSOLE_URL`        | `https://app.obiente.cloud`  | ❌       | Dashboard URL used in invitation call-to-action  |
+| `SUPPORT_EMAIL`      | -                            | ❌       | Support contact displayed in email footers       |
+| `SUPERADMIN_EMAILS`  | -                            | ❌       | Comma-separated list of emails with global access |
 
 ## Configuration Sections
 
@@ -84,6 +89,52 @@ CORS_ORIGIN=https://example.com,https://app.example.com
 # Single origin
 CORS_ORIGIN=https://obiente.cloud
 ```
+
+### Email Delivery
+
+| Variable                 | Type    | Default                     | Required |
+| ------------------------ | ------- | --------------------------- | -------- |
+| `SMTP_HOST`              | string  | -                           | ✅ (email) |
+| `SMTP_PORT`              | number  | `587`                       | ❌        |
+| `SMTP_USERNAME`          | string  | -                           | ❌        |
+| `SMTP_PASSWORD`          | string  | -                           | ❌        |
+| `SMTP_FROM_ADDRESS`      | string  | -                           | ✅ (email) |
+| `SMTP_FROM_NAME`         | string  | `Obiente Cloud`             | ❌        |
+| `SMTP_REPLY_TO`          | string  | -                           | ❌        |
+| `SMTP_USE_STARTTLS`      | boolean | `true`                      | ❌        |
+| `SMTP_SKIP_TLS_VERIFY`   | boolean | `false`                     | ❌        |
+| `SMTP_TIMEOUT_SECONDS`   | number  | `10`                        | ❌        |
+| `SMTP_LOCAL_NAME`        | string  | `api.obiente.local`         | ❌        |
+
+**Notes:**
+
+- `SMTP_HOST` and `SMTP_FROM_ADDRESS` must be set for outbound email. When missing, email delivery is disabled gracefully.
+- Set `SMTP_USERNAME` and `SMTP_PASSWORD` for authenticated SMTP relays.
+- Use `SMTP_REPLY_TO` to redirect replies to a shared inbox (e.g. `support@yourdomain`).
+
+**Example:**
+
+```bash
+SMTP_HOST=smtp.mailprovider.com
+SMTP_PORT=587
+SMTP_USERNAME=obiente-api
+SMTP_PASSWORD=<strong_password>
+SMTP_FROM_ADDRESS=no-reply@obiente.cloud
+SMTP_FROM_NAME="Obiente Cloud"
+SMTP_REPLY_TO=support@obiente.cloud
+```
+
+### Console & Support
+
+| Variable         | Type   | Default                    | Required |
+| ---------------- | ------ | -------------------------- | -------- |
+| `CONSOLE_URL`    | string | `https://app.obiente.cloud` | ❌       |
+| `DASHBOARD_URL`  | string | -                          | ❌       |
+| `APP_CONSOLE_URL`| string | -                          | ❌       |
+| `SUPPORT_EMAIL`  | string | -                          | ❌       |
+| `SUPERADMIN_EMAILS` | string | -                       | ❌       |
+
+The API resolves the first non-empty value from `CONSOLE_URL`, `DASHBOARD_URL`, and `APP_CONSOLE_URL` to build links in transactional emails. Configure `SUPPORT_EMAIL` to surface a contact address in email footers. `SUPERADMIN_EMAILS` grants Obiente operators system-wide access to the Superadmin API and dashboard (provide a comma-separated list of email addresses matching your identity provider).
 
 ### Orchestration
 

@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   api:
     image: obiente/cloud-api:latest
@@ -16,8 +14,10 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-debug}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       ZITADEL_URL: ${ZITADEL_URL:-https://auth.obiente.cloud}
+      ZITADEL_MANAGEMENT_TOKEN: ${ZITADEL_MANAGEMENT_TOKEN:-}
       DISABLE_AUTH: ${DISABLE_AUTH:-false}
       SKIP_TLS_VERIFY: ${SKIP_TLS_VERIFY:-false}
+      SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -25,6 +25,10 @@ services:
       - obiente-network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Mount custom safe directories for sanitized bind mounts
+      - /var/lib/obiente:/var/lib/obiente
+      - /tmp/obiente-volumes:/tmp/obiente-volumes
+      - /tmp/obiente-deployments:/tmp/obiente-deployments
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.api.rule=Host(`api.${DOMAIN:-localhost}`) || Host(`api.localhost`) || Host(`localhost`)"

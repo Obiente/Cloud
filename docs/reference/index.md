@@ -10,6 +10,10 @@ Technical reference documentation for Obiente Cloud.
 
 - [API Reference](api.md) - ConnectRPC services (coming soon)
 
+## Messaging
+
+- [Email Template & SMTP](email.md) - Transactional email styling and delivery
+
 ## Command Line Tools
 
 - [CLI Reference](cli.md) - Command-line tools (coming soon)

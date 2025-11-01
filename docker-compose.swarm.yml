@@ -1,5 +1,3 @@
-version: "3.8"
-
 # Obiente Cloud - Docker Swarm Deployment
 # This is a simplified setup. For high availability, use docker-compose.swarm.ha.yml
 
@@ -78,14 +76,20 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       # Authentication - Zitadel
       ZITADEL_URL: ${ZITADEL_URL:-https://auth.obiente.cloud}
+      ZITADEL_MANAGEMENT_TOKEN: ${ZITADEL_MANAGEMENT_TOKEN:-}
       DISABLE_AUTH: ${DISABLE_AUTH:-false}
       SKIP_TLS_VERIFY: ${SKIP_TLS_VERIFY:-false}
+      SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
       # Orchestration settings
       DEPLOYMENT_STRATEGY: ${DEPLOYMENT_STRATEGY:-least-loaded}
       MAX_DEPLOYMENTS_PER_NODE: ${MAX_DEPLOYMENTS_PER_NODE:-50}
     volumes:
       # Mount Docker socket to manage containers (read-write required)
       - /var/run/docker.sock:/var/run/docker.sock
+      # Mount custom safe directories for sanitized bind mounts
+      - /var/lib/obiente:/var/lib/obiente
+      - /tmp/obiente-volumes:/tmp/obiente-volumes
+      - /tmp/obiente-deployments:/tmp/obiente-deployments
     depends_on:
       - postgres
       - redis
