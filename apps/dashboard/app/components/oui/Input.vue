@@ -4,7 +4,7 @@
     :required="props.required"
     :disabled="props.disabled"
     :read-only="props.readonly"
-    class="oui-field space-y-1"
+    class="oui-field space-y-1 w-full"
   >
     <Field.Label v-if="props.label" class="block text-sm font-medium text-primary">
       {{ props.label }}
@@ -13,7 +13,7 @@
       </Field.RequiredIndicator>
     </Field.Label>
 
-    <div class="relative">
+    <div class="relative w-full">
       <Field.Input
         :type="props.type"
         :placeholder="props.placeholder"

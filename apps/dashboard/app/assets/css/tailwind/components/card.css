@@ -7,9 +7,9 @@
 
 /* Example card compositions using standard Tailwind utilities */
 
-/* Basic Card: bg-surface-base border border rounded-lg overflow-hidden */
-/* Raised Card: bg-surface-raised border border-muted rounded-lg shadow-md overflow-hidden */
-/* Overlay Card: bg-surface-overlay border border-strong rounded-lg shadow-lg overflow-hidden */
+/* Basic Card: bg-surface-base border border rounded-xl overflow-hidden */
+/* Raised Card: bg-surface-raised border border-muted rounded-xl shadow-md overflow-hidden */
+/* Overlay Card: bg-surface-overlay border border-strong rounded-xl shadow-lg overflow-hidden */
 
 /* Interactive Card: hover:-translate-y-0.5 hover:shadow-lg transition-all duration-200 cursor-pointer focus-ring */
 

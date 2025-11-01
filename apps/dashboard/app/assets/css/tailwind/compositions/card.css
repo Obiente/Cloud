@@ -7,7 +7,7 @@
 @layer components {
   /* Card Base - reusable across all card types */
   .oui-card-base {
-    @apply rounded-lg shadow overflow-hidden;
+    @apply rounded-xl shadow overflow-hidden;
     background-color: var(--oui-surface-base);
     border: 1px solid var(--oui-border-default);
     color: var(--oui-text-primary);

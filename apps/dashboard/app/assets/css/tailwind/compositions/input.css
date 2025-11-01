@@ -7,8 +7,9 @@
 @layer components {
   /* Input Base */
   .oui-input {
-    @apply flex rounded-md px-3 py-2 text-base w-full;
+    @apply flex rounded-md px-3 py-2 text-base h-10 w-full;
     @apply transition-colors border;
+    @apply focus:oui-focus-ring;
     @apply disabled:cursor-not-allowed disabled:opacity-60;
     background-color: var(--oui-surface-base);
     border-color: var(--oui-border-default);
@@ -20,7 +21,7 @@
   }
 
   .oui-input-base::placeholder {
-    color: var(--oui-text-tertiary);
+    @apply text-muted;
   }
 
   .oui-input:hover:not(:disabled) {
@@ -34,17 +35,18 @@
 
   /* Input Sizes */
   .oui-input-sm {
-    @apply flex rounded-md px-2 py-1 text-sm h-8 w-full;
+    @apply flex rounded-md px-2 py-1 text-sm w-full;
     @apply transition-colors border;
     @apply focus:oui-focus-ring;
     @apply disabled:cursor-not-allowed disabled:opacity-60;
+    height: 2rem; /* h-8 - explicit to override base */
     background-color: var(--oui-surface-base);
     border-color: var(--oui-border-default);
     color: var(--oui-text-primary);
   }
 
   .oui-input-sm::placeholder {
-    color: var(--oui-text-tertiary);
+    @apply text-muted;
   }
   .oui-input-sm:hover:not(:disabled) {
     border-color: var(--oui-border-strong);
@@ -58,17 +60,18 @@
   }
 
   .oui-input-md {
-    @apply flex rounded-md px-3 py-2 text-base h-10 w-full;
+    @apply flex rounded-xl px-3 py-2 text-base w-full;
     @apply transition-colors border;
     @apply focus:oui-focus-ring;
     @apply disabled:cursor-not-allowed disabled:opacity-60;
+    height: 2.5rem; /* h-10 - explicit to override base */
     background-color: var(--oui-surface-base);
     border-color: var(--oui-border-default);
     color: var(--oui-text-primary);
   }
 
   .oui-input-md::placeholder {
-    color: var(--oui-text-tertiary);
+    @apply text-muted;
   }
   .oui-input-md:hover:not(:disabled) {
     border-color: var(--oui-border-strong);
@@ -82,17 +85,18 @@
   }
 
   .oui-input-lg {
-    @apply flex rounded-md px-4 py-3 text-lg h-12 w-full;
+    @apply flex rounded-md px-4 py-3 text-lg w-full;
     @apply transition-colors border;
     @apply focus:oui-focus-ring;
     @apply disabled:cursor-not-allowed disabled:opacity-60;
+    height: 3rem; /* h-12 - explicit to override base */
     background-color: var(--oui-surface-base);
     border-color: var(--oui-border-default);
     color: var(--oui-text-primary);
   }
 
   .oui-input-lg::placeholder {
-    color: var(--oui-text-tertiary);
+    @apply text-muted;
   }
   .oui-input-lg:hover:not(:disabled) {
     border-color: var(--oui-border-strong);
@@ -117,7 +121,7 @@
   }
 
   .oui-input-filled::placeholder {
-    color: var(--oui-text-tertiary);
+    @apply text-muted;
   }
   .oui-input-filled:hover:not(:disabled) {
     background-color: var(--oui-surface-overlay);
@@ -142,7 +146,7 @@
   }
 
   .oui-input-outline::placeholder {
-    color: var(--oui-text-tertiary);
+    @apply text-muted;
   }
   .oui-input-outline:hover:not(:disabled) {
     border-color: var(--oui-border-strong);
@@ -199,7 +203,7 @@
   }
 
   .oui-textarea::placeholder {
-    color: var(--oui-text-tertiary);
+    @apply text-muted;
   }
   .oui-textarea:hover:not(:disabled) {
     border-color: var(--oui-border-strong);
@@ -223,7 +227,7 @@
   }
 
   .oui-textarea-sm::placeholder {
-    color: var(--oui-text-tertiary);
+    @apply text-muted;
   }
   .oui-textarea-sm:hover:not(:disabled) {
     border-color: var(--oui-border-strong);
@@ -247,7 +251,7 @@
   }
 
   .oui-textarea-lg::placeholder {
-    color: var(--oui-text-tertiary);
+    @apply text-muted;
   }
   .oui-textarea-lg:hover:not(:disabled) {
     border-color: var(--oui-border-strong);

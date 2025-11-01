@@ -39,6 +39,7 @@
 @source inline("h-{auto,full,fit,screen,xs,sm,md,lg,xl,2xl,3xl,4xl,5xl,6xl,7xl}");
 @source inline("overflow-{visible,hidden,auto,scroll}");
 @source inline("bg-{transparent,background,surface-base,surface-raised,surface-overlay,surface-muted,accent-primary,accent-secondary,success,warning,danger,info}");
+@source inline("text-{text-primary,text-secondary,text-tertiary,text-disabled,primary,secondary,success,warning,danger,info,muted,foreground,background,surface-base,surface-raised,surface-overlay,surface-muted}");
 @source inline("divide-{x,y}");
 @source inline("divide-{default,muted,strong}");
 @source inline("max-w-{xs,sm,md,lg,xl,2xl,3xl,4xl,5xl,6xl,7xl,full}");
@@ -86,11 +87,12 @@
   --color-warning: var(--oui-accent-warning);
   --color-danger: var(--oui-accent-danger);
   --color-info: var(--oui-accent-info);
+  --color-muted: var(--oui-text-secondary);
 
   /* Border colors */
-  --border-color-border-default: var(--oui-border-default);
-  --border-color-border-muted: var(--oui-border-muted);
-  --border-color-border-strong: var(--oui-border-strong);
+  --border-color-default: var(--oui-border-default);
+  --border-color-muted: var(--oui-border-muted);
+  --border-color-strong: var(--oui-border-strong);
   --color-border-default: var(--oui-border-default);
   --color-border-muted: var(--oui-border-muted);
   --color-border-strong: var(--oui-border-strong);
