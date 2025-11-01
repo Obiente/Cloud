@@ -78,17 +78,11 @@
                 />
               </OuiGrid>
 
-              <OuiGrid cols="1" :cols-md="3" gap="md">
+              <OuiGrid cols="1" :cols-md="2" gap="md">
                 <OuiSelect
                   v-model="rule.protocol"
                   :items="protocolOptions"
                   label="Protocol"
-                  @update:model-value="markDirty"
-                />
-                <OuiSelect
-                  v-model="rule.loadBalancerAlgo"
-                  :items="loadBalancerOptions"
-                  label="Load Balancer"
                   @update:model-value="markDirty"
                 />
                 <OuiSwitch
@@ -144,7 +138,6 @@ interface LocalRule {
   targetPort: number;
   targetPortStr: string;
   protocol: string;
-  loadBalancerAlgo: string;
   sslEnabled: boolean;
   sslCertResolver: string;
 }
@@ -163,12 +156,6 @@ const protocolOptions = [
   { label: "HTTP", value: "http" },
   { label: "HTTPS", value: "https" },
   { label: "gRPC", value: "grpc" },
-];
-
-const loadBalancerOptions = [
-  { label: "Round Robin", value: "round-robin" },
-  { label: "Least Connections", value: "least-conn" },
-  { label: "IP Hash", value: "ip-hash" },
 ];
 
 const serviceNameOptions = ref<Array<{ label: string; value: string }>>([
@@ -218,7 +205,6 @@ const loadRules = async () => {
       targetPort: rule.targetPort || 80,
       targetPortStr: String(rule.targetPort || 80),
       protocol: rule.protocol || "http",
-      loadBalancerAlgo: rule.loadBalancerAlgo || "round-robin",
       sslEnabled: rule.sslEnabled ?? true,
       sslCertResolver: rule.sslCertResolver || "letsencrypt",
     }));
@@ -233,7 +219,6 @@ const loadRules = async () => {
         targetPort: defaultPort,
         targetPortStr: String(defaultPort),
         protocol: "http",
-        loadBalancerAlgo: "round-robin",
         sslEnabled: true,
         sslCertResolver: "letsencrypt",
       });
@@ -260,7 +245,6 @@ const addRule = () => {
     targetPort: defaultPort,
     targetPortStr: String(defaultPort),
     protocol: "http",
-    loadBalancerAlgo: "round-robin",
     sslEnabled: true,
     sslCertResolver: "letsencrypt",
   });
@@ -316,7 +300,6 @@ const saveRules = async () => {
         pathPrefix: rule.pathPrefix.trim(),
         targetPort: rule.targetPort,
         protocol: rule.protocol,
-        loadBalancerAlgo: rule.loadBalancerAlgo,
         sslEnabled: rule.sslEnabled,
         sslCertResolver: rule.sslCertResolver || "",
       };
@@ -338,7 +321,6 @@ const saveRules = async () => {
       targetPort: rule.targetPort,
       targetPortStr: String(rule.targetPort),
       protocol: rule.protocol,
-      loadBalancerAlgo: rule.loadBalancerAlgo,
       sslEnabled: rule.sslEnabled,
       sslCertResolver: rule.sslCertResolver,
     }));

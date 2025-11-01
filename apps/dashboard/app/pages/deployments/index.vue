@@ -449,11 +449,9 @@
               placeholder="Select type"
             />
 
-            <GitHubRepoPicker
-              v-model="newDeployment.githubRepo"
-              v-model:branch="newDeployment.githubBranch"
-              @compose-loaded="handleComposeFromGitHub"
-            />
+            <OuiText size="xs" color="secondary">
+              You can configure the repository and other settings after creating the deployment.
+            </OuiText>
           </OuiStack>
         </form>
         <template #footer>
@@ -512,6 +510,7 @@
   import { useDeploymentActions } from "~/composables/useDeploymentActions";
   import ErrorAlert from "~/components/ErrorAlert.vue";
   import GitHubRepoPicker from "~/components/deployment/GitHubRepoPicker.vue";
+  import { useOrganizationsStore } from "~/stores/organizations";
   definePageMeta({
     layout: "default",
     middleware: "auth",
@@ -519,6 +518,13 @@
   // Error handling
   const createError = ref<Error | null>(null);
   const listError = ref<Error | null>(null);
+  
+  // Organizations
+  const orgsStore = useOrganizationsStore();
+  const effectiveOrgId = computed(() => orgsStore.currentOrgId || "");
+
+  // Deployment service client
+  const deploymentClient = useConnectClient(DeploymentService);
 
   // Filters
   const searchQuery = ref("");
@@ -850,16 +856,10 @@
     createError.value = null;
 
     try {
-      const branch = newDeployment.value.githubBranch || "main";
-      const repoUrl = newDeployment.value.githubRepo
-        ? `https://github.com/${newDeployment.value.githubRepo}`
-        : undefined;
-
       const deployment = await deploymentActions.createDeployment({
         name: newDeployment.value.name,
         type: Number(newDeployment.value.type),
-        branch: branch,
-        repositoryUrl: repoUrl,
+        // Repository and branch will be configured later in the deployment settings
       });
 
       showCreateDialog.value = false;
@@ -890,11 +890,11 @@
     }
   };
 
+  const composeFromGitHub = ref<string | null>(null);
+
   const handleComposeFromGitHub = (composeContent: string) => {
     // Store compose content for when deployment is created
-    // Could be passed to createDeployment or saved after creation
-    console.log("Compose file loaded from GitHub:", composeContent.length, "bytes");
-    // TODO: Save compose after deployment creation
+    composeFromGitHub.value = composeContent;
   };
 </script>
 

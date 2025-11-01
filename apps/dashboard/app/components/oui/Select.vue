@@ -25,7 +25,7 @@
       <Teleport to="body">
         <Select.Positioner class="w-[--reference-width]">
           <Select.Content
-            class="z-50 min-w-[12rem] w-[--reference-width] overflow-hidden rounded-md border border-border-default bg-surface-base shadow-md animate-in data-[side=bottom]:slide-in-from-top-2"
+            class="z-50 min-w-[12rem] max-h-[300px] w-[--reference-width] overflow-y-auto rounded-md border border-border-default bg-surface-base shadow-md animate-in data-[side=bottom]:slide-in-from-top-2"
           >
             <Select.ItemGroup>
               <Select.Item
@@ -86,9 +86,15 @@
     disabled: false,
   });
 
-  const collection = computed(() =>
-    createListCollection({ items: props.items })
-  );
+  const collection = computed(() => {
+    // Ensure items are properly formatted for Ark UI
+    const items = props.items.map(item => ({
+      label: item.label,
+      value: String(item.value), // Convert to string for Ark UI internal matching
+      disabled: item.disabled,
+    }));
+    return createListCollection({ items });
+  });
 
   const triggerClasses = computed(() => [
     "oui-input",
@@ -101,29 +107,54 @@
   const model = defineModel<any>();
   const inner = ref<string[]>([]);
 
-  // Sync external -> internal
+  // Sync external -> internal: Convert model value to string array for Ark UI
   watch(
     () => model.value,
     (val) => {
-      if (Array.isArray(val)) inner.value = val.map(String);
-      else if (val === null || val === undefined || val === "")
+      if (Array.isArray(val)) {
+        inner.value = val.map(String);
+      } else if (val === null || val === undefined || val === "") {
         inner.value = [];
-      else inner.value = [String(val)];
+      } else {
+        inner.value = [String(val)];
+      }
     },
     { immediate: true }
   );
 
-  // Sync internal -> external (emit single value for single-select)
+  // Sync internal -> external: Convert string array back to single value
   watch(
     () => inner.value,
     (arr) => {
-      const next: any = !arr?.length
-        ? null
-        : arr.length === 1
-        ? arr[0]
-        : [...arr];
-      (model as any).value = next as any;
-    }
+      if (!arr?.length) {
+        if (model.value !== null) {
+          (model as any).value = null;
+        }
+        return;
+      }
+      
+      // Get the string value from Ark UI
+      const strVal = arr.length === 1 ? arr[0] : arr;
+      
+      // Find matching item to preserve original value type
+      if (typeof strVal === 'string' && arr.length === 1) {
+        // Find by comparing string values
+        const matchingItem = props.items.find(item => {
+          const itemValueStr = String(item.value);
+          return itemValueStr === strVal;
+        });
+        if (matchingItem) {
+          // Update with the original value type from the item
+          (model as any).value = matchingItem.value;
+          return;
+        }
+      }
+      
+      // Fallback: use the array or string value
+      const newValue = arr.length === 1 ? strVal : [...arr];
+      (model as any).value = newValue;
+    },
+    { immediate: false }
   );
 
   defineOptions({ inheritAttrs: false });

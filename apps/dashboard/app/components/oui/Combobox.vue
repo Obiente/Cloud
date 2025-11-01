@@ -41,7 +41,7 @@
       <Teleport to="body">
         <Combobox.Positioner class="w-[--reference-width]">
           <Combobox.Content
-            class="z-50 min-w-[8rem] w-[--reference-width] overflow-hidden rounded-md border border-border-default bg-surface-base p-1 shadow-md animate-in data-[side=bottom]:slide-in-from-top-2"
+            class="z-50 min-w-[8rem] max-h-[300px] w-[--reference-width] overflow-y-auto rounded-md border border-border-default bg-surface-base p-1 shadow-md animate-in data-[side=bottom]:slide-in-from-top-2"
           >
             <Combobox.ItemGroup>
               <Combobox.Item
@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { Combobox, useListCollection } from "@ark-ui/vue/combobox";
 import { Field } from "@ark-ui/vue/field";
 import { useFilter } from "@ark-ui/vue/locale";
@@ -121,10 +121,16 @@ const emit = defineEmits<{
 
 const filters = useFilter({ sensitivity: "base" });
 
-const { collection, filter } = useListCollection({
+// useListCollection needs to be reactive, so we watch options and update the collection
+const { collection, filter, set } = useListCollection({
   initialItems: props.options,
   filter: filters.value.contains,
 });
+
+// Update collection items when options prop changes
+watch(() => props.options, (newOptions) => {
+  set(newOptions);
+}, { deep: true, immediate: false });
 
 // Controlled value for Ark UI Combobox (expects an array)
 const comboboxValue = computed(() => {
