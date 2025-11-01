@@ -73,7 +73,7 @@ services:
     image: traefik:v3.0
     command:
       - --api.dashboard=true
-      - --api.insecure=false
+      - --api.insecure=true
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --providers.docker.constraints=Label(`com.obiente.traefik`,`true`)

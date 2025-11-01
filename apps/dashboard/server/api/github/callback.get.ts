@@ -118,6 +118,16 @@ export default defineEventHandler(async (event) => {
     const { getServerToken } = await import("../../utils/serverAuth");
     let userAccessToken = await getServerToken(event);
 
+    // Log token availability for debugging
+    if (userAccessToken) {
+      console.log("[GitHub OAuth] User access token found (length):", userAccessToken.length);
+    } else {
+      console.warn("[GitHub OAuth] No user access token found");
+      // Try to get all cookies for debugging
+      const allCookies = event.node.req.headers.cookie;
+      console.log("[GitHub OAuth] Available cookies:", allCookies ? "present" : "none");
+    }
+
     if (!userAccessToken) {
       if (isAuthDisabled) {
         // In development mode, use a dummy token - the Go API will ignore it
@@ -169,11 +179,16 @@ export default defineEventHandler(async (event) => {
       const { createClient } = await import("@connectrpc/connect");
       
       // Create transport with auth interceptor
+      // Ensure token is always defined
+      if (!userAccessToken) {
+        throw new Error("User access token is required to save GitHub integration");
+      }
+      
       const transport = createConnectTransport({
         baseUrl: `${apiHost}`,
         httpVersion: "2",
         interceptors: [
-          createAuthInterceptor(() => Promise.resolve(userAccessToken)),
+          createAuthInterceptor(() => Promise.resolve(userAccessToken!)),
         ],
       });
 

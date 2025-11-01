@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
 
   const { getAccessToken } = await import("../utils/token");
   // Skip auth for public routes
-  const publicRoutes = ["/auth/callback", "/auth/login"];
+  const publicRoutes = ["/auth/callback", "/auth/login", "/api/github/callback"];
   if (publicRoutes.includes(event.path)) {
     return;
   }

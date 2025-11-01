@@ -16,11 +16,13 @@ export function createAuthInterceptor(
         if (token && typeof token === "string" && token.trim() !== "") {
           req.header.append("Authorization", `Bearer ${token}`);
         } else {
-          console.debug("No valid token available for request");
+          console.warn("[Auth Interceptor] No valid token available for request to:", req.url);
+          // Don't throw here - let the API handle authentication errors
+          // This allows for better error messages from the API
         }
       } catch (error) {
-        console.error("Error getting auth token:", error);
-        // Continue without token
+        console.error("[Auth Interceptor] Error getting auth token:", error);
+        // Continue without token - let the API return proper auth error
       }
     }
     return next(req);

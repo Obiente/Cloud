@@ -217,8 +217,12 @@ export function useDeploymentActions(organizationId: string = "default") {
       name?: string;
       repositoryUrl?: string;
       branch?: string;
+      buildStrategy?: number; // BuildStrategy enum
       buildCommand?: string;
       installCommand?: string;
+      dockerfilePath?: string;
+      composeFilePath?: string;
+      githubIntegrationId?: string;
     }
   ) => {
     if (isProcessing.value) return;
@@ -231,8 +235,12 @@ export function useDeploymentActions(organizationId: string = "default") {
         name: updates.name,
         repositoryUrl: updates.repositoryUrl,
         branch: updates.branch,
+        buildStrategy: updates.buildStrategy,
         buildCommand: updates.buildCommand,
         installCommand: updates.installCommand,
+        dockerfilePath: updates.dockerfilePath,
+        composeFilePath: updates.composeFilePath,
+        githubIntegrationId: updates.githubIntegrationId,
       });
 
       return res.deployment;
@@ -251,7 +259,7 @@ export function useDeploymentActions(organizationId: string = "default") {
     name: string;
     type: any; // DeploymentType
     repositoryUrl?: string;
-    branch: string;
+    branch?: string;
     buildCommand?: string;
     installCommand?: string;
   }) => {
