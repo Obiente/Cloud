@@ -32,9 +32,20 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 		Size:           db.Size,
 	}
 
-	// Parse custom domains from JSON (omitted for brevity)
+	// Parse custom domains from JSON
 	if db.CustomDomains != "" {
-		deployment.CustomDomains = []string{}
+		var customDomains []string
+		if err := json.Unmarshal([]byte(db.CustomDomains), &customDomains); err == nil {
+			deployment.CustomDomains = customDomains
+		}
+	}
+
+	// Parse groups from JSON
+	if db.Groups != "" {
+		var groups []string
+		if err := json.Unmarshal([]byte(db.Groups), &groups); err == nil {
+			deployment.Groups = groups
+		}
 	}
 
 	if db.RepositoryURL != nil {
@@ -106,7 +117,6 @@ func protoToDBDeployment(protoDep *deploymentsv1.Deployment, orgID string, creat
 		Status:         int32(protoDep.GetStatus()),
 		HealthStatus:   protoDep.GetHealthStatus(),
 		Environment:    int32(protoDep.GetEnvironment()),
-		Group:          protoDep.Group,
 		BandwidthUsage: protoDep.GetBandwidthUsage(),
 		StorageBytes:   protoDep.GetStorageUsage(),
 		BuildTime:      protoDep.GetBuildTime(),
@@ -161,8 +171,21 @@ func protoToDBDeployment(protoDep *deploymentsv1.Deployment, orgID string, creat
 		db.CreatedAt = protoDep.CreatedAt.AsTime()
 	}
 
-	// Custom domains stored as JSON string (keep empty for now)
-	db.CustomDomains = "[]"
+	// Custom domains stored as JSON string
+	if len(protoDep.GetCustomDomains()) > 0 {
+		customDomainsJSON, _ := json.Marshal(protoDep.GetCustomDomains())
+		db.CustomDomains = string(customDomainsJSON)
+	} else {
+		db.CustomDomains = "[]"
+	}
+
+	// Groups stored as JSON array
+	if len(protoDep.GetGroups()) > 0 {
+		groupsJSON, _ := json.Marshal(protoDep.GetGroups())
+		db.Groups = string(groupsJSON)
+	} else {
+		db.Groups = "[]"
+	}
 
 	// Env vars stored as JSON object
 	if len(protoDep.GetEnvVars()) > 0 {
