@@ -97,6 +97,49 @@ func InitDeploymentTracking() error {
 	); err != nil {
 		return err
 	}
+	
+	// Create composite indexes for better query performance
+	if err := createMetricsIndexes(); err != nil {
+		return fmt.Errorf("failed to create metrics indexes: %w", err)
+	}
+	
+	return nil
+}
+
+// createMetricsIndexes creates composite indexes for metrics queries
+func createMetricsIndexes() error {
+	// Composite index for deployment_id + timestamp (most common query pattern)
+	if err := DB.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_deployment_metrics_deployment_timestamp 
+		ON deployment_metrics(deployment_id, timestamp DESC)
+	`).Error; err != nil {
+		return fmt.Errorf("failed to create deployment_timestamp index: %w", err)
+	}
+	
+	// Composite index for timestamp + deployment_id (for time-range queries)
+	if err := DB.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_deployment_metrics_timestamp_deployment 
+		ON deployment_metrics(timestamp DESC, deployment_id)
+	`).Error; err != nil {
+		return fmt.Errorf("failed to create timestamp_deployment index: %w", err)
+	}
+	
+	// Composite index for container_id + timestamp (container-specific queries)
+	if err := DB.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_deployment_metrics_container_timestamp 
+		ON deployment_metrics(container_id, timestamp DESC)
+	`).Error; err != nil {
+		return fmt.Errorf("failed to create container_timestamp index: %w", err)
+	}
+	
+	// Index for hourly aggregates (deployment_id + hour)
+	if err := DB.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_deployment_usage_hourly_deployment_hour 
+		ON deployment_usage_hourly(deployment_id, hour DESC)
+	`).Error; err != nil {
+		return fmt.Errorf("failed to create usage_hourly index: %w", err)
+	}
+	
 	return nil
 }
 

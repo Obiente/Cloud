@@ -21,12 +21,10 @@ type OrchestratorService struct {
 	deploymentManager *DeploymentManager
 	serviceRegistry   *registry.ServiceRegistry
 	healthChecker     *registry.HealthChecker
+	metricsStreamer   *MetricsStreamer
 	syncInterval      time.Duration
 	ctx               context.Context
 	cancel            context.CancelFunc
-	// Track previous stats per container to calculate deltas
-	previousStats map[string]*containerStats
-	statsMutex     sync.RWMutex
 }
 
 // NewOrchestratorService creates a new orchestrator service
@@ -42,17 +40,21 @@ func NewOrchestratorService(strategy string, maxDeploymentsPerNode int, syncInte
 	}
 
 	healthChecker := registry.NewHealthChecker(serviceRegistry, 1*time.Minute)
+	metricsStreamer := NewMetricsStreamer(serviceRegistry)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	
+	// Register global metrics streamer for access from other services
+	SetGlobalMetricsStreamer(metricsStreamer)
 
 	return &OrchestratorService{
 		deploymentManager: deploymentManager,
 		serviceRegistry:   serviceRegistry,
 		healthChecker:     healthChecker,
+		metricsStreamer:   metricsStreamer,
 		syncInterval:      syncInterval,
 		ctx:               ctx,
 		cancel:            cancel,
-		previousStats:     make(map[string]*containerStats),
 	}, nil
 }
 
@@ -68,9 +70,9 @@ func (os *OrchestratorService) Start() {
 	os.healthChecker.Start(os.ctx)
 	log.Println("[Orchestrator] Started health checker")
 
-	// Start metrics collection
-	go os.collectMetrics()
-	log.Println("[Orchestrator] Started metrics collection")
+	// Start metrics streaming (handles live collection and periodic storage)
+	os.metricsStreamer.Start()
+	log.Println("[Orchestrator] Started metrics streaming")
 
 	// Start cleanup tasks
 	go os.cleanupTasks()
@@ -94,130 +96,16 @@ func (os *OrchestratorService) Stop() {
 	if err := os.serviceRegistry.Close(); err != nil {
 		log.Printf("[Orchestrator] Error closing service registry: %v", err)
 	}
+	
+	os.metricsStreamer.Stop()
+	log.Println("[Orchestrator] Stopped metrics streamer")
 
 	log.Println("[Orchestrator] Orchestration service stopped")
 }
 
-// collectMetrics periodically collects metrics from all deployments
-// Collects every 5 seconds for real-time monitoring
-func (os *OrchestratorService) collectMetrics() {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	// Log less frequently to avoid spam (every 30 seconds)
-	lastLogTime := time.Now()
-
-	for {
-		select {
-		case <-ticker.C:
-			shouldLog := time.Since(lastLogTime) >= 30*time.Second
-			if shouldLog {
-				log.Printf("[Orchestrator] Collecting metrics (interval: 5s)...")
-				lastLogTime = time.Now()
-			}
-			
-			// Get all running deployment locations on this node
-			nodeID := os.serviceRegistry.NodeID()
-			locations, err := os.serviceRegistry.GetNodeDeployments(nodeID)
-			if err != nil {
-				log.Printf("[Orchestrator] Failed to get node deployments: %v", err)
-				continue
-			}
-
-			if len(locations) == 0 {
-				// No deployments running on this node - this is fine, just continue
-				if shouldLog {
-					log.Printf("[Orchestrator] No deployments running on node %s", nodeID)
-				}
-				continue
-			}
-
-			for _, location := range locations {
-				// GetNodeDeployments already filters for status="running", but double-check for safety
-				if location.Status != "running" {
-					continue
-				}
-
-				// Get container stats from Docker (these are cumulative since container start)
-				currentStats, err := os.getContainerStats(location.ContainerID)
-				if err != nil {
-					log.Printf("[Orchestrator] Failed to get stats for container %s: %v", location.ContainerID, err)
-					continue
-				}
-
-				// Get previous stats to calculate deltas
-				os.statsMutex.RLock()
-				prevStats, hasPrev := os.previousStats[location.ContainerID]
-				os.statsMutex.RUnlock()
-
-				// Calculate deltas (incremental values since last measurement)
-				// Docker stats are cumulative for: Network Rx/Tx bytes, Disk Read/Write bytes
-				// Docker stats are instantaneous for: CPU %, Memory usage bytes
-				var networkRxDelta, networkTxDelta, diskReadDelta, diskWriteDelta int64
-				if hasPrev {
-					// Network and disk I/O are cumulative (total since container start)
-					// Calculate deltas to get incremental I/O per interval
-					networkRxDelta = currentStats.NetworkRxBytes - prevStats.NetworkRxBytes
-					networkTxDelta = currentStats.NetworkTxBytes - prevStats.NetworkTxBytes
-					diskReadDelta = currentStats.DiskReadBytes - prevStats.DiskReadBytes
-					diskWriteDelta = currentStats.DiskWriteBytes - prevStats.DiskWriteBytes
-					
-					// Ensure deltas are non-negative (handle container restarts)
-					if networkRxDelta < 0 {
-						networkRxDelta = currentStats.NetworkRxBytes
-					}
-					if networkTxDelta < 0 {
-						networkTxDelta = currentStats.NetworkTxBytes
-					}
-					if diskReadDelta < 0 {
-						diskReadDelta = currentStats.DiskReadBytes
-					}
-					if diskWriteDelta < 0 {
-						diskWriteDelta = currentStats.DiskWriteBytes
-					}
-				} else {
-					// First measurement - use current values as baseline (will be small or zero)
-					// Next measurement will show the actual delta
-					networkRxDelta = 0
-					networkTxDelta = 0
-					diskReadDelta = 0
-					diskWriteDelta = 0
-				}
-
-				// Record metrics with incremental values
-				metric := &database.DeploymentMetrics{
-					DeploymentID:    location.DeploymentID,
-					ContainerID:     location.ContainerID,
-					NodeID:          location.NodeID,
-					CPUUsage:        currentStats.CPUUsage,
-					MemoryUsage:     currentStats.MemoryUsage,
-					NetworkRxBytes:  networkRxDelta,
-					NetworkTxBytes:  networkTxDelta,
-					DiskReadBytes:   diskReadDelta,
-					DiskWriteBytes:  diskWriteDelta,
-					Timestamp:       time.Now(),
-				}
-
-				if err := database.RecordMetrics(metric); err != nil {
-					log.Printf("[Orchestrator] Failed to record metrics for deployment %s: %v", location.DeploymentID, err)
-				} else {
-					// Store current stats for next delta calculation
-					os.statsMutex.Lock()
-					os.previousStats[location.ContainerID] = currentStats
-					os.statsMutex.Unlock()
-				}
-
-				// Update deployment location with current CPU/memory
-				_ = os.serviceRegistry.UpdateDeploymentMetrics(location.ContainerID, currentStats.CPUUsage, currentStats.MemoryUsage)
-			}
-			
-			if shouldLog {
-				log.Printf("[Orchestrator] Collected metrics for %d deployments", len(locations))
-			}
-		case <-os.ctx.Done():
-			return
-		}
-	}
+// GetMetricsStreamer returns the metrics streamer instance
+func (os *OrchestratorService) GetMetricsStreamer() *MetricsStreamer {
+	return os.metricsStreamer
 }
 
 // containerStats holds container resource usage statistics
@@ -363,131 +251,38 @@ func (os *OrchestratorService) cleanupTasks() {
 			
 			log.Printf("[Orchestrator] Aggregating metrics for %d deployments", len(deploymentIDs))
 			
+			// Process deployments in parallel batches
+			const batchSize = 10 // Process 10 deployments concurrently
 			totalAggregated := 0
 			totalDeleted := int64(0)
+			var aggMutex sync.Mutex
 			
-			for _, deploymentID := range deploymentIDs {
-				// Get org ID once
-				var orgID string
-				database.DB.Table("deployments").
-					Select("organization_id").
-					Where("id = ?", deploymentID).
-					Pluck("organization_id", &orgID)
-				
-				// Find the oldest metric for this deployment
-				var oldestTime time.Time
-				database.DB.Table("deployment_metrics").
-					Select("MIN(timestamp)").
-					Where("deployment_id = ? AND timestamp < ?", deploymentID, aggregateCutoff).
-					Scan(&oldestTime)
-				
-				if oldestTime.IsZero() {
-					continue
+			// Process in batches
+			for i := 0; i < len(deploymentIDs); i += batchSize {
+				end := i + batchSize
+				if end > len(deploymentIDs) {
+					end = len(deploymentIDs)
 				}
+				batch := deploymentIDs[i:end]
 				
-				// Aggregate hour by hour
-				currentHour := oldestTime.Truncate(time.Hour)
-				deletedInDeployment := int64(0)
-				
-				for currentHour.Before(aggregateCutoff) {
-					nextHour := currentHour.Add(1 * time.Hour)
-					
-					// Check if hourly aggregate already exists
-					var existingHourly database.DeploymentUsageHourly
-					err := database.DB.Where("deployment_id = ? AND hour = ?", deploymentID, currentHour).
-						First(&existingHourly).Error
-					
-					if errors.Is(err, gorm.ErrRecordNotFound) {
-						// Aggregate metrics for this hour
-						// For multi-container deployments: we need to aggregate per timestamp first,
-						// then average across timestamps within the hour
-						// CPU: average across timestamps (each timestamp is the sum/average of all containers at that time)
-						// Memory: average across timestamps (each timestamp is the sum of all containers)
-						// Network/Disk: sum all incremental values (already handled correctly)
-						type hourlyAgg struct {
-							AvgCPUUsage      float64
-							SumMemoryUsage   float64 // Sum first, then we'll average across samples
-							AvgMemoryUsage   float64
-							SumNetworkRx     int64
-							SumNetworkTx     int64
-							SumDiskRead      int64
-							SumDiskWrite     int64
-							SumRequestCount  int64
-							SumErrorCount    int64
-							Count            int64
-							TimestampCount   int64 // Distinct timestamps to calculate proper averages
+				var wg sync.WaitGroup
+				for _, deploymentID := range batch {
+					wg.Add(1)
+					go func(depID string) {
+						defer wg.Done()
+						aggregated, deleted := os.aggregateDeploymentMetrics(depID, aggregateCutoff)
+						if aggregated > 0 || deleted > 0 {
+							aggMutex.Lock()
+							totalAggregated += aggregated
+							totalDeleted += deleted
+							aggMutex.Unlock()
 						}
-						var agg hourlyAgg
-						
-						// First, aggregate per timestamp (sum memory, avg CPU per timestamp)
-						// Then average those values across the hour
-						err := database.DB.Table("deployment_metrics").
-							Select(`
-								AVG(cpu_usage) as avg_cpu_usage,
-								AVG(memory_usage) as avg_memory_usage,
-								SUM(memory_usage) as sum_memory_usage,
-								COALESCE(SUM(network_rx_bytes), 0) as sum_network_rx,
-								COALESCE(SUM(network_tx_bytes), 0) as sum_network_tx,
-								COALESCE(SUM(disk_read_bytes), 0) as sum_disk_read,
-								COALESCE(SUM(disk_write_bytes), 0) as sum_disk_write,
-								COALESCE(SUM(request_count), 0) as sum_request_count,
-								COALESCE(SUM(error_count), 0) as sum_error_count,
-								COUNT(*) as count,
-								COUNT(DISTINCT timestamp) as timestamp_count
-							`).
-							Where("deployment_id = ? AND timestamp >= ? AND timestamp < ?",
-								deploymentID, currentHour, nextHour).
-							Scan(&agg).Error
-						
-						if err == nil && agg.Count > 0 {
-							// For memory: average the total memory usage across timestamps
-							// (If we have 3 containers per timestamp, we sum them, then average across timestamps)
-							if agg.TimestampCount > 0 {
-								agg.AvgMemoryUsage = agg.SumMemoryUsage / float64(agg.TimestampCount)
-							} else {
-								agg.AvgMemoryUsage = agg.SumMemoryUsage / float64(agg.Count)
-							}
-							
-							// Create hourly aggregate
-							hourlyUsage := database.DeploymentUsageHourly{
-								DeploymentID:     deploymentID,
-								OrganizationID:    orgID,
-								Hour:              currentHour,
-								AvgCPUUsage:       agg.AvgCPUUsage,
-								AvgMemoryUsage:    int64(agg.AvgMemoryUsage),
-								BandwidthRxBytes:  agg.SumNetworkRx,
-								BandwidthTxBytes:  agg.SumNetworkTx,
-								DiskReadBytes:     agg.SumDiskRead,
-								DiskWriteBytes:    agg.SumDiskWrite,
-								RequestCount:      agg.SumRequestCount,
-								ErrorCount:        agg.SumErrorCount,
-								SampleCount:       agg.Count,
-							}
-							
-							if err := database.DB.Create(&hourlyUsage).Error; err != nil {
-								log.Printf("[Orchestrator] Failed to create hourly aggregate for %s at %s: %v", deploymentID, currentHour, err)
-							} else {
-								totalAggregated++
-								
-								// Delete the raw metrics for this hour
-								result := database.DB.Where("deployment_id = ? AND timestamp >= ? AND timestamp < ?",
-									deploymentID, currentHour, nextHour).
-									Delete(&database.DeploymentMetrics{})
-								
-								if result.Error == nil {
-									deletedInDeployment += result.RowsAffected
-								}
-							}
-						}
-					}
-					
-					currentHour = nextHour
+					}(deploymentID)
 				}
-				
-				if deletedInDeployment > 0 {
-					totalDeleted += deletedInDeployment
-				}
+				wg.Wait()
 			}
+			
+			// Helper function moved to separate method
 			
 			log.Printf("[Orchestrator] Aggregated %d hours, deleted %d raw metrics, cleanup tasks completed", totalAggregated, totalDeleted)
 		case <-os.ctx.Done():
@@ -738,4 +533,117 @@ func (os *OrchestratorService) GetServiceRegistry() *registry.ServiceRegistry {
 // GetHealthChecker returns the health checker instance
 func (os *OrchestratorService) GetHealthChecker() *registry.HealthChecker {
 	return os.healthChecker
+}
+
+// aggregateDeploymentMetrics aggregates metrics for a single deployment (called in parallel)
+func (os *OrchestratorService) aggregateDeploymentMetrics(deploymentID string, aggregateCutoff time.Time) (aggregated int, deleted int64) {
+	// Get org ID once
+	var orgID string
+	database.DB.Table("deployments").
+		Select("organization_id").
+		Where("id = ?", deploymentID).
+		Pluck("organization_id", &orgID)
+	
+	// Find the oldest metric for this deployment
+	var oldestTime time.Time
+	database.DB.Table("deployment_metrics").
+		Select("MIN(timestamp)").
+		Where("deployment_id = ? AND timestamp < ?", deploymentID, aggregateCutoff).
+		Scan(&oldestTime)
+	
+	if oldestTime.IsZero() {
+		return 0, 0
+	}
+	
+	// Aggregate hour by hour
+	currentHour := oldestTime.Truncate(time.Hour)
+	deletedInDeployment := int64(0)
+	aggregatedCount := 0
+	
+	for currentHour.Before(aggregateCutoff) {
+		nextHour := currentHour.Add(1 * time.Hour)
+		
+		// Check if hourly aggregate already exists
+		var existingHourly database.DeploymentUsageHourly
+		err := database.DB.Where("deployment_id = ? AND hour = ?", deploymentID, currentHour).
+			First(&existingHourly).Error
+		
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Aggregate metrics for this hour
+			type hourlyAgg struct {
+				AvgCPUUsage      float64
+				SumMemoryUsage   float64
+				AvgMemoryUsage   float64
+				SumNetworkRx     int64
+				SumNetworkTx     int64
+				SumDiskRead      int64
+				SumDiskWrite     int64
+				SumRequestCount  int64
+				SumErrorCount    int64
+				Count            int64
+				TimestampCount   int64
+			}
+			var agg hourlyAgg
+			
+			err := database.DB.Table("deployment_metrics").
+				Select(`
+					AVG(cpu_usage) as avg_cpu_usage,
+					AVG(memory_usage) as avg_memory_usage,
+					SUM(memory_usage) as sum_memory_usage,
+					COALESCE(SUM(network_rx_bytes), 0) as sum_network_rx,
+					COALESCE(SUM(network_tx_bytes), 0) as sum_network_tx,
+					COALESCE(SUM(disk_read_bytes), 0) as sum_disk_read,
+					COALESCE(SUM(disk_write_bytes), 0) as sum_disk_write,
+					COALESCE(SUM(request_count), 0) as sum_request_count,
+					COALESCE(SUM(error_count), 0) as sum_error_count,
+					COUNT(*) as count,
+					COUNT(DISTINCT timestamp) as timestamp_count
+				`).
+				Where("deployment_id = ? AND timestamp >= ? AND timestamp < ?",
+					deploymentID, currentHour, nextHour).
+				Scan(&agg).Error
+			
+			if err == nil && agg.Count > 0 {
+				if agg.TimestampCount > 0 {
+					agg.AvgMemoryUsage = agg.SumMemoryUsage / float64(agg.TimestampCount)
+				} else {
+					agg.AvgMemoryUsage = agg.SumMemoryUsage / float64(agg.Count)
+				}
+				
+				hourlyUsage := database.DeploymentUsageHourly{
+					DeploymentID:     deploymentID,
+					OrganizationID:    orgID,
+					Hour:              currentHour,
+					AvgCPUUsage:       agg.AvgCPUUsage,
+					AvgMemoryUsage:    int64(agg.AvgMemoryUsage),
+					BandwidthRxBytes:  agg.SumNetworkRx,
+					BandwidthTxBytes:  agg.SumNetworkTx,
+					DiskReadBytes:     agg.SumDiskRead,
+					DiskWriteBytes:    agg.SumDiskWrite,
+					RequestCount:      agg.SumRequestCount,
+					ErrorCount:        agg.SumErrorCount,
+					SampleCount:       agg.Count,
+				}
+				
+				if err := database.DB.Create(&hourlyUsage).Error; err != nil {
+					log.Printf("[Orchestrator] Failed to create hourly aggregate for %s at %s: %v", deploymentID, currentHour, err)
+				} else {
+					aggregatedCount++
+					
+					// Delete the raw metrics for this hour in batch
+					result := database.DB.Where("deployment_id = ? AND timestamp >= ? AND timestamp < ?",
+						deploymentID, currentHour, nextHour).
+						Delete(&database.DeploymentMetrics{})
+					
+					if result.Error == nil {
+						deletedInDeployment += result.RowsAffected
+					}
+				}
+			}
+		}
+		
+		currentHour = nextHour
+	}
+	
+	return aggregatedCount, deletedInDeployment
 }

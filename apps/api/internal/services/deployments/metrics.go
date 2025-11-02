@@ -12,6 +12,7 @@ import (
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/orchestrator"
 	"api/internal/pricing"
 
 	"connectrpc.com/connect"
@@ -331,6 +332,15 @@ func (s *Service) StreamDeploymentMetrics(ctx context.Context, req *connect.Requ
 		}
 	}
 
+	// Get metrics streamer for live streaming
+	metricsStreamer := orchestrator.GetGlobalMetricsStreamer()
+	
+	// If streamer is available, use live streaming (much more efficient)
+	if metricsStreamer != nil {
+		return s.streamLiveMetrics(ctx, stream, deploymentID, targetContainerID, shouldAggregate)
+	}
+	
+	// Fallback to database polling if streamer is not available
 	intervalSeconds := int(req.Msg.GetIntervalSeconds())
 	if intervalSeconds <= 0 {
 		intervalSeconds = 5 // Default 5 seconds
