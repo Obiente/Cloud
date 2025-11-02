@@ -10,6 +10,9 @@ service AuthService {
   // Get current authenticated user
   rpc GetCurrentUser(GetCurrentUserRequest) returns (GetCurrentUserResponse);
   
+  // Update user profile information
+  rpc UpdateUserProfile(UpdateUserProfileRequest) returns (UpdateUserProfileResponse);
+  
   // GitHub Integration
   // Connect GitHub account by storing OAuth token
   rpc ConnectGitHub(ConnectGitHubRequest) returns (ConnectGitHubResponse);
@@ -115,4 +118,22 @@ message GitHubIntegrationInfo {
 
 message ListGitHubIntegrationsResponse {
   repeated GitHubIntegrationInfo integrations = 1;
+}
+
+// User Profile Update Messages
+message UpdateUserProfileRequest {
+  // Optional: Update given name (first name)
+  optional string given_name = 1;
+  // Optional: Update family name (last name)
+  optional string family_name = 2;
+  // Optional: Update display name
+  optional string name = 3;
+  // Optional: Update preferred username
+  optional string preferred_username = 4;
+  // Optional: Update locale
+  optional string locale = 5;
+}
+
+message UpdateUserProfileResponse {
+  User user = 1; // Updated user information
 }

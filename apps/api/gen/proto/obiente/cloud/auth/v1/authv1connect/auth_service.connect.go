@@ -36,6 +36,9 @@ const (
 	// AuthServiceGetCurrentUserProcedure is the fully-qualified name of the AuthService's
 	// GetCurrentUser RPC.
 	AuthServiceGetCurrentUserProcedure = "/obiente.cloud.auth.v1.AuthService/GetCurrentUser"
+	// AuthServiceUpdateUserProfileProcedure is the fully-qualified name of the AuthService's
+	// UpdateUserProfile RPC.
+	AuthServiceUpdateUserProfileProcedure = "/obiente.cloud.auth.v1.AuthService/UpdateUserProfile"
 	// AuthServiceConnectGitHubProcedure is the fully-qualified name of the AuthService's ConnectGitHub
 	// RPC.
 	AuthServiceConnectGitHubProcedure = "/obiente.cloud.auth.v1.AuthService/ConnectGitHub"
@@ -60,6 +63,8 @@ const (
 type AuthServiceClient interface {
 	// Get current authenticated user
 	GetCurrentUser(context.Context, *connect.Request[v1.GetCurrentUserRequest]) (*connect.Response[v1.GetCurrentUserResponse], error)
+	// Update user profile information
+	UpdateUserProfile(context.Context, *connect.Request[v1.UpdateUserProfileRequest]) (*connect.Response[v1.UpdateUserProfileResponse], error)
 	// GitHub Integration
 	// Connect GitHub account by storing OAuth token
 	ConnectGitHub(context.Context, *connect.Request[v1.ConnectGitHubRequest]) (*connect.Response[v1.ConnectGitHubResponse], error)
@@ -91,6 +96,12 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			httpClient,
 			baseURL+AuthServiceGetCurrentUserProcedure,
 			connect.WithSchema(authServiceMethods.ByName("GetCurrentUser")),
+			connect.WithClientOptions(opts...),
+		),
+		updateUserProfile: connect.NewClient[v1.UpdateUserProfileRequest, v1.UpdateUserProfileResponse](
+			httpClient,
+			baseURL+AuthServiceUpdateUserProfileProcedure,
+			connect.WithSchema(authServiceMethods.ByName("UpdateUserProfile")),
 			connect.WithClientOptions(opts...),
 		),
 		connectGitHub: connect.NewClient[v1.ConnectGitHubRequest, v1.ConnectGitHubResponse](
@@ -135,6 +146,7 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 // authServiceClient implements AuthServiceClient.
 type authServiceClient struct {
 	getCurrentUser               *connect.Client[v1.GetCurrentUserRequest, v1.GetCurrentUserResponse]
+	updateUserProfile            *connect.Client[v1.UpdateUserProfileRequest, v1.UpdateUserProfileResponse]
 	connectGitHub                *connect.Client[v1.ConnectGitHubRequest, v1.ConnectGitHubResponse]
 	disconnectGitHub             *connect.Client[v1.DisconnectGitHubRequest, v1.DisconnectGitHubResponse]
 	getGitHubStatus              *connect.Client[v1.GetGitHubStatusRequest, v1.GetGitHubStatusResponse]
@@ -146,6 +158,11 @@ type authServiceClient struct {
 // GetCurrentUser calls obiente.cloud.auth.v1.AuthService.GetCurrentUser.
 func (c *authServiceClient) GetCurrentUser(ctx context.Context, req *connect.Request[v1.GetCurrentUserRequest]) (*connect.Response[v1.GetCurrentUserResponse], error) {
 	return c.getCurrentUser.CallUnary(ctx, req)
+}
+
+// UpdateUserProfile calls obiente.cloud.auth.v1.AuthService.UpdateUserProfile.
+func (c *authServiceClient) UpdateUserProfile(ctx context.Context, req *connect.Request[v1.UpdateUserProfileRequest]) (*connect.Response[v1.UpdateUserProfileResponse], error) {
+	return c.updateUserProfile.CallUnary(ctx, req)
 }
 
 // ConnectGitHub calls obiente.cloud.auth.v1.AuthService.ConnectGitHub.
@@ -183,6 +200,8 @@ func (c *authServiceClient) ListGitHubIntegrations(ctx context.Context, req *con
 type AuthServiceHandler interface {
 	// Get current authenticated user
 	GetCurrentUser(context.Context, *connect.Request[v1.GetCurrentUserRequest]) (*connect.Response[v1.GetCurrentUserResponse], error)
+	// Update user profile information
+	UpdateUserProfile(context.Context, *connect.Request[v1.UpdateUserProfileRequest]) (*connect.Response[v1.UpdateUserProfileResponse], error)
 	// GitHub Integration
 	// Connect GitHub account by storing OAuth token
 	ConnectGitHub(context.Context, *connect.Request[v1.ConnectGitHubRequest]) (*connect.Response[v1.ConnectGitHubResponse], error)
@@ -210,6 +229,12 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		AuthServiceGetCurrentUserProcedure,
 		svc.GetCurrentUser,
 		connect.WithSchema(authServiceMethods.ByName("GetCurrentUser")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceUpdateUserProfileHandler := connect.NewUnaryHandler(
+		AuthServiceUpdateUserProfileProcedure,
+		svc.UpdateUserProfile,
+		connect.WithSchema(authServiceMethods.ByName("UpdateUserProfile")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authServiceConnectGitHubHandler := connect.NewUnaryHandler(
@@ -252,6 +277,8 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		switch r.URL.Path {
 		case AuthServiceGetCurrentUserProcedure:
 			authServiceGetCurrentUserHandler.ServeHTTP(w, r)
+		case AuthServiceUpdateUserProfileProcedure:
+			authServiceUpdateUserProfileHandler.ServeHTTP(w, r)
 		case AuthServiceConnectGitHubProcedure:
 			authServiceConnectGitHubHandler.ServeHTTP(w, r)
 		case AuthServiceDisconnectGitHubProcedure:
@@ -275,6 +302,10 @@ type UnimplementedAuthServiceHandler struct{}
 
 func (UnimplementedAuthServiceHandler) GetCurrentUser(context.Context, *connect.Request[v1.GetCurrentUserRequest]) (*connect.Response[v1.GetCurrentUserResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.auth.v1.AuthService.GetCurrentUser is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) UpdateUserProfile(context.Context, *connect.Request[v1.UpdateUserProfileRequest]) (*connect.Response[v1.UpdateUserProfileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.auth.v1.AuthService.UpdateUserProfile is not implemented"))
 }
 
 func (UnimplementedAuthServiceHandler) ConnectGitHub(context.Context, *connect.Request[v1.ConnectGitHubRequest]) (*connect.Response[v1.ConnectGitHubResponse], error) {

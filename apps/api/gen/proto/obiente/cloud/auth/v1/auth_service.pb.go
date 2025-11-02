@@ -906,6 +906,132 @@ func (x *ListGitHubIntegrationsResponse) GetIntegrations() []*GitHubIntegrationI
 	return nil
 }
 
+// User Profile Update Messages
+type UpdateUserProfileRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Optional: Update given name (first name)
+	GivenName *string `protobuf:"bytes,1,opt,name=given_name,json=givenName,proto3,oneof" json:"given_name,omitempty"`
+	// Optional: Update family name (last name)
+	FamilyName *string `protobuf:"bytes,2,opt,name=family_name,json=familyName,proto3,oneof" json:"family_name,omitempty"`
+	// Optional: Update display name
+	Name *string `protobuf:"bytes,3,opt,name=name,proto3,oneof" json:"name,omitempty"`
+	// Optional: Update preferred username
+	PreferredUsername *string `protobuf:"bytes,4,opt,name=preferred_username,json=preferredUsername,proto3,oneof" json:"preferred_username,omitempty"`
+	// Optional: Update locale
+	Locale        *string `protobuf:"bytes,5,opt,name=locale,proto3,oneof" json:"locale,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateUserProfileRequest) Reset() {
+	*x = UpdateUserProfileRequest{}
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateUserProfileRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateUserProfileRequest) ProtoMessage() {}
+
+func (x *UpdateUserProfileRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateUserProfileRequest.ProtoReflect.Descriptor instead.
+func (*UpdateUserProfileRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *UpdateUserProfileRequest) GetGivenName() string {
+	if x != nil && x.GivenName != nil {
+		return *x.GivenName
+	}
+	return ""
+}
+
+func (x *UpdateUserProfileRequest) GetFamilyName() string {
+	if x != nil && x.FamilyName != nil {
+		return *x.FamilyName
+	}
+	return ""
+}
+
+func (x *UpdateUserProfileRequest) GetName() string {
+	if x != nil && x.Name != nil {
+		return *x.Name
+	}
+	return ""
+}
+
+func (x *UpdateUserProfileRequest) GetPreferredUsername() string {
+	if x != nil && x.PreferredUsername != nil {
+		return *x.PreferredUsername
+	}
+	return ""
+}
+
+func (x *UpdateUserProfileRequest) GetLocale() string {
+	if x != nil && x.Locale != nil {
+		return *x.Locale
+	}
+	return ""
+}
+
+type UpdateUserProfileResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	User          *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"` // Updated user information
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateUserProfileResponse) Reset() {
+	*x = UpdateUserProfileResponse{}
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateUserProfileResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateUserProfileResponse) ProtoMessage() {}
+
+func (x *UpdateUserProfileResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateUserProfileResponse.ProtoReflect.Descriptor instead.
+func (*UpdateUserProfileResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *UpdateUserProfileResponse) GetUser() *User {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
 var File_obiente_cloud_auth_v1_auth_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_auth_v1_auth_service_proto_rawDesc = "" +
@@ -970,9 +1096,25 @@ const file_obiente_cloud_auth_v1_auth_service_proto_rawDesc = "" +
 	"\x11organization_name\x18\x06 \x01(\tR\x10organizationName\x12=\n" +
 	"\fconnected_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\vconnectedAt\"r\n" +
 	"\x1eListGitHubIntegrationsResponse\x12P\n" +
-	"\fintegrations\x18\x01 \x03(\v2,.obiente.cloud.auth.v1.GitHubIntegrationInfoR\fintegrations2\x82\a\n" +
+	"\fintegrations\x18\x01 \x03(\v2,.obiente.cloud.auth.v1.GitHubIntegrationInfoR\fintegrations\"\x98\x02\n" +
+	"\x18UpdateUserProfileRequest\x12\"\n" +
+	"\n" +
+	"given_name\x18\x01 \x01(\tH\x00R\tgivenName\x88\x01\x01\x12$\n" +
+	"\vfamily_name\x18\x02 \x01(\tH\x01R\n" +
+	"familyName\x88\x01\x01\x12\x17\n" +
+	"\x04name\x18\x03 \x01(\tH\x02R\x04name\x88\x01\x01\x122\n" +
+	"\x12preferred_username\x18\x04 \x01(\tH\x03R\x11preferredUsername\x88\x01\x01\x12\x1b\n" +
+	"\x06locale\x18\x05 \x01(\tH\x04R\x06locale\x88\x01\x01B\r\n" +
+	"\v_given_nameB\x0e\n" +
+	"\f_family_nameB\a\n" +
+	"\x05_nameB\x15\n" +
+	"\x13_preferred_usernameB\t\n" +
+	"\a_locale\"L\n" +
+	"\x19UpdateUserProfileResponse\x12/\n" +
+	"\x04user\x18\x01 \x01(\v2\x1b.obiente.cloud.auth.v1.UserR\x04user2\xfa\a\n" +
 	"\vAuthService\x12m\n" +
-	"\x0eGetCurrentUser\x12,.obiente.cloud.auth.v1.GetCurrentUserRequest\x1a-.obiente.cloud.auth.v1.GetCurrentUserResponse\x12j\n" +
+	"\x0eGetCurrentUser\x12,.obiente.cloud.auth.v1.GetCurrentUserRequest\x1a-.obiente.cloud.auth.v1.GetCurrentUserResponse\x12v\n" +
+	"\x11UpdateUserProfile\x12/.obiente.cloud.auth.v1.UpdateUserProfileRequest\x1a0.obiente.cloud.auth.v1.UpdateUserProfileResponse\x12j\n" +
 	"\rConnectGitHub\x12+.obiente.cloud.auth.v1.ConnectGitHubRequest\x1a,.obiente.cloud.auth.v1.ConnectGitHubResponse\x12s\n" +
 	"\x10DisconnectGitHub\x12..obiente.cloud.auth.v1.DisconnectGitHubRequest\x1a/.obiente.cloud.auth.v1.DisconnectGitHubResponse\x12p\n" +
 	"\x0fGetGitHubStatus\x12-.obiente.cloud.auth.v1.GetGitHubStatusRequest\x1a..obiente.cloud.auth.v1.GetGitHubStatusResponse\x12\x8e\x01\n" +
@@ -992,7 +1134,7 @@ func file_obiente_cloud_auth_v1_auth_service_proto_rawDescGZIP() []byte {
 	return file_obiente_cloud_auth_v1_auth_service_proto_rawDescData
 }
 
-var file_obiente_cloud_auth_v1_auth_service_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_obiente_cloud_auth_v1_auth_service_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_obiente_cloud_auth_v1_auth_service_proto_goTypes = []any{
 	(*GetCurrentUserRequest)(nil),                // 0: obiente.cloud.auth.v1.GetCurrentUserRequest
 	(*GetCurrentUserResponse)(nil),               // 1: obiente.cloud.auth.v1.GetCurrentUserResponse
@@ -1010,33 +1152,38 @@ var file_obiente_cloud_auth_v1_auth_service_proto_goTypes = []any{
 	(*ListGitHubIntegrationsRequest)(nil),        // 13: obiente.cloud.auth.v1.ListGitHubIntegrationsRequest
 	(*GitHubIntegrationInfo)(nil),                // 14: obiente.cloud.auth.v1.GitHubIntegrationInfo
 	(*ListGitHubIntegrationsResponse)(nil),       // 15: obiente.cloud.auth.v1.ListGitHubIntegrationsResponse
-	(*timestamppb.Timestamp)(nil),                // 16: google.protobuf.Timestamp
+	(*UpdateUserProfileRequest)(nil),             // 16: obiente.cloud.auth.v1.UpdateUserProfileRequest
+	(*UpdateUserProfileResponse)(nil),            // 17: obiente.cloud.auth.v1.UpdateUserProfileResponse
+	(*timestamppb.Timestamp)(nil),                // 18: google.protobuf.Timestamp
 }
 var file_obiente_cloud_auth_v1_auth_service_proto_depIdxs = []int32{
 	2,  // 0: obiente.cloud.auth.v1.GetCurrentUserResponse.user:type_name -> obiente.cloud.auth.v1.User
-	16, // 1: obiente.cloud.auth.v1.User.created_at:type_name -> google.protobuf.Timestamp
-	16, // 2: obiente.cloud.auth.v1.User.updated_at:type_name -> google.protobuf.Timestamp
-	16, // 3: obiente.cloud.auth.v1.GitHubIntegrationInfo.connected_at:type_name -> google.protobuf.Timestamp
+	18, // 1: obiente.cloud.auth.v1.User.created_at:type_name -> google.protobuf.Timestamp
+	18, // 2: obiente.cloud.auth.v1.User.updated_at:type_name -> google.protobuf.Timestamp
+	18, // 3: obiente.cloud.auth.v1.GitHubIntegrationInfo.connected_at:type_name -> google.protobuf.Timestamp
 	14, // 4: obiente.cloud.auth.v1.ListGitHubIntegrationsResponse.integrations:type_name -> obiente.cloud.auth.v1.GitHubIntegrationInfo
-	0,  // 5: obiente.cloud.auth.v1.AuthService.GetCurrentUser:input_type -> obiente.cloud.auth.v1.GetCurrentUserRequest
-	3,  // 6: obiente.cloud.auth.v1.AuthService.ConnectGitHub:input_type -> obiente.cloud.auth.v1.ConnectGitHubRequest
-	5,  // 7: obiente.cloud.auth.v1.AuthService.DisconnectGitHub:input_type -> obiente.cloud.auth.v1.DisconnectGitHubRequest
-	7,  // 8: obiente.cloud.auth.v1.AuthService.GetGitHubStatus:input_type -> obiente.cloud.auth.v1.GetGitHubStatusRequest
-	9,  // 9: obiente.cloud.auth.v1.AuthService.ConnectOrganizationGitHub:input_type -> obiente.cloud.auth.v1.ConnectOrganizationGitHubRequest
-	11, // 10: obiente.cloud.auth.v1.AuthService.DisconnectOrganizationGitHub:input_type -> obiente.cloud.auth.v1.DisconnectOrganizationGitHubRequest
-	13, // 11: obiente.cloud.auth.v1.AuthService.ListGitHubIntegrations:input_type -> obiente.cloud.auth.v1.ListGitHubIntegrationsRequest
-	1,  // 12: obiente.cloud.auth.v1.AuthService.GetCurrentUser:output_type -> obiente.cloud.auth.v1.GetCurrentUserResponse
-	4,  // 13: obiente.cloud.auth.v1.AuthService.ConnectGitHub:output_type -> obiente.cloud.auth.v1.ConnectGitHubResponse
-	6,  // 14: obiente.cloud.auth.v1.AuthService.DisconnectGitHub:output_type -> obiente.cloud.auth.v1.DisconnectGitHubResponse
-	8,  // 15: obiente.cloud.auth.v1.AuthService.GetGitHubStatus:output_type -> obiente.cloud.auth.v1.GetGitHubStatusResponse
-	10, // 16: obiente.cloud.auth.v1.AuthService.ConnectOrganizationGitHub:output_type -> obiente.cloud.auth.v1.ConnectOrganizationGitHubResponse
-	12, // 17: obiente.cloud.auth.v1.AuthService.DisconnectOrganizationGitHub:output_type -> obiente.cloud.auth.v1.DisconnectOrganizationGitHubResponse
-	15, // 18: obiente.cloud.auth.v1.AuthService.ListGitHubIntegrations:output_type -> obiente.cloud.auth.v1.ListGitHubIntegrationsResponse
-	12, // [12:19] is the sub-list for method output_type
-	5,  // [5:12] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	2,  // 5: obiente.cloud.auth.v1.UpdateUserProfileResponse.user:type_name -> obiente.cloud.auth.v1.User
+	0,  // 6: obiente.cloud.auth.v1.AuthService.GetCurrentUser:input_type -> obiente.cloud.auth.v1.GetCurrentUserRequest
+	16, // 7: obiente.cloud.auth.v1.AuthService.UpdateUserProfile:input_type -> obiente.cloud.auth.v1.UpdateUserProfileRequest
+	3,  // 8: obiente.cloud.auth.v1.AuthService.ConnectGitHub:input_type -> obiente.cloud.auth.v1.ConnectGitHubRequest
+	5,  // 9: obiente.cloud.auth.v1.AuthService.DisconnectGitHub:input_type -> obiente.cloud.auth.v1.DisconnectGitHubRequest
+	7,  // 10: obiente.cloud.auth.v1.AuthService.GetGitHubStatus:input_type -> obiente.cloud.auth.v1.GetGitHubStatusRequest
+	9,  // 11: obiente.cloud.auth.v1.AuthService.ConnectOrganizationGitHub:input_type -> obiente.cloud.auth.v1.ConnectOrganizationGitHubRequest
+	11, // 12: obiente.cloud.auth.v1.AuthService.DisconnectOrganizationGitHub:input_type -> obiente.cloud.auth.v1.DisconnectOrganizationGitHubRequest
+	13, // 13: obiente.cloud.auth.v1.AuthService.ListGitHubIntegrations:input_type -> obiente.cloud.auth.v1.ListGitHubIntegrationsRequest
+	1,  // 14: obiente.cloud.auth.v1.AuthService.GetCurrentUser:output_type -> obiente.cloud.auth.v1.GetCurrentUserResponse
+	17, // 15: obiente.cloud.auth.v1.AuthService.UpdateUserProfile:output_type -> obiente.cloud.auth.v1.UpdateUserProfileResponse
+	4,  // 16: obiente.cloud.auth.v1.AuthService.ConnectGitHub:output_type -> obiente.cloud.auth.v1.ConnectGitHubResponse
+	6,  // 17: obiente.cloud.auth.v1.AuthService.DisconnectGitHub:output_type -> obiente.cloud.auth.v1.DisconnectGitHubResponse
+	8,  // 18: obiente.cloud.auth.v1.AuthService.GetGitHubStatus:output_type -> obiente.cloud.auth.v1.GetGitHubStatusResponse
+	10, // 19: obiente.cloud.auth.v1.AuthService.ConnectOrganizationGitHub:output_type -> obiente.cloud.auth.v1.ConnectOrganizationGitHubResponse
+	12, // 20: obiente.cloud.auth.v1.AuthService.DisconnectOrganizationGitHub:output_type -> obiente.cloud.auth.v1.DisconnectOrganizationGitHubResponse
+	15, // 21: obiente.cloud.auth.v1.AuthService.ListGitHubIntegrations:output_type -> obiente.cloud.auth.v1.ListGitHubIntegrationsResponse
+	14, // [14:22] is the sub-list for method output_type
+	6,  // [6:14] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_auth_v1_auth_service_proto_init() }
@@ -1044,13 +1191,14 @@ func file_obiente_cloud_auth_v1_auth_service_proto_init() {
 	if File_obiente_cloud_auth_v1_auth_service_proto != nil {
 		return
 	}
+	file_obiente_cloud_auth_v1_auth_service_proto_msgTypes[16].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_auth_v1_auth_service_proto_rawDesc), len(file_obiente_cloud_auth_v1_auth_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
