@@ -359,7 +359,16 @@
                                 :items="protocolOptions"
                                 label="Protocol"
                                 size="sm"
-                                @update:model-value="markRoutingDirty"
+                                @update:model-value="(val) => { 
+                                  rule.protocol = val; 
+                                  // Auto-sync SSL with protocol
+                                  if (val === 'http') {
+                                    rule.sslEnabled = false;
+                                  } else if (val === 'https') {
+                                    rule.sslEnabled = true;
+                                  }
+                                  markRoutingDirty();
+                                }"
                               />
                             </OuiGrid>
 
@@ -368,6 +377,7 @@
                                 v-model="rule.sslEnabled"
                                 label="SSL Enabled"
                                 size="sm"
+                                :disabled="rule.protocol === 'http'"
                                 @update:checked="markRoutingDirty"
                               />
                               <OuiSelect
@@ -382,17 +392,17 @@
                           </OuiStack>
                         </OuiCardBody>
                       </OuiCard>
-
-                      <OuiFlex justify="end">
-                        <OuiButton
-                          @click="saveRoutingRules"
-                          :disabled="!isRoutingDirty || isSavingRouting"
-                          size="sm"
-                        >
-                          {{ isSavingRouting ? "Saving..." : "Save Routing Rules" }}
-                        </OuiButton>
-                      </OuiFlex>
                     </OuiStack>
+
+                    <OuiFlex justify="end">
+                      <OuiButton
+                        @click="saveRoutingRules"
+                        :disabled="!isRoutingDirty || isSavingRouting"
+                        size="sm"
+                      >
+                        {{ isSavingRouting ? "Saving..." : "Save Routing Rules" }}
+                      </OuiButton>
+                    </OuiFlex>
                   </OuiStack>
                 </div>
               </div>
@@ -652,9 +662,17 @@
         if (!rulesByService.has(serviceName)) {
           rulesByService.set(serviceName, []);
         }
+        
+        const protocol = rule.protocol || "http";
+        // Sync SSL with protocol - HTTP should not have SSL enabled
+        const sslEnabled = protocol === "http" ? false : (rule.sslEnabled ?? (protocol === "https"));
+        
+        // Create rule object with corrected values (order matters - override after spread)
         rulesByService.get(serviceName)!.push({
           ...rule,
           targetPortStr: String(rule.targetPort || 80),
+          protocol: protocol,
+          sslEnabled: sslEnabled, // This overrides the spread value to ensure correct state
         });
       });
 
@@ -695,7 +713,7 @@
       targetPort: defaultPort,
       targetPortStr: String(defaultPort),
       protocol: "http",
-      sslEnabled: true,
+      sslEnabled: false, // HTTP protocol defaults to no SSL
       sslCertResolver: "letsencrypt",
     } as LocalRoutingRule;
     rules.push(newRule);
@@ -726,6 +744,10 @@
     localRoutingRules.value.forEach((rules, serviceName) => {
       rules.forEach((rule) => {
         if (rule.domain.trim()) {
+          const protocol = rule.protocol || "http";
+          // Ensure SSL is disabled for HTTP protocol
+          const sslEnabled = protocol === "http" ? false : (rule.sslEnabled ?? (protocol === "https"));
+          
           allRules.push({
             id: rule.id || "",
             deploymentId: props.deploymentId,
@@ -733,8 +755,8 @@
             serviceName: rule.serviceName.trim() || serviceName,
             pathPrefix: rule.pathPrefix?.trim() || "",
             targetPort: rule.targetPort || 80,
-            protocol: rule.protocol || "http",
-            sslEnabled: rule.sslEnabled ?? true,
+            protocol: protocol,
+            sslEnabled: sslEnabled,
             sslCertResolver: rule.sslCertResolver || "letsencrypt",
           } as RoutingRule);
         }
@@ -840,7 +862,13 @@
         (c) => c.status?.toLowerCase() === "running"
       );
 
-      await Promise.all(
+      if (runningContainers.length === 0) {
+        return;
+      }
+
+      // Use Promise.allSettled to continue even if some fail
+      // This handles network errors/timeouts more gracefully
+      const results = await Promise.allSettled(
         runningContainers.map((container) =>
           client.stopContainer({
             organizationId: props.organizationId,
@@ -850,17 +878,68 @@
         )
       );
 
-      // Refresh containers after a delay
+      // Check if any failed with non-network errors
+      const failures = results.filter((result): result is PromiseRejectedResult => {
+        if (result.status === "fulfilled") return false;
+        const error = result.reason;
+        // Ignore network errors and timeouts - container might have stopped anyway
+        const isNetworkError = 
+          error?.message?.includes("NetworkError") ||
+          error?.message?.includes("fetch") ||
+          error?.message?.includes("timeout") ||
+          error?.message?.includes("Failed to fetch") ||
+          error?.code === "unknown" ||
+          error?.name === "NetworkError";
+        return !isNetworkError;
+      });
+
+      // Refresh containers immediately to check actual state
+      await loadContainers();
+
+      // Wait a bit and refresh again to catch any delayed state changes
       setTimeout(() => {
         loadContainers();
       }, 1000);
+
+      // Only show error if there were non-network failures
+      if (failures.length > 0) {
+        const errorMessages = failures
+          .map((f) => {
+            const error = f.reason;
+            return error?.message || error?.toString() || "Unknown error";
+          })
+          .filter((msg, idx, arr) => arr.indexOf(msg) === idx);
+        
+        await showAlert({
+          title: "Failed to Stop Service",
+          message: `Failed to stop some containers for service "${serviceName}": ${errorMessages.join(", ")}`,
+        });
+      }
+      // Otherwise, assume success (containers might have stopped even if API timed out)
     } catch (error: any) {
-      await showAlert({
-        title: "Failed to Stop Service",
-        message:
-          error.message ||
-          `Failed to stop service "${serviceName}". Please try again.`,
-      });
+      // Only show error if it's not a network/timeout error
+      const isNetworkError = 
+        error?.message?.includes("NetworkError") ||
+        error?.message?.includes("fetch") ||
+        error?.message?.includes("timeout") ||
+        error?.message?.includes("Failed to fetch") ||
+        error?.code === "unknown" ||
+        error?.name === "NetworkError";
+
+      if (!isNetworkError) {
+        await showAlert({
+          title: "Failed to Stop Service",
+          message:
+            error.message ||
+            `Failed to stop service "${serviceName}". Please try again.`,
+        });
+      }
+      
+      // Refresh containers anyway to check actual state
+      await loadContainers();
+      setTimeout(() => {
+        loadContainers();
+      }, 1000);
     } finally {
       processingServices.value.delete(serviceName);
     }
@@ -934,16 +1013,36 @@
         containerId,
       });
 
+      // Refresh containers immediately and again after delay
+      await loadContainers();
       setTimeout(() => {
         loadContainers();
       }, 1000);
     } catch (error: any) {
-      await showAlert({
-        title: "Failed to Stop Container",
-        message:
-          error.message ||
-          "Failed to stop container. Please try again.",
-      });
+      // Only show error if it's not a network/timeout error
+      // Container might have stopped even if API timed out
+      const isNetworkError = 
+        error?.message?.includes("NetworkError") ||
+        error?.message?.includes("fetch") ||
+        error?.message?.includes("timeout") ||
+        error?.message?.includes("Failed to fetch") ||
+        error?.code === "unknown" ||
+        error?.name === "NetworkError";
+
+      if (!isNetworkError) {
+        await showAlert({
+          title: "Failed to Stop Container",
+          message:
+            error.message ||
+            "Failed to stop container. Please try again.",
+        });
+      }
+      
+      // Refresh containers anyway to check actual state
+      await loadContainers();
+      setTimeout(() => {
+        loadContainers();
+      }, 1000);
     } finally {
       processingContainers.value.delete(containerId);
     }

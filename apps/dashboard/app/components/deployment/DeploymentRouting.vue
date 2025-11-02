@@ -85,11 +85,21 @@
                   v-model="rule.protocol"
                   :items="protocolOptions"
                   label="Protocol"
-                  @update:model-value="markDirty"
+                  @update:model-value="(val) => { 
+                    rule.protocol = val; 
+                    // Auto-sync SSL with protocol
+                    if (val === 'http') {
+                      rule.sslEnabled = false;
+                    } else if (val === 'https') {
+                      rule.sslEnabled = true;
+                    }
+                    markDirty();
+                  }"
                 />
                 <OuiSwitch
                   v-model="rule.sslEnabled"
                   label="SSL Enabled"
+                  :disabled="rule.protocol === 'http'"
                   @update:checked="markDirty"
                 />
               </OuiGrid>
@@ -104,17 +114,17 @@
             </OuiStack>
           </OuiCardBody>
         </OuiCard>
-
-        <OuiFlex justify="end">
-          <OuiButton
-            @click="saveRules"
-            :disabled="!isDirty || isLoading"
-            size="sm"
-          >
-            {{ isLoading ? "Saving..." : "Save Routing Rules" }}
-          </OuiButton>
-        </OuiFlex>
       </OuiStack>
+
+      <OuiFlex v-if="!isLoading" justify="end">
+        <OuiButton
+          @click="saveRules"
+          :disabled="!isDirty || isLoading"
+          size="sm"
+        >
+          {{ isLoading ? "Saving..." : "Save Routing Rules" }}
+        </OuiButton>
+      </OuiFlex>
     </OuiStack>
   </OuiCardBody>
 </template>
@@ -199,17 +209,23 @@ const loadRules = async () => {
       deploymentId: props.deployment.id,
     });
 
-    rules.value = (res.rules || []).map((rule) => ({
-      id: rule.id,
-      domain: rule.domain || "",
-      serviceName: rule.serviceName || "default",
-      pathPrefix: rule.pathPrefix || "",
-      targetPort: rule.targetPort || 80,
-      targetPortStr: String(rule.targetPort || 80),
-      protocol: rule.protocol || "http",
-      sslEnabled: rule.sslEnabled ?? true,
-      sslCertResolver: rule.sslCertResolver || "letsencrypt",
-    }));
+    rules.value = (res.rules || []).map((rule) => {
+      const protocol = rule.protocol || "http";
+      // Sync SSL with protocol - HTTP should not have SSL enabled
+      const sslEnabled = protocol === "http" ? false : (rule.sslEnabled ?? (protocol === "https"));
+      
+      return {
+        id: rule.id,
+        domain: rule.domain || "",
+        serviceName: rule.serviceName || "default",
+        pathPrefix: rule.pathPrefix || "",
+        targetPort: rule.targetPort || 80,
+        targetPortStr: String(rule.targetPort || 80),
+        protocol: protocol,
+        sslEnabled: sslEnabled,
+        sslCertResolver: rule.sslCertResolver || "letsencrypt",
+      };
+    });
 
     // If no rules exist, add a default one
     if (rules.value.length === 0 && props.deployment.domain) {
@@ -221,7 +237,7 @@ const loadRules = async () => {
         targetPort: defaultPort,
         targetPortStr: String(defaultPort),
         protocol: "http",
-        sslEnabled: true,
+        sslEnabled: false, // HTTP protocol defaults to no SSL
         sslCertResolver: "letsencrypt",
       });
     }
@@ -247,7 +263,7 @@ const addRule = () => {
     targetPort: defaultPort,
     targetPortStr: String(defaultPort),
     protocol: "http",
-    sslEnabled: true,
+    sslEnabled: false, // HTTP protocol defaults to no SSL
     sslCertResolver: "letsencrypt",
   });
   markDirty();
@@ -294,6 +310,10 @@ const saveRules = async () => {
   isLoading.value = true;
   try {
     const protoRules = rules.value.map((rule) => {
+      const protocol = rule.protocol || "http";
+      // Ensure SSL is disabled for HTTP protocol, enabled for HTTPS
+      const sslEnabled = protocol === "http" ? false : (protocol === "https" ? true : rule.sslEnabled);
+      
       const protoRule = {
         id: rule.id || "",
         deploymentId: props.deployment.id,
@@ -301,8 +321,8 @@ const saveRules = async () => {
         serviceName: rule.serviceName.trim() || "default",
         pathPrefix: rule.pathPrefix.trim(),
         targetPort: rule.targetPort,
-        protocol: rule.protocol,
-        sslEnabled: rule.sslEnabled,
+        protocol: protocol,
+        sslEnabled: sslEnabled,
         sslCertResolver: rule.sslCertResolver || "",
       };
       return protoRule as RoutingRule;
