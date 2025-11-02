@@ -60,6 +60,15 @@ const (
 	// DeploymentServiceStreamBuildLogsProcedure is the fully-qualified name of the DeploymentService's
 	// StreamBuildLogs RPC.
 	DeploymentServiceStreamBuildLogsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StreamBuildLogs"
+	// DeploymentServiceGetDeploymentMetricsProcedure is the fully-qualified name of the
+	// DeploymentService's GetDeploymentMetrics RPC.
+	DeploymentServiceGetDeploymentMetricsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetDeploymentMetrics"
+	// DeploymentServiceStreamDeploymentMetricsProcedure is the fully-qualified name of the
+	// DeploymentService's StreamDeploymentMetrics RPC.
+	DeploymentServiceStreamDeploymentMetricsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StreamDeploymentMetrics"
+	// DeploymentServiceGetDeploymentUsageProcedure is the fully-qualified name of the
+	// DeploymentService's GetDeploymentUsage RPC.
+	DeploymentServiceGetDeploymentUsageProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetDeploymentUsage"
 	// DeploymentServiceStartDeploymentProcedure is the fully-qualified name of the DeploymentService's
 	// StartDeployment RPC.
 	DeploymentServiceStartDeploymentProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StartDeployment"
@@ -141,6 +150,21 @@ const (
 	// DeploymentServiceGetDeploymentServiceNamesProcedure is the fully-qualified name of the
 	// DeploymentService's GetDeploymentServiceNames RPC.
 	DeploymentServiceGetDeploymentServiceNamesProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetDeploymentServiceNames"
+	// DeploymentServiceListDeploymentContainersProcedure is the fully-qualified name of the
+	// DeploymentService's ListDeploymentContainers RPC.
+	DeploymentServiceListDeploymentContainersProcedure = "/obiente.cloud.deployments.v1.DeploymentService/ListDeploymentContainers"
+	// DeploymentServiceStreamContainerLogsProcedure is the fully-qualified name of the
+	// DeploymentService's StreamContainerLogs RPC.
+	DeploymentServiceStreamContainerLogsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StreamContainerLogs"
+	// DeploymentServiceStartContainerProcedure is the fully-qualified name of the DeploymentService's
+	// StartContainer RPC.
+	DeploymentServiceStartContainerProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StartContainer"
+	// DeploymentServiceStopContainerProcedure is the fully-qualified name of the DeploymentService's
+	// StopContainer RPC.
+	DeploymentServiceStopContainerProcedure = "/obiente.cloud.deployments.v1.DeploymentService/StopContainer"
+	// DeploymentServiceRestartContainerProcedure is the fully-qualified name of the DeploymentService's
+	// RestartContainer RPC.
+	DeploymentServiceRestartContainerProcedure = "/obiente.cloud.deployments.v1.DeploymentService/RestartContainer"
 )
 
 // DeploymentServiceClient is a client for the obiente.cloud.deployments.v1.DeploymentService
@@ -164,6 +188,12 @@ type DeploymentServiceClient interface {
 	StreamDeploymentLogs(context.Context, *connect.Request[v1.StreamDeploymentLogsRequest]) (*connect.ServerStreamForClient[v1.DeploymentLogLine], error)
 	// Stream build logs during deployment (live build output)
 	StreamBuildLogs(context.Context, *connect.Request[v1.StreamBuildLogsRequest]) (*connect.ServerStreamForClient[v1.DeploymentLogLine], error)
+	// Get deployment metrics (real-time or historical)
+	GetDeploymentMetrics(context.Context, *connect.Request[v1.GetDeploymentMetricsRequest]) (*connect.Response[v1.GetDeploymentMetricsResponse], error)
+	// Stream real-time deployment metrics
+	StreamDeploymentMetrics(context.Context, *connect.Request[v1.StreamDeploymentMetricsRequest]) (*connect.ServerStreamForClient[v1.DeploymentMetric], error)
+	// Get aggregated usage for a deployment
+	GetDeploymentUsage(context.Context, *connect.Request[v1.GetDeploymentUsageRequest]) (*connect.Response[v1.GetDeploymentUsageResponse], error)
 	// Start a stopped deployment
 	StartDeployment(context.Context, *connect.Request[v1.StartDeploymentRequest]) (*connect.Response[v1.StartDeploymentResponse], error)
 	// Stop a running deployment
@@ -226,6 +256,16 @@ type DeploymentServiceClient interface {
 	UpdateDeploymentRoutings(context.Context, *connect.Request[v1.UpdateDeploymentRoutingsRequest]) (*connect.Response[v1.UpdateDeploymentRoutingsResponse], error)
 	// Get available service names from Docker Compose
 	GetDeploymentServiceNames(context.Context, *connect.Request[v1.GetDeploymentServiceNamesRequest]) (*connect.Response[v1.GetDeploymentServiceNamesResponse], error)
+	// List all containers for a deployment
+	ListDeploymentContainers(context.Context, *connect.Request[v1.ListDeploymentContainersRequest]) (*connect.Response[v1.ListDeploymentContainersResponse], error)
+	// Stream logs from a specific container
+	StreamContainerLogs(context.Context, *connect.Request[v1.StreamContainerLogsRequest]) (*connect.ServerStreamForClient[v1.DeploymentLogLine], error)
+	// Start a specific container
+	StartContainer(context.Context, *connect.Request[v1.StartContainerRequest]) (*connect.Response[v1.StartContainerResponse], error)
+	// Stop a specific container
+	StopContainer(context.Context, *connect.Request[v1.StopContainerRequest]) (*connect.Response[v1.StopContainerResponse], error)
+	// Restart a specific container
+	RestartContainer(context.Context, *connect.Request[v1.RestartContainerRequest]) (*connect.Response[v1.RestartContainerResponse], error)
 }
 
 // NewDeploymentServiceClient constructs a client for the
@@ -292,6 +332,24 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			httpClient,
 			baseURL+DeploymentServiceStreamBuildLogsProcedure,
 			connect.WithSchema(deploymentServiceMethods.ByName("StreamBuildLogs")),
+			connect.WithClientOptions(opts...),
+		),
+		getDeploymentMetrics: connect.NewClient[v1.GetDeploymentMetricsRequest, v1.GetDeploymentMetricsResponse](
+			httpClient,
+			baseURL+DeploymentServiceGetDeploymentMetricsProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentMetrics")),
+			connect.WithClientOptions(opts...),
+		),
+		streamDeploymentMetrics: connect.NewClient[v1.StreamDeploymentMetricsRequest, v1.DeploymentMetric](
+			httpClient,
+			baseURL+DeploymentServiceStreamDeploymentMetricsProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("StreamDeploymentMetrics")),
+			connect.WithClientOptions(opts...),
+		),
+		getDeploymentUsage: connect.NewClient[v1.GetDeploymentUsageRequest, v1.GetDeploymentUsageResponse](
+			httpClient,
+			baseURL+DeploymentServiceGetDeploymentUsageProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentUsage")),
 			connect.WithClientOptions(opts...),
 		),
 		startDeployment: connect.NewClient[v1.StartDeploymentRequest, v1.StartDeploymentResponse](
@@ -456,6 +514,36 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentServiceNames")),
 			connect.WithClientOptions(opts...),
 		),
+		listDeploymentContainers: connect.NewClient[v1.ListDeploymentContainersRequest, v1.ListDeploymentContainersResponse](
+			httpClient,
+			baseURL+DeploymentServiceListDeploymentContainersProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("ListDeploymentContainers")),
+			connect.WithClientOptions(opts...),
+		),
+		streamContainerLogs: connect.NewClient[v1.StreamContainerLogsRequest, v1.DeploymentLogLine](
+			httpClient,
+			baseURL+DeploymentServiceStreamContainerLogsProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("StreamContainerLogs")),
+			connect.WithClientOptions(opts...),
+		),
+		startContainer: connect.NewClient[v1.StartContainerRequest, v1.StartContainerResponse](
+			httpClient,
+			baseURL+DeploymentServiceStartContainerProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("StartContainer")),
+			connect.WithClientOptions(opts...),
+		),
+		stopContainer: connect.NewClient[v1.StopContainerRequest, v1.StopContainerResponse](
+			httpClient,
+			baseURL+DeploymentServiceStopContainerProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("StopContainer")),
+			connect.WithClientOptions(opts...),
+		),
+		restartContainer: connect.NewClient[v1.RestartContainerRequest, v1.RestartContainerResponse](
+			httpClient,
+			baseURL+DeploymentServiceRestartContainerProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("RestartContainer")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -470,6 +558,9 @@ type deploymentServiceClient struct {
 	getDeploymentLogs               *connect.Client[v1.GetDeploymentLogsRequest, v1.GetDeploymentLogsResponse]
 	streamDeploymentLogs            *connect.Client[v1.StreamDeploymentLogsRequest, v1.DeploymentLogLine]
 	streamBuildLogs                 *connect.Client[v1.StreamBuildLogsRequest, v1.DeploymentLogLine]
+	getDeploymentMetrics            *connect.Client[v1.GetDeploymentMetricsRequest, v1.GetDeploymentMetricsResponse]
+	streamDeploymentMetrics         *connect.Client[v1.StreamDeploymentMetricsRequest, v1.DeploymentMetric]
+	getDeploymentUsage              *connect.Client[v1.GetDeploymentUsageRequest, v1.GetDeploymentUsageResponse]
 	startDeployment                 *connect.Client[v1.StartDeploymentRequest, v1.StartDeploymentResponse]
 	stopDeployment                  *connect.Client[v1.StopDeploymentRequest, v1.StopDeploymentResponse]
 	deleteDeployment                *connect.Client[v1.DeleteDeploymentRequest, v1.DeleteDeploymentResponse]
@@ -497,6 +588,11 @@ type deploymentServiceClient struct {
 	getDeploymentRoutings           *connect.Client[v1.GetDeploymentRoutingsRequest, v1.GetDeploymentRoutingsResponse]
 	updateDeploymentRoutings        *connect.Client[v1.UpdateDeploymentRoutingsRequest, v1.UpdateDeploymentRoutingsResponse]
 	getDeploymentServiceNames       *connect.Client[v1.GetDeploymentServiceNamesRequest, v1.GetDeploymentServiceNamesResponse]
+	listDeploymentContainers        *connect.Client[v1.ListDeploymentContainersRequest, v1.ListDeploymentContainersResponse]
+	streamContainerLogs             *connect.Client[v1.StreamContainerLogsRequest, v1.DeploymentLogLine]
+	startContainer                  *connect.Client[v1.StartContainerRequest, v1.StartContainerResponse]
+	stopContainer                   *connect.Client[v1.StopContainerRequest, v1.StopContainerResponse]
+	restartContainer                *connect.Client[v1.RestartContainerRequest, v1.RestartContainerResponse]
 }
 
 // ListDeployments calls obiente.cloud.deployments.v1.DeploymentService.ListDeployments.
@@ -543,6 +639,22 @@ func (c *deploymentServiceClient) StreamDeploymentLogs(ctx context.Context, req 
 // StreamBuildLogs calls obiente.cloud.deployments.v1.DeploymentService.StreamBuildLogs.
 func (c *deploymentServiceClient) StreamBuildLogs(ctx context.Context, req *connect.Request[v1.StreamBuildLogsRequest]) (*connect.ServerStreamForClient[v1.DeploymentLogLine], error) {
 	return c.streamBuildLogs.CallServerStream(ctx, req)
+}
+
+// GetDeploymentMetrics calls obiente.cloud.deployments.v1.DeploymentService.GetDeploymentMetrics.
+func (c *deploymentServiceClient) GetDeploymentMetrics(ctx context.Context, req *connect.Request[v1.GetDeploymentMetricsRequest]) (*connect.Response[v1.GetDeploymentMetricsResponse], error) {
+	return c.getDeploymentMetrics.CallUnary(ctx, req)
+}
+
+// StreamDeploymentMetrics calls
+// obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentMetrics.
+func (c *deploymentServiceClient) StreamDeploymentMetrics(ctx context.Context, req *connect.Request[v1.StreamDeploymentMetricsRequest]) (*connect.ServerStreamForClient[v1.DeploymentMetric], error) {
+	return c.streamDeploymentMetrics.CallServerStream(ctx, req)
+}
+
+// GetDeploymentUsage calls obiente.cloud.deployments.v1.DeploymentService.GetDeploymentUsage.
+func (c *deploymentServiceClient) GetDeploymentUsage(ctx context.Context, req *connect.Request[v1.GetDeploymentUsageRequest]) (*connect.Response[v1.GetDeploymentUsageResponse], error) {
+	return c.getDeploymentUsage.CallUnary(ctx, req)
 }
 
 // StartDeployment calls obiente.cloud.deployments.v1.DeploymentService.StartDeployment.
@@ -687,6 +799,32 @@ func (c *deploymentServiceClient) GetDeploymentServiceNames(ctx context.Context,
 	return c.getDeploymentServiceNames.CallUnary(ctx, req)
 }
 
+// ListDeploymentContainers calls
+// obiente.cloud.deployments.v1.DeploymentService.ListDeploymentContainers.
+func (c *deploymentServiceClient) ListDeploymentContainers(ctx context.Context, req *connect.Request[v1.ListDeploymentContainersRequest]) (*connect.Response[v1.ListDeploymentContainersResponse], error) {
+	return c.listDeploymentContainers.CallUnary(ctx, req)
+}
+
+// StreamContainerLogs calls obiente.cloud.deployments.v1.DeploymentService.StreamContainerLogs.
+func (c *deploymentServiceClient) StreamContainerLogs(ctx context.Context, req *connect.Request[v1.StreamContainerLogsRequest]) (*connect.ServerStreamForClient[v1.DeploymentLogLine], error) {
+	return c.streamContainerLogs.CallServerStream(ctx, req)
+}
+
+// StartContainer calls obiente.cloud.deployments.v1.DeploymentService.StartContainer.
+func (c *deploymentServiceClient) StartContainer(ctx context.Context, req *connect.Request[v1.StartContainerRequest]) (*connect.Response[v1.StartContainerResponse], error) {
+	return c.startContainer.CallUnary(ctx, req)
+}
+
+// StopContainer calls obiente.cloud.deployments.v1.DeploymentService.StopContainer.
+func (c *deploymentServiceClient) StopContainer(ctx context.Context, req *connect.Request[v1.StopContainerRequest]) (*connect.Response[v1.StopContainerResponse], error) {
+	return c.stopContainer.CallUnary(ctx, req)
+}
+
+// RestartContainer calls obiente.cloud.deployments.v1.DeploymentService.RestartContainer.
+func (c *deploymentServiceClient) RestartContainer(ctx context.Context, req *connect.Request[v1.RestartContainerRequest]) (*connect.Response[v1.RestartContainerResponse], error) {
+	return c.restartContainer.CallUnary(ctx, req)
+}
+
 // DeploymentServiceHandler is an implementation of the
 // obiente.cloud.deployments.v1.DeploymentService service.
 type DeploymentServiceHandler interface {
@@ -708,6 +846,12 @@ type DeploymentServiceHandler interface {
 	StreamDeploymentLogs(context.Context, *connect.Request[v1.StreamDeploymentLogsRequest], *connect.ServerStream[v1.DeploymentLogLine]) error
 	// Stream build logs during deployment (live build output)
 	StreamBuildLogs(context.Context, *connect.Request[v1.StreamBuildLogsRequest], *connect.ServerStream[v1.DeploymentLogLine]) error
+	// Get deployment metrics (real-time or historical)
+	GetDeploymentMetrics(context.Context, *connect.Request[v1.GetDeploymentMetricsRequest]) (*connect.Response[v1.GetDeploymentMetricsResponse], error)
+	// Stream real-time deployment metrics
+	StreamDeploymentMetrics(context.Context, *connect.Request[v1.StreamDeploymentMetricsRequest], *connect.ServerStream[v1.DeploymentMetric]) error
+	// Get aggregated usage for a deployment
+	GetDeploymentUsage(context.Context, *connect.Request[v1.GetDeploymentUsageRequest]) (*connect.Response[v1.GetDeploymentUsageResponse], error)
 	// Start a stopped deployment
 	StartDeployment(context.Context, *connect.Request[v1.StartDeploymentRequest]) (*connect.Response[v1.StartDeploymentResponse], error)
 	// Stop a running deployment
@@ -770,6 +914,16 @@ type DeploymentServiceHandler interface {
 	UpdateDeploymentRoutings(context.Context, *connect.Request[v1.UpdateDeploymentRoutingsRequest]) (*connect.Response[v1.UpdateDeploymentRoutingsResponse], error)
 	// Get available service names from Docker Compose
 	GetDeploymentServiceNames(context.Context, *connect.Request[v1.GetDeploymentServiceNamesRequest]) (*connect.Response[v1.GetDeploymentServiceNamesResponse], error)
+	// List all containers for a deployment
+	ListDeploymentContainers(context.Context, *connect.Request[v1.ListDeploymentContainersRequest]) (*connect.Response[v1.ListDeploymentContainersResponse], error)
+	// Stream logs from a specific container
+	StreamContainerLogs(context.Context, *connect.Request[v1.StreamContainerLogsRequest], *connect.ServerStream[v1.DeploymentLogLine]) error
+	// Start a specific container
+	StartContainer(context.Context, *connect.Request[v1.StartContainerRequest]) (*connect.Response[v1.StartContainerResponse], error)
+	// Stop a specific container
+	StopContainer(context.Context, *connect.Request[v1.StopContainerRequest]) (*connect.Response[v1.StopContainerResponse], error)
+	// Restart a specific container
+	RestartContainer(context.Context, *connect.Request[v1.RestartContainerRequest]) (*connect.Response[v1.RestartContainerResponse], error)
 }
 
 // NewDeploymentServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -831,6 +985,24 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		DeploymentServiceStreamBuildLogsProcedure,
 		svc.StreamBuildLogs,
 		connect.WithSchema(deploymentServiceMethods.ByName("StreamBuildLogs")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceGetDeploymentMetricsHandler := connect.NewUnaryHandler(
+		DeploymentServiceGetDeploymentMetricsProcedure,
+		svc.GetDeploymentMetrics,
+		connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentMetrics")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceStreamDeploymentMetricsHandler := connect.NewServerStreamHandler(
+		DeploymentServiceStreamDeploymentMetricsProcedure,
+		svc.StreamDeploymentMetrics,
+		connect.WithSchema(deploymentServiceMethods.ByName("StreamDeploymentMetrics")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceGetDeploymentUsageHandler := connect.NewUnaryHandler(
+		DeploymentServiceGetDeploymentUsageProcedure,
+		svc.GetDeploymentUsage,
+		connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentUsage")),
 		connect.WithHandlerOptions(opts...),
 	)
 	deploymentServiceStartDeploymentHandler := connect.NewUnaryHandler(
@@ -995,6 +1167,36 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentServiceNames")),
 		connect.WithHandlerOptions(opts...),
 	)
+	deploymentServiceListDeploymentContainersHandler := connect.NewUnaryHandler(
+		DeploymentServiceListDeploymentContainersProcedure,
+		svc.ListDeploymentContainers,
+		connect.WithSchema(deploymentServiceMethods.ByName("ListDeploymentContainers")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceStreamContainerLogsHandler := connect.NewServerStreamHandler(
+		DeploymentServiceStreamContainerLogsProcedure,
+		svc.StreamContainerLogs,
+		connect.WithSchema(deploymentServiceMethods.ByName("StreamContainerLogs")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceStartContainerHandler := connect.NewUnaryHandler(
+		DeploymentServiceStartContainerProcedure,
+		svc.StartContainer,
+		connect.WithSchema(deploymentServiceMethods.ByName("StartContainer")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceStopContainerHandler := connect.NewUnaryHandler(
+		DeploymentServiceStopContainerProcedure,
+		svc.StopContainer,
+		connect.WithSchema(deploymentServiceMethods.ByName("StopContainer")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceRestartContainerHandler := connect.NewUnaryHandler(
+		DeploymentServiceRestartContainerProcedure,
+		svc.RestartContainer,
+		connect.WithSchema(deploymentServiceMethods.ByName("RestartContainer")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.deployments.v1.DeploymentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DeploymentServiceListDeploymentsProcedure:
@@ -1015,6 +1217,12 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceStreamDeploymentLogsHandler.ServeHTTP(w, r)
 		case DeploymentServiceStreamBuildLogsProcedure:
 			deploymentServiceStreamBuildLogsHandler.ServeHTTP(w, r)
+		case DeploymentServiceGetDeploymentMetricsProcedure:
+			deploymentServiceGetDeploymentMetricsHandler.ServeHTTP(w, r)
+		case DeploymentServiceStreamDeploymentMetricsProcedure:
+			deploymentServiceStreamDeploymentMetricsHandler.ServeHTTP(w, r)
+		case DeploymentServiceGetDeploymentUsageProcedure:
+			deploymentServiceGetDeploymentUsageHandler.ServeHTTP(w, r)
 		case DeploymentServiceStartDeploymentProcedure:
 			deploymentServiceStartDeploymentHandler.ServeHTTP(w, r)
 		case DeploymentServiceStopDeploymentProcedure:
@@ -1069,6 +1277,16 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceUpdateDeploymentRoutingsHandler.ServeHTTP(w, r)
 		case DeploymentServiceGetDeploymentServiceNamesProcedure:
 			deploymentServiceGetDeploymentServiceNamesHandler.ServeHTTP(w, r)
+		case DeploymentServiceListDeploymentContainersProcedure:
+			deploymentServiceListDeploymentContainersHandler.ServeHTTP(w, r)
+		case DeploymentServiceStreamContainerLogsProcedure:
+			deploymentServiceStreamContainerLogsHandler.ServeHTTP(w, r)
+		case DeploymentServiceStartContainerProcedure:
+			deploymentServiceStartContainerHandler.ServeHTTP(w, r)
+		case DeploymentServiceStopContainerProcedure:
+			deploymentServiceStopContainerHandler.ServeHTTP(w, r)
+		case DeploymentServiceRestartContainerProcedure:
+			deploymentServiceRestartContainerHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1112,6 +1330,18 @@ func (UnimplementedDeploymentServiceHandler) StreamDeploymentLogs(context.Contex
 
 func (UnimplementedDeploymentServiceHandler) StreamBuildLogs(context.Context, *connect.Request[v1.StreamBuildLogsRequest], *connect.ServerStream[v1.DeploymentLogLine]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.StreamBuildLogs is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) GetDeploymentMetrics(context.Context, *connect.Request[v1.GetDeploymentMetricsRequest]) (*connect.Response[v1.GetDeploymentMetricsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetDeploymentMetrics is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) StreamDeploymentMetrics(context.Context, *connect.Request[v1.StreamDeploymentMetricsRequest], *connect.ServerStream[v1.DeploymentMetric]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentMetrics is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) GetDeploymentUsage(context.Context, *connect.Request[v1.GetDeploymentUsageRequest]) (*connect.Response[v1.GetDeploymentUsageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetDeploymentUsage is not implemented"))
 }
 
 func (UnimplementedDeploymentServiceHandler) StartDeployment(context.Context, *connect.Request[v1.StartDeploymentRequest]) (*connect.Response[v1.StartDeploymentResponse], error) {
@@ -1220,4 +1450,24 @@ func (UnimplementedDeploymentServiceHandler) UpdateDeploymentRoutings(context.Co
 
 func (UnimplementedDeploymentServiceHandler) GetDeploymentServiceNames(context.Context, *connect.Request[v1.GetDeploymentServiceNamesRequest]) (*connect.Response[v1.GetDeploymentServiceNamesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetDeploymentServiceNames is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) ListDeploymentContainers(context.Context, *connect.Request[v1.ListDeploymentContainersRequest]) (*connect.Response[v1.ListDeploymentContainersResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.ListDeploymentContainers is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) StreamContainerLogs(context.Context, *connect.Request[v1.StreamContainerLogsRequest], *connect.ServerStream[v1.DeploymentLogLine]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.StreamContainerLogs is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) StartContainer(context.Context, *connect.Request[v1.StartContainerRequest]) (*connect.Response[v1.StartContainerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.StartContainer is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) StopContainer(context.Context, *connect.Request[v1.StopContainerRequest]) (*connect.Response[v1.StopContainerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.StopContainer is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) RestartContainer(context.Context, *connect.Request[v1.RestartContainerRequest]) (*connect.Response[v1.RestartContainerResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.RestartContainer is not implemented"))
 }

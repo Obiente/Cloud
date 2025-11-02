@@ -60,6 +60,18 @@ const (
 	// OrganizationServiceTransferOwnershipProcedure is the fully-qualified name of the
 	// OrganizationService's TransferOwnership RPC.
 	OrganizationServiceTransferOwnershipProcedure = "/obiente.cloud.organizations.v1.OrganizationService/TransferOwnership"
+	// OrganizationServiceGetUsageProcedure is the fully-qualified name of the OrganizationService's
+	// GetUsage RPC.
+	OrganizationServiceGetUsageProcedure = "/obiente.cloud.organizations.v1.OrganizationService/GetUsage"
+	// OrganizationServiceAddCreditsProcedure is the fully-qualified name of the OrganizationService's
+	// AddCredits RPC.
+	OrganizationServiceAddCreditsProcedure = "/obiente.cloud.organizations.v1.OrganizationService/AddCredits"
+	// OrganizationServiceAdminAddCreditsProcedure is the fully-qualified name of the
+	// OrganizationService's AdminAddCredits RPC.
+	OrganizationServiceAdminAddCreditsProcedure = "/obiente.cloud.organizations.v1.OrganizationService/AdminAddCredits"
+	// OrganizationServiceAdminRemoveCreditsProcedure is the fully-qualified name of the
+	// OrganizationService's AdminRemoveCredits RPC.
+	OrganizationServiceAdminRemoveCreditsProcedure = "/obiente.cloud.organizations.v1.OrganizationService/AdminRemoveCredits"
 )
 
 // OrganizationServiceClient is a client for the obiente.cloud.organizations.v1.OrganizationService
@@ -83,6 +95,14 @@ type OrganizationServiceClient interface {
 	RemoveMember(context.Context, *connect.Request[v1.RemoveMemberRequest]) (*connect.Response[v1.RemoveMemberResponse], error)
 	// Transfer organization ownership to another member
 	TransferOwnership(context.Context, *connect.Request[v1.TransferOwnershipRequest]) (*connect.Response[v1.TransferOwnershipResponse], error)
+	// Get current usage and billing information for the organization
+	GetUsage(context.Context, *connect.Request[v1.GetUsageRequest]) (*connect.Response[v1.GetUsageResponse], error)
+	// Add credits to organization (for regular users/owners)
+	AddCredits(context.Context, *connect.Request[v1.AddCreditsRequest]) (*connect.Response[v1.AddCreditsResponse], error)
+	// Admin: Add credits to any organization (superadmin only)
+	AdminAddCredits(context.Context, *connect.Request[v1.AdminAddCreditsRequest]) (*connect.Response[v1.AdminAddCreditsResponse], error)
+	// Admin: Remove credits from any organization (superadmin only)
+	AdminRemoveCredits(context.Context, *connect.Request[v1.AdminRemoveCreditsRequest]) (*connect.Response[v1.AdminRemoveCreditsResponse], error)
 }
 
 // NewOrganizationServiceClient constructs a client for the
@@ -151,6 +171,30 @@ func NewOrganizationServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(organizationServiceMethods.ByName("TransferOwnership")),
 			connect.WithClientOptions(opts...),
 		),
+		getUsage: connect.NewClient[v1.GetUsageRequest, v1.GetUsageResponse](
+			httpClient,
+			baseURL+OrganizationServiceGetUsageProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("GetUsage")),
+			connect.WithClientOptions(opts...),
+		),
+		addCredits: connect.NewClient[v1.AddCreditsRequest, v1.AddCreditsResponse](
+			httpClient,
+			baseURL+OrganizationServiceAddCreditsProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("AddCredits")),
+			connect.WithClientOptions(opts...),
+		),
+		adminAddCredits: connect.NewClient[v1.AdminAddCreditsRequest, v1.AdminAddCreditsResponse](
+			httpClient,
+			baseURL+OrganizationServiceAdminAddCreditsProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("AdminAddCredits")),
+			connect.WithClientOptions(opts...),
+		),
+		adminRemoveCredits: connect.NewClient[v1.AdminRemoveCreditsRequest, v1.AdminRemoveCreditsResponse](
+			httpClient,
+			baseURL+OrganizationServiceAdminRemoveCreditsProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("AdminRemoveCredits")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -165,6 +209,10 @@ type organizationServiceClient struct {
 	updateMember       *connect.Client[v1.UpdateMemberRequest, v1.UpdateMemberResponse]
 	removeMember       *connect.Client[v1.RemoveMemberRequest, v1.RemoveMemberResponse]
 	transferOwnership  *connect.Client[v1.TransferOwnershipRequest, v1.TransferOwnershipResponse]
+	getUsage           *connect.Client[v1.GetUsageRequest, v1.GetUsageResponse]
+	addCredits         *connect.Client[v1.AddCreditsRequest, v1.AddCreditsResponse]
+	adminAddCredits    *connect.Client[v1.AdminAddCreditsRequest, v1.AdminAddCreditsResponse]
+	adminRemoveCredits *connect.Client[v1.AdminRemoveCreditsRequest, v1.AdminRemoveCreditsResponse]
 }
 
 // ListOrganizations calls obiente.cloud.organizations.v1.OrganizationService.ListOrganizations.
@@ -212,6 +260,26 @@ func (c *organizationServiceClient) TransferOwnership(ctx context.Context, req *
 	return c.transferOwnership.CallUnary(ctx, req)
 }
 
+// GetUsage calls obiente.cloud.organizations.v1.OrganizationService.GetUsage.
+func (c *organizationServiceClient) GetUsage(ctx context.Context, req *connect.Request[v1.GetUsageRequest]) (*connect.Response[v1.GetUsageResponse], error) {
+	return c.getUsage.CallUnary(ctx, req)
+}
+
+// AddCredits calls obiente.cloud.organizations.v1.OrganizationService.AddCredits.
+func (c *organizationServiceClient) AddCredits(ctx context.Context, req *connect.Request[v1.AddCreditsRequest]) (*connect.Response[v1.AddCreditsResponse], error) {
+	return c.addCredits.CallUnary(ctx, req)
+}
+
+// AdminAddCredits calls obiente.cloud.organizations.v1.OrganizationService.AdminAddCredits.
+func (c *organizationServiceClient) AdminAddCredits(ctx context.Context, req *connect.Request[v1.AdminAddCreditsRequest]) (*connect.Response[v1.AdminAddCreditsResponse], error) {
+	return c.adminAddCredits.CallUnary(ctx, req)
+}
+
+// AdminRemoveCredits calls obiente.cloud.organizations.v1.OrganizationService.AdminRemoveCredits.
+func (c *organizationServiceClient) AdminRemoveCredits(ctx context.Context, req *connect.Request[v1.AdminRemoveCreditsRequest]) (*connect.Response[v1.AdminRemoveCreditsResponse], error) {
+	return c.adminRemoveCredits.CallUnary(ctx, req)
+}
+
 // OrganizationServiceHandler is an implementation of the
 // obiente.cloud.organizations.v1.OrganizationService service.
 type OrganizationServiceHandler interface {
@@ -233,6 +301,14 @@ type OrganizationServiceHandler interface {
 	RemoveMember(context.Context, *connect.Request[v1.RemoveMemberRequest]) (*connect.Response[v1.RemoveMemberResponse], error)
 	// Transfer organization ownership to another member
 	TransferOwnership(context.Context, *connect.Request[v1.TransferOwnershipRequest]) (*connect.Response[v1.TransferOwnershipResponse], error)
+	// Get current usage and billing information for the organization
+	GetUsage(context.Context, *connect.Request[v1.GetUsageRequest]) (*connect.Response[v1.GetUsageResponse], error)
+	// Add credits to organization (for regular users/owners)
+	AddCredits(context.Context, *connect.Request[v1.AddCreditsRequest]) (*connect.Response[v1.AddCreditsResponse], error)
+	// Admin: Add credits to any organization (superadmin only)
+	AdminAddCredits(context.Context, *connect.Request[v1.AdminAddCreditsRequest]) (*connect.Response[v1.AdminAddCreditsResponse], error)
+	// Admin: Remove credits from any organization (superadmin only)
+	AdminRemoveCredits(context.Context, *connect.Request[v1.AdminRemoveCreditsRequest]) (*connect.Response[v1.AdminRemoveCreditsResponse], error)
 }
 
 // NewOrganizationServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -296,6 +372,30 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 		connect.WithSchema(organizationServiceMethods.ByName("TransferOwnership")),
 		connect.WithHandlerOptions(opts...),
 	)
+	organizationServiceGetUsageHandler := connect.NewUnaryHandler(
+		OrganizationServiceGetUsageProcedure,
+		svc.GetUsage,
+		connect.WithSchema(organizationServiceMethods.ByName("GetUsage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	organizationServiceAddCreditsHandler := connect.NewUnaryHandler(
+		OrganizationServiceAddCreditsProcedure,
+		svc.AddCredits,
+		connect.WithSchema(organizationServiceMethods.ByName("AddCredits")),
+		connect.WithHandlerOptions(opts...),
+	)
+	organizationServiceAdminAddCreditsHandler := connect.NewUnaryHandler(
+		OrganizationServiceAdminAddCreditsProcedure,
+		svc.AdminAddCredits,
+		connect.WithSchema(organizationServiceMethods.ByName("AdminAddCredits")),
+		connect.WithHandlerOptions(opts...),
+	)
+	organizationServiceAdminRemoveCreditsHandler := connect.NewUnaryHandler(
+		OrganizationServiceAdminRemoveCreditsProcedure,
+		svc.AdminRemoveCredits,
+		connect.WithSchema(organizationServiceMethods.ByName("AdminRemoveCredits")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.organizations.v1.OrganizationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case OrganizationServiceListOrganizationsProcedure:
@@ -316,6 +416,14 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 			organizationServiceRemoveMemberHandler.ServeHTTP(w, r)
 		case OrganizationServiceTransferOwnershipProcedure:
 			organizationServiceTransferOwnershipHandler.ServeHTTP(w, r)
+		case OrganizationServiceGetUsageProcedure:
+			organizationServiceGetUsageHandler.ServeHTTP(w, r)
+		case OrganizationServiceAddCreditsProcedure:
+			organizationServiceAddCreditsHandler.ServeHTTP(w, r)
+		case OrganizationServiceAdminAddCreditsProcedure:
+			organizationServiceAdminAddCreditsHandler.ServeHTTP(w, r)
+		case OrganizationServiceAdminRemoveCreditsProcedure:
+			organizationServiceAdminRemoveCreditsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -359,4 +467,20 @@ func (UnimplementedOrganizationServiceHandler) RemoveMember(context.Context, *co
 
 func (UnimplementedOrganizationServiceHandler) TransferOwnership(context.Context, *connect.Request[v1.TransferOwnershipRequest]) (*connect.Response[v1.TransferOwnershipResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.TransferOwnership is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) GetUsage(context.Context, *connect.Request[v1.GetUsageRequest]) (*connect.Response[v1.GetUsageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.GetUsage is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) AddCredits(context.Context, *connect.Request[v1.AddCreditsRequest]) (*connect.Response[v1.AddCreditsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.AddCredits is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) AdminAddCredits(context.Context, *connect.Request[v1.AdminAddCreditsRequest]) (*connect.Response[v1.AdminAddCreditsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.AdminAddCredits is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) AdminRemoveCredits(context.Context, *connect.Request[v1.AdminRemoveCreditsRequest]) (*connect.Response[v1.AdminRemoveCreditsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.AdminRemoveCredits is not implemented"))
 }

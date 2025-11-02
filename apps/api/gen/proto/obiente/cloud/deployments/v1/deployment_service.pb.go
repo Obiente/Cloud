@@ -1306,7 +1306,9 @@ type StreamDeploymentLogsRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
 	DeploymentId   string                 `protobuf:"bytes,2,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
-	Tail           *int32                 `protobuf:"varint,3,opt,name=tail,proto3,oneof" json:"tail,omitempty"` // number of lines to tail before following
+	Tail           *int32                 `protobuf:"varint,3,opt,name=tail,proto3,oneof" json:"tail,omitempty"`                                 // number of lines to tail before following
+	ContainerId    *string                `protobuf:"bytes,4,opt,name=container_id,json=containerId,proto3,oneof" json:"container_id,omitempty"` // Optional: stream logs from a specific container. If not specified, uses first container.
+	ServiceName    *string                `protobuf:"bytes,5,opt,name=service_name,json=serviceName,proto3,oneof" json:"service_name,omitempty"` // Optional: stream logs from a specific service. If container_id is specified, this is ignored.
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1360,6 +1362,20 @@ func (x *StreamDeploymentLogsRequest) GetTail() int32 {
 		return *x.Tail
 	}
 	return 0
+}
+
+func (x *StreamDeploymentLogsRequest) GetContainerId() string {
+	if x != nil && x.ContainerId != nil {
+		return *x.ContainerId
+	}
+	return ""
+}
+
+func (x *StreamDeploymentLogsRequest) GetServiceName() string {
+	if x != nil && x.ServiceName != nil {
+		return *x.ServiceName
+	}
+	return ""
 }
 
 type StreamBuildLogsRequest struct {
@@ -3468,9 +3484,11 @@ type TerminalInput struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
 	DeploymentId   string                 `protobuf:"bytes,2,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
-	Input          []byte                 `protobuf:"bytes,3,opt,name=input,proto3" json:"input,omitempty"` // User keyboard input
-	Cols           int32                  `protobuf:"varint,4,opt,name=cols,proto3" json:"cols,omitempty"`  // Terminal width (for resize/initial setup)
-	Rows           int32                  `protobuf:"varint,5,opt,name=rows,proto3" json:"rows,omitempty"`  // Terminal height (for resize/initial setup)
+	ContainerId    string                 `protobuf:"bytes,6,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"` // Optional: specific container ID to connect to
+	ServiceName    string                 `protobuf:"bytes,7,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"` // Optional: service name to connect to (for Docker Compose)
+	Input          []byte                 `protobuf:"bytes,3,opt,name=input,proto3" json:"input,omitempty"`                                // User keyboard input
+	Cols           int32                  `protobuf:"varint,4,opt,name=cols,proto3" json:"cols,omitempty"`                                 // Terminal width (for resize/initial setup)
+	Rows           int32                  `protobuf:"varint,5,opt,name=rows,proto3" json:"rows,omitempty"`                                 // Terminal height (for resize/initial setup)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -3515,6 +3533,20 @@ func (x *TerminalInput) GetOrganizationId() string {
 func (x *TerminalInput) GetDeploymentId() string {
 	if x != nil {
 		return x.DeploymentId
+	}
+	return ""
+}
+
+func (x *TerminalInput) GetContainerId() string {
+	if x != nil {
+		return x.ContainerId
+	}
+	return ""
+}
+
+func (x *TerminalInput) GetServiceName() string {
+	if x != nil {
+		return x.ServiceName
 	}
 	return ""
 }
@@ -3669,6 +3701,8 @@ type ListContainerFilesRequest struct {
 	ListVolumes    bool                   `protobuf:"varint,5,opt,name=list_volumes,json=listVolumes,proto3" json:"list_volumes,omitempty"`   // If true, return list of available volumes instead of files
 	Cursor         *string                `protobuf:"bytes,6,opt,name=cursor,proto3,oneof" json:"cursor,omitempty"`
 	PageSize       *int32                 `protobuf:"varint,7,opt,name=page_size,json=pageSize,proto3,oneof" json:"page_size,omitempty"`
+	ContainerId    *string                `protobuf:"bytes,8,opt,name=container_id,json=containerId,proto3,oneof" json:"container_id,omitempty"` // Optional: use a specific container. If not specified, uses first container.
+	ServiceName    *string                `protobuf:"bytes,9,opt,name=service_name,json=serviceName,proto3,oneof" json:"service_name,omitempty"` // Optional: use a specific service. If container_id is specified, this is ignored.
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -3750,6 +3784,20 @@ func (x *ListContainerFilesRequest) GetPageSize() int32 {
 		return *x.PageSize
 	}
 	return 0
+}
+
+func (x *ListContainerFilesRequest) GetContainerId() string {
+	if x != nil && x.ContainerId != nil {
+		return *x.ContainerId
+	}
+	return ""
+}
+
+func (x *ListContainerFilesRequest) GetServiceName() string {
+	if x != nil && x.ServiceName != nil {
+		return *x.ServiceName
+	}
+	return ""
 }
 
 type ContainerFile struct {
@@ -3996,8 +4044,10 @@ type GetContainerFileRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
 	DeploymentId   string                 `protobuf:"bytes,2,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
-	Path           string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`                                     // File path
-	VolumeName     *string                `protobuf:"bytes,4,opt,name=volume_name,json=volumeName,proto3,oneof" json:"volume_name,omitempty"` // If specified, read file from this volume instead of container filesystem
+	Path           string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`                                        // File path
+	VolumeName     *string                `protobuf:"bytes,4,opt,name=volume_name,json=volumeName,proto3,oneof" json:"volume_name,omitempty"`    // If specified, read file from this volume instead of container filesystem
+	ContainerId    *string                `protobuf:"bytes,5,opt,name=container_id,json=containerId,proto3,oneof" json:"container_id,omitempty"` // Optional: use a specific container. If not specified, uses first container.
+	ServiceName    *string                `protobuf:"bytes,6,opt,name=service_name,json=serviceName,proto3,oneof" json:"service_name,omitempty"` // Optional: use a specific service. If container_id is specified, this is ignored.
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -4056,6 +4106,20 @@ func (x *GetContainerFileRequest) GetPath() string {
 func (x *GetContainerFileRequest) GetVolumeName() string {
 	if x != nil && x.VolumeName != nil {
 		return *x.VolumeName
+	}
+	return ""
+}
+
+func (x *GetContainerFileRequest) GetContainerId() string {
+	if x != nil && x.ContainerId != nil {
+		return *x.ContainerId
+	}
+	return ""
+}
+
+func (x *GetContainerFileRequest) GetServiceName() string {
+	if x != nil && x.ServiceName != nil {
+		return *x.ServiceName
 	}
 	return ""
 }
@@ -4225,6 +4289,8 @@ type UploadContainerFilesMetadata struct {
 	DestinationPath string                 `protobuf:"bytes,3,opt,name=destination_path,json=destinationPath,proto3" json:"destination_path,omitempty"` // Directory path where files should be extracted (default: "/")
 	Files           []*FileMetadata        `protobuf:"bytes,4,rep,name=files,proto3" json:"files,omitempty"`                                            // Metadata about files being uploaded
 	VolumeName      *string                `protobuf:"bytes,5,opt,name=volume_name,json=volumeName,proto3,oneof" json:"volume_name,omitempty"`          // If specified, upload files to this volume instead of container filesystem
+	ContainerId     *string                `protobuf:"bytes,6,opt,name=container_id,json=containerId,proto3,oneof" json:"container_id,omitempty"`       // Optional: use a specific container. If not specified, uses first container.
+	ServiceName     *string                `protobuf:"bytes,7,opt,name=service_name,json=serviceName,proto3,oneof" json:"service_name,omitempty"`       // Optional: use a specific service. If container_id is specified, this is ignored.
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -4290,6 +4356,20 @@ func (x *UploadContainerFilesMetadata) GetFiles() []*FileMetadata {
 func (x *UploadContainerFilesMetadata) GetVolumeName() string {
 	if x != nil && x.VolumeName != nil {
 		return *x.VolumeName
+	}
+	return ""
+}
+
+func (x *UploadContainerFilesMetadata) GetContainerId() string {
+	if x != nil && x.ContainerId != nil {
+		return *x.ContainerId
+	}
+	return ""
+}
+
+func (x *UploadContainerFilesMetadata) GetServiceName() string {
+	if x != nil && x.ServiceName != nil {
+		return *x.ServiceName
 	}
 	return ""
 }
@@ -5463,6 +5543,633 @@ func (x *GetDeploymentServiceNamesResponse) GetServiceNames() []string {
 	return nil
 }
 
+type GetDeploymentMetricsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	DeploymentId   string                 `protobuf:"bytes,1,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
+	OrganizationId string                 `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// Optional: time range for historical metrics
+	StartTime *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=start_time,json=startTime,proto3,oneof" json:"start_time,omitempty"`
+	EndTime   *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=end_time,json=endTime,proto3,oneof" json:"end_time,omitempty"`
+	// If true, return only the latest metrics point
+	LatestOnly *bool `protobuf:"varint,5,opt,name=latest_only,json=latestOnly,proto3,oneof" json:"latest_only,omitempty"`
+	// Optional: filter by container_id (if not specified, returns aggregated metrics across all containers)
+	ContainerId *string `protobuf:"bytes,6,opt,name=container_id,json=containerId,proto3,oneof" json:"container_id,omitempty"`
+	// Optional: filter by service_name (alternative to container_id, matches containers by service name)
+	ServiceName *string `protobuf:"bytes,7,opt,name=service_name,json=serviceName,proto3,oneof" json:"service_name,omitempty"`
+	// If true, aggregate metrics across all containers (sum for network/disk, avg for CPU/memory)
+	// If false and container_id/service_name not specified, aggregates are returned
+	Aggregate     *bool `protobuf:"varint,8,opt,name=aggregate,proto3,oneof" json:"aggregate,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDeploymentMetricsRequest) Reset() {
+	*x = GetDeploymentMetricsRequest{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[80]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDeploymentMetricsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDeploymentMetricsRequest) ProtoMessage() {}
+
+func (x *GetDeploymentMetricsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[80]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDeploymentMetricsRequest.ProtoReflect.Descriptor instead.
+func (*GetDeploymentMetricsRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{80}
+}
+
+func (x *GetDeploymentMetricsRequest) GetDeploymentId() string {
+	if x != nil {
+		return x.DeploymentId
+	}
+	return ""
+}
+
+func (x *GetDeploymentMetricsRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *GetDeploymentMetricsRequest) GetStartTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartTime
+	}
+	return nil
+}
+
+func (x *GetDeploymentMetricsRequest) GetEndTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EndTime
+	}
+	return nil
+}
+
+func (x *GetDeploymentMetricsRequest) GetLatestOnly() bool {
+	if x != nil && x.LatestOnly != nil {
+		return *x.LatestOnly
+	}
+	return false
+}
+
+func (x *GetDeploymentMetricsRequest) GetContainerId() string {
+	if x != nil && x.ContainerId != nil {
+		return *x.ContainerId
+	}
+	return ""
+}
+
+func (x *GetDeploymentMetricsRequest) GetServiceName() string {
+	if x != nil && x.ServiceName != nil {
+		return *x.ServiceName
+	}
+	return ""
+}
+
+func (x *GetDeploymentMetricsRequest) GetAggregate() bool {
+	if x != nil && x.Aggregate != nil {
+		return *x.Aggregate
+	}
+	return false
+}
+
+type GetDeploymentMetricsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Metrics       []*DeploymentMetric    `protobuf:"bytes,1,rep,name=metrics,proto3" json:"metrics,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDeploymentMetricsResponse) Reset() {
+	*x = GetDeploymentMetricsResponse{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[81]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDeploymentMetricsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDeploymentMetricsResponse) ProtoMessage() {}
+
+func (x *GetDeploymentMetricsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[81]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDeploymentMetricsResponse.ProtoReflect.Descriptor instead.
+func (*GetDeploymentMetricsResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{81}
+}
+
+func (x *GetDeploymentMetricsResponse) GetMetrics() []*DeploymentMetric {
+	if x != nil {
+		return x.Metrics
+	}
+	return nil
+}
+
+type StreamDeploymentMetricsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	DeploymentId   string                 `protobuf:"bytes,1,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
+	OrganizationId string                 `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// How often to send updates (in seconds, default: 5)
+	IntervalSeconds *int32 `protobuf:"varint,3,opt,name=interval_seconds,json=intervalSeconds,proto3,oneof" json:"interval_seconds,omitempty"`
+	// Optional: filter by container_id (if not specified, returns aggregated metrics across all containers)
+	ContainerId *string `protobuf:"bytes,4,opt,name=container_id,json=containerId,proto3,oneof" json:"container_id,omitempty"`
+	// Optional: filter by service_name (alternative to container_id, matches containers by service name)
+	ServiceName *string `protobuf:"bytes,5,opt,name=service_name,json=serviceName,proto3,oneof" json:"service_name,omitempty"`
+	// If true, aggregate metrics across all containers (sum for network/disk, avg for CPU/memory)
+	// If false and container_id/service_name not specified, aggregates are returned
+	Aggregate     *bool `protobuf:"varint,6,opt,name=aggregate,proto3,oneof" json:"aggregate,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamDeploymentMetricsRequest) Reset() {
+	*x = StreamDeploymentMetricsRequest{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[82]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamDeploymentMetricsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamDeploymentMetricsRequest) ProtoMessage() {}
+
+func (x *StreamDeploymentMetricsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[82]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamDeploymentMetricsRequest.ProtoReflect.Descriptor instead.
+func (*StreamDeploymentMetricsRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{82}
+}
+
+func (x *StreamDeploymentMetricsRequest) GetDeploymentId() string {
+	if x != nil {
+		return x.DeploymentId
+	}
+	return ""
+}
+
+func (x *StreamDeploymentMetricsRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *StreamDeploymentMetricsRequest) GetIntervalSeconds() int32 {
+	if x != nil && x.IntervalSeconds != nil {
+		return *x.IntervalSeconds
+	}
+	return 0
+}
+
+func (x *StreamDeploymentMetricsRequest) GetContainerId() string {
+	if x != nil && x.ContainerId != nil {
+		return *x.ContainerId
+	}
+	return ""
+}
+
+func (x *StreamDeploymentMetricsRequest) GetServiceName() string {
+	if x != nil && x.ServiceName != nil {
+		return *x.ServiceName
+	}
+	return ""
+}
+
+func (x *StreamDeploymentMetricsRequest) GetAggregate() bool {
+	if x != nil && x.Aggregate != nil {
+		return *x.Aggregate
+	}
+	return false
+}
+
+type DeploymentMetric struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	DeploymentId string                 `protobuf:"bytes,1,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
+	Timestamp    *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	// CPU usage as percentage (0-100)
+	CpuUsagePercent float64 `protobuf:"fixed64,3,opt,name=cpu_usage_percent,json=cpuUsagePercent,proto3" json:"cpu_usage_percent,omitempty"`
+	// Memory usage in bytes
+	MemoryUsageBytes int64 `protobuf:"varint,4,opt,name=memory_usage_bytes,json=memoryUsageBytes,proto3" json:"memory_usage_bytes,omitempty"`
+	// Network receive bytes (total since container start)
+	NetworkRxBytes int64 `protobuf:"varint,5,opt,name=network_rx_bytes,json=networkRxBytes,proto3" json:"network_rx_bytes,omitempty"`
+	// Network transmit bytes (total since container start)
+	NetworkTxBytes int64 `protobuf:"varint,6,opt,name=network_tx_bytes,json=networkTxBytes,proto3" json:"network_tx_bytes,omitempty"`
+	// Disk read bytes (total since container start)
+	DiskReadBytes int64 `protobuf:"varint,7,opt,name=disk_read_bytes,json=diskReadBytes,proto3" json:"disk_read_bytes,omitempty"`
+	// Disk write bytes (total since container start)
+	DiskWriteBytes int64 `protobuf:"varint,8,opt,name=disk_write_bytes,json=diskWriteBytes,proto3" json:"disk_write_bytes,omitempty"`
+	// Request count (if tracked via middleware)
+	RequestCount *int64 `protobuf:"varint,9,opt,name=request_count,json=requestCount,proto3,oneof" json:"request_count,omitempty"`
+	// Error count (if tracked via middleware)
+	ErrorCount *int64 `protobuf:"varint,10,opt,name=error_count,json=errorCount,proto3,oneof" json:"error_count,omitempty"`
+	// Container ID this metric is from (for multi-container deployments)
+	ContainerId *string `protobuf:"bytes,11,opt,name=container_id,json=containerId,proto3,oneof" json:"container_id,omitempty"`
+	// Service name this metric is from (for multi-container deployments)
+	ServiceName   *string `protobuf:"bytes,12,opt,name=service_name,json=serviceName,proto3,oneof" json:"service_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeploymentMetric) Reset() {
+	*x = DeploymentMetric{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[83]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeploymentMetric) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeploymentMetric) ProtoMessage() {}
+
+func (x *DeploymentMetric) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[83]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeploymentMetric.ProtoReflect.Descriptor instead.
+func (*DeploymentMetric) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{83}
+}
+
+func (x *DeploymentMetric) GetDeploymentId() string {
+	if x != nil {
+		return x.DeploymentId
+	}
+	return ""
+}
+
+func (x *DeploymentMetric) GetTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Timestamp
+	}
+	return nil
+}
+
+func (x *DeploymentMetric) GetCpuUsagePercent() float64 {
+	if x != nil {
+		return x.CpuUsagePercent
+	}
+	return 0
+}
+
+func (x *DeploymentMetric) GetMemoryUsageBytes() int64 {
+	if x != nil {
+		return x.MemoryUsageBytes
+	}
+	return 0
+}
+
+func (x *DeploymentMetric) GetNetworkRxBytes() int64 {
+	if x != nil {
+		return x.NetworkRxBytes
+	}
+	return 0
+}
+
+func (x *DeploymentMetric) GetNetworkTxBytes() int64 {
+	if x != nil {
+		return x.NetworkTxBytes
+	}
+	return 0
+}
+
+func (x *DeploymentMetric) GetDiskReadBytes() int64 {
+	if x != nil {
+		return x.DiskReadBytes
+	}
+	return 0
+}
+
+func (x *DeploymentMetric) GetDiskWriteBytes() int64 {
+	if x != nil {
+		return x.DiskWriteBytes
+	}
+	return 0
+}
+
+func (x *DeploymentMetric) GetRequestCount() int64 {
+	if x != nil && x.RequestCount != nil {
+		return *x.RequestCount
+	}
+	return 0
+}
+
+func (x *DeploymentMetric) GetErrorCount() int64 {
+	if x != nil && x.ErrorCount != nil {
+		return *x.ErrorCount
+	}
+	return 0
+}
+
+func (x *DeploymentMetric) GetContainerId() string {
+	if x != nil && x.ContainerId != nil {
+		return *x.ContainerId
+	}
+	return ""
+}
+
+func (x *DeploymentMetric) GetServiceName() string {
+	if x != nil && x.ServiceName != nil {
+		return *x.ServiceName
+	}
+	return ""
+}
+
+type GetDeploymentUsageRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	DeploymentId   string                 `protobuf:"bytes,1,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
+	OrganizationId string                 `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// Optional: specify a month (YYYY-MM format). Defaults to current month.
+	Month         *string `protobuf:"bytes,3,opt,name=month,proto3,oneof" json:"month,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDeploymentUsageRequest) Reset() {
+	*x = GetDeploymentUsageRequest{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[84]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDeploymentUsageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDeploymentUsageRequest) ProtoMessage() {}
+
+func (x *GetDeploymentUsageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[84]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDeploymentUsageRequest.ProtoReflect.Descriptor instead.
+func (*GetDeploymentUsageRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{84}
+}
+
+func (x *GetDeploymentUsageRequest) GetDeploymentId() string {
+	if x != nil {
+		return x.DeploymentId
+	}
+	return ""
+}
+
+func (x *GetDeploymentUsageRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *GetDeploymentUsageRequest) GetMonth() string {
+	if x != nil && x.Month != nil {
+		return *x.Month
+	}
+	return ""
+}
+
+type GetDeploymentUsageResponse struct {
+	state            protoimpl.MessageState  `protogen:"open.v1"`
+	DeploymentId     string                  `protobuf:"bytes,1,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
+	OrganizationId   string                  `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	Month            string                  `protobuf:"bytes,3,opt,name=month,proto3" json:"month,omitempty"` // YYYY-MM format
+	Current          *DeploymentUsageMetrics `protobuf:"bytes,4,opt,name=current,proto3" json:"current,omitempty"`
+	EstimatedMonthly *DeploymentUsageMetrics `protobuf:"bytes,5,opt,name=estimated_monthly,json=estimatedMonthly,proto3" json:"estimated_monthly,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GetDeploymentUsageResponse) Reset() {
+	*x = GetDeploymentUsageResponse{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[85]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDeploymentUsageResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDeploymentUsageResponse) ProtoMessage() {}
+
+func (x *GetDeploymentUsageResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[85]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDeploymentUsageResponse.ProtoReflect.Descriptor instead.
+func (*GetDeploymentUsageResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{85}
+}
+
+func (x *GetDeploymentUsageResponse) GetDeploymentId() string {
+	if x != nil {
+		return x.DeploymentId
+	}
+	return ""
+}
+
+func (x *GetDeploymentUsageResponse) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *GetDeploymentUsageResponse) GetMonth() string {
+	if x != nil {
+		return x.Month
+	}
+	return ""
+}
+
+func (x *GetDeploymentUsageResponse) GetCurrent() *DeploymentUsageMetrics {
+	if x != nil {
+		return x.Current
+	}
+	return nil
+}
+
+func (x *GetDeploymentUsageResponse) GetEstimatedMonthly() *DeploymentUsageMetrics {
+	if x != nil {
+		return x.EstimatedMonthly
+	}
+	return nil
+}
+
+type DeploymentUsageMetrics struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	CpuCoreSeconds    int64                  `protobuf:"varint,1,opt,name=cpu_core_seconds,json=cpuCoreSeconds,proto3" json:"cpu_core_seconds,omitempty"`
+	MemoryByteSeconds int64                  `protobuf:"varint,2,opt,name=memory_byte_seconds,json=memoryByteSeconds,proto3" json:"memory_byte_seconds,omitempty"`
+	BandwidthRxBytes  int64                  `protobuf:"varint,3,opt,name=bandwidth_rx_bytes,json=bandwidthRxBytes,proto3" json:"bandwidth_rx_bytes,omitempty"`
+	BandwidthTxBytes  int64                  `protobuf:"varint,4,opt,name=bandwidth_tx_bytes,json=bandwidthTxBytes,proto3" json:"bandwidth_tx_bytes,omitempty"`
+	StorageBytes      int64                  `protobuf:"varint,5,opt,name=storage_bytes,json=storageBytes,proto3" json:"storage_bytes,omitempty"`
+	RequestCount      int64                  `protobuf:"varint,6,opt,name=request_count,json=requestCount,proto3" json:"request_count,omitempty"`
+	ErrorCount        int64                  `protobuf:"varint,7,opt,name=error_count,json=errorCount,proto3" json:"error_count,omitempty"`
+	UptimeSeconds     int64                  `protobuf:"varint,8,opt,name=uptime_seconds,json=uptimeSeconds,proto3" json:"uptime_seconds,omitempty"`
+	// Estimated cost in cents
+	EstimatedCostCents int64 `protobuf:"varint,9,opt,name=estimated_cost_cents,json=estimatedCostCents,proto3" json:"estimated_cost_cents,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *DeploymentUsageMetrics) Reset() {
+	*x = DeploymentUsageMetrics{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[86]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeploymentUsageMetrics) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeploymentUsageMetrics) ProtoMessage() {}
+
+func (x *DeploymentUsageMetrics) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[86]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeploymentUsageMetrics.ProtoReflect.Descriptor instead.
+func (*DeploymentUsageMetrics) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{86}
+}
+
+func (x *DeploymentUsageMetrics) GetCpuCoreSeconds() int64 {
+	if x != nil {
+		return x.CpuCoreSeconds
+	}
+	return 0
+}
+
+func (x *DeploymentUsageMetrics) GetMemoryByteSeconds() int64 {
+	if x != nil {
+		return x.MemoryByteSeconds
+	}
+	return 0
+}
+
+func (x *DeploymentUsageMetrics) GetBandwidthRxBytes() int64 {
+	if x != nil {
+		return x.BandwidthRxBytes
+	}
+	return 0
+}
+
+func (x *DeploymentUsageMetrics) GetBandwidthTxBytes() int64 {
+	if x != nil {
+		return x.BandwidthTxBytes
+	}
+	return 0
+}
+
+func (x *DeploymentUsageMetrics) GetStorageBytes() int64 {
+	if x != nil {
+		return x.StorageBytes
+	}
+	return 0
+}
+
+func (x *DeploymentUsageMetrics) GetRequestCount() int64 {
+	if x != nil {
+		return x.RequestCount
+	}
+	return 0
+}
+
+func (x *DeploymentUsageMetrics) GetErrorCount() int64 {
+	if x != nil {
+		return x.ErrorCount
+	}
+	return 0
+}
+
+func (x *DeploymentUsageMetrics) GetUptimeSeconds() int64 {
+	if x != nil {
+		return x.UptimeSeconds
+	}
+	return 0
+}
+
+func (x *DeploymentUsageMetrics) GetEstimatedCostCents() int64 {
+	if x != nil {
+		return x.EstimatedCostCents
+	}
+	return 0
+}
+
 type Deployment struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -5499,13 +6206,16 @@ type Deployment struct {
 	// Environment variables
 	EnvVars             map[string]string `protobuf:"bytes,25,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	GithubIntegrationId *string           `protobuf:"bytes,29,opt,name=github_integration_id,json=githubIntegrationId,proto3,oneof" json:"github_integration_id,omitempty"` // GitHub integration ID used for this deployment
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Container status (for compose deployments)
+	ContainersRunning *int32 `protobuf:"varint,30,opt,name=containers_running,json=containersRunning,proto3,oneof" json:"containers_running,omitempty"` // Number of containers actually running (from Docker)
+	ContainersTotal   *int32 `protobuf:"varint,31,opt,name=containers_total,json=containersTotal,proto3,oneof" json:"containers_total,omitempty"`       // Total number of containers for this deployment
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Deployment) Reset() {
 	*x = Deployment{}
-	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[80]
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5517,7 +6227,7 @@ func (x *Deployment) String() string {
 func (*Deployment) ProtoMessage() {}
 
 func (x *Deployment) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[80]
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5530,7 +6240,7 @@ func (x *Deployment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Deployment.ProtoReflect.Descriptor instead.
 func (*Deployment) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{80}
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *Deployment) GetId() string {
@@ -5736,6 +6446,620 @@ func (x *Deployment) GetGithubIntegrationId() string {
 	return ""
 }
 
+func (x *Deployment) GetContainersRunning() int32 {
+	if x != nil && x.ContainersRunning != nil {
+		return *x.ContainersRunning
+	}
+	return 0
+}
+
+func (x *Deployment) GetContainersTotal() int32 {
+	if x != nil && x.ContainersTotal != nil {
+		return *x.ContainersTotal
+	}
+	return 0
+}
+
+type ListDeploymentContainersRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	DeploymentId   string                 `protobuf:"bytes,2,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ListDeploymentContainersRequest) Reset() {
+	*x = ListDeploymentContainersRequest{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[88]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDeploymentContainersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDeploymentContainersRequest) ProtoMessage() {}
+
+func (x *ListDeploymentContainersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[88]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDeploymentContainersRequest.ProtoReflect.Descriptor instead.
+func (*ListDeploymentContainersRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{88}
+}
+
+func (x *ListDeploymentContainersRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *ListDeploymentContainersRequest) GetDeploymentId() string {
+	if x != nil {
+		return x.DeploymentId
+	}
+	return ""
+}
+
+type ListDeploymentContainersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Containers    []*DeploymentContainer `protobuf:"bytes,1,rep,name=containers,proto3" json:"containers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDeploymentContainersResponse) Reset() {
+	*x = ListDeploymentContainersResponse{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[89]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDeploymentContainersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDeploymentContainersResponse) ProtoMessage() {}
+
+func (x *ListDeploymentContainersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[89]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDeploymentContainersResponse.ProtoReflect.Descriptor instead.
+func (*ListDeploymentContainersResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{89}
+}
+
+func (x *ListDeploymentContainersResponse) GetContainers() []*DeploymentContainer {
+	if x != nil {
+		return x.Containers
+	}
+	return nil
+}
+
+type DeploymentContainer struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ContainerId   string                 `protobuf:"bytes,1,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"`
+	ServiceName   *string                `protobuf:"bytes,2,opt,name=service_name,json=serviceName,proto3,oneof" json:"service_name,omitempty"` // Service name from compose (e.g., "web", "api")
+	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`                                    // running, stopped, exited, etc.
+	NodeId        *string                `protobuf:"bytes,4,opt,name=node_id,json=nodeId,proto3,oneof" json:"node_id,omitempty"`
+	NodeHostname  *string                `protobuf:"bytes,5,opt,name=node_hostname,json=nodeHostname,proto3,oneof" json:"node_hostname,omitempty"`
+	Port          *int32                 `protobuf:"varint,6,opt,name=port,proto3,oneof" json:"port,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeploymentContainer) Reset() {
+	*x = DeploymentContainer{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[90]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeploymentContainer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeploymentContainer) ProtoMessage() {}
+
+func (x *DeploymentContainer) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[90]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeploymentContainer.ProtoReflect.Descriptor instead.
+func (*DeploymentContainer) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{90}
+}
+
+func (x *DeploymentContainer) GetContainerId() string {
+	if x != nil {
+		return x.ContainerId
+	}
+	return ""
+}
+
+func (x *DeploymentContainer) GetServiceName() string {
+	if x != nil && x.ServiceName != nil {
+		return *x.ServiceName
+	}
+	return ""
+}
+
+func (x *DeploymentContainer) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *DeploymentContainer) GetNodeId() string {
+	if x != nil && x.NodeId != nil {
+		return *x.NodeId
+	}
+	return ""
+}
+
+func (x *DeploymentContainer) GetNodeHostname() string {
+	if x != nil && x.NodeHostname != nil {
+		return *x.NodeHostname
+	}
+	return ""
+}
+
+func (x *DeploymentContainer) GetPort() int32 {
+	if x != nil && x.Port != nil {
+		return *x.Port
+	}
+	return 0
+}
+
+func (x *DeploymentContainer) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *DeploymentContainer) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type StreamContainerLogsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	DeploymentId   string                 `protobuf:"bytes,2,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
+	ContainerId    string                 `protobuf:"bytes,3,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"` // Container ID to stream logs from
+	Tail           int32                  `protobuf:"varint,4,opt,name=tail,proto3" json:"tail,omitempty"`                                 // Number of lines to tail (default: 200)
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *StreamContainerLogsRequest) Reset() {
+	*x = StreamContainerLogsRequest{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[91]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamContainerLogsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamContainerLogsRequest) ProtoMessage() {}
+
+func (x *StreamContainerLogsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[91]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamContainerLogsRequest.ProtoReflect.Descriptor instead.
+func (*StreamContainerLogsRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{91}
+}
+
+func (x *StreamContainerLogsRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *StreamContainerLogsRequest) GetDeploymentId() string {
+	if x != nil {
+		return x.DeploymentId
+	}
+	return ""
+}
+
+func (x *StreamContainerLogsRequest) GetContainerId() string {
+	if x != nil {
+		return x.ContainerId
+	}
+	return ""
+}
+
+func (x *StreamContainerLogsRequest) GetTail() int32 {
+	if x != nil {
+		return x.Tail
+	}
+	return 0
+}
+
+type StartContainerRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	DeploymentId   string                 `protobuf:"bytes,2,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
+	ContainerId    string                 `protobuf:"bytes,3,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"` // Container ID to start
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *StartContainerRequest) Reset() {
+	*x = StartContainerRequest{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[92]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartContainerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartContainerRequest) ProtoMessage() {}
+
+func (x *StartContainerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[92]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartContainerRequest.ProtoReflect.Descriptor instead.
+func (*StartContainerRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{92}
+}
+
+func (x *StartContainerRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *StartContainerRequest) GetDeploymentId() string {
+	if x != nil {
+		return x.DeploymentId
+	}
+	return ""
+}
+
+func (x *StartContainerRequest) GetContainerId() string {
+	if x != nil {
+		return x.ContainerId
+	}
+	return ""
+}
+
+type StartContainerResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Error         *string                `protobuf:"bytes,2,opt,name=error,proto3,oneof" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartContainerResponse) Reset() {
+	*x = StartContainerResponse{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[93]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartContainerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartContainerResponse) ProtoMessage() {}
+
+func (x *StartContainerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[93]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartContainerResponse.ProtoReflect.Descriptor instead.
+func (*StartContainerResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{93}
+}
+
+func (x *StartContainerResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *StartContainerResponse) GetError() string {
+	if x != nil && x.Error != nil {
+		return *x.Error
+	}
+	return ""
+}
+
+type StopContainerRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	DeploymentId   string                 `protobuf:"bytes,2,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
+	ContainerId    string                 `protobuf:"bytes,3,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"` // Container ID to stop
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *StopContainerRequest) Reset() {
+	*x = StopContainerRequest{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[94]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopContainerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopContainerRequest) ProtoMessage() {}
+
+func (x *StopContainerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[94]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopContainerRequest.ProtoReflect.Descriptor instead.
+func (*StopContainerRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{94}
+}
+
+func (x *StopContainerRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *StopContainerRequest) GetDeploymentId() string {
+	if x != nil {
+		return x.DeploymentId
+	}
+	return ""
+}
+
+func (x *StopContainerRequest) GetContainerId() string {
+	if x != nil {
+		return x.ContainerId
+	}
+	return ""
+}
+
+type StopContainerResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Error         *string                `protobuf:"bytes,2,opt,name=error,proto3,oneof" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopContainerResponse) Reset() {
+	*x = StopContainerResponse{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[95]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopContainerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopContainerResponse) ProtoMessage() {}
+
+func (x *StopContainerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[95]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopContainerResponse.ProtoReflect.Descriptor instead.
+func (*StopContainerResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{95}
+}
+
+func (x *StopContainerResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *StopContainerResponse) GetError() string {
+	if x != nil && x.Error != nil {
+		return *x.Error
+	}
+	return ""
+}
+
+type RestartContainerRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	DeploymentId   string                 `protobuf:"bytes,2,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
+	ContainerId    string                 `protobuf:"bytes,3,opt,name=container_id,json=containerId,proto3" json:"container_id,omitempty"` // Container ID to restart
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RestartContainerRequest) Reset() {
+	*x = RestartContainerRequest{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[96]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RestartContainerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestartContainerRequest) ProtoMessage() {}
+
+func (x *RestartContainerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[96]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestartContainerRequest.ProtoReflect.Descriptor instead.
+func (*RestartContainerRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{96}
+}
+
+func (x *RestartContainerRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *RestartContainerRequest) GetDeploymentId() string {
+	if x != nil {
+		return x.DeploymentId
+	}
+	return ""
+}
+
+func (x *RestartContainerRequest) GetContainerId() string {
+	if x != nil {
+		return x.ContainerId
+	}
+	return ""
+}
+
+type RestartContainerResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Error         *string                `protobuf:"bytes,2,opt,name=error,proto3,oneof" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RestartContainerResponse) Reset() {
+	*x = RestartContainerResponse{}
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[97]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RestartContainerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestartContainerResponse) ProtoMessage() {}
+
+func (x *RestartContainerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[97]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestartContainerResponse.ProtoReflect.Descriptor instead.
+func (*RestartContainerResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{97}
+}
+
+func (x *RestartContainerResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *RestartContainerResponse) GetError() string {
+	if x != nil && x.Error != nil {
+		return *x.Error
+	}
+	return ""
+}
+
 var File_obiente_cloud_deployments_v1_deployment_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
@@ -5860,12 +7184,16 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x06_linesB\t\n" +
 	"\a_follow\"/\n" +
 	"\x19GetDeploymentLogsResponse\x12\x12\n" +
-	"\x04logs\x18\x01 \x03(\tR\x04logs\"\x8d\x01\n" +
+	"\x04logs\x18\x01 \x03(\tR\x04logs\"\xff\x01\n" +
 	"\x1bStreamDeploymentLogsRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\x17\n" +
-	"\x04tail\x18\x03 \x01(\x05H\x00R\x04tail\x88\x01\x01B\a\n" +
-	"\x05_tail\"f\n" +
+	"\x04tail\x18\x03 \x01(\x05H\x00R\x04tail\x88\x01\x01\x12&\n" +
+	"\fcontainer_id\x18\x04 \x01(\tH\x01R\vcontainerId\x88\x01\x01\x12&\n" +
+	"\fservice_name\x18\x05 \x01(\tH\x02R\vserviceName\x88\x01\x01B\a\n" +
+	"\x05_tailB\x0f\n" +
+	"\r_container_idB\x0f\n" +
+	"\r_service_name\"f\n" +
 	"\x16StreamBuildLogsRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\"\x9e\x01\n" +
@@ -6017,10 +7345,12 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x04cols\x18\x04 \x01(\x05R\x04cols\x12\x12\n" +
 	"\x04rows\x18\x05 \x01(\x05R\x04rows\"5\n" +
 	"\x19SendTerminalInputResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x9b\x01\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xe1\x01\n" +
 	"\rTerminalInput\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
-	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\x14\n" +
+	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12!\n" +
+	"\fcontainer_id\x18\x06 \x01(\tR\vcontainerId\x12!\n" +
+	"\fservice_name\x18\a \x01(\tR\vserviceName\x12\x14\n" +
 	"\x05input\x18\x03 \x01(\fR\x05input\x12\x12\n" +
 	"\x04cols\x18\x04 \x01(\x05R\x04cols\x12\x12\n" +
 	"\x04rows\x18\x05 \x01(\x05R\x04rows\"<\n" +
@@ -6033,7 +7363,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\vmount_point\x18\x02 \x01(\tR\n" +
 	"mountPoint\x12\x16\n" +
 	"\x06source\x18\x03 \x01(\tR\x06source\x12#\n" +
-	"\ris_persistent\x18\x04 \x01(\bR\fisPersistent\"\xae\x02\n" +
+	"\ris_persistent\x18\x04 \x01(\bR\fisPersistent\"\xa0\x03\n" +
 	"\x19ListContainerFilesRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\x12\n" +
@@ -6042,11 +7372,15 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"volumeName\x88\x01\x01\x12!\n" +
 	"\flist_volumes\x18\x05 \x01(\bR\vlistVolumes\x12\x1b\n" +
 	"\x06cursor\x18\x06 \x01(\tH\x01R\x06cursor\x88\x01\x01\x12 \n" +
-	"\tpage_size\x18\a \x01(\x05H\x02R\bpageSize\x88\x01\x01B\x0e\n" +
+	"\tpage_size\x18\a \x01(\x05H\x02R\bpageSize\x88\x01\x01\x12&\n" +
+	"\fcontainer_id\x18\b \x01(\tH\x03R\vcontainerId\x88\x01\x01\x12&\n" +
+	"\fservice_name\x18\t \x01(\tH\x04R\vserviceName\x88\x01\x01B\x0e\n" +
 	"\f_volume_nameB\t\n" +
 	"\a_cursorB\f\n" +
 	"\n" +
-	"_page_size\"\x92\x05\n" +
+	"_page_sizeB\x0f\n" +
+	"\r_container_idB\x0f\n" +
+	"\r_service_name\"\x92\x05\n" +
 	"\rContainerFile\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12!\n" +
@@ -6085,14 +7419,18 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\bhas_more\x18\x06 \x01(\bR\ahasMore\x12$\n" +
 	"\vnext_cursor\x18\a \x01(\tH\x00R\n" +
 	"nextCursor\x88\x01\x01B\x0e\n" +
-	"\f_next_cursor\"\xb1\x01\n" +
+	"\f_next_cursor\"\xa3\x02\n" +
 	"\x17GetContainerFileRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\x12\n" +
 	"\x04path\x18\x03 \x01(\tR\x04path\x12$\n" +
 	"\vvolume_name\x18\x04 \x01(\tH\x00R\n" +
-	"volumeName\x88\x01\x01B\x0e\n" +
-	"\f_volume_name\"\xf0\x01\n" +
+	"volumeName\x88\x01\x01\x12&\n" +
+	"\fcontainer_id\x18\x05 \x01(\tH\x01R\vcontainerId\x88\x01\x01\x12&\n" +
+	"\fservice_name\x18\x06 \x01(\tH\x02R\vserviceName\x88\x01\x01B\x0e\n" +
+	"\f_volume_nameB\x0f\n" +
+	"\r_container_idB\x0f\n" +
+	"\r_service_name\"\xf0\x01\n" +
 	"\x18GetContainerFileResponse\x12\x18\n" +
 	"\acontent\x18\x01 \x01(\tR\acontent\x12\x1a\n" +
 	"\bencoding\x18\x02 \x01(\tR\bencoding\x12\x12\n" +
@@ -6105,15 +7443,19 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x1bUploadContainerFilesRequest\x12X\n" +
 	"\bmetadata\x18\x01 \x01(\v2:.obiente.cloud.deployments.v1.UploadContainerFilesMetadataH\x00R\bmetadata\x12\x16\n" +
 	"\x05chunk\x18\x02 \x01(\fH\x00R\x05chunkB\x06\n" +
-	"\x04data\"\x8f\x02\n" +
+	"\x04data\"\x81\x03\n" +
 	"\x1cUploadContainerFilesMetadata\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12)\n" +
 	"\x10destination_path\x18\x03 \x01(\tR\x0fdestinationPath\x12@\n" +
 	"\x05files\x18\x04 \x03(\v2*.obiente.cloud.deployments.v1.FileMetadataR\x05files\x12$\n" +
 	"\vvolume_name\x18\x05 \x01(\tH\x00R\n" +
-	"volumeName\x88\x01\x01B\x0e\n" +
-	"\f_volume_name\"m\n" +
+	"volumeName\x88\x01\x01\x12&\n" +
+	"\fcontainer_id\x18\x06 \x01(\tH\x01R\vcontainerId\x88\x01\x01\x12&\n" +
+	"\fservice_name\x18\a \x01(\tH\x02R\vserviceName\x88\x01\x01B\x0e\n" +
+	"\f_volume_nameB\x0f\n" +
+	"\r_container_idB\x0f\n" +
+	"\r_service_name\"m\n" +
 	"\fFileMetadata\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04size\x18\x02 \x01(\x03R\x04size\x12!\n" +
@@ -6219,7 +7561,80 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\"H\n" +
 	"!GetDeploymentServiceNamesResponse\x12#\n" +
-	"\rservice_names\x18\x01 \x03(\tR\fserviceNames\"\x80\f\n" +
+	"\rservice_names\x18\x01 \x03(\tR\fserviceNames\"\xdc\x03\n" +
+	"\x1bGetDeploymentMetricsRequest\x12#\n" +
+	"\rdeployment_id\x18\x01 \x01(\tR\fdeploymentId\x12'\n" +
+	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12>\n" +
+	"\n" +
+	"start_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampH\x00R\tstartTime\x88\x01\x01\x12:\n" +
+	"\bend_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampH\x01R\aendTime\x88\x01\x01\x12$\n" +
+	"\vlatest_only\x18\x05 \x01(\bH\x02R\n" +
+	"latestOnly\x88\x01\x01\x12&\n" +
+	"\fcontainer_id\x18\x06 \x01(\tH\x03R\vcontainerId\x88\x01\x01\x12&\n" +
+	"\fservice_name\x18\a \x01(\tH\x04R\vserviceName\x88\x01\x01\x12!\n" +
+	"\taggregate\x18\b \x01(\bH\x05R\taggregate\x88\x01\x01B\r\n" +
+	"\v_start_timeB\v\n" +
+	"\t_end_timeB\x0e\n" +
+	"\f_latest_onlyB\x0f\n" +
+	"\r_container_idB\x0f\n" +
+	"\r_service_nameB\f\n" +
+	"\n" +
+	"_aggregate\"h\n" +
+	"\x1cGetDeploymentMetricsResponse\x12H\n" +
+	"\ametrics\x18\x01 \x03(\v2..obiente.cloud.deployments.v1.DeploymentMetricR\ametrics\"\xd6\x02\n" +
+	"\x1eStreamDeploymentMetricsRequest\x12#\n" +
+	"\rdeployment_id\x18\x01 \x01(\tR\fdeploymentId\x12'\n" +
+	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12.\n" +
+	"\x10interval_seconds\x18\x03 \x01(\x05H\x00R\x0fintervalSeconds\x88\x01\x01\x12&\n" +
+	"\fcontainer_id\x18\x04 \x01(\tH\x01R\vcontainerId\x88\x01\x01\x12&\n" +
+	"\fservice_name\x18\x05 \x01(\tH\x02R\vserviceName\x88\x01\x01\x12!\n" +
+	"\taggregate\x18\x06 \x01(\bH\x03R\taggregate\x88\x01\x01B\x13\n" +
+	"\x11_interval_secondsB\x0f\n" +
+	"\r_container_idB\x0f\n" +
+	"\r_service_nameB\f\n" +
+	"\n" +
+	"_aggregate\"\xd5\x04\n" +
+	"\x10DeploymentMetric\x12#\n" +
+	"\rdeployment_id\x18\x01 \x01(\tR\fdeploymentId\x128\n" +
+	"\ttimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12*\n" +
+	"\x11cpu_usage_percent\x18\x03 \x01(\x01R\x0fcpuUsagePercent\x12,\n" +
+	"\x12memory_usage_bytes\x18\x04 \x01(\x03R\x10memoryUsageBytes\x12(\n" +
+	"\x10network_rx_bytes\x18\x05 \x01(\x03R\x0enetworkRxBytes\x12(\n" +
+	"\x10network_tx_bytes\x18\x06 \x01(\x03R\x0enetworkTxBytes\x12&\n" +
+	"\x0fdisk_read_bytes\x18\a \x01(\x03R\rdiskReadBytes\x12(\n" +
+	"\x10disk_write_bytes\x18\b \x01(\x03R\x0ediskWriteBytes\x12(\n" +
+	"\rrequest_count\x18\t \x01(\x03H\x00R\frequestCount\x88\x01\x01\x12$\n" +
+	"\verror_count\x18\n" +
+	" \x01(\x03H\x01R\n" +
+	"errorCount\x88\x01\x01\x12&\n" +
+	"\fcontainer_id\x18\v \x01(\tH\x02R\vcontainerId\x88\x01\x01\x12&\n" +
+	"\fservice_name\x18\f \x01(\tH\x03R\vserviceName\x88\x01\x01B\x10\n" +
+	"\x0e_request_countB\x0e\n" +
+	"\f_error_countB\x0f\n" +
+	"\r_container_idB\x0f\n" +
+	"\r_service_name\"\x8e\x01\n" +
+	"\x19GetDeploymentUsageRequest\x12#\n" +
+	"\rdeployment_id\x18\x01 \x01(\tR\fdeploymentId\x12'\n" +
+	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12\x19\n" +
+	"\x05month\x18\x03 \x01(\tH\x00R\x05month\x88\x01\x01B\b\n" +
+	"\x06_month\"\xb3\x02\n" +
+	"\x1aGetDeploymentUsageResponse\x12#\n" +
+	"\rdeployment_id\x18\x01 \x01(\tR\fdeploymentId\x12'\n" +
+	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12\x14\n" +
+	"\x05month\x18\x03 \x01(\tR\x05month\x12N\n" +
+	"\acurrent\x18\x04 \x01(\v24.obiente.cloud.deployments.v1.DeploymentUsageMetricsR\acurrent\x12a\n" +
+	"\x11estimated_monthly\x18\x05 \x01(\v24.obiente.cloud.deployments.v1.DeploymentUsageMetricsR\x10estimatedMonthly\"\x92\x03\n" +
+	"\x16DeploymentUsageMetrics\x12(\n" +
+	"\x10cpu_core_seconds\x18\x01 \x01(\x03R\x0ecpuCoreSeconds\x12.\n" +
+	"\x13memory_byte_seconds\x18\x02 \x01(\x03R\x11memoryByteSeconds\x12,\n" +
+	"\x12bandwidth_rx_bytes\x18\x03 \x01(\x03R\x10bandwidthRxBytes\x12,\n" +
+	"\x12bandwidth_tx_bytes\x18\x04 \x01(\x03R\x10bandwidthTxBytes\x12#\n" +
+	"\rstorage_bytes\x18\x05 \x01(\x03R\fstorageBytes\x12#\n" +
+	"\rrequest_count\x18\x06 \x01(\x03R\frequestCount\x12\x1f\n" +
+	"\verror_count\x18\a \x01(\x03R\n" +
+	"errorCount\x12%\n" +
+	"\x0euptime_seconds\x18\b \x01(\x03R\ruptimeSeconds\x120\n" +
+	"\x14estimated_cost_cents\x18\t \x01(\x03R\x12estimatedCostCents\"\x90\r\n" +
 	"\n" +
 	"Deployment\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
@@ -6254,7 +7669,9 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\rnode_hostname\x18\x18 \x01(\tH\tR\fnodeHostname\x88\x01\x01\x12P\n" +
 	"\benv_vars\x18\x19 \x03(\v25.obiente.cloud.deployments.v1.Deployment.EnvVarsEntryR\aenvVars\x127\n" +
 	"\x15github_integration_id\x18\x1d \x01(\tH\n" +
-	"R\x13githubIntegrationId\x88\x01\x01\x1a:\n" +
+	"R\x13githubIntegrationId\x88\x01\x01\x122\n" +
+	"\x12containers_running\x18\x1e \x01(\x05H\vR\x11containersRunning\x88\x01\x01\x12.\n" +
+	"\x10containers_total\x18\x1f \x01(\x05H\fR\x0fcontainersTotal\x88\x01\x01\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x11\n" +
@@ -6269,7 +7686,61 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\n" +
 	"\b_node_idB\x10\n" +
 	"\x0e_node_hostnameB\x18\n" +
-	"\x16_github_integration_id*\x9b\x01\n" +
+	"\x16_github_integration_idB\x15\n" +
+	"\x13_containers_runningB\x13\n" +
+	"\x11_containers_total\"o\n" +
+	"\x1fListDeploymentContainersRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
+	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\"u\n" +
+	" ListDeploymentContainersResponse\x12Q\n" +
+	"\n" +
+	"containers\x18\x01 \x03(\v21.obiente.cloud.deployments.v1.DeploymentContainerR\n" +
+	"containers\"\x87\x03\n" +
+	"\x13DeploymentContainer\x12!\n" +
+	"\fcontainer_id\x18\x01 \x01(\tR\vcontainerId\x12&\n" +
+	"\fservice_name\x18\x02 \x01(\tH\x00R\vserviceName\x88\x01\x01\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12\x1c\n" +
+	"\anode_id\x18\x04 \x01(\tH\x01R\x06nodeId\x88\x01\x01\x12(\n" +
+	"\rnode_hostname\x18\x05 \x01(\tH\x02R\fnodeHostname\x88\x01\x01\x12\x17\n" +
+	"\x04port\x18\x06 \x01(\x05H\x03R\x04port\x88\x01\x01\x129\n" +
+	"\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAtB\x0f\n" +
+	"\r_service_nameB\n" +
+	"\n" +
+	"\b_node_idB\x10\n" +
+	"\x0e_node_hostnameB\a\n" +
+	"\x05_port\"\xa1\x01\n" +
+	"\x1aStreamContainerLogsRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
+	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12!\n" +
+	"\fcontainer_id\x18\x03 \x01(\tR\vcontainerId\x12\x12\n" +
+	"\x04tail\x18\x04 \x01(\x05R\x04tail\"\x88\x01\n" +
+	"\x15StartContainerRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
+	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12!\n" +
+	"\fcontainer_id\x18\x03 \x01(\tR\vcontainerId\"W\n" +
+	"\x16StartContainerResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x19\n" +
+	"\x05error\x18\x02 \x01(\tH\x00R\x05error\x88\x01\x01B\b\n" +
+	"\x06_error\"\x87\x01\n" +
+	"\x14StopContainerRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
+	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12!\n" +
+	"\fcontainer_id\x18\x03 \x01(\tR\vcontainerId\"V\n" +
+	"\x15StopContainerResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x19\n" +
+	"\x05error\x18\x02 \x01(\tH\x00R\x05error\x88\x01\x01B\b\n" +
+	"\x06_error\"\x8a\x01\n" +
+	"\x17RestartContainerRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
+	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12!\n" +
+	"\fcontainer_id\x18\x03 \x01(\tR\vcontainerId\"Y\n" +
+	"\x18RestartContainerResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x19\n" +
+	"\x05error\x18\x02 \x01(\tH\x00R\x05error\x88\x01\x01B\b\n" +
+	"\x06_error*\x9b\x01\n" +
 	"\x0eDeploymentType\x12\x1f\n" +
 	"\x1bDEPLOYMENT_TYPE_UNSPECIFIED\x10\x00\x12\n" +
 	"\n" +
@@ -6314,7 +7785,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	" CONTAINER_ENTRY_TYPE_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19CONTAINER_ENTRY_TYPE_FILE\x10\x01\x12\"\n" +
 	"\x1eCONTAINER_ENTRY_TYPE_DIRECTORY\x10\x02\x12 \n" +
-	"\x1cCONTAINER_ENTRY_TYPE_SYMLINK\x10\x032\x8b'\n" +
+	"\x1cCONTAINER_ENTRY_TYPE_SYMLINK\x10\x032\xcd/\n" +
 	"\x11DeploymentService\x12~\n" +
 	"\x0fListDeployments\x124.obiente.cloud.deployments.v1.ListDeploymentsRequest\x1a5.obiente.cloud.deployments.v1.ListDeploymentsResponse\x12\x81\x01\n" +
 	"\x10CreateDeployment\x125.obiente.cloud.deployments.v1.CreateDeploymentRequest\x1a6.obiente.cloud.deployments.v1.CreateDeploymentResponse\x12x\n" +
@@ -6324,7 +7795,10 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x16StreamDeploymentStatus\x12;.obiente.cloud.deployments.v1.StreamDeploymentStatusRequest\x1a4.obiente.cloud.deployments.v1.DeploymentStatusUpdate0\x01\x12\x84\x01\n" +
 	"\x11GetDeploymentLogs\x126.obiente.cloud.deployments.v1.GetDeploymentLogsRequest\x1a7.obiente.cloud.deployments.v1.GetDeploymentLogsResponse\x12\x84\x01\n" +
 	"\x14StreamDeploymentLogs\x129.obiente.cloud.deployments.v1.StreamDeploymentLogsRequest\x1a/.obiente.cloud.deployments.v1.DeploymentLogLine0\x01\x12z\n" +
-	"\x0fStreamBuildLogs\x124.obiente.cloud.deployments.v1.StreamBuildLogsRequest\x1a/.obiente.cloud.deployments.v1.DeploymentLogLine0\x01\x12~\n" +
+	"\x0fStreamBuildLogs\x124.obiente.cloud.deployments.v1.StreamBuildLogsRequest\x1a/.obiente.cloud.deployments.v1.DeploymentLogLine0\x01\x12\x8d\x01\n" +
+	"\x14GetDeploymentMetrics\x129.obiente.cloud.deployments.v1.GetDeploymentMetricsRequest\x1a:.obiente.cloud.deployments.v1.GetDeploymentMetricsResponse\x12\x89\x01\n" +
+	"\x17StreamDeploymentMetrics\x12<.obiente.cloud.deployments.v1.StreamDeploymentMetricsRequest\x1a..obiente.cloud.deployments.v1.DeploymentMetric0\x01\x12\x87\x01\n" +
+	"\x12GetDeploymentUsage\x127.obiente.cloud.deployments.v1.GetDeploymentUsageRequest\x1a8.obiente.cloud.deployments.v1.GetDeploymentUsageResponse\x12~\n" +
 	"\x0fStartDeployment\x124.obiente.cloud.deployments.v1.StartDeploymentRequest\x1a5.obiente.cloud.deployments.v1.StartDeploymentResponse\x12{\n" +
 	"\x0eStopDeployment\x123.obiente.cloud.deployments.v1.StopDeploymentRequest\x1a4.obiente.cloud.deployments.v1.StopDeploymentResponse\x12\x81\x01\n" +
 	"\x10DeleteDeployment\x125.obiente.cloud.deployments.v1.DeleteDeploymentRequest\x1a6.obiente.cloud.deployments.v1.DeleteDeploymentResponse\x12\x84\x01\n" +
@@ -6351,7 +7825,12 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x12WriteContainerFile\x127.obiente.cloud.deployments.v1.WriteContainerFileRequest\x1a8.obiente.cloud.deployments.v1.WriteContainerFileResponse\x12\x90\x01\n" +
 	"\x15GetDeploymentRoutings\x12:.obiente.cloud.deployments.v1.GetDeploymentRoutingsRequest\x1a;.obiente.cloud.deployments.v1.GetDeploymentRoutingsResponse\x12\x99\x01\n" +
 	"\x18UpdateDeploymentRoutings\x12=.obiente.cloud.deployments.v1.UpdateDeploymentRoutingsRequest\x1a>.obiente.cloud.deployments.v1.UpdateDeploymentRoutingsResponse\x12\x9c\x01\n" +
-	"\x19GetDeploymentServiceNames\x12>.obiente.cloud.deployments.v1.GetDeploymentServiceNamesRequest\x1a?.obiente.cloud.deployments.v1.GetDeploymentServiceNamesResponseB:Z8api/gen/proto/obiente/cloud/deployments/v1;deploymentsv1b\x06proto3"
+	"\x19GetDeploymentServiceNames\x12>.obiente.cloud.deployments.v1.GetDeploymentServiceNamesRequest\x1a?.obiente.cloud.deployments.v1.GetDeploymentServiceNamesResponse\x12\x99\x01\n" +
+	"\x18ListDeploymentContainers\x12=.obiente.cloud.deployments.v1.ListDeploymentContainersRequest\x1a>.obiente.cloud.deployments.v1.ListDeploymentContainersResponse\x12\x82\x01\n" +
+	"\x13StreamContainerLogs\x128.obiente.cloud.deployments.v1.StreamContainerLogsRequest\x1a/.obiente.cloud.deployments.v1.DeploymentLogLine0\x01\x12{\n" +
+	"\x0eStartContainer\x123.obiente.cloud.deployments.v1.StartContainerRequest\x1a4.obiente.cloud.deployments.v1.StartContainerResponse\x12x\n" +
+	"\rStopContainer\x122.obiente.cloud.deployments.v1.StopContainerRequest\x1a3.obiente.cloud.deployments.v1.StopContainerResponse\x12\x81\x01\n" +
+	"\x10RestartContainer\x125.obiente.cloud.deployments.v1.RestartContainerRequest\x1a6.obiente.cloud.deployments.v1.RestartContainerResponseB:Z8api/gen/proto/obiente/cloud/deployments/v1;deploymentsv1b\x06proto3"
 
 var (
 	file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescOnce sync.Once
@@ -6366,7 +7845,7 @@ func file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP() []
 }
 
 var file_obiente_cloud_deployments_v1_deployment_service_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes = make([]protoimpl.MessageInfo, 84)
+var file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes = make([]protoimpl.MessageInfo, 101)
 var file_obiente_cloud_deployments_v1_deployment_service_proto_goTypes = []any{
 	(DeploymentType)(0),                             // 0: obiente.cloud.deployments.v1.DeploymentType
 	(BuildStrategy)(0),                              // 1: obiente.cloud.deployments.v1.BuildStrategy
@@ -6453,138 +7932,180 @@ var file_obiente_cloud_deployments_v1_deployment_service_proto_goTypes = []any{
 	(*UpdateDeploymentRoutingsResponse)(nil),        // 82: obiente.cloud.deployments.v1.UpdateDeploymentRoutingsResponse
 	(*GetDeploymentServiceNamesRequest)(nil),        // 83: obiente.cloud.deployments.v1.GetDeploymentServiceNamesRequest
 	(*GetDeploymentServiceNamesResponse)(nil),       // 84: obiente.cloud.deployments.v1.GetDeploymentServiceNamesResponse
-	(*Deployment)(nil),                              // 85: obiente.cloud.deployments.v1.Deployment
-	nil,                                             // 86: obiente.cloud.deployments.v1.CreateDeploymentRequest.EnvEntry
-	nil,                                             // 87: obiente.cloud.deployments.v1.CreateDeploymentRequest.LabelsEntry
-	nil,                                             // 88: obiente.cloud.deployments.v1.Deployment.EnvVarsEntry
-	(*v1.Pagination)(nil),                           // 89: obiente.cloud.organizations.v1.Pagination
-	(*timestamppb.Timestamp)(nil),                   // 90: google.protobuf.Timestamp
+	(*GetDeploymentMetricsRequest)(nil),             // 85: obiente.cloud.deployments.v1.GetDeploymentMetricsRequest
+	(*GetDeploymentMetricsResponse)(nil),            // 86: obiente.cloud.deployments.v1.GetDeploymentMetricsResponse
+	(*StreamDeploymentMetricsRequest)(nil),          // 87: obiente.cloud.deployments.v1.StreamDeploymentMetricsRequest
+	(*DeploymentMetric)(nil),                        // 88: obiente.cloud.deployments.v1.DeploymentMetric
+	(*GetDeploymentUsageRequest)(nil),               // 89: obiente.cloud.deployments.v1.GetDeploymentUsageRequest
+	(*GetDeploymentUsageResponse)(nil),              // 90: obiente.cloud.deployments.v1.GetDeploymentUsageResponse
+	(*DeploymentUsageMetrics)(nil),                  // 91: obiente.cloud.deployments.v1.DeploymentUsageMetrics
+	(*Deployment)(nil),                              // 92: obiente.cloud.deployments.v1.Deployment
+	(*ListDeploymentContainersRequest)(nil),         // 93: obiente.cloud.deployments.v1.ListDeploymentContainersRequest
+	(*ListDeploymentContainersResponse)(nil),        // 94: obiente.cloud.deployments.v1.ListDeploymentContainersResponse
+	(*DeploymentContainer)(nil),                     // 95: obiente.cloud.deployments.v1.DeploymentContainer
+	(*StreamContainerLogsRequest)(nil),              // 96: obiente.cloud.deployments.v1.StreamContainerLogsRequest
+	(*StartContainerRequest)(nil),                   // 97: obiente.cloud.deployments.v1.StartContainerRequest
+	(*StartContainerResponse)(nil),                  // 98: obiente.cloud.deployments.v1.StartContainerResponse
+	(*StopContainerRequest)(nil),                    // 99: obiente.cloud.deployments.v1.StopContainerRequest
+	(*StopContainerResponse)(nil),                   // 100: obiente.cloud.deployments.v1.StopContainerResponse
+	(*RestartContainerRequest)(nil),                 // 101: obiente.cloud.deployments.v1.RestartContainerRequest
+	(*RestartContainerResponse)(nil),                // 102: obiente.cloud.deployments.v1.RestartContainerResponse
+	nil,                                             // 103: obiente.cloud.deployments.v1.CreateDeploymentRequest.EnvEntry
+	nil,                                             // 104: obiente.cloud.deployments.v1.CreateDeploymentRequest.LabelsEntry
+	nil,                                             // 105: obiente.cloud.deployments.v1.Deployment.EnvVarsEntry
+	(*v1.Pagination)(nil),                           // 106: obiente.cloud.organizations.v1.Pagination
+	(*timestamppb.Timestamp)(nil),                   // 107: google.protobuf.Timestamp
 }
 var file_obiente_cloud_deployments_v1_deployment_service_proto_depIdxs = []int32{
-	3,  // 0: obiente.cloud.deployments.v1.ListDeploymentsRequest.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
-	85, // 1: obiente.cloud.deployments.v1.ListDeploymentsResponse.deployments:type_name -> obiente.cloud.deployments.v1.Deployment
-	89, // 2: obiente.cloud.deployments.v1.ListDeploymentsResponse.pagination:type_name -> obiente.cloud.organizations.v1.Pagination
-	0,  // 3: obiente.cloud.deployments.v1.CreateDeploymentRequest.type:type_name -> obiente.cloud.deployments.v1.DeploymentType
-	1,  // 4: obiente.cloud.deployments.v1.CreateDeploymentRequest.build_strategy:type_name -> obiente.cloud.deployments.v1.BuildStrategy
-	86, // 5: obiente.cloud.deployments.v1.CreateDeploymentRequest.env:type_name -> obiente.cloud.deployments.v1.CreateDeploymentRequest.EnvEntry
-	87, // 6: obiente.cloud.deployments.v1.CreateDeploymentRequest.labels:type_name -> obiente.cloud.deployments.v1.CreateDeploymentRequest.LabelsEntry
-	85, // 7: obiente.cloud.deployments.v1.CreateDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	85, // 8: obiente.cloud.deployments.v1.GetDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	1,  // 9: obiente.cloud.deployments.v1.UpdateDeploymentRequest.build_strategy:type_name -> obiente.cloud.deployments.v1.BuildStrategy
-	85, // 10: obiente.cloud.deployments.v1.UpdateDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	3,  // 11: obiente.cloud.deployments.v1.DeploymentStatusUpdate.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
-	90, // 12: obiente.cloud.deployments.v1.DeploymentStatusUpdate.timestamp:type_name -> google.protobuf.Timestamp
-	90, // 13: obiente.cloud.deployments.v1.DeploymentLogLine.timestamp:type_name -> google.protobuf.Timestamp
-	85, // 14: obiente.cloud.deployments.v1.StartDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	85, // 15: obiente.cloud.deployments.v1.StopDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	85, // 16: obiente.cloud.deployments.v1.RestartDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	85, // 17: obiente.cloud.deployments.v1.ScaleDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	85, // 18: obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	42, // 19: obiente.cloud.deployments.v1.ValidateDeploymentComposeResponse.validation_errors:type_name -> obiente.cloud.deployments.v1.ComposeValidationError
-	85, // 20: obiente.cloud.deployments.v1.UpdateDeploymentComposeResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
-	42, // 21: obiente.cloud.deployments.v1.UpdateDeploymentComposeResponse.validation_errors:type_name -> obiente.cloud.deployments.v1.ComposeValidationError
-	44, // 22: obiente.cloud.deployments.v1.ListGitHubReposResponse.repos:type_name -> obiente.cloud.deployments.v1.GitHubRepo
-	47, // 23: obiente.cloud.deployments.v1.GetGitHubBranchesResponse.branches:type_name -> obiente.cloud.deployments.v1.GitHubBranch
-	52, // 24: obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsResponse.integrations:type_name -> obiente.cloud.deployments.v1.GitHubIntegrationOption
-	90, // 25: obiente.cloud.deployments.v1.ContainerFile.modified_time:type_name -> google.protobuf.Timestamp
-	90, // 26: obiente.cloud.deployments.v1.ContainerFile.created_time:type_name -> google.protobuf.Timestamp
-	61, // 27: obiente.cloud.deployments.v1.ListContainerFilesResponse.files:type_name -> obiente.cloud.deployments.v1.ContainerFile
-	59, // 28: obiente.cloud.deployments.v1.ListContainerFilesResponse.volumes:type_name -> obiente.cloud.deployments.v1.VolumeInfo
-	61, // 29: obiente.cloud.deployments.v1.GetContainerFileResponse.metadata:type_name -> obiente.cloud.deployments.v1.ContainerFile
-	66, // 30: obiente.cloud.deployments.v1.UploadContainerFilesRequest.metadata:type_name -> obiente.cloud.deployments.v1.UploadContainerFilesMetadata
-	67, // 31: obiente.cloud.deployments.v1.UploadContainerFilesMetadata.files:type_name -> obiente.cloud.deployments.v1.FileMetadata
-	70, // 32: obiente.cloud.deployments.v1.DeleteContainerEntriesResponse.errors:type_name -> obiente.cloud.deployments.v1.DeleteContainerEntriesError
-	61, // 33: obiente.cloud.deployments.v1.RenameContainerEntryResponse.entry:type_name -> obiente.cloud.deployments.v1.ContainerFile
-	4,  // 34: obiente.cloud.deployments.v1.CreateContainerEntryRequest.type:type_name -> obiente.cloud.deployments.v1.ContainerEntryType
-	61, // 35: obiente.cloud.deployments.v1.CreateContainerEntryResponse.entry:type_name -> obiente.cloud.deployments.v1.ContainerFile
-	61, // 36: obiente.cloud.deployments.v1.WriteContainerFileResponse.entry:type_name -> obiente.cloud.deployments.v1.ContainerFile
-	78, // 37: obiente.cloud.deployments.v1.GetDeploymentRoutingsResponse.rules:type_name -> obiente.cloud.deployments.v1.RoutingRule
-	78, // 38: obiente.cloud.deployments.v1.UpdateDeploymentRoutingsRequest.rules:type_name -> obiente.cloud.deployments.v1.RoutingRule
-	78, // 39: obiente.cloud.deployments.v1.UpdateDeploymentRoutingsResponse.rules:type_name -> obiente.cloud.deployments.v1.RoutingRule
-	0,  // 40: obiente.cloud.deployments.v1.Deployment.type:type_name -> obiente.cloud.deployments.v1.DeploymentType
-	1,  // 41: obiente.cloud.deployments.v1.Deployment.build_strategy:type_name -> obiente.cloud.deployments.v1.BuildStrategy
-	3,  // 42: obiente.cloud.deployments.v1.Deployment.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
-	90, // 43: obiente.cloud.deployments.v1.Deployment.last_deployed_at:type_name -> google.protobuf.Timestamp
-	90, // 44: obiente.cloud.deployments.v1.Deployment.created_at:type_name -> google.protobuf.Timestamp
-	2,  // 45: obiente.cloud.deployments.v1.Deployment.environment:type_name -> obiente.cloud.deployments.v1.Environment
-	88, // 46: obiente.cloud.deployments.v1.Deployment.env_vars:type_name -> obiente.cloud.deployments.v1.Deployment.EnvVarsEntry
-	5,  // 47: obiente.cloud.deployments.v1.DeploymentService.ListDeployments:input_type -> obiente.cloud.deployments.v1.ListDeploymentsRequest
-	7,  // 48: obiente.cloud.deployments.v1.DeploymentService.CreateDeployment:input_type -> obiente.cloud.deployments.v1.CreateDeploymentRequest
-	9,  // 49: obiente.cloud.deployments.v1.DeploymentService.GetDeployment:input_type -> obiente.cloud.deployments.v1.GetDeploymentRequest
-	11, // 50: obiente.cloud.deployments.v1.DeploymentService.UpdateDeployment:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentRequest
-	13, // 51: obiente.cloud.deployments.v1.DeploymentService.TriggerDeployment:input_type -> obiente.cloud.deployments.v1.TriggerDeploymentRequest
-	15, // 52: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentStatus:input_type -> obiente.cloud.deployments.v1.StreamDeploymentStatusRequest
-	17, // 53: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentLogs:input_type -> obiente.cloud.deployments.v1.GetDeploymentLogsRequest
-	19, // 54: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentLogs:input_type -> obiente.cloud.deployments.v1.StreamDeploymentLogsRequest
-	20, // 55: obiente.cloud.deployments.v1.DeploymentService.StreamBuildLogs:input_type -> obiente.cloud.deployments.v1.StreamBuildLogsRequest
-	22, // 56: obiente.cloud.deployments.v1.DeploymentService.StartDeployment:input_type -> obiente.cloud.deployments.v1.StartDeploymentRequest
-	24, // 57: obiente.cloud.deployments.v1.DeploymentService.StopDeployment:input_type -> obiente.cloud.deployments.v1.StopDeploymentRequest
-	26, // 58: obiente.cloud.deployments.v1.DeploymentService.DeleteDeployment:input_type -> obiente.cloud.deployments.v1.DeleteDeploymentRequest
-	28, // 59: obiente.cloud.deployments.v1.DeploymentService.RestartDeployment:input_type -> obiente.cloud.deployments.v1.RestartDeploymentRequest
-	30, // 60: obiente.cloud.deployments.v1.DeploymentService.ScaleDeployment:input_type -> obiente.cloud.deployments.v1.ScaleDeploymentRequest
-	32, // 61: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentEnvVars:input_type -> obiente.cloud.deployments.v1.GetDeploymentEnvVarsRequest
-	34, // 62: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentEnvVars:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsRequest
-	36, // 63: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentCompose:input_type -> obiente.cloud.deployments.v1.GetDeploymentComposeRequest
-	38, // 64: obiente.cloud.deployments.v1.DeploymentService.ValidateDeploymentCompose:input_type -> obiente.cloud.deployments.v1.ValidateDeploymentComposeRequest
-	40, // 65: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentCompose:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentComposeRequest
-	43, // 66: obiente.cloud.deployments.v1.DeploymentService.ListGitHubRepos:input_type -> obiente.cloud.deployments.v1.ListGitHubReposRequest
-	46, // 67: obiente.cloud.deployments.v1.DeploymentService.GetGitHubBranches:input_type -> obiente.cloud.deployments.v1.GetGitHubBranchesRequest
-	49, // 68: obiente.cloud.deployments.v1.DeploymentService.GetGitHubFile:input_type -> obiente.cloud.deployments.v1.GetGitHubFileRequest
-	51, // 69: obiente.cloud.deployments.v1.DeploymentService.ListAvailableGitHubIntegrations:input_type -> obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsRequest
-	57, // 70: obiente.cloud.deployments.v1.DeploymentService.StreamTerminal:input_type -> obiente.cloud.deployments.v1.TerminalInput
-	54, // 71: obiente.cloud.deployments.v1.DeploymentService.StreamTerminalOutput:input_type -> obiente.cloud.deployments.v1.StreamTerminalOutputRequest
-	55, // 72: obiente.cloud.deployments.v1.DeploymentService.SendTerminalInput:input_type -> obiente.cloud.deployments.v1.SendTerminalInputRequest
-	60, // 73: obiente.cloud.deployments.v1.DeploymentService.ListContainerFiles:input_type -> obiente.cloud.deployments.v1.ListContainerFilesRequest
-	63, // 74: obiente.cloud.deployments.v1.DeploymentService.GetContainerFile:input_type -> obiente.cloud.deployments.v1.GetContainerFileRequest
-	65, // 75: obiente.cloud.deployments.v1.DeploymentService.UploadContainerFiles:input_type -> obiente.cloud.deployments.v1.UploadContainerFilesRequest
-	69, // 76: obiente.cloud.deployments.v1.DeploymentService.DeleteContainerEntries:input_type -> obiente.cloud.deployments.v1.DeleteContainerEntriesRequest
-	72, // 77: obiente.cloud.deployments.v1.DeploymentService.RenameContainerEntry:input_type -> obiente.cloud.deployments.v1.RenameContainerEntryRequest
-	74, // 78: obiente.cloud.deployments.v1.DeploymentService.CreateContainerEntry:input_type -> obiente.cloud.deployments.v1.CreateContainerEntryRequest
-	76, // 79: obiente.cloud.deployments.v1.DeploymentService.WriteContainerFile:input_type -> obiente.cloud.deployments.v1.WriteContainerFileRequest
-	79, // 80: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentRoutings:input_type -> obiente.cloud.deployments.v1.GetDeploymentRoutingsRequest
-	81, // 81: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentRoutings:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentRoutingsRequest
-	83, // 82: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentServiceNames:input_type -> obiente.cloud.deployments.v1.GetDeploymentServiceNamesRequest
-	6,  // 83: obiente.cloud.deployments.v1.DeploymentService.ListDeployments:output_type -> obiente.cloud.deployments.v1.ListDeploymentsResponse
-	8,  // 84: obiente.cloud.deployments.v1.DeploymentService.CreateDeployment:output_type -> obiente.cloud.deployments.v1.CreateDeploymentResponse
-	10, // 85: obiente.cloud.deployments.v1.DeploymentService.GetDeployment:output_type -> obiente.cloud.deployments.v1.GetDeploymentResponse
-	12, // 86: obiente.cloud.deployments.v1.DeploymentService.UpdateDeployment:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentResponse
-	14, // 87: obiente.cloud.deployments.v1.DeploymentService.TriggerDeployment:output_type -> obiente.cloud.deployments.v1.TriggerDeploymentResponse
-	16, // 88: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentStatus:output_type -> obiente.cloud.deployments.v1.DeploymentStatusUpdate
-	18, // 89: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentLogs:output_type -> obiente.cloud.deployments.v1.GetDeploymentLogsResponse
-	21, // 90: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentLogs:output_type -> obiente.cloud.deployments.v1.DeploymentLogLine
-	21, // 91: obiente.cloud.deployments.v1.DeploymentService.StreamBuildLogs:output_type -> obiente.cloud.deployments.v1.DeploymentLogLine
-	23, // 92: obiente.cloud.deployments.v1.DeploymentService.StartDeployment:output_type -> obiente.cloud.deployments.v1.StartDeploymentResponse
-	25, // 93: obiente.cloud.deployments.v1.DeploymentService.StopDeployment:output_type -> obiente.cloud.deployments.v1.StopDeploymentResponse
-	27, // 94: obiente.cloud.deployments.v1.DeploymentService.DeleteDeployment:output_type -> obiente.cloud.deployments.v1.DeleteDeploymentResponse
-	29, // 95: obiente.cloud.deployments.v1.DeploymentService.RestartDeployment:output_type -> obiente.cloud.deployments.v1.RestartDeploymentResponse
-	31, // 96: obiente.cloud.deployments.v1.DeploymentService.ScaleDeployment:output_type -> obiente.cloud.deployments.v1.ScaleDeploymentResponse
-	33, // 97: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentEnvVars:output_type -> obiente.cloud.deployments.v1.GetDeploymentEnvVarsResponse
-	35, // 98: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentEnvVars:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsResponse
-	37, // 99: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentCompose:output_type -> obiente.cloud.deployments.v1.GetDeploymentComposeResponse
-	39, // 100: obiente.cloud.deployments.v1.DeploymentService.ValidateDeploymentCompose:output_type -> obiente.cloud.deployments.v1.ValidateDeploymentComposeResponse
-	41, // 101: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentCompose:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentComposeResponse
-	45, // 102: obiente.cloud.deployments.v1.DeploymentService.ListGitHubRepos:output_type -> obiente.cloud.deployments.v1.ListGitHubReposResponse
-	48, // 103: obiente.cloud.deployments.v1.DeploymentService.GetGitHubBranches:output_type -> obiente.cloud.deployments.v1.GetGitHubBranchesResponse
-	50, // 104: obiente.cloud.deployments.v1.DeploymentService.GetGitHubFile:output_type -> obiente.cloud.deployments.v1.GetGitHubFileResponse
-	53, // 105: obiente.cloud.deployments.v1.DeploymentService.ListAvailableGitHubIntegrations:output_type -> obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsResponse
-	58, // 106: obiente.cloud.deployments.v1.DeploymentService.StreamTerminal:output_type -> obiente.cloud.deployments.v1.TerminalOutput
-	58, // 107: obiente.cloud.deployments.v1.DeploymentService.StreamTerminalOutput:output_type -> obiente.cloud.deployments.v1.TerminalOutput
-	56, // 108: obiente.cloud.deployments.v1.DeploymentService.SendTerminalInput:output_type -> obiente.cloud.deployments.v1.SendTerminalInputResponse
-	62, // 109: obiente.cloud.deployments.v1.DeploymentService.ListContainerFiles:output_type -> obiente.cloud.deployments.v1.ListContainerFilesResponse
-	64, // 110: obiente.cloud.deployments.v1.DeploymentService.GetContainerFile:output_type -> obiente.cloud.deployments.v1.GetContainerFileResponse
-	68, // 111: obiente.cloud.deployments.v1.DeploymentService.UploadContainerFiles:output_type -> obiente.cloud.deployments.v1.UploadContainerFilesResponse
-	71, // 112: obiente.cloud.deployments.v1.DeploymentService.DeleteContainerEntries:output_type -> obiente.cloud.deployments.v1.DeleteContainerEntriesResponse
-	73, // 113: obiente.cloud.deployments.v1.DeploymentService.RenameContainerEntry:output_type -> obiente.cloud.deployments.v1.RenameContainerEntryResponse
-	75, // 114: obiente.cloud.deployments.v1.DeploymentService.CreateContainerEntry:output_type -> obiente.cloud.deployments.v1.CreateContainerEntryResponse
-	77, // 115: obiente.cloud.deployments.v1.DeploymentService.WriteContainerFile:output_type -> obiente.cloud.deployments.v1.WriteContainerFileResponse
-	80, // 116: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentRoutings:output_type -> obiente.cloud.deployments.v1.GetDeploymentRoutingsResponse
-	82, // 117: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentRoutings:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentRoutingsResponse
-	84, // 118: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentServiceNames:output_type -> obiente.cloud.deployments.v1.GetDeploymentServiceNamesResponse
-	83, // [83:119] is the sub-list for method output_type
-	47, // [47:83] is the sub-list for method input_type
-	47, // [47:47] is the sub-list for extension type_name
-	47, // [47:47] is the sub-list for extension extendee
-	0,  // [0:47] is the sub-list for field type_name
+	3,   // 0: obiente.cloud.deployments.v1.ListDeploymentsRequest.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
+	92,  // 1: obiente.cloud.deployments.v1.ListDeploymentsResponse.deployments:type_name -> obiente.cloud.deployments.v1.Deployment
+	106, // 2: obiente.cloud.deployments.v1.ListDeploymentsResponse.pagination:type_name -> obiente.cloud.organizations.v1.Pagination
+	0,   // 3: obiente.cloud.deployments.v1.CreateDeploymentRequest.type:type_name -> obiente.cloud.deployments.v1.DeploymentType
+	1,   // 4: obiente.cloud.deployments.v1.CreateDeploymentRequest.build_strategy:type_name -> obiente.cloud.deployments.v1.BuildStrategy
+	103, // 5: obiente.cloud.deployments.v1.CreateDeploymentRequest.env:type_name -> obiente.cloud.deployments.v1.CreateDeploymentRequest.EnvEntry
+	104, // 6: obiente.cloud.deployments.v1.CreateDeploymentRequest.labels:type_name -> obiente.cloud.deployments.v1.CreateDeploymentRequest.LabelsEntry
+	92,  // 7: obiente.cloud.deployments.v1.CreateDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	92,  // 8: obiente.cloud.deployments.v1.GetDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	1,   // 9: obiente.cloud.deployments.v1.UpdateDeploymentRequest.build_strategy:type_name -> obiente.cloud.deployments.v1.BuildStrategy
+	92,  // 10: obiente.cloud.deployments.v1.UpdateDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	3,   // 11: obiente.cloud.deployments.v1.DeploymentStatusUpdate.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
+	107, // 12: obiente.cloud.deployments.v1.DeploymentStatusUpdate.timestamp:type_name -> google.protobuf.Timestamp
+	107, // 13: obiente.cloud.deployments.v1.DeploymentLogLine.timestamp:type_name -> google.protobuf.Timestamp
+	92,  // 14: obiente.cloud.deployments.v1.StartDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	92,  // 15: obiente.cloud.deployments.v1.StopDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	92,  // 16: obiente.cloud.deployments.v1.RestartDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	92,  // 17: obiente.cloud.deployments.v1.ScaleDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	92,  // 18: obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	42,  // 19: obiente.cloud.deployments.v1.ValidateDeploymentComposeResponse.validation_errors:type_name -> obiente.cloud.deployments.v1.ComposeValidationError
+	92,  // 20: obiente.cloud.deployments.v1.UpdateDeploymentComposeResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
+	42,  // 21: obiente.cloud.deployments.v1.UpdateDeploymentComposeResponse.validation_errors:type_name -> obiente.cloud.deployments.v1.ComposeValidationError
+	44,  // 22: obiente.cloud.deployments.v1.ListGitHubReposResponse.repos:type_name -> obiente.cloud.deployments.v1.GitHubRepo
+	47,  // 23: obiente.cloud.deployments.v1.GetGitHubBranchesResponse.branches:type_name -> obiente.cloud.deployments.v1.GitHubBranch
+	52,  // 24: obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsResponse.integrations:type_name -> obiente.cloud.deployments.v1.GitHubIntegrationOption
+	107, // 25: obiente.cloud.deployments.v1.ContainerFile.modified_time:type_name -> google.protobuf.Timestamp
+	107, // 26: obiente.cloud.deployments.v1.ContainerFile.created_time:type_name -> google.protobuf.Timestamp
+	61,  // 27: obiente.cloud.deployments.v1.ListContainerFilesResponse.files:type_name -> obiente.cloud.deployments.v1.ContainerFile
+	59,  // 28: obiente.cloud.deployments.v1.ListContainerFilesResponse.volumes:type_name -> obiente.cloud.deployments.v1.VolumeInfo
+	61,  // 29: obiente.cloud.deployments.v1.GetContainerFileResponse.metadata:type_name -> obiente.cloud.deployments.v1.ContainerFile
+	66,  // 30: obiente.cloud.deployments.v1.UploadContainerFilesRequest.metadata:type_name -> obiente.cloud.deployments.v1.UploadContainerFilesMetadata
+	67,  // 31: obiente.cloud.deployments.v1.UploadContainerFilesMetadata.files:type_name -> obiente.cloud.deployments.v1.FileMetadata
+	70,  // 32: obiente.cloud.deployments.v1.DeleteContainerEntriesResponse.errors:type_name -> obiente.cloud.deployments.v1.DeleteContainerEntriesError
+	61,  // 33: obiente.cloud.deployments.v1.RenameContainerEntryResponse.entry:type_name -> obiente.cloud.deployments.v1.ContainerFile
+	4,   // 34: obiente.cloud.deployments.v1.CreateContainerEntryRequest.type:type_name -> obiente.cloud.deployments.v1.ContainerEntryType
+	61,  // 35: obiente.cloud.deployments.v1.CreateContainerEntryResponse.entry:type_name -> obiente.cloud.deployments.v1.ContainerFile
+	61,  // 36: obiente.cloud.deployments.v1.WriteContainerFileResponse.entry:type_name -> obiente.cloud.deployments.v1.ContainerFile
+	78,  // 37: obiente.cloud.deployments.v1.GetDeploymentRoutingsResponse.rules:type_name -> obiente.cloud.deployments.v1.RoutingRule
+	78,  // 38: obiente.cloud.deployments.v1.UpdateDeploymentRoutingsRequest.rules:type_name -> obiente.cloud.deployments.v1.RoutingRule
+	78,  // 39: obiente.cloud.deployments.v1.UpdateDeploymentRoutingsResponse.rules:type_name -> obiente.cloud.deployments.v1.RoutingRule
+	107, // 40: obiente.cloud.deployments.v1.GetDeploymentMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
+	107, // 41: obiente.cloud.deployments.v1.GetDeploymentMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
+	88,  // 42: obiente.cloud.deployments.v1.GetDeploymentMetricsResponse.metrics:type_name -> obiente.cloud.deployments.v1.DeploymentMetric
+	107, // 43: obiente.cloud.deployments.v1.DeploymentMetric.timestamp:type_name -> google.protobuf.Timestamp
+	91,  // 44: obiente.cloud.deployments.v1.GetDeploymentUsageResponse.current:type_name -> obiente.cloud.deployments.v1.DeploymentUsageMetrics
+	91,  // 45: obiente.cloud.deployments.v1.GetDeploymentUsageResponse.estimated_monthly:type_name -> obiente.cloud.deployments.v1.DeploymentUsageMetrics
+	0,   // 46: obiente.cloud.deployments.v1.Deployment.type:type_name -> obiente.cloud.deployments.v1.DeploymentType
+	1,   // 47: obiente.cloud.deployments.v1.Deployment.build_strategy:type_name -> obiente.cloud.deployments.v1.BuildStrategy
+	3,   // 48: obiente.cloud.deployments.v1.Deployment.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
+	107, // 49: obiente.cloud.deployments.v1.Deployment.last_deployed_at:type_name -> google.protobuf.Timestamp
+	107, // 50: obiente.cloud.deployments.v1.Deployment.created_at:type_name -> google.protobuf.Timestamp
+	2,   // 51: obiente.cloud.deployments.v1.Deployment.environment:type_name -> obiente.cloud.deployments.v1.Environment
+	105, // 52: obiente.cloud.deployments.v1.Deployment.env_vars:type_name -> obiente.cloud.deployments.v1.Deployment.EnvVarsEntry
+	95,  // 53: obiente.cloud.deployments.v1.ListDeploymentContainersResponse.containers:type_name -> obiente.cloud.deployments.v1.DeploymentContainer
+	107, // 54: obiente.cloud.deployments.v1.DeploymentContainer.created_at:type_name -> google.protobuf.Timestamp
+	107, // 55: obiente.cloud.deployments.v1.DeploymentContainer.updated_at:type_name -> google.protobuf.Timestamp
+	5,   // 56: obiente.cloud.deployments.v1.DeploymentService.ListDeployments:input_type -> obiente.cloud.deployments.v1.ListDeploymentsRequest
+	7,   // 57: obiente.cloud.deployments.v1.DeploymentService.CreateDeployment:input_type -> obiente.cloud.deployments.v1.CreateDeploymentRequest
+	9,   // 58: obiente.cloud.deployments.v1.DeploymentService.GetDeployment:input_type -> obiente.cloud.deployments.v1.GetDeploymentRequest
+	11,  // 59: obiente.cloud.deployments.v1.DeploymentService.UpdateDeployment:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentRequest
+	13,  // 60: obiente.cloud.deployments.v1.DeploymentService.TriggerDeployment:input_type -> obiente.cloud.deployments.v1.TriggerDeploymentRequest
+	15,  // 61: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentStatus:input_type -> obiente.cloud.deployments.v1.StreamDeploymentStatusRequest
+	17,  // 62: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentLogs:input_type -> obiente.cloud.deployments.v1.GetDeploymentLogsRequest
+	19,  // 63: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentLogs:input_type -> obiente.cloud.deployments.v1.StreamDeploymentLogsRequest
+	20,  // 64: obiente.cloud.deployments.v1.DeploymentService.StreamBuildLogs:input_type -> obiente.cloud.deployments.v1.StreamBuildLogsRequest
+	85,  // 65: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentMetrics:input_type -> obiente.cloud.deployments.v1.GetDeploymentMetricsRequest
+	87,  // 66: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentMetrics:input_type -> obiente.cloud.deployments.v1.StreamDeploymentMetricsRequest
+	89,  // 67: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentUsage:input_type -> obiente.cloud.deployments.v1.GetDeploymentUsageRequest
+	22,  // 68: obiente.cloud.deployments.v1.DeploymentService.StartDeployment:input_type -> obiente.cloud.deployments.v1.StartDeploymentRequest
+	24,  // 69: obiente.cloud.deployments.v1.DeploymentService.StopDeployment:input_type -> obiente.cloud.deployments.v1.StopDeploymentRequest
+	26,  // 70: obiente.cloud.deployments.v1.DeploymentService.DeleteDeployment:input_type -> obiente.cloud.deployments.v1.DeleteDeploymentRequest
+	28,  // 71: obiente.cloud.deployments.v1.DeploymentService.RestartDeployment:input_type -> obiente.cloud.deployments.v1.RestartDeploymentRequest
+	30,  // 72: obiente.cloud.deployments.v1.DeploymentService.ScaleDeployment:input_type -> obiente.cloud.deployments.v1.ScaleDeploymentRequest
+	32,  // 73: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentEnvVars:input_type -> obiente.cloud.deployments.v1.GetDeploymentEnvVarsRequest
+	34,  // 74: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentEnvVars:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsRequest
+	36,  // 75: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentCompose:input_type -> obiente.cloud.deployments.v1.GetDeploymentComposeRequest
+	38,  // 76: obiente.cloud.deployments.v1.DeploymentService.ValidateDeploymentCompose:input_type -> obiente.cloud.deployments.v1.ValidateDeploymentComposeRequest
+	40,  // 77: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentCompose:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentComposeRequest
+	43,  // 78: obiente.cloud.deployments.v1.DeploymentService.ListGitHubRepos:input_type -> obiente.cloud.deployments.v1.ListGitHubReposRequest
+	46,  // 79: obiente.cloud.deployments.v1.DeploymentService.GetGitHubBranches:input_type -> obiente.cloud.deployments.v1.GetGitHubBranchesRequest
+	49,  // 80: obiente.cloud.deployments.v1.DeploymentService.GetGitHubFile:input_type -> obiente.cloud.deployments.v1.GetGitHubFileRequest
+	51,  // 81: obiente.cloud.deployments.v1.DeploymentService.ListAvailableGitHubIntegrations:input_type -> obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsRequest
+	57,  // 82: obiente.cloud.deployments.v1.DeploymentService.StreamTerminal:input_type -> obiente.cloud.deployments.v1.TerminalInput
+	54,  // 83: obiente.cloud.deployments.v1.DeploymentService.StreamTerminalOutput:input_type -> obiente.cloud.deployments.v1.StreamTerminalOutputRequest
+	55,  // 84: obiente.cloud.deployments.v1.DeploymentService.SendTerminalInput:input_type -> obiente.cloud.deployments.v1.SendTerminalInputRequest
+	60,  // 85: obiente.cloud.deployments.v1.DeploymentService.ListContainerFiles:input_type -> obiente.cloud.deployments.v1.ListContainerFilesRequest
+	63,  // 86: obiente.cloud.deployments.v1.DeploymentService.GetContainerFile:input_type -> obiente.cloud.deployments.v1.GetContainerFileRequest
+	65,  // 87: obiente.cloud.deployments.v1.DeploymentService.UploadContainerFiles:input_type -> obiente.cloud.deployments.v1.UploadContainerFilesRequest
+	69,  // 88: obiente.cloud.deployments.v1.DeploymentService.DeleteContainerEntries:input_type -> obiente.cloud.deployments.v1.DeleteContainerEntriesRequest
+	72,  // 89: obiente.cloud.deployments.v1.DeploymentService.RenameContainerEntry:input_type -> obiente.cloud.deployments.v1.RenameContainerEntryRequest
+	74,  // 90: obiente.cloud.deployments.v1.DeploymentService.CreateContainerEntry:input_type -> obiente.cloud.deployments.v1.CreateContainerEntryRequest
+	76,  // 91: obiente.cloud.deployments.v1.DeploymentService.WriteContainerFile:input_type -> obiente.cloud.deployments.v1.WriteContainerFileRequest
+	79,  // 92: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentRoutings:input_type -> obiente.cloud.deployments.v1.GetDeploymentRoutingsRequest
+	81,  // 93: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentRoutings:input_type -> obiente.cloud.deployments.v1.UpdateDeploymentRoutingsRequest
+	83,  // 94: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentServiceNames:input_type -> obiente.cloud.deployments.v1.GetDeploymentServiceNamesRequest
+	93,  // 95: obiente.cloud.deployments.v1.DeploymentService.ListDeploymentContainers:input_type -> obiente.cloud.deployments.v1.ListDeploymentContainersRequest
+	96,  // 96: obiente.cloud.deployments.v1.DeploymentService.StreamContainerLogs:input_type -> obiente.cloud.deployments.v1.StreamContainerLogsRequest
+	97,  // 97: obiente.cloud.deployments.v1.DeploymentService.StartContainer:input_type -> obiente.cloud.deployments.v1.StartContainerRequest
+	99,  // 98: obiente.cloud.deployments.v1.DeploymentService.StopContainer:input_type -> obiente.cloud.deployments.v1.StopContainerRequest
+	101, // 99: obiente.cloud.deployments.v1.DeploymentService.RestartContainer:input_type -> obiente.cloud.deployments.v1.RestartContainerRequest
+	6,   // 100: obiente.cloud.deployments.v1.DeploymentService.ListDeployments:output_type -> obiente.cloud.deployments.v1.ListDeploymentsResponse
+	8,   // 101: obiente.cloud.deployments.v1.DeploymentService.CreateDeployment:output_type -> obiente.cloud.deployments.v1.CreateDeploymentResponse
+	10,  // 102: obiente.cloud.deployments.v1.DeploymentService.GetDeployment:output_type -> obiente.cloud.deployments.v1.GetDeploymentResponse
+	12,  // 103: obiente.cloud.deployments.v1.DeploymentService.UpdateDeployment:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentResponse
+	14,  // 104: obiente.cloud.deployments.v1.DeploymentService.TriggerDeployment:output_type -> obiente.cloud.deployments.v1.TriggerDeploymentResponse
+	16,  // 105: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentStatus:output_type -> obiente.cloud.deployments.v1.DeploymentStatusUpdate
+	18,  // 106: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentLogs:output_type -> obiente.cloud.deployments.v1.GetDeploymentLogsResponse
+	21,  // 107: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentLogs:output_type -> obiente.cloud.deployments.v1.DeploymentLogLine
+	21,  // 108: obiente.cloud.deployments.v1.DeploymentService.StreamBuildLogs:output_type -> obiente.cloud.deployments.v1.DeploymentLogLine
+	86,  // 109: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentMetrics:output_type -> obiente.cloud.deployments.v1.GetDeploymentMetricsResponse
+	88,  // 110: obiente.cloud.deployments.v1.DeploymentService.StreamDeploymentMetrics:output_type -> obiente.cloud.deployments.v1.DeploymentMetric
+	90,  // 111: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentUsage:output_type -> obiente.cloud.deployments.v1.GetDeploymentUsageResponse
+	23,  // 112: obiente.cloud.deployments.v1.DeploymentService.StartDeployment:output_type -> obiente.cloud.deployments.v1.StartDeploymentResponse
+	25,  // 113: obiente.cloud.deployments.v1.DeploymentService.StopDeployment:output_type -> obiente.cloud.deployments.v1.StopDeploymentResponse
+	27,  // 114: obiente.cloud.deployments.v1.DeploymentService.DeleteDeployment:output_type -> obiente.cloud.deployments.v1.DeleteDeploymentResponse
+	29,  // 115: obiente.cloud.deployments.v1.DeploymentService.RestartDeployment:output_type -> obiente.cloud.deployments.v1.RestartDeploymentResponse
+	31,  // 116: obiente.cloud.deployments.v1.DeploymentService.ScaleDeployment:output_type -> obiente.cloud.deployments.v1.ScaleDeploymentResponse
+	33,  // 117: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentEnvVars:output_type -> obiente.cloud.deployments.v1.GetDeploymentEnvVarsResponse
+	35,  // 118: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentEnvVars:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentEnvVarsResponse
+	37,  // 119: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentCompose:output_type -> obiente.cloud.deployments.v1.GetDeploymentComposeResponse
+	39,  // 120: obiente.cloud.deployments.v1.DeploymentService.ValidateDeploymentCompose:output_type -> obiente.cloud.deployments.v1.ValidateDeploymentComposeResponse
+	41,  // 121: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentCompose:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentComposeResponse
+	45,  // 122: obiente.cloud.deployments.v1.DeploymentService.ListGitHubRepos:output_type -> obiente.cloud.deployments.v1.ListGitHubReposResponse
+	48,  // 123: obiente.cloud.deployments.v1.DeploymentService.GetGitHubBranches:output_type -> obiente.cloud.deployments.v1.GetGitHubBranchesResponse
+	50,  // 124: obiente.cloud.deployments.v1.DeploymentService.GetGitHubFile:output_type -> obiente.cloud.deployments.v1.GetGitHubFileResponse
+	53,  // 125: obiente.cloud.deployments.v1.DeploymentService.ListAvailableGitHubIntegrations:output_type -> obiente.cloud.deployments.v1.ListAvailableGitHubIntegrationsResponse
+	58,  // 126: obiente.cloud.deployments.v1.DeploymentService.StreamTerminal:output_type -> obiente.cloud.deployments.v1.TerminalOutput
+	58,  // 127: obiente.cloud.deployments.v1.DeploymentService.StreamTerminalOutput:output_type -> obiente.cloud.deployments.v1.TerminalOutput
+	56,  // 128: obiente.cloud.deployments.v1.DeploymentService.SendTerminalInput:output_type -> obiente.cloud.deployments.v1.SendTerminalInputResponse
+	62,  // 129: obiente.cloud.deployments.v1.DeploymentService.ListContainerFiles:output_type -> obiente.cloud.deployments.v1.ListContainerFilesResponse
+	64,  // 130: obiente.cloud.deployments.v1.DeploymentService.GetContainerFile:output_type -> obiente.cloud.deployments.v1.GetContainerFileResponse
+	68,  // 131: obiente.cloud.deployments.v1.DeploymentService.UploadContainerFiles:output_type -> obiente.cloud.deployments.v1.UploadContainerFilesResponse
+	71,  // 132: obiente.cloud.deployments.v1.DeploymentService.DeleteContainerEntries:output_type -> obiente.cloud.deployments.v1.DeleteContainerEntriesResponse
+	73,  // 133: obiente.cloud.deployments.v1.DeploymentService.RenameContainerEntry:output_type -> obiente.cloud.deployments.v1.RenameContainerEntryResponse
+	75,  // 134: obiente.cloud.deployments.v1.DeploymentService.CreateContainerEntry:output_type -> obiente.cloud.deployments.v1.CreateContainerEntryResponse
+	77,  // 135: obiente.cloud.deployments.v1.DeploymentService.WriteContainerFile:output_type -> obiente.cloud.deployments.v1.WriteContainerFileResponse
+	80,  // 136: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentRoutings:output_type -> obiente.cloud.deployments.v1.GetDeploymentRoutingsResponse
+	82,  // 137: obiente.cloud.deployments.v1.DeploymentService.UpdateDeploymentRoutings:output_type -> obiente.cloud.deployments.v1.UpdateDeploymentRoutingsResponse
+	84,  // 138: obiente.cloud.deployments.v1.DeploymentService.GetDeploymentServiceNames:output_type -> obiente.cloud.deployments.v1.GetDeploymentServiceNamesResponse
+	94,  // 139: obiente.cloud.deployments.v1.DeploymentService.ListDeploymentContainers:output_type -> obiente.cloud.deployments.v1.ListDeploymentContainersResponse
+	21,  // 140: obiente.cloud.deployments.v1.DeploymentService.StreamContainerLogs:output_type -> obiente.cloud.deployments.v1.DeploymentLogLine
+	98,  // 141: obiente.cloud.deployments.v1.DeploymentService.StartContainer:output_type -> obiente.cloud.deployments.v1.StartContainerResponse
+	100, // 142: obiente.cloud.deployments.v1.DeploymentService.StopContainer:output_type -> obiente.cloud.deployments.v1.StopContainerResponse
+	102, // 143: obiente.cloud.deployments.v1.DeploymentService.RestartContainer:output_type -> obiente.cloud.deployments.v1.RestartContainerResponse
+	100, // [100:144] is the sub-list for method output_type
+	56,  // [56:100] is the sub-list for method input_type
+	56,  // [56:56] is the sub-list for extension type_name
+	56,  // [56:56] is the sub-list for extension extendee
+	0,   // [0:56] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_deployments_v1_deployment_service_proto_init() }
@@ -6618,13 +8139,21 @@ func file_obiente_cloud_deployments_v1_deployment_service_proto_init() {
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[71].OneofWrappers = []any{}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[72].OneofWrappers = []any{}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[80].OneofWrappers = []any{}
+	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[82].OneofWrappers = []any{}
+	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[83].OneofWrappers = []any{}
+	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[84].OneofWrappers = []any{}
+	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[87].OneofWrappers = []any{}
+	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[90].OneofWrappers = []any{}
+	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[93].OneofWrappers = []any{}
+	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[95].OneofWrappers = []any{}
+	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[97].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc), len(file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   84,
+			NumMessages:   101,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

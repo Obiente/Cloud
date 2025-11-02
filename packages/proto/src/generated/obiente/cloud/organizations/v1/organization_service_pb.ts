@@ -14,7 +14,158 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/organizations/v1/organization_service.proto.
  */
 export const file_obiente_cloud_organizations_v1_organization_service: GenFile = /*@__PURE__*/
-  fileDesc("CjlvYmllbnRlL2Nsb3VkL29yZ2FuaXphdGlvbnMvdjEvb3JnYW5pemF0aW9uX3NlcnZpY2UucHJvdG8SHm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MSJgChhMaXN0T3JnYW5pemF0aW9uc1JlcXVlc3QSDAoEcGFnZRgBIAEoBRIQCghwZXJfcGFnZRgCIAEoBRIWCglvbmx5X21pbmUYAyABKAhIAIgBAUIMCgpfb25seV9taW5lIqABChlMaXN0T3JnYW5pemF0aW9uc1Jlc3BvbnNlEkMKDW9yZ2FuaXphdGlvbnMYASADKAsyLC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuT3JnYW5pemF0aW9uEj4KCnBhZ2luYXRpb24YAiABKAsyKi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuUGFnaW5hdGlvbiJFChlDcmVhdGVPcmdhbml6YXRpb25SZXF1ZXN0EgwKBG5hbWUYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRwbGFuGAMgASgJImAKGkNyZWF0ZU9yZ2FuaXphdGlvblJlc3BvbnNlEkIKDG9yZ2FuaXphdGlvbhgBIAEoCzIsLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5Pcmdhbml6YXRpb24iMQoWR2V0T3JnYW5pemF0aW9uUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkiXQoXR2V0T3JnYW5pemF0aW9uUmVzcG9uc2USQgoMb3JnYW5pemF0aW9uGAEgASgLMiwub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbiJwChlVcGRhdGVPcmdhbml6YXRpb25SZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIRCgRuYW1lGAIgASgJSACIAQESEwoGZG9tYWluGAMgASgJSAGIAQFCBwoFX25hbWVCCQoHX2RvbWFpbiJgChpVcGRhdGVPcmdhbml6YXRpb25SZXNwb25zZRJCCgxvcmdhbml6YXRpb24YASABKAsyLC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuT3JnYW5pemF0aW9uIk0KEkxpc3RNZW1iZXJzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDAoEcGFnZRgCIAEoBRIQCghwZXJfcGFnZRgDIAEoBSKaAQoTTGlzdE1lbWJlcnNSZXNwb25zZRJDCgdtZW1iZXJzGAEgAygLMjIub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbk1lbWJlchI+CgpwYWdpbmF0aW9uGAIgASgLMioub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlBhZ2luYXRpb24iSwoTSW52aXRlTWVtYmVyUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDQoFZW1haWwYAiABKAkSDAoEcm9sZRgDIAEoCSJaChRJbnZpdGVNZW1iZXJSZXNwb25zZRJCCgZtZW1iZXIYASABKAsyMi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuT3JnYW5pemF0aW9uTWVtYmVyIl0KE1VwZGF0ZU1lbWJlclJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhEKCW1lbWJlcl9pZBgCIAEoCRIRCgRyb2xlGAMgASgJSACIAQFCBwoFX3JvbGUiWgoUVXBkYXRlTWVtYmVyUmVzcG9uc2USQgoGbWVtYmVyGAEgASgLMjIub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbk1lbWJlciJBChNSZW1vdmVNZW1iZXJSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIRCgltZW1iZXJfaWQYAiABKAkiJwoUUmVtb3ZlTWVtYmVyUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCCJnChhUcmFuc2Zlck93bmVyc2hpcFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhsKE25ld19vd25lcl9tZW1iZXJfaWQYAiABKAkSFQoNZmFsbGJhY2tfcm9sZRgDIAEoCSKCAQoZVHJhbnNmZXJPd25lcnNoaXBSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEiAKGHByZXZpb3VzX293bmVyX21lbWJlcl9pZBgCIAEoCRIbChNuZXdfb3duZXJfbWVtYmVyX2lkGAMgASgJEhUKDWZhbGxiYWNrX3JvbGUYBCABKAki8gEKDE9yZ2FuaXphdGlvbhIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgwKBHNsdWcYAyABKAkSEwoGZG9tYWluGAQgASgJSACIAQESDAoEcGxhbhgFIAEoCRIOCgZzdGF0dXMYBiABKAkSLgoKY3JlYXRlZF9hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFwoPbWF4X2RlcGxveW1lbnRzGAggASgFEhkKEW1heF92cHNfaW5zdGFuY2VzGAkgASgFEhgKEG1heF90ZWFtX21lbWJlcnMYCiABKAVCCQoHX2RvbWFpbiKYAQoST3JnYW5pemF0aW9uTWVtYmVyEgoKAmlkGAEgASgJEikKBHVzZXIYAiABKAsyGy5vYmllbnRlLmNsb3VkLmF1dGgudjEuVXNlchIMCgRyb2xlGAMgASgJEg4KBnN0YXR1cxgEIAEoCRItCglqb2luZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlAKClBhZ2luYXRpb24SDAoEcGFnZRgBIAEoBRIQCghwZXJfcGFnZRgCIAEoBRINCgV0b3RhbBgDIAEoBRITCgt0b3RhbF9wYWdlcxgEIAEoBTK1CQoTT3JnYW5pemF0aW9uU2VydmljZRKIAQoRTGlzdE9yZ2FuaXphdGlvbnMSOC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuTGlzdE9yZ2FuaXphdGlvbnNSZXF1ZXN0Gjkub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkxpc3RPcmdhbml6YXRpb25zUmVzcG9uc2USiwEKEkNyZWF0ZU9yZ2FuaXphdGlvbhI5Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5DcmVhdGVPcmdhbml6YXRpb25SZXF1ZXN0Gjoub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkNyZWF0ZU9yZ2FuaXphdGlvblJlc3BvbnNlEoIBCg9HZXRPcmdhbml6YXRpb24SNi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuR2V0T3JnYW5pemF0aW9uUmVxdWVzdBo3Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5HZXRPcmdhbml6YXRpb25SZXNwb25zZRKLAQoSVXBkYXRlT3JnYW5pemF0aW9uEjkub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlVwZGF0ZU9yZ2FuaXphdGlvblJlcXVlc3QaOi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuVXBkYXRlT3JnYW5pemF0aW9uUmVzcG9uc2USdgoLTGlzdE1lbWJlcnMSMi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuTGlzdE1lbWJlcnNSZXF1ZXN0GjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkxpc3RNZW1iZXJzUmVzcG9uc2USeQoMSW52aXRlTWVtYmVyEjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkludml0ZU1lbWJlclJlcXVlc3QaNC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuSW52aXRlTWVtYmVyUmVzcG9uc2USeQoMVXBkYXRlTWVtYmVyEjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlVwZGF0ZU1lbWJlclJlcXVlc3QaNC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuVXBkYXRlTWVtYmVyUmVzcG9uc2USeQoMUmVtb3ZlTWVtYmVyEjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlJlbW92ZU1lbWJlclJlcXVlc3QaNC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuUmVtb3ZlTWVtYmVyUmVzcG9uc2USiAEKEVRyYW5zZmVyT3duZXJzaGlwEjgub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlRyYW5zZmVyT3duZXJzaGlwUmVxdWVzdBo5Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5UcmFuc2Zlck93bmVyc2hpcFJlc3BvbnNlQj5aPGFwaS9nZW4vcHJvdG8vb2JpZW50ZS9jbG91ZC9vcmdhbml6YXRpb25zL3YxO29yZ2FuaXphdGlvbnN2MWIGcHJvdG8z", [file_google_protobuf_timestamp, file_obiente_cloud_auth_v1_auth_service]);
+  fileDesc("CjlvYmllbnRlL2Nsb3VkL29yZ2FuaXphdGlvbnMvdjEvb3JnYW5pemF0aW9uX3NlcnZpY2UucHJvdG8SHm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MSJICg9HZXRVc2FnZVJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhIKBW1vbnRoGAIgASgJSACIAQFCCAoGX21vbnRoIv0BChBHZXRVc2FnZVJlc3BvbnNlEhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRINCgVtb250aBgCIAEoCRI9CgdjdXJyZW50GAMgASgLMiwub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlVzYWdlTWV0cmljcxJHChFlc3RpbWF0ZWRfbW9udGhseRgEIAEoCzIsLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5Vc2FnZU1ldHJpY3MSOQoFcXVvdGEYBSABKAsyKi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuVXNhZ2VRdW90YSLTAQoMVXNhZ2VNZXRyaWNzEhgKEGNwdV9jb3JlX3NlY29uZHMYASABKAMSGwoTbWVtb3J5X2J5dGVfc2Vjb25kcxgCIAEoAxIaChJiYW5kd2lkdGhfcnhfYnl0ZXMYAyABKAMSGgoSYmFuZHdpZHRoX3R4X2J5dGVzGAQgASgDEhUKDXN0b3JhZ2VfYnl0ZXMYBSABKAMSHwoXZGVwbG95bWVudHNfYWN0aXZlX3BlYWsYBiABKAUSHAoUZXN0aW1hdGVkX2Nvc3RfY2VudHMYByABKAMipAEKClVzYWdlUXVvdGESIAoYY3B1X2NvcmVfc2Vjb25kc19tb250aGx5GAEgASgDEiMKG21lbW9yeV9ieXRlX3NlY29uZHNfbW9udGhseRgCIAEoAxIfChdiYW5kd2lkdGhfYnl0ZXNfbW9udGhseRgDIAEoAxIVCg1zdG9yYWdlX2J5dGVzGAQgASgDEhcKD2RlcGxveW1lbnRzX21heBgFIAEoBSJgChhMaXN0T3JnYW5pemF0aW9uc1JlcXVlc3QSDAoEcGFnZRgBIAEoBRIQCghwZXJfcGFnZRgCIAEoBRIWCglvbmx5X21pbmUYAyABKAhIAIgBAUIMCgpfb25seV9taW5lIqABChlMaXN0T3JnYW5pemF0aW9uc1Jlc3BvbnNlEkMKDW9yZ2FuaXphdGlvbnMYASADKAsyLC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuT3JnYW5pemF0aW9uEj4KCnBhZ2luYXRpb24YAiABKAsyKi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuUGFnaW5hdGlvbiJFChlDcmVhdGVPcmdhbml6YXRpb25SZXF1ZXN0EgwKBG5hbWUYASABKAkSDAoEc2x1ZxgCIAEoCRIMCgRwbGFuGAMgASgJImAKGkNyZWF0ZU9yZ2FuaXphdGlvblJlc3BvbnNlEkIKDG9yZ2FuaXphdGlvbhgBIAEoCzIsLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5Pcmdhbml6YXRpb24iMQoWR2V0T3JnYW5pemF0aW9uUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkiXQoXR2V0T3JnYW5pemF0aW9uUmVzcG9uc2USQgoMb3JnYW5pemF0aW9uGAEgASgLMiwub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbiJwChlVcGRhdGVPcmdhbml6YXRpb25SZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIRCgRuYW1lGAIgASgJSACIAQESEwoGZG9tYWluGAMgASgJSAGIAQFCBwoFX25hbWVCCQoHX2RvbWFpbiJgChpVcGRhdGVPcmdhbml6YXRpb25SZXNwb25zZRJCCgxvcmdhbml6YXRpb24YASABKAsyLC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuT3JnYW5pemF0aW9uIk0KEkxpc3RNZW1iZXJzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDAoEcGFnZRgCIAEoBRIQCghwZXJfcGFnZRgDIAEoBSKaAQoTTGlzdE1lbWJlcnNSZXNwb25zZRJDCgdtZW1iZXJzGAEgAygLMjIub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbk1lbWJlchI+CgpwYWdpbmF0aW9uGAIgASgLMioub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlBhZ2luYXRpb24iSwoTSW52aXRlTWVtYmVyUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDQoFZW1haWwYAiABKAkSDAoEcm9sZRgDIAEoCSJaChRJbnZpdGVNZW1iZXJSZXNwb25zZRJCCgZtZW1iZXIYASABKAsyMi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuT3JnYW5pemF0aW9uTWVtYmVyIl0KE1VwZGF0ZU1lbWJlclJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhEKCW1lbWJlcl9pZBgCIAEoCRIRCgRyb2xlGAMgASgJSACIAQFCBwoFX3JvbGUiWgoUVXBkYXRlTWVtYmVyUmVzcG9uc2USQgoGbWVtYmVyGAEgASgLMjIub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbk1lbWJlciJBChNSZW1vdmVNZW1iZXJSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIRCgltZW1iZXJfaWQYAiABKAkiJwoUUmVtb3ZlTWVtYmVyUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCCJnChhUcmFuc2Zlck93bmVyc2hpcFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhsKE25ld19vd25lcl9tZW1iZXJfaWQYAiABKAkSFQoNZmFsbGJhY2tfcm9sZRgDIAEoCSKCAQoZVHJhbnNmZXJPd25lcnNoaXBSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEiAKGHByZXZpb3VzX293bmVyX21lbWJlcl9pZBgCIAEoCRIbChNuZXdfb3duZXJfbWVtYmVyX2lkGAMgASgJEhUKDWZhbGxiYWNrX3JvbGUYBCABKAkigwIKDE9yZ2FuaXphdGlvbhIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgwKBHNsdWcYAyABKAkSEwoGZG9tYWluGAQgASgJSACIAQESDAoEcGxhbhgFIAEoCRIOCgZzdGF0dXMYBiABKAkSLgoKY3JlYXRlZF9hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFwoPbWF4X2RlcGxveW1lbnRzGAggASgFEhkKEW1heF92cHNfaW5zdGFuY2VzGAkgASgFEhgKEG1heF90ZWFtX21lbWJlcnMYCiABKAUSDwoHY3JlZGl0cxgLIAEoA0IJCgdfZG9tYWluIpgBChJPcmdhbml6YXRpb25NZW1iZXISCgoCaWQYASABKAkSKQoEdXNlchgCIAEoCzIbLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Vc2VyEgwKBHJvbGUYAyABKAkSDgoGc3RhdHVzGAQgASgJEi0KCWpvaW5lZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiUAoKUGFnaW5hdGlvbhIMCgRwYWdlGAEgASgFEhAKCHBlcl9wYWdlGAIgASgFEg0KBXRvdGFsGAMgASgFEhMKC3RvdGFsX3BhZ2VzGAQgASgFIl4KEUFkZENyZWRpdHNSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIUCgxhbW91bnRfY2VudHMYAiABKAMSEQoEbm90ZRgDIAEoCUgAiAEBQgcKBV9ub3RlIo8BChJBZGRDcmVkaXRzUmVzcG9uc2USQgoMb3JnYW5pemF0aW9uGAEgASgLMiwub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbhIZChFuZXdfYmFsYW5jZV9jZW50cxgCIAEoAxIaChJhbW91bnRfYWRkZWRfY2VudHMYAyABKAMiYwoWQWRtaW5BZGRDcmVkaXRzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFAoMYW1vdW50X2NlbnRzGAIgASgDEhEKBG5vdGUYAyABKAlIAIgBAUIHCgVfbm90ZSKUAQoXQWRtaW5BZGRDcmVkaXRzUmVzcG9uc2USQgoMb3JnYW5pemF0aW9uGAEgASgLMiwub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbhIZChFuZXdfYmFsYW5jZV9jZW50cxgCIAEoAxIaChJhbW91bnRfYWRkZWRfY2VudHMYAyABKAMiZgoZQWRtaW5SZW1vdmVDcmVkaXRzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFAoMYW1vdW50X2NlbnRzGAIgASgDEhEKBG5vdGUYAyABKAlIAIgBAUIHCgVfbm90ZSKZAQoaQWRtaW5SZW1vdmVDcmVkaXRzUmVzcG9uc2USQgoMb3JnYW5pemF0aW9uGAEgASgLMiwub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbhIZChFuZXdfYmFsYW5jZV9jZW50cxgCIAEoAxIcChRhbW91bnRfcmVtb3ZlZF9jZW50cxgDIAEoAzKsDQoTT3JnYW5pemF0aW9uU2VydmljZRKIAQoRTGlzdE9yZ2FuaXphdGlvbnMSOC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuTGlzdE9yZ2FuaXphdGlvbnNSZXF1ZXN0Gjkub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkxpc3RPcmdhbml6YXRpb25zUmVzcG9uc2USiwEKEkNyZWF0ZU9yZ2FuaXphdGlvbhI5Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5DcmVhdGVPcmdhbml6YXRpb25SZXF1ZXN0Gjoub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkNyZWF0ZU9yZ2FuaXphdGlvblJlc3BvbnNlEoIBCg9HZXRPcmdhbml6YXRpb24SNi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuR2V0T3JnYW5pemF0aW9uUmVxdWVzdBo3Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5HZXRPcmdhbml6YXRpb25SZXNwb25zZRKLAQoSVXBkYXRlT3JnYW5pemF0aW9uEjkub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlVwZGF0ZU9yZ2FuaXphdGlvblJlcXVlc3QaOi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuVXBkYXRlT3JnYW5pemF0aW9uUmVzcG9uc2USdgoLTGlzdE1lbWJlcnMSMi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuTGlzdE1lbWJlcnNSZXF1ZXN0GjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkxpc3RNZW1iZXJzUmVzcG9uc2USeQoMSW52aXRlTWVtYmVyEjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkludml0ZU1lbWJlclJlcXVlc3QaNC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuSW52aXRlTWVtYmVyUmVzcG9uc2USeQoMVXBkYXRlTWVtYmVyEjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlVwZGF0ZU1lbWJlclJlcXVlc3QaNC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuVXBkYXRlTWVtYmVyUmVzcG9uc2USeQoMUmVtb3ZlTWVtYmVyEjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlJlbW92ZU1lbWJlclJlcXVlc3QaNC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuUmVtb3ZlTWVtYmVyUmVzcG9uc2USiAEKEVRyYW5zZmVyT3duZXJzaGlwEjgub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlRyYW5zZmVyT3duZXJzaGlwUmVxdWVzdBo5Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5UcmFuc2Zlck93bmVyc2hpcFJlc3BvbnNlEm0KCEdldFVzYWdlEi8ub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkdldFVzYWdlUmVxdWVzdBowLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5HZXRVc2FnZVJlc3BvbnNlEnMKCkFkZENyZWRpdHMSMS5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuQWRkQ3JlZGl0c1JlcXVlc3QaMi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuQWRkQ3JlZGl0c1Jlc3BvbnNlEoIBCg9BZG1pbkFkZENyZWRpdHMSNi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuQWRtaW5BZGRDcmVkaXRzUmVxdWVzdBo3Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5BZG1pbkFkZENyZWRpdHNSZXNwb25zZRKLAQoSQWRtaW5SZW1vdmVDcmVkaXRzEjkub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkFkbWluUmVtb3ZlQ3JlZGl0c1JlcXVlc3QaOi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuQWRtaW5SZW1vdmVDcmVkaXRzUmVzcG9uc2VCPlo8YXBpL2dlbi9wcm90by9vYmllbnRlL2Nsb3VkL29yZ2FuaXphdGlvbnMvdjE7b3JnYW5pemF0aW9uc3YxYgZwcm90bzM", [file_google_protobuf_timestamp, file_obiente_cloud_auth_v1_auth_service]);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.GetUsageRequest
+ */
+export type GetUsageRequest = Message<"obiente.cloud.organizations.v1.GetUsageRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * Optional: specify a month (YYYY-MM format). Defaults to current month.
+   *
+   * @generated from field: optional string month = 2;
+   */
+  month?: string;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.GetUsageRequest.
+ * Use `create(GetUsageRequestSchema)` to create a new message.
+ */
+export const GetUsageRequestSchema: GenMessage<GetUsageRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 0);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.GetUsageResponse
+ */
+export type GetUsageResponse = Message<"obiente.cloud.organizations.v1.GetUsageResponse"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * YYYY-MM format
+   *
+   * @generated from field: string month = 2;
+   */
+  month: string;
+
+  /**
+   * @generated from field: obiente.cloud.organizations.v1.UsageMetrics current = 3;
+   */
+  current?: UsageMetrics;
+
+  /**
+   * @generated from field: obiente.cloud.organizations.v1.UsageMetrics estimated_monthly = 4;
+   */
+  estimatedMonthly?: UsageMetrics;
+
+  /**
+   * Quota limits (0 means unlimited)
+   *
+   * @generated from field: obiente.cloud.organizations.v1.UsageQuota quota = 5;
+   */
+  quota?: UsageQuota;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.GetUsageResponse.
+ * Use `create(GetUsageResponseSchema)` to create a new message.
+ */
+export const GetUsageResponseSchema: GenMessage<GetUsageResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 1);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.UsageMetrics
+ */
+export type UsageMetrics = Message<"obiente.cloud.organizations.v1.UsageMetrics"> & {
+  /**
+   * @generated from field: int64 cpu_core_seconds = 1;
+   */
+  cpuCoreSeconds: bigint;
+
+  /**
+   * @generated from field: int64 memory_byte_seconds = 2;
+   */
+  memoryByteSeconds: bigint;
+
+  /**
+   * @generated from field: int64 bandwidth_rx_bytes = 3;
+   */
+  bandwidthRxBytes: bigint;
+
+  /**
+   * @generated from field: int64 bandwidth_tx_bytes = 4;
+   */
+  bandwidthTxBytes: bigint;
+
+  /**
+   * @generated from field: int64 storage_bytes = 5;
+   */
+  storageBytes: bigint;
+
+  /**
+   * @generated from field: int32 deployments_active_peak = 6;
+   */
+  deploymentsActivePeak: number;
+
+  /**
+   * Estimated cost in cents (e.g., 2347 = $23.47)
+   *
+   * @generated from field: int64 estimated_cost_cents = 7;
+   */
+  estimatedCostCents: bigint;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.UsageMetrics.
+ * Use `create(UsageMetricsSchema)` to create a new message.
+ */
+export const UsageMetricsSchema: GenMessage<UsageMetrics> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 2);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.UsageQuota
+ */
+export type UsageQuota = Message<"obiente.cloud.organizations.v1.UsageQuota"> & {
+  /**
+   * @generated from field: int64 cpu_core_seconds_monthly = 1;
+   */
+  cpuCoreSecondsMonthly: bigint;
+
+  /**
+   * @generated from field: int64 memory_byte_seconds_monthly = 2;
+   */
+  memoryByteSecondsMonthly: bigint;
+
+  /**
+   * @generated from field: int64 bandwidth_bytes_monthly = 3;
+   */
+  bandwidthBytesMonthly: bigint;
+
+  /**
+   * @generated from field: int64 storage_bytes = 4;
+   */
+  storageBytes: bigint;
+
+  /**
+   * @generated from field: int32 deployments_max = 5;
+   */
+  deploymentsMax: number;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.UsageQuota.
+ * Use `create(UsageQuotaSchema)` to create a new message.
+ */
+export const UsageQuotaSchema: GenMessage<UsageQuota> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 3);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.ListOrganizationsRequest
@@ -44,7 +195,7 @@ export type ListOrganizationsRequest = Message<"obiente.cloud.organizations.v1.L
  * Use `create(ListOrganizationsRequestSchema)` to create a new message.
  */
 export const ListOrganizationsRequestSchema: GenMessage<ListOrganizationsRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 0);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 4);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.ListOrganizationsResponse
@@ -66,7 +217,7 @@ export type ListOrganizationsResponse = Message<"obiente.cloud.organizations.v1.
  * Use `create(ListOrganizationsResponseSchema)` to create a new message.
  */
 export const ListOrganizationsResponseSchema: GenMessage<ListOrganizationsResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 1);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 5);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.CreateOrganizationRequest
@@ -95,7 +246,7 @@ export type CreateOrganizationRequest = Message<"obiente.cloud.organizations.v1.
  * Use `create(CreateOrganizationRequestSchema)` to create a new message.
  */
 export const CreateOrganizationRequestSchema: GenMessage<CreateOrganizationRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 2);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 6);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.CreateOrganizationResponse
@@ -112,7 +263,7 @@ export type CreateOrganizationResponse = Message<"obiente.cloud.organizations.v1
  * Use `create(CreateOrganizationResponseSchema)` to create a new message.
  */
 export const CreateOrganizationResponseSchema: GenMessage<CreateOrganizationResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 3);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 7);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.GetOrganizationRequest
@@ -129,7 +280,7 @@ export type GetOrganizationRequest = Message<"obiente.cloud.organizations.v1.Get
  * Use `create(GetOrganizationRequestSchema)` to create a new message.
  */
 export const GetOrganizationRequestSchema: GenMessage<GetOrganizationRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 4);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 8);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.GetOrganizationResponse
@@ -146,7 +297,7 @@ export type GetOrganizationResponse = Message<"obiente.cloud.organizations.v1.Ge
  * Use `create(GetOrganizationResponseSchema)` to create a new message.
  */
 export const GetOrganizationResponseSchema: GenMessage<GetOrganizationResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 5);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 9);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.UpdateOrganizationRequest
@@ -173,7 +324,7 @@ export type UpdateOrganizationRequest = Message<"obiente.cloud.organizations.v1.
  * Use `create(UpdateOrganizationRequestSchema)` to create a new message.
  */
 export const UpdateOrganizationRequestSchema: GenMessage<UpdateOrganizationRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 6);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 10);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.UpdateOrganizationResponse
@@ -190,7 +341,7 @@ export type UpdateOrganizationResponse = Message<"obiente.cloud.organizations.v1
  * Use `create(UpdateOrganizationResponseSchema)` to create a new message.
  */
 export const UpdateOrganizationResponseSchema: GenMessage<UpdateOrganizationResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 7);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 11);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.ListMembersRequest
@@ -217,7 +368,7 @@ export type ListMembersRequest = Message<"obiente.cloud.organizations.v1.ListMem
  * Use `create(ListMembersRequestSchema)` to create a new message.
  */
 export const ListMembersRequestSchema: GenMessage<ListMembersRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 8);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 12);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.ListMembersResponse
@@ -239,7 +390,7 @@ export type ListMembersResponse = Message<"obiente.cloud.organizations.v1.ListMe
  * Use `create(ListMembersResponseSchema)` to create a new message.
  */
 export const ListMembersResponseSchema: GenMessage<ListMembersResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 9);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 13);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.InviteMemberRequest
@@ -268,7 +419,7 @@ export type InviteMemberRequest = Message<"obiente.cloud.organizations.v1.Invite
  * Use `create(InviteMemberRequestSchema)` to create a new message.
  */
 export const InviteMemberRequestSchema: GenMessage<InviteMemberRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 10);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 14);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.InviteMemberResponse
@@ -285,7 +436,7 @@ export type InviteMemberResponse = Message<"obiente.cloud.organizations.v1.Invit
  * Use `create(InviteMemberResponseSchema)` to create a new message.
  */
 export const InviteMemberResponseSchema: GenMessage<InviteMemberResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 11);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 15);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.UpdateMemberRequest
@@ -312,7 +463,7 @@ export type UpdateMemberRequest = Message<"obiente.cloud.organizations.v1.Update
  * Use `create(UpdateMemberRequestSchema)` to create a new message.
  */
 export const UpdateMemberRequestSchema: GenMessage<UpdateMemberRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 12);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 16);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.UpdateMemberResponse
@@ -329,7 +480,7 @@ export type UpdateMemberResponse = Message<"obiente.cloud.organizations.v1.Updat
  * Use `create(UpdateMemberResponseSchema)` to create a new message.
  */
 export const UpdateMemberResponseSchema: GenMessage<UpdateMemberResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 13);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 17);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.RemoveMemberRequest
@@ -351,7 +502,7 @@ export type RemoveMemberRequest = Message<"obiente.cloud.organizations.v1.Remove
  * Use `create(RemoveMemberRequestSchema)` to create a new message.
  */
 export const RemoveMemberRequestSchema: GenMessage<RemoveMemberRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 14);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 18);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.RemoveMemberResponse
@@ -368,7 +519,7 @@ export type RemoveMemberResponse = Message<"obiente.cloud.organizations.v1.Remov
  * Use `create(RemoveMemberResponseSchema)` to create a new message.
  */
 export const RemoveMemberResponseSchema: GenMessage<RemoveMemberResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 15);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 19);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.TransferOwnershipRequest
@@ -397,7 +548,7 @@ export type TransferOwnershipRequest = Message<"obiente.cloud.organizations.v1.T
  * Use `create(TransferOwnershipRequestSchema)` to create a new message.
  */
 export const TransferOwnershipRequestSchema: GenMessage<TransferOwnershipRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 16);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 20);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.TransferOwnershipResponse
@@ -429,7 +580,7 @@ export type TransferOwnershipResponse = Message<"obiente.cloud.organizations.v1.
  * Use `create(TransferOwnershipResponseSchema)` to create a new message.
  */
 export const TransferOwnershipResponseSchema: GenMessage<TransferOwnershipResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 17);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 21);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.Organization
@@ -484,6 +635,13 @@ export type Organization = Message<"obiente.cloud.organizations.v1.Organization"
    * @generated from field: int32 max_team_members = 10;
    */
   maxTeamMembers: number;
+
+  /**
+   * Credits balance in cents ($0.01 units)
+   *
+   * @generated from field: int64 credits = 11;
+   */
+  credits: bigint;
 };
 
 /**
@@ -491,7 +649,7 @@ export type Organization = Message<"obiente.cloud.organizations.v1.Organization"
  * Use `create(OrganizationSchema)` to create a new message.
  */
 export const OrganizationSchema: GenMessage<Organization> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 18);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 22);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.OrganizationMember
@@ -528,7 +686,7 @@ export type OrganizationMember = Message<"obiente.cloud.organizations.v1.Organiz
  * Use `create(OrganizationMemberSchema)` to create a new message.
  */
 export const OrganizationMemberSchema: GenMessage<OrganizationMember> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 19);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 23);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.Pagination
@@ -560,7 +718,193 @@ export type Pagination = Message<"obiente.cloud.organizations.v1.Pagination"> & 
  * Use `create(PaginationSchema)` to create a new message.
  */
 export const PaginationSchema: GenMessage<Pagination> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 20);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 24);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.AddCreditsRequest
+ */
+export type AddCreditsRequest = Message<"obiente.cloud.organizations.v1.AddCreditsRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * Amount in cents ($0.01 units). Must be positive.
+   *
+   * @generated from field: int64 amount_cents = 2;
+   */
+  amountCents: bigint;
+
+  /**
+   * Optional note/reason for adding credits
+   *
+   * @generated from field: optional string note = 3;
+   */
+  note?: string;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.AddCreditsRequest.
+ * Use `create(AddCreditsRequestSchema)` to create a new message.
+ */
+export const AddCreditsRequestSchema: GenMessage<AddCreditsRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 25);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.AddCreditsResponse
+ */
+export type AddCreditsResponse = Message<"obiente.cloud.organizations.v1.AddCreditsResponse"> & {
+  /**
+   * @generated from field: obiente.cloud.organizations.v1.Organization organization = 1;
+   */
+  organization?: Organization;
+
+  /**
+   * New credits balance after adding
+   *
+   * @generated from field: int64 new_balance_cents = 2;
+   */
+  newBalanceCents: bigint;
+
+  /**
+   * Amount added
+   *
+   * @generated from field: int64 amount_added_cents = 3;
+   */
+  amountAddedCents: bigint;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.AddCreditsResponse.
+ * Use `create(AddCreditsResponseSchema)` to create a new message.
+ */
+export const AddCreditsResponseSchema: GenMessage<AddCreditsResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 26);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.AdminAddCreditsRequest
+ */
+export type AdminAddCreditsRequest = Message<"obiente.cloud.organizations.v1.AdminAddCreditsRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * Amount in cents ($0.01 units). Must be positive.
+   *
+   * @generated from field: int64 amount_cents = 2;
+   */
+  amountCents: bigint;
+
+  /**
+   * Optional note/reason for adding credits
+   *
+   * @generated from field: optional string note = 3;
+   */
+  note?: string;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.AdminAddCreditsRequest.
+ * Use `create(AdminAddCreditsRequestSchema)` to create a new message.
+ */
+export const AdminAddCreditsRequestSchema: GenMessage<AdminAddCreditsRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 27);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.AdminAddCreditsResponse
+ */
+export type AdminAddCreditsResponse = Message<"obiente.cloud.organizations.v1.AdminAddCreditsResponse"> & {
+  /**
+   * @generated from field: obiente.cloud.organizations.v1.Organization organization = 1;
+   */
+  organization?: Organization;
+
+  /**
+   * New credits balance after adding
+   *
+   * @generated from field: int64 new_balance_cents = 2;
+   */
+  newBalanceCents: bigint;
+
+  /**
+   * Amount added
+   *
+   * @generated from field: int64 amount_added_cents = 3;
+   */
+  amountAddedCents: bigint;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.AdminAddCreditsResponse.
+ * Use `create(AdminAddCreditsResponseSchema)` to create a new message.
+ */
+export const AdminAddCreditsResponseSchema: GenMessage<AdminAddCreditsResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 28);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.AdminRemoveCreditsRequest
+ */
+export type AdminRemoveCreditsRequest = Message<"obiente.cloud.organizations.v1.AdminRemoveCreditsRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * Amount in cents ($0.01 units). Must be positive.
+   *
+   * @generated from field: int64 amount_cents = 2;
+   */
+  amountCents: bigint;
+
+  /**
+   * Optional note/reason for removing credits
+   *
+   * @generated from field: optional string note = 3;
+   */
+  note?: string;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.AdminRemoveCreditsRequest.
+ * Use `create(AdminRemoveCreditsRequestSchema)` to create a new message.
+ */
+export const AdminRemoveCreditsRequestSchema: GenMessage<AdminRemoveCreditsRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 29);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.AdminRemoveCreditsResponse
+ */
+export type AdminRemoveCreditsResponse = Message<"obiente.cloud.organizations.v1.AdminRemoveCreditsResponse"> & {
+  /**
+   * @generated from field: obiente.cloud.organizations.v1.Organization organization = 1;
+   */
+  organization?: Organization;
+
+  /**
+   * New credits balance after removing
+   *
+   * @generated from field: int64 new_balance_cents = 2;
+   */
+  newBalanceCents: bigint;
+
+  /**
+   * Amount removed
+   *
+   * @generated from field: int64 amount_removed_cents = 3;
+   */
+  amountRemovedCents: bigint;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.AdminRemoveCreditsResponse.
+ * Use `create(AdminRemoveCreditsResponseSchema)` to create a new message.
+ */
+export const AdminRemoveCreditsResponseSchema: GenMessage<AdminRemoveCreditsResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 30);
 
 /**
  * @generated from service obiente.cloud.organizations.v1.OrganizationService
@@ -655,6 +999,46 @@ export const OrganizationService: GenService<{
     methodKind: "unary";
     input: typeof TransferOwnershipRequestSchema;
     output: typeof TransferOwnershipResponseSchema;
+  },
+  /**
+   * Get current usage and billing information for the organization
+   *
+   * @generated from rpc obiente.cloud.organizations.v1.OrganizationService.GetUsage
+   */
+  getUsage: {
+    methodKind: "unary";
+    input: typeof GetUsageRequestSchema;
+    output: typeof GetUsageResponseSchema;
+  },
+  /**
+   * Add credits to organization (for regular users/owners)
+   *
+   * @generated from rpc obiente.cloud.organizations.v1.OrganizationService.AddCredits
+   */
+  addCredits: {
+    methodKind: "unary";
+    input: typeof AddCreditsRequestSchema;
+    output: typeof AddCreditsResponseSchema;
+  },
+  /**
+   * Admin: Add credits to any organization (superadmin only)
+   *
+   * @generated from rpc obiente.cloud.organizations.v1.OrganizationService.AdminAddCredits
+   */
+  adminAddCredits: {
+    methodKind: "unary";
+    input: typeof AdminAddCreditsRequestSchema;
+    output: typeof AdminAddCreditsResponseSchema;
+  },
+  /**
+   * Admin: Remove credits from any organization (superadmin only)
+   *
+   * @generated from rpc obiente.cloud.organizations.v1.OrganizationService.AdminRemoveCredits
+   */
+  adminRemoveCredits: {
+    methodKind: "unary";
+    input: typeof AdminRemoveCreditsRequestSchema;
+    output: typeof AdminRemoveCreditsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_obiente_cloud_organizations_v1_organization_service, 0);

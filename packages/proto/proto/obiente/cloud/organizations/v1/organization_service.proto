@@ -34,6 +34,52 @@ service OrganizationService {
 
   // Transfer organization ownership to another member
   rpc TransferOwnership(TransferOwnershipRequest) returns (TransferOwnershipResponse);
+
+  // Get current usage and billing information for the organization
+  rpc GetUsage(GetUsageRequest) returns (GetUsageResponse);
+
+  // Add credits to organization (for regular users/owners)
+  rpc AddCredits(AddCreditsRequest) returns (AddCreditsResponse);
+
+  // Admin: Add credits to any organization (superadmin only)
+  rpc AdminAddCredits(AdminAddCreditsRequest) returns (AdminAddCreditsResponse);
+
+  // Admin: Remove credits from any organization (superadmin only)
+  rpc AdminRemoveCredits(AdminRemoveCreditsRequest) returns (AdminRemoveCreditsResponse);
+}
+
+message GetUsageRequest {
+  string organization_id = 1;
+  // Optional: specify a month (YYYY-MM format). Defaults to current month.
+  optional string month = 2;
+}
+
+message GetUsageResponse {
+  string organization_id = 1;
+  string month = 2; // YYYY-MM format
+  UsageMetrics current = 3;
+  UsageMetrics estimated_monthly = 4;
+  // Quota limits (0 means unlimited)
+  UsageQuota quota = 5;
+}
+
+message UsageMetrics {
+  int64 cpu_core_seconds = 1;
+  int64 memory_byte_seconds = 2;
+  int64 bandwidth_rx_bytes = 3;
+  int64 bandwidth_tx_bytes = 4;
+  int64 storage_bytes = 5;
+  int32 deployments_active_peak = 6;
+  // Estimated cost in cents (e.g., 2347 = $23.47)
+  int64 estimated_cost_cents = 7;
+}
+
+message UsageQuota {
+  int64 cpu_core_seconds_monthly = 1;
+  int64 memory_byte_seconds_monthly = 2;
+  int64 bandwidth_bytes_monthly = 3;
+  int64 storage_bytes = 4;
+  int32 deployments_max = 5;
 }
 
 message ListOrganizationsRequest {
@@ -142,6 +188,8 @@ message Organization {
   int32 max_deployments = 8;
   int32 max_vps_instances = 9;
   int32 max_team_members = 10;
+  // Credits balance in cents ($0.01 units)
+  int64 credits = 11;
 }
 
 message OrganizationMember {
@@ -157,4 +205,52 @@ message Pagination {
   int32 per_page = 2;
   int32 total = 3;
   int32 total_pages = 4;
+}
+
+message AddCreditsRequest {
+  string organization_id = 1;
+  // Amount in cents ($0.01 units). Must be positive.
+  int64 amount_cents = 2;
+  // Optional note/reason for adding credits
+  optional string note = 3;
+}
+
+message AddCreditsResponse {
+  Organization organization = 1;
+  // New credits balance after adding
+  int64 new_balance_cents = 2;
+  // Amount added
+  int64 amount_added_cents = 3;
+}
+
+message AdminAddCreditsRequest {
+  string organization_id = 1;
+  // Amount in cents ($0.01 units). Must be positive.
+  int64 amount_cents = 2;
+  // Optional note/reason for adding credits
+  optional string note = 3;
+}
+
+message AdminAddCreditsResponse {
+  Organization organization = 1;
+  // New credits balance after adding
+  int64 new_balance_cents = 2;
+  // Amount added
+  int64 amount_added_cents = 3;
+}
+
+message AdminRemoveCreditsRequest {
+  string organization_id = 1;
+  // Amount in cents ($0.01 units). Must be positive.
+  int64 amount_cents = 2;
+  // Optional note/reason for removing credits
+  optional string note = 3;
+}
+
+message AdminRemoveCreditsResponse {
+  Organization organization = 1;
+  // New credits balance after removing
+  int64 new_balance_cents = 2;
+  // Amount removed
+  int64 amount_removed_cents = 3;
 }

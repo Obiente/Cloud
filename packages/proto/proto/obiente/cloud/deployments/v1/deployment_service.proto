@@ -79,6 +79,15 @@ service DeploymentService {
   // Stream build logs during deployment (live build output)
   rpc StreamBuildLogs(StreamBuildLogsRequest) returns (stream DeploymentLogLine);
 
+  // Get deployment metrics (real-time or historical)
+  rpc GetDeploymentMetrics(GetDeploymentMetricsRequest) returns (GetDeploymentMetricsResponse);
+
+  // Stream real-time deployment metrics
+  rpc StreamDeploymentMetrics(StreamDeploymentMetricsRequest) returns (stream DeploymentMetric);
+
+  // Get aggregated usage for a deployment
+  rpc GetDeploymentUsage(GetDeploymentUsageRequest) returns (GetDeploymentUsageResponse);
+
   // Start a stopped deployment
   rpc StartDeployment(StartDeploymentRequest) returns (StartDeploymentResponse);
 
@@ -167,6 +176,21 @@ service DeploymentService {
   
   // Get available service names from Docker Compose
   rpc GetDeploymentServiceNames(GetDeploymentServiceNamesRequest) returns (GetDeploymentServiceNamesResponse);
+
+  // List all containers for a deployment
+  rpc ListDeploymentContainers(ListDeploymentContainersRequest) returns (ListDeploymentContainersResponse);
+
+  // Stream logs from a specific container
+  rpc StreamContainerLogs(StreamContainerLogsRequest) returns (stream DeploymentLogLine);
+
+  // Start a specific container
+  rpc StartContainer(StartContainerRequest) returns (StartContainerResponse);
+
+  // Stop a specific container
+  rpc StopContainer(StopContainerRequest) returns (StopContainerResponse);
+
+  // Restart a specific container
+  rpc RestartContainer(RestartContainerRequest) returns (RestartContainerResponse);
 }
 
 message ListDeploymentsRequest {
@@ -275,6 +299,8 @@ message StreamDeploymentLogsRequest {
   string organization_id = 1;
   string deployment_id = 2;
   optional int32 tail = 3; // number of lines to tail before following
+  optional string container_id = 4; // Optional: stream logs from a specific container. If not specified, uses first container.
+  optional string service_name = 5; // Optional: stream logs from a specific service. If container_id is specified, this is ignored.
 }
 
 message StreamBuildLogsRequest {
@@ -489,6 +515,8 @@ message SendTerminalInputResponse {
 message TerminalInput {
   string organization_id = 1;
   string deployment_id = 2;
+  string container_id = 6; // Optional: specific container ID to connect to
+  string service_name = 7; // Optional: service name to connect to (for Docker Compose)
   bytes input = 3; // User keyboard input
   int32 cols = 4; // Terminal width (for resize/initial setup)
   int32 rows = 5; // Terminal height (for resize/initial setup)
@@ -515,6 +543,8 @@ message ListContainerFilesRequest {
   bool list_volumes = 5; // If true, return list of available volumes instead of files
   optional string cursor = 6;
   optional int32 page_size = 7;
+  optional string container_id = 8; // Optional: use a specific container. If not specified, uses first container.
+  optional string service_name = 9; // Optional: use a specific service. If container_id is specified, this is ignored.
 }
 
 message ContainerFile {
@@ -549,6 +579,8 @@ message GetContainerFileRequest {
   string deployment_id = 2;
   string path = 3; // File path
   optional string volume_name = 4; // If specified, read file from this volume instead of container filesystem
+  optional string container_id = 5; // Optional: use a specific container. If not specified, uses first container.
+  optional string service_name = 6; // Optional: use a specific service. If container_id is specified, this is ignored.
 }
 
 message GetContainerFileResponse {
@@ -572,6 +604,8 @@ message UploadContainerFilesMetadata {
   string destination_path = 3; // Directory path where files should be extracted (default: "/")
   repeated FileMetadata files = 4; // Metadata about files being uploaded
   optional string volume_name = 5; // If specified, upload files to this volume instead of container filesystem
+  optional string container_id = 6; // Optional: use a specific container. If not specified, uses first container.
+  optional string service_name = 7; // Optional: use a specific service. If container_id is specified, this is ignored.
 }
 
 message FileMetadata {
@@ -701,6 +735,94 @@ message GetDeploymentServiceNamesResponse {
   repeated string service_names = 1;
 }
 
+message GetDeploymentMetricsRequest {
+  string deployment_id = 1;
+  string organization_id = 2;
+  // Optional: time range for historical metrics
+  optional google.protobuf.Timestamp start_time = 3;
+  optional google.protobuf.Timestamp end_time = 4;
+  // If true, return only the latest metrics point
+  optional bool latest_only = 5;
+  // Optional: filter by container_id (if not specified, returns aggregated metrics across all containers)
+  optional string container_id = 6;
+  // Optional: filter by service_name (alternative to container_id, matches containers by service name)
+  optional string service_name = 7;
+  // If true, aggregate metrics across all containers (sum for network/disk, avg for CPU/memory)
+  // If false and container_id/service_name not specified, aggregates are returned
+  optional bool aggregate = 8;
+}
+
+message GetDeploymentMetricsResponse {
+  repeated DeploymentMetric metrics = 1;
+}
+
+message StreamDeploymentMetricsRequest {
+  string deployment_id = 1;
+  string organization_id = 2;
+  // How often to send updates (in seconds, default: 5)
+  optional int32 interval_seconds = 3;
+  // Optional: filter by container_id (if not specified, returns aggregated metrics across all containers)
+  optional string container_id = 4;
+  // Optional: filter by service_name (alternative to container_id, matches containers by service name)
+  optional string service_name = 5;
+  // If true, aggregate metrics across all containers (sum for network/disk, avg for CPU/memory)
+  // If false and container_id/service_name not specified, aggregates are returned
+  optional bool aggregate = 6;
+}
+
+message DeploymentMetric {
+  string deployment_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  // CPU usage as percentage (0-100)
+  double cpu_usage_percent = 3;
+  // Memory usage in bytes
+  int64 memory_usage_bytes = 4;
+  // Network receive bytes (total since container start)
+  int64 network_rx_bytes = 5;
+  // Network transmit bytes (total since container start)
+  int64 network_tx_bytes = 6;
+  // Disk read bytes (total since container start)
+  int64 disk_read_bytes = 7;
+  // Disk write bytes (total since container start)
+  int64 disk_write_bytes = 8;
+  // Request count (if tracked via middleware)
+  optional int64 request_count = 9;
+  // Error count (if tracked via middleware)
+  optional int64 error_count = 10;
+  // Container ID this metric is from (for multi-container deployments)
+  optional string container_id = 11;
+  // Service name this metric is from (for multi-container deployments)
+  optional string service_name = 12;
+}
+
+message GetDeploymentUsageRequest {
+  string deployment_id = 1;
+  string organization_id = 2;
+  // Optional: specify a month (YYYY-MM format). Defaults to current month.
+  optional string month = 3;
+}
+
+message GetDeploymentUsageResponse {
+  string deployment_id = 1;
+  string organization_id = 2;
+  string month = 3; // YYYY-MM format
+  DeploymentUsageMetrics current = 4;
+  DeploymentUsageMetrics estimated_monthly = 5;
+}
+
+message DeploymentUsageMetrics {
+  int64 cpu_core_seconds = 1;
+  int64 memory_byte_seconds = 2;
+  int64 bandwidth_rx_bytes = 3;
+  int64 bandwidth_tx_bytes = 4;
+  int64 storage_bytes = 5;
+  int64 request_count = 6;
+  int64 error_count = 7;
+  int64 uptime_seconds = 8;
+  // Estimated cost in cents
+  int64 estimated_cost_cents = 9;
+}
+
 message Deployment {
   string id = 1;
   string name = 2;
@@ -736,4 +858,67 @@ message Deployment {
   // Environment variables
   map<string, string> env_vars = 25;
   optional string github_integration_id = 29; // GitHub integration ID used for this deployment
+  // Container status (for compose deployments)
+  optional int32 containers_running = 30; // Number of containers actually running (from Docker)
+  optional int32 containers_total = 31; // Total number of containers for this deployment
+}
+
+message ListDeploymentContainersRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+}
+
+message ListDeploymentContainersResponse {
+  repeated DeploymentContainer containers = 1;
+}
+
+message DeploymentContainer {
+  string container_id = 1;
+  optional string service_name = 2; // Service name from compose (e.g., "web", "api")
+  string status = 3; // running, stopped, exited, etc.
+  optional string node_id = 4;
+  optional string node_hostname = 5;
+  optional int32 port = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message StreamContainerLogsRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string container_id = 3; // Container ID to stream logs from
+  int32 tail = 4; // Number of lines to tail (default: 200)
+}
+
+message StartContainerRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string container_id = 3; // Container ID to start
+}
+
+message StartContainerResponse {
+  bool success = 1;
+  optional string error = 2;
+}
+
+message StopContainerRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string container_id = 3; // Container ID to stop
+}
+
+message StopContainerResponse {
+  bool success = 1;
+  optional string error = 2;
+}
+
+message RestartContainerRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string container_id = 3; // Container ID to restart
+}
+
+message RestartContainerResponse {
+  bool success = 1;
+  optional string error = 2;
 }
