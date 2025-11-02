@@ -28,16 +28,39 @@
                 @update:model-value="markGeneralDirty"
               />
 
-              <OuiInput
-                v-model="localGroup"
-                label="Group"
-                placeholder="e.g. frontend, backend, microservices"
-                @update:model-value="markGeneralDirty"
-              >
-                <template #hint>
-                  Organize deployments into groups for easier management
-                </template>
-              </OuiInput>
+              <div>
+                <OuiText size="sm" weight="medium" class="mb-2 block">Groups/Labels</OuiText>
+                <div class="flex flex-wrap gap-2 mb-2 p-2 border border-border-default rounded-lg min-h-[2.5rem]">
+                  <OuiBadge
+                    v-for="(group, idx) in localGroups"
+                    :key="idx"
+                    variant="outline"
+                    size="sm"
+                    class="gap-1"
+                  >
+                    {{ group }}
+                    <button
+                      @click="removeGroup(idx)"
+                      class="ml-1 hover:text-danger"
+                      type="button"
+                    >
+                      <span class="sr-only">Remove</span>
+                      ×
+                    </button>
+                  </OuiBadge>
+                  <input
+                    v-model="newGroupInput"
+                    @keydown.enter.prevent="addGroup"
+                    @blur="addGroup"
+                    type="text"
+                    placeholder="Add group..."
+                    class="flex-1 min-w-[120px] border-0 outline-none bg-transparent text-sm"
+                  />
+                </div>
+                <OuiText size="xs" color="secondary">
+                  Press Enter or click outside to add a group/label
+                </OuiText>
+              </div>
             </OuiGrid>
           </OuiStack>
         </OuiCardBody>
@@ -291,9 +314,10 @@ const orgsStore = useOrganizationsStore();
 const { showAlert, showConfirm } = useDialog();
 const organizationId = computed(() => orgsStore.currentOrgId || "");
 
-// General settings (environment, group)
+// General settings (environment, groups)
 const localEnvironment = ref<string>("");
-const localGroup = ref<string>("");
+const localGroups = ref<string[]>([]);
+const newGroupInput = ref<string>("");
 const isGeneralDirty = ref(false);
 const isSaving = ref(false);
 const error = ref("");
@@ -329,7 +353,8 @@ watchEffect(() => {
   if (props.deployment) {
     // General settings
     localEnvironment.value = String(props.deployment.environment ?? EnvEnum.PRODUCTION);
-    localGroup.value = (props.deployment as any).group ?? "";
+    const deploymentGroups = (props.deployment as any).groups || (props.deployment as any).group ? [(props.deployment as any).group].filter(Boolean) : [];
+    localGroups.value = Array.isArray(deploymentGroups) ? deploymentGroups : [];
     
     // Config settings
     const repoUrl = props.deployment.repositoryUrl || (props.deployment as any).repository_url || "";
@@ -442,6 +467,20 @@ const markGeneralDirty = () => {
   error.value = "";
 };
 
+const addGroup = () => {
+  const trimmed = newGroupInput.value.trim();
+  if (trimmed && !localGroups.value.includes(trimmed)) {
+    localGroups.value.push(trimmed);
+    newGroupInput.value = "";
+    markGeneralDirty();
+  }
+};
+
+const removeGroup = (index: number) => {
+  localGroups.value.splice(index, 1);
+  markGeneralDirty();
+};
+
 const markConfigDirty = () => {
   isConfigDirty.value = true;
   configSuccess.value = false;
@@ -524,16 +563,9 @@ async function saveGeneralSettings() {
   saveSuccess.value = false;
 
   try {
-    const groupValue = localGroup.value?.trim() || "";
-    console.log("[DeploymentSettings] Saving general settings:", {
-      environment: Number(localEnvironment.value),
-      group: groupValue,
-    });
-    
     await deploymentActions.updateDeployment(String(route.params.id), {
       environment: Number(localEnvironment.value) as EnvEnum,
-      // Always send group (even empty string) so backend can clear it if needed
-      group: groupValue,
+      groups: localGroups.value.filter(g => g.trim()),
     });
     
     await refreshNuxtData(`deployment-${route.params.id}`);

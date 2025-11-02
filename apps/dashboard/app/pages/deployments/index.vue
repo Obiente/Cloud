@@ -203,8 +203,10 @@
                     </OuiText>
                   </OuiBadge>
                   <OuiBadge
-                    v-if="(deployment as any).group"
+                    v-for="(group, idx) in ((deployment as any).groups || [])"
+                    :key="idx"
                     variant="secondary"
+                    size="sm"
                   >
                     <OuiText
                       as="span"
@@ -212,7 +214,7 @@
                       weight="semibold"
                       class="text-[11px]"
                     >
-                      {{ (deployment as any).group }}
+                      {{ group }}
                     </OuiText>
                   </OuiBadge>
                 </OuiFlex>
@@ -480,15 +482,39 @@
               required
             />
 
-            <OuiInput
-              v-model="newDeployment.group"
-              label="Group (Optional)"
-              placeholder="e.g. frontend, backend, microservices"
-            >
-              <template #hint>
-                Organize deployments into groups for easier management
-              </template>
-            </OuiInput>
+            <div>
+              <OuiText size="sm" weight="medium" class="mb-2 block">Groups/Labels (Optional)</OuiText>
+              <div class="flex flex-wrap gap-2 mb-2 p-2 border border-border-default rounded-lg min-h-[2.5rem]">
+                <OuiBadge
+                  v-for="(group, idx) in newDeploymentGroups"
+                  :key="idx"
+                  variant="outline"
+                  size="sm"
+                  class="gap-1"
+                >
+                  {{ group }}
+                  <button
+                    @click="removeNewGroup(idx)"
+                    class="ml-1 hover:text-danger"
+                    type="button"
+                  >
+                    <span class="sr-only">Remove</span>
+                    ×
+                  </button>
+                </OuiBadge>
+                <input
+                  v-model="newGroupInput"
+                  @keydown.enter.prevent="addNewGroup"
+                  @blur="addNewGroup"
+                  type="text"
+                  placeholder="Add group..."
+                  class="flex-1 min-w-[120px] border-0 outline-none bg-transparent text-sm"
+                />
+              </div>
+              <OuiText size="xs" color="secondary">
+                Press Enter or click outside to add a group/label
+              </OuiText>
+            </div>
 
             <OuiText size="xs" color="secondary">
               The deployment type will be automatically detected when you connect your repository. You can configure the repository and other settings after creating the deployment.
@@ -594,8 +620,9 @@
   const newDeployment = ref({
     name: "",
     environment: String(EnvEnum.PRODUCTION),
-    group: "",
   });
+  const newDeploymentGroups = ref<string[]>([]);
+  const newGroupInput = ref<string>("");
 
   const statusFilterOptions = [
     { label: "All Status", value: "" },
@@ -615,8 +642,11 @@
   const groupOptions = computed(() => {
     const groups = new Set<string>();
     (deployments.value || []).forEach((deployment: any) => {
-      if (deployment.group && deployment.group.trim()) {
-        groups.add(deployment.group.trim());
+      const deploymentGroups = (deployment.groups || []).filter((g: string) => g && g.trim());
+      deploymentGroups.forEach((g: string) => groups.add(g.trim()));
+      // Also check legacy group field for backward compatibility
+      if ((deployment as any).group && (deployment as any).group.trim()) {
+        groups.add((deployment as any).group.trim());
       }
     });
     return Array.from(groups)
@@ -873,8 +903,13 @@
 
     if (groupFilter.value) {
       filtered = filtered.filter((deployment) => {
-        const deploymentGroup = (deployment as any).group;
-        return deploymentGroup && deploymentGroup.trim() === groupFilter.value.trim();
+        const deploymentGroups = (deployment as any).groups || [];
+        // Also check legacy group field for backward compatibility
+        const legacyGroup = (deployment as any).group;
+        if (legacyGroup) {
+          deploymentGroups.push(legacyGroup);
+        }
+        return deploymentGroups.some((g: string) => g && g.trim() === groupFilter.value.trim());
       });
     }
 
@@ -904,6 +939,18 @@
 
   const { showAlert } = useDialog();
 
+  const addNewGroup = () => {
+    const trimmed = newGroupInput.value.trim();
+    if (trimmed && !newDeploymentGroups.value.includes(trimmed)) {
+      newDeploymentGroups.value.push(trimmed);
+      newGroupInput.value = "";
+    }
+  };
+
+  const removeNewGroup = (index: number) => {
+    newDeploymentGroups.value.splice(index, 1);
+  };
+
   const createDeployment = async () => {
     if (!newDeployment.value.name.trim()) {
       await showAlert({
@@ -920,7 +967,7 @@
       const deployment = await deploymentActions.createDeployment({
         name: newDeployment.value.name,
         environment: Number(newDeployment.value.environment) as EnvEnum,
-        group: newDeployment.value.group || undefined,
+        groups: newDeploymentGroups.value.filter(g => g.trim()),
       });
 
       showCreateDialog.value = false;
@@ -928,8 +975,9 @@
       newDeployment.value = {
         name: "",
         environment: String(EnvEnum.PRODUCTION),
-        group: "",
       };
+      newDeploymentGroups.value = [];
+      newGroupInput.value = "";
 
       // Add to local deployments list if it's not there already
       if (
