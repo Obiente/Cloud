@@ -14,6 +14,7 @@ import (
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/email"
+	"api/internal/pricing"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -56,6 +57,7 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 	type row struct {
 		Id, Name, Slug, Plan, Status string
 		Domain                       *string
+		Credits                      int64
 		CreatedAt                    time.Time
 	}
 
@@ -67,7 +69,7 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 	if onlyMine || !isSuperAdmin {
 		ensurePersonalOrg(user.Id)
 		if err := database.DB.Raw(`
-			SELECT o.id, o.name, o.slug, o.plan, o.status, o.domain, o.created_at
+			SELECT o.id, o.name, o.slug, o.plan, o.status, o.domain, o.credits, o.created_at
 			FROM organizations o
 			JOIN organization_members m ON m.organization_id = o.id
 			WHERE m.user_id = ?
@@ -78,7 +80,7 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 	} else {
 		// Superadmin gets all organizations (when onlyMine is false/unset)
 		if err := database.DB.Raw(`
-			SELECT o.id, o.name, o.slug, o.plan, o.status, o.domain, o.created_at
+			SELECT o.id, o.name, o.slug, o.plan, o.status, o.domain, o.credits, o.created_at
 			FROM organizations o
 			ORDER BY o.created_at DESC
 		`).Scan(&rows).Error; err != nil {
@@ -90,7 +92,7 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 	for _, r := range rows {
 		po := &organizationsv1.Organization{
 			Id: r.Id, Name: r.Name, Slug: r.Slug, Plan: strings.ToLower(r.Plan), Status: r.Status,
-			CreatedAt: timestamppb.New(r.CreatedAt),
+			Credits: r.Credits, CreatedAt: timestamppb.New(r.CreatedAt),
 		}
 		if r.Domain != nil {
 			po.Domain = r.Domain
@@ -123,14 +125,14 @@ func (s *Service) CreateOrganization(ctx context.Context, req *connect.Request[o
 		plan = "starter"
 	}
 	now := time.Now()
-	org := &database.Organization{ID: generateID("org"), Name: name, Slug: slug, Plan: plan, Status: "active", CreatedAt: now}
+	org := &database.Organization{ID: generateID("org"), Name: name, Slug: slug, Plan: plan, Status: "active", Credits: 0, CreatedAt: now}
 	if err := database.DB.Create(org).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create org: %w", err))
 	}
 	// add creator as owner
 	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: user.Id, Role: "owner", Status: "active", JoinedAt: now}
 	_ = database.DB.Create(m).Error
-	po := &organizationsv1.Organization{Id: org.ID, Name: org.Name, Slug: org.Slug, Plan: strings.ToLower(org.Plan), Status: org.Status, CreatedAt: timestamppb.New(org.CreatedAt)}
+	po := &organizationsv1.Organization{Id: org.ID, Name: org.Name, Slug: org.Slug, Plan: strings.ToLower(org.Plan), Status: org.Status, Credits: org.Credits, CreatedAt: timestamppb.New(org.CreatedAt)}
 	return connect.NewResponse(&organizationsv1.CreateOrganizationResponse{Organization: po}), nil
 }
 
@@ -139,7 +141,7 @@ func (s *Service) GetOrganization(_ context.Context, req *connect.Request[organi
 	if err := database.DB.First(&r, "id = ?", req.Msg.GetOrganizationId()).Error; err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
 	}
-	po := &organizationsv1.Organization{Id: r.ID, Name: r.Name, Slug: r.Slug, Plan: strings.ToLower(r.Plan), Status: r.Status, CreatedAt: timestamppb.New(r.CreatedAt)}
+	po := &organizationsv1.Organization{Id: r.ID, Name: r.Name, Slug: r.Slug, Plan: strings.ToLower(r.Plan), Status: r.Status, Credits: r.Credits, CreatedAt: timestamppb.New(r.CreatedAt)}
 	if r.Domain != nil {
 		po.Domain = r.Domain
 	}
@@ -174,7 +176,7 @@ func (s *Service) UpdateOrganization(ctx context.Context, req *connect.Request[o
 	if err := database.DB.Save(&org).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update org: %w", err))
 	}
-	po := &organizationsv1.Organization{Id: org.ID, Name: org.Name, Slug: org.Slug, Plan: strings.ToLower(org.Plan), Status: org.Status, CreatedAt: timestamppb.New(org.CreatedAt)}
+	po := &organizationsv1.Organization{Id: org.ID, Name: org.Name, Slug: org.Slug, Plan: strings.ToLower(org.Plan), Status: org.Status, Credits: org.Credits, CreatedAt: timestamppb.New(org.CreatedAt)}
 	if org.Domain != nil {
 		po.Domain = org.Domain
 	}
@@ -446,6 +448,215 @@ func (s *Service) TransferOwnership(ctx context.Context, req *connect.Request[or
 	return connect.NewResponse(response), nil
 }
 
+func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizationsv1.GetUsageRequest]) (*connect.Response[organizationsv1.GetUsageResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	if !isSuperAdmin {
+		if err := s.authorizeOrgRoles(ctx, orgID, user, "viewer", "member", "admin", "owner"); err != nil {
+			return nil, err
+		}
+	}
+
+	// Determine month (default to current month)
+	month := strings.TrimSpace(req.Msg.GetMonth())
+	if month == "" {
+		month = time.Now().UTC().Format("2006-01")
+	}
+
+	// Get usage from UsageMonthly table
+	var usage database.UsageMonthly
+	if err := database.DB.Where("organization_id = ? AND month = ?", orgID, month).First(&usage).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Return zero usage if no record exists
+			usage = database.UsageMonthly{
+				OrganizationID:       orgID,
+				Month:                month,
+				CPUCoreSeconds:       0,
+				MemoryByteSeconds:    0,
+				BandwidthRxBytes:     0,
+				BandwidthTxBytes:     0,
+				StorageBytes:         0,
+				DeploymentsActivePeak: 0,
+			}
+		} else {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("query usage: %w", err))
+		}
+	}
+
+	// Calculate estimated monthly usage based on current month progress
+	now := time.Now().UTC()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0).Add(-time.Second)
+	
+	// Calculate elapsed ratio for current month cost prorating
+	var elapsedRatio float64
+	if month == now.Format("2006-01") {
+		elapsed := now.Sub(monthStart)
+		monthDuration := monthEnd.Sub(monthStart)
+		elapsedRatio = float64(elapsed) / float64(monthDuration)
+	} else {
+		// Historical month: use full month (1.0) for prorating
+		elapsedRatio = 1.0
+	}
+	
+	var estimatedMonthly *organizationsv1.UsageMetrics
+	if month == now.Format("2006-01") {
+		// Current month: project based on elapsed time
+		
+		if elapsedRatio > 0 {
+			estimatedMonthly = &organizationsv1.UsageMetrics{
+				CpuCoreSeconds:      int64(float64(usage.CPUCoreSeconds) / elapsedRatio),
+				MemoryByteSeconds:   int64(float64(usage.MemoryByteSeconds) / elapsedRatio),
+				BandwidthRxBytes:    usage.BandwidthRxBytes, // Bandwidth is cumulative total, use current value for estimate
+				BandwidthTxBytes:    usage.BandwidthTxBytes, // Bandwidth is cumulative total, use current value for estimate
+				StorageBytes:        usage.StorageBytes, // Storage is billed at current snapshot for full month, don't project
+				DeploymentsActivePeak: int32(usage.DeploymentsActivePeak),
+			}
+		} else {
+			estimatedMonthly = &organizationsv1.UsageMetrics{
+				CpuCoreSeconds:      usage.CPUCoreSeconds,
+				MemoryByteSeconds:   usage.MemoryByteSeconds,
+				BandwidthRxBytes:    usage.BandwidthRxBytes,
+				BandwidthTxBytes:    usage.BandwidthTxBytes,
+				StorageBytes:        usage.StorageBytes,
+				DeploymentsActivePeak: int32(usage.DeploymentsActivePeak),
+			}
+		}
+	} else {
+		// Historical month: estimated equals current
+		estimatedMonthly = &organizationsv1.UsageMetrics{
+			CpuCoreSeconds:      usage.CPUCoreSeconds,
+			MemoryByteSeconds:   usage.MemoryByteSeconds,
+			BandwidthRxBytes:    usage.BandwidthRxBytes,
+			BandwidthTxBytes:    usage.BandwidthTxBytes,
+			StorageBytes:        usage.StorageBytes,
+			DeploymentsActivePeak: int32(usage.DeploymentsActivePeak),
+		}
+	}
+
+	// Calculate estimated cost using centralized pricing model
+	pricingModel := pricing.GetPricing()
+	bandwidthBytes := estimatedMonthly.BandwidthRxBytes + estimatedMonthly.BandwidthTxBytes
+	estimatedCostCents := pricingModel.CalculateTotalCost(
+		estimatedMonthly.CpuCoreSeconds,
+		estimatedMonthly.MemoryByteSeconds,
+		bandwidthBytes,
+		estimatedMonthly.StorageBytes,
+	)
+
+	// Calculate current cost using centralized pricing model
+	// Note: Storage is billed monthly - for current cost, we need to prorate it
+	// CPU/Memory are already time-based (core-seconds, byte-seconds) so no prorating needed
+	// Bandwidth is one-time cost per byte transferred, no prorating needed
+	// Storage is monthly cost per byte, so must prorate based on elapsed time
+	currBandwidthBytes := usage.BandwidthRxBytes + usage.BandwidthTxBytes
+	cpuCost := pricingModel.CalculateCPUCost(usage.CPUCoreSeconds)
+	memoryCost := pricingModel.CalculateMemoryCost(usage.MemoryByteSeconds)
+	bandwidthCost := pricingModel.CalculateBandwidthCost(currBandwidthBytes)
+	
+	// Storage cost is monthly rate, prorate for current cost calculation
+	var currentCostCents int64
+	if month == now.Format("2006-01") && elapsedRatio > 0 {
+		storageCostFullMonth := pricingModel.CalculateStorageCost(usage.StorageBytes)
+		storageCostProrated := int64(float64(storageCostFullMonth) * elapsedRatio)
+		currentCostCents = cpuCost + memoryCost + bandwidthCost + storageCostProrated
+	} else {
+		// Historical month: storage is already for full month
+		currentCostCents = pricingModel.CalculateTotalCost(
+			usage.CPUCoreSeconds,
+			usage.MemoryByteSeconds,
+			currBandwidthBytes,
+			usage.StorageBytes,
+		)
+	}
+
+	estimatedMonthly.EstimatedCostCents = estimatedCostCents
+
+	currentMetrics := &organizationsv1.UsageMetrics{
+		CpuCoreSeconds:      usage.CPUCoreSeconds,
+		MemoryByteSeconds:   usage.MemoryByteSeconds,
+		BandwidthRxBytes:    usage.BandwidthRxBytes,
+		BandwidthTxBytes:    usage.BandwidthTxBytes,
+		StorageBytes:        usage.StorageBytes,
+		DeploymentsActivePeak: int32(usage.DeploymentsActivePeak),
+		EstimatedCostCents: currentCostCents, // Current usage cost (calculated server-side)
+	}
+
+	// Get quota information
+	var quota *organizationsv1.UsageQuota
+	var orgQuota database.OrgQuota
+	if err := database.DB.First(&orgQuota, "organization_id = ?", orgID).Error; err == nil {
+		// Get plan details
+		var plan database.OrganizationPlan
+		if err := database.DB.First(&plan, "id = ?", orgQuota.PlanID).Error; err == nil {
+			cpuLimit := plan.CPUCores
+			if orgQuota.CPUCoresOverride != nil && *orgQuota.CPUCoresOverride > 0 {
+				cpuLimit = *orgQuota.CPUCoresOverride
+			}
+			
+			memoryLimit := plan.MemoryBytes
+			if orgQuota.MemoryBytesOverride != nil && *orgQuota.MemoryBytesOverride > 0 {
+				memoryLimit = *orgQuota.MemoryBytesOverride
+			}
+			
+			bandwidthLimit := plan.BandwidthBytesMonth
+			if orgQuota.BandwidthBytesMonthOverride != nil && *orgQuota.BandwidthBytesMonthOverride > 0 {
+				bandwidthLimit = *orgQuota.BandwidthBytesMonthOverride
+			}
+			
+			storageLimit := plan.StorageBytes
+			if orgQuota.StorageBytesOverride != nil && *orgQuota.StorageBytesOverride > 0 {
+				storageLimit = *orgQuota.StorageBytesOverride
+			}
+			
+			deploymentsMax := plan.DeploymentsMax
+			if orgQuota.DeploymentsMaxOverride != nil && *orgQuota.DeploymentsMaxOverride > 0 {
+				deploymentsMax = *orgQuota.DeploymentsMaxOverride
+			}
+
+			// Convert to monthly limits (CPU and Memory are per-second, so multiply by seconds in month)
+			secondsInMonth := int64(monthEnd.Sub(monthStart).Seconds())
+			quota = &organizationsv1.UsageQuota{
+				CpuCoreSecondsMonthly:   int64(cpuLimit) * secondsInMonth,
+				MemoryByteSecondsMonthly: memoryLimit * secondsInMonth,
+				BandwidthBytesMonthly:    bandwidthLimit,
+				StorageBytes:             storageLimit,
+				DeploymentsMax:           int32(deploymentsMax),
+			}
+		}
+	}
+	
+	if quota == nil {
+		// Default quota (0 = unlimited)
+		quota = &organizationsv1.UsageQuota{
+			CpuCoreSecondsMonthly:   0,
+			MemoryByteSecondsMonthly: 0,
+			BandwidthBytesMonthly:    0,
+			StorageBytes:             0,
+			DeploymentsMax:           0,
+		}
+	}
+
+	response := &organizationsv1.GetUsageResponse{
+		OrganizationId:    orgID,
+		Month:             month,
+		Current:           currentMetrics,
+		EstimatedMonthly:  estimatedMonthly,
+		Quota:             quota,
+	}
+
+	return connect.NewResponse(response), nil
+}
+
 func ensurePersonalOrg(userID string) {
 	// Check membership
 	var count int64
@@ -657,4 +868,172 @@ func buildUserProfile(ctx context.Context, resolver *userProfileResolver, member
 	}
 
 	return userProto
+}
+
+func (s *Service) AddCredits(ctx context.Context, req *connect.Request[organizationsv1.AddCreditsRequest]) (*connect.Response[organizationsv1.AddCreditsResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	amountCents := req.Msg.GetAmountCents()
+	if amountCents <= 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("amount_cents must be positive"))
+	}
+
+	// Only owners and admins can add credits to their organization
+	if err := s.authorizeOrgRoles(ctx, orgID, user, "owner", "admin"); err != nil {
+		return nil, err
+	}
+
+	// Update credits in a transaction
+	var org database.Organization
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
+			return err
+		}
+		org.Credits += amountCents
+		if org.Credits < 0 {
+			org.Credits = 0 // Prevent negative balances
+		}
+		return tx.Save(&org).Error
+	}); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("add credits: %w", err))
+	}
+
+	po := &organizationsv1.Organization{
+		Id: org.ID, Name: org.Name, Slug: org.Slug, Plan: strings.ToLower(org.Plan),
+		Status: org.Status, Credits: org.Credits, CreatedAt: timestamppb.New(org.CreatedAt),
+	}
+	if org.Domain != nil {
+		po.Domain = org.Domain
+	}
+
+	return connect.NewResponse(&organizationsv1.AddCreditsResponse{
+		Organization:      po,
+		NewBalanceCents:   org.Credits,
+		AmountAddedCents: amountCents,
+	}), nil
+}
+
+func (s *Service) AdminAddCredits(ctx context.Context, req *connect.Request[organizationsv1.AdminAddCreditsRequest]) (*connect.Response[organizationsv1.AdminAddCreditsResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	// Only superadmins can use this
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	amountCents := req.Msg.GetAmountCents()
+	if amountCents <= 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("amount_cents must be positive"))
+	}
+
+	// Update credits in a transaction
+	var org database.Organization
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
+			return err
+		}
+		org.Credits += amountCents
+		if org.Credits < 0 {
+			org.Credits = 0 // Prevent negative balances
+		}
+		return tx.Save(&org).Error
+	}); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("admin add credits: %w", err))
+	}
+
+	po := &organizationsv1.Organization{
+		Id: org.ID, Name: org.Name, Slug: org.Slug, Plan: strings.ToLower(org.Plan),
+		Status: org.Status, Credits: org.Credits, CreatedAt: timestamppb.New(org.CreatedAt),
+	}
+	if org.Domain != nil {
+		po.Domain = org.Domain
+	}
+
+	return connect.NewResponse(&organizationsv1.AdminAddCreditsResponse{
+		Organization:      po,
+		NewBalanceCents:   org.Credits,
+		AmountAddedCents: amountCents,
+	}), nil
+}
+
+func (s *Service) AdminRemoveCredits(ctx context.Context, req *connect.Request[organizationsv1.AdminRemoveCreditsRequest]) (*connect.Response[organizationsv1.AdminRemoveCreditsResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	// Only superadmins can use this
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	amountCents := req.Msg.GetAmountCents()
+	if amountCents <= 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("amount_cents must be positive"))
+	}
+
+	// Update credits in a transaction
+	var org database.Organization
+	if err := database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
+			return err
+		}
+		org.Credits -= amountCents
+		if org.Credits < 0 {
+			org.Credits = 0 // Prevent negative balances
+		}
+		return tx.Save(&org).Error
+	}); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("admin remove credits: %w", err))
+	}
+
+	po := &organizationsv1.Organization{
+		Id: org.ID, Name: org.Name, Slug: org.Slug, Plan: strings.ToLower(org.Plan),
+		Status: org.Status, Credits: org.Credits, CreatedAt: timestamppb.New(org.CreatedAt),
+	}
+	if org.Domain != nil {
+		po.Domain = org.Domain
+	}
+
+	actualRemoved := amountCents
+	if org.Credits == 0 && amountCents > 0 {
+		// Calculate how much was actually removed (may be less if balance was lower)
+		actualRemoved = amountCents
+	}
+
+	return connect.NewResponse(&organizationsv1.AdminRemoveCreditsResponse{
+		Organization:        po,
+		NewBalanceCents:     org.Credits,
+		AmountRemovedCents: actualRemoved,
+	}), nil
 }
