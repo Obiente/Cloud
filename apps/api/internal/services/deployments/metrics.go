@@ -440,18 +440,29 @@ func (s *Service) StreamDeploymentMetrics(ctx context.Context, req *connect.Requ
 				// Aggregate mode: get all containers' metrics for the latest timestamp
 				var latestMetrics []database.DeploymentMetrics
 				// Get the latest timestamp first
-				// Create a fresh query without ORDER BY for aggregate functions
-				maxTimestampQuery := database.DB.Model(&database.DeploymentMetrics{}).
-					Where("deployment_id = ?", deploymentID)
+				// Get the latest timestamp using raw SQL to avoid ORDER BY issues with aggregates
+				var latestTimestamp *time.Time
+				var timestampValue time.Time
+				query := `SELECT MAX(timestamp) as max_timestamp FROM deployment_metrics WHERE deployment_id = $1`
+				args := []interface{}{deploymentID}
+				argIndex := 2
+				
 				if targetContainerID != "" {
-					maxTimestampQuery = maxTimestampQuery.Where("container_id = ?", targetContainerID)
+					query += ` AND container_id = $` + fmt.Sprintf("%d", argIndex)
+					args = append(args, targetContainerID)
+					argIndex++
 				}
 				if !lastSentTimestamp.IsZero() {
-					maxTimestampQuery = maxTimestampQuery.Where("timestamp > ?", lastSentTimestamp)
+					query += ` AND timestamp > $` + fmt.Sprintf("%d", argIndex)
+					args = append(args, lastSentTimestamp)
+					argIndex++
 				}
-				// Use a pointer to handle NULL from MAX() when no rows match
-				var latestTimestamp *time.Time
-				if err := maxTimestampQuery.Select("MAX(timestamp) as max_timestamp").Scan(&latestTimestamp).Error; err == nil && latestTimestamp != nil && !latestTimestamp.IsZero() {
+				
+				if err := database.DB.Raw(query, args...).Scan(&timestampValue).Error; err == nil && !timestampValue.IsZero() {
+					latestTimestamp = &timestampValue
+				}
+				
+				if latestTimestamp != nil && !latestTimestamp.IsZero() {
 					// Get all metrics at that timestamp
 					if err := database.DB.Where("deployment_id = ? AND timestamp = ?", deploymentID, *latestTimestamp).
 						Find(&latestMetrics).Error; err == nil && len(latestMetrics) > 0 {
@@ -705,7 +716,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 					CASE 
 						WHEN dl.status = 'running' THEN NOW() - dl.created_at
 						WHEN dl.updated_at > dl.created_at THEN dl.updated_at - dl.created_at
-						ELSE 0
+						ELSE '0 seconds'::interval
 					END
 				))), 0)::bigint as uptime_seconds
 			`).
@@ -772,7 +783,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 						WHEN dl.status = 'running' AND dl.updated_at <= ? THEN ?::timestamp - dl.created_at
 						WHEN dl.updated_at > dl.created_at AND dl.updated_at <= ? THEN dl.updated_at - dl.created_at
 						WHEN dl.created_at >= ? AND dl.created_at < ? THEN ?::timestamp - dl.created_at
-						ELSE 0
+						ELSE '0 seconds'::interval
 					END
 				))), 0)::bigint as uptime_seconds
 			`, monthEnd, monthEnd, monthEnd, requestedMonthStart, monthEnd, monthEnd).
