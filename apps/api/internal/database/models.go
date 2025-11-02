@@ -24,8 +24,9 @@ type Deployment struct {
 	Status         int32     `gorm:"column:status;default:0" json:"status"` // DeploymentStatus enum
 	HealthStatus   string    `gorm:"column:health_status" json:"health_status"`
 	Environment    int32     `gorm:"column:environment" json:"environment"` // Environment enum
+	Groups         string    `gorm:"column:groups;type:jsonb;default:'[]'::jsonb" json:"groups"` // Optional groups/labels for organizing deployments (stored as JSON array)
 	BandwidthUsage int64     `gorm:"column:bandwidth_usage;default:0" json:"bandwidth_usage"`
-	StorageUsage   int64     `gorm:"column:storage_usage;default:0" json:"storage_usage"`
+	StorageBytes   int64     `gorm:"column:storage_bytes;default:0" json:"storage_bytes"`
 	BuildTime      int32     `gorm:"column:build_time;default:0" json:"build_time"`
 	Size           string    `gorm:"column:size" json:"size"`
 	LastDeployedAt time.Time `gorm:"column:last_deployed_at" json:"last_deployed_at"`
@@ -119,36 +120,6 @@ type OrgRoleBinding struct {
 
 func (OrgRoleBinding) TableName() string { return "org_role_bindings" }
 
-// UsageMonthly stores aggregated usage per month for billing
-type UsageMonthly struct {
-	ID                  uint   `gorm:"primaryKey" json:"id"`
-	OrganizationID      string `gorm:"index" json:"organization_id"`
-	Month               string `gorm:"index" json:"month"` // YYYY-MM
-	CPUCoreSeconds      int64  `json:"cpu_core_seconds"`
-	MemoryByteSeconds   int64  `json:"memory_byte_seconds"`
-	BandwidthRxBytes    int64  `json:"bandwidth_rx_bytes"`
-	BandwidthTxBytes    int64  `json:"bandwidth_tx_bytes"`
-	StorageBytes        int64  `json:"storage_bytes"`
-	DeploymentsActivePeak int  `json:"deployments_active_peak"`
-}
-
-func (UsageMonthly) TableName() string { return "usage_monthly" }
-
-// UsageWeekly stores aggregated usage per week for billing/reporting
-type UsageWeekly struct {
-	ID                  uint   `gorm:"primaryKey" json:"id"`
-	OrganizationID      string `gorm:"index" json:"organization_id"`
-	Week                string `gorm:"index" json:"week"` // ISO week, e.g., 2025-W44
-	CPUCoreSeconds      int64  `json:"cpu_core_seconds"`
-	MemoryByteSeconds   int64  `json:"memory_byte_seconds"`
-	BandwidthRxBytes    int64  `json:"bandwidth_rx_bytes"`
-	BandwidthTxBytes    int64  `json:"bandwidth_tx_bytes"`
-	StorageBytes        int64  `json:"storage_bytes"`
-	DeploymentsActivePeak int  `json:"deployments_active_peak"`
-}
-
-func (UsageWeekly) TableName() string { return "usage_weekly" }
-
 // DeploymentUsageHourly stores hourly aggregated metrics to reduce raw data volume
 type DeploymentUsageHourly struct {
 	ID                  uint      `gorm:"primaryKey" json:"id"`
@@ -169,26 +140,6 @@ type DeploymentUsageHourly struct {
 }
 
 func (DeploymentUsageHourly) TableName() string { return "deployment_usage_hourly" }
-
-// DeploymentUsage stores aggregated usage per deployment (for historical tracking even after deletion)
-type DeploymentUsage struct {
-	ID                  uint      `gorm:"primaryKey" json:"id"`
-	DeploymentID        string    `gorm:"index;not null" json:"deployment_id"`
-	OrganizationID      string    `gorm:"index;not null" json:"organization_id"` // Denormalized for easier querying
-	Month               string    `gorm:"index" json:"month"`                   // YYYY-MM
-	CPUCoreSeconds      int64     `json:"cpu_core_seconds"`
-	MemoryByteSeconds   int64     `json:"memory_byte_seconds"`
-	BandwidthRxBytes    int64     `json:"bandwidth_rx_bytes"`
-	BandwidthTxBytes    int64     `json:"bandwidth_tx_bytes"`
-	StorageBytes        int64     `json:"storage_bytes"`
-	RequestCount        int64     `json:"request_count"`
-	ErrorCount          int64     `json:"error_count"`
-	UptimeSeconds       int64     `json:"uptime_seconds"`
-	CreatedAt           time.Time `json:"created_at"`
-	UpdatedAt           time.Time `json:"updated_at"`
-}
-
-func (DeploymentUsage) TableName() string { return "deployment_usage" }
 
 // Organization and members
 type Organization struct {
@@ -214,6 +165,21 @@ type OrganizationMember struct {
 }
 
 func (OrganizationMember) TableName() string { return "organization_members" }
+
+// CreditTransaction tracks all credit additions and removals for audit and history
+type CreditTransaction struct {
+	ID             string    `gorm:"primaryKey" json:"id"`
+	OrganizationID string    `gorm:"index;not null" json:"organization_id"`
+	AmountCents    int64     `json:"amount_cents"` // Positive for additions, negative for removals
+	BalanceAfter   int64     `json:"balance_after"` // Credit balance after this transaction
+	Type           string    `json:"type"`         // "payment", "admin_add", "admin_remove", "usage", "refund", etc.
+	Source         string    `json:"source"`        // "stripe", "admin", "system", etc.
+	Note           *string   `json:"note"`          // Optional note/reason
+	CreatedBy      *string   `gorm:"index" json:"created_by"` // User ID who initiated (nullable for system/automatic)
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+func (CreditTransaction) TableName() string { return "credit_transactions" }
 
 // GitHubIntegration stores GitHub OAuth tokens for users and organizations
 type GitHubIntegration struct {

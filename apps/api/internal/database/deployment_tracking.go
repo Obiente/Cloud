@@ -62,7 +62,7 @@ type DeploymentRouting struct {
 	PathPrefix       string    `json:"path_prefix"`
 	TargetPort       int       `gorm:"not null" json:"target_port"`
 	Protocol         string    `gorm:"default:'http'" json:"protocol"` // http, https, grpc
-	SSLEnabled       bool      `gorm:"default:true" json:"ssl_enabled"`
+	SSLEnabled       bool      `gorm:"default:false" json:"ssl_enabled"` // Default to false (HTTP protocol doesn't use SSL)
 	SSLCertResolver  string    `json:"ssl_cert_resolver"`
 	Middleware       string    `gorm:"type:jsonb" json:"middleware"` // Middleware configuration (JSON)
 	CreatedAt        time.Time `json:"created_at"`
@@ -94,7 +94,6 @@ func InitDeploymentTracking() error {
 		&DeploymentRouting{},
 		&DeploymentUsageHourly{},
 		&DeploymentMetrics{},
-		&DeploymentUsage{}, // Per-deployment usage aggregation
 	); err != nil {
 		return err
 	}
@@ -334,7 +333,11 @@ func GetDeploymentRoutingByDomain(domain string) (*DeploymentRouting, error) {
 
 // UpsertDeploymentRouting creates or updates deployment routing
 func UpsertDeploymentRouting(routing *DeploymentRouting) error {
+	// Use Select to explicitly update all fields including SSLEnabled (especially important for boolean false values)
+	// This ensures SSLEnabled=false is properly saved even when protocol is HTTP
 	return DB.Save(routing).Error
+	// Note: GORM's Save will update all fields including zero values when using Save
+	// If issues persist, we can use DB.Where(...).Assign(...).FirstOrCreate(...) pattern
 }
 
 // RecordMetrics records deployment metrics

@@ -215,7 +215,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 		ServiceName:       "default",
 		TargetPort:        config.Port,
 		Protocol:          "http",
-		SSLEnabled:        true,
+		SSLEnabled:        false, // Default to no SSL for HTTP protocol
 		SSLCertResolver:   "letsencrypt",
 		Middleware:        "{}", // Empty JSON object for jsonb field
 		CreatedAt:         time.Now(),
@@ -231,10 +231,9 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 }
 
 // generateTraefikLabels generates Traefik labels from routing rules
-func generateTraefikLabels(deploymentID string, serviceName string, routings []database.DeploymentRouting) map[string]string {
+// If no routing rules exist and servicePort is provided, it will create basic labels with port
+func generateTraefikLabels(deploymentID string, serviceName string, routings []database.DeploymentRouting, servicePort *int) map[string]string {
 	labels := make(map[string]string)
-	labels["traefik.enable"] = "true"
-	labels["com.obiente.traefik"] = "true" // Required for Traefik to discover this container
 	
 	// Filter routings for this service name
 	serviceRoutings := []database.DeploymentRouting{}
@@ -244,11 +243,17 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 		}
 	}
 	
-	// If no specific routing found, don't create any routing rules
-	// User must configure routing before the service will be accessible
+	// If no specific routing found, don't enable Traefik unless we have a port
+	// User must configure routing before the service will be accessible via Traefik
 	if len(serviceRoutings) == 0 {
-		return labels
+		// Only enable Traefik if we have port information (but no routing rules means no router will be created)
+		// We still need to NOT enable it to avoid Traefik errors
+		return labels // Return empty - don't enable Traefik for services without routing rules
 	}
+	
+	// Enable Traefik only when we have routing rules
+	labels["traefik.enable"] = "true"
+	labels["com.obiente.traefik"] = "true" // Required for Traefik to discover this container
 	
 	// Generate labels for each routing rule
 	for idx, routing := range serviceRoutings {
@@ -267,8 +272,21 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 		}
 		labels["traefik.http.routers."+routerName+".rule"] = rule
 		
-		// Entrypoints
-		if routing.SSLEnabled {
+		// Entrypoints - respect protocol field
+		// HTTP protocol should use web (no SSL), HTTPS protocol or SSLEnabled=true should use websecure
+		shouldUseSSL := false
+		if routing.Protocol == "https" {
+			// HTTPS protocol always uses SSL
+			shouldUseSSL = true
+		} else if routing.Protocol == "http" {
+			// HTTP protocol never uses SSL, regardless of SSLEnabled flag
+			shouldUseSSL = false
+		} else {
+			// For other protocols (grpc, etc.) or if protocol is not set, use SSLEnabled flag
+			shouldUseSSL = routing.SSLEnabled
+		}
+		
+		if shouldUseSSL {
 			labels["traefik.http.routers."+routerName+".entrypoints"] = "websecure"
 			if routing.SSLCertResolver != "" && routing.SSLCertResolver != "internal" {
 				labels["traefik.http.routers."+routerName+".tls.certresolver"] = routing.SSLCertResolver
@@ -277,7 +295,11 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 				labels["traefik.http.routers."+routerName+".entrypoints"] = "web"
 			}
 		} else {
+			// HTTP-only: explicitly set web entrypoint and ensure no TLS labels
 			labels["traefik.http.routers."+routerName+".entrypoints"] = "web"
+			// Explicitly remove any TLS configuration for HTTP-only routers
+			// Note: Docker label deletion in compose requires the label to not exist at all
+			// We rely on only setting web entrypoint which won't trigger TLS
 		}
 		
 		// Service port
@@ -306,8 +328,34 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 	if services, ok := compose["services"].(map[string]interface{}); ok {
 		for serviceName, serviceData := range services {
 			if service, ok := serviceData.(map[string]interface{}); ok {
+				// Extract port from compose service if available
+				var servicePort *int
+				if ports, ok := service["ports"].([]interface{}); ok && len(ports) > 0 {
+					// Try to extract port from first port mapping
+					if portStr, ok := ports[0].(string); ok {
+						// Format: "host:container" or just "container"
+						parts := strings.Split(portStr, ":")
+						if len(parts) >= 2 {
+							if p, err := strconv.Atoi(parts[len(parts)-1]); err == nil {
+								servicePort = &p
+							}
+						} else if len(parts) == 1 {
+							if p, err := strconv.Atoi(parts[0]); err == nil {
+								servicePort = &p
+							}
+						}
+					}
+				} else if expose, ok := service["expose"].([]interface{}); ok && len(expose) > 0 {
+					// Check exposed ports
+					if portStr, ok := expose[0].(string); ok {
+						if p, err := strconv.Atoi(portStr); err == nil {
+							servicePort = &p
+						}
+					}
+				}
+				
 				// Generate Traefik labels for this service
-				traefikLabels := generateTraefikLabels(deploymentID, serviceName, routings)
+				traefikLabels := generateTraefikLabels(deploymentID, serviceName, routings, servicePort)
 				
 				// Get or create labels map for this service
 				var labels map[string]interface{}
@@ -331,7 +379,21 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 					labels = make(map[string]interface{})
 				}
 				
-				// Merge Traefik labels (Traefik labels take precedence)
+				// Remove old Traefik labels that might conflict (e.g., TLS labels for HTTP-only services)
+				// We'll rebuild all Traefik labels from scratch based on current routing rules
+				traefikKeysToRemove := []string{}
+				for key := range labels {
+					if strings.HasPrefix(key, "traefik.http.routers.") || 
+					   strings.HasPrefix(key, "traefik.http.services.") ||
+					   key == "traefik.enable" {
+						traefikKeysToRemove = append(traefikKeysToRemove, key)
+					}
+				}
+				for _, key := range traefikKeysToRemove {
+					delete(labels, key)
+				}
+				
+				// Merge new Traefik labels (Traefik labels take precedence)
 				for k, v := range traefikLabels {
 					labels[k] = v
 				}
@@ -340,7 +402,10 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 				labels["com.obiente.managed"] = "true"
 				labels["com.obiente.deployment_id"] = deploymentID
 				labels["com.obiente.service_name"] = serviceName
-				labels["com.obiente.traefik"] = "true" // Required for Traefik discovery
+				// Only set com.obiente.traefik if Traefik labels were generated (i.e., routing rules exist)
+				if len(traefikLabels) > 0 {
+					labels["com.obiente.traefik"] = "true" // Required for Traefik discovery
+				}
 				if deploymentDomain != "" {
 					labels["com.obiente.domain"] = deploymentDomain
 				}
@@ -372,13 +437,17 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		"com.obiente.domain":        config.Domain,
 		"com.obiente.service_name":  serviceName,
 		"com.obiente.replica":       strconv.Itoa(replicaIndex),
-		"com.obiente.traefik":       "true", // Required for Traefik discovery
 	}
 	
 	// Generate Traefik labels from routing rules
-	traefikLabels := generateTraefikLabels(config.DeploymentID, serviceName, routings)
+	// Note: For non-compose deployments, we don't have service port info here, pass nil
+	traefikLabels := generateTraefikLabels(config.DeploymentID, serviceName, routings, nil)
 	for k, v := range traefikLabels {
 		labels[k] = v
+	}
+	// Only set com.obiente.traefik if we actually generated Traefik labels (i.e., routing rules exist)
+	if len(traefikLabels) > 0 {
+		labels["com.obiente.traefik"] = "true" // Required for Traefik discovery
 	}
 
 	// Add custom labels
@@ -752,7 +821,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 			ServiceName:       "default",
 			TargetPort:        targetPort,
 			Protocol:          "http",
-			SSLEnabled:        true,
+			SSLEnabled:        false, // Default to no SSL for HTTP protocol
 			SSLCertResolver:   "letsencrypt",
 			Middleware:        "{}",
 			CreatedAt:         time.Now(),

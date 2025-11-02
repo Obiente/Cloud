@@ -50,7 +50,7 @@ func TestDeploymentModelStructure(t *testing.T) {
 	checkStringField(deployment.Size)
 	checkInt32Field(deployment.Environment)
 	checkInt64Field(deployment.BandwidthUsage)
-	checkInt64Field(deployment.StorageUsage)
+	checkInt64Field(deployment.StorageBytes)
 	
 	// Check that time fields exist (will fail compilation if missing)
 	_ = deployment.LastDeployedAt

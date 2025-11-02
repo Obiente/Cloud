@@ -505,8 +505,6 @@ func (os *OrchestratorService) aggregateUsage() {
 			log.Println("[Orchestrator] Aggregating usage...")
 			now := time.Now()
 			month := now.Format("2006-01")
-			year, week := now.ISOWeek()
-			weekStr := fmt.Sprintf("%d-W%02d", year, week)
 			
 			// Calculate the start of the current month for accurate aggregation
 			monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
@@ -541,7 +539,7 @@ func (os *OrchestratorService) aggregateUsage() {
 				}
 			}
 			
-			for orgID, currentPeak := range orgMap {
+			for orgID := range orgMap {
 				// Get all deployments for this organization (running or that ran this month)
 				var deploymentIDs []string
 				database.DB.Table("deployments d").
@@ -605,7 +603,6 @@ func (os *OrchestratorService) aggregateUsage() {
 					Scan(&locations)
 				
 				var totalCPUSeconds int64
-				var totalMemoryByteSeconds int64
 				
 				// Group by deployment and calculate total runtime
 				// Sum all runtime periods for each deployment this month
@@ -639,7 +636,7 @@ func (os *OrchestratorService) aggregateUsage() {
 					}
 				}
 				
-				// Calculate totals using allocations
+				// Calculate CPU totals using allocations (CPU is based on allocation)
 				for deploymentID, runtimeSeconds := range runtimeByDeployment {
 					alloc, exists := allocMap[deploymentID]
 					if !exists {
@@ -650,25 +647,49 @@ func (os *OrchestratorService) aggregateUsage() {
 						}{1, 512 * 1024 * 1024} // 1 core, 512MB default
 					}
 					totalCPUSeconds += alloc.cpuShares * runtimeSeconds
-					totalMemoryByteSeconds += alloc.memoryBytes * runtimeSeconds
 				}
 				
-				// Also try to get actual CPU usage from metrics if available (more accurate)
-				// This supplements the allocation-based calculation
-				type cpuMetricsRow struct {
-					DeploymentID string
-					AvgCPU       float64
-					SampleCount  int64
+				// Calculate memory byte-seconds from actual metrics (not allocated memory)
+				// Aggregate from raw metrics (recent) + hourly aggregates (older) for the month
+				var orgMemoryByteSeconds int64
+				
+				// Sum from raw metrics (last 24 hours)
+				// Calculate memory byte-seconds by summing memory per distinct timestamp * interval
+				rawCutoff := time.Now().Add(-24 * time.Hour)
+				if rawCutoff.Before(monthStart) {
+					rawCutoff = monthStart
 				}
-				var cpuMetrics []cpuMetricsRow
+				
+				type orgMemoryPerTimestamp struct {
+					MemorySum   int64
+					Timestamp   time.Time
+				}
+				var orgMemoryTimestamps []orgMemoryPerTimestamp
 				database.DB.Table("deployment_metrics dm").
-					Select("dm.deployment_id, AVG(dm.cpu_usage) as avg_cpu, COUNT(*) as sample_count").
-					Where("dm.deployment_id IN ? AND dm.timestamp >= ?", deploymentIDs, monthStart).
-					Group("dm.deployment_id").
-					Scan(&cpuMetrics)
+					Select(`
+						SUM(dm.memory_usage) as memory_sum,
+						dm.timestamp as timestamp
+					`).
+					Where("dm.deployment_id IN ? AND dm.timestamp >= ?", deploymentIDs, rawCutoff).
+					Group("dm.timestamp").
+					Order("dm.timestamp ASC").
+					Scan(&orgMemoryTimestamps)
 				
-				// If we have CPU metrics, we can refine the calculation
-				// But for now, we'll use the allocation-based approach which is more predictable for billing
+				// Calculate byte-seconds: for each timestamp, use memory * 5 seconds (average interval)
+				intervalSeconds := int64(5) // Average interval between metric samples
+				for _, m := range orgMemoryTimestamps {
+					orgMemoryByteSeconds += m.MemorySum * intervalSeconds
+				}
+				
+				// Sum from hourly aggregates (older than 24 hours, within month)
+				if rawCutoff.After(monthStart) {
+					var hourlyMemorySum int64
+					database.DB.Table("deployment_usage_hourly duh").
+						Select("COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds").
+						Where("duh.deployment_id IN ? AND duh.hour >= ? AND duh.hour < ?", deploymentIDs, monthStart, rawCutoff).
+						Scan(&hourlyMemorySum)
+					orgMemoryByteSeconds += hourlyMemorySum
+				}
 				
 				// Aggregate bandwidth from raw metrics (recent) + hourly aggregates (older) for the month
 				type bandwidthRow struct {
@@ -678,293 +699,24 @@ func (os *OrchestratorService) aggregateUsage() {
 				
 				// Sum from raw metrics (last 24 hours)
 				var rawBandwidth bandwidthRow
-				rawCutoff := time.Now().Add(-24 * time.Hour)
-				if rawCutoff.Before(monthStart) {
-					rawCutoff = monthStart
+				rawCutoffBandwidth := time.Now().Add(-24 * time.Hour)
+				if rawCutoffBandwidth.Before(monthStart) {
+					rawCutoffBandwidth = monthStart
 				}
 				database.DB.Table("deployment_metrics dm").
 					Select("COALESCE(SUM(dm.network_rx_bytes), 0) as rx_bytes, COALESCE(SUM(dm.network_tx_bytes), 0) as tx_bytes").
-					Where("dm.deployment_id IN ? AND dm.timestamp >= ?", deploymentIDs, rawCutoff).
-					Scan(&rawBandwidth)
-				
-				// Sum from hourly aggregates (older than 24 hours, within month)
-				var hourlyBandwidth bandwidthRow
-				if rawCutoff.After(monthStart) {
-					database.DB.Table("deployment_usage_hourly duh").
-						Select("COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as rx_bytes, COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as tx_bytes").
-						Where("duh.deployment_id IN ? AND duh.hour >= ? AND duh.hour < ?", deploymentIDs, monthStart, rawCutoff).
-						Scan(&hourlyBandwidth)
-				}
-				
-				bandwidthRx := rawBandwidth.RxBytes + hourlyBandwidth.RxBytes
-				bandwidthTx := rawBandwidth.TxBytes + hourlyBandwidth.TxBytes
-				
-				// Get current storage usage (cumulative)
-				var storageSum int64
-				database.DB.Table("deployments").
-					Select("COALESCE(SUM(storage_usage), 0)").
-					Where("organization_id = ?", orgID).
-					Scan(&storageSum)
-				
-				// Get or create usage record
-				var usage database.UsageMonthly
-				err := database.DB.Where("organization_id = ? AND month = ?", orgID, month).
-					First(&usage).Error
-				
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					usage = database.UsageMonthly{
-						OrganizationID:       orgID,
-						Month:                month,
-						CPUCoreSeconds:       0,
-						MemoryByteSeconds:    0,
-						BandwidthRxBytes:     0,
-						BandwidthTxBytes:     0,
-						StorageBytes:         0,
-						DeploymentsActivePeak: 0,
-					}
-					database.DB.Create(&usage)
-				}
-				
-				// Update with calculated values (replace, not add, since we're recalculating)
-				usage.CPUCoreSeconds = totalCPUSeconds
-				usage.MemoryByteSeconds = totalMemoryByteSeconds
-				usage.BandwidthRxBytes = bandwidthRx
-				usage.BandwidthTxBytes = bandwidthTx
-				usage.StorageBytes = storageSum
-				if currentPeak > usage.DeploymentsActivePeak {
-					usage.DeploymentsActivePeak = currentPeak
-				}
-				
-				database.DB.Save(&usage)
-				
-				// Same for weekly - calculate from week start
-				year, weekNum := now.ISOWeek()
-				weekStart := getWeekStart(now, year, weekNum)
-				
-				var weeklyCPUSeconds int64
-				var weeklyMemoryByteSeconds int64
-				
-				// Calculate weekly runtime (same logic as monthly but for week)
-				weeklyRuntimeByDeployment := make(map[string]int64)
-				for _, loc := range locations {
-					locationStart := loc.CreatedAt
-					if locationStart.Before(weekStart) {
-						locationStart = weekStart
-					}
-					
-					locationEnd := now
-					if loc.Status != "running" {
-						if loc.UpdatedAt.After(locationStart) {
-							locationEnd = loc.UpdatedAt
-						} else {
-							continue
-						}
-					}
-					
-					if locationEnd.After(now) {
-						locationEnd = now
-					}
-					
-					if locationEnd.After(locationStart) {
-						runtimeSeconds := int64(locationEnd.Sub(locationStart).Seconds())
-						weeklyRuntimeByDeployment[loc.DeploymentID] += runtimeSeconds
-					}
-				}
-				
-				// Calculate weekly totals
-				for deploymentID, runtimeSeconds := range weeklyRuntimeByDeployment {
-					alloc, exists := allocMap[deploymentID]
-					if !exists {
-						alloc = struct {
-							cpuShares   int64
-							memoryBytes int64
-						}{1, 512 * 1024 * 1024}
-					}
-					weeklyCPUSeconds += alloc.cpuShares * runtimeSeconds
-					weeklyMemoryByteSeconds += alloc.memoryBytes * runtimeSeconds
-				}
-				
-				// Get weekly bandwidth from raw metrics + hourly aggregates
-				// Sum from raw metrics (last 24 hours)
-				var weeklyRawBandwidth bandwidthRow
-				weeklyRawCutoff := time.Now().Add(-24 * time.Hour)
-				if weeklyRawCutoff.Before(weekStart) {
-					weeklyRawCutoff = weekStart
-				}
-				database.DB.Table("deployment_metrics dm").
-					Select("COALESCE(SUM(dm.network_rx_bytes), 0) as rx_bytes, COALESCE(SUM(dm.network_tx_bytes), 0) as tx_bytes").
-					Where("dm.deployment_id IN ? AND dm.timestamp >= ?", deploymentIDs, weeklyRawCutoff).
-					Scan(&weeklyRawBandwidth)
-				
-				// Sum from hourly aggregates (older than 24 hours, within week)
-				var weeklyHourlyBandwidth bandwidthRow
-				if weeklyRawCutoff.After(weekStart) {
-					database.DB.Table("deployment_usage_hourly duh").
-						Select("COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as rx_bytes, COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as tx_bytes").
-						Where("duh.deployment_id IN ? AND duh.hour >= ? AND duh.hour < ?", deploymentIDs, weekStart, weeklyRawCutoff).
-						Scan(&weeklyHourlyBandwidth)
-				}
-				
-				weeklyBandwidthRx := weeklyRawBandwidth.RxBytes + weeklyHourlyBandwidth.RxBytes
-				weeklyBandwidthTx := weeklyRawBandwidth.TxBytes + weeklyHourlyBandwidth.TxBytes
-				
-				var usageWeekly database.UsageWeekly
-				err = database.DB.Where("organization_id = ? AND week = ?", orgID, weekStr).
-					First(&usageWeekly).Error
-				
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					usageWeekly = database.UsageWeekly{
-						OrganizationID:       orgID,
-						Week:                 weekStr,
-						CPUCoreSeconds:       0,
-						MemoryByteSeconds:    0,
-						BandwidthRxBytes:     0,
-						BandwidthTxBytes:     0,
-						StorageBytes:         0,
-						DeploymentsActivePeak: 0,
-					}
-					database.DB.Create(&usageWeekly)
-				}
-				
-				usageWeekly.CPUCoreSeconds = weeklyCPUSeconds
-				usageWeekly.MemoryByteSeconds = weeklyMemoryByteSeconds
-				usageWeekly.BandwidthRxBytes = weeklyBandwidthRx
-				usageWeekly.BandwidthTxBytes = weeklyBandwidthTx
-				usageWeekly.StorageBytes = storageSum
-				if currentPeak > usageWeekly.DeploymentsActivePeak {
-					usageWeekly.DeploymentsActivePeak = currentPeak
-				}
-				
-				database.DB.Save(&usageWeekly)
-
-				// Aggregate per-deployment usage
-				for deploymentID := range runtimeByDeployment {
-					var deploymentUsage database.DeploymentUsage
-					err := database.DB.Where("deployment_id = ? AND month = ?", deploymentID, month).
-						First(&deploymentUsage).Error
-
-					if errors.Is(err, gorm.ErrRecordNotFound) {
-						// Get deployment org ID
-						var orgID string
-						database.DB.Table("deployments").
-							Select("organization_id").
-							Where("id = ?", deploymentID).
-							Pluck("organization_id", &orgID)
-						
-						deploymentUsage = database.DeploymentUsage{
-							DeploymentID:      deploymentID,
-							OrganizationID:     orgID,
-							Month:              month,
-							CPUCoreSeconds:     0,
-							MemoryByteSeconds:  0,
-							BandwidthRxBytes:   0,
-							BandwidthTxBytes:   0,
-							StorageBytes:       0,
-							RequestCount:        0,
-							ErrorCount:          0,
-							UptimeSeconds:       0,
-						}
-						database.DB.Create(&deploymentUsage)
-					}
-
-					// Calculate deployment-specific metrics
-					depRuntime := runtimeByDeployment[deploymentID]
-					alloc, exists := allocMap[deploymentID]
-					if !exists {
-						alloc = struct {
-							cpuShares   int64
-							memoryBytes int64
-						}{1, 512 * 1024 * 1024}
-					}
-					depCPUSeconds := alloc.cpuShares * depRuntime
-					depMemorySeconds := alloc.memoryBytes * depRuntime
-
-					// Get deployment bandwidth from raw metrics (recent) + hourly aggregates (older)
-					var depBandwidth bandwidthRow
-					
-					// Sum from raw metrics (last 24 hours)
-					var rawBandwidth bandwidthRow
-					rawCutoff := time.Now().Add(-24 * time.Hour)
-					database.DB.Table("deployment_metrics dm").
-						Select("COALESCE(SUM(dm.network_rx_bytes), 0) as rx_bytes, COALESCE(SUM(dm.network_tx_bytes), 0) as tx_bytes").
-						Where("dm.deployment_id = ? AND dm.timestamp >= ?", deploymentID, rawCutoff).
+					Where("dm.deployment_id IN ? AND dm.timestamp >= ?", deploymentIDs, rawCutoffBandwidth).
 						Scan(&rawBandwidth)
 					
 					// Sum from hourly aggregates (older than 24 hours, within month)
 					var hourlyBandwidth bandwidthRow
-					monthStartTime := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Now().Location())
-					if rawCutoff.Before(monthStartTime) {
-						rawCutoff = monthStartTime
-					}
+				if rawCutoffBandwidth.After(monthStart) {
 					database.DB.Table("deployment_usage_hourly duh").
 						Select("COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as rx_bytes, COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as tx_bytes").
-						Where("duh.deployment_id = ? AND duh.hour >= ? AND duh.hour < ?", deploymentID, monthStartTime, rawCutoff).
+						Where("duh.deployment_id IN ? AND duh.hour >= ? AND duh.hour < ?", deploymentIDs, monthStart, rawCutoffBandwidth).
 						Scan(&hourlyBandwidth)
-					
-					depBandwidth.RxBytes = rawBandwidth.RxBytes + hourlyBandwidth.RxBytes
-					depBandwidth.TxBytes = rawBandwidth.TxBytes + hourlyBandwidth.TxBytes
-
-					// Get deployment disk I/O from raw metrics + hourly aggregates
-					type diskIORow struct {
-						DiskReadBytes  int64
-						DiskWriteBytes int64
-					}
-					var depDiskIO diskIORow
-					
-					// Sum from raw metrics
-					var rawDiskIO diskIORow
-					database.DB.Table("deployment_metrics dm").
-						Select("COALESCE(SUM(dm.disk_read_bytes), 0) as disk_read_bytes, COALESCE(SUM(dm.disk_write_bytes), 0) as disk_write_bytes").
-						Where("dm.deployment_id = ? AND dm.timestamp >= ?", deploymentID, rawCutoff).
-						Scan(&rawDiskIO)
-					
-					// Sum from hourly aggregates
-					var hourlyDiskIO diskIORow
-					if rawCutoff.Before(monthStartTime) {
-						rawCutoff = monthStartTime
-					}
-					database.DB.Table("deployment_usage_hourly duh").
-						Select("COALESCE(SUM(duh.disk_read_bytes), 0) as disk_read_bytes, COALESCE(SUM(duh.disk_write_bytes), 0) as disk_write_bytes").
-						Where("duh.deployment_id = ? AND duh.hour >= ? AND duh.hour < ?", deploymentID, monthStartTime, rawCutoff).
-						Scan(&hourlyDiskIO)
-					
-					depDiskIO.DiskReadBytes = rawDiskIO.DiskReadBytes + hourlyDiskIO.DiskReadBytes
-					depDiskIO.DiskWriteBytes = rawDiskIO.DiskWriteBytes + hourlyDiskIO.DiskWriteBytes
-
-					// Get deployment storage (from deployments table, not from disk I/O)
-					var depStorage int64
-					database.DB.Table("deployments").
-						Select("COALESCE(storage_usage, 0)").
-						Where("id = ?", deploymentID).
-						Scan(&depStorage)
-					
-					// Use disk write bytes as storage if storage_usage is not set
-					if depStorage == 0 && depDiskIO.DiskWriteBytes > 0 {
-						depStorage = depDiskIO.DiskWriteBytes
-					}
-
-					// Get request/error counts from metrics
-					type requestCountRow struct {
-						RequestCount int64
-						ErrorCount   int64
-					}
-					var reqCount requestCountRow
-					database.DB.Table("deployment_metrics dm").
-						Select("COALESCE(SUM(dm.request_count), 0) as request_count, COALESCE(SUM(dm.error_count), 0) as error_count").
-						Where("dm.deployment_id = ? AND dm.timestamp >= ?", deploymentID, monthStart).
-						Scan(&reqCount)
-
-					deploymentUsage.CPUCoreSeconds = depCPUSeconds
-					deploymentUsage.MemoryByteSeconds = depMemorySeconds
-					deploymentUsage.BandwidthRxBytes = depBandwidth.RxBytes
-					deploymentUsage.BandwidthTxBytes = depBandwidth.TxBytes
-					deploymentUsage.StorageBytes = depStorage
-					deploymentUsage.RequestCount = reqCount.RequestCount
-					deploymentUsage.ErrorCount = reqCount.ErrorCount
-					deploymentUsage.UptimeSeconds = depRuntime
-
-					database.DB.Save(&deploymentUsage)
 				}
+				
 			}
 		case <-os.ctx.Done():
 			return
@@ -972,17 +724,6 @@ func (os *OrchestratorService) aggregateUsage() {
 	}
 }
 
-// getWeekStart returns the start of the ISO week (Monday) for the given date
-func getWeekStart(date time.Time, year, week int) time.Time {
-	// Find the first Thursday of the year (ISO week 1 contains Jan 4)
-	jan4 := time.Date(year, time.January, 4, 0, 0, 0, 0, date.Location())
-	thursdayOffset := (4 - int(jan4.Weekday()) + 7) % 7
-	firstThursday := jan4.AddDate(0, 0, thursdayOffset)
-	
-	// Calculate the start of the given week (Monday of that week)
-	weekStart := firstThursday.AddDate(0, 0, (week-1)*7).AddDate(0, 0, -3)
-	return weekStart
-}
 
 // GetDeploymentManager returns the deployment manager instance
 func (os *OrchestratorService) GetDeploymentManager() *DeploymentManager {
