@@ -43,9 +43,20 @@ func NewServiceRegistry() (*ServiceRegistry, error) {
 		return nil, fmt.Errorf("failed to get Docker info: %w", err)
 	}
 
+	// Determine node ID: use Swarm NodeID if in swarm mode, otherwise use hostname as identifier
+	nodeID := info.Swarm.NodeID
+	if nodeID == "" {
+		// Not in swarm mode - use hostname or ID as node identifier
+		// In single-node setups, we can use the hostname or generate a stable ID
+		nodeID = info.Name
+		if nodeID == "" {
+			nodeID = "local-node"
+		}
+	}
+
 	registry := &ServiceRegistry{
 		dockerClient: cli,
-		nodeID:       info.Swarm.NodeID,
+		nodeID:       nodeID,
 		nodeHostname: info.Name,
 	}
 
@@ -387,6 +398,16 @@ func (sr *ServiceRegistry) StartPeriodicSync(ctx context.Context, interval time.
 // Close closes the Docker client
 func (sr *ServiceRegistry) Close() error {
 	return sr.dockerClient.Close()
+}
+
+// DockerClient returns the Docker API client
+func (sr *ServiceRegistry) DockerClient() client.APIClient {
+	return sr.dockerClient
+}
+
+// NodeID returns the current node ID
+func (sr *ServiceRegistry) NodeID() string {
+	return sr.nodeID
 }
 
 // ClusterStats holds cluster-wide statistics

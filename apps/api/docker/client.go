@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/events"
+	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/client"
 )
 
@@ -280,7 +282,8 @@ func (c *Client) ContainerListFiles(ctx context.Context, containerID, path strin
 	// If stopped, temporarily start it
 	if !wasRunning {
 		if err := c.StartContainer(ctx, containerID); err != nil {
-			return nil, fmt.Errorf("failed to start stopped container for file listing: %w", err)
+			// If we can't start the container, return a clear error
+			return nil, fmt.Errorf("container is stopped and cannot be started automatically for file listing. The container may be in an error state or require manual intervention. Error: %w", err)
 		}
 		wasStarted = true
 		
@@ -301,7 +304,8 @@ func (c *Client) ContainerListFiles(ctx context.Context, containerID, path strin
 	cmd := []string{"ls", "-la", "--time-style=long-iso", path}
 	output, err := c.ContainerExecRun(ctx, containerID, cmd)
 	if err != nil {
-		return nil, fmt.Errorf("list files: %w", err)
+		// Provide more context about the failure
+		return nil, fmt.Errorf("failed to list files in %q: %w", path, err)
 	}
 
 	return parseLsOutput(output, path), nil
@@ -661,14 +665,51 @@ func (c *Client) GetContainerVolumes(ctx context.Context, containerID string) ([
 	for i, mount := range containerInfo.Mounts {
 		log.Printf("[GetContainerVolumes] Mount %d: Type=%s, Name=%s, Source=%s, Destination=%s", i, mount.Type, mount.Name, mount.Source, mount.Destination)
 		
-		// Include all Docker volumes (both named and anonymous)
-		// Named volumes have Type="volume" and Name is set
-		// Anonymous volumes have Type="volume" but Name is empty (they're still Docker-managed)
-		if mount.Type == "volume" {
+		// Include Docker volumes (Type="volume") and Obiente Cloud bind mounts
+		// Obiente Cloud volumes are stored as bind mounts in /var/lib/obiente/volumes
+		isObienteVolume := mount.Type == "bind" && strings.HasPrefix(mount.Source, "/var/lib/obiente/volumes")
+		isDockerVolume := mount.Type == "volume"
+		
+		if isDockerVolume || isObienteVolume {
 			volumePath := mount.Source
 			log.Printf("[GetContainerVolumes] Processing volume mount: Name=%s, Source=%s", mount.Name, volumePath)
 
-			// For named volumes, try to resolve the correct volume path
+			// For Obiente Cloud volumes (bind mounts), use the source path directly
+			if isObienteVolume {
+				// Extract volume name from path: /var/lib/obiente/volumes/{deploymentID}/{volumeName}
+				parts := strings.Split(strings.TrimPrefix(volumePath, "/var/lib/obiente/volumes/"), "/")
+				volumeName := ""
+				if len(parts) >= 2 {
+					volumeName = parts[1] // Second part after deploymentID
+				} else if len(parts) == 1 {
+					// Fallback: use the last component
+					volumeName = filepath.Base(volumePath)
+				}
+				if volumeName == "" {
+					volumeName = filepath.Base(volumePath)
+				}
+				
+				// Use mount destination as the display name if volume name is empty
+				if volumeName == "" {
+					volumeName = filepath.Base(mount.Destination)
+				}
+				
+				if _, err := os.Stat(volumePath); err == nil {
+					volumeMount := VolumeMount{
+						Name:       volumeName,
+						MountPoint: mount.Destination,
+						Source:     volumePath,
+						IsNamed:    true, // Obiente volumes are always "named" (persistent)
+					}
+					log.Printf("[GetContainerVolumes] Adding Obiente volume: Name=%s, MountPoint=%s, Source=%s", volumeMount.Name, volumeMount.MountPoint, volumeMount.Source)
+					volumes = append(volumes, volumeMount)
+				} else {
+					log.Printf("[GetContainerVolumes] Skipping Obiente volume - path does not exist: %s (error: %v)", volumePath, err)
+				}
+				continue // Skip Docker volume processing for Obiente volumes
+			}
+
+			// For Docker volumes, try to resolve the correct volume path
 			// Docker volumes are typically at /var/lib/docker/volumes/<name>/_data
 			// but mount.Source might point to the volume directory or the _data subdirectory
 			// For anonymous volumes, mount.Source is the direct path to the volume data
@@ -974,4 +1015,35 @@ func (c *Client) ContainerCreateSymlink(ctx context.Context, containerID, target
 		return err
 	}
 	return nil
+}
+
+// Events streams Docker events, filtered by the provided filters
+// Returns a channel that emits events and a function to stop listening
+func (c *Client) Events(ctx context.Context, filterMap map[string][]string) (<-chan events.Message, <-chan error, func(), error) {
+	if c == nil || c.api == nil {
+		return nil, nil, nil, ErrUninitialized
+	}
+
+	// Build event options
+	// Convert map[string][]string to filters.Args
+	filterArgs := filters.NewArgs()
+	for key, values := range filterMap {
+		for _, value := range values {
+			filterArgs.Add(key, value)
+		}
+	}
+	
+	eventChan, errChan := c.api.Events(ctx, client.EventsListOptions{
+		Since:   "",
+		Until:   "",
+		Filters: filterArgs,
+	})
+
+	// Return cleanup function
+	cleanup := func() {
+		// The event stream will close when context is cancelled
+		// No explicit cleanup needed for the Docker API event stream
+	}
+
+	return eventChan, errChan, cleanup, nil
 }

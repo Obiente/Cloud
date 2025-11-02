@@ -73,6 +73,7 @@ type DeploymentRouting struct {
 type DeploymentMetrics struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
 	DeploymentID  string    `gorm:"index;not null" json:"deployment_id"`
+	ContainerID   string    `gorm:"index" json:"container_id"` // Container ID for multi-container deployments
 	NodeID        string    `gorm:"index" json:"node_id"`
 	CPUUsage      float64   `json:"cpu_usage"`
 	MemoryUsage   int64     `json:"memory_usage"`
@@ -91,7 +92,9 @@ func InitDeploymentTracking() error {
 		&DeploymentLocation{},
 		&NodeMetadata{},
 		&DeploymentRouting{},
+		&DeploymentUsageHourly{},
 		&DeploymentMetrics{},
+		&DeploymentUsage{}, // Per-deployment usage aggregation
 	); err != nil {
 		return err
 	}
@@ -102,6 +105,13 @@ func InitDeploymentTracking() error {
 func GetDeploymentLocations(deploymentID string) ([]DeploymentLocation, error) {
 	var locations []DeploymentLocation
 	result := DB.Where("deployment_id = ? AND status = ?", deploymentID, "running").Find(&locations)
+	return locations, result.Error
+}
+
+// GetAllDeploymentLocations returns all locations for a deployment regardless of status
+func GetAllDeploymentLocations(deploymentID string) ([]DeploymentLocation, error) {
+	var locations []DeploymentLocation
+	result := DB.Where("deployment_id = ?", deploymentID).Find(&locations)
 	return locations, result.Error
 }
 

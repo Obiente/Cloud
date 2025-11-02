@@ -2,6 +2,7 @@ package deployments
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -10,8 +11,10 @@ import (
 	"sync"
 	"time"
 
+	"api/docker"
 	"api/internal/auth"
 
+	"connectrpc.com/connect"
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
 )
@@ -21,9 +24,12 @@ type terminalWSMessage struct {
 	DeploymentID   string `json:"deploymentId,omitempty"`
 	OrganizationID string `json:"organizationId,omitempty"`
 	Token          string `json:"token,omitempty"`
+	ContainerID    string `json:"containerId,omitempty"`
+	ServiceName    string `json:"serviceName,omitempty"`
 	Input          []int  `json:"input,omitempty"`
 	Cols           int    `json:"cols,omitempty"`
 	Rows           int    `json:"rows,omitempty"`
+	Command        string `json:"command,omitempty"` // For special commands like "start"
 }
 
 type terminalWSOutput struct {
@@ -117,11 +123,36 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	session, cleanup, created, err := s.ensureTerminalSession(ctx, initMsg.DeploymentID, initMsg.OrganizationID, initMsg.Cols, initMsg.Rows)
+	// Track container info for "start" command
+	var currentContainerID string
+
+	// Try to initialize terminal session
+	session, cleanup, created, err := s.ensureTerminalSession(ctx, initMsg.DeploymentID, initMsg.OrganizationID, initMsg.Cols, initMsg.Rows, initMsg.ContainerID, initMsg.ServiceName)
+
+	// If container is stopped, we need to find it first to get its ID
 	if err != nil {
-		sendError(err.Error())
-		conn.Close(websocket.StatusInternalError, "failed to initialize terminal")
-		return
+		connectErr, ok := err.(*connect.Error)
+		if ok && connectErr.Code() == connect.CodeFailedPrecondition {
+			// Container is stopped - find it to get the container ID for "start" command
+			dcli, dcliErr := docker.New()
+			if dcliErr == nil {
+				loc, findErr := s.findContainerForDeployment(ctx, initMsg.DeploymentID, initMsg.ContainerID, initMsg.ServiceName, dcli)
+				if findErr == nil {
+					currentContainerID = loc.ContainerID
+				}
+				dcli.Close()
+			}
+		}
+		// Don't close connection - allow user to type "start" command
+		// We'll set session to nil to indicate no active session
+		session = nil
+		cleanup = func() {}
+		created = false
+	} else {
+		// Session created successfully - store container info
+		if session != nil {
+			currentContainerID = session.containerID
+		}
 	}
 
 	var cleanupOnce sync.Once
@@ -130,56 +161,78 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 	}
 	defer cleanupFn()
 
-	if created {
+	if created && session != nil {
 		log.Printf("[Terminal WS] New terminal session created, sending initial newline")
 		if _, err := session.conn.Write([]byte("\r\n")); err != nil {
 			log.Printf("[Terminal WS] Failed to write initial newline: %v", err)
 		}
 	}
 
-	if err := writeJSON(map[string]string{"type": "connected"}); err != nil {
-		log.Printf("[Terminal WS] Failed to send connected message: %v", err)
-		conn.Close(websocket.StatusInternalError, "failed to send connected")
-		return
+	// Send connected message (or stopped message)
+	if session != nil {
+		if err := writeJSON(map[string]string{"type": "connected"}); err != nil {
+			log.Printf("[Terminal WS] Failed to send connected message: %v", err)
+			conn.Close(websocket.StatusInternalError, "failed to send connected")
+			return
+		}
+	} else {
+		// Container is stopped - send helpful message
+		stoppedMsg := "Container is stopped. Type 'start' to start the container first.\r\n"
+		data := make([]int, len(stoppedMsg))
+		for i, b := range []byte(stoppedMsg) {
+			data[i] = int(b)
+		}
+		_ = writeJSON(terminalWSOutput{Type: "output", Data: data})
 	}
 
 	outputCtx, outputCancel := context.WithCancel(ctx)
 	outputDone := make(chan struct{})
 
-	// Forward container output to websocket client
-	go func() {
-		defer close(outputDone)
-		defer outputCancel()
+	// Buffer for accumulating command input when container is stopped
+	var commandBuffer strings.Builder
 
-		buf := make([]byte, 4096)
-		for {
-			n, err := session.conn.Read(buf)
-			if n > 0 {
-				data := make([]int, n)
-				for i := 0; i < n; i++ {
-					data[i] = int(buf[i])
+	// Forward container output to websocket client (only if session exists)
+	var outputDoneWg sync.WaitGroup
+	if session != nil {
+		outputDoneWg.Add(1)
+		go func() {
+			defer outputDoneWg.Done()
+			defer close(outputDone)
+			defer outputCancel()
+
+			buf := make([]byte, 4096)
+			for {
+				n, err := session.conn.Read(buf)
+				if n > 0 {
+					data := make([]int, n)
+					for i := 0; i < n; i++ {
+						data[i] = int(buf[i])
+					}
+					if err := writeJSON(terminalWSOutput{Type: "output", Data: data}); err != nil {
+						log.Printf("[Terminal WS] Failed to forward output: %v", err)
+						return
+					}
 				}
-				if err := writeJSON(terminalWSOutput{Type: "output", Data: data}); err != nil {
-					log.Printf("[Terminal WS] Failed to forward output: %v", err)
+
+				if err != nil {
+					if err == io.EOF {
+						_ = writeJSON(terminalWSOutput{Type: "closed", Reason: "Terminal session ended", Exit: true})
+						conn.Close(websocket.StatusNormalClosure, "terminal closed")
+						closed = true
+					} else {
+						log.Printf("[Terminal WS] Container read error: %v", err)
+						_ = writeJSON(terminalWSOutput{Type: "error", Message: "Terminal stream error"})
+						conn.Close(websocket.StatusInternalError, "terminal error")
+						closed = true
+					}
 					return
 				}
 			}
-
-			if err != nil {
-				if err == io.EOF {
-					_ = writeJSON(terminalWSOutput{Type: "closed", Reason: "Terminal session ended", Exit: true})
-					conn.Close(websocket.StatusNormalClosure, "terminal closed")
-					closed = true
-				} else {
-					log.Printf("[Terminal WS] Container read error: %v", err)
-					_ = writeJSON(terminalWSOutput{Type: "error", Message: "Terminal stream error"})
-					conn.Close(websocket.StatusInternalError, "terminal error")
-					closed = true
-				}
-				return
-			}
-		}
-	}()
+		}()
+	} else {
+		// No session - just close the channel
+		close(outputDone)
+	}
 
 	// Listen for client input messages
 	for {
@@ -206,6 +259,203 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 			if len(msg.Input) == 0 {
 				continue
 			}
+
+			// Check for "start" command when container is stopped
+			if session == nil {
+				inputBytes := make([]byte, len(msg.Input))
+				for i, v := range msg.Input {
+					inputBytes[i] = byte(v)
+				}
+				inputStr := string(inputBytes)
+
+				// Accumulate characters in buffer until we get Enter/newline
+				currentBuffer := commandBuffer.String()
+				commandBuffer.WriteString(inputStr)
+
+				// Get the new buffer content
+				newBuffer := commandBuffer.String()
+
+				// Only echo characters that match typing "start" letter by letter (case-insensitive)
+				// Remove newlines/carriage returns for comparison
+				bufferForCheck := strings.ReplaceAll(strings.ReplaceAll(newBuffer, "\r", ""), "\n", "")
+				lowerBuffer := strings.ToLower(bufferForCheck)
+				expectedStart := "start"
+
+				// Check if the buffer still matches "start" prefix (character by character)
+				if len(lowerBuffer) <= len(expectedStart) && expectedStart[:len(lowerBuffer)] == lowerBuffer {
+					// Still matching "start" - echo only the new characters
+					// Find what was newly added (after currentBuffer)
+					if len(newBuffer) > len(currentBuffer) {
+						newChars := newBuffer[len(currentBuffer):]
+						// Remove control characters for display
+						displayChars := strings.ReplaceAll(strings.ReplaceAll(newChars, "\r", ""), "\n", "")
+						if len(displayChars) > 0 {
+							displayBytes := []byte(displayChars)
+							displayData := make([]int, len(displayBytes))
+							for i, b := range displayBytes {
+								displayData[i] = int(b)
+							}
+							_ = writeJSON(terminalWSOutput{Type: "output", Data: displayData})
+						}
+					}
+				}
+				// If it doesn't match "start", don't echo anything
+
+				// Check if we have a complete command (ends with \r or \n)
+				if strings.Contains(newBuffer, "\r") || strings.Contains(newBuffer, "\n") {
+					// We have a complete command
+					trimmed := strings.TrimSpace(strings.ToLower(bufferForCheck))
+					// Reset buffer
+					commandBuffer.Reset()
+
+					// Check if user typed "start" command (case-insensitive, allow with newline)
+					if trimmed == "start" {
+						// Check permissions for starting container
+						if err := s.permissionChecker.CheckScopedPermission(ctx, initMsg.OrganizationID, auth.ScopedPermission{Permission: "deployments.manage", ResourceType: "deployment", ResourceID: initMsg.DeploymentID}); err != nil {
+							errMsg := "Permission denied: you need 'deployments.manage' permission to start containers.\r\n"
+							errData := make([]int, len(errMsg))
+							for i, b := range []byte(errMsg) {
+								errData[i] = int(b)
+							}
+							_ = writeJSON(terminalWSOutput{Type: "output", Data: errData})
+							continue
+						}
+
+						if currentContainerID == "" {
+							errMsg := "Error: Container ID not found. Please reconnect.\r\n"
+							errData := make([]int, len(errMsg))
+							for i, b := range []byte(errMsg) {
+								errData[i] = int(b)
+							}
+							_ = writeJSON(terminalWSOutput{Type: "output", Data: errData})
+							continue
+						}
+
+						// Start the container
+						dcli, err := docker.New()
+						if err != nil {
+							errMsg := fmt.Sprintf("Error starting container: %v\r\n", err)
+							errData := make([]int, len(errMsg))
+							for i, b := range []byte(errMsg) {
+								errData[i] = int(b)
+							}
+							_ = writeJSON(terminalWSOutput{Type: "output", Data: errData})
+							dcli.Close()
+							continue
+						}
+
+						statusMsg := fmt.Sprintf("Starting container %s...\r\n", currentContainerID[:12])
+						statusData := make([]int, len(statusMsg))
+						for i, b := range []byte(statusMsg) {
+							statusData[i] = int(b)
+						}
+						_ = writeJSON(terminalWSOutput{Type: "output", Data: statusData})
+
+						if err := dcli.StartContainer(ctx, currentContainerID); err != nil {
+							errMsg := fmt.Sprintf("Error starting container: %v\r\n", err)
+							errData := make([]int, len(errMsg))
+							for i, b := range []byte(errMsg) {
+								errData[i] = int(b)
+							}
+							_ = writeJSON(terminalWSOutput{Type: "output", Data: errData})
+							dcli.Close()
+							continue
+						}
+
+						dcli.Close()
+
+						// Wait a moment for container to be ready
+						time.Sleep(500 * time.Millisecond)
+
+						// Try to initialize terminal session again
+						var newSession *TerminalSession
+						var newCleanup func()
+						var newCreated bool
+						var newErr error
+						newSession, newCleanup, newCreated, newErr = s.ensureTerminalSession(ctx, initMsg.DeploymentID, initMsg.OrganizationID, initMsg.Cols, initMsg.Rows, initMsg.ContainerID, initMsg.ServiceName)
+
+						if newErr != nil {
+							errMsg := fmt.Sprintf("Error connecting to container: %v\r\n", newErr)
+							errData := make([]int, len(errMsg))
+							for i, b := range []byte(errMsg) {
+								errData[i] = int(b)
+							}
+							_ = writeJSON(terminalWSOutput{Type: "output", Data: errData})
+							continue
+						}
+
+						// Success! Update session
+						session = newSession
+						cleanup = newCleanup
+
+						// Start output forwarding
+						outputDone = make(chan struct{})
+						outputCancel()
+						outputCtx, outputCancel = context.WithCancel(ctx)
+						outputDoneWg.Add(1)
+						go func() {
+							defer outputDoneWg.Done()
+							defer close(outputDone)
+							defer outputCancel()
+
+							buf := make([]byte, 4096)
+							for {
+								n, err := session.conn.Read(buf)
+								if n > 0 {
+									data := make([]int, n)
+									for i := 0; i < n; i++ {
+										data[i] = int(buf[i])
+									}
+									if err := writeJSON(terminalWSOutput{Type: "output", Data: data}); err != nil {
+										log.Printf("[Terminal WS] Failed to forward output: %v", err)
+										return
+									}
+								}
+
+								if err != nil {
+									if err == io.EOF {
+										_ = writeJSON(terminalWSOutput{Type: "closed", Reason: "Terminal session ended", Exit: true})
+										conn.Close(websocket.StatusNormalClosure, "terminal closed")
+										closed = true
+									} else {
+										log.Printf("[Terminal WS] Container read error: %v", err)
+										_ = writeJSON(terminalWSOutput{Type: "error", Message: "Terminal stream error"})
+										conn.Close(websocket.StatusInternalError, "terminal error")
+										closed = true
+									}
+									return
+								}
+							}
+						}()
+
+						// Send initial newline
+						if newCreated && session != nil {
+							if _, err := session.conn.Write([]byte("\r\n")); err != nil {
+								log.Printf("[Terminal WS] Failed to write initial newline: %v", err)
+							}
+						}
+
+						successMsg := "Container started successfully! Terminal connected.\r\n"
+						successData := make([]int, len(successMsg))
+						for i, b := range []byte(successMsg) {
+							successData[i] = int(b)
+						}
+						_ = writeJSON(terminalWSOutput{Type: "output", Data: successData})
+					} else {
+						// Not "start" command - show error message
+						errMsg := "Unknown command. Type 'start' to start the container.\r\n"
+						errData := make([]int, len(errMsg))
+						for i, b := range []byte(errMsg) {
+							errData[i] = int(b)
+						}
+						_ = writeJSON(terminalWSOutput{Type: "output", Data: errData})
+					}
+				}
+				// Continue to allow accumulating more characters
+				continue
+			}
+
+			// Normal input handling when session exists
 			inputBytes := make([]byte, len(msg.Input))
 			for i, v := range msg.Input {
 				inputBytes[i] = byte(v)

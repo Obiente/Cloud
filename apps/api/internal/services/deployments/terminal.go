@@ -38,7 +38,7 @@ var terminalSessionsMutex sync.RWMutex
 // ensureTerminalSession returns an active terminal session for the given deployment,
 // creating one if necessary. It returns the session, a cleanup function, and a boolean
 // indicating whether a new session was created.
-func (s *Service) ensureTerminalSession(ctx context.Context, deploymentID, orgID string, cols, rows int) (*TerminalSession, func(), bool, error) {
+func (s *Service) ensureTerminalSession(ctx context.Context, deploymentID, orgID string, cols, rows int, containerID, serviceName string) (*TerminalSession, func(), bool, error) {
 	// Normalize terminal dimensions
 	if cols <= 0 {
 		cols = 80
@@ -47,26 +47,35 @@ func (s *Service) ensureTerminalSession(ctx context.Context, deploymentID, orgID
 		rows = 24
 	}
 
-	// Refresh container locations to ensure we have a valid container ID
-	locations, err := database.ValidateAndRefreshLocations(deploymentID)
+	dcli, err := docker.New()
 	if err != nil {
-		return nil, nil, false, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to validate locations: %w", err))
+		return nil, nil, false, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
 	}
-	if len(locations) == 0 {
-		return nil, nil, false, connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
+	defer dcli.Close()
+
+	// Find container by container_id or service_name, or use first if neither specified
+	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+	if err != nil {
+		return nil, nil, false, connect.NewError(connect.CodeNotFound, err)
 	}
-	loc := locations[0]
+
+	// Check if container is running - Docker exec requires running containers
+	containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
+	if err != nil {
+		return nil, nil, false, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to inspect container: %w", err))
+	}
+
+	if !containerInfo.State.Running {
+		return nil, nil, false, connect.NewError(
+			connect.CodeFailedPrecondition,
+			fmt.Errorf("container is stopped. Type 'start' to start the container first."),
+		)
+	}
 
 	terminalSessionsMutex.Lock()
 	session, exists := terminalSessions[deploymentID]
 	if !exists {
-		dcli, err := docker.New()
-		if err != nil {
-			terminalSessionsMutex.Unlock()
-			return nil, nil, false, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
-		}
 		conn, err := dcli.ContainerExec(ctx, loc.ContainerID, cols, rows)
-		dcli.Close()
 		if err != nil {
 			terminalSessionsMutex.Unlock()
 			return nil, nil, false, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create terminal: %w", err))
@@ -129,6 +138,8 @@ func (s *Service) StreamTerminal(ctx context.Context, stream *connect.BidiStream
 			if !initialized {
 				deploymentID = input.GetDeploymentId()
 				orgID = input.GetOrganizationId()
+				containerID := input.GetContainerId()
+				serviceName := input.GetServiceName()
 
 				// Check permissions
 				if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.view", ResourceType: "deployment", ResourceID: deploymentID}); err != nil {
@@ -140,7 +151,7 @@ func (s *Service) StreamTerminal(ctx context.Context, stream *connect.BidiStream
 				rows := int(input.GetRows())
 				var created bool
 				var err error
-				session, cleanupSession, created, err = s.ensureTerminalSession(ctx, deploymentID, orgID, cols, rows)
+				session, cleanupSession, created, err = s.ensureTerminalSession(ctx, deploymentID, orgID, cols, rows, containerID, serviceName)
 				if err != nil {
 					errorChan <- err
 					return

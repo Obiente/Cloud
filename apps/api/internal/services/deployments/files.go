@@ -32,21 +32,19 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	locations, err := database.ValidateAndRefreshLocations(deploymentID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to validate locations: %w", err))
-	}
-	if len(locations) == 0 {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
-	}
-
 	dcli, err := docker.New()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
 	}
 	defer dcli.Close()
 
-	loc := locations[0]
+	// Find container by container_id or service_name, or use first if neither specified
+	containerID := req.Msg.GetContainerId()
+	serviceName := req.Msg.GetServiceName()
+	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
 
 	containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
 	if err != nil {
@@ -54,7 +52,16 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 		if refreshErr != nil || len(refreshedLocations) == 0 {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 		}
-		loc = refreshedLocations[0]
+		// Try to find the same container again, or use first available
+		for _, refLoc := range refreshedLocations {
+			if refLoc.ContainerID == loc.ContainerID {
+				*loc = refLoc
+				break
+			}
+		}
+		if loc.ContainerID != refreshedLocations[0].ContainerID {
+			*loc = refreshedLocations[0]
+		}
 		containerInfo, err = dcli.ContainerInspect(ctx, loc.ContainerID)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to inspect container after refresh: %w", err))
@@ -67,11 +74,11 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 		volumes, err := dcli.GetContainerVolumes(ctx, loc.ContainerID)
 		if err != nil {
 			log.Printf("[ListContainerFiles] Error getting volumes: %v", err)
-			refreshedLocations, refreshErr := database.ValidateAndRefreshLocations(deploymentID)
-			if refreshErr != nil || len(refreshedLocations) == 0 {
+			refreshedLoc, refreshErr := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+			if refreshErr != nil {
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 			}
-			loc = refreshedLocations[0]
+			loc = refreshedLoc
 			volumes, err = dcli.GetContainerVolumes(ctx, loc.ContainerID)
 			if err != nil {
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to get volumes after refresh: %w", err))
@@ -121,11 +128,11 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 	if volumeName != "" {
 		volumes, err := dcli.GetContainerVolumes(ctx, loc.ContainerID)
 		if err != nil {
-			refreshedLocations, refreshErr := database.ValidateAndRefreshLocations(deploymentID)
-			if refreshErr != nil || len(refreshedLocations) == 0 {
+			refreshedLoc, refreshErr := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+			if refreshErr != nil {
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 			}
-			loc = refreshedLocations[0]
+			loc = refreshedLoc
 			volumes, err = dcli.GetContainerVolumes(ctx, loc.ContainerID)
 			if err != nil {
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to get volumes after refresh: %w", err))
@@ -169,12 +176,31 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 		return connect.NewResponse(resp), nil
 	}
 
-	if !isRunning {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running. Use volume_name parameter to access persistent volumes"))
-	}
-
+	// Try to list files - ContainerListFiles will handle stopped containers by temporarily starting them
+	// If the container can't be started automatically, it will return an error
 	fileInfos, err := dcli.ContainerListFiles(ctx, loc.ContainerID, path)
 	if err != nil {
+		// Check if error mentions container being stopped or can't be started
+		errStr := err.Error()
+		if strings.Contains(errStr, "container is stopped") || 
+		   strings.Contains(errStr, "cannot be started automatically") ||
+		   strings.Contains(errStr, "failed to start stopped container") {
+			// Container is stopped and couldn't be auto-started
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running and cannot be started automatically for file listing. Use volume_name parameter to access persistent volumes (volumes are accessible even when containers are stopped), or manually start the container"))
+		}
+		
+		// Check if the error is from ContainerExecRun (command failed with exit code)
+		// This indicates the ls command itself failed (not a container state issue)
+		if strings.Contains(errStr, "failed with exit code") || strings.Contains(errStr, "command") {
+			// Check if container is actually running - if not, suggest using volumes
+			if !isRunning {
+				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running and the file listing command failed. Use volume_name parameter to access persistent volumes (volumes are accessible even when containers are stopped), or start the container"))
+			}
+			// Container is running but command failed - likely a path or permission issue
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list files: %w", err))
+		}
+		
+		// Other errors (permissions, path issues, exec failures, etc.)
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list files: %w", err))
 	}
 
@@ -206,15 +232,6 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	// Validate and refresh locations to ensure we have valid container IDs
-	locations, err := database.ValidateAndRefreshLocations(deploymentID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to validate locations: %w", err))
-	}
-	if len(locations) == 0 {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
-	}
-
 	dcli, err := docker.New()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
@@ -226,21 +243,25 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("path is required"))
 	}
 
-	// Use the first location for now
-	loc := locations[0]
+	// Find container by container_id or service_name, or use first if neither specified
+	containerID := req.Msg.GetContainerId()
+	serviceName := req.Msg.GetServiceName()
+	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
 
 	// If volume_name is specified, read file from volume
 	volumeName := req.Msg.GetVolumeName()
 	if volumeName != "" {
 		volumes, err := dcli.GetContainerVolumes(ctx, loc.ContainerID)
 		if err != nil {
-			// Container might have been deleted - try to refresh locations
-			refreshedLocations, refreshErr := database.ValidateAndRefreshLocations(deploymentID)
-			if refreshErr != nil || len(refreshedLocations) == 0 {
+			// Container might have been deleted - try to refresh and find again
+			refreshedLoc, refreshErr := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+			if refreshErr != nil {
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 			}
-			// Use the refreshed location
-			loc = refreshedLocations[0]
+			loc = refreshedLoc
 			volumes, err = dcli.GetContainerVolumes(ctx, loc.ContainerID)
 			if err != nil {
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to get volumes after refresh: %w", err))
@@ -290,13 +311,12 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 	// Otherwise, read file from container filesystem (only works if running)
 	containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
 	if err != nil {
-		// Container might have been deleted - try to refresh locations
-		refreshedLocations, refreshErr := database.ValidateAndRefreshLocations(deploymentID)
-		if refreshErr != nil || len(refreshedLocations) == 0 {
-			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
-		}
-		// Use the refreshed location
-		loc = refreshedLocations[0]
+			// Container might have been deleted - try to refresh and find again
+			refreshedLoc, refreshErr := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+			if refreshErr != nil {
+				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
+			}
+			loc = refreshedLoc
 		containerInfo, err = dcli.ContainerInspect(ctx, loc.ContainerID)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to inspect container after refresh: %w", err))
@@ -441,8 +461,13 @@ func (s *Service) UploadContainerFiles(ctx context.Context, stream *connect.Clie
 		}
 	} else {
 		// Upload to container filesystem
-		// Use the first location
-		loc := locations[0]
+		// Find container by container_id or service_name from metadata, or use first if neither specified
+		containerID := metadata.GetContainerId()
+		serviceName := metadata.GetServiceName()
+		loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeNotFound, err)
+		}
 		err = dcli.ContainerUploadFiles(ctx, loc.ContainerID, destPath, files)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to upload files: %w", err))
@@ -468,21 +493,21 @@ func (s *Service) DeleteContainerEntries(ctx context.Context, req *connect.Reque
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	locations, err := database.ValidateAndRefreshLocations(deploymentID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to validate locations: %w", err))
-	}
-	if len(locations) == 0 {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
-	}
-
 	dcli, err := docker.New()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
 	}
 	defer dcli.Close()
 
-	loc := locations[0]
+	// Find container by container_id or service_name, or use first if neither specified
+	// Note: DeleteContainerEntriesRequest doesn't have container_id/service_name yet, so we use "" for now
+	containerID := "" // TODO: Add container_id and service_name to DeleteContainerEntriesRequest
+	serviceName := ""
+	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
 	volumeName := req.Msg.GetVolumeName()
 	recursive := req.Msg.GetRecursive()
 	force := req.Msg.GetForce()
@@ -493,11 +518,11 @@ func (s *Service) DeleteContainerEntries(ctx context.Context, req *connect.Reque
 	if volumeName != "" {
 		volumes, err := dcli.GetContainerVolumes(ctx, loc.ContainerID)
 		if err != nil {
-			refreshedLocations, refreshErr := database.ValidateAndRefreshLocations(deploymentID)
-			if refreshErr != nil || len(refreshedLocations) == 0 {
+			refreshedLoc, refreshErr := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+			if refreshErr != nil {
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 			}
-			loc = refreshedLocations[0]
+			loc = refreshedLoc
 			volumes, err = dcli.GetContainerVolumes(ctx, loc.ContainerID)
 			if err != nil {
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to get volumes after refresh: %w", err))
@@ -546,7 +571,16 @@ func (s *Service) DeleteContainerEntries(ctx context.Context, req *connect.Reque
 		if refreshErr != nil || len(refreshedLocations) == 0 {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 		}
-		loc = refreshedLocations[0]
+		// Try to find the same container again, or use first available
+		for _, refLoc := range refreshedLocations {
+			if refLoc.ContainerID == loc.ContainerID {
+				*loc = refLoc
+				break
+			}
+		}
+		if loc.ContainerID != refreshedLocations[0].ContainerID {
+			*loc = refreshedLocations[0]
+		}
 		containerInfo, err = dcli.ContainerInspect(ctx, loc.ContainerID)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to inspect container after refresh: %w", err))
@@ -596,21 +630,21 @@ func (s *Service) CreateContainerEntry(ctx context.Context, req *connect.Request
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	locations, err := database.ValidateAndRefreshLocations(deploymentID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to validate locations: %w", err))
-	}
-	if len(locations) == 0 {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
-	}
-
 	dcli, err := docker.New()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
 	}
 	defer dcli.Close()
 
-	loc := locations[0]
+	// Find container by container_id or service_name, or use first if neither specified
+	// Note: CreateContainerEntryRequest doesn't have container_id/service_name yet, so we use "" for now
+	containerID := "" // TODO: Add container_id and service_name to CreateContainerEntryRequest
+	serviceName := ""
+	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
 	volumeName := req.Msg.GetVolumeName()
 
 	targetPath := joinContainerPath(parentPath, name)
@@ -626,11 +660,11 @@ func (s *Service) CreateContainerEntry(ctx context.Context, req *connect.Request
 	if volumeName != "" {
 		volumes, err := dcli.GetContainerVolumes(ctx, loc.ContainerID)
 		if err != nil {
-			refreshedLocations, refreshErr := database.ValidateAndRefreshLocations(deploymentID)
-			if refreshErr != nil || len(refreshedLocations) == 0 {
+			refreshedLoc, refreshErr := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+			if refreshErr != nil {
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 			}
-			loc = refreshedLocations[0]
+			loc = refreshedLoc
 			volumes, err = dcli.GetContainerVolumes(ctx, loc.ContainerID)
 			if err != nil {
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to get volumes after refresh: %w", err))
@@ -692,7 +726,16 @@ func (s *Service) CreateContainerEntry(ctx context.Context, req *connect.Request
 		if refreshErr != nil || len(refreshedLocations) == 0 {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 		}
-		loc = refreshedLocations[0]
+		// Try to find the same container again, or use first available
+		for _, refLoc := range refreshedLocations {
+			if refLoc.ContainerID == loc.ContainerID {
+				*loc = refLoc
+				break
+			}
+		}
+		if loc.ContainerID != refreshedLocations[0].ContainerID {
+			*loc = refreshedLocations[0]
+		}
 		containerInfo, err = dcli.ContainerInspect(ctx, loc.ContainerID)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to inspect container after refresh: %w", err))
@@ -752,32 +795,32 @@ func (s *Service) WriteContainerFile(ctx context.Context, req *connect.Request[d
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	locations, err := database.ValidateAndRefreshLocations(deploymentID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to validate locations: %w", err))
-	}
-	if len(locations) == 0 {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("no containers for deployment"))
-	}
-
 	dcli, err := docker.New()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
 	}
 	defer dcli.Close()
 
-	loc := locations[0]
+	// Find container by container_id or service_name, or use first if neither specified
+	// Note: WriteContainerFileRequest doesn't have container_id/service_name yet, so we use "" for now
+	containerID := "" // TODO: Add container_id and service_name to WriteContainerFileRequest
+	serviceName := ""
+	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
 	volumeName := req.Msg.GetVolumeName()
 	createIfMissing := req.Msg.GetCreateIfMissing()
 	mode := req.Msg.GetModeOctal()
 	if volumeName != "" {
 		volumes, err := dcli.GetContainerVolumes(ctx, loc.ContainerID)
 		if err != nil {
-			refreshedLocations, refreshErr := database.ValidateAndRefreshLocations(deploymentID)
-			if refreshErr != nil || len(refreshedLocations) == 0 {
+			refreshedLoc, refreshErr := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
+			if refreshErr != nil {
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 			}
-			loc = refreshedLocations[0]
+			loc = refreshedLoc
 			volumes, err = dcli.GetContainerVolumes(ctx, loc.ContainerID)
 			if err != nil {
 				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to get volumes after refresh: %w", err))
@@ -839,7 +882,16 @@ func (s *Service) WriteContainerFile(ctx context.Context, req *connect.Request[d
 		if refreshErr != nil || len(refreshedLocations) == 0 {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
 		}
-		loc = refreshedLocations[0]
+		// Try to find the same container again, or use first available
+		for _, refLoc := range refreshedLocations {
+			if refLoc.ContainerID == loc.ContainerID {
+				*loc = refLoc
+				break
+			}
+		}
+		if loc.ContainerID != refreshedLocations[0].ContainerID {
+			*loc = refreshedLocations[0]
+		}
 		containerInfo, err = dcli.ContainerInspect(ctx, loc.ContainerID)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to inspect container after refresh: %w", err))

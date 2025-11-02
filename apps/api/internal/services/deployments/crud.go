@@ -55,10 +55,23 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list deployments: %w", err))
 	}
 
-	// Convert DB models to proto models
+	// Convert DB models to proto models and enrich with actual container status
 	items := make([]*deploymentsv1.Deployment, 0, len(dbDeployments))
 	for _, dbDep := range dbDeployments {
-		items = append(items, dbDeploymentToProto(dbDep))
+		deployment := dbDeploymentToProto(dbDep)
+		
+		// Get actual container status from Docker (not DB)
+		// Only for compose deployments (when BuildStrategy is PLAIN_COMPOSE or COMPOSE_REPO)
+		if dbDep.BuildStrategy == int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) ||
+		   dbDep.BuildStrategy == int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) {
+			running, total, err := s.getDeploymentContainerStatus(ctx, dbDep.ID)
+			if err == nil {
+				deployment.ContainersRunning = proto.Int32(running)
+				deployment.ContainersTotal = proto.Int32(total)
+			}
+		}
+		
+		items = append(items, deployment)
 	}
 
 	// Get total count with same filters
@@ -334,8 +347,45 @@ func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploy
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
 	}
 
-	// Convert to proto and return
+	// Convert to proto and enrich with actual container status
 	deployment := dbDeploymentToProto(dbDeployment)
+	
+	// Get actual container status from Docker (not DB)
+	// Only for compose deployments (when BuildStrategy is PLAIN_COMPOSE or COMPOSE_REPO)
+	if dbDeployment.BuildStrategy == int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) ||
+	   dbDeployment.BuildStrategy == int32(deploymentsv1.BuildStrategy_COMPOSE_REPO) {
+		running, total, err := s.getDeploymentContainerStatus(ctx, deploymentID)
+		if err == nil {
+			deployment.ContainersRunning = proto.Int32(running)
+			deployment.ContainersTotal = proto.Int32(total)
+			
+			// Sync deployment status with actual container status
+			// If deployment has containers but none are running, it should be STOPPED
+			// If some containers are running, it should be RUNNING
+			if total > 0 {
+				if running == 0 {
+					// All containers stopped - update status to STOPPED
+					deployment.Status = deploymentsv1.DeploymentStatus_STOPPED
+					// Optionally update DB to keep it in sync (async to not block response)
+					go func() {
+						if err := s.repo.UpdateStatus(context.Background(), deploymentID, int32(deploymentsv1.DeploymentStatus_STOPPED)); err != nil {
+							log.Printf("[GetDeployment] Failed to sync deployment status to STOPPED: %v", err)
+						}
+					}()
+				} else if running > 0 && dbDeployment.Status == int32(deploymentsv1.DeploymentStatus_STOPPED) {
+					// Some containers running but DB says STOPPED - update to RUNNING
+					deployment.Status = deploymentsv1.DeploymentStatus_RUNNING
+					// Optionally update DB to keep it in sync (async to not block response)
+					go func() {
+						if err := s.repo.UpdateStatus(context.Background(), deploymentID, int32(deploymentsv1.DeploymentStatus_RUNNING)); err != nil {
+							log.Printf("[GetDeployment] Failed to sync deployment status to RUNNING: %v", err)
+						}
+					}()
+				}
+			}
+		}
+	}
+	
 	res := connect.NewResponse(&deploymentsv1.GetDeploymentResponse{Deployment: deployment})
 	return res, nil
 }

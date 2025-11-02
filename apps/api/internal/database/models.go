@@ -30,6 +30,7 @@ type Deployment struct {
 	Size           string    `gorm:"column:size" json:"size"`
 	LastDeployedAt time.Time `gorm:"column:last_deployed_at" json:"last_deployed_at"`
 	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
+	DeletedAt      *time.Time `gorm:"column:deleted_at;index" json:"deleted_at"` // Soft delete timestamp
 	OrganizationID string    `gorm:"column:organization_id;index" json:"organization_id"`
 	CreatedBy      string    `gorm:"column:created_by;index" json:"created_by"`
 
@@ -148,6 +149,47 @@ type UsageWeekly struct {
 
 func (UsageWeekly) TableName() string { return "usage_weekly" }
 
+// DeploymentUsageHourly stores hourly aggregated metrics to reduce raw data volume
+type DeploymentUsageHourly struct {
+	ID                  uint      `gorm:"primaryKey" json:"id"`
+	DeploymentID        string    `gorm:"index;not null" json:"deployment_id"`
+	OrganizationID      string    `gorm:"index;not null" json:"organization_id"` // Denormalized for easier querying
+	Hour                time.Time `gorm:"index" json:"hour"`                      // Truncated to hour
+	AvgCPUUsage         float64   `json:"avg_cpu_usage"`
+	AvgMemoryUsage      int64     `json:"avg_memory_usage"`
+	BandwidthRxBytes    int64     `json:"bandwidth_rx_bytes"`  // Sum of incremental values
+	BandwidthTxBytes    int64     `json:"bandwidth_tx_bytes"`  // Sum of incremental values
+	DiskReadBytes       int64     `json:"disk_read_bytes"`     // Sum of incremental values
+	DiskWriteBytes      int64     `json:"disk_write_bytes"`    // Sum of incremental values
+	RequestCount        int64     `json:"request_count"`
+	ErrorCount          int64     `json:"error_count"`
+	SampleCount         int64     `json:"sample_count"`        // Number of raw metrics aggregated
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+}
+
+func (DeploymentUsageHourly) TableName() string { return "deployment_usage_hourly" }
+
+// DeploymentUsage stores aggregated usage per deployment (for historical tracking even after deletion)
+type DeploymentUsage struct {
+	ID                  uint      `gorm:"primaryKey" json:"id"`
+	DeploymentID        string    `gorm:"index;not null" json:"deployment_id"`
+	OrganizationID      string    `gorm:"index;not null" json:"organization_id"` // Denormalized for easier querying
+	Month               string    `gorm:"index" json:"month"`                   // YYYY-MM
+	CPUCoreSeconds      int64     `json:"cpu_core_seconds"`
+	MemoryByteSeconds   int64     `json:"memory_byte_seconds"`
+	BandwidthRxBytes    int64     `json:"bandwidth_rx_bytes"`
+	BandwidthTxBytes    int64     `json:"bandwidth_tx_bytes"`
+	StorageBytes        int64     `json:"storage_bytes"`
+	RequestCount        int64     `json:"request_count"`
+	ErrorCount          int64     `json:"error_count"`
+	UptimeSeconds       int64     `json:"uptime_seconds"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+}
+
+func (DeploymentUsage) TableName() string { return "deployment_usage" }
+
 // Organization and members
 type Organization struct {
     ID        string    `gorm:"primaryKey" json:"id"`
@@ -156,6 +198,7 @@ type Organization struct {
     Plan      string    `json:"plan"`
     Status    string    `json:"status"`
     Domain    *string   `json:"domain"`
+    Credits   int64     `gorm:"column:credits;default:0" json:"credits"` // Credits in cents ($0.01 units)
     CreatedAt time.Time `json:"created_at"`
 }
 

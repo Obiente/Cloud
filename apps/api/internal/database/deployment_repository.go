@@ -26,6 +26,10 @@ func (r *DeploymentRepository) Create(ctx context.Context, deployment *Deploymen
 }
 
 func (r *DeploymentRepository) GetByID(ctx context.Context, id string) (*Deployment, error) {
+	return r.GetByIDIncludeDeleted(ctx, id, false)
+}
+
+func (r *DeploymentRepository) GetByIDIncludeDeleted(ctx context.Context, id string, includeDeleted bool) (*Deployment, error) {
 	cacheKey := fmt.Sprintf("deployment:%s", id)
 
 	// Try cache first
@@ -39,7 +43,11 @@ func (r *DeploymentRepository) GetByID(ctx context.Context, id string) (*Deploym
 	}
 
 	var deployment Deployment
-	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&deployment).Error; err != nil {
+	query := r.db.WithContext(ctx).Where("id = ?", id)
+	if !includeDeleted {
+		query = query.Where("deleted_at IS NULL")
+	}
+	if err := query.First(&deployment).Error; err != nil {
 		return nil, err
 	}
 
@@ -52,7 +60,7 @@ func (r *DeploymentRepository) GetByID(ctx context.Context, id string) (*Deploym
 }
 
 func (r *DeploymentRepository) GetAll(ctx context.Context, organizationID string, filters *DeploymentFilters) ([]*Deployment, error) {
-	query := r.db.WithContext(ctx).Where("organization_id = ?", organizationID)
+	query := r.db.WithContext(ctx).Where("organization_id = ? AND deleted_at IS NULL", organizationID)
 
 	if filters != nil {
 		// Apply status filter if provided
@@ -138,7 +146,12 @@ func (r *DeploymentRepository) Delete(ctx context.Context, id string) error {
 		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", id))
 	}
 
-	return r.db.WithContext(ctx).Delete(&Deployment{}, "id = ?", id).Error
+	// Soft delete: set DeletedAt timestamp
+	now := time.Now()
+	return r.db.WithContext(ctx).
+		Model(&Deployment{}).
+		Where("id = ?", id).
+		Update("deleted_at", now).Error
 }
 
 func (r *DeploymentRepository) Count(ctx context.Context, organizationID string, filters *DeploymentFilters) (int64, error) {

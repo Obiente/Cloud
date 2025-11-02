@@ -18,11 +18,11 @@ type ComposeSanitizer struct {
 // NewComposeSanitizer creates a new compose sanitizer for a deployment
 func NewComposeSanitizer(deploymentID string) *ComposeSanitizer {
 	// Determine safe base directory for user volumes
-	// Try multiple locations, prefer persistent storage
+	// All volumes should go to /var/lib/obiente/volumes/{deploymentID}
+	// This keeps Obiente Cloud volumes separate from Docker's default volumes
 	var safeBaseDir string
 	possibleDirs := []string{
 		"/var/lib/obiente/volumes",
-		"/var/lib/obiente/deployments",
 		"/tmp/obiente-volumes",
 	}
 
@@ -167,26 +167,50 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 		volStr = v
 	case map[string]interface{}:
 		// Handle named volume or bind mount object format
+		target := v["target"]
+		if target == nil {
+			target = v["bind"]
+		}
+		if target == nil {
+			return nil // Invalid volume spec - no target
+		}
+
+		// Check volume type
+		volType, _ := v["type"].(string)
+		
+		// If it has a source, check if it's a bind mount (absolute path) or named volume
 		if source, ok := v["source"].(string); ok {
-			// Bind mount - transform source path
-			target := v["target"]
-			if target == nil {
-				target = v["bind"]
-			}
-			if target == nil {
-				return nil // Invalid volume spec
-			}
-
-			// Transform source path to safe directory
-			sanitizedSource := cs.sanitizeHostPath(source, serviceName)
-
-			return map[string]interface{}{
-				"type":   "bind",
-				"source": sanitizedSource,
-				"target": target,
+			if strings.HasPrefix(source, "/") {
+				// Bind mount with absolute path - sanitize it
+				sanitizedSource := cs.sanitizeHostPath(source, serviceName)
+				return map[string]interface{}{
+					"type":   "bind",
+					"source": sanitizedSource,
+					"target": target,
+				}
+			} else {
+				// Named volume - convert to bind mount in /var/lib/obiente
+				obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, source)
+				os.MkdirAll(obienteVolumePath, 0755)
+				return map[string]interface{}{
+					"type":   "bind",
+					"source": obienteVolumePath,
+					"target": target,
+				}
 			}
 		}
-		// Named volume - keep as is (it's managed by Docker)
+		
+		// Check if it's explicitly a named volume type (without source, just name reference)
+		if volType == "volume" {
+			// This is a named volume reference - we need to check if there's a name
+			// In compose, this might be referenced by service name or explicit name
+			// For now, we'll handle it based on the volume definition context
+			// This case is handled in sanitizeVolumeDefinition
+			return vol
+		}
+		
+		// No source, no explicit type - could be a simple named volume reference
+		// This case should be handled in string parsing below
 		return vol
 	default:
 		return vol
@@ -204,8 +228,14 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 
 		// Check if it's a named volume (no leading slash, not an absolute path)
 		if !strings.HasPrefix(hostPath, "/") && !strings.HasPrefix(hostPath, "~") && !filepath.IsAbs(hostPath) {
-			// Named volume - keep as is
-			return vol
+			// Named volume - convert to bind mount in /var/lib/obiente
+			// Structure: /var/lib/obiente/volumes/{deploymentID}/{volumeName}
+			volumeName := hostPath
+			obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volumeName)
+			// Ensure directory exists
+			os.MkdirAll(obienteVolumePath, 0755)
+			// Return as bind mount
+			return fmt.Sprintf("%s:%s", obienteVolumePath, containerPath)
 		}
 
 		// It's a bind mount - sanitize host path
@@ -215,7 +245,16 @@ func (cs *ComposeSanitizer) sanitizeVolumeBinding(vol interface{}, serviceName s
 		return fmt.Sprintf("%s:%s", sanitizedHostPath, containerPath)
 	}
 
-	// Not a bind mount, likely a named volume - keep as is
+	// Not a bind mount string, likely a named volume reference
+	// If it looks like a named volume (no path separators, simple name), convert to bind mount
+	if volStr != "" && !strings.Contains(volStr, "/") && !strings.Contains(volStr, ":") {
+		// This is a named volume - convert to bind mount
+		obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volStr)
+		os.MkdirAll(obienteVolumePath, 0755)
+		// Return as bind mount with default container path
+		return fmt.Sprintf("%s:/data", obienteVolumePath)
+	}
+	
 	return vol
 }
 
@@ -259,21 +298,36 @@ func (cs *ComposeSanitizer) sanitizeHostPath(hostPath string, serviceName string
 
 // sanitizeVolumeDefinition sanitizes top-level volume definitions
 func (cs *ComposeSanitizer) sanitizeVolumeDefinition(volName string, volData interface{}) {
-	// Most volume definitions are named volumes managed by Docker, which is safe
-	// We mainly need to handle driver_opts with device/bind mounts
+	// Convert named volume definitions to bind mounts pointing to /var/lib/obiente
+	// This ensures all volumes are stored in Obiente's directory structure
 	if volMap, ok := volData.(map[string]interface{}); ok {
-		if driverOpts, ok := volMap["driver_opts"].(map[string]interface{}); ok {
-			// Check for device or type=bind options
-			if device, ok := driverOpts["device"].(string); ok {
-				// Transform device path to safe directory
-				sanitizedDevice := cs.sanitizeHostPath(device, "volume-"+volName)
-				driverOpts["device"] = sanitizedDevice
-			}
-			if volType, ok := driverOpts["type"].(string); ok && volType == "bind" {
-				// Ensure bind mounts use sanitized paths
-				if o, ok := driverOpts["o"].(string); ok {
-					// Parse and sanitize bind options
-					driverOpts["o"] = cs.sanitizeBindOptions(o, volName)
+		// If it's an empty map or only has driver_opts, convert to bind mount
+		if len(volMap) == 0 || (len(volMap) == 1 && volMap["driver_opts"] != nil) {
+			// This is a named volume - convert to bind mount specification
+			obienteVolumePath := filepath.Join("/var/lib/obiente/volumes", cs.deploymentID, volName)
+			os.MkdirAll(obienteVolumePath, 0755)
+			
+			// Replace with bind mount configuration
+			// Note: We can't fully represent bind mounts in top-level volumes,
+			// but we'll ensure the directory exists and remove the volume definition
+			// The actual bind mount will be created in sanitizeVolumeBinding
+			delete(volMap, "driver")
+			delete(volMap, "driver_opts")
+		} else {
+			// Handle driver_opts with device/bind mounts
+			if driverOpts, ok := volMap["driver_opts"].(map[string]interface{}); ok {
+				// Check for device or type=bind options
+				if device, ok := driverOpts["device"].(string); ok {
+					// Transform device path to safe directory
+					sanitizedDevice := cs.sanitizeHostPath(device, "volume-"+volName)
+					driverOpts["device"] = sanitizedDevice
+				}
+				if volType, ok := driverOpts["type"].(string); ok && volType == "bind" {
+					// Ensure bind mounts use sanitized paths
+					if o, ok := driverOpts["o"].(string); ok {
+						// Parse and sanitize bind options
+						driverOpts["o"] = cs.sanitizeBindOptions(o, volName)
+					}
 				}
 			}
 		}
