@@ -440,10 +440,20 @@ func (s *Service) StreamDeploymentMetrics(ctx context.Context, req *connect.Requ
 				// Aggregate mode: get all containers' metrics for the latest timestamp
 				var latestMetrics []database.DeploymentMetrics
 				// Get the latest timestamp first
-				var latestTimestamp time.Time
-				if err := query.Select("MAX(timestamp)").Scan(&latestTimestamp).Error; err == nil && !latestTimestamp.IsZero() {
+				// Create a fresh query without ORDER BY for aggregate functions
+				maxTimestampQuery := database.DB.Model(&database.DeploymentMetrics{}).
+					Where("deployment_id = ?", deploymentID)
+				if targetContainerID != "" {
+					maxTimestampQuery = maxTimestampQuery.Where("container_id = ?", targetContainerID)
+				}
+				if !lastSentTimestamp.IsZero() {
+					maxTimestampQuery = maxTimestampQuery.Where("timestamp > ?", lastSentTimestamp)
+				}
+				// Use a pointer to handle NULL from MAX() when no rows match
+				var latestTimestamp *time.Time
+				if err := maxTimestampQuery.Select("MAX(timestamp) as max_timestamp").Scan(&latestTimestamp).Error; err == nil && latestTimestamp != nil && !latestTimestamp.IsZero() {
 					// Get all metrics at that timestamp
-					if err := database.DB.Where("deployment_id = ? AND timestamp = ?", deploymentID, latestTimestamp).
+					if err := database.DB.Where("deployment_id = ? AND timestamp = ?", deploymentID, *latestTimestamp).
 						Find(&latestMetrics).Error; err == nil && len(latestMetrics) > 0 {
 						// Aggregate across all containers
 						var sumCPU float64
@@ -467,11 +477,11 @@ func (s *Service) StreamDeploymentMetrics(ctx context.Context, req *connect.Requ
 						}
 
 						avgCPU := sumCPU / float64(len(latestMetrics))
-						lastSentTimestamp = latestTimestamp
+						lastSentTimestamp = *latestTimestamp
 
 						metric := &deploymentsv1.DeploymentMetric{
 							DeploymentId:     deploymentID,
-							Timestamp:        timestamppb.New(latestTimestamp),
+							Timestamp:        timestamppb.New(*latestTimestamp),
 							CpuUsagePercent:  avgCPU,
 							MemoryUsageBytes: sumMemory,
 							NetworkRxBytes:   sumNetworkRx,
@@ -561,109 +571,329 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 		month = time.Now().UTC().Format("2006-01")
 	}
 
-	// Get usage from DeploymentUsage table
-	var usage database.DeploymentUsage
-	err = database.DB.Where("deployment_id = ? AND month = ?", deploymentID, month).First(&usage).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Return zero usage if no record exists
-			usage = database.DeploymentUsage{
-				DeploymentID:      deploymentID,
-				OrganizationID:    orgID,
-				Month:             month,
-				CPUCoreSeconds:    0,
-				MemoryByteSeconds: 0,
-				BandwidthRxBytes:  0,
-				BandwidthTxBytes:  0,
-				StorageBytes:      0,
-				RequestCount:      0,
-				ErrorCount:        0,
-				UptimeSeconds:     0,
-			}
-		} else {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("query usage: %w", err))
-		}
-	}
-
 	// Calculate estimated monthly usage based on current month progress
 	now := time.Now().UTC()
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	monthEnd := monthStart.AddDate(0, 1, 0).Add(-time.Second)
+	
+	// Parse requested month for historical queries
+	requestedMonthStart := monthStart
+	if month != now.Format("2006-01") {
+		// Parse historical month
+		t, err := time.Parse("2006-01", month)
+		if err == nil {
+			requestedMonthStart = time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+			monthEnd = requestedMonthStart.AddDate(0, 1, 0).Add(-time.Second)
+		}
+	}
+
+	// Calculate usage from deployment_usage_hourly (single source of truth)
+	// This works for both current and historical months
+	var currentCPUCoreSeconds int64
+	var currentMemoryByteSeconds int64
+	var currentBandwidthRxBytes int64
+	var currentBandwidthTxBytes int64
+	var currentRequestCount int64
+	var currentErrorCount int64
+	var currentStorageBytes int64
+	var currentUptimeSeconds int64
+
+	if month == now.Format("2006-01") {
+		// Current month: calculate live from hourly aggregates (full month) + raw metrics (recent)
+		// Hourly aggregates are reliable and pre-calculated, raw metrics for most recent period
+		rawCutoff := time.Now().Add(-24 * time.Hour)
+		if rawCutoff.Before(monthStart) {
+			rawCutoff = monthStart
+		}
+
+		// Get usage from hourly aggregates for full month (most efficient and accurate)
+		var hourlyUsage struct {
+			CPUCoreSeconds    int64
+			MemoryByteSeconds int64
+			BandwidthRxBytes  int64
+			BandwidthTxBytes  int64
+		}
+		database.DB.Table("deployment_usage_hourly duh").
+			Select(`
+				COALESCE(SUM((duh.avg_cpu_usage / 100.0) * 3600), 0) as cpu_core_seconds,
+				COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds,
+				COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
+				COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
+			`).
+			Where("duh.deployment_id = ? AND duh.hour >= ? AND duh.hour < ?", deploymentID, monthStart, rawCutoff).
+			Scan(&hourlyUsage)
+
+		// Get recent usage from raw metrics (last 24 hours - not yet aggregated)
+		type recentMetric struct {
+			CPUCoreSeconds    int64
+			MemoryByteSeconds int64
+			BandwidthRxBytes  int64
+			BandwidthTxBytes  int64
+			RequestCount      int64
+			ErrorCount        int64
+		}
+		var recentUsage recentMetric
+		
+		// Calculate CPU and Memory from raw metrics (grouped by timestamp)
+		type metricTimestamp struct {
+			CPUUsage    float64
+			MemorySum   int64
+			Timestamp   time.Time
+		}
+		var metricTimestamps []metricTimestamp
+		database.DB.Table("deployment_metrics dm").
+			Select(`
+				AVG(dm.cpu_usage) as cpu_usage,
+				SUM(dm.memory_usage) as memory_sum,
+				dm.timestamp as timestamp
+			`).
+			Where("dm.deployment_id = ? AND dm.timestamp >= ?", deploymentID, rawCutoff).
+			Group("dm.timestamp").
+			Order("dm.timestamp ASC").
+			Scan(&metricTimestamps)
+		
+		// Calculate byte-seconds from timestamped metrics
+		metricInterval := int64(5)
+		for i, m := range metricTimestamps {
+			interval := metricInterval
+			if i > 0 {
+				interval = int64(m.Timestamp.Sub(metricTimestamps[i-1].Timestamp).Seconds())
+				if interval <= 0 {
+					interval = metricInterval
+				}
+			}
+			recentUsage.CPUCoreSeconds += int64((m.CPUUsage / 100.0) * float64(interval))
+			recentUsage.MemoryByteSeconds += m.MemorySum * interval
+		}
+
+		// Get bandwidth and request counts from raw metrics
+		database.DB.Table("deployment_metrics dm").
+			Select(`
+				COALESCE(SUM(dm.network_rx_bytes), 0) as bandwidth_rx_bytes,
+				COALESCE(SUM(dm.network_tx_bytes), 0) as bandwidth_tx_bytes,
+				COALESCE(SUM(dm.request_count), 0) as request_count,
+				COALESCE(SUM(dm.error_count), 0) as error_count
+			`).
+			Where("dm.deployment_id = ? AND dm.timestamp >= ?", deploymentID, rawCutoff).
+			Scan(&recentUsage)
+
+		// Combine: hourly aggregates (older) + raw metrics (recent) = live current month usage
+		currentCPUCoreSeconds = hourlyUsage.CPUCoreSeconds + recentUsage.CPUCoreSeconds
+		currentMemoryByteSeconds = hourlyUsage.MemoryByteSeconds + recentUsage.MemoryByteSeconds
+		currentBandwidthRxBytes = hourlyUsage.BandwidthRxBytes + recentUsage.BandwidthRxBytes
+		currentBandwidthTxBytes = hourlyUsage.BandwidthTxBytes + recentUsage.BandwidthTxBytes
+		currentRequestCount = recentUsage.RequestCount
+		currentErrorCount = recentUsage.ErrorCount
+		
+		// Get storage from deployments table
+		var storage struct {
+			StorageBytes int64
+		}
+		database.DB.Table("deployments").
+			Select("COALESCE(storage_bytes, 0) as storage_bytes").
+			Where("id = ?", deploymentID).
+			Scan(&storage)
+		currentStorageBytes = storage.StorageBytes
+		
+		// Calculate uptime from deployment_locations
+		var uptime struct {
+			UptimeSeconds int64
+		}
+		database.DB.Table("deployment_locations dl").
+			Select(`
+				COALESCE(SUM(EXTRACT(EPOCH FROM (
+					CASE 
+						WHEN dl.status = 'running' THEN NOW() - dl.created_at
+						WHEN dl.updated_at > dl.created_at THEN dl.updated_at - dl.created_at
+						ELSE 0
+					END
+				))), 0)::bigint as uptime_seconds
+			`).
+			Where("dl.deployment_id = ? AND (dl.created_at >= ? OR dl.updated_at >= ?)", deploymentID, monthStart, monthStart).
+			Scan(&uptime)
+		currentUptimeSeconds = uptime.UptimeSeconds
+	} else {
+		// Historical month: calculate from deployment_usage_hourly
+		// Get usage from hourly aggregates for the entire requested month
+		var hourlyUsage struct {
+			CPUCoreSeconds    int64
+			MemoryByteSeconds int64
+			BandwidthRxBytes  int64
+			BandwidthTxBytes  int64
+		}
+		database.DB.Table("deployment_usage_hourly duh").
+			Select(`
+				COALESCE(SUM((duh.avg_cpu_usage / 100.0) * 3600), 0) as cpu_core_seconds,
+				COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds,
+				COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
+				COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
+			`).
+			Where("duh.deployment_id = ? AND duh.hour >= ? AND duh.hour <= ?", deploymentID, requestedMonthStart, monthEnd).
+			Scan(&hourlyUsage)
+		
+		currentCPUCoreSeconds = hourlyUsage.CPUCoreSeconds
+		currentMemoryByteSeconds = hourlyUsage.MemoryByteSeconds
+		currentBandwidthRxBytes = hourlyUsage.BandwidthRxBytes
+		currentBandwidthTxBytes = hourlyUsage.BandwidthTxBytes
+		
+		// Get request/error counts from raw metrics for the month
+		var reqCount struct {
+			RequestCount int64
+			ErrorCount   int64
+		}
+		database.DB.Table("deployment_metrics dm").
+			Select(`
+				COALESCE(SUM(dm.request_count), 0) as request_count,
+				COALESCE(SUM(dm.error_count), 0) as error_count
+			`).
+			Where("dm.deployment_id = ? AND dm.timestamp >= ? AND dm.timestamp <= ?", deploymentID, requestedMonthStart, monthEnd).
+			Scan(&reqCount)
+		currentRequestCount = reqCount.RequestCount
+		currentErrorCount = reqCount.ErrorCount
+		
+		// Get storage from deployments table (historical snapshot not available, use current)
+		var storage struct {
+			StorageBytes int64
+		}
+		database.DB.Table("deployments").
+			Select("COALESCE(storage_bytes, 0) as storage_bytes").
+			Where("id = ?", deploymentID).
+			Scan(&storage)
+		currentStorageBytes = storage.StorageBytes
+		
+		// Calculate uptime from deployment_locations for historical month
+		var uptime struct {
+			UptimeSeconds int64
+		}
+		database.DB.Table("deployment_locations dl").
+			Select(`
+				COALESCE(SUM(EXTRACT(EPOCH FROM (
+					CASE 
+						WHEN dl.status = 'running' AND dl.updated_at <= ? THEN ?::timestamp - dl.created_at
+						WHEN dl.updated_at > dl.created_at AND dl.updated_at <= ? THEN dl.updated_at - dl.created_at
+						WHEN dl.created_at >= ? AND dl.created_at < ? THEN ?::timestamp - dl.created_at
+						ELSE 0
+					END
+				))), 0)::bigint as uptime_seconds
+			`, monthEnd, monthEnd, monthEnd, requestedMonthStart, monthEnd, monthEnd).
+			Where("dl.deployment_id = ? AND ((dl.created_at >= ? AND dl.created_at <= ?) OR (dl.updated_at >= ? AND dl.updated_at <= ?))", 
+				deploymentID, requestedMonthStart, monthEnd, requestedMonthStart, monthEnd).
+			Scan(&uptime)
+		currentUptimeSeconds = uptime.UptimeSeconds
+	}
 
 	var estimatedMonthly *deploymentsv1.DeploymentUsageMetrics
 	if month == now.Format("2006-01") {
-		// Current month: project based on elapsed time
+		// Current month: project based on elapsed time using live calculated values
 		elapsed := now.Sub(monthStart)
 		monthDuration := monthEnd.Sub(monthStart)
 		elapsedRatio := float64(elapsed) / float64(monthDuration)
 
 		if elapsedRatio > 0 {
 			estimatedMonthly = &deploymentsv1.DeploymentUsageMetrics{
-				CpuCoreSeconds:    int64(float64(usage.CPUCoreSeconds) / elapsedRatio),
-				MemoryByteSeconds: int64(float64(usage.MemoryByteSeconds) / elapsedRatio),
-				BandwidthRxBytes:  usage.BandwidthRxBytes, // Bandwidth is cumulative, not time-based for estimation
-				BandwidthTxBytes:  usage.BandwidthTxBytes,
-				StorageBytes:      usage.StorageBytes, // Storage is not time-based
-				RequestCount:      usage.RequestCount,
-				ErrorCount:        usage.ErrorCount,
-				UptimeSeconds:     int64(float64(usage.UptimeSeconds) / elapsedRatio),
+				CpuCoreSeconds:    int64(float64(currentCPUCoreSeconds) / elapsedRatio),
+				MemoryByteSeconds: int64(float64(currentMemoryByteSeconds) / elapsedRatio),
+				BandwidthRxBytes:  currentBandwidthRxBytes, // Bandwidth is cumulative, use current value for estimate
+				BandwidthTxBytes:  currentBandwidthTxBytes,
+				StorageBytes:      currentStorageBytes, // Storage is snapshot from deployments table
+				RequestCount:      currentRequestCount,
+				ErrorCount:        currentErrorCount,
+				UptimeSeconds:     int64(float64(currentUptimeSeconds) / elapsedRatio), // Use calculated uptime
 			}
 		} else {
 			estimatedMonthly = &deploymentsv1.DeploymentUsageMetrics{
-				CpuCoreSeconds:    usage.CPUCoreSeconds,
-				MemoryByteSeconds: usage.MemoryByteSeconds,
-				BandwidthRxBytes:  usage.BandwidthRxBytes,
-				BandwidthTxBytes:  usage.BandwidthTxBytes,
-				StorageBytes:      usage.StorageBytes,
-				RequestCount:      usage.RequestCount,
-				ErrorCount:        usage.ErrorCount,
-				UptimeSeconds:     usage.UptimeSeconds,
+				CpuCoreSeconds:    currentCPUCoreSeconds,
+				MemoryByteSeconds: currentMemoryByteSeconds,
+				BandwidthRxBytes:  currentBandwidthRxBytes,
+				BandwidthTxBytes:  currentBandwidthTxBytes,
+				StorageBytes:      currentStorageBytes,
+				RequestCount:      currentRequestCount,
+				ErrorCount:        currentErrorCount,
+				UptimeSeconds:     currentUptimeSeconds,
 			}
 		}
 	} else {
-		// Historical month: estimated equals current
+		// Historical month: estimated equals current (from calculated data)
 		estimatedMonthly = &deploymentsv1.DeploymentUsageMetrics{
-			CpuCoreSeconds:    usage.CPUCoreSeconds,
-			MemoryByteSeconds: usage.MemoryByteSeconds,
-			BandwidthRxBytes:  usage.BandwidthRxBytes,
-			BandwidthTxBytes:  usage.BandwidthTxBytes,
-			StorageBytes:      usage.StorageBytes,
-			RequestCount:      usage.RequestCount,
-			ErrorCount:        usage.ErrorCount,
-			UptimeSeconds:     usage.UptimeSeconds,
+			CpuCoreSeconds:    currentCPUCoreSeconds,
+			MemoryByteSeconds: currentMemoryByteSeconds,
+			BandwidthRxBytes:  currentBandwidthRxBytes,
+			BandwidthTxBytes:  currentBandwidthTxBytes,
+			StorageBytes:      currentStorageBytes,
+			RequestCount:      currentRequestCount,
+			ErrorCount:        currentErrorCount,
+			UptimeSeconds:     currentUptimeSeconds,
 		}
 	}
 
 	// Calculate estimated cost using centralized pricing model
 	pricingModel := pricing.GetPricing()
 	estBandwidthBytes := estimatedMonthly.BandwidthRxBytes + estimatedMonthly.BandwidthTxBytes
-	estimatedMonthly.EstimatedCostCents = pricingModel.CalculateTotalCost(
-		estimatedMonthly.CpuCoreSeconds,
-		estimatedMonthly.MemoryByteSeconds,
-		estBandwidthBytes,
-		estimatedMonthly.StorageBytes,
-	)
+	
+	// Calculate per-resource costs for estimated monthly
+	estCPUCost := pricingModel.CalculateCPUCost(estimatedMonthly.CpuCoreSeconds)
+	estMemoryCost := pricingModel.CalculateMemoryCost(estimatedMonthly.MemoryByteSeconds)
+	estBandwidthCost := pricingModel.CalculateBandwidthCost(estBandwidthBytes)
+	estStorageCost := pricingModel.CalculateStorageCost(estimatedMonthly.StorageBytes) // Full month for estimate
+	estimatedMonthly.EstimatedCostCents = estCPUCost + estMemoryCost + estBandwidthCost + estStorageCost
+	
+	// Set per-resource cost breakdown for estimated monthly
+	cpuCostPtr := int64(estCPUCost)
+	memoryCostPtr := int64(estMemoryCost)
+	bandwidthCostPtr := int64(estBandwidthCost)
+	storageCostPtr := int64(estStorageCost)
+	estimatedMonthly.CpuCostCents = &cpuCostPtr
+	estimatedMonthly.MemoryCostCents = &memoryCostPtr
+	estimatedMonthly.BandwidthCostCents = &bandwidthCostPtr
+	estimatedMonthly.StorageCostCents = &storageCostPtr
 
-	// Calculate current cost using centralized pricing model
-	currBandwidthBytes := usage.BandwidthRxBytes + usage.BandwidthTxBytes
-	currentCostCents := pricingModel.CalculateTotalCost(
-		usage.CPUCoreSeconds,
-		usage.MemoryByteSeconds,
-		currBandwidthBytes,
-		usage.StorageBytes,
-	)
+	// Calculate current cost using centralized pricing model with live calculated values
+	// Note: Storage is billed monthly - for current cost, we need to prorate it
+	// CPU/Memory are already time-based (core-seconds, byte-seconds) so no prorating needed
+	// Bandwidth is one-time cost per byte transferred, no prorating needed
+	// Storage is monthly cost per byte, so must prorate based on elapsed time
+	currBandwidthBytes := currentBandwidthRxBytes + currentBandwidthTxBytes
+	
+	// Calculate elapsed ratio for storage prorating
+	var elapsedRatio float64
+	if month == now.Format("2006-01") {
+		elapsed := now.Sub(monthStart)
+		monthDuration := monthEnd.Sub(monthStart)
+		elapsedRatio = float64(elapsed) / float64(monthDuration)
+	} else {
+		// Historical month: use full month (1.0) for prorating
+		elapsedRatio = 1.0
+	}
+	
+	// Calculate per-resource costs for current usage (using live calculated values)
+	currCPUCost := pricingModel.CalculateCPUCost(currentCPUCoreSeconds)
+	currMemoryCost := pricingModel.CalculateMemoryCost(currentMemoryByteSeconds)
+	currBandwidthCost := pricingModel.CalculateBandwidthCost(currBandwidthBytes)
+	currStorageFullMonth := pricingModel.CalculateStorageCost(currentStorageBytes)
+	currStorageCost := int64(float64(currStorageFullMonth) * elapsedRatio) // Prorate for current month
+	currentCostCents := currCPUCost + currMemoryCost + currBandwidthCost + currStorageCost
 
 	currentMetrics := &deploymentsv1.DeploymentUsageMetrics{
-		CpuCoreSeconds:     usage.CPUCoreSeconds,
-		MemoryByteSeconds:  usage.MemoryByteSeconds,
-		BandwidthRxBytes:   usage.BandwidthRxBytes,
-		BandwidthTxBytes:   usage.BandwidthTxBytes,
-		StorageBytes:       usage.StorageBytes,
-		RequestCount:       usage.RequestCount,
-		ErrorCount:         usage.ErrorCount,
-		UptimeSeconds:      usage.UptimeSeconds,
-		EstimatedCostCents: currentCostCents, // Current usage cost (calculated server-side)
+		CpuCoreSeconds:     currentCPUCoreSeconds,
+		MemoryByteSeconds:  currentMemoryByteSeconds,
+		BandwidthRxBytes:   currentBandwidthRxBytes,
+		BandwidthTxBytes:   currentBandwidthTxBytes,
+		StorageBytes:       currentStorageBytes, // Storage from deployments table
+		RequestCount:       currentRequestCount,
+		ErrorCount:         currentErrorCount,
+		UptimeSeconds:      currentUptimeSeconds, // Uptime calculated from deployment_locations
+		EstimatedCostCents: currentCostCents, // Current usage cost (calculated server-side with live data)
 	}
+	
+	// Set per-resource cost breakdown for current usage
+	currCPUCostPtr := int64(currCPUCost)
+	currMemoryCostPtr := int64(currMemoryCost)
+	currBandwidthCostPtr := int64(currBandwidthCost)
+	currStorageCostPtr := currStorageCost
+	currentMetrics.CpuCostCents = &currCPUCostPtr
+	currentMetrics.MemoryCostCents = &currMemoryCostPtr
+	currentMetrics.BandwidthCostCents = &currBandwidthCostPtr
+	currentMetrics.StorageCostCents = &currStorageCostPtr
 
 	response := &deploymentsv1.GetDeploymentUsageResponse{
 		DeploymentId:     deploymentID,
