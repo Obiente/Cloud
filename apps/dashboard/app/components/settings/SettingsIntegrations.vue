@@ -24,35 +24,40 @@
       </OuiCard>
 
       <!-- Connected Accounts List -->
-      <OuiCard v-else-if="integrations.length > 0" variant="outline">
-        <OuiCardBody>
-          <OuiStack gap="md">
-            <OuiText as="h3" size="lg" weight="semibold"
-              >Active Connections</OuiText
-            >
+      <div v-else-if="integrations.length > 0">
+        <OuiStack gap="md">
+          <OuiText as="h3" size="lg" weight="semibold"
+            >Active Connections</OuiText
+          >
 
-            <OuiStack gap="sm">
-              <OuiCard
-                v-for="integration in integrations"
-                :key="integration.id"
-                variant="outline"
-                class="border-default"
-              >
-                <OuiCardBody>
-                  <OuiFlex justify="between" align="center">
-                    <OuiFlex align="center" gap="md">
-                      <Icon name="uil:github" class="h-5 w-5" />
+          <!-- Single account - no nested cards to avoid whitespace -->
+          <OuiCard
+            v-if="integrations.length === 1 && integrations[0]"
+            variant="outline"
+            class="border-default"
+          >
+            <OuiCardBody>
+              <template v-if="integrations[0]">
+                <OuiFlex justify="between" align="center" gap="md">
+                  <OuiFlex align="center" gap="md" class="flex-1">
+                    <img
+                      :src="`https://avatars.githubusercontent.com/${integrations[0].username}`"
+                      :alt="integrations[0].username"
+                      class="h-12 w-12 rounded-full border border-default"
+                      @error="handleAvatarError"
+                    />
+                    <OuiStack gap="xs" class="flex-1">
                       <OuiStack gap="xs">
-                        <OuiFlex align="center" gap="sm">
-                          <OuiText size="sm" weight="medium">{{
-                            integration.username
-                          }}</OuiText>
+                        <OuiFlex align="center" gap="sm" wrap="wrap">
+                          <OuiText size="sm" weight="semibold" class="text-text-primary">
+                            @{{ integrations[0].username }}
+                          </OuiText>
                           <OuiBox
-                            v-if="integration.isUser"
+                            v-if="integrations[0].isUser"
                             px="xs"
                             py="xs"
                             rounded="sm"
-                            class="bg-primary/10 text-primary text-xs"
+                            class="bg-primary/10 text-primary text-xs font-medium"
                           >
                             Personal
                           </OuiBox>
@@ -61,40 +66,138 @@
                             px="xs"
                             py="xs"
                             rounded="sm"
-                            class="bg-secondary/10 text-secondary text-xs"
+                            class="bg-secondary/10 text-secondary text-xs font-medium"
                           >
-                            {{
-                              integration.organizationName ||
-                              integration.organizationId
-                            }}
+                            Organization
+                          </OuiBox>
+                          <OuiBox
+                            v-if="!integrations[0].isUser && integrations[0].organizationName"
+                            px="xs"
+                            py="xs"
+                            rounded="sm"
+                            class="bg-text-secondary/10 text-text-secondary text-xs font-medium"
+                          >
+                            {{ integrations[0].organizationName }}
                           </OuiBox>
                         </OuiFlex>
-                        <OuiText size="xs" color="secondary">
-                          Connected
-                          <OuiRelativeTime
-                            v-if="integration.connectedAt"
-                            :value="new Date((integration.connectedAt.seconds || 0) * 1000)"
-                            :style="'short'"
-                          />
-                        </OuiText>
+                        <OuiFlex align="center" gap="xs" wrap="wrap">
+                          <OuiText size="xs" color="secondary">
+                            Connected
+                            <OuiRelativeTime
+                              v-if="integrations[0].connectedAt"
+                              :value="new Date((integrations[0].connectedAt.seconds || 0) * 1000)"
+                              :style="'short'"
+                            />
+                          </OuiText>
+                          <template v-if="integrations[0].scope">
+                            <span class="text-text-tertiary">•</span>
+                            <OuiText size="xs" color="secondary">
+                              Scopes: {{ formatScopes(integrations[0].scope) }}
+                            </OuiText>
+                          </template>
+                        </OuiFlex>
                       </OuiStack>
-                    </OuiFlex>
-                    <OuiButton
-                      @click="disconnectIntegration(integration)"
-                      :disabled="isDisconnecting"
-                      variant="ghost"
-                      size="sm"
-                      color="danger"
-                    >
-                      Disconnect
-                    </OuiButton>
+                    </OuiStack>
                   </OuiFlex>
-                </OuiCardBody>
-              </OuiCard>
-            </OuiStack>
+                  <OuiButton
+                    @click="disconnectIntegration(integrations[0])"
+                    :disabled="isDisconnecting"
+                    variant="ghost"
+                    size="sm"
+                    color="danger"
+                  >
+                    Disconnect
+                  </OuiButton>
+                </OuiFlex>
+              </template>
+            </OuiCardBody>
+          </OuiCard>
+
+          <!-- Multiple accounts - use list layout -->
+          <OuiStack v-else gap="sm">
+            <OuiCard
+              v-for="integration in integrations"
+              :key="integration.id"
+              variant="outline"
+              class="border-default"
+            >
+              <OuiCardBody>
+                <OuiFlex justify="between" align="center" gap="md">
+                  <OuiFlex align="center" gap="md" class="flex-1">
+                    <img
+                      :src="`https://avatars.githubusercontent.com/${integration.username}`"
+                      :alt="integration.username"
+                      class="h-10 w-10 rounded-full border border-default"
+                      @error="handleAvatarError"
+                    />
+                    <OuiStack gap="xs" class="flex-1">
+                      <OuiStack gap="xs">
+                        <OuiFlex align="center" gap="sm" wrap="wrap">
+                          <OuiText size="sm" weight="semibold" class="text-text-primary">
+                            @{{ integration.username }}
+                          </OuiText>
+                          <OuiBox
+                            v-if="integration.isUser"
+                            px="xs"
+                            py="xs"
+                            rounded="sm"
+                            class="bg-primary/10 text-primary text-xs font-medium"
+                          >
+                            Personal
+                          </OuiBox>
+                          <OuiBox
+                            v-else
+                            px="xs"
+                            py="xs"
+                            rounded="sm"
+                            class="bg-secondary/10 text-secondary text-xs font-medium"
+                          >
+                            Organization
+                          </OuiBox>
+                          <OuiBox
+                            v-if="!integration.isUser && integration.organizationName"
+                            px="xs"
+                            py="xs"
+                            rounded="sm"
+                            class="bg-text-secondary/10 text-text-secondary text-xs font-medium"
+                          >
+                            {{ integration.organizationName }}
+                          </OuiBox>
+                        </OuiFlex>
+                        <OuiFlex align="center" gap="xs" wrap="wrap">
+                          <OuiText size="xs" color="secondary">
+                            Connected
+                            <OuiRelativeTime
+                              v-if="integration.connectedAt"
+                              :value="new Date((integration.connectedAt.seconds || 0) * 1000)"
+                              :style="'short'"
+                            />
+                          </OuiText>
+                          <template v-if="integration.scope">
+                            <span class="text-text-tertiary">•</span>
+                            <OuiText size="xs" color="secondary">
+                              Scopes: {{ formatScopes(integration.scope) }}
+                            </OuiText>
+                          </template>
+                        </OuiFlex>
+                      </OuiStack>
+                    </OuiStack>
+                  </OuiFlex>
+                  <OuiButton
+                    @click="disconnectIntegration(integration)"
+                    :disabled="isDisconnecting"
+                    variant="ghost"
+                    size="sm"
+                    color="danger"
+                  >
+                    Disconnect
+                  </OuiButton>
+                </OuiFlex>
+              </OuiCardBody>
+            </OuiCard>
           </OuiStack>
-        </OuiCardBody>
-      </OuiCard>
+        </OuiStack>
+      </div>
 
       <!-- Empty State -->
       <OuiCard v-else variant="outline">
@@ -448,6 +551,31 @@
       Math.random().toString(36).substring(2, 15) +
       Math.random().toString(36).substring(2, 15)
     );
+  };
+
+  const formatScopes = (scope: string): string => {
+    if (!scope) return "None";
+    // Common GitHub scopes with readable names
+    const scopeMap: Record<string, string> = {
+      repo: "Repository access",
+      "read:user": "Read user info",
+      "admin:repo_hook": "Manage webhooks",
+      "read:org": "Read organization",
+      "write:org": "Write organization",
+    };
+    
+    const scopes = scope.split(" ").filter((s) => s.trim());
+    return scopes
+      .map((s) => scopeMap[s] || s)
+      .join(", ");
+  };
+
+  const handleAvatarError = (event: Event) => {
+    // Fallback to a default GitHub icon if avatar fails to load
+    const target = event.target as HTMLImageElement;
+    if (target) {
+      target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23666'%3E%3Cpath d='M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z'/%3E%3C/svg%3E";
+    }
   };
 
   const disconnectIntegration = async (
