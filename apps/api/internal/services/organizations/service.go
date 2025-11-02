@@ -472,26 +472,6 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		month = time.Now().UTC().Format("2006-01")
 	}
 
-	// Get usage from UsageMonthly table
-	var usage database.UsageMonthly
-	if err := database.DB.Where("organization_id = ? AND month = ?", orgID, month).First(&usage).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Return zero usage if no record exists
-			usage = database.UsageMonthly{
-				OrganizationID:       orgID,
-				Month:                month,
-				CPUCoreSeconds:       0,
-				MemoryByteSeconds:    0,
-				BandwidthRxBytes:     0,
-				BandwidthTxBytes:     0,
-				StorageBytes:         0,
-				DeploymentsActivePeak: 0,
-			}
-		} else {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("query usage: %w", err))
-		}
-	}
-
 	// Calculate estimated monthly usage based on current month progress
 	now := time.Now().UTC()
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -508,38 +488,192 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		elapsedRatio = 1.0
 	}
 	
+	// Parse requested month for historical queries
+	requestedMonthStart := monthStart
+	if month != now.Format("2006-01") {
+		// Parse historical month
+		t, err := time.Parse("2006-01", month)
+		if err == nil {
+			requestedMonthStart = time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+			monthEnd = requestedMonthStart.AddDate(0, 1, 0).Add(-time.Second)
+		}
+	}
+	
+	// Calculate usage from deployment_usage_hourly (single source of truth)
+	// This works for both current and historical months
+	var currentCPUCoreSeconds int64
+	var currentMemoryByteSeconds int64
+	var currentBandwidthRxBytes int64
+	var currentBandwidthTxBytes int64
+	var currentStorageBytes int64
+	var deploymentsActivePeak int
+
+	if month == now.Format("2006-01") {
+		// Current month: calculate live from hourly aggregates (full month) + raw metrics (recent)
+		rawCutoff := time.Now().Add(-24 * time.Hour)
+		if rawCutoff.Before(monthStart) {
+			rawCutoff = monthStart
+		}
+
+		// Get usage from hourly aggregates for all org deployments (older than 24 hours)
+		var hourlyUsage struct {
+			CPUCoreSeconds    int64
+			MemoryByteSeconds int64
+			BandwidthRxBytes  int64
+			BandwidthTxBytes  int64
+		}
+		database.DB.Table("deployment_usage_hourly duh").
+			Select(`
+				COALESCE(SUM((duh.avg_cpu_usage / 100.0) * 3600), 0) as cpu_core_seconds,
+				COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds,
+				COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
+				COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
+			`).
+			Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour < ?", orgID, monthStart, rawCutoff).
+			Scan(&hourlyUsage)
+
+		// Get recent usage from raw metrics (last 24 hours - not yet aggregated)
+		// We need to query by joining with deployments table to filter by organization
+		type metricTimestamp struct {
+			CPUUsage    float64
+			MemorySum   int64
+			Timestamp   time.Time
+		}
+		var metricTimestamps []metricTimestamp
+		database.DB.Table("deployment_metrics dm").
+			Select(`
+				AVG(dm.cpu_usage) as cpu_usage,
+				SUM(dm.memory_usage) as memory_sum,
+				dm.timestamp as timestamp
+			`).
+			Joins("JOIN deployments d ON d.id = dm.deployment_id").
+			Where("d.organization_id = ? AND dm.timestamp >= ?", orgID, rawCutoff).
+			Group("dm.timestamp").
+			Order("dm.timestamp ASC").
+			Scan(&metricTimestamps)
+		
+		var recentCPU int64
+		var recentMemory int64
+		metricInterval := int64(5)
+		for i, m := range metricTimestamps {
+			interval := metricInterval
+			if i > 0 {
+				interval = int64(m.Timestamp.Sub(metricTimestamps[i-1].Timestamp).Seconds())
+				if interval <= 0 {
+					interval = metricInterval
+				}
+			}
+			recentCPU += int64((m.CPUUsage / 100.0) * float64(interval))
+			recentMemory += m.MemorySum * interval
+		}
+
+		// Get bandwidth from raw metrics
+		var recentBandwidth struct {
+			BandwidthRxBytes int64
+			BandwidthTxBytes int64
+		}
+		database.DB.Table("deployment_metrics dm").
+			Select(`
+				COALESCE(SUM(dm.network_rx_bytes), 0) as bandwidth_rx_bytes,
+				COALESCE(SUM(dm.network_tx_bytes), 0) as bandwidth_tx_bytes
+			`).
+			Joins("JOIN deployments d ON d.id = dm.deployment_id").
+			Where("d.organization_id = ? AND dm.timestamp >= ?", orgID, rawCutoff).
+			Scan(&recentBandwidth)
+
+		// Combine: hourly aggregates (older) + raw metrics (recent) = live current month usage
+		currentCPUCoreSeconds = hourlyUsage.CPUCoreSeconds + recentCPU
+		currentMemoryByteSeconds = hourlyUsage.MemoryByteSeconds + recentMemory
+		currentBandwidthRxBytes = hourlyUsage.BandwidthRxBytes + recentBandwidth.BandwidthRxBytes
+		currentBandwidthTxBytes = hourlyUsage.BandwidthTxBytes + recentBandwidth.BandwidthTxBytes
+		
+		// Storage: get current snapshot from deployments table
+		var storageSum struct {
+			StorageBytes int64
+		}
+		database.DB.Table("deployments d").
+			Select("COALESCE(SUM(d.storage_bytes), 0) as storage_bytes").
+			Where("d.organization_id = ?", orgID).
+			Scan(&storageSum)
+		currentStorageBytes = storageSum.StorageBytes
+		
+		// Get peak deployments count for current month
+		var peakCount int
+		database.DB.Table("deployment_locations dl").
+			Select("COUNT(DISTINCT dl.deployment_id)").
+			Joins("JOIN deployments d ON d.id = dl.deployment_id").
+			Where("d.organization_id = ? AND dl.status = ? AND (dl.created_at >= ? OR dl.updated_at >= ?)", orgID, "running", monthStart, monthStart).
+			Scan(&peakCount)
+		deploymentsActivePeak = peakCount
+	} else {
+		// Historical month: calculate from deployment_usage_hourly
+		// Get usage from hourly aggregates for the entire requested month
+		var hourlyUsage struct {
+			CPUCoreSeconds    int64
+			MemoryByteSeconds int64
+			BandwidthRxBytes  int64
+			BandwidthTxBytes  int64
+		}
+		database.DB.Table("deployment_usage_hourly duh").
+			Select(`
+				COALESCE(SUM((duh.avg_cpu_usage / 100.0) * 3600), 0) as cpu_core_seconds,
+				COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds,
+				COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
+				COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
+			`).
+			Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour <= ?", orgID, requestedMonthStart, monthEnd).
+			Scan(&hourlyUsage)
+		
+		currentCPUCoreSeconds = hourlyUsage.CPUCoreSeconds
+		currentMemoryByteSeconds = hourlyUsage.MemoryByteSeconds
+		currentBandwidthRxBytes = hourlyUsage.BandwidthRxBytes
+		currentBandwidthTxBytes = hourlyUsage.BandwidthTxBytes
+		
+		// Storage: get snapshot from deployments table for the month (use current, as historical storage is not tracked)
+		var storageSum struct {
+			StorageBytes int64
+		}
+		database.DB.Table("deployments d").
+			Select("COALESCE(SUM(d.storage_bytes), 0) as storage_bytes").
+			Where("d.organization_id = ?", orgID).
+			Scan(&storageSum)
+		currentStorageBytes = storageSum.StorageBytes
+		
+		// Peak deployments: not tracked historically, use 0 or current
+		deploymentsActivePeak = 0
+	}
+	
 	var estimatedMonthly *organizationsv1.UsageMetrics
 	if month == now.Format("2006-01") {
-		// Current month: project based on elapsed time
-		
+		// Current month: project based on elapsed time using live calculated values
 		if elapsedRatio > 0 {
 			estimatedMonthly = &organizationsv1.UsageMetrics{
-				CpuCoreSeconds:      int64(float64(usage.CPUCoreSeconds) / elapsedRatio),
-				MemoryByteSeconds:   int64(float64(usage.MemoryByteSeconds) / elapsedRatio),
-				BandwidthRxBytes:    usage.BandwidthRxBytes, // Bandwidth is cumulative total, use current value for estimate
-				BandwidthTxBytes:    usage.BandwidthTxBytes, // Bandwidth is cumulative total, use current value for estimate
-				StorageBytes:        usage.StorageBytes, // Storage is billed at current snapshot for full month, don't project
-				DeploymentsActivePeak: int32(usage.DeploymentsActivePeak),
+				CpuCoreSeconds:      int64(float64(currentCPUCoreSeconds) / elapsedRatio),
+				MemoryByteSeconds:   int64(float64(currentMemoryByteSeconds) / elapsedRatio),
+				BandwidthRxBytes:    currentBandwidthRxBytes, // Bandwidth is cumulative, use current value for estimate
+				BandwidthTxBytes:    currentBandwidthTxBytes,
+				StorageBytes:        currentStorageBytes, // Storage is snapshot, use current value for estimate
+				DeploymentsActivePeak: int32(deploymentsActivePeak),
 			}
 		} else {
 			estimatedMonthly = &organizationsv1.UsageMetrics{
-				CpuCoreSeconds:      usage.CPUCoreSeconds,
-				MemoryByteSeconds:   usage.MemoryByteSeconds,
-				BandwidthRxBytes:    usage.BandwidthRxBytes,
-				BandwidthTxBytes:    usage.BandwidthTxBytes,
-				StorageBytes:        usage.StorageBytes,
-				DeploymentsActivePeak: int32(usage.DeploymentsActivePeak),
+				CpuCoreSeconds:      currentCPUCoreSeconds,
+				MemoryByteSeconds:   currentMemoryByteSeconds,
+				BandwidthRxBytes:    currentBandwidthRxBytes,
+				BandwidthTxBytes:    currentBandwidthTxBytes,
+				StorageBytes:        currentStorageBytes,
+				DeploymentsActivePeak: int32(deploymentsActivePeak),
 			}
 		}
 	} else {
-		// Historical month: estimated equals current
+		// Historical month: estimated equals current (from aggregated data)
 		estimatedMonthly = &organizationsv1.UsageMetrics{
-			CpuCoreSeconds:      usage.CPUCoreSeconds,
-			MemoryByteSeconds:   usage.MemoryByteSeconds,
-			BandwidthRxBytes:    usage.BandwidthRxBytes,
-			BandwidthTxBytes:    usage.BandwidthTxBytes,
-			StorageBytes:        usage.StorageBytes,
-			DeploymentsActivePeak: int32(usage.DeploymentsActivePeak),
+			CpuCoreSeconds:      currentCPUCoreSeconds,
+			MemoryByteSeconds:   currentMemoryByteSeconds,
+			BandwidthRxBytes:    currentBandwidthRxBytes,
+			BandwidthTxBytes:    currentBandwidthTxBytes,
+			StorageBytes:        currentStorageBytes,
+			DeploymentsActivePeak: int32(deploymentsActivePeak),
 		}
 	}
 
@@ -553,42 +687,42 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		estimatedMonthly.StorageBytes,
 	)
 
-	// Calculate current cost using centralized pricing model
+	// Calculate current cost using centralized pricing model with live calculated values
 	// Note: Storage is billed monthly - for current cost, we need to prorate it
 	// CPU/Memory are already time-based (core-seconds, byte-seconds) so no prorating needed
 	// Bandwidth is one-time cost per byte transferred, no prorating needed
 	// Storage is monthly cost per byte, so must prorate based on elapsed time
-	currBandwidthBytes := usage.BandwidthRxBytes + usage.BandwidthTxBytes
-	cpuCost := pricingModel.CalculateCPUCost(usage.CPUCoreSeconds)
-	memoryCost := pricingModel.CalculateMemoryCost(usage.MemoryByteSeconds)
+	currBandwidthBytes := currentBandwidthRxBytes + currentBandwidthTxBytes
+	cpuCost := pricingModel.CalculateCPUCost(currentCPUCoreSeconds)
+	memoryCost := pricingModel.CalculateMemoryCost(currentMemoryByteSeconds)
 	bandwidthCost := pricingModel.CalculateBandwidthCost(currBandwidthBytes)
 	
 	// Storage cost is monthly rate, prorate for current cost calculation
 	var currentCostCents int64
 	if month == now.Format("2006-01") && elapsedRatio > 0 {
-		storageCostFullMonth := pricingModel.CalculateStorageCost(usage.StorageBytes)
+		storageCostFullMonth := pricingModel.CalculateStorageCost(currentStorageBytes)
 		storageCostProrated := int64(float64(storageCostFullMonth) * elapsedRatio)
 		currentCostCents = cpuCost + memoryCost + bandwidthCost + storageCostProrated
 	} else {
 		// Historical month: storage is already for full month
 		currentCostCents = pricingModel.CalculateTotalCost(
-			usage.CPUCoreSeconds,
-			usage.MemoryByteSeconds,
+			currentCPUCoreSeconds,
+			currentMemoryByteSeconds,
 			currBandwidthBytes,
-			usage.StorageBytes,
+			currentStorageBytes,
 		)
 	}
 
 	estimatedMonthly.EstimatedCostCents = estimatedCostCents
 
 	currentMetrics := &organizationsv1.UsageMetrics{
-		CpuCoreSeconds:      usage.CPUCoreSeconds,
-		MemoryByteSeconds:   usage.MemoryByteSeconds,
-		BandwidthRxBytes:    usage.BandwidthRxBytes,
-		BandwidthTxBytes:    usage.BandwidthTxBytes,
-		StorageBytes:        usage.StorageBytes,
-		DeploymentsActivePeak: int32(usage.DeploymentsActivePeak),
-		EstimatedCostCents: currentCostCents, // Current usage cost (calculated server-side)
+		CpuCoreSeconds:      currentCPUCoreSeconds,
+		MemoryByteSeconds:   currentMemoryByteSeconds,
+		BandwidthRxBytes:    currentBandwidthRxBytes,
+		BandwidthTxBytes:    currentBandwidthTxBytes,
+		StorageBytes:        currentStorageBytes,
+		DeploymentsActivePeak: int32(deploymentsActivePeak),
+		EstimatedCostCents: currentCostCents, // Current usage cost (calculated server-side with live data)
 	}
 
 	// Get quota information
@@ -871,57 +1005,9 @@ func buildUserProfile(ctx context.Context, resolver *userProfileResolver, member
 }
 
 func (s *Service) AddCredits(ctx context.Context, req *connect.Request[organizationsv1.AddCreditsRequest]) (*connect.Response[organizationsv1.AddCreditsResponse], error) {
-	user, err := auth.GetUserFromContext(ctx)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
-	}
-
-	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
-	if orgID == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
-	}
-
-	amountCents := req.Msg.GetAmountCents()
-	if amountCents <= 0 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("amount_cents must be positive"))
-	}
-
-	// Only owners and admins can add credits to their organization
-	if err := s.authorizeOrgRoles(ctx, orgID, user, "owner", "admin"); err != nil {
-		return nil, err
-	}
-
-	// Update credits in a transaction
-	var org database.Organization
-	if err := database.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
-			return err
-		}
-		org.Credits += amountCents
-		if org.Credits < 0 {
-			org.Credits = 0 // Prevent negative balances
-		}
-		return tx.Save(&org).Error
-	}); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
-		}
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("add credits: %w", err))
-	}
-
-	po := &organizationsv1.Organization{
-		Id: org.ID, Name: org.Name, Slug: org.Slug, Plan: strings.ToLower(org.Plan),
-		Status: org.Status, Credits: org.Credits, CreatedAt: timestamppb.New(org.CreatedAt),
-	}
-	if org.Domain != nil {
-		po.Domain = org.Domain
-	}
-
-	return connect.NewResponse(&organizationsv1.AddCreditsResponse{
-		Organization:      po,
-		NewBalanceCents:   org.Credits,
-		AmountAddedCents: amountCents,
-	}), nil
+	// SECURITY: Users should not be able to add credits without payment
+	// This endpoint is deprecated - use AdminAddCredits or payment processing instead
+	return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("users cannot add credits directly. Credits must be added through payment processing or by administrators"))
 }
 
 func (s *Service) AdminAddCredits(ctx context.Context, req *connect.Request[organizationsv1.AdminAddCreditsRequest]) (*connect.Response[organizationsv1.AdminAddCreditsResponse], error) {
@@ -945,8 +1031,15 @@ func (s *Service) AdminAddCredits(ctx context.Context, req *connect.Request[orga
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("amount_cents must be positive"))
 	}
 
-	// Update credits in a transaction
+	// Update credits in a transaction and record it
 	var org database.Organization
+	var note *string
+	if req.Msg.GetNote() != "" {
+		n := req.Msg.GetNote()
+		note = &n
+	}
+	userID := user.Id
+
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
 			return err
@@ -955,7 +1048,22 @@ func (s *Service) AdminAddCredits(ctx context.Context, req *connect.Request[orga
 		if org.Credits < 0 {
 			org.Credits = 0 // Prevent negative balances
 		}
-		return tx.Save(&org).Error
+		if err := tx.Save(&org).Error; err != nil {
+			return err
+		}
+		// Record transaction in credit log
+		transaction := &database.CreditTransaction{
+			ID:             generateID("ct"),
+			OrganizationID: orgID,
+			AmountCents:    amountCents,
+			BalanceAfter:   org.Credits,
+			Type:           "admin_add",
+			Source:         "admin",
+			Note:           note,
+			CreatedBy:      &userID,
+			CreatedAt:      time.Now(),
+		}
+		return tx.Create(transaction).Error
 	}); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
@@ -999,17 +1107,43 @@ func (s *Service) AdminRemoveCredits(ctx context.Context, req *connect.Request[o
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("amount_cents must be positive"))
 	}
 
-	// Update credits in a transaction
+	// Update credits in a transaction and record it
 	var org database.Organization
+	var note *string
+	if req.Msg.GetNote() != "" {
+		n := req.Msg.GetNote()
+		note = &n
+	}
+	userID := user.Id
+	var oldBalance int64
+	var actualRemoved int64
+
 	if err := database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
 			return err
 		}
+		oldBalance = org.Credits
 		org.Credits -= amountCents
 		if org.Credits < 0 {
 			org.Credits = 0 // Prevent negative balances
 		}
-		return tx.Save(&org).Error
+		actualRemoved = oldBalance - org.Credits
+		if err := tx.Save(&org).Error; err != nil {
+			return err
+		}
+		// Record transaction in credit log (negative amount for removal)
+		transaction := &database.CreditTransaction{
+			ID:             generateID("ct"),
+			OrganizationID: orgID,
+			AmountCents:    -actualRemoved, // Negative for removal
+			BalanceAfter:   org.Credits,
+			Type:           "admin_remove",
+			Source:         "admin",
+			Note:           note,
+			CreatedBy:      &userID,
+			CreatedAt:      time.Now(),
+		}
+		return tx.Create(transaction).Error
 	}); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
@@ -1025,15 +1159,95 @@ func (s *Service) AdminRemoveCredits(ctx context.Context, req *connect.Request[o
 		po.Domain = org.Domain
 	}
 
-	actualRemoved := amountCents
-	if org.Credits == 0 && amountCents > 0 {
-		// Calculate how much was actually removed (may be less if balance was lower)
-		actualRemoved = amountCents
-	}
-
 	return connect.NewResponse(&organizationsv1.AdminRemoveCreditsResponse{
 		Organization:        po,
 		NewBalanceCents:     org.Credits,
 		AmountRemovedCents: actualRemoved,
+	}), nil
+}
+
+func (s *Service) GetCreditLog(ctx context.Context, req *connect.Request[organizationsv1.GetCreditLogRequest]) (*connect.Response[organizationsv1.GetCreditLogResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	// Check authorization - user must be a member or superadmin
+	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	if !isSuperAdmin {
+		var member database.OrganizationMember
+		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("access denied to organization"))
+		}
+	}
+
+	// Pagination
+	page := int(req.Msg.GetPage())
+	if page < 1 {
+		page = 1
+	}
+	perPage := int(req.Msg.GetPerPage())
+	if perPage < 1 {
+		perPage = 50
+	}
+	if perPage > 100 {
+		perPage = 100
+	}
+	offset := (page - 1) * perPage
+
+	// Query transactions
+	var transactions []database.CreditTransaction
+	var total int64
+
+	if err := database.DB.Model(&database.CreditTransaction{}).
+		Where("organization_id = ?", orgID).
+		Count(&total).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get credit log: %w", err))
+	}
+
+	if err := database.DB.Where("organization_id = ?", orgID).
+		Order("created_at DESC").
+		Limit(perPage).
+		Offset(offset).
+		Find(&transactions).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get credit log: %w", err))
+		}
+
+	// Convert to proto
+	protoTransactions := make([]*organizationsv1.CreditTransaction, 0, len(transactions))
+	for _, t := range transactions {
+		pt := &organizationsv1.CreditTransaction{
+			Id:           t.ID,
+			OrganizationId: t.OrganizationID,
+			AmountCents:  t.AmountCents,
+			BalanceAfter: t.BalanceAfter,
+			Type:         t.Type,
+			Source:       t.Source,
+			CreatedAt:    timestamppb.New(t.CreatedAt),
+	}
+		if t.Note != nil {
+			pt.Note = t.Note
+		}
+		if t.CreatedBy != nil {
+			pt.CreatedBy = t.CreatedBy
+		}
+		protoTransactions = append(protoTransactions, pt)
+	}
+
+	totalPages := (int(total) + perPage - 1) / perPage
+
+	return connect.NewResponse(&organizationsv1.GetCreditLogResponse{
+		Transactions: protoTransactions,
+		Pagination: &organizationsv1.Pagination{
+			Page:       int32(page),
+			PerPage:    int32(perPage),
+			Total:      int32(total),
+			TotalPages: int32(totalPages),
+		},
 	}), nil
 }

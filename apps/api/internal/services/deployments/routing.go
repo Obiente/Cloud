@@ -104,24 +104,66 @@ func (s *Service) UpdateDeploymentRoutings(ctx context.Context, req *connect.Req
 			protocol = "http"
 		}
 
-		dbRouting := &database.DeploymentRouting{
-			ID:              ruleID,
-			DeploymentID:    deploymentID,
-			Domain:          rule.GetDomain(),
-			ServiceName:     serviceName,
-			PathPrefix:      rule.GetPathPrefix(),
-			TargetPort:      int(rule.GetTargetPort()),
-			Protocol:        protocol,
-			SSLEnabled:      rule.GetSslEnabled(),
-			SSLCertResolver: rule.GetSslCertResolver(),
-			Middleware:      "{}",
-			CreatedAt:       time.Now(),
-			UpdatedAt:       time.Now(),
+		// Ensure SSL is disabled for HTTP protocol, regardless of what the client sends
+		sslEnabled := rule.GetSslEnabled()
+		if protocol == "http" {
+			sslEnabled = false
+		} else if protocol == "https" {
+			sslEnabled = true
 		}
+		
+		var dbRouting *database.DeploymentRouting
+		
+		// Check if routing already exists
+		var existingRouting database.DeploymentRouting
+		err := database.DB.Where("id = ?", ruleID).First(&existingRouting).Error
+		
+		if err == nil {
+			// Update existing routing - explicitly update all fields including SSLEnabled
+			// Using Updates with map to ensure boolean false values are properly saved
+			updateData := map[string]interface{}{
+				"domain":           rule.GetDomain(),
+				"service_name":     serviceName,
+				"path_prefix":      rule.GetPathPrefix(),
+				"target_port":      int(rule.GetTargetPort()),
+				"protocol":         protocol,
+				"ssl_enabled":      sslEnabled, // Explicitly set to ensure false values are saved
+				"ssl_cert_resolver": rule.GetSslCertResolver(),
+				"updated_at":       time.Now(),
+			}
+			
+			if updateErr := database.DB.Model(&existingRouting).Updates(updateData).Error; updateErr != nil {
+				log.Printf("[UpdateDeploymentRoutings] Warning: Failed to update routing rule for %s: %v", rule.GetDomain(), updateErr)
+				continue
+			}
+			// Read updated record back
+			if readErr := database.DB.Where("id = ?", ruleID).First(&existingRouting).Error; readErr != nil {
+				log.Printf("[UpdateDeploymentRoutings] Warning: Failed to read updated routing: %v", readErr)
+				continue
+			}
+			dbRouting = &existingRouting
+		} else {
+			// Create new routing
+			newRouting := &database.DeploymentRouting{
+				ID:              ruleID,
+				DeploymentID:    deploymentID,
+				Domain:          rule.GetDomain(),
+				ServiceName:     serviceName,
+				PathPrefix:      rule.GetPathPrefix(),
+				TargetPort:      int(rule.GetTargetPort()),
+				Protocol:        protocol,
+				SSLEnabled:      sslEnabled,
+				SSLCertResolver: rule.GetSslCertResolver(),
+				Middleware:      "{}",
+				CreatedAt:       time.Now(),
+				UpdatedAt:       time.Now(),
+			}
 
-		if err := database.UpsertDeploymentRouting(dbRouting); err != nil {
-			log.Printf("[UpdateDeploymentRoutings] Warning: Failed to create routing rule for %s: %v", rule.GetDomain(), err)
-			continue
+			if createErr := database.DB.Create(newRouting).Error; createErr != nil {
+				log.Printf("[UpdateDeploymentRoutings] Warning: Failed to create routing rule for %s: %v", rule.GetDomain(), createErr)
+				continue
+			}
+			dbRouting = newRouting
 		}
 
 		// Convert back to proto for response

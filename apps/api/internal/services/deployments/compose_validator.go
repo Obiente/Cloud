@@ -140,7 +140,17 @@ func validateWithDockerCompose(ctx context.Context, composeYaml string) []Valida
 	
 	// Always parse warnings (can appear even if validation passes)
 	warnings := parseDockerComposeWarnings(errorOutput, composeYaml)
-	errors = append(errors, warnings...)
+	// Deduplicate warnings by message to avoid showing the same warning multiple times
+	warningMap := make(map[string]ValidationError)
+	for _, w := range warnings {
+		key := fmt.Sprintf("%d:%d:%s", w.Line, w.Column, w.Message)
+		if existing, exists := warningMap[key]; !exists || len(existing.Message) < len(w.Message) {
+			warningMap[key] = w
+		}
+	}
+	for _, w := range warningMap {
+		errors = append(errors, w)
+	}
 	
 	// Parse errors if Docker Compose returned an error exit code
 	if err != nil {
@@ -173,18 +183,59 @@ func parseDockerComposeWarnings(output string, composeYaml string) []ValidationE
 
 	// Docker Compose warnings have format:
 	// time="..." level=warning msg="<file>: <message>"
-	warningRegex := regexp.MustCompile(`level=warning\s+msg="([^"]+)"`)
-	matches := warningRegex.FindAllStringSubmatch(output, -1)
-
-	for _, match := range matches {
-		if len(match) < 2 {
+	// or in newer versions: level=warning msg="message"
+	// Handle escaped quotes and various formats
+	// Strategy: Find all warning lines, then manually extract the message
+	scanner := bufio.NewScanner(strings.NewReader(output))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.Contains(line, "level=warning") || !strings.Contains(line, "msg=") {
 			continue
 		}
-		msg := match[1]
+		
+		// Find the msg= field
+		msgStart := strings.Index(line, `msg="`)
+		if msgStart == -1 {
+			continue
+		}
+		msgStart += 5 // Skip `msg="`
+		
+		// Find the closing quote, handling escaped quotes
+		msg := ""
+		for i := msgStart; i < len(line); i++ {
+			if line[i] == '"' && (i == msgStart || line[i-1] != '\\') {
+				// Found unescaped closing quote
+				msg = line[msgStart:i]
+				break
+			}
+		}
+		
+		// If we didn't find a closing quote, use the rest of the line (shouldn't happen but be safe)
+		if msg == "" && msgStart < len(line) {
+			msg = line[msgStart:]
+		}
+		
+		// Handle escaped quotes and backslashes
+		msg = strings.ReplaceAll(msg, `\"`, `"`)
+		msg = strings.ReplaceAll(msg, `\\`, `\`)
+		
+		if msg == "" {
+			continue
+		}
 		
 		// Remove file path prefix if present (e.g., "/tmp/file.yml: message" -> "message")
+		// But be careful - if the message itself contains ": ", only remove if it looks like a file path
 		if idx := strings.LastIndex(msg, ": "); idx > 0 {
-			msg = msg[idx+2:]
+			// Check if the part before ": " looks like a file path (contains / or ends with .yml/.yaml)
+			prefix := msg[:idx]
+			if strings.Contains(prefix, "/") || strings.HasSuffix(prefix, ".yml") || strings.HasSuffix(prefix, ".yaml") {
+				msg = msg[idx+2:]
+			}
+		}
+		
+		// Skip empty or very short messages (likely parsing errors)
+		if len(strings.TrimSpace(msg)) < 3 {
+			continue
 		}
 		
 		// Try to locate the warning in the compose file
@@ -192,7 +243,7 @@ func parseDockerComposeWarnings(output string, composeYaml string) []ValidationE
 		colNum := int32(1)
 		
 		// Check for common warnings that we can locate
-		if strings.Contains(msg, "version") && strings.Contains(msg, "obsolete") {
+		if strings.Contains(msg, "version") && (strings.Contains(msg, "obsolete") || strings.Contains(msg, "deprecated")) {
 			// Version warning - typically on line 1 or 2
 			for i, line := range lines {
 				if strings.Contains(strings.ToLower(line), "version") {

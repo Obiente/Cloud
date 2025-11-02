@@ -213,14 +213,29 @@ type usageRow struct {
 }
 
 func loadCurrentUsage() ([]*superadminv1.OrganizationUsage, error) {
-	month := time.Now().UTC().Format("2006-01")
+	now := time.Now().UTC()
+	month := now.Format("2006-01")
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0).Add(-time.Second)
+	
+	// Calculate usage from deployment_usage_hourly (single source of truth)
 	var rows []usageRow
-	if err := database.DB.Table("usage_monthly u").
-		Select(`u.organization_id, COALESCE(o.name, '') AS organization_name, u.month, u.cpu_core_seconds,
-			u.memory_byte_seconds, u.bandwidth_rx_bytes, u.bandwidth_tx_bytes, u.storage_bytes, u.deployments_active_peak`).
-		Joins("LEFT JOIN organizations o ON o.id = u.organization_id").
-		Where("u.month = ?", month).
-		Order("u.cpu_core_seconds DESC").
+	if err := database.DB.Table("deployment_usage_hourly duh").
+		Select(`
+			duh.organization_id,
+			COALESCE(o.name, '') AS organization_name,
+			? AS month,
+			COALESCE(SUM((duh.avg_cpu_usage / 100.0) * 3600), 0) AS cpu_core_seconds,
+			COALESCE(SUM(duh.avg_memory_usage * 3600), 0) AS memory_byte_seconds,
+			COALESCE(SUM(duh.bandwidth_rx_bytes), 0) AS bandwidth_rx_bytes,
+			COALESCE(SUM(duh.bandwidth_tx_bytes), 0) AS bandwidth_tx_bytes,
+			COALESCE((SELECT SUM(storage_bytes) FROM deployments WHERE organization_id = duh.organization_id), 0) AS storage_bytes,
+			0 AS deployments_active_peak
+		`, month).
+		Joins("LEFT JOIN organizations o ON o.id = duh.organization_id").
+		Where("duh.hour >= ? AND duh.hour <= ?", monthStart, monthEnd).
+		Group("duh.organization_id, o.name").
+		Order("cpu_core_seconds DESC").
 		Limit(overviewLimit).
 		Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("load usage: %w", err)

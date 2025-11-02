@@ -40,13 +40,44 @@ func (s *Service) findContainerForDeployment(ctx context.Context, deploymentID, 
 	}
 
 	// If container_id is provided, find by ID
+	// Docker supports matching by prefix, so we should support that too
 	if containerID != "" {
+		// Normalize the input container ID (lowercase, no spaces)
+		normalizedInputID := strings.ToLower(strings.TrimSpace(containerID))
+		
 		for _, loc := range locations {
-			if loc.ContainerID == containerID {
+			// Normalize stored container ID
+			normalizedStoredID := strings.ToLower(strings.TrimSpace(loc.ContainerID))
+			
+			// Exact match or prefix match (Docker-style)
+			if normalizedStoredID == normalizedInputID ||
+				strings.HasPrefix(normalizedStoredID, normalizedInputID) ||
+				strings.HasPrefix(normalizedInputID, normalizedStoredID) {
 				return &loc, nil
 			}
 		}
-		return nil, fmt.Errorf("container %s not found for deployment %s", containerID[:12], deploymentID)
+		
+		// If not found, try refreshing locations and search again
+		// This helps when containers were recently created or the database is stale
+		refreshedLocations, refreshErr := database.ValidateAndRefreshLocations(deploymentID)
+		if refreshErr == nil && len(refreshedLocations) > 0 {
+			for _, loc := range refreshedLocations {
+				normalizedStoredID := strings.ToLower(strings.TrimSpace(loc.ContainerID))
+				
+				if normalizedStoredID == normalizedInputID ||
+					strings.HasPrefix(normalizedStoredID, normalizedInputID) ||
+					strings.HasPrefix(normalizedInputID, normalizedStoredID) {
+					return &loc, nil
+				}
+			}
+		}
+		
+		// Extract short ID for error message
+		shortID := containerID
+		if len(shortID) > 12 {
+			shortID = shortID[:12]
+		}
+		return nil, fmt.Errorf("container %s not found for deployment %s", shortID, deploymentID)
 	}
 
 	// If service_name is provided, find by service name (check container labels)

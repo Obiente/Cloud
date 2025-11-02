@@ -5,15 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	organizationsv1 "api/gen/proto/obiente/cloud/organizations/v1"
 	"api/internal/auth"
 	"api/internal/database"
-	"api/internal/orchestrator"
-	"api/internal/quota"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/proto"
@@ -111,213 +108,43 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	// Quota check
-	reqRes := quota.RequestedResources{
-		Replicas:    int(req.Msg.GetReplicas()),
-		MemoryBytes: req.Msg.GetMemoryBytes(),
-		CPUshares:   req.Msg.GetCpuShares(),
-	}
-	if err := s.quotaChecker.CanAllocate(ctx, orgID, reqRes); err != nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
-	}
-
 	id := fmt.Sprintf("deploy-%d", time.Now().Unix())
 
-	// Determine build strategy
-	buildStrategy := req.Msg.GetBuildStrategy()
-	var detectDir string
-	if buildStrategy == deploymentsv1.BuildStrategy_BUILD_STRATEGY_UNSPECIFIED {
-		// Auto-detect if repository URL is provided
-		if repoURL := req.Msg.GetRepositoryUrl(); repoURL != "" {
-			branch := req.Msg.GetBranch()
-			if branch == "" {
-				branch = "main" // Default branch
-			}
-			// Clone repo temporarily to detect
-			buildDir, err := ensureBuildDir(id + "-detect")
-			if err == nil {
-				if err := cloneRepository(ctx, repoURL, branch, buildDir); err == nil {
-					detected, _ := s.buildRegistry.AutoDetect(ctx, buildDir)
-					buildStrategy = detected
-					detectDir = buildDir // Keep for type inference
-				}
-			}
-		}
-
-		// Default to PLAIN_COMPOSE if image is provided (legacy behavior)
-		if buildStrategy == deploymentsv1.BuildStrategy_BUILD_STRATEGY_UNSPECIFIED && req.Msg.GetImage() != "" {
-			buildStrategy = deploymentsv1.BuildStrategy_PLAIN_COMPOSE
-		} else if buildStrategy == deploymentsv1.BuildStrategy_BUILD_STRATEGY_UNSPECIFIED {
-			buildStrategy = deploymentsv1.BuildStrategy_NIXPACKS // Default fallback
-		}
+	// Get environment from request, default to PRODUCTION
+	environment := req.Msg.GetEnvironment()
+	if environment == deploymentsv1.Environment_ENVIRONMENT_UNSPECIFIED {
+		environment = deploymentsv1.Environment_PRODUCTION
 	}
 
-	// Infer deployment type from build strategy if not specified
-	deploymentType := req.Msg.GetType()
-	if deploymentType == deploymentsv1.DeploymentType_DEPLOYMENT_TYPE_UNSPECIFIED {
-		if detectDir != "" {
-			// Use detection directory if available
-			deploymentType = s.buildRegistry.InferDeploymentType(ctx, buildStrategy, detectDir)
-			os.RemoveAll(detectDir) // Cleanup after type inference
-		} else if repoURL := req.Msg.GetRepositoryUrl(); repoURL != "" {
-			branch := req.Msg.GetBranch()
-			if branch == "" {
-				branch = "main" // Default branch
-			}
-			// Clone repo temporarily for type inference
-			buildDir, err := ensureBuildDir(id + "-type-detect")
-			if err == nil {
-				if err := cloneRepository(ctx, repoURL, branch, buildDir); err == nil {
-					deploymentType = s.buildRegistry.InferDeploymentType(ctx, buildStrategy, buildDir)
-					os.RemoveAll(buildDir) // Cleanup
-				}
-			}
-		} else {
-			// Default based on build strategy
-			deploymentType = s.buildRegistry.InferDeploymentType(ctx, buildStrategy, "")
-		}
-	}
+	// Get groups from request (optional)
+	groups := req.Msg.GetGroups()
 
+	// Create deployment with minimal configuration
+	// Type and build strategy will be auto-detected when repository is configured
 	deployment := &deploymentsv1.Deployment{
 		Id:             id,
 		Name:           req.Msg.GetName(),
 		Domain:         fmt.Sprintf("%s.obiente.cloud", req.Msg.GetName()),
 		CustomDomains:  []string{},
-		Type:           deploymentType,
-		BuildStrategy:  buildStrategy,
-		Status:         deploymentsv1.DeploymentStatus_STOPPED, // Start as STOPPED when no repository
+		Type:           deploymentsv1.DeploymentType_DEPLOYMENT_TYPE_UNSPECIFIED, // Will be auto-detected
+		BuildStrategy:  deploymentsv1.BuildStrategy_BUILD_STRATEGY_UNSPECIFIED,  // Will be auto-detected
+		Status:         deploymentsv1.DeploymentStatus_STOPPED,                    // Start as STOPPED
 		HealthStatus:   "pending",
-		Environment:    deploymentsv1.Environment_PRODUCTION,
+		Environment:    environment,
+		Groups:         groups, // Set groups from request
+		Branch:         "main", // Default branch
 		LastDeployedAt: timestamppb.Now(),
 		BandwidthUsage: 0,
 		StorageUsage:   0,
 		BuildTime:      0,
 		Size:           "--",
 		CreatedAt:      timestamppb.Now(),
-		Image:          proto.String(req.Msg.GetImage()),
-		Port:           proto.Int32(req.Msg.GetPort()),
-		Replicas:       proto.Int32(req.Msg.GetReplicas()),
-		EnvVars:        req.Msg.GetEnv(),
-	}
-	if branch := req.Msg.GetBranch(); branch != "" {
-		deployment.Branch = branch
-	} else {
-		deployment.Branch = "main" // Default branch, but won't be used until repo is set
-	}
-	if repo := req.Msg.GetRepositoryUrl(); repo != "" {
-		deployment.RepositoryUrl = proto.String(repo)
-		// Only set status to BUILDING if we have a repository to build from
-		deployment.Status = deploymentsv1.DeploymentStatus_BUILDING
-	}
-	if integrationID := req.Msg.GetGithubIntegrationId(); integrationID != "" {
-		deployment.GithubIntegrationId = proto.String(integrationID)
-	}
-	if build := req.Msg.GetBuildCommand(); build != "" {
-		deployment.BuildCommand = proto.String(build)
-	}
-	if install := req.Msg.GetInstallCommand(); install != "" {
-		deployment.InstallCommand = proto.String(install)
+		EnvVars:        map[string]string{},
 	}
 
 	dbDeployment := protoToDBDeployment(deployment, orgID, userInfo.Id)
 	if err := s.repo.Create(ctx, dbDeployment); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create deployment: %w", err))
-	}
-
-	// Only build and deploy if we have a repository URL
-	hasRepository := req.Msg.GetRepositoryUrl() != ""
-	if hasRepository && s.manager != nil && s.buildRegistry != nil {
-		strategy, err := s.buildRegistry.Get(buildStrategy)
-		if err != nil {
-			log.Printf("[CreateDeployment] Invalid build strategy %v: %v", buildStrategy, err)
-			_ = s.repo.UpdateStatus(ctx, id, int32(deploymentsv1.DeploymentStatus_FAILED))
-			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid build strategy: %w", err))
-		}
-
-		// Prepare build config
-		branch := req.Msg.GetBranch()
-		if branch == "" {
-			branch = "main" // Default branch
-		}
-		buildConfig := &BuildConfig{
-			DeploymentID:    id,
-			RepositoryURL:   req.Msg.GetRepositoryUrl(),
-			Branch:          branch,
-			BuildCommand:    req.Msg.GetBuildCommand(),
-			InstallCommand:  req.Msg.GetInstallCommand(),
-			DockerfilePath:  req.Msg.GetDockerfilePath(),
-			ComposeFilePath: req.Msg.GetComposeFilePath(),
-			EnvVars:         req.Msg.GetEnv(),
-			Port:            int(req.Msg.GetPort()),
-			MemoryBytes:     req.Msg.GetMemoryBytes(),
-			CPUShares:       req.Msg.GetCpuShares(),
-		}
-
-		// For PLAIN_COMPOSE with direct image, skip build step
-		if buildStrategy == deploymentsv1.BuildStrategy_PLAIN_COMPOSE && req.Msg.GetImage() != "" && req.Msg.GetRepositoryUrl() == "" {
-			// Direct image deployment (legacy behavior)
-			cfg := &orchestrator.DeploymentConfig{
-				DeploymentID: id,
-				Image:        req.Msg.GetImage(),
-				Domain:       deployment.GetDomain(),
-				Port:         int(req.Msg.GetPort()),
-				EnvVars:      req.Msg.GetEnv(),
-				Labels:       req.Msg.GetLabels(),
-				Memory:       req.Msg.GetMemoryBytes(),
-				CPUShares:    req.Msg.GetCpuShares(),
-				Replicas:     int(req.Msg.GetReplicas()),
-			}
-			if err := s.manager.CreateDeployment(ctx, cfg); err != nil {
-				log.Printf("[CreateDeployment] WARNING: Failed to create containers: %v", err)
-				_ = s.repo.UpdateStatus(ctx, id, int32(deploymentsv1.DeploymentStatus_FAILED))
-			} else {
-				if err := s.verifyContainersRunning(ctx, id); err != nil {
-					log.Printf("[CreateDeployment] WARNING: Containers not running: %v", err)
-					_ = s.repo.UpdateStatus(ctx, id, int32(deploymentsv1.DeploymentStatus_FAILED))
-				} else {
-					_ = s.repo.UpdateStatus(ctx, id, int32(deploymentsv1.DeploymentStatus_RUNNING))
-				}
-			}
-		} else {
-			// Build using strategy
-			result, err := strategy.Build(ctx, dbDeployment, buildConfig)
-			if err != nil || !result.Success {
-				log.Printf("[CreateDeployment] Build failed for deployment %s: %v", id, err)
-				if result != nil && result.Error != nil {
-					err = result.Error
-				}
-				_ = s.repo.UpdateStatus(ctx, id, int32(deploymentsv1.DeploymentStatus_FAILED))
-				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("build failed: %w", err))
-			}
-
-			// Deploy using build result
-			if err := deployResultToOrchestrator(ctx, s.manager, dbDeployment, result); err != nil {
-				log.Printf("[CreateDeployment] Deployment failed: %v", err)
-				_ = s.repo.UpdateStatus(ctx, id, int32(deploymentsv1.DeploymentStatus_FAILED))
-				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("deployment failed: %w", err))
-			}
-
-			// Update deployment with build results
-			if result.ImageName != "" {
-				dbDeployment.Image = &result.ImageName
-			}
-			if result.ComposeYaml != "" {
-				dbDeployment.ComposeYaml = result.ComposeYaml
-			}
-			if result.Port > 0 {
-				port := int32(result.Port)
-				dbDeployment.Port = &port
-			}
-			s.repo.Update(ctx, dbDeployment)
-
-			// Verify containers are running
-			if err := s.verifyContainersRunning(ctx, id); err != nil {
-				log.Printf("[CreateDeployment] WARNING: Containers not running: %v", err)
-				_ = s.repo.UpdateStatus(ctx, id, int32(deploymentsv1.DeploymentStatus_FAILED))
-			} else {
-				_ = s.repo.UpdateStatus(ctx, id, int32(deploymentsv1.DeploymentStatus_RUNNING))
-			}
-		}
 	}
 
 	// Fetch the latest deployment from database to ensure all fields are included in response
@@ -470,6 +297,21 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 	if req.Msg.BuildStrategy != nil {
 		buildStrategy := int32(req.Msg.GetBuildStrategy())
 		dbDeployment.BuildStrategy = buildStrategy
+	}
+	if req.Msg.Environment != nil {
+		environment := int32(req.Msg.GetEnvironment())
+		dbDeployment.Environment = environment
+	}
+	// Handle groups (repeated string -> JSON array)
+	if len(req.Msg.GetGroups()) > 0 {
+		groupsJSON, err := json.Marshal(req.Msg.GetGroups())
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal groups: %w", err))
+		}
+		dbDeployment.Groups = string(groupsJSON)
+	} else if req.Msg.Groups != nil {
+		// Empty array was explicitly set
+		dbDeployment.Groups = "[]"
 	}
 	// Handle custom_domains (repeated string -> JSON array)
 	if len(req.Msg.GetCustomDomains()) > 0 {
