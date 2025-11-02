@@ -1567,4 +1567,9 @@
     networkChart?.dispose();
     diskChart?.dispose();
   });
+
+  // Expose refresh method for parent component
+  defineExpose({
+    refreshUsage,
+  });
 </script>

@@ -1829,6 +1829,11 @@ onUnmounted(() => {
       }
     }
   );
+
+  // Expose refresh method for parent component
+  defineExpose({
+    refreshRoot,
+  });
 </script>
 
 <style scoped>

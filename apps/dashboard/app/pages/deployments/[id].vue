@@ -73,6 +73,19 @@
                 <OuiButton
                   variant="ghost"
                   size="sm"
+                  @click="refreshAll"
+                  :loading="isRefreshing"
+                  class="gap-2"
+                >
+                  <ArrowPathIcon
+                    class="h-4 w-4"
+                    :class="{ 'animate-spin': isRefreshing }"
+                  />
+                  <OuiText as="span" size="xs" weight="medium">Refresh</OuiText>
+                </OuiButton>
+                <OuiButton
+                  variant="ghost"
+                  size="sm"
                   @click="openDomain"
                   :disabled="!deployment.domain"
                   class="gap-2"
@@ -155,6 +168,7 @@
               </template>
               <template #metrics>
                 <DeploymentMetrics
+                  ref="metricsRef"
                   :deployment-id="id"
                   :organization-id="orgId"
                 />
@@ -180,7 +194,11 @@
                 />
               </template>
               <template #files>
-                <DeploymentFiles :deployment-id="id" :organization-id="orgId" />
+                <DeploymentFiles
+                  ref="filesRef"
+                  :deployment-id="id"
+                  :organization-id="orgId"
+                />
               </template>
               <template #compose>
                 <DeploymentCompose
@@ -602,6 +620,16 @@
     stopStream: () => void;
     clearLogs: () => void;
   } | null>(null);
+
+  const metricsRef = ref<{
+    refreshUsage?: () => Promise<void>;
+  } | null>(null);
+
+  const filesRef = ref<{
+    refreshRoot?: () => Promise<void>;
+  } | null>(null);
+
+  const isRefreshing = ref(false);
   const isBuildingOrDeploying = computed(() => {
     const status = deployment.value?.status;
     return (
@@ -704,6 +732,35 @@
       }
     } catch (error: any) {
       console.error("Failed to refresh deployment after env vars save:", error);
+    }
+  }
+
+  // Refresh all deployment data
+  async function refreshAll() {
+    if (isRefreshing.value) return;
+    isRefreshing.value = true;
+    try {
+      // Refresh deployment data
+      await refreshDeployment();
+      
+      // Reload containers
+      await loadContainers();
+      
+      // Refresh child components that expose refresh methods
+      if (metricsRef.value?.refreshUsage) {
+        await metricsRef.value.refreshUsage();
+      }
+      
+      if (filesRef.value?.refreshRoot) {
+        await filesRef.value.refreshRoot();
+      }
+      
+      // Build logs, logs, and terminal components refresh automatically
+      // or through their own mechanisms
+    } catch (error) {
+      console.error("Failed to refresh deployment:", error);
+    } finally {
+      isRefreshing.value = false;
     }
   }
 
