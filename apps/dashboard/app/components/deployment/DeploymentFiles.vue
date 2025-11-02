@@ -69,9 +69,6 @@
         >
             Refresh
           </OuiButton>
-          <OuiButton variant="ghost" size="sm" @click="handleRefreshVolumes">
-            Refresh Volumes ({{ volumes.length }})
-          </OuiButton>
           <OuiButton variant="ghost" size="sm" @click="showUpload = !showUpload">
             Upload
           </OuiButton>
@@ -825,10 +822,6 @@ import { DeploymentService } from "@obiente/proto";
     }
     return explorer.root.path || "/";
   });
-
-  async function handleRefreshVolumes() {
-    await fetchVolumes();
-  }
 
   function handleSwitchSource(type: "container" | "volume", name?: string) {
     if (type === "container") {
