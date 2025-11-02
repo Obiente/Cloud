@@ -223,25 +223,37 @@ export function useDeploymentActions(organizationId: string = "default") {
       dockerfilePath?: string;
       composeFilePath?: string;
       githubIntegrationId?: string;
+      environment?: number; // Environment enum
+      group?: string;
     }
   ) => {
     if (isProcessing.value) return;
     isProcessing.value = true;
 
     try {
-      const res = await client.updateDeployment({
+      // Build request object, only including fields that are explicitly provided
+      const request: any = {
         organizationId: getOrgId(),
         deploymentId,
-        name: updates.name,
-        repositoryUrl: updates.repositoryUrl,
-        branch: updates.branch,
-        buildStrategy: updates.buildStrategy,
-        buildCommand: updates.buildCommand,
-        installCommand: updates.installCommand,
-        dockerfilePath: updates.dockerfilePath,
-        composeFilePath: updates.composeFilePath,
-        githubIntegrationId: updates.githubIntegrationId,
-      });
+      };
+      
+      if (updates.name !== undefined) request.name = updates.name;
+      if (updates.repositoryUrl !== undefined) request.repositoryUrl = updates.repositoryUrl;
+      if (updates.branch !== undefined) request.branch = updates.branch;
+      if (updates.buildStrategy !== undefined) request.buildStrategy = updates.buildStrategy;
+      if (updates.buildCommand !== undefined) request.buildCommand = updates.buildCommand;
+      if (updates.installCommand !== undefined) request.installCommand = updates.installCommand;
+      if (updates.dockerfilePath !== undefined) request.dockerfilePath = updates.dockerfilePath;
+      if (updates.composeFilePath !== undefined) request.composeFilePath = updates.composeFilePath;
+      if (updates.githubIntegrationId !== undefined) request.githubIntegrationId = updates.githubIntegrationId;
+      if (updates.environment !== undefined) request.environment = updates.environment;
+      // Always include group if provided (even if empty string) so backend can clear it
+      if (updates.group !== undefined) {
+        request.group = updates.group;
+        console.log("[useDeploymentActions] Including group in update request:", updates.group);
+      }
+      
+      const res = await client.updateDeployment(request);
 
       return res.deployment;
     } catch (error) {
@@ -257,11 +269,8 @@ export function useDeploymentActions(organizationId: string = "default") {
    */
   const createDeployment = async (deployment: {
     name: string;
-    type: any; // DeploymentType
-    repositoryUrl?: string;
-    branch?: string;
-    buildCommand?: string;
-    installCommand?: string;
+    environment?: number;
+    group?: string;
   }) => {
     if (isProcessing.value) return;
     isProcessing.value = true;
@@ -270,11 +279,8 @@ export function useDeploymentActions(organizationId: string = "default") {
       const res = await client.createDeployment({
         organizationId: getOrgId(),
         name: deployment.name,
-        type: deployment.type,
-        repositoryUrl: deployment.repositoryUrl,
-        branch: deployment.branch,
-        buildCommand: deployment.buildCommand,
-        installCommand: deployment.installCommand,
+        environment: deployment.environment,
+        group: deployment.group,
       });
 
       return res.deployment;
