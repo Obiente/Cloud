@@ -149,6 +149,153 @@ The API resolves the first non-empty value from `CONSOLE_URL`, `DASHBOARD_URL`, 
 - `round-robin` - Cycle through nodes
 - `resource-based` - Match resources to node capacity
 
+### Metrics Database Configuration
+
+| Variable              | Type   | Default                      | Required |
+| --------------------- | ------ | ---------------------------- | -------- |
+| `METRICS_DB_HOST`     | string | `timescaledb`                | ❌       |
+| `METRICS_DB_PORT`     | number | `5432`                       | ❌       |
+| `METRICS_DB_USER`     | string | `POSTGRES_USER` or `postgres`| ❌       |
+| `METRICS_DB_PASSWORD` | string | `POSTGRES_PASSWORD` or `postgres` | ❌ |
+| `METRICS_DB_NAME`     | string | `obiente_metrics`            | ❌       |
+
+**Notes:**
+
+- Metrics are stored in a separate TimescaleDB instance for optimal time-series performance
+- Falls back to main PostgreSQL if TimescaleDB is not available
+- In HA deployments, connects via `metrics-pgpool` load balancer
+
+### Metrics Collection Configuration
+
+| Variable                            | Type         | Default     | Required | Description                                    |
+| ---------------------------------- | ------------ | ----------- | -------- | ---------------------------------------------- |
+| `METRICS_COLLECTION_INTERVAL`      | duration     | `5s`        | ❌       | How often to collect metrics from containers   |
+| `METRICS_STORAGE_INTERVAL`         | duration     | `60s`       | ❌       | How often to batch write metrics to database  |
+| `METRICS_LIVE_RETENTION`           | duration     | `5m`        | ❌       | How long to keep live metrics in memory       |
+| `METRICS_MAX_WORKERS`              | number       | `50`        | ❌       | Max parallel workers for stats collection      |
+| `METRICS_BATCH_SIZE`               | number       | `100`       | ❌       | Batch size for database writes                |
+| `METRICS_MAX_LIVE_PER_DEPLOYMENT`  | number       | `1000`      | ❌       | Max metrics to keep in memory per deployment   |
+| `METRICS_MAX_PREVIOUS_STATS`       | number       | `10000`     | ❌       | Max container stats to cache for delta calc    |
+
+**Duration Format:**
+
+All duration values use Go's duration format: `5s` (5 seconds), `1m` (1 minute), `2h` (2 hours).
+
+**Example:**
+
+```bash
+# Collect metrics every 3 seconds
+METRICS_COLLECTION_INTERVAL=3s
+
+# Store aggregated metrics every 2 minutes
+METRICS_STORAGE_INTERVAL=2m
+
+# Keep 10 minutes of live metrics in memory
+METRICS_LIVE_RETENTION=10m
+
+# Use 100 parallel workers for high-throughput scenarios
+METRICS_MAX_WORKERS=100
+```
+
+### Metrics Docker API Configuration
+
+| Variable                              | Type         | Default     | Required | Description                              |
+| ------------------------------------- | ------------ | ----------- | -------- | ---------------------------------------- |
+| `METRICS_DOCKER_API_TIMEOUT`          | duration     | `10s`       | ❌       | Timeout for Docker API calls             |
+| `METRICS_DOCKER_API_RETRY_MAX`        | number       | `3`         | ❌       | Max retry attempts for failed API calls  |
+| `METRICS_DOCKER_API_RETRY_BACKOFF_INITIAL` | duration  | `1s`        | ❌       | Initial backoff delay for retries        |
+| `METRICS_DOCKER_API_RETRY_BACKOFF_MAX` | duration     | `30s`       | ❌       | Maximum backoff delay for retries         |
+
+**Example:**
+
+```bash
+# Increase timeout for slow Docker hosts
+METRICS_DOCKER_API_TIMEOUT=30s
+
+# More aggressive retry strategy
+METRICS_DOCKER_API_RETRY_MAX=5
+METRICS_DOCKER_API_RETRY_BACKOFF_INITIAL=500ms
+```
+
+### Metrics Circuit Breaker Configuration
+
+| Variable                                  | Type         | Default | Required | Description                                    |
+| ----------------------------------------- | ------------ | ------- | -------- | ---------------------------------------------- |
+| `METRICS_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | number     | `5`     | ❌       | Failures before opening circuit               |
+| `METRICS_CIRCUIT_BREAKER_COOLDOWN`        | duration     | `1m`    | ❌       | Cooldown period before attempting half-open    |
+| `METRICS_CIRCUIT_BREAKER_HALFOPEN_MAX`    | number       | `3`     | ❌       | Successful calls needed to close circuit       |
+
+**Circuit Breaker States:**
+
+- **Closed**: Normal operation, requests pass through
+- **Open**: Too many failures, requests immediately fail
+- **Half-Open**: Testing if service recovered, limited requests allowed
+
+**Example:**
+
+```bash
+# More sensitive circuit breaker (opens after 3 failures)
+METRICS_CIRCUIT_BREAKER_FAILURE_THRESHOLD=3
+
+# Longer cooldown for unstable Docker hosts
+METRICS_CIRCUIT_BREAKER_COOLDOWN=5m
+```
+
+### Metrics Health Check Configuration
+
+| Variable                           | Type         | Default | Required | Description                              |
+| ---------------------------------- | ------------ | ------- | -------- | ---------------------------------------- |
+| `METRICS_HEALTH_CHECK_INTERVAL`    | duration     | `30s`   | ❌       | How often to run health checks           |
+| `METRICS_HEALTH_CHECK_FAILURE_THRESHOLD` | number | `3`     | ❌       | Consecutive failures before unhealthy     |
+
+**Example:**
+
+```bash
+# Check health every 10 seconds
+METRICS_HEALTH_CHECK_INTERVAL=10s
+
+# More sensitive health checks
+METRICS_HEALTH_CHECK_FAILURE_THRESHOLD=2
+```
+
+### Metrics Backpressure & Subscriber Configuration
+
+| Variable                        | Type         | Default | Required | Description                              |
+| ------------------------------- | ------------ | ------- | -------- | ---------------------------------------- |
+| `METRICS_SUBSCRIBER_BUFFER_SIZE` | number       | `100`   | ❌       | Buffer size for subscriber channels      |
+| `METRICS_SUBSCRIBER_SLOW_THRESHOLD` | duration     | `5s`    | ❌       | Time before marking subscriber as slow   |
+| `METRICS_SUBSCRIBER_CLEANUP_INTERVAL` | duration | `1m`   | ❌       | How often to cleanup dead subscribers    |
+
+**Example:**
+
+```bash
+# Larger buffers for high-throughput streaming
+METRICS_SUBSCRIBER_BUFFER_SIZE=500
+
+# More aggressive cleanup of slow subscribers
+METRICS_SUBSCRIBER_SLOW_THRESHOLD=2s
+METRICS_SUBSCRIBER_CLEANUP_INTERVAL=30s
+```
+
+### Metrics Retry Queue Configuration
+
+| Variable                   | Type         | Default | Required | Description                              |
+| -------------------------- | ------------ | ------- | -------- | ---------------------------------------- |
+| `METRICS_RETRY_MAX_RETRIES` | number       | `5`     | ❌       | Max retries for failed database writes   |
+| `METRICS_RETRY_INTERVAL`   | duration     | `1m`    | ❌       | Interval between retry attempts          |
+| `METRICS_RETRY_MAX_QUEUE_SIZE` | number   | `10000` | ❌       | Max size of retry queue                  |
+
+**Example:**
+
+```bash
+# More persistent retry strategy
+METRICS_RETRY_MAX_RETRIES=10
+METRICS_RETRY_INTERVAL=30s
+
+# Larger queue for high-volume scenarios
+METRICS_RETRY_MAX_QUEUE_SIZE=50000
+```
+
 ### Domain & SSL
 
 | Variable     | Type   | Default               | Required               |
@@ -189,6 +336,24 @@ SESSION_SECRET=<generated_value>
 | ------------------ | ------ | ------- | ------------ |
 | `GRAFANA_PASSWORD` | string | -       | ❌ (HA only) |
 
+**Metrics Observability:**
+
+The API exposes metrics observability at `/metrics/observability` (no authentication required). This endpoint provides real-time statistics about metrics collection, including:
+
+- Collection rates and error counts
+- Container processing statistics
+- Database write success/failure rates
+- Retry queue status
+- Subscriber counts and backpressure metrics
+- Circuit breaker state
+- Health status
+
+Access via:
+
+```bash
+curl http://localhost:3001/metrics/observability
+```
+
 ## Environment File Templates
 
 ### Local Development (.env)
@@ -208,6 +373,10 @@ DISABLE_AUTH=true
 POSTGRES_USER=obiente
 POSTGRES_PASSWORD=<strong_random_password>
 POSTGRES_DB=obiente
+METRICS_DB_HOST=metrics-pgpool
+METRICS_DB_USER=obiente
+METRICS_DB_PASSWORD=<strong_random_password>
+METRICS_DB_NAME=obiente_metrics
 LOG_LEVEL=info
 CORS_ORIGIN=https://obiente.cloud
 ZITADEL_URL=https://auth.obiente.cloud
@@ -215,6 +384,10 @@ DOMAIN=obiente.cloud
 ACME_EMAIL=admin@obiente.cloud
 JWT_SECRET=<generated_secret>
 SESSION_SECRET=<generated_secret>
+# Metrics configuration (optional, uses defaults if not set)
+METRICS_COLLECTION_INTERVAL=5s
+METRICS_STORAGE_INTERVAL=60s
+METRICS_MAX_WORKERS=50
 ```
 
 ## Loading Environment Variables
