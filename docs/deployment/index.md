@@ -66,9 +66,11 @@ Obiente Cloud can be deployed in several ways, from simple local development to 
 | ---------------- | -------------- | ------------ | -------------- |
 | Nodes Required   | 1              | 2+           | 5+             |
 | PostgreSQL       | Single         | Single       | 3-node cluster |
+| TimescaleDB      | Single         | Single       | 3-node cluster |
 | Redis            | Single         | Single       | 3-node cluster |
 | Auto Failover    | ❌             | ❌           | ✅             |
 | Load Balancing   | ❌             | ✅           | ✅             |
+| Metrics HA       | ❌             | ❌           | ✅             |
 | Setup Complexity | Low            | Medium       | High           |
 | Resource Usage   | Low            | Medium       | High           |
 

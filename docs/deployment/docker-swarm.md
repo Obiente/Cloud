@@ -93,8 +93,9 @@ Expected output:
 ID             NAME                MODE         REPLICAS   IMAGE
 abc123         obiente_api        global       3/3        obiente/cloud-api:latest
 def456         obiente_postgres      replicated   1/1        postgres:16-alpine
-ghi789         obiente_redis         replicated   1/1        redis:7-alpine
-jkl012         obiente_traefik       global       3/3        traefik:v2.11
+ghi789         obiente_timescaledb  replicated   1/1        timescale/timescaledb:latest-pg16
+jkl012         obiente_redis         replicated   1/1        redis:7-alpine
+mno345         obiente_traefik       global       3/3        traefik:v2.11
 ```
 
 ## Service Configuration
@@ -117,7 +118,7 @@ docker service logs obiente_api
 
 ### Database Configuration
 
-PostgreSQL runs as a single replica with health checks:
+**PostgreSQL** runs as a single replica with health checks:
 
 ```bash
 # Check database status
@@ -125,6 +126,16 @@ docker service ps obiente_postgres
 
 # Check logs
 docker service logs obiente_postgres
+```
+
+**TimescaleDB** (metrics database) runs as a separate service:
+
+```bash
+# Check metrics database status
+docker service ps obiente_timescaledb
+
+# Check logs
+docker service logs obiente_timescaledb
 ```
 
 ### Scaling Services
@@ -165,8 +176,9 @@ Docker Swarm handles rolling updates automatically:
 All services include health checks:
 
 - **PostgreSQL**: `pg_isready`
+- **TimescaleDB**: `pg_isready` (metrics database)
 - **Redis**: `redis-cli ping`
-- **Go API**: HTTP endpoint at `/health`
+- **Go API**: HTTP endpoint at `/health` (includes metrics system health)
 
 Check health status:
 
@@ -178,12 +190,13 @@ docker service ps obiente_api
 
 Default resource allocations:
 
-| Service    | CPU | Memory |
-| ---------- | --- | ------ |
-| PostgreSQL | 2.0 | 2GB    |
-| Redis      | 0.5 | 256MB  |
-| Go API     | 2.0 | 1GB    |
-| Traefik    | 1.0 | 256MB  |
+| Service     | CPU | Memory |
+| ----------- | --- | ------ |
+| PostgreSQL  | 2.0 | 2GB    |
+| TimescaleDB | 2.0 | 2GB    |
+| Redis       | 0.5 | 256MB  |
+| Go API      | 2.0 | 1GB    |
+| Traefik     | 1.0 | 256MB  |
 
 Adjust these in `docker-compose.swarm.yml` based on your cluster.
 
@@ -200,6 +213,7 @@ All services communicate over the `obiente-network` overlay network, enabling:
 Data persists through Docker volumes:
 
 - `postgres_data`: PostgreSQL database data
+- `timescaledb_data`: TimescaleDB metrics data
 - `redis_data`: Redis persistence
 - `traefik_letsencrypt`: SSL certificates
 
