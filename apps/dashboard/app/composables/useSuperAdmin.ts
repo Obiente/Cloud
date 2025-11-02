@@ -33,13 +33,22 @@ export const useSuperAdmin = () => {
       const response = await client.getOverview({});
       state.value.overview = response;
       state.value.allowed = true;
+      state.value.error = null;
       return response;
     } catch (err) {
       if (err instanceof ConnectError && err.code === Code.PermissionDenied) {
+        // User is not a superadmin
         state.value.allowed = false;
         state.value.overview = null;
         state.value.error = null;
       } else {
+        // Network errors or other errors - preserve previous allowed state if initialized
+        // This prevents network errors from hiding the sidebar for superadmins
+        if (!state.value.initialized) {
+          // First time fetch failed - set allowed to false to prevent showing sidebar until verified
+          state.value.allowed = false;
+        }
+        // Otherwise, keep the existing allowed state (don't change it)
         state.value.error = err instanceof Error ? err.message : String(err);
       }
       return null;
