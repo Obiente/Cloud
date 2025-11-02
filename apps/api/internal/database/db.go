@@ -51,6 +51,23 @@ func InitDatabase() error {
 	DB = db
 	log.Println("Database connection established")
 
+	// Pre-create groups column if it doesn't exist to avoid GORM AutoMigrate syntax issues
+	// This prevents GORM from trying to add it with incorrect default value syntax
+	if !db.Migrator().HasColumn("deployments", "groups") {
+		log.Println("Creating groups column before AutoMigrate to avoid syntax issues...")
+		if err := db.Exec(`ALTER TABLE deployments ADD COLUMN groups JSONB`).Error; err != nil {
+			// Column might have been created by another process, check again
+			if !db.Migrator().HasColumn("deployments", "groups") {
+				log.Printf("Warning: Failed to pre-create groups column: %v. AutoMigrate may fail, but migration will handle it.", err)
+			}
+		} else {
+			// Set default after adding column to avoid quote escaping issues
+			if err := db.Exec(`ALTER TABLE deployments ALTER COLUMN groups SET DEFAULT '[]'::jsonb`).Error; err != nil {
+				log.Printf("Warning: Failed to set groups default: %v", err)
+			}
+		}
+	}
+
 	// Auto-migrate the schema
 	if err := db.AutoMigrate(&Deployment{}); err != nil {
 		return fmt.Errorf("failed to auto-migrate: %w", err)

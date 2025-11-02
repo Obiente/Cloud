@@ -24,7 +24,7 @@ type Deployment struct {
 	Status         int32     `gorm:"column:status;default:0" json:"status"` // DeploymentStatus enum
 	HealthStatus   string    `gorm:"column:health_status" json:"health_status"`
 	Environment    int32     `gorm:"column:environment" json:"environment"` // Environment enum
-	Groups         string    `gorm:"column:groups;type:jsonb;default:'[]'::jsonb" json:"groups"` // Optional groups/labels for organizing deployments (stored as JSON array)
+	Groups         string    `gorm:"column:groups;type:jsonb" json:"groups"` // Optional groups/labels for organizing deployments (stored as JSON array)
 	BandwidthUsage int64     `gorm:"column:bandwidth_usage;default:0" json:"bandwidth_usage"`
 	StorageBytes   int64     `gorm:"column:storage_bytes;default:0" json:"storage_bytes"`
 	BuildTime      int32     `gorm:"column:build_time;default:0" json:"build_time"`

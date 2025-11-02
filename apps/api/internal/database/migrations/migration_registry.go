@@ -15,6 +15,7 @@ func RegisterMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_12_20_001", "Drop redundant usage tables", dropRedundantUsageTables)
 	registry.Register("2025_12_20_002", "Rename storage_usage to storage_bytes", renameStorageUsageToStorageBytes)
 	registry.Register("2025_12_20_003", "Add group column to deployments", addGroupColumnToDeployments)
+	registry.Register("2025_12_20_004", "Migrate group to groups JSONB array", migrateGroupToGroupsArray)
 
 	// Add new migrations here
 }
@@ -119,6 +120,55 @@ func addGroupColumnToDeployments(db *gorm.DB) error {
 
 	// Add index
 	return db.Exec("CREATE INDEX IF NOT EXISTS idx_deployments_group ON deployments(\"group\")").Error
+}
+
+// migrateGroupToGroupsArray migrates from single group column to groups JSONB array
+func migrateGroupToGroupsArray(db *gorm.DB) error {
+	// Check if groups column already exists
+	if db.Migrator().HasColumn("deployments", "groups") {
+		return nil
+	}
+
+	// Add groups column as JSONB
+	// Use GORM's Migrator to add column without default first, then set default
+	// This avoids SQL escaping issues
+	if !db.Migrator().HasColumn("deployments", "groups") {
+		// Add column without default first (GORM handles this better)
+		if err := db.Exec(`ALTER TABLE deployments ADD COLUMN groups JSONB`).Error; err != nil {
+			// Check if column was added anyway (maybe by AutoMigrate concurrently)
+			if !db.Migrator().HasColumn("deployments", "groups") {
+				return err
+			}
+		}
+		// Now set the default value separately to avoid quote escaping issues
+		if err := db.Exec(`ALTER TABLE deployments ALTER COLUMN groups SET DEFAULT '[]'::jsonb`).Error; err != nil {
+			// Default might already be set, continue
+		}
+	}
+
+	// Migrate existing group values to groups array
+	// If group is not null and not empty, convert to JSON array
+	if err := db.Exec(`
+		UPDATE deployments 
+		SET groups = CASE 
+			WHEN "group" IS NOT NULL AND "group" != '' THEN jsonb_build_array("group")
+			ELSE '[]'::jsonb
+		END
+	`).Error; err != nil {
+		return err
+	}
+
+	// Drop old group column and its index
+	if db.Migrator().HasColumn("deployments", "group") {
+		if err := db.Exec("DROP INDEX IF EXISTS idx_deployments_group").Error; err != nil {
+			return err
+		}
+		if err := db.Exec("ALTER TABLE deployments DROP COLUMN IF EXISTS \"group\"").Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Template for creating a new migration:
