@@ -1,36 +1,78 @@
 <template>
   <OuiCardBody>
+    <!-- Service Selector -->
+    <div class="mb-4">
+      <ContainerSelector
+        :deployment-id="props.deploymentId"
+        :organization-id="effectiveOrgId"
+        v-model="selectedService"
+        :show-selected-info="true"
+        selected-info-text="Viewing logs for"
+        @change="onServiceChange"
+      />
+    </div>
+
     <OuiLogs
       ref="logsComponent"
       :logs="formattedLogs"
       :is-loading="isLoading"
       :show-timestamps="showTimestamps"
-      :tail-lines="tailLines"
-      :show-tail-controls="true"
+      :show-tail-controls="false"
       :enable-ansi="true"
       :auto-scroll="true"
       empty-message="No logs available. Start following to see real-time logs."
       loading-message="Connecting..."
       title="Deployment Logs"
-      @tail-change="handleTailChange"
-      @update:show-timestamps="showTimestamps = $event"
     >
       <template #actions>
-        <OuiButton
-          variant="ghost"
-          size="sm"
-          @click="toggleFollow"
-          :class="{ 'text-primary': isFollowing }"
-        >
-          <ArrowPathIcon
-            class="h-4 w-4 mr-1"
-            :class="{ 'animate-spin': isFollowing }"
-          />
-          {{ isFollowing ? "Following" : "Follow" }}
-        </OuiButton>
-        <OuiButton variant="ghost" size="sm" @click="clearLogs">
-          Clear
-        </OuiButton>
+        <OuiFlex gap="sm" align="center">
+          <OuiButton
+            variant="ghost"
+            size="sm"
+            @click="toggleFollow"
+            :class="{ 'text-primary': isFollowing }"
+          >
+            <ArrowPathIcon
+              class="h-4 w-4 mr-1"
+              :class="{ 'animate-spin': isFollowing }"
+            />
+            {{ isFollowing ? "Following" : "Follow" }}
+          </OuiButton>
+          <OuiButton variant="ghost" size="sm" @click="clearLogs">
+            Clear
+          </OuiButton>
+          <OuiMenu>
+            <template #trigger>
+              <OuiButton variant="ghost" size="sm">
+                <EllipsisVerticalIcon class="h-4 w-4" />
+              </OuiButton>
+            </template>
+            <template #default>
+              <OuiMenuItem>
+                <OuiCheckbox
+                  v-model="showTimestamps"
+                  label="Show timestamps"
+                  @click.stop
+                />
+              </OuiMenuItem>
+              <OuiMenuItem>
+                <label class="flex items-center gap-2 px-4 py-2 text-sm cursor-pointer">
+                  <span>Tail lines:</span>
+                  <OuiInput
+                    :model-value="tailLines.toString()"
+                    type="number"
+                    :min="10"
+                    :max="10000"
+                    size="sm"
+                    style="width: 100px;"
+                    @update:model-value="handleTailChange"
+                    @click.stop
+                  />
+                </label>
+              </OuiMenuItem>
+            </template>
+          </OuiMenu>
+        </OuiFlex>
       </template>
     </OuiLogs>
   </OuiCardBody>
@@ -38,12 +80,13 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
-import { ArrowPathIcon } from "@heroicons/vue/24/outline";
+import { ArrowPathIcon, EllipsisVerticalIcon } from "@heroicons/vue/24/outline";
 import { useConnectClient } from "~/lib/connect-client";
 import { DeploymentService } from "@obiente/proto";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { useAuth } from "~/composables/useAuth";
 import type { LogEntry } from "~/components/oui/Logs.vue";
+import ContainerSelector from "./ContainerSelector.vue";
 
 interface Props {
   deploymentId: string;
@@ -72,6 +115,11 @@ const tailLines = ref(200);
 const showTimestamps = ref(true);
 const logsComponent = ref<any>(null);
 let streamController: AbortController | null = null;
+let isAborting = false; // Track if we're intentionally aborting
+
+// Service selection
+const selectedService = ref<string>(""); // Empty string means "first container" (default)
+const selectedContainer = ref<{ containerId: string; serviceName?: string } | null>(null);
 
 // Convert internal logs to LogEntry format for OuiLogs component
 const formattedLogs = computed<LogEntry[]>(() => {
@@ -84,8 +132,15 @@ const formattedLogs = computed<LogEntry[]>(() => {
   }));
 });
 
-const handleTailChange = (value: number) => {
-  tailLines.value = value;
+const handleTailChange = (value: string | number) => {
+  const numValue = typeof value === "string" ? parseInt(value, 10) : value;
+  if (isNaN(numValue) || numValue < 10) {
+    tailLines.value = 10;
+  } else if (numValue > 10000) {
+    tailLines.value = 10000;
+  } else {
+    tailLines.value = numValue;
+  }
   if (isFollowing.value) {
     restartStream();
   }
@@ -133,12 +188,25 @@ const startStream = async () => {
     }
 
     streamController = new AbortController();
+    
+    // Build request with service/container filter
+    const request: any = {
+      organizationId: effectiveOrgId.value,
+      deploymentId: props.deploymentId,
+      tail: tailLines.value,
+    };
+    
+    // Add service filter if a specific service is selected
+    if (selectedContainer.value) {
+      if (selectedContainer.value.serviceName) {
+        request.serviceName = selectedContainer.value.serviceName;
+      } else {
+        request.containerId = selectedContainer.value.containerId;
+      }
+    }
+    
     const stream = await client.streamDeploymentLogs(
-      {
-        organizationId: effectiveOrgId.value,
-        deploymentId: props.deploymentId,
-        tail: tailLines.value,
-      },
+      request,
       { signal: streamController.signal }
     );
 
@@ -160,6 +228,19 @@ const startStream = async () => {
       }
     }
   } catch (error: any) {
+    // Suppress all abort-related errors - they're intentional when switching services
+    const isAbortError = 
+      error.name === "AbortError" || 
+      error.message?.toLowerCase().includes("aborted") ||
+      error.message?.toLowerCase().includes("canceled") ||
+      error.message?.toLowerCase().includes("cancelled") ||
+      isAborting;
+
+    if (isAbortError) {
+      // User intentionally cancelled or we're switching services - no error needed
+      return;
+    }
+
     // Suppress benign errors if we successfully received logs:
     // - "missing trailer": Connect/gRPC-Web quirk where streams end without HTTP trailers
     // - "invalid UTF-8": Docker logs can contain binary data (now sanitized server-side)
@@ -169,11 +250,6 @@ const startStream = async () => {
       error.message?.toLowerCase().includes("invalid utf-8") ||
       error.message?.toLowerCase().includes("marshal message") ||
       error.code === "unknown";
-
-    if (error.name === "AbortError") {
-      // User intentionally cancelled - no error needed
-      return;
-    }
 
     // Only show error if it's not a benign error after successful streaming,
     // or if it's a real error before receiving any logs
@@ -191,11 +267,13 @@ const startStream = async () => {
   } finally {
     isLoading.value = false;
     isFollowing.value = false;
+    isAborting = false; // Reset abort flag
   }
 };
 
 const stopStream = () => {
   if (streamController) {
+    isAborting = true; // Mark that we're intentionally aborting
     streamController.abort();
     streamController = null;
   }
@@ -205,6 +283,23 @@ const stopStream = () => {
 const restartStream = () => {
   stopStream();
   setTimeout(() => startStream(), 100);
+};
+
+// Handle service change
+const onServiceChange = (container: { containerId: string; serviceName?: string } | null) => {
+  selectedContainer.value = container;
+  
+  // Stop current stream (this will set isAborting = true)
+  stopStream();
+  
+  // Wait a brief moment to let the abort error be handled silently
+  // Clear logs after a short delay to avoid race conditions
+  setTimeout(() => {
+    logs.value = [];
+    
+    // Always auto-follow when service changes
+    startStream();
+  }, 50);
 };
 
 onMounted(() => {
@@ -219,6 +314,8 @@ onUnmounted(() => {
 watch(() => props.deploymentId, () => {
   stopStream();
   logs.value = [];
+  selectedService.value = ""; // Reset to default
+  selectedContainer.value = null;
   if (isFollowing.value) {
     startStream();
   }

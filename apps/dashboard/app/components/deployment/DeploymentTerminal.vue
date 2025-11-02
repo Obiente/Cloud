@@ -41,6 +41,24 @@
         container.
       </OuiText>
 
+      <!-- Container Selector -->
+      <ContainerSelector
+        :deployment-id="props.deploymentId"
+        :organization-id="organizationId"
+        :model-value="selectedContainerId"
+        label="Container"
+        @update:model-value="(value) => {
+          // Find container from value
+          const container = containerQuery.containers.value.find(
+            c => (c.serviceName || c.containerId) === value
+          );
+          if (container) {
+            onContainerChange(container);
+          }
+        }"
+        @change="onContainerChange"
+      />
+
       <div class="terminal-wrapper">
         <div class="terminal-container">
           <div ref="terminalContainer" class="terminal-content" />
@@ -63,6 +81,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useAuth } from "~/composables/useAuth";
 import { useOrganizationsStore } from "~/stores/organizations";
+import { useDeploymentContainerQuery } from "~/composables/useDeploymentContainerQuery";
+import ContainerSelector from "./ContainerSelector.vue";
 
 interface Props {
   deploymentId: string;
@@ -76,10 +96,36 @@ const organizationId = computed(
 );
 const auth = useAuth();
 
+// Use composable for container query management
+const containerQuery = useDeploymentContainerQuery(
+  props.deploymentId,
+  props.organizationId
+);
+
 const terminalContainer = ref<HTMLElement | null>(null);
 const isConnected = ref(false);
 const isLoading = ref(false);
 const error = ref("");
+
+// Sync with composable
+const selectedContainerId = computed(() => containerQuery.selectedContainerId.value);
+const selectedContainer = computed(() => containerQuery.selectedContainer.value);
+
+// Watch for container changes from query params (e.g., service button clicked)
+watch(
+  containerQuery.selectedContainer,
+  (newContainer, oldContainer) => {
+    // Only handle if container actually changed (not just initial load)
+    if (newContainer && oldContainer && 
+        (newContainer.containerId !== oldContainer.containerId || 
+         newContainer.serviceName !== oldContainer.serviceName)) {
+      // Container changed via query params, handle reconnection if needed
+      if (isConnected.value && terminal) {
+        onContainerChange(newContainer);
+      }
+    }
+  }
+);
 
 let terminal: any = null;
 let fitAddon: any = null;
@@ -91,6 +137,44 @@ let FitAddon: any = null;
 
 const showSpinner = computed(() => isLoading.value && !isConnected.value);
 const shouldAttemptReconnect = ref(true);
+
+// Handle container change - seamlessly swap without showing disconnect message
+const onContainerChange = (container: { containerId: string; serviceName?: string } | null) => {
+  // Update query params via composable
+  if (container) {
+    containerQuery.setContainer(container.serviceName, container.containerId);
+  }
+  
+  // If connected, swap to new container seamlessly
+  if (isConnected.value && websocket) {
+    // Show switching message
+    if (terminal) {
+      const containerName = container?.serviceName || container?.containerId?.substring(0, 12) || "new container";
+      terminal.write(`\r\n\x1b[36m[Switching to ${containerName}...]\x1b[0m\r\n`);
+    }
+    
+    // Close old connection silently (don't call disconnectTerminal to avoid disconnect message)
+    const oldWebsocket = websocket;
+    shouldAttemptReconnect.value = false; // Prevent auto-reconnect from old connection
+    isConnected.value = false;
+    
+    // Close old websocket without showing disconnect message
+    try {
+      oldWebsocket.close();
+    } catch {
+      // ignore
+    }
+    websocket = null;
+    
+    // Immediately connect to new container
+    if (terminal) {
+      connectTerminal();
+    }
+  } else if (terminal) {
+    // If not connected but terminal is initialized, auto-connect to new container
+    connectTerminal();
+  }
+};
 
 async function initTerminal() {
   if (typeof window === "undefined" || !terminalContainer.value) return;
@@ -228,7 +312,8 @@ async function initTerminal() {
   }
 
   terminal.onData((data: string) => {
-    if (!isConnected.value || !websocket || websocket.readyState !== WebSocket.OPEN) {
+    // Allow input even if not fully connected (e.g., container is stopped)
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
       return;
     }
 
@@ -250,13 +335,24 @@ async function initTerminal() {
 }
 
 const connectTerminal = async () => {
+  // Don't connect if already connected
+  if (isConnected.value) {
+    return;
+  }
+
   shouldAttemptReconnect.value = true;
 
   if (!terminal) {
     await initTerminal();
   }
+  
+  if (!terminal) {
+    error.value = "Failed to initialize terminal";
+    isLoading.value = false;
+    return;
+  }
 
-  isLoading.value = !isConnected.value;
+  isLoading.value = true;
   error.value = "";
 
   try {
@@ -298,16 +394,25 @@ const connectTerminal = async () => {
         return;
       }
 
-      websocket!.send(
-        JSON.stringify({
-          type: "init",
-          deploymentId: props.deploymentId,
-          organizationId: organizationId.value,
-          token,
-          cols: terminal.cols || 80,
-          rows: terminal.rows || 24,
-        })
-      );
+      const initMessage: any = {
+        type: "init",
+        deploymentId: props.deploymentId,
+        organizationId: organizationId.value,
+        token,
+        cols: terminal.cols || 80,
+        rows: terminal.rows || 24,
+      };
+      
+      // Add container/service filter if a specific container is selected
+      if (selectedContainer.value) {
+        if (selectedContainer.value.serviceName) {
+          initMessage.serviceName = selectedContainer.value.serviceName;
+        } else {
+          initMessage.containerId = selectedContainer.value.containerId;
+        }
+      }
+      
+      websocket!.send(JSON.stringify(initMessage));
     };
 
     websocket.onmessage = (event: MessageEvent) => {
@@ -429,9 +534,15 @@ const clearTerminal = () => {
 
 watch(
   () => props.deploymentId,
-  () => {
+  async () => {
     if (isConnected.value) {
       disconnectTerminal();
+    }
+    // Reset container selection via composable
+    containerQuery.setContainer(undefined, undefined);
+    await nextTick();
+    if (terminal) {
+      await connectTerminal();
     }
   }
 );
@@ -439,6 +550,10 @@ watch(
 onMounted(async () => {
   await nextTick();
   await initTerminal();
+  // Auto-connect when terminal is ready
+  if (terminal) {
+    await connectTerminal();
+  }
 });
 
 onUnmounted(() => {

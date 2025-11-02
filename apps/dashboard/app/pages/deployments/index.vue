@@ -1,5 +1,5 @@
 <template>
-  <OuiContainer >
+  <OuiContainer size="full">
     <OuiStack gap="xl">
       <OuiFlex justify="between" align="start" wrap="wrap" gap="lg">
         <OuiStack gap="sm" class="max-w-xl">
@@ -161,7 +161,7 @@
                     >
                   </OuiFlex>
                 </OuiStack>
-                <OuiFlex gap="sm" justify="end">
+                <OuiFlex gap="sm" justify="end" wrap="wrap">
                   <OuiBadge :variant="getStatusMeta(deployment.status).badge">
                     <span
                       class="inline-flex h-1.5 w-1.5 rounded-full"
@@ -180,6 +180,19 @@
                       class="text-[11px]"
                     >
                       {{ getStatusMeta(deployment.status).label }}
+                    </OuiText>
+                  </OuiBadge>
+                  <OuiBadge
+                    v-if="deployment.containersTotal && deployment.containersTotal > 0 && (deployment.containersRunning ?? 0) > 0 && (deployment.containersRunning ?? 0) < deployment.containersTotal"
+                    :variant="getContainerStatusVariant(deployment.containersRunning ?? 0, deployment.containersTotal ?? 0)"
+                  >
+                    <OuiText
+                      as="span"
+                      size="xs"
+                      weight="semibold"
+                      class="text-[11px]"
+                    >
+                      {{ deployment.containersRunning ?? 0 }}/{{ deployment.containersTotal }} running
                     </OuiText>
                   </OuiBadge>
                 </OuiFlex>
@@ -663,6 +676,13 @@
       default:
         return STATUS_META.DEFAULT;
     }
+  };
+
+  const getContainerStatusVariant = (running: number, total: number): "success" | "warning" | "danger" => {
+    if (total === 0) return "danger";
+    if (running === total) return "success"; // All running
+    if (running === 0) return "danger"; // None running
+    return "warning"; // Partial (e.g., 2/5 running)
   };
 
   const ENVIRONMENT_META = {

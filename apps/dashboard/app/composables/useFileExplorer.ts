@@ -42,6 +42,7 @@ type WriteFileInput = Partial<
 
 export function useFileExplorer(options: ExplorerOptions) {
   const client = useConnectClient(DeploymentService);
+  const deploymentServiceClient = useConnectClient(DeploymentService);
   const currentOrgId = ref(options.organizationId ?? "");
   const root = reactive<ExplorerNode>({
     id: "ROOT",
@@ -63,6 +64,9 @@ export function useFileExplorer(options: ExplorerOptions) {
   const selectedPath = ref<string | null>(null);
   const isLoadingTree = ref(false);
   const errorMessage = ref<string | null>(null);
+  const selectedContainerId = ref<string>("");
+  const selectedServiceName = ref<string>("");
+  const containers = ref<Array<{ containerId: string; serviceName?: string; status?: string }>>([]);
 
   function setOrganizationId(id: string) {
     currentOrgId.value = id ?? "";
@@ -87,6 +91,7 @@ export function useFileExplorer(options: ExplorerOptions) {
         deploymentId: options.deploymentId,
         path: "/",
         listVolumes: true,
+        // Don't pass containerId/serviceName for volume listing - volumes are per deployment, not per container
       });
       
       console.log("fetchVolumes: API response", res);
@@ -187,6 +192,8 @@ export function useFileExplorer(options: ExplorerOptions) {
         cursor,
         pageSize: 200,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
+        containerId: source.type === "container" && selectedContainerId.value ? selectedContainerId.value : undefined,
+        serviceName: source.type === "container" && selectedServiceName.value ? selectedServiceName.value : undefined,
       });
       containerRunning.value = !!res.containerRunning;
       const children = (res.files ?? []).map(convertFile);
@@ -287,6 +294,37 @@ export function useFileExplorer(options: ExplorerOptions) {
     return parts;
   });
 
+  // Load containers for this deployment
+  async function loadContainers() {
+    try {
+      const orgId = getOrgId();
+      if (!orgId) {
+        containers.value = [];
+        return;
+      }
+      const res = await (deploymentServiceClient as any).listDeploymentContainers({
+        deploymentId: options.deploymentId,
+        organizationId: orgId,
+      });
+      
+      if (res?.containers) {
+        containers.value = res.containers.map((c: any) => ({
+          containerId: c.containerId,
+          serviceName: c.serviceName || undefined,
+          status: c.status,
+        }));
+      }
+    } catch (err) {
+      console.error("Failed to load containers:", err);
+      containers.value = [];
+    }
+  }
+
+  function setContainer(containerId?: string, serviceName?: string) {
+    selectedContainerId.value = containerId || "";
+    selectedServiceName.value = serviceName || "";
+  }
+
   return {
     root,
     volumes,
@@ -296,7 +334,12 @@ export function useFileExplorer(options: ExplorerOptions) {
     breadcrumbs,
     errorMessage,
     isLoadingTree,
+    containers,
+    selectedContainerId,
+    selectedServiceName,
     fetchVolumes,
+    loadContainers,
+    setContainer,
     switchToVolume,
     switchToContainer,
     loadChildren,
