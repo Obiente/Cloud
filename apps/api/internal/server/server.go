@@ -109,7 +109,6 @@ func registerServices(mux *http.ServeMux) {
 			&database.OrgQuota{},
 			&database.OrgRole{},
 			&database.OrgRoleBinding{},
-			&database.UsageMonthly{},
 			&database.Organization{},
 			&database.OrganizationMember{},
 			&database.GitHubIntegration{},
