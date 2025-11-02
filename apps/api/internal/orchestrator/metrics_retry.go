@@ -26,13 +26,23 @@ type MetricsRetryQueue struct {
 	maxQueueSize  int
 }
 
-// NewMetricsRetryQueue creates a new retry queue
+// NewMetricsRetryQueue creates a new retry queue with default config
 func NewMetricsRetryQueue() *MetricsRetryQueue {
 	return &MetricsRetryQueue{
 		failedBatches: make([]FailedMetricBatch, 0),
 		maxRetries:    5,
 		retryInterval: 1 * time.Minute,
 		maxQueueSize:  10000, // Limit queue size to prevent memory issues
+	}
+}
+
+// NewMetricsRetryQueueWithConfig creates a new retry queue from config
+func NewMetricsRetryQueueWithConfig(config *MetricsConfig) *MetricsRetryQueue {
+	return &MetricsRetryQueue{
+		failedBatches: make([]FailedMetricBatch, 0),
+		maxRetries:    config.RetryMaxRetries,
+		retryInterval: config.RetryInterval,
+		maxQueueSize:  config.RetryMaxQueueSize,
 	}
 }
 

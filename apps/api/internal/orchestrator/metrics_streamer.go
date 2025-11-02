@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -39,47 +40,54 @@ type MetricsStreamer struct {
 	liveMetrics      map[string][]LiveMetric
 	liveMetricsMutex sync.RWMutex
 
-	// Subscribers: deploymentID -> []chan LiveMetric
-	subscribers      map[string][]chan LiveMetric
+	// Subscribers: deploymentID -> []chan LiveMetric with metadata
+	subscribers      map[string][]*subscriberChannel
 	subscribersMutex sync.RWMutex
 
 	ctx    context.Context
 	cancel context.CancelFunc
 
 	// Configuration
-	collectionInterval time.Duration // How often to collect (default 5s)
-	storageInterval    time.Duration // How often to save to DB (default 60s)
-	liveRetention      time.Duration // How long to keep live metrics (default 5min)
-	maxWorkers         int           // Max parallel workers for stats collection
-	batchSize          int           // Batch size for DB writes
+	config *MetricsConfig
 	
 	// Retry queue for failed database writes
 	retryQueue *MetricsRetryQueue
 	
-	// Memory limits
-	maxLiveMetricsPerDeployment int // Max number of metrics to keep in memory per deployment
-	maxPreviousStats            int // Max number of previous stats to keep
+	// Circuit breaker for Docker API
+	circuitBreaker *CircuitBreaker
+	
+	// Observability stats
+	stats *MetricsStats
+	
+	// Graceful degradation
+	collectionRateMultiplier float64 // Reduces collection rate under load
+	degradationMutex         sync.RWMutex
+}
+
+// subscriberChannel wraps a channel with metadata for backpressure detection
+type subscriberChannel struct {
+	ch           chan LiveMetric
+	lastSendTime time.Time
+	overflowCount int64
 }
 
 // NewMetricsStreamer creates a new metrics streamer
 func NewMetricsStreamer(serviceRegistry *registry.ServiceRegistry) *MetricsStreamer {
 	ctx, cancel := context.WithCancel(context.Background())
-
+	config := LoadMetricsConfig()
+	
 	return &MetricsStreamer{
-		serviceRegistry:            serviceRegistry,
-		previousStats:              make(map[string]*containerStats),
-		liveMetrics:                make(map[string][]LiveMetric),
-		subscribers:                make(map[string][]chan LiveMetric),
-		ctx:                        ctx,
-		cancel:                     cancel,
-		collectionInterval:         5 * time.Second,
-		storageInterval:            60 * time.Second, // Store every minute instead of every 5s
-		liveRetention:              5 * time.Minute,
-		maxWorkers:                 50,  // Parallel workers for stats collection
-		batchSize:                  100, // Batch DB writes
-		retryQueue:                 NewMetricsRetryQueue(),
-		maxLiveMetricsPerDeployment: 1000, // Max 1000 metrics per deployment (about 83 minutes at 5s interval)
-		maxPreviousStats:           10000, // Max 10000 container stats (about 200 deployments with 50 containers each)
+		serviceRegistry:          serviceRegistry,
+		previousStats:            make(map[string]*containerStats),
+		liveMetrics:              make(map[string][]LiveMetric),
+		subscribers:              make(map[string][]*subscriberChannel),
+		ctx:                      ctx,
+		cancel:                   cancel,
+		config:                   config,
+		retryQueue:               NewMetricsRetryQueueWithConfig(config),
+		circuitBreaker:           NewCircuitBreaker(config.CircuitBreakerFailureThreshold, config.CircuitBreakerCooldownPeriod, config.CircuitBreakerHalfOpenMaxCalls),
+		stats:                    NewMetricsStats(),
+		collectionRateMultiplier: 1.0, // Start at full speed
 	}
 }
 
@@ -99,6 +107,12 @@ func (ms *MetricsStreamer) Start() {
 	
 	// Start cleanup of stale previous stats
 	go ms.cleanupStaleStats()
+	
+	// Start health checker
+	go ms.healthCheck()
+	
+	// Start backpressure monitor
+	go ms.monitorBackpressure()
 }
 
 // Stop stops the metrics streamer
@@ -107,22 +121,32 @@ func (ms *MetricsStreamer) Stop() {
 
 	// Close all subscriber channels
 	ms.subscribersMutex.Lock()
-	for _, chans := range ms.subscribers {
-		for _, ch := range chans {
-			close(ch)
+	for _, subs := range ms.subscribers {
+		for _, sub := range subs {
+			close(sub.ch)
 		}
 	}
-	ms.subscribers = make(map[string][]chan LiveMetric)
+	ms.subscribers = make(map[string][]*subscriberChannel)
 	ms.subscribersMutex.Unlock()
 }
 
 // Subscribe adds a subscriber for a deployment's metrics
 func (ms *MetricsStreamer) Subscribe(deploymentID string) <-chan LiveMetric {
-	ch := make(chan LiveMetric, 10) // Buffered to avoid blocking
+	ch := make(chan LiveMetric, ms.config.SubscriberChannelBufferSize)
+	sub := &subscriberChannel{
+		ch:           ch,
+		lastSendTime: time.Now(),
+	}
 
 	ms.subscribersMutex.Lock()
-	ms.subscribers[deploymentID] = append(ms.subscribers[deploymentID], ch)
+	ms.subscribers[deploymentID] = append(ms.subscribers[deploymentID], sub)
+	totalSubs := 0
+	for _, s := range ms.subscribers {
+		totalSubs += len(s)
+	}
 	ms.subscribersMutex.Unlock()
+	
+	ms.stats.UpdateSubscriberStats(totalSubs, 0, 0)
 
 	return ch
 }
@@ -137,14 +161,25 @@ func (ms *MetricsStreamer) Unsubscribe(deploymentID string, ch <-chan LiveMetric
 		return
 	}
 
-	for i, subCh := range chans {
-		if subCh == ch {
+	for i, sub := range chans {
+		if sub.ch == ch {
 			// Remove from slice
 			ms.subscribers[deploymentID] = append(chans[:i], chans[i+1:]...)
-			close(subCh)
-			return
+			close(sub.ch)
+			break
 		}
 	}
+	
+	if len(ms.subscribers[deploymentID]) == 0 {
+		delete(ms.subscribers, deploymentID)
+	}
+	
+	// Update stats
+	totalSubs := 0
+	for _, s := range ms.subscribers {
+		totalSubs += len(s)
+	}
+	ms.stats.UpdateSubscriberStats(totalSubs, 0, 0)
 }
 
 // GetLatestMetrics returns the latest metrics for a deployment
@@ -162,7 +197,12 @@ func (ms *MetricsStreamer) GetLatestMetrics(deploymentID string) []LiveMetric {
 
 // collectLiveMetrics collects metrics in parallel and streams to subscribers
 func (ms *MetricsStreamer) collectLiveMetrics() {
-	ticker := time.NewTicker(ms.collectionInterval)
+	// Use configurable interval with graceful degradation multiplier
+	ms.degradationMutex.RLock()
+	interval := time.Duration(float64(ms.config.CollectionInterval) * ms.collectionRateMultiplier)
+	ms.degradationMutex.RUnlock()
+	
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	lastLogTime := time.Now()
@@ -190,7 +230,7 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 			}
 
 			// Collect stats in parallel using worker pool
-			metrics := ms.collectStatsParallel(locations, shouldLog)
+			metrics, containersFailed := ms.collectStatsParallel(locations, shouldLog)
 
 			// Store in live cache and stream to subscribers
 			now := time.Now()
@@ -203,7 +243,7 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 				ms.liveMetrics[metric.DeploymentID] = append(ms.liveMetrics[metric.DeploymentID], metric)
 
 				// Trim old metrics (keep only last N minutes or max size)
-				retentionCutoff := now.Add(-ms.liveRetention)
+				retentionCutoff := now.Add(-ms.config.LiveRetention)
 				trimmed := ms.liveMetrics[metric.DeploymentID][:0]
 				for _, m := range ms.liveMetrics[metric.DeploymentID] {
 					if m.Timestamp.After(retentionCutoff) {
@@ -211,28 +251,55 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 					}
 				}
 				// Enforce max size per deployment
-				if len(trimmed) > ms.maxLiveMetricsPerDeployment {
+				if len(trimmed) > ms.config.MaxLiveMetricsPerDeployment {
 					// Keep only the most recent metrics
-					startIdx := len(trimmed) - ms.maxLiveMetricsPerDeployment
+					startIdx := len(trimmed) - ms.config.MaxLiveMetricsPerDeployment
 					trimmed = trimmed[startIdx:]
 				}
 				ms.liveMetrics[metric.DeploymentID] = trimmed
 				ms.liveMetricsMutex.Unlock()
 
-				// Stream to subscribers (non-blocking)
+				// Stream to subscribers (non-blocking with backpressure detection)
 				ms.subscribersMutex.RLock()
 				subs := ms.subscribers[metric.DeploymentID]
 				ms.subscribersMutex.RUnlock()
 
-				for _, ch := range subs {
+				var overflows int64
+				for _, sub := range subs {
 					select {
-					case ch <- metric:
+					case sub.ch <- metric:
+						sub.lastSendTime = now
 					default:
 						// Channel full, skip to avoid blocking
+						sub.overflowCount++
+						overflows++
 					}
+				}
+				
+				if overflows > 0 {
+					ms.stats.mu.Lock()
+					ms.stats.SubscriberOverflows += overflows
+					ms.stats.mu.Unlock()
 				}
 			}
 
+			// Update stats
+			success := len(metrics) > 0
+			containersProcessed := len(metrics)
+			ms.stats.RecordCollection(success, containersProcessed, containersFailed)
+			
+			// Update cache stats
+			ms.liveMetricsMutex.RLock()
+			totalLiveMetrics := 0
+			for _, m := range ms.liveMetrics {
+				totalLiveMetrics += len(m)
+			}
+			ms.liveMetricsMutex.RUnlock()
+			ms.statsMutex.RLock()
+			previousStatsSize := len(ms.previousStats)
+			ms.statsMutex.RUnlock()
+			ms.stats.UpdateCacheStats(totalLiveMetrics, previousStatsSize)
+			
 			if shouldLog && len(metrics) > 0 {
 				log.Printf("[MetricsStreamer] Collected %d live metrics for %d deployments", len(metrics), len(locations))
 			}
@@ -244,7 +311,8 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 }
 
 // collectStatsParallel collects container stats in parallel using worker pool
-func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentLocation, shouldLog bool) []LiveMetric {
+// Returns metrics and count of failed containers
+func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentLocation, shouldLog bool) ([]LiveMetric, int) {
 	type statsJob struct {
 		location database.DeploymentLocation
 		index    int
@@ -261,7 +329,7 @@ func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentL
 
 	// Start workers
 	var wg sync.WaitGroup
-	for i := 0; i < ms.maxWorkers && i < len(locations); i++ {
+	for i := 0; i < ms.config.MaxWorkers && i < len(locations); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -271,14 +339,31 @@ func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentL
 					continue
 				}
 
-				currentStats, err := ms.getContainerStats(job.location.ContainerID)
-				if err != nil {
-					// Log error with context but don't fail completely
-					// log.Printf("[MetricsStreamer] Failed to get stats for container %s (deployment %s): %v", 
-					// 	job.location.ContainerID[:12], job.location.DeploymentID, err)
+				// Use circuit breaker and retry for Docker API calls
+				var currentStats *containerStats
+				var err error
+				
+				err = ms.circuitBreaker.Call(func() error {
+					stats, e := ms.getContainerStatsWithRetry(job.location.ContainerID)
+					if e != nil {
+						return e
+					}
+					currentStats = stats
+					return nil
+				})
+				
+				if err != nil || currentStats == nil {
+					if err != ErrCircuitOpen {
+						// Log error with context but don't fail completely
+						log.Printf("[MetricsStreamer] Failed to get stats for container %s (deployment %s): %v", 
+							job.location.ContainerID[:12], job.location.DeploymentID, err)
+					}
 					results <- statsResult{err: err, index: job.index}
 					continue
 				}
+				
+				// Update circuit breaker stats
+				ms.stats.UpdateCircuitBreakerState(ms.circuitBreaker.GetState(), int64(ms.circuitBreaker.GetFailureCount()))
 
 				// Get previous stats for delta calculation
 				ms.statsMutex.RLock()
@@ -347,11 +432,11 @@ func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentL
 
 	// Collect results in order
 	resultMap := make(map[int]LiveMetric)
-	var errors []error
+	var errorList []error
 
 	for result := range results {
 		if result.err != nil {
-			errors = append(errors, result.err)
+			errorList = append(errorList, result.err)
 			continue
 		}
 		if result.metric.DeploymentID != "" {
@@ -367,16 +452,42 @@ func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentL
 		}
 	}
 
-	if shouldLog && len(errors) > 0 {
-		log.Printf("[MetricsStreamer] %d errors during stats collection out of %d containers", len(errors), len(locations))
+	if shouldLog && len(errorList) > 0 {
+		log.Printf("[MetricsStreamer] %d errors during stats collection out of %d containers", len(errorList), len(locations))
 	}
 
-	return metrics
+	return metrics, len(errorList)
+}
+
+// getContainerStatsWithRetry retrieves container stats with exponential backoff retry
+func (ms *MetricsStreamer) getContainerStatsWithRetry(containerID string) (*containerStats, error) {
+	var lastErr error
+	backoff := ms.config.DockerAPIRetryInitialBackoff
+	
+	for attempt := 0; attempt < ms.config.DockerAPIRetryMaxAttempts; attempt++ {
+		stats, err := ms.getContainerStats(containerID)
+		if err == nil {
+			return stats, nil
+		}
+		
+		lastErr = err
+		
+		// Exponential backoff before retry
+		if attempt < ms.config.DockerAPIRetryMaxAttempts-1 {
+			if backoff > ms.config.DockerAPIRetryMaxBackoff {
+				backoff = ms.config.DockerAPIRetryMaxBackoff
+			}
+			time.Sleep(backoff)
+			backoff *= 2
+		}
+	}
+	
+	return nil, fmt.Errorf("failed after %d attempts: %w", ms.config.DockerAPIRetryMaxAttempts, lastErr)
 }
 
 // getContainerStats retrieves stats from Docker
 func (ms *MetricsStreamer) getContainerStats(containerID string) (*containerStats, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), ms.config.DockerAPITimeout)
 	defer cancel()
 
 	statsResp, err := ms.serviceRegistry.DockerClient().ContainerStats(ctx, containerID, false)
@@ -463,7 +574,7 @@ func (ms *MetricsStreamer) getContainerStats(containerID string) (*containerStat
 
 // storeMetricsBatch periodically saves aggregated metrics to database in batches
 func (ms *MetricsStreamer) storeMetricsBatch() {
-	ticker := time.NewTicker(ms.storageInterval)
+	ticker := time.NewTicker(ms.config.StorageInterval)
 	defer ticker.Stop()
 
 	for {
@@ -540,17 +651,20 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 						Timestamp:      latestTimestamp,
 					})
 
-					if len(metricsToStore) >= ms.batchSize {
+					if len(metricsToStore) >= ms.config.BatchSize {
 						// Batch insert using MetricsDB if available, otherwise fallback to main DB
 						targetDB := database.MetricsDB
 						if targetDB == nil {
 							targetDB = database.DB
 						}
 						
-						if err := targetDB.CreateInBatches(metricsToStore, ms.batchSize).Error; err != nil {
+						if err := targetDB.CreateInBatches(metricsToStore, ms.config.BatchSize).Error; err != nil {
 							log.Printf("[MetricsStreamer] Failed to store metrics batch (%d metrics): %v", len(metricsToStore), err)
 							// Add to retry queue
 							ms.retryQueue.AddFailedBatch(metricsToStore, err)
+							ms.stats.RecordStorage(false, len(metricsToStore))
+						} else {
+							ms.stats.RecordStorage(true, len(metricsToStore))
 						}
 						metricsToStore = metricsToStore[:0]
 					}
@@ -564,10 +678,13 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 					targetDB = database.DB
 				}
 				
-				if err := targetDB.CreateInBatches(metricsToStore, ms.batchSize).Error; err != nil {
+				if err := targetDB.CreateInBatches(metricsToStore, ms.config.BatchSize).Error; err != nil {
 					log.Printf("[MetricsStreamer] Failed to store final metrics batch (%d metrics): %v", len(metricsToStore), err)
 					// Add to retry queue
 					ms.retryQueue.AddFailedBatch(metricsToStore, err)
+					ms.stats.RecordStorage(false, len(metricsToStore))
+				} else {
+					ms.stats.RecordStorage(true, len(metricsToStore))
 				}
 			}
 
@@ -585,7 +702,7 @@ func (ms *MetricsStreamer) cleanupLiveMetrics() {
 	for {
 		select {
 		case <-ticker.C:
-			cutoff := time.Now().Add(-ms.liveRetention)
+			cutoff := time.Now().Add(-ms.config.LiveRetention)
 
 			ms.liveMetricsMutex.Lock()
 			for deploymentID, metrics := range ms.liveMetrics {
@@ -625,8 +742,12 @@ func (ms *MetricsStreamer) processRetries() {
 			
 			queueSize := ms.retryQueue.GetQueueSize()
 			if queueSize > 0 {
+				beforeSize := queueSize
 				ms.retryQueue.ProcessRetries(targetDB)
+				afterSize := ms.retryQueue.GetQueueSize()
+				success := afterSize < beforeSize
 				ms.retryQueue.ClearOldBatches()
+				ms.stats.RecordRetry(int(queueSize), success)
 			}
 
 		case <-ms.ctx.Done():
@@ -668,10 +789,10 @@ func (ms *MetricsStreamer) cleanupStaleStats() {
 			}
 			
 			// Enforce max size limit
-			if len(ms.previousStats) > ms.maxPreviousStats {
+			if len(ms.previousStats) > ms.config.MaxPreviousStats {
 				// Remove oldest entries (simple approach: remove randomly until under limit)
 				// In a production system, you might want to track last used time
-				for len(ms.previousStats) > ms.maxPreviousStats {
+				for len(ms.previousStats) > ms.config.MaxPreviousStats {
 					for containerID := range ms.previousStats {
 						delete(ms.previousStats, containerID)
 						removedCount++
@@ -689,4 +810,147 @@ func (ms *MetricsStreamer) cleanupStaleStats() {
 			return
 		}
 	}
+}
+
+
+// healthCheck monitors the health of metrics collection
+func (ms *MetricsStreamer) healthCheck() {
+	ticker := time.NewTicker(ms.config.HealthCheckInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			stats := ms.stats.GetSnapshot()
+			
+			// Check if collection is lagging (no collections in last 2 intervals)
+			collectionLagging := false
+			if !stats.LastCollectionTime.IsZero() {
+				elapsed := time.Since(stats.LastCollectionTime)
+				if elapsed > ms.config.CollectionInterval*2 {
+					collectionLagging = true
+				}
+			}
+			
+			// Check consecutive failures
+			unhealthy := stats.ConsecutiveFailures >= int64(ms.config.HealthCheckFailureThreshold) || collectionLagging
+			
+			// Update health status
+			ms.stats.UpdateHealth(!unhealthy, stats.ConsecutiveFailures)
+			
+			// Graceful degradation: slow down collection if unhealthy
+			ms.degradationMutex.Lock()
+			if unhealthy {
+				// Reduce collection rate by 50%
+				if ms.collectionRateMultiplier > 0.5 {
+					ms.collectionRateMultiplier = 0.5
+					log.Printf("[MetricsStreamer] Health check failed: entering graceful degradation mode")
+				}
+			} else {
+				// Gradually return to normal speed
+				if ms.collectionRateMultiplier < 1.0 {
+					ms.collectionRateMultiplier = math.Min(1.0, ms.collectionRateMultiplier+0.1)
+					if ms.collectionRateMultiplier >= 1.0 {
+						log.Printf("[MetricsStreamer] Health check passed: returning to normal speed")
+					}
+				}
+			}
+			ms.degradationMutex.Unlock()
+			
+			// Log health status
+			if unhealthy {
+				log.Printf("[MetricsStreamer] Health check: UNHEALTHY (failures: %d, lagging: %v)", 
+					stats.ConsecutiveFailures, collectionLagging)
+			}
+
+		case <-ms.ctx.Done():
+			return
+		}
+	}
+}
+
+// monitorBackpressure detects and handles slow/dead subscriber channels
+func (ms *MetricsStreamer) monitorBackpressure() {
+	ticker := time.NewTicker(ms.config.SubscriberCleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			now := time.Now()
+			var slowSubs []*subscriberChannel
+			var deadSubs []*subscriberChannel
+			
+			ms.subscribersMutex.Lock()
+			for deploymentID, subs := range ms.subscribers {
+				var validSubs []*subscriberChannel
+				for _, sub := range subs {
+					// Check if channel is slow (last send was too long ago)
+					if !sub.lastSendTime.IsZero() {
+						elapsed := now.Sub(sub.lastSendTime)
+						if elapsed > ms.config.SubscriberSlowThreshold {
+							// Check if channel is full (likely dead)
+							select {
+							case <-sub.ch:
+								// Channel is readable, not dead
+								if elapsed > ms.config.SubscriberSlowThreshold*2 {
+									slowSubs = append(slowSubs, sub)
+								}
+								validSubs = append(validSubs, sub)
+							default:
+								// Channel is full, likely dead subscriber
+								if elapsed > ms.config.SubscriberSlowThreshold*3 {
+									deadSubs = append(deadSubs, sub)
+									continue // Don't add to validSubs
+								}
+								validSubs = append(validSubs, sub)
+							}
+						} else {
+							validSubs = append(validSubs, sub)
+						}
+					} else {
+						validSubs = append(validSubs, sub)
+					}
+				}
+				
+				if len(validSubs) == 0 {
+					delete(ms.subscribers, deploymentID)
+				} else {
+					ms.subscribers[deploymentID] = validSubs
+				}
+			}
+			ms.subscribersMutex.Unlock()
+			
+			// Clean up dead subscribers
+			for _, sub := range deadSubs {
+				close(sub.ch)
+			}
+			
+			// Update stats
+			totalSubs := 0
+			slowCount := len(slowSubs)
+			for _, s := range ms.subscribers {
+				totalSubs += len(s)
+			}
+			ms.stats.UpdateSubscriberStats(totalSubs, slowCount, 0)
+			
+			if len(deadSubs) > 0 {
+				log.Printf("[MetricsStreamer] Cleaned up %d dead subscriber channels", len(deadSubs))
+			}
+
+		case <-ms.ctx.Done():
+			return
+		}
+	}
+}
+
+// GetStats returns observability stats snapshot
+func (ms *MetricsStreamer) GetStats() MetricsStats {
+	return ms.stats.GetSnapshot()
+}
+
+// GetHealth returns the current health status
+func (ms *MetricsStreamer) GetHealth() (bool, int64) {
+	stats := ms.stats.GetSnapshot()
+	return stats.IsHealthy, stats.ConsecutiveFailures
 }
