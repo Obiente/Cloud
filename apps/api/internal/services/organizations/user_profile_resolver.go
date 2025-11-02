@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -39,6 +40,11 @@ func getUserProfileResolver() *userProfileResolver {
 		resolverInstance = newUserProfileResolver()
 	})
 	return resolverInstance
+}
+
+// GetUserProfileResolver returns the singleton user profile resolver instance
+func GetUserProfileResolver() *userProfileResolver {
+	return getUserProfileResolver()
 }
 
 func newUserProfileResolver() *userProfileResolver {
@@ -101,6 +107,59 @@ func (r *userProfileResolver) Resolve(ctx context.Context, userID string) (*auth
 	r.mu.Unlock()
 
 	return cloneUser(user), nil
+}
+
+// UpdateProfile updates a user's profile in Zitadel
+func (r *userProfileResolver) UpdateProfile(ctx context.Context, userID string, updates map[string]interface{}) (*authv1.User, error) {
+	if r == nil || userID == "" || r.token == "" || r.baseURL == "" {
+		return nil, fmt.Errorf("profile resolver not configured")
+	}
+
+	// Build update request body
+	updateBody := make(map[string]interface{})
+	
+	if profile, ok := updates["profile"].(map[string]interface{}); ok {
+		updateBody["profile"] = profile
+	}
+	if preferredLanguage, ok := updates["preferredLanguage"].(string); ok {
+		updateBody["preferredLanguage"] = preferredLanguage
+	}
+
+	// Serialize request body
+	bodyBytes, err := json.Marshal(updateBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshal update: %w", err)
+	}
+
+	// Create PUT request
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, 
+		fmt.Sprintf("%s/management/v1/users/%s/human/profile", r.baseURL, userID),
+		strings.NewReader(string(bodyBytes)))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+r.token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("update profile: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("profile update failed: %s, body: %s", resp.Status, string(body))
+	}
+
+	// Invalidate cache
+	r.mu.Lock()
+	delete(r.cache, userID)
+	r.mu.Unlock()
+
+	// Fetch updated profile
+	return r.Resolve(ctx, userID)
 }
 
 func cloneUser(in *authv1.User) *authv1.User {

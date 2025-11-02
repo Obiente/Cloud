@@ -9,6 +9,8 @@ import (
 	authv1connect "api/gen/proto/obiente/cloud/auth/v1/authv1connect"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/services/organizations"
+	"strings"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
@@ -33,6 +35,76 @@ func (s *Service) GetCurrentUser(ctx context.Context, _ *connect.Request[authv1.
 		return connect.NewResponse(&authv1.GetCurrentUserResponse{User: nil}), nil
 	}
     return connect.NewResponse(&authv1.GetCurrentUserResponse{User: ui}), nil
+}
+
+func (s *Service) UpdateUserProfile(ctx context.Context, req *connect.Request[authv1.UpdateUserProfileRequest]) (*connect.Response[authv1.UpdateUserProfileResponse], error) {
+	// Get authenticated user
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required"))
+	}
+
+	if user.Id == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("user ID is required"))
+	}
+
+	// Get user profile resolver
+	resolver := organizations.GetUserProfileResolver()
+
+	// Build update map
+	updates := make(map[string]interface{})
+	profile := make(map[string]interface{})
+
+	if req.Msg.GivenName != nil {
+		givenName := strings.TrimSpace(req.Msg.GetGivenName())
+		if givenName != "" {
+			profile["firstName"] = givenName
+		}
+	}
+
+	if req.Msg.FamilyName != nil {
+		familyName := strings.TrimSpace(req.Msg.GetFamilyName())
+		if familyName != "" {
+			profile["lastName"] = familyName
+		}
+	}
+
+	if req.Msg.Name != nil {
+		displayName := strings.TrimSpace(req.Msg.GetName())
+		if displayName != "" {
+			profile["displayName"] = displayName
+		}
+	}
+
+	if req.Msg.PreferredUsername != nil {
+		// Note: Username updates might need a different endpoint in Zitadel
+		// For now, we'll skip this or handle it separately
+	}
+
+	if len(profile) > 0 {
+		updates["profile"] = profile
+	}
+
+	if req.Msg.Locale != nil {
+		locale := strings.TrimSpace(req.Msg.GetLocale())
+		if locale != "" {
+			updates["preferredLanguage"] = locale
+		}
+	}
+
+	if len(updates) == 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("no fields to update"))
+	}
+
+	// Update profile via Zitadel management API
+	updatedUser, err := resolver.UpdateProfile(ctx, user.Id, updates)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update profile: %w", err))
+	}
+
+	return connect.NewResponse(&authv1.UpdateUserProfileResponse{
+		User: updatedUser,
+	}), nil
 }
 
 func (s *Service) ConnectGitHub(ctx context.Context, req *connect.Request[authv1.ConnectGitHubRequest]) (*connect.Response[authv1.ConnectGitHubResponse], error) {
