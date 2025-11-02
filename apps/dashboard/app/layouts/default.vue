@@ -168,11 +168,15 @@
   const user = useAuth();
   const superAdmin = useSuperAdmin();
 
+  // Fetch superadmin overview - await on client side too to ensure state is initialized
   if (import.meta.server) {
     await superAdmin.fetchOverview().catch(() => null);
   } else {
-    superAdmin.fetchOverview().catch(() => null);
+    // On client, await the fetch to ensure state is initialized before computing showSuperAdmin
+    await superAdmin.fetchOverview().catch(() => null);
   }
+  
+  // Show superadmin sidebar if allowed is explicitly true (not null or false)
   const showSuperAdmin = computed(() => superAdmin.allowed.value === true);
   // Notifications state
   const isNotificationsOpen = ref(false);

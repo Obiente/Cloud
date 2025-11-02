@@ -627,71 +627,43 @@
         ...combinedCurrent,
         // Use API's calculated current cost (includes aggregated metrics)
         estimatedCostCents: toNumber(current.estimatedCostCents),
+        // Use API's calculated per-resource costs
+        cpuCostCents: current.cpuCostCents != null ? toNumber(current.cpuCostCents) : undefined,
+        memoryCostCents: current.memoryCostCents != null ? toNumber(current.memoryCostCents) : undefined,
+        bandwidthCostCents: current.bandwidthCostCents != null ? toNumber(current.bandwidthCostCents) : undefined,
+        storageCostCents: current.storageCostCents != null ? toNumber(current.storageCostCents) : undefined,
       },
-      estimatedMonthly: combinedEstimated,
+      estimatedMonthly: {
+        ...combinedEstimated,
+        // Use API's calculated per-resource costs
+        cpuCostCents: estimated.cpuCostCents != null ? toNumber(estimated.cpuCostCents) : undefined,
+        memoryCostCents: estimated.memoryCostCents != null ? toNumber(estimated.memoryCostCents) : undefined,
+        bandwidthCostCents: estimated.bandwidthCostCents != null ? toNumber(estimated.bandwidthCostCents) : undefined,
+        storageCostCents: estimated.storageCostCents != null ? toNumber(estimated.storageCostCents) : undefined,
+      },
     };
   });
 
-  // Cost breakdown per resource
-  // Using default pricing from backend (same as api/internal/pricing/pricing.go)
-  const PRICING = {
-    cpuPerCoreSecond: 0.0001,           // $0.0001 per core-second
-    memoryPerByteSecond: 0.00000001,    // $0.00000001 per byte-second
-    bandwidthPerByte: 0.00000001,       // $0.00000001 per byte
-    storagePerByteMonth: 0.00000001,    // $0.00000001 per byte-month
-  };
-
+  // Cost breakdown per resource - uses backend calculated values
   const costBreakdown = computed(() => {
     const current = combinedUsage.value?.current || {};
     const estimated = combinedUsage.value?.estimatedMonthly || {};
     
-    // Calculate elapsed ratio for storage prorating
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-    const monthDuration = monthEnd.getTime() - monthStart.getTime();
-    const elapsedInMonth = now.getTime() - monthStart.getTime();
-    const elapsedRatio = Math.max(0, Math.min(1, elapsedInMonth / monthDuration));
-
-    // Current costs
-    const currentCpu = toNumber(current.cpuCoreSeconds || 0);
-    const currentMemory = toNumber(current.memoryByteSeconds || 0);
-    const currentBandwidth = toNumber(current.bandwidthRxBytes || 0) + toNumber(current.bandwidthTxBytes || 0);
-    const currentStorage = toNumber(current.storageBytes || 0);
-
-    const currentCpuCost = currentCpu * PRICING.cpuPerCoreSecond * 100; // Convert to cents
-    const currentMemoryCost = currentMemory * PRICING.memoryPerByteSecond * 100;
-    const currentBandwidthCost = currentBandwidth * PRICING.bandwidthPerByte * 100;
-    const currentStorageFullMonth = currentStorage * PRICING.storagePerByteMonth * 100;
-    const currentStorageCost = currentStorageFullMonth * elapsedRatio; // Prorate for current month
-    const currentTotal = currentCpuCost + currentMemoryCost + currentBandwidthCost + currentStorageCost;
-
-    // Estimated costs
-    const estimatedCpu = toNumber(estimated.cpuCoreSeconds || 0);
-    const estimatedMemory = toNumber(estimated.memoryByteSeconds || 0);
-    const estimatedBandwidth = toNumber(estimated.bandwidthRxBytes || 0) + toNumber(estimated.bandwidthTxBytes || 0);
-    const estimatedStorage = toNumber(estimated.storageBytes || 0);
-
-    const estimatedCpuCost = estimatedCpu * PRICING.cpuPerCoreSecond * 100;
-    const estimatedMemoryCost = estimatedMemory * PRICING.memoryPerByteSecond * 100;
-    const estimatedBandwidthCost = estimatedBandwidth * PRICING.bandwidthPerByte * 100;
-    const estimatedStorageCost = estimatedStorage * PRICING.storagePerByteMonth * 100; // Full month
-    const estimatedTotal = estimatedCpuCost + estimatedMemoryCost + estimatedBandwidthCost + estimatedStorageCost;
-
+    // All costs are calculated on the backend and returned in cents
     return {
       current: {
-        cpu: Math.round(currentCpuCost),
-        memory: Math.round(currentMemoryCost),
-        bandwidth: Math.round(currentBandwidthCost),
-        storage: Math.round(currentStorageCost),
-        total: Math.round(currentTotal),
+        cpu: current.cpuCostCents ?? 0,
+        memory: current.memoryCostCents ?? 0,
+        bandwidth: current.bandwidthCostCents ?? 0,
+        storage: current.storageCostCents ?? 0,
+        total: current.estimatedCostCents ?? 0, // Total current cost
       },
       estimated: {
-        cpu: Math.round(estimatedCpuCost),
-        memory: Math.round(estimatedMemoryCost),
-        bandwidth: Math.round(estimatedBandwidthCost),
-        storage: Math.round(estimatedStorageCost),
-        total: Math.round(estimatedTotal),
+        cpu: estimated.cpuCostCents ?? 0,
+        memory: estimated.memoryCostCents ?? 0,
+        bandwidth: estimated.bandwidthCostCents ?? 0,
+        storage: estimated.storageCostCents ?? 0,
+        total: estimated.estimatedCostCents ?? 0, // Total estimated cost
       },
     };
   });

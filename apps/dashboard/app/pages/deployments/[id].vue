@@ -166,6 +166,9 @@
               <template #overview>
                 <DeploymentOverview :deployment="deployment" />
               </template>
+              <template #settings>
+                <DeploymentSettings :deployment="deployment" />
+              </template>
               <template #metrics>
                 <DeploymentMetrics
                   ref="metricsRef"
@@ -222,49 +225,6 @@
             </OuiTabs>
           </OuiCard>
 
-          <!-- Danger Zone - Only show on overview tab -->
-          <OuiCard
-            v-if="activeTab === 'overview'"
-            variant="outline"
-            class="border-danger/20"
-          >
-            <OuiCardBody>
-              <OuiStack gap="md">
-                <OuiStack gap="xs">
-                  <OuiText as="h3" size="lg" weight="semibold" color="danger">
-                    Danger Zone
-                  </OuiText>
-                  <OuiText size="sm" color="secondary">
-                    Irreversible and destructive actions
-                  </OuiText>
-                </OuiStack>
-                <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
-                  <OuiStack gap="xs" class="flex-1 min-w-0">
-                    <OuiText size="sm" weight="medium" color="primary">
-                      Delete Deployment
-                    </OuiText>
-                    <OuiText size="xs" color="secondary">
-                      Once you delete a deployment, there is no going back. This
-                      will permanently remove the deployment and all associated
-                      data.
-                    </OuiText>
-                  </OuiStack>
-                  <OuiButton
-                    variant="outline"
-                    color="danger"
-                    size="sm"
-                    @click="handleDelete"
-                    class="gap-2 shrink-0"
-                  >
-                    <TrashIcon class="h-4 w-4" />
-                    <OuiText as="span" size="xs" weight="medium"
-                      >Delete Deployment</OuiText
-                    >
-                  </OuiButton>
-                </OuiFlex>
-              </OuiStack>
-            </OuiCardBody>
-          </OuiCard>
         </OuiStack>
       </OuiStack>
     </OuiContainer>
@@ -272,7 +232,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, computed, watchEffect, watch, nextTick, onMounted } from "vue";
+  import { ref, computed, watchEffect, watch, nextTick, onMounted, onUnmounted } from "vue";
   import { useRoute, useRouter } from "vue-router";
   import type { TabItem } from "~/components/oui/Tabs.vue";
   import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
@@ -371,6 +331,7 @@
   const tabs = computed<TabItem[]>(() => {
     const baseTabs: TabItem[] = [
       { id: "overview", label: "Overview", icon: RocketLaunchIcon },
+      { id: "settings", label: "Settings", icon: Cog6ToothIcon },
       { id: "metrics", label: "Metrics", icon: ChartBarIcon },
       { id: "routing", label: "Routing", icon: GlobeAltIcon },
       { id: "build-logs", label: "Build Logs", icon: Cog6ToothIcon },
@@ -583,15 +544,11 @@
     if (!localDeployment.value || isProcessing.value) return;
     try {
       await deploymentActions.startDeployment(id.value, localDeployment.value);
-      // Refresh deployment and containers multiple times to catch status changes
-      setTimeout(() => {
-        refreshDeployment();
-        loadContainers();
-      }, 1000);
-      setTimeout(() => {
-        refreshDeployment();
-        loadContainers();
-      }, 3000);
+      // Immediately refresh to get updated status
+      await refreshDeployment();
+      await loadContainers();
+      // Start polling to catch status changes as containers start
+      startPolling();
     } catch (error: any) {
       console.error("Failed to start deployment:", error);
     }
@@ -601,15 +558,11 @@
     if (!localDeployment.value || isProcessing.value) return;
     try {
       await deploymentActions.stopDeployment(id.value, localDeployment.value);
-      // Refresh deployment and containers multiple times to catch status changes
-      setTimeout(() => {
-        refreshDeployment();
-        loadContainers();
-      }, 1000);
-      setTimeout(() => {
-        refreshDeployment();
-        loadContainers();
-      }, 3000);
+      // Immediately refresh to get updated status
+      await refreshDeployment();
+      await loadContainers();
+      // Start polling to catch status changes as containers stop
+      startPolling();
     } catch (error: any) {
       console.error("Failed to stop deployment:", error);
     }
@@ -638,36 +591,83 @@
     );
   });
 
-  async function handleDelete() {
-    if (!localDeployment.value) return;
+  // Polling for deployment status and containers during transitions
+  let pollingInterval: ReturnType<typeof setInterval> | null = null;
+  const isPolling = ref(false);
 
-    const confirmed = await showConfirm({
-      title: "Delete Deployment",
-      message: `Are you sure you want to delete "${localDeployment.value.name}"? This action cannot be undone and will permanently remove the deployment and all associated data.`,
-      confirmLabel: "Delete",
-      cancelLabel: "Cancel",
-      variant: "danger",
-    });
+  const startPolling = () => {
+    if (pollingInterval) return; // Already polling
+    
+    isPolling.value = true;
+    pollingInterval = setInterval(async () => {
+      if (!id.value || !orgId.value) {
+        stopPolling();
+        return;
+      }
+      
+      // Check if we should continue polling
+      const status = deployment.value?.status;
+      const shouldPoll = 
+        status === DeploymentStatus.BUILDING ||
+        status === DeploymentStatus.DEPLOYING ||
+        // Also poll if containers are partially running (transitioning)
+        (containerStats.value.totalCount > 0 && 
+         containerStats.value.runningCount > 0 && 
+         containerStats.value.runningCount < containerStats.value.totalCount);
 
-    if (!confirmed) return;
+      if (!shouldPoll) {
+        stopPolling();
+        return;
+      }
 
-    try {
-      await deploymentActions.deleteDeployment(id.value, localDeployment.value);
-      await showAlert({
-        title: "Deployment Deleted",
-        message: `"${localDeployment.value.name}" has been successfully deleted.`,
-      });
-      // Navigate back to deployments list
-      router.push("/deployments");
-    } catch (error: any) {
-      await showAlert({
-        title: "Failed to Delete Deployment",
-        message:
-          error.message ||
-          "An error occurred while deleting the deployment. Please try again.",
-      });
+      // Refresh both deployment and containers
+      try {
+        await refreshDeployment();
+        await loadContainers();
+      } catch (error) {
+        console.error("Failed to poll deployment status:", error);
+      }
+    }, 2000); // Poll every 2 seconds
+  };
+
+  const stopPolling = () => {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
     }
-  }
+    isPolling.value = false;
+  };
+
+  // Start polling when deployment is transitioning
+  watch(
+    () => [
+      deployment.value?.status,
+      containerStats.value.runningCount,
+      containerStats.value.totalCount,
+    ],
+    () => {
+      const status = deployment.value?.status;
+      const shouldPoll = 
+        status === DeploymentStatus.BUILDING ||
+        status === DeploymentStatus.DEPLOYING ||
+        (containerStats.value.totalCount > 0 && 
+         containerStats.value.runningCount > 0 && 
+         containerStats.value.runningCount < containerStats.value.totalCount);
+
+      if (shouldPoll && !pollingInterval) {
+        startPolling();
+      } else if (!shouldPoll && pollingInterval) {
+        stopPolling();
+      }
+    },
+    { immediate: true }
+  );
+
+  // Stop polling when component unmounts
+  onUnmounted(() => {
+    stopPolling();
+  });
+
 
   async function redeploy() {
     if (!localDeployment.value) return;

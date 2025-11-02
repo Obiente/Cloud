@@ -43,7 +43,7 @@
         class="backdrop-blur-sm border border-border-muted/60"
       >
         <OuiCardBody>
-          <OuiGrid cols="1" cols-md="3" gap="md">
+          <OuiGrid cols="1" cols-md="4" gap="md">
             <OuiInput
               v-model="searchQuery"
               placeholder="Search by name, domain, or framework..."
@@ -64,6 +64,13 @@
               v-model="environmentFilter"
               :options="environmentOptions"
               placeholder="All Environments"
+              clearable
+            />
+
+            <OuiCombobox
+              v-model="groupFilter"
+              :options="groupOptions"
+              placeholder="All Groups"
               clearable
             />
           </OuiGrid>
@@ -88,7 +95,7 @@
           <OuiBox class="max-w-md">
             <OuiText color="secondary">
               {{
-                searchQuery || statusFilter || environmentFilter
+                searchQuery || statusFilter || environmentFilter || groupFilter
                   ? "Try adjusting your filters to see more results."
                   : "Get started by creating your first deployment."
               }}
@@ -193,6 +200,19 @@
                       class="text-[11px]"
                     >
                       {{ deployment.containersRunning ?? 0 }}/{{ deployment.containersTotal }} running
+                    </OuiText>
+                  </OuiBadge>
+                  <OuiBadge
+                    v-if="(deployment as any).group"
+                    variant="secondary"
+                  >
+                    <OuiText
+                      as="span"
+                      size="xs"
+                      weight="semibold"
+                      class="text-[11px]"
+                    >
+                      {{ (deployment as any).group }}
                     </OuiText>
                   </OuiBadge>
                 </OuiFlex>
@@ -454,14 +474,24 @@
             />
 
             <OuiSelect
-              v-model="newDeployment.type"
-              :items="typeOptions"
-              label="Type"
-              placeholder="Select type"
+              v-model="newDeployment.environment"
+              :items="environmentOptions"
+              label="Environment"
+              required
             />
 
+            <OuiInput
+              v-model="newDeployment.group"
+              label="Group (Optional)"
+              placeholder="e.g. frontend, backend, microservices"
+            >
+              <template #hint>
+                Organize deployments into groups for easier management
+              </template>
+            </OuiInput>
+
             <OuiText size="xs" color="secondary">
-              You can configure the repository and other settings after creating the deployment.
+              The deployment type will be automatically detected when you connect your repository. You can configure the repository and other settings after creating the deployment.
             </OuiText>
           </OuiStack>
         </form>
@@ -558,14 +588,13 @@
   const searchQuery = ref("");
   const statusFilter = ref("");
   const environmentFilter = ref("");
+  const groupFilter = ref("");
   const showCreateDialog = ref(false);
 
   const newDeployment = ref({
     name: "",
-    // store enum value as string for OuiSelect
-    type: String(DeploymentType.DOCKER),
-    githubRepo: "",
-    githubBranch: "",
+    environment: String(EnvEnum.PRODUCTION),
+    group: "",
   });
 
   const statusFilterOptions = [
@@ -582,12 +611,19 @@
     { label: "Development", value: String(EnvEnum.DEVELOPMENT) },
   ];
 
-  const typeOptions = [
-    { label: "Docker", value: String(DeploymentType.DOCKER) },
-    { label: "Static Site", value: String(DeploymentType.STATIC) },
-    { label: "Node.js", value: String(DeploymentType.NODE) },
-    { label: "Go", value: String(DeploymentType.GO) },
-  ];
+  // Compute available groups from deployments
+  const groupOptions = computed(() => {
+    const groups = new Set<string>();
+    (deployments.value || []).forEach((deployment: any) => {
+      if (deployment.group && deployment.group.trim()) {
+        groups.add(deployment.group.trim());
+      }
+    });
+    return Array.from(groups)
+      .sort()
+      .map((group) => ({ label: group, value: group }));
+  });
+
 
   const STATUS_META = {
     RUNNING: {
@@ -835,6 +871,13 @@
       });
     }
 
+    if (groupFilter.value) {
+      filtered = filtered.filter((deployment) => {
+        const deploymentGroup = (deployment as any).group;
+        return deploymentGroup && deploymentGroup.trim() === groupFilter.value.trim();
+      });
+    }
+
     return filtered;
   });
 
@@ -876,17 +919,16 @@
     try {
       const deployment = await deploymentActions.createDeployment({
         name: newDeployment.value.name,
-        type: Number(newDeployment.value.type),
-        // Repository and branch will be configured later in the deployment settings
+        environment: Number(newDeployment.value.environment) as EnvEnum,
+        group: newDeployment.value.group || undefined,
       });
 
       showCreateDialog.value = false;
       // Reset form for next time
       newDeployment.value = {
         name: "",
-        type: String(DeploymentType.DOCKER),
-        githubRepo: "",
-        githubBranch: "",
+        environment: String(EnvEnum.PRODUCTION),
+        group: "",
       };
 
       // Add to local deployments list if it's not there already
