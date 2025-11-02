@@ -257,6 +257,17 @@
                 class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] rounded-xl bg-surface-subtle text-text-secondary"
                 >Created: {{ formatDatetime(currentNode.createdTime) }}</span
               >
+              <!-- Unsaved Changes Indicator -->
+              <Transition name="fade">
+                <span
+                  v-if="hasUnsavedChanges && selectedPath && currentNode?.type === 'file'"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border-2 border-warning/40 bg-warning/20 text-warning transition-all duration-200 shadow-md z-10"
+                >
+                  <OuiText size="xs" weight="semibold" color="warning">
+                    Unsaved changes
+                  </OuiText>
+                </span>
+              </Transition>
               <!-- Save Status Indicator -->
               <Transition name="fade">
                 <span
@@ -305,6 +316,25 @@
               class="min-w-[180px] max-w-[250px]"
               size="sm"
             />
+            <OuiButton
+              v-if="
+                selectedPath &&
+                currentNode?.type === 'file' &&
+                !fileError &&
+                filePreviewType !== 'binary' &&
+                filePreviewType !== 'image' &&
+                filePreviewType !== 'video' &&
+                filePreviewType !== 'audio' &&
+                filePreviewType !== 'pdf'
+              "
+              variant="solid"
+              size="sm"
+              :disabled="isSaving"
+              @click="handleSaveFile"
+            >
+              <DocumentArrowDownIcon class="h-4 w-4 mr-1.5" />
+              <span>{{ isSaving ? 'Saving...' : 'Save' }}</span>
+            </OuiButton>
             <OuiButton
               variant="ghost"
               size="sm"
@@ -464,7 +494,7 @@
               !fileError &&
               (filePreviewType === 'text' || filePreviewType === null)
             "
-            :key="`${selectedPath}-${currentNode?.path || ''}`"
+            :key="`editor-${selectedPath}-${editorRefreshKey}`"
             v-model="fileContent"
             :language="fileLanguage"
             :read-only="false"
@@ -489,6 +519,7 @@
 
 <script setup lang="ts">
   import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+  import { useRoute, useRouter } from "vue-router";
   import {
     ArrowPathIcon,
     ServerIcon,
@@ -499,6 +530,7 @@
     DocumentIcon,
     CheckCircleIcon,
     XCircleIcon,
+    DocumentArrowDownIcon,
   } from "@heroicons/vue/24/outline";
   import { TreeView } from "@ark-ui/vue/tree-view";
   import {
@@ -524,15 +556,29 @@ import { DeploymentService } from "@obiente/proto";
     allowEditing?: boolean;
   }>();
 
+  const route = useRoute();
+  const router = useRouter();
+
   const showUpload = ref(false);
   const hasMounted = ref(false);
+  const isInitializingFromQuery = ref(false); // Flag to prevent circular updates during query param initialization
+  const isLoadingFile = ref(false); // Track if a file load is in progress
+  let currentFileLoadController: AbortController | null = null; // AbortController for cancelling pending requests
   const fileContent = ref("");
+  const originalFileContent = ref(""); // Track original content to detect changes
   const fileLanguage = ref("plaintext");
   const currentFilePath = ref<string | null>(null);
   const fileError = ref<string | null>(null);
   const fileMetadata = ref<{ mimeType?: string; encoding?: string; size?: number } | null>(null);
   const fileBlobUrl = ref<string | null>(null);
   const filePreviewType = ref<"text" | "image" | "video" | "audio" | "pdf" | "binary" | null>(null);
+  const editorRefreshKey = ref(0); // Force editor refresh when reloading file
+  
+  // Track if file has unsaved changes
+  const hasUnsavedChanges = computed(() => {
+    if (!currentFilePath.value) return false;
+    return fileContent.value !== originalFileContent.value;
+  });
 
   // Comprehensive list of Monaco-supported languages
   const languageOptions = computed(() => {
@@ -784,6 +830,7 @@ import { DeploymentService } from "@obiente/proto";
     currentFilePath.value = null;
     fileContent.value = "";
     fileLanguage.value = "plaintext";
+    updateFileQueryParam(null); // Clear file query param
     refreshRoot();
   }
 
@@ -863,13 +910,44 @@ import { DeploymentService } from "@obiente/proto";
   }
 
   async function handleCreate(type: "file" | "directory" | "symlink") {
-    if (!allowEditing) return;
+    if (!allowEditing) {
+      await dialog.showAlert({
+        title: "Editing Disabled",
+        message: "File editing is not enabled for this deployment.",
+      });
+      return;
+    }
+
+    // Determine parent directory - use current directory if it's a directory, otherwise use parent of current file
     const parent =
       currentNode.value && currentNode.value.type === "directory"
         ? currentNode.value.path
-        : "/";
-    const name = prompt(`Name for new ${type}`);
-    if (!name) return;
+        : currentDirectory.value || "/";
+
+    // Get name from user using dialog
+    const nameResult = await dialog.showPrompt({
+      title: `Create New ${type === "directory" ? "Folder" : type === "file" ? "File" : "Symlink"}`,
+      message: `Enter a name for the new ${type}:`,
+      placeholder: `new-${type}-name`,
+      confirmLabel: "Create",
+      cancelLabel: "Cancel",
+    });
+
+    if (!nameResult || !nameResult.trim()) {
+      return; // User cancelled or entered empty name
+    }
+
+    const name = nameResult.trim();
+
+    // Validate name (basic validation)
+    if (name.includes("/") || name.includes("\\")) {
+      await dialog.showAlert({
+        title: "Invalid Name",
+        message: "Name cannot contain path separators.",
+      });
+      return;
+    }
+
     let entryType = ContainerEntryType.FILE;
     if (type === "directory") entryType = ContainerEntryType.DIRECTORY;
     if (type === "symlink") entryType = ContainerEntryType.SYMLINK;
@@ -882,13 +960,48 @@ import { DeploymentService } from "@obiente/proto";
       volumeName: source.type === "volume" ? source.volumeName : undefined,
     };
 
+    // For symlinks, get the target path
     if (type === "symlink") {
-      const target = prompt("Path to link to?")?.trim();
-      if (!target) return;
-      payload.template = target;
+      const targetResult = await dialog.showPrompt({
+        title: "Create Symlink",
+        message: "Enter the target path for the symlink:",
+        placeholder: "/path/to/target",
+        confirmLabel: "Create",
+        cancelLabel: "Cancel",
+      });
+      
+      if (!targetResult || !targetResult.trim()) {
+        return; // User cancelled
+      }
+      payload.template = targetResult.trim();
     }
 
-    await createEntry(payload);
+    try {
+      await createEntry(payload);
+      
+      // Refresh the parent directory to show the new entry
+      const parentNode = findNode(parent);
+      if (parentNode && parentNode.type === "directory") {
+        await loadChildren(parentNode);
+      } else {
+        // Fallback to refreshing root
+        await refreshRoot();
+      }
+
+      // Show success message
+      await dialog.showAlert({
+        title: "Created",
+        message: `Successfully created ${type}: ${name}`,
+        confirmLabel: "OK",
+      });
+    } catch (err: any) {
+      console.error("Failed to create entry:", err);
+      await dialog.showAlert({
+        title: "Creation Failed",
+        message: err?.message || `Failed to create ${type}. Please try again.`,
+        confirmLabel: "OK",
+      });
+    }
   }
 
   async function queueDelete(paths: string[]) {
@@ -896,6 +1009,7 @@ import { DeploymentService } from "@obiente/proto";
     if (!confirm(`Delete ${paths.length} item(s)?`)) return;
     await deleteEntries(paths);
     selectedPath.value = null;
+    updateFileQueryParam(null); // Clear file query param when closing file
   }
 
   async function queueRename(node: ExplorerNode) {
@@ -1110,6 +1224,18 @@ import { DeploymentService } from "@obiente/proto";
   async function handleLoadFile(node: ExplorerNode) {
     if (node.type !== "file") return;
 
+    // Cancel any pending file load request
+    if (currentFileLoadController) {
+      currentFileLoadController.abort();
+      currentFileLoadController = null;
+    }
+
+    // Prevent concurrent loads of the same file
+    if (isLoadingFile.value && currentFilePath.value === node.path) {
+      console.log("[handleLoadFile] Already loading this file, skipping duplicate request");
+      return;
+    }
+
     // Clean up previous blob URL when switching files
     if (fileBlobUrl.value) {
       URL.revokeObjectURL(fileBlobUrl.value);
@@ -1129,19 +1255,49 @@ import { DeploymentService } from "@obiente/proto";
       return;
     }
 
+    // Check for unsaved changes before switching files
+    if (hasUnsavedChanges.value && currentFilePath.value) {
+      const confirmed = await dialog.showConfirm({
+        title: "Unsaved Changes",
+        message: `You have unsaved changes in ${currentFilePath.value.split("/").pop()}. Open another file?`,
+        confirmLabel: "Discard & Open",
+        cancelLabel: "Cancel",
+      });
+      if (!confirmed) return;
+    }
+    
     selectedPath.value = node.path;
     currentFilePath.value = node.path;
     fileError.value = null; // Clear previous errors
     saveStatus.value = "idle"; // Reset save status when switching files
     saveErrorMessage.value = null;
+    // Reset original content - will be set when file loads
+    originalFileContent.value = "";
+
+    // Update query parameter to track the open file
+    updateFileQueryParam(node.path);
+
+    // Create new AbortController for this request
+    const abortController = new AbortController();
+    currentFileLoadController = abortController;
+    isLoadingFile.value = true;
 
     try {
+      // Store the request path to verify it's still the current file after load
+      const requestPath = node.path;
+      
       const res = await explorerClient.getContainerFile({
         organizationId: getOrgId(),
         deploymentId: props.deploymentId,
         path: node.path,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
       });
+
+      // Verify this request is still valid (file hasn't changed during load)
+      if (currentFilePath.value !== requestPath) {
+        console.log("[handleLoadFile] File changed during load, discarding stale response");
+        return;
+      }
 
       // Store metadata
       fileMetadata.value = {
@@ -1157,7 +1313,10 @@ import { DeploymentService } from "@obiente/proto";
 
       if (previewType === "text") {
         // Text file - show in editor
-        fileContent.value = res.content || "";
+        const content = res.content || "";
+        fileContent.value = content;
+        originalFileContent.value = content; // Store original content
+        editorRefreshKey.value++; // Force editor to refresh with new content
         fileLanguage.value = detectLanguage(node.path);
         // Clean up any existing blob URL
         if (fileBlobUrl.value) {
@@ -1196,7 +1355,13 @@ import { DeploymentService } from "@obiente/proto";
       }
 
       fileError.value = null; // Clear error on success
-    } catch (err) {
+    } catch (err: any) {
+      // Don't show error if request was aborted (cancelled)
+      if (err?.name === "AbortError" || err?.message?.includes("aborted")) {
+        console.log("[handleLoadFile] Request was aborted");
+        return;
+      }
+      
       console.error("load file", err);
       fileError.value = parseFileError(err);
       fileContent.value = "";
@@ -1206,6 +1371,12 @@ import { DeploymentService } from "@obiente/proto";
       if (fileBlobUrl.value) {
         URL.revokeObjectURL(fileBlobUrl.value);
         fileBlobUrl.value = null;
+      }
+    } finally {
+      // Reset loading state and clear abort controller
+      isLoadingFile.value = false;
+      if (currentFileLoadController === abortController) {
+        currentFileLoadController = null;
       }
     }
   }
@@ -1359,8 +1530,8 @@ import { DeploymentService } from "@obiente/proto";
   }
 
   async function handleSaveFile() {
-    if (!currentFilePath.value || !allowEditing) {
-      console.warn("Cannot save: no file path or editing disabled");
+    if (!currentFilePath.value) {
+      console.warn("Cannot save: no file path");
       return;
     }
     if (isSaving.value) {
@@ -1388,26 +1559,15 @@ import { DeploymentService } from "@obiente/proto";
 
       console.log("File saved successfully");
       saveStatus.value = "success";
-      console.log("Save status set to:", saveStatus.value);
-      
-      // Keep status visible for at least 5 seconds
-      // Show dialog after 1 second (non-blocking)
-      setTimeout(async () => {
-        if (!currentFilePath.value) return;
-        dialog.showAlert({
-          title: "File Saved",
-          message: `Successfully saved ${currentFilePath.value.split("/").pop()}`,
-          confirmLabel: "OK",
-        }).catch(() => {});
-      }, 1000);
+      // Update original content to match saved content
+      originalFileContent.value = fileContent.value;
 
-      // Reset status after 5 seconds total
+      // Reset status after 3 seconds (status indicator shows "Saved")
       setTimeout(() => {
         if (saveStatus.value === "success") {
-          console.log("Resetting save status from success to idle");
           saveStatus.value = "idle";
         }
-      }, 5000);
+      }, 3000);
     } catch (err: any) {
       console.error("save file error:", err);
       saveStatus.value = "error";
@@ -1705,9 +1865,45 @@ import { DeploymentService } from "@obiente/proto";
     if (node) handleOpen(node);
   }
 
-  function handleRefreshSelection() {
+  async function handleRefreshSelection() {
     if (!currentNode.value) return;
-    loadChildren(currentNode.value);
+    
+    // If it's a file, reload the file content
+    if (currentNode.value.type === "file" && currentFilePath.value) {
+      // Check for unsaved changes
+      if (hasUnsavedChanges.value) {
+        const confirmed = await dialog.showConfirm({
+          title: "Unsaved Changes",
+          message: "You have unsaved changes. Refreshing will discard them. Continue?",
+          confirmLabel: "Discard & Refresh",
+          cancelLabel: "Cancel",
+        });
+        if (!confirmed) return;
+      }
+      
+      // Cancel any pending requests first
+      if (currentFileLoadController) {
+        currentFileLoadController.abort();
+        currentFileLoadController = null;
+      }
+      
+      // Force a fresh load by incrementing the editor refresh key first
+      // This ensures any cached content is cleared before loading
+      editorRefreshKey.value++;
+      
+      // Clear current content to show we're loading fresh data
+      fileContent.value = "";
+      originalFileContent.value = "";
+      
+      // Small delay to ensure any pending requests are cancelled and UI updates
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Reload the file
+      await handleLoadFile(currentNode.value);
+    } else {
+      // For directories, just reload children
+      await loadChildren(currentNode.value);
+    }
   }
 
   async function handleDownload() {
@@ -1809,7 +2005,7 @@ import { DeploymentService } from "@obiente/proto";
     return "Unknown";
   });
 
-  function handleContainerChange(value: string) {
+    function handleContainerChange(value: string) {
     if (!value) {
       setContainer(undefined, undefined);
     } else {
@@ -1826,7 +2022,62 @@ import { DeploymentService } from "@obiente/proto";
     currentFilePath.value = null;
     fileContent.value = "";
     fileLanguage.value = "plaintext";
+    updateFileQueryParam(null); // Clear file query param
     refreshRoot();
+  }
+
+  // Helper function to update file query parameter
+  function updateFileQueryParam(filePath: string | null) {
+    if (filePath) {
+      // Update query param with the file path (URL-encoded)
+      router.replace({
+        query: {
+          ...route.query,
+          tab: "files", // Ensure we're on the files tab
+          file: encodeURIComponent(filePath),
+        },
+      });
+    } else {
+      // Clear file query param when no file is selected
+      const query = { ...route.query };
+      delete query.file;
+      router.replace({ query });
+    }
+  }
+
+  // Helper function to open file from path (used for query param loading)
+  async function openFileFromPath(filePath: string) {
+    // Wait for tree to be loaded
+    if (!root.hasLoaded) {
+      await refreshRoot();
+    }
+
+    // Find the node in the tree
+    const node = findNode(filePath);
+    if (node && node.type === "file") {
+      await handleLoadFile(node);
+    } else {
+      // If node not found, try loading parent directories recursively
+      const pathParts = filePath.split("/").filter(Boolean);
+      let currentPath = "";
+      
+      // Load all parent directories up to the file's parent
+      for (const part of pathParts.slice(0, -1)) {
+        currentPath = currentPath + "/" + part;
+        const dirNode = findNode(currentPath || "/");
+        if (dirNode && dirNode.type === "directory" && !dirNode.hasLoaded) {
+          await loadChildren(dirNode);
+        }
+      }
+
+      // Try finding the file node again
+      const fileNode = findNode(filePath);
+      if (fileNode && fileNode.type === "file") {
+        await handleLoadFile(fileNode);
+      } else {
+        console.warn(`File not found in tree: ${filePath}`);
+      }
+    }
   }
 
 onMounted(async () => {
@@ -1839,6 +2090,20 @@ onMounted(async () => {
     await loadContainers();
     await fetchVolumes();
     await refreshRoot();
+
+    // Check for file query parameter and open the file
+    const fileParam = route.query.file;
+    if (typeof fileParam === "string") {
+      try {
+        isInitializingFromQuery.value = true; // Prevent query param updates during init
+        const filePath = decodeURIComponent(fileParam);
+        await openFileFromPath(filePath);
+      } catch (err) {
+        console.error("Failed to open file from query param:", err);
+      } finally {
+        isInitializingFromQuery.value = false;
+      }
+    }
 });
 
 onUnmounted(() => {
@@ -1860,6 +2125,48 @@ onUnmounted(() => {
         await loadContainers();
         await fetchVolumes();
         await refreshRoot();
+      }
+    }
+  );
+
+  // Watch for file query parameter changes (e.g., back/forward navigation, shared links)
+  watch(
+    () => route.query.file,
+    async (fileParam) => {
+      if (!hasMounted.value) return; // Skip during initial mount (handled in onMounted)
+      
+      // Only react to query param changes if it's different from current file
+      const currentFileFromQuery = typeof fileParam === "string" 
+        ? decodeURIComponent(fileParam) 
+        : null;
+      
+      if (currentFileFromQuery && currentFileFromQuery !== currentFilePath.value) {
+        try {
+          await openFileFromPath(currentFileFromQuery);
+        } catch (err) {
+          console.error("Failed to open file from query param change:", err);
+        }
+      } else if (!fileParam && currentFilePath.value) {
+        // Query param was cleared, but we still have a file open - don't close it automatically
+        // The user might have cleared it manually
+      }
+    }
+  );
+
+  // Update query param when selectedPath changes (but avoid circular updates)
+  watch(
+    selectedPath,
+    (newPath) => {
+      // Skip if we're initializing from query param to prevent circular updates
+      if (isInitializingFromQuery.value) return;
+      
+      // Only update if the query param doesn't match (to avoid circular updates from query watcher)
+      const currentFileFromQuery = typeof route.query.file === "string"
+        ? decodeURIComponent(route.query.file)
+        : null;
+      
+      if (newPath !== currentFileFromQuery) {
+        updateFileQueryParam(newPath);
       }
     }
   );

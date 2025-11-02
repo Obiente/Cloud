@@ -14,15 +14,26 @@ export interface ConfirmOptions {
   variant?: "default" | "danger";
 }
 
+export interface PromptOptions {
+  title?: string;
+  message: string;
+  placeholder?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  defaultValue?: string;
+}
+
 interface DialogState {
   open: boolean;
-  type: "alert" | "confirm" | null;
+  type: "alert" | "confirm" | "prompt" | null;
   title: string;
   message: string;
   confirmLabel: string;
   cancelLabel: string;
   variant: "default" | "danger";
-  resolve: ((value: boolean) => void) | null;
+  placeholder?: string;
+  defaultValue?: string;
+  resolve: ((value: boolean | string | null) => void) | null;
 }
 
 const dialogState = ref<DialogState>({
@@ -33,6 +44,8 @@ const dialogState = ref<DialogState>({
   confirmLabel: "OK",
   cancelLabel: "Cancel",
   variant: "default",
+  placeholder: "",
+  defaultValue: "",
   resolve: null,
 });
 
@@ -79,6 +92,25 @@ export function useDialog() {
     });
   };
 
+  const showPrompt = (options: PromptOptions): Promise<string | null> => {
+    return new Promise((resolve) => {
+      dialogState.value = {
+        open: true,
+        type: "prompt",
+        title: options.title || "Input",
+        message: options.message,
+        confirmLabel: options.confirmLabel || "OK",
+        cancelLabel: options.cancelLabel || "Cancel",
+        variant: "default",
+        placeholder: options.placeholder || "",
+        defaultValue: options.defaultValue || "",
+        resolve: (value: string | null) => {
+          resolve(value);
+        },
+      };
+    });
+  };
+
   const handleConfirm = () => {
     if (dialogState.value.resolve) {
       dialogState.value.resolve(true);
@@ -89,7 +121,11 @@ export function useDialog() {
 
   const handleCancel = () => {
     if (dialogState.value.resolve) {
-      dialogState.value.resolve(false);
+      if (dialogState.value.type === "prompt") {
+        dialogState.value.resolve(null);
+      } else {
+        dialogState.value.resolve(false);
+      }
       dialogState.value.resolve = null;
     }
     dialogState.value.open = false;
@@ -97,7 +133,7 @@ export function useDialog() {
 
   const handleClose = () => {
     // For alert, close is same as confirm
-    // For confirm, close is same as cancel
+    // For confirm/prompt, close is same as cancel
     if (dialogState.value.type === "alert") {
       handleConfirm();
     } else {
@@ -105,13 +141,23 @@ export function useDialog() {
     }
   };
 
+  const handlePromptConfirm = (value: string) => {
+    if (dialogState.value.resolve) {
+      dialogState.value.resolve(value);
+      dialogState.value.resolve = null;
+    }
+    dialogState.value.open = false;
+  };
+
   return {
     dialogState,
     showAlert,
     showConfirm,
+    showPrompt,
     handleConfirm,
     handleCancel,
     handleClose,
+    handlePromptConfirm,
   };
 }
 

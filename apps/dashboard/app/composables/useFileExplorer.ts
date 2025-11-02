@@ -279,7 +279,9 @@ export function useFileExplorer(options: ExplorerOptions) {
       deploymentId: options.deploymentId,
     });
     await client.writeContainerFile(request);
-    await refreshRoot();
+    // Don't refresh the tree after saving - it causes the file to close
+    // The file was just saved, so we know it exists. Metadata refresh can happen on next manual refresh.
+    // This preserves the selectedPath and keeps the file open.
   }
 
   const breadcrumbs = computed(() => {
