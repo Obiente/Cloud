@@ -69,6 +69,9 @@
         >
             Refresh
           </OuiButton>
+          <OuiButton variant="ghost" size="sm" @click="handleRefreshVolumes">
+            Refresh Volumes ({{ volumes.length }})
+          </OuiButton>
           <OuiButton variant="ghost" size="sm" @click="showUpload = !showUpload">
             Upload
           </OuiButton>
@@ -86,6 +89,8 @@
             :deployment-id="deploymentId"
             :destination-path="currentDirectory"
             :volume-name="source.type === 'volume' ? source.volumeName : undefined"
+            :container-id="source.type === 'container' && selectedContainerId ? selectedContainerId : undefined"
+            :service-name="source.type === 'container' && selectedServiceName ? selectedServiceName : undefined"
             @uploaded="handleFilesUploaded"
           />
         </OuiCardBody>
@@ -111,7 +116,7 @@
               class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[13px] text-left transition-colors duration-150 text-text-secondary border-none bg-transparent cursor-pointer hover:bg-surface-hover hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed"
               :class="{
                 'bg-surface-selected text-text-primary':
-                  explorer.source.type === 'container',
+                  source.type === 'container',
               }"
               :disabled="!containerRunning"
               @click="handleSwitchSource('container')"
@@ -125,7 +130,7 @@
               class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[13px] text-left transition-colors duration-150 text-text-secondary border-none bg-transparent cursor-pointer hover:bg-surface-hover hover:text-text-primary"
               :class="{
                 'bg-surface-selected text-text-primary':
-                  explorer.source.volumeName === volume.name,
+                  source.type === 'volume' && source.volumeName === volume.name,
               }"
               @click="handleSwitchSource('volume', volume.name || '')"
             >
@@ -695,7 +700,7 @@ import { DeploymentService } from "@obiente/proto";
   const explorer = useFileExplorer({
     organizationId: props.organizationId || "",
     deploymentId: props.deploymentId,
-    allowEditing: props.allowEditing,
+    allowEditing: props.allowEditing ?? true,
   });
 
   const {
@@ -798,7 +803,8 @@ import { DeploymentService } from "@obiente/proto";
   const explorerClient = useConnectClient(DeploymentService);
   const dialog = useDialog();
 
-  const allowEditing = props.allowEditing ?? true;
+  // Make allowEditing reactive to prop changes
+  const allowEditing = computed(() => props.allowEditing ?? true);
   const isSaving = ref(false);
   const saveStatus = ref<"idle" | "saving" | "success" | "error">("idle");
   const saveErrorMessage = ref<string | null>(null);
@@ -819,6 +825,10 @@ import { DeploymentService } from "@obiente/proto";
     }
     return explorer.root.path || "/";
   });
+
+  async function handleRefreshVolumes() {
+    await fetchVolumes();
+  }
 
   function handleSwitchSource(type: "container" | "volume", name?: string) {
     if (type === "container") {
@@ -882,11 +892,11 @@ import { DeploymentService } from "@obiente/proto";
         loadChildren(node);
         break;
       case "delete":
-        if (!allowEditing) return;
+        if (!allowEditing.value) return;
         queueDelete([node.path]);
         break;
       case "rename":
-        if (!allowEditing) return;
+        if (!allowEditing.value) return;
         queueRename(node);
         break;
       case "copy-path":
@@ -895,22 +905,22 @@ import { DeploymentService } from "@obiente/proto";
           .catch((err) => console.error("copy path", err));
         break;
       case "new-file":
-        if (!allowEditing) return;
+        if (!allowEditing.value) return;
         handleCreate("file");
         break;
       case "new-folder":
-        if (!allowEditing) return;
+        if (!allowEditing.value) return;
         handleCreate("directory");
         break;
       case "new-symlink":
-        if (!allowEditing) return;
+        if (!allowEditing.value) return;
         handleCreate("symlink");
         break;
     }
   }
 
   async function handleCreate(type: "file" | "directory" | "symlink") {
-    if (!allowEditing) {
+    if (!allowEditing.value) {
       await dialog.showAlert({
         title: "Editing Disabled",
         message: "File editing is not enabled for this deployment.",

@@ -39,6 +39,61 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 	}
 	defer dcli.Close()
 
+	// If we're only listing volumes, we can be more lenient with container lookup
+	if req.Msg.GetListVolumes() {
+		// For volume listing, try to find any container from the deployment
+		// Volumes are accessible even when containers are stopped, so use GetAllDeploymentLocations
+		// instead of ValidateAndRefreshLocations which only returns running containers
+		allLocations, locationsErr := database.GetAllDeploymentLocations(deploymentID)
+		if locationsErr != nil {
+			return connect.NewResponse(&deploymentsv1.ListContainerFilesResponse{
+				Volumes:          []*deploymentsv1.VolumeInfo{},
+				ContainerRunning: false,
+			}), nil
+		}
+
+		// Try each container until we find one that works for listing volumes
+		// We can list volumes even from stopped containers
+		var volumes []docker.VolumeMount
+		var isRunning bool
+		foundVolumes := false
+		for _, testLoc := range allLocations {
+			containerInfo, inspectErr := dcli.ContainerInspect(ctx, testLoc.ContainerID)
+			if inspectErr != nil {
+				continue
+			}
+			if !foundVolumes {
+				isRunning = containerInfo.State.Running
+			}
+			testVolumes, volErr := dcli.GetContainerVolumes(ctx, testLoc.ContainerID)
+			if volErr == nil {
+				volumes = testVolumes
+				foundVolumes = true
+				isRunning = containerInfo.State.Running
+				break
+			}
+		}
+		if !foundVolumes {
+			volumes = []docker.VolumeMount{}
+		}
+
+		volumeInfos := make([]*deploymentsv1.VolumeInfo, len(volumes))
+		for i, vol := range volumes {
+			volumeInfos[i] = &deploymentsv1.VolumeInfo{
+				Name:         vol.Name,
+				MountPoint:   vol.MountPoint,
+				Source:       vol.Source,
+				IsPersistent: vol.IsNamed,
+			}
+		}
+
+		return connect.NewResponse(&deploymentsv1.ListContainerFilesResponse{
+			Volumes:          volumeInfos,
+			ContainerRunning: isRunning,
+		}), nil
+	}
+
+	// Normal file listing (not just volumes)
 	// Find container by container_id or service_name, or use first if neither specified
 	containerID := req.Msg.GetContainerId()
 	serviceName := req.Msg.GetServiceName()
@@ -70,42 +125,6 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 	}
 	isRunning := containerInfo.State.Running
 
-	if req.Msg.GetListVolumes() {
-		log.Printf("[ListContainerFiles] Listing volumes for container %s (deployment %s)", loc.ContainerID, deploymentID)
-		volumes, err := dcli.GetContainerVolumes(ctx, loc.ContainerID)
-		if err != nil {
-			log.Printf("[ListContainerFiles] Error getting volumes: %v", err)
-			refreshedLoc, refreshErr := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
-			if refreshErr != nil {
-				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("container not found and could not be refreshed: %w", err))
-			}
-			loc = refreshedLoc
-			volumes, err = dcli.GetContainerVolumes(ctx, loc.ContainerID)
-			if err != nil {
-				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to get volumes after refresh: %w", err))
-			}
-		}
-
-		log.Printf("[ListContainerFiles] Found %d volumes", len(volumes))
-		volumeInfos := make([]*deploymentsv1.VolumeInfo, len(volumes))
-		for i, vol := range volumes {
-			log.Printf("[ListContainerFiles] Volume %d: Name=%s, MountPoint=%s, Source=%s, IsNamed=%v", i, vol.Name, vol.MountPoint, vol.Source, vol.IsNamed)
-			volumeInfos[i] = &deploymentsv1.VolumeInfo{
-				Name:         vol.Name,
-				MountPoint:   vol.MountPoint,
-				Source:       vol.Source,
-				IsPersistent: vol.IsNamed,
-			}
-		}
-
-		resp := &deploymentsv1.ListContainerFilesResponse{
-			Volumes:          volumeInfos,
-			ContainerRunning: isRunning,
-		}
-		log.Printf("[ListContainerFiles] Returning response with %d volumes", len(volumeInfos))
-		return connect.NewResponse(resp), nil
-	}
-
 	cursor := req.Msg.GetCursor()
 	pageSize := req.Msg.GetPageSize()
 	if pageSize < 0 {
@@ -116,8 +135,6 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 	if path == "" {
 		path = "/"
 	}
-	
-	log.Printf("[ListContainerFiles] Received path from request: %q", path)
 	
 	// Sanitize path to prevent directory traversal attacks
 	// Ensure path is absolute and normalized
@@ -141,11 +158,8 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 	
 	// Final validation: path should only contain valid characters for Unix paths
 	if strings.Contains(path, "\x00") || strings.Contains(path, "..") {
-		log.Printf("[ListContainerFiles] Invalid path detected after cleaning: %q, defaulting to /", path)
 		path = "/"
 	}
-	
-	log.Printf("[ListContainerFiles] Sanitized path: %q", path)
 
 	volumeName := req.Msg.GetVolumeName()
 	if volumeName != "" {
@@ -201,39 +215,26 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 
 	// Try to list files - ContainerListFiles will handle stopped containers by temporarily starting them
 	// If the container can't be started automatically, it will return an error
-	log.Printf("[ListContainerFiles] Attempting to list files in container %s at path %s (running=%v)", loc.ContainerID, path, isRunning)
 	fileInfos, err := dcli.ContainerListFiles(ctx, loc.ContainerID, path)
 	if err != nil {
-		log.Printf("[ListContainerFiles] Error listing files: %v (type: %T)", err, err)
 		// Check if error mentions container being stopped or can't be started
 		errStr := err.Error()
 		if strings.Contains(errStr, "container is stopped") || 
 		   strings.Contains(errStr, "cannot be started automatically") ||
 		   strings.Contains(errStr, "failed to start stopped container") {
-			// Container is stopped and couldn't be auto-started
-			log.Printf("[ListContainerFiles] Container is stopped and cannot be auto-started")
 			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running and cannot be started automatically for file listing. Use volume_name parameter to access persistent volumes (volumes are accessible even when containers are stopped), or manually start the container"))
 		}
 		
 		// Check if the error is from ContainerExecRun (command failed with exit code)
-		// This indicates the ls command itself failed (not a container state issue)
 		if strings.Contains(errStr, "failed with exit code") || strings.Contains(errStr, "command") {
-			log.Printf("[ListContainerFiles] Command failed, container running=%v", isRunning)
-			// Check if container is actually running - if not, suggest using volumes
 			if !isRunning {
 				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running and the file listing command failed. Use volume_name parameter to access persistent volumes (volumes are accessible even when containers are stopped), or start the container"))
 			}
-			// Container is running but command failed - likely a path or permission issue
-			log.Printf("[ListContainerFiles] Container is running but ls command failed: %v", err)
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list files: %w", err))
 		}
 		
-		// Other errors (permissions, path issues, exec failures, etc.)
-		log.Printf("[ListContainerFiles] Other error (exec/permissions): %v", err)
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list files: %w", err))
 	}
-	
-	log.Printf("[ListContainerFiles] Successfully listed %d files in path %s", len(fileInfos), path)
 
 	pagedInfos, hasMore, nextCursor := paginateFileInfos(fileInfos, cursor, pageSize)
 	files := make([]*deploymentsv1.ContainerFile, 0, len(pagedInfos))
@@ -1298,3 +1299,4 @@ func writeVolumeFile(path string, content []byte, mode os.FileMode, create bool)
 
 	return nil
 }
+

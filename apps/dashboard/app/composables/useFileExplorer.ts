@@ -86,24 +86,19 @@ export function useFileExplorer(options: ExplorerOptions) {
         switchToContainer();
         return;
       }
+      // For volume listing, we need to find a container first (volumes are per container)
+      // But we don't need to specify which container - any container from the deployment will work
+      // to get the volume list. The backend will use the first container if none is specified.
       const res = await client.listContainerFiles({
         organizationId: orgId,
         deploymentId: options.deploymentId,
         path: "/",
         listVolumes: true,
-        // Don't pass containerId/serviceName for volume listing - volumes are per deployment, not per container
+        // Don't pass containerId/serviceName - let backend use first container to list volumes
       });
-      
-      console.log("fetchVolumes: API response", res);
-      console.log("fetchVolumes: res.volumes", res.volumes);
-      console.log("fetchVolumes: res.volumes type", typeof res.volumes, Array.isArray(res.volumes));
       
       volumes.value = res.volumes ?? [];
       containerRunning.value = !!res.containerRunning;
-      
-      console.log("fetchVolumes: Found volumes", volumes.value.length, volumes.value);
-      console.log("fetchVolumes: volumes.value after assignment", volumes.value);
-      console.log("fetchVolumes: Container running", containerRunning.value);
       
       const firstVolume = volumes.value[0];
       if (!containerRunning.value && firstVolume) {
