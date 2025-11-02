@@ -63,6 +63,15 @@ docker compose logs postgres
 
 # Test connection
 docker exec -it obiente-postgres psql -U obiente-postgres -d obiente
+
+# Verify TimescaleDB (metrics database) is running
+docker compose ps timescaledb
+
+# Check TimescaleDB logs
+docker compose logs timescaledb
+
+# Test metrics database connection
+docker exec -it obiente-timescaledb psql -U postgres -d obiente_metrics
 ```
 
 ### Authentication Errors
@@ -215,7 +224,63 @@ docker exec obiente-postgres psql -U obiente-postgres -c "SELECT pg_database_siz
 
 # Analyze tables
 docker exec obiente-postgres psql -U obiente-postgres -d obiente -c "VACUUM ANALYZE;"
+
+# Check TimescaleDB size (metrics database)
+docker exec obiente-timescaledb psql -U postgres -d obiente_metrics -c "SELECT pg_database_size('obiente_metrics');"
 ```
+
+### Metrics Collection Issues
+
+**Problem**: Metrics not being collected or displayed
+
+**Solution**:
+
+```bash
+# Check metrics system health
+curl http://localhost:3001/health
+
+# Check detailed metrics observability
+curl http://localhost:3001/metrics/observability | jq
+
+# Look for:
+# - "healthy": should be true
+# - "circuit_breaker_state": should be 0 (Closed)
+# - "consecutive_failures": should be 0
+# - "collection_errors": check error rate
+```
+
+**Common Issues:**
+
+1. **Circuit Breaker Open (state = 1)**
+   - Docker API is having issues
+   - Check Docker daemon connectivity
+   - Review Docker API permissions
+   - Wait for cooldown period or restart API
+
+2. **High Error Rates**
+   ```bash
+   # Check Docker API connectivity
+   docker ps
+   
+   # Check API logs for errors
+   docker service logs obiente_api | grep -i "metrics\|docker"
+   ```
+
+3. **Metrics Database Connection Failed**
+   ```bash
+   # Verify TimescaleDB is running
+   docker compose ps timescaledb
+   
+   # Check connection from API
+   docker exec obiente-api psql -h timescaledb -U postgres -d obiente_metrics
+   ```
+
+4. **Slow Metrics Collection**
+   - Increase `METRICS_MAX_WORKERS` environment variable
+   - Check Docker API response times
+   - Monitor container count (may need more workers)
+
+See [Monitoring Guide](monitoring.md) for more details.
 
 ## Getting Help
 
