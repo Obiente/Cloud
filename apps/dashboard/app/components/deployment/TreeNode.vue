@@ -7,6 +7,7 @@
     FolderOpenIcon,
     DocumentIcon,
     ChevronRightIcon,
+    ChevronDownIcon,
     MinusSmallIcon,
     LinkIcon,
     EllipsisVerticalIcon,
@@ -168,7 +169,8 @@
         >
           <span class="tree-trigger__chevron">
             <TreeView.BranchIndicator>
-              <ChevronRightIcon class="chevron" />
+              <ChevronRightIcon v-if="!isExpanded" class="chevron" />
+              <ChevronDownIcon v-else class="chevron" />
             </TreeView.BranchIndicator>
           </span>
           <span class="tree-trigger__icon">
@@ -351,11 +353,7 @@
     height: 14px;
     width: 14px;
     color: var(--oui-text-tertiary);
-    transition: transform 0.12s ease;
-  }
-
-  [data-state="open"] .chevron {
-    transform: rotate(90deg);
+    transition: color 0.12s ease;
   }
 
   .tree-trigger__icon {
