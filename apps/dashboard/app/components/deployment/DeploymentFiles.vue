@@ -1291,6 +1291,8 @@ import { DeploymentService } from "@obiente/proto";
         deploymentId: props.deploymentId,
         path: node.path,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
+        containerId: source.type === "container" && selectedContainerId.value ? selectedContainerId.value : undefined,
+        serviceName: source.type === "container" && selectedServiceName.value ? selectedServiceName.value : undefined,
       });
 
       // Verify this request is still valid (file hasn't changed during load)
@@ -1913,9 +1915,11 @@ import { DeploymentService } from "@obiente/proto";
       // Fetch file content
       const res = await explorerClient.getContainerFile({
         organizationId: getOrgId(),
-      deploymentId: props.deploymentId,
+        deploymentId: props.deploymentId,
         path: currentNode.value.path,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
+        containerId: source.type === "container" && selectedContainerId.value ? selectedContainerId.value : undefined,
+        serviceName: source.type === "container" && selectedServiceName.value ? selectedServiceName.value : undefined,
       });
 
       // Get file name from path
