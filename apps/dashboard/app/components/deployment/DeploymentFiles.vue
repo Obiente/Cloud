@@ -1164,7 +1164,7 @@ import { DeploymentService } from "@obiente/proto";
           URL.revokeObjectURL(fileBlobUrl.value);
           fileBlobUrl.value = null;
         }
-  } else {
+      } else {
         // Media file - create blob URL for preview
         fileContent.value = ""; // Clear text content
         fileLanguage.value = "plaintext";
@@ -1267,6 +1267,40 @@ import { DeploymentService } from "@obiente/proto";
       "wma",
       "opus",
     ];
+    // Common text file paths (especially system files without extensions)
+    const commonTextPaths = [
+      "/etc/",
+      "/etc/profile",
+      "/etc/passwd",
+      "/etc/group",
+      "/etc/hosts",
+      "/etc/fstab",
+      "/etc/resolv.conf",
+      "/etc/ssh/",
+      "/etc/nginx/",
+      "/etc/apache/",
+      "/var/log/",
+      "/home/",
+      "/root/",
+      "/opt/",
+      "/usr/local/",
+      ".env",
+      ".gitignore",
+      ".dockerignore",
+      "Dockerfile",
+      "docker-compose",
+      "Makefile",
+      "README",
+      "CHANGELOG",
+      "LICENSE",
+    ];
+    
+    // Check if path matches common text file patterns
+    const lowerPath = path.toLowerCase();
+    if (commonTextPaths.some(pattern => lowerPath.includes(pattern.toLowerCase()))) {
+      return "text";
+    }
+    
     const textExts = [
       "txt",
       "md",

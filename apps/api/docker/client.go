@@ -216,30 +216,60 @@ func (c *Client) ContainerExecRun(ctx context.Context, containerID string, cmd [
 	defer attachResp.Close()
 
 	// Read output - Docker multiplexes stdout/stderr with 8-byte headers
+	// Format: [stream_type(1)][reserved(3)][payload_length(4 bytes, big-endian)]
 	var stdout bytes.Buffer
+	var stderr bytes.Buffer
 	outputDone := make(chan error, 1)
 
 	go func() {
-		buf := make([]byte, 32*1024)
+		header := make([]byte, 8)
+		frameBuf := make([]byte, 32*1024)
 		for {
-			n, err := attachResp.Reader.Read(buf)
-			if n > 0 {
-				// Skip 8-byte header and extract stdout (type 1)
-				if n > 8 {
-					streamType := buf[0]
-					if streamType == 1 { // stdout
-						stdout.Write(buf[8:n])
-					}
-					// Ignore stderr (type 2) for now
+			// Read 8-byte header
+			if _, err := io.ReadFull(attachResp.Reader, header); err != nil {
+				if err == io.EOF || err == io.ErrUnexpectedEOF {
+					outputDone <- nil
+					return
 				}
-			}
-			if err == io.EOF {
-				outputDone <- nil
-				return
-			}
-			if err != nil {
 				outputDone <- err
 				return
+			}
+
+			streamType := header[0]
+			// Read payload length (bytes 4-7, big-endian)
+			payloadLength := int(uint32(header[4])<<24 | uint32(header[5])<<16 | uint32(header[6])<<8 | uint32(header[7]))
+
+			if payloadLength == 0 {
+				continue
+			}
+
+			// Ensure we have enough buffer space
+			if payloadLength > len(frameBuf) {
+				frameBuf = make([]byte, payloadLength)
+			}
+
+			// Read the payload
+			payload := frameBuf[:payloadLength]
+			if _, err := io.ReadFull(attachResp.Reader, payload); err != nil {
+				if err == io.EOF || err == io.ErrUnexpectedEOF {
+					// Partial frame, write what we have
+					if streamType == 1 {
+						stdout.Write(payload)
+					} else if streamType == 2 {
+						stderr.Write(payload)
+					}
+					outputDone <- nil
+					return
+				}
+				outputDone <- err
+				return
+			}
+
+			// Write to appropriate buffer
+			if streamType == 1 { // stdout
+				stdout.Write(payload)
+			} else if streamType == 2 { // stderr
+				stderr.Write(payload)
 			}
 		}
 	}()
@@ -261,7 +291,11 @@ func (c *Client) ContainerExecRun(ctx context.Context, containerID string, cmd [
 		return "", fmt.Errorf("inspect exec: %w", err)
 	}
 	if inspect.ExitCode != 0 {
-		return stdout.String(), fmt.Errorf("command %q failed with exit code %d", strings.Join(cmd, " "), inspect.ExitCode)
+		errMsg := fmt.Sprintf("command %q failed with exit code %d", strings.Join(cmd, " "), inspect.ExitCode)
+		if stderr.Len() > 0 {
+			errMsg += ": " + stderr.String()
+		}
+		return stdout.String(), fmt.Errorf("%s", errMsg)
 	}
 
 	return stdout.String(), nil
@@ -301,19 +335,59 @@ func (c *Client) ContainerListFiles(ctx context.Context, containerID, path strin
 	}()
 
 	// Use ls -la to get detailed file info
+	// Try GNU ls format first (--time-style=long-iso), fall back to BusyBox format (--full-time)
 	cmd := []string{"ls", "-la", "--time-style=long-iso", path}
+	log.Printf("[ContainerListFiles] Running command in container %s: %v", containerID, cmd)
 	output, err := c.ContainerExecRun(ctx, containerID, cmd)
 	if err != nil {
-		// Provide more context about the failure
-		return nil, fmt.Errorf("failed to list files in %q: %w", path, err)
+		log.Printf("[ContainerListFiles] Command failed: %v, output (if any): %q", err, output)
+		
+		// Check if error is due to unsupported option (BusyBox)
+		errStr := err.Error()
+		if strings.Contains(errStr, "unrecognized option") || strings.Contains(errStr, "time-style") {
+			log.Printf("[ContainerListFiles] GNU ls format failed, trying BusyBox format (--full-time)")
+			// Fall back to BusyBox-compatible format
+			cmd = []string{"ls", "-la", "--full-time", path}
+			output, err = c.ContainerExecRun(ctx, containerID, cmd)
+			if err != nil {
+				log.Printf("[ContainerListFiles] BusyBox format also failed: %v", err)
+				// If we got some output despite the error, try to parse it (might be partial success)
+				if output != "" {
+					log.Printf("[ContainerListFiles] Attempting to parse partial output despite error")
+					return parseLsOutput(output, path), nil
+				}
+				return nil, fmt.Errorf("failed to list files in %q: %w", path, err)
+			}
+		} else {
+			// If we got some output despite the error, try to parse it (might be partial success)
+			if output != "" {
+				log.Printf("[ContainerListFiles] Attempting to parse partial output despite error")
+				return parseLsOutput(output, path), nil
+			}
+			// Provide more context about the failure
+			return nil, fmt.Errorf("failed to list files in %q: %w", path, err)
+		}
 	}
 
+	log.Printf("[ContainerListFiles] Command succeeded, output length: %d chars", len(output))
 	return parseLsOutput(output, path), nil
 }
 
 // ContainerReadFile reads a file using cat command
 // If container is stopped, it temporarily starts it, performs the operation, then stops it again
 func (c *Client) ContainerReadFile(ctx context.Context, containerID, filePath string) ([]byte, error) {
+	// Sanitize filePath to ensure it's valid
+	filePath = strings.TrimSpace(filePath)
+	filePath = filepath.ToSlash(filepath.Clean(filePath))
+	if !strings.HasPrefix(filePath, "/") {
+		filePath = "/" + filePath
+	}
+	// Final validation
+	if strings.Contains(filePath, "\x00") || strings.Contains(filePath, "..") {
+		log.Printf("[ContainerReadFile] Invalid filePath detected: %q", filePath)
+		return nil, fmt.Errorf("invalid file path: %q", filePath)
+	}
+	
 	// Check if container is running
 	containerInfo, err := c.api.ContainerInspect(ctx, containerID)
 	if err != nil {
@@ -343,11 +417,34 @@ func (c *Client) ContainerReadFile(ctx context.Context, containerID, filePath st
 		}
 	}()
 
+	// Use cat directly - Docker exec passes arguments safely, so special characters in paths are handled
+	// This works on both GNU coreutils and BusyBox
 	cmd := []string{"cat", filePath}
 	output, err := c.ContainerExecRun(ctx, containerID, cmd)
 	if err != nil {
-		return nil, fmt.Errorf("read file: %w", err)
+		log.Printf("[ContainerReadFile] cat command failed: %v", err)
+		errStr := err.Error()
+		
+		// Check if file doesn't exist
+		if strings.Contains(errStr, "No such file") || strings.Contains(errStr, "not found") {
+			return nil, fmt.Errorf("file not found: %q", filePath)
+		}
+		
+		// Check if it's a permission issue
+		if strings.Contains(errStr, "Permission denied") || strings.Contains(errStr, "EACCES") {
+			return nil, fmt.Errorf("permission denied reading file %q", filePath)
+		}
+		
+		// Check if it's a directory
+		if strings.Contains(errStr, "Is a directory") || strings.Contains(errStr, "EISDIR") {
+			return nil, fmt.Errorf("path is a directory, not a file: %q", filePath)
+		}
+		
+		// Return error with full context - the stderr should already be included in the error message
+		return nil, fmt.Errorf("failed to read file %q: %w", filePath, err)
 	}
+	
+	// Empty files are valid - return empty byte slice
 	return []byte(output), nil
 }
 
@@ -500,10 +597,25 @@ func (c *Client) ContainerStat(ctx context.Context, containerID, path string) (*
 	if base == "" {
 		base = "/"
 	}
-	output, err := c.ContainerExecRun(ctx, containerID, []string{"ls", "-ld", "--time-style=long-iso", path})
+	
+	// Try GNU ls format first (--time-style=long-iso), fall back to BusyBox format (--full-time)
+	cmd := []string{"ls", "-ld", "--time-style=long-iso", path}
+	output, err := c.ContainerExecRun(ctx, containerID, cmd)
 	if err != nil {
-		return nil, err
+		// Check if error is due to unsupported option (BusyBox)
+		errStr := err.Error()
+		if strings.Contains(errStr, "unrecognized option") || strings.Contains(errStr, "time-style") {
+			// Fall back to BusyBox-compatible format
+			cmd = []string{"ls", "-ld", "--full-time", path}
+			output, err = c.ContainerExecRun(ctx, containerID, cmd)
+			if err != nil {
+				return nil, fmt.Errorf("failed to stat file %q: %w", path, err)
+			}
+		} else {
+			return nil, fmt.Errorf("failed to stat file %q: %w", path, err)
+		}
 	}
+	
 	infos := parseLsOutput(output, base)
 	if len(infos) == 0 {
 		return nil, fmt.Errorf("no metadata for path %s", path)
@@ -528,6 +640,18 @@ type FileInfo struct {
 
 // parseLsOutput parses ls -la output into FileInfo structs
 func parseLsOutput(output, basePath string) []FileInfo {
+	// Sanitize basePath to ensure it's valid
+	basePath = strings.TrimSpace(basePath)
+	basePath = filepath.ToSlash(filepath.Clean(basePath))
+	if !strings.HasPrefix(basePath, "/") {
+		basePath = "/" + basePath
+	}
+	// Final validation
+	if strings.Contains(basePath, "\x00") || strings.Contains(basePath, "..") {
+		log.Printf("[parseLsOutput] Invalid basePath detected: %q, defaulting to /", basePath)
+		basePath = "/"
+	}
+	
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	var files []FileInfo
 
@@ -548,7 +672,13 @@ func parseLsOutput(output, basePath string) []FileInfo {
 
 		parts := strings.Fields(line)
 		if len(parts) < 8 {
+			log.Printf("[parseLsOutput] Skipping line with < 8 fields (%d): %q", len(parts), line)
 			continue
+		}
+		
+		// Log first few lines to debug parsing issues
+		if i < start+3 {
+			log.Printf("[parseLsOutput] Parsing line %d: %q, fields: %d", i, line, len(parts))
 		}
 
 		perms := parts[0]
@@ -566,14 +696,43 @@ func parseLsOutput(output, basePath string) []FileInfo {
 		fmt.Sscanf(parts[4], "%d", &size)
 		}
 
-		// File name starts at index 8, but handle cases where it might be different
-		// Join all parts from index 8 onwards to handle spaces in filenames
+		// Determine where the filename starts based on timestamp format
+		// Standard format: perms links owner group size date time filename (8 fields, filename at index 7)
+		// BusyBox --full-time: perms links owner group size date time timezone filename (9+ fields, filename at index 8)
+		// GNU --full-time: perms links owner group size date time timezone filename (9+ fields, filename at index 8)
+		// Check if we have a timezone field (parts[7] might be timezone like +0000, -0500, etc.)
 		nameStartIdx := 7
+		if len(parts) > 7 {
+			// Check if parts[7] looks like a timezone (starts with + or - and is 4-6 characters)
+			timezoneField := parts[7]
+			if (strings.HasPrefix(timezoneField, "+") || strings.HasPrefix(timezoneField, "-")) && 
+			   len(timezoneField) >= 5 && len(timezoneField) <= 6 {
+				// This is a timezone field, filename starts at index 8
+				nameStartIdx = 8
+			} else if len(parts) > 8 {
+				// Check parts[8] as well, in case format is different
+				nextField := parts[8]
+				// If parts[7] looks like a partial timestamp and parts[8] looks like timezone
+				if (strings.HasPrefix(nextField, "+") || strings.HasPrefix(nextField, "-")) && 
+				   len(nextField) >= 5 && len(nextField) <= 6 {
+					nameStartIdx = 9
+				}
+			}
+		}
+		
 		if len(parts) <= nameStartIdx {
+			log.Printf("[parseLsOutput] Not enough fields for filename: %d fields, need > %d", len(parts), nameStartIdx)
 			continue
 		}
 
 		rawName := strings.Join(parts[nameStartIdx:], " ")
+		
+		// Sanitize the raw name - remove any control characters or invalid path characters
+		rawName = strings.TrimSpace(rawName)
+		if rawName == "" {
+			log.Printf("[parseLsOutput] Empty filename after join, skipping line")
+			continue
+		}
 
 		displayName := rawName
 		symlinkTarget := ""
@@ -591,9 +750,34 @@ func parseLsOutput(output, basePath string) []FileInfo {
 
 		var modifiedAt time.Time
 		if len(parts) >= 7 {
+			// Try to parse timestamp - handle multiple formats:
+			// 1. GNU ls --time-style=long-iso: "2006-01-02 15:04"
+			// 2. BusyBox --full-time: "2006-01-02 15:04:05.123456 +0000" or "2006-01-02 15:04:05.123456"
+			// 3. Standard ls: "Jan 02 15:04" or "Jan 02 2006"
+			
+			// For long-iso or full-time, join date and time parts
 			timestamp := strings.Join(parts[5:7], " ")
-			if ts, err := time.Parse("2006-01-02 15:04", timestamp); err == nil {
+			
+			// Try GNU/BusyBox ISO format first (YYYY-MM-DD HH:MM:SS...)
+			if ts, err := time.Parse("2006-01-02 15:04:05.000000 -0700", timestamp); err == nil {
 				modifiedAt = ts
+			} else if ts, err := time.Parse("2006-01-02 15:04:05 -0700", timestamp); err == nil {
+				modifiedAt = ts
+			} else if ts, err := time.Parse("2006-01-02 15:04:05.000000", timestamp); err == nil {
+				modifiedAt = ts
+			} else if ts, err := time.Parse("2006-01-02 15:04:05", timestamp); err == nil {
+				modifiedAt = ts
+			} else if ts, err := time.Parse("2006-01-02 15:04", timestamp); err == nil {
+				// GNU ls --time-style=long-iso format
+				modifiedAt = ts
+			} else if len(parts) >= 8 {
+				// Try with timezone if present
+				timestampWithTZ := strings.Join(parts[5:8], " ")
+				if ts, err := time.Parse("2006-01-02 15:04:05.000000 -0700", timestampWithTZ); err == nil {
+					modifiedAt = ts
+				} else if ts, err := time.Parse("2006-01-02 15:04:05 -0700", timestampWithTZ); err == nil {
+					modifiedAt = ts
+				}
 			}
 		}
 

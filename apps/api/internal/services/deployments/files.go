@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"api/docker"
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
@@ -116,13 +117,35 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 		path = "/"
 	}
 	
+	log.Printf("[ListContainerFiles] Received path from request: %q", path)
+	
 	// Sanitize path to prevent directory traversal attacks
 	// Ensure path is absolute and normalized
-	path = filepath.Clean(path)
-	if !filepath.IsAbs(path) {
+	// Use path/filepath carefully - on Windows filepath.Clean might change slashes
+	// For container paths, always use forward slashes
+	path = strings.TrimSpace(path)
+	// Remove any invalid characters that might have been parsed incorrectly
+	path = strings.Trim(path, "\x00\r\n")
+	
+	// Ensure path is absolute and normalized (use Unix-style paths)
+	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-	path = filepath.Clean(path)
+	
+	// Clean up the path - remove any double slashes, resolve . and ..
+	path = filepath.ToSlash(filepath.Clean(path))
+	// Ensure it starts with /
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	
+	// Final validation: path should only contain valid characters for Unix paths
+	if strings.Contains(path, "\x00") || strings.Contains(path, "..") {
+		log.Printf("[ListContainerFiles] Invalid path detected after cleaning: %q, defaulting to /", path)
+		path = "/"
+	}
+	
+	log.Printf("[ListContainerFiles] Sanitized path: %q", path)
 
 	volumeName := req.Msg.GetVolumeName()
 	if volumeName != "" {
@@ -178,31 +201,39 @@ func (s *Service) ListContainerFiles(ctx context.Context, req *connect.Request[d
 
 	// Try to list files - ContainerListFiles will handle stopped containers by temporarily starting them
 	// If the container can't be started automatically, it will return an error
+	log.Printf("[ListContainerFiles] Attempting to list files in container %s at path %s (running=%v)", loc.ContainerID, path, isRunning)
 	fileInfos, err := dcli.ContainerListFiles(ctx, loc.ContainerID, path)
 	if err != nil {
+		log.Printf("[ListContainerFiles] Error listing files: %v (type: %T)", err, err)
 		// Check if error mentions container being stopped or can't be started
 		errStr := err.Error()
 		if strings.Contains(errStr, "container is stopped") || 
 		   strings.Contains(errStr, "cannot be started automatically") ||
 		   strings.Contains(errStr, "failed to start stopped container") {
 			// Container is stopped and couldn't be auto-started
+			log.Printf("[ListContainerFiles] Container is stopped and cannot be auto-started")
 			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running and cannot be started automatically for file listing. Use volume_name parameter to access persistent volumes (volumes are accessible even when containers are stopped), or manually start the container"))
 		}
 		
 		// Check if the error is from ContainerExecRun (command failed with exit code)
 		// This indicates the ls command itself failed (not a container state issue)
 		if strings.Contains(errStr, "failed with exit code") || strings.Contains(errStr, "command") {
+			log.Printf("[ListContainerFiles] Command failed, container running=%v", isRunning)
 			// Check if container is actually running - if not, suggest using volumes
 			if !isRunning {
 				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running and the file listing command failed. Use volume_name parameter to access persistent volumes (volumes are accessible even when containers are stopped), or start the container"))
 			}
 			// Container is running but command failed - likely a path or permission issue
+			log.Printf("[ListContainerFiles] Container is running but ls command failed: %v", err)
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list files: %w", err))
 		}
 		
 		// Other errors (permissions, path issues, exec failures, etc.)
+		log.Printf("[ListContainerFiles] Other error (exec/permissions): %v", err)
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list files: %w", err))
 	}
+	
+	log.Printf("[ListContainerFiles] Successfully listed %d files in path %s", len(fileInfos), path)
 
 	pagedInfos, hasMore, nextCursor := paginateFileInfos(fileInfos, cursor, pageSize)
 	files := make([]*deploymentsv1.ContainerFile, 0, len(pagedInfos))
@@ -241,6 +272,31 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 	path := req.Msg.GetPath()
 	if path == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("path is required"))
+	}
+	
+	// Sanitize path to prevent directory traversal attacks
+	// Ensure path is absolute and normalized
+	// Use path/filepath carefully - on Windows filepath.Clean might change slashes
+	// For container paths, always use forward slashes
+	path = strings.TrimSpace(path)
+	// Remove any invalid characters that might have been parsed incorrectly
+	path = strings.Trim(path, "\x00\r\n")
+	
+	// Ensure path is absolute and normalized (use Unix-style paths)
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	
+	// Clean up the path - remove any double slashes, resolve . and ..
+	path = filepath.ToSlash(filepath.Clean(path))
+	// Ensure it starts with /
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	
+	// Final validation: path should only contain valid characters for Unix paths
+	if strings.Contains(path, "\x00") || strings.Contains(path, "..") {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid path: %q", path))
 	}
 
 	// Find container by container_id or service_name, or use first if neither specified
@@ -335,16 +391,31 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 
 	statInfo, err := dcli.ContainerStat(ctx, loc.ContainerID, path)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to stat file: %w", err))
+		log.Printf("[GetContainerFile] Failed to stat file (non-fatal, continuing): %v", err)
+		// Don't fail if stat fails - we can still return the content
+		statInfo = nil
 	}
 
-	return connect.NewResponse(&deploymentsv1.GetContainerFileResponse{
+	// Check if content is valid UTF-8
+	encoding := "text"
+	if !utf8.Valid(content) {
+		// Invalid UTF-8 - encode as base64
+		encoding = "base64"
+		content = []byte(base64.StdEncoding.EncodeToString(content))
+		log.Printf("[GetContainerFile] Content contains invalid UTF-8, encoding as base64")
+	}
+	
+	resp := &deploymentsv1.GetContainerFileResponse{
 		Content:   string(content),
-		Encoding:  "text",
+		Encoding:  encoding,
 		Size:      int64(len(content)),
-		Metadata:  fileInfoToProto(*statInfo, ""),
 		Truncated: proto.Bool(false),
-	}), nil
+	}
+	if statInfo != nil {
+		resp.Metadata = fileInfoToProto(*statInfo, "")
+	}
+	
+	return connect.NewResponse(resp), nil
 }
 
 // UploadContainerFiles uploads files to a deployment container
