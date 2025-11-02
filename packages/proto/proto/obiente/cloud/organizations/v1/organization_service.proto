@@ -46,6 +46,9 @@ service OrganizationService {
 
   // Admin: Remove credits from any organization (superadmin only)
   rpc AdminRemoveCredits(AdminRemoveCreditsRequest) returns (AdminRemoveCreditsResponse);
+
+  // Get credit transaction history for an organization
+  rpc GetCreditLog(GetCreditLogRequest) returns (GetCreditLogResponse);
 }
 
 message GetUsageRequest {
@@ -253,4 +256,34 @@ message AdminRemoveCreditsResponse {
   int64 new_balance_cents = 2;
   // Amount removed
   int64 amount_removed_cents = 3;
+}
+
+message GetCreditLogRequest {
+  string organization_id = 1;
+  // Pagination
+  int32 page = 2;
+  int32 per_page = 3;
+}
+
+message GetCreditLogResponse {
+  repeated CreditTransaction transactions = 1;
+  Pagination pagination = 2;
+}
+
+message CreditTransaction {
+  string id = 1;
+  string organization_id = 2;
+  // Positive for additions, negative for removals (in cents)
+  int64 amount_cents = 3;
+  // Credit balance after this transaction
+  int64 balance_after = 4;
+  // Transaction type: "payment", "admin_add", "admin_remove", "usage", "refund", etc.
+  string type = 5;
+  // Source: "stripe", "admin", "system", etc.
+  string source = 6;
+  // Optional note/reason
+  optional string note = 7;
+  // User ID who initiated (null for system/automatic)
+  optional string created_by = 8;
+  google.protobuf.Timestamp created_at = 9;
 }

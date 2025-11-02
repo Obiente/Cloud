@@ -72,6 +72,9 @@ const (
 	// OrganizationServiceAdminRemoveCreditsProcedure is the fully-qualified name of the
 	// OrganizationService's AdminRemoveCredits RPC.
 	OrganizationServiceAdminRemoveCreditsProcedure = "/obiente.cloud.organizations.v1.OrganizationService/AdminRemoveCredits"
+	// OrganizationServiceGetCreditLogProcedure is the fully-qualified name of the OrganizationService's
+	// GetCreditLog RPC.
+	OrganizationServiceGetCreditLogProcedure = "/obiente.cloud.organizations.v1.OrganizationService/GetCreditLog"
 )
 
 // OrganizationServiceClient is a client for the obiente.cloud.organizations.v1.OrganizationService
@@ -103,6 +106,8 @@ type OrganizationServiceClient interface {
 	AdminAddCredits(context.Context, *connect.Request[v1.AdminAddCreditsRequest]) (*connect.Response[v1.AdminAddCreditsResponse], error)
 	// Admin: Remove credits from any organization (superadmin only)
 	AdminRemoveCredits(context.Context, *connect.Request[v1.AdminRemoveCreditsRequest]) (*connect.Response[v1.AdminRemoveCreditsResponse], error)
+	// Get credit transaction history for an organization
+	GetCreditLog(context.Context, *connect.Request[v1.GetCreditLogRequest]) (*connect.Response[v1.GetCreditLogResponse], error)
 }
 
 // NewOrganizationServiceClient constructs a client for the
@@ -195,6 +200,12 @@ func NewOrganizationServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(organizationServiceMethods.ByName("AdminRemoveCredits")),
 			connect.WithClientOptions(opts...),
 		),
+		getCreditLog: connect.NewClient[v1.GetCreditLogRequest, v1.GetCreditLogResponse](
+			httpClient,
+			baseURL+OrganizationServiceGetCreditLogProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("GetCreditLog")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -213,6 +224,7 @@ type organizationServiceClient struct {
 	addCredits         *connect.Client[v1.AddCreditsRequest, v1.AddCreditsResponse]
 	adminAddCredits    *connect.Client[v1.AdminAddCreditsRequest, v1.AdminAddCreditsResponse]
 	adminRemoveCredits *connect.Client[v1.AdminRemoveCreditsRequest, v1.AdminRemoveCreditsResponse]
+	getCreditLog       *connect.Client[v1.GetCreditLogRequest, v1.GetCreditLogResponse]
 }
 
 // ListOrganizations calls obiente.cloud.organizations.v1.OrganizationService.ListOrganizations.
@@ -280,6 +292,11 @@ func (c *organizationServiceClient) AdminRemoveCredits(ctx context.Context, req 
 	return c.adminRemoveCredits.CallUnary(ctx, req)
 }
 
+// GetCreditLog calls obiente.cloud.organizations.v1.OrganizationService.GetCreditLog.
+func (c *organizationServiceClient) GetCreditLog(ctx context.Context, req *connect.Request[v1.GetCreditLogRequest]) (*connect.Response[v1.GetCreditLogResponse], error) {
+	return c.getCreditLog.CallUnary(ctx, req)
+}
+
 // OrganizationServiceHandler is an implementation of the
 // obiente.cloud.organizations.v1.OrganizationService service.
 type OrganizationServiceHandler interface {
@@ -309,6 +326,8 @@ type OrganizationServiceHandler interface {
 	AdminAddCredits(context.Context, *connect.Request[v1.AdminAddCreditsRequest]) (*connect.Response[v1.AdminAddCreditsResponse], error)
 	// Admin: Remove credits from any organization (superadmin only)
 	AdminRemoveCredits(context.Context, *connect.Request[v1.AdminRemoveCreditsRequest]) (*connect.Response[v1.AdminRemoveCreditsResponse], error)
+	// Get credit transaction history for an organization
+	GetCreditLog(context.Context, *connect.Request[v1.GetCreditLogRequest]) (*connect.Response[v1.GetCreditLogResponse], error)
 }
 
 // NewOrganizationServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -396,6 +415,12 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 		connect.WithSchema(organizationServiceMethods.ByName("AdminRemoveCredits")),
 		connect.WithHandlerOptions(opts...),
 	)
+	organizationServiceGetCreditLogHandler := connect.NewUnaryHandler(
+		OrganizationServiceGetCreditLogProcedure,
+		svc.GetCreditLog,
+		connect.WithSchema(organizationServiceMethods.ByName("GetCreditLog")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.organizations.v1.OrganizationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case OrganizationServiceListOrganizationsProcedure:
@@ -424,6 +449,8 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 			organizationServiceAdminAddCreditsHandler.ServeHTTP(w, r)
 		case OrganizationServiceAdminRemoveCreditsProcedure:
 			organizationServiceAdminRemoveCreditsHandler.ServeHTTP(w, r)
+		case OrganizationServiceGetCreditLogProcedure:
+			organizationServiceGetCreditLogHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -483,4 +510,8 @@ func (UnimplementedOrganizationServiceHandler) AdminAddCredits(context.Context, 
 
 func (UnimplementedOrganizationServiceHandler) AdminRemoveCredits(context.Context, *connect.Request[v1.AdminRemoveCreditsRequest]) (*connect.Response[v1.AdminRemoveCreditsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.AdminRemoveCredits is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) GetCreditLog(context.Context, *connect.Request[v1.GetCreditLogRequest]) (*connect.Response[v1.GetCreditLogResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.GetCreditLog is not implemented"))
 }
