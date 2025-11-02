@@ -1,5 +1,3 @@
-import type { Transport } from "@connectrpc/connect";
-
 /**
  * GitHub OAuth Callback Handler
  * 
@@ -61,28 +59,91 @@ export default defineEventHandler(async (event) => {
     }
 
     // Exchange authorization code for access token
-    const tokenResponse = await $fetch<{
-      access_token: string;
-      token_type: string;
-      scope: string;
-    }>("https://github.com/login/oauth/access_token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: {
-        client_id: githubClientId,
-        client_secret: githubClientSecret,
-        code,
-        // State should match what we sent
-        // redirect_uri should match what we registered with GitHub
-        redirect_uri: `${runtimeConfig.public.requestHost}/api/github/callback`,
-      },
-    });
+    // Get the redirect URI from the request (must match EXACTLY what frontend sent to GitHub)
+    // The frontend uses window.location.origin, so we need to construct the same value
+    // Use the request URL to get the actual origin used by the browser
+    const requestUrl = new URL(event.node.req.url || '/', `http://${event.node.req.headers.host || 'localhost:3000'}`);
+    const protocol = event.node.req.headers['x-forwarded-proto'] || (requestUrl.protocol === 'https:' ? 'https' : 'http');
+    const host = event.node.req.headers.host || requestUrl.host || 'localhost:3000';
+    const redirectUri = `${protocol}://${host}/api/github/callback`;
+    
+    console.log("[GitHub OAuth] Redirect URI being used for token exchange:", redirectUri);
+    console.log("[GitHub OAuth] Authorization code received:", code ? `${code.substring(0, 10)}...` : "none");
+    
+    let tokenResponse: {
+      access_token?: string;
+      token_type?: string;
+      scope?: string;
+      error?: string;
+      error_description?: string;
+      error_uri?: string;
+    };
+    
+    try {
+      tokenResponse = await $fetch("https://github.com/login/oauth/access_token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: {
+          client_id: githubClientId,
+          client_secret: githubClientSecret,
+          code,
+          // redirect_uri must match EXACTLY what was sent in the authorization request
+          redirect_uri: redirectUri,
+        },
+      }) as any;
+      
+      console.log("[GitHub OAuth] Token exchange response received:", {
+        hasAccessToken: !!tokenResponse.access_token,
+        hasError: !!tokenResponse.error,
+        error: tokenResponse.error,
+        errorDescription: tokenResponse.error_description,
+      });
+    } catch (fetchError: any) {
+      console.error("[GitHub OAuth] Token exchange request failed:", {
+        message: fetchError.message,
+        status: fetchError.status,
+        statusText: fetchError.statusText,
+        data: fetchError.data,
+        response: fetchError.response,
+      });
+      throw new Error(`Token exchange failed: ${fetchError.message || "Unknown error"}`);
+    }
+
+    // Check for GitHub API errors
+    if (tokenResponse.error) {
+      console.error("[GitHub OAuth] GitHub API error:", {
+        error: tokenResponse.error,
+        errorDescription: tokenResponse.error_description,
+        errorUri: tokenResponse.error_uri,
+        redirectUri,
+        code: code ? `${code.substring(0, 10)}...` : "none",
+      });
+      
+      // Provide more helpful error messages based on common issues
+      let errorMessage = tokenResponse.error;
+      if (tokenResponse.error_description) {
+        errorMessage += `: ${tokenResponse.error_description}`;
+      }
+      
+      if (tokenResponse.error === "bad_verification_code") {
+        errorMessage = "The authorization code has expired or is invalid. Please try connecting again.";
+      } else if (tokenResponse.error === "redirect_uri_mismatch") {
+        errorMessage = `Redirect URI mismatch. Expected redirect_uri to match the one registered with GitHub. Used: ${redirectUri}`;
+      }
+      
+      throw new Error(errorMessage);
+    }
 
     if (!tokenResponse.access_token) {
-      throw new Error("No access token received from GitHub");
+      console.error("[GitHub OAuth] No access token in response:", {
+        response: JSON.stringify(tokenResponse),
+        redirectUri,
+        code: code ? `${code.substring(0, 10)}...` : "none",
+      });
+      throw new Error("No access token received from GitHub. Please check that the authorization code is valid and hasn't expired.");
     }
 
     // TODO: Store the access token securely
@@ -91,10 +152,6 @@ export default defineEventHandler(async (event) => {
     // 2. Store in encrypted session
     // 3. Store in secure cookie (less secure)
     
-    // For now, we'll need to implement token storage
-    // This is a placeholder - implement based on your security requirements
-    console.log("[GitHub OAuth] Token received (length):", tokenResponse.access_token.length);
-    console.log("[GitHub OAuth] Scopes:", tokenResponse.scope);
 
     // Get user info from GitHub to verify connection
     const userResponse = await $fetch<{
@@ -170,10 +227,22 @@ export default defineEventHandler(async (event) => {
 
     // Call Go API to store the GitHub token in database
     try {
-      const transport = (event as any)?.context?.$connect as Transport | undefined;
-      if (!transport) {
-        throw new Error("Connect transport is not available in server context");
-      }
+      // Create Connect client manually for server API route
+      // The plugin transport isn't available in API routes, so we create it here
+      const config = useRuntimeConfig();
+      const { createConnectTransport } = await import("@connectrpc/connect-node");
+      const { createAuthInterceptor } = await import("~/lib/transport");
+      
+      // Create an interceptor that uses the token we already have
+      const getToken = () => Promise.resolve(userAccessToken || undefined);
+      const authInterceptor = createAuthInterceptor(getToken);
+      
+      const transport = createConnectTransport({
+        baseUrl: config.public.apiHost,
+        httpVersion: "1.1",
+        useBinaryFormat: false,
+        interceptors: [authInterceptor],
+      });
 
       const { createClient } = await import("@connectrpc/connect");
       const { AuthService } = await import("@obiente/proto");
@@ -185,33 +254,54 @@ export default defineEventHandler(async (event) => {
       }
 
       let success = false;
+      let apiError: Error | null = null;
       const baseRedirectUrl = `/settings?tab=integrations&provider=github&success=true&username=${encodeURIComponent(userResponse.login)}`;
       let redirectUrl = baseRedirectUrl;
 
-      if (connectionType === "organization" && orgId) {
-        // Connect as organization
-        const response = await client.connectOrganizationGitHub({
-          organizationId: orgId,
-          accessToken: tokenResponse.access_token,
-          username: userResponse.login,
-          scope: tokenResponse.scope,
-        }, { headers: authHeaders });
-        success = response.success;
-        if (success && orgId) {
-          redirectUrl += `&orgId=${encodeURIComponent(orgId)}`;
+      console.log("[GitHub OAuth] Storing token in database:", {
+        connectionType,
+        orgId: orgId || "none",
+        username: userResponse.login,
+        hasToken: !!tokenResponse.access_token,
+      });
+
+      try {
+        if (connectionType === "organization" && orgId) {
+          // Connect as organization
+          const response = await client.connectOrganizationGitHub({
+            organizationId: orgId,
+            accessToken: tokenResponse.access_token,
+            username: userResponse.login,
+            scope: tokenResponse.scope || "",
+          }, { headers: authHeaders });
+          success = response.success;
+          if (success && orgId) {
+            redirectUrl += `&orgId=${encodeURIComponent(orgId)}`;
+          }
+          console.log("[GitHub OAuth] Organization connection response:", { success, orgId });
+        } else {
+          // Connect as user
+          const response = await client.connectGitHub({
+            accessToken: tokenResponse.access_token,
+            username: userResponse.login,
+            scope: tokenResponse.scope || "",
+          }, { headers: authHeaders });
+          success = response.success;
+          console.log("[GitHub OAuth] User connection response:", { success, username: response.username });
         }
-      } else {
-        // Connect as user
-        const response = await client.connectGitHub({
-          accessToken: tokenResponse.access_token,
-          username: userResponse.login,
-          scope: tokenResponse.scope,
-        }, { headers: authHeaders });
-        success = response.success;
+      } catch (apiCallError: any) {
+        console.error("[GitHub OAuth] API call failed:", {
+          message: apiCallError.message,
+          code: apiCallError.code,
+          details: apiCallError.details,
+        });
+        apiError = apiCallError;
       }
 
       if (!success) {
-        throw new Error("Failed to save GitHub token to database");
+        const errorMsg = apiError?.message || "Failed to save GitHub token to database";
+        console.error("[GitHub OAuth] Token storage failed:", errorMsg);
+        throw new Error(errorMsg);
       }
 
       console.log("[GitHub OAuth] Token saved to database successfully");

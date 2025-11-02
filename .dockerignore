@@ -1,0 +1,70 @@
+# Keep go.work and go.work.sum (needed for workspace)
+# Keep apps/api/ (our source code)
+
+# Git
+.git
+.gitignore
+.github
+
+# Documentation
+docs
+README.md
+AGENTS.md
+
+# Frontend/Dashboard (not needed for API build)
+node_modules
+.nx
+apps/dashboard
+packages/dashboard
+packages/database
+packages/proto/src/generated
+packages/proto/src
+packages/proto/proto
+
+# Build artifacts
+*.test
+*.out
+*.exe
+dist
+build
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+tmp
+temp
+
+# Docker compose files (not needed in build)
+docker-compose*.yml
+
+# Monitoring and tools
+monitoring
+tools
+specs
+
+# Package managers
+pnpm-lock.yaml
+package.json
+tsconfig*.json
+
+# Other packages (if not referenced by API)
+# Keep packages/proto since gen files might be there, but exclude src
+packages/config
+packages/docker
+packages/types
+
