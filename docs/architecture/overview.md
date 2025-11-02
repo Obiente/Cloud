@@ -43,6 +43,21 @@ These are the core services that manage the platform:
   - Node resource usage and capacity
   - Routing configuration
 
+#### Metrics Database (TimescaleDB)
+
+- **Separate TimescaleDB instance** optimized for time-series data
+- **Production HA**: 3-node TimescaleDB cluster with Patroni + etcd (mirrors PostgreSQL setup)
+- **PgPool**: `metrics-pgpool` for connection pooling and load balancing
+- Stores:
+  - Container metrics (CPU, memory, network, disk I/O)
+  - Aggregated hourly usage statistics
+  - Historical deployment performance data
+- **Benefits**:
+  - Isolated from main database workload
+  - Optimized for time-series queries and aggregations
+  - Automatic hypertable partitioning for performance
+  - Falls back to main PostgreSQL if TimescaleDB unavailable
+
 #### Redis Cluster
 
 - **3-node Redis cluster** for distributed caching
@@ -104,14 +119,54 @@ User's deployed application
 
 ### 5. Monitoring & Observability
 
-- **Prometheus**: Scrapes metrics from all services and nodes
-- **Grafana**: Visualizes metrics and creates dashboards
+#### Metrics Collection System
+
+The platform uses a production-ready metrics system with:
+
+- **Live Metrics Streaming**: Real-time container stats collection (5-second intervals)
+- **In-Memory Caching**: Fast access to recent metrics for UI streaming
+- **Batch Storage**: Aggregated metrics written to TimescaleDB every minute
+- **Resilience Features**:
+  - Circuit breaker pattern for Docker API protection
+  - Exponential backoff retry mechanism
+  - Automatic graceful degradation under load
+  - Health monitoring with failure detection
+  - Backpressure handling for slow subscribers
+
+#### Metrics Flow
+
+```
+Container Stats (Docker API)
+       ↓
+Metrics Streamer (Parallel Collection)
+       ↓
+Live Cache (Memory) → Subscribers (UI streaming)
+       ↓
+Aggregation (Every 60s)
+       ↓
+TimescaleDB (Historical Storage)
+```
+
+#### Observability Endpoints
+
+- **`/health`**: Health check including metrics system status
+- **`/metrics/observability`**: Real-time metrics collection statistics
+  - Collection rates and error counts
+  - Database write success/failure rates
+  - Circuit breaker state
+  - Subscriber and cache metrics
+
+#### External Monitoring
+
+- **Prometheus**: Scrapes metrics from all services and nodes (optional)
+- **Grafana**: Visualizes metrics and creates dashboards (optional)
 - Metrics tracked:
   - Node resource usage (CPU, memory, disk)
-  - Deployment resource consumption
+  - Deployment resource consumption (real-time and historical)
   - API request latency and throughput
   - Database performance
   - Network traffic per deployment
+  - Metrics collection health and performance
 
 ## How Deployments Work
 

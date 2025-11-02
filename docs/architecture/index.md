@@ -57,8 +57,11 @@ Obiente Cloud's architecture is designed for distributed, production-grade deplo
 ┌──────────────────▼──────────────────┐
 │             Data Plane              │
 │   ┌────────────┐  ┌────────────┐    │
-│   │PostgreSQL  │  │   Redis    │    │
+│   │PostgreSQL  │  │TimescaleDB │    │
 │   └────────────┘  └────────────┘    │
+│   ┌────────────┐                    │
+│   │   Redis    │                    │
+│   └────────────┘                    │
 └─────────────────────────────────────┘
 ```
 
@@ -76,7 +79,8 @@ Services that manage the platform:
 
 Storage and caching layer:
 
-- **PostgreSQL** - Primary database
+- **PostgreSQL** - Primary database for application metadata
+- **TimescaleDB** - Time-series database for metrics storage
 - **Redis** - Caching and sessions
 
 ### Routing
