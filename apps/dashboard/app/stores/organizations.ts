@@ -4,6 +4,7 @@ type OrgSummary = {
   id: string;
   name?: string | null;
   slug?: string | null;
+  credits?: bigint | number;
 };
 
 const ORGS_CACHE_KEY = "obiente_orgs_cache";
@@ -68,6 +69,7 @@ export const useOrganizationsStore = defineStore("organizations", () => {
       id: String(org.id),
       name: org.name ?? null,
       slug: org.slug ?? null,
+      credits: org.credits !== undefined ? (typeof org.credits === 'bigint' ? Number(org.credits) : org.credits) : undefined,
     }));
     orgs.value = normalized;
     if (normalized.length && !normalized.find((o) => o.id === currentOrgId.value)) {

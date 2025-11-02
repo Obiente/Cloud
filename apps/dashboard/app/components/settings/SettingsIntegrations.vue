@@ -302,6 +302,9 @@
 
   // Check if we're coming from a callback
   onMounted(async () => {
+    // Reset connecting state in case user navigated back
+    isConnecting.value = false;
+    
     const provider = route.query.provider;
     if (provider === "github") {
       // Handle OAuth callback results (success/error)
@@ -319,6 +322,7 @@
       } else if (errorParam) {
         // Handle errors from callback
         const errorMsg = String(errorParam);
+        isConnecting.value = false; // Reset on error
         if (errorMsg === "missing_code") {
           error.value =
             "Authorization code missing. Please try connecting again.";
@@ -398,6 +402,9 @@
     // Callback URL - must match EXACTLY what's configured in GitHub OAuth App
     // Do NOT add query parameters here - GitHub will reject it
     const redirectUri = `${window.location.origin}/api/github/callback`;
+    
+    // Log for debugging - ensure this matches what callback handler uses
+    console.log("[GitHub OAuth] Redirect URI being sent to GitHub:", redirectUri);
     // Required scopes:
     // - repo: Full repository access (read/write, webhooks, deployments)
     // - read:user: Read user profile information

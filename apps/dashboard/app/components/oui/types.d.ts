@@ -150,7 +150,7 @@ export type AxisAlignWithBaseline = AxisAlign | "baseline";
 export type AxisAlignContent = AxisJustify;
 export type AxisAlignContentWithStretch = AxisJustify | "stretch";
 
-export type ContainerSize = SizeRange<"xs", "7xl"> | "full" | "default";
+export type ContainerSize = SizeRange<"xs", "7xl"> | "full";
 export type ContainerBreakpoint = "always" | SizeRange<"sm", "2xl">;
 
 export type DimensionVariant =

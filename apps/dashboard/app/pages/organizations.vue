@@ -6,7 +6,13 @@
     type OrganizationMember,
   } from "@obiente/proto";
   import { useConnectClient } from "~/lib/connect-client";
-  import { CheckIcon } from "@heroicons/vue/24/outline";
+  import {
+    CheckIcon,
+    PlusIcon,
+    CreditCardIcon,
+    PencilIcon,
+    ArrowDownTrayIcon,
+  } from "@heroicons/vue/24/outline";
 
   const name = ref("");
   const slug = ref("");
@@ -264,12 +270,47 @@
     await syncOrganizations();
     await Promise.all([refreshMembers(), refreshRoleCatalog()]);
   }
+  
+  async function addCredits() {
+    if (!selectedOrg.value || !addCreditsAmount.value) return;
+    const amount = parseFloat(addCreditsAmount.value);
+    if (isNaN(amount) || amount <= 0) {
+      error.value = "Please enter a valid positive amount";
+      return;
+    }
+    
+    addCreditsLoading.value = true;
+    error.value = "";
+    try {
+      // Note: Proto files need to be generated
+      await (orgClient as any).addCredits({
+        organizationId: selectedOrg.value,
+        amountCents: Math.round(amount * 100), // Convert dollars to cents
+        note: addCreditsNote.value || undefined,
+      });
+      addCreditsDialogOpen.value = false;
+      addCreditsAmount.value = "";
+      addCreditsNote.value = "";
+      await syncOrganizations(); // Refresh organizations to get updated credits
+    } catch (err: any) {
+      error.value = err.message || "Failed to add credits";
+    } finally {
+      addCreditsLoading.value = false;
+    }
+  }
 
-  const memberStats = computed(() => ({
-    total: members.value.length,
-    owners: members.value.filter((m) => m.role === "owner").length,
-    pending: members.value.filter((m) => m.status !== "active").length,
-  }));
+  const memberStats = computed(() => {
+    const activeMembers = members.value.filter((m) => m.status === "active");
+    const pendingInvites = members.value.filter((m) => m.status === "invited");
+    return {
+      total: activeMembers.length,
+      owners: activeMembers.filter((m) => m.role === "owner").length,
+      admins: activeMembers.filter((m) => m.role === "admin").length,
+      members: activeMembers.filter((m) => m.role === "member").length,
+      viewers: activeMembers.filter((m) => m.role === "viewer").length,
+      pending: pendingInvites.length,
+    };
+  });
 
   const tabs = [
     { id: "members", label: "Members" },
@@ -292,6 +333,138 @@
       "this member";
     return `Ownership will move to ${label}. You will become ${OWNER_TRANSFER_FALLBACK_ROLE}.`;
   });
+
+  const currentMonth = computed(() => {
+    const now = new Date();
+    return now.toLocaleString("default", { month: "long", year: "numeric" });
+  });
+
+  // Fetch usage data
+  const { data: usageData, refresh: refreshUsage } = await useAsyncData(
+    () =>
+      selectedOrg.value
+        ? `org-usage-${selectedOrg.value}`
+        : "org-usage-none",
+    async () => {
+      if (!selectedOrg.value) return null;
+      try {
+        // Connect RPC returns the response message directly
+        const res = await orgClient.getUsage({
+          organizationId: selectedOrg.value,
+        });
+        // Connect returns the message directly (not wrapped in .msg)
+        // The response is GetUsageResponse with properties: organizationId, month, current, estimatedMonthly, quota
+        return res;
+      } catch (err) {
+        console.error("Failed to fetch usage:", err);
+        // Return null to show loading state, but log the error
+        return null;
+      }
+    },
+    { watch: [selectedOrg], server: false }
+  );
+
+  const usage = computed(() => usageData.value);
+  
+  // Get current organization object to access credits
+  const currentOrganization = computed(() => {
+    if (!selectedOrg.value) return null;
+    return organizations.value.find((o) => o.id === selectedOrg.value) || null;
+  });
+  
+  const creditsBalance = computed(() => {
+    const credits = currentOrganization.value?.credits;
+    if (credits === undefined || credits === null) return 0;
+    // Handle both bigint (from proto) and number types
+    return typeof credits === 'bigint' ? Number(credits) : credits;
+  });
+  
+  const addCreditsDialogOpen = ref(false);
+  const addCreditsAmount = ref("");
+  const addCreditsNote = ref("");
+  const addCreditsLoading = ref(false);
+  
+  // Format helper functions
+  const formatBytes = (bytes: number | bigint) => {
+    const b = Number(bytes);
+    if (b === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(b) / Math.log(k));
+    return `${(b / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+  };
+
+  const formatBytesToGB = (bytes: number | bigint) => {
+    const b = Number(bytes);
+    if (b === 0) return "0.00";
+    return (b / (1024 * 1024 * 1024)).toFixed(2);
+  };
+
+  const formatMemoryByteSecondsToGB = (byteSeconds: number | bigint) => {
+    const bs = Number(byteSeconds);
+    if (bs === 0 || !Number.isFinite(bs)) return "0.00";
+    // Convert byte-seconds to GB-hours, then show as GB (for average memory usage)
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const secondsInMonth = Math.max(1, Math.floor((now.getTime() - monthStart.getTime()) / 1000));
+    const avgBytes = bs / secondsInMonth;
+    return formatBytesToGB(avgBytes);
+  };
+
+  const formatCoreSecondsToHours = (coreSeconds: number | bigint) => {
+    const s = Number(coreSeconds);
+    if (!Number.isFinite(s) || s === 0) return "0.00";
+    return (s / 3600).toFixed(2);
+  };
+
+  const formatCurrency = (cents: number | bigint) => {
+    const c = Number(cents);
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(c / 100);
+  };
+
+  const getUsagePercentage = (
+    current: number | bigint,
+    quota: number | bigint
+  ) => {
+    const c = Number(current);
+    const q = Number(quota);
+    if (q === 0 || !Number.isFinite(q)) return 0; // Unlimited quota
+    if (!Number.isFinite(c) || c === 0) return 0;
+    return Math.min(100, Math.max(0, Math.round((c / q) * 100)));
+  };
+
+  const getUsageBadgeVariant = (percentage: number) => {
+    if (percentage >= 90) return "danger";
+    if (percentage >= 75) return "warning";
+    return "success";
+  };
+
+  const billingHistory = [
+    {
+      id: "1",
+      number: "#INV-2024-001",
+      date: "Jan 1, 2024",
+      amount: "$28.50",
+      status: "Paid",
+    },
+    {
+      id: "2",
+      number: "#INV-2023-012",
+      date: "Dec 1, 2023",
+      amount: "$31.75",
+      status: "Paid",
+    },
+    {
+      id: "3",
+      number: "#INV-2023-011",
+      date: "Nov 1, 2023",
+      amount: "$24.20",
+      status: "Paid",
+    },
+  ];
 </script>
 
 <template>
@@ -363,26 +536,34 @@
           <OuiText size="lg" weight="semibold">Member Stats</OuiText>
         </OuiCardHeader>
         <OuiCardBody>
-          <OuiStack gap="md">
-            <OuiStack gap="sm">
+          <OuiStack gap="lg">
+            <OuiStack gap="xs">
               <OuiText size="2xl" weight="semibold">{{
                 memberStats.total
               }}</OuiText>
-              <OuiText color="muted" size="sm">Total members</OuiText>
+              <OuiText color="muted" size="sm">Active members</OuiText>
             </OuiStack>
-            <OuiStack gap="sm">
-              <OuiText size="lg" weight="medium">Owners</OuiText>
-              <OuiProgress
-                :value="memberStats.owners"
-                :max="Math.max(memberStats.total, 1)"
-              />
-              <OuiText color="muted" size="sm"
-                >{{ memberStats.owners }} owners</OuiText
-              >
-            </OuiStack>
-            <OuiStack gap="sm">
-              <OuiText size="lg" weight="medium">Pending Invites</OuiText>
-              <OuiText color="muted">{{ memberStats.pending }}</OuiText>
+            <OuiGrid cols="2" gap="md">
+              <OuiStack gap="xs">
+                <OuiText size="lg" weight="semibold">{{ memberStats.owners }}</OuiText>
+                <OuiText color="muted" size="sm">Owners</OuiText>
+              </OuiStack>
+              <OuiStack gap="xs">
+                <OuiText size="lg" weight="semibold">{{ memberStats.admins }}</OuiText>
+                <OuiText color="muted" size="sm">Admins</OuiText>
+              </OuiStack>
+              <OuiStack gap="xs">
+                <OuiText size="lg" weight="semibold">{{ memberStats.members }}</OuiText>
+                <OuiText color="muted" size="sm">Members</OuiText>
+              </OuiStack>
+              <OuiStack gap="xs">
+                <OuiText size="lg" weight="semibold">{{ memberStats.viewers }}</OuiText>
+                <OuiText color="muted" size="sm">Viewers</OuiText>
+              </OuiStack>
+            </OuiGrid>
+            <OuiStack gap="xs">
+              <OuiText size="lg" weight="semibold">{{ memberStats.pending }}</OuiText>
+              <OuiText color="muted" size="sm">Pending invites</OuiText>
             </OuiStack>
           </OuiStack>
         </OuiCardBody>
@@ -561,16 +742,328 @@
           </template>
 
           <template #billing>
-            <OuiStack gap="md">
-              <OuiText size="lg" weight="semibold">Billing Overview</OuiText>
-              <OuiText color="muted" size="sm">
-                Billing analytics coming soon.
-              </OuiText>
-              <OuiCard>
-                <OuiCardBody>
-                  <OuiSkeleton height="120px" />
-                </OuiCardBody>
-              </OuiCard>
+            <OuiStack gap="xl">
+              <template v-if="!usage || !usage.current">
+                <OuiStack gap="md" align="center" class="py-12">
+                  <OuiText color="muted">Loading usage data...</OuiText>
+                  <OuiSkeleton width="100%" height="200px" />
+                </OuiStack>
+              </template>
+              <template v-else>
+                <!-- Current Usage -->
+                <OuiStack gap="lg">
+                  <OuiText size="2xl" weight="bold">Current Usage</OuiText>
+                  <OuiGrid cols="1" cols-md="2" cols-lg="3" gap="lg">
+                    <!-- vCPU Usage -->
+                    <OuiCard>
+                      <OuiCardBody>
+                        <OuiStack gap="md">
+                          <OuiFlex justify="between" align="start">
+                            <OuiStack gap="xs">
+                              <OuiText size="sm" color="muted">vCPU Hours</OuiText>
+                              <OuiText size="2xl" weight="bold">
+                                {{ formatCoreSecondsToHours(usage.current.cpuCoreSeconds) }}
+                              </OuiText>
+                            </OuiStack>
+                            <OuiBadge 
+                              :variant="getUsageBadgeVariant(
+                                getUsagePercentage(
+                                  usage.current.cpuCoreSeconds,
+                                  usage.quota?.cpuCoreSecondsMonthly || 0
+                                )
+                              )"
+                            >
+                              Active
+                            </OuiBadge>
+                          </OuiFlex>
+                          <OuiProgress 
+                            :value="getUsagePercentage(
+                              usage.current.cpuCoreSeconds,
+                              usage.quota?.cpuCoreSecondsMonthly || 0
+                            )" 
+                            :max="100" 
+                          />
+                          <OuiText size="sm" color="muted">
+                            <template v-if="Number(usage.quota?.cpuCoreSecondsMonthly || 0) === 0">
+                              Unlimited allocation
+                            </template>
+                            <template v-else>
+                              {{ getUsagePercentage(
+                                usage.current.cpuCoreSeconds,
+                                usage.quota?.cpuCoreSecondsMonthly || 0
+                              ) }}% of monthly allocation
+                              ({{ formatCoreSecondsToHours(usage.quota?.cpuCoreSecondsMonthly || 0) }} hours)
+                            </template>
+                          </OuiText>
+                        </OuiStack>
+                      </OuiCardBody>
+                    </OuiCard>
+
+                    <!-- Memory Usage -->
+                    <OuiCard>
+                      <OuiCardBody>
+                        <OuiStack gap="md">
+                          <OuiFlex justify="between" align="start">
+                            <OuiStack gap="xs">
+                              <OuiText size="sm" color="muted">Memory (GB avg)</OuiText>
+                              <OuiText size="2xl" weight="bold">
+                                {{ formatMemoryByteSecondsToGB(usage.current.memoryByteSeconds) }}
+                              </OuiText>
+                            </OuiStack>
+                            <OuiBadge 
+                              :variant="getUsageBadgeVariant(
+                                getUsagePercentage(
+                                  usage.current.memoryByteSeconds,
+                                  usage.quota?.memoryByteSecondsMonthly || 0
+                                )
+                              )"
+                            >
+                              <template v-if="getUsagePercentage(
+                                usage.current.memoryByteSeconds,
+                                usage.quota?.memoryByteSecondsMonthly || 0
+                              ) >= 90">High</template>
+                              <template v-else-if="getUsagePercentage(
+                                usage.current.memoryByteSeconds,
+                                usage.quota?.memoryByteSecondsMonthly || 0
+                              ) >= 75">Warning</template>
+                              <template v-else>Normal</template>
+                            </OuiBadge>
+                          </OuiFlex>
+                          <OuiProgress 
+                            :value="getUsagePercentage(
+                              usage.current.memoryByteSeconds,
+                              usage.quota?.memoryByteSecondsMonthly || 0
+                            )" 
+                            :max="100" 
+                          />
+                          <OuiText size="sm" color="muted">
+                            <template v-if="Number(usage.quota?.memoryByteSecondsMonthly || 0) === 0">
+                              Unlimited allocation
+                            </template>
+                            <template v-else>
+                              {{ getUsagePercentage(
+                                usage.current.memoryByteSeconds,
+                                usage.quota?.memoryByteSecondsMonthly || 0
+                              ) }}% of monthly allocation
+                              ({{ formatMemoryByteSecondsToGB(usage.quota?.memoryByteSecondsMonthly || 0) }} GB)
+                            </template>
+                          </OuiText>
+                        </OuiStack>
+                      </OuiCardBody>
+                    </OuiCard>
+
+                    <!-- Storage Usage -->
+                    <OuiCard>
+                      <OuiCardBody>
+                        <OuiStack gap="md">
+                          <OuiFlex justify="between" align="start">
+                            <OuiStack gap="xs">
+                              <OuiText size="sm" color="muted">Storage (GB)</OuiText>
+                              <OuiText size="2xl" weight="bold">
+                                {{ formatBytesToGB(usage.current.storageBytes) }}
+                              </OuiText>
+                            </OuiStack>
+                            <OuiBadge 
+                              :variant="getUsageBadgeVariant(
+                                getUsagePercentage(
+                                  usage.current.storageBytes,
+                                  usage.quota?.storageBytes || 0
+                                )
+                              )"
+                            >
+                              <template v-if="getUsagePercentage(
+                                usage.current.storageBytes,
+                                usage.quota?.storageBytes || 0
+                              ) >= 90">High</template>
+                              <template v-else-if="getUsagePercentage(
+                                usage.current.storageBytes,
+                                usage.quota?.storageBytes || 0
+                              ) >= 75">Warning</template>
+                              <template v-else>Normal</template>
+                            </OuiBadge>
+                          </OuiFlex>
+                          <OuiProgress 
+                            :value="getUsagePercentage(
+                              usage.current.storageBytes,
+                              usage.quota?.storageBytes || 0
+                            )" 
+                            :max="100" 
+                          />
+                          <OuiText size="sm" color="muted">
+                            <template v-if="Number(usage.quota?.storageBytes || 0) === 0">
+                              Unlimited allocation
+                            </template>
+                            <template v-else>
+                              {{ getUsagePercentage(
+                                usage.current.storageBytes,
+                                usage.quota?.storageBytes || 0
+                              ) }}% of monthly allocation
+                              ({{ formatBytesToGB(usage.quota?.storageBytes || 0) }} GB)
+                            </template>
+                          </OuiText>
+                        </OuiStack>
+                      </OuiCardBody>
+                    </OuiCard>
+                  </OuiGrid>
+
+                  <!-- Credits Balance -->
+                  <OuiCard variant="outline">
+                    <OuiCardBody>
+                      <OuiStack gap="lg">
+                        <OuiFlex justify="between" align="start">
+                          <OuiStack gap="xs">
+                            <OuiText size="sm" color="muted">Credits Balance</OuiText>
+                            <OuiText size="3xl" weight="bold">
+                              {{ formatCurrency(creditsBalance) }}
+                            </OuiText>
+                            <OuiText size="sm" color="muted">
+                              Available credits for your organization
+                            </OuiText>
+                          </OuiStack>
+                          <OuiButton 
+                            variant="solid" 
+                            size="sm" 
+                            @click="addCreditsDialogOpen = true"
+                            v-if="currentUserIsOwner"
+                          >
+                            <PlusIcon class="h-4 w-4 mr-2" />
+                            Add Credits
+                          </OuiButton>
+                        </OuiFlex>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+
+                  <!-- Current Month Summary -->
+                  <OuiCard variant="outline">
+                    <OuiCardBody>
+                      <OuiStack gap="lg">
+                        <OuiText size="xl" weight="semibold">Current Month Estimate</OuiText>
+                        <OuiFlex justify="between" align="center">
+                          <OuiStack gap="xs">
+                            <OuiText size="sm" color="muted">{{ currentMonth }}</OuiText>
+                            <OuiText size="3xl" weight="bold">
+                              {{ usage.estimatedMonthly?.estimatedCostCents 
+                                ? formatCurrency(usage.estimatedMonthly.estimatedCostCents)
+                                : '$0.00' }}
+                            </OuiText>
+                            <OuiText size="sm" color="muted">
+                              Based on current usage patterns
+                            </OuiText>
+                          </OuiStack>
+                          <OuiButton variant="outline" size="sm" @click="refreshUsage">
+                            Refresh
+                          </OuiButton>
+                        </OuiFlex>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+                </OuiStack>
+              </template>
+
+              <!-- Payment Methods -->
+              <OuiStack gap="lg">
+                <OuiFlex justify="between" align="center">
+                  <OuiText size="2xl" weight="bold">Payment Methods</OuiText>
+                  <OuiButton variant="solid" size="sm">
+                    <PlusIcon class="h-4 w-4 mr-2" />
+                    Add Payment Method
+                  </OuiButton>
+                </OuiFlex>
+
+                <OuiGrid cols="1" cols-lg="2" gap="lg">
+                  <!-- Primary Payment Method -->
+                  <OuiCard>
+                    <OuiCardBody>
+                      <OuiStack gap="lg">
+                        <OuiFlex justify="between" align="start">
+                          <OuiStack gap="sm">
+                            <OuiFlex align="center" gap="sm">
+                              <CreditCardIcon class="h-6 w-6 text-accent-primary" />
+                              <OuiText size="lg" weight="semibold">•••• •••• •••• 4242</OuiText>
+                              <OuiBadge variant="success">Primary</OuiBadge>
+                            </OuiFlex>
+                            <OuiText size="sm" color="muted">Visa • Expires 12/26</OuiText>
+                          </OuiStack>
+                          <OuiButton variant="ghost" size="sm">
+                            <PencilIcon class="h-4 w-4" />
+                          </OuiButton>
+                        </OuiFlex>
+                        <OuiFlex gap="sm">
+                          <OuiButton variant="outline" size="sm">Update</OuiButton>
+                          <OuiButton variant="ghost" size="sm">Remove</OuiButton>
+                        </OuiFlex>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+
+                  <!-- Backup Payment Method -->
+                  <OuiCard variant="outline" class="border-dashed">
+                    <OuiCardBody>
+                      <OuiStack gap="lg" align="center">
+                        <OuiStack gap="sm" align="center">
+                          <CreditCardIcon class="h-12 w-12 text-muted" />
+                          <OuiText size="lg" weight="semibold">Add Backup Payment</OuiText>
+                          <OuiText size="sm" color="muted">
+                            Ensure uninterrupted service with a backup payment method
+                          </OuiText>
+                        </OuiStack>
+                        <OuiButton variant="outline" size="sm">Add Card</OuiButton>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+                </OuiGrid>
+              </OuiStack>
+
+              <!-- Billing History -->
+              <OuiStack gap="lg">
+                <OuiFlex justify="between" align="center">
+                  <OuiText size="2xl" weight="bold">Billing History</OuiText>
+                  <OuiButton variant="outline" size="sm">
+                    <ArrowDownTrayIcon class="h-4 w-4 mr-2" />
+                    Download All
+                  </OuiButton>
+                </OuiFlex>
+
+                <OuiCard>
+                  <OuiCardBody class="p-0">
+                    <OuiStack>
+                      <!-- Table Header -->
+                      <OuiBox p="md" borderBottom="1" borderColor="muted">
+                        <OuiGrid cols="5" gap="md">
+                          <OuiText size="sm" weight="medium" color="muted">Invoice</OuiText>
+                          <OuiText size="sm" weight="medium" color="muted">Date</OuiText>
+                          <OuiText size="sm" weight="medium" color="muted">Amount</OuiText>
+                          <OuiText size="sm" weight="medium" color="muted">Status</OuiText>
+                          <OuiText size="sm" weight="medium" color="muted">Actions</OuiText>
+                        </OuiGrid>
+                      </OuiBox>
+
+                      <!-- Table Rows -->
+                      <OuiStack>
+                        <OuiBox
+                          v-for="invoice in billingHistory"
+                          :key="invoice.id"
+                          p="md"
+                          borderBottom="1"
+                          borderColor="muted"
+                        >
+                          <OuiGrid cols="5" gap="md" align="center">
+                            <OuiText size="sm" weight="medium">{{ invoice.number }}</OuiText>
+                            <OuiText size="sm" color="muted">{{ invoice.date }}</OuiText>
+                            <OuiText size="sm" weight="medium">{{ invoice.amount }}</OuiText>
+                            <OuiBadge variant="success">{{ invoice.status }}</OuiBadge>
+                            <OuiFlex gap="sm">
+                              <OuiButton variant="ghost" size="xs">View</OuiButton>
+                              <OuiButton variant="ghost" size="xs">Download</OuiButton>
+                            </OuiFlex>
+                          </OuiGrid>
+                        </OuiBox>
+                      </OuiStack>
+                    </OuiStack>
+                  </OuiCardBody>
+                </OuiCard>
+              </OuiStack>
             </OuiStack>
           </template>
         </OuiTabs>
@@ -595,6 +1088,53 @@
           </OuiButton>
         </OuiFlex>
       </template>
+    </OuiDialog>
+
+    <!-- Add Credits Dialog -->
+    <OuiDialog v-model:open="addCreditsDialogOpen" title="Add Credits">
+      <OuiStack gap="lg">
+        <OuiStack gap="xs">
+          <OuiText size="sm" color="muted">
+            Add credits to your organization balance. Credits are stored in cents ($0.01 units).
+          </OuiText>
+          <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
+        </OuiStack>
+        
+        <OuiStack gap="md">
+          <OuiStack gap="xs">
+            <OuiText size="sm" weight="medium">Amount (USD)</OuiText>
+            <OuiInput
+              v-model="addCreditsAmount"
+              type="number"
+              step="0.01"
+              min="0.01"
+              placeholder="0.00"
+            />
+          </OuiStack>
+          
+          <OuiStack gap="xs">
+            <OuiText size="sm" weight="medium">Note (Optional)</OuiText>
+            <OuiInput
+              v-model="addCreditsNote"
+              type="text"
+              placeholder="Reason for adding credits"
+            />
+          </OuiStack>
+        </OuiStack>
+
+        <OuiFlex justify="end" gap="sm">
+          <OuiButton variant="ghost" @click="addCreditsDialogOpen = false">
+            Cancel
+          </OuiButton>
+          <OuiButton 
+            variant="solid" 
+            @click="addCredits"
+            :disabled="addCreditsLoading || !addCreditsAmount || parseFloat(addCreditsAmount) <= 0"
+          >
+            {{ addCreditsLoading ? "Adding..." : "Add Credits" }}
+          </OuiButton>
+        </OuiFlex>
+      </OuiStack>
     </OuiDialog>
   </OuiStack>
 </template>

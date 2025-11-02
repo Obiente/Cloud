@@ -1,6 +1,5 @@
 <template>
-  <div>
-    <OuiContainer size="7xl" py="xl">
+    <OuiContainer size="full" py="xl">
       <OuiStack gap="xl">
         <!-- Header -->
         <OuiFlex justify="between" align="start" wrap="wrap" gap="lg">
@@ -40,7 +39,6 @@
         </OuiCard>
       </OuiStack>
     </OuiContainer>
-  </div>
 </template>
 
 <script setup lang="ts">

@@ -100,7 +100,7 @@ interface ContainerProps {
 
 const props = withDefaults(defineProps<ContainerProps>(), {
   as: "div",
-  size: "default",
+  size: "full",
   centered: true,
   p: "md",
   fluid: false,
@@ -128,7 +128,6 @@ const containerClasses = computed(() => {
       "6xl": "max-w-6xl", // 72rem (1152px)
       "7xl": "max-w-7xl", // 80rem (1280px)
       full: "max-w-full", // 100%
-      default: "max-w-7xl", // Default to 7xl
     };
     classes.push(sizeMap[props.size]);
   }

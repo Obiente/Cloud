@@ -1,5 +1,5 @@
 <template>
-  <OuiContainer size="7xl" py="xl">
+  <OuiContainer size="full" py="xl">
     <OuiStack gap="xl">
       <!-- Page Header -->
       <OuiFlex justify="between" align="center" wrap="wrap" gap="lg">
@@ -59,7 +59,7 @@
               variant="ghost"
               size="sm"
               class="gap-1.5"
-              @click="navigateTo('/billing')"
+              @click="navigateTo('/organizations?tab=billing')"
               >Billing</OuiButton
             >
             <OuiButton
@@ -385,7 +385,7 @@
               <OuiButton
                 variant="ghost"
                 size="sm"
-                @click="navigateTo('/billing')"
+                @click="navigateTo('/organizations?tab=billing')"
                 >View billing</OuiButton
               >
             </OuiFlex>
@@ -572,7 +572,7 @@ const kpiCards = computed(() => [
     icon: CreditCardIcon,
     iconBg: "bg-warning/10",
     iconColor: "text-warning",
-    href: "/billing",
+    href: "#billing",
   },
 ]);
 

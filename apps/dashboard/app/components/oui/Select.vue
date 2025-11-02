@@ -22,10 +22,35 @@
         </Select.Trigger>
       </Select.Control>
 
-      <Teleport to="body">
+      <template v-if="isMounted">
+        <Teleport to="body">
+          <Select.Positioner class="w-[--reference-width]">
+            <Select.Content
+              class="z-50 min-w-[12rem] max-h-[300px] w-[--reference-width] overflow-y-auto rounded-xl border border-border-default bg-surface-base shadow-md animate-in data-[side=bottom]:slide-in-from-top-2"
+            >
+              <Select.ItemGroup>
+                <Select.Item
+                  v-for="item in collection.items"
+                  :key="item.value"
+                  :item="item"
+                  class="relative text-primary flex w-full cursor-pointer select-none items-center justify-between gap-2 py-2 px-4 text-sm transition-colors duration-150 hover:bg-surface-raised data-disabled:cursor-not-allowed data-disabled:text-text-muted data-disabled:opacity-60"
+                >
+                  <Select.ItemText>{{ item.label }}</Select.ItemText>
+
+                  <Select.ItemIndicator>
+                    <CheckIcon class="h-4 w-4 text-primary" />
+                  </Select.ItemIndicator>
+                </Select.Item>
+              </Select.ItemGroup>
+            </Select.Content>
+          </Select.Positioner>
+        </Teleport>
+      </template>
+      <template v-else>
+        <!-- SSR fallback - render inline during SSR to avoid hydration mismatch -->
         <Select.Positioner class="w-[--reference-width]">
           <Select.Content
-            class="z-50 min-w-[12rem] max-h-[300px] w-[--reference-width] overflow-y-auto rounded-xl border border-border-default bg-surface-base shadow-md animate-in data-[side=bottom]:slide-in-from-top-2"
+            class="z-50 min-w-[12rem] max-h-[300px] w-[--reference-width] overflow-y-auto rounded-xl border border-border-default bg-surface-base shadow-md hidden"
           >
             <Select.ItemGroup>
               <Select.Item
@@ -43,7 +68,7 @@
             </Select.ItemGroup>
           </Select.Content>
         </Select.Positioner>
-      </Teleport>
+      </template>
 
       <Select.HiddenSelect />
     </Select.Root>
@@ -58,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, ref, watch } from "vue";
+  import { computed, ref, watch, onMounted } from "vue";
   import { Select, createListCollection } from "@ark-ui/vue/select";
   import { Field } from "@ark-ui/vue/field";
   import { CheckIcon, ChevronUpDownIcon } from "@heroicons/vue/24/outline";
@@ -94,6 +119,12 @@
       disabled: item.disabled,
     }));
     return createListCollection({ items });
+  });
+
+  const isMounted = ref(false);
+
+  onMounted(() => {
+    isMounted.value = true;
   });
 
   const triggerClasses = computed(() => [
