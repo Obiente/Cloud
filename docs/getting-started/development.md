@@ -23,7 +23,11 @@ cd cloud
 Start database and other dependencies:
 
 ```bash
+# Start PostgreSQL (main database)
 docker compose up -d postgres
+
+# Start TimescaleDB (metrics database)
+docker compose up -d timescaledb
 
 # Optional: enable Redis in docker-compose.yml first, then start it
 # docker compose up -d redis
@@ -124,8 +128,11 @@ docker compose logs postgres
 ### Database Access
 
 ```bash
-# Connect to PostgreSQL (container name from docker-compose.yml)
+# Connect to PostgreSQL (main database)
 docker exec -it obiente-postgres psql -U obiente-postgres -d obiente
+
+# Connect to TimescaleDB (metrics database)
+docker exec -it obiente-timescaledb psql -U postgres -d obiente_metrics
 ```
 
 ## Troubleshooting

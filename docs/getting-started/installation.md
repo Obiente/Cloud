@@ -94,16 +94,23 @@ docker service logs obiente_api
 ### 3. Test API
 
 ```bash
-# Health check
+# Health check (includes metrics system status)
 curl http://localhost:3001/health
 
-# Should return: {"status":"ok"}
+# Should return: {"status":"healthy","version":"1.0.0","metrics_healthy":true}
+
+# Check metrics observability
+curl http://localhost:3001/metrics/observability
 ```
 
 ### 4. Test Database Connection
 
 ```bash
+# Test PostgreSQL (main database)
 docker exec -it obiente-postgres psql -U obiente-postgres -d obiente -c "\dt"
+
+# Test TimescaleDB (metrics database)
+docker exec -it obiente-timescaledb psql -U postgres -d obiente_metrics -c "\dt"
 ```
 
 ## Next Steps

@@ -20,7 +20,14 @@ cp env.swarm.example .env
 POSTGRES_USER=obiente
 POSTGRES_PASSWORD=your_secure_password
 POSTGRES_DB=obiente
+
+# Metrics database (TimescaleDB)
+METRICS_DB_USER=obiente
+METRICS_DB_PASSWORD=your_secure_password
+METRICS_DB_NAME=obiente_metrics
 ```
+
+**Note:** Metrics are stored in a separate TimescaleDB instance for optimal time-series performance. See [Environment Variables Reference](../reference/environment-variables.md#metrics-database-configuration) for all metrics configuration options.
 
 ### Authentication
 
@@ -66,6 +73,26 @@ JWT_SECRET=<generated_value>
 SESSION_SECRET=<generated_value>
 ```
 
+### Metrics Configuration (Optional)
+
+Fine-tune metrics collection behavior:
+
+```bash
+# Collection intervals
+METRICS_COLLECTION_INTERVAL=5s
+METRICS_STORAGE_INTERVAL=60s
+
+# Performance tuning
+METRICS_MAX_WORKERS=50
+METRICS_BATCH_SIZE=100
+
+# Resilience settings
+METRICS_CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+METRICS_HEALTH_CHECK_INTERVAL=30s
+```
+
+See [Environment Variables Reference](../reference/environment-variables.md#metrics-collection-configuration) for complete metrics configuration options.
+
 ## Production Configuration
 
 For production deployments:
@@ -75,6 +102,8 @@ For production deployments:
 3. **Configure CORS properly** - Use specific origins
 4. **Enable authentication** - Set `DISABLE_AUTH=false`
 5. **Set up SSL** - Configure domain and ACME email
+6. **Configure metrics database** - Set up separate TimescaleDB credentials
+7. **Tune metrics collection** - Adjust workers and intervals based on load
 
 ## Reference
 
