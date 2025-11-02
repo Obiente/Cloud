@@ -122,6 +122,8 @@ interface Props {
   deploymentId: string;
   destinationPath?: string;
   volumeName?: string;
+  containerId?: string;
+  serviceName?: string;
 }
 
 interface Emits {
@@ -243,6 +245,8 @@ const uploadFiles = async (api: any) => {
       deploymentId: props.deploymentId,
       destinationPath: props.destinationPath || "/",
       volumeName: props.volumeName,
+      containerId: !props.volumeName && props.containerId ? props.containerId : undefined,
+      serviceName: !props.volumeName && props.serviceName ? props.serviceName : undefined,
       files: api.acceptedFiles.map((f: File) => ({
         name: f.name,
         size: BigInt(f.size),

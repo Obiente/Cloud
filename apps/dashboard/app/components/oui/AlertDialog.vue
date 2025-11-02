@@ -12,7 +12,7 @@
       v-model="promptValue"
       :placeholder="dialogState.placeholder"
       class="mt-4"
-      @keyup.enter="handlePromptConfirm"
+      @keyup.enter="() => handlePromptConfirm(promptValue.trim())"
     />
 
     <template #footer>

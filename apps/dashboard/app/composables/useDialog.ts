@@ -85,8 +85,8 @@ export function useDialog() {
         confirmLabel: opts.confirmLabel || "Confirm",
         cancelLabel: opts.cancelLabel || "Cancel",
         variant: opts.variant || "default",
-        resolve: (confirmed: boolean) => {
-          resolve(confirmed);
+        resolve: (value: boolean | string | null) => {
+          resolve(value as boolean);
         },
       };
     });
@@ -104,8 +104,8 @@ export function useDialog() {
         variant: "default",
         placeholder: options.placeholder || "",
         defaultValue: options.defaultValue || "",
-        resolve: (value: string | null) => {
-          resolve(value);
+        resolve: (value: boolean | string | null) => {
+          resolve(value as string | null);
         },
       };
     });
