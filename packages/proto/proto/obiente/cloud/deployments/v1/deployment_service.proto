@@ -208,23 +208,8 @@ message ListDeploymentsResponse {
 message CreateDeploymentRequest {
   string organization_id = 1;
   string name = 2;
-  DeploymentType type = 3; // deployment type enum
-  BuildStrategy build_strategy = 15; // build strategy enum
-  optional string repository_url = 4;
-  optional string github_integration_id = 18; // GitHub integration ID used for this deployment
-  optional string branch = 5;
-  optional string build_command = 6;
-  optional string install_command = 7;
-  optional string dockerfile_path = 16; // Path to Dockerfile (relative to repo root)
-  optional string compose_file_path = 17; // Path to compose file (relative to repo root)
-  // Docker/runtime specific
-  optional string image = 8;
-  optional int32 port = 9;
-  map<string, string> env = 10;
-  map<string, string> labels = 11;
-  optional int64 memory_bytes = 12;
-  optional int64 cpu_shares = 13;
-  optional int32 replicas = 14;
+  Environment environment = 3; // Environment (production/staging/development)
+  repeated string groups = 4; // Optional groups/labels for organizing deployments
 }
 
 message CreateDeploymentResponse {
@@ -255,6 +240,8 @@ message UpdateDeploymentRequest {
   repeated string custom_domains = 9;
   optional int32 port = 10;
   optional BuildStrategy build_strategy = 11; // build strategy enum
+  optional Environment environment = 15; // Environment (production/staging/development)
+  repeated string groups = 16; // Optional groups/labels for organizing deployments
 }
 
 message UpdateDeploymentResponse {
@@ -821,6 +808,11 @@ message DeploymentUsageMetrics {
   int64 uptime_seconds = 8;
   // Estimated cost in cents
   int64 estimated_cost_cents = 9;
+  // Per-resource cost breakdown in cents
+  optional int64 cpu_cost_cents = 10;
+  optional int64 memory_cost_cents = 11;
+  optional int64 bandwidth_cost_cents = 12;
+  optional int64 storage_cost_cents = 13;
 }
 
 message Deployment {
@@ -848,6 +840,8 @@ message Deployment {
   string size = 17;
   // Environment enum (production/staging/development)
   Environment environment = 18;
+  // Optional groups/labels for organizing deployments
+  repeated string groups = 32;
   // Docker/runtime specific view
   optional string image = 19;
   optional int32 port = 20;
