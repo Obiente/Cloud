@@ -450,7 +450,7 @@ type CreateDeploymentRequest struct {
 	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
 	Name           string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Environment    Environment            `protobuf:"varint,3,opt,name=environment,proto3,enum=obiente.cloud.deployments.v1.Environment" json:"environment,omitempty"` // Environment (production/staging/development)
-	Group          *string                `protobuf:"bytes,4,opt,name=group,proto3,oneof" json:"group,omitempty"`                                                      // Optional group/category for organizing deployments
+	Groups         []string               `protobuf:"bytes,4,rep,name=groups,proto3" json:"groups,omitempty"`                                                          // Optional groups/labels for organizing deployments
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -506,11 +506,11 @@ func (x *CreateDeploymentRequest) GetEnvironment() Environment {
 	return Environment_ENVIRONMENT_UNSPECIFIED
 }
 
-func (x *CreateDeploymentRequest) GetGroup() string {
-	if x != nil && x.Group != nil {
-		return *x.Group
+func (x *CreateDeploymentRequest) GetGroups() []string {
+	if x != nil {
+		return x.Groups
 	}
-	return ""
+	return nil
 }
 
 type CreateDeploymentResponse struct {
@@ -670,7 +670,7 @@ type UpdateDeploymentRequest struct {
 	Port                *int32                 `protobuf:"varint,10,opt,name=port,proto3,oneof" json:"port,omitempty"`
 	BuildStrategy       *BuildStrategy         `protobuf:"varint,11,opt,name=build_strategy,json=buildStrategy,proto3,enum=obiente.cloud.deployments.v1.BuildStrategy,oneof" json:"build_strategy,omitempty"` // build strategy enum
 	Environment         *Environment           `protobuf:"varint,15,opt,name=environment,proto3,enum=obiente.cloud.deployments.v1.Environment,oneof" json:"environment,omitempty"`                            // Environment (production/staging/development)
-	Group               *string                `protobuf:"bytes,16,opt,name=group,proto3,oneof" json:"group,omitempty"`                                                                                       // Optional group/category for organizing deployments
+	Groups              []string               `protobuf:"bytes,16,rep,name=groups,proto3" json:"groups,omitempty"`                                                                                           // Optional groups/labels for organizing deployments
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -810,11 +810,11 @@ func (x *UpdateDeploymentRequest) GetEnvironment() Environment {
 	return Environment_ENVIRONMENT_UNSPECIFIED
 }
 
-func (x *UpdateDeploymentRequest) GetGroup() string {
-	if x != nil && x.Group != nil {
-		return *x.Group
+func (x *UpdateDeploymentRequest) GetGroups() []string {
+	if x != nil {
+		return x.Groups
 	}
-	return ""
+	return nil
 }
 
 type UpdateDeploymentResponse struct {
@@ -6132,8 +6132,8 @@ type Deployment struct {
 	Size string `protobuf:"bytes,17,opt,name=size,proto3" json:"size,omitempty"`
 	// Environment enum (production/staging/development)
 	Environment Environment `protobuf:"varint,18,opt,name=environment,proto3,enum=obiente.cloud.deployments.v1.Environment" json:"environment,omitempty"`
-	// Optional group/category for organizing deployments
-	Group *string `protobuf:"bytes,32,opt,name=group,proto3,oneof" json:"group,omitempty"`
+	// Optional groups/labels for organizing deployments
+	Groups []string `protobuf:"bytes,32,rep,name=groups,proto3" json:"groups,omitempty"`
 	// Docker/runtime specific view
 	Image        *string  `protobuf:"bytes,19,opt,name=image,proto3,oneof" json:"image,omitempty"`
 	Port         *int32   `protobuf:"varint,20,opt,name=port,proto3,oneof" json:"port,omitempty"`
@@ -6328,11 +6328,11 @@ func (x *Deployment) GetEnvironment() Environment {
 	return Environment_ENVIRONMENT_UNSPECIFIED
 }
 
-func (x *Deployment) GetGroup() string {
-	if x != nil && x.Group != nil {
-		return *x.Group
+func (x *Deployment) GetGroups() []string {
+	if x != nil {
+		return x.Groups
 	}
-	return ""
+	return nil
 }
 
 func (x *Deployment) GetImage() string {
@@ -7020,13 +7020,12 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\vdeployments\x18\x01 \x03(\v2(.obiente.cloud.deployments.v1.DeploymentR\vdeployments\x12J\n" +
 	"\n" +
 	"pagination\x18\x02 \x01(\v2*.obiente.cloud.organizations.v1.PaginationR\n" +
-	"pagination\"\xc8\x01\n" +
+	"pagination\"\xbb\x01\n" +
 	"\x17CreateDeploymentRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12K\n" +
-	"\venvironment\x18\x03 \x01(\x0e2).obiente.cloud.deployments.v1.EnvironmentR\venvironment\x12\x19\n" +
-	"\x05group\x18\x04 \x01(\tH\x00R\x05group\x88\x01\x01B\b\n" +
-	"\x06_group\"d\n" +
+	"\venvironment\x18\x03 \x01(\x0e2).obiente.cloud.deployments.v1.EnvironmentR\venvironment\x12\x16\n" +
+	"\x06groups\x18\x04 \x03(\tR\x06groups\"d\n" +
 	"\x18CreateDeploymentResponse\x12H\n" +
 	"\n" +
 	"deployment\x18\x01 \x01(\v2(.obiente.cloud.deployments.v1.DeploymentR\n" +
@@ -7037,7 +7036,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x15GetDeploymentResponse\x12H\n" +
 	"\n" +
 	"deployment\x18\x01 \x01(\v2(.obiente.cloud.deployments.v1.DeploymentR\n" +
-	"deployment\"\xae\a\n" +
+	"deployment\"\xa1\a\n" +
 	"\x17UpdateDeploymentRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\x17\n" +
@@ -7055,8 +7054,8 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	" \x01(\x05H\tR\x04port\x88\x01\x01\x12W\n" +
 	"\x0ebuild_strategy\x18\v \x01(\x0e2+.obiente.cloud.deployments.v1.BuildStrategyH\n" +
 	"R\rbuildStrategy\x88\x01\x01\x12P\n" +
-	"\venvironment\x18\x0f \x01(\x0e2).obiente.cloud.deployments.v1.EnvironmentH\vR\venvironment\x88\x01\x01\x12\x19\n" +
-	"\x05group\x18\x10 \x01(\tH\fR\x05group\x88\x01\x01B\a\n" +
+	"\venvironment\x18\x0f \x01(\x0e2).obiente.cloud.deployments.v1.EnvironmentH\vR\venvironment\x88\x01\x01\x12\x16\n" +
+	"\x06groups\x18\x10 \x03(\tR\x06groupsB\a\n" +
 	"\x05_nameB\x11\n" +
 	"\x0f_repository_urlB\x18\n" +
 	"\x16_github_integration_idB\t\n" +
@@ -7068,8 +7067,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\a_domainB\a\n" +
 	"\x05_portB\x11\n" +
 	"\x0f_build_strategyB\x0e\n" +
-	"\f_environmentB\b\n" +
-	"\x06_group\"d\n" +
+	"\f_environment\"d\n" +
 	"\x18UpdateDeploymentResponse\x12H\n" +
 	"\n" +
 	"deployment\x18\x01 \x01(\v2(.obiente.cloud.deployments.v1.DeploymentR\n" +
@@ -7558,7 +7556,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x0f_cpu_cost_centsB\x14\n" +
 	"\x12_memory_cost_centsB\x17\n" +
 	"\x15_bandwidth_cost_centsB\x15\n" +
-	"\x13_storage_cost_cents\"\xb5\r\n" +
+	"\x13_storage_cost_cents\"\xa8\r\n" +
 	"\n" +
 	"Deployment\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
@@ -7584,19 +7582,19 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\n" +
 	"build_time\x18\x10 \x01(\x05R\tbuildTime\x12\x12\n" +
 	"\x04size\x18\x11 \x01(\tR\x04size\x12K\n" +
-	"\venvironment\x18\x12 \x01(\x0e2).obiente.cloud.deployments.v1.EnvironmentR\venvironment\x12\x19\n" +
-	"\x05group\x18  \x01(\tH\x05R\x05group\x88\x01\x01\x12\x19\n" +
-	"\x05image\x18\x13 \x01(\tH\x06R\x05image\x88\x01\x01\x12\x17\n" +
-	"\x04port\x18\x14 \x01(\x05H\aR\x04port\x88\x01\x01\x12\x1f\n" +
-	"\breplicas\x18\x15 \x01(\x05H\bR\breplicas\x88\x01\x01\x12#\n" +
+	"\venvironment\x18\x12 \x01(\x0e2).obiente.cloud.deployments.v1.EnvironmentR\venvironment\x12\x16\n" +
+	"\x06groups\x18  \x03(\tR\x06groups\x12\x19\n" +
+	"\x05image\x18\x13 \x01(\tH\x05R\x05image\x88\x01\x01\x12\x17\n" +
+	"\x04port\x18\x14 \x01(\x05H\x06R\x04port\x88\x01\x01\x12\x1f\n" +
+	"\breplicas\x18\x15 \x01(\x05H\aR\breplicas\x88\x01\x01\x12#\n" +
 	"\rcontainer_ids\x18\x16 \x03(\tR\fcontainerIds\x12\x1c\n" +
-	"\anode_id\x18\x17 \x01(\tH\tR\x06nodeId\x88\x01\x01\x12(\n" +
-	"\rnode_hostname\x18\x18 \x01(\tH\n" +
-	"R\fnodeHostname\x88\x01\x01\x12P\n" +
+	"\anode_id\x18\x17 \x01(\tH\bR\x06nodeId\x88\x01\x01\x12(\n" +
+	"\rnode_hostname\x18\x18 \x01(\tH\tR\fnodeHostname\x88\x01\x01\x12P\n" +
 	"\benv_vars\x18\x19 \x03(\v25.obiente.cloud.deployments.v1.Deployment.EnvVarsEntryR\aenvVars\x127\n" +
-	"\x15github_integration_id\x18\x1d \x01(\tH\vR\x13githubIntegrationId\x88\x01\x01\x122\n" +
-	"\x12containers_running\x18\x1e \x01(\x05H\fR\x11containersRunning\x88\x01\x01\x12.\n" +
-	"\x10containers_total\x18\x1f \x01(\x05H\rR\x0fcontainersTotal\x88\x01\x01\x1a:\n" +
+	"\x15github_integration_id\x18\x1d \x01(\tH\n" +
+	"R\x13githubIntegrationId\x88\x01\x01\x122\n" +
+	"\x12containers_running\x18\x1e \x01(\x05H\vR\x11containersRunning\x88\x01\x01\x12.\n" +
+	"\x10containers_total\x18\x1f \x01(\x05H\fR\x0fcontainersTotal\x88\x01\x01\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\x11\n" +
@@ -7605,7 +7603,6 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x10_install_commandB\x12\n" +
 	"\x10_dockerfile_pathB\x14\n" +
 	"\x12_compose_file_pathB\b\n" +
-	"\x06_groupB\b\n" +
 	"\x06_imageB\a\n" +
 	"\x05_portB\v\n" +
 	"\t_replicasB\n" +
@@ -8036,7 +8033,6 @@ func file_obiente_cloud_deployments_v1_deployment_service_proto_init() {
 		return
 	}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[0].OneofWrappers = []any{}
-	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[2].OneofWrappers = []any{}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[6].OneofWrappers = []any{}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[11].OneofWrappers = []any{}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[12].OneofWrappers = []any{}
