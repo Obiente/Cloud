@@ -22,12 +22,22 @@
         </OuiBreadcrumbs>
       </OuiFlex>
 
-      <OuiFlex gap="sm" align="center">
+      <OuiFlex gap="sm" align="center" wrap="wrap">
+        <OuiFlex gap="sm" align="center" v-if="source.type === 'container' && containers.length > 0">
+          <OuiText size="xs" color="muted">Container:</OuiText>
+          <OuiSelect
+            :model-value="selectedServiceName || selectedContainerId || ''"
+            :items="containerOptions"
+            placeholder="Select container"
+            style="min-width: 180px;"
+            @update:model-value="handleContainerChange"
+          />
+        </OuiFlex>
         <OuiMenu>
           <template #trigger>
-            <OuiButton
-              variant="ghost"
-              size="sm"
+          <OuiButton
+            variant="ghost"
+            size="sm"
               :disabled="!currentNode || currentNode.type !== 'directory'"
             >
               New
@@ -57,12 +67,12 @@
           :loading="isLoadingTree"
           @click="refreshRoot"
         >
-          Refresh
-        </OuiButton>
-        <OuiButton variant="ghost" size="sm" @click="showUpload = !showUpload">
-          Upload
-        </OuiButton>
-      </OuiFlex>
+            Refresh
+          </OuiButton>
+          <OuiButton variant="ghost" size="sm" @click="showUpload = !showUpload">
+            Upload
+          </OuiButton>
+        </OuiFlex>
     </div>
 
     <transition name="fade">
@@ -97,7 +107,7 @@
             >Sources</OuiText
           >
           <nav class="flex flex-col gap-1.5">
-            <button
+                <button
               class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[13px] text-left transition-colors duration-150 text-text-secondary border-none bg-transparent cursor-pointer hover:bg-surface-hover hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed"
               :class="{
                 'bg-surface-selected text-text-primary':
@@ -108,10 +118,10 @@
             >
               <ServerIcon class="h-4 w-4" />
               <span>Container filesystem</span>
-            </button>
-            <button
-              v-for="volume in volumes"
-              :key="volume.name"
+                </button>
+                <button
+                  v-for="volume in volumes"
+                  :key="volume.name"
               class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[13px] text-left transition-colors duration-150 text-text-secondary border-none bg-transparent cursor-pointer hover:bg-surface-hover hover:text-text-primary"
               :class="{
                 'bg-surface-selected text-text-primary':
@@ -124,9 +134,9 @@
               <span class="ml-auto text-[11px] text-text-tertiary">{{
                 volume.mountPoint
               }}</span>
-            </button>
+                </button>
           </nav>
-        </div>
+              </div>
 
         <div class="flex-1 overflow-y-auto font-mono" role="tree">
           <div class="p-2">
@@ -150,7 +160,7 @@
                   <OuiText size="xs" color="secondary" class="wrap-break-word">
                     {{ parseTreeError(errorMessage) }}
                   </OuiText>
-                </div>
+          </div>
                 <OuiButton
                   variant="ghost"
                   size="xs"
@@ -159,7 +169,7 @@
                 >
                   <XMarkIcon class="h-3.5 w-3.5" />
                 </OuiButton>
-              </div>
+          </div>
             </div>
             <template v-if="root.children.length === 0 && isLoadingTree">
             <OuiFlex direction="col" align="center" gap="sm" class="tree-empty">
@@ -247,6 +257,43 @@
                 class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] rounded-xl bg-surface-subtle text-text-secondary"
                 >Created: {{ formatDatetime(currentNode.createdTime) }}</span
               >
+              <!-- Save Status Indicator -->
+              <Transition name="fade">
+                <span
+                  v-if="saveStatus !== 'idle' && selectedPath"
+                  class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border-2 transition-all duration-200 shadow-md z-10"
+                  :data-status="saveStatus"
+                  :data-test="'save-status-' + saveStatus"
+                  :key="'save-status-' + saveStatus"
+                  :class="{
+                    'bg-success/20 text-success border-success/40': saveStatus === 'success',
+                    'bg-danger/20 text-danger border-danger/40': saveStatus === 'error',
+                    'bg-primary/20 text-primary border-primary/40': saveStatus === 'saving',
+                  }"
+                >
+                  <ArrowPathIcon
+                    v-if="saveStatus === 'saving'"
+                    class="h-4 w-4 animate-spin"
+                  />
+                  <CheckCircleIcon
+                    v-else-if="saveStatus === 'success'"
+                    class="h-4 w-4"
+                  />
+                  <XCircleIcon
+                    v-else-if="saveStatus === 'error'"
+                    class="h-4 w-4"
+                  />
+                  <OuiText size="xs" weight="semibold" :color="saveStatus === 'success' ? 'success' : saveStatus === 'error' ? 'danger' : 'primary'">
+                    {{
+                      saveStatus === "saving"
+                        ? "Saving..."
+                        : saveStatus === "success"
+                        ? "Saved"
+                        : "Save Failed"
+                    }}
+                  </OuiText>
+                </span>
+              </Transition>
             </OuiFlex>
           </div>
           <OuiFlex gap="sm" align="center">
@@ -297,8 +344,8 @@
             <OuiText size="sm" color="secondary"
               >Select a file to view its contents</OuiText
             >
-          </div>
-          <div
+            </div>
+            <div
             v-else-if="fileError"
             class="h-full flex items-center justify-center p-8"
           >
@@ -307,7 +354,7 @@
                 class="flex items-center justify-center w-16 h-16 rounded-full bg-danger/10"
               >
                 <ExclamationTriangleIcon class="h-8 w-8 text-danger" />
-              </div>
+            </div>
               <div class="flex flex-col gap-2">
                 <OuiText size="lg" weight="semibold" color="danger">
                   Unable to View File
@@ -373,7 +420,7 @@
                 >
                   Your browser does not support the audio tag.
                 </audio>
-              </div>
+          </div>
               <!-- PDF Preview -->
               <iframe
                 v-else-if="filePreviewType === 'pdf'"
@@ -390,7 +437,7 @@
                   class="flex items-center justify-center w-16 h-16 rounded-full bg-surface-elevated border-2 border-border-default"
                 >
                   <DocumentIcon class="h-8 w-8 text-text-tertiary" />
-                </div>
+        </div>
                 <div class="flex flex-col gap-2">
                   <OuiText size="lg" weight="semibold">
                     Binary File
@@ -402,7 +449,7 @@
                       MIME type: {{ fileMetadata.mimeType }}
                     </template>
                   </OuiText>
-                </div>
+      </div>
                 <OuiButton variant="outline" size="sm" @click="handleDownload">
                   Download File
                 </OuiButton>
@@ -422,6 +469,7 @@
             :language="fileLanguage"
             :read-only="false"
             height="100%"
+            :container-class="'w-full h-full border-0 overflow-hidden'"
             class="absolute inset-0"
             @save="handleSaveFile"
           />
@@ -440,7 +488,7 @@
 </template>
 
 <script setup lang="ts">
-  import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+  import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
   import {
     ArrowPathIcon,
     ServerIcon,
@@ -449,25 +497,30 @@
     ExclamationTriangleIcon,
     XMarkIcon,
     DocumentIcon,
+    CheckCircleIcon,
+    XCircleIcon,
   } from "@heroicons/vue/24/outline";
   import { TreeView } from "@ark-ui/vue/tree-view";
   import {
     createTreeCollection,
     type TreeNode as ArkTreeNode,
   } from "@ark-ui/vue/collection";
-  import TreeNode from "./TreeNode.vue";
+import TreeNode from "./TreeNode.vue";
   import { useFileExplorer } from "~/composables/useFileExplorer";
-  import { useConnectClient } from "~/lib/connect-client";
-  import { DeploymentService } from "@obiente/proto";
+  import { useDeploymentContainerQuery } from "~/composables/useDeploymentContainerQuery";
+import { useConnectClient } from "~/lib/connect-client";
+import { DeploymentService } from "@obiente/proto";
   import type { ExplorerNode } from "./fileExplorerTypes";
   import type { CreateContainerEntryRequest } from "@obiente/proto";
   import { ContainerEntryType } from "@obiente/proto";
   import OuiFileEditor from "~/components/oui/FileEditor.vue";
   import OuiCombobox from "~/components/oui/Combobox.vue";
+  import OuiSelect from "~/components/oui/Select.vue";
+  import { useDialog } from "~/composables/useDialog";
 
   const props = defineProps<{
-    deploymentId: string;
-    organizationId?: string;
+  deploymentId: string;
+  organizationId?: string;
     allowEditing?: boolean;
   }>();
 
@@ -608,7 +661,12 @@
     breadcrumbs,
     errorMessage,
     isLoadingTree,
+    containers,
+    selectedContainerId,
+    selectedServiceName,
     fetchVolumes,
+    loadContainers,
+    setContainer,
     switchToVolume,
     switchToContainer,
     refreshRoot,
@@ -617,9 +675,26 @@
     deleteEntries,
     renameEntry,
     createEntry,
+    writeFile,
     getOrgId,
     setOrganizationId,
   } = explorer;
+
+  // Use composable for container query management
+  const containerQuery = useDeploymentContainerQuery(
+    props.deploymentId,
+    props.organizationId
+  );
+
+  // Sync with composable - watch for container changes from query params
+  watch(
+    containerQuery.selectedContainer,
+    (container) => {
+      if (container) {
+        setContainer(container.containerId, container.serviceName);
+      }
+    }
+  );
 
   // Ensure volumes is reactive for template - access via computed
   const volumes = computed(() => volumesRef.value || []);
@@ -653,7 +728,7 @@
           value: node,
           isBranch: node.type === "directory" || !!node.children?.length,
           isLeaf: node.type !== "directory" && !node.children?.length,
-          children: [],
+  children: [],
         };
         acc.push(treeNode);
         if (node.children?.length) {
@@ -671,12 +746,16 @@
         value: null,
         children: items,
       },
-    });
   });
+});
 
   const explorerClient = useConnectClient(DeploymentService);
+  const dialog = useDialog();
 
   const allowEditing = props.allowEditing ?? true;
+  const isSaving = ref(false);
+  const saveStatus = ref<"idle" | "saving" | "success" | "error">("idle");
+  const saveErrorMessage = ref<string | null>(null);
 
   const currentNode = computed(() => {
     if (!selectedPath.value) return null;
@@ -871,6 +950,17 @@
       return "Directory not found. It may have been deleted or moved.";
     }
 
+    // Check for container stopped errors
+    if (
+      errorMessage.includes("container is stopped") ||
+      errorMessage.includes("container is not running")
+    ) {
+      if (errorMessage.includes("Use volume_name") || errorMessage.includes("start the container")) {
+        return "Container is not running. To access files, either start the container or use a volume (which can be accessed even when containers are stopped).";
+      }
+      return "Container is not running. Please start it to access the filesystem, or use a volume for persistent storage.";
+    }
+    
     // Check for command failures
     if (
       errorMessage.includes("command") &&
@@ -882,6 +972,15 @@
         return `Unable to list files in: ${pathMatch[1]}. This location may not be accessible.`;
       }
       return "Unable to list files. The location may be restricted or inaccessible.";
+    }
+    
+    // Check for "failed to list files" errors
+    if (errorMessage.includes("failed to list files")) {
+      const pathMatch = errorMessage.match(/failed to list files in ["']([^"']+)["']/);
+      if (pathMatch) {
+        return `Unable to list files in: ${pathMatch[1]}. This location may not be accessible or the container may not be running.`;
+      }
+      return "Unable to list files. The container may not be running or the location may be inaccessible.";
     }
 
     // Generic error - try to extract meaningful part
@@ -1033,6 +1132,8 @@
     selectedPath.value = node.path;
     currentFilePath.value = node.path;
     fileError.value = null; // Clear previous errors
+    saveStatus.value = "idle"; // Reset save status when switching files
+    saveErrorMessage.value = null;
 
     try {
       const res = await explorerClient.getContainerFile({
@@ -1063,7 +1164,7 @@
           URL.revokeObjectURL(fileBlobUrl.value);
           fileBlobUrl.value = null;
         }
-      } else {
+  } else {
         // Media file - create blob URL for preview
         fileContent.value = ""; // Clear text content
         fileLanguage.value = "plaintext";
@@ -1224,19 +1325,81 @@
   }
 
   async function handleSaveFile() {
-    if (!currentFilePath.value || !allowEditing) return;
+    if (!currentFilePath.value || !allowEditing) {
+      console.warn("Cannot save: no file path or editing disabled");
+      return;
+    }
+    if (isSaving.value) {
+      console.log("Save already in progress, skipping");
+      return; // Prevent double-saving
+    }
+
+    console.log("Starting save for:", currentFilePath.value);
+    console.log("Current saveStatus before save:", saveStatus.value);
+    isSaving.value = true;
+    saveStatus.value = "saving";
+    console.log("Save status set to 'saving':", saveStatus.value);
+    saveErrorMessage.value = null;
+    
+    // Force Vue to update by using nextTick
+    await nextTick();
+    console.log("After nextTick, saveStatus:", saveStatus.value);
+
     try {
-      await explorerClient.writeContainerFile({
-        organizationId: getOrgId(),
-        deploymentId: props.deploymentId,
+      await writeFile({
         path: currentFilePath.value,
         content: fileContent.value,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
       });
-      // Optionally show a success message
+
       console.log("File saved successfully");
-    } catch (err) {
-      console.error("save file", err);
+      saveStatus.value = "success";
+      console.log("Save status set to:", saveStatus.value);
+      
+      // Keep status visible for at least 5 seconds
+      // Show dialog after 1 second (non-blocking)
+      setTimeout(async () => {
+        if (!currentFilePath.value) return;
+        dialog.showAlert({
+          title: "File Saved",
+          message: `Successfully saved ${currentFilePath.value.split("/").pop()}`,
+          confirmLabel: "OK",
+        }).catch(() => {});
+      }, 1000);
+
+      // Reset status after 5 seconds total
+      setTimeout(() => {
+        if (saveStatus.value === "success") {
+          console.log("Resetting save status from success to idle");
+          saveStatus.value = "idle";
+        }
+      }, 5000);
+    } catch (err: any) {
+      console.error("save file error:", err);
+      saveStatus.value = "error";
+      
+      const errorMsg = err?.message || "Failed to save file. Please try again.";
+      saveErrorMessage.value = errorMsg;
+
+      // Show error message dialog after showing status
+      setTimeout(async () => {
+        dialog.showAlert({
+          title: "Save Failed",
+          message: errorMsg,
+          confirmLabel: "OK",
+        }).catch(() => {});
+
+        // Reset status after showing dialog (5 seconds total)
+        setTimeout(() => {
+          if (saveStatus.value === "error") {
+            console.log("Resetting save status from error to idle");
+            saveStatus.value = "idle";
+            saveErrorMessage.value = null;
+          }
+        }, 3000);
+      }, 1000); // Show dialog after 1 second
+    } finally {
+      isSaving.value = false;
     }
   }
 
@@ -1294,23 +1457,23 @@
     const ext = filename.split(".").pop()?.toLowerCase();
     const extMap: Record<string, string> = {
       // JavaScript/TypeScript
-      js: "javascript",
+    js: "javascript",
       mjs: "javascript",
       cjs: "javascript",
       jsx: "javascriptreact",
-      ts: "typescript",
+    ts: "typescript",
       tsx: "typescriptreact",
       // Python
-      py: "python",
+    py: "python",
       pyw: "python",
       pyi: "python",
       pyx: "python",
       // Go
-      go: "go",
+    go: "go",
       // Rust
-      rs: "rust",
+    rs: "rust",
       // Java
-      java: "java",
+    java: "java",
       class: "java",
       jar: "java",
       // C/C++
@@ -1333,10 +1496,10 @@
       csh: "shell",
       tcsh: "shell",
       // Web technologies
-      html: "html",
+    html: "html",
       htm: "html",
       xhtml: "html",
-      css: "css",
+    css: "css",
       scss: "scss",
       sass: "sass",
       less: "less",
@@ -1352,14 +1515,14 @@
       xsl: "xml",
       xslt: "xml",
       // Markup/Markdown
-      md: "markdown",
+    md: "markdown",
       markdown: "markdown",
       mdown: "markdown",
       mkd: "markdown",
       mkdn: "markdown",
       rst: "restructuredtext",
       // SQL
-      sql: "sql",
+    sql: "sql",
       mysql: "mysql",
       pgsql: "pgsql",
       // PHP
@@ -1400,7 +1563,7 @@
       bat: "bat",
       cmd: "bat",
       // Docker/Container
-      dockerfile: "dockerfile",
+    dockerfile: "dockerfile",
       dockerignore: "dockerignore",
       // Build tools
       makefile: "makefile",
@@ -1520,7 +1683,7 @@
       // Fetch file content
       const res = await explorerClient.getContainerFile({
         organizationId: getOrgId(),
-        deploymentId: props.deploymentId,
+      deploymentId: props.deploymentId,
         path: currentNode.value.path,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
       });
@@ -1564,7 +1727,7 @@
       // Cleanup
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (err: any) {
+  } catch (err: any) {
       console.error("Failed to download file:", err);
       // Show user-friendly error
       const errorMsg = parseFileError(err);
@@ -1581,22 +1744,70 @@
   }
 
   async function handleFilesUploaded() {
-    showUpload.value = false;
+  showUpload.value = false;
     await refreshRoot();
   }
 
-  onMounted(async () => {
+  const containerOptions = computed(() => {
+    const options: Array<{ label: string; value: string }> = [
+      { label: "Default (first container)", value: "" }
+    ];
+    containers.value.forEach(container => {
+      const label = container.serviceName 
+        ? `${container.serviceName} (${container.containerId.substring(0, 12)})`
+        : container.containerId.substring(0, 12);
+      const value = container.serviceName || container.containerId;
+      options.push({ label, value });
+    });
+    return options;
+  });
+
+  const selectedContainerLabel = computed(() => {
+    if (!selectedServiceName.value && !selectedContainerId.value) {
+      return "Default (first container)";
+    }
+    const container = containers.value.find(c => 
+      (c.serviceName || c.containerId) === (selectedServiceName.value || selectedContainerId.value)
+    );
+    if (container) {
+      return container.serviceName || container.containerId.substring(0, 12);
+    }
+    return "Unknown";
+  });
+
+  function handleContainerChange(value: string) {
+    if (!value) {
+      setContainer(undefined, undefined);
+    } else {
+      const container = containers.value.find(c => 
+        (c.serviceName || c.containerId) === value
+      );
+      if (container) {
+        setContainer(container.containerId, container.serviceName);
+      } else {
+        setContainer(value, undefined);
+      }
+    }
+    selectedPath.value = null;
+    currentFilePath.value = null;
+    fileContent.value = "";
+    fileLanguage.value = "plaintext";
+    refreshRoot();
+  }
+
+onMounted(async () => {
     hasMounted.value = true;
     // Set organization ID if provided
     if (props.organizationId) {
       setOrganizationId(props.organizationId);
     }
     // Always try to fetch volumes when mounted (will skip if no orgId)
+    await loadContainers();
     await fetchVolumes();
     await refreshRoot();
-  });
+});
 
-  onUnmounted(() => {
+onUnmounted(() => {
     // Clean up blob URL on unmount
     if (fileBlobUrl.value) {
       URL.revokeObjectURL(fileBlobUrl.value);
@@ -1612,6 +1823,7 @@
       setOrganizationId(orgId);
       // Fetch volumes when orgId changes (after mount)
       if (orgId) {
+        await loadContainers();
         await fetchVolumes();
         await refreshRoot();
       }
@@ -1637,5 +1849,5 @@
     to {
       opacity: 1;
     }
-  }
+}
 </style>

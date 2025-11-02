@@ -39,7 +39,7 @@
           :format-on-type="true"
           :bracket-pair-colorization="{ enabled: true }"
           :validation-errors="validationErrors"
-          container-class="w-full h-[600px] rounded-xl border border-border-default overflow-hidden"
+          :container-class="'w-full h-[600px] rounded-xl border border-border-default overflow-hidden'"
           @save="saveCompose"
           @change="markDirty"
         />
