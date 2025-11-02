@@ -1,10 +1,12 @@
 package server
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	adminv1connect "api/gen/proto/obiente/cloud/admin/v1/adminv1connect"
 	authv1connect "api/gen/proto/obiente/cloud/auth/v1/authv1connect"
@@ -83,9 +85,97 @@ func registerRoot(mux *http.ServeMux) {
 			return
 		}
 
+		// Check metrics streamer health if available
+		streamer := orchestrator.GetGlobalMetricsStreamer()
+		metricsHealthy := true
+		if streamer != nil {
+			healthy, failures := streamer.GetHealth()
+			metricsHealthy = healthy
+			if !healthy {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"status":"unhealthy","message":"metrics collection unhealthy","consecutive_failures":` + fmt.Sprintf("%d", failures) + `}`))
+				return
+			}
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"healthy","version":"1.0.0"}`))
+		_, _ = w.Write([]byte(`{"status":"healthy","version":"1.0.0","metrics_healthy":` + fmt.Sprintf("%t", metricsHealthy) + `}`))
+	})
+
+	// Metrics observability endpoint (no auth required, useful for monitoring)
+	mux.HandleFunc("/metrics/observability", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+
+		streamer := orchestrator.GetGlobalMetricsStreamer()
+		if streamer == nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"error":"metrics streamer not available"}`))
+			return
+		}
+
+		stats := streamer.GetStats()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		
+		// Return JSON stats (simplified - in production use proper JSON marshaling)
+		json := fmt.Sprintf(`{
+			"collection_count": %d,
+			"collection_errors": %d,
+			"collections_per_second": %.2f,
+			"containers_processed": %d,
+			"containers_failed": %d,
+			"storage_batches_written": %d,
+			"storage_batches_failed": %d,
+			"storage_metrics_written": %d,
+			"storage_metrics_failed": %d,
+			"retry_queue_size": %d,
+			"retry_batches_processed": %d,
+			"retry_batches_success": %d,
+			"active_subscribers": %d,
+			"slow_subscribers": %d,
+			"subscriber_overflows": %d,
+			"live_metrics_cache_size": %d,
+			"previous_stats_cache_size": %d,
+			"circuit_breaker_state": %d,
+			"circuit_breaker_failures": %d,
+			"healthy": %t,
+			"consecutive_failures": %d,
+			"last_collection_time": "%s",
+			"last_storage_time": "%s",
+			"last_health_check_time": "%s"
+		}`,
+			stats.CollectionCount,
+			stats.CollectionErrors,
+			stats.CollectionsPerSecond,
+			stats.ContainersProcessed,
+			stats.ContainersFailed,
+			stats.StorageBatchesWritten,
+			stats.StorageBatchesFailed,
+			stats.StorageMetricsWritten,
+			stats.StorageMetricsFailed,
+			stats.RetryQueueSize,
+			stats.RetryBatchesProcessed,
+			stats.RetryBatchesSuccess,
+			stats.ActiveSubscribers,
+			stats.SlowSubscribers,
+			stats.SubscriberOverflows,
+			stats.LiveMetricsCacheSize,
+			stats.PreviousStatsCacheSize,
+			stats.CircuitBreakerState,
+			stats.CircuitBreakerFailures,
+			stats.IsHealthy,
+			stats.ConsecutiveFailures,
+			stats.LastCollectionTime.Format(time.RFC3339),
+			stats.LastStorageTime.Format(time.RFC3339),
+			stats.LastHealthCheckTime.Format(time.RFC3339),
+		)
+		_, _ = w.Write([]byte(json))
 	})
 }
 
