@@ -103,7 +103,8 @@ func (s *Service) GetDeploymentMetrics(ctx context.Context, req *connect.Request
 		rawStartTime = cutoffForRaw
 	}
 	if rawStartTime.Before(rawEndTime) {
-		query := database.DB.Where("deployment_id = ? AND timestamp >= ? AND timestamp <= ?", deploymentID, rawStartTime, rawEndTime)
+		metricsDB := database.GetMetricsDB()
+		query := metricsDB.Where("deployment_id = ? AND timestamp >= ? AND timestamp <= ?", deploymentID, rawStartTime, rawEndTime)
 
 		// Apply container filter if specified
 		if targetContainerID != "" {
@@ -127,7 +128,8 @@ func (s *Service) GetDeploymentMetrics(ctx context.Context, req *connect.Request
 		hourlyStart := startTime.Truncate(time.Hour)
 		hourlyEnd := cutoffForRaw.Truncate(time.Hour)
 		if hourlyStart.Before(hourlyEnd) {
-			if err := database.DB.Where("deployment_id = ? AND hour >= ? AND hour < ?", deploymentID, hourlyStart, hourlyEnd).
+			metricsDB := database.GetMetricsDB()
+			if err := metricsDB.Where("deployment_id = ? AND hour >= ? AND hour < ?", deploymentID, hourlyStart, hourlyEnd).
 				Order("hour ASC").
 				Find(&hourlyAggregates).Error; err != nil {
 				// Log error but don't fail - we can still return raw metrics
@@ -359,7 +361,8 @@ func (s *Service) StreamDeploymentMetrics(ctx context.Context, req *connect.Requ
 			return nil
 		case <-ticker.C:
 			var dbMetric database.DeploymentMetrics
-			query := database.DB.Where("deployment_id = ?", deploymentID)
+			metricsDB := database.GetMetricsDB()
+			query := metricsDB.Where("deployment_id = ?", deploymentID)
 
 			// Apply container filter if specified
 			if targetContainerID != "" {
@@ -375,7 +378,7 @@ func (s *Service) StreamDeploymentMetrics(ctx context.Context, req *connect.Requ
 				// If no raw metrics, try hourly aggregates
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					var hourlyMetric database.DeploymentUsageHourly
-					hourlyErr := database.DB.Where("deployment_id = ?", deploymentID).
+					hourlyErr := metricsDB.Where("deployment_id = ?", deploymentID).
 						Order("hour DESC").
 						First(&hourlyMetric).Error
 
@@ -468,13 +471,13 @@ func (s *Service) StreamDeploymentMetrics(ctx context.Context, req *connect.Requ
 					argIndex++
 				}
 				
-				if err := database.DB.Raw(query, args...).Scan(&timestampValue).Error; err == nil && !timestampValue.IsZero() {
+				if err := metricsDB.Raw(query, args...).Scan(&timestampValue).Error; err == nil && !timestampValue.IsZero() {
 					latestTimestamp = &timestampValue
 				}
 				
 				if latestTimestamp != nil && !latestTimestamp.IsZero() {
 					// Get all metrics at that timestamp
-					if err := database.DB.Where("deployment_id = ? AND timestamp = ?", deploymentID, *latestTimestamp).
+					if err := metricsDB.Where("deployment_id = ? AND timestamp = ?", deploymentID, *latestTimestamp).
 						Find(&latestMetrics).Error; err == nil && len(latestMetrics) > 0 {
 						// Aggregate across all containers
 						var sumCPU float64
@@ -634,7 +637,8 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 			BandwidthRxBytes  int64
 			BandwidthTxBytes  int64
 		}
-		database.DB.Table("deployment_usage_hourly duh").
+		metricsDB := database.GetMetricsDB()
+		metricsDB.Table("deployment_usage_hourly duh").
 			Select(`
 				COALESCE(SUM((duh.avg_cpu_usage / 100.0) * 3600), 0) as cpu_core_seconds,
 				COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds,
@@ -662,7 +666,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 			Timestamp   time.Time
 		}
 		var metricTimestamps []metricTimestamp
-		database.DB.Table("deployment_metrics dm").
+		metricsDB.Table("deployment_metrics dm").
 			Select(`
 				AVG(dm.cpu_usage) as cpu_usage,
 				SUM(dm.memory_usage) as memory_sum,
@@ -688,7 +692,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 		}
 
 		// Get bandwidth and request counts from raw metrics
-		database.DB.Table("deployment_metrics dm").
+		metricsDB.Table("deployment_metrics dm").
 			Select(`
 				COALESCE(SUM(dm.network_rx_bytes), 0) as bandwidth_rx_bytes,
 				COALESCE(SUM(dm.network_tx_bytes), 0) as bandwidth_tx_bytes,
@@ -742,7 +746,8 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 			BandwidthRxBytes  int64
 			BandwidthTxBytes  int64
 		}
-		database.DB.Table("deployment_usage_hourly duh").
+		metricsDB := database.GetMetricsDB()
+		metricsDB.Table("deployment_usage_hourly duh").
 			Select(`
 				COALESCE(SUM((duh.avg_cpu_usage / 100.0) * 3600), 0) as cpu_core_seconds,
 				COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds,
@@ -762,7 +767,7 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 			RequestCount int64
 			ErrorCount   int64
 		}
-		database.DB.Table("deployment_metrics dm").
+		metricsDB.Table("deployment_metrics dm").
 			Select(`
 				COALESCE(SUM(dm.request_count), 0) as request_count,
 				COALESCE(SUM(dm.error_count), 0) as error_count

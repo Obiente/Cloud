@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +52,13 @@ type MetricsStreamer struct {
 	liveRetention      time.Duration // How long to keep live metrics (default 5min)
 	maxWorkers         int           // Max parallel workers for stats collection
 	batchSize          int           // Batch size for DB writes
+	
+	// Retry queue for failed database writes
+	retryQueue *MetricsRetryQueue
+	
+	// Memory limits
+	maxLiveMetricsPerDeployment int // Max number of metrics to keep in memory per deployment
+	maxPreviousStats            int // Max number of previous stats to keep
 }
 
 // NewMetricsStreamer creates a new metrics streamer
@@ -58,17 +66,20 @@ func NewMetricsStreamer(serviceRegistry *registry.ServiceRegistry) *MetricsStrea
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &MetricsStreamer{
-		serviceRegistry:    serviceRegistry,
-		previousStats:      make(map[string]*containerStats),
-		liveMetrics:        make(map[string][]LiveMetric),
-		subscribers:        make(map[string][]chan LiveMetric),
-		ctx:                ctx,
-		cancel:             cancel,
-		collectionInterval: 5 * time.Second,
-		storageInterval:    60 * time.Second, // Store every minute instead of every 5s
-		liveRetention:      5 * time.Minute,
-		maxWorkers:         50,  // Parallel workers for stats collection
-		batchSize:          100, // Batch DB writes
+		serviceRegistry:            serviceRegistry,
+		previousStats:              make(map[string]*containerStats),
+		liveMetrics:                make(map[string][]LiveMetric),
+		subscribers:                make(map[string][]chan LiveMetric),
+		ctx:                        ctx,
+		cancel:                     cancel,
+		collectionInterval:         5 * time.Second,
+		storageInterval:            60 * time.Second, // Store every minute instead of every 5s
+		liveRetention:              5 * time.Minute,
+		maxWorkers:                 50,  // Parallel workers for stats collection
+		batchSize:                  100, // Batch DB writes
+		retryQueue:                 NewMetricsRetryQueue(),
+		maxLiveMetricsPerDeployment: 1000, // Max 1000 metrics per deployment (about 83 minutes at 5s interval)
+		maxPreviousStats:           10000, // Max 10000 container stats (about 200 deployments with 50 containers each)
 	}
 }
 
@@ -82,6 +93,12 @@ func (ms *MetricsStreamer) Start() {
 
 	// Start cleanup of old live metrics
 	go ms.cleanupLiveMetrics()
+	
+	// Start retry processor for failed writes
+	go ms.processRetries()
+	
+	// Start cleanup of stale previous stats
+	go ms.cleanupStaleStats()
 }
 
 // Stop stops the metrics streamer
@@ -155,7 +172,7 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 		case <-ticker.C:
 			shouldLog := time.Since(lastLogTime) >= 30*time.Second
 			if shouldLog {
-				// log.Printf("[MetricsStreamer] Collecting live metrics...")
+				log.Printf("[MetricsStreamer] Collecting live metrics...")
 				lastLogTime = time.Now()
 			}
 
@@ -163,7 +180,7 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 			locations, err := ms.serviceRegistry.GetNodeDeployments(nodeID)
 			if err != nil {
 				if shouldLog {
-					// log.Printf("[MetricsStreamer] Failed to get node deployments: %v", err)
+					log.Printf("[MetricsStreamer] Failed to get node deployments: %v", err)
 				}
 				continue
 			}
@@ -185,13 +202,19 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 				}
 				ms.liveMetrics[metric.DeploymentID] = append(ms.liveMetrics[metric.DeploymentID], metric)
 
-				// Trim old metrics (keep only last N minutes)
+				// Trim old metrics (keep only last N minutes or max size)
 				retentionCutoff := now.Add(-ms.liveRetention)
 				trimmed := ms.liveMetrics[metric.DeploymentID][:0]
 				for _, m := range ms.liveMetrics[metric.DeploymentID] {
 					if m.Timestamp.After(retentionCutoff) {
 						trimmed = append(trimmed, m)
 					}
+				}
+				// Enforce max size per deployment
+				if len(trimmed) > ms.maxLiveMetricsPerDeployment {
+					// Keep only the most recent metrics
+					startIdx := len(trimmed) - ms.maxLiveMetricsPerDeployment
+					trimmed = trimmed[startIdx:]
 				}
 				ms.liveMetrics[metric.DeploymentID] = trimmed
 				ms.liveMetricsMutex.Unlock()
@@ -211,7 +234,7 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 			}
 
 			if shouldLog && len(metrics) > 0 {
-				// log.Printf("[MetricsStreamer] Collected %d live metrics", len(metrics))
+				log.Printf("[MetricsStreamer] Collected %d live metrics for %d deployments", len(metrics), len(locations))
 			}
 
 		case <-ms.ctx.Done():
@@ -250,6 +273,9 @@ func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentL
 
 				currentStats, err := ms.getContainerStats(job.location.ContainerID)
 				if err != nil {
+					// Log error with context but don't fail completely
+					// log.Printf("[MetricsStreamer] Failed to get stats for container %s (deployment %s): %v", 
+					// 	job.location.ContainerID[:12], job.location.DeploymentID, err)
 					results <- statsResult{err: err, index: job.index}
 					continue
 				}
@@ -342,7 +368,7 @@ func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentL
 	}
 
 	if shouldLog && len(errors) > 0 {
-		// log.Printf("[MetricsStreamer] %d errors during stats collection", len(errors))
+		log.Printf("[MetricsStreamer] %d errors during stats collection out of %d containers", len(errors), len(locations))
 	}
 
 	return metrics
@@ -515,9 +541,16 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 					})
 
 					if len(metricsToStore) >= ms.batchSize {
-						// Batch insert
-						if err := database.DB.CreateInBatches(metricsToStore, ms.batchSize).Error; err != nil {
-							// log.Printf("[MetricsStreamer] Failed to store metrics batch: %v", err)
+						// Batch insert using MetricsDB if available, otherwise fallback to main DB
+						targetDB := database.MetricsDB
+						if targetDB == nil {
+							targetDB = database.DB
+						}
+						
+						if err := targetDB.CreateInBatches(metricsToStore, ms.batchSize).Error; err != nil {
+							log.Printf("[MetricsStreamer] Failed to store metrics batch (%d metrics): %v", len(metricsToStore), err)
+							// Add to retry queue
+							ms.retryQueue.AddFailedBatch(metricsToStore, err)
 						}
 						metricsToStore = metricsToStore[:0]
 					}
@@ -526,8 +559,15 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 
 			// Store remaining metrics
 			if len(metricsToStore) > 0 {
-				if err := database.DB.CreateInBatches(metricsToStore, ms.batchSize).Error; err != nil {
-					// log.Printf("[MetricsStreamer] Failed to store final metrics batch: %v", err)
+				targetDB := database.MetricsDB
+				if targetDB == nil {
+					targetDB = database.DB
+				}
+				
+				if err := targetDB.CreateInBatches(metricsToStore, ms.batchSize).Error; err != nil {
+					log.Printf("[MetricsStreamer] Failed to store final metrics batch (%d metrics): %v", len(metricsToStore), err)
+					// Add to retry queue
+					ms.retryQueue.AddFailedBatch(metricsToStore, err)
 				}
 			}
 
@@ -563,6 +603,87 @@ func (ms *MetricsStreamer) cleanupLiveMetrics() {
 				}
 			}
 			ms.liveMetricsMutex.Unlock()
+
+		case <-ms.ctx.Done():
+			return
+		}
+	}
+}
+
+// processRetries periodically attempts to retry failed database writes
+func (ms *MetricsStreamer) processRetries() {
+	ticker := time.NewTicker(2 * time.Minute) // Check every 2 minutes
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			targetDB := database.MetricsDB
+			if targetDB == nil {
+				targetDB = database.DB
+			}
+			
+			queueSize := ms.retryQueue.GetQueueSize()
+			if queueSize > 0 {
+				ms.retryQueue.ProcessRetries(targetDB)
+				ms.retryQueue.ClearOldBatches()
+			}
+
+		case <-ms.ctx.Done():
+			return
+		}
+	}
+}
+
+// cleanupStaleStats removes previousStats for containers that no longer exist
+func (ms *MetricsStreamer) cleanupStaleStats() {
+	ticker := time.NewTicker(10 * time.Minute) // Cleanup every 10 minutes
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			// Get list of currently running containers
+			nodeID := ms.serviceRegistry.NodeID()
+			locations, err := ms.serviceRegistry.GetNodeDeployments(nodeID)
+			if err != nil {
+				continue
+			}
+
+			activeContainerIDs := make(map[string]bool)
+			for _, loc := range locations {
+				if loc.Status == "running" {
+					activeContainerIDs[loc.ContainerID] = true
+				}
+			}
+
+			// Clean up stats for containers that no longer exist
+			ms.statsMutex.Lock()
+			var removedCount int
+			for containerID := range ms.previousStats {
+				if !activeContainerIDs[containerID] {
+					delete(ms.previousStats, containerID)
+					removedCount++
+				}
+			}
+			
+			// Enforce max size limit
+			if len(ms.previousStats) > ms.maxPreviousStats {
+				// Remove oldest entries (simple approach: remove randomly until under limit)
+				// In a production system, you might want to track last used time
+				for len(ms.previousStats) > ms.maxPreviousStats {
+					for containerID := range ms.previousStats {
+						delete(ms.previousStats, containerID)
+						removedCount++
+						break // Remove one at a time
+					}
+				}
+			}
+			ms.statsMutex.Unlock()
+
+			if removedCount > 0 {
+				log.Printf("[MetricsStreamer] Cleaned up %d stale previousStats entries", removedCount)
+			}
 
 		case <-ms.ctx.Done():
 			return

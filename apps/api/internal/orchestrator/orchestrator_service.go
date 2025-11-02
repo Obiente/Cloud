@@ -238,7 +238,8 @@ func (os *OrchestratorService) cleanupTasks() {
 			
 			// Get all deployments that have metrics older than cutoff
 			var deploymentIDs []string
-			database.DB.Table("deployment_metrics").
+			metricsDB := database.GetMetricsDB()
+			metricsDB.Table("deployment_metrics").
 				Select("DISTINCT deployment_id").
 				Where("timestamp < ?", aggregateCutoff).
 				Pluck("deployment_id", &deploymentIDs)
@@ -460,7 +461,8 @@ func (os *OrchestratorService) aggregateUsage() {
 					Timestamp   time.Time
 				}
 				var orgMemoryTimestamps []orgMemoryPerTimestamp
-				database.DB.Table("deployment_metrics dm").
+				metricsDB := database.GetMetricsDB()
+				metricsDB.Table("deployment_metrics dm").
 					Select(`
 						SUM(dm.memory_usage) as memory_sum,
 						dm.timestamp as timestamp
@@ -479,7 +481,7 @@ func (os *OrchestratorService) aggregateUsage() {
 				// Sum from hourly aggregates (older than 24 hours, within month)
 				if rawCutoff.After(monthStart) {
 					var hourlyMemorySum int64
-					database.DB.Table("deployment_usage_hourly duh").
+					metricsDB.Table("deployment_usage_hourly duh").
 						Select("COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds").
 						Where("duh.deployment_id IN ? AND duh.hour >= ? AND duh.hour < ?", deploymentIDs, monthStart, rawCutoff).
 						Scan(&hourlyMemorySum)
@@ -498,7 +500,7 @@ func (os *OrchestratorService) aggregateUsage() {
 				if rawCutoffBandwidth.Before(monthStart) {
 					rawCutoffBandwidth = monthStart
 				}
-				database.DB.Table("deployment_metrics dm").
+				metricsDB.Table("deployment_metrics dm").
 					Select("COALESCE(SUM(dm.network_rx_bytes), 0) as rx_bytes, COALESCE(SUM(dm.network_tx_bytes), 0) as tx_bytes").
 					Where("dm.deployment_id IN ? AND dm.timestamp >= ?", deploymentIDs, rawCutoffBandwidth).
 						Scan(&rawBandwidth)
@@ -506,7 +508,7 @@ func (os *OrchestratorService) aggregateUsage() {
 					// Sum from hourly aggregates (older than 24 hours, within month)
 					var hourlyBandwidth bandwidthRow
 				if rawCutoffBandwidth.After(monthStart) {
-					database.DB.Table("deployment_usage_hourly duh").
+					metricsDB.Table("deployment_usage_hourly duh").
 						Select("COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as rx_bytes, COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as tx_bytes").
 						Where("duh.deployment_id IN ? AND duh.hour >= ? AND duh.hour < ?", deploymentIDs, monthStart, rawCutoffBandwidth).
 						Scan(&hourlyBandwidth)
@@ -546,7 +548,8 @@ func (os *OrchestratorService) aggregateDeploymentMetrics(deploymentID string, a
 	
 	// Find the oldest metric for this deployment
 	var oldestTime time.Time
-	database.DB.Table("deployment_metrics").
+	metricsDB := database.GetMetricsDB()
+	metricsDB.Table("deployment_metrics").
 		Select("MIN(timestamp)").
 		Where("deployment_id = ? AND timestamp < ?", deploymentID, aggregateCutoff).
 		Scan(&oldestTime)
@@ -565,7 +568,7 @@ func (os *OrchestratorService) aggregateDeploymentMetrics(deploymentID string, a
 		
 		// Check if hourly aggregate already exists
 		var existingHourly database.DeploymentUsageHourly
-		err := database.DB.Where("deployment_id = ? AND hour = ?", deploymentID, currentHour).
+		err := metricsDB.Where("deployment_id = ? AND hour = ?", deploymentID, currentHour).
 			First(&existingHourly).Error
 		
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -585,7 +588,7 @@ func (os *OrchestratorService) aggregateDeploymentMetrics(deploymentID string, a
 			}
 			var agg hourlyAgg
 			
-			err := database.DB.Table("deployment_metrics").
+			err := metricsDB.Table("deployment_metrics").
 				Select(`
 					AVG(cpu_usage) as avg_cpu_usage,
 					AVG(memory_usage) as avg_memory_usage,
@@ -625,13 +628,13 @@ func (os *OrchestratorService) aggregateDeploymentMetrics(deploymentID string, a
 					SampleCount:       agg.Count,
 				}
 				
-				if err := database.DB.Create(&hourlyUsage).Error; err != nil {
+				if err := metricsDB.Create(&hourlyUsage).Error; err != nil {
 					log.Printf("[Orchestrator] Failed to create hourly aggregate for %s at %s: %v", deploymentID, currentHour, err)
 				} else {
 					aggregatedCount++
 					
 					// Delete the raw metrics for this hour in batch
-					result := database.DB.Where("deployment_id = ? AND timestamp >= ? AND timestamp < ?",
+					result := metricsDB.Where("deployment_id = ? AND timestamp >= ? AND timestamp < ?",
 						deploymentID, currentHour, nextHour).
 						Delete(&database.DeploymentMetrics{})
 					

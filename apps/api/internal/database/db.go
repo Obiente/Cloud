@@ -82,6 +82,12 @@ func InitDatabase() error {
 
 	log.Println("Deployment tracking initialized")
 
+	// Initialize metrics database (separate connection for metrics)
+	if err := InitMetricsDatabase(); err != nil {
+		log.Printf("Warning: Metrics database initialization failed: %v. Metrics may not work correctly.", err)
+		// Don't fail main initialization if metrics DB fails
+	}
+
 	return nil
 }
 

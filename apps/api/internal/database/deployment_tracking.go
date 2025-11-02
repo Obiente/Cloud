@@ -92,24 +92,26 @@ func InitDeploymentTracking() error {
 		&DeploymentLocation{},
 		&NodeMetadata{},
 		&DeploymentRouting{},
-		&DeploymentUsageHourly{},
-		&DeploymentMetrics{},
 	); err != nil {
 		return err
 	}
 	
-	// Create composite indexes for better query performance
-	if err := createMetricsIndexes(); err != nil {
-		return fmt.Errorf("failed to create metrics indexes: %w", err)
-	}
+	// Note: DeploymentMetrics and DeploymentUsageHourly are now handled by InitMetricsTables
+	// to use the separate metrics database
 	
 	return nil
 }
 
 // createMetricsIndexes creates composite indexes for metrics queries
+// Uses MetricsDB if available, otherwise falls back to main DB
 func createMetricsIndexes() error {
+	db := MetricsDB
+	if db == nil {
+		db = DB // Fallback to main database
+	}
+	
 	// Composite index for deployment_id + timestamp (most common query pattern)
-	if err := DB.Exec(`
+	if err := db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_deployment_metrics_deployment_timestamp 
 		ON deployment_metrics(deployment_id, timestamp DESC)
 	`).Error; err != nil {
@@ -117,7 +119,7 @@ func createMetricsIndexes() error {
 	}
 	
 	// Composite index for timestamp + deployment_id (for time-range queries)
-	if err := DB.Exec(`
+	if err := db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_deployment_metrics_timestamp_deployment 
 		ON deployment_metrics(timestamp DESC, deployment_id)
 	`).Error; err != nil {
@@ -125,7 +127,7 @@ func createMetricsIndexes() error {
 	}
 	
 	// Composite index for container_id + timestamp (container-specific queries)
-	if err := DB.Exec(`
+	if err := db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_deployment_metrics_container_timestamp 
 		ON deployment_metrics(container_id, timestamp DESC)
 	`).Error; err != nil {
@@ -133,7 +135,7 @@ func createMetricsIndexes() error {
 	}
 	
 	// Index for hourly aggregates (deployment_id + hour)
-	if err := DB.Exec(`
+	if err := db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_deployment_usage_hourly_deployment_hour 
 		ON deployment_usage_hourly(deployment_id, hour DESC)
 	`).Error; err != nil {
@@ -384,14 +386,24 @@ func UpsertDeploymentRouting(routing *DeploymentRouting) error {
 }
 
 // RecordMetrics records deployment metrics
+// Uses MetricsDB if available, otherwise falls back to main DB
 func RecordMetrics(metrics *DeploymentMetrics) error {
-	return DB.Create(metrics).Error
+	targetDB := MetricsDB
+	if targetDB == nil {
+		targetDB = DB
+	}
+	return targetDB.Create(metrics).Error
 }
 
 // GetRecentMetrics gets recent metrics for a deployment
+// Uses MetricsDB if available, otherwise falls back to main DB
 func GetRecentMetrics(deploymentID string, since time.Time) ([]DeploymentMetrics, error) {
 	var metrics []DeploymentMetrics
-	result := DB.Where("deployment_id = ? AND timestamp >= ?", deploymentID, since).
+	targetDB := MetricsDB
+	if targetDB == nil {
+		targetDB = DB
+	}
+	result := targetDB.Where("deployment_id = ? AND timestamp >= ?", deploymentID, since).
 		Order("timestamp DESC").
 		Limit(1000).
 		Find(&metrics)
@@ -399,8 +411,13 @@ func GetRecentMetrics(deploymentID string, since time.Time) ([]DeploymentMetrics
 }
 
 // CleanOldMetrics removes metrics older than retention period
+// Uses MetricsDB if available, otherwise falls back to main DB
 func CleanOldMetrics(retentionDays int) error {
 	cutoff := time.Now().AddDate(0, 0, -retentionDays)
-	return DB.Where("timestamp < ?", cutoff).Delete(&DeploymentMetrics{}).Error
+	targetDB := MetricsDB
+	if targetDB == nil {
+		targetDB = DB
+	}
+	return targetDB.Where("timestamp < ?", cutoff).Delete(&DeploymentMetrics{}).Error
 }
 

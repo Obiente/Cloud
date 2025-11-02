@@ -178,6 +178,152 @@ services:
       - obiente-network
 
   # ============================================================================
+  # METRICS DATABASE CLUSTER (TimescaleDB + Patroni)
+  # ============================================================================
+
+  # PgPool for TimescaleDB - Connection pooler and load balancer
+  metrics-pgpool:
+    image: bitnami/pgpool:4
+    environment:
+      PGPOOL_BACKEND_NODES: 0:metrics-patroni-1:5432,1:metrics-patroni-2:5432,2:metrics-patroni-3:5432
+      PGPOOL_SR_CHECK_USER: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
+      PGPOOL_SR_CHECK_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      PGPOOL_ENABLE_LDAP: "no"
+      PGPOOL_POSTGRES_USERNAME: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
+      PGPOOL_POSTGRES_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      PGPOOL_ADMIN_USERNAME: admin
+      PGPOOL_ADMIN_PASSWORD: ${METRICS_PGPOOL_ADMIN_PASSWORD:-${PGPOOL_ADMIN_PASSWORD:-adminpassword}}
+      PGPOOL_ENABLE_LOAD_BALANCING: "yes"
+      PGPOOL_MAX_POOL: 100
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "/opt/bitnami/scripts/pgpool/healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - obiente-network
+
+  # Patroni TimescaleDB - Node 1 (Leader)
+  metrics-patroni-1:
+    image: timescale/timescaledb:latest-pg16
+    hostname: metrics-patroni-1
+    environment:
+      PATRONI_NAME: metrics-patroni-1
+      PATRONI_SCOPE: metrics-cluster
+      PATRONI_ETCD3_HOSTS: etcd:2379
+      PATRONI_RESTAPI_CONNECT_ADDRESS: metrics-patroni-1:8008
+      PATRONI_RESTAPI_LISTEN: 0.0.0.0:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: metrics-patroni-1:5432
+      PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
+      PATRONI_POSTGRESQL_DATA_DIR: /var/lib/postgresql/data
+      PATRONI_POSTGRESQL_PGPASS: /tmp/pgpass
+      PATRONI_SUPERUSER_USERNAME: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
+      PATRONI_SUPERUSER_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      PATRONI_REPLICATION_USERNAME: metrics-replicator
+      PATRONI_REPLICATION_PASSWORD: ${METRICS_REPLICATION_PASSWORD:-${REPLICATION_PASSWORD:-metrics-replicator-password}}
+      PATRONI_admin_PASSWORD: ${METRICS_PATRONI_ADMIN_PASSWORD:-${PATRONI_ADMIN_PASSWORD:-admin}}
+      PATRONI_admin_OPTIONS: "createdb,createrole"
+    volumes:
+      - metrics_patroni_1_data:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.metrics.replica == 1
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+        reservations:
+          cpus: "1"
+          memory: 2G
+    networks:
+      - obiente-network
+
+  # Patroni TimescaleDB - Node 2 (Replica)
+  metrics-patroni-2:
+    image: timescale/timescaledb:latest-pg16
+    hostname: metrics-patroni-2
+    environment:
+      PATRONI_NAME: metrics-patroni-2
+      PATRONI_SCOPE: metrics-cluster
+      PATRONI_ETCD3_HOSTS: etcd:2379
+      PATRONI_RESTAPI_CONNECT_ADDRESS: metrics-patroni-2:8008
+      PATRONI_RESTAPI_LISTEN: 0.0.0.0:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: metrics-patroni-2:5432
+      PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
+      PATRONI_POSTGRESQL_DATA_DIR: /var/lib/postgresql/data
+      PATRONI_POSTGRESQL_PGPASS: /tmp/pgpass
+      PATRONI_SUPERUSER_USERNAME: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
+      PATRONI_SUPERUSER_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      PATRONI_REPLICATION_USERNAME: metrics-replicator
+      PATRONI_REPLICATION_PASSWORD: ${METRICS_REPLICATION_PASSWORD:-${REPLICATION_PASSWORD:-metrics-replicator-password}}
+      PATRONI_admin_PASSWORD: ${METRICS_PATRONI_ADMIN_PASSWORD:-${PATRONI_ADMIN_PASSWORD:-admin}}
+      PATRONI_admin_OPTIONS: "createdb,createrole"
+    volumes:
+      - metrics_patroni_2_data:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.metrics.replica == 2
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+        reservations:
+          cpus: "1"
+          memory: 2G
+    networks:
+      - obiente-network
+
+  # Patroni TimescaleDB - Node 3 (Replica)
+  metrics-patroni-3:
+    image: timescale/timescaledb:latest-pg16
+    hostname: metrics-patroni-3
+    environment:
+      PATRONI_NAME: metrics-patroni-3
+      PATRONI_SCOPE: metrics-cluster
+      PATRONI_ETCD3_HOSTS: etcd:2379
+      PATRONI_RESTAPI_CONNECT_ADDRESS: metrics-patroni-3:8008
+      PATRONI_RESTAPI_LISTEN: 0.0.0.0:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: metrics-patroni-3:5432
+      PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
+      PATRONI_POSTGRESQL_DATA_DIR: /var/lib/postgresql/data
+      PATRONI_POSTGRESQL_PGPASS: /tmp/pgpass
+      PATRONI_SUPERUSER_USERNAME: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
+      PATRONI_SUPERUSER_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      PATRONI_REPLICATION_USERNAME: metrics-replicator
+      PATRONI_REPLICATION_PASSWORD: ${METRICS_REPLICATION_PASSWORD:-${REPLICATION_PASSWORD:-metrics-replicator-password}}
+      PATRONI_admin_PASSWORD: ${METRICS_PATRONI_ADMIN_PASSWORD:-${PATRONI_ADMIN_PASSWORD:-admin}}
+      PATRONI_admin_OPTIONS: "createdb,createrole"
+    volumes:
+      - metrics_patroni_3_data:/var/lib/postgresql/data
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.metrics.replica == 3
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+        reservations:
+          cpus: "1"
+          memory: 2G
+    networks:
+      - obiente-network
+
+  # ============================================================================
   # REDIS CLUSTER (for caching, sessions, job queues)
   # ============================================================================
 
@@ -277,6 +423,12 @@ services:
       DB_USER: ${POSTGRES_USER:-obiente-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
       DB_NAME: ${POSTGRES_DB:-obiente}
+      # Metrics database (TimescaleDB via PgPool)
+      METRICS_DB_HOST: metrics-pgpool
+      METRICS_DB_PORT: 5432
+      METRICS_DB_USER: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
+      METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      METRICS_DB_NAME: ${METRICS_DB_NAME:-obiente_metrics}
       # Redis cluster endpoints
       REDIS_CLUSTER_NODES: redis-1:6379,redis-2:6379,redis-3:6379
       # Logging
@@ -310,6 +462,7 @@ services:
       - /tmp/obiente-deployments:/tmp/obiente-deployments
     depends_on:
       - pgpool
+      - metrics-pgpool
       - redis-1
     deploy:
       mode: global # One instance per node
@@ -524,6 +677,14 @@ volumes:
   patroni_2_data:
     driver: local
   patroni_3_data:
+    driver: local
+
+  # TimescaleDB Patroni
+  metrics_patroni_1_data:
+    driver: local
+  metrics_patroni_2_data:
+    driver: local
+  metrics_patroni_3_data:
     driver: local
 
   # Redis Cluster

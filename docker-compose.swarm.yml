@@ -31,6 +31,35 @@ services:
     networks:
       - obiente-network
 
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
+      POSTGRES_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      POSTGRES_DB: ${METRICS_DB_NAME:-obiente_metrics}
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "1"
+          memory: 1G
+    networks:
+      - obiente-network
+
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
@@ -69,6 +98,11 @@ services:
       DB_USER: ${POSTGRES_USER:-obiente-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
       DB_NAME: ${POSTGRES_DB:-obiente}
+      METRICS_DB_HOST: timescaledb
+      METRICS_DB_PORT: 5432
+      METRICS_DB_USER: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
+      METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      METRICS_DB_NAME: ${METRICS_DB_NAME:-obiente_metrics}
       REDIS_URL: redis://redis:6379
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-debug}
@@ -99,6 +133,7 @@ services:
       - /tmp/obiente-deployments:/tmp/obiente-deployments
     depends_on:
       - postgres
+      - timescaledb
       - redis
     deploy:
       mode: global # One instance per node for local Docker access
@@ -194,6 +229,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  timescaledb_data:
     driver: local
   redis_data:
     driver: local
