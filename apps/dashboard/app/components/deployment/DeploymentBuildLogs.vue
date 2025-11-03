@@ -1,5 +1,4 @@
 <template>
-  <OuiCardBody>
     <OuiLogs
       :logs="formattedLogs"
       :is-loading="isLoading"
@@ -44,7 +43,6 @@
         </div>
       </template>
     </OuiLogs>
-  </OuiCardBody>
 </template>
 
 <script setup lang="ts">
@@ -82,17 +80,42 @@ interface LogLine {
   line: string;
   timestamp: string;
   stderr: boolean;
+  logLevel?: number; // LogLevel enum value from proto
 }
+
+// Convert LogLevel enum to string for OuiLogs
+const logLevelToString = (level?: number): "error" | "warning" | "info" | "debug" | "trace" => {
+  if (!level) return "info";
+  // LogLevel enum: 0=UNSPECIFIED, 1=TRACE, 2=DEBUG, 3=INFO, 4=WARN, 5=ERROR
+  switch (level) {
+    case 5: return "error";
+    case 4: return "warning";
+    case 3: return "info";
+    case 2: return "debug";
+    case 1: return "trace";
+    default: return "info";
+  }
+};
 
 // Convert internal logs to LogEntry format for OuiLogs component
 const formattedLogs = computed<LogEntry[]>(() => {
-  return logs.value.map((log, idx) => ({
-    id: idx,
-    line: log.line,
-    timestamp: log.timestamp,
-    stderr: log.stderr,
-    level: log.stderr ? "error" : "info",
-  }));
+  return logs.value.map((log, idx) => {
+    // Determine log level - use detected level if available, otherwise infer from stderr
+    let level: "error" | "warning" | "info" | "debug" | "trace" | undefined;
+    if (log.logLevel !== undefined) {
+      level = logLevelToString(log.logLevel);
+    } else {
+      level = log.stderr ? "error" : "info";
+    }
+    
+    return {
+      id: idx,
+      line: log.line,
+      timestamp: log.timestamp,
+      stderr: log.stderr,
+      level,
+    };
+  });
 });
 
 const clearLogs = () => {
@@ -139,16 +162,19 @@ const startStream = async () => {
               ).toISOString()
             : new Date().toISOString(),
           stderr: update.stderr || false,
+          logLevel: update.logLevel || undefined, // Include log level from proto
         });
       }
     }
   } catch (error: any) {
-    // Suppress "missing trailer" errors if we successfully received logs
-    // This is a benign Connect/gRPC-Web quirk where streams can end without
-    // proper HTTP trailers, but the stream itself worked correctly
-    const isMissingTrailerError =
+    // Suppress benign stream closure errors if we successfully received logs
+    // These are Connect/gRPC-Web quirks where streams can end without
+    // proper HTTP trailers or end-of-stream markers, but the stream itself worked correctly
+    const isBenignStreamError =
       error.message?.toLowerCase().includes("missing trailer") ||
       error.message?.toLowerCase().includes("trailer") ||
+      error.message?.toLowerCase().includes("missing endstreamresponse") ||
+      error.message?.toLowerCase().includes("endstreamresponse") ||
       error.code === "unknown";
 
     if (error.name === "AbortError") {
@@ -156,18 +182,19 @@ const startStream = async () => {
       return;
     }
 
-    // Only show error if it's not a missing trailer error after successful streaming,
+    // Only show error if it's not a benign stream error after successful streaming,
     // or if it's a real error before receiving any logs
-    if (!isMissingTrailerError || !hasReceivedLogs) {
+    if (!isBenignStreamError || !hasReceivedLogs) {
       console.error("Build log stream error:", error);
       logs.value.push({
         line: `[error] Failed to stream build logs: ${error.message}`,
         timestamp: new Date().toISOString(),
         stderr: true,
+        logLevel: 5, // ERROR
       });
     } else {
       // Log to console but don't show to user - this is expected behavior
-      console.debug("Stream ended with missing trailer (benign):", error.message);
+      console.debug("Stream ended with benign error (expected):", error.message);
     }
   } finally {
     isLoading.value = false;
