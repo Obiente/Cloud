@@ -2,11 +2,13 @@ package deployments
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"api/internal/database"
@@ -53,13 +55,42 @@ func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Depl
 
 	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
 
-	// Use Nixpacks to build application (Railpacks uses Nixpacks under the hood)
-	// Nixpacks will auto-detect the language (supports: Clojure, Cobol, Crystal, C#/.NET,
-	// Dart, Deno, Elixir, F#, Gleam, Go, Haskell, Java, Lunatic, Node, PHP, Python,
-	// Ruby, Rust, Scheme, Staticfile, Swift, Scala, Zig)
-	// and build accordingly with minimal configuration
-	cmd := exec.CommandContext(ctx, "nixpacks", "build", buildDir, "--name", imageName)
-	cmd.Env = getEnvAsStringSlice(config.EnvVars)
+	// Create railpack.toml or nixpacks.toml configuration if needed
+	// Railpack uses railpack.toml (or railpack.json), but can also read nixpacks.toml
+	// For now, create nixpacks.toml for compatibility
+	if err := createNixpacksConfig(buildDir, config.StartCommand, false); err != nil {
+		log.Printf("[Railpacks] Warning: Failed to create nixpacks.toml: %v", err)
+	}
+
+	// Use Railpack (Railway's build tool, separate from nixpacks)
+	// Railpack is a different CLI tool that uses Railway's optimized build process
+	// It uses ghcr.io/railwayapp/nixpacks base images but with different build logic
+	// Use full path to railpack since PATH might not include /usr/local/bin in all contexts
+	railpackPath := "/usr/local/bin/railpack"
+	// First try to find railpack in PATH (preferred)
+	if path, err := exec.LookPath("railpack"); err == nil {
+		railpackPath = path
+	} else if _, err := os.Stat(railpackPath); err != nil {
+		// If PATH lookup fails and full path doesn't exist, return error
+		return &BuildResult{Success: false, Error: fmt.Errorf("railpack executable not found in PATH or %s. Please ensure railpack is installed in the Docker image", railpackPath)}, nil
+	}
+	cmd := exec.CommandContext(ctx, railpackPath, "build", buildDir, "--name", imageName)
+	envVars := getEnvAsStringSlice(config.EnvVars)
+	
+	// Railpack requires BUILDKIT_HOST to be set for BuildKit builds
+	// Check if buildx is available; if not, disable BuildKit as fallback
+	if !isBuildxAvailable(ctx) {
+		log.Printf("[Railpacks] Buildx not available, disabling BuildKit")
+		envVars = append(envVars, "DOCKER_BUILDKIT=0")
+	} else {
+		// Enable BuildKit and ensure BuildKit daemon container is running
+		// Railpack uses BuildKit for building, so we need to provide a BuildKit daemon
+		// Start buildkit container if it doesn't exist or isn't running
+		startBuildkitContainer(ctx)
+		envVars = append(envVars, "DOCKER_BUILDKIT=1")
+		envVars = append(envVars, "BUILDKIT_HOST=docker-container://buildkit")
+	}
+	cmd.Env = envVars
 
 	// Use log writers if provided, otherwise fallback to os.Stdout/Stderr
 	if config.LogWriter != nil {
@@ -74,7 +105,15 @@ func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Depl
 	}
 
 	if err := cmd.Run(); err != nil {
-		return &BuildResult{Success: false, Error: fmt.Errorf("nixpacks build failed: %w", err)}, nil
+		return &BuildResult{Success: false, Error: fmt.Errorf("railpack build failed: %w", err)}, nil
+	}
+
+	// Get image size
+	var imageSize int64
+	if size, err := getImageSize(ctx, imageName); err != nil {
+		log.Printf("[Railpacks] Warning: Failed to get image size: %v", err)
+	} else {
+		imageSize = size
 	}
 
 	// Auto-detect port based on detected language
@@ -85,9 +124,10 @@ func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Depl
 	}
 
 	return &BuildResult{
-		ImageName: imageName,
-		Port:      port,
-		Success:   true,
+		ImageName:      imageName,
+		ImageSizeBytes: imageSize,
+		Port:           port,
+		Success:        true,
 	}, nil
 }
 
@@ -243,9 +283,24 @@ func (s *NixpacksStrategy) Build(ctx context.Context, deployment *database.Deplo
 
 	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
 
+	// Create nixpacks.toml with start command if provided
+	// Use standard nixpacks provider (not Railway's)
+	if err := createNixpacksConfig(buildDir, config.StartCommand, false); err != nil {
+		log.Printf("[Nixpacks] Warning: Failed to create nixpacks.toml: %v", err)
+	}
+
 	// Use Nixpacks to build application
 	cmd := exec.CommandContext(ctx, "nixpacks", "build", buildDir, "--name", imageName)
-	cmd.Env = getEnvAsStringSlice(config.EnvVars)
+	envVars := getEnvAsStringSlice(config.EnvVars)
+	// Check if buildx is available; if not, disable BuildKit as fallback
+	if !isBuildxAvailable(ctx) {
+		log.Printf("[Nixpacks] Buildx not available, disabling BuildKit")
+		envVars = append(envVars, "DOCKER_BUILDKIT=0")
+	} else {
+		// Enable BuildKit for faster, more efficient builds
+		envVars = append(envVars, "DOCKER_BUILDKIT=1")
+	}
+	cmd.Env = envVars
 
 	// Use log writers if provided, otherwise fallback to os.Stdout/Stderr
 	if config.LogWriter != nil {
@@ -263,14 +318,239 @@ func (s *NixpacksStrategy) Build(ctx context.Context, deployment *database.Deplo
 		return &BuildResult{Success: false, Error: fmt.Errorf("nixpacks build failed: %w", err)}, nil
 	}
 
+	// Get image size
+	var imageSize int64
+	if size, err := getImageSize(ctx, imageName); err != nil {
+		log.Printf("[Nixpacks] Warning: Failed to get image size: %v", err)
+	} else {
+		imageSize = size
+	}
+
 	// Auto-detect port based on framework
 	port := s.detectPort(buildDir, config.Port)
 
 	return &BuildResult{
-		ImageName: imageName,
-		Port:      port,
-		Success:   true,
+		ImageName:      imageName,
+		ImageSizeBytes: imageSize,
+		Port:           port,
+		Success:        true,
 	}, nil
+}
+
+// isBuildxAvailable checks if Docker buildx is available on the host system
+// Since we mount the Docker socket, we check the host's Docker installation
+func isBuildxAvailable(ctx context.Context) bool {
+	// Try to check if buildx is available via docker buildx version
+	cmd := exec.CommandContext(ctx, "docker", "buildx", "version")
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	if err := cmd.Run(); err != nil {
+		return false
+	}
+	return true
+}
+
+// checkBuildkitContainer checks if a BuildKit container named "buildkit" is running
+func checkBuildkitContainer(ctx context.Context) bool {
+	cmd := exec.CommandContext(ctx, "docker", "ps", "--filter", "name=buildkit", "--format", "{{.Names}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(output)) == "buildkit"
+}
+
+// startBuildkitContainer starts a BuildKit daemon container if it doesn't exist
+func startBuildkitContainer(ctx context.Context) {
+	// Check if buildkit container already exists (running or stopped)
+	cmd := exec.CommandContext(ctx, "docker", "ps", "-a", "--filter", "name=buildkit", "--format", "{{.Names}}")
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("[Railpacks] Failed to check for buildkit container: %v", err)
+		return
+	}
+	
+	if strings.TrimSpace(string(output)) != "" {
+		// Container exists, try to start it if it's stopped
+		startCmd := exec.CommandContext(ctx, "docker", "start", "buildkit")
+		if err := startCmd.Run(); err != nil {
+			log.Printf("[Railpacks] Failed to start existing buildkit container: %v", err)
+		}
+		return
+	}
+	
+	// Container doesn't exist, create and start it
+	log.Printf("[Railpacks] Starting BuildKit daemon container...")
+	createCmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--privileged", "-d", "--name", "buildkit", "moby/buildkit:latest")
+	if err := createCmd.Run(); err != nil {
+		log.Printf("[Railpacks] Failed to start BuildKit container: %v. Railpack may fail.", err)
+	}
+}
+
+// createNixpacksConfig creates a nixpacks.toml file with the start command and Node.js version if provided
+// This is used by both NixpacksStrategy and RailpacksStrategy
+// If startCommand is empty, it attempts to detect a default from the repository
+// If Node.js version is not specified, it attempts to detect from package.json engines field
+// useRailwayProvider: if true, configures for Railway's Railpack provider (uses Railway base images)
+func createNixpacksConfig(buildDir, startCommand string, useRailwayProvider bool) error {
+	nixpacksConfigPath := filepath.Join(buildDir, "nixpacks.toml")
+	
+	// Detect start command if not provided
+	if startCommand == "" {
+		startCommand = detectDefaultStartCommand(buildDir)
+	}
+	
+	// Detect Node.js version requirement from package.json
+	nodeVersion := detectNodeVersion(buildDir)
+	
+	// Build nixpacks.toml content
+	var configParts []string
+	
+	// Add provider configuration for Railway Railpack if requested
+	if useRailwayProvider {
+		// Railway's Railpack uses railway provider which selects Railway's optimized base images
+		// This ensures we use ghcr.io/railwayapp/nixpacks base images instead of standard ones
+		configParts = append(configParts, "[provider]\nname = \"railway\"\n")
+	}
+	
+	// Add Node.js version if detected
+	if nodeVersion != "" {
+		configParts = append(configParts, fmt.Sprintf("[variables]\nNODE_VERSION = %q\n", nodeVersion))
+	}
+	
+	// Add start command if provided
+	if startCommand != "" {
+		configParts = append(configParts, fmt.Sprintf("[start]\ncmd = %q\n", startCommand))
+	}
+	
+	// If no configuration needed, don't create file (let nixpacks auto-detect)
+	if len(configParts) == 0 {
+		return nil
+	}
+	
+	configContent := strings.Join(configParts, "\n")
+	
+	if err := os.WriteFile(nixpacksConfigPath, []byte(configContent), 0644); err != nil {
+		return fmt.Errorf("failed to write nixpacks.toml: %w", err)
+	}
+	
+	log.Printf("[Nixpacks] Created nixpacks.toml with Node.js version: %s, start command: %s", nodeVersion, startCommand)
+	return nil
+}
+
+// detectNodeVersion attempts to detect the required Node.js version from package.json
+// Returns the version string (e.g., "18.20.8" or "20") or empty string if not found
+func detectNodeVersion(buildDir string) string {
+	packageJsonPath := filepath.Join(buildDir, "package.json")
+	if !fileExists(packageJsonPath) {
+		return ""
+	}
+	
+	content, err := os.ReadFile(packageJsonPath)
+	if err != nil {
+		return ""
+	}
+	
+	// Parse package.json to extract engines.node
+	var pkg struct {
+		Engines struct {
+			Node string `json:"node"`
+		} `json:"engines"`
+	}
+	
+	if err := json.Unmarshal(content, &pkg); err != nil {
+		// If JSON parsing fails, try simple string matching as fallback
+		contentStr := string(content)
+		if strings.Contains(contentStr, `"engines"`) && strings.Contains(contentStr, `"node"`) {
+			// Try to extract version using regex as fallback
+			// Look for patterns like "node": ">=18.20.8" or "node": "18.x"
+			re := regexp.MustCompile(`"node"\s*:\s*"([^"]+)"`)
+			matches := re.FindStringSubmatch(contentStr)
+			if len(matches) > 1 {
+				return normalizeNodeVersion(matches[1])
+			}
+		}
+		return ""
+	}
+	
+	if pkg.Engines.Node != "" {
+		return normalizeNodeVersion(pkg.Engines.Node)
+	}
+	
+	return ""
+}
+
+// normalizeNodeVersion normalizes Node.js version strings to a format nixpacks accepts
+// Handles patterns like ">=18.20.8", "18.x", "20", "^18.20.8", "~18.20.8"
+// Returns the minimum version that satisfies the constraint
+func normalizeNodeVersion(version string) string {
+	// Remove common version prefixes
+	version = strings.TrimSpace(version)
+	
+	// Handle ">=" constraints - take the minimum version
+	if strings.HasPrefix(version, ">=") {
+		version = strings.TrimPrefix(version, ">=")
+		return version // Return full version like "18.20.8"
+	}
+	
+	// Remove other prefixes that don't affect minimum version
+	version = strings.TrimPrefix(version, "^")
+	version = strings.TrimPrefix(version, "~")
+	version = strings.TrimPrefix(version, "=")
+	
+	// Handle "x" versions like "18.x" or "20.x" -> convert to major version
+	if strings.Contains(version, ".x") {
+		parts := strings.Split(version, ".")
+		if len(parts) > 0 {
+			return parts[0]
+		}
+	}
+	
+	// If it's a full version string like "18.20.8", return as-is
+	// If it's just major.minor like "18.20", that should work too
+	// For major only like "20", return as-is
+	
+	return version
+}
+
+// detectDefaultStartCommand attempts to detect a default start command from repository files
+func detectDefaultStartCommand(buildDir string) string {
+	packageJsonPath := filepath.Join(buildDir, "package.json")
+	if fileExists(packageJsonPath) {
+		// Try to read package.json and extract start script
+		content, err := os.ReadFile(packageJsonPath)
+		if err == nil {
+			contentStr := string(content)
+			// Simple detection: look for "start" script
+			if strings.Contains(contentStr, `"start"`) {
+				// Fallback: use npm/pnpm/yarn start
+				// Check for lockfiles to determine package manager
+				if fileExists(filepath.Join(buildDir, "pnpm-lock.yaml")) {
+					return "pnpm start"
+				}
+				if fileExists(filepath.Join(buildDir, "yarn.lock")) {
+					return "yarn start"
+				}
+				return "npm start"
+			}
+		}
+	}
+	
+	// Check for other common files
+	if fileExists(filepath.Join(buildDir, "main.py")) {
+		return "python main.py"
+	}
+	if fileExists(filepath.Join(buildDir, "app.py")) {
+		return "python app.py"
+	}
+	if fileExists(filepath.Join(buildDir, "server.js")) {
+		return "node server.js"
+	}
+	if fileExists(filepath.Join(buildDir, "index.js")) {
+		return "node index.js"
+	}
+	
+	return ""
 }
 
 func (s *NixpacksStrategy) detectPort(repoPath string, defaultPort int) int {
@@ -346,13 +626,22 @@ func (s *DockerfileStrategy) Build(ctx context.Context, deployment *database.Dep
 		return &BuildResult{Success: false, Error: fmt.Errorf("docker build failed: %w", err)}, nil
 	}
 
+	// Get image size
+	var imageSize int64
+	if size, err := getImageSize(ctx, imageName); err != nil {
+		log.Printf("[Dockerfile] Warning: Failed to get image size: %v", err)
+	} else {
+		imageSize = size
+	}
+
 	// Try to detect port from Dockerfile EXPOSE directive
 	port := s.detectPortFromDockerfile(dockerfilePath, config.Port)
 
 	return &BuildResult{
-		ImageName: imageName,
-		Port:      port,
-		Success:   true,
+		ImageName:      imageName,
+		ImageSizeBytes: imageSize,
+		Port:           port,
+		Success:        true,
 	}, nil
 }
 

@@ -93,7 +93,7 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 		nodeID = "local-" + info.Name
 	}
 
-	return &DeploymentManager{
+	dm := &DeploymentManager{
         dockerClient: cli,
         dockerHelper: helper,
 		nodeSelector: nodeSelector,
@@ -101,7 +101,46 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 		networkName:  "obiente-network",
 		nodeID:       nodeID,
 		nodeHostname: info.Name,
-	}, nil
+	}
+	
+	// Ensure the network exists
+	if err := dm.ensureNetwork(context.Background()); err != nil {
+		return nil, fmt.Errorf("failed to ensure network exists: %w", err)
+	}
+	
+	return dm, nil
+}
+
+// ensureNetwork ensures the obiente-network exists, creating it if necessary
+func (dm *DeploymentManager) ensureNetwork(ctx context.Context) error {
+	// Use exec to check and create network since Docker API types may vary
+	// Check if network exists
+	checkCmd := exec.CommandContext(ctx, "docker", "network", "ls", "--filter", fmt.Sprintf("name=%s", dm.networkName), "--format", "{{.Name}}")
+	output, err := checkCmd.Output()
+	if err != nil {
+		log.Printf("[DeploymentManager] Warning: Failed to check for network: %v", err)
+	}
+	
+	if strings.TrimSpace(string(output)) == dm.networkName {
+		log.Printf("[DeploymentManager] Network %s already exists", dm.networkName)
+		return nil
+	}
+	
+	// Network doesn't exist, create it
+	log.Printf("[DeploymentManager] Creating network %s", dm.networkName)
+	createCmd := exec.CommandContext(ctx, "docker", "network", "create", "--driver", "bridge", "--label", "com.obiente.managed=true", dm.networkName)
+	if err := createCmd.Run(); err != nil {
+		// Check if network was created by another process
+		output, checkErr := checkCmd.Output()
+		if checkErr == nil && strings.TrimSpace(string(output)) == dm.networkName {
+			log.Printf("[DeploymentManager] Network %s was created by another process", dm.networkName)
+			return nil
+		}
+		return fmt.Errorf("failed to create network: %w", err)
+	}
+	
+	log.Printf("[DeploymentManager] Successfully created network %s", dm.networkName)
+	return nil
 }
 
 // CreateDeployment creates a new deployment on the cluster
