@@ -10,13 +10,35 @@
 
     <!-- Account/Integration Selector -->
     <OuiSelect
-      v-if="availableIntegrations.length > 1"
+      v-if="isLoadingIntegrations"
+      :items="[]"
+      label="GitHub Account"
+      placeholder="Loading accounts..."
+      disabled
+    />
+    <OuiSelect
+      v-else-if="availableIntegrations.length > 1"
       v-model="selectedIntegrationId"
       :items="integrationOptions"
       label="GitHub Account"
       placeholder="Select GitHub account..."
       @update:model-value="handleIntegrationChange"
     />
+    <OuiText
+      v-else-if="availableIntegrations.length === 0"
+      size="xs"
+      color="secondary"
+    >
+      No GitHub accounts available. Please connect a GitHub account in Settings.
+    </OuiText>
+    <OuiText
+      v-else-if="availableIntegrations.length === 1"
+      size="xs"
+      color="secondary"
+    >
+      Using account: {{ availableIntegrations[0]?.username }} 
+      {{ availableIntegrations[0]?.isUser ? '(Personal)' : `(${availableIntegrations[0]?.obienteOrgName || 'Organization'})` }}
+    </OuiText>
 
     <OuiCombobox
       v-model="selectedRepo"
@@ -50,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from "vue";
+import { ref, computed, watch, onMounted, nextTick } from "vue";
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 import { useConnectClient } from "~/lib/connect-client";
 import { DeploymentService } from "@obiente/proto";
@@ -115,6 +137,7 @@ const branchOptions = computed(() =>
 
 const loadAvailableIntegrations = async () => {
   isLoadingIntegrations.value = true;
+  error.value = "";
   try {
     const res = await client.listAvailableGitHubIntegrations({
       organizationId: props.organizationId || "",
@@ -135,8 +158,14 @@ const loadAvailableIntegrations = async () => {
         emit("update:integrationId", firstIntegration.id);
       }
     }
+
+    // Show error if no integrations found
+    if (availableIntegrations.value.length === 0) {
+      error.value = "No GitHub accounts connected. Please connect a GitHub account in Settings > Integrations.";
+    }
   } catch (err: any) {
     console.error("Failed to load GitHub integrations:", err);
+    error.value = "Failed to load GitHub accounts. Please ensure your GitHub account is connected in Settings.";
     availableIntegrations.value = [];
   } finally {
     isLoadingIntegrations.value = false;
@@ -157,9 +186,20 @@ const handleIntegrationChange = () => {
 };
 
 const refreshRepos = async () => {
+  if (!selectedIntegrationId.value && availableIntegrations.value.length > 0) {
+    // Wait for integration to be selected
+    return;
+  }
+  
   isLoading.value = true;
   error.value = "";
   try {
+    if (availableIntegrations.value.length === 0) {
+      error.value = "No GitHub accounts available. Please connect a GitHub account in Settings > Integrations.";
+      isLoading.value = false;
+      return;
+    }
+
     const res = await client.listGitHubRepos({
       organizationId: props.organizationId || "",
       integrationId: selectedIntegrationId.value || undefined,
@@ -168,11 +208,15 @@ const refreshRepos = async () => {
     });
     repos.value = res.repos || [];
     if (repos.value.length === 0) {
-      error.value = "No repositories found. Please connect your GitHub account or organization.";
+      const integration = availableIntegrations.value.find(i => i.id === selectedIntegrationId.value);
+      const accountName = integration?.username || "this account";
+      error.value = `No repositories found for ${accountName}. Make sure the account has access to repositories.`;
     }
   } catch (err: any) {
     console.error("Failed to load repos:", err);
-    error.value = "Failed to load GitHub repositories. Please ensure your GitHub account or organization is connected.";
+    const integration = availableIntegrations.value.find(i => i.id === selectedIntegrationId.value);
+    const accountName = integration?.username || "the selected account";
+    error.value = `Failed to load repositories for ${accountName}. ${err.message || "Please ensure the GitHub account is properly connected."}`;
     repos.value = [];
   } finally {
     isLoading.value = false;
@@ -260,11 +304,6 @@ watch(selectedBranch, (newBranch) => {
   emit("update:branch", newBranch || "");
 });
 
-// Watch selectedIntegrationId changes and emit to parent
-watch(selectedIntegrationId, (newId) => {
-  emit("update:integrationId", newId || "");
-});
-
 // Watch selectedRepo changes to fetch branches when repository changes
 // This ensures branches are fetched whenever the repo changes via combobox selection
 watch(selectedRepo, async (newRepo, oldRepo) => {
@@ -288,13 +327,25 @@ watch(selectedRepo, async (newRepo, oldRepo) => {
   }
 }, { immediate: true });
 
-watch(() => props.organizationId, () => {
+watch(() => props.organizationId, async () => {
   // Reload integrations when organization changes
-  loadAvailableIntegrations();
+  await loadAvailableIntegrations();
+  // Repos will be refreshed when integration changes
 });
+
+watch(selectedIntegrationId, async (newId, oldId) => {
+  // Emit integration ID change to parent
+  emit("update:integrationId", newId || "");
+  // Refresh repos when integration changes
+  if (newId && newId !== oldId) {
+    await refreshRepos();
+  }
+}, { immediate: true });
 
 onMounted(async () => {
   await loadAvailableIntegrations();
+  // Wait a tick for integration to be selected if auto-selected
+  await nextTick();
   await refreshRepos();
   // Watcher with immediate: true will handle fetching branches for initial value
 });

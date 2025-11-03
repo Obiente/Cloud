@@ -93,14 +93,24 @@
             >
               <OuiCardBody>
                 <OuiStack gap="sm">
-                  <OuiFlex align="center" gap="sm">
-                    <Icon 
-                      name="uil:check-circle" 
-                      class="h-5 w-5 text-success shrink-0" 
-                    />
-                    <OuiText size="sm" weight="semibold" color="success">
-                      Repository Connected
-                    </OuiText>
+                  <OuiFlex justify="between" align="center">
+                    <OuiFlex align="center" gap="sm">
+                      <Icon 
+                        name="uil:check-circle" 
+                        class="h-5 w-5 text-success shrink-0" 
+                      />
+                      <OuiText size="sm" weight="semibold" color="success">
+                        Repository Connected
+                      </OuiText>
+                    </OuiFlex>
+                    <OuiButton
+                      variant="ghost"
+                      size="sm"
+                      @click="handleChangeRepository"
+                    >
+                      <PencilIcon class="h-4 w-4 mr-1" />
+                      Change
+                    </OuiButton>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm" class="pl-7">
                     <Icon
@@ -129,7 +139,7 @@
             </OuiCard>
 
             <!-- Repository Source Selection -->
-            <OuiStack gap="md">
+            <OuiStack v-if="!config.repositoryUrl || config.repositoryUrl.trim() === ''" gap="md">
               <OuiText as="h4" size="sm" weight="semibold">Repository Source</OuiText>
               
               <OuiRadioGroup 
@@ -181,7 +191,7 @@
                   v-model="config.repositoryUrl"
                   label="Repository URL"
                   placeholder="https://github.com/org/repo or https://gitlab.com/org/repo"
-                  @update:model-value="markConfigDirty"
+                  @update:model-value="handleManualUrlChange"
                 />
                 <OuiInput
                   v-model="config.branch"
@@ -292,13 +302,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, watchEffect, computed, watch, onMounted } from "vue";
-import { LinkIcon, TrashIcon } from "@heroicons/vue/24/outline";
+import { LinkIcon, TrashIcon, PencilIcon } from "@heroicons/vue/24/outline";
 import type { Deployment } from "@obiente/proto";
-import { DeploymentType, Environment as EnvEnum, BuildStrategy } from "@obiente/proto";
+import { DeploymentType, Environment as EnvEnum, BuildStrategy, DeploymentService } from "@obiente/proto";
 import { useDeploymentActions } from "~/composables/useDeploymentActions";
 import { useRoute, useRouter } from "vue-router";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { useDialog } from "~/composables/useDialog";
+import { useConnectClient } from "~/lib/connect-client";
 import GitHubRepoPicker from "./GitHubRepoPicker.vue";
 import OuiRadioGroup from "~/components/oui/RadioGroup.vue";
 
@@ -313,6 +324,7 @@ const deploymentActions = useDeploymentActions();
 const orgsStore = useOrganizationsStore();
 const { showAlert, showConfirm } = useDialog();
 const organizationId = computed(() => orgsStore.currentOrgId || "");
+const client = useConnectClient(DeploymentService);
 
 // General settings (environment, groups)
 const localEnvironment = ref<string>("");
@@ -333,13 +345,36 @@ const githubIntegrationId = ref<string>("");
 const isGitHubConnected = ref(false);
 const buildStrategy = ref<BuildStrategy>(BuildStrategy.BUILD_STRATEGY_UNSPECIFIED);
 
+// Initialize config with values from deployment for SSR compatibility
+// This ensures server and client render the same content initially
+const getInitialValue = (key: keyof Deployment) => {
+  const deployment = props.deployment;
+  if (!deployment) return "";
+  switch (key) {
+    case "repositoryUrl":
+      return deployment.repositoryUrl || (deployment as any)?.repository_url || "";
+    case "branch":
+      return deployment.branch || "main";
+    case "installCommand":
+      return deployment.installCommand ?? "";
+    case "buildCommand":
+      return deployment.buildCommand ?? "";
+    case "dockerfilePath":
+      return deployment.dockerfilePath ?? "";
+    case "composeFilePath":
+      return deployment.composeFilePath ?? "";
+    default:
+      return "";
+  }
+};
+
 const config = reactive({
-  repositoryUrl: "",
-  branch: "main",
-  installCommand: "",
-  buildCommand: "",
-  dockerfilePath: "",
-  composeFilePath: "",
+  repositoryUrl: getInitialValue("repositoryUrl"),
+  branch: getInitialValue("branch"),
+  installCommand: getInitialValue("installCommand"),
+  buildCommand: getInitialValue("buildCommand"),
+  dockerfilePath: getInitialValue("dockerfilePath"),
+  composeFilePath: getInitialValue("composeFilePath"),
 });
 
 const environmentOptions = [
@@ -348,17 +383,24 @@ const environmentOptions = [
   { label: "Development", value: String(EnvEnum.DEVELOPMENT) },
 ];
 
+// Track if we're manually clearing the repository
+const isClearingRepository = ref(false);
+// Track if user has explicitly cleared the repository (persists until they save or select a new one)
+const userClearedRepository = ref(false);
+
 // Initialize from deployment
 watchEffect(() => {
-  if (props.deployment) {
+  if (props.deployment && !isClearingRepository.value) {
     // General settings
     localEnvironment.value = String(props.deployment.environment ?? EnvEnum.PRODUCTION);
     const deploymentGroups = (props.deployment as any).groups || (props.deployment as any).group ? [(props.deployment as any).group].filter(Boolean) : [];
     localGroups.value = Array.isArray(deploymentGroups) ? deploymentGroups : [];
     
-    // Config settings
+    // Config settings - only set if we're not clearing and user hasn't explicitly cleared it
     const repoUrl = props.deployment.repositoryUrl || (props.deployment as any).repository_url || "";
-    config.repositoryUrl = repoUrl;
+    if (!isClearingRepository.value && !userClearedRepository.value) {
+      config.repositoryUrl = repoUrl;
+    }
     config.branch = props.deployment.branch !== undefined && props.deployment.branch !== null 
       ? props.deployment.branch 
       : "main";
@@ -369,7 +411,9 @@ watchEffect(() => {
     config.buildCommand = props.deployment.buildCommand ?? "";
     config.dockerfilePath = props.deployment.dockerfilePath ?? "";
     config.composeFilePath = props.deployment.composeFilePath ?? "";
-    githubIntegrationId.value = props.deployment.githubIntegrationId ?? "";
+    if (!isClearingRepository.value && !userClearedRepository.value) {
+      githubIntegrationId.value = props.deployment.githubIntegrationId ?? "";
+    }
     
     // Reset dirty flags
     isGeneralDirty.value = false;
@@ -379,29 +423,79 @@ watchEffect(() => {
     error.value = "";
     configError.value = "";
     
-    // Determine repository source
-    if (config.repositoryUrl && config.repositoryUrl.includes("github.com")) {
-      repositorySource.value = "github";
-      const match = config.repositoryUrl.match(/github\.com\/([^\/]+\/[^\/]+)/);
-      if (match && match[1]) {
-        selectedGitHubRepo.value = match[1].replace(/\.git$/, "");
+    // Determine repository source - only if not clearing and user hasn't explicitly cleared
+    if (!isClearingRepository.value && !userClearedRepository.value) {
+      if (config.repositoryUrl && config.repositoryUrl.includes("github.com")) {
+        repositorySource.value = "github";
+        const match = config.repositoryUrl.match(/github\.com\/([^\/]+\/[^\/]+)/);
+        if (match && match[1]) {
+          selectedGitHubRepo.value = match[1].replace(/\.git$/, "");
+        }
+      } else if (config.repositoryUrl) {
+        repositorySource.value = "manual";
       }
-    } else if (config.repositoryUrl) {
-      repositorySource.value = "manual";
     }
   }
 });
 
 const handleGitHubRepoSelected = (repoFullName: string) => {
   if (repoFullName) {
+    // User selected a repo, so clear the "user cleared" flag
+    userClearedRepository.value = false;
+    selectedGitHubRepo.value = repoFullName;
     config.repositoryUrl = `https://github.com/${repoFullName}`;
+    // Ensure repository source is set to GitHub when a repo is selected
+    if (repositorySource.value !== "github") {
+      repositorySource.value = "github";
+    }
+    markConfigDirty();
+    console.log("[DeploymentSettings] GitHub repo selected:", repoFullName, "URL:", config.repositoryUrl);
+  } else {
+    selectedGitHubRepo.value = "";
+    config.repositoryUrl = "";
     markConfigDirty();
   }
 };
 
 const handleIntegrationIdChange = (id: string) => {
-  githubIntegrationId.value = id;
+  if (githubIntegrationId.value !== id) {
+    githubIntegrationId.value = id;
+    markConfigDirty();
+    console.log("[DeploymentSettings] GitHub integration ID changed to:", id);
+  }
+};
+
+const handleManualUrlChange = () => {
+  // User typed a URL manually, clear the "user cleared" flag
+  if (config.repositoryUrl && config.repositoryUrl.trim()) {
+    userClearedRepository.value = false;
+  }
   markConfigDirty();
+};
+
+const handleChangeRepository = () => {
+  // Set flags to prevent watchEffect from resetting values
+  isClearingRepository.value = true;
+  userClearedRepository.value = true;
+  
+  // Clear the repository URL and selected repo to show the source selection
+  config.repositoryUrl = "";
+  selectedGitHubRepo.value = "";
+  githubIntegrationId.value = "";
+  repositorySource.value = "manual"; // Reset to manual, user can choose again
+  markConfigDirty();
+  
+  // Reset the clearing flag after a tick to allow normal watchEffect behavior for other fields
+  // But keep userClearedRepository true until user saves or selects a new repo
+  setTimeout(() => {
+    isClearingRepository.value = false;
+  }, 100);
+  
+  console.log("[DeploymentSettings] Changed repository - clearing values:", {
+    repositoryUrl: config.repositoryUrl,
+    selectedGitHubRepo: selectedGitHubRepo.value,
+    repositorySource: repositorySource.value
+  });
 };
 
 watch(selectedGitHubRepo, (repo) => {
@@ -433,20 +527,12 @@ const navigateToGitHubSettings = () => {
 
 const checkGitHubConnection = async () => {
   try {
-    const { useConnectClient } = await import("~/lib/connect-client");
-    const { AuthService, ListGitHubIntegrationsRequestSchema } = await import("@obiente/proto");
-    const { create } = await import("@bufbuild/protobuf");
+    const response = await client.listAvailableGitHubIntegrations({
+      organizationId: organizationId.value || "",
+    });
     
-    const client = useConnectClient(AuthService);
-    const request = create(ListGitHubIntegrationsRequestSchema, {});
-    const response = await client.listGitHubIntegrations(request);
-    
-    const hasUserConnection = response.integrations.some(i => i.isUser === true);
-    const hasOrgConnection = organizationId.value && response.integrations.some(
-      i => i.isUser === false && i.organizationId === organizationId.value
-    );
-    
-    isGitHubConnected.value = hasUserConnection || (hasOrgConnection === true);
+    // Check if there are any available integrations for this organization/user
+    isGitHubConnected.value = response.integrations && response.integrations.length > 0;
   } catch (err) {
     console.error("Failed to check GitHub connection:", err);
     isGitHubConnected.value = false;
@@ -592,10 +678,7 @@ async function saveConfig() {
   configSuccess.value = false;
 
   try {
-    await deploymentActions.updateDeployment(String(route.params.id), {
-      repositoryUrl: config.repositoryUrl !== undefined && config.repositoryUrl !== null
-        ? (config.repositoryUrl || "")
-        : undefined,
+    const updates: any = {
       branch: config.branch !== undefined && config.branch !== null
         ? config.branch
         : undefined,
@@ -606,8 +689,41 @@ async function saveConfig() {
       installCommand: config.installCommand || undefined,
       dockerfilePath: config.dockerfilePath || undefined,
       composeFilePath: config.composeFilePath || undefined,
-      githubIntegrationId: githubIntegrationId.value || undefined,
+    };
+
+    // Always include repositoryUrl if we have any indication of a repo
+    const repoUrl = config.repositoryUrl?.trim() || "";
+    const hasSelectedRepo = selectedGitHubRepo.value && selectedGitHubRepo.value.trim() !== "";
+    
+    if (repoUrl !== "" || hasSelectedRepo) {
+      // Use the URL from config if available, otherwise construct from selected repo
+      updates.repositoryUrl = repoUrl !== "" 
+        ? repoUrl 
+        : (hasSelectedRepo ? `https://github.com/${selectedGitHubRepo.value}` : "");
+    }
+
+    // Always include githubIntegrationId if it exists (even if empty string, backend will handle it)
+    // The value might be empty string initially, so we check if the ref itself has been set
+    if (githubIntegrationId.value !== undefined && githubIntegrationId.value !== null) {
+      const trimmed = githubIntegrationId.value.trim();
+      // Include it even if empty - the composable will convert empty to undefined
+      updates.githubIntegrationId = trimmed;
+    }
+
+    console.log("[DeploymentSettings] Saving config:", {
+      repositoryUrl: updates.repositoryUrl,
+      branch: updates.branch,
+      githubIntegrationId: updates.githubIntegrationId,
+      selectedGitHubRepo: selectedGitHubRepo.value,
+      configRepositoryUrl: config.repositoryUrl,
+      githubIntegrationIdValue: githubIntegrationId.value,
+      allUpdates: updates,
     });
+
+    await deploymentActions.updateDeployment(String(route.params.id), updates);
+    
+    // Reset user cleared flag after successful save
+    userClearedRepository.value = false;
     
     await refreshNuxtData(`deployment-${route.params.id}`);
     

@@ -238,14 +238,24 @@ export function useDeploymentActions(organizationId: string = "default") {
              };
              
              if (updates.name !== undefined) request.name = updates.name;
-             if (updates.repositoryUrl !== undefined) request.repositoryUrl = updates.repositoryUrl;
+             // Include repositoryUrl if provided (convert empty string to undefined for backend)
+             if (updates.repositoryUrl !== undefined) {
+               request.repositoryUrl = updates.repositoryUrl && updates.repositoryUrl.trim() !== "" 
+                 ? updates.repositoryUrl.trim() 
+                 : undefined;
+             }
              if (updates.branch !== undefined) request.branch = updates.branch;
              if (updates.buildStrategy !== undefined) request.buildStrategy = updates.buildStrategy;
              if (updates.buildCommand !== undefined) request.buildCommand = updates.buildCommand;
              if (updates.installCommand !== undefined) request.installCommand = updates.installCommand;
              if (updates.dockerfilePath !== undefined) request.dockerfilePath = updates.dockerfilePath;
              if (updates.composeFilePath !== undefined) request.composeFilePath = updates.composeFilePath;
-             if (updates.githubIntegrationId !== undefined) request.githubIntegrationId = updates.githubIntegrationId;
+             // Include githubIntegrationId if provided
+             if (updates.githubIntegrationId !== undefined) {
+               request.githubIntegrationId = updates.githubIntegrationId && updates.githubIntegrationId.trim() !== ""
+                 ? updates.githubIntegrationId.trim()
+                 : undefined;
+             }
              if (updates.environment !== undefined) request.environment = updates.environment;
              // Always include groups if provided (even if empty array) so backend can clear it
              if (updates.groups !== undefined) {

@@ -23,6 +23,21 @@
         </OuiCardBody>
       </OuiCard>
 
+      <!-- Error State -->
+      <OuiCard v-else-if="error && !isLoading" variant="outline" class="border-danger">
+        <OuiCardBody>
+          <OuiStack gap="sm">
+            <OuiText size="sm" weight="medium" color="danger">
+              Error Loading Accounts
+            </OuiText>
+            <OuiText size="xs" color="secondary">{{ error }}</OuiText>
+            <OuiButton size="sm" variant="ghost" @click="loadIntegrations">
+              Retry
+            </OuiButton>
+          </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
+
       <!-- Connected Accounts List -->
       <div v-else-if="integrations.length > 0">
         <OuiStack gap="md">
@@ -344,7 +359,7 @@
               </ul>
             </OuiStack>
 
-            <OuiText v-if="error" size="xs" color="danger">{{ error }}</OuiText>
+            <!-- Error is shown in dedicated error card above -->
           </OuiStack>
         </OuiCardBody>
       </OuiCard>
@@ -389,7 +404,7 @@
       connectedAt?: { seconds: number; nanos: number };
     }>
   >([]);
-  const isLoading = ref(true);
+  const isLoading = ref(false);
   const isConnecting = ref(false);
   const isDisconnecting = ref(false);
   const error = ref("");
@@ -417,9 +432,15 @@
       const orgId = route.query.orgId;
 
       if (success === "true" && username) {
-        // Successfully connected - reload integrations
+        // Successfully connected - reload integrations with a small delay to ensure backend processed it
+        await new Promise(resolve => setTimeout(resolve, 500));
         await loadIntegrations();
         error.value = "";
+        // Show success message briefly
+        const successMsg = orgId 
+          ? `Successfully connected GitHub organization to ${orgId}`
+          : `Successfully connected GitHub account: ${username}`;
+        console.log("[SettingsIntegrations]", successMsg);
         // Clean up URL
         router.replace({ query: { tab: route.query.tab } });
       } else if (errorParam) {
@@ -465,23 +486,26 @@
       const request = create(ListGitHubIntegrationsRequestSchema, {});
       const response = await client.listGitHubIntegrations(request);
 
-      integrations.value = response.integrations.map((i) => ({
+      integrations.value = (response.integrations || []).map((i) => ({
         id: i.id,
-        username: i.username,
-        scope: i.scope,
-        isUser: i.isUser,
+        username: i.username || "Unknown",
+        scope: i.scope || "",
+        isUser: i.isUser || false,
         organizationId: i.organizationId || undefined,
         organizationName: i.organizationName || undefined,
         connectedAt: i.connectedAt
           ? {
-              seconds: Number(i.connectedAt.seconds),
-              nanos: Number(i.connectedAt.nanos),
+              seconds: Number(i.connectedAt.seconds || 0),
+              nanos: Number(i.connectedAt.nanos || 0),
             }
           : undefined,
       }));
-    } catch (err) {
+
+      // Log for debugging
+      console.log(`[SettingsIntegrations] Loaded ${integrations.value.length} GitHub integration(s)`);
+    } catch (err: any) {
       console.error("Failed to load GitHub integrations:", err);
-      error.value = "Failed to load connected accounts. Please try again.";
+      error.value = err.message || "Failed to load connected accounts. Please try again.";
       integrations.value = [];
     } finally {
       isLoading.value = false;

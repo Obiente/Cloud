@@ -1,5 +1,5 @@
-# Build stage
-FROM golang:1.25-alpine AS builder
+# Build stage for Go API
+FROM golang:1.25-alpine AS go-builder
 
 # Install build dependencies
 RUN apk add --no-cache git make
@@ -36,20 +36,34 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
     -ldflags="-w -s -extldflags '-static'" \
     -o /build/api ./main.go
 
+# Build stage for nixpacks
+FROM rust:1.75-alpine AS nixpacks-builder
+
+# Install build dependencies
+RUN apk add --no-cache musl-dev
+
+# Install nixpacks via cargo
+RUN cargo install nixpacks --locked
+
 # Final stage
 FROM alpine:latest
 
 # Install CA certificates for HTTPS requests
 # Install docker CLI and docker-compose for deployment management
+# Install git for repository cloning during builds
 RUN apk --no-cache add \
     ca-certificates \
     docker-cli \
-    docker-compose
+    docker-compose \
+    git
+
+# Copy nixpacks binary from builder
+COPY --from=nixpacks-builder /usr/local/cargo/bin/nixpacks /usr/local/bin/nixpacks
 
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /build/api .
+# Copy API binary from Go builder
+COPY --from=go-builder /build/api .
 
 # Expose port
 EXPOSE 3001
