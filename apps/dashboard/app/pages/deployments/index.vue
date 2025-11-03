@@ -301,15 +301,7 @@
                         Build Time
                       </OuiText>
                       <OuiText size="2xl" weight="bold" color="primary">
-                        {{ deployment.buildTime }}
-                        <OuiText
-                          as="span"
-                          size="md"
-                          color="secondary"
-                          weight="semibold"
-                        >
-                          s
-                        </OuiText>
+                        {{ formatBuildTime(deployment.buildTime ?? 0) }}
                       </OuiText>
                     </OuiStack>
                   </OuiBox>
@@ -357,20 +349,15 @@
                       class="text-xs font-bold uppercase tracking-wider"
                     >
                       <Cog6ToothIcon class="h-4 w-4 animate-spin" />
-                      <span>Building deployment</span>
+                      <span>{{ progressPhases[deployment.id] || 'Starting deployment...' }}</span>
                     </OuiFlex>
                     <div
                       class="relative h-2 w-full overflow-hidden rounded-full bg-warning/20"
                     >
-                      <div class="absolute inset-0 flex">
-                        <div
-                          class="h-full w-1/3 animate-pulse rounded-full bg-linear-to-r from-transparent via-warning to-transparent"
-                          style="
-                            animation: shimmer 2s infinite;
-                            background-size: 200% 100%;
-                          "
-                        />
-                      </div>
+                      <div
+                        class="absolute inset-y-0 left-0 rounded-full bg-warning transition-all duration-300"
+                        :style="{ width: `${progressValues[deployment.id] || 0}%` }"
+                      />
                     </div>
                   </OuiStack>
                 </OuiBox>
@@ -542,7 +529,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, computed, reactive } from "vue";
+  import { ref, computed, reactive, watch } from "vue";
   import { useRouter } from "vue-router";
   import { NuxtLink } from "#components";
   import {
@@ -580,6 +567,7 @@
   import { useOrganizationsStore } from "~/stores/organizations";
   import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
   import { useDialog } from "~/composables/useDialog";
+  import { useBuildProgress } from "~/composables/useBuildProgress";
   definePageMeta({
     layout: "default",
     middleware: "auth",
@@ -728,7 +716,7 @@
     },
   } as const;
 
-  const getStatusMeta = (status: number) => {
+  const getStatusMeta = (status: number | DeploymentStatus) => {
     switch (status) {
       case DeploymentStatus.RUNNING:
         return STATUS_META.RUNNING;
@@ -820,6 +808,16 @@
     }
   };
 
+  const formatBuildTime = (seconds: number) => {
+    if (!seconds || seconds === 0) return "0s";
+    if (seconds < 60) {
+      return `${seconds}s`;
+    }
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+  };
+
   const getEnvironmentLabel = (env: string | EnvEnum | number) => {
     if (typeof env === "number") {
       switch (env) {
@@ -842,7 +840,7 @@
   const client = useConnectClient(DeploymentService);
   const deploymentActions = useDeploymentActions();
 
-  const { data: deployments } = await useAsyncData(
+  const { data: deployments, refresh: refreshDeployments } = await useAsyncData(
     "deployments-list",
     async () => {
       try {
@@ -854,6 +852,96 @@
         return [];
       }
     }
+  );
+
+  // Track build progress for each deployment
+  const buildProgressMap = new Map<string, ReturnType<typeof useBuildProgress>>();
+
+  // Get or create build progress tracker for a deployment
+  const getBuildProgress = (deploymentId: string) => {
+    if (!buildProgressMap.has(deploymentId)) {
+      const progress = useBuildProgress({
+        deploymentId,
+        organizationId: effectiveOrgId.value,
+      });
+      buildProgressMap.set(deploymentId, progress);
+    }
+    return buildProgressMap.get(deploymentId)!;
+  };
+
+  // Create a reactive map of progress values for template access
+  const progressValues = reactive<Record<string, number>>({});
+  const progressPhases = reactive<Record<string, string>>({});
+
+  // Helper to update reactive progress values
+  const updateProgressValues = () => {
+    buildProgressMap.forEach((progress, id) => {
+      progressValues[id] = progress.progress.value;
+      progressPhases[id] = progress.currentPhase.value;
+    });
+  };
+
+  // Watch for progress changes and update reactive values
+  watch(
+    () => deployments.value,
+    () => {
+      deployments.value?.forEach((deployment) => {
+        const progress = getBuildProgress(deployment.id);
+        // Set up watchers for each deployment's progress
+        watch(
+          () => progress.progress.value,
+          (newValue) => {
+            progressValues[deployment.id] = newValue;
+          },
+          { immediate: true }
+        );
+        watch(
+          () => progress.currentPhase.value,
+          (newValue) => {
+            progressPhases[deployment.id] = newValue;
+          },
+          { immediate: true }
+        );
+      });
+    },
+    { immediate: true, deep: true }
+  );
+
+  // Watch deployments and enable/disable progress tracking based on status
+  watch(
+    () => deployments.value,
+    (newDeployments) => {
+      if (!newDeployments) return;
+
+      newDeployments.forEach((deployment) => {
+        const isBuilding =
+          deployment.status === DeploymentStatus.BUILDING ||
+          deployment.status === DeploymentStatus.DEPLOYING;
+        const progress = getBuildProgress(deployment.id);
+
+        if (isBuilding && !progress.isStreaming.value) {
+          // Start streaming when deployment enters building state
+          progress.startStreaming();
+        } else if (!isBuilding && progress.isStreaming.value) {
+          // Stop streaming and reset when deployment is no longer building
+          progress.stopStreaming();
+          // Reset after a delay to allow final progress update
+          setTimeout(() => {
+            progress.reset();
+          }, 1000);
+        }
+      });
+
+      // Clean up progress trackers for deployments that no longer exist
+      const currentIds = new Set(newDeployments.map((d) => d.id));
+      buildProgressMap.forEach((progress, id) => {
+        if (!currentIds.has(id)) {
+          progress.stopStreaming();
+          buildProgressMap.delete(id);
+        }
+      });
+    },
+    { immediate: true, deep: true }
   );
   const cleanRepositoryName = (url: string) => {
     if (!url) return "";
@@ -916,16 +1004,22 @@
     return filtered;
   });
 
-  const stopDeployment = (id: string) => {
-    deploymentActions.stopDeployment(id, deployments.value ?? []);
+  const stopDeployment = async (id: string) => {
+    await deploymentActions.stopDeployment(id, deployments.value ?? []);
+    // Refresh to get latest status from server
+    await refreshDeployments();
   };
 
-  const startDeployment = (id: string) => {
-    deploymentActions.startDeployment(id, deployments.value ?? []);
+  const startDeployment = async (id: string) => {
+    await deploymentActions.startDeployment(id, deployments.value ?? []);
+    // Refresh to get latest status from server
+    await refreshDeployments();
   };
 
-  const redeployApp = (id: string) => {
-    deploymentActions.redeployDeployment(id, deployments.value ?? []);
+  const redeployApp = async (id: string) => {
+    await deploymentActions.redeployDeployment(id, deployments.value ?? []);
+    // Refresh to get latest status from server
+    await refreshDeployments();
   };
 
   const viewDeployment = (id: string) => {

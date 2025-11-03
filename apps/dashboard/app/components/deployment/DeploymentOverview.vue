@@ -66,7 +66,7 @@
               <OuiFlex align="center" gap="sm">
                 <ClockIcon class="h-5 w-5 text-secondary" />
                 <OuiText size="2xl" weight="bold">
-                  {{ formatBuildTime(deployment.buildTime) }}
+                  {{ formatBuildTime(deployment.buildTime ?? 0) }}
                 </OuiText>
           </OuiFlex>
               <OuiText size="xs" color="muted">
