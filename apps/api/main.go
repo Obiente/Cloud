@@ -59,7 +59,11 @@ func main() {
 	orchService, err := orchestrator.NewOrchestratorService("least-loaded", 50, syncInterval)
 	if err != nil {
 		log.Printf("⚠️  Failed to initialize orchestrator service: %v", err)
+		log.Printf("⚠️  Error details: %+v", err)
 		log.Println("⚠️  Metrics collection will not be available")
+		log.Println("⚠️  The server will attempt to create a deployment manager as fallback")
+		log.Println("⚠️  However, deployments may fail if Docker is not accessible")
+		log.Println("⚠️  Please check Docker connection and ensure Docker daemon is running")
 	} else {
 		log.Println("✓ Orchestrator service initialized")
 		orchService.Start()

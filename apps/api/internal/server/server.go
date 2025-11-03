@@ -227,11 +227,32 @@ func registerServices(mux *http.ServeMux) {
 
 	// Create deployment repository and service
 	deploymentRepo := database.NewDeploymentRepository(database.DB, database.RedisClient)
-	// Orchestrator dependencies
-	manager, err := orchestrator.NewDeploymentManager("least-loaded", 50)
-	if err != nil {
-		log.Printf("[Server] Failed to init deployment manager: %v", err)
-		manager = nil
+	// Get orchestrator service and its deployment manager
+	// The orchestrator service should be initialized in main.go before server is created
+	orchService := orchestrator.GetGlobalOrchestratorService()
+	var manager *orchestrator.DeploymentManager
+	if orchService != nil {
+		manager = orchService.GetDeploymentManager()
+		if manager != nil {
+			log.Println("[Server] Using deployment manager from orchestrator service")
+		} else {
+			log.Printf("[Server] Warning: Orchestrator service exists but deployment manager is nil")
+		}
+	}
+	
+	// Fallback: create a deployment manager directly if orchestrator service is not available or manager is nil
+	if manager == nil {
+		log.Println("[Server] Attempting to create deployment manager as fallback...")
+		var err error
+		manager, err = orchestrator.NewDeploymentManager("least-loaded", 50)
+		if err != nil {
+			log.Printf("[Server] ❌ CRITICAL: Failed to create deployment manager: %v", err)
+			log.Printf("[Server] ❌ Deployments will not work until Docker is accessible and orchestrator is initialized")
+			log.Printf("[Server] ❌ Please check Docker connection and ensure Docker daemon is running")
+			manager = nil
+		} else {
+			log.Println("[Server] ✓ Created deployment manager directly (orchestrator service not available or manager was nil)")
+		}
 	}
 	qc := quota.NewChecker()
 	deploymentService := deploymentsvc.NewService(deploymentRepo, manager, qc)

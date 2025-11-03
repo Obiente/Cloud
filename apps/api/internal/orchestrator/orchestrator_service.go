@@ -48,8 +48,8 @@ func NewOrchestratorService(strategy string, maxDeploymentsPerNode int, syncInte
 	
 	// Register global metrics streamer for access from other services
 	SetGlobalMetricsStreamer(metricsStreamer)
-
-	return &OrchestratorService{
+	
+	service := &OrchestratorService{
 		deploymentManager: deploymentManager,
 		serviceRegistry:   serviceRegistry,
 		healthChecker:     healthChecker,
@@ -57,7 +57,12 @@ func NewOrchestratorService(strategy string, maxDeploymentsPerNode int, syncInte
 		syncInterval:      syncInterval,
 		ctx:               ctx,
 		cancel:            cancel,
-	}, nil
+	}
+	
+	// Register global orchestrator service for access from other services
+	SetGlobalOrchestratorService(service)
+	
+	return service, nil
 }
 
 // Start begins all background orchestration tasks

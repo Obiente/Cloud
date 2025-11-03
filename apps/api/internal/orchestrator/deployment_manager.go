@@ -103,9 +103,13 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 		nodeHostname: info.Name,
 	}
 	
-	// Ensure the network exists
+	// Ensure the network exists (non-blocking - we'll try again when needed)
+	// If this fails, we'll attempt to create it later when actually deploying
 	if err := dm.ensureNetwork(context.Background()); err != nil {
-		return nil, fmt.Errorf("failed to ensure network exists: %w", err)
+		log.Printf("[DeploymentManager] Warning: Failed to ensure network exists during initialization: %v", err)
+		log.Printf("[DeploymentManager] Network will be created on-demand when deploying containers")
+		// Don't fail initialization - network creation will be retried during deployment
+		// This allows the system to start even if Docker has temporary issues
 	}
 	
 	return dm, nil
@@ -118,6 +122,16 @@ func (dm *DeploymentManager) ensureNetwork(ctx context.Context) error {
 	checkCmd := exec.CommandContext(ctx, "docker", "network", "ls", "--filter", fmt.Sprintf("name=%s", dm.networkName), "--format", "{{.Name}}")
 	output, err := checkCmd.Output()
 	if err != nil {
+		// Check if Docker is available
+		if exitError, ok := err.(*exec.ExitError); ok {
+			stderr := string(exitError.Stderr)
+			log.Printf("[DeploymentManager] Failed to check for network (exit code %d): %s", exitError.ExitCode(), stderr)
+			// If Docker is not available, return a more helpful error
+			if strings.Contains(stderr, "Cannot connect to the Docker daemon") || 
+			   strings.Contains(stderr, "Is the docker daemon running") {
+				return fmt.Errorf("docker daemon is not accessible: %s", stderr)
+			}
+		}
 		log.Printf("[DeploymentManager] Warning: Failed to check for network: %v", err)
 	}
 	
@@ -129,14 +143,39 @@ func (dm *DeploymentManager) ensureNetwork(ctx context.Context) error {
 	// Network doesn't exist, create it
 	log.Printf("[DeploymentManager] Creating network %s", dm.networkName)
 	createCmd := exec.CommandContext(ctx, "docker", "network", "create", "--driver", "bridge", "--label", "com.obiente.managed=true", dm.networkName)
+	var stderr bytes.Buffer
+	createCmd.Stderr = &stderr
 	if err := createCmd.Run(); err != nil {
-		// Check if network was created by another process
+		// Check if network was created by another process (race condition)
 		output, checkErr := checkCmd.Output()
 		if checkErr == nil && strings.TrimSpace(string(output)) == dm.networkName {
 			log.Printf("[DeploymentManager] Network %s was created by another process", dm.networkName)
 			return nil
 		}
-		return fmt.Errorf("failed to create network: %w", err)
+		
+		// Capture stderr for better error messages
+		errorOutput := stderr.String()
+		if errorOutput == "" {
+			if exitError, ok := err.(*exec.ExitError); ok {
+				errorOutput = string(exitError.Stderr)
+			}
+		}
+		
+		// Provide more specific error messages
+		if strings.Contains(errorOutput, "already exists") {
+			log.Printf("[DeploymentManager] Network %s already exists (race condition)", dm.networkName)
+			return nil
+		}
+		if strings.Contains(errorOutput, "Cannot connect to the Docker daemon") ||
+		   strings.Contains(errorOutput, "Is the docker daemon running") {
+			return fmt.Errorf("docker daemon is not accessible: %s", errorOutput)
+		}
+		if strings.Contains(errorOutput, "permission denied") {
+			return fmt.Errorf("permission denied: unable to create Docker network (check Docker permissions): %s", errorOutput)
+		}
+		
+		log.Printf("[DeploymentManager] Failed to create network: %v, stderr: %s", err, errorOutput)
+		return fmt.Errorf("failed to create network: %w (stderr: %s)", err, errorOutput)
 	}
 	
 	log.Printf("[DeploymentManager] Successfully created network %s", dm.networkName)
@@ -146,6 +185,11 @@ func (dm *DeploymentManager) ensureNetwork(ctx context.Context) error {
 // CreateDeployment creates a new deployment on the cluster
 func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *DeploymentConfig) error {
 	log.Printf("[DeploymentManager] Creating deployment %s", config.DeploymentID)
+	
+	// Ensure network exists before creating containers (retry if it failed during initialization)
+	if err := dm.ensureNetwork(ctx); err != nil {
+		return fmt.Errorf("network is required but could not be created: %w", err)
+	}
 
 	// Select best node for deployment
 	targetNode, err := dm.nodeSelector.SelectNode(ctx)
@@ -187,6 +231,11 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 	for _, serviceName := range serviceNames {
 		for i := 0; i < config.Replicas; i++ {
 			containerName := fmt.Sprintf("%s-%s-replica-%d", config.DeploymentID, serviceName, i)
+
+			// Remove existing container with this name if it exists (for redeployments)
+			if err := dm.removeContainerByName(ctx, containerName); err != nil {
+				log.Printf("[DeploymentManager] Warning: Failed to remove existing container %s: %v (will attempt to create anyway)", containerName, err)
+			}
 
 			containerID, err := dm.createContainer(ctx, config, containerName, i, serviceName)
 			if err != nil {
@@ -464,6 +513,77 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 	return string(labeledYaml), nil
 }
 
+// removeContainerByName removes a container by name if it exists
+func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containerName string) error {
+	// Try to inspect container directly by name (most efficient)
+	// Docker API accepts both with and without leading "/"
+	containerNameWithSlash := "/" + containerName
+	containerNameWithoutSlash := strings.TrimPrefix(containerName, "/")
+	
+	// Try both variations
+	for _, nameToTry := range []string{containerNameWithSlash, containerNameWithoutSlash} {
+		containerInfo, err := dm.dockerClient.ContainerInspect(ctx, nameToTry)
+		if err == nil {
+			// Container exists, remove it
+			log.Printf("[DeploymentManager] Removing existing container %s (ID: %s) for redeployment", containerName, containerInfo.ID[:12])
+			
+			// Stop container first
+			timeout := 10 * time.Second
+			_ = dm.dockerHelper.StopContainer(ctx, containerInfo.ID, timeout)
+			
+			// Remove container
+			if err := dm.dockerHelper.RemoveContainer(ctx, containerInfo.ID, true); err != nil {
+				return fmt.Errorf("failed to remove existing container %s: %w", containerName, err)
+			}
+			
+			// Unregister from registry if it was registered
+			_ = dm.registry.UnregisterDeployment(ctx, containerInfo.ID)
+			
+			log.Printf("[DeploymentManager] Successfully removed existing container %s", containerName)
+			return nil
+		}
+		// If error is "not found", continue to next name variation
+		// If it's another error, we'll try the list approach as fallback
+	}
+	
+	// Fallback: List all containers and find by exact name match
+	// This handles edge cases where inspect might not work
+	allContainers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+		All: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	// Find container with exact name match
+	for _, cnt := range allContainers {
+		for _, n := range cnt.Names {
+			// Docker names start with "/", so check both
+			nTrimmed := strings.TrimPrefix(n, "/")
+			if nTrimmed == containerNameWithoutSlash || n == containerNameWithSlash {
+				log.Printf("[DeploymentManager] Removing existing container %s (ID: %s) for redeployment", containerName, cnt.ID[:12])
+				
+				// Stop container first
+				timeout := 10 * time.Second
+				_ = dm.dockerHelper.StopContainer(ctx, cnt.ID, timeout)
+				
+				// Remove container
+				if err := dm.dockerHelper.RemoveContainer(ctx, cnt.ID, true); err != nil {
+					return fmt.Errorf("failed to remove existing container %s: %w", containerName, err)
+				}
+				
+				// Unregister from registry if it was registered
+				_ = dm.registry.UnregisterDeployment(ctx, cnt.ID)
+				
+				log.Printf("[DeploymentManager] Successfully removed existing container %s", containerName)
+				return nil
+			}
+		}
+	}
+
+	return nil // Container doesn't exist, which is fine
+}
+
 // createContainer creates a single container
 func (dm *DeploymentManager) createContainer(ctx context.Context, config *DeploymentConfig, name string, replicaIndex int, serviceName string) (string, error) {
 	// Get routing rules for this deployment
@@ -558,7 +678,25 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	// Create container
 	resp, err := dm.dockerClient.ContainerCreate(ctx, containerConfig, hostConfig, networkConfig, nil, name)
 	if err != nil {
-		return "", fmt.Errorf("failed to create container: %w", err)
+		// Check for name conflict error - if container was created by another process
+		if strings.Contains(err.Error(), "is already in use") || strings.Contains(err.Error(), "already exists") {
+			log.Printf("[DeploymentManager] Container name conflict for %s: %v. Attempting to remove and retry...", name, err)
+			
+			// Try to remove the conflicting container
+			if removeErr := dm.removeContainerByName(ctx, name); removeErr != nil {
+				log.Printf("[DeploymentManager] Failed to remove conflicting container %s: %v", name, removeErr)
+				return "", fmt.Errorf("container name %s is in use and could not be removed: %w (original error: %v)", name, removeErr, err)
+			}
+			
+			// Retry container creation once
+			log.Printf("[DeploymentManager] Retrying container creation for %s after removing conflicting container", name)
+			resp, err = dm.dockerClient.ContainerCreate(ctx, containerConfig, hostConfig, networkConfig, nil, name)
+			if err != nil {
+				return "", fmt.Errorf("failed to create container after removing conflicting container: %w", err)
+			}
+		} else {
+			return "", fmt.Errorf("failed to create container: %w", err)
+		}
 	}
 
 	return resp.ID, nil
@@ -797,6 +935,11 @@ func (dm *DeploymentManager) GetDeploymentLogs(ctx context.Context, deploymentID
 // DeployComposeFile deploys a Docker Compose file for a deployment
 func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
 	log.Printf("[DeploymentManager] Deploying compose file for deployment %s", deploymentID)
+	
+	// Ensure network exists before deploying (retry if it failed during initialization)
+	if err := dm.ensureNetwork(ctx); err != nil {
+		return fmt.Errorf("network is required but could not be created: %w", err)
+	}
 
 	// Sanitize compose file for security (transform volumes, remove host ports, etc.)
 	sanitizer := NewComposeSanitizer(deploymentID)
