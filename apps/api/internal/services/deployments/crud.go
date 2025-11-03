@@ -57,6 +57,14 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 	for _, dbDep := range dbDeployments {
 		deployment := dbDeploymentToProto(dbDep)
 		
+		// If deployment's build time is 0, try to get it from the latest successful build
+		if deployment.BuildTime == 0 {
+			latestBuild, err := s.buildHistoryRepo.GetLatestSuccessfulBuild(ctx, dbDep.ID)
+			if err == nil && latestBuild != nil && latestBuild.BuildTime > 0 {
+				deployment.BuildTime = latestBuild.BuildTime
+			}
+		}
+		
 		// Get actual container status from Docker (not DB)
 		// Only for compose deployments (when BuildStrategy is PLAIN_COMPOSE or COMPOSE_REPO)
 		if dbDep.BuildStrategy == int32(deploymentsv1.BuildStrategy_PLAIN_COMPOSE) ||
@@ -176,6 +184,14 @@ func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploy
 
 	// Convert to proto and enrich with actual container status
 	deployment := dbDeploymentToProto(dbDeployment)
+	
+	// If deployment's build time is 0, get it from the latest successful build
+	if deployment.BuildTime == 0 {
+		latestBuild, err := s.buildHistoryRepo.GetLatestSuccessfulBuild(ctx, deploymentID)
+		if err == nil && latestBuild != nil && latestBuild.BuildTime > 0 {
+			deployment.BuildTime = latestBuild.BuildTime
+		}
+	}
 	
 	// Get actual container status from Docker (not DB)
 	// Only for compose deployments (when BuildStrategy is PLAIN_COMPOSE or COMPOSE_REPO)

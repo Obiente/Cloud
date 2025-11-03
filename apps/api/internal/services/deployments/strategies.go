@@ -88,7 +88,7 @@ func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Depl
 		// Start buildkit container if it doesn't exist or isn't running
 		startBuildkitContainer(ctx)
 		envVars = append(envVars, "DOCKER_BUILDKIT=1")
-		envVars = append(envVars, "BUILDKIT_HOST=docker-container://buildkit")
+		envVars = append(envVars, "BUILDKIT_HOST=docker-container://obiente-cloud-buildkit")
 	}
 	cmd.Env = envVars
 
@@ -350,40 +350,83 @@ func isBuildxAvailable(ctx context.Context) bool {
 	return true
 }
 
-// checkBuildkitContainer checks if a BuildKit container named "buildkit" is running
+// checkBuildkitContainer checks if a BuildKit container named "obiente-cloud-buildkit" is running
 func checkBuildkitContainer(ctx context.Context) bool {
-	cmd := exec.CommandContext(ctx, "docker", "ps", "--filter", "name=buildkit", "--format", "{{.Names}}")
+	cmd := exec.CommandContext(ctx, "docker", "ps", "--filter", "name=obiente-cloud-buildkit", "--format", "{{.Names}}")
 	output, err := cmd.Output()
 	if err != nil {
 		return false
 	}
-	return strings.TrimSpace(string(output)) == "buildkit"
+	return strings.TrimSpace(string(output)) == "obiente-cloud-buildkit"
 }
 
 // startBuildkitContainer starts a BuildKit daemon container if it doesn't exist
+// We spawn BuildKit manually because Railpack requires BUILDKIT_HOST=docker-container://buildkit
+// Docker does NOT automatically spawn BuildKit containers - we need to provide a BuildKit daemon
+// when using the docker-container:// protocol. This allows BuildKit to run in a separate container
+// with better isolation and caching capabilities.
 func startBuildkitContainer(ctx context.Context) {
+	containerName := "obiente-cloud-buildkit"
+	
 	// Check if buildkit container already exists (running or stopped)
-	cmd := exec.CommandContext(ctx, "docker", "ps", "-a", "--filter", "name=buildkit", "--format", "{{.Names}}")
+	cmd := exec.CommandContext(ctx, "docker", "ps", "-a", "--filter", fmt.Sprintf("name=%s", containerName), "--format", "{{.Names}}")
 	output, err := cmd.Output()
 	if err != nil {
 		log.Printf("[Railpacks] Failed to check for buildkit container: %v", err)
 		return
 	}
 	
-	if strings.TrimSpace(string(output)) != "" {
+	if strings.TrimSpace(string(output)) == containerName {
 		// Container exists, try to start it if it's stopped
-		startCmd := exec.CommandContext(ctx, "docker", "start", "buildkit")
+		startCmd := exec.CommandContext(ctx, "docker", "start", containerName)
 		if err := startCmd.Run(); err != nil {
 			log.Printf("[Railpacks] Failed to start existing buildkit container: %v", err)
+		} else {
+			log.Printf("[Railpacks] Started existing BuildKit container: %s", containerName)
 		}
 		return
 	}
 	
 	// Container doesn't exist, create and start it
-	log.Printf("[Railpacks] Starting BuildKit daemon container...")
-	createCmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--privileged", "-d", "--name", "buildkit", "moby/buildkit:latest")
+	// Create BuildKit cache volume in obiente volume path
+	buildkitCacheDir := "/var/lib/obiente/volumes/buildkit-cache"
+	// Fallback to temp directory if obiente volume path doesn't exist
+	if _, err := os.Stat("/var/lib/obiente/volumes"); os.IsNotExist(err) {
+		buildkitCacheDir = "/tmp/obiente-volumes/buildkit-cache"
+	}
+	
+	// Ensure cache directory exists
+	if err := os.MkdirAll(buildkitCacheDir, 0755); err != nil {
+		log.Printf("[Railpacks] Warning: Failed to create BuildKit cache directory %s: %v", buildkitCacheDir, err)
+		// Continue without cache directory
+		buildkitCacheDir = ""
+	}
+	
+	log.Printf("[Railpacks] Starting BuildKit daemon container: %s", containerName)
+	
+	// Build docker run command with volume mount for BuildKit cache
+	// Note: We don't use --rm because we want the container to persist for caching
+	args := []string{
+		"run",
+		"--privileged",
+		"-d",
+		"--name", containerName,
+		"--restart", "unless-stopped",
+	}
+	
+	// Add volume mount for BuildKit cache if directory was created
+	if buildkitCacheDir != "" {
+		args = append(args, "-v", fmt.Sprintf("%s:/var/lib/buildkit", buildkitCacheDir))
+		log.Printf("[Railpacks] Using BuildKit cache directory: %s", buildkitCacheDir)
+	}
+	
+	args = append(args, "moby/buildkit:latest")
+	
+	createCmd := exec.CommandContext(ctx, "docker", args...)
 	if err := createCmd.Run(); err != nil {
 		log.Printf("[Railpacks] Failed to start BuildKit container: %v. Railpack may fail.", err)
+	} else {
+		log.Printf("[Railpacks] Successfully started BuildKit container: %s", containerName)
 	}
 }
 
@@ -619,7 +662,7 @@ func (s *DockerfileStrategy) Build(ctx context.Context, deployment *database.Dep
 	// Ensure dockerfile path is relative to buildDir
 	dockerfilePath := filepath.Join(buildDir, dockerfile)
 	if !fileExists(dockerfilePath) {
-		return &BuildResult{Success: false, Error: fmt.Errorf("Dockerfile not found at path: %s", dockerfile)}, nil
+		return &BuildResult{Success: false, Error: fmt.Errorf("dockerfile not found at path: %s", dockerfile)}, nil
 	}
 
 	if err := buildDockerImage(ctx, buildDir, imageName, dockerfile, config.LogWriter, config.LogWriterErr); err != nil {

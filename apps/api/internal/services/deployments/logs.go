@@ -130,11 +130,26 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	logChan := make(chan *deploymentsv1.DeploymentLogLine, 100)
 	var wg sync.WaitGroup
 	
+	// Close channel after all goroutines finish
+	go func() {
+		wg.Wait()
+		close(logChan)
+	}()
+	
+	// Helper function to safely send to channel
+	safeSend := func(line *deploymentsv1.DeploymentLogLine) bool {
+		select {
+		case logChan <- line:
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	}
+	
 	// Stream container logs
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer close(logChan)
 		buf := make([]byte, 4096)
 		for {
 			n, readErr := reader.Read(buf)
@@ -152,9 +167,7 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 					Stderr:       false, // Container logs don't distinguish stderr/stdout in this context
 					LogLevel:     logLevel,
 				}
-				select {
-				case logChan <- line:
-				case <-ctx.Done():
+				if !safeSend(line) {
 					return
 				}
 			}
@@ -181,9 +194,7 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 					// Format and send relevant events
 					eventLine := s.formatDockerEvent(deploymentID, event, containerIDs, imageNames)
 					if eventLine != nil {
-						select {
-						case logChan <- eventLine:
-						case <-ctx.Done():
+						if !safeSend(eventLine) {
 							return
 						}
 					}
@@ -204,8 +215,7 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 			return nil
 		case line, ok := <-logChan:
 			if !ok {
-				// Wait for goroutines to finish
-				wg.Wait()
+				// Channel closed, all goroutines finished
 				return nil
 			}
 			if sendErr := stream.Send(line); sendErr != nil {
