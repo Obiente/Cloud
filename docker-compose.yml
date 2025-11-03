@@ -73,7 +73,7 @@ services:
       - "traefik.http.routers.api-secure.entrypoints=websecure"
       - "traefik.http.routers.api-secure.service=api"
       - "traefik.http.routers.api-secure.tls=true"
-      - "com.obiente.traefik=true"
+      - "cloud.obiente.traefik=true"
 
   postgres:
     image: postgres:16-alpine
@@ -134,11 +134,11 @@ services:
       - --api.insecure=true
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
-      - --providers.docker.constraints=Label(`com.obiente.traefik`,`true`)
+      - --providers.docker.constraints=Label(`cloud.obiente.traefik`,`true`)
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
     labels:
-      - "com.obiente.traefik=true"
+      - "cloud.obiente.traefik=true"
       - "traefik.enable=true"
       - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.traefik.entrypoints=web,websecure"

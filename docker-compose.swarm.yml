@@ -176,8 +176,8 @@ services:
           cpus: "1"
           memory: 512M
       labels:
-        - "com.obiente.service=api"
-        - "com.obiente.role=control-plane"
+        - "cloud.obiente.service=api"
+        - "cloud.obiente.role=control-plane"
         - "traefik.enable=true"
         - "traefik.http.routers.api.rule=Host(`api.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.api.entrypoints=websecure"

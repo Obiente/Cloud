@@ -504,8 +504,8 @@ services:
           cpus: "1"
           memory: 512M
       labels:
-        - "com.obiente.service=api"
-        - "com.obiente.role=control-plane"
+        - "cloud.obiente.service=api"
+        - "cloud.obiente.role=control-plane"
     healthcheck:
       test:
         [
@@ -555,8 +555,8 @@ services:
           cpus: "0.5"
           memory: 256M
       labels:
-        - "com.obiente.service=orchestrator"
-        - "com.obiente.role=control-plane"
+        - "cloud.obiente.service=orchestrator"
+        - "cloud.obiente.role=control-plane"
     networks:
       - obiente-network
 

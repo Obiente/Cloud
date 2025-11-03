@@ -271,7 +271,7 @@ nodes, _ := dockerClient.NodeList(ctx, types.NodeListOptions{})
 // Get containers on current node
 containers, _ := dockerClient.ContainerList(ctx, types.ContainerListOptions{
     Filters: filters.NewArgs(
-        filters.Arg("label", "com.obiente.deployment=true"),
+        filters.Arg("label", "cloud.obiente.deployment=true"),
     ),
 })
 ```
