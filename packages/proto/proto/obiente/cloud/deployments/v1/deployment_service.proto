@@ -23,6 +23,16 @@ enum DeploymentType {
   GENERIC = 10;        // Generic/unknown runtime (use when can't detect)
 }
 
+// LogLevel represents the severity/type of a log line
+enum LogLevel {
+  LOG_LEVEL_UNSPECIFIED = 0;
+  LOG_LEVEL_TRACE = 1;    // Trace-level debugging
+  LOG_LEVEL_DEBUG = 2;    // Debug information
+  LOG_LEVEL_INFO = 3;     // Informational messages (default)
+  LOG_LEVEL_WARN = 4;     // Warning messages
+  LOG_LEVEL_ERROR = 5;    // Error messages
+}
+
 // Build strategy determines how the deployment is built and deployed
 enum BuildStrategy {
   BUILD_STRATEGY_UNSPECIFIED = 0;
@@ -49,6 +59,14 @@ enum DeploymentStatus {
   STOPPED = 4;
   FAILED = 5;
   DEPLOYING = 6;
+}
+
+enum BuildStatus {
+  BUILD_STATUS_UNSPECIFIED = 0;
+  BUILD_PENDING = 1;
+  BUILD_BUILDING = 2;
+  BUILD_SUCCESS = 3;
+  BUILD_FAILED = 4;
 }
 
 service DeploymentService {
@@ -127,6 +145,22 @@ service DeploymentService {
   
   // Get file content from a GitHub repository
   rpc GetGitHubFile(GetGitHubFileRequest) returns (GetGitHubFileResponse);
+
+  // Build history management
+  // List builds for a deployment
+  rpc ListBuilds(ListBuildsRequest) returns (ListBuildsResponse);
+  
+  // Get details of a specific build
+  rpc GetBuild(GetBuildRequest) returns (GetBuildResponse);
+  
+  // Get build logs for a specific build
+  rpc GetBuildLogs(GetBuildLogsRequest) returns (GetBuildLogsResponse);
+  
+  // Revert deployment to a previous build
+  rpc RevertToBuild(RevertToBuildRequest) returns (RevertToBuildResponse);
+  
+  // Delete a build from history
+  rpc DeleteBuild(DeleteBuildRequest) returns (DeleteBuildResponse);
   
   // List all available GitHub integrations for the current user
   rpc ListAvailableGitHubIntegrations(ListAvailableGitHubIntegrationsRequest) returns (ListAvailableGitHubIntegrationsResponse);
@@ -234,6 +268,7 @@ message UpdateDeploymentRequest {
   optional string branch = 5;
   optional string build_command = 6;
   optional string install_command = 7;
+  optional string start_command = 17; // Start command for running the application
   optional string dockerfile_path = 12; // Path to Dockerfile (relative to repo root)
   optional string compose_file_path = 13; // Path to compose file (relative to repo root)
   optional string domain = 8;
@@ -299,7 +334,8 @@ message DeploymentLogLine {
   string deployment_id = 1;
   string line = 2;
   google.protobuf.Timestamp timestamp = 3;
-  bool stderr = 4;
+  bool stderr = 4; // Deprecated: Use log_level instead. Kept for backward compatibility.
+  LogLevel log_level = 5; // Log level (INFO, WARN, ERROR, DEBUG, TRACE)
 }
 
 message StartDeploymentRequest {
@@ -826,6 +862,7 @@ message Deployment {
   string branch = 7;
   optional string build_command = 8;
   optional string install_command = 9;
+  optional string start_command = 29; // Start command for running the application
   optional string dockerfile_path = 27; // Path to Dockerfile (relative to repo root, e.g., "Dockerfile", "backend/Dockerfile")
   optional string compose_file_path = 28; // Path to compose file (relative to repo root, e.g., "docker-compose.yml", "compose/production.yml")
   DeploymentStatus status = 10;
@@ -851,7 +888,7 @@ message Deployment {
   optional string node_hostname = 24;
   // Environment variables
   map<string, string> env_vars = 25;
-  optional string github_integration_id = 29; // GitHub integration ID used for this deployment
+  optional string github_integration_id = 33; // GitHub integration ID used for this deployment
   // Container status (for compose deployments)
   optional int32 containers_running = 30; // Number of containers actually running (from Docker)
   optional int32 containers_total = 31; // Total number of containers for this deployment
@@ -915,4 +952,93 @@ message RestartContainerRequest {
 message RestartContainerResponse {
   bool success = 1;
   optional string error = 2;
+}
+
+// Build history messages
+message ListBuildsRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  optional int32 limit = 3; // Maximum number of builds to return (default: 50)
+  optional int32 offset = 4; // Offset for pagination
+}
+
+message ListBuildsResponse {
+  repeated Build builds = 1;
+  int32 total = 2; // Total number of builds
+}
+
+message GetBuildRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string build_id = 3;
+}
+
+message GetBuildResponse {
+  Build build = 1;
+}
+
+message GetBuildLogsRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string build_id = 3;
+  optional int32 limit = 4; // Maximum number of log lines to return (default: all)
+  optional int32 offset = 5; // Offset for pagination (for very large logs)
+}
+
+message GetBuildLogsResponse {
+  repeated DeploymentLogLine logs = 1;
+  int32 total = 2; // Total number of log lines
+}
+
+message RevertToBuildRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string build_id = 3;
+}
+
+message RevertToBuildResponse {
+  Deployment deployment = 1; // Updated deployment after revert
+  string new_build_id = 2; // ID of the new build created from the revert
+}
+
+message DeleteBuildRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string build_id = 3;
+}
+
+message DeleteBuildResponse {
+  bool success = 1;
+}
+
+message Build {
+  string id = 1;
+  string deployment_id = 2;
+  string organization_id = 3;
+  int32 build_number = 4; // Sequential build number per deployment
+  BuildStatus status = 5;
+  google.protobuf.Timestamp started_at = 6;
+  optional google.protobuf.Timestamp completed_at = 7;
+  int32 build_time = 8; // Duration in seconds
+  string triggered_by = 9; // User ID who triggered the build
+  
+  // Build configuration snapshot (captured at build time)
+  optional string repository_url = 10;
+  string branch = 11;
+  optional string commit_sha = 12; // Git commit SHA if available
+  optional string build_command = 13;
+  optional string install_command = 14;
+  optional string start_command = 15;
+  optional string dockerfile_path = 16;
+  optional string compose_file_path = 17;
+  BuildStrategy build_strategy = 18;
+  
+  // Build results
+  optional string image_name = 19; // Built image name (for single container)
+  optional string compose_yaml = 20; // Docker Compose YAML (for compose deployments)
+  optional string size = 21; // Human-readable bundle size
+  optional string error = 22; // Error message if build failed
+  
+  google.protobuf.Timestamp created_at = 23;
+  google.protobuf.Timestamp updated_at = 24;
 }

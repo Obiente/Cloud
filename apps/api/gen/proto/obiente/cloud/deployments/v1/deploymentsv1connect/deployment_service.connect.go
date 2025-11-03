@@ -108,6 +108,21 @@ const (
 	// DeploymentServiceGetGitHubFileProcedure is the fully-qualified name of the DeploymentService's
 	// GetGitHubFile RPC.
 	DeploymentServiceGetGitHubFileProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetGitHubFile"
+	// DeploymentServiceListBuildsProcedure is the fully-qualified name of the DeploymentService's
+	// ListBuilds RPC.
+	DeploymentServiceListBuildsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/ListBuilds"
+	// DeploymentServiceGetBuildProcedure is the fully-qualified name of the DeploymentService's
+	// GetBuild RPC.
+	DeploymentServiceGetBuildProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetBuild"
+	// DeploymentServiceGetBuildLogsProcedure is the fully-qualified name of the DeploymentService's
+	// GetBuildLogs RPC.
+	DeploymentServiceGetBuildLogsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetBuildLogs"
+	// DeploymentServiceRevertToBuildProcedure is the fully-qualified name of the DeploymentService's
+	// RevertToBuild RPC.
+	DeploymentServiceRevertToBuildProcedure = "/obiente.cloud.deployments.v1.DeploymentService/RevertToBuild"
+	// DeploymentServiceDeleteBuildProcedure is the fully-qualified name of the DeploymentService's
+	// DeleteBuild RPC.
+	DeploymentServiceDeleteBuildProcedure = "/obiente.cloud.deployments.v1.DeploymentService/DeleteBuild"
 	// DeploymentServiceListAvailableGitHubIntegrationsProcedure is the fully-qualified name of the
 	// DeploymentService's ListAvailableGitHubIntegrations RPC.
 	DeploymentServiceListAvailableGitHubIntegrationsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/ListAvailableGitHubIntegrations"
@@ -221,6 +236,17 @@ type DeploymentServiceClient interface {
 	GetGitHubBranches(context.Context, *connect.Request[v1.GetGitHubBranchesRequest]) (*connect.Response[v1.GetGitHubBranchesResponse], error)
 	// Get file content from a GitHub repository
 	GetGitHubFile(context.Context, *connect.Request[v1.GetGitHubFileRequest]) (*connect.Response[v1.GetGitHubFileResponse], error)
+	// Build history management
+	// List builds for a deployment
+	ListBuilds(context.Context, *connect.Request[v1.ListBuildsRequest]) (*connect.Response[v1.ListBuildsResponse], error)
+	// Get details of a specific build
+	GetBuild(context.Context, *connect.Request[v1.GetBuildRequest]) (*connect.Response[v1.GetBuildResponse], error)
+	// Get build logs for a specific build
+	GetBuildLogs(context.Context, *connect.Request[v1.GetBuildLogsRequest]) (*connect.Response[v1.GetBuildLogsResponse], error)
+	// Revert deployment to a previous build
+	RevertToBuild(context.Context, *connect.Request[v1.RevertToBuildRequest]) (*connect.Response[v1.RevertToBuildResponse], error)
+	// Delete a build from history
+	DeleteBuild(context.Context, *connect.Request[v1.DeleteBuildRequest]) (*connect.Response[v1.DeleteBuildResponse], error)
 	// List all available GitHub integrations for the current user
 	ListAvailableGitHubIntegrations(context.Context, *connect.Request[v1.ListAvailableGitHubIntegrationsRequest]) (*connect.Response[v1.ListAvailableGitHubIntegrationsResponse], error)
 	// Terminal access
@@ -430,6 +456,36 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(deploymentServiceMethods.ByName("GetGitHubFile")),
 			connect.WithClientOptions(opts...),
 		),
+		listBuilds: connect.NewClient[v1.ListBuildsRequest, v1.ListBuildsResponse](
+			httpClient,
+			baseURL+DeploymentServiceListBuildsProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("ListBuilds")),
+			connect.WithClientOptions(opts...),
+		),
+		getBuild: connect.NewClient[v1.GetBuildRequest, v1.GetBuildResponse](
+			httpClient,
+			baseURL+DeploymentServiceGetBuildProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("GetBuild")),
+			connect.WithClientOptions(opts...),
+		),
+		getBuildLogs: connect.NewClient[v1.GetBuildLogsRequest, v1.GetBuildLogsResponse](
+			httpClient,
+			baseURL+DeploymentServiceGetBuildLogsProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("GetBuildLogs")),
+			connect.WithClientOptions(opts...),
+		),
+		revertToBuild: connect.NewClient[v1.RevertToBuildRequest, v1.RevertToBuildResponse](
+			httpClient,
+			baseURL+DeploymentServiceRevertToBuildProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("RevertToBuild")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteBuild: connect.NewClient[v1.DeleteBuildRequest, v1.DeleteBuildResponse](
+			httpClient,
+			baseURL+DeploymentServiceDeleteBuildProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("DeleteBuild")),
+			connect.WithClientOptions(opts...),
+		),
 		listAvailableGitHubIntegrations: connect.NewClient[v1.ListAvailableGitHubIntegrationsRequest, v1.ListAvailableGitHubIntegrationsResponse](
 			httpClient,
 			baseURL+DeploymentServiceListAvailableGitHubIntegrationsProcedure,
@@ -574,6 +630,11 @@ type deploymentServiceClient struct {
 	listGitHubRepos                 *connect.Client[v1.ListGitHubReposRequest, v1.ListGitHubReposResponse]
 	getGitHubBranches               *connect.Client[v1.GetGitHubBranchesRequest, v1.GetGitHubBranchesResponse]
 	getGitHubFile                   *connect.Client[v1.GetGitHubFileRequest, v1.GetGitHubFileResponse]
+	listBuilds                      *connect.Client[v1.ListBuildsRequest, v1.ListBuildsResponse]
+	getBuild                        *connect.Client[v1.GetBuildRequest, v1.GetBuildResponse]
+	getBuildLogs                    *connect.Client[v1.GetBuildLogsRequest, v1.GetBuildLogsResponse]
+	revertToBuild                   *connect.Client[v1.RevertToBuildRequest, v1.RevertToBuildResponse]
+	deleteBuild                     *connect.Client[v1.DeleteBuildRequest, v1.DeleteBuildResponse]
 	listAvailableGitHubIntegrations *connect.Client[v1.ListAvailableGitHubIntegrationsRequest, v1.ListAvailableGitHubIntegrationsResponse]
 	streamTerminal                  *connect.Client[v1.TerminalInput, v1.TerminalOutput]
 	streamTerminalOutput            *connect.Client[v1.StreamTerminalOutputRequest, v1.TerminalOutput]
@@ -723,6 +784,31 @@ func (c *deploymentServiceClient) GetGitHubBranches(ctx context.Context, req *co
 // GetGitHubFile calls obiente.cloud.deployments.v1.DeploymentService.GetGitHubFile.
 func (c *deploymentServiceClient) GetGitHubFile(ctx context.Context, req *connect.Request[v1.GetGitHubFileRequest]) (*connect.Response[v1.GetGitHubFileResponse], error) {
 	return c.getGitHubFile.CallUnary(ctx, req)
+}
+
+// ListBuilds calls obiente.cloud.deployments.v1.DeploymentService.ListBuilds.
+func (c *deploymentServiceClient) ListBuilds(ctx context.Context, req *connect.Request[v1.ListBuildsRequest]) (*connect.Response[v1.ListBuildsResponse], error) {
+	return c.listBuilds.CallUnary(ctx, req)
+}
+
+// GetBuild calls obiente.cloud.deployments.v1.DeploymentService.GetBuild.
+func (c *deploymentServiceClient) GetBuild(ctx context.Context, req *connect.Request[v1.GetBuildRequest]) (*connect.Response[v1.GetBuildResponse], error) {
+	return c.getBuild.CallUnary(ctx, req)
+}
+
+// GetBuildLogs calls obiente.cloud.deployments.v1.DeploymentService.GetBuildLogs.
+func (c *deploymentServiceClient) GetBuildLogs(ctx context.Context, req *connect.Request[v1.GetBuildLogsRequest]) (*connect.Response[v1.GetBuildLogsResponse], error) {
+	return c.getBuildLogs.CallUnary(ctx, req)
+}
+
+// RevertToBuild calls obiente.cloud.deployments.v1.DeploymentService.RevertToBuild.
+func (c *deploymentServiceClient) RevertToBuild(ctx context.Context, req *connect.Request[v1.RevertToBuildRequest]) (*connect.Response[v1.RevertToBuildResponse], error) {
+	return c.revertToBuild.CallUnary(ctx, req)
+}
+
+// DeleteBuild calls obiente.cloud.deployments.v1.DeploymentService.DeleteBuild.
+func (c *deploymentServiceClient) DeleteBuild(ctx context.Context, req *connect.Request[v1.DeleteBuildRequest]) (*connect.Response[v1.DeleteBuildResponse], error) {
+	return c.deleteBuild.CallUnary(ctx, req)
 }
 
 // ListAvailableGitHubIntegrations calls
@@ -879,6 +965,17 @@ type DeploymentServiceHandler interface {
 	GetGitHubBranches(context.Context, *connect.Request[v1.GetGitHubBranchesRequest]) (*connect.Response[v1.GetGitHubBranchesResponse], error)
 	// Get file content from a GitHub repository
 	GetGitHubFile(context.Context, *connect.Request[v1.GetGitHubFileRequest]) (*connect.Response[v1.GetGitHubFileResponse], error)
+	// Build history management
+	// List builds for a deployment
+	ListBuilds(context.Context, *connect.Request[v1.ListBuildsRequest]) (*connect.Response[v1.ListBuildsResponse], error)
+	// Get details of a specific build
+	GetBuild(context.Context, *connect.Request[v1.GetBuildRequest]) (*connect.Response[v1.GetBuildResponse], error)
+	// Get build logs for a specific build
+	GetBuildLogs(context.Context, *connect.Request[v1.GetBuildLogsRequest]) (*connect.Response[v1.GetBuildLogsResponse], error)
+	// Revert deployment to a previous build
+	RevertToBuild(context.Context, *connect.Request[v1.RevertToBuildRequest]) (*connect.Response[v1.RevertToBuildResponse], error)
+	// Delete a build from history
+	DeleteBuild(context.Context, *connect.Request[v1.DeleteBuildRequest]) (*connect.Response[v1.DeleteBuildResponse], error)
 	// List all available GitHub integrations for the current user
 	ListAvailableGitHubIntegrations(context.Context, *connect.Request[v1.ListAvailableGitHubIntegrationsRequest]) (*connect.Response[v1.ListAvailableGitHubIntegrationsResponse], error)
 	// Terminal access
@@ -1083,6 +1180,36 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		connect.WithSchema(deploymentServiceMethods.ByName("GetGitHubFile")),
 		connect.WithHandlerOptions(opts...),
 	)
+	deploymentServiceListBuildsHandler := connect.NewUnaryHandler(
+		DeploymentServiceListBuildsProcedure,
+		svc.ListBuilds,
+		connect.WithSchema(deploymentServiceMethods.ByName("ListBuilds")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceGetBuildHandler := connect.NewUnaryHandler(
+		DeploymentServiceGetBuildProcedure,
+		svc.GetBuild,
+		connect.WithSchema(deploymentServiceMethods.ByName("GetBuild")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceGetBuildLogsHandler := connect.NewUnaryHandler(
+		DeploymentServiceGetBuildLogsProcedure,
+		svc.GetBuildLogs,
+		connect.WithSchema(deploymentServiceMethods.ByName("GetBuildLogs")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceRevertToBuildHandler := connect.NewUnaryHandler(
+		DeploymentServiceRevertToBuildProcedure,
+		svc.RevertToBuild,
+		connect.WithSchema(deploymentServiceMethods.ByName("RevertToBuild")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceDeleteBuildHandler := connect.NewUnaryHandler(
+		DeploymentServiceDeleteBuildProcedure,
+		svc.DeleteBuild,
+		connect.WithSchema(deploymentServiceMethods.ByName("DeleteBuild")),
+		connect.WithHandlerOptions(opts...),
+	)
 	deploymentServiceListAvailableGitHubIntegrationsHandler := connect.NewUnaryHandler(
 		DeploymentServiceListAvailableGitHubIntegrationsProcedure,
 		svc.ListAvailableGitHubIntegrations,
@@ -1249,6 +1376,16 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceGetGitHubBranchesHandler.ServeHTTP(w, r)
 		case DeploymentServiceGetGitHubFileProcedure:
 			deploymentServiceGetGitHubFileHandler.ServeHTTP(w, r)
+		case DeploymentServiceListBuildsProcedure:
+			deploymentServiceListBuildsHandler.ServeHTTP(w, r)
+		case DeploymentServiceGetBuildProcedure:
+			deploymentServiceGetBuildHandler.ServeHTTP(w, r)
+		case DeploymentServiceGetBuildLogsProcedure:
+			deploymentServiceGetBuildLogsHandler.ServeHTTP(w, r)
+		case DeploymentServiceRevertToBuildProcedure:
+			deploymentServiceRevertToBuildHandler.ServeHTTP(w, r)
+		case DeploymentServiceDeleteBuildProcedure:
+			deploymentServiceDeleteBuildHandler.ServeHTTP(w, r)
 		case DeploymentServiceListAvailableGitHubIntegrationsProcedure:
 			deploymentServiceListAvailableGitHubIntegrationsHandler.ServeHTTP(w, r)
 		case DeploymentServiceStreamTerminalProcedure:
@@ -1394,6 +1531,26 @@ func (UnimplementedDeploymentServiceHandler) GetGitHubBranches(context.Context, 
 
 func (UnimplementedDeploymentServiceHandler) GetGitHubFile(context.Context, *connect.Request[v1.GetGitHubFileRequest]) (*connect.Response[v1.GetGitHubFileResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetGitHubFile is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) ListBuilds(context.Context, *connect.Request[v1.ListBuildsRequest]) (*connect.Response[v1.ListBuildsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.ListBuilds is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) GetBuild(context.Context, *connect.Request[v1.GetBuildRequest]) (*connect.Response[v1.GetBuildResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetBuild is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) GetBuildLogs(context.Context, *connect.Request[v1.GetBuildLogsRequest]) (*connect.Response[v1.GetBuildLogsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetBuildLogs is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) RevertToBuild(context.Context, *connect.Request[v1.RevertToBuildRequest]) (*connect.Response[v1.RevertToBuildResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.RevertToBuild is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) DeleteBuild(context.Context, *connect.Request[v1.DeleteBuildRequest]) (*connect.Response[v1.DeleteBuildResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.DeleteBuild is not implemented"))
 }
 
 func (UnimplementedDeploymentServiceHandler) ListAvailableGitHubIntegrations(context.Context, *connect.Request[v1.ListAvailableGitHubIntegrationsRequest]) (*connect.Response[v1.ListAvailableGitHubIntegrationsResponse], error) {
