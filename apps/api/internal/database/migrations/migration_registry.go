@@ -16,6 +16,8 @@ func RegisterMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_12_20_002", "Rename storage_usage to storage_bytes", renameStorageUsageToStorageBytes)
 	registry.Register("2025_12_20_003", "Add group column to deployments", addGroupColumnToDeployments)
 	registry.Register("2025_12_20_004", "Migrate group to groups JSONB array", migrateGroupToGroupsArray)
+	registry.Register("2025_12_20_005", "Add start_command column to deployments", addStartCommandColumn)
+	registry.Register("2025_12_28_001", "Create build_history and build_logs tables", createBuildHistoryTables)
 
 	// Add new migrations here
 }
@@ -164,6 +166,87 @@ func migrateGroupToGroupsArray(db *gorm.DB) error {
 			return err
 		}
 		if err := db.Exec("ALTER TABLE deployments DROP COLUMN IF EXISTS \"group\"").Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// addStartCommandColumn adds the start_command column to deployments table
+func addStartCommandColumn(db *gorm.DB) error {
+	// Check if column already exists
+	if db.Migrator().HasColumn("deployments", "start_command") {
+		return nil
+	}
+
+	// Add column
+	return db.Exec("ALTER TABLE deployments ADD COLUMN start_command VARCHAR(500)").Error
+}
+
+// createBuildHistoryTables creates the build_history and build_logs tables
+func createBuildHistoryTables(db *gorm.DB) error {
+	// Check if tables already exist
+	if db.Migrator().HasTable("build_history") && db.Migrator().HasTable("build_logs") {
+		return nil
+	}
+
+	// Create build_history table
+	if !db.Migrator().HasTable("build_history") {
+		if err := db.Exec(`
+			CREATE TABLE build_history (
+				id VARCHAR(255) PRIMARY KEY,
+				deployment_id VARCHAR(255) NOT NULL,
+				organization_id VARCHAR(255) NOT NULL,
+				build_number INTEGER NOT NULL,
+				status INTEGER NOT NULL DEFAULT 0,
+				started_at TIMESTAMP NOT NULL,
+				completed_at TIMESTAMP,
+				build_time INTEGER NOT NULL DEFAULT 0,
+				triggered_by VARCHAR(255) NOT NULL,
+				repository_url VARCHAR(500),
+				branch VARCHAR(255) NOT NULL,
+				commit_sha VARCHAR(255),
+				build_command VARCHAR(500),
+				install_command VARCHAR(500),
+				start_command VARCHAR(500),
+				dockerfile_path VARCHAR(500),
+				compose_file_path VARCHAR(500),
+				build_strategy INTEGER NOT NULL DEFAULT 0,
+				image_name VARCHAR(500),
+				compose_yaml TEXT,
+				size VARCHAR(50),
+				error TEXT,
+				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				INDEX idx_deployment_id (deployment_id),
+				INDEX idx_organization_id (organization_id),
+				INDEX idx_build_number (build_number),
+				INDEX idx_started_at (started_at),
+				INDEX idx_triggered_by (triggered_by),
+				UNIQUE INDEX idx_deployment_build_number (deployment_id, build_number)
+			)
+		`).Error; err != nil {
+			return err
+		}
+	}
+
+	// Create build_logs table
+	if !db.Migrator().HasTable("build_logs") {
+		if err := db.Exec(`
+			CREATE TABLE build_logs (
+				id SERIAL PRIMARY KEY,
+				build_id VARCHAR(255) NOT NULL,
+				line TEXT NOT NULL,
+				timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				stderr BOOLEAN NOT NULL DEFAULT FALSE,
+				line_number INTEGER NOT NULL,
+				INDEX idx_build_id (build_id),
+				INDEX idx_timestamp (timestamp),
+				INDEX idx_line_number (line_number),
+				FOREIGN KEY (build_id) REFERENCES build_history(id) ON DELETE CASCADE
+			)
+		`).Error; err != nil {
 			return err
 		}
 	}

@@ -103,7 +103,7 @@ func (r *DeploymentRepository) Update(ctx context.Context, deployment *Deploymen
 		Model(deployment).
 		Select(
 			"name", "domain", "custom_domains", "type", "build_strategy",
-			"repository_url", "branch", "build_command", "install_command",
+			"repository_url", "branch", "build_command", "install_command", "start_command",
 			"dockerfile_path", "compose_file_path", "github_integration_id",
 			"status", "health_status", "environment", "groups",
 			"image", "port", "replicas", "memory_bytes", "cpu_shares",
@@ -138,6 +138,17 @@ func (r *DeploymentRepository) UpdateStatus(ctx context.Context, id string, stat
 	return r.db.WithContext(ctx).Model(&Deployment{}).
 		Where("id = ?", id).
 		Update("status", status).Error
+}
+
+func (r *DeploymentRepository) UpdateStorage(ctx context.Context, id string, storageBytes int64) error {
+	// Clear cache
+	if r.cache != nil {
+		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", id))
+	}
+
+	return r.db.WithContext(ctx).Model(&Deployment{}).
+		Where("id = ?", id).
+		Update("storage_bytes", storageBytes).Error
 }
 
 func (r *DeploymentRepository) Delete(ctx context.Context, id string) error {

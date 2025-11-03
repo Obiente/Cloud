@@ -69,7 +69,11 @@ func InitDatabase() error {
 	}
 
 	// Auto-migrate the schema
-	if err := db.AutoMigrate(&Deployment{}); err != nil {
+	if err := db.AutoMigrate(
+		&Deployment{},
+		&BuildHistory{},
+		&BuildLog{},
+	); err != nil {
 		return fmt.Errorf("failed to auto-migrate: %w", err)
 	}
 
