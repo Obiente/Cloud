@@ -23,7 +23,7 @@
     node: ExplorerNode;
     indexPath: number[];
     selectedPath: string | null;
-    allowEditing: boolean;
+    allowEditing?: boolean;
   }>();
 
   const emit = defineEmits<{
@@ -55,22 +55,19 @@
 
     if (props.node.type === "directory") {
       add({ key: "refresh", label: "Refresh" });
-      if (props.allowEditing) {
-        add({ key: "new-file", label: "New File", shortcut: "N", separatorBefore: true });
-        add({ key: "new-folder", label: "New Folder" });
-        add({ key: "new-symlink", label: "New Symlink" });
-      }
+      add({ key: "new-file", label: "New File", shortcut: "N", separatorBefore: true });
+      add({ key: "new-folder", label: "New Folder" });
+      add({ key: "new-symlink", label: "New Symlink" });
     } else {
       add({
         key: "open-editor",
-        label: props.allowEditing ? "Open in Editor" : "View",
-        disabled: !props.allowEditing,
+        label: "Open in Editor",
       });
     }
 
     add({ key: "copy-path", label: "Copy Path", separatorBefore: true });
 
-    if (props.allowEditing && props.node.path !== "/") {
+    if (props.node.path !== "/") {
       add({ key: "rename", label: "Rename", shortcut: "F2", separatorBefore: true });
       add({ key: "delete", label: "Delete", shortcut: "Del" });
     }
@@ -228,7 +225,7 @@
             :node="child"
             :indexPath="[...props.indexPath, idx]"
             :selectedPath="selectedPath"
-            :allowEditing="allowEditing"
+            :allowEditing="props.allowEditing ?? true"
             @toggle="(n, open) => emit('toggle', n, open)"
             @open="(n, options) => emit('open', n, options)"
             @action="(action, n) => emit('action', action, n)"

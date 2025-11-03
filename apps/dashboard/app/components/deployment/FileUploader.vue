@@ -1,13 +1,10 @@
 <template>
-  <OuiStack gap="md">
-    <OuiFlex justify="between" align="center">
-      <OuiText as="h4" size="sm" weight="semibold">Upload Files</OuiText>
-      <FileUpload.Root
-        :maxFiles="20"
-        :maxFileSize="100 * 1024 * 1024"
-        @filesAccepted="handleFilesAccepted"
-        @fileRejected="handleFileRejected"
-      >
+  <FileUpload.Root
+    :maxFiles="20"
+    :maxFileSize="100 * 1024 * 1024"
+    @filesAccepted="handleFilesAccepted"
+    @fileRejected="handleFileRejected"
+  >
         <FileUpload.Context v-slot="api">
           <FileUpload.Dropzone
             :class="[
@@ -16,17 +13,24 @@
             ]"
           >
             <OuiStack gap="sm" align="center">
-              <ArrowUpTrayIcon class="h-8 w-8 text-secondary" />
-              <OuiText size="sm" weight="medium">
-                {{ api.dragging ? 'Drop files here' : 'Drag and drop files here' }}
-              </OuiText>
-              <OuiText size="xs" color="secondary">or</OuiText>
-              <FileUpload.Trigger asChild>
-                <OuiButton variant="ghost" size="sm">
-                  Choose Files
-                </OuiButton>
-              </FileUpload.Trigger>
-              <OuiText size="xs" color="secondary">
+              <ArrowUpTrayIcon class="h-10 w-10 text-text-tertiary" />
+              <OuiStack gap="xs" align="center">
+                <OuiText size="md" weight="semibold">
+                  {{ api.dragging ? 'Drop files here to upload' : 'Click or drag files to upload' }}
+                </OuiText>
+                <OuiText size="xs" color="secondary">
+                  {{ api.dragging ? 'Release to upload' : 'Upload multiple files at once' }}
+                </OuiText>
+              </OuiStack>
+              <OuiFlex gap="xs" align="center" class="mt-2">
+                <OuiText size="xs" color="secondary">or</OuiText>
+                <FileUpload.Trigger asChild>
+                  <OuiButton variant="outline" size="sm">
+                    Browse Files
+                  </OuiButton>
+                </FileUpload.Trigger>
+              </OuiFlex>
+              <OuiText size="xs" color="secondary" class="mt-1">
                 Maximum size: 100MB per file
               </OuiText>
             </OuiStack>
@@ -88,10 +92,9 @@
           <FileUpload.HiddenInput />
         </FileUpload.Context>
       </FileUpload.Root>
-    </OuiFlex>
 
     <!-- Rejected Files -->
-    <OuiStack v-if="rejectedFiles.length > 0" gap="xs">
+    <OuiStack v-if="rejectedFiles.length > 0" gap="xs" class="mt-4">
       <OuiText size="xs" weight="semibold" color="danger">Rejected Files:</OuiText>
       <OuiCard variant="default" class="border-danger" v-for="rejection in rejectedFiles" :key="rejection.file.name">
         <OuiCardBody class="py-2">
@@ -105,9 +108,8 @@
       </OuiCard>
     </OuiStack>
 
-    <OuiText v-if="uploadError" size="xs" color="danger">{{ uploadError }}</OuiText>
-    <OuiText v-if="uploadSuccess" size="xs" color="success">{{ uploadSuccess }}</OuiText>
-  </OuiStack>
+    <OuiText v-if="uploadError" size="xs" color="danger" class="mt-4">{{ uploadError }}</OuiText>
+    <OuiText v-if="uploadSuccess" size="xs" color="success" class="mt-4">{{ uploadSuccess }}</OuiText>
 </template>
 
 <script setup lang="ts">
@@ -115,7 +117,8 @@ import { ref, computed } from "vue";
 import { FileUpload } from "@ark-ui/vue/file-upload";
 import { ArrowUpTrayIcon, DocumentIcon } from "@heroicons/vue/24/outline";
 import { useConnectClient } from "~/lib/connect-client";
-import { DeploymentService } from "@obiente/proto";
+import { DeploymentService, UploadContainerFilesRequestSchema, UploadContainerFilesMetadataSchema } from "@obiente/proto";
+import { create } from "@bufbuild/protobuf";
 import { useOrganizationsStore } from "~/stores/organizations";
 
 interface Props {
@@ -239,8 +242,8 @@ const uploadFiles = async (api: any) => {
     // Create tar archive
     const tarData = await createTarArchive(api.acceptedFiles);
     
-    // Create metadata
-    const metadata = {
+    // Create metadata using protobuf schema
+    const metadata = create(UploadContainerFilesMetadataSchema, {
       organizationId: organizationId.value,
       deploymentId: props.deploymentId,
       destinationPath: props.destinationPath || "/",
@@ -253,33 +256,16 @@ const uploadFiles = async (api: any) => {
         isDirectory: false,
         path: f.name,
       })),
-    };
+    });
     
-    // Use Connect client streaming API with async generator
-    async function* inputStream() {
-      // Send metadata first
-      yield {
-        data: {
-          case: "metadata" as const,
-          value: metadata,
-        },
-      } as any;
-      
-      // Send file data in chunks (64KB chunks)
-      const chunkSize = 64 * 1024;
-      for (let offset = 0; offset < tarData.length; offset += chunkSize) {
-        const chunk = tarData.slice(offset, offset + chunkSize);
-        yield {
-          data: {
-            case: "chunk" as const,
-            value: new Uint8Array(chunk),
-          },
-        } as any;
-      }
-    }
+    // Create single non-streaming request with all data
+    const request = create(UploadContainerFilesRequestSchema, {
+      metadata: metadata,
+      tarData: new Uint8Array(tarData),
+    });
     
-    // Call the upload RPC with the async generator
-    const response = await client.uploadContainerFiles(inputStream());
+    // Call the upload RPC with a single request (non-streaming)
+    const response = await client.uploadContainerFiles(request);
 
     if (response.success) {
       uploadSuccess.value = `Successfully uploaded ${response.filesUploaded} file(s)`;

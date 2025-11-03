@@ -25,7 +25,6 @@ interface SourceState {
 interface ExplorerOptions {
   organizationId: string;
   deploymentId: string;
-  allowEditing?: boolean;
 }
 
 type RenameEntryInput = Partial<
@@ -226,19 +225,61 @@ export function useFileExplorer(options: ExplorerOptions) {
 
   async function deleteEntries(paths: string[]) {
     if (!getOrgId()) return;
-    const payload = create(DeleteContainerEntriesRequestSchema, {
-      organizationId: getOrgId(),
-      deploymentId: options.deploymentId,
-      paths,
-      volumeName: source.type === "volume" ? source.volumeName : undefined,
-      recursive: true,
-      force: true,
-    });
-    const res = await client.deleteContainerEntries(payload);
-    if (!res.success && res.errors?.length) {
-      throw new Error(res.errors.map((e) => e.message || "Unknown error").join("\n"));
+    
+    // Optimistically remove files from tree immediately for better UX
+    const deletedNodes: Array<{ node: ExplorerNode | null; parent: ExplorerNode | null }> = [];
+    for (const path of paths) {
+      const node = findNode(path);
+      if (node) {
+        const parentPath = node.parentPath || "/";
+        const parent = findNode(parentPath);
+        if (parent && parent.children) {
+          parent.children = parent.children.filter(child => child.path !== path);
+          deletedNodes.push({ node, parent });
+        }
+      }
     }
-    await refreshRoot();
+    
+    try {
+      const payload = create(DeleteContainerEntriesRequestSchema, {
+        organizationId: getOrgId(),
+        deploymentId: options.deploymentId,
+        paths,
+        volumeName: source.type === "volume" ? source.volumeName : undefined,
+        recursive: true,
+        force: true,
+      });
+      const res = await client.deleteContainerEntries(payload);
+      if (!res.success && res.errors?.length) {
+        // Revert optimistic update on error
+        for (const { node, parent } of deletedNodes) {
+          if (node && parent && parent.children) {
+            parent.children.push(node);
+            sortNodes(parent.children);
+          }
+        }
+        throw new Error(res.errors.map((e) => e.message || "Unknown error").join("\n"));
+      }
+      
+      // Refresh parent directories to ensure consistency
+      const refreshedParents = new Set<string>();
+      for (const { parent } of deletedNodes) {
+        if (parent && !refreshedParents.has(parent.path)) {
+          refreshedParents.add(parent.path);
+          await loadChildren(parent);
+        }
+      }
+    } catch (error) {
+      // If error and optimistic update was reverted, refresh all affected parents
+      const refreshedParents = new Set<string>();
+      for (const { parent } of deletedNodes) {
+        if (parent && !refreshedParents.has(parent.path)) {
+          refreshedParents.add(parent.path);
+          await loadChildren(parent);
+        }
+      }
+      throw error;
+    }
   }
 
   async function renameEntry(payload: RenameEntryInput) {
@@ -252,7 +293,21 @@ export function useFileExplorer(options: ExplorerOptions) {
     if (!res.success) {
       throw new Error("Rename failed");
     }
-    await refreshRoot();
+    
+    // Refresh the parent directory instead of entire root
+    const sourcePath = payload.sourcePath;
+    if (sourcePath) {
+      const parentPath = sourcePath.substring(0, sourcePath.lastIndexOf("/")) || "/";
+      const parent = findNode(parentPath);
+      if (parent) {
+        await loadChildren(parent);
+      } else {
+        // Fallback to root if parent not found
+        await refreshRoot();
+      }
+    } else {
+      await refreshRoot();
+    }
   }
 
   async function createEntry(payload: CreateEntryInput) {
@@ -263,7 +318,16 @@ export function useFileExplorer(options: ExplorerOptions) {
       deploymentId: options.deploymentId,
     });
     await client.createContainerEntry(request);
-    await refreshRoot();
+    
+    // Refresh the parent directory instead of entire root
+    const parentPath = payload.parentPath || "/";
+    const parent = findNode(parentPath);
+    if (parent) {
+      await loadChildren(parent);
+    } else {
+      // Fallback to root if parent not found
+      await refreshRoot();
+    }
   }
 
   async function writeFile(payload: WriteFileInput) {

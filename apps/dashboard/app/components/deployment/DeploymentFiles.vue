@@ -38,10 +38,9 @@
           <OuiButton
             variant="ghost"
             size="sm"
-              :disabled="!currentNode || currentNode.type !== 'directory'"
-            >
-              New
-            </OuiButton>
+          >
+            New
+          </OuiButton>
           </template>
           <template #default>
             <OuiMenuItem value="new-file" @select="() => handleCreate('file')">
@@ -74,25 +73,6 @@
           </OuiButton>
         </OuiFlex>
     </div>
-
-    <transition name="fade">
-      <OuiCard
-        v-if="showUpload"
-        variant="outline"
-        class="animate-[fade-in_0.2s_ease]"
-      >
-        <OuiCardBody>
-          <FileUploader
-            :deployment-id="deploymentId"
-            :destination-path="currentDirectory"
-            :volume-name="source.type === 'volume' ? source.volumeName : undefined"
-            :container-id="source.type === 'container' && selectedContainerId ? selectedContainerId : undefined"
-            :service-name="source.type === 'container' && selectedServiceName ? selectedServiceName : undefined"
-            @uploaded="handleFilesUploaded"
-          />
-        </OuiCardBody>
-      </OuiCard>
-    </transition>
 
     <div
       class="grid grid-cols-[260px_1fr] gap-4 h-[calc(100vh-220px)] min-h-[calc(100vh-220px)] max-h-[calc(100vh-220px)] overflow-hidden"
@@ -198,7 +178,7 @@
                   :node="child"
                   :indexPath="[idx]"
                   :selectedPath="selectedPath"
-                  :allowEditing="allowEditing"
+                  :allowEditing="true"
                   @toggle="(node, open) => handleToggle(node, open)"
                   @open="(node, options) => handleOpen(node, options)"
                   @action="handleContextAction"
@@ -369,18 +349,36 @@
         </header>
 
         <div class="flex-1 relative min-h-0 overflow-hidden" role="tabpanel">
+          <!-- File Uploader (replaces editor when showUpload is true) -->
           <div
-            v-if="!selectedPath"
-            class="h-full flex items-center justify-center text-text-tertiary"
-          >
-            <OuiText size="sm" color="secondary"
-              >Select a file to view its contents</OuiText
-            >
-            </div>
-            <div
-            v-else-if="fileError"
+            v-if="showUpload"
             class="h-full flex items-center justify-center p-8"
           >
+            <div class="w-full max-w-2xl">
+              <FileUploader
+                :deployment-id="deploymentId"
+                :destination-path="currentDirectory"
+                :volume-name="source.type === 'volume' ? source.volumeName : undefined"
+                :container-id="source.type === 'container' && selectedContainerId ? selectedContainerId : undefined"
+                :service-name="source.type === 'container' && selectedServiceName ? selectedServiceName : undefined"
+                @uploaded="handleFilesUploaded"
+              />
+            </div>
+          </div>
+          <!-- File Preview/Editor (shown when not uploading) -->
+          <template v-else>
+            <div
+              v-if="!selectedPath"
+              class="h-full flex items-center justify-center text-text-tertiary"
+            >
+              <OuiText size="sm" color="secondary"
+                >Select a file to view its contents</OuiText
+              >
+            </div>
+            <div
+              v-else-if="fileError"
+              class="h-full flex items-center justify-center p-8"
+            >
             <div class="flex flex-col items-center gap-4 max-w-md text-center">
               <div
                 class="flex items-center justify-center w-16 h-16 rounded-full bg-danger/10"
@@ -513,6 +511,7 @@
               >Select a file to view its contents</OuiText
             >
           </div>
+          </template>
         </div>
       </section>
     </div>
@@ -540,6 +539,7 @@
     type TreeNode as ArkTreeNode,
   } from "@ark-ui/vue/collection";
 import TreeNode from "./TreeNode.vue";
+import FileUploader from "./FileUploader.vue";
   import { useFileExplorer } from "~/composables/useFileExplorer";
   import { useDeploymentContainerQuery } from "~/composables/useDeploymentContainerQuery";
 import { useConnectClient } from "~/lib/connect-client";
@@ -555,7 +555,6 @@ import { DeploymentService } from "@obiente/proto";
   const props = defineProps<{
   deploymentId: string;
   organizationId?: string;
-    allowEditing?: boolean;
   }>();
 
   const route = useRoute();
@@ -697,7 +696,6 @@ import { DeploymentService } from "@obiente/proto";
   const explorer = useFileExplorer({
     organizationId: props.organizationId || "",
     deploymentId: props.deploymentId,
-    allowEditing: props.allowEditing ?? true,
   });
 
   const {
@@ -800,8 +798,6 @@ import { DeploymentService } from "@obiente/proto";
   const explorerClient = useConnectClient(DeploymentService);
   const dialog = useDialog();
 
-  // Make allowEditing reactive to prop changes
-  const allowEditing = computed(() => props.allowEditing ?? true);
   const isSaving = ref(false);
   const saveStatus = ref<"idle" | "saving" | "success" | "error">("idle");
   const saveErrorMessage = ref<string | null>(null);
@@ -885,11 +881,9 @@ import { DeploymentService } from "@obiente/proto";
         loadChildren(node);
         break;
       case "delete":
-        if (!allowEditing.value) return;
         queueDelete([node.path]);
         break;
       case "rename":
-        if (!allowEditing.value) return;
         queueRename(node);
         break;
       case "copy-path":
@@ -898,29 +892,18 @@ import { DeploymentService } from "@obiente/proto";
           .catch((err) => console.error("copy path", err));
         break;
       case "new-file":
-        if (!allowEditing.value) return;
         handleCreate("file");
         break;
       case "new-folder":
-        if (!allowEditing.value) return;
         handleCreate("directory");
         break;
       case "new-symlink":
-        if (!allowEditing.value) return;
         handleCreate("symlink");
         break;
     }
   }
 
   async function handleCreate(type: "file" | "directory" | "symlink") {
-    if (!allowEditing.value) {
-      await dialog.showAlert({
-        title: "Editing Disabled",
-        message: "File editing is not enabled for this deployment.",
-      });
-      return;
-    }
-
     // Determine parent directory - use current directory if it's a directory, otherwise use parent of current file
     const parent =
       currentNode.value && currentNode.value.type === "directory"
@@ -961,6 +944,8 @@ import { DeploymentService } from "@obiente/proto";
       type: entryType,
       modeOctal: type === "directory" ? 0o755 : 0o644,
       volumeName: source.type === "volume" ? source.volumeName : undefined,
+      containerId: source.type === "container" && selectedContainerId.value ? selectedContainerId.value : undefined,
+      serviceName: source.type === "container" && selectedServiceName.value ? selectedServiceName.value : undefined,
     };
 
     // For symlinks, get the target path
@@ -980,23 +965,8 @@ import { DeploymentService } from "@obiente/proto";
     }
 
     try {
+      // createEntry now handles refreshing the parent directory
       await createEntry(payload);
-      
-      // Refresh the parent directory to show the new entry
-      const parentNode = findNode(parent);
-      if (parentNode && parentNode.type === "directory") {
-        await loadChildren(parentNode);
-      } else {
-        // Fallback to refreshing root
-        await refreshRoot();
-      }
-
-      // Show success message
-      await dialog.showAlert({
-        title: "Created",
-        message: `Successfully created ${type}: ${name}`,
-        confirmLabel: "OK",
-      });
     } catch (err: any) {
       console.error("Failed to create entry:", err);
       await dialog.showAlert({
@@ -1008,15 +978,27 @@ import { DeploymentService } from "@obiente/proto";
   }
 
   async function queueDelete(paths: string[]) {
-    if (!allowEditing) return;
     if (!confirm(`Delete ${paths.length} item(s)?`)) return;
-    await deleteEntries(paths);
-    selectedPath.value = null;
-    updateFileQueryParam(null); // Clear file query param when closing file
+    
+    // Clear selection immediately for better UX
+    const wasSelected = selectedPath.value && paths.includes(selectedPath.value);
+    if (wasSelected) {
+      selectedPath.value = null;
+      updateFileQueryParam(null);
+    }
+    
+    // Delete is now non-blocking and handles its own optimistic updates
+    deleteEntries(paths).catch((err: any) => {
+      console.error("Failed to delete:", err);
+      dialog.showAlert({
+        title: "Delete Failed",
+        message: err?.message || "Failed to delete item(s). Please try again.",
+        confirmLabel: "OK",
+      });
+    });
   }
 
   async function queueRename(node: ExplorerNode) {
-    if (!allowEditing) return;
     const target = prompt("New name", node.name);
     if (!target || target === node.name) return;
     const targetPath =
@@ -1313,7 +1295,8 @@ import { DeploymentService } from "@obiente/proto";
 
       // Determine preview type based on MIME type or file extension
       const mimeType = res.metadata?.mimeType || "";
-      const previewType = detectPreviewType(node.path, mimeType);
+      const fileSize = Number(res.size || 0);
+      const previewType = detectPreviewType(node.path, mimeType, fileSize);
       filePreviewType.value = previewType;
 
       if (previewType === "text") {
@@ -1388,8 +1371,21 @@ import { DeploymentService } from "@obiente/proto";
 
   function detectPreviewType(
     path: string,
-    mimeType?: string
+    mimeType?: string,
+    fileSize: number = 0
   ): "text" | "image" | "video" | "audio" | "pdf" | "binary" {
+    // Empty files (0 bytes) should default to text unless they have a known binary extension
+    if (fileSize === 0) {
+      // Check if it has a known binary extension
+      const ext = path.split(".").pop()?.toLowerCase() || "";
+      const binaryExts = ["exe", "dll", "so", "dylib", "bin", "app", "deb", "rpm", "pkg", "dmg", "iso", "img"];
+      if (binaryExts.includes(ext)) {
+        return "binary";
+      }
+      // Default empty files to text so they can be edited
+      return "text";
+    }
+    
     // Check MIME type first (most reliable)
     if (mimeType) {
       if (mimeType.startsWith("image/")) return "image";
@@ -1981,8 +1977,17 @@ import { DeploymentService } from "@obiente/proto";
   }
 
   async function handleFilesUploaded() {
-  showUpload.value = false;
-    await refreshRoot();
+    showUpload.value = false;
+    
+    // Refresh the directory where files were uploaded (destination path)
+    const uploadDir = currentDirectory.value || "/";
+    const dirNode = findNode(uploadDir);
+    if (dirNode && dirNode.type === "directory") {
+      await loadChildren(dirNode);
+    } else {
+      // Fallback to root if directory not found
+      await refreshRoot();
+    }
   }
 
   const containerOptions = computed(() => {

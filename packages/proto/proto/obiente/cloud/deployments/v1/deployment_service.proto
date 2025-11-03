@@ -153,7 +153,7 @@ service DeploymentService {
   rpc GetContainerFile(GetContainerFileRequest) returns (GetContainerFileResponse);
   
   // Upload files to a deployment container
-  rpc UploadContainerFiles(stream UploadContainerFilesRequest) returns (UploadContainerFilesResponse);
+  rpc UploadContainerFiles(UploadContainerFilesRequest) returns (UploadContainerFilesResponse);
 
   // Delete one or more files/directories in a deployment container
   rpc DeleteContainerEntries(DeleteContainerEntriesRequest) returns (DeleteContainerEntriesResponse);
@@ -579,10 +579,8 @@ message GetContainerFileResponse {
 }
 
 message UploadContainerFilesRequest {
-  oneof data {
-    UploadContainerFilesMetadata metadata = 1; // First message contains metadata
-    bytes chunk = 2; // Subsequent messages contain file data chunks
-  }
+  UploadContainerFilesMetadata metadata = 1; // Metadata about the upload
+  bytes tar_data = 2; // Complete tar archive containing all files
 }
 
 message UploadContainerFilesMetadata {
@@ -655,9 +653,11 @@ message CreateContainerEntryRequest {
   string parent_path = 3;
   string name = 4;
   ContainerEntryType type = 5;
-  optional string template = 6; // Optional template identifier for seeded content
+  optional string template = 6; // Optional template identifier for seeded content (required for symlinks - target path)
   optional string volume_name = 7;
   optional uint32 mode_octal = 8;
+  optional string container_id = 9; // Specific container to create entry in (for compose deployments)
+  optional string service_name = 10; // Service name to create entry in (for compose deployments)
 }
 
 message CreateContainerEntryResponse {
