@@ -215,7 +215,7 @@ func (s *Service) GetGitHubStatus(ctx context.Context, _ *connect.Request[authv1
 
 func (s *Service) ConnectOrganizationGitHub(ctx context.Context, req *connect.Request[authv1.ConnectOrganizationGitHubRequest]) (*connect.Response[authv1.ConnectOrganizationGitHubResponse], error) {
 	// Get authenticated user
-	_, err := auth.GetUserFromContext(ctx)
+	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required"))
 	}
@@ -225,8 +225,11 @@ func (s *Service) ConnectOrganizationGitHub(ctx context.Context, req *connect.Re
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
 	}
 
-	// TODO: Verify user has permission to manage integrations for this organization
-	// For now, we'll allow any authenticated user (should check for org admin/owner)
+	// Verify user has permission to manage integrations for this organization
+	// Only owners and admins can manage organization integrations
+	if err := s.verifyOrgAdminPermission(ctx, orgID, user); err != nil {
+		return nil, err
+	}
 
 	if s.db == nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("database not initialized"))
@@ -276,7 +279,7 @@ func (s *Service) ConnectOrganizationGitHub(ctx context.Context, req *connect.Re
 
 func (s *Service) DisconnectOrganizationGitHub(ctx context.Context, req *connect.Request[authv1.DisconnectOrganizationGitHubRequest]) (*connect.Response[authv1.DisconnectOrganizationGitHubResponse], error) {
 	// Get authenticated user
-	_, err := auth.GetUserFromContext(ctx)
+	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required"))
 	}
@@ -286,7 +289,11 @@ func (s *Service) DisconnectOrganizationGitHub(ctx context.Context, req *connect
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
 	}
 
-	// TODO: Verify user has permission to manage integrations for this organization
+	// Verify user has permission to manage integrations for this organization
+	// Only owners and admins can manage organization integrations
+	if err := s.verifyOrgAdminPermission(ctx, orgID, user); err != nil {
+		return nil, err
+	}
 
 	if s.db == nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("database not initialized"))
@@ -366,4 +373,36 @@ func (s *Service) ListGitHubIntegrations(ctx context.Context, _ *connect.Request
 	return connect.NewResponse(&authv1.ListGitHubIntegrationsResponse{
 		Integrations: protoIntegrations,
 	}), nil
+}
+
+// verifyOrgAdminPermission verifies that the user is an admin or owner of the organization
+func (s *Service) verifyOrgAdminPermission(ctx context.Context, orgID string, user *authv1.User) error {
+	if user == nil {
+		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required"))
+	}
+
+	// Superadmins bypass permission checks
+	if auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil
+	}
+
+	// Check if user is a member with admin or owner role
+	var member database.OrganizationMember
+	if err := s.db.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("not a member of this organization"))
+		}
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("membership lookup: %w", err))
+	}
+
+	if !strings.EqualFold(member.Status, "active") {
+		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("inactive members cannot perform this action"))
+	}
+
+	role := strings.ToLower(member.Role)
+	if role != "owner" && role != "admin" {
+		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("only organization owners and admins can manage integrations"))
+	}
+
+	return nil
 }

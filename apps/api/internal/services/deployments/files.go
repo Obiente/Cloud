@@ -420,28 +420,15 @@ func (s *Service) GetContainerFile(ctx context.Context, req *connect.Request[dep
 }
 
 // UploadContainerFiles uploads files to a deployment container
-func (s *Service) UploadContainerFiles(ctx context.Context, stream *connect.ClientStream[deploymentsv1.UploadContainerFilesRequest]) (*connect.Response[deploymentsv1.UploadContainerFilesResponse], error) {
-	var metadata *deploymentsv1.UploadContainerFilesMetadata
-	var fileData bytes.Buffer
-
-	// Read all stream messages
-	for stream.Receive() {
-		msg := stream.Msg()
-
-		switch d := msg.Data.(type) {
-		case *deploymentsv1.UploadContainerFilesRequest_Metadata:
-			metadata = d.Metadata
-		case *deploymentsv1.UploadContainerFilesRequest_Chunk:
-			fileData.Write(d.Chunk)
-		}
-	}
-
-	if err := stream.Err(); err != nil && err != io.EOF {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to receive stream: %w", err))
-	}
-
+func (s *Service) UploadContainerFiles(ctx context.Context, req *connect.Request[deploymentsv1.UploadContainerFilesRequest]) (*connect.Response[deploymentsv1.UploadContainerFilesResponse], error) {
+	metadata := req.Msg.GetMetadata()
 	if metadata == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("metadata is required"))
+	}
+
+	fileData := req.Msg.GetTarData()
+	if len(fileData) == 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("tar_data is required"))
 	}
 
 	deploymentID := metadata.GetDeploymentId()
@@ -475,7 +462,7 @@ func (s *Service) UploadContainerFiles(ctx context.Context, stream *connect.Clie
 
 	// Extract files from tar archive
 	files := make(map[string][]byte)
-	tarReader := tar.NewReader(&fileData)
+	tarReader := tar.NewReader(bytes.NewReader(fileData))
 	for {
 		hdr, err := tarReader.Next()
 		if err == io.EOF {

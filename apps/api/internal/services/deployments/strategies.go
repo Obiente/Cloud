@@ -47,7 +47,7 @@ func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Depl
 	}
 
 	// Clone repository
-	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, buildDir); err != nil {
+	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, buildDir, config.GitHubToken); err != nil {
 		return &BuildResult{Success: false, Error: err}, err
 	}
 
@@ -237,7 +237,7 @@ func (s *NixpacksStrategy) Build(ctx context.Context, deployment *database.Deplo
 	}
 
 	// Clone repository
-	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, buildDir); err != nil {
+	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, buildDir, config.GitHubToken); err != nil {
 		return &BuildResult{Success: false, Error: err}, err
 	}
 
@@ -324,7 +324,7 @@ func (s *DockerfileStrategy) Build(ctx context.Context, deployment *database.Dep
 	}
 
 	// Clone repository
-	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, buildDir); err != nil {
+	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, buildDir, config.GitHubToken); err != nil {
 		return &BuildResult{Success: false, Error: err}, err
 	}
 
@@ -459,7 +459,7 @@ func (s *ComposeRepoStrategy) Build(ctx context.Context, deployment *database.De
 	if branch == "" {
 		branch = "main"
 	}
-	if err := cloneRepository(ctx, config.RepositoryURL, branch, buildDir); err != nil {
+	if err := cloneRepository(ctx, config.RepositoryURL, branch, buildDir, config.GitHubToken); err != nil {
 		return &BuildResult{Success: false, Error: err}, err
 	}
 
@@ -546,7 +546,7 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 	}
 
 	// Clone repository
-	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, buildDir); err != nil {
+	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, buildDir, config.GitHubToken); err != nil {
 		return &BuildResult{Success: false, Error: err}, nil
 	}
 

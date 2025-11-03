@@ -240,7 +240,7 @@ type DeploymentServiceClient interface {
 	// Get file content from a deployment container
 	GetContainerFile(context.Context, *connect.Request[v1.GetContainerFileRequest]) (*connect.Response[v1.GetContainerFileResponse], error)
 	// Upload files to a deployment container
-	UploadContainerFiles(context.Context) *connect.ClientStreamForClient[v1.UploadContainerFilesRequest, v1.UploadContainerFilesResponse]
+	UploadContainerFiles(context.Context, *connect.Request[v1.UploadContainerFilesRequest]) (*connect.Response[v1.UploadContainerFilesResponse], error)
 	// Delete one or more files/directories in a deployment container
 	DeleteContainerEntries(context.Context, *connect.Request[v1.DeleteContainerEntriesRequest]) (*connect.Response[v1.DeleteContainerEntriesResponse], error)
 	// Rename or move a file/directory within a deployment container
@@ -757,8 +757,8 @@ func (c *deploymentServiceClient) GetContainerFile(ctx context.Context, req *con
 }
 
 // UploadContainerFiles calls obiente.cloud.deployments.v1.DeploymentService.UploadContainerFiles.
-func (c *deploymentServiceClient) UploadContainerFiles(ctx context.Context) *connect.ClientStreamForClient[v1.UploadContainerFilesRequest, v1.UploadContainerFilesResponse] {
-	return c.uploadContainerFiles.CallClientStream(ctx)
+func (c *deploymentServiceClient) UploadContainerFiles(ctx context.Context, req *connect.Request[v1.UploadContainerFilesRequest]) (*connect.Response[v1.UploadContainerFilesResponse], error) {
+	return c.uploadContainerFiles.CallUnary(ctx, req)
 }
 
 // DeleteContainerEntries calls
@@ -898,7 +898,7 @@ type DeploymentServiceHandler interface {
 	// Get file content from a deployment container
 	GetContainerFile(context.Context, *connect.Request[v1.GetContainerFileRequest]) (*connect.Response[v1.GetContainerFileResponse], error)
 	// Upload files to a deployment container
-	UploadContainerFiles(context.Context, *connect.ClientStream[v1.UploadContainerFilesRequest]) (*connect.Response[v1.UploadContainerFilesResponse], error)
+	UploadContainerFiles(context.Context, *connect.Request[v1.UploadContainerFilesRequest]) (*connect.Response[v1.UploadContainerFilesResponse], error)
 	// Delete one or more files/directories in a deployment container
 	DeleteContainerEntries(context.Context, *connect.Request[v1.DeleteContainerEntriesRequest]) (*connect.Response[v1.DeleteContainerEntriesResponse], error)
 	// Rename or move a file/directory within a deployment container
@@ -1119,7 +1119,7 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		connect.WithSchema(deploymentServiceMethods.ByName("GetContainerFile")),
 		connect.WithHandlerOptions(opts...),
 	)
-	deploymentServiceUploadContainerFilesHandler := connect.NewClientStreamHandler(
+	deploymentServiceUploadContainerFilesHandler := connect.NewUnaryHandler(
 		DeploymentServiceUploadContainerFilesProcedure,
 		svc.UploadContainerFiles,
 		connect.WithSchema(deploymentServiceMethods.ByName("UploadContainerFiles")),
@@ -1420,7 +1420,7 @@ func (UnimplementedDeploymentServiceHandler) GetContainerFile(context.Context, *
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetContainerFile is not implemented"))
 }
 
-func (UnimplementedDeploymentServiceHandler) UploadContainerFiles(context.Context, *connect.ClientStream[v1.UploadContainerFilesRequest]) (*connect.Response[v1.UploadContainerFilesResponse], error) {
+func (UnimplementedDeploymentServiceHandler) UploadContainerFiles(context.Context, *connect.Request[v1.UploadContainerFilesRequest]) (*connect.Response[v1.UploadContainerFilesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.UploadContainerFiles is not implemented"))
 }
 

@@ -51,7 +51,15 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			if dbDeployment.RepositoryURL != nil && *dbDeployment.RepositoryURL != "" {
 				buildDir, err := ensureBuildDir(deploymentID + "-detect")
 				if err == nil {
-					if err := cloneRepository(buildCtx, *dbDeployment.RepositoryURL, dbDeployment.Branch, buildDir); err == nil {
+					// Get GitHub token if integration ID is set
+					githubToken := ""
+					if dbDeployment.GitHubIntegrationID != nil && *dbDeployment.GitHubIntegrationID != "" {
+						var integration database.GitHubIntegration
+						if err := database.DB.Where("id = ?", *dbDeployment.GitHubIntegrationID).First(&integration).Error; err == nil {
+							githubToken = integration.Token
+						}
+					}
+					if err := cloneRepository(buildCtx, *dbDeployment.RepositoryURL, dbDeployment.Branch, buildDir, githubToken); err == nil {
 						if detected, _ := s.buildRegistry.AutoDetect(buildCtx, buildDir); detected != deploymentsv1.BuildStrategy_BUILD_STRATEGY_UNSPECIFIED {
 							buildStrategy = detected
 							// Update deployment with detected strategy
@@ -115,10 +123,20 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			composeFilePath = *dbDeployment.ComposeFilePath
 		}
 
+		// Get GitHub token if integration ID is set
+		githubToken := ""
+		if dbDeployment.GitHubIntegrationID != nil && *dbDeployment.GitHubIntegrationID != "" {
+			var integration database.GitHubIntegration
+			if err := database.DB.Where("id = ?", *dbDeployment.GitHubIntegrationID).First(&integration).Error; err == nil {
+				githubToken = integration.Token
+			}
+		}
+
 		buildConfig := &BuildConfig{
 			DeploymentID:    deploymentID,
 			RepositoryURL:   repoURL,
 			Branch:          dbDeployment.Branch,
+			GitHubToken:     githubToken,
 			BuildCommand:    buildCmd,
 			InstallCommand:  installCmd,
 			DockerfilePath:  dockerfilePath,

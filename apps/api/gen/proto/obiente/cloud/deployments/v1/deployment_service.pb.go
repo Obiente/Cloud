@@ -4104,12 +4104,9 @@ func (x *GetContainerFileResponse) GetMetadata() *ContainerFile {
 }
 
 type UploadContainerFilesRequest struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Types that are valid to be assigned to Data:
-	//
-	//	*UploadContainerFilesRequest_Metadata
-	//	*UploadContainerFilesRequest_Chunk
-	Data          isUploadContainerFilesRequest_Data `protobuf_oneof:"data"`
+	state         protoimpl.MessageState        `protogen:"open.v1"`
+	Metadata      *UploadContainerFilesMetadata `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`              // Metadata about the upload
+	TarData       []byte                        `protobuf:"bytes,2,opt,name=tar_data,json=tarData,proto3" json:"tar_data,omitempty"` // Complete tar archive containing all files
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4144,46 +4141,19 @@ func (*UploadContainerFilesRequest) Descriptor() ([]byte, []int) {
 	return file_obiente_cloud_deployments_v1_deployment_service_proto_rawDescGZIP(), []int{60}
 }
 
-func (x *UploadContainerFilesRequest) GetData() isUploadContainerFilesRequest_Data {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
 func (x *UploadContainerFilesRequest) GetMetadata() *UploadContainerFilesMetadata {
 	if x != nil {
-		if x, ok := x.Data.(*UploadContainerFilesRequest_Metadata); ok {
-			return x.Metadata
-		}
+		return x.Metadata
 	}
 	return nil
 }
 
-func (x *UploadContainerFilesRequest) GetChunk() []byte {
+func (x *UploadContainerFilesRequest) GetTarData() []byte {
 	if x != nil {
-		if x, ok := x.Data.(*UploadContainerFilesRequest_Chunk); ok {
-			return x.Chunk
-		}
+		return x.TarData
 	}
 	return nil
 }
-
-type isUploadContainerFilesRequest_Data interface {
-	isUploadContainerFilesRequest_Data()
-}
-
-type UploadContainerFilesRequest_Metadata struct {
-	Metadata *UploadContainerFilesMetadata `protobuf:"bytes,1,opt,name=metadata,proto3,oneof"` // First message contains metadata
-}
-
-type UploadContainerFilesRequest_Chunk struct {
-	Chunk []byte `protobuf:"bytes,2,opt,name=chunk,proto3,oneof"` // Subsequent messages contain file data chunks
-}
-
-func (*UploadContainerFilesRequest_Metadata) isUploadContainerFilesRequest_Data() {}
-
-func (*UploadContainerFilesRequest_Chunk) isUploadContainerFilesRequest_Data() {}
 
 type UploadContainerFilesMetadata struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -4744,9 +4714,11 @@ type CreateContainerEntryRequest struct {
 	ParentPath     string                 `protobuf:"bytes,3,opt,name=parent_path,json=parentPath,proto3" json:"parent_path,omitempty"`
 	Name           string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
 	Type           ContainerEntryType     `protobuf:"varint,5,opt,name=type,proto3,enum=obiente.cloud.deployments.v1.ContainerEntryType" json:"type,omitempty"`
-	Template       *string                `protobuf:"bytes,6,opt,name=template,proto3,oneof" json:"template,omitempty"` // Optional template identifier for seeded content
+	Template       *string                `protobuf:"bytes,6,opt,name=template,proto3,oneof" json:"template,omitempty"` // Optional template identifier for seeded content (required for symlinks - target path)
 	VolumeName     *string                `protobuf:"bytes,7,opt,name=volume_name,json=volumeName,proto3,oneof" json:"volume_name,omitempty"`
 	ModeOctal      *uint32                `protobuf:"varint,8,opt,name=mode_octal,json=modeOctal,proto3,oneof" json:"mode_octal,omitempty"`
+	ContainerId    *string                `protobuf:"bytes,9,opt,name=container_id,json=containerId,proto3,oneof" json:"container_id,omitempty"`  // Specific container to create entry in (for compose deployments)
+	ServiceName    *string                `protobuf:"bytes,10,opt,name=service_name,json=serviceName,proto3,oneof" json:"service_name,omitempty"` // Service name to create entry in (for compose deployments)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -4835,6 +4807,20 @@ func (x *CreateContainerEntryRequest) GetModeOctal() uint32 {
 		return *x.ModeOctal
 	}
 	return 0
+}
+
+func (x *CreateContainerEntryRequest) GetContainerId() string {
+	if x != nil && x.ContainerId != nil {
+		return *x.ContainerId
+	}
+	return ""
+}
+
+func (x *CreateContainerEntryRequest) GetServiceName() string {
+	if x != nil && x.ServiceName != nil {
+		return *x.ServiceName
+	}
+	return ""
 }
 
 type CreateContainerEntryResponse struct {
@@ -7352,11 +7338,10 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\bmetadata\x18\x05 \x01(\v2+.obiente.cloud.deployments.v1.ContainerFileH\x01R\bmetadata\x88\x01\x01B\f\n" +
 	"\n" +
 	"_truncatedB\v\n" +
-	"\t_metadata\"\x97\x01\n" +
-	"\x1bUploadContainerFilesRequest\x12X\n" +
-	"\bmetadata\x18\x01 \x01(\v2:.obiente.cloud.deployments.v1.UploadContainerFilesMetadataH\x00R\bmetadata\x12\x16\n" +
-	"\x05chunk\x18\x02 \x01(\fH\x00R\x05chunkB\x06\n" +
-	"\x04data\"\x81\x03\n" +
+	"\t_metadata\"\x90\x01\n" +
+	"\x1bUploadContainerFilesRequest\x12V\n" +
+	"\bmetadata\x18\x01 \x01(\v2:.obiente.cloud.deployments.v1.UploadContainerFilesMetadataR\bmetadata\x12\x19\n" +
+	"\btar_data\x18\x02 \x01(\fR\atarData\"\x81\x03\n" +
 	"\x1cUploadContainerFilesMetadata\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12)\n" +
@@ -7409,7 +7394,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x1cRenameContainerEntryResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12F\n" +
 	"\x05entry\x18\x02 \x01(\v2+.obiente.cloud.deployments.v1.ContainerFileH\x00R\x05entry\x88\x01\x01B\b\n" +
-	"\x06_entry\"\xfd\x02\n" +
+	"\x06_entry\"\xef\x03\n" +
 	"\x1bCreateContainerEntryRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12#\n" +
 	"\rdeployment_id\x18\x02 \x01(\tR\fdeploymentId\x12\x1f\n" +
@@ -7421,10 +7406,15 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\vvolume_name\x18\a \x01(\tH\x01R\n" +
 	"volumeName\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"mode_octal\x18\b \x01(\rH\x02R\tmodeOctal\x88\x01\x01B\v\n" +
+	"mode_octal\x18\b \x01(\rH\x02R\tmodeOctal\x88\x01\x01\x12&\n" +
+	"\fcontainer_id\x18\t \x01(\tH\x03R\vcontainerId\x88\x01\x01\x12&\n" +
+	"\fservice_name\x18\n" +
+	" \x01(\tH\x04R\vserviceName\x88\x01\x01B\v\n" +
 	"\t_templateB\x0e\n" +
 	"\f_volume_nameB\r\n" +
-	"\v_mode_octal\"a\n" +
+	"\v_mode_octalB\x0f\n" +
+	"\r_container_idB\x0f\n" +
+	"\r_service_name\"a\n" +
 	"\x1cCreateContainerEntryResponse\x12A\n" +
 	"\x05entry\x18\x01 \x01(\v2+.obiente.cloud.deployments.v1.ContainerFileR\x05entry\"\xc8\x02\n" +
 	"\x19WriteContainerFileRequest\x12'\n" +
@@ -7708,7 +7698,7 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	" CONTAINER_ENTRY_TYPE_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19CONTAINER_ENTRY_TYPE_FILE\x10\x01\x12\"\n" +
 	"\x1eCONTAINER_ENTRY_TYPE_DIRECTORY\x10\x02\x12 \n" +
-	"\x1cCONTAINER_ENTRY_TYPE_SYMLINK\x10\x032\xcd/\n" +
+	"\x1cCONTAINER_ENTRY_TYPE_SYMLINK\x10\x032\xcb/\n" +
 	"\x11DeploymentService\x12~\n" +
 	"\x0fListDeployments\x124.obiente.cloud.deployments.v1.ListDeploymentsRequest\x1a5.obiente.cloud.deployments.v1.ListDeploymentsResponse\x12\x81\x01\n" +
 	"\x10CreateDeployment\x125.obiente.cloud.deployments.v1.CreateDeploymentRequest\x1a6.obiente.cloud.deployments.v1.CreateDeploymentResponse\x12x\n" +
@@ -7740,8 +7730,8 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x14StreamTerminalOutput\x129.obiente.cloud.deployments.v1.StreamTerminalOutputRequest\x1a,.obiente.cloud.deployments.v1.TerminalOutput0\x01\x12\x84\x01\n" +
 	"\x11SendTerminalInput\x126.obiente.cloud.deployments.v1.SendTerminalInputRequest\x1a7.obiente.cloud.deployments.v1.SendTerminalInputResponse\x12\x87\x01\n" +
 	"\x12ListContainerFiles\x127.obiente.cloud.deployments.v1.ListContainerFilesRequest\x1a8.obiente.cloud.deployments.v1.ListContainerFilesResponse\x12\x81\x01\n" +
-	"\x10GetContainerFile\x125.obiente.cloud.deployments.v1.GetContainerFileRequest\x1a6.obiente.cloud.deployments.v1.GetContainerFileResponse\x12\x8f\x01\n" +
-	"\x14UploadContainerFiles\x129.obiente.cloud.deployments.v1.UploadContainerFilesRequest\x1a:.obiente.cloud.deployments.v1.UploadContainerFilesResponse(\x01\x12\x93\x01\n" +
+	"\x10GetContainerFile\x125.obiente.cloud.deployments.v1.GetContainerFileRequest\x1a6.obiente.cloud.deployments.v1.GetContainerFileResponse\x12\x8d\x01\n" +
+	"\x14UploadContainerFiles\x129.obiente.cloud.deployments.v1.UploadContainerFilesRequest\x1a:.obiente.cloud.deployments.v1.UploadContainerFilesResponse\x12\x93\x01\n" +
 	"\x16DeleteContainerEntries\x12;.obiente.cloud.deployments.v1.DeleteContainerEntriesRequest\x1a<.obiente.cloud.deployments.v1.DeleteContainerEntriesResponse\x12\x8d\x01\n" +
 	"\x14RenameContainerEntry\x129.obiente.cloud.deployments.v1.RenameContainerEntryRequest\x1a:.obiente.cloud.deployments.v1.RenameContainerEntryResponse\x12\x8d\x01\n" +
 	"\x14CreateContainerEntry\x129.obiente.cloud.deployments.v1.CreateContainerEntryRequest\x1a:.obiente.cloud.deployments.v1.CreateContainerEntryResponse\x12\x87\x01\n" +
@@ -8044,10 +8034,6 @@ func file_obiente_cloud_deployments_v1_deployment_service_proto_init() {
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[57].OneofWrappers = []any{}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[58].OneofWrappers = []any{}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[59].OneofWrappers = []any{}
-	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[60].OneofWrappers = []any{
-		(*UploadContainerFilesRequest_Metadata)(nil),
-		(*UploadContainerFilesRequest_Chunk)(nil),
-	}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[61].OneofWrappers = []any{}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[63].OneofWrappers = []any{}
 	file_obiente_cloud_deployments_v1_deployment_service_proto_msgTypes[64].OneofWrappers = []any{}

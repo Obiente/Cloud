@@ -190,6 +190,11 @@ func (s *Service) GetDeploymentMetrics(ctx context.Context, req *connect.Request
 			var sumErrorCount int64
 			count := len(group)
 
+			// Safety check: skip empty groups to prevent division by zero
+			if count == 0 {
+				continue
+			}
+
 			for _, m := range group {
 				sumCPU += m.CPUUsage
 				sumMemory += m.MemoryUsage

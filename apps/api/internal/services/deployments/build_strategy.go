@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/database"
@@ -32,6 +33,7 @@ type BuildConfig struct {
 	DeploymentID    string
 	RepositoryURL   string
 	Branch          string
+	GitHubToken     string // GitHub token for authenticating with private repositories
 	BuildCommand    string
 	InstallCommand  string
 	DockerfilePath  string // Path to Dockerfile (relative to repo root, defaults to "Dockerfile")
@@ -300,12 +302,18 @@ func ensureBuildDir(deploymentID string) (string, error) {
 }
 
 // cloneRepository clones a git repository to the build directory
-func cloneRepository(ctx context.Context, repoURL, branch, destDir string) error {
+func cloneRepository(ctx context.Context, repoURL, branch, destDir string, githubToken string) error {
 	// Remove destination if it exists
 	os.RemoveAll(destDir)
 
+	// If this is a GitHub repository and we have a token, inject it into the URL for authentication
+	authenticatedURL := repoURL
+	if githubToken != "" && isGitHubURL(repoURL) {
+		authenticatedURL = injectGitHubToken(repoURL, githubToken)
+	}
+
 	// Clone repository
-	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--branch", branch, repoURL, destDir)
+	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--branch", branch, authenticatedURL, destDir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -314,6 +322,31 @@ func cloneRepository(ctx context.Context, repoURL, branch, destDir string) error
 	}
 
 	return nil
+}
+
+// isGitHubURL checks if the URL is a GitHub repository URL
+func isGitHubURL(url string) bool {
+	return strings.HasPrefix(url, "https://github.com/") || 
+		   strings.HasPrefix(url, "http://github.com/") ||
+		   strings.HasPrefix(url, "git@github.com:")
+}
+
+// injectGitHubToken injects a GitHub token into a repository URL for authentication
+func injectGitHubToken(repoURL, token string) string {
+	// Handle HTTPS GitHub URLs
+	if strings.HasPrefix(repoURL, "https://github.com/") {
+		// Replace https://github.com/ with https://token@github.com/
+		repoPath := strings.TrimPrefix(repoURL, "https://github.com/")
+		return fmt.Sprintf("https://%s@github.com/%s", token, repoPath)
+	}
+	if strings.HasPrefix(repoURL, "http://github.com/") {
+		// Replace http://github.com/ with http://token@github.com/
+		repoPath := strings.TrimPrefix(repoURL, "http://github.com/")
+		return fmt.Sprintf("http://%s@github.com/%s", token, repoPath)
+	}
+	// For SSH URLs (git@github.com:), tokens aren't used - SSH keys are required instead
+	// Return original URL if it's SSH or unknown format
+	return repoURL
 }
 
 // execCommand runs a command in a directory
