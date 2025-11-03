@@ -60,6 +60,9 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 	if db.InstallCommand != nil {
 		deployment.InstallCommand = proto.String(*db.InstallCommand)
 	}
+	if db.StartCommand != nil {
+		deployment.StartCommand = proto.String(*db.StartCommand)
+	}
 	if db.DockerfilePath != nil {
 		deployment.DockerfilePath = proto.String(*db.DockerfilePath)
 	}
@@ -141,6 +144,10 @@ func protoToDBDeployment(protoDep *deploymentsv1.Deployment, orgID string, creat
 	if protoDep.InstallCommand != nil {
 		installCmd := protoDep.GetInstallCommand()
 		db.InstallCommand = &installCmd
+	}
+	if protoDep.StartCommand != nil {
+		startCmd := protoDep.GetStartCommand()
+		db.StartCommand = &startCmd
 	}
 	if protoDep.DockerfilePath != nil {
 		dockerfilePath := protoDep.GetDockerfilePath()

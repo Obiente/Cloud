@@ -18,6 +18,7 @@ type Deployment struct {
 	Branch            string    `gorm:"column:branch" json:"branch"`
 	BuildCommand      *string   `gorm:"column:build_command" json:"build_command"`
 	InstallCommand    *string   `gorm:"column:install_command" json:"install_command"`
+	StartCommand      *string   `gorm:"column:start_command" json:"start_command"` // Start command for running the application
 	DockerfilePath    *string   `gorm:"column:dockerfile_path" json:"dockerfile_path"` // Path to Dockerfile (relative to repo root)
 	ComposeFilePath   *string   `gorm:"column:compose_file_path" json:"compose_file_path"` // Path to compose file (relative to repo root)
 	GitHubIntegrationID *string `gorm:"column:github_integration_id;index" json:"github_integration_id"` // GitHub integration ID for autodeploys
@@ -187,10 +188,60 @@ type GitHubIntegration struct {
 	UserID      *string   `gorm:"index;uniqueIndex:idx_user_github" json:"user_id"`      // Zitadel user ID (nullable)
 	OrganizationID *string `gorm:"index;uniqueIndex:idx_org_github" json:"organization_id"` // Organization ID (nullable)
 	Token       string    `gorm:"column:token" json:"token"`                             // Encrypted GitHub access token
+	RefreshToken *string  `gorm:"column:refresh_token" json:"refresh_token"`             // Refresh token (if using GitHub Apps with expiring tokens)
 	Username    string    `gorm:"column:username" json:"username"`                       // GitHub username
 	Scope       string    `gorm:"column:scope" json:"scope"`                             // Granted OAuth scopes
+	TokenExpiresAt *time.Time `gorm:"column:token_expires_at" json:"token_expires_at"`    // Token expiration time (if applicable)
 	ConnectedAt time.Time `gorm:"column:connected_at" json:"connected_at"`
 	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (GitHubIntegration) TableName() string { return "github_integrations" }
+
+// BuildHistory stores historical build information for deployments
+type BuildHistory struct {
+	ID             string    `gorm:"primaryKey" json:"id"`
+	DeploymentID   string    `gorm:"index;not null" json:"deployment_id"`
+	OrganizationID string    `gorm:"index;not null" json:"organization_id"`
+	BuildNumber    int32     `gorm:"index:idx_deployment_build_number" json:"build_number"` // Sequential build number per deployment
+	Status         int32     `gorm:"column:status;default:0" json:"status"`                  // BuildStatus enum (pending, building, success, failed)
+	StartedAt      time.Time `gorm:"index" json:"started_at"`
+	CompletedAt    *time.Time `json:"completed_at"`
+	BuildTime      int32     `json:"build_time"` // Duration in seconds
+	TriggeredBy    string    `gorm:"index" json:"triggered_by"` // User ID who triggered the build
+	
+	// Build configuration snapshot (captured at build time)
+	RepositoryURL    *string `gorm:"column:repository_url" json:"repository_url"`
+	Branch           string  `gorm:"column:branch" json:"branch"`
+	CommitSHA        *string `gorm:"column:commit_sha" json:"commit_sha"` // Git commit SHA if available
+	BuildCommand     *string `gorm:"column:build_command" json:"build_command"`
+	InstallCommand   *string `gorm:"column:install_command" json:"install_command"`
+	StartCommand     *string `gorm:"column:start_command" json:"start_command"`
+	DockerfilePath   *string `gorm:"column:dockerfile_path" json:"dockerfile_path"`
+	ComposeFilePath  *string `gorm:"column:compose_file_path" json:"compose_file_path"`
+	BuildStrategy    int32   `gorm:"column:build_strategy" json:"build_strategy"`
+	
+	// Build results
+	ImageName   *string `gorm:"column:image_name" json:"image_name"`   // Built image name (for single container)
+	ComposeYaml *string `gorm:"column:compose_yaml;type:text" json:"compose_yaml"` // Docker Compose YAML (for compose deployments)
+	Size        *string `gorm:"column:size" json:"size"`                 // Human-readable bundle size
+	Error       *string `gorm:"column:error;type:text" json:"error"`     // Error message if build failed
+	
+	// Build logs stored separately in build_logs table (linked by build_id)
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (BuildHistory) TableName() string { return "build_history" }
+
+// BuildLog stores individual log lines for a build
+type BuildLog struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	BuildID   string    `gorm:"index;not null" json:"build_id"` // References build_history.id
+	Line      string    `gorm:"type:text" json:"line"`
+	Timestamp time.Time `gorm:"index" json:"timestamp"`
+	Stderr    bool      `gorm:"default:false" json:"stderr"`
+	LineNumber int32    `gorm:"index" json:"line_number"` // Sequential line number within the build
+}
+
+func (BuildLog) TableName() string { return "build_logs" }

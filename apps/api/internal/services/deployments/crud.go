@@ -271,6 +271,14 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 			dbDeployment.InstallCommand = nil
 		}
 	}
+	if req.Msg.StartCommand != nil {
+		start := req.Msg.GetStartCommand()
+		if start != "" {
+			dbDeployment.StartCommand = &start
+		} else {
+			dbDeployment.StartCommand = nil
+		}
+	}
 	if req.Msg.DockerfilePath != nil {
 		dockerfilePath := req.Msg.GetDockerfilePath()
 		if dockerfilePath != "" {
