@@ -36,6 +36,7 @@ type BuildConfig struct {
 	GitHubToken     string // GitHub token for authenticating with private repositories
 	BuildCommand    string
 	InstallCommand  string
+	StartCommand    string // Start command for running the application
 	DockerfilePath  string // Path to Dockerfile (relative to repo root, defaults to "Dockerfile")
 	ComposeFilePath string // Path to compose file (relative to repo root, auto-detected if empty)
 	EnvVars         map[string]string
@@ -48,11 +49,12 @@ type BuildConfig struct {
 
 // BuildResult contains the result of a build operation
 type BuildResult struct {
-	ImageName   string // Final image name (for single container deployments)
-	ComposeYaml string // Docker Compose YAML (for compose-based deployments)
-	Port        int    // Exposed port
-	Success     bool
-	Error       error
+	ImageName      string // Final image name (for single container deployments)
+	ImageSizeBytes int64  // Size of the built image in bytes
+	ComposeYaml    string // Docker Compose YAML (for compose-based deployments)
+	Port           int    // Exposed port
+	Success        bool
+	Error          error
 }
 
 // BuildStrategyRegistry manages available build strategies
@@ -438,8 +440,31 @@ func buildDockerImage(ctx context.Context, dir, imageName, dockerfile string, lo
 	return cmd.Run()
 }
 
+// getImageSize gets the size of a Docker image in bytes
+func getImageSize(ctx context.Context, imageName string) (int64, error) {
+	// Use docker image inspect to get image size
+	cmd := exec.CommandContext(ctx, "docker", "image", "inspect", imageName, "--format", "{{.Size}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get image size: %w", err)
+	}
+
+	// Parse size from output
+	sizeStr := strings.TrimSpace(string(output))
+	var size int64
+	if _, err := fmt.Sscanf(sizeStr, "%d", &size); err != nil {
+		return 0, fmt.Errorf("failed to parse image size: %w", err)
+	}
+
+	return size, nil
+}
+
 // deployResultToOrchestrator converts a BuildResult to orchestrator configuration
 func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.DeploymentManager, deployment *database.Deployment, result *BuildResult) error {
+	if manager == nil {
+		return fmt.Errorf("deployment manager is not available (orchestrator not initialized)")
+	}
+
 	if result.ComposeYaml != "" {
 		// Use compose deployment
 		return manager.DeployComposeFile(ctx, deployment.ID, result.ComposeYaml)
