@@ -68,11 +68,10 @@ func InitDatabase() error {
 		}
 	}
 
-	// Auto-migrate the schema
+	// Auto-migrate the schema (build_logs is stored in TimescaleDB, not here)
 	if err := db.AutoMigrate(
 		&Deployment{},
 		&BuildHistory{},
-		&BuildLog{},
 	); err != nil {
 		return fmt.Errorf("failed to auto-migrate: %w", err)
 	}
@@ -112,5 +111,82 @@ func InitRedis() error {
 
 	RedisClient = client
 	log.Println("Redis connection established")
+	return nil
+}
+
+// InitBuildLogsTimescaleDB converts build_logs table to TimescaleDB hypertable if available
+// This provides better performance for time-series log data
+// Note: This should be called with MetricsDB (TimescaleDB connection), not the main DB
+func InitBuildLogsTimescaleDB(db *gorm.DB) error {
+	// Check if TimescaleDB extension is available
+	var extensionExists bool
+	if err := db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM pg_extension WHERE extname = 'timescaledb'
+		)
+	`).Scan(&extensionExists).Error; err != nil {
+		return fmt.Errorf("failed to check TimescaleDB extension: %w", err)
+	}
+
+	if !extensionExists {
+		// Try to create the extension
+		if err := db.Exec("CREATE EXTENSION IF NOT EXISTS timescaledb").Error; err != nil {
+			return fmt.Errorf("TimescaleDB extension not available: %w", err)
+		}
+		log.Println("TimescaleDB extension enabled for build_logs")
+	}
+
+	// Check if build_logs table exists
+	if !db.Migrator().HasTable("build_logs") {
+		log.Println("build_logs table does not exist yet, skipping TimescaleDB conversion")
+		return nil
+	}
+
+	// Check if table is already a hypertable
+	var isHypertable bool
+	if err := db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM timescaledb_information.hypertables 
+			WHERE hypertable_name = 'build_logs'
+		)
+	`).Scan(&isHypertable).Error; err != nil {
+		return fmt.Errorf("failed to check if build_logs is hypertable: %w", err)
+	}
+
+	if isHypertable {
+		log.Println("build_logs is already a TimescaleDB hypertable")
+		return nil
+	}
+
+	// Convert to hypertable with timestamp as time column and build_id as partition dimension
+	// This allows efficient querying by both time and build_id
+	// Use 1 hour chunk interval for build logs (builds typically last minutes to hours)
+	if err := db.Exec(`
+		SELECT create_hypertable('build_logs', 'timestamp', 
+			chunk_time_interval => INTERVAL '1 hour',
+			if_not_exists => TRUE)
+	`).Error; err != nil {
+		return fmt.Errorf("failed to create hypertable for build_logs: %w", err)
+	}
+
+	log.Println("✓ Converted build_logs to TimescaleDB hypertable (optimized for time-series queries)")
+
+	// Create additional indexes for common query patterns
+	// Composite index for querying logs by build_id and timestamp range
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_build_logs_build_id_timestamp 
+		ON build_logs (build_id, timestamp DESC)
+	`).Error; err != nil {
+		log.Printf("Warning: Failed to create composite index: %v", err)
+	}
+
+	// Index for line_number ordering within a build
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_build_logs_build_id_line_number 
+		ON build_logs (build_id, line_number ASC)
+	`).Error; err != nil {
+		log.Printf("Warning: Failed to create line_number index: %v", err)
+	}
+
 	return nil
 }

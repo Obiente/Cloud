@@ -231,26 +231,6 @@ func createBuildHistoryTables(db *gorm.DB) error {
 		}
 	}
 
-	// Create build_logs table
-	if !db.Migrator().HasTable("build_logs") {
-		if err := db.Exec(`
-			CREATE TABLE build_logs (
-				id SERIAL PRIMARY KEY,
-				build_id VARCHAR(255) NOT NULL,
-				line TEXT NOT NULL,
-				timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-				stderr BOOLEAN NOT NULL DEFAULT FALSE,
-				line_number INTEGER NOT NULL,
-				INDEX idx_build_id (build_id),
-				INDEX idx_timestamp (timestamp),
-				INDEX idx_line_number (line_number),
-				FOREIGN KEY (build_id) REFERENCES build_history(id) ON DELETE CASCADE
-			)
-		`).Error; err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 

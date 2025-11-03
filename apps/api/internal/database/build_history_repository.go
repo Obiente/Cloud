@@ -122,46 +122,9 @@ func (r *BuildHistoryRepository) UpdateBuildResults(ctx context.Context, buildID
 		Updates(update).Error
 }
 
-// AddBuildLog adds a log line to a build
-func (r *BuildHistoryRepository) AddBuildLog(ctx context.Context, buildID string, line string, stderr bool, lineNumber int32) error {
-	buildLog := &BuildLog{
-		BuildID:    buildID,
-		Line:       line,
-		Timestamp:  time.Now(),
-		Stderr:     stderr,
-		LineNumber: lineNumber,
-	}
-	return r.db.WithContext(ctx).Create(buildLog).Error
-}
-
-// GetBuildLogs retrieves logs for a build with pagination
-func (r *BuildHistoryRepository) GetBuildLogs(ctx context.Context, buildID string, limit, offset int) ([]*BuildLog, int64, error) {
-	query := r.db.WithContext(ctx).Where("build_id = ?", buildID)
-
-	// Get total count
-	var total int64
-	if err := query.Model(&BuildLog{}).Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	// Apply pagination
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
-	if offset > 0 {
-		query = query.Offset(offset)
-	}
-
-	// Order by line number ascending
-	query = query.Order("line_number ASC")
-
-	var logs []*BuildLog
-	if err := query.Find(&logs).Error; err != nil {
-		return nil, 0, err
-	}
-
-	return logs, total, nil
-}
+// NOTE: Build log methods (AddBuildLog, AddBuildLogsBatch, GetBuildLogs) have been moved
+// to BuildLogsRepository which uses TimescaleDB. Use database.NewBuildLogsRepository(MetricsDB)
+// to get a repository instance for build logs.
 
 // GetLatestSuccessfulBuild returns the most recent successful build for a deployment
 func (r *BuildHistoryRepository) GetLatestSuccessfulBuild(ctx context.Context, deploymentID string) (*BuildHistory, error) {

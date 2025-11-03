@@ -19,12 +19,23 @@ import (
 type BuildLogStreamer struct {
 	deploymentID string
 	buildID      string // Optional: ID of the build record in database
-	buildHistoryRepo *database.BuildHistoryRepository // Repository for saving logs
+	buildLogsRepo *database.BuildLogsRepository // Repository for saving logs to TimescaleDB
 	subscribers  map[chan *deploymentsv1.DeploymentLogLine]struct{}
 	mu           sync.RWMutex
 	logs         []*deploymentsv1.DeploymentLogLine
 	maxLogs      int
 	lineNumber   int32 // Sequential line number for database storage
+	
+	// Batching for TimescaleDB
+	pendingLogs []struct {
+		Line      string
+		Stderr    bool
+		LineNumber int32
+		Timestamp time.Time
+	}
+	batchMutex  sync.Mutex
+	batchTimer  *time.Timer
+	stopBatching chan struct{}
 }
 
 // BuildLogStreamerRegistry manages build log streamers for all deployments
@@ -46,14 +57,27 @@ func GetBuildLogStreamer(deploymentID string) *BuildLogStreamer {
 		return streamer
 	}
 
+	// Use TimescaleDB for build logs (MetricsDB connection)
+	buildLogsRepo := database.NewBuildLogsRepository(database.MetricsDB)
+	
 	streamer := &BuildLogStreamer{
 		deploymentID:     deploymentID,
-		buildHistoryRepo: database.NewBuildHistoryRepository(database.DB),
+		buildLogsRepo:    buildLogsRepo,
 		subscribers:      make(map[chan *deploymentsv1.DeploymentLogLine]struct{}),
 		logs:             make([]*deploymentsv1.DeploymentLogLine, 0),
 		maxLogs:          10000, // Keep last 10k lines
 		lineNumber:       0,
+		pendingLogs:      make([]struct {
+			Line      string
+			Stderr    bool
+			LineNumber int32
+			Timestamp time.Time
+		}, 0, 100), // Pre-allocate with capacity for batching
+		stopBatching: make(chan struct{}),
 	}
+	
+	// Start batch flusher
+	go streamer.startBatchFlusher()
 	globalBuildLogRegistry.streamers[deploymentID] = streamer
 	return streamer
 }
@@ -180,22 +204,16 @@ func (s *BuildLogStreamer) writeLine(line string, stderr bool) (int, error) {
 
 		// Get build info and increment line number if saving to DB
 		currentBuildID := s.buildID
-		currentRepo := s.buildHistoryRepo
+		currentRepo := s.buildLogsRepo
 		lineNumber := s.lineNumber
 		if currentBuildID != "" {
 			s.lineNumber++
 		}
 		s.mu.Unlock()
 
-		// Save to database if build ID is set (async to avoid blocking)
+		// Add to batch queue for database if build ID is set (async to avoid blocking)
 		if currentBuildID != "" && currentRepo != nil {
-			go func(buildID string, repo *database.BuildHistoryRepository, line string, isStderr bool, lineNum int32) {
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				if err := repo.AddBuildLog(ctx, buildID, line, isStderr, lineNum); err != nil {
-					log.Printf("[BuildLogStreamer] Failed to save log to database: %v", err)
-				}
-			}(currentBuildID, currentRepo, l, stderr, lineNumber)
+			s.addToBatch(l, stderr, lineNumber)
 		}
 
 		s.mu.RLock()
@@ -277,8 +295,145 @@ func (s *BuildLogStreamer) GetLogs() []*deploymentsv1.DeploymentLogLine {
 	return logs
 }
 
+// addToBatch adds a log line to the batch queue for efficient database writes
+func (s *BuildLogStreamer) addToBatch(line string, stderr bool, lineNumber int32) {
+	s.batchMutex.Lock()
+	defer s.batchMutex.Unlock()
+
+	// Add to pending batch
+	s.pendingLogs = append(s.pendingLogs, struct {
+		Line      string
+		Stderr    bool
+		LineNumber int32
+		Timestamp time.Time
+	}{
+		Line:      line,
+		Stderr:    stderr,
+		LineNumber: lineNumber,
+		Timestamp: time.Now(),
+	})
+
+	// Get buildID and repo safely (need to check if buildID is set)
+	s.mu.RLock()
+	buildID := s.buildID
+	repo := s.buildLogsRepo
+	s.mu.RUnlock()
+
+	if buildID == "" || repo == nil {
+		return // Can't flush without buildID
+	}
+
+	// Flush immediately if batch is large enough (100 items)
+	if len(s.pendingLogs) >= 100 {
+		s.flushBatch(buildID, repo)
+	} else {
+		// Reset timer for auto-flush (flush after 500ms of inactivity)
+		if s.batchTimer != nil {
+			s.batchTimer.Stop()
+		}
+		s.batchTimer = time.AfterFunc(500*time.Millisecond, func() {
+			s.batchMutex.Lock()
+			defer s.batchMutex.Unlock()
+			if len(s.pendingLogs) > 0 {
+				s.mu.RLock()
+				bid := s.buildID
+				r := s.buildLogsRepo
+				s.mu.RUnlock()
+				if bid != "" && r != nil {
+					s.flushBatch(bid, r)
+				}
+			}
+		})
+	}
+}
+
+// flushBatch writes the pending batch to the database
+func (s *BuildLogStreamer) flushBatch(buildID string, repo *database.BuildLogsRepository) {
+	if len(s.pendingLogs) == 0 {
+		return
+	}
+
+	// Copy batch for async write
+	batch := make([]struct {
+		Line      string
+		Stderr    bool
+		LineNumber int32
+		Timestamp time.Time
+	}, len(s.pendingLogs))
+	copy(batch, s.pendingLogs)
+	s.pendingLogs = s.pendingLogs[:0] // Clear batch
+
+	// Write asynchronously
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := repo.AddBuildLogsBatch(ctx, buildID, batch); err != nil {
+			log.Printf("[BuildLogStreamer] Failed to save batch of %d logs to database: %v", len(batch), err)
+		}
+	}()
+}
+
+// startBatchFlusher periodically flushes any remaining logs
+func (s *BuildLogStreamer) startBatchFlusher() {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			s.mu.RLock()
+			buildID := s.buildID
+			repo := s.buildLogsRepo
+			s.mu.RUnlock()
+			
+			s.batchMutex.Lock()
+			pendingCount := len(s.pendingLogs)
+			s.batchMutex.Unlock()
+
+			if buildID != "" && repo != nil && pendingCount > 0 {
+				s.batchMutex.Lock()
+				s.flushBatch(buildID, repo)
+				s.batchMutex.Unlock()
+			}
+		case <-s.stopBatching:
+			// Final flush before stopping
+			s.mu.RLock()
+			buildID := s.buildID
+			repo := s.buildLogsRepo
+			s.mu.RUnlock()
+			
+			s.batchMutex.Lock()
+			if buildID != "" && repo != nil && len(s.pendingLogs) > 0 {
+				s.flushBatch(buildID, repo)
+			}
+			s.batchMutex.Unlock()
+			return
+		}
+	}
+}
+
 // Close cleans up the streamer
 func (s *BuildLogStreamer) Close() {
+	// Stop batch flusher and do final flush
+	close(s.stopBatching)
+	
+	s.mu.RLock()
+	buildID := s.buildID
+	s.mu.RUnlock()
+	
+	s.mu.RLock()
+	repo := s.buildLogsRepo
+	s.mu.RUnlock()
+	
+	s.batchMutex.Lock()
+	if buildID != "" && repo != nil && len(s.pendingLogs) > 0 {
+		s.flushBatch(buildID, repo)
+	}
+	if s.batchTimer != nil {
+		s.batchTimer.Stop()
+	}
+	s.batchMutex.Unlock()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

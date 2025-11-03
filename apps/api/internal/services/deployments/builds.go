@@ -94,7 +94,9 @@ func (s *Service) GetBuildLogs(ctx context.Context, req *connect.Request[deploym
 	limit := int(req.Msg.GetLimit())
 	offset := int(req.Msg.GetOffset())
 
-	logs, total, err := s.buildHistoryRepo.GetBuildLogs(ctx, buildID, limit, offset)
+	// Use TimescaleDB repository for build logs
+	buildLogsRepo := database.NewBuildLogsRepository(database.MetricsDB)
+	logs, total, err := buildLogsRepo.GetBuildLogs(ctx, buildID, limit, offset)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get build logs: %w", err))
 	}

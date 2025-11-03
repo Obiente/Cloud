@@ -85,12 +85,19 @@ func InitMetricsDatabase() error {
 
 // InitMetricsTables creates and configures metrics tables
 func InitMetricsTables() error {
-	// Auto-migrate metrics tables
+	// Auto-migrate metrics tables (including build_logs which is stored in TimescaleDB)
 	if err := MetricsDB.AutoMigrate(
 		&DeploymentMetrics{},
 		&DeploymentUsageHourly{},
+		&BuildLog{},
 	); err != nil {
 		return fmt.Errorf("failed to auto-migrate metrics tables: %w", err)
+	}
+
+	// Initialize TimescaleDB hypertable for build_logs
+	if err := InitBuildLogsTimescaleDB(MetricsDB); err != nil {
+		log.Printf("Warning: Failed to initialize TimescaleDB hypertable for build_logs: %v", err)
+		// Continue anyway - standard PostgreSQL will work fine
 	}
 
 	// Create composite indexes for better query performance
