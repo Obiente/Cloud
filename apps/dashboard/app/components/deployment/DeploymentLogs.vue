@@ -1,5 +1,4 @@
 <template>
-  <OuiCardBody>
     <!-- Service Selector -->
     <div class="mb-4">
       <ContainerSelector
@@ -75,7 +74,6 @@
         </OuiFlex>
       </template>
     </OuiLogs>
-  </OuiCardBody>
 </template>
 
 <script setup lang="ts">
@@ -97,6 +95,7 @@ interface LogLine {
   line: string;
   timestamp: string;
   stderr: boolean;
+  logLevel?: number; // LogLevel enum value from proto
 }
 
 const props = defineProps<Props>();
@@ -121,15 +120,39 @@ let isAborting = false; // Track if we're intentionally aborting
 const selectedService = ref<string>(""); // Empty string means "first container" (default)
 const selectedContainer = ref<{ containerId: string; serviceName?: string } | null>(null);
 
+// Convert LogLevel enum to string for OuiLogs
+const logLevelToString = (level?: number): "error" | "warning" | "info" | "debug" | "trace" => {
+  if (!level) return "info";
+  // LogLevel enum: 0=UNSPECIFIED, 1=TRACE, 2=DEBUG, 3=INFO, 4=WARN, 5=ERROR
+  switch (level) {
+    case 5: return "error";
+    case 4: return "warning";
+    case 3: return "info";
+    case 2: return "debug";
+    case 1: return "trace";
+    default: return "info";
+  }
+};
+
 // Convert internal logs to LogEntry format for OuiLogs component
 const formattedLogs = computed<LogEntry[]>(() => {
-  return logs.value.map((log, idx) => ({
-    id: idx,
-    line: log.line,
-    timestamp: log.timestamp,
-    stderr: log.stderr,
-    level: log.stderr ? "error" : "info",
-  }));
+  return logs.value.map((log, idx) => {
+    // Determine log level - use detected level if available, otherwise infer from stderr
+    let level: "error" | "warning" | "info" | "debug" | "trace" | undefined;
+    if (log.logLevel !== undefined) {
+      level = logLevelToString(log.logLevel);
+    } else {
+      level = log.stderr ? "error" : "info";
+    }
+    
+    return {
+      id: idx,
+      line: log.line,
+      timestamp: log.timestamp,
+      stderr: log.stderr,
+      level,
+    };
+  });
 });
 
 const handleTailChange = (value: string | number) => {
@@ -215,7 +238,7 @@ const startStream = async () => {
     for await (const update of stream) {
       if (update.line) {
         hasReceivedLogs = true;
-        logs.value.push({
+          logs.value.push({
           line: update.line,
           timestamp: update.timestamp
             ? new Date(
@@ -224,6 +247,7 @@ const startStream = async () => {
               ).toISOString()
             : new Date().toISOString(),
           stderr: update.stderr || false,
+          logLevel: update.logLevel || undefined, // Include log level from proto
         });
       }
     }
@@ -243,10 +267,13 @@ const startStream = async () => {
 
     // Suppress benign errors if we successfully received logs:
     // - "missing trailer": Connect/gRPC-Web quirk where streams end without HTTP trailers
+    // - "missing EndStreamResponse": Connect/gRPC-Web quirk where streams end without explicit end marker
     // - "invalid UTF-8": Docker logs can contain binary data (now sanitized server-side)
     const isBenignError =
       error.message?.toLowerCase().includes("missing trailer") ||
       error.message?.toLowerCase().includes("trailer") ||
+      error.message?.toLowerCase().includes("missing endstreamresponse") ||
+      error.message?.toLowerCase().includes("endstreamresponse") ||
       error.message?.toLowerCase().includes("invalid utf-8") ||
       error.message?.toLowerCase().includes("marshal message") ||
       error.code === "unknown";
@@ -259,6 +286,7 @@ const startStream = async () => {
         line: `[error] Failed to stream logs: ${error.message}`,
         timestamp: new Date().toISOString(),
         stderr: true,
+        logLevel: 5, // ERROR
       });
     } else {
       // Log to console but don't show to user - this is expected behavior
