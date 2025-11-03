@@ -13,6 +13,14 @@ export default defineNuxtPlugin({
     // Function to get the authentication token from the session
     // Using a function so it's evaluated on each request to get the latest token
     const getToken = async (): Promise<string | undefined> => {
+      // Check if auth is disabled (development mode)
+      const disableAuth = config.public.disableAuth === true;
+
+      if (disableAuth) {
+        // Return dummy token when auth is disabled - API will ignore it and use mock user
+        return "dev-dummy-token";
+      }
+
       // On server-side, get the token from the event
       const event = useRequestEvent();
       if (!event) return undefined;
@@ -42,8 +50,9 @@ export default defineNuxtPlugin({
         console.error("Failed to get server-side token from session:", e);
       }
 
+      // Only warn if auth is not disabled
       console.warn("No token available for SSR request");
-      return undefined;
+        return undefined;
     };
 
     const authInterceptor = createAuthInterceptor(getToken);

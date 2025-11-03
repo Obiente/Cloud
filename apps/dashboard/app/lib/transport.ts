@@ -1,4 +1,4 @@
-import { createGrpcWebTransport } from "@connectrpc/connect-web";
+import { createConnectTransport } from "@connectrpc/connect-web";
 import type { Transport } from "@connectrpc/connect";
 import type { Interceptor } from "@connectrpc/connect";
 
@@ -16,7 +16,12 @@ export function createAuthInterceptor(
         if (token && typeof token === "string" && token.trim() !== "") {
           req.header.append("Authorization", `Bearer ${token}`);
         } else {
-          console.warn("[Auth Interceptor] No valid token available for request to:", req.url);
+          // Only warn if token is missing and it's not a dev dummy token scenario
+          // (dev dummy token is "dev-dummy-token", so empty means real missing token)
+          const isDevDummy = process.env.DISABLE_AUTH === "true";
+          if (!isDevDummy) {
+            console.warn("[Auth Interceptor] No valid token available for request to:", req.url);
+          }
           // Don't throw here - let the API handle authentication errors
           // This allows for better error messages from the API
         }
@@ -34,8 +39,10 @@ export function createWebTransport(
   baseUrl: string,
   interceptor: Interceptor
 ): Transport {
-  return createGrpcWebTransport({
+  return createConnectTransport({
     baseUrl,
     interceptors: [interceptor],
+    // Use JSON for better browser compatibility
+    useBinaryFormat: false,
   });
 }
