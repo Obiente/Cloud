@@ -1,5 +1,10 @@
 <template>
-  <component :is="as" :class="textClasses" v-bind="$attrs">
+  <component
+    :is="as"
+    :class="textClasses"
+    :style="textStyles"
+    v-bind="$attrs"
+  >
     <slot />
   </component>
 </template>
@@ -67,10 +72,10 @@
     truncate?: boolean;
 
     /**
-     * Line height variant
+     * Line height variant (preset) or numeric value
      * @default undefined
      */
-    leading?: "none" | "tight" | "snug" | "normal" | "relaxed" | "loose";
+    leading?: "none" | "tight" | "snug" | "normal" | "relaxed" | "loose" | number;
 
     /**
      * Whether text should wrap or not
@@ -169,15 +174,22 @@
 
     // Leading (line height) classes
     if (props.leading) {
-      const leadingClasses = {
-        none: "leading-none",
-        tight: "leading-tight",
-        snug: "leading-snug",
-        normal: "leading-normal",
-        relaxed: "leading-relaxed",
-        loose: "leading-loose",
-      };
-      classes.push(leadingClasses[props.leading]);
+      if (typeof props.leading === "number") {
+        // Custom numeric line height value
+        // Use inline style for custom values
+        // Note: We'll handle this via style binding instead of classes
+      } else {
+        // Preset line height classes
+        const leadingClasses = {
+          none: "leading-none",
+          tight: "leading-tight",
+          snug: "leading-snug",
+          normal: "leading-normal",
+          relaxed: "leading-relaxed",
+          loose: "leading-loose",
+        };
+        classes.push(leadingClasses[props.leading]);
+      }
     }
 
     // Wrap classes
@@ -191,5 +203,16 @@
     }
 
     return classes.join(" ");
+  });
+
+  // Handle custom numeric line height values via inline styles
+  const textStyles = computed(() => {
+    const styles: Record<string, string> = {};
+    
+    if (props.leading && typeof props.leading === "number") {
+      styles.lineHeight = String(props.leading);
+    }
+    
+    return Object.keys(styles).length > 0 ? styles : undefined;
   });
 </script>

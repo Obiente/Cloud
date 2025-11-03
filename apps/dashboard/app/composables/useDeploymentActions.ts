@@ -220,6 +220,7 @@ export function useDeploymentActions(organizationId: string = "default") {
              buildStrategy?: number; // BuildStrategy enum
              buildCommand?: string;
              installCommand?: string;
+             startCommand?: string;
              dockerfilePath?: string;
              composeFilePath?: string;
              githubIntegrationId?: string;
@@ -248,6 +249,7 @@ export function useDeploymentActions(organizationId: string = "default") {
              if (updates.buildStrategy !== undefined) request.buildStrategy = updates.buildStrategy;
              if (updates.buildCommand !== undefined) request.buildCommand = updates.buildCommand;
              if (updates.installCommand !== undefined) request.installCommand = updates.installCommand;
+             if (updates.startCommand !== undefined) request.startCommand = updates.startCommand;
              if (updates.dockerfilePath !== undefined) request.dockerfilePath = updates.dockerfilePath;
              if (updates.composeFilePath !== undefined) request.composeFilePath = updates.composeFilePath;
              // Include githubIntegrationId if provided

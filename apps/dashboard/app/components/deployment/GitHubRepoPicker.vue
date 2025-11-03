@@ -155,8 +155,13 @@ const loadAvailableIntegrations = async () => {
       const firstIntegration = availableIntegrations.value[0];
       if (firstIntegration) {
         selectedIntegrationId.value = firstIntegration.id;
+        // Always emit integration ID when it's set (critical for private repos)
         emit("update:integrationId", firstIntegration.id);
       }
+    } else if (selectedIntegrationId.value) {
+      // If we already have a selected integration ID, ensure it's emitted
+      // This ensures the parent component always has the integration ID when picker loads
+      emit("update:integrationId", selectedIntegrationId.value);
     }
 
     // Show error if no integrations found
@@ -229,10 +234,16 @@ const handleRepoChange = async (repoFullName: string | null | undefined) => {
     branches.value = [];
     emit("update:modelValue", "");
     emit("update:branch", "");
+    // Emit empty integration ID when repo is cleared
+    emit("update:integrationId", "");
     return;
   }
 
   emit("update:modelValue", repoFullName);
+  // Always emit integration ID when repo is selected (essential for private repos)
+  if (selectedIntegrationId.value) {
+    emit("update:integrationId", selectedIntegrationId.value);
+  }
   selectedBranch.value = "";
   branches.value = [];
 
@@ -304,7 +315,7 @@ watch(selectedBranch, (newBranch) => {
   emit("update:branch", newBranch || "");
 });
 
-// Watch selectedRepo changes to fetch branches when repository changes
+  // Watch selectedRepo changes to fetch branches when repository changes
 // This ensures branches are fetched whenever the repo changes via combobox selection
 watch(selectedRepo, async (newRepo, oldRepo) => {
   // Don't fetch if this is just the initial value from props
@@ -312,6 +323,10 @@ watch(selectedRepo, async (newRepo, oldRepo) => {
     // Still need to fetch branches for initial value
     if (newRepo) {
       await handleRepoChange(newRepo);
+      // Ensure integration ID is emitted when repo is set initially
+      if (selectedIntegrationId.value) {
+        emit("update:integrationId", selectedIntegrationId.value);
+      }
     }
     return;
   }
@@ -319,11 +334,16 @@ watch(selectedRepo, async (newRepo, oldRepo) => {
   // Fetch branches if repo changed
   if (newRepo && newRepo !== oldRepo) {
     await handleRepoChange(newRepo);
+    // Emit integration ID when repo is selected (ensure it's always set)
+    if (selectedIntegrationId.value) {
+      emit("update:integrationId", selectedIntegrationId.value);
+    }
   } else if (!newRepo && oldRepo) {
     // Clear branches when repo is cleared
     branches.value = [];
     selectedBranch.value = "";
     emit("update:branch", "");
+    emit("update:integrationId", "");
   }
 }, { immediate: true });
 
