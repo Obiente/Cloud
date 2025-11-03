@@ -44,6 +44,7 @@
       class="oui-logs-viewer"
       :class="viewerClass"
       :style="viewerStyle"
+      @scroll="handleScroll"
     >
       <!-- Empty State -->
       <div v-if="logs.length === 0 && !isLoading" class="oui-logs-empty">
@@ -163,6 +164,8 @@ const emit = defineEmits<{
 
 const logContainer = ref<HTMLElement | null>(null);
 const internalShowTimestamps = ref(props.showTimestamps);
+const isUserScrolledUp = ref(false); // Track if user has manually scrolled away from bottom
+const shouldAutoScroll = ref(true); // Whether we should auto-scroll to bottom
 
 watch(() => props.showTimestamps, (val) => {
   internalShowTimestamps.value = val;
@@ -172,11 +175,54 @@ watch(internalShowTimestamps, (val) => {
   emit("update:showTimestamps", val);
 });
 
-const viewerStyle = computed(() => {
-  const height =
-    typeof props.height === "number" ? `${props.height}px` : props.height;
-  return { height };
+// Calculate max height that fits on screen
+// Default to viewport height minus header/controls (approximately 200px for header + controls)
+const maxHeight = computed(() => {
+  if (props.height && props.height !== "600px") {
+    // If explicit height is provided and not the default, use it
+    return typeof props.height === "number" ? `${props.height}px` : props.height;
+  }
+  // Otherwise, use viewport-based height that fits on screen
+  return "calc(100vh - 200px)";
 });
+
+const viewerStyle = computed(() => {
+  return { 
+    maxHeight: maxHeight.value,
+    height: maxHeight.value,
+  };
+});
+
+// Check if user is near the bottom of the scroll container
+// Uses a threshold to account for slight differences when new content is added
+const isNearBottom = (threshold: number = 100): boolean => {
+  if (!logContainer.value) return true;
+  const { scrollTop, scrollHeight, clientHeight } = logContainer.value;
+  
+  // If content doesn't overflow, we're always "near bottom"
+  if (scrollHeight <= clientHeight) return true;
+  
+  const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+  return distanceFromBottom <= threshold;
+};
+
+// Handle scroll events to detect user interaction
+const handleScroll = () => {
+  if (!logContainer.value || !props.autoScroll) return;
+  
+  // Check if user is near bottom
+  const nearBottom = isNearBottom(100);
+  
+  if (nearBottom) {
+    // User scrolled back to bottom - re-enable auto-scroll
+    isUserScrolledUp.value = false;
+    shouldAutoScroll.value = true;
+  } else {
+    // User scrolled up - disable auto-scroll
+    isUserScrolledUp.value = true;
+    shouldAutoScroll.value = false;
+  }
+};
 
 const formatTimestamp = (ts: string | Date): string => {
   if (!ts) return "";
@@ -215,26 +261,43 @@ const handleTailChange = (val: string | number) => {
 };
 
 const scrollToBottom = () => {
-  if (props.autoScroll && logContainer.value) {
-    nextTick(() => {
+  if (!logContainer.value || !props.autoScroll) return;
+  
+  // Wait for DOM to update, then check if we should auto-scroll
+  nextTick(() => {
+    if (!logContainer.value) return;
+    
+    // Only auto-scroll if user is near the bottom (within 100px threshold)
+    // This allows auto-scroll when user is following, and prevents it when they scroll up
+    // On initial load or when logs are first added, isNearBottom will be true (no scroll yet)
+    if (isNearBottom(100)) {
       if (logContainer.value) {
         logContainer.value.scrollTop = logContainer.value.scrollHeight;
+        // Reset scroll state after scrolling to bottom
+        isUserScrolledUp.value = false;
+        shouldAutoScroll.value = true;
       }
-    });
-  }
+    }
+  });
 };
 
-// Auto-scroll when logs change
+// Auto-scroll when logs change (only if user is following)
 watch(
   () => props.logs.length,
-  () => {
-    scrollToBottom();
+  (newLength, oldLength) => {
+    // Only scroll if we have logs and they actually changed
+    if (newLength > 0 && newLength !== oldLength) {
+      scrollToBottom();
+    }
   }
 );
 
 // Scroll on mount if needed
 onMounted(() => {
-  scrollToBottom();
+  // Initial scroll to bottom if we already have logs
+  if (props.logs.length > 0) {
+    scrollToBottom();
+  }
 });
 
 defineExpose({
@@ -288,6 +351,7 @@ defineExpose({
   max-width: 100%;
   overflow-x: auto;
   overflow-y: auto;
+  min-height: 0; /* Ensure flex child can shrink */
 }
 
 .oui-logs-empty,

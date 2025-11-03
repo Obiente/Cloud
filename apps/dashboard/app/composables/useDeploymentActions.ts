@@ -37,7 +37,8 @@ export function useDeploymentActions(organizationId: string = "default") {
       : null;
 
     if (deployment) {
-      deployment.status = newStatus;
+      // Use Object.assign to ensure reactivity is maintained
+      Object.assign(deployment, { status: newStatus });
       return deployment;
     }
     return null;
