@@ -1,5 +1,4 @@
 <template>
-  <OuiCardBody>
     <OuiStack gap="md">
       <OuiFlex justify="between" align="center">
         <OuiText as="h3" size="md" weight="semibold">
@@ -74,7 +73,6 @@
         ✓ Terminal connected. Type commands to interact with your container.
       </OuiText>
     </OuiStack>
-  </OuiCardBody>
 </template>
 
 <script setup lang="ts">

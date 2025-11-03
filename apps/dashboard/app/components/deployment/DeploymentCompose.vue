@@ -1,5 +1,4 @@
 <template>
-  <OuiCardBody>
     <OuiStack gap="md">
       <OuiFlex justify="between" align="center">
         <OuiStack gap="none">
@@ -131,7 +130,6 @@
         </OuiCardBody>
       </OuiCard>
     </OuiStack>
-  </OuiCardBody>
 </template>
 
 <script setup lang="ts">
