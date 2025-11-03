@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
 
+	"api/docker"
 	"api/internal/database"
 	"api/internal/registry"
 
@@ -81,6 +83,14 @@ func (os *OrchestratorService) Start() {
 	// Start usage aggregation (hourly)
 	go os.aggregateUsage()
 	log.Println("[Orchestrator] Started usage aggregation")
+
+	// Start storage updates (every 5 minutes)
+	go os.updateStoragePeriodically()
+	log.Println("[Orchestrator] Started periodic storage updates")
+
+	// Start build history cleanup (daily)
+	go os.cleanupBuildHistory()
+	log.Println("[Orchestrator] Started build history cleanup")
 
 	log.Println("[Orchestrator] Orchestration service started successfully")
 }
@@ -649,4 +659,333 @@ func (os *OrchestratorService) aggregateDeploymentMetrics(deploymentID string, a
 	}
 	
 	return aggregatedCount, deletedInDeployment
+}
+
+// storageInfo contains storage information for a deployment
+type storageInfo struct {
+	ImageSize     int64 // Docker image size in bytes
+	VolumeSize    int64 // Total volume size in bytes
+	ContainerDisk int64 // Container root filesystem usage in bytes
+	TotalStorage  int64 // Total storage (image + volumes + container disk)
+}
+
+// calculateStorage calculates total storage for a deployment
+func (os *OrchestratorService) calculateStorage(ctx context.Context, imageName string, containerIDs []string) (*storageInfo, error) {
+	info := &storageInfo{}
+
+	// Get Docker client
+	dcli, err := docker.New()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Docker client: %w", err)
+	}
+	defer dcli.Close()
+
+	// 1. Get image size
+	if imageName != "" {
+		imageSize, err := getImageSize(ctx, imageName)
+		if err != nil {
+			log.Printf("[calculateStorage] Failed to get image size for %s: %v", imageName, err)
+		} else {
+			info.ImageSize = imageSize
+		}
+	}
+
+	// 2. Get volume sizes and container disk usage for all containers
+	totalVolumeSize := int64(0)
+	totalContainerDisk := int64(0)
+
+	for _, containerID := range containerIDs {
+		// Get volume sizes
+		volumeSize, err := os.getContainerVolumeSize(ctx, dcli, containerID)
+		if err != nil {
+			log.Printf("[calculateStorage] Failed to get volume size for container %s: %v", containerID, err)
+		} else {
+			totalVolumeSize += volumeSize
+		}
+
+		// Get container root filesystem disk usage
+		containerDisk, err := os.getContainerDiskUsage(ctx, dcli, containerID)
+		if err != nil {
+			log.Printf("[calculateStorage] Failed to get container disk usage for %s: %v", containerID, err)
+		} else {
+			totalContainerDisk += containerDisk
+		}
+	}
+
+	info.VolumeSize = totalVolumeSize
+	info.ContainerDisk = totalContainerDisk
+	info.TotalStorage = info.ImageSize + info.VolumeSize + info.ContainerDisk
+
+	return info, nil
+}
+
+// getImageSize gets the size of a Docker image in bytes
+func getImageSize(ctx context.Context, imageName string) (int64, error) {
+	cmd := exec.CommandContext(ctx, "docker", "image", "inspect", imageName, "--format", "{{.Size}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get image size: %w", err)
+	}
+
+	sizeStr := strings.TrimSpace(string(output))
+	var size int64
+	if _, err := fmt.Sscanf(sizeStr, "%d", &size); err != nil {
+		return 0, fmt.Errorf("failed to parse image size: %w", err)
+	}
+
+	return size, nil
+}
+
+// getContainerVolumeSize calculates total size of all volumes attached to a container
+func (os *OrchestratorService) getContainerVolumeSize(ctx context.Context, dcli *docker.Client, containerID string) (int64, error) {
+	containerInfo, err := dcli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	totalSize := int64(0)
+
+	volumes, err := dcli.GetContainerVolumes(ctx, containerID)
+	if err != nil {
+		log.Printf("[getContainerVolumeSize] Failed to get volumes for container %s: %v", containerID, err)
+		for _, mount := range containerInfo.Mounts {
+			if mount.Type == "volume" || (mount.Type == "bind" && strings.HasPrefix(mount.Source, "/var/lib/obiente/volumes")) {
+				size, err := getDirectorySize(ctx, mount.Source)
+				if err != nil {
+					log.Printf("[getContainerVolumeSize] Failed to get size for volume %s: %v", mount.Source, err)
+					continue
+				}
+				totalSize += size
+			}
+		}
+	} else {
+		for _, volume := range volumes {
+			size, err := getDirectorySize(ctx, volume.Source)
+			if err != nil {
+				log.Printf("[getContainerVolumeSize] Failed to get size for volume %s: %v", volume.Source, err)
+				continue
+			}
+			totalSize += size
+		}
+	}
+
+	return totalSize, nil
+}
+
+// getContainerDiskUsage gets the root filesystem disk usage of a container
+func (os *OrchestratorService) getContainerDiskUsage(ctx context.Context, dcli *docker.Client, containerID string) (int64, error) {
+	cmd := []string{"sh", "-c", "du -sb / 2>/dev/null | cut -f1"}
+	output, err := dcli.ContainerExecRun(ctx, containerID, cmd)
+	if err != nil {
+		// Fallback: try df command
+		cmd = []string{"df", "-B1", "/"}
+		output, err = dcli.ContainerExecRun(ctx, containerID, cmd)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get disk usage: %w", err)
+		}
+
+		lines := strings.Split(strings.TrimSpace(output), "\n")
+		if len(lines) < 2 {
+			return 0, fmt.Errorf("unexpected df output format")
+		}
+
+		fields := strings.Fields(lines[1])
+		if len(fields) < 3 {
+			return 0, fmt.Errorf("unexpected df output format")
+		}
+
+		var used int64
+		if _, err := fmt.Sscanf(fields[2], "%d", &used); err != nil {
+			return 0, fmt.Errorf("failed to parse used size: %w", err)
+		}
+
+		return used, nil
+	}
+
+	sizeStr := strings.TrimSpace(output)
+	var size int64
+	if _, err := fmt.Sscanf(sizeStr, "%d", &size); err != nil {
+		return 0, fmt.Errorf("failed to parse disk usage: %w", err)
+	}
+
+	return size, nil
+}
+
+// getDirectorySize calculates the total size of a directory
+func getDirectorySize(ctx context.Context, path string) (int64, error) {
+	cmd := exec.CommandContext(ctx, "du", "-sb", path)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get directory size: %w", err)
+	}
+
+	parts := strings.Fields(string(output))
+	if len(parts) < 1 {
+		return 0, fmt.Errorf("unexpected du output format")
+	}
+
+	var size int64
+	if _, err := fmt.Sscanf(parts[0], "%d", &size); err != nil {
+		return 0, fmt.Errorf("failed to parse size: %w", err)
+	}
+
+	return size, nil
+}
+
+// updateStoragePeriodically updates storage usage for all running deployments
+func (os *OrchestratorService) updateStoragePeriodically() {
+	// Run every 5 minutes
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			log.Println("[Orchestrator] Updating storage for all running deployments...")
+			
+			// Get all running deployments
+			var locations []database.DeploymentLocation
+			if err := database.DB.Where("status = ?", "running").Find(&locations).Error; err != nil {
+				log.Printf("[Orchestrator] Failed to get running deployments: %v", err)
+				continue
+			}
+
+			// Group by deployment ID
+			deploymentMap := make(map[string][]database.DeploymentLocation)
+			for _, loc := range locations {
+				deploymentMap[loc.DeploymentID] = append(deploymentMap[loc.DeploymentID], loc)
+			}
+
+			log.Printf("[Orchestrator] Updating storage for %d deployments", len(deploymentMap))
+
+			// Process deployments in parallel batches
+			const batchSize = 5 // Process 5 deployments concurrently
+			var wg sync.WaitGroup
+			var mu sync.Mutex
+			updatedCount := 0
+			errorCount := 0
+
+			deploymentIDs := make([]string, 0, len(deploymentMap))
+			for depID := range deploymentMap {
+				deploymentIDs = append(deploymentIDs, depID)
+			}
+
+			for i := 0; i < len(deploymentIDs); i += batchSize {
+				end := i + batchSize
+				if end > len(deploymentIDs) {
+					end = len(deploymentIDs)
+				}
+				batch := deploymentIDs[i:end]
+
+				for _, deploymentID := range batch {
+					wg.Add(1)
+					go func(depID string) {
+						defer wg.Done()
+						
+						ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+						defer cancel()
+
+						// Get container IDs for this deployment
+						containerIDs := make([]string, 0)
+						if locs, ok := deploymentMap[depID]; ok {
+							for _, loc := range locs {
+								if loc.ContainerID != "" {
+									containerIDs = append(containerIDs, loc.ContainerID)
+								}
+							}
+						}
+
+						if len(containerIDs) == 0 {
+							return
+						}
+
+						// Get deployment to find image name
+						var deployment database.Deployment
+						if err := database.DB.Where("id = ?", depID).First(&deployment).Error; err != nil {
+							log.Printf("[Orchestrator] Failed to get deployment %s: %v", depID, err)
+							return
+						}
+
+						imageName := ""
+						if deployment.Image != nil {
+							imageName = *deployment.Image
+						}
+
+						// Calculate storage
+						storageInfo, err := os.calculateStorage(ctx, imageName, containerIDs)
+						if err != nil {
+							log.Printf("[Orchestrator] Failed to calculate storage for deployment %s: %v", depID, err)
+							mu.Lock()
+							errorCount++
+							mu.Unlock()
+							return
+						}
+
+						// Update storage in database
+						if err := database.DB.Model(&database.Deployment{}).
+							Where("id = ?", depID).
+							Update("storage_bytes", storageInfo.TotalStorage).Error; err != nil {
+							log.Printf("[Orchestrator] Failed to update storage for deployment %s: %v", depID, err)
+							mu.Lock()
+							errorCount++
+							mu.Unlock()
+							return
+						}
+
+						mu.Lock()
+						updatedCount++
+						mu.Unlock()
+					}(deploymentID)
+				}
+
+				wg.Wait()
+			}
+
+			log.Printf("[Orchestrator] Storage update completed: %d updated, %d errors", updatedCount, errorCount)
+		case <-os.ctx.Done():
+			return
+		}
+	}
+}
+
+// cleanupBuildHistory deletes build history older than 30 days
+func (os *OrchestratorService) cleanupBuildHistory() {
+	// Run daily at midnight
+	// Calculate time until next midnight
+	now := time.Now()
+	nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+	initialDelay := nextMidnight.Sub(now)
+	
+	// Wait for first run
+	select {
+	case <-time.After(initialDelay):
+		// Run immediately after initial delay
+	case <-os.ctx.Done():
+		return
+	}
+	
+	// Run daily after initial delay
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	
+	for {
+		select {
+		case <-ticker.C:
+			log.Println("[Orchestrator] Running build history cleanup...")
+			
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+			
+			// Delete builds older than 30 days
+			buildHistoryRepo := database.NewBuildHistoryRepository(database.DB)
+			deletedCount, err := buildHistoryRepo.DeleteBuildsOlderThan(ctx, 30*24*time.Hour)
+			if err != nil {
+				log.Printf("[Orchestrator] Failed to cleanup build history: %v", err)
+			} else {
+				log.Printf("[Orchestrator] Deleted %d build(s) older than 30 days", deletedCount)
+			}
+		case <-os.ctx.Done():
+			return
+		}
+	}
 }

@@ -13,6 +13,7 @@ import (
 	"api/internal/quota"
 
 	"connectrpc.com/connect"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -36,13 +37,70 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to trigger deployment: %w", err))
 	}
 
+	// Get user ID for build record
+	userInfo, _ := auth.GetUserFromContext(ctx)
+	triggeredBy := "system"
+	if userInfo != nil {
+		triggeredBy = userInfo.Id
+	}
+
 	// Start async rebuild with log streaming
 	go func() {
 		buildCtx := context.Background()
+		buildStartTime := time.Now()
 
 		// Get or create build log streamer
 		streamer := GetBuildLogStreamer(deploymentID)
 		defer streamer.Close()
+
+		// Create build record
+		buildID := uuid.New().String()
+		buildNumber, err := s.buildHistoryRepo.GetNextBuildNumber(buildCtx, deploymentID)
+		if err != nil {
+			log.Printf("[TriggerDeployment] Failed to get next build number: %v", err)
+			buildNumber = 1 // Fallback to 1
+		}
+
+		buildRecord := &database.BuildHistory{
+			ID:             buildID,
+			DeploymentID:   deploymentID,
+			OrganizationID: dbDeployment.OrganizationID,
+			BuildNumber:    buildNumber,
+			Status:         1, // BUILD_PENDING
+			StartedAt:      buildStartTime,
+			TriggeredBy:    triggeredBy,
+			BuildStrategy:  dbDeployment.BuildStrategy,
+			Branch:         dbDeployment.Branch,
+		}
+
+		// Capture build configuration snapshot
+		if dbDeployment.RepositoryURL != nil {
+			buildRecord.RepositoryURL = dbDeployment.RepositoryURL
+		}
+		if dbDeployment.BuildCommand != nil {
+			buildRecord.BuildCommand = dbDeployment.BuildCommand
+		}
+		if dbDeployment.InstallCommand != nil {
+			buildRecord.InstallCommand = dbDeployment.InstallCommand
+		}
+		if dbDeployment.StartCommand != nil {
+			buildRecord.StartCommand = dbDeployment.StartCommand
+		}
+		if dbDeployment.DockerfilePath != nil {
+			buildRecord.DockerfilePath = dbDeployment.DockerfilePath
+		}
+		if dbDeployment.ComposeFilePath != nil {
+			buildRecord.ComposeFilePath = dbDeployment.ComposeFilePath
+		}
+
+		if err := s.buildHistoryRepo.CreateBuild(buildCtx, buildRecord); err != nil {
+			log.Printf("[TriggerDeployment] Failed to create build record: %v", err)
+		} else {
+			// Set build ID on streamer so logs are saved to database
+			streamer.SetBuildID(buildID)
+			// Update status to BUILDING
+			_ = s.buildHistoryRepo.UpdateBuildStatus(buildCtx, buildID, 2, 0, nil) // BUILD_BUILDING = 2
+		}
 
 		// Get build strategy - handle UNSPECIFIED by auto-detecting
 		buildStrategy := deploymentsv1.BuildStrategy(dbDeployment.BuildStrategy)
@@ -99,6 +157,10 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		if dbDeployment.InstallCommand != nil {
 			installCmd = *dbDeployment.InstallCommand
 		}
+		startCmd := ""
+		if dbDeployment.StartCommand != nil {
+			startCmd = *dbDeployment.StartCommand
+		}
 
 		// Set defaults for optional fields
 		port := 8080
@@ -139,6 +201,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			GitHubToken:     githubToken,
 			BuildCommand:    buildCmd,
 			InstallCommand:  installCmd,
+			StartCommand:    startCmd,
 			DockerfilePath:  dockerfilePath,
 			ComposeFilePath: composeFilePath,
 			EnvVars:         parseEnvVars(dbDeployment.EnvVars),
@@ -153,15 +216,31 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		streamer.Write([]byte(fmt.Sprintf("🚀 Starting deployment rebuild for %s...\n", deploymentID)))
 		streamer.Write([]byte(fmt.Sprintf("📦 Using build strategy: %s\n", strategy.Name())))
 
+		// Helper function to update build status and calculate build time
+		updateBuildStatus := func(status int32, errorMsg *string) {
+			buildTime := int32(time.Since(buildStartTime).Seconds())
+			if err := s.buildHistoryRepo.UpdateBuildStatus(buildCtx, buildID, status, buildTime, errorMsg); err != nil {
+				log.Printf("[TriggerDeployment] Failed to update build status: %v", err)
+			}
+		}
+
+		// Capture build result for storage calculation
+		var buildResult *BuildResult
+
 		// Handle compose-based deployments
 		if dbDeployment.ComposeYaml != "" {
 			streamer.Write([]byte("🐳 Deploying Docker Compose configuration...\n"))
 			if err := s.manager.DeployComposeFile(buildCtx, deploymentID, dbDeployment.ComposeYaml); err != nil {
 				log.Printf("[TriggerDeployment] Compose deployment failed: %v", err)
 				streamer.WriteStderr([]byte(fmt.Sprintf("❌ Deployment failed: %v\n", err)))
+				errorMsg := err.Error()
+				updateBuildStatus(4, &errorMsg) // BUILD_FAILED = 4
 				_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
 				return
 			}
+			// Update build with compose yaml
+			composeYaml := dbDeployment.ComposeYaml
+			_ = s.buildHistoryRepo.UpdateBuildResults(buildCtx, buildID, nil, &composeYaml, nil)
 			// Containers are automatically registered by DeployComposeFile
 		} else {
 			// Build using strategy
@@ -173,17 +252,39 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 					err = result.Error
 				}
 				streamer.WriteStderr([]byte(fmt.Sprintf("❌ Build failed: %v\n", err)))
+				errorMsg := err.Error()
+				updateBuildStatus(4, &errorMsg) // BUILD_FAILED = 4
 				_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
 				return
 			}
 
+			buildResult = result
+
 			streamer.Write([]byte("✅ Build completed successfully\n"))
 			streamer.Write([]byte("🚀 Deploying to orchestrator...\n"))
+
+			// Update build with build results
+			var imageName *string
+			var composeYaml *string
+			var size *string
+			if result.ImageName != "" {
+				imageName = &result.ImageName
+			}
+			if result.ComposeYaml != "" {
+				composeYaml = &result.ComposeYaml
+			}
+			// Try to get size from deployment if available
+			if dbDeployment.Size != "" {
+				size = &dbDeployment.Size
+			}
+			_ = s.buildHistoryRepo.UpdateBuildResults(buildCtx, buildID, imageName, composeYaml, size)
 
 			// Deploy using build result
 			if err := deployResultToOrchestrator(buildCtx, s.manager, dbDeployment, result); err != nil {
 				log.Printf("[TriggerDeployment] Deployment failed: %v", err)
 				streamer.WriteStderr([]byte(fmt.Sprintf("❌ Deployment failed: %v\n", err)))
+				errorMsg := err.Error()
+				updateBuildStatus(4, &errorMsg) // BUILD_FAILED = 4
 				_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
 				return
 			}
@@ -207,9 +308,20 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		if err := s.verifyContainersRunning(buildCtx, deploymentID); err != nil {
 			log.Printf("[TriggerDeployment] WARNING: Containers not running: %v", err)
 			streamer.WriteStderr([]byte(fmt.Sprintf("⚠️  Warning: %v\n", err)))
+			errorMsg := err.Error()
+			updateBuildStatus(4, &errorMsg) // BUILD_FAILED = 4
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
 		} else {
 			streamer.Write([]byte("✅ Deployment completed successfully!\n"))
+			
+			// Calculate and update storage usage
+			streamer.Write([]byte("📊 Calculating storage usage...\n"))
+			if err := s.updateDeploymentStorage(buildCtx, deploymentID, buildResult); err != nil {
+				log.Printf("[TriggerDeployment] Warning: Failed to update storage: %v", err)
+				// Don't fail deployment if storage calculation fails
+			}
+			
+			updateBuildStatus(3, nil) // BUILD_SUCCESS = 3
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_RUNNING))
 		}
 	}()
@@ -455,4 +567,49 @@ func (s *Service) ScaleDeployment(ctx context.Context, req *connect.Request[depl
 	}
 	res := connect.NewResponse(&deploymentsv1.ScaleDeploymentResponse{Deployment: dbDeploymentToProto(dbDep)})
 	return res, nil
+}
+
+// updateDeploymentStorage calculates and updates storage usage for a deployment
+func (s *Service) updateDeploymentStorage(ctx context.Context, deploymentID string, result *BuildResult) error {
+	// Get all container locations for this deployment
+	locations, err := database.GetAllDeploymentLocations(deploymentID)
+	if err != nil {
+		return fmt.Errorf("failed to get deployment locations: %w", err)
+	}
+
+	// Collect container IDs
+	containerIDs := make([]string, 0, len(locations))
+	for _, loc := range locations {
+		if loc.ContainerID != "" {
+			containerIDs = append(containerIDs, loc.ContainerID)
+		}
+	}
+
+	// Determine image name
+	imageName := ""
+	if result != nil && result.ImageName != "" {
+		imageName = result.ImageName
+	} else {
+		// Try to get from deployment
+		deployment, err := s.repo.GetByID(ctx, deploymentID)
+		if err == nil && deployment.Image != nil {
+			imageName = *deployment.Image
+		}
+	}
+
+	// Calculate storage
+	storageInfo, err := CalculateStorage(ctx, imageName, containerIDs)
+	if err != nil {
+		return fmt.Errorf("failed to calculate storage: %w", err)
+	}
+
+	// Update deployment with storage information
+	if err := s.repo.UpdateStorage(ctx, deploymentID, storageInfo.TotalStorage); err != nil {
+		return fmt.Errorf("failed to update storage: %w", err)
+	}
+
+	log.Printf("[updateDeploymentStorage] Updated storage for deployment %s: Image=%d bytes, Volumes=%d bytes, Container=%d bytes, Total=%d bytes",
+		deploymentID, storageInfo.ImageSize, storageInfo.VolumeSize, storageInfo.ContainerDisk, storageInfo.TotalStorage)
+
+	return nil
 }

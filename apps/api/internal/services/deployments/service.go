@@ -19,6 +19,7 @@ import (
 type Service struct {
 	deploymentsv1connect.UnimplementedDeploymentServiceHandler
 	repo              *database.DeploymentRepository
+	buildHistoryRepo  *database.BuildHistoryRepository
 	permissionChecker *auth.PermissionChecker
 	manager           *orchestrator.DeploymentManager
 	quotaChecker      *quota.Checker
@@ -28,6 +29,7 @@ type Service struct {
 func NewService(repo *database.DeploymentRepository, manager *orchestrator.DeploymentManager, qc *quota.Checker) *Service {
 	return &Service{
 		repo:              repo,
+		buildHistoryRepo:  database.NewBuildHistoryRepository(database.DB),
 		permissionChecker: auth.NewPermissionChecker(),
 		manager:           manager,
 		quotaChecker:      qc,

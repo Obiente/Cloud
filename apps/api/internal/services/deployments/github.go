@@ -3,6 +3,7 @@ package deployments
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/auth"
@@ -11,6 +12,14 @@ import (
 
 	"connectrpc.com/connect"
 )
+
+// containsAuthError checks if an error message indicates authentication failure
+func containsAuthError(errMsg string) bool {
+	lowerMsg := strings.ToLower(errMsg)
+	return strings.Contains(lowerMsg, "authentication failed") ||
+		strings.Contains(lowerMsg, "401") ||
+		strings.Contains(lowerMsg, "403")
+}
 
 // getGitHubToken retrieves a GitHub token for the authenticated user or organization
 func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationID string) (string, error) {
@@ -95,7 +104,13 @@ func (s *Service) ListGitHubRepos(ctx context.Context, req *connect.Request[depl
 
 	repos, err := ghClient.ListRepos(ctx, page, perPage)
 	if err != nil {
-		// If GitHub API fails (e.g., invalid token), return empty list
+		// Check if error is due to authentication failure (expired/revoked token)
+		errMsg := err.Error()
+		if containsAuthError(errMsg) {
+			// Return proper error code so frontend can prompt user to reconnect
+			return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("GitHub token expired or revoked. Please reconnect your GitHub account: %w", err))
+		}
+		// For other errors, return empty list (backward compatibility)
 		return connect.NewResponse(&deploymentsv1.ListGitHubReposResponse{
 			Repos: []*deploymentsv1.GitHubRepo{},
 			Total: 0,
@@ -144,6 +159,11 @@ func (s *Service) GetGitHubBranches(ctx context.Context, req *connect.Request[de
 
 	branches, err := ghClient.ListBranches(ctx, repoFullName)
 	if err != nil {
+		// Check if error is due to authentication failure
+		errMsg := err.Error()
+		if containsAuthError(errMsg) {
+			return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("GitHub token expired or revoked. Please reconnect your GitHub account: %w", err))
+		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to fetch branches: %w", err))
 	}
 
@@ -187,6 +207,11 @@ func (s *Service) GetGitHubFile(ctx context.Context, req *connect.Request[deploy
 
 	fileContent, err := ghClient.GetFile(ctx, repoFullName, branch, path)
 	if err != nil {
+		// Check if error is due to authentication failure
+		errMsg := err.Error()
+		if containsAuthError(errMsg) {
+			return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("GitHub token expired or revoked. Please reconnect your GitHub account: %w", err))
+		}
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to fetch file: %w", err))
 	}
 

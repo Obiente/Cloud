@@ -202,6 +202,8 @@ func registerServices(mux *http.ServeMux) {
 			&database.Organization{},
 			&database.OrganizationMember{},
 			&database.GitHubIntegration{},
+			&database.BuildHistory{},
+			&database.BuildLog{},
 		); err != nil {
 			log.Printf("[Server] AutoMigrate warning: %v", err)
 		}
