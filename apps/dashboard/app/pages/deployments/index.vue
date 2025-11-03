@@ -326,7 +326,10 @@
                         Bundle Size
                       </OuiText>
                       <OuiText size="2xl" weight="bold" color="primary">
-                        {{ deployment.size }}
+                        <OuiByte
+                          :value="deployment.size ?? 0"
+                          unit-display="short"
+                        />
                       </OuiText>
                     </OuiStack>
                   </OuiBox>
@@ -335,26 +338,62 @@
                 <OuiBox
                   v-if="
                     deployment.status === DeploymentStatus.BUILDING ||
-                    deployment.status === DeploymentStatus.DEPLOYING
+                    deployment.status === DeploymentStatus.DEPLOYING ||
+                    (deployment.status === DeploymentStatus.FAILED && progressValues[deployment.id] !== undefined)
                   "
                   p="md"
                   rounded="xl"
                   class="border backdrop-blur-sm"
-                  :class="getStatusMeta(deployment.status).progressClass"
+                  :class="
+                    deployment.status === DeploymentStatus.FAILED
+                      ? 'border-danger/30 bg-danger/10 text-danger'
+                      : getStatusMeta(deployment.status).progressClass
+                  "
                 >
                   <OuiStack gap="sm">
                     <OuiFlex
                       align="center"
                       gap="sm"
                       class="text-xs font-bold uppercase tracking-wider"
+                      :class="
+                        deployment.status === DeploymentStatus.FAILED
+                          ? 'text-danger'
+                          : ''
+                      "
                     >
-                      <Cog6ToothIcon class="h-4 w-4 animate-spin" />
-                      <span>{{ progressPhases[deployment.id] || 'Starting deployment...' }}</span>
+                      <Cog6ToothIcon
+                        v-if="deployment.status !== DeploymentStatus.FAILED"
+                        class="h-4 w-4 animate-spin"
+                      />
+                      <ExclamationTriangleIcon
+                        v-else
+                        class="h-4 w-4 text-danger"
+                      />
+                      <span
+                        :class="
+                          deployment.status === DeploymentStatus.FAILED
+                            ? 'text-danger'
+                            : ''
+                        "
+                      >
+                        {{ progressPhases[deployment.id] || 'Starting deployment...' }}
+                      </span>
                     </OuiFlex>
                     <div
-                      class="relative h-2 w-full overflow-hidden rounded-full bg-warning/20"
+                      class="relative h-2 w-full overflow-hidden rounded-full"
+                      :class="
+                        deployment.status === DeploymentStatus.FAILED
+                          ? 'bg-danger/20'
+                          : 'bg-warning/20'
+                      "
                     >
                       <div
+                        v-if="deployment.status === DeploymentStatus.FAILED"
+                        class="absolute inset-y-0 left-0 rounded-full bg-danger transition-all duration-300"
+                        :style="{ width: '100%' }"
+                      />
+                      <div
+                        v-else
                         class="absolute inset-y-0 left-0 rounded-full bg-warning transition-all duration-300"
                         :style="{ width: `${progressValues[deployment.id] || 0}%` }"
                       />
@@ -399,7 +438,7 @@
                   color="warning"
                   size="sm"
                   @click="redeployApp(deployment.id)"
-                  title="Redeploy"
+                  title="Redeploy (rebuild and redeploy)"
                   :aria-label="`Redeploy deployment ${deployment.name}`"
                   class="gap-2"
                 >
@@ -529,7 +568,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, computed, reactive, watch } from "vue";
+  import { ref, computed, reactive, watch, onMounted, onUnmounted } from "vue";
   import { useRouter } from "vue-router";
   import { NuxtLink } from "#components";
   import {
@@ -566,6 +605,7 @@
   import GitHubRepoPicker from "~/components/deployment/GitHubRepoPicker.vue";
   import { useOrganizationsStore } from "~/stores/organizations";
   import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
+  import OuiByte from "~/components/oui/Byte.vue";
   import { useDialog } from "~/composables/useDialog";
   import { useBuildProgress } from "~/composables/useBuildProgress";
   definePageMeta({
@@ -854,6 +894,66 @@
     }
   );
 
+  // Periodic refresh - faster when deployments are building/deploying
+  const hasActiveDeployments = computed(() => {
+    return (deployments.value ?? []).some(
+      (d) =>
+        d.status === DeploymentStatus.BUILDING ||
+        d.status === DeploymentStatus.DEPLOYING
+    );
+  });
+
+  // Use faster refresh (3 seconds) when there are active deployments, slower (30 seconds) otherwise
+  const refreshIntervalMs = computed(() => (hasActiveDeployments.value ? 3000 : 30000));
+
+  // Track page visibility using VueUse
+  const visibility = useDocumentVisibility();
+  const isVisible = computed(() => visibility.value === "visible");
+
+  // Periodic refresh - use ref to store interval ID so we can restart when interval changes
+  const refreshIntervalId = ref<ReturnType<typeof setInterval> | null>(null);
+
+  // Function to setup/restart the interval
+  const setupRefreshInterval = () => {
+    // Clear existing interval if any
+    if (refreshIntervalId.value) {
+      clearInterval(refreshIntervalId.value);
+      refreshIntervalId.value = null;
+    }
+
+    // Only setup if page is visible
+    if (isVisible.value && !listError.value) {
+      refreshIntervalId.value = setInterval(async () => {
+        if (isVisible.value && !listError.value) {
+          try {
+            await refreshDeployments();
+          } catch (error) {
+            console.error("Failed to refresh deployments:", error);
+            // Don't set listError here to avoid breaking the UI
+          }
+        }
+      }, refreshIntervalMs.value);
+    }
+  };
+
+  // Watch for interval changes (e.g., when active deployments change)
+  watch([refreshIntervalMs, isVisible], () => {
+    setupRefreshInterval();
+  });
+
+  // Start refreshing when component is mounted
+  onMounted(() => {
+    setupRefreshInterval();
+  });
+
+  // Cleanup on unmount
+  onUnmounted(() => {
+    if (refreshIntervalId.value) {
+      clearInterval(refreshIntervalId.value);
+      refreshIntervalId.value = null;
+    }
+  });
+
   // Track build progress for each deployment
   const buildProgressMap = new Map<string, ReturnType<typeof useBuildProgress>>();
 
@@ -881,27 +981,49 @@
     });
   };
 
+  // Track watchers to avoid creating duplicates
+  const progressWatchers = new Map<string, { progressWatcher: () => void; phaseWatcher: () => void }>();
+
   // Watch for progress changes and update reactive values
   watch(
     () => deployments.value,
     () => {
       deployments.value?.forEach((deployment) => {
+        // Skip if watchers already exist for this deployment
+        if (progressWatchers.has(deployment.id)) {
+          return;
+        }
+
         const progress = getBuildProgress(deployment.id);
+        
         // Set up watchers for each deployment's progress
-        watch(
+        const progressWatcher = watch(
           () => progress.progress.value,
           (newValue) => {
             progressValues[deployment.id] = newValue;
           },
           { immediate: true }
         );
-        watch(
+        
+        const phaseWatcher = watch(
           () => progress.currentPhase.value,
           (newValue) => {
             progressPhases[deployment.id] = newValue;
           },
           { immediate: true }
         );
+
+        progressWatchers.set(deployment.id, { progressWatcher, phaseWatcher });
+      });
+
+      // Clean up watchers for deployments that no longer exist
+      const currentIds = new Set(deployments.value?.map((d) => d.id) || []);
+      progressWatchers.forEach((watchers, id) => {
+        if (!currentIds.has(id)) {
+          watchers.progressWatcher();
+          watchers.phaseWatcher();
+          progressWatchers.delete(id);
+        }
       });
     },
     { immediate: true, deep: true }
@@ -917,18 +1039,38 @@
         const isBuilding =
           deployment.status === DeploymentStatus.BUILDING ||
           deployment.status === DeploymentStatus.DEPLOYING;
+        const isFailed = deployment.status === DeploymentStatus.FAILED;
         const progress = getBuildProgress(deployment.id);
 
         if (isBuilding && !progress.isStreaming.value) {
           // Start streaming when deployment enters building state
           progress.startStreaming();
-        } else if (!isBuilding && progress.isStreaming.value) {
-          // Stop streaming and reset when deployment is no longer building
+        } else if ((!isBuilding || isFailed) && progress.isStreaming.value) {
+          // Stop streaming when deployment is no longer building or has failed
           progress.stopStreaming();
-          // Reset after a delay to allow final progress update
-          setTimeout(() => {
-            progress.reset();
-          }, 1000);
+          // If failed, update phase immediately; otherwise reset after delay
+          if (isFailed) {
+            // Update phase to show failure, but keep progress at current value
+            // Also ensure we update reactive values immediately
+            const currentProgress = progress.progress.value;
+            progressValues[deployment.id] = currentProgress > 0 ? currentProgress : progress.progress.value;
+            progressPhases[deployment.id] = progress.currentPhase.value || "Build failed";
+          } else {
+            // Reset after a delay to allow final progress update
+            setTimeout(() => {
+              progress.reset();
+              progressValues[deployment.id] = 0;
+              progressPhases[deployment.id] = "Starting deployment...";
+            }, 1000);
+          }
+        } else if (isFailed && !isBuilding && !progress.isStreaming.value) {
+          // If deployment is already failed and we're not streaming, ensure UI is updated
+          // This handles the case where status changed to FAILED before we started tracking
+          const currentProgress = progress.progress.value;
+          if (currentProgress > 0 || progressValues[deployment.id] === undefined) {
+            progressValues[deployment.id] = currentProgress > 0 ? currentProgress : 0;
+            progressPhases[deployment.id] = progress.currentPhase.value || "Build failed";
+          }
         }
       });
 

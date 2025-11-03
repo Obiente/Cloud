@@ -66,6 +66,7 @@
                 <OuiFlex gap="sm" wrap="wrap" class="shrink-0">
                   <OuiButton
                     variant="ghost"
+                    color="secondary"
                     size="sm"
                     @click="refreshAll"
                     :loading="isRefreshing"
@@ -81,6 +82,7 @@
                   </OuiButton>
                   <OuiButton
                     variant="ghost"
+                    color="success"
                     size="sm"
                     @click="openDomain"
                     :disabled="!deployment.domain"
@@ -90,7 +92,7 @@
                     <OuiText as="span" size="xs" weight="medium">Open</OuiText>
                   </OuiButton>
                   <OuiButton
-                    variant="ghost"
+                    variant="outline"
                     color="warning"
                     size="sm"
                     @click="redeploy"
@@ -111,6 +113,25 @@
                     />
                     <OuiText as="span" size="xs" weight="medium"
                       >Redeploy</OuiText
+                    >
+                  </OuiButton>
+                  <OuiButton
+                    v-if="hasRunningContainers"
+                    variant="outline"
+                    color="primary"
+                    size="sm"
+                    @click="restart"
+                    :disabled="
+                      isProcessing ||
+                      deployment.status === DeploymentStatusEnum.BUILDING ||
+                      deployment.status === DeploymentStatusEnum.DEPLOYING
+                    "
+                    class="gap-2"
+                    title="Restart (restart without rebuilding)"
+                  >
+                    <ArrowPathIcon class="h-4 w-4" />
+                    <OuiText as="span" size="xs" weight="medium"
+                      >Restart</OuiText
                     >
                   </OuiButton>
                   <OuiButton
@@ -695,6 +716,16 @@
 
     // Trigger the redeployment
     await deploymentActions.redeployDeployment(id.value, localDeployment.value);
+  }
+
+  async function restart() {
+    if (!localDeployment.value) return;
+
+    // Restart deployment (restart containers without rebuilding)
+    await deploymentActions.reloadDeployment(id.value, localDeployment.value);
+
+    // Refresh deployment data to get updated status
+    await refreshDeployment();
   }
 
   async function handleComposeSave(composeYaml: string) {

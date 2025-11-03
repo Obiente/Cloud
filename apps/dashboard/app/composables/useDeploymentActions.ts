@@ -130,7 +130,7 @@ export function useDeploymentActions(organizationId: string = "default") {
   };
 
   /**
-   * Trigger a redeployment
+   * Trigger a redeployment (rebuilds and redeploys)
    */
   const redeployDeployment = async (
     deploymentId: string,
@@ -170,6 +170,48 @@ export function useDeploymentActions(organizationId: string = "default") {
       if (deployment) {
         deployment.status = DeploymentStatus.FAILED;
       }
+      throw error;
+    } finally {
+      isProcessing.value = false;
+    }
+  };
+
+  /**
+   * Reload a deployment (restarts containers without rebuilding)
+   * This is useful when configs have been updated and you want to apply them
+   */
+  const reloadDeployment = async (
+    deploymentId: string,
+    deployments: Deployment | Deployment[] | null | undefined
+  ) => {
+    if (isProcessing.value) return;
+    isProcessing.value = true;
+
+    // Optimistic update - keep current status but show it's reloading
+    const deployment = Array.isArray(deployments)
+      ? deployments.find((d) => d.id === deploymentId)
+      : (deployments as Deployment)?.id === deploymentId
+      ? (deployments as Deployment)
+      : null;
+
+    if (deployment) {
+      deployment.lastDeployedAt = timestamp(new Date());
+    }
+
+    try {
+      const res = await client.restartDeployment({
+        organizationId: getOrgId(),
+        deploymentId,
+      });
+
+      // Update with server response
+      if (deployment && res.deployment) {
+        Object.assign(deployment, res.deployment);
+      }
+
+      return res.deployment;
+    } catch (error) {
+      console.error("Failed to reload deployment:", error);
       throw error;
     } finally {
       isProcessing.value = false;
@@ -309,6 +351,7 @@ export function useDeploymentActions(organizationId: string = "default") {
     startDeployment,
     stopDeployment,
     redeployDeployment,
+    reloadDeployment,
     deleteDeployment,
     updateDeployment,
     createDeployment,
