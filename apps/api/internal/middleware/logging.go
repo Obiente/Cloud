@@ -3,12 +3,11 @@ package middleware
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
-	"os"
-	"strings"
 	"time"
+
+	"api/internal/logger"
 )
 
 // responseWriter wraps http.ResponseWriter to capture status code
@@ -51,11 +50,11 @@ func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 
 // RequestLogger logs all incoming requests with detailed information
 func RequestLogger(next http.Handler) http.Handler {
-	// Check if debug logging is enabled
-	logLevel := strings.ToLower(os.Getenv("LOG_LEVEL"))
-	debug := logLevel == "debug" || logLevel == "trace"
+	// Initialize logger if not already done
+	logger.Init()
+	debug := logger.IsDebug()
 
-	log.Printf("[Middleware] RequestLogger initialized (debug=%v, LOG_LEVEL=%s)", debug, logLevel)
+	logger.Debug("[Middleware] RequestLogger initialized (debug=%v, LOG_LEVEL=%s)", debug, logger.GetLevel())
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -66,25 +65,25 @@ func RequestLogger(next http.Handler) http.Handler {
 			statusCode:     http.StatusOK,
 		}
 
-		// Log incoming request
-		log.Printf("[Request] %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+		// Log incoming request (only at info level or above)
+		logger.Debug("[Request] %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
 
 		if debug {
 			// Log important headers
-			log.Printf("  Origin: %s", r.Header.Get("Origin"))
-			log.Printf("  Content-Type: %s", r.Header.Get("Content-Type"))
-			log.Printf("  Authorization: %s", maskAuth(r.Header.Get("Authorization")))
-			log.Printf("  User-Agent: %s", r.Header.Get("User-Agent"))
-			log.Printf("  Connect-Protocol-Version: %s", r.Header.Get("Connect-Protocol-Version"))
+			logger.Debug("  Origin: %s", r.Header.Get("Origin"))
+			logger.Debug("  Content-Type: %s", r.Header.Get("Content-Type"))
+			logger.Debug("  Authorization: %s", maskAuth(r.Header.Get("Authorization")))
+			logger.Debug("  User-Agent: %s", r.Header.Get("User-Agent"))
+			logger.Debug("  Connect-Protocol-Version: %s", r.Header.Get("Connect-Protocol-Version"))
 
 			// Log all headers in debug mode
-			log.Println("  All Headers:")
+			logger.Debugln("  All Headers:")
 			for name, values := range r.Header {
 				for _, value := range values {
 					if name == "Authorization" {
 						value = maskAuth(value)
 					}
-					log.Printf("    %s: %s", name, value)
+					logger.Debug("    %s: %s", name, value)
 				}
 			}
 		}
@@ -92,16 +91,23 @@ func RequestLogger(next http.Handler) http.Handler {
 		// Call next handler
 		next.ServeHTTP(wrapped, r)
 
-		// Log response
+		// Log response (only at info level or above)
 		duration := time.Since(start)
-		log.Printf("[Response] %s %s -> %d (%v)", r.Method, r.URL.Path, wrapped.statusCode, duration)
+		// Log errors and warnings at their respective levels
+		if wrapped.statusCode >= 500 {
+			logger.Error("[Response] %s %s -> %d (%v)", r.Method, r.URL.Path, wrapped.statusCode, duration)
+		} else if wrapped.statusCode >= 400 {
+			logger.Warn("[Response] %s %s -> %d (%v)", r.Method, r.URL.Path, wrapped.statusCode, duration)
+		} else {
+			logger.Debug("[Response] %s %s -> %d (%v)", r.Method, r.URL.Path, wrapped.statusCode, duration)
+		}
 
 		if debug {
 			// Log response headers
-			log.Println("  Response Headers:")
+			logger.Debugln("  Response Headers:")
 			for name, values := range wrapped.Header() {
 				for _, value := range values {
-					log.Printf("    %s: %s", name, value)
+					logger.Debug("    %s: %s", name, value)
 				}
 			}
 		}
@@ -121,18 +127,18 @@ func maskAuth(auth string) string {
 
 // CORSDebugLogger specifically logs CORS-related information
 func CORSDebugLogger(next http.Handler) http.Handler {
-	log.Println("[Middleware] CORSDebugLogger initialized")
+	logger.Debugln("[Middleware] CORSDebugLogger initialized")
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 
-		// Only log if there's an Origin header (CORS request)
-		if origin != "" {
-			log.Printf("[CORS] Request: %s %s", r.Method, r.URL.Path)
-			log.Printf("[CORS]   Origin: %s", origin)
-			log.Printf("[CORS]   Method: %s", r.Method)
-			log.Printf("[CORS]   Access-Control-Request-Method: %s", r.Header.Get("Access-Control-Request-Method"))
-			log.Printf("[CORS]   Access-Control-Request-Headers: %s", r.Header.Get("Access-Control-Request-Headers"))
+		// Only log if there's an Origin header (CORS request) and debug is enabled
+		if origin != "" && logger.IsDebug() {
+			logger.Debug("[CORS] Request: %s %s", r.Method, r.URL.Path)
+			logger.Debug("[CORS]   Origin: %s", origin)
+			logger.Debug("[CORS]   Method: %s", r.Method)
+			logger.Debug("[CORS]   Access-Control-Request-Method: %s", r.Header.Get("Access-Control-Request-Method"))
+			logger.Debug("[CORS]   Access-Control-Request-Headers: %s", r.Header.Get("Access-Control-Request-Headers"))
 		}
 
 		// Wrap response to log CORS headers
@@ -143,13 +149,13 @@ func CORSDebugLogger(next http.Handler) http.Handler {
 
 		next.ServeHTTP(wrapped, r)
 
-		// Log CORS response headers
-		if origin != "" {
-			log.Printf("[CORS] Response: %d", wrapped.statusCode)
-			log.Printf("[CORS]   Access-Control-Allow-Origin: %s", wrapped.Header().Get("Access-Control-Allow-Origin"))
-			log.Printf("[CORS]   Access-Control-Allow-Credentials: %s", wrapped.Header().Get("Access-Control-Allow-Credentials"))
-			log.Printf("[CORS]   Access-Control-Allow-Methods: %s", wrapped.Header().Get("Access-Control-Allow-Methods"))
-			log.Printf("[CORS]   Access-Control-Allow-Headers: %s", wrapped.Header().Get("Access-Control-Allow-Headers"))
+		// Log CORS response headers (only in debug mode)
+		if origin != "" && logger.IsDebug() {
+			logger.Debug("[CORS] Response: %d", wrapped.statusCode)
+			logger.Debug("[CORS]   Access-Control-Allow-Origin: %s", wrapped.Header().Get("Access-Control-Allow-Origin"))
+			logger.Debug("[CORS]   Access-Control-Allow-Credentials: %s", wrapped.Header().Get("Access-Control-Allow-Credentials"))
+			logger.Debug("[CORS]   Access-Control-Allow-Methods: %s", wrapped.Header().Get("Access-Control-Allow-Methods"))
+			logger.Debug("[CORS]   Access-Control-Allow-Headers: %s", wrapped.Header().Get("Access-Control-Allow-Headers"))
 		}
 	})
 }

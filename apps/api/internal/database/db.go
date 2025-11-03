@@ -2,16 +2,35 @@ package database
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	gormlogger "gorm.io/gorm/logger"
+
+	"api/internal/logger"
 )
 
 var DB *gorm.DB
 var RedisClient *RedisCache
+
+// getGormLogLevel converts our LOG_LEVEL to GORM's log level
+func getGormLogLevel() gormlogger.LogLevel {
+	// Initialize our logger to ensure it's ready
+	logger.Init()
+	level := logger.GetLevel()
+	
+	switch level {
+	case "error":
+		return gormlogger.Error // Only errors
+	case "warn", "warning":
+		return gormlogger.Warn // Warnings and errors, no SQL queries
+	case "info", "debug", "trace":
+		return gormlogger.Info // All SQL queries (for info/debug)
+	default:
+		return gormlogger.Warn // Default to warn to suppress SQL queries
+	}
+}
 
 // InitDatabase initializes the PostgreSQL database connection
 func InitDatabase() error {
@@ -42,28 +61,28 @@ func InitDatabase() error {
 
 	// Open database connection
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: gormlogger.Default.LogMode(getGormLogLevel()),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	DB = db
-	log.Println("Database connection established")
+	logger.Info("Database connection established")
 
 	// Pre-create groups column if it doesn't exist to avoid GORM AutoMigrate syntax issues
 	// This prevents GORM from trying to add it with incorrect default value syntax
 	if !db.Migrator().HasColumn("deployments", "groups") {
-		log.Println("Creating groups column before AutoMigrate to avoid syntax issues...")
+		logger.Debug("Creating groups column before AutoMigrate to avoid syntax issues...")
 		if err := db.Exec(`ALTER TABLE deployments ADD COLUMN groups JSONB`).Error; err != nil {
 			// Column might have been created by another process, check again
 			if !db.Migrator().HasColumn("deployments", "groups") {
-				log.Printf("Warning: Failed to pre-create groups column: %v. AutoMigrate may fail, but migration will handle it.", err)
+				logger.Warn("Failed to pre-create groups column: %v. AutoMigrate may fail, but migration will handle it.", err)
 			}
 		} else {
 			// Set default after adding column to avoid quote escaping issues
 			if err := db.Exec(`ALTER TABLE deployments ALTER COLUMN groups SET DEFAULT '[]'::jsonb`).Error; err != nil {
-				log.Printf("Warning: Failed to set groups default: %v", err)
+				logger.Warn("Failed to set groups default: %v", err)
 			}
 		}
 	}
@@ -76,18 +95,18 @@ func InitDatabase() error {
 		return fmt.Errorf("failed to auto-migrate: %w", err)
 	}
 
-	log.Println("Database schema migrated")
+	logger.Info("Database schema migrated")
 
 	// Initialize deployment tracking tables
 	if err := InitDeploymentTracking(); err != nil {
 		return fmt.Errorf("failed to initialize deployment tracking: %w", err)
 	}
 
-	log.Println("Deployment tracking initialized")
+	logger.Info("Deployment tracking initialized")
 
 	// Initialize metrics database (separate connection for metrics)
 	if err := InitMetricsDatabase(); err != nil {
-		log.Printf("Warning: Metrics database initialization failed: %v. Metrics may not work correctly.", err)
+		logger.Warn("Metrics database initialization failed: %v. Metrics may not work correctly.", err)
 		// Don't fail main initialization if metrics DB fails
 	}
 
@@ -99,18 +118,18 @@ func InitRedis() error {
 	// Will be implemented separately
 	// For now, return nil if Redis is not configured
 	if os.Getenv("REDIS_URL") == "" {
-		log.Println("Redis not configured, running without cache")
+		logger.Info("Redis not configured, running without cache")
 		return nil
 	}
 
 	client := NewRedisCache()
 	if err := client.Connect(); err != nil {
-		log.Printf("Warning: Failed to connect to Redis: %v", err)
+		logger.Warn("Failed to connect to Redis: %v", err)
 		return nil // Don't fail if Redis is unavailable
 	}
 
 	RedisClient = client
-	log.Println("Redis connection established")
+	logger.Info("Redis connection established")
 	return nil
 }
 
@@ -133,12 +152,12 @@ func InitBuildLogsTimescaleDB(db *gorm.DB) error {
 		if err := db.Exec("CREATE EXTENSION IF NOT EXISTS timescaledb").Error; err != nil {
 			return fmt.Errorf("TimescaleDB extension not available: %w", err)
 		}
-		log.Println("TimescaleDB extension enabled for build_logs")
+		logger.Info("TimescaleDB extension enabled for build_logs")
 	}
 
 	// Check if build_logs table exists
 	if !db.Migrator().HasTable("build_logs") {
-		log.Println("build_logs table does not exist yet, skipping TimescaleDB conversion")
+		logger.Debug("build_logs table does not exist yet, skipping TimescaleDB conversion")
 		return nil
 	}
 
@@ -154,7 +173,7 @@ func InitBuildLogsTimescaleDB(db *gorm.DB) error {
 	}
 
 	if isHypertable {
-		log.Println("build_logs is already a TimescaleDB hypertable")
+		logger.Debug("build_logs is already a TimescaleDB hypertable")
 		return nil
 	}
 
@@ -169,7 +188,7 @@ func InitBuildLogsTimescaleDB(db *gorm.DB) error {
 		return fmt.Errorf("failed to create hypertable for build_logs: %w", err)
 	}
 
-	log.Println("✓ Converted build_logs to TimescaleDB hypertable (optimized for time-series queries)")
+	logger.Info("✓ Converted build_logs to TimescaleDB hypertable (optimized for time-series queries)")
 
 	// Create additional indexes for common query patterns
 	// Composite index for querying logs by build_id and timestamp range
@@ -177,7 +196,7 @@ func InitBuildLogsTimescaleDB(db *gorm.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_build_logs_build_id_timestamp 
 		ON build_logs (build_id, timestamp DESC)
 	`).Error; err != nil {
-		log.Printf("Warning: Failed to create composite index: %v", err)
+		logger.Warn("Failed to create composite index: %v", err)
 	}
 
 	// Index for line_number ordering within a build
@@ -185,7 +204,7 @@ func InitBuildLogsTimescaleDB(db *gorm.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_build_logs_build_id_line_number 
 		ON build_logs (build_id, line_number ASC)
 	`).Error; err != nil {
-		log.Printf("Warning: Failed to create line_number index: %v", err)
+		logger.Warn("Failed to create line_number index: %v", err)
 	}
 
 	return nil

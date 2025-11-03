@@ -3,12 +3,13 @@ package database
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/client"
 	"gorm.io/gorm"
+
+	"api/internal/logger"
 )
 
 // DeploymentLocation tracks where deployments are running across the cluster
@@ -250,9 +251,9 @@ func ValidateAndRefreshLocations(deploymentID string) ([]DeploymentLocation, err
 		_, err := mobyClient.ContainerInspect(context.Background(), loc.ContainerID)
 		if err != nil {
 			// Container doesn't exist - remove from DB
-			log.Printf("[ValidateAndRefreshLocations] Container %s no longer exists, removing stale location", loc.ContainerID[:12])
+			logger.Debug("[ValidateAndRefreshLocations] Container %s no longer exists, removing stale location", loc.ContainerID[:12])
 			if removeErr := RemoveDeploymentLocation(loc.ContainerID); removeErr != nil {
-				log.Printf("[ValidateAndRefreshLocations] Failed to remove stale location: %v", removeErr)
+				logger.Warn("[ValidateAndRefreshLocations] Failed to remove stale location: %v", removeErr)
 			}
 			continue
 		}
@@ -261,7 +262,7 @@ func ValidateAndRefreshLocations(deploymentID string) ([]DeploymentLocation, err
 
 	// If we removed stale entries, try to find actual running containers for this deployment
 	if len(validLocations) == 0 && len(locations) > 0 {
-		log.Printf("[ValidateAndRefreshLocations] All containers were stale, attempting to discover actual containers for deployment %s", deploymentID)
+		logger.Info("[ValidateAndRefreshLocations] All containers were stale, attempting to discover actual containers for deployment %s", deploymentID)
 		
 		// Look for containers with deployment label using moby filters
 		filterArgs := filters.NewArgs()
@@ -273,7 +274,7 @@ func ValidateAndRefreshLocations(deploymentID string) ([]DeploymentLocation, err
 		})
 		
 		if listErr == nil && len(containers) > 0 {
-			log.Printf("[ValidateAndRefreshLocations] Found %d actual containers for deployment %s", len(containers), deploymentID)
+			logger.Info("[ValidateAndRefreshLocations] Found %d actual containers for deployment %s", len(containers), deploymentID)
 			// Register the actual containers
 			for _, c := range containers {
 				// Get container details to extract full info
@@ -321,7 +322,7 @@ func ValidateAndRefreshLocations(deploymentID string) ([]DeploymentLocation, err
 				
 				if regErr := RecordDeploymentLocation(location); regErr == nil {
 					validLocations = append(validLocations, *location)
-					log.Printf("[ValidateAndRefreshLocations] Registered actual container %s for deployment %s", c.ID[:12], deploymentID)
+					logger.Info("[ValidateAndRefreshLocations] Registered actual container %s for deployment %s", c.ID[:12], deploymentID)
 				}
 			}
 		}

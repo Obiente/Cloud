@@ -4,13 +4,13 @@ import (
 	"bufio"
 	"context"
 	"io"
-	"log"
 	"strings"
 	"sync"
 	"time"
 
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/database"
+	"api/internal/logger"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -251,7 +251,7 @@ func (s *BuildLogStreamer) Subscribe() chan *deploymentsv1.DeploymentLogLine {
 			select {
 			case ch <- logLine:
 			case <-time.After(1 * time.Second):
-				log.Printf("[BuildLogStreamer] Timeout sending buffered log to subscriber")
+				logger.Debug("[BuildLogStreamer] Timeout sending buffered log to subscriber")
 				return
 			}
 		}
@@ -278,7 +278,7 @@ func (s *BuildLogStreamer) Unsubscribe(ch chan *deploymentsv1.DeploymentLogLine)
 		defer func() {
 			if r := recover(); r != nil {
 				// Channel already closed, ignore panic
-				log.Printf("[BuildLogStreamer] Warning: Attempted to close already-closed channel (this is safe to ignore)")
+				logger.Debug("[BuildLogStreamer] Warning: Attempted to close already-closed channel (this is safe to ignore)")
 			}
 		}()
 		close(ch)
@@ -368,7 +368,7 @@ func (s *BuildLogStreamer) flushBatch(buildID string, repo *database.BuildLogsRe
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := repo.AddBuildLogsBatch(ctx, buildID, batch); err != nil {
-			log.Printf("[BuildLogStreamer] Failed to save batch of %d logs to database: %v", len(batch), err)
+			logger.Debug("[BuildLogStreamer] Failed to save batch of %d logs to database: %v", len(batch), err)
 		}
 	}()
 }
@@ -443,7 +443,7 @@ func (s *BuildLogStreamer) Close() {
 			defer func() {
 				if r := recover(); r != nil {
 					// Channel already closed, ignore panic
-					log.Printf("[BuildLogStreamer] Warning: Attempted to close already-closed channel during Close()")
+					logger.Debug("[BuildLogStreamer] Warning: Attempted to close already-closed channel during Close()")
 				}
 			}()
 			close(ch)

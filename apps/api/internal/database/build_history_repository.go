@@ -2,10 +2,11 @@ package database
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"gorm.io/gorm"
+
+	"api/internal/logger"
 )
 
 type BuildHistoryRepository struct {
@@ -173,7 +174,7 @@ func (r *BuildHistoryRepository) DeleteBuildsOlderThan(ctx context.Context, olde
 		if err := r.db.WithContext(ctx).
 			Where("build_id IN ?", buildIDs).
 			Delete(&BuildLog{}).Error; err != nil {
-			log.Printf("[DeleteBuildsOlderThan] Warning: Failed to delete logs: %v", err)
+			logger.Warn("[DeleteBuildsOlderThan] Failed to delete logs: %v", err)
 			// Continue anyway - cascade delete should handle this
 		}
 	}

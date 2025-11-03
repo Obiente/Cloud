@@ -2,13 +2,13 @@ package migrations
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sort"
 	"strings"
 	"time"
 
 	"api/internal/database"
+	"api/internal/logger"
 
 	"gorm.io/gorm"
 )
@@ -129,11 +129,11 @@ func (r *MigrationRegistry) Apply() error {
 	// Apply pending migrations
 	for _, id := range migrationIDs {
 		if appliedMap[id] {
-			log.Printf("Migration %s already applied", id)
+			logger.Debug("Migration %s already applied", id)
 			continue
 		}
 
-		log.Printf("Applying migration: %s - %s", id, r.migrationDetails[id])
+		logger.Info("Applying migration: %s - %s", id, r.migrationDetails[id])
 		startTime := time.Now()
 
 		err := r.db.Transaction(func(tx *gorm.DB) error {
@@ -168,7 +168,7 @@ func (r *MigrationRegistry) Apply() error {
 		}
 
 		duration := time.Since(startTime)
-		log.Printf("Migration %s applied successfully in %v", id, duration)
+		logger.Info("Migration %s applied successfully in %v", id, duration)
 	}
 
 	return nil
@@ -181,7 +181,7 @@ func IsMigrationMode() bool {
 
 // MigrateModels automatically creates or updates database tables based on GORM models
 func MigrateModels(db *gorm.DB) error {
-	log.Println("Running auto-migration for models...")
+	logger.Info("Running auto-migration for models...")
 
 	// Register all models that should be auto-migrated
 	models := []interface{}{
@@ -194,13 +194,13 @@ func MigrateModels(db *gorm.DB) error {
 	for _, model := range models {
 		modelName := fmt.Sprintf("%T", model)
 		modelName = strings.TrimPrefix(modelName, "*")
-		log.Printf("Auto-migrating model: %s", modelName)
+		logger.Debug("Auto-migrating model: %s", modelName)
 
 		if err := db.AutoMigrate(model); err != nil {
 			return fmt.Errorf("failed to auto-migrate %s: %w", modelName, err)
 		}
 	}
 
-	log.Println("Auto-migration completed successfully")
+	logger.Info("Auto-migration completed successfully")
 	return nil
 }

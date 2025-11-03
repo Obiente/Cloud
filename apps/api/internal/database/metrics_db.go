@@ -2,12 +2,13 @@ package database
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	gormlogger "gorm.io/gorm/logger"
+
+	"api/internal/logger"
 )
 
 var MetricsDB *gorm.DB
@@ -55,23 +56,23 @@ func InitMetricsDatabase() error {
 
 	// Open database connection
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: gormlogger.Default.LogMode(getGormLogLevel()),
 	})
 	if err != nil {
-		log.Printf("Warning: Failed to connect to metrics database: %v. Falling back to main database.", err)
+		logger.Warn("Failed to connect to metrics database: %v. Falling back to main database.", err)
 		// Fallback to main database if metrics DB is unavailable
 		MetricsDB = DB
 		return nil
 	}
 
 	MetricsDB = db
-	log.Println("Metrics database connection established")
+	logger.Info("Metrics database connection established")
 
 	// Create TimescaleDB extension if available (will fail gracefully if not installed)
 	if err := db.Exec("CREATE EXTENSION IF NOT EXISTS timescaledb").Error; err != nil {
-		log.Printf("TimescaleDB extension not available: %v. Using standard PostgreSQL.", err)
+		logger.Warn("TimescaleDB extension not available: %v. Using standard PostgreSQL.", err)
 	} else {
-		log.Println("TimescaleDB extension enabled")
+		logger.Info("TimescaleDB extension enabled")
 	}
 
 	// Initialize metrics tables
@@ -79,7 +80,7 @@ func InitMetricsDatabase() error {
 		return fmt.Errorf("failed to initialize metrics tables: %w", err)
 	}
 
-	log.Println("Metrics database initialized")
+	logger.Info("Metrics database initialized")
 	return nil
 }
 
@@ -96,7 +97,7 @@ func InitMetricsTables() error {
 
 	// Initialize TimescaleDB hypertable for build_logs
 	if err := InitBuildLogsTimescaleDB(MetricsDB); err != nil {
-		log.Printf("Warning: Failed to initialize TimescaleDB hypertable for build_logs: %v", err)
+		logger.Warn("Failed to initialize TimescaleDB hypertable for build_logs: %v", err)
 		// Continue anyway - standard PostgreSQL will work fine
 	}
 
@@ -120,9 +121,9 @@ func InitMetricsTables() error {
 				chunk_time_interval => INTERVAL '1 hour',
 				if_not_exists => TRUE)
 		`).Error; err != nil {
-			log.Printf("Warning: Failed to create hypertable for deployment_metrics: %v", err)
+			logger.Warn("Failed to create hypertable for deployment_metrics: %v", err)
 		} else {
-			log.Println("Created TimescaleDB hypertable for deployment_metrics")
+			logger.Info("Created TimescaleDB hypertable for deployment_metrics")
 		}
 	}
 
@@ -138,9 +139,9 @@ func InitMetricsTables() error {
 				chunk_time_interval => INTERVAL '7 days',
 				if_not_exists => TRUE)
 		`).Error; err != nil {
-			log.Printf("Warning: Failed to create hypertable for deployment_usage_hourly: %v", err)
+			logger.Warn("Failed to create hypertable for deployment_usage_hourly: %v", err)
 		} else {
-			log.Println("Created TimescaleDB hypertable for deployment_usage_hourly")
+			logger.Info("Created TimescaleDB hypertable for deployment_usage_hourly")
 		}
 	}
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"api/internal/database"
+	"api/internal/logger"
 	"api/internal/orchestrator"
 	apisrv "api/internal/server"
 
@@ -30,21 +31,24 @@ func main() {
 	log.SetOutput(os.Stdout)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 
-	log.Println("=== Obiente Cloud API Starting ===")
-	log.Printf("LOG_LEVEL: %s", os.Getenv("LOG_LEVEL"))
-	log.Printf("CORS_ORIGIN: %s", os.Getenv("CORS_ORIGIN"))
+	// Initialize logger with LOG_LEVEL
+	logger.Init()
+
+	logger.Info("=== Obiente Cloud API Starting ===")
+	logger.Debug("LOG_LEVEL: %s", os.Getenv("LOG_LEVEL"))
+	logger.Debug("CORS_ORIGIN: %s", os.Getenv("CORS_ORIGIN"))
 
 	// Initialize database
 	if err := database.InitDatabase(); err != nil {
-		log.Fatalf("failed to initialize database: %v", err)
+		logger.Fatalf("failed to initialize database: %v", err)
 	}
-	log.Println("✓ Database initialized")
+	logger.Info("✓ Database initialized")
 
 	// Initialize Redis
 	if err := database.InitRedis(); err != nil {
-		log.Printf("Redis initialization failed: %v", err)
+		logger.Warn("Redis initialization failed: %v", err)
 	} else {
-		log.Println("✓ Redis initialized")
+		logger.Info("✓ Redis initialized")
 	}
 
 	// Initialize orchestrator service for metrics collection, health checks, etc.
@@ -58,16 +62,16 @@ func main() {
 
 	orchService, err := orchestrator.NewOrchestratorService("least-loaded", 50, syncInterval)
 	if err != nil {
-		log.Printf("⚠️  Failed to initialize orchestrator service: %v", err)
-		log.Printf("⚠️  Error details: %+v", err)
-		log.Println("⚠️  Metrics collection will not be available")
-		log.Println("⚠️  The server will attempt to create a deployment manager as fallback")
-		log.Println("⚠️  However, deployments may fail if Docker is not accessible")
-		log.Println("⚠️  Please check Docker connection and ensure Docker daemon is running")
+		logger.Warn("⚠️  Failed to initialize orchestrator service: %v", err)
+		logger.Debug("⚠️  Error details: %+v", err)
+		logger.Warn("⚠️  Metrics collection will not be available")
+		logger.Warn("⚠️  The server will attempt to create a deployment manager as fallback")
+		logger.Warn("⚠️  However, deployments may fail if Docker is not accessible")
+		logger.Warn("⚠️  Please check Docker connection and ensure Docker daemon is running")
 	} else {
-		log.Println("✓ Orchestrator service initialized")
+		logger.Info("✓ Orchestrator service initialized")
 		orchService.Start()
-		log.Println("✓ Orchestrator service started (metrics collection, health checks, usage aggregation)")
+		logger.Info("✓ Orchestrator service started (metrics collection, health checks, usage aggregation)")
 		defer func() {
 			if orchService != nil {
 				orchService.Stop()
@@ -80,7 +84,7 @@ func main() {
 		port = defaultPort
 	}
 
-	log.Println("✓ Creating HTTP server with middleware...")
+	logger.Info("✓ Creating HTTP server with middleware...")
 	srv := &http.Server{
 		Addr:              ":" + port,
 		Handler:           apisrv.New(),
@@ -96,7 +100,7 @@ func main() {
 	// Start server in a goroutine
 	serverErr := make(chan error, 1)
 	go func() {
-		log.Printf("=== Server Ready - Listening on %s ===", srv.Addr)
+		logger.Info("=== Server Ready - Listening on %s ===", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 		}
@@ -105,17 +109,17 @@ func main() {
 	// Wait for interrupt or server error
 	select {
 	case err := <-serverErr:
-		log.Fatalf("server failed: %v", err)
+		logger.Fatalf("server failed: %v", err)
 	case <-shutdownCtx.Done():
-		log.Println("\n=== Shutting down gracefully ===")
+		logger.Info("\n=== Shutting down gracefully ===")
 		shutdownTimeout := 30 * time.Second
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
 		if err := srv.Shutdown(ctx); err != nil {
-			log.Printf("Error during server shutdown: %v", err)
+			logger.Warn("Error during server shutdown: %v", err)
 		} else {
-			log.Print(gracefulShutdownMessage)
+			logger.Info(gracefulShutdownMessage)
 		}
 	}
 }

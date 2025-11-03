@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os/exec"
 	"strings"
 	"sync"
@@ -13,6 +12,7 @@ import (
 
 	"api/docker"
 	"api/internal/database"
+	"api/internal/logger"
 	"api/internal/registry"
 
 	"gorm.io/gorm"
@@ -67,55 +67,55 @@ func NewOrchestratorService(strategy string, maxDeploymentsPerNode int, syncInte
 
 // Start begins all background orchestration tasks
 func (os *OrchestratorService) Start() {
-	log.Println("[Orchestrator] Starting orchestration service...")
+	logger.Info("[Orchestrator] Starting orchestration service...")
 
 	// Start periodic sync with Docker
 	os.serviceRegistry.StartPeriodicSync(os.ctx, os.syncInterval)
-	log.Printf("[Orchestrator] Started periodic sync (interval: %v)", os.syncInterval)
+	logger.Debug("[Orchestrator] Started periodic sync (interval: %v)", os.syncInterval)
 
 	// Start health checking
 	os.healthChecker.Start(os.ctx)
-	log.Println("[Orchestrator] Started health checker")
+	logger.Debug("[Orchestrator] Started health checker")
 
 	// Start metrics streaming (handles live collection and periodic storage)
 	os.metricsStreamer.Start()
-	log.Println("[Orchestrator] Started metrics streaming")
+	logger.Debug("[Orchestrator] Started metrics streaming")
 
 	// Start cleanup tasks
 	go os.cleanupTasks()
-	log.Println("[Orchestrator] Started cleanup tasks")
+	logger.Debug("[Orchestrator] Started cleanup tasks")
 
 	// Start usage aggregation (hourly)
 	go os.aggregateUsage()
-	log.Println("[Orchestrator] Started usage aggregation")
+	logger.Debug("[Orchestrator] Started usage aggregation")
 
 	// Start storage updates (every 5 minutes)
 	go os.updateStoragePeriodically()
-	log.Println("[Orchestrator] Started periodic storage updates")
+	logger.Debug("[Orchestrator] Started periodic storage updates")
 
 	// Start build history cleanup (daily)
 	go os.cleanupBuildHistory()
-	log.Println("[Orchestrator] Started build history cleanup")
+	logger.Debug("[Orchestrator] Started build history cleanup")
 
-	log.Println("[Orchestrator] Orchestration service started successfully")
+	logger.Info("[Orchestrator] Orchestration service started successfully")
 }
 
 // Stop gracefully stops the orchestrator service
 func (os *OrchestratorService) Stop() {
-	log.Println("[Orchestrator] Stopping orchestration service...")
+	logger.Info("[Orchestrator] Stopping orchestration service...")
 	os.cancel()
 
 	if err := os.deploymentManager.Close(); err != nil {
-		log.Printf("[Orchestrator] Error closing deployment manager: %v", err)
+		logger.Warn("[Orchestrator] Error closing deployment manager: %v", err)
 	}
 	if err := os.serviceRegistry.Close(); err != nil {
-		log.Printf("[Orchestrator] Error closing service registry: %v", err)
+		logger.Warn("[Orchestrator] Error closing service registry: %v", err)
 	}
 	
 	os.metricsStreamer.Stop()
-	log.Println("[Orchestrator] Stopped metrics streamer")
+	logger.Debug("[Orchestrator] Stopped metrics streamer")
 
-	log.Println("[Orchestrator] Orchestration service stopped")
+	logger.Info("[Orchestrator] Orchestration service stopped")
 }
 
 // GetMetricsStreamer returns the metrics streamer instance
@@ -215,14 +215,14 @@ func (os *OrchestratorService) getContainerStats(containerID string) (*container
 	
 	// Log if we're not getting any disk I/O data (for debugging)
 	if len(statsJSON.BlkioStats.IoServiceBytesRecursive) == 0 {
-		log.Printf("[getContainerStats] No BlkioStats found for container %s - disk I/O may not be available", containerID[:12])
+		logger.Debug("[getContainerStats] No BlkioStats found for container %s - disk I/O may not be available", containerID[:12])
 	} else if diskRead == 0 && diskWrite == 0 {
 		// Log operation names we're seeing (for debugging)
 		ops := make([]string, 0, len(statsJSON.BlkioStats.IoServiceBytesRecursive))
 		for _, ioStat := range statsJSON.BlkioStats.IoServiceBytesRecursive {
 			ops = append(ops, ioStat.Op)
 		}
-		log.Printf("[getContainerStats] BlkioStats available for container %s but no read/write found. Operations seen: %v", containerID[:12], ops)
+		logger.Debug("[getContainerStats] BlkioStats available for container %s but no read/write found. Operations seen: %v", containerID[:12], ops)
 	}
 
 	return &containerStats{
@@ -245,7 +245,7 @@ func (os *OrchestratorService) cleanupTasks() {
 	for {
 		select {
 		case <-ticker.C:
-			log.Println("[Orchestrator] Running cleanup tasks...")
+			logger.Debug("[Orchestrator] Running cleanup tasks...")
 			
 			// Keep last 24 hours of raw metrics for real-time viewing
 			// Aggregate older metrics into hourly summaries
@@ -260,12 +260,12 @@ func (os *OrchestratorService) cleanupTasks() {
 				Pluck("deployment_id", &deploymentIDs)
 			
 			if len(deploymentIDs) == 0 {
-				log.Println("[Orchestrator] No old metrics to aggregate")
-				log.Println("[Orchestrator] Cleanup tasks completed")
+				logger.Debug("[Orchestrator] No old metrics to aggregate")
+				logger.Debug("[Orchestrator] Cleanup tasks completed")
 				continue
 			}
 			
-			log.Printf("[Orchestrator] Aggregating metrics for %d deployments", len(deploymentIDs))
+			logger.Debug("[Orchestrator] Aggregating metrics for %d deployments", len(deploymentIDs))
 			
 			// Process deployments in parallel batches
 			const batchSize = 10 // Process 10 deployments concurrently
@@ -300,7 +300,7 @@ func (os *OrchestratorService) cleanupTasks() {
 			
 			// Helper function moved to separate method
 			
-			log.Printf("[Orchestrator] Aggregated %d hours, deleted %d raw metrics, cleanup tasks completed", totalAggregated, totalDeleted)
+			logger.Debug("[Orchestrator] Aggregated %d hours, deleted %d raw metrics, cleanup tasks completed", totalAggregated, totalDeleted)
 		case <-os.ctx.Done():
 			return
 		}
@@ -313,7 +313,7 @@ func (os *OrchestratorService) aggregateUsage() {
 	for {
 		select {
 		case <-ticker.C:
-			log.Println("[Orchestrator] Aggregating usage...")
+			logger.Debug("[Orchestrator] Aggregating usage...")
 			now := time.Now()
 			month := now.Format("2006-01")
 			
@@ -644,7 +644,7 @@ func (os *OrchestratorService) aggregateDeploymentMetrics(deploymentID string, a
 				}
 				
 				if err := metricsDB.Create(&hourlyUsage).Error; err != nil {
-					log.Printf("[Orchestrator] Failed to create hourly aggregate for %s at %s: %v", deploymentID, currentHour, err)
+					logger.Warn("[Orchestrator] Failed to create hourly aggregate for %s at %s: %v", deploymentID, currentHour, err)
 				} else {
 					aggregatedCount++
 					
@@ -689,7 +689,7 @@ func (os *OrchestratorService) calculateStorage(ctx context.Context, imageName s
 	if imageName != "" {
 		imageSize, err := getImageSize(ctx, imageName)
 		if err != nil {
-			log.Printf("[calculateStorage] Failed to get image size for %s: %v", imageName, err)
+			logger.Warn("[calculateStorage] Failed to get image size for %s: %v", imageName, err)
 		} else {
 			info.ImageSize = imageSize
 		}
@@ -703,7 +703,7 @@ func (os *OrchestratorService) calculateStorage(ctx context.Context, imageName s
 		// Get volume sizes
 		volumeSize, err := os.getContainerVolumeSize(ctx, dcli, containerID)
 		if err != nil {
-			log.Printf("[calculateStorage] Failed to get volume size for container %s: %v", containerID, err)
+			logger.Warn("[calculateStorage] Failed to get volume size for container %s: %v", containerID, err)
 		} else {
 			totalVolumeSize += volumeSize
 		}
@@ -711,7 +711,7 @@ func (os *OrchestratorService) calculateStorage(ctx context.Context, imageName s
 		// Get container root filesystem disk usage
 		containerDisk, err := os.getContainerDiskUsage(ctx, dcli, containerID)
 		if err != nil {
-			log.Printf("[calculateStorage] Failed to get container disk usage for %s: %v", containerID, err)
+			logger.Warn("[calculateStorage] Failed to get container disk usage for %s: %v", containerID, err)
 		} else {
 			totalContainerDisk += containerDisk
 		}
@@ -752,12 +752,12 @@ func (os *OrchestratorService) getContainerVolumeSize(ctx context.Context, dcli 
 
 	volumes, err := dcli.GetContainerVolumes(ctx, containerID)
 	if err != nil {
-		log.Printf("[getContainerVolumeSize] Failed to get volumes for container %s: %v", containerID, err)
+		logger.Warn("[getContainerVolumeSize] Failed to get volumes for container %s: %v", containerID, err)
 		for _, mount := range containerInfo.Mounts {
 			if mount.Type == "volume" || (mount.Type == "bind" && strings.HasPrefix(mount.Source, "/var/lib/obiente/volumes")) {
 				size, err := getDirectorySize(ctx, mount.Source)
 				if err != nil {
-					log.Printf("[getContainerVolumeSize] Failed to get size for volume %s: %v", mount.Source, err)
+					logger.Warn("[getContainerVolumeSize] Failed to get size for volume %s: %v", mount.Source, err)
 					continue
 				}
 				totalSize += size
@@ -767,7 +767,7 @@ func (os *OrchestratorService) getContainerVolumeSize(ctx context.Context, dcli 
 		for _, volume := range volumes {
 			size, err := getDirectorySize(ctx, volume.Source)
 			if err != nil {
-				log.Printf("[getContainerVolumeSize] Failed to get size for volume %s: %v", volume.Source, err)
+				logger.Warn("[getContainerVolumeSize] Failed to get size for volume %s: %v", volume.Source, err)
 				continue
 			}
 			totalSize += size
@@ -846,12 +846,12 @@ func (os *OrchestratorService) updateStoragePeriodically() {
 	for {
 		select {
 		case <-ticker.C:
-			log.Println("[Orchestrator] Updating storage for all running deployments...")
+			logger.Debug("[Orchestrator] Updating storage for all running deployments...")
 			
 			// Get all running deployments
 			var locations []database.DeploymentLocation
 			if err := database.DB.Where("status = ?", "running").Find(&locations).Error; err != nil {
-				log.Printf("[Orchestrator] Failed to get running deployments: %v", err)
+				logger.Warn("[Orchestrator] Failed to get running deployments: %v", err)
 				continue
 			}
 
@@ -861,7 +861,7 @@ func (os *OrchestratorService) updateStoragePeriodically() {
 				deploymentMap[loc.DeploymentID] = append(deploymentMap[loc.DeploymentID], loc)
 			}
 
-			log.Printf("[Orchestrator] Updating storage for %d deployments", len(deploymentMap))
+			logger.Debug("[Orchestrator] Updating storage for %d deployments", len(deploymentMap))
 
 			// Process deployments in parallel batches
 			const batchSize = 5 // Process 5 deployments concurrently
@@ -907,7 +907,7 @@ func (os *OrchestratorService) updateStoragePeriodically() {
 						// Get deployment to find image name
 						var deployment database.Deployment
 						if err := database.DB.Where("id = ?", depID).First(&deployment).Error; err != nil {
-							log.Printf("[Orchestrator] Failed to get deployment %s: %v", depID, err)
+							logger.Warn("[Orchestrator] Failed to get deployment %s: %v", depID, err)
 							return
 						}
 
@@ -919,7 +919,7 @@ func (os *OrchestratorService) updateStoragePeriodically() {
 						// Calculate storage
 						storageInfo, err := os.calculateStorage(ctx, imageName, containerIDs)
 						if err != nil {
-							log.Printf("[Orchestrator] Failed to calculate storage for deployment %s: %v", depID, err)
+							logger.Warn("[Orchestrator] Failed to calculate storage for deployment %s: %v", depID, err)
 							mu.Lock()
 							errorCount++
 							mu.Unlock()
@@ -930,7 +930,7 @@ func (os *OrchestratorService) updateStoragePeriodically() {
 						if err := database.DB.Model(&database.Deployment{}).
 							Where("id = ?", depID).
 							Update("storage_bytes", storageInfo.TotalStorage).Error; err != nil {
-							log.Printf("[Orchestrator] Failed to update storage for deployment %s: %v", depID, err)
+							logger.Warn("[Orchestrator] Failed to update storage for deployment %s: %v", depID, err)
 							mu.Lock()
 							errorCount++
 							mu.Unlock()
@@ -946,7 +946,7 @@ func (os *OrchestratorService) updateStoragePeriodically() {
 				wg.Wait()
 			}
 
-			log.Printf("[Orchestrator] Storage update completed: %d updated, %d errors", updatedCount, errorCount)
+			logger.Debug("[Orchestrator] Storage update completed: %d updated, %d errors", updatedCount, errorCount)
 		case <-os.ctx.Done():
 			return
 		}
@@ -976,7 +976,7 @@ func (os *OrchestratorService) cleanupBuildHistory() {
 	for {
 		select {
 		case <-ticker.C:
-			log.Println("[Orchestrator] Running build history cleanup...")
+			logger.Info("[Orchestrator] Running build history cleanup...")
 			
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
@@ -985,9 +985,9 @@ func (os *OrchestratorService) cleanupBuildHistory() {
 			buildHistoryRepo := database.NewBuildHistoryRepository(database.DB)
 			deletedCount, err := buildHistoryRepo.DeleteBuildsOlderThan(ctx, 30*24*time.Hour)
 			if err != nil {
-				log.Printf("[Orchestrator] Failed to cleanup build history: %v", err)
+				logger.Warn("[Orchestrator] Failed to cleanup build history: %v", err)
 			} else {
-				log.Printf("[Orchestrator] Deleted %d build(s) older than 30 days", deletedCount)
+				logger.Info("[Orchestrator] Deleted %d build(s) older than 30 days", deletedCount)
 			}
 		case <-os.ctx.Done():
 			return
