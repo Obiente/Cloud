@@ -241,6 +241,8 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			// Update build with compose yaml
 			composeYaml := dbDeployment.ComposeYaml
 			_ = s.buildHistoryRepo.UpdateBuildResults(buildCtx, buildID, nil, &composeYaml, nil)
+			// Note: buildResult will be nil for compose deployments, which is fine
+			buildResult = nil
 			// Containers are automatically registered by DeployComposeFile
 		} else {
 			// Build using strategy
@@ -273,14 +275,44 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			if result.ComposeYaml != "" {
 				composeYaml = &result.ComposeYaml
 			}
-			// Try to get size from deployment if available
-			if dbDeployment.Size != "" {
+			// Calculate size from image if available (store as bytes string)
+			if result.ImageSizeBytes > 0 {
+				sizeStr := fmt.Sprintf("%d", result.ImageSizeBytes)
+				size = &sizeStr
+			} else if dbDeployment.Size != "" {
 				size = &dbDeployment.Size
 			}
 			_ = s.buildHistoryRepo.UpdateBuildResults(buildCtx, buildID, imageName, composeYaml, size)
 
 			// Deploy using build result
-			if err := deployResultToOrchestrator(buildCtx, s.manager, dbDeployment, result); err != nil {
+			// Get manager - use service's manager if available, otherwise try to get from global orchestrator
+			manager := s.manager
+			if manager == nil {
+				// Try to get manager from global orchestrator service as fallback
+				orchService := orchestrator.GetGlobalOrchestratorService()
+				if orchService != nil {
+					manager = orchService.GetDeploymentManager()
+					log.Printf("[TriggerDeployment] Manager was nil, retrieved from global orchestrator service")
+				}
+			}
+			
+			// If still nil, try to create a new one as last resort
+			if manager == nil {
+				log.Printf("[TriggerDeployment] WARNING: Creating deployment manager as last resort...")
+				var err error
+				manager, err = orchestrator.NewDeploymentManager("least-loaded", 50)
+				if err != nil {
+					log.Printf("[TriggerDeployment] CRITICAL: Failed to create deployment manager: %v", err)
+					streamer.WriteStderr([]byte(fmt.Sprintf("❌ Deployment failed: deployment manager is not available (orchestrator not initialized): %v\n", err)))
+					errorMsg := fmt.Sprintf("deployment manager is not available (orchestrator not initialized): %v", err)
+					updateBuildStatus(4, &errorMsg) // BUILD_FAILED = 4
+					_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+					return
+				}
+				log.Printf("[TriggerDeployment] Successfully created deployment manager as last resort")
+			}
+			
+			if err := deployResultToOrchestrator(buildCtx, manager, dbDeployment, result); err != nil {
 				log.Printf("[TriggerDeployment] Deployment failed: %v", err)
 				streamer.WriteStderr([]byte(fmt.Sprintf("❌ Deployment failed: %v\n", err)))
 				errorMsg := err.Error()
@@ -303,13 +335,16 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			s.repo.Update(buildCtx, dbDeployment)
 		}
 
+		// Update build status in build history as successful (build completed)
+		// buildTime is calculated inside updateBuildStatus
+		updateBuildStatus(3, nil) // BUILD_SUCCESS = 3
+		
 		// Verify containers are running
 		streamer.Write([]byte("🔍 Verifying containers are running...\n"))
 		if err := s.verifyContainersRunning(buildCtx, deploymentID); err != nil {
 			log.Printf("[TriggerDeployment] WARNING: Containers not running: %v", err)
 			streamer.WriteStderr([]byte(fmt.Sprintf("⚠️  Warning: %v\n", err)))
-			errorMsg := err.Error()
-			updateBuildStatus(4, &errorMsg) // BUILD_FAILED = 4
+			// Don't mark build as failed - build itself succeeded, just container verification failed
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
 		} else {
 			streamer.Write([]byte("✅ Deployment completed successfully!\n"))
@@ -321,7 +356,6 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				// Don't fail deployment if storage calculation fails
 			}
 			
-			updateBuildStatus(3, nil) // BUILD_SUCCESS = 3
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_RUNNING))
 		}
 	}()

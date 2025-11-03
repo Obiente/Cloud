@@ -108,6 +108,7 @@ func (r *DeploymentRepository) Update(ctx context.Context, deployment *Deploymen
 			"status", "health_status", "environment", "groups",
 			"image", "port", "replicas", "memory_bytes", "cpu_shares",
 			"env_vars", "env_file_content", "compose_yaml",
+			"build_time", "size", "storage_bytes", "bandwidth_usage",
 			"last_deployed_at", "updated_at",
 		).
 		Updates(deployment).Error
@@ -146,9 +147,15 @@ func (r *DeploymentRepository) UpdateStorage(ctx context.Context, id string, sto
 		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", id))
 	}
 
+	// Store bytes as string (client will format it)
+	sizeStr := fmt.Sprintf("%d", storageBytes)
+
 	return r.db.WithContext(ctx).Model(&Deployment{}).
 		Where("id = ?", id).
-		Update("storage_bytes", storageBytes).Error
+		Updates(map[string]interface{}{
+			"storage_bytes": storageBytes,
+			"size":          sizeStr,
+		}).Error
 }
 
 func (r *DeploymentRepository) Delete(ctx context.Context, id string) error {
