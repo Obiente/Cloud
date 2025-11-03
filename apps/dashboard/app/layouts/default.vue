@@ -102,13 +102,21 @@
         <!-- Notifications -->
         <AppNotifications
           v-model="isNotificationsOpen"
-          :items="notifications"
+          :items="Array.from(notifications)"
+          :anchor-element="notificationButtonElement"
           @update:items="
-            (val) =>
-              (notifications = val.map((n) => ({ ...n, read: !!n.read })))
+            (val) => {
+              const notify = useNotifications();
+              val.forEach(n => {
+                if (n.read) notify.markAsRead(n.id);
+              });
+            }
           "
           @close="isNotificationsOpen = false"
         />
+
+        <!-- Toast Notifications -->
+        <OuiToaster :toaster="toaster" />
       </div>
     </div>
 
@@ -161,8 +169,9 @@
   }
 </style>
 <script setup lang="ts">
-  import { onBeforeUnmount, onMounted, computed, ref } from "vue";
+  import { onBeforeUnmount, onMounted, computed, ref, type ComponentPublicInstance } from "vue";
   import { Bars3Icon, XMarkIcon } from "@heroicons/vue/24/outline";
+  import AppHeader from "~/components/app/AppHeader.vue";
 
   // Pinia user store
   const user = useAuth();
@@ -179,41 +188,17 @@
   // Show superadmin sidebar if allowed is explicitly true (not null or false)
   const showSuperAdmin = computed(() => superAdmin.allowed.value === true);
   // Notifications state
+  const { notifications, unreadCount } = useNotifications();
   const isNotificationsOpen = ref(false);
-  const notifications = ref<
-    Array<{
-      id: string;
-      title: string;
-      message: string;
-      timestamp: Date;
-      read: boolean;
-    }>
-  >([
-    {
-      id: "1",
-      title: "Deployment complete",
-      message: "Your app is live at app.obiente.cloud",
-      timestamp: new Date(),
-      read: false,
-    },
-    {
-      id: "2",
-      title: "New member joined",
-      message: "Alex added to Acme Corp",
-      timestamp: new Date(Date.now() - 3600_000),
-      read: true,
-    },
-    {
-      id: "3",
-      title: "Build started",
-      message: "Re-deploy triggered for dashboard",
-      timestamp: new Date(Date.now() - 600_000),
-      read: false,
-    },
-  ]);
-  const unreadCount = computed(
-    () => notifications.value.filter((n) => !n.read).length
-  );
+  const headerRef = ref<ComponentPublicInstance<typeof AppHeader> | null>(null);
+  const notificationButtonElement = computed(() => {
+    if (import.meta.client && headerRef.value?.notificationButtonRef) {
+      return headerRef.value.notificationButtonRef;
+    }
+    return null;
+  });
+  // Toast notifications
+  const { toaster } = useToast();
 
   const isSidebarOpen = ref(false);
   const mobileSidebarId = "mobile-primary-navigation";

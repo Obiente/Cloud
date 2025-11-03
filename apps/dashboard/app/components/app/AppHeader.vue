@@ -21,6 +21,7 @@
       <OuiFlex align="center" gap="md">
         <!-- Notifications -->
         <OuiButton
+          ref="notificationButtonRef"
           variant="ghost"
           size="sm"
           title="Notifications"
@@ -49,6 +50,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from "vue";
 import { BellIcon } from "@heroicons/vue/24/outline";
 import OuiText from "../oui/Text.vue";
 
@@ -66,6 +68,13 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   "notifications-click": [];
 }>();
+
+const notificationButtonRef = ref<HTMLElement | null>(null);
+
+// Expose the button ref for parent components
+defineExpose({
+  notificationButtonRef,
+});
 
 const handleNotificationsClick = () => {
   emit("notifications-click");
