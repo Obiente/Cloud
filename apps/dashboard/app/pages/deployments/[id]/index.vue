@@ -1,45 +1,55 @@
 <template>
-  <div>
-    <OuiContainer>
-      <OuiStack gap="xl">
-        <!-- Header -->
-        <OuiCard variant="outline" class="border-border-default/50">
-          <OuiCardBody class="p-6">
-            <OuiFlex justify="between" align="start" wrap="wrap" gap="lg">
-              <OuiStack gap="md" class="flex-1 min-w-0">
-                <OuiFlex align="center" gap="md" wrap="wrap">
-                  <OuiBox
-                    p="sm"
-                    rounded="xl"
-                    bg="accent-primary"
-                    class="bg-primary/10 ring-1 ring-primary/20 shrink-0"
-                  >
-                    <RocketLaunchIcon class="w-6 h-6 text-primary" />
-                  </OuiBox>
-                  <OuiStack gap="xs" class="min-w-0 flex-1">
+  <OuiContainer>
+    <OuiStack gap="xl">
+      <!-- Header -->
+      <OuiCard variant="outline" class="border-border-default/50">
+        <OuiCardBody>
+          <OuiFlex justify="between" align="start" wrap="wrap" gap="lg">
+            <OuiStack gap="md" class="flex-1 min-w-0">
+              <OuiFlex align="center" gap="md" wrap="wrap">
+                <OuiBox
+                  p="sm"
+                  rounded="xl"
+                  bg="accent-primary"
+                  class="bg-primary/10 ring-1 ring-primary/20 shrink-0"
+                >
+                  <RocketLaunchIcon class="w-6 h-6 text-primary" />
+                </OuiBox>
+                <OuiStack gap="none" class="min-w-0 flex-1">
+                  <OuiFlex align="center" gap="md">
                     <OuiText as="h1" size="2xl" weight="bold" truncate>
                       {{ deployment.name }}
                     </OuiText>
-                    <OuiText size="sm" color="secondary" truncate>
-                      {{ deployment.domain }}
-                    </OuiText>
-                  </OuiStack>
-                </OuiFlex>
+                    <OuiBadge :variant="statusMeta.badge" size="xs">
+                      <span
+                        class="inline-flex h-1.5 w-1.5 rounded-full mr-1.5"
+                        :class="statusMeta.dotClass"
+                      />
+                      <OuiText
+                        as="span"
+                        size="xs"
+                        weight="semibold"
+                        transform="uppercase"
+                        >{{ statusMeta.label }}</OuiText
+                      >
+                    </OuiBadge>
 
-                <OuiFlex align="center" gap="md" wrap="wrap">
-                  <OuiBadge :variant="statusMeta.badge" size="sm">
-                    <span
-                      class="inline-flex h-1.5 w-1.5 rounded-full mr-1.5"
-                      :class="statusMeta.dotClass"
-                    />
-                    <OuiText
-                      as="span"
-                      size="xs"
-                      weight="semibold"
-                      transform="uppercase"
-                      >{{ statusMeta.label }}</OuiText
+                    <OuiBadge
+                      v-if="
+                        containerStats.runningCount > 0 &&
+                        containerStats.runningCount < containerStats.totalCount
+                      "
+                      variant="warning"
+                      size="sm"
                     >
-                  </OuiBadge>
+                      <OuiText as="span" size="xs" weight="medium">
+                        {{ containerStats.runningCount }}/{{
+                          containerStats.totalCount
+                        }}
+                        running
+                      </OuiText>
+                    </OuiBadge>
+                  </OuiFlex>
                   <OuiText size="sm" color="secondary" class="hidden sm:inline">
                     Last deployed
                     <OuiRelativeTime
@@ -51,188 +61,189 @@
                       :style="'short'"
                     />
                   </OuiText>
-                  <OuiBadge
-                    v-if="
-                      containerStats.runningCount > 0 &&
-                      containerStats.runningCount < containerStats.totalCount
-                    "
-                    variant="warning"
+                </OuiStack>
+
+                <OuiFlex gap="sm" wrap="wrap" class="shrink-0">
+                  <OuiButton
+                    variant="ghost"
                     size="sm"
+                    @click="refreshAll"
+                    :loading="isRefreshing"
+                    class="gap-2"
                   >
-                    <OuiText as="span" size="xs" weight="medium">
-                      {{ containerStats.runningCount }}/{{
-                        containerStats.totalCount
-                      }}
-                      running
-                    </OuiText>
-                  </OuiBadge>
+                    <ArrowPathIcon
+                      class="h-4 w-4"
+                      :class="{ 'animate-spin': isRefreshing }"
+                    />
+                    <OuiText as="span" size="xs" weight="medium"
+                      >Refresh</OuiText
+                    >
+                  </OuiButton>
+                  <OuiButton
+                    variant="ghost"
+                    size="sm"
+                    @click="openDomain"
+                    :disabled="!deployment.domain"
+                    class="gap-2"
+                  >
+                    <ArrowTopRightOnSquareIcon class="h-4 w-4" />
+                    <OuiText as="span" size="xs" weight="medium">Open</OuiText>
+                  </OuiButton>
+                  <OuiButton
+                    variant="ghost"
+                    color="warning"
+                    size="sm"
+                    @click="redeploy"
+                    :disabled="
+                      isProcessing ||
+                      deployment.status === DeploymentStatusEnum.BUILDING ||
+                      deployment.status === DeploymentStatusEnum.DEPLOYING
+                    "
+                    class="gap-2"
+                  >
+                    <ArrowPathIcon
+                      class="h-4 w-4"
+                      :class="{
+                        'animate-spin':
+                          deployment.status === DeploymentStatusEnum.BUILDING ||
+                          deployment.status === DeploymentStatusEnum.DEPLOYING,
+                      }"
+                    />
+                    <OuiText as="span" size="xs" weight="medium"
+                      >Redeploy</OuiText
+                    >
+                  </OuiButton>
+                  <OuiButton
+                    v-if="hasRunningContainers"
+                    variant="solid"
+                    color="danger"
+                    size="sm"
+                    @click="stop"
+                    :disabled="
+                      isProcessing ||
+                      deployment.status === DeploymentStatusEnum.BUILDING ||
+                      deployment.status === DeploymentStatusEnum.DEPLOYING
+                    "
+                    class="gap-2"
+                  >
+                    <StopIcon class="h-4 w-4" />
+                    <OuiText as="span" size="xs" weight="medium">Stop</OuiText>
+                  </OuiButton>
+                  <OuiButton
+                    v-else-if="
+                      !hasRunningContainers &&
+                      (containerStats.totalCount > 0 ||
+                        deployment.status === DeploymentStatusEnum.STOPPED)
+                    "
+                    variant="solid"
+                    color="success"
+                    size="sm"
+                    @click="start"
+                    :disabled="
+                      isProcessing ||
+                      deployment.status === DeploymentStatusEnum.BUILDING ||
+                      deployment.status === DeploymentStatusEnum.DEPLOYING
+                    "
+                    class="gap-2"
+                  >
+                    <PlayIcon class="h-4 w-4" />
+                    <OuiText as="span" size="xs" weight="medium">Start</OuiText>
+                  </OuiButton>
                 </OuiFlex>
-              </OuiStack>
-
-              <OuiFlex gap="sm" wrap="wrap" class="shrink-0">
-                <OuiButton
-                  variant="ghost"
-                  size="sm"
-                  @click="refreshAll"
-                  :loading="isRefreshing"
-                  class="gap-2"
-                >
-                  <ArrowPathIcon
-                    class="h-4 w-4"
-                    :class="{ 'animate-spin': isRefreshing }"
-                  />
-                  <OuiText as="span" size="xs" weight="medium">Refresh</OuiText>
-                </OuiButton>
-                <OuiButton
-                  variant="ghost"
-                  size="sm"
-                  @click="openDomain"
-                  :disabled="!deployment.domain"
-                  class="gap-2"
-                >
-                  <ArrowTopRightOnSquareIcon class="h-4 w-4" />
-                  <OuiText as="span" size="xs" weight="medium">Open</OuiText>
-                </OuiButton>
-                <OuiButton
-                  variant="ghost"
-                  color="warning"
-                  size="sm"
-                  @click="redeploy"
-                  :disabled="
-                    isProcessing ||
-                    deployment.status === DeploymentStatusEnum.BUILDING ||
-                    deployment.status === DeploymentStatusEnum.DEPLOYING
-                  "
-                  class="gap-2"
-                >
-                  <ArrowPathIcon
-                    class="h-4 w-4"
-                    :class="{
-                      'animate-spin':
-                        deployment.status === DeploymentStatusEnum.BUILDING ||
-                        deployment.status === DeploymentStatusEnum.DEPLOYING,
-                    }"
-                  />
-                  <OuiText as="span" size="xs" weight="medium"
-                    >Redeploy</OuiText
-                  >
-                </OuiButton>
-                <OuiButton
-                  v-if="hasRunningContainers"
-                  variant="solid"
-                  color="danger"
-                  size="sm"
-                  @click="stop"
-                  :disabled="
-                    isProcessing ||
-                    deployment.status === DeploymentStatusEnum.BUILDING ||
-                    deployment.status === DeploymentStatusEnum.DEPLOYING
-                  "
-                  class="gap-2"
-                >
-                  <StopIcon class="h-4 w-4" />
-                  <OuiText as="span" size="xs" weight="medium">Stop</OuiText>
-                </OuiButton>
-                <OuiButton
-                  v-else-if="
-                    !hasRunningContainers &&
-                    (containerStats.totalCount > 0 ||
-                      deployment.status === DeploymentStatusEnum.STOPPED)
-                  "
-                  variant="solid"
-                  color="success"
-                  size="sm"
-                  @click="start"
-                  :disabled="
-                    isProcessing ||
-                    deployment.status === DeploymentStatusEnum.BUILDING ||
-                    deployment.status === DeploymentStatusEnum.DEPLOYING
-                  "
-                  class="gap-2"
-                >
-                  <PlayIcon class="h-4 w-4" />
-                  <OuiText as="span" size="xs" weight="medium">Start</OuiText>
-                </OuiButton>
               </OuiFlex>
-            </OuiFlex>
-          </OuiCardBody>
+            </OuiStack>
+          </OuiFlex>
+        </OuiCardBody>
+      </OuiCard>
+
+      <!-- Tabbed Content -->
+      <OuiStack gap="md">
+        <OuiTabs v-model="activeTab" :tabs="tabs" />
+        <OuiCard variant="default">
+          <OuiTabs v-model="activeTab" :tabs="tabs" :content-only="true">
+            <template #overview>
+              <DeploymentOverview
+                :deployment="deployment"
+                :organization-id="orgId"
+                @navigate="(tab) => (activeTab = tab)"
+              />
+            </template>
+            <template #settings>
+              <DeploymentSettings :deployment="deployment" />
+            </template>
+            <template #builds>
+              <DeploymentBuilds :deployment-id="id" :organization-id="orgId" />
+            </template>
+            <template #metrics>
+              <DeploymentMetrics
+                ref="metricsRef"
+                :deployment-id="id"
+                :organization-id="orgId"
+              />
+            </template>
+            <template #routing>
+              <DeploymentRouting :deployment="deployment" />
+            </template>
+            <template #build-logs>
+              <DeploymentBuildLogs
+                ref="buildLogsRef"
+                :deployment-id="id"
+                :organization-id="orgId"
+                :auto-start="isBuildingOrDeploying"
+              />
+            </template>
+            <template #logs>
+              <DeploymentLogs :deployment-id="id" :organization-id="orgId" />
+            </template>
+            <template #terminal>
+              <DeploymentTerminal
+                :deployment-id="id"
+                :organization-id="orgId"
+              />
+            </template>
+            <template #files>
+              <DeploymentFiles
+                ref="filesRef"
+                :deployment-id="id"
+                :organization-id="orgId"
+              />
+            </template>
+            <template #compose>
+              <DeploymentCompose
+                :deployment="deployment"
+                @save="handleComposeSave"
+              />
+            </template>
+            <template #services>
+              <DeploymentServices
+                :deployment="deployment"
+                :deployment-id="id"
+                :organization-id="orgId"
+              />
+            </template>
+            <template #env>
+              <DeploymentEnvVars
+                :deployment="deployment"
+                @save="handleEnvSave"
+              />
+            </template>
+          </OuiTabs>
         </OuiCard>
-
-        <!-- Tabbed Content -->
-        <OuiStack gap="md">
-          <OuiTabs v-model="activeTab" :tabs="tabs" />
-          <OuiCard variant="default">
-            <OuiTabs v-model="activeTab" :tabs="tabs" :content-only="true">
-              <template #overview>
-                <DeploymentOverview :deployment="deployment" />
-              </template>
-              <template #settings>
-                <DeploymentSettings :deployment="deployment" />
-              </template>
-              <template #metrics>
-                <DeploymentMetrics
-                  ref="metricsRef"
-                  :deployment-id="id"
-                  :organization-id="orgId"
-                />
-              </template>
-              <template #routing>
-                <DeploymentRouting :deployment="deployment" />
-              </template>
-              <template #build-logs>
-                <DeploymentBuildLogs
-                  ref="buildLogsRef"
-                  :deployment-id="id"
-                  :organization-id="orgId"
-                  :auto-start="isBuildingOrDeploying"
-                />
-              </template>
-              <template #logs>
-                <DeploymentLogs :deployment-id="id" :organization-id="orgId" />
-              </template>
-              <template #terminal>
-                <DeploymentTerminal
-                  :deployment-id="id"
-                  :organization-id="orgId"
-                />
-              </template>
-              <template #files>
-                <DeploymentFiles
-                  ref="filesRef"
-                  :deployment-id="id"
-                  :organization-id="orgId"
-                />
-              </template>
-              <template #compose>
-                <DeploymentCompose
-                  :deployment="deployment"
-                  @save="handleComposeSave"
-                />
-              </template>
-              <template #services>
-                <DeploymentServices
-                  :deployment="deployment"
-                  :deployment-id="id"
-                  :organization-id="orgId"
-                />
-              </template>
-              <template #env>
-                <DeploymentEnvVars
-                  :deployment="deployment"
-                  @save="handleEnvSave"
-                />
-              </template>
-            </OuiTabs>
-          </OuiCard>
-
-        </OuiStack>
       </OuiStack>
-    </OuiContainer>
-  </div>
+    </OuiStack>
+  </OuiContainer>
 </template>
 
 <script setup lang="ts">
-  import { ref, computed, watchEffect, watch, nextTick, onMounted, onUnmounted } from "vue";
+  import {
+    ref,
+    computed,
+    watchEffect,
+    watch,
+    nextTick,
+    onMounted,
+    onUnmounted,
+  } from "vue";
   import { useRoute, useRouter } from "vue-router";
   import type { TabItem } from "~/components/oui/Tabs.vue";
   import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
@@ -252,6 +263,7 @@
     Cog6ToothIcon,
     ChartBarIcon,
     CubeIcon,
+    ClockIcon,
   } from "@heroicons/vue/24/outline";
   import {
     DeploymentService,
@@ -332,6 +344,7 @@
     const baseTabs: TabItem[] = [
       { id: "overview", label: "Overview", icon: RocketLaunchIcon },
       { id: "settings", label: "Settings", icon: Cog6ToothIcon },
+      { id: "builds", label: "Builds", icon: ClockIcon },
       { id: "metrics", label: "Metrics", icon: ChartBarIcon },
       { id: "routing", label: "Routing", icon: GlobeAltIcon },
       { id: "build-logs", label: "Build Logs", icon: Cog6ToothIcon },
@@ -354,7 +367,7 @@
     const isComposeDeployment =
       dep?.buildStrategy === BuildStrategy.PLAIN_COMPOSE ||
       dep?.buildStrategy === BuildStrategy.COMPOSE_REPO;
-    
+
     if (isComposeDeployment) {
       baseTabs.push({ id: "services", label: "Services", icon: CubeIcon });
     }
@@ -597,23 +610,23 @@
 
   const startPolling = () => {
     if (pollingInterval) return; // Already polling
-    
+
     isPolling.value = true;
     pollingInterval = setInterval(async () => {
       if (!id.value || !orgId.value) {
         stopPolling();
         return;
       }
-      
+
       // Check if we should continue polling
       const status = deployment.value?.status;
-      const shouldPoll = 
+      const shouldPoll =
         status === DeploymentStatus.BUILDING ||
         status === DeploymentStatus.DEPLOYING ||
         // Also poll if containers are partially running (transitioning)
-        (containerStats.value.totalCount > 0 && 
-         containerStats.value.runningCount > 0 && 
-         containerStats.value.runningCount < containerStats.value.totalCount);
+        (containerStats.value.totalCount > 0 &&
+          containerStats.value.runningCount > 0 &&
+          containerStats.value.runningCount < containerStats.value.totalCount);
 
       if (!shouldPoll) {
         stopPolling();
@@ -647,12 +660,12 @@
     ],
     () => {
       const status = deployment.value?.status;
-      const shouldPoll = 
+      const shouldPoll =
         status === DeploymentStatus.BUILDING ||
         status === DeploymentStatus.DEPLOYING ||
-        (containerStats.value.totalCount > 0 && 
-         containerStats.value.runningCount > 0 && 
-         containerStats.value.runningCount < containerStats.value.totalCount);
+        (containerStats.value.totalCount > 0 &&
+          containerStats.value.runningCount > 0 &&
+          containerStats.value.runningCount < containerStats.value.totalCount);
 
       if (shouldPoll && !pollingInterval) {
         startPolling();
@@ -667,7 +680,6 @@
   onUnmounted(() => {
     stopPolling();
   });
-
 
   async function redeploy() {
     if (!localDeployment.value) return;
@@ -742,19 +754,19 @@
     try {
       // Refresh deployment data
       await refreshDeployment();
-      
+
       // Reload containers
       await loadContainers();
-      
+
       // Refresh child components that expose refresh methods
       if (metricsRef.value?.refreshUsage) {
         await metricsRef.value.refreshUsage();
       }
-      
+
       if (filesRef.value?.refreshRoot) {
         await filesRef.value.refreshRoot();
       }
-      
+
       // Build logs, logs, and terminal components refresh automatically
       // or through their own mechanisms
     } catch (error) {
