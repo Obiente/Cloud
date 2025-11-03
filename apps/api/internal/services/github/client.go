@@ -69,6 +69,10 @@ func (c *Client) ListRepos(ctx context.Context, page, perPage int) ([]GitHubRepo
 	
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		// Check for authentication errors (401/403) which indicate expired/revoked tokens
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return nil, fmt.Errorf("github authentication failed (token may be expired or revoked): %d - %s", resp.StatusCode, string(body))
+		}
 		return nil, fmt.Errorf("github API error: %d - %s", resp.StatusCode, string(body))
 	}
 	
@@ -100,6 +104,10 @@ func (c *Client) ListBranches(ctx context.Context, repoFullName string) ([]GitHu
 	
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		// Check for authentication errors (401/403) which indicate expired/revoked tokens
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return nil, fmt.Errorf("github authentication failed (token may be expired or revoked): %d - %s", resp.StatusCode, string(body))
+		}
 		return nil, fmt.Errorf("github API error: %d - %s", resp.StatusCode, string(body))
 	}
 	
@@ -131,6 +139,10 @@ func (c *Client) GetFile(ctx context.Context, repoFullName, branch, path string)
 	
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		// Check for authentication errors (401/403) which indicate expired/revoked tokens
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return nil, fmt.Errorf("github authentication failed (token may be expired or revoked): %d - %s", resp.StatusCode, string(body))
+		}
 		return nil, fmt.Errorf("github API error: %d - %s", resp.StatusCode, string(body))
 	}
 	

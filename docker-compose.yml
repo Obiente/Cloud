@@ -106,7 +106,7 @@ services:
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${METRICS_DB_USER:-${POSTGRES_USER:-postgres}}"]
+      test: ["CMD-SHELL", "pg_isready -U ${METRICS_DB_USER:-${POSTGRES_USER:-postgres}} -d ${METRICS_DB_NAME:-obiente_metrics}"]
       interval: 5s
       timeout: 5s
       retries: 5
