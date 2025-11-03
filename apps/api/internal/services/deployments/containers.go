@@ -321,10 +321,14 @@ func (s *Service) StreamContainerLogs(ctx context.Context, req *connect.Request[
 		if n > 0 {
 			// Sanitize to valid UTF-8
 			sanitizedLine := strings.ToValidUTF8(string(buf[:n]), "")
+			// Detect log level from content
+			logLevel := detectLogLevelFromContent(sanitizedLine, false)
 			line := &deploymentsv1.DeploymentLogLine{
 				DeploymentId: deploymentID,
 				Line:         sanitizedLine,
 				Timestamp:    timestamppb.Now(),
+				Stderr:       false,
+				LogLevel:     logLevel,
 			}
 			if sendErr := stream.Send(line); sendErr != nil {
 				return sendErr

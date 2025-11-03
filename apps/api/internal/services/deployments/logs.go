@@ -143,10 +143,14 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 				// Sanitize to valid UTF-8 before sending to protobuf, which requires valid UTF-8.
 				// Invalid sequences are replaced with the Unicode replacement character (U+FFFD).
 				sanitizedLine := strings.ToValidUTF8(string(buf[:n]), "")
+				// Detect log level from content (container logs can also have structured log levels)
+				logLevel := detectLogLevelFromContent(sanitizedLine, false)
 				line := &deploymentsv1.DeploymentLogLine{
 					DeploymentId: deploymentID,
 					Line:         sanitizedLine,
 					Timestamp:    timestamppb.Now(),
+					Stderr:       false, // Container logs don't distinguish stderr/stdout in this context
+					LogLevel:     logLevel,
 				}
 				select {
 				case logChan <- line:
@@ -209,6 +213,61 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 			}
 		}
 	}
+}
+
+// detectLogLevelFromContent detects log level from log line content
+// This is a shared function for both build logs and container logs
+func detectLogLevelFromContent(line string, isStderr bool) deploymentsv1.LogLevel {
+	lineLower := strings.ToLower(strings.TrimSpace(line))
+	
+	// Check for explicit log level markers (case-insensitive)
+	if strings.Contains(lineLower, "[error]") || strings.Contains(lineLower, "error:") ||
+		strings.Contains(lineLower, "fatal:") || strings.Contains(lineLower, "failed") ||
+		strings.HasPrefix(lineLower, "error") || strings.Contains(lineLower, " ❌ ") {
+		return deploymentsv1.LogLevel_LOG_LEVEL_ERROR
+	}
+	
+	if strings.Contains(lineLower, "[warn]") || strings.Contains(lineLower, "[warning]") ||
+		strings.Contains(lineLower, "warning:") || strings.Contains(lineLower, "⚠️") ||
+		strings.HasPrefix(lineLower, "warn") {
+		return deploymentsv1.LogLevel_LOG_LEVEL_WARN
+	}
+	
+	if strings.Contains(lineLower, "[debug]") || strings.Contains(lineLower, "[trace]") ||
+		strings.HasPrefix(lineLower, "debug") || strings.HasPrefix(lineLower, "trace") {
+		return deploymentsv1.LogLevel_LOG_LEVEL_DEBUG
+	}
+	
+	// Nixpacks/Railpacks specific patterns - these are INFO even if on stderr
+	if strings.Contains(lineLower, "nixpacks") || strings.Contains(lineLower, "railpacks") ||
+		strings.Contains(lineLower, "building") || strings.Contains(lineLower, "setup") ||
+		strings.Contains(lineLower, "install") || strings.Contains(lineLower, "build") ||
+		strings.Contains(lineLower, "start") || strings.Contains(lineLower, "transferring") ||
+		strings.Contains(lineLower, "loading") || strings.Contains(lineLower, "resolving") ||
+		strings.Contains(lineLower, "[internal]") || strings.Contains(lineLower, "[stage-") ||
+		strings.Contains(lineLower, "sha256:") || strings.Contains(lineLower, "done") ||
+		strings.Contains(lineLower, "dockerfile:") || strings.Contains(lineLower, "context:") ||
+		strings.Contains(lineLower, "metadata") {
+		return deploymentsv1.LogLevel_LOG_LEVEL_INFO
+	}
+	
+	// Docker build output patterns - usually INFO
+	if strings.Contains(lineLower, "[") && strings.Contains(lineLower, "]") &&
+		(strings.Contains(lineLower, "step") || strings.Contains(lineLower, "from") ||
+		strings.Contains(lineLower, "running") || strings.Contains(lineLower, "executing")) {
+		return deploymentsv1.LogLevel_LOG_LEVEL_INFO
+	}
+	
+	// Default: if stderr is true and no pattern matched, it might be an error
+	if isStderr {
+		if strings.Contains(lineLower, "error") || strings.Contains(lineLower, "fail") {
+			return deploymentsv1.LogLevel_LOG_LEVEL_WARN
+		}
+		return deploymentsv1.LogLevel_LOG_LEVEL_INFO
+	}
+	
+	// Default to INFO for stdout
+	return deploymentsv1.LogLevel_LOG_LEVEL_INFO
 }
 
 // formatDockerEvent formats a Docker event into a log line
@@ -399,8 +458,17 @@ func (s *Service) StreamBuildLogs(ctx context.Context, req *connect.Request[depl
 	// Send buffered logs first
 	bufferedLogs := buildStreamer.GetLogs()
 	for _, logLine := range bufferedLogs {
+		// Check context before sending
+		if ctx.Err() != nil {
+			return nil
+		}
 		if err := stream.Send(logLine); err != nil {
-			return err
+			// If context is cancelled, return nil for proper closure
+			if ctx.Err() != nil {
+				return nil
+			}
+			// For other errors, still return nil to ensure proper stream closure
+			return nil
 		}
 	}
 
@@ -408,14 +476,21 @@ func (s *Service) StreamBuildLogs(ctx context.Context, req *connect.Request[depl
 	for {
 		select {
 		case <-ctx.Done():
-			return nil // Return nil on context cancel for proper stream close
+			// Context cancelled (client disconnected or timeout) - return nil for proper stream close
+			return nil
 		case logLine, ok := <-logChan:
 			if !ok {
-				// Channel closed, stream ended normally
+				// Channel closed, stream ended normally - return nil for proper stream close
 				return nil
 			}
 			if err := stream.Send(logLine); err != nil {
-				// Connection closed or error, stop streaming
+				// Check if context was cancelled (client disconnected)
+				// In that case, return nil for proper stream closure
+				if ctx.Err() != nil {
+					return nil
+				}
+				// For other errors from Send(), return nil as well to ensure proper stream closure
+				// This handles cases where the client disconnected but context isn't cancelled yet
 				return nil
 			}
 		}
