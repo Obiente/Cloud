@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"io"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +38,8 @@ type BuildLogStreamer struct {
 	batchMutex  sync.Mutex
 	batchTimer  *time.Timer
 	stopBatching chan struct{}
+	closed      bool // Track if Close() has been called
+	closeMutex  sync.Mutex // Protect close operation
 }
 
 // BuildLogStreamerRegistry manages build log streamers for all deployments
@@ -295,6 +299,83 @@ func (s *BuildLogStreamer) GetLogs() []*deploymentsv1.DeploymentLogLine {
 	return logs
 }
 
+// DetectPortFromLogs parses the first N log lines to detect a port number
+// Looks for common patterns like "Listening on port 3000", "server running on :8080", etc.
+// Returns 0 if no port is found
+func (s *BuildLogStreamer) DetectPortFromLogs(maxLines int) int {
+	if maxLines <= 0 {
+		maxLines = 100 // Check first 100 lines by default
+	}
+
+	s.mu.RLock()
+	logsToCheck := make([]*deploymentsv1.DeploymentLogLine, 0, maxLines)
+	if len(s.logs) > maxLines {
+		logsToCheck = append(logsToCheck, s.logs[:maxLines]...)
+	} else {
+		logsToCheck = append(logsToCheck, s.logs...)
+	}
+	s.mu.RUnlock()
+
+	return detectPortFromLogLines(logsToCheck)
+}
+
+// detectPortFromLogLines parses log lines for port patterns
+func detectPortFromLogLines(logLines []*deploymentsv1.DeploymentLogLine) int {
+	if len(logLines) == 0 {
+		return 0
+	}
+
+	// Common port detection patterns
+	portPatterns := []*regexp.Regexp{
+		// "Listening on port 3000"
+		regexp.MustCompile(`(?i)(?:listening|listen|running|started|server).*?(?:on|at|port|:)\s*(?:port\s*:?\s*)?(\d+)`),
+		// "Server running on :8080"
+		regexp.MustCompile(`(?i)(?:server|app|application).*?(?:running|started|listening).*?(?:on|at|:)\s*(?:port\s*:?\s*)?(\d+)`),
+		// "Port: 3000" or "PORT=3000"
+		regexp.MustCompile(`(?i)(?:^|\s)(?:port|PORT)\s*[:=]\s*(\d+)`),
+		// ":8080" or "localhost:8080" or "0.0.0.0:8080"
+		regexp.MustCompile(`(?i)(?:localhost|127\.0\.0\.1|0\.0\.0\.0|::)\s*:\s*(\d+)`),
+		// "http://localhost:3000" or "http://0.0.0.0:8080"
+		regexp.MustCompile(`(?i)https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0|.*?):(\d+)`),
+		// "binding to port 3000"
+		regexp.MustCompile(`(?i)(?:binding|bound|binding\s+to).*?(?:port|:)\s*(\d+)`),
+		// Next.js: "Ready on http://localhost:3000"
+		regexp.MustCompile(`(?i)(?:ready|started).*?https?://.*?:(\d+)`),
+		// Rails: "Listening on tcp://0.0.0.0:3000"
+		regexp.MustCompile(`(?i)tcp://.*?:(\d+)`),
+		// Python: "Running on http://127.0.0.1:8000"
+		regexp.MustCompile(`(?i)(?:running|uvicorn|gunicorn).*?https?://.*?:(\d+)`),
+		// Go: "Listening on :8080"
+		regexp.MustCompile(`(?i)(?:listening|listen).*?:\s*(\d+)`),
+		// Node/Express: "App listening on port 3000"
+		regexp.MustCompile(`(?i)(?:app|server).*?(?:listening|listen).*?(?:on|port)\s*(\d+)`),
+	}
+
+	// Check each log line
+	for _, logLine := range logLines {
+		if logLine == nil || logLine.Line == "" {
+			continue
+		}
+
+		line := logLine.Line
+		// Try each pattern
+		for _, pattern := range portPatterns {
+			matches := pattern.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				// Extract port number from match
+				portStr := matches[1]
+				if port, err := strconv.Atoi(portStr); err == nil {
+					if port > 0 && port < 65536 {
+						return port
+					}
+				}
+			}
+		}
+	}
+
+	return 0
+}
+
 // addToBatch adds a log line to the batch queue for efficient database writes
 func (s *BuildLogStreamer) addToBatch(line string, stderr bool, lineNumber int32) {
 	s.batchMutex.Lock()
@@ -413,8 +494,21 @@ func (s *BuildLogStreamer) startBatchFlusher() {
 }
 
 // Close cleans up the streamer
+// Safe to call multiple times - uses sync to prevent double-close
 func (s *BuildLogStreamer) Close() {
+	s.closeMutex.Lock()
+	defer s.closeMutex.Unlock()
+	
+	// Check if already closed
+	if s.closed {
+		logger.Debug("[BuildLogStreamer] Close() called on already-closed streamer, ignoring")
+		return
+	}
+	
+	s.closed = true
+	
 	// Stop batch flusher and do final flush
+	// Safe to close - we've checked that we haven't closed before
 	close(s.stopBatching)
 	
 	s.mu.RLock()

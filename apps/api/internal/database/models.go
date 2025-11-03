@@ -21,6 +21,10 @@ type Deployment struct {
 	StartCommand      *string   `gorm:"column:start_command" json:"start_command"` // Start command for running the application
 	DockerfilePath    *string   `gorm:"column:dockerfile_path" json:"dockerfile_path"` // Path to Dockerfile (relative to repo root)
 	ComposeFilePath   *string   `gorm:"column:compose_file_path" json:"compose_file_path"` // Path to compose file (relative to repo root)
+	BuildPath         *string   `gorm:"column:build_path" json:"build_path"` // Working directory for build (relative to repo root, defaults to ".")
+	BuildOutputPath   *string   `gorm:"column:build_output_path" json:"build_output_path"` // Path to built output files (relative to repo root, auto-detected if empty)
+	UseNginx          *bool     `gorm:"column:use_nginx;default:false" json:"use_nginx"` // Use nginx for static deployments
+	NginxConfig       *string   `gorm:"column:nginx_config;type:text" json:"nginx_config"` // Custom nginx configuration (optional, uses default if empty)
 	GitHubIntegrationID *string `gorm:"column:github_integration_id;index" json:"github_integration_id"` // GitHub integration ID for autodeploys
 	Status         int32     `gorm:"column:status;default:0" json:"status"` // DeploymentStatus enum
 	HealthStatus   string    `gorm:"column:health_status" json:"health_status"`

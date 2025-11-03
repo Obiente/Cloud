@@ -56,6 +56,7 @@ type DeploymentConfig struct {
 	Memory       int64 // in bytes
 	CPUShares    int64
 	Replicas     int
+	StartCommand *string // Optional start command to override container CMD
 }
 
 // NewDeploymentManager creates a new deployment manager
@@ -142,7 +143,7 @@ func (dm *DeploymentManager) ensureNetwork(ctx context.Context) error {
 	
 	// Network doesn't exist, create it
 	logger.Info("[DeploymentManager] Creating network %s", dm.networkName)
-	createCmd := exec.CommandContext(ctx, "docker", "network", "create", "--driver", "bridge", "--label", "com.obiente.managed=true", dm.networkName)
+	createCmd := exec.CommandContext(ctx, "docker", "network", "create", "--driver", "bridge", "--label", "cloud.obiente.managed=true", dm.networkName)
 	var stderr bytes.Buffer
 	createCmd.Stderr = &stderr
 	if err := createCmd.Run(); err != nil {
@@ -341,7 +342,7 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 	
 	// Enable Traefik only when we have routing rules
 	labels["traefik.enable"] = "true"
-	labels["com.obiente.traefik"] = "true" // Required for Traefik to discover this container
+	labels["cloud.obiente.traefik"] = "true" // Required for Traefik to discover this container
 	
 	// Generate labels for each routing rule
 	for idx, routing := range serviceRoutings {
@@ -487,15 +488,15 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 				}
 				
 				// Add management labels
-				labels["com.obiente.managed"] = "true"
-				labels["com.obiente.deployment_id"] = deploymentID
-				labels["com.obiente.service_name"] = serviceName
-				// Only set com.obiente.traefik if Traefik labels were generated (i.e., routing rules exist)
+				labels["cloud.obiente.managed"] = "true"
+				labels["cloud.obiente.deployment_id"] = deploymentID
+				labels["cloud.obiente.service_name"] = serviceName
+				// Only set cloud.obiente.traefik if Traefik labels were generated (i.e., routing rules exist)
 				if len(traefikLabels) > 0 {
-					labels["com.obiente.traefik"] = "true" // Required for Traefik discovery
+					labels["cloud.obiente.traefik"] = "true" // Required for Traefik discovery
 				}
 				if deploymentDomain != "" {
-					labels["com.obiente.domain"] = deploymentDomain
+					labels["cloud.obiente.domain"] = deploymentDomain
 				}
 				
 				// Update service with labels
@@ -591,11 +592,11 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	
 	// Prepare labels
 	labels := map[string]string{
-		"com.obiente.managed":       "true",
-		"com.obiente.deployment_id": config.DeploymentID,
-		"com.obiente.domain":        config.Domain,
-		"com.obiente.service_name":  serviceName,
-		"com.obiente.replica":       strconv.Itoa(replicaIndex),
+		"cloud.obiente.managed":       "true",
+		"cloud.obiente.deployment_id": config.DeploymentID,
+		"cloud.obiente.domain":        config.Domain,
+		"cloud.obiente.service_name":  serviceName,
+		"cloud.obiente.replica":       strconv.Itoa(replicaIndex),
 	}
 	
 	// Generate Traefik labels from routing rules
@@ -604,9 +605,9 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	for k, v := range traefikLabels {
 		labels[k] = v
 	}
-	// Only set com.obiente.traefik if we actually generated Traefik labels (i.e., routing rules exist)
+	// Only set cloud.obiente.traefik if we actually generated Traefik labels (i.e., routing rules exist)
 	if len(traefikLabels) > 0 {
-		labels["com.obiente.traefik"] = "true" // Required for Traefik discovery
+		labels["cloud.obiente.traefik"] = "true" // Required for Traefik discovery
 	}
 
 	// Add custom labels
@@ -647,6 +648,23 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 			Timeout:  10 * time.Second,
 			Retries:  3,
 		},
+	}
+	
+	// Override container CMD if start command is provided
+	// This is useful for static sites that need build commands chained (e.g., "pnpm build && pnpm preview --host")
+	if config.StartCommand != nil && *config.StartCommand != "" {
+		// Split the command into parts for Cmd
+		// For shell commands like "pnpm build && pnpm preview", we need to run via sh -c
+		cmdParts := strings.Fields(*config.StartCommand)
+		if len(cmdParts) > 0 {
+			// If command contains && or ||, it needs to be run via shell
+			if strings.Contains(*config.StartCommand, "&&") || strings.Contains(*config.StartCommand, "||") {
+				containerConfig.Cmd = []string{"sh", "-c", *config.StartCommand}
+			} else {
+				// Simple command, use as-is
+				containerConfig.Cmd = cmdParts
+			}
+		}
 	}
 
 	// Host configuration

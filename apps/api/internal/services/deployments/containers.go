@@ -95,7 +95,7 @@ func (s *Service) findContainerForDeployment(ctx context.Context, deploymentID, 
 			// Check both label formats
 			labelServiceName := ""
 			if containerInfo.Config != nil && containerInfo.Config.Labels != nil {
-				labelServiceName = containerInfo.Config.Labels["com.obiente.service_name"]
+				labelServiceName = containerInfo.Config.Labels["cloud.obiente.service_name"]
 				if labelServiceName == "" {
 					labelServiceName = containerInfo.Config.Labels["com.docker.compose.service"]
 				}
@@ -196,7 +196,7 @@ func (s *Service) ListDeploymentContainers(ctx context.Context, req *connect.Req
 		// Extract service name from labels
 		serviceName := ""
 		if containerInfo.Config != nil && containerInfo.Config.Labels != nil {
-			serviceName = containerInfo.Config.Labels["com.obiente.service_name"]
+			serviceName = containerInfo.Config.Labels["cloud.obiente.service_name"]
 			if serviceName == "" {
 				serviceName = containerInfo.Config.Labels["com.docker.compose.service"]
 			}

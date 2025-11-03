@@ -114,7 +114,7 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	// Start Docker events stream filtered for this deployment
 	eventFilters := map[string][]string{
 		"type": {"container", "image"},
-		"label": {fmt.Sprintf("com.obiente.deployment_id=%s", deploymentID)},
+		"label": {fmt.Sprintf("cloud.obiente.deployment_id=%s", deploymentID)},
 	}
 	eventChan, eventErrChan, cleanup, err := dcli.Events(ctx, eventFilters)
 	if err != nil {
@@ -304,7 +304,7 @@ func (s *Service) formatDockerEvent(deploymentID string, event events.Message, c
 		
 		// Also check by deployment label
 		if len(event.Actor.Attributes) > 0 {
-			if event.Actor.Attributes["com.obiente.deployment_id"] == deploymentID {
+			if event.Actor.Attributes["cloud.obiente.deployment_id"] == deploymentID {
 				isOurContainer = true
 			}
 		}
@@ -316,7 +316,7 @@ func (s *Service) formatDockerEvent(deploymentID string, event events.Message, c
 		// Format container events
 		containerName := containerID
 		if len(event.Actor.Attributes) > 0 {
-			if serviceName := event.Actor.Attributes["com.obiente.service_name"]; serviceName != "" {
+			if serviceName := event.Actor.Attributes["cloud.obiente.service_name"]; serviceName != "" {
 				containerName = serviceName
 			} else if serviceName := event.Actor.Attributes["com.docker.compose.service"]; serviceName != "" {
 				containerName = serviceName

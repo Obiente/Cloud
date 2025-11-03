@@ -189,7 +189,7 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 
 	// Get all containers managed by Obiente
 	filterArgs := filters.NewArgs()
-	filterArgs.Add("label", "com.obiente.managed=true")
+	filterArgs.Add("label", "cloud.obiente.managed=true")
 
 	containers, err := sr.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
@@ -231,7 +231,7 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 		containerID := c.ID
 		if !dbContainerIDs[containerID] {
 			// Extract deployment info from labels
-			deploymentID := c.Labels["com.obiente.deployment_id"]
+			deploymentID := c.Labels["cloud.obiente.deployment_id"]
 			if deploymentID == "" {
 				continue
 			}
@@ -246,7 +246,7 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 				NodeHostname: sr.nodeHostname,
 				ContainerID:  containerID,
 				Status:       c.State,
-				Domain:       c.Labels["com.obiente.domain"],
+				Domain:       c.Labels["cloud.obiente.domain"],
 			}
 
 			// Extract port if available

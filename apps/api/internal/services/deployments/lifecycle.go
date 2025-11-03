@@ -3,12 +3,12 @@ package deployments
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/logger"
 	"api/internal/orchestrator"
 	"api/internal/quota"
 
@@ -57,7 +57,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		buildID := uuid.New().String()
 		buildNumber, err := s.buildHistoryRepo.GetNextBuildNumber(buildCtx, deploymentID)
 		if err != nil {
-			log.Printf("[TriggerDeployment] Failed to get next build number: %v", err)
+			logger.Warn("[TriggerDeployment] Failed to get next build number: %v", err)
 			buildNumber = 1 // Fallback to 1
 		}
 
@@ -94,7 +94,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		}
 
 		if err := s.buildHistoryRepo.CreateBuild(buildCtx, buildRecord); err != nil {
-			log.Printf("[TriggerDeployment] Failed to create build record: %v", err)
+			logger.Warn("[TriggerDeployment] Failed to create build record: %v", err)
 		} else {
 			// Set build ID on streamer so logs are saved to database
 			streamer.SetBuildID(buildID)
@@ -138,7 +138,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 
 		strategy, err := s.buildRegistry.Get(buildStrategy)
 		if err != nil {
-			log.Printf("[TriggerDeployment] Invalid build strategy %v: %v", buildStrategy, err)
+			logger.Warn("[TriggerDeployment] Invalid build strategy %v: %v", buildStrategy, err)
 			streamer.WriteStderr([]byte(fmt.Sprintf("Error: Invalid build strategy: %v\n", err)))
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
 			return
@@ -220,7 +220,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		updateBuildStatus := func(status int32, errorMsg *string) {
 			buildTime := int32(time.Since(buildStartTime).Seconds())
 			if err := s.buildHistoryRepo.UpdateBuildStatus(buildCtx, buildID, status, buildTime, errorMsg); err != nil {
-				log.Printf("[TriggerDeployment] Failed to update build status: %v", err)
+				logger.Warn("[TriggerDeployment] Failed to update build status: %v", err)
 			}
 		}
 
@@ -231,7 +231,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		if dbDeployment.ComposeYaml != "" {
 			streamer.Write([]byte("🐳 Deploying Docker Compose configuration...\n"))
 			if err := s.manager.DeployComposeFile(buildCtx, deploymentID, dbDeployment.ComposeYaml); err != nil {
-				log.Printf("[TriggerDeployment] Compose deployment failed: %v", err)
+				logger.Warn("[TriggerDeployment] Compose deployment failed: %v", err)
 				streamer.WriteStderr([]byte(fmt.Sprintf("❌ Deployment failed: %v\n", err)))
 				errorMsg := err.Error()
 				updateBuildStatus(4, &errorMsg) // BUILD_FAILED = 4
@@ -249,7 +249,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			streamer.Write([]byte(fmt.Sprintf("🔨 Building deployment with %s...\n", strategy.Name())))
 			result, err := strategy.Build(buildCtx, dbDeployment, buildConfig)
 			if err != nil || !result.Success {
-				log.Printf("[TriggerDeployment] Build failed: %v", err)
+				logger.Error("[TriggerDeployment] Build failed: %v", err)
 				if result != nil && result.Error != nil {
 					err = result.Error
 				}
@@ -263,6 +263,24 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			buildResult = result
 
 			streamer.Write([]byte("✅ Build completed successfully\n"))
+			
+			// Update deployment start command if it was modified by the build strategy
+			// (e.g., for Astro projects that need "pnpm build && pnpm preview --host")
+			if buildConfig.StartCommand != "" && buildConfig.StartCommand != startCmd {
+				dbDeployment.StartCommand = &buildConfig.StartCommand
+				logger.Info("[TriggerDeployment] Updated start command to: %s", buildConfig.StartCommand)
+			}
+			
+			// Try to detect port from build logs if not already detected
+			if result.Port == 0 {
+				logPort := streamer.DetectPortFromLogs(100) // Check first 100 log lines
+				if logPort > 0 {
+					result.Port = logPort
+					logger.Debug("[TriggerDeployment] Detected port %d from build logs", logPort)
+					streamer.Write([]byte(fmt.Sprintf("🔍 Detected port %d from build logs\n", logPort)))
+				}
+			}
+			
 			streamer.Write([]byte("🚀 Deploying to orchestrator...\n"))
 
 			// Update build with build results
@@ -292,28 +310,28 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				orchService := orchestrator.GetGlobalOrchestratorService()
 				if orchService != nil {
 					manager = orchService.GetDeploymentManager()
-					log.Printf("[TriggerDeployment] Manager was nil, retrieved from global orchestrator service")
+					logger.Debug("[TriggerDeployment] Manager was nil, retrieved from global orchestrator service")
 				}
 			}
 			
 			// If still nil, try to create a new one as last resort
 			if manager == nil {
-				log.Printf("[TriggerDeployment] WARNING: Creating deployment manager as last resort...")
+				logger.Warn("[TriggerDeployment] WARNING: Creating deployment manager as last resort...")
 				var err error
 				manager, err = orchestrator.NewDeploymentManager("least-loaded", 50)
 				if err != nil {
-					log.Printf("[TriggerDeployment] CRITICAL: Failed to create deployment manager: %v", err)
+					logger.Error("[TriggerDeployment] CRITICAL: Failed to create deployment manager: %v", err)
 					streamer.WriteStderr([]byte(fmt.Sprintf("❌ Deployment failed: deployment manager is not available (orchestrator not initialized): %v\n", err)))
 					errorMsg := fmt.Sprintf("deployment manager is not available (orchestrator not initialized): %v", err)
 					updateBuildStatus(4, &errorMsg) // BUILD_FAILED = 4
 					_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
 					return
 				}
-				log.Printf("[TriggerDeployment] Successfully created deployment manager as last resort")
+				logger.Info("[TriggerDeployment] Successfully created deployment manager as last resort")
 			}
 			
 			if err := deployResultToOrchestrator(buildCtx, manager, dbDeployment, result); err != nil {
-				log.Printf("[TriggerDeployment] Deployment failed: %v", err)
+				logger.Error("[TriggerDeployment] Deployment failed: %v", err)
 				streamer.WriteStderr([]byte(fmt.Sprintf("❌ Deployment failed: %v\n", err)))
 				errorMsg := err.Error()
 				updateBuildStatus(4, &errorMsg) // BUILD_FAILED = 4
@@ -342,7 +360,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		// Verify containers are running
 		streamer.Write([]byte("🔍 Verifying containers are running...\n"))
 		if err := s.verifyContainersRunning(buildCtx, deploymentID); err != nil {
-			log.Printf("[TriggerDeployment] WARNING: Containers not running: %v", err)
+			logger.Warn("[TriggerDeployment] WARNING: Containers not running: %v", err)
 			streamer.WriteStderr([]byte(fmt.Sprintf("⚠️  Warning: %v\n", err)))
 			// Don't mark build as failed - build itself succeeded, just container verification failed
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
@@ -352,7 +370,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			// Calculate and update storage usage
 			streamer.Write([]byte("📊 Calculating storage usage...\n"))
 			if err := s.updateDeploymentStorage(buildCtx, deploymentID, buildResult); err != nil {
-				log.Printf("[TriggerDeployment] Warning: Failed to update storage: %v", err)
+				logger.Warn("[TriggerDeployment] Warning: Failed to update storage: %v", err)
 				// Don't fail deployment if storage calculation fails
 			}
 			
@@ -421,14 +439,14 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 		// Deploy using Docker Compose
 		if s.manager != nil {
 			if err := s.manager.DeployComposeFile(ctx, deploymentID, dbDep.ComposeYaml); err != nil {
-				log.Printf("[StartDeployment] Failed to deploy compose file for deployment %s: %v", deploymentID, err)
+				logger.Warn("[StartDeployment] Failed to deploy compose file for deployment %s: %v", deploymentID, err)
 				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to deploy compose file: %w", err))
 			}
-			log.Printf("[StartDeployment] Successfully deployed compose file for deployment %s", deploymentID)
+			logger.Info("[StartDeployment] Successfully deployed compose file for deployment %s", deploymentID)
 
 			// Verify containers are actually running before setting status
 			if err := s.verifyContainersRunning(ctx, deploymentID); err != nil {
-				log.Printf("[StartDeployment] WARNING: Containers not running for deployment %s: %v", deploymentID, err)
+				logger.Warn("[StartDeployment] WARNING: Containers not running for deployment %s: %v", deploymentID, err)
 				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("deployment started but no containers are running: %w", err))
 			}
 		} else {
@@ -478,14 +496,14 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 					Replicas:     replicas,
 				}
 				if err := s.manager.CreateDeployment(ctx, cfg); err != nil {
-					log.Printf("[StartDeployment] Failed to create containers for deployment %s: %v", deploymentID, err)
+					logger.Error("[StartDeployment] Failed to create containers for deployment %s: %v", deploymentID, err)
 					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create containers: %w", err))
 				}
-				log.Printf("[StartDeployment] Successfully created containers for deployment %s", deploymentID)
+				logger.Info("[StartDeployment] Successfully created containers for deployment %s", deploymentID)
 
 				// Verify containers are actually running before setting status
 				if err := s.verifyContainersRunning(ctx, deploymentID); err != nil {
-					log.Printf("[StartDeployment] WARNING: Containers not running for deployment %s: %v", deploymentID, err)
+					logger.Warn("[StartDeployment] WARNING: Containers not running for deployment %s: %v", deploymentID, err)
 					return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("containers created but not running: %w", err))
 				}
 			} else {
@@ -501,7 +519,7 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 
 			// Verify containers are actually running after starting
 			if err := s.verifyContainersRunning(ctx, deploymentID); err != nil {
-				log.Printf("[StartDeployment] WARNING: Containers not running for deployment %s after start: %v", deploymentID, err)
+				logger.Warn("[StartDeployment] WARNING: Containers not running for deployment %s after start: %v", deploymentID, err)
 				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start containers: %w", err))
 			}
 		}
@@ -533,7 +551,7 @@ func (s *Service) StopDeployment(ctx context.Context, req *connect.Request[deplo
 	// Check if this is a compose-based deployment
 	if dbDep.ComposeYaml != "" && s.manager != nil {
 		if err := s.manager.StopComposeDeployment(ctx, deploymentID); err != nil {
-			log.Printf("[StopDeployment] Failed to stop compose deployment %s: %v", deploymentID, err)
+			logger.Warn("[StopDeployment] Failed to stop compose deployment %s: %v", deploymentID, err)
 			// Continue to update status even if stop failed
 		}
 	} else if s.manager != nil {
@@ -566,7 +584,7 @@ func (s *Service) RestartDeployment(ctx context.Context, req *connect.Request[de
 		// For compose deployments, restart by stopping and starting again
 		_ = s.manager.StopComposeDeployment(ctx, deploymentID)
 		if err := s.manager.DeployComposeFile(ctx, deploymentID, dbDep.ComposeYaml); err != nil {
-			log.Printf("[RestartDeployment] Failed to restart compose deployment %s: %v", deploymentID, err)
+			logger.Warn("[RestartDeployment] Failed to restart compose deployment %s: %v", deploymentID, err)
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart compose deployment: %w", err))
 		}
 	} else if s.manager != nil {
@@ -642,7 +660,7 @@ func (s *Service) updateDeploymentStorage(ctx context.Context, deploymentID stri
 		return fmt.Errorf("failed to update storage: %w", err)
 	}
 
-	log.Printf("[updateDeploymentStorage] Updated storage for deployment %s: Image=%d bytes, Volumes=%d bytes, Container=%d bytes, Total=%d bytes",
+	logger.Debug("[updateDeploymentStorage] Updated storage for deployment %s: Image=%d bytes, Volumes=%d bytes, Container=%d bytes, Total=%d bytes",
 		deploymentID, storageInfo.ImageSize, storageInfo.VolumeSize, storageInfo.ContainerDisk, storageInfo.TotalStorage)
 
 	return nil

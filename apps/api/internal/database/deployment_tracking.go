@@ -266,7 +266,7 @@ func ValidateAndRefreshLocations(deploymentID string) ([]DeploymentLocation, err
 		
 		// Look for containers with deployment label using moby filters
 		filterArgs := filters.NewArgs()
-		filterArgs.Add("label", fmt.Sprintf("com.obiente.deployment_id=%s", deploymentID))
+		filterArgs.Add("label", fmt.Sprintf("cloud.obiente.deployment_id=%s", deploymentID))
 		
 		containers, listErr := mobyClient.ContainerList(context.Background(), client.ContainerListOptions{
 			All:     true,
@@ -286,7 +286,7 @@ func ValidateAndRefreshLocations(deploymentID string) ([]DeploymentLocation, err
 				// Extract deployment ID from labels
 				var containerDeploymentID string
 				if info.Config != nil && info.Config.Labels != nil {
-					containerDeploymentID = info.Config.Labels["com.obiente.deployment_id"]
+					containerDeploymentID = info.Config.Labels["cloud.obiente.deployment_id"]
 				}
 				
 				if containerDeploymentID != deploymentID {
@@ -302,7 +302,7 @@ func ValidateAndRefreshLocations(deploymentID string) ([]DeploymentLocation, err
 				// Get domain from labels
 				domain := ""
 				if info.Config != nil && info.Config.Labels != nil {
-					domain = info.Config.Labels["com.obiente.domain"]
+					domain = info.Config.Labels["cloud.obiente.domain"]
 				}
 				
 				location := &DeploymentLocation{

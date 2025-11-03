@@ -194,7 +194,7 @@ func CalculateStorageForDeployment(ctx context.Context, deploymentID string) (*S
 
 	// Find all containers for this deployment
 	// Use label filter to find containers
-	cmd := exec.CommandContext(ctx, "docker", "ps", "-a", "--filter", fmt.Sprintf("label=com.obiente.deployment_id=%s", deploymentID), "--format", "{{.ID}}")
+	cmd := exec.CommandContext(ctx, "docker", "ps", "-a", "--filter", fmt.Sprintf("label=cloud.obiente.deployment_id=%s", deploymentID), "--format", "{{.ID}}")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list containers: %w", err)

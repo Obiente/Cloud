@@ -39,6 +39,10 @@ type BuildConfig struct {
 	StartCommand    string // Start command for running the application
 	DockerfilePath  string // Path to Dockerfile (relative to repo root, defaults to "Dockerfile")
 	ComposeFilePath string // Path to compose file (relative to repo root, auto-detected if empty)
+	BuildPath       string // Working directory for build (relative to repo root, defaults to ".")
+	BuildOutputPath string // Path to built output files (relative to repo root, auto-detected if empty)
+	UseNginx        bool   // Use nginx for static deployments
+	NginxConfig     string // Custom nginx configuration (optional, uses default if empty)
 	EnvVars         map[string]string
 	Port            int
 	MemoryBytes     int64
@@ -419,6 +423,11 @@ func getEnvAsStringSlice(envVars map[string]string) []string {
 func buildDockerImage(ctx context.Context, dir, imageName, dockerfile string, logWriter, logWriterErr io.Writer) error {
 	args := []string{"build", "-t", imageName}
 	if dockerfile != "" {
+		// If dockerfile is a relative path, make it absolute relative to dir
+		// If it's already absolute, use it as-is
+		if !filepath.IsAbs(dockerfile) {
+			dockerfile = filepath.Join(dir, dockerfile)
+		}
 		args = append(args, "-f", dockerfile)
 	}
 	args = append(args, dir)
@@ -492,6 +501,11 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 			cpuShares = *deployment.CPUShares
 		}
 
+		var startCmd *string
+		if deployment.StartCommand != nil && *deployment.StartCommand != "" {
+			startCmd = deployment.StartCommand
+		}
+		
 		cfg := &orchestrator.DeploymentConfig{
 			DeploymentID: deployment.ID,
 			Image:        result.ImageName,
@@ -502,6 +516,7 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 			Memory:       memory,
 			CPUShares:    cpuShares,
 			Replicas:     1,
+			StartCommand: startCmd, // Pass start command to override container CMD
 		}
 
 		if deployment.Replicas != nil {

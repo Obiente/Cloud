@@ -78,7 +78,7 @@ func (s *Service) GetDeploymentMetrics(ctx context.Context, req *connect.Request
 				for _, loc := range locations {
 					containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
 					if err == nil && containerInfo.Config != nil && containerInfo.Config.Labels != nil {
-						labelServiceName := containerInfo.Config.Labels["com.obiente.service_name"]
+						labelServiceName := containerInfo.Config.Labels["cloud.obiente.service_name"]
 						if labelServiceName == "" {
 							labelServiceName = containerInfo.Config.Labels["com.docker.compose.service"]
 						}
@@ -150,7 +150,7 @@ func (s *Service) GetDeploymentMetrics(ctx context.Context, req *connect.Request
 				for _, loc := range locations {
 					containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
 					if err == nil && containerInfo.Config != nil && containerInfo.Config.Labels != nil {
-						serviceName := containerInfo.Config.Labels["com.obiente.service_name"]
+						serviceName := containerInfo.Config.Labels["cloud.obiente.service_name"]
 						if serviceName == "" {
 							serviceName = containerInfo.Config.Labels["com.docker.compose.service"]
 						}
@@ -325,7 +325,7 @@ func (s *Service) StreamDeploymentMetrics(ctx context.Context, req *connect.Requ
 				for _, loc := range locations {
 					containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
 					if err == nil && containerInfo.Config != nil && containerInfo.Config.Labels != nil {
-						labelServiceName := containerInfo.Config.Labels["com.obiente.service_name"]
+						labelServiceName := containerInfo.Config.Labels["cloud.obiente.service_name"]
 						if labelServiceName == "" {
 							labelServiceName = containerInfo.Config.Labels["com.docker.compose.service"]
 						}

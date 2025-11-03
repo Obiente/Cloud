@@ -4,14 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"api/internal/database"
+	"api/internal/logger"
 )
 
 // RailpacksStrategy handles Railpacks deployments
@@ -41,7 +43,18 @@ func (s *RailpacksStrategy) Detect(ctx context.Context, repoPath string) (bool, 
 }
 
 func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Deployment, config *BuildConfig) (*BuildResult, error) {
-	log.Printf("[Railpacks] Building deployment %s", deployment.ID)
+	// Helper function to write to build logs if writer is available
+	writeBuildLog := func(format string, args ...interface{}) {
+		msg := fmt.Sprintf(format, args...)
+		if config.LogWriter != nil {
+			config.LogWriter.Write([]byte(msg + "\n"))
+		}
+		logger.Debug("[Railpacks] %s", msg)
+	}
+
+	writeBuildLog("🚀 Obiente Cloud: Starting deployment build")
+	writeBuildLog("   📦 Build strategy: Railpacks (Railway optimized)")
+	writeBuildLog("   🔗 Repository: %s (branch: %s)", config.RepositoryURL, config.Branch)
 
 	buildDir, err := ensureBuildDir(deployment.ID)
 	if err != nil {
@@ -49,19 +62,82 @@ func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Depl
 	}
 
 	// Clone repository
+	writeBuildLog("   📥 Cloning repository...")
 	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, buildDir, config.GitHubToken); err != nil {
 		return &BuildResult{Success: false, Error: err}, err
 	}
+	writeBuildLog("   ✅ Repository cloned successfully")
 
 	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
 
-	// Create railpack.toml or nixpacks.toml configuration if needed
-	// Railpack uses railpack.toml (or railpack.json), but can also read nixpacks.toml
-	// For now, create nixpacks.toml for compatibility
-	if err := createNixpacksConfig(buildDir, config.StartCommand, false); err != nil {
-		log.Printf("[Railpacks] Warning: Failed to create nixpacks.toml: %v", err)
+	// Railpack doesn't need config files - it auto-detects everything
+	// However, we need to ensure static sites that need building get built
+	// For Astro and similar frameworks, we may need to modify the start command
+	// to include a build step if the build output doesn't exist
+	if config.LogWriter != nil {
+		config.LogWriter.Write([]byte("   🔧 Analyzing project...\n"))
 	}
-
+	
+	// Check if this is a static site that needs building (like Astro)
+	// If so, ensure the start command includes building
+	startCommand := config.StartCommand
+	if startCommand == "" {
+		startCommand = detectDefaultStartCommand(buildDir)
+	}
+	
+	// For Astro projects using preview, ensure build happens first
+	isAstro := fileExists(filepath.Join(buildDir, "astro.config.js")) ||
+		fileExists(filepath.Join(buildDir, "astro.config.mjs")) ||
+		fileExists(filepath.Join(buildDir, "astro.config.ts"))
+	
+	if isAstro && strings.Contains(startCommand, "preview") {
+		// Railpack will run the start command, but we need to ensure build happens first
+		// Check if dist folder exists - if not, we need to build first
+		distExists := fileExists(filepath.Join(buildDir, "dist"))
+		
+		// Detect package manager for build command
+		var buildCmd string
+		if fileExists(filepath.Join(buildDir, "pnpm-lock.yaml")) {
+			buildCmd = "pnpm build"
+		} else if fileExists(filepath.Join(buildDir, "yarn.lock")) {
+			buildCmd = "yarn build"
+		} else {
+			buildCmd = "npm run build"
+		}
+		
+		// If dist doesn't exist, we need to build before preview
+		// Railpack doesn't have a separate build phase, so we chain the commands
+		if !distExists {
+			// Combine build and preview into one command
+			// Use && to ensure build completes before preview starts
+			if strings.Contains(startCommand, "pnpm") {
+				startCommand = fmt.Sprintf("%s && pnpm preview --host", buildCmd)
+			} else if strings.Contains(startCommand, "yarn") {
+				startCommand = fmt.Sprintf("%s && yarn preview --host", buildCmd)
+			} else {
+				startCommand = fmt.Sprintf("%s && npm run preview -- --host", buildCmd)
+			}
+			if config.LogWriter != nil {
+				config.LogWriter.Write([]byte(fmt.Sprintf("   🔧 Detected Astro project - configured start command to build first: %s\n", startCommand)))
+			}
+		} else {
+			// Dist exists, just ensure preview has --host flag
+			if !strings.Contains(startCommand, "--host") {
+				if strings.Contains(startCommand, "pnpm") {
+					startCommand = strings.Replace(startCommand, "pnpm preview", "pnpm preview --host", 1)
+				} else if strings.Contains(startCommand, "yarn") {
+					startCommand = strings.Replace(startCommand, "yarn preview", "yarn preview --host", 1)
+				} else {
+					startCommand = strings.Replace(startCommand, "npm run preview", "npm run preview -- --host", 1)
+				}
+			}
+		}
+	}
+	
+	// Store the modified start command back in config so it's used when the container starts
+	// The start command will be set at container runtime by the orchestrator
+	config.StartCommand = startCommand
+	
 	// Use Railpack (Railway's build tool, separate from nixpacks)
 	// Railpack is a different CLI tool that uses Railway's optimized build process
 	// It uses ghcr.io/railwayapp/nixpacks base images but with different build logic
@@ -80,7 +156,7 @@ func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Depl
 	// Railpack requires BUILDKIT_HOST to be set for BuildKit builds
 	// Check if buildx is available; if not, disable BuildKit as fallback
 	if !isBuildxAvailable(ctx) {
-		log.Printf("[Railpacks] Buildx not available, disabling BuildKit")
+		logger.Warn("[Railpacks] Buildx not available, disabling BuildKit")
 		envVars = append(envVars, "DOCKER_BUILDKIT=0")
 	} else {
 		// Enable BuildKit and ensure BuildKit daemon container is running
@@ -111,7 +187,7 @@ func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Depl
 	// Get image size
 	var imageSize int64
 	if size, err := getImageSize(ctx, imageName); err != nil {
-		log.Printf("[Railpacks] Warning: Failed to get image size: %v", err)
+		logger.Warn("[Railpacks] Warning: Failed to get image size: %v", err)
 	} else {
 		imageSize = size
 	}
@@ -133,25 +209,74 @@ func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Depl
 
 // detectPortFromRepo attempts to detect the port from repository files
 // Supports ports for: Node, Python, Go, PHP, Java, Ruby, Deno, Rust, Elixir
+// Checks multiple sources in order of priority:
+// 1. .env files (PORT=)
+// 2. package.json (scripts, config)
+// 3. Framework-specific config files (next.config.js, vite.config.js, etc.)
+// 4. Dockerfile (EXPOSE)
+// 5. Language-specific defaults
 func detectPortFromRepo(repoPath string, defaultPort int) int {
-	// Check for common port indicators in various frameworks
+	// Priority 1: Check .env files for PORT
+	envPort := detectPortFromEnv(repoPath)
+	if envPort > 0 {
+		return envPort
+	}
+
+	// Priority 2: Check package.json for Node.js projects
+	if fileExists(filepath.Join(repoPath, "package.json")) {
+		if port := detectPortFromPackageJson(repoPath); port > 0 {
+			return port
+		}
+		// Check framework-specific configs
+		if port := detectPortFromNodeFramework(repoPath); port > 0 {
+			return port
+		}
+		// Default Node.js port
+		return 8080
+	}
+
+	// Priority 3: Check Dockerfile for EXPOSE directive
+	if fileExists(filepath.Join(repoPath, "Dockerfile")) {
+		if port := detectPortFromDockerfile(filepath.Join(repoPath, "Dockerfile")); port > 0 {
+			return port
+		}
+	}
+
+	// Priority 4: Check Deno config
 	if fileExists(filepath.Join(repoPath, "deno.json")) || fileExists(filepath.Join(repoPath, "deno.jsonc")) {
+		if port := detectPortFromDenoConfig(repoPath); port > 0 {
+			return port
+		}
 		return 8080 // Default Deno port
 	}
-	if fileExists(filepath.Join(repoPath, "package.json")) {
-		return 8080 // Default Node.js port
-	}
+
+	// Priority 5: Check Python config
 	if fileExists(filepath.Join(repoPath, "requirements.txt")) ||
 		fileExists(filepath.Join(repoPath, "Pipfile")) ||
 		fileExists(filepath.Join(repoPath, "pyproject.toml")) {
+		if port := detectPortFromPythonConfig(repoPath); port > 0 {
+			return port
+		}
 		return 8000 // Default Python port
 	}
+
+	// Priority 6: Check Go
 	if fileExists(filepath.Join(repoPath, "go.mod")) {
+		if port := detectPortFromGoCode(repoPath); port > 0 {
+			return port
+		}
 		return 8080 // Default Go port
 	}
+
+	// Priority 7: Check Ruby/Rails
 	if fileExists(filepath.Join(repoPath, "Gemfile")) {
+		if port := detectPortFromRailsConfig(repoPath); port > 0 {
+			return port
+		}
 		return 3000 // Default Rails port
 	}
+
+	// Priority 8: Other languages
 	if fileExists(filepath.Join(repoPath, "composer.json")) {
 		return 8080 // Default PHP port
 	}
@@ -164,7 +289,324 @@ func detectPortFromRepo(repoPath string, defaultPort int) int {
 	if fileExists(filepath.Join(repoPath, "mix.exs")) {
 		return 4000 // Default Phoenix/Elixir port
 	}
+
 	return defaultPort
+}
+
+// detectPortFromEnv checks .env files for PORT variable
+func detectPortFromEnv(repoPath string) int {
+	envFiles := []string{".env", ".env.local", ".env.production", ".env.development"}
+	for _, envFile := range envFiles {
+		envPath := filepath.Join(repoPath, envFile)
+		if !fileExists(envPath) {
+			continue
+		}
+		content, err := readFile(envPath)
+		if err != nil {
+			continue
+		}
+		// Look for PORT=1234 pattern (with optional whitespace)
+		portRegex := regexp.MustCompile(`(?i)^\s*PORT\s*=\s*(\d+)\s*$`)
+		lines := strings.Split(content, "\n")
+		for _, line := range lines {
+			matches := portRegex.FindStringSubmatch(strings.TrimSpace(line))
+			if len(matches) > 1 {
+				if port, err := strconv.Atoi(matches[1]); err == nil && port > 0 && port < 65536 {
+					return port
+				}
+			}
+		}
+	}
+	return 0
+}
+
+// detectPortFromPackageJson parses package.json for PORT in scripts or config
+func detectPortFromPackageJson(repoPath string) int {
+	packageJsonPath := filepath.Join(repoPath, "package.json")
+	content, err := readFile(packageJsonPath)
+	if err != nil {
+		return 0
+	}
+
+	var pkg map[string]interface{}
+	if err := json.Unmarshal([]byte(content), &pkg); err != nil {
+		return 0
+	}
+
+	// Check for PORT in scripts
+	if scripts, ok := pkg["scripts"].(map[string]interface{}); ok {
+		for _, script := range scripts {
+			if scriptStr, ok := script.(string); ok {
+				// Look for PORT=1234 or -p 1234 or --port 1234 in scripts
+				portRegex := regexp.MustCompile(`(?i)(?:PORT\s*=\s*|--port\s+|--port\s*=\s*|-p\s+)(\d+)`)
+				matches := portRegex.FindStringSubmatch(scriptStr)
+				if len(matches) > 1 {
+					if port, err := strconv.Atoi(matches[1]); err == nil && port > 0 && port < 65536 {
+						return port
+					}
+				}
+			}
+		}
+	}
+
+	// Check for config.port or config.PORT
+	if config, ok := pkg["config"].(map[string]interface{}); ok {
+		if portVal, ok := config["port"]; ok {
+			if port, ok := portVal.(float64); ok && port > 0 && port < 65536 {
+				return int(port)
+			}
+		}
+		if portVal, ok := config["PORT"]; ok {
+			if port, ok := portVal.(float64); ok && port > 0 && port < 65536 {
+				return int(port)
+			}
+		}
+	}
+
+	return 0
+}
+
+// detectPortFromNodeFramework checks framework-specific config files
+func detectPortFromNodeFramework(repoPath string) int {
+	// Next.js
+	if fileExists(filepath.Join(repoPath, "next.config.js")) || fileExists(filepath.Join(repoPath, "next.config.mjs")) {
+		if port := detectPortFromNextConfig(repoPath); port > 0 {
+			return port
+		}
+	}
+
+	// Vite
+	if fileExists(filepath.Join(repoPath, "vite.config.js")) || fileExists(filepath.Join(repoPath, "vite.config.ts")) {
+		if port := detectPortFromViteConfig(repoPath); port > 0 {
+			return port
+		}
+	}
+
+	// Nuxt.js
+	if fileExists(filepath.Join(repoPath, "nuxt.config.js")) || fileExists(filepath.Join(repoPath, "nuxt.config.ts")) {
+		if port := detectPortFromNuxtConfig(repoPath); port > 0 {
+			return port
+		}
+	}
+
+	// Express.js (check server.js, app.js, index.js for listen())
+	if port := detectPortFromExpressCode(repoPath); port > 0 {
+		return port
+	}
+
+	return 0
+}
+
+// detectPortFromNextConfig checks Next.js config for port
+func detectPortFromNextConfig(repoPath string) int {
+	configFiles := []string{"next.config.js", "next.config.mjs", "next.config.ts"}
+	for _, configFile := range configFiles {
+		configPath := filepath.Join(repoPath, configFile)
+		if !fileExists(configPath) {
+			continue
+		}
+		content, err := readFile(configPath)
+		if err != nil {
+			continue
+		}
+		// Look for port in config (common patterns)
+		portRegex := regexp.MustCompile(`(?i)port\s*[:=]\s*(\d+)`)
+		matches := portRegex.FindStringSubmatch(content)
+		if len(matches) > 1 {
+			if port, err := strconv.Atoi(matches[1]); err == nil && port > 0 && port < 65536 {
+				return port
+			}
+		}
+	}
+	return 3000 // Next.js default
+}
+
+// detectPortFromViteConfig checks Vite config for port
+func detectPortFromViteConfig(repoPath string) int {
+	configFiles := []string{"vite.config.js", "vite.config.ts", "vite.config.mjs"}
+	for _, configFile := range configFiles {
+		configPath := filepath.Join(repoPath, configFile)
+		if !fileExists(configPath) {
+			continue
+		}
+		content, err := readFile(configPath)
+		if err != nil {
+			continue
+		}
+		// Look for port in server config
+		portRegex := regexp.MustCompile(`(?i)(?:server\s*:\s*\{[^}]*)?port\s*[:=]\s*(\d+)`)
+		matches := portRegex.FindStringSubmatch(content)
+		if len(matches) > 1 {
+			if port, err := strconv.Atoi(matches[1]); err == nil && port > 0 && port < 65536 {
+				return port
+			}
+		}
+	}
+	return 5173 // Vite default
+}
+
+// detectPortFromNuxtConfig checks Nuxt config for port
+func detectPortFromNuxtConfig(repoPath string) int {
+	configFiles := []string{"nuxt.config.js", "nuxt.config.ts"}
+	for _, configFile := range configFiles {
+		configPath := filepath.Join(repoPath, configFile)
+		if !fileExists(configPath) {
+			continue
+		}
+		content, err := readFile(configPath)
+		if err != nil {
+			continue
+		}
+		// Look for port in server config
+		portRegex := regexp.MustCompile(`(?i)(?:server\s*:\s*\{[^}]*)?port\s*[:=]\s*(\d+)`)
+		matches := portRegex.FindStringSubmatch(content)
+		if len(matches) > 1 {
+			if port, err := strconv.Atoi(matches[1]); err == nil && port > 0 && port < 65536 {
+				return port
+			}
+		}
+	}
+	return 3000 // Nuxt default
+}
+
+// detectPortFromExpressCode checks Express.js code for app.listen() or server.listen()
+func detectPortFromExpressCode(repoPath string) int {
+	jsFiles := []string{"server.js", "app.js", "index.js", "main.js", "src/server.js", "src/app.js", "src/index.js"}
+	for _, jsFile := range jsFiles {
+		filePath := filepath.Join(repoPath, jsFile)
+		if !fileExists(filePath) {
+			continue
+		}
+		content, err := readFile(filePath)
+		if err != nil {
+			continue
+		}
+		// Look for .listen(port) or .listen(PORT) or process.env.PORT
+		portRegex := regexp.MustCompile(`(?i)\.listen\s*\(\s*(?:process\.env\.PORT\s*\|\s*)?(\d+)`)
+		matches := portRegex.FindStringSubmatch(content)
+		if len(matches) > 1 {
+			if port, err := strconv.Atoi(matches[1]); err == nil && port > 0 && port < 65536 {
+				return port
+			}
+		}
+	}
+	return 0
+}
+
+// detectPortFromDockerfile checks Dockerfile for EXPOSE directive
+func detectPortFromDockerfile(dockerfilePath string) int {
+	content, err := readFile(dockerfilePath)
+	if err != nil {
+		return 0
+	}
+	// Look for EXPOSE directive
+	exposeRegex := regexp.MustCompile(`(?i)^\s*EXPOSE\s+(\d+)`)
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		matches := exposeRegex.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			if port, err := strconv.Atoi(matches[1]); err == nil && port > 0 && port < 65536 {
+				return port
+			}
+		}
+	}
+	return 0
+}
+
+// detectPortFromDenoConfig checks Deno config files
+func detectPortFromDenoConfig(repoPath string) int {
+	configFiles := []string{"deno.json", "deno.jsonc"}
+	for _, configFile := range configFiles {
+		configPath := filepath.Join(repoPath, configFile)
+		if !fileExists(configPath) {
+			continue
+		}
+		content, err := readFile(configPath)
+		if err != nil {
+			continue
+		}
+		var config map[string]interface{}
+		if err := json.Unmarshal([]byte(content), &config); err != nil {
+			continue
+		}
+		// Check for port in config
+		if portVal, ok := config["port"]; ok {
+			if port, ok := portVal.(float64); ok && port > 0 && port < 65536 {
+				return int(port)
+			}
+		}
+	}
+	return 0
+}
+
+// detectPortFromPythonConfig checks Python config files
+func detectPortFromPythonConfig(repoPath string) int {
+	// Check for common patterns in Python files
+	pythonFiles := []string{"main.py", "app.py", "server.py", "wsgi.py", "asgi.py"}
+	for _, pyFile := range pythonFiles {
+		filePath := filepath.Join(repoPath, pyFile)
+		if !fileExists(filePath) {
+			continue
+		}
+		content, err := readFile(filePath)
+		if err != nil {
+			continue
+		}
+		// Look for port in app.run(port=) or uvicorn.run(port=)
+		portRegex := regexp.MustCompile(`(?i)(?:app\.run|uvicorn\.run|server\.run).*?port\s*=\s*(\d+)`)
+		matches := portRegex.FindStringSubmatch(content)
+		if len(matches) > 1 {
+			if port, err := strconv.Atoi(matches[1]); err == nil && port > 0 && port < 65536 {
+				return port
+			}
+		}
+	}
+	return 0
+}
+
+// detectPortFromGoCode checks Go code for port patterns
+func detectPortFromGoCode(repoPath string) int {
+	// Check main.go for common patterns
+	mainGoPath := filepath.Join(repoPath, "main.go")
+	if fileExists(mainGoPath) {
+		content, err := readFile(mainGoPath)
+		if err == nil {
+			// Look for :8080 or ":8080" patterns
+			portRegex := regexp.MustCompile(`(?i):(\d+)(?:\s|"|'|,|\)|$)`)
+			matches := portRegex.FindStringSubmatch(content)
+			if len(matches) > 1 {
+				if port, err := strconv.Atoi(matches[1]); err == nil && port > 0 && port < 65536 {
+					return port
+				}
+			}
+		}
+	}
+	return 0
+}
+
+// detectPortFromRailsConfig checks Rails config for port
+func detectPortFromRailsConfig(repoPath string) int {
+	// Check config/puma.rb or config/application.rb
+	configFiles := []string{"config/puma.rb", "config/application.rb"}
+	for _, configFile := range configFiles {
+		configPath := filepath.Join(repoPath, configFile)
+		if !fileExists(configPath) {
+			continue
+		}
+		content, err := readFile(configPath)
+		if err != nil {
+			continue
+		}
+		// Look for port in config
+		portRegex := regexp.MustCompile(`(?i)port\s+(\d+)`)
+		matches := portRegex.FindStringSubmatch(content)
+		if len(matches) > 1 {
+			if port, err := strconv.Atoi(matches[1]); err == nil && port > 0 && port < 65536 {
+				return port
+			}
+		}
+	}
+	return 0
 }
 
 // NixpacksStrategy handles generic Nixpacks buildpack deployments
@@ -269,7 +711,18 @@ func (s *NixpacksStrategy) Detect(ctx context.Context, repoPath string) (bool, e
 }
 
 func (s *NixpacksStrategy) Build(ctx context.Context, deployment *database.Deployment, config *BuildConfig) (*BuildResult, error) {
-	log.Printf("[Nixpacks] Building deployment %s", deployment.ID)
+	// Helper function to write to build logs if writer is available
+	writeBuildLog := func(format string, args ...interface{}) {
+		msg := fmt.Sprintf(format, args...)
+		if config.LogWriter != nil {
+			config.LogWriter.Write([]byte(msg + "\n"))
+		}
+		logger.Debug("[Nixpacks] %s", msg)
+	}
+
+	writeBuildLog("🚀 Obiente Cloud: Starting deployment build")
+	writeBuildLog("   📦 Build strategy: Nixpacks")
+	writeBuildLog("   🔗 Repository: %s (branch: %s)", config.RepositoryURL, config.Branch)
 
 	buildDir, err := ensureBuildDir(deployment.ID)
 	if err != nil {
@@ -277,24 +730,28 @@ func (s *NixpacksStrategy) Build(ctx context.Context, deployment *database.Deplo
 	}
 
 	// Clone repository
+	writeBuildLog("   📥 Cloning repository...")
 	if err := cloneRepository(ctx, config.RepositoryURL, config.Branch, buildDir, config.GitHubToken); err != nil {
 		return &BuildResult{Success: false, Error: err}, err
 	}
+	writeBuildLog("   ✅ Repository cloned successfully")
 
 	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
 
 	// Create nixpacks.toml with start command if provided
 	// Use standard nixpacks provider (not Railway's)
-	if err := createNixpacksConfig(buildDir, config.StartCommand, false); err != nil {
-		log.Printf("[Nixpacks] Warning: Failed to create nixpacks.toml: %v", err)
+	writeBuildLog("   🔧 Analyzing project and configuring build...")
+	if err := createNixpacksConfig(buildDir, config.StartCommand, false, config.LogWriter); err != nil {
+		logger.Warn("[Nixpacks] Warning: Failed to create nixpacks.toml: %v", err)
 	}
 
 	// Use Nixpacks to build application
+	writeBuildLog("   🔨 Building application with Nixpacks...")
 	cmd := exec.CommandContext(ctx, "nixpacks", "build", buildDir, "--name", imageName)
 	envVars := getEnvAsStringSlice(config.EnvVars)
 	// Check if buildx is available; if not, disable BuildKit as fallback
 	if !isBuildxAvailable(ctx) {
-		log.Printf("[Nixpacks] Buildx not available, disabling BuildKit")
+		logger.Warn("[Nixpacks] Buildx not available, disabling BuildKit")
 		envVars = append(envVars, "DOCKER_BUILDKIT=0")
 	} else {
 		// Enable BuildKit for faster, more efficient builds
@@ -321,7 +778,7 @@ func (s *NixpacksStrategy) Build(ctx context.Context, deployment *database.Deplo
 	// Get image size
 	var imageSize int64
 	if size, err := getImageSize(ctx, imageName); err != nil {
-		log.Printf("[Nixpacks] Warning: Failed to get image size: %v", err)
+		logger.Warn("[Nixpacks] Warning: Failed to get image size: %v", err)
 	} else {
 		imageSize = size
 	}
@@ -371,18 +828,18 @@ func startBuildkitContainer(ctx context.Context) {
 	// Check if buildkit container already exists (running or stopped)
 	cmd := exec.CommandContext(ctx, "docker", "ps", "-a", "--filter", fmt.Sprintf("name=%s", containerName), "--format", "{{.Names}}")
 	output, err := cmd.Output()
-	if err != nil {
-		log.Printf("[Railpacks] Failed to check for buildkit container: %v", err)
-		return
-	}
+		if err != nil {
+			logger.Warn("[Railpacks] Failed to check for buildkit container: %v", err)
+			return
+		}
 	
 	if strings.TrimSpace(string(output)) == containerName {
 		// Container exists, try to start it if it's stopped
 		startCmd := exec.CommandContext(ctx, "docker", "start", containerName)
 		if err := startCmd.Run(); err != nil {
-			log.Printf("[Railpacks] Failed to start existing buildkit container: %v", err)
+			logger.Warn("[Railpacks] Failed to start existing buildkit container: %v", err)
 		} else {
-			log.Printf("[Railpacks] Started existing BuildKit container: %s", containerName)
+			logger.Info("[Railpacks] Started existing BuildKit container: %s", containerName)
 		}
 		return
 	}
@@ -397,12 +854,12 @@ func startBuildkitContainer(ctx context.Context) {
 	
 	// Ensure cache directory exists
 	if err := os.MkdirAll(buildkitCacheDir, 0755); err != nil {
-		log.Printf("[Railpacks] Warning: Failed to create BuildKit cache directory %s: %v", buildkitCacheDir, err)
+		logger.Warn("[Railpacks] Warning: Failed to create BuildKit cache directory %s: %v", buildkitCacheDir, err)
 		// Continue without cache directory
 		buildkitCacheDir = ""
 	}
 	
-	log.Printf("[Railpacks] Starting BuildKit daemon container: %s", containerName)
+	logger.Debug("[Railpacks] Starting BuildKit daemon container: %s", containerName)
 	
 	// Build docker run command with volume mount for BuildKit cache
 	// Note: We don't use --rm because we want the container to persist for caching
@@ -417,16 +874,16 @@ func startBuildkitContainer(ctx context.Context) {
 	// Add volume mount for BuildKit cache if directory was created
 	if buildkitCacheDir != "" {
 		args = append(args, "-v", fmt.Sprintf("%s:/var/lib/buildkit", buildkitCacheDir))
-		log.Printf("[Railpacks] Using BuildKit cache directory: %s", buildkitCacheDir)
+		logger.Debug("[Railpacks] Using BuildKit cache directory: %s", buildkitCacheDir)
 	}
 	
 	args = append(args, "moby/buildkit:latest")
 	
 	createCmd := exec.CommandContext(ctx, "docker", args...)
 	if err := createCmd.Run(); err != nil {
-		log.Printf("[Railpacks] Failed to start BuildKit container: %v. Railpack may fail.", err)
+		logger.Warn("[Railpacks] Failed to start BuildKit container: %v. Railpack may fail.", err)
 	} else {
-		log.Printf("[Railpacks] Successfully started BuildKit container: %s", containerName)
+		logger.Info("[Railpacks] Successfully started BuildKit container: %s", containerName)
 	}
 }
 
@@ -435,16 +892,76 @@ func startBuildkitContainer(ctx context.Context) {
 // If startCommand is empty, it attempts to detect a default from the repository
 // If Node.js version is not specified, it attempts to detect from package.json engines field
 // useRailwayProvider: if true, configures for Railway's Railpack provider (uses Railway base images)
-func createNixpacksConfig(buildDir, startCommand string, useRailwayProvider bool) error {
+// logWriter: optional writer for build logs (if nil, only logs to API server)
+func createNixpacksConfig(buildDir, startCommand string, useRailwayProvider bool, logWriter io.Writer) error {
 	nixpacksConfigPath := filepath.Join(buildDir, "nixpacks.toml")
 	
+	// Helper function to write to build logs if writer is available
+	writeBuildLog := func(format string, args ...interface{}) {
+		msg := fmt.Sprintf(format, args...)
+		if logWriter != nil {
+			logWriter.Write([]byte(msg + "\n"))
+		}
+		logger.Debug("[Nixpacks] %s", msg)
+	}
+
 	// Detect start command if not provided
+	detectedStartCommand := ""
 	if startCommand == "" {
-		startCommand = detectDefaultStartCommand(buildDir)
+		detectedStartCommand = detectDefaultStartCommand(buildDir)
+		if detectedStartCommand != "" {
+			startCommand = detectedStartCommand
+			writeBuildLog("✨ Obiente Cloud: Auto-detected start command: %s", startCommand)
+		}
+	} else {
+		writeBuildLog("✨ Obiente Cloud: Using provided start command: %s", startCommand)
 	}
 	
-	// Detect Node.js version requirement from package.json
+	// Detect Node.js version requirement from package.json or .nvmrc
+	// detectNodeVersion checks .nvmrc first, then package.json engines.node
+	nvmrcPath := filepath.Join(buildDir, ".nvmrc")
+	packageJsonPath := filepath.Join(buildDir, "package.json")
 	nodeVersion := detectNodeVersion(buildDir)
+	versionSource := ""
+	
+	if nodeVersion != "" {
+		// Determine source for better logging
+		versionSource = "package.json engines.node"
+		if fileExists(nvmrcPath) {
+			// Check if .nvmrc has content (it was checked first in detectNodeVersion)
+			content, err := os.ReadFile(nvmrcPath)
+			if err == nil {
+				version := strings.TrimSpace(string(content))
+				if version != "" && normalizeNodeVersion(version) == nodeVersion {
+					versionSource = ".nvmrc file"
+				}
+			}
+		}
+		writeBuildLog("✨ Obiente Cloud: Auto-detected Node.js version requirement: %s (from %s)", nodeVersion, versionSource)
+		writeBuildLog("   📦 Configuring Nixpacks to use Node.js %s", nodeVersion)
+		writeBuildLog("   ℹ️  This ensures your app uses the exact Node.js version you specified")
+	} else {
+		// Use latest LTS Node.js version as default (Node.js 20 as of 2024)
+		// This is better than Nixpacks' default which uses an older version
+		nodeVersion = getDefaultNodeVersion()
+		versionSource = "Obiente Cloud default (latest LTS)"
+		
+		// Check if package.json exists to provide helpful message
+		if fileExists(packageJsonPath) {
+			writeBuildLog("✨ Obiente Cloud: No Node.js version specified in package.json or .nvmrc")
+			writeBuildLog("   📦 Using latest LTS Node.js version: %s (Obiente Cloud default)", nodeVersion)
+			writeBuildLog("   💡 Tip: Add \"engines\": { \"node\": \">=20.0.0\" } to package.json")
+			writeBuildLog("      Or create a .nvmrc file to pin your Node.js version")
+			writeBuildLog("      This ensures consistent Node.js versions across environments")
+		} else {
+			writeBuildLog("✨ Obiente Cloud: Using latest LTS Node.js version: %s (default)", nodeVersion)
+		}
+	}
+	
+	// Check if this is an Astro project and needs special build configuration
+	isAstro := fileExists(filepath.Join(buildDir, "astro.config.js")) ||
+		fileExists(filepath.Join(buildDir, "astro.config.mjs")) ||
+		fileExists(filepath.Join(buildDir, "astro.config.ts"))
 	
 	// Build nixpacks.toml content
 	var configParts []string
@@ -456,9 +973,28 @@ func createNixpacksConfig(buildDir, startCommand string, useRailwayProvider bool
 		configParts = append(configParts, "[provider]\nname = \"railway\"\n")
 	}
 	
-	// Add Node.js version if detected
-	if nodeVersion != "" {
-		configParts = append(configParts, fmt.Sprintf("[variables]\nNODE_VERSION = %q\n", nodeVersion))
+	// Set Node.js version via environment variable
+	// Nixpacks will read this along with .nvmrc file to determine the Node.js version
+	configParts = append(configParts, fmt.Sprintf("[variables]\nNODE_VERSION = %q\n", nodeVersion))
+	
+	// For Astro projects, ensure build command runs before start
+	if isAstro && startCommand != "" {
+		// Check if start command is a preview command (needs build first)
+		if strings.Contains(startCommand, "preview") {
+			// Detect package manager for build command
+			var buildCmd string
+			if fileExists(filepath.Join(buildDir, "pnpm-lock.yaml")) {
+				buildCmd = "pnpm build"
+			} else if fileExists(filepath.Join(buildDir, "yarn.lock")) {
+				buildCmd = "yarn build"
+			} else {
+				buildCmd = "npm run build"
+			}
+			
+			// Add build phase to ensure Astro builds before preview
+			configParts = append(configParts, fmt.Sprintf("[phases.build]\ncmds = [%q]\n", buildCmd))
+			writeBuildLog("   🔧 Detected Astro project - configuring build phase: %s", buildCmd)
+		}
 	}
 	
 	// Add start command if provided
@@ -471,19 +1007,79 @@ func createNixpacksConfig(buildDir, startCommand string, useRailwayProvider bool
 		return nil
 	}
 	
-	configContent := strings.Join(configParts, "\n")
+	// Check if files exist before creating them (to preserve user's custom configs)
+	nixpacksConfigExists := fileExists(nixpacksConfigPath)
+	nvmrcExists := fileExists(nvmrcPath)
 	
-	if err := os.WriteFile(nixpacksConfigPath, []byte(configContent), 0644); err != nil {
-		return fmt.Errorf("failed to write nixpacks.toml: %w", err)
+	// Only create nixpacks.toml if it doesn't already exist (don't overwrite user's custom config)
+	if !nixpacksConfigExists {
+		configContent := strings.Join(configParts, "\n")
+		if err := os.WriteFile(nixpacksConfigPath, []byte(configContent), 0644); err != nil {
+			return fmt.Errorf("failed to write nixpacks.toml: %w", err)
+		}
+		logger.Debug("[Nixpacks] Created nixpacks.toml with content:\n%s", configContent)
+	} else {
+		logger.Debug("[Nixpacks] nixpacks.toml already exists, skipping creation to preserve user's configuration")
+		// Still log what we would have configured for debugging
+		configContent := strings.Join(configParts, "\n")
+		logger.Debug("[Nixpacks] Would have created nixpacks.toml with content:\n%s", configContent)
 	}
 	
-	log.Printf("[Nixpacks] Created nixpacks.toml with Node.js version: %s, start command: %s", nodeVersion, startCommand)
+	// Create .nvmrc file for Node.js version specification
+	// Nixpacks automatically reads .nvmrc to determine the Node.js version
+	// This is the primary method for Node.js version specification in Nixpacks
+	// Only create if .nvmrc doesn't already exist (don't overwrite user's file)
+	if !nvmrcExists {
+		if err := os.WriteFile(nvmrcPath, []byte(nodeVersion+"\n"), 0644); err != nil {
+			// Non-fatal - NODE_VERSION variable is also set
+			logger.Debug("[Nixpacks] Failed to create .nvmrc file: %v", err)
+		} else {
+			logger.Debug("[Nixpacks] Created .nvmrc file with version: %s", nodeVersion)
+		}
+	}
+	
+	// Provide user-friendly summary of what was configured
+	writeBuildLog("✅ Obiente Cloud: Build configuration complete")
+	writeBuildLog("   📌 Node.js version: %s (%s)", nodeVersion, versionSource)
+	if startCommand != "" {
+		writeBuildLog("   📌 Start command: %s", startCommand)
+	}
+	
+	// List which files were created vs preserved
+	var configFiles []string
+	if !nixpacksConfigExists {
+		configFiles = append(configFiles, "nixpacks.toml (created)")
+	} else {
+		configFiles = append(configFiles, "nixpacks.toml (preserved)")
+	}
+	if !nvmrcExists {
+		configFiles = append(configFiles, ".nvmrc (created)")
+	} else {
+		configFiles = append(configFiles, ".nvmrc (preserved)")
+	}
+	writeBuildLog("   📌 Configuration files: %s", strings.Join(configFiles, ", "))
+	
 	return nil
 }
 
 // detectNodeVersion attempts to detect the required Node.js version from package.json
 // Returns the version string (e.g., "18.20.8" or "20") or empty string if not found
+// Also checks for .nvmrc file as a fallback
 func detectNodeVersion(buildDir string) string {
+	// First, try to read from .nvmrc file (if it exists, it's the explicit preference)
+	nvmrcPath := filepath.Join(buildDir, ".nvmrc")
+	if fileExists(nvmrcPath) {
+		content, err := os.ReadFile(nvmrcPath)
+		if err == nil {
+			version := strings.TrimSpace(string(content))
+			if version != "" {
+				logger.Debug("[Nixpacks] Detected Node.js version from .nvmrc: %s", version)
+				return normalizeNodeVersion(version)
+			}
+		}
+	}
+	
+	// Then check package.json engines field
 	packageJsonPath := filepath.Join(buildDir, "package.json")
 	if !fileExists(packageJsonPath) {
 		return ""
@@ -510,30 +1106,56 @@ func detectNodeVersion(buildDir string) string {
 			re := regexp.MustCompile(`"node"\s*:\s*"([^"]+)"`)
 			matches := re.FindStringSubmatch(contentStr)
 			if len(matches) > 1 {
-				return normalizeNodeVersion(matches[1])
+				detected := normalizeNodeVersion(matches[1])
+				logger.Debug("[Nixpacks] Detected Node.js version from package.json (regex fallback): %s", detected)
+				return detected
 			}
 		}
 		return ""
 	}
 	
 	if pkg.Engines.Node != "" {
-		return normalizeNodeVersion(pkg.Engines.Node)
+		detected := normalizeNodeVersion(pkg.Engines.Node)
+		logger.Debug("[Nixpacks] Detected Node.js version from package.json engines.node: %s", detected)
+		return detected
 	}
 	
 	return ""
 }
 
+// getDefaultNodeVersion returns the latest LTS Node.js version to use as default
+// Currently Node.js 20 is the latest stable LTS (as of 2024)
+// This can be updated when newer LTS versions are released
+func getDefaultNodeVersion() string {
+	// Node.js 20 is the current LTS version (as of October 2024)
+	// When Node.js 22 becomes LTS or we want to use a newer version, update this
+	return "20"
+}
+
 // normalizeNodeVersion normalizes Node.js version strings to a format nixpacks accepts
 // Handles patterns like ">=18.20.8", "18.x", "20", "^18.20.8", "~18.20.8"
 // Returns the minimum version that satisfies the constraint
+// For ">=" constraints, ensures we use the exact minimum version specified
 func normalizeNodeVersion(version string) string {
 	// Remove common version prefixes
 	version = strings.TrimSpace(version)
 	
-	// Handle ">=" constraints - take the minimum version
+	// Handle ">=" constraints - take the minimum version and ensure it's used as-is
 	if strings.HasPrefix(version, ">=") {
 		version = strings.TrimPrefix(version, ">=")
-		return version // Return full version like "18.20.8"
+		version = strings.TrimSpace(version)
+		// For ">=18.20.8", return "18.20.8" to ensure exact version
+		// This ensures Nixpacks uses at least this version, not an older one
+		return version
+	}
+	
+	// Handle ">" constraints - bump patch version if needed
+	if strings.HasPrefix(version, ">") {
+		version = strings.TrimPrefix(version, ">")
+		version = strings.TrimSpace(version)
+		// For ">18.20.8", we'd want at least 18.20.9, but Nixpacks should handle this
+		// For now, return as-is and let Nixpacks resolve
+		return version
 	}
 	
 	// Remove other prefixes that don't affect minimum version
@@ -541,11 +1163,15 @@ func normalizeNodeVersion(version string) string {
 	version = strings.TrimPrefix(version, "~")
 	version = strings.TrimPrefix(version, "=")
 	
-	// Handle "x" versions like "18.x" or "20.x" -> convert to major version
+	// Handle "x" versions like "18.x" or "20.x"
 	if strings.Contains(version, ".x") {
 		parts := strings.Split(version, ".")
 		if len(parts) > 0 {
-			return parts[0]
+			major := parts[0]
+			// For "18.x", return "18" to let Nixpacks pick latest 18.x
+			// But if we detected a specific requirement like ">=18.20.8", 
+			// we should have caught it above
+			return major
 		}
 	}
 	
@@ -559,6 +1185,81 @@ func normalizeNodeVersion(version string) string {
 // detectDefaultStartCommand attempts to detect a default start command from repository files
 func detectDefaultStartCommand(buildDir string) string {
 	packageJsonPath := filepath.Join(buildDir, "package.json")
+	
+	// Check for Astro first (needs special handling)
+	if fileExists(filepath.Join(buildDir, "astro.config.js")) || fileExists(filepath.Join(buildDir, "astro.config.mjs")) || fileExists(filepath.Join(buildDir, "astro.config.ts")) {
+		// Check if Astro is configured for server mode
+		astroConfig := detectAstroOutputMode(buildDir)
+		if astroConfig == "server" {
+			// Astro SSR mode - needs Node.js adapter
+			// Check for built server files
+			if fileExists(filepath.Join(buildDir, "dist", "server", "entry.mjs")) {
+				return "node ./dist/server/entry.mjs"
+			}
+			// For SSR mode, check package.json for start script first
+			packageJsonPath := filepath.Join(buildDir, "package.json")
+			if fileExists(packageJsonPath) {
+				content, err := os.ReadFile(packageJsonPath)
+				if err == nil {
+					contentStr := string(content)
+					if strings.Contains(contentStr, `"start"`) {
+						if fileExists(filepath.Join(buildDir, "pnpm-lock.yaml")) {
+							return "pnpm start"
+						}
+						if fileExists(filepath.Join(buildDir, "yarn.lock")) {
+							return "yarn start"
+						}
+						return "npm start"
+					}
+				}
+			}
+			// Fallback: use preview (will work after build)
+			if fileExists(filepath.Join(buildDir, "pnpm-lock.yaml")) {
+				return "pnpm preview --host"
+			}
+			if fileExists(filepath.Join(buildDir, "yarn.lock")) {
+				return "yarn preview --host"
+			}
+			return "npm run preview -- --host"
+		} else {
+			// Astro static mode - check if dist exists, if so serve it, otherwise use preview
+			// In production, built static files should be served
+			if fileExists(filepath.Join(buildDir, "dist")) {
+				// Use a simple static server if available, or fallback to preview
+				// Check for serve package
+				packageJsonPath := filepath.Join(buildDir, "package.json")
+			if fileExists(packageJsonPath) {
+				content, err := os.ReadFile(packageJsonPath)
+				if err == nil && strings.Contains(string(content), `"serve"`) {
+						if fileExists(filepath.Join(buildDir, "pnpm-lock.yaml")) {
+							return "pnpm serve dist"
+						}
+						if fileExists(filepath.Join(buildDir, "yarn.lock")) {
+							return "yarn serve dist"
+						}
+						return "npx serve dist"
+					}
+				}
+				// Fallback to preview (works for static sites too)
+				if fileExists(filepath.Join(buildDir, "pnpm-lock.yaml")) {
+					return "pnpm preview --host"
+				}
+				if fileExists(filepath.Join(buildDir, "yarn.lock")) {
+					return "yarn preview --host"
+				}
+				return "npm run preview -- --host"
+			}
+			// No dist folder yet - will be built by build phase
+			if fileExists(filepath.Join(buildDir, "pnpm-lock.yaml")) {
+				return "pnpm preview --host"
+			}
+			if fileExists(filepath.Join(buildDir, "yarn.lock")) {
+				return "yarn preview --host"
+			}
+			return "npm run preview -- --host"
+		}
+	}
+	
 	if fileExists(packageJsonPath) {
 		// Try to read package.json and extract start script
 		content, err := os.ReadFile(packageJsonPath)
@@ -575,6 +1276,16 @@ func detectDefaultStartCommand(buildDir string) string {
 					return "yarn start"
 				}
 				return "npm start"
+			}
+			// Check for preview script (common for static sites)
+			if strings.Contains(contentStr, `"preview"`) {
+				if fileExists(filepath.Join(buildDir, "pnpm-lock.yaml")) {
+					return "pnpm preview"
+				}
+				if fileExists(filepath.Join(buildDir, "yarn.lock")) {
+					return "yarn preview"
+				}
+				return "npm run preview"
 			}
 		}
 	}
@@ -596,31 +1307,41 @@ func detectDefaultStartCommand(buildDir string) string {
 	return ""
 }
 
+// detectAstroOutputMode checks Astro config to determine if it's in server or static mode
+func detectAstroOutputMode(buildDir string) string {
+	configFiles := []string{"astro.config.js", "astro.config.mjs", "astro.config.ts"}
+	for _, configFile := range configFiles {
+		configPath := filepath.Join(buildDir, configFile)
+		if !fileExists(configPath) {
+			continue
+		}
+		content, err := readFile(configPath)
+		if err != nil {
+			continue
+		}
+		// Look for output: "server" or adapter configuration
+		if strings.Contains(content, `output: "server"`) || strings.Contains(content, `output: 'server'`) {
+			return "server"
+		}
+		// Check for Node adapter
+		if strings.Contains(content, `@astrojs/node`) || strings.Contains(content, `"@astrojs/node"`) {
+			return "server"
+		}
+		// Check for hybrid mode
+		if strings.Contains(content, `output: "hybrid"`) || strings.Contains(content, `output: 'hybrid'`) {
+			return "server"
+		}
+	}
+	// Default to static if not specified
+	return "static"
+}
+
 func (s *NixpacksStrategy) detectPort(repoPath string, defaultPort int) int {
 	if defaultPort != 0 {
 		return defaultPort
 	}
-
-	// Check for common port indicators
-	if fileExists(filepath.Join(repoPath, "package.json")) {
-		// Check package.json for start script port
-		content, err := readFile(filepath.Join(repoPath, "package.json"))
-		if err == nil && strings.Contains(content, "PORT") {
-			// Could parse PORT from package.json scripts, but defaulting to 8080
-			return 8080
-		}
-		return 8080 // Default Node.js port
-	}
-
-	if fileExists(filepath.Join(repoPath, "requirements.txt")) {
-		return 8000 // Default Python port
-	}
-
-	if fileExists(filepath.Join(repoPath, "go.mod")) {
-		return 8080 // Default Go port
-	}
-
-	return 8080 // Default fallback
+	// Use the improved port detection
+	return detectPortFromRepo(repoPath, 8080)
 }
 
 // DockerfileStrategy handles Dockerfile-based builds
@@ -639,7 +1360,7 @@ func (s *DockerfileStrategy) Detect(ctx context.Context, repoPath string) (bool,
 }
 
 func (s *DockerfileStrategy) Build(ctx context.Context, deployment *database.Deployment, config *BuildConfig) (*BuildResult, error) {
-	log.Printf("[Dockerfile] Building deployment %s", deployment.ID)
+	logger.Info("[Dockerfile] Building deployment %s", deployment.ID)
 
 	buildDir, err := ensureBuildDir(deployment.ID)
 	if err != nil {
@@ -672,7 +1393,7 @@ func (s *DockerfileStrategy) Build(ctx context.Context, deployment *database.Dep
 	// Get image size
 	var imageSize int64
 	if size, err := getImageSize(ctx, imageName); err != nil {
-		log.Printf("[Dockerfile] Warning: Failed to get image size: %v", err)
+		logger.Warn("[Dockerfile] Warning: Failed to get image size: %v", err)
 	} else {
 		imageSize = size
 	}
@@ -693,27 +1414,14 @@ func (s *DockerfileStrategy) detectPortFromDockerfile(dockerfilePath string, def
 		return defaultPort
 	}
 
-	content, err := readFile(dockerfilePath)
-	if err != nil {
-		return 8080 // Default fallback
+	// Try Dockerfile first
+	if port := detectPortFromDockerfile(dockerfilePath); port > 0 {
+		return port
 	}
 
-	// Look for EXPOSE directive
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(strings.ToUpper(line), "EXPOSE ") {
-			parts := strings.Fields(line)
-			if len(parts) > 1 {
-				var port int
-				if _, err := fmt.Sscanf(parts[1], "%d", &port); err == nil {
-					return port
-				}
-			}
-		}
-	}
-
-	return 8080 // Default fallback
+	// Fallback to checking the repo directory for other configs
+	dockerfileDir := filepath.Dir(dockerfilePath)
+	return detectPortFromRepo(dockerfileDir, 8080)
 }
 
 // PlainComposeStrategy handles plain Docker Compose deployments
@@ -734,7 +1442,7 @@ func (s *PlainComposeStrategy) Detect(ctx context.Context, repoPath string) (boo
 }
 
 func (s *PlainComposeStrategy) Build(ctx context.Context, deployment *database.Deployment, config *BuildConfig) (*BuildResult, error) {
-	log.Printf("[PlainCompose] Building deployment %s", deployment.ID)
+	logger.Info("[PlainCompose] Building deployment %s", deployment.ID)
 
 	// Plain Compose uses compose YAML directly from database, not from a repository
 	if deployment.ComposeYaml == "" {
@@ -775,7 +1483,7 @@ func (s *ComposeRepoStrategy) Detect(ctx context.Context, repoPath string) (bool
 }
 
 func (s *ComposeRepoStrategy) Build(ctx context.Context, deployment *database.Deployment, config *BuildConfig) (*BuildResult, error) {
-	log.Printf("[ComposeRepo] Building deployment %s from repository", deployment.ID)
+	logger.Info("[ComposeRepo] Building deployment %s from repository", deployment.ID)
 
 	if config.RepositoryURL == "" {
 		return &BuildResult{Success: false, Error: fmt.Errorf("repository URL is required for COMPOSE_REPO strategy")}, nil
@@ -870,7 +1578,7 @@ func (s *StaticStrategy) Detect(ctx context.Context, repoPath string) (bool, err
 }
 
 func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deployment, config *BuildConfig) (*BuildResult, error) {
-	log.Printf("[Static] Building deployment %s", deployment.ID)
+	logger.Info("[Static] Building deployment %s", deployment.ID)
 
 	buildDir, err := ensureBuildDir(deployment.ID)
 	if err != nil {
