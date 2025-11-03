@@ -194,6 +194,24 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			}
 		}
 
+		// Get configurable paths
+		buildPath := ""
+		if dbDeployment.BuildPath != nil {
+			buildPath = *dbDeployment.BuildPath
+		}
+		buildOutputPath := ""
+		if dbDeployment.BuildOutputPath != nil {
+			buildOutputPath = *dbDeployment.BuildOutputPath
+		}
+		useNginx := false
+		if dbDeployment.UseNginx != nil {
+			useNginx = *dbDeployment.UseNginx
+		}
+		nginxConfig := ""
+		if dbDeployment.NginxConfig != nil {
+			nginxConfig = *dbDeployment.NginxConfig
+		}
+
 		buildConfig := &BuildConfig{
 			DeploymentID:    deploymentID,
 			RepositoryURL:   repoURL,
@@ -204,6 +222,10 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			StartCommand:    startCmd,
 			DockerfilePath:  dockerfilePath,
 			ComposeFilePath: composeFilePath,
+			BuildPath:       buildPath,
+			BuildOutputPath: buildOutputPath,
+			UseNginx:        useNginx,
+			NginxConfig:     nginxConfig,
 			EnvVars:         parseEnvVars(dbDeployment.EnvVars),
 			Port:            port,
 			MemoryBytes:     memoryBytes,

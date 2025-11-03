@@ -1590,15 +1590,39 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 		return &BuildResult{Success: false, Error: err}, nil
 	}
 
-	// Determine output directory and build command
-	outputDir := s.findOutputDir(buildDir)
+	// Determine build working directory (default to repo root)
+	buildWorkDir := buildDir
+	if config.BuildPath != "" {
+		buildWorkDir = filepath.Join(buildDir, config.BuildPath)
+		// Ensure build directory exists
+		if err := os.MkdirAll(buildWorkDir, 0755); err != nil {
+			return &BuildResult{Success: false, Error: fmt.Errorf("failed to create build path: %w", err)}, nil
+		}
+	}
+
+	// Determine output directory
+	outputDir := config.BuildOutputPath
+	if outputDir == "" {
+		// Auto-detect if not specified
+		outputDir = s.findOutputDir(buildDir)
+	}
+	
+	// Ensure outputDir is relative to buildDir for Dockerfile COPY
+	// If it's absolute, make it relative
+	if filepath.IsAbs(outputDir) {
+		relPath, err := filepath.Rel(buildDir, outputDir)
+		if err != nil {
+			return &BuildResult{Success: false, Error: fmt.Errorf("failed to resolve output path: %w", err)}, nil
+		}
+		outputDir = relPath
+	}
 
 	// Run build command if provided
 	if config.BuildCommand != "" {
 		parts := strings.Fields(config.BuildCommand)
 		if len(parts) > 0 {
 			cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
-			cmd.Dir = buildDir
+			cmd.Dir = buildWorkDir // Use configured build path
 			cmd.Env = getEnvAsStringSlice(config.EnvVars)
 
 			// Use log writers if provided, otherwise fallback to os.Stdout/Stderr
@@ -1620,7 +1644,7 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 	}
 
 	// Create Dockerfile for static site
-	dockerfileContent := s.generateStaticDockerfile(outputDir)
+	dockerfileContent := s.generateStaticDockerfile(outputDir, config.UseNginx, config.NginxConfig)
 	dockerfilePath := filepath.Join(buildDir, ".obiente.Dockerfile")
 	if err := os.WriteFile(dockerfilePath, []byte(dockerfileContent), 0644); err != nil {
 		return &BuildResult{Success: false, Error: fmt.Errorf("failed to write Dockerfile: %w", err)}, nil
@@ -1633,9 +1657,15 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 		return &BuildResult{Success: false, Error: fmt.Errorf("docker build failed: %w", err)}, nil
 	}
 
+	// Determine port based on nginx usage
+	port := 80
+	if !config.UseNginx {
+		port = 3000 // Node serve uses port 3000
+	}
+
 	return &BuildResult{
 		ImageName: imageName,
-		Port:      80, // Static sites typically use port 80
+		Port:      port,
 		Success:   true,
 	}, nil
 }
@@ -1666,9 +1696,59 @@ func (s *StaticStrategy) findOutputDir(repoPath string) string {
 	return "public" // Default fallback
 }
 
-func (s *StaticStrategy) generateStaticDockerfile(outputDir string) string {
+func (s *StaticStrategy) generateStaticDockerfile(outputDir string, useNginx bool, nginxConfig string) string {
+	if !useNginx {
+		// Use a simple static file server (like serve or http-server)
+		return fmt.Sprintf(`FROM node:20-alpine
+WORKDIR /app
+RUN npm install -g serve
+COPY %s /app/public
+EXPOSE 3000
+CMD ["serve", "-s", "public", "-l", "3000"]`, outputDir)
+	}
+	
+	// Use nginx with custom or default config
+	nginxConfContent := nginxConfig
+	if nginxConfContent == "" {
+		// Default nginx config for static sites
+		nginxConfContent = `server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html index.htm;
+
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/json;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # SPA routing support - try files, then fallback to index.html
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Cache static assets
+    location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Deny access to hidden files
+    location ~ /\. {
+        deny all;
+    }
+}`
+	}
+	
 	return fmt.Sprintf(`FROM nginx:alpine
 COPY %s /usr/share/nginx/html
+RUN echo '%s' > /etc/nginx/conf.d/default.conf
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]`, outputDir)
+CMD ["nginx", "-g", "daemon off;"]`, outputDir, strings.ReplaceAll(nginxConfContent, "'", "\\'"))
 }

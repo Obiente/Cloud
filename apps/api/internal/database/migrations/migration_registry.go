@@ -18,6 +18,7 @@ func RegisterMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_12_20_004", "Migrate group to groups JSONB array", migrateGroupToGroupsArray)
 	registry.Register("2025_12_20_005", "Add start_command column to deployments", addStartCommandColumn)
 	registry.Register("2025_12_28_001", "Create build_history and build_logs tables", createBuildHistoryTables)
+	registry.Register("2025_01_03_001", "Add configurable build paths and nginx config to deployments", addBuildPathsAndNginxConfig)
 
 	// Add new migrations here
 }
@@ -227,6 +228,39 @@ func createBuildHistoryTables(db *gorm.DB) error {
 				UNIQUE INDEX idx_deployment_build_number (deployment_id, build_number)
 			)
 		`).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// addBuildPathsAndNginxConfig adds configurable build paths and nginx configuration fields
+func addBuildPathsAndNginxConfig(db *gorm.DB) error {
+	// Add build_path column
+	if !db.Migrator().HasColumn("deployments", "build_path") {
+		if err := db.Exec("ALTER TABLE deployments ADD COLUMN build_path VARCHAR(500)").Error; err != nil {
+			return err
+		}
+	}
+
+	// Add build_output_path column
+	if !db.Migrator().HasColumn("deployments", "build_output_path") {
+		if err := db.Exec("ALTER TABLE deployments ADD COLUMN build_output_path VARCHAR(500)").Error; err != nil {
+			return err
+		}
+	}
+
+	// Add use_nginx column
+	if !db.Migrator().HasColumn("deployments", "use_nginx") {
+		if err := db.Exec("ALTER TABLE deployments ADD COLUMN use_nginx BOOLEAN DEFAULT false").Error; err != nil {
+			return err
+		}
+	}
+
+	// Add nginx_config column
+	if !db.Migrator().HasColumn("deployments", "nginx_config") {
+		if err := db.Exec("ALTER TABLE deployments ADD COLUMN nginx_config TEXT").Error; err != nil {
 			return err
 		}
 	}

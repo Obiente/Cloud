@@ -311,7 +311,35 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 			dbDeployment.ComposeFilePath = nil
 		}
 	}
-	if req.Msg.Domain != nil {
+	if req.Msg.BuildPath != nil {
+		buildPath := req.Msg.GetBuildPath()
+		if buildPath != "" {
+			dbDeployment.BuildPath = &buildPath
+		} else {
+			dbDeployment.BuildPath = nil
+		}
+	}
+	if req.Msg.BuildOutputPath != nil {
+		buildOutputPath := req.Msg.GetBuildOutputPath()
+		if buildOutputPath != "" {
+			dbDeployment.BuildOutputPath = &buildOutputPath
+		} else {
+			dbDeployment.BuildOutputPath = nil
+		}
+	}
+	if req.Msg.UseNginx != nil {
+		useNginx := req.Msg.GetUseNginx()
+		dbDeployment.UseNginx = &useNginx
+	}
+		if req.Msg.NginxConfig != nil {
+			nginxConfig := req.Msg.GetNginxConfig()
+			if nginxConfig != "" {
+				dbDeployment.NginxConfig = &nginxConfig
+			} else {
+				dbDeployment.NginxConfig = nil
+			}
+		}
+		if req.Msg.Domain != nil {
 		dbDeployment.Domain = req.Msg.GetDomain()
 	}
 	if req.Msg.Port != nil {
