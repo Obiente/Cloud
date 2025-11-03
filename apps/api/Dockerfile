@@ -50,14 +50,47 @@ FROM alpine:latest
 
 # Install CA certificates for HTTPS requests
 # Install docker CLI and docker-compose for deployment management
-# Install git for repository cloning during builds
+# Install git and curl for repository cloning and downloading buildx
 RUN apk --no-cache add \
     ca-certificates \
     docker-cli \
     docker-compose \
-    git
+    git \
+    curl
 
-# Copy nixpacks binary from builder
+# Install docker-buildx plugin from Docker's official releases
+# BuildKit requires buildx for advanced build features (faster builds, better caching)
+RUN BUILDX_VERSION="0.29.1" && \
+    curl -fsSL "https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-amd64" -o /tmp/docker-buildx && \
+    chmod +x /tmp/docker-buildx && \
+    mkdir -p /root/.docker/cli-plugins && \
+    mv /tmp/docker-buildx /root/.docker/cli-plugins/docker-buildx
+
+# Set DOCKER_CLI_PLUGIN_PATH so Docker can find buildx
+ENV DOCKER_CLI_PLUGIN_PATH=/root/.docker/cli-plugins
+
+# Install mise (version manager used by railpack and for installing railpack)
+# Mise is used by railpack to install tools like pnpm, nodejs, etc.
+# Railpack expects mise at /tmp/railpack/mise/mise-{version}, so we install it there
+RUN MISE_VERSION="2025.10.13" && \
+    curl https://mise.run | sh && \
+    mkdir -p /tmp/railpack/mise && \
+    cp /root/.local/bin/mise /tmp/railpack/mise/mise-${MISE_VERSION} && \
+    chmod +x /tmp/railpack/mise/mise-${MISE_VERSION} && \
+    ln -sf /tmp/railpack/mise/mise-${MISE_VERSION} /usr/local/bin/mise
+
+# Install railpack using mise (Railway's build tool, separate from nixpacks)
+# Railpack is a Go-based tool that replaces nixpacks with improved performance
+# According to https://railpack.com/installation, use: mise use ubi:railwayapp/railpack@latest
+RUN RAILPACK_VERSION="0.9.2" && \
+    mkdir -p /tmp/mise-install && \
+    cd /tmp/mise-install && \
+    mise use ubi:railwayapp/railpack@${RAILPACK_VERSION} && \
+    RAILPACK_PATH=$(mise which railpack) && \
+    ln -sf "$RAILPACK_PATH" /usr/local/bin/railpack && \
+    rm -rf /tmp/mise-install
+
+# Copy nixpacks binary from builder (still needed for NIXPACKS strategy)
 COPY --from=nixpacks-builder /usr/local/cargo/bin/nixpacks /usr/local/bin/nixpacks
 
 WORKDIR /app
