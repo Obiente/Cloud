@@ -1,8 +1,11 @@
 package database
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -14,21 +17,66 @@ import (
 var DB *gorm.DB
 var RedisClient *RedisCache
 
-// getGormLogLevel converts our LOG_LEVEL to GORM's log level
-func getGormLogLevel() gormlogger.LogLevel {
-	// Initialize our logger to ensure it's ready
-	logger.Init()
-	level := logger.GetLevel()
+// customGormLogger is a GORM logger that filters out "record not found" errors at warn level
+type customGormLogger struct {
+	gormlogger.Interface
+	logLevel string
+}
+
+func (l *customGormLogger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
+	return &customGormLogger{
+		Interface: l.Interface.LogMode(level),
+		logLevel: l.logLevel,
+	}
+}
+
+func (l *customGormLogger) Error(ctx context.Context, msg string, data ...interface{}) {
+	// Filter out "record not found" errors at warn level or higher
+	if l.logLevel == "warn" || l.logLevel == "warning" || l.logLevel == "error" {
+		for _, d := range data {
+			if err, ok := d.(error); ok {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					// Suppress "record not found" errors at warn/error level
+					return
+				}
+			}
+		}
+	}
+	l.Interface.Error(ctx, msg, data...)
+}
+
+// getGormLogger returns a custom GORM logger that respects DB_LOG_LEVEL (or falls back to LOG_LEVEL)
+func getGormLogger() gormlogger.Interface {
+	// Get DB_LOG_LEVEL, fallback to LOG_LEVEL if not set
+	dbLogLevel := os.Getenv("DB_LOG_LEVEL")
+	if dbLogLevel == "" {
+		// Fallback to application LOG_LEVEL
+		logger.Init()
+		dbLogLevel = logger.GetLevel()
+	} else {
+		dbLogLevel = strings.ToLower(strings.TrimSpace(dbLogLevel))
+	}
 	
-	switch level {
+	var gormLevel gormlogger.LogLevel
+	switch dbLogLevel {
 	case "error":
-		return gormlogger.Error // Only errors
+		gormLevel = gormlogger.Error // Only errors
 	case "warn", "warning":
-		return gormlogger.Warn // Warnings and errors, no SQL queries
-	case "info", "debug", "trace":
-		return gormlogger.Info // All SQL queries (for info/debug)
+		gormLevel = gormlogger.Error // Errors only (suppress SQL queries and record not found)
+	case "info":
+		gormLevel = gormlogger.Error // Suppress SQL queries at info level
+	case "debug", "trace":
+		gormLevel = gormlogger.Info // All SQL queries (only for debug/trace)
 	default:
-		return gormlogger.Warn // Default to warn to suppress SQL queries
+		gormLevel = gormlogger.Error // Default to error to suppress SQL queries
+	}
+	
+	logger.Debug("[DB] Database logging level: %s (GORM level: %v)", dbLogLevel, gormLevel)
+	
+	// Create custom logger that filters out "record not found" at warn level
+	return &customGormLogger{
+		Interface: gormlogger.Default.LogMode(gormLevel),
+		logLevel:  dbLogLevel,
 	}
 }
 
@@ -61,7 +109,7 @@ func InitDatabase() error {
 
 	// Open database connection
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: gormlogger.Default.LogMode(getGormLogLevel()),
+		Logger: getGormLogger(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)

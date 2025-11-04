@@ -116,6 +116,11 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 	return dm, nil
 }
 
+// GetNodeID returns the node ID for this deployment manager
+func (dm *DeploymentManager) GetNodeID() string {
+	return dm.nodeID
+}
+
 // ensureNetwork ensures the obiente-network exists, creating it if necessary
 func (dm *DeploymentManager) ensureNetwork(ctx context.Context) error {
 	// Use exec to check and create network since Docker API types may vary
@@ -642,6 +647,8 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		Env:          env,
 		Labels:       labels,
 		ExposedPorts: exposedPorts,
+		// Clear ENTRYPOINT to avoid conflicts when overriding CMD
+		Entrypoint: []string{},
 		Healthcheck: &container.HealthConfig{
 			Test:     []string{"CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:" + strconv.Itoa(config.Port) + "/health || exit 1"},
 			Interval: 30 * time.Second,
@@ -651,20 +658,9 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	}
 	
 	// Override container CMD if start command is provided
-	// This is useful for static sites that need build commands chained (e.g., "pnpm build && pnpm preview --host")
 	if config.StartCommand != nil && *config.StartCommand != "" {
-		// Split the command into parts for Cmd
-		// For shell commands like "pnpm build && pnpm preview", we need to run via sh -c
-		cmdParts := strings.Fields(*config.StartCommand)
-		if len(cmdParts) > 0 {
-			// If command contains && or ||, it needs to be run via shell
-			if strings.Contains(*config.StartCommand, "&&") || strings.Contains(*config.StartCommand, "||") {
-				containerConfig.Cmd = []string{"sh", "-c", *config.StartCommand}
-			} else {
-				// Simple command, use as-is
-				containerConfig.Cmd = cmdParts
-			}
-		}
+		// Use sh -c to preserve working directory and handle relative paths
+		containerConfig.Cmd = []string{"sh", "-c", *config.StartCommand}
 	}
 
 	// Host configuration

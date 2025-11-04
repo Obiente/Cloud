@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -126,6 +127,7 @@ func (r *BuildHistoryRepository) UpdateBuildResults(ctx context.Context, buildID
 // to get a repository instance for build logs.
 
 // GetLatestSuccessfulBuild returns the most recent successful build for a deployment
+// Returns nil, nil if no successful build is found (this is a normal condition, not an error)
 func (r *BuildHistoryRepository) GetLatestSuccessfulBuild(ctx context.Context, deploymentID string) (*BuildHistory, error) {
 	var build BuildHistory
 	err := r.db.WithContext(ctx).
@@ -134,6 +136,11 @@ func (r *BuildHistoryRepository) GetLatestSuccessfulBuild(ctx context.Context, d
 		First(&build).Error
 	
 	if err != nil {
+		// "Record not found" is a normal condition - deployment simply has no successful builds yet
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		// Return other errors (database issues, etc.)
 		return nil, err
 	}
 	return &build, nil
@@ -150,6 +157,36 @@ func (r *BuildHistoryRepository) DeleteBuild(ctx context.Context, buildID, organ
 
 	// Delete the build (logs are handled separately in the service layer using TimescaleDB)
 	return r.db.WithContext(ctx).Where("id = ?", buildID).Delete(&BuildHistory{}).Error
+}
+
+// DeleteBuildsByDeployment deletes all builds for a deployment
+// Returns the build IDs that were deleted and the count, so the caller can delete logs from TimescaleDB
+// The caller should use BuildLogsRepository to delete logs for the returned build IDs
+func (r *BuildHistoryRepository) DeleteBuildsByDeployment(ctx context.Context, deploymentID string) ([]string, int64, error) {
+	// Get build IDs that will be deleted so caller can delete logs from TimescaleDB
+	var builds []BuildHistory
+	if err := r.db.WithContext(ctx).
+		Where("deployment_id = ?", deploymentID).
+		Select("id").
+		Find(&builds).Error; err != nil {
+		return nil, 0, err
+	}
+
+	buildIDs := make([]string, len(builds))
+	for i, build := range builds {
+		buildIDs[i] = build.ID
+	}
+
+	// Delete builds from PostgreSQL
+	result := r.db.WithContext(ctx).
+		Where("deployment_id = ?", deploymentID).
+		Delete(&BuildHistory{})
+
+	if result.Error != nil {
+		return nil, 0, result.Error
+	}
+
+	return buildIDs, result.RowsAffected, nil
 }
 
 // DeleteBuildsOlderThan deletes all builds older than the specified duration

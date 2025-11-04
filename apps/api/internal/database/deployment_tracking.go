@@ -48,6 +48,7 @@ type NodeMetadata struct {
 	DeploymentCount  int       `gorm:"default:0" json:"deployment_count"` // Number of deployments on this node
 	MaxDeployments   int       `gorm:"default:50" json:"max_deployments"` // Max deployments allowed
 	Labels           string    `gorm:"type:jsonb" json:"labels"`          // Node labels (JSON)
+	Region           string    `gorm:"index" json:"region"`               // Region identifier (e.g., "us-east-1", "eu-west-1")
 	LastHeartbeat    time.Time `json:"last_heartbeat"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
