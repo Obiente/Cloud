@@ -6,7 +6,6 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 
 	"api/internal/logger"
 )
@@ -56,7 +55,7 @@ func InitMetricsDatabase() error {
 
 	// Open database connection
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: gormlogger.Default.LogMode(getGormLogLevel()),
+		Logger: getGormLogger(),
 	})
 	if err != nil {
 		logger.Warn("Failed to connect to metrics database: %v. Falling back to main database.", err)

@@ -3,7 +3,6 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -15,7 +14,9 @@ import (
 	"api/internal/logger"
 	"api/internal/registry"
 
-	"gorm.io/gorm"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/filters"
+	"github.com/moby/moby/client"
 )
 
 // OrchestratorService is the main orchestration service that runs continuously
@@ -81,6 +82,10 @@ func (os *OrchestratorService) Start() {
 	os.metricsStreamer.Start()
 	logger.Debug("[Orchestrator] Started metrics streaming")
 
+	// Backfill missing hourly aggregates on startup
+	go os.backfillMissingHourlyAggregates()
+	logger.Debug("[Orchestrator] Started backfill of missing hourly aggregates")
+
 	// Start cleanup tasks
 	go os.cleanupTasks()
 	logger.Debug("[Orchestrator] Started cleanup tasks")
@@ -96,6 +101,10 @@ func (os *OrchestratorService) Start() {
 	// Start build history cleanup (daily)
 	go os.cleanupBuildHistory()
 	logger.Debug("[Orchestrator] Started build history cleanup")
+
+	// Start stray container cleanup (every 6 hours)
+	go os.cleanupStrayContainers()
+	logger.Debug("[Orchestrator] Started stray container cleanup")
 
 	logger.Info("[Orchestrator] Orchestration service started successfully")
 }
@@ -586,8 +595,21 @@ func (os *OrchestratorService) aggregateDeploymentMetrics(deploymentID string, a
 		err := metricsDB.Where("deployment_id = ? AND hour = ?", deploymentID, currentHour).
 			First(&existingHourly).Error
 		
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		// Check if raw metrics still exist for this hour (if not, we can't recalculate)
+		var rawMetricsCount int64
+		metricsDB.Table("deployment_metrics").
+			Where("deployment_id = ? AND timestamp >= ? AND timestamp < ?", deploymentID, currentHour, nextHour).
+			Count(&rawMetricsCount)
+		
+		// Only create/recalculate if raw metrics exist (allows recalculation of existing aggregates)
+		if rawMetricsCount > 0 {
+			// Delete existing aggregate if present (to allow recalculation with corrected logic)
+			if err == nil {
+				metricsDB.Where("deployment_id = ? AND hour = ?", deploymentID, currentHour).
+					Delete(&database.DeploymentUsageHourly{})
+			}
 			// Aggregate metrics for this hour
+			// First, get basic aggregates
 			type hourlyAgg struct {
 				AvgCPUUsage      float64
 				SumMemoryUsage   float64
@@ -622,10 +644,88 @@ func (os *OrchestratorService) aggregateDeploymentMetrics(deploymentID string, a
 				Scan(&agg).Error
 			
 			if err == nil && agg.Count > 0 {
-				if agg.TimestampCount > 0 {
-					agg.AvgMemoryUsage = agg.SumMemoryUsage / float64(agg.TimestampCount)
+				// Calculate CPU core-seconds and memory byte-seconds properly using actual timestamp intervals
+				// Fetch timestamps ordered to calculate intervals
+				type metricTimestamp struct {
+					CPUUsage    float64
+					MemorySum   int64
+					Timestamp   time.Time
+				}
+				var timestamps []metricTimestamp
+				metricsDB.Table("deployment_metrics").
+					Select(`
+						AVG(cpu_usage) as cpu_usage,
+						SUM(memory_usage) as memory_sum,
+						timestamp
+					`).
+					Where("deployment_id = ? AND timestamp >= ? AND timestamp < ?",
+						deploymentID, currentHour, nextHour).
+					Group("timestamp").
+					Order("timestamp ASC").
+					Scan(&timestamps)
+				
+				// Calculate core-seconds and byte-seconds from actual intervals
+				var cpuCoreSeconds float64
+				var memoryByteSeconds int64
+				metricInterval := int64(5) // Default 5 seconds
+				if len(timestamps) > 0 {
+					for i, ts := range timestamps {
+						interval := metricInterval
+						if i > 0 {
+							intervalSeconds := int64(ts.Timestamp.Sub(timestamps[i-1].Timestamp).Seconds())
+							if intervalSeconds > 0 && intervalSeconds <= 3600 { // Sanity check: max 1 hour
+								interval = intervalSeconds
+							}
+						} else if i == 0 && len(timestamps) == 1 {
+							// Single timestamp: use default interval
+							interval = metricInterval
+						}
+						cpuCoreSeconds += (ts.CPUUsage / 100.0) * float64(interval)
+						memoryByteSeconds += ts.MemorySum * interval
+					}
+					// Handle last timestamp: if it's not at the end of the hour, use remaining time
+					if len(timestamps) > 0 {
+						lastTimestamp := timestamps[len(timestamps)-1].Timestamp
+						timeRemaining := int64(nextHour.Sub(lastTimestamp).Seconds())
+						if timeRemaining > 0 && timeRemaining <= 3600 {
+							lastCPU := timestamps[len(timestamps)-1].CPUUsage
+							lastMemory := timestamps[len(timestamps)-1].MemorySum
+							cpuCoreSeconds += (lastCPU / 100.0) * float64(timeRemaining)
+							memoryByteSeconds += lastMemory * timeRemaining
+						}
+					}
+				}
+				
+				// Store avg_cpu_usage as average CPU for the hour (core-seconds / 3600)
+				// This way, when we query with SUM((avg_cpu_usage / 100.0) * 3600), we get correct core-seconds
+				if cpuCoreSeconds > 0 {
+					agg.AvgCPUUsage = (cpuCoreSeconds / 3600.0) * 100.0 // Convert back to percentage
+				}
+				
+				// Store avg_memory_usage as average memory for the hour (byte-seconds / 3600)
+				// This way, when we query with SUM(avg_memory_usage * 3600), we get correct byte-seconds
+				if memoryByteSeconds > 0 {
+					agg.AvgMemoryUsage = float64(memoryByteSeconds) / 3600.0
+				} else if agg.TimestampCount > 0 {
+					// Fallback: calculate byte-seconds from average memory and default interval
+					// If we have timestamps but couldn't calculate intervals, use 5-second default
+					avgMemoryBytes := agg.SumMemoryUsage / float64(agg.TimestampCount)
+					// Assume 5-second intervals, so byte-seconds = avgMemory * interval * timestamps
+					// But we want byte-seconds/hour, so: (avgMemory * 5 * timestamps) / 3600
+					metricInterval := int64(5)
+					fallbackByteSeconds := int64(avgMemoryBytes * float64(metricInterval) * float64(agg.TimestampCount))
+					agg.AvgMemoryUsage = float64(fallbackByteSeconds) / 3600.0
+				} else if agg.Count > 0 {
+					// Last resort: use average memory and assume 5-second intervals
+					avgMemoryBytes := agg.SumMemoryUsage / float64(agg.Count)
+					metricInterval := int64(5)
+					// Estimate timestamps: assume metrics are evenly distributed over the hour
+					estimatedTimestamps := float64(agg.Count) / 1.0 // 1 metric per timestamp
+					fallbackByteSeconds := int64(avgMemoryBytes * float64(metricInterval) * estimatedTimestamps)
+					agg.AvgMemoryUsage = float64(fallbackByteSeconds) / 3600.0
 				} else {
-					agg.AvgMemoryUsage = agg.SumMemoryUsage / float64(agg.Count)
+					// No metrics at all - set to 0
+					agg.AvgMemoryUsage = 0
 				}
 				
 				hourlyUsage := database.DeploymentUsageHourly{
@@ -633,7 +733,7 @@ func (os *OrchestratorService) aggregateDeploymentMetrics(deploymentID string, a
 					OrganizationID:    orgID,
 					Hour:              currentHour,
 					AvgCPUUsage:       agg.AvgCPUUsage,
-					AvgMemoryUsage:    int64(agg.AvgMemoryUsage),
+					AvgMemoryUsage:    agg.AvgMemoryUsage,
 					BandwidthRxBytes:  agg.SumNetworkRx,
 					BandwidthTxBytes:  agg.SumNetworkTx,
 					DiskReadBytes:     agg.SumDiskRead,
@@ -664,6 +764,367 @@ func (os *OrchestratorService) aggregateDeploymentMetrics(deploymentID string, a
 	}
 	
 	return aggregatedCount, deletedInDeployment
+}
+
+// backfillMissingHourlyAggregates calculates missing hourly aggregates for all deployments
+// This runs once on startup to ensure data consistency
+func (os *OrchestratorService) backfillMissingHourlyAggregates() {
+	logger.Info("[Orchestrator] Starting backfill of missing hourly aggregates...")
+	
+	metricsDB := database.GetMetricsDB()
+	if metricsDB == nil {
+		logger.Warn("[Orchestrator] Metrics database not available, skipping backfill")
+		return
+	}
+	
+	// Verify tables exist
+	var metricsTableExists bool
+	var hourlyTableExists bool
+	metricsDB.Raw(`
+		SELECT EXISTS (
+			SELECT FROM information_schema.tables 
+			WHERE table_schema = 'public' 
+			AND table_name = 'deployment_metrics'
+		)
+	`).Scan(&metricsTableExists)
+	metricsDB.Raw(`
+		SELECT EXISTS (
+			SELECT FROM information_schema.tables 
+			WHERE table_schema = 'public' 
+			AND table_name = 'deployment_usage_hourly'
+		)
+	`).Scan(&hourlyTableExists)
+	
+	logger.Debug("[Orchestrator] Tables exist: deployment_metrics=%v, deployment_usage_hourly=%v", metricsTableExists, hourlyTableExists)
+	
+	if !metricsTableExists {
+		logger.Warn("[Orchestrator] deployment_metrics table does not exist, skipping backfill")
+		return
+	}
+	
+	if !hourlyTableExists {
+		logger.Warn("[Orchestrator] deployment_usage_hourly table does not exist, cannot create aggregates")
+		return
+	}
+	
+	// Get current time and calculate backfill range (current month start to now)
+	// Include ALL hours in the current month, not just older than 24 hours
+	now := time.Now().UTC()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	backfillCutoff := now.Truncate(time.Hour) // Current hour (not 24 hours ago)
+	
+	logger.Debug("[Orchestrator] Backfill range: %s to %s", monthStart, backfillCutoff)
+	
+	// First check if there are any metrics at all
+	var totalMetricsCount int64
+	metricsDB.Table("deployment_metrics").
+		Where("timestamp >= ? AND timestamp < ?", monthStart, backfillCutoff.Add(1*time.Hour)).
+		Count(&totalMetricsCount)
+	logger.Debug("[Orchestrator] Found %d total raw metrics in backfill range", totalMetricsCount)
+	
+	if totalMetricsCount == 0 {
+		logger.Warn("[Orchestrator] No raw metrics found in backfill range - deployment_usage_hourly will remain empty")
+		return
+	}
+	
+	// Get all deployments that have metrics in the backfill range (entire current month)
+	var deploymentIDs []string
+	metricsDB.Table("deployment_metrics").
+		Select("DISTINCT deployment_id").
+		Where("timestamp >= ? AND timestamp < ?", monthStart, backfillCutoff.Add(1*time.Hour)).
+		Pluck("deployment_id", &deploymentIDs)
+	
+	if len(deploymentIDs) == 0 {
+		logger.Warn("[Orchestrator] No deployments with metrics to backfill (found %d total metrics but no distinct deployments)", totalMetricsCount)
+		return
+	}
+	
+	logger.Info("[Orchestrator] Found %d deployments with metrics for backfill", len(deploymentIDs))
+	
+	logger.Info("[Orchestrator] Backfilling aggregates for %d deployments", len(deploymentIDs))
+	
+	totalAggregated := 0
+	const batchSize = 10 // Process 10 deployments concurrently
+	var aggMutex sync.Mutex
+	
+	// Process in batches
+	for i := 0; i < len(deploymentIDs); i += batchSize {
+		end := i + batchSize
+		if end > len(deploymentIDs) {
+			end = len(deploymentIDs)
+		}
+		batch := deploymentIDs[i:end]
+		
+		var wg sync.WaitGroup
+		for _, deploymentID := range batch {
+			wg.Add(1)
+			go func(depID string) {
+				defer wg.Done()
+				
+				// Get org ID for this deployment
+				var orgID string
+				database.DB.Table("deployments").
+					Select("organization_id").
+					Where("id = ?", depID).
+					Pluck("organization_id", &orgID)
+				
+				if orgID == "" {
+					logger.Warn("[Orchestrator] Deployment %s has no organization_id, skipping", depID)
+					return
+				}
+				
+				// Find hours with raw metrics but missing aggregates
+				// Iterate through each hour in the backfill range (entire current month)
+				aggregatedForDeployment := 0
+				currentHour := monthStart.Truncate(time.Hour)
+				
+				for currentHour.Before(backfillCutoff) || currentHour.Equal(backfillCutoff) {
+					nextHour := currentHour.Add(1 * time.Hour)
+					
+					// Check if aggregate already exists
+					var existingHourly database.DeploymentUsageHourly
+					err := metricsDB.Where("deployment_id = ? AND hour = ?", depID, currentHour).
+						First(&existingHourly).Error
+					
+					// If aggregate exists, skip (don't recalculate on startup)
+					if err == nil {
+						currentHour = nextHour
+						continue
+					}
+					
+					// Check if raw metrics exist for this hour
+					var rawMetricsCount int64
+					metricsDB.Table("deployment_metrics").
+						Where("deployment_id = ? AND timestamp >= ? AND timestamp < ?", depID, currentHour, nextHour).
+						Count(&rawMetricsCount)
+					
+					if rawMetricsCount > 0 {
+						// Create aggregate for this hour
+						aggregated, err := os.aggregateSingleHour(depID, orgID, currentHour, nextHour)
+						if aggregated {
+							aggregatedForDeployment++
+						} else if err != nil {
+							logger.Warn("[Orchestrator] Failed to aggregate hour %s for deployment %s: %v", currentHour, depID, err)
+						}
+					}
+					
+					currentHour = nextHour
+				}
+				
+				if aggregatedForDeployment > 0 {
+					aggMutex.Lock()
+					totalAggregated += aggregatedForDeployment
+					aggMutex.Unlock()
+					logger.Info("[Orchestrator] Backfilled %d hours for deployment %s", aggregatedForDeployment, depID)
+				} else {
+					// Log why no aggregates were created
+					var totalHoursChecked int
+					var hoursWithMetrics int
+					var hoursWithAggregates int
+					checkHour := monthStart.Truncate(time.Hour)
+					for checkHour.Before(backfillCutoff) || checkHour.Equal(backfillCutoff) {
+						totalHoursChecked++
+						var rawCount int64
+						metricsDB.Table("deployment_metrics").
+							Where("deployment_id = ? AND timestamp >= ? AND timestamp < ?", depID, checkHour, checkHour.Add(1*time.Hour)).
+							Count(&rawCount)
+						if rawCount > 0 {
+							hoursWithMetrics++
+						}
+						var aggExists database.DeploymentUsageHourly
+						if err := metricsDB.Where("deployment_id = ? AND hour = ?", depID, checkHour).First(&aggExists).Error; err == nil {
+							hoursWithAggregates++
+						}
+						checkHour = checkHour.Add(1 * time.Hour)
+					}
+					logger.Debug("[Orchestrator] Deployment %s: checked %d hours, %d with metrics, %d with aggregates", depID, totalHoursChecked, hoursWithMetrics, hoursWithAggregates)
+				}
+			}(deploymentID)
+		}
+		wg.Wait()
+	}
+	
+	if totalAggregated > 0 {
+		logger.Info("[Orchestrator] ✓ Backfill completed successfully: created %d hourly aggregates", totalAggregated)
+	} else {
+		logger.Warn("[Orchestrator] ⚠️ Backfill completed but no aggregates were created (found %d deployments with %d raw metrics)", 
+			len(deploymentIDs), totalMetricsCount)
+		logger.Warn("[Orchestrator] This may indicate that aggregates already exist or there's an issue with aggregation")
+	}
+}
+
+// aggregateSingleHour creates a single hourly aggregate for a deployment
+// Returns true if aggregate was created, false otherwise
+func (os *OrchestratorService) aggregateSingleHour(deploymentID, orgID string, hourStart, hourEnd time.Time) (bool, error) {
+	metricsDB := database.GetMetricsDB()
+	if metricsDB == nil {
+		return false, fmt.Errorf("metrics database not available")
+	}
+	
+	logger.Debug("[Orchestrator] Aggregating hour %s for deployment %s", hourStart, deploymentID)
+	
+	// Get basic aggregates
+	type hourlyAgg struct {
+		AvgCPUUsage      float64
+		SumMemoryUsage   float64
+		AvgMemoryUsage   float64
+		SumNetworkRx     int64
+		SumNetworkTx     int64
+		SumDiskRead      int64
+		SumDiskWrite     int64
+		SumRequestCount  int64
+		SumErrorCount    int64
+		Count            int64
+		TimestampCount   int64
+	}
+	var agg hourlyAgg
+	
+	err := metricsDB.Table("deployment_metrics").
+		Select(`
+			AVG(cpu_usage) as avg_cpu_usage,
+			AVG(memory_usage) as avg_memory_usage,
+			SUM(memory_usage) as sum_memory_usage,
+			COALESCE(SUM(network_rx_bytes), 0) as sum_network_rx,
+			COALESCE(SUM(network_tx_bytes), 0) as sum_network_tx,
+			COALESCE(SUM(disk_read_bytes), 0) as sum_disk_read,
+			COALESCE(SUM(disk_write_bytes), 0) as sum_disk_write,
+			COALESCE(SUM(request_count), 0) as sum_request_count,
+			COALESCE(SUM(error_count), 0) as sum_error_count,
+			COUNT(*) as count,
+			COUNT(DISTINCT timestamp) as timestamp_count
+		`).
+		Where("deployment_id = ? AND timestamp >= ? AND timestamp < ?",
+			deploymentID, hourStart, hourEnd).
+		Scan(&agg).Error
+	
+	if err != nil {
+		logger.Warn("[Orchestrator] Failed to query metrics for %s at %s: %v", deploymentID, hourStart, err)
+		return false, err
+	}
+	
+	if agg.Count == 0 {
+		logger.Debug("[Orchestrator] No metrics found for %s at %s", deploymentID, hourStart)
+		return false, nil
+	}
+	
+	logger.Debug("[Orchestrator] Found %d metrics for %s at %s", agg.Count, deploymentID, hourStart)
+	
+	// Calculate CPU core-seconds and memory byte-seconds using actual timestamp intervals
+	type metricTimestamp struct {
+		CPUUsage    float64
+		MemorySum   int64
+		Timestamp   time.Time
+	}
+	var timestamps []metricTimestamp
+	metricsDB.Table("deployment_metrics").
+		Select(`
+			AVG(cpu_usage) as cpu_usage,
+			SUM(memory_usage) as memory_sum,
+			timestamp
+		`).
+		Where("deployment_id = ? AND timestamp >= ? AND timestamp < ?",
+			deploymentID, hourStart, hourEnd).
+		Group("timestamp").
+		Order("timestamp ASC").
+		Scan(&timestamps)
+	
+	// Calculate core-seconds and byte-seconds from actual intervals
+	var cpuCoreSeconds float64
+	var memoryByteSeconds int64
+	metricInterval := int64(5) // Default 5 seconds
+	if len(timestamps) > 0 {
+		// First timestamp: use time from hour start to first timestamp, or default interval
+		firstTimestamp := timestamps[0].Timestamp
+		firstInterval := int64(firstTimestamp.Sub(hourStart).Seconds())
+		if firstInterval <= 0 {
+			firstInterval = metricInterval
+		} else if firstInterval > 3600 {
+			firstInterval = metricInterval // Sanity check
+		}
+		cpuCoreSeconds += (timestamps[0].CPUUsage / 100.0) * float64(firstInterval)
+		memoryByteSeconds += timestamps[0].MemorySum * firstInterval
+		
+		// Subsequent timestamps: use actual interval between timestamps
+		// For each interval from timestamps[i-1] to timestamps[i], use memory[i-1] (the value at the start of the interval)
+		for i := 1; i < len(timestamps); i++ {
+			interval := metricInterval
+			intervalSeconds := int64(timestamps[i].Timestamp.Sub(timestamps[i-1].Timestamp).Seconds())
+			if intervalSeconds > 0 && intervalSeconds <= 3600 { // Sanity check: max 1 hour
+				interval = intervalSeconds
+			}
+			// Use memory from the PREVIOUS timestamp for this interval (memory[i-1] represents memory from timestamps[i-1] to timestamps[i])
+			cpuCoreSeconds += (timestamps[i-1].CPUUsage / 100.0) * float64(interval)
+			memoryByteSeconds += timestamps[i-1].MemorySum * interval
+		}
+		// Handle last timestamp: if it's not at the end of the hour, use remaining time
+		// Note: We've already counted the interval from timestamps[last-1] to timestamps[last],
+		// so we only need to add the remaining time from timestamps[last] to hourEnd
+		if len(timestamps) > 0 {
+			lastTimestamp := timestamps[len(timestamps)-1].Timestamp
+			timeRemaining := int64(hourEnd.Sub(lastTimestamp).Seconds())
+			if timeRemaining > 0 && timeRemaining <= 3600 {
+				lastCPU := timestamps[len(timestamps)-1].CPUUsage
+				lastMemory := timestamps[len(timestamps)-1].MemorySum
+				cpuCoreSeconds += (lastCPU / 100.0) * float64(timeRemaining)
+				memoryByteSeconds += lastMemory * timeRemaining
+			}
+		}
+	}
+	
+	// Store avg_cpu_usage as average CPU for the hour (core-seconds / 3600)
+	if cpuCoreSeconds > 0 {
+		agg.AvgCPUUsage = (cpuCoreSeconds / 3600.0) * 100.0 // Convert back to percentage
+	}
+	
+	// Store avg_memory_usage as average memory for the hour (byte-seconds / 3600)
+	// This way, when we query with SUM(avg_memory_usage * 3600), we get correct byte-seconds
+	if memoryByteSeconds > 0 {
+		agg.AvgMemoryUsage = float64(memoryByteSeconds) / 3600.0
+	} else if agg.TimestampCount > 0 {
+		// Fallback: calculate byte-seconds from average memory and default interval
+		// If we have timestamps but couldn't calculate intervals, use 5-second default
+		avgMemoryBytes := agg.SumMemoryUsage / float64(agg.TimestampCount)
+		// Assume 5-second intervals, so byte-seconds = avgMemory * interval * timestamps
+		// But we want byte-seconds/hour, so: (avgMemory * 5 * timestamps) / 3600
+		metricInterval := int64(5)
+		fallbackByteSeconds := int64(avgMemoryBytes * float64(metricInterval) * float64(agg.TimestampCount))
+		agg.AvgMemoryUsage = float64(fallbackByteSeconds) / 3600.0
+	} else if agg.Count > 0 {
+		// Last resort: use average memory and assume 5-second intervals
+		avgMemoryBytes := agg.SumMemoryUsage / float64(agg.Count)
+		metricInterval := int64(5)
+		// Estimate timestamps: assume metrics are evenly distributed over the hour
+		estimatedTimestamps := float64(agg.Count) / 1.0 // 1 metric per timestamp
+		fallbackByteSeconds := int64(avgMemoryBytes * float64(metricInterval) * estimatedTimestamps)
+		agg.AvgMemoryUsage = float64(fallbackByteSeconds) / 3600.0
+	} else {
+		// No metrics at all - set to 0
+		agg.AvgMemoryUsage = 0
+	}
+	
+	hourlyUsage := database.DeploymentUsageHourly{
+		DeploymentID:     deploymentID,
+		OrganizationID:    orgID,
+		Hour:              hourStart,
+		AvgCPUUsage:       agg.AvgCPUUsage,
+		AvgMemoryUsage:    agg.AvgMemoryUsage,
+		BandwidthRxBytes:  agg.SumNetworkRx,
+		BandwidthTxBytes:  agg.SumNetworkTx,
+		DiskReadBytes:     agg.SumDiskRead,
+		DiskWriteBytes:    agg.SumDiskWrite,
+		RequestCount:      agg.SumRequestCount,
+		ErrorCount:        agg.SumErrorCount,
+		SampleCount:       agg.Count,
+	}
+	
+	if err := metricsDB.Create(&hourlyUsage).Error; err != nil {
+		logger.Warn("[Orchestrator] Failed to create hourly aggregate for %s at %s: %v", deploymentID, hourStart, err)
+		return false, err
+	}
+	
+	logger.Debug("[Orchestrator] ✓ Created hourly aggregate for %s at %s (CPU: %.2f%%, Memory: %.2f bytes/sec, SampleCount: %d)", 
+		deploymentID, hourStart, agg.AvgCPUUsage, agg.AvgMemoryUsage, agg.Count)
+	return true, nil
 }
 
 // storageInfo contains storage information for a deployment
@@ -1003,5 +1464,237 @@ func (os *OrchestratorService) cleanupBuildHistory() {
 		case <-os.ctx.Done():
 			return
 		}
+	}
+}
+
+// cleanupStrayContainers finds and stops containers that are running but don't exist in the database
+// After 7 days, it also deletes associated volumes
+func (os *OrchestratorService) cleanupStrayContainers() {
+	// Run every 6 hours
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+
+	// Run immediately on startup
+	os.runStrayContainerCleanup()
+
+	for {
+		select {
+		case <-ticker.C:
+			os.runStrayContainerCleanup()
+		case <-os.ctx.Done():
+			return
+		}
+	}
+}
+
+// runStrayContainerCleanup performs the actual cleanup work
+func (os *OrchestratorService) runStrayContainerCleanup() {
+	logger.Info("[Orchestrator] Running stray container cleanup...")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	// Get Docker client
+	dcli, err := docker.New()
+	if err != nil {
+		logger.Warn("[Orchestrator] Failed to create Docker client for stray cleanup: %v", err)
+		return
+	}
+	defer dcli.Close()
+
+	// Get node ID
+	nodeID := os.deploymentManager.GetNodeID()
+
+	// Get all containers managed by Obiente
+	filterArgs := filters.NewArgs()
+	filterArgs.Add("label", "cloud.obiente.managed=true")
+
+	containers, err := os.deploymentManager.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+		All:     true,
+		Filters: filterArgs,
+	})
+	if err != nil {
+		logger.Warn("[Orchestrator] Failed to list containers for stray cleanup: %v", err)
+		return
+	}
+
+	// Get all container IDs from deployment_locations table
+	var dbContainerIDs []string
+	if err := database.DB.Table("deployment_locations").
+		Select("container_id").
+		Where("node_id = ?", nodeID).
+		Pluck("container_id", &dbContainerIDs).Error; err != nil {
+		logger.Warn("[Orchestrator] Failed to query deployment locations: %v", err)
+		return
+	}
+
+	// Build a map for fast lookup
+	dbContainerMap := make(map[string]bool)
+	for _, id := range dbContainerIDs {
+		dbContainerMap[id] = true
+	}
+
+	// Find stray containers (running but not in DB)
+	// ContainerList returns []container.Summary
+	var strayContainers []container.Summary
+	for _, container := range containers {
+		// Verify container has cloud.obiente.managed=true (should already be filtered, but double-check)
+		if container.Labels["cloud.obiente.managed"] != "true" {
+			continue
+		}
+		
+		// Check if container is running
+		containerInfo, err := os.deploymentManager.dockerClient.ContainerInspect(ctx, container.ID)
+		if err != nil {
+			logger.Debug("[Orchestrator] Failed to inspect container %s: %v", container.ID[:12], err)
+			continue
+		}
+
+		// Only process running containers
+		if !containerInfo.State.Running {
+			continue
+		}
+
+		// Check if container exists in database
+		if !dbContainerMap[container.ID] {
+			strayContainers = append(strayContainers, container)
+		}
+	}
+
+	if len(strayContainers) == 0 {
+		logger.Debug("[Orchestrator] No stray containers found")
+	} else {
+		logger.Info("[Orchestrator] Found %d stray container(s)", len(strayContainers))
+	}
+
+	// Stop stray containers and record them
+	now := time.Now()
+	for _, container := range strayContainers {
+		// Check if we've already recorded this container
+		var existingStray database.StrayContainer
+		if err := database.DB.Where("container_id = ?", container.ID).First(&existingStray).Error; err == nil {
+			// Already recorded, skip
+			continue
+		}
+
+		// Stop the container
+		logger.Info("[Orchestrator] Stopping stray container %s", container.ID[:12])
+		timeout := 30 * time.Second
+		if err := dcli.StopContainer(ctx, container.ID, timeout); err != nil {
+			logger.Warn("[Orchestrator] Failed to stop stray container %s: %v", container.ID[:12], err)
+			continue
+		}
+
+		// Record in database
+		stray := database.StrayContainer{
+			ContainerID: container.ID,
+			NodeID:      nodeID,
+			StoppedAt:   now,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		if err := database.DB.Create(&stray).Error; err != nil {
+			logger.Warn("[Orchestrator] Failed to record stray container %s: %v", container.ID[:12], err)
+		} else {
+			logger.Info("[Orchestrator] Recorded stray container %s (stopped at %s)", container.ID[:12], now.Format(time.RFC3339))
+		}
+	}
+
+	// Delete volumes for containers stopped more than 7 days ago
+	sevenDaysAgo := now.Add(-7 * 24 * time.Hour)
+	var oldStrayContainers []database.StrayContainer
+	if err := database.DB.Where("stopped_at < ? AND volumes_deleted_at IS NULL", sevenDaysAgo).Find(&oldStrayContainers).Error; err != nil {
+		logger.Warn("[Orchestrator] Failed to query old stray containers: %v", err)
+		return
+	}
+
+	if len(oldStrayContainers) == 0 {
+		logger.Debug("[Orchestrator] No old stray containers to clean up")
+		return
+	}
+
+	logger.Info("[Orchestrator] Cleaning up volumes for %d old stray container(s)", len(oldStrayContainers))
+
+	for _, stray := range oldStrayContainers {
+		// Verify container has cloud.obiente tags before deleting volumes
+		// Check container labels to ensure it's an Obiente-managed container
+		// Even though container might be gone, we can check if volumes are Obiente volumes
+		containerInfo, err := os.deploymentManager.dockerClient.ContainerInspect(ctx, stray.ContainerID)
+		hasObienteTags := false
+		containerExists := err == nil
+		if containerExists && containerInfo.Config != nil && containerInfo.Config.Labels != nil {
+			// Container still exists - verify it has cloud.obiente tags
+			if containerInfo.Config.Labels["cloud.obiente.managed"] == "true" {
+				hasObienteTags = true
+			}
+		} else {
+			// Container is gone - we can only verify by checking volume paths
+			// We'll only delete volumes if they're Obiente volumes (path-based check)
+			// For Docker volumes, we'll skip if container is gone (too risky)
+			hasObienteTags = true // Assume it had tags since it's in stray_containers table
+		}
+
+		// Only proceed if container has Obiente tags (or container is gone and we can verify via paths)
+		if !hasObienteTags {
+			logger.Warn("[Orchestrator] Skipping volume deletion for container %s - missing cloud.obiente tags", stray.ContainerID[:12])
+			continue
+		}
+
+		// Get volumes for this container
+		volumes, err := dcli.GetContainerVolumes(ctx, stray.ContainerID)
+		if err != nil {
+			logger.Warn("[Orchestrator] Failed to get volumes for container %s: %v", stray.ContainerID[:12], err)
+			// Mark as deleted even if we couldn't get volumes (container might be gone)
+			database.DB.Model(&stray).Update("volumes_deleted_at", now)
+			continue
+		}
+
+		// Delete each volume - only delete Obiente-managed volumes
+		for _, volume := range volumes {
+			// For Obiente Cloud volumes (bind mounts), delete the directory
+			// These are stored in /var/lib/obiente/volumes/{deploymentID}/{volumeName}
+			if strings.HasPrefix(volume.Source, "/var/lib/obiente/volumes") {
+				logger.Info("[Orchestrator] Deleting Obiente volume at %s", volume.Source)
+				if err := exec.Command("rm", "-rf", volume.Source).Run(); err != nil {
+					logger.Warn("[Orchestrator] Failed to delete Obiente volume %s: %v", volume.Source, err)
+				} else {
+					logger.Info("[Orchestrator] Deleted Obiente volume %s", volume.Source)
+				}
+			} else if volume.IsNamed {
+				// For Docker named volumes, only delete if container still exists and has cloud.obiente tags
+				// This is safer - we don't want to delete volumes from containers that might not be Obiente-managed
+				if containerExists && containerInfo.Config != nil && containerInfo.Config.Labels != nil {
+					if containerInfo.Config.Labels["cloud.obiente.managed"] == "true" {
+						logger.Info("[Orchestrator] Removing Docker volume %s (container has cloud.obiente tags)", volume.Name)
+						// Extract volume name from mount name if needed
+						volumeName := volume.Name
+						if volumeName == "" {
+							// Try to extract from path
+							if strings.Contains(volume.Source, "/volumes/") {
+								parts := strings.Split(volume.Source, "/volumes/")
+								if len(parts) > 1 {
+									volumeName = strings.Split(parts[1], "/")[0]
+								}
+							}
+						}
+						if volumeName != "" {
+							if err := os.deploymentManager.dockerClient.VolumeRemove(ctx, volumeName, false); err != nil {
+								logger.Warn("[Orchestrator] Failed to remove Docker volume %s: %v", volumeName, err)
+							} else {
+								logger.Info("[Orchestrator] Removed Docker volume %s", volumeName)
+							}
+						}
+					} else {
+						logger.Debug("[Orchestrator] Skipping Docker volume %s - container missing cloud.obiente tags", volume.Name)
+					}
+				} else {
+					logger.Debug("[Orchestrator] Skipping Docker volume %s - container no longer exists (cannot verify tags)", volume.Name)
+				}
+			}
+			// Anonymous volumes are typically cleaned up when the container is removed
+		}
+
+		// Mark volumes as deleted
+		database.DB.Model(&stray).Update("volumes_deleted_at", now)
+		logger.Info("[Orchestrator] Marked volumes as deleted for container %s", stray.ContainerID[:12])
 	}
 }

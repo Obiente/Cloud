@@ -263,7 +263,7 @@ func (s *Service) GetDeploymentMetrics(ctx context.Context, req *connect.Request
 			DeploymentId:     h.DeploymentID,
 			Timestamp:        timestamppb.New(h.Hour),
 			CpuUsagePercent:  h.AvgCPUUsage,
-			MemoryUsageBytes: h.AvgMemoryUsage,
+			MemoryUsageBytes: int64(h.AvgMemoryUsage),
 			NetworkRxBytes:   h.BandwidthRxBytes, // Hourly totals
 			NetworkTxBytes:   h.BandwidthTxBytes,
 			DiskReadBytes:    h.DiskReadBytes, // Hourly totals
@@ -398,7 +398,7 @@ func (s *Service) StreamDeploymentMetrics(ctx context.Context, req *connect.Requ
 							DeploymentId:     hourlyMetric.DeploymentID,
 							Timestamp:        timestamppb.New(hourlyMetric.Hour),
 							CpuUsagePercent:  hourlyMetric.AvgCPUUsage,
-							MemoryUsageBytes: hourlyMetric.AvgMemoryUsage,
+							MemoryUsageBytes: int64(hourlyMetric.AvgMemoryUsage),
 							NetworkRxBytes:   hourlyMetric.BandwidthRxBytes,
 							NetworkTxBytes:   hourlyMetric.BandwidthTxBytes,
 							DiskReadBytes:    hourlyMetric.DiskReadBytes,
@@ -684,16 +684,30 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 		
 		// Calculate byte-seconds from timestamped metrics
 		metricInterval := int64(5)
-		for i, m := range metricTimestamps {
-			interval := metricInterval
-			if i > 0 {
-				interval = int64(m.Timestamp.Sub(metricTimestamps[i-1].Timestamp).Seconds())
-				if interval <= 0 {
-					interval = metricInterval
-				}
+		if len(metricTimestamps) > 0 {
+			// First timestamp: use time from rawCutoff to first timestamp, or default interval
+			firstTimestamp := metricTimestamps[0].Timestamp
+			firstInterval := int64(firstTimestamp.Sub(rawCutoff).Seconds())
+			if firstInterval <= 0 {
+				firstInterval = metricInterval
+			} else if firstInterval > 3600 {
+				firstInterval = metricInterval // Sanity check
 			}
-			recentUsage.CPUCoreSeconds += int64((m.CPUUsage / 100.0) * float64(interval))
-			recentUsage.MemoryByteSeconds += m.MemorySum * interval
+			recentUsage.CPUCoreSeconds += int64((metricTimestamps[0].CPUUsage / 100.0) * float64(firstInterval))
+			recentUsage.MemoryByteSeconds += metricTimestamps[0].MemorySum * firstInterval
+			
+			// Subsequent timestamps: use actual interval between timestamps
+			// For each interval from timestamps[i-1] to timestamps[i], use memory[i-1] (the value at the start of the interval)
+			for i := 1; i < len(metricTimestamps); i++ {
+				interval := metricInterval
+				intervalSeconds := int64(metricTimestamps[i].Timestamp.Sub(metricTimestamps[i-1].Timestamp).Seconds())
+				if intervalSeconds > 0 && intervalSeconds <= 3600 {
+					interval = intervalSeconds
+				}
+				// Use memory from the PREVIOUS timestamp for this interval
+				recentUsage.CPUCoreSeconds += int64((metricTimestamps[i-1].CPUUsage / 100.0) * float64(interval))
+				recentUsage.MemoryByteSeconds += metricTimestamps[i-1].MemorySum * interval
+			}
 		}
 
 		// Get bandwidth and request counts from raw metrics
