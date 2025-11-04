@@ -296,12 +296,19 @@ If you can't resolve the issue:
 Enable debug logging:
 
 ```bash
+# Enable application debug logging
 echo "LOG_LEVEL=debug" >> .env
+
+# Enable database query logging (optional, falls back to LOG_LEVEL if not set)
+echo "DB_LOG_LEVEL=debug" >> .env
+
 # If running API locally, restart your local process
 # If running API in Swarm:
 # docker service update --force obiente_api
 # docker service logs -f obiente_api
 ```
+
+**Note:** Database logging can be very verbose. Use `DB_LOG_LEVEL=debug` only when debugging database issues. For production, use `DB_LOG_LEVEL=error` to suppress SQL query logs.
 
 ---
 

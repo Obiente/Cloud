@@ -46,6 +46,24 @@ DOMAIN=obiente.cloud
 ACME_EMAIL=admin@obiente.cloud
 ```
 
+### DNS Configuration
+
+```bash
+# Traefik IPs per region (required)
+# Format: "region1:ip1,ip2;region2:ip3,ip4"
+TRAEFIK_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"
+
+# DNS server IPs (optional, for nameserver configuration)
+# Comma-separated list of public IPs where DNS servers run
+DNS_IPS="1.2.3.4,5.6.7.8,9.10.11.12"
+
+# DNS server port (optional, default: 53)
+# Use a different port if 53 is already in use (e.g., systemd-resolved)
+DNS_PORT=53
+```
+
+**Note:** See [DNS Configuration](../deployment/dns.md) for detailed setup instructions.
+
 ## Security Configuration
 
 ### CORS
@@ -69,9 +87,10 @@ openssl rand -hex 32
 Add to `.env`:
 
 ```bash
-JWT_SECRET=<generated_value>
-SESSION_SECRET=<generated_value>
+SECRET=<generated_value>
 ```
+
+**Note:** `SECRET` is required and used for cryptographic operations like domain verification token generation.
 
 ### Metrics Configuration (Optional)
 
@@ -98,12 +117,13 @@ See [Environment Variables Reference](../reference/environment-variables.md#metr
 For production deployments:
 
 1. **Change all defaults** - Update all default passwords
-2. **Set LOG_LEVEL=info** - Reduce log verbosity
-3. **Configure CORS properly** - Use specific origins
-4. **Enable authentication** - Set `DISABLE_AUTH=false`
-5. **Set up SSL** - Configure domain and ACME email
-6. **Configure metrics database** - Set up separate TimescaleDB credentials
-7. **Tune metrics collection** - Adjust workers and intervals based on load
+2. **Set LOG_LEVEL=info** - Reduce application log verbosity
+3. **Set DB_LOG_LEVEL=error** - Suppress database query logs (optional, defaults to LOG_LEVEL)
+4. **Configure CORS properly** - Use specific origins
+5. **Enable authentication** - Set `DISABLE_AUTH=false`
+6. **Set up SSL** - Configure domain and ACME email
+7. **Configure metrics database** - Set up separate TimescaleDB credentials
+8. **Tune metrics collection** - Adjust workers and intervals based on load
 
 ## Reference
 

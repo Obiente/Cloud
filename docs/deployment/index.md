@@ -92,6 +92,7 @@ Choose your deployment method and follow the respective guide:
 1. [Docker Compose](docker-compose.md)
 2. [Docker Swarm](docker-swarm.md)
 3. [High Availability](high-availability.md)
+4. [DNS Configuration](dns.md)
 
 ---
 

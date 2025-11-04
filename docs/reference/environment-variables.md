@@ -9,13 +9,17 @@ Complete reference for all Obiente Cloud environment variables.
 | `POSTGRES_USER`      | `obiente`                    | ❌       | PostgreSQL username                              |
 | `POSTGRES_PASSWORD`  | -                            | ✅       | PostgreSQL password                              |
 | `ZITADEL_URL`        | `https://auth.obiente.cloud` | ❌       | Zitadel instance URL                             |
-| `LOG_LEVEL`          | `debug`                      | ❌       | Logging level                                    |
+| `LOG_LEVEL`          | `info`                       | ❌       | Application logging level                        |
+| `DB_LOG_LEVEL`      | (uses LOG_LEVEL)             | ❌       | Database query logging level                     |
 | `CORS_ORIGIN`        | `*`                          | ❌       | Allowed CORS origins                             |
 | `SMTP_HOST`          | -                            | ❌       | SMTP server host (required to enable email)      |
 | `SMTP_FROM_ADDRESS`  | -                            | ❌       | From address used for outbound email             |
 | `CONSOLE_URL`        | `https://app.obiente.cloud`  | ❌       | Dashboard URL used in invitation call-to-action  |
 | `SUPPORT_EMAIL`      | -                            | ❌       | Support contact displayed in email footers       |
 | `SUPERADMIN_EMAILS`  | -                            | ❌       | Comma-separated list of emails with global access |
+| `STRIPE_SECRET_KEY`  | -                            | ✅ (billing) | Stripe secret API key for payment processing |
+| `STRIPE_WEBHOOK_SECRET` | -                        | ✅ (webhooks) | Stripe webhook signing secret for webhook verification |
+| `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | -            | ✅ (frontend) | Stripe publishable key for client-side Stripe.js |
 
 ## Configuration Sections
 
@@ -41,17 +45,43 @@ POSTGRES_DB=obiente
 
 ### API Configuration
 
-| Variable      | Type   | Default | Required |
-| ------------- | ------ | ------- | -------- |
-| `GO_API_PORT` | number | `3001`  | ❌       |
-| `LOG_LEVEL`   | string | `debug` | ❌       |
+| Variable       | Type   | Default | Required |
+| -------------- | ------ | ------- | -------- |
+| `GO_API_PORT`  | number | `3001`  | ❌       |
+| `LOG_LEVEL`    | string | `info`  | ❌       |
+| `DB_LOG_LEVEL` | string | -       | ❌       |
 
-**Log Levels:**
+**Application Log Levels (`LOG_LEVEL`):**
 
 - `debug` - Verbose logging for development
 - `info` - Standard production logging
 - `warn` - Only warnings and errors
 - `error` - Only errors
+
+**Database Log Levels (`DB_LOG_LEVEL`):**
+
+Controls GORM database query logging. If not set, falls back to `LOG_LEVEL`.
+
+- `debug` / `trace` - Show all SQL queries and parameters
+- `info` - Show SQL queries only (no parameters)
+- `warn` / `warning` - Only database errors (suppresses "record not found")
+- `error` - Only database errors
+
+**Examples:**
+
+```bash
+# Application logs at info, database logs at error (no SQL queries)
+LOG_LEVEL=info
+DB_LOG_LEVEL=error
+
+# Both at debug for development
+LOG_LEVEL=debug
+DB_LOG_LEVEL=debug
+
+# Application at warn, database at debug (useful for debugging slow queries)
+LOG_LEVEL=warn
+DB_LOG_LEVEL=debug
+```
 
 ### Authentication
 
@@ -310,12 +340,75 @@ DOMAIN=obiente.cloud
 ACME_EMAIL=admin@obiente.cloud
 ```
 
+### DNS Configuration
+
+| Variable     | Type   | Default | Required | Description                                      |
+| ------------ | ------ | ------- | -------- | ------------------------------------------------ |
+| `TRAEFIK_IPS` | string | -       | ✅       | Traefik IPs per region (format: `"region1:ip1,ip2;region2:ip3,ip4"` or simple `"ip1,ip2"`) |
+| `DNS_IPS`    | string | -       | ❌       | DNS server IPs (comma-separated) for nameserver configuration |
+| `DNS_PORT`   | number | `53`    | ❌       | DNS server port (use different port if 53 is in use) |
+
+**TRAEFIK_IPS Format:**
+
+Two formats are supported:
+
+**Simple format** (single IP or comma-separated IPs, defaults to "default" region):
+```
+ip1,ip2
+```
+
+**Multi-region format**:
+```
+region1:ip1,ip2;region2:ip3,ip4
+```
+
+**Examples:**
+
+```bash
+# Simple format (single IP, defaults to "default" region)
+TRAEFIK_IPS="1.2.3.4"
+
+# Simple format (multiple IPs, defaults to "default" region)
+TRAEFIK_IPS="1.2.3.4,1.2.3.5"
+
+# Single region
+TRAEFIK_IPS="us-east-1:1.2.3.4,1.2.3.5"
+
+# Multiple regions
+TRAEFIK_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"
+
+# Explicit default region
+TRAEFIK_IPS="default:1.2.3.4"
+```
+
+**DNS_IPS Format:**
+
+Comma-separated list of public IP addresses where DNS servers run. Used for configuring nameserver records in your DNS provider.
+
+```bash
+# Single node
+DNS_IPS="1.2.3.4"
+
+# Multiple nodes (HA)
+DNS_IPS="1.2.3.4,5.6.7.8,9.10.11.12"
+```
+
+**DNS_PORT:**
+
+Default DNS port is 53. If port 53 is already in use (e.g., systemd-resolved), configure a different port:
+
+```bash
+# Use port 5353 instead
+DNS_PORT=5353
+```
+
+**Note:** See [DNS Configuration](../deployment/dns.md) for detailed setup instructions.
+
 ### Security
 
 | Variable               | Type   | Default | Required |
 | ---------------------- | ------ | ------- | -------- |
-| `JWT_SECRET`           | string | -       | ❌       |
-| `SESSION_SECRET`       | string | -       | ❌       |
+| `SECRET`               | string | -       | ✅       |
 | `RATE_LIMIT_WINDOW_MS` | number | `60000` | ❌       |
 | `RATE_LIMIT_MAX`       | number | `100`   | ❌       |
 
@@ -326,9 +419,62 @@ ACME_EMAIL=admin@obiente.cloud
 openssl rand -hex 32
 
 # Add to .env
-JWT_SECRET=<generated_value>
-SESSION_SECRET=<generated_value>
+SECRET=<generated_value>
 ```
+
+**Note:** `SECRET` is used for cryptographic operations like domain verification token generation. It should be a strong, random value and kept secure.
+
+### Stripe Payment Processing
+
+| Variable                         | Type   | Default | Required     |
+| -------------------------------- | ------ | ------- | ------------ |
+| `STRIPE_SECRET_KEY`              | string | -       | ✅ (billing) |
+| `STRIPE_WEBHOOK_SECRET`          | string | -       | ✅ (webhooks) |
+| `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | string | -       | ✅ (frontend) |
+
+**Setup:**
+
+1. Create a Stripe account at https://stripe.com
+2. Get your API keys from the Stripe Dashboard (API keys section)
+   - **Secret key** (starts with `sk_`) → Set as `STRIPE_SECRET_KEY`
+   - **Publishable key** (starts with `pk_`) → Set as `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+3. Create a webhook endpoint in Stripe Dashboard pointing to `https://your-domain.com/webhooks/stripe`
+   - **Important:** Set the API version to `2025-10-29.clover` to match the SDK version
+   - Go to **Developers** > **Webhooks** > **Add endpoint**
+   - Enter your endpoint URL
+   - Select events: `checkout.session.completed`, `payment_intent.succeeded`, `payment_intent.payment_failed`
+   - In the **Version** dropdown, select `2025-10-29.clover`
+4. Set `STRIPE_WEBHOOK_SECRET` to the webhook signing secret (starts with `whsec_`)
+
+**Development:**
+
+For local development, use Stripe CLI to forward webhooks:
+
+```bash
+# Install Stripe CLI
+https://docs.stripe.com/stripe-cli/install
+
+# Login
+stripe login
+
+# Forward webhooks to local server
+stripe listen --forward-to localhost:3001/webhooks/stripe
+```
+
+The webhook secret will be shown in the CLI output. Use that for `STRIPE_WEBHOOK_SECRET` in development.
+
+**Example:**
+
+```bash
+# Backend (API)
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Frontend (Dashboard)
+NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+```
+
+**Note:** The publishable key (`NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`) is safe to expose publicly as it's used client-side for Stripe.js initialization. The secret key (`STRIPE_SECRET_KEY`) must be kept secure and never exposed to the client.
 
 ### Monitoring
 
@@ -363,8 +509,13 @@ POSTGRES_USER=obiente
 POSTGRES_PASSWORD=local_dev_password
 POSTGRES_DB=obiente
 LOG_LEVEL=debug
+DB_LOG_LEVEL=debug
 CORS_ORIGIN=*
 DISABLE_AUTH=true
+# Stripe configuration (optional for local dev)
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 ```
 
 ### Production (.env)
@@ -378,12 +529,17 @@ METRICS_DB_USER=obiente
 METRICS_DB_PASSWORD=<strong_random_password>
 METRICS_DB_NAME=obiente_metrics
 LOG_LEVEL=info
+DB_LOG_LEVEL=error
 CORS_ORIGIN=https://obiente.cloud
 ZITADEL_URL=https://auth.obiente.cloud
 DOMAIN=obiente.cloud
 ACME_EMAIL=admin@obiente.cloud
-JWT_SECRET=<generated_secret>
-SESSION_SECRET=<generated_secret>
+SECRET=<generated_secret>
+# Stripe configuration (required for billing)
+STRIPE_SECRET_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+# Frontend Stripe publishable key
+NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 # Metrics configuration (optional, uses defaults if not set)
 METRICS_COLLECTION_INTERVAL=5s
 METRICS_STORAGE_INTERVAL=60s
