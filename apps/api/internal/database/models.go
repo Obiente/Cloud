@@ -132,7 +132,7 @@ type DeploymentUsageHourly struct {
 	OrganizationID      string    `gorm:"index;not null" json:"organization_id"` // Denormalized for easier querying
 	Hour                time.Time `gorm:"index" json:"hour"`                      // Truncated to hour
 	AvgCPUUsage         float64   `json:"avg_cpu_usage"`
-	AvgMemoryUsage      int64     `json:"avg_memory_usage"`
+	AvgMemoryUsage      float64   `json:"avg_memory_usage"` // Average memory bytes per second for the hour (byte-seconds / 3600)
 	BandwidthRxBytes    int64     `json:"bandwidth_rx_bytes"`  // Sum of incremental values
 	BandwidthTxBytes    int64     `json:"bandwidth_tx_bytes"`  // Sum of incremental values
 	DiskReadBytes       int64     `json:"disk_read_bytes"`     // Sum of incremental values
@@ -185,6 +185,22 @@ type CreditTransaction struct {
 }
 
 func (CreditTransaction) TableName() string { return "credit_transactions" }
+
+// BillingAccount stores Stripe customer and billing information for organizations
+type BillingAccount struct {
+	ID               string    `gorm:"primaryKey" json:"id"`
+	OrganizationID   string    `gorm:"index;not null;uniqueIndex:idx_org_billing" json:"organization_id"`
+	StripeCustomerID *string    `gorm:"column:stripe_customer_id;uniqueIndex" json:"stripe_customer_id"`
+	Status           string    `gorm:"column:status;default:ACTIVE" json:"status"` // "ACTIVE", "INACTIVE", "PAST_DUE", etc.
+	BillingEmail     *string   `gorm:"column:billing_email" json:"billing_email"`
+	CompanyName      *string   `gorm:"column:company_name" json:"company_name"`
+	TaxID            *string   `gorm:"column:tax_id" json:"tax_id"`
+	Address          *string   `gorm:"column:address;type:jsonb" json:"address"` // JSON-encoded address (nullable)
+	CreatedAt        time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt        time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (BillingAccount) TableName() string { return "billing_accounts" }
 
 // GitHubIntegration stores GitHub OAuth tokens for users and organizations
 type GitHubIntegration struct {
@@ -249,3 +265,16 @@ type BuildLog struct {
 }
 
 func (BuildLog) TableName() string { return "build_logs" }
+
+// StrayContainer tracks containers that were running but don't exist in the database
+// These are containers that were stopped by the cleanup process
+type StrayContainer struct {
+	ContainerID string    `gorm:"primaryKey;column:container_id" json:"container_id"`
+	NodeID      string    `gorm:"index;column:node_id" json:"node_id"`
+	StoppedAt   time.Time `gorm:"index;column:stopped_at" json:"stopped_at"`
+	VolumesDeletedAt *time.Time `gorm:"column:volumes_deleted_at" json:"volumes_deleted_at"` // When volumes were deleted (if applicable)
+	CreatedAt   time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (StrayContainer) TableName() string { return "stray_containers" }

@@ -19,6 +19,7 @@ func RegisterMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_12_20_005", "Add start_command column to deployments", addStartCommandColumn)
 	registry.Register("2025_12_28_001", "Create build_history and build_logs tables", createBuildHistoryTables)
 	registry.Register("2025_01_03_001", "Add configurable build paths and nginx config to deployments", addBuildPathsAndNginxConfig)
+	registry.Register("2025_01_03_002", "Add region column to node_metadata table", addRegionToNodeMetadata)
 
 	// Add new migrations here
 }
@@ -266,6 +267,22 @@ func addBuildPathsAndNginxConfig(db *gorm.DB) error {
 	}
 
 	return nil
+}
+
+// addRegionToNodeMetadata adds the region column to node_metadata table for multi-region DNS routing
+func addRegionToNodeMetadata(db *gorm.DB) error {
+	// Check if column already exists
+	if db.Migrator().HasColumn("node_metadata", "region") {
+		return nil
+	}
+
+	// Add column with index
+	if err := db.Exec("ALTER TABLE node_metadata ADD COLUMN region VARCHAR(255)").Error; err != nil {
+		return err
+	}
+
+	// Add index for faster region lookups
+	return db.Exec("CREATE INDEX IF NOT EXISTS idx_node_metadata_region ON node_metadata(region)").Error
 }
 
 // Template for creating a new migration:
