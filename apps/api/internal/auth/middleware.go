@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	authv1 "api/gen/proto/obiente/cloud/auth/v1"
+	"api/internal/logger"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -45,7 +45,7 @@ func getMockDevUser() *authv1.User {
 	lowerEmail := strings.ToLower(user.Email)
 	if _, ok := superAdmins[lowerEmail]; ok {
 		ensureRole(user, RoleSuperAdmin)
-		log.Printf("Mock dev user promoted to superadmin via SUPERADMIN_EMAILS")
+		logger.Debug("Mock dev user promoted to superadmin via SUPERADMIN_EMAILS")
 	}
 
 	ensureRole(user, RoleAdmin)
@@ -173,9 +173,9 @@ func NewAuthConfig() *AuthConfig {
 
 	// Check if auth is disabled for development
 	if isAuthDisabled() {
-		log.Println("⚠️  WARNING: Authentication is DISABLED (DISABLE_AUTH=true)")
-		log.Println("⚠️  This should ONLY be used in development!")
-		log.Println("⚠️  Using mock development user: mem-development")
+		logger.Warn("⚠️  WARNING: Authentication is DISABLED (DISABLE_AUTH=true)")
+		logger.Warn("⚠️  This should ONLY be used in development!")
+		logger.Warn("⚠️  Using mock development user: mem-development")
 		return &AuthConfig{
 			UserInfoCache:  nil,
 			UserInfoURL:    "",
@@ -190,7 +190,7 @@ func NewAuthConfig() *AuthConfig {
 	zitadelURL := os.Getenv("ZITADEL_URL")
 	if zitadelURL == "" {
 		zitadelURL = "https://auth.obiente.cloud" // Default fallback
-		log.Println("⚠️  Warning: ZITADEL_URL not set, using default")
+		logger.Warn("⚠️  Warning: ZITADEL_URL not set, using default")
 	}
 
 	// Build userinfo URL
@@ -202,16 +202,16 @@ func NewAuthConfig() *AuthConfig {
 	}
 
 	if os.Getenv("SKIP_TLS_VERIFY") == "true" {
-		log.Println("⚠️  Warning: TLS verification disabled (SKIP_TLS_VERIFY=true)")
+		logger.Warn("⚠️  Warning: TLS verification disabled (SKIP_TLS_VERIFY=true)")
 		httpClient.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}
 	}
 
-	log.Printf("🔐 Auth Configuration:")
-	log.Printf("  Zitadel URL: %s", zitadelURL)
-	log.Printf("  UserInfo URL: %s", userInfoURL)
-	log.Printf("  Skip TLS Verify: %s", os.Getenv("SKIP_TLS_VERIFY"))
+	logger.Debug("🔐 Auth Configuration:")
+	logger.Debug("  Zitadel URL: %s", zitadelURL)
+	logger.Debug("  UserInfo URL: %s", userInfoURL)
+	logger.Debug("  Skip TLS Verify: %s", os.Getenv("SKIP_TLS_VERIFY"))
 
 	return &AuthConfig{
 		UserInfoCache:  NewUserInfoCache(),
@@ -240,40 +240,40 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 					}
 				}
 				ctx = context.WithValue(ctx, userInfoKey, mockUser)
-				log.Printf("[Auth] Auth disabled - using mock user for: %s", procedure)
+				logger.Debug("[Auth] Auth disabled - using mock user for: %s", procedure)
 				return next(ctx, req)
 			}
 
 			// If auth config is nil but DISABLE_AUTH is not set, this is an error state
 			if config.UserInfoCache == nil {
-				log.Println("⚠️  WARNING: Auth config is nil but DISABLE_AUTH is not set. This should not happen.")
+				logger.Warn("⚠️  WARNING: Auth config is nil but DISABLE_AUTH is not set. This should not happen.")
 				return next(ctx, req)
 			}
 
 			// Extract token from Authorization header
 			authHeader := req.Header().Get(AuthorizationHeader)
 			hasAuthHeader := authHeader != "" && strings.HasPrefix(authHeader, BearerPrefix)
-			log.Printf("[Auth] Procedure: %s, Has auth header: %v", procedure, hasAuthHeader)
+			logger.Debug("[Auth] Procedure: %s, Has auth header: %v", procedure, hasAuthHeader)
 
 			if !hasAuthHeader {
-				log.Printf("[Auth] Missing Authorization header for: %s", procedure)
+				logger.Debug("[Auth] Missing Authorization header for: %s", procedure)
 				return nil, connect.NewError(connect.CodeUnauthenticated, ErrNoToken)
 			}
 
 			token := strings.TrimPrefix(authHeader, BearerPrefix)
 			if token == "" {
-				log.Printf("[Auth] Empty token after Bearer prefix for: %s", procedure)
+				logger.Debug("[Auth] Empty token after Bearer prefix for: %s", procedure)
 				return nil, connect.NewError(connect.CodeUnauthenticated, ErrNoToken)
 			}
 
 			// Validate token against userinfo endpoint
 			userInfo, err := config.validateToken(ctx, token)
 			if err != nil {
-				log.Printf("[Auth] Token validation failed for %s: %v", procedure, err)
+				logger.Debug("[Auth] Token validation failed for %s: %v", procedure, err)
 				return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("error validating token: %w", err))
 			}
 
-			log.Printf("[Auth] Token validated successfully for %s, user: %s", procedure, userInfo.Id)
+			logger.Debug("[Auth] Token validated successfully for %s, user: %s", procedure, userInfo.Id)
 
 			// Add user info to context
 			ctx = context.WithValue(ctx, userInfoKey, userInfo)
@@ -296,7 +296,55 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.User, error) {
 	// Check cache first
 	if cachedUser, found := c.UserInfoCache.Get(token); found {
-		log.Printf("✓ Token validated (cached) for user: %s (%s)", cachedUser.Id, cachedUser.Email)
+		logger.Debug("✓ Token validated (cached) for user: %s (%s)", cachedUser.Id, cachedUser.Email)
+		
+		// Always check superadmin emails for cached users, as SUPERADMIN_EMAILS might have changed
+		// This ensures superadmin status is applied even when using cached user data
+		if cachedUser.Email != "" && c.SuperAdmins != nil {
+			lowerEmail := strings.ToLower(cachedUser.Email)
+			logger.Debug("[SuperAdmin] Checking cached user email: %s (lowercase: %s)", cachedUser.Email, lowerEmail)
+			logger.Debug("[SuperAdmin] SuperAdmins map has %d entries", len(c.SuperAdmins))
+			rolesChanged := false
+			if _, ok := c.SuperAdmins[lowerEmail]; ok {
+				// User is in superadmin list - ensure they have the role
+				hadRole := false
+				for _, role := range cachedUser.Roles {
+					if role == RoleSuperAdmin {
+						hadRole = true
+						break
+					}
+				}
+				if !hadRole {
+					logger.Info("[SuperAdmin] ✓ Granting superadmin role to cached user: %s", cachedUser.Email)
+					ensureRole(cachedUser, RoleSuperAdmin)
+					ensureRole(cachedUser, RoleAdmin)
+					rolesChanged = true
+				}
+			} else {
+				// User is NOT in superadmin list - remove the role if they had it
+				// (in case SUPERADMIN_EMAILS was updated to remove them)
+				newRoles := removeRole(cachedUser.Roles, RoleSuperAdmin)
+				if len(newRoles) != len(cachedUser.Roles) {
+					logger.Info("[SuperAdmin] Removing superadmin role from cached user: %s", cachedUser.Email)
+					cachedUser.Roles = newRoles
+					rolesChanged = true
+				}
+			}
+			
+			// Update cache if roles changed to ensure persistence
+			if rolesChanged {
+				c.UserInfoCache.Set(token, cachedUser)
+				logger.Debug("[SuperAdmin] Updated cache with new roles for user: %s", cachedUser.Email)
+			}
+		} else {
+			if cachedUser.Email == "" {
+				logger.Debug("[SuperAdmin] Cached user has no email, skipping superadmin check")
+			}
+			if c.SuperAdmins == nil {
+				logger.Debug("[SuperAdmin] SuperAdmins map is nil, skipping superadmin check")
+			}
+		}
+		
 		return cachedUser, nil
 	}
 
@@ -319,7 +367,7 @@ func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.U
 	// Check status code
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Printf("UserInfo request failed: status=%d, body=%s", resp.StatusCode, string(body))
+		logger.Debug("UserInfo request failed: status=%d, body=%s", resp.StatusCode, string(body))
 
 		if resp.StatusCode == http.StatusUnauthorized {
 			return nil, ErrInvalidToken
@@ -351,16 +399,29 @@ func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.U
 
 	// Apply superadmin roles if configured via email match
 	if user.Email != "" && c.SuperAdmins != nil {
-		if _, ok := c.SuperAdmins[strings.ToLower(user.Email)]; ok {
+		lowerEmail := strings.ToLower(user.Email)
+		logger.Debug("[SuperAdmin] Checking new user email: %s (lowercase: %s)", user.Email, lowerEmail)
+		logger.Debug("[SuperAdmin] SuperAdmins map has %d entries", len(c.SuperAdmins))
+		if _, ok := c.SuperAdmins[lowerEmail]; ok {
+			logger.Info("[SuperAdmin] ✓ Granting superadmin role to user: %s", user.Email)
 			ensureRole(user, RoleSuperAdmin)
 			ensureRole(user, RoleAdmin)
+		} else {
+			logger.Debug("[SuperAdmin] User %s is NOT in superadmin list", user.Email)
+		}
+	} else {
+		if user.Email == "" {
+			logger.Debug("[SuperAdmin] User has no email, skipping superadmin check")
+		}
+		if c.SuperAdmins == nil {
+			logger.Debug("[SuperAdmin] SuperAdmins map is nil, skipping superadmin check")
 		}
 	}
 
 	// Cache the result
 	c.UserInfoCache.Set(token, user)
 
-	log.Printf("✓ Token validated for user: %s (%s)", user.Id, user.Email)
+	logger.Debug("✓ Token validated for user: %s (%s)", user.Id, user.Email)
 	return user, nil
 }
 
@@ -376,9 +437,23 @@ func ensureRole(user *authv1.User, role string) {
 	user.Roles = append(user.Roles, role)
 }
 
+// removeRole removes a role from a roles slice
+func removeRole(roles []string, roleToRemove string) []string {
+	result := make([]string, 0, len(roles))
+	for _, role := range roles {
+		if role != roleToRemove {
+			result = append(result, role)
+		}
+	}
+	return result
+}
+
 func loadSuperAdminEmails() map[string]struct{} {
 	superAdmins := make(map[string]struct{})
-	for _, raw := range strings.Split(os.Getenv("SUPERADMIN_EMAILS"), ",") {
+	envValue := os.Getenv("SUPERADMIN_EMAILS")
+	logger.Debug("[SuperAdmin] Loading SUPERADMIN_EMAILS from environment: %q", envValue)
+	
+	for _, raw := range strings.Split(envValue, ",") {
 		email := strings.TrimSpace(raw)
 		email = strings.Trim(email, "\"'")
 		email = strings.ToLower(email)
@@ -386,9 +461,15 @@ func loadSuperAdminEmails() map[string]struct{} {
 			continue
 		}
 		superAdmins[email] = struct{}{}
+		logger.Debug("[SuperAdmin] Added superadmin email: %s", email)
 	}
 	if len(superAdmins) > 0 {
-		log.Printf("  Superadmins configured: %d", len(superAdmins))
+		logger.Info("[SuperAdmin] Configured %d superadmin email(s)", len(superAdmins))
+		for email := range superAdmins {
+			logger.Info("[SuperAdmin]   - %s", email)
+		}
+	} else {
+		logger.Warn("[SuperAdmin] No superadmin emails configured (SUPERADMIN_EMAILS is empty or invalid)")
 	}
 	return superAdmins
 }

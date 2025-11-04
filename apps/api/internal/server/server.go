@@ -10,6 +10,7 @@ import (
 
 	adminv1connect "api/gen/proto/obiente/cloud/admin/v1/adminv1connect"
 	authv1connect "api/gen/proto/obiente/cloud/auth/v1/authv1connect"
+	billingv1connect "api/gen/proto/obiente/cloud/billing/v1/billingv1connect"
 	deploymentsv1connect "api/gen/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
 	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
 	superadminv1connect "api/gen/proto/obiente/cloud/superadmin/v1/superadminv1connect"
@@ -21,9 +22,11 @@ import (
 	"api/internal/quota"
 	adminsvc "api/internal/services/admin"
 	authsvc "api/internal/services/auth"
+	billingsvc "api/internal/services/billing"
 	deploymentsvc "api/internal/services/deployments"
 	orgsvc "api/internal/services/organizations"
 	superadminsvc "api/internal/services/superadmin"
+	"api/internal/stripe"
 
 	"connectrpc.com/connect"
 	"connectrpc.com/grpcreflect"
@@ -204,6 +207,8 @@ func registerServices(mux *http.ServeMux) {
 			&database.GitHubIntegration{},
 			&database.BuildHistory{},
 			&database.BuildLog{},
+			&database.BillingAccount{},
+			&database.CreditTransaction{},
 		); err != nil {
 			log.Printf("[Server] AutoMigrate warning: %v", err)
 		}
@@ -290,6 +295,31 @@ func registerServices(mux *http.ServeMux) {
 	)
 	mux.Handle(adminPath, adminHandler)
 
+	// Billing service (always register, but Stripe features require STRIPE_SECRET_KEY)
+	stripeClient, err := stripe.NewClient()
+	if err != nil {
+		log.Printf("[Server] ⚠️  Warning: Stripe client initialization failed: %v", err)
+		log.Printf("[Server] ⚠️  Billing features will return errors. Set STRIPE_SECRET_KEY to enable.")
+		stripeClient = nil
+	}
+
+	// Always register billing service (it will return appropriate errors if Stripe is not configured)
+	billingService := billingsvc.NewService(stripeClient, consoleURL)
+	billingPath, billingHandler := billingv1connect.NewBillingServiceHandler(
+		billingService,
+		connect.WithInterceptors(authInterceptor),
+	)
+	mux.Handle(billingPath, billingHandler)
+
+	// Stripe webhook endpoint (no auth required, uses webhook signature verification)
+	// Only register webhook handler if Stripe is configured
+	if stripeClient != nil {
+		mux.HandleFunc("/webhooks/stripe", billingsvc.HandleStripeWebhook)
+		log.Println("[Server] ✓ Billing service registered with Stripe webhook support")
+	} else {
+		log.Println("[Server] ⚠️  Billing service registered but Stripe not configured (webhook disabled)")
+	}
+
 }
 
 func firstNonEmpty(values ...string) string {
@@ -307,6 +337,7 @@ func registerReflection(mux *http.ServeMux) {
 		authv1connect.AuthServiceName,
 		deploymentsv1connect.DeploymentServiceName,
 		organizationsv1connect.OrganizationServiceName,
+		billingv1connect.BillingServiceName,
 	)
 
 	grpcPath, grpcHandler := grpcreflect.NewHandlerV1(reflector)

@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
 WORKDIR /build
 COPY apps/api/ ./apps/api/
 
-# Build the application with optimizations
+# Build the API application with optimizations
 WORKDIR /build/apps/api
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
@@ -35,6 +35,14 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
     -trimpath \
     -ldflags="-w -s -extldflags '-static'" \
     -o /build/api ./main.go
+
+# Build the DNS server with optimizations
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -trimpath \
+    -ldflags="-w -s -extldflags '-static'" \
+    -o /build/dns-server ./cmd/dns/main.go
 
 # Build stage for nixpacks
 FROM rust:1.75-alpine AS nixpacks-builder
@@ -95,12 +103,13 @@ COPY --from=nixpacks-builder /usr/local/cargo/bin/nixpacks /usr/local/bin/nixpac
 
 WORKDIR /app
 
-# Copy API binary from Go builder
+# Copy both binaries from Go builder
 COPY --from=go-builder /build/api .
+COPY --from=go-builder /build/dns-server .
 
-# Expose port
-EXPOSE 3001
+# Expose ports
+EXPOSE 3001 53/udp 53/tcp
 
-# Run the application
+# Run the application (default to API)
 CMD ["./api"]
 

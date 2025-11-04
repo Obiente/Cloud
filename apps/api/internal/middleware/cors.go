@@ -1,10 +1,11 @@
 package middleware
 
 import (
-	"log"
 	"net/http"
 	"os"
 	"strings"
+
+	"api/internal/logger"
 )
 
 // CORSConfig holds CORS configuration
@@ -90,7 +91,7 @@ func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 				// Browsers reject "Access-Control-Allow-Origin: *" with credentials
 				if config.AllowCredentials && origin != "" {
 					allowedOrigin = origin
-					log.Printf("[CORS] Wildcard mode: echoing origin %s", origin)
+					logger.Debug("[CORS] Wildcard mode: echoing origin %s", origin)
 				} else if !config.AllowCredentials {
 					allowedOrigin = "*"
 				} else {
@@ -106,19 +107,19 @@ func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 					
 					if normalizedAllowed == normalizedOrigin || allowed == "*" {
 						allowedOrigin = origin
-						log.Printf("[CORS] Origin %s matched allowed origin %s", origin, allowed)
+						logger.Debug("[CORS] Origin %s matched allowed origin %s", origin, allowed)
 						break
 					}
 				}
 				
 				if allowedOrigin == "" {
-					log.Printf("[CORS] Origin %s NOT in allowed list: %v", origin, config.AllowedOrigins)
+					logger.Debug("[CORS] Origin %s NOT in allowed list: %v", origin, config.AllowedOrigins)
 				}
 			} else {
 				// No Origin header - might be same-origin request or browser didn't send it
 				// Still allow OPTIONS for preflight from same-origin
 				if r.Method == http.MethodOptions {
-					log.Printf("[CORS] OPTIONS request with no Origin header")
+					logger.Debug("[CORS] OPTIONS request with no Origin header")
 				}
 			}
 
@@ -166,8 +167,9 @@ func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 
 // CORSHandler wraps an http.Handler with CORS middleware
 func CORSHandler(handler http.Handler) http.Handler {
+	logger.Init()
 	config := DefaultCORSConfig()
-	log.Printf("[Middleware] CORS initialized - AllowedOrigins: %v, AllowCredentials: %v",
+	logger.Debug("[Middleware] CORS initialized - AllowedOrigins: %v, AllowCredentials: %v",
 		config.AllowedOrigins, config.AllowCredentials)
 	return CORS(config)(handler)
 }
