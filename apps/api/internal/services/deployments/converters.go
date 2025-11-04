@@ -69,6 +69,18 @@ func dbDeploymentToProto(db *database.Deployment) *deploymentsv1.Deployment {
 	if db.ComposeFilePath != nil {
 		deployment.ComposeFilePath = proto.String(*db.ComposeFilePath)
 	}
+	if db.BuildPath != nil {
+		deployment.BuildPath = proto.String(*db.BuildPath)
+	}
+	if db.BuildOutputPath != nil {
+		deployment.BuildOutputPath = proto.String(*db.BuildOutputPath)
+	}
+	if db.UseNginx != nil {
+		deployment.UseNginx = proto.Bool(*db.UseNginx)
+	}
+	if db.NginxConfig != nil {
+		deployment.NginxConfig = proto.String(*db.NginxConfig)
+	}
 
 	// Runtime fields
 	if db.Image != nil {
@@ -156,6 +168,22 @@ func protoToDBDeployment(protoDep *deploymentsv1.Deployment, orgID string, creat
 	if protoDep.ComposeFilePath != nil {
 		composeFilePath := protoDep.GetComposeFilePath()
 		db.ComposeFilePath = &composeFilePath
+	}
+	if protoDep.BuildPath != nil {
+		buildPath := protoDep.GetBuildPath()
+		db.BuildPath = &buildPath
+	}
+	if protoDep.BuildOutputPath != nil {
+		buildOutputPath := protoDep.GetBuildOutputPath()
+		db.BuildOutputPath = &buildOutputPath
+	}
+	if protoDep.UseNginx != nil {
+		useNginx := protoDep.GetUseNginx()
+		db.UseNginx = &useNginx
+	}
+	if protoDep.NginxConfig != nil {
+		nginxConfig := protoDep.GetNginxConfig()
+		db.NginxConfig = &nginxConfig
 	}
 	if protoDep.Image != nil {
 		img := protoDep.GetImage()

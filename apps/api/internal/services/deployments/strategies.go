@@ -16,44 +16,134 @@ import (
 	"api/internal/logger"
 )
 
-// RailpacksStrategy handles Railpacks deployments
-// Railpacks is a variant of Nixpacks that works out of the box with minimal configuration.
+// RailpackStrategy handles Railpack deployments
+// Railpack is a variant of Nixpacks that works out of the box with minimal configuration.
 // It supports: Clojure, Cobol, Crystal, C#/.NET, Dart, Deno, Elixir, F#, Gleam, Go,
 // Haskell, Java, Lunatic, Node, PHP, Python, Ruby, Rust, Scheme, Staticfile,
 // Swift, Scala, Zig
 // The detection is Rails-optimized, but the build can handle any supported language.
-type RailpacksStrategy struct{}
+type RailpackStrategy struct{}
 
-func NewRailpacksStrategy() *RailpacksStrategy {
-	return &RailpacksStrategy{}
+func NewRailpackStrategy() *RailpackStrategy {
+	return &RailpackStrategy{}
 }
 
-func (s *RailpacksStrategy) Name() string {
-	return "Railpacks"
+func (s *RailpackStrategy) Name() string {
+	return "Railpack"
 }
 
-func (s *RailpacksStrategy) Detect(ctx context.Context, repoPath string) (bool, error) {
-	// Check for Rails-specific files (Railpacks is optimized for Rails detection)
-	// Note: While Railpacks can build any language, this detection prioritizes Rails apps
-	hasGemfile := fileExists(filepath.Join(repoPath, "Gemfile"))
-	hasRailsApp := fileExists(filepath.Join(repoPath, "config", "application.rb")) ||
-		fileExists(filepath.Join(repoPath, "config.ru"))
+func (s *RailpackStrategy) Detect(ctx context.Context, repoPath string) (bool, error) {
+	// Railpack can build any language that Nixpacks can build:
+	// Clojure, Cobol, Crystal, C#/.NET, Dart, Deno, Elixir, F#, Gleam, Go,
+	// Haskell, Java, Lunatic, Node, PHP, Python, Ruby, Rust, Scheme,
+	// Staticfile, Swift, Scala, Zig
+	// Check for common indicators that Railpack can handle (same as Nixpacks)
 
-	return hasGemfile && hasRailsApp, nil
+	// Check exact filenames first
+	exactIndicators := []string{
+		// Node.js/Deno
+		"package.json",
+		"deno.json",
+		"deno.jsonc",
+		// Python
+		"requirements.txt",
+		"setup.py",
+		"Pipfile",
+		"pyproject.toml",
+		// Rust
+		"Cargo.toml",
+		// Go
+		"go.mod",
+		// Java/Scala
+		"pom.xml",
+		"build.gradle",
+		"build.gradle.kts",
+		"build.sbt",
+		// PHP
+		"composer.json",
+		// Ruby/Rails
+		"Gemfile",
+		// Elixir/Phoenix
+		"mix.exs",
+		// Dart
+		"pubspec.yaml",
+		"pubspec.yml",
+		// Crystal
+		"shard.yml",
+		// Gleam
+		"gleam.toml",
+		// Zig
+		"build.zig",
+		// Swift
+		"Package.swift",
+		// Staticfile
+		"Staticfile",
+		"static.json",
+		// Clojure
+		"project.clj",
+		"build.boot",
+		"deps.edn",
+		// Lunatic
+		"lunatic.toml",
+	}
+
+	for _, indicator := range exactIndicators {
+		if fileExists(filepath.Join(repoPath, indicator)) {
+			return true, nil
+		}
+	}
+
+	// Check for pattern-based indicators
+	patterns := []string{
+		"*.csproj",    // C#/.NET
+		"*.fsproj",    // F#
+		"*.sln",       // .NET Solution
+		"*.vbproj",    // VB.NET
+		"*.cabal",     // Haskell
+		"stack.yaml",  // Haskell Stack
+		"package.yaml", // Haskell
+	}
+
+	for _, pattern := range patterns {
+		if hasAnyFile(repoPath, pattern) {
+			return true, nil
+		}
+	}
+
+	// Check for HTML/static sites (index.html without package.json or Dockerfile)
+	if fileExists(filepath.Join(repoPath, "index.html")) &&
+		!fileExists(filepath.Join(repoPath, "package.json")) &&
+		!fileExists(filepath.Join(repoPath, "Dockerfile")) {
+		return true, nil
+	}
+
+	// Don't use Railpack if Dockerfile exists (should use Dockerfile strategy instead)
+	if fileExists(filepath.Join(repoPath, "Dockerfile")) {
+		return false, nil
+	}
+
+	// Don't use Railpack if docker-compose.yml exists (should use Plain Compose strategy instead)
+	if hasFile(repoPath, "docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml") {
+		return false, nil
+	}
+
+	// Default fallback: Railpack can try to build anything
+	// This makes Railpack the default fallback instead of Nixpacks
+	return true, nil
 }
 
-func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Deployment, config *BuildConfig) (*BuildResult, error) {
+func (s *RailpackStrategy) Build(ctx context.Context, deployment *database.Deployment, config *BuildConfig) (*BuildResult, error) {
 	// Helper function to write to build logs if writer is available
 	writeBuildLog := func(format string, args ...interface{}) {
 		msg := fmt.Sprintf(format, args...)
 		if config.LogWriter != nil {
 			config.LogWriter.Write([]byte(msg + "\n"))
 		}
-		logger.Debug("[Railpacks] %s", msg)
+		logger.Debug("[Railpack] %s", msg)
 	}
 
 	writeBuildLog("🚀 Obiente Cloud: Starting deployment build")
-	writeBuildLog("   📦 Build strategy: Railpacks (Railway optimized)")
+	writeBuildLog("   📦 Build strategy: Railpack (Railway optimized)")
 	writeBuildLog("   🔗 Repository: %s (branch: %s)", config.RepositoryURL, config.Branch)
 
 	buildDir, err := ensureBuildDir(deployment.ID)
@@ -70,6 +160,17 @@ func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Depl
 
 	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
 
+	// Determine build working directory (default to repo root)
+	buildWorkDir := buildDir
+	if config.BuildPath != "" {
+		buildWorkDir = filepath.Join(buildDir, config.BuildPath)
+		// Ensure build directory exists
+		if err := os.MkdirAll(buildWorkDir, 0755); err != nil {
+			return &BuildResult{Success: false, Error: fmt.Errorf("failed to create build path: %w", err)}, nil
+		}
+		writeBuildLog("   📁 Build path: %s", config.BuildPath)
+	}
+
 	// Railpack doesn't need config files - it auto-detects everything
 	// However, we need to ensure static sites that need building get built
 	// For Astro and similar frameworks, we may need to modify the start command
@@ -77,67 +178,68 @@ func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Depl
 	if config.LogWriter != nil {
 		config.LogWriter.Write([]byte("   🔧 Analyzing project...\n"))
 	}
-	
+
 	// Check if this is a static site that needs building (like Astro)
 	// If so, ensure the start command includes building
 	startCommand := config.StartCommand
 	if startCommand == "" {
 		startCommand = detectDefaultStartCommand(buildDir)
 	}
-	
+
+	// COMMENTED OUT: Astro detection logic - temporarily disabled for testing
 	// For Astro projects using preview, ensure build happens first
-	isAstro := fileExists(filepath.Join(buildDir, "astro.config.js")) ||
-		fileExists(filepath.Join(buildDir, "astro.config.mjs")) ||
-		fileExists(filepath.Join(buildDir, "astro.config.ts"))
-	
-	if isAstro && strings.Contains(startCommand, "preview") {
-		// Railpack will run the start command, but we need to ensure build happens first
-		// Check if dist folder exists - if not, we need to build first
-		distExists := fileExists(filepath.Join(buildDir, "dist"))
-		
-		// Detect package manager for build command
-		var buildCmd string
-		if fileExists(filepath.Join(buildDir, "pnpm-lock.yaml")) {
-			buildCmd = "pnpm build"
-		} else if fileExists(filepath.Join(buildDir, "yarn.lock")) {
-			buildCmd = "yarn build"
-		} else {
-			buildCmd = "npm run build"
-		}
-		
-		// If dist doesn't exist, we need to build before preview
-		// Railpack doesn't have a separate build phase, so we chain the commands
-		if !distExists {
-			// Combine build and preview into one command
-			// Use && to ensure build completes before preview starts
-			if strings.Contains(startCommand, "pnpm") {
-				startCommand = fmt.Sprintf("%s && pnpm preview --host", buildCmd)
-			} else if strings.Contains(startCommand, "yarn") {
-				startCommand = fmt.Sprintf("%s && yarn preview --host", buildCmd)
-			} else {
-				startCommand = fmt.Sprintf("%s && npm run preview -- --host", buildCmd)
-			}
-			if config.LogWriter != nil {
-				config.LogWriter.Write([]byte(fmt.Sprintf("   🔧 Detected Astro project - configured start command to build first: %s\n", startCommand)))
-			}
-		} else {
-			// Dist exists, just ensure preview has --host flag
-			if !strings.Contains(startCommand, "--host") {
-				if strings.Contains(startCommand, "pnpm") {
-					startCommand = strings.Replace(startCommand, "pnpm preview", "pnpm preview --host", 1)
-				} else if strings.Contains(startCommand, "yarn") {
-					startCommand = strings.Replace(startCommand, "yarn preview", "yarn preview --host", 1)
-				} else {
-					startCommand = strings.Replace(startCommand, "npm run preview", "npm run preview -- --host", 1)
-				}
-			}
-		}
-	}
-	
+	// isAstro := fileExists(filepath.Join(buildDir, "astro.config.js")) ||
+	// 	fileExists(filepath.Join(buildDir, "astro.config.mjs")) ||
+	// 	fileExists(filepath.Join(buildDir, "astro.config.ts"))
+
+	// if isAstro && strings.Contains(startCommand, "preview") {
+	// 	// Railpack will run the start command, but we need to ensure build happens first
+	// 	// Check if dist folder exists - if not, we need to build first
+	// 	distExists := fileExists(filepath.Join(buildDir, "dist"))
+
+	// 	// Detect package manager for build command
+	// 	var buildCmd string
+	// 	if fileExists(filepath.Join(buildDir, "pnpm-lock.yaml")) {
+	// 		buildCmd = "pnpm build"
+	// 	} else if fileExists(filepath.Join(buildDir, "yarn.lock")) {
+	// 		buildCmd = "yarn build"
+	// 	} else {
+	// 		buildCmd = "npm run build"
+	// 	}
+
+	// 	// If dist doesn't exist, we need to build before preview
+	// 	// Railpack doesn't have a separate build phase, so we chain the commands
+	// 	if !distExists {
+	// 		// Combine build and preview into one command
+	// 		// Use && to ensure build completes before preview starts
+	// 		if strings.Contains(startCommand, "pnpm") {
+	// 			startCommand = fmt.Sprintf("%s && pnpm preview --host", buildCmd)
+	// 		} else if strings.Contains(startCommand, "yarn") {
+	// 			startCommand = fmt.Sprintf("%s && yarn preview --host", buildCmd)
+	// 		} else {
+	// 			startCommand = fmt.Sprintf("%s && npm run preview -- --host", buildCmd)
+	// 		}
+	// 		if config.LogWriter != nil {
+	// 			config.LogWriter.Write([]byte(fmt.Sprintf("   🔧 Detected Astro project - configured start command to build first: %s\n", startCommand)))
+	// 		}
+	// 	} else {
+	// 		// Dist exists, just ensure preview has --host flag
+	// 		if !strings.Contains(startCommand, "--host") {
+	// 			if strings.Contains(startCommand, "pnpm") {
+	// 				startCommand = strings.Replace(startCommand, "pnpm preview", "pnpm preview --host", 1)
+	// 			} else if strings.Contains(startCommand, "yarn") {
+	// 				startCommand = strings.Replace(startCommand, "yarn preview", "yarn preview --host", 1)
+	// 			} else {
+	// 				startCommand = strings.Replace(startCommand, "npm run preview", "npm run preview -- --host", 1)
+	// 			}
+	// 		}
+	// 	}
+	// }
+
 	// Store the modified start command back in config so it's used when the container starts
 	// The start command will be set at container runtime by the orchestrator
 	config.StartCommand = startCommand
-	
+
 	// Use Railpack (Railway's build tool, separate from nixpacks)
 	// Railpack is a different CLI tool that uses Railway's optimized build process
 	// It uses ghcr.io/railwayapp/nixpacks base images but with different build logic
@@ -150,13 +252,37 @@ func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Depl
 		// If PATH lookup fails and full path doesn't exist, return error
 		return &BuildResult{Success: false, Error: fmt.Errorf("railpack executable not found in PATH or %s. Please ensure railpack is installed in the Docker image", railpackPath)}, nil
 	}
-	cmd := exec.CommandContext(ctx, railpackPath, "build", buildDir, "--name", imageName)
-	envVars := getEnvAsStringSlice(config.EnvVars)
+	// Use buildWorkDir (which includes BuildPath if set) instead of buildDir
+	cmd := exec.CommandContext(ctx, railpackPath, "build", buildWorkDir, "--name", imageName)
 	
+	// Prepare environment variables - add RAILPACK_* vars to config.EnvVars before converting
+	// This ensures they override any existing values
+	railpackEnvVars := make(map[string]string)
+	// Copy existing env vars
+	for k, v := range config.EnvVars {
+		railpackEnvVars[k] = v
+	}
+	// Override with RAILPACK_* commands if provided
+	// See https://railpack.com/config/environment-variables
+	if config.InstallCommand != "" {
+		railpackEnvVars["RAILPACK_INSTALL_CMD"] = config.InstallCommand
+		writeBuildLog("   📦 Install command: %s", config.InstallCommand)
+	}
+	if config.BuildCommand != "" {
+		railpackEnvVars["RAILPACK_BUILD_CMD"] = config.BuildCommand
+		writeBuildLog("   🔨 Build command: %s", config.BuildCommand)
+	}
+	if config.StartCommand != "" {
+		railpackEnvVars["RAILPACK_START_CMD"] = config.StartCommand
+		writeBuildLog("   🚀 Start command: %s", config.StartCommand)
+	}
+	
+	envVars := getEnvAsStringSlice(railpackEnvVars)
+
 	// Railpack requires BUILDKIT_HOST to be set for BuildKit builds
 	// Check if buildx is available; if not, disable BuildKit as fallback
 	if !isBuildxAvailable(ctx) {
-		logger.Warn("[Railpacks] Buildx not available, disabling BuildKit")
+		logger.Warn("[Railpack] Buildx not available, disabling BuildKit")
 		envVars = append(envVars, "DOCKER_BUILDKIT=0")
 	} else {
 		// Enable BuildKit and ensure BuildKit daemon container is running
@@ -184,10 +310,27 @@ func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Depl
 		return &BuildResult{Success: false, Error: fmt.Errorf("railpack build failed: %w", err)}, nil
 	}
 
+	// Extract start command from railpack image if not already set
+	// Railpack embeds the start command in the image's CMD, so we should extract it
+	if config.StartCommand == "" {
+		extractedCmd, _ := extractImageCmd(ctx, imageName)
+		if extractedCmd != "" {
+			config.StartCommand = extractedCmd
+			writeBuildLog("   📌 Extracted start command from image: %s", extractedCmd)
+		} else {
+			// If extraction failed or returned empty, try to detect from repository
+			detectedCmd := detectDefaultStartCommand(buildWorkDir)
+			if detectedCmd != "" {
+				config.StartCommand = detectedCmd
+				writeBuildLog("   📌 Detected start command from repository: %s", detectedCmd)
+			}
+		}
+	}
+
 	// Get image size
-	var imageSize int64
+	imageSize := int64(0)
 	if size, err := getImageSize(ctx, imageName); err != nil {
-		logger.Warn("[Railpacks] Warning: Failed to get image size: %v", err)
+		logger.Warn("[Railpack] Warning: Failed to get image size: %v", err)
 	} else {
 		imageSize = size
 	}
@@ -196,7 +339,8 @@ func (s *RailpacksStrategy) Build(ctx context.Context, deployment *database.Depl
 	port := config.Port
 	if port == 0 {
 		// Try to detect from repository, default to 3000 (common for Rails/Node)
-		port = detectPortFromRepo(buildDir, 3000)
+		// Use buildWorkDir (which includes BuildPath if set) for port detection
+		port = detectPortFromRepo(buildWorkDir, 3000)
 	}
 
 	return &BuildResult{
@@ -368,6 +512,33 @@ func detectPortFromPackageJson(repoPath string) int {
 
 // detectPortFromNodeFramework checks framework-specific config files
 func detectPortFromNodeFramework(repoPath string) int {
+	// Astro
+	if fileExists(filepath.Join(repoPath, "astro.config.js")) ||
+		fileExists(filepath.Join(repoPath, "astro.config.mjs")) ||
+		fileExists(filepath.Join(repoPath, "astro.config.ts")) {
+		// Check astro config for port
+		configFiles := []string{"astro.config.js", "astro.config.mjs", "astro.config.ts"}
+		for _, configFile := range configFiles {
+			configPath := filepath.Join(repoPath, configFile)
+			if !fileExists(configPath) {
+				continue
+			}
+			content, err := readFile(configPath)
+			if err != nil {
+				continue
+			}
+			// Look for server.port in Astro config
+			portRegex := regexp.MustCompile(`(?i)(?:server\s*:\s*\{[^}]*)?port\s*[:=]\s*(\d+)`)
+			matches := portRegex.FindStringSubmatch(content)
+			if len(matches) > 1 {
+				if port, err := strconv.Atoi(matches[1]); err == nil && port > 0 && port < 65536 {
+					return port
+				}
+			}
+		}
+		return 4321 // Astro default port
+	}
+
 	// Next.js
 	if fileExists(filepath.Join(repoPath, "next.config.js")) || fileExists(filepath.Join(repoPath, "next.config.mjs")) {
 		if port := detectPortFromNextConfig(repoPath); port > 0 {
@@ -738,16 +909,29 @@ func (s *NixpacksStrategy) Build(ctx context.Context, deployment *database.Deplo
 
 	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
 
-	// Create nixpacks.toml with start command if provided
+	// Determine build working directory (default to repo root)
+	buildWorkDir := buildDir
+	if config.BuildPath != "" {
+		buildWorkDir = filepath.Join(buildDir, config.BuildPath)
+		// Ensure build directory exists
+		if err := os.MkdirAll(buildWorkDir, 0755); err != nil {
+			return &BuildResult{Success: false, Error: fmt.Errorf("failed to create build path: %w", err)}, nil
+		}
+		writeBuildLog("   📁 Build path: %s", config.BuildPath)
+	}
+
+	// Create nixpacks.toml with install, build, and start commands if provided
 	// Use standard nixpacks provider (not Railway's)
 	writeBuildLog("   🔧 Analyzing project and configuring build...")
-	if err := createNixpacksConfig(buildDir, config.StartCommand, false, config.LogWriter); err != nil {
+	// Create config in buildWorkDir (which includes BuildPath if set)
+	if err := createNixpacksConfig(buildWorkDir, config.InstallCommand, config.BuildCommand, config.StartCommand, false, config.LogWriter); err != nil {
 		logger.Warn("[Nixpacks] Warning: Failed to create nixpacks.toml: %v", err)
 	}
 
 	// Use Nixpacks to build application
 	writeBuildLog("   🔨 Building application with Nixpacks...")
-	cmd := exec.CommandContext(ctx, "nixpacks", "build", buildDir, "--name", imageName)
+	// Use buildWorkDir (which includes BuildPath if set) instead of buildDir
+	cmd := exec.CommandContext(ctx, "nixpacks", "build", buildWorkDir, "--name", imageName)
 	envVars := getEnvAsStringSlice(config.EnvVars)
 	// Check if buildx is available; if not, disable BuildKit as fallback
 	if !isBuildxAvailable(ctx) {
@@ -784,7 +968,8 @@ func (s *NixpacksStrategy) Build(ctx context.Context, deployment *database.Deplo
 	}
 
 	// Auto-detect port based on framework
-	port := s.detectPort(buildDir, config.Port)
+	// Use buildWorkDir (which includes BuildPath if set) for port detection
+	port := s.detectPort(buildWorkDir, config.Port)
 
 	return &BuildResult{
 		ImageName:      imageName,
@@ -824,26 +1009,26 @@ func checkBuildkitContainer(ctx context.Context) bool {
 // with better isolation and caching capabilities.
 func startBuildkitContainer(ctx context.Context) {
 	containerName := "obiente-cloud-buildkit"
-	
+
 	// Check if buildkit container already exists (running or stopped)
 	cmd := exec.CommandContext(ctx, "docker", "ps", "-a", "--filter", fmt.Sprintf("name=%s", containerName), "--format", "{{.Names}}")
 	output, err := cmd.Output()
-		if err != nil {
-			logger.Warn("[Railpacks] Failed to check for buildkit container: %v", err)
-			return
-		}
-	
+	if err != nil {
+		logger.Warn("[Railpack] Failed to check for buildkit container: %v", err)
+		return
+	}
+
 	if strings.TrimSpace(string(output)) == containerName {
 		// Container exists, try to start it if it's stopped
 		startCmd := exec.CommandContext(ctx, "docker", "start", containerName)
 		if err := startCmd.Run(); err != nil {
-			logger.Warn("[Railpacks] Failed to start existing buildkit container: %v", err)
+			logger.Warn("[Railpack] Failed to start existing buildkit container: %v", err)
 		} else {
-			logger.Info("[Railpacks] Started existing BuildKit container: %s", containerName)
+			logger.Info("[Railpack] Started existing BuildKit container: %s", containerName)
 		}
 		return
 	}
-	
+
 	// Container doesn't exist, create and start it
 	// Create BuildKit cache volume in obiente volume path
 	buildkitCacheDir := "/var/lib/obiente/volumes/buildkit-cache"
@@ -851,16 +1036,16 @@ func startBuildkitContainer(ctx context.Context) {
 	if _, err := os.Stat("/var/lib/obiente/volumes"); os.IsNotExist(err) {
 		buildkitCacheDir = "/tmp/obiente-volumes/buildkit-cache"
 	}
-	
+
 	// Ensure cache directory exists
 	if err := os.MkdirAll(buildkitCacheDir, 0755); err != nil {
-		logger.Warn("[Railpacks] Warning: Failed to create BuildKit cache directory %s: %v", buildkitCacheDir, err)
+		logger.Warn("[Railpack] Warning: Failed to create BuildKit cache directory %s: %v", buildkitCacheDir, err)
 		// Continue without cache directory
 		buildkitCacheDir = ""
 	}
-	
-	logger.Debug("[Railpacks] Starting BuildKit daemon container: %s", containerName)
-	
+
+	logger.Debug("[Railpack] Starting BuildKit daemon container: %s", containerName)
+
 	// Build docker run command with volume mount for BuildKit cache
 	// Note: We don't use --rm because we want the container to persist for caching
 	args := []string{
@@ -870,32 +1055,32 @@ func startBuildkitContainer(ctx context.Context) {
 		"--name", containerName,
 		"--restart", "unless-stopped",
 	}
-	
+
 	// Add volume mount for BuildKit cache if directory was created
 	if buildkitCacheDir != "" {
 		args = append(args, "-v", fmt.Sprintf("%s:/var/lib/buildkit", buildkitCacheDir))
-		logger.Debug("[Railpacks] Using BuildKit cache directory: %s", buildkitCacheDir)
+		logger.Debug("[Railpack] Using BuildKit cache directory: %s", buildkitCacheDir)
 	}
-	
+
 	args = append(args, "moby/buildkit:latest")
-	
+
 	createCmd := exec.CommandContext(ctx, "docker", args...)
 	if err := createCmd.Run(); err != nil {
-		logger.Warn("[Railpacks] Failed to start BuildKit container: %v. Railpack may fail.", err)
+		logger.Warn("[Railpack] Failed to start BuildKit container: %v. Railpack may fail.", err)
 	} else {
-		logger.Info("[Railpacks] Successfully started BuildKit container: %s", containerName)
+		logger.Info("[Railpack] Successfully started BuildKit container: %s", containerName)
 	}
 }
 
-// createNixpacksConfig creates a nixpacks.toml file with the start command and Node.js version if provided
-// This is used by both NixpacksStrategy and RailpacksStrategy
+// createNixpacksConfig creates a nixpacks.toml file with install, build, and start commands
+// This is used by both NixpacksStrategy and RailpackStrategy
 // If startCommand is empty, it attempts to detect a default from the repository
 // If Node.js version is not specified, it attempts to detect from package.json engines field
 // useRailwayProvider: if true, configures for Railway's Railpack provider (uses Railway base images)
 // logWriter: optional writer for build logs (if nil, only logs to API server)
-func createNixpacksConfig(buildDir, startCommand string, useRailwayProvider bool, logWriter io.Writer) error {
+func createNixpacksConfig(buildDir, installCommand, buildCommand, startCommand string, useRailwayProvider bool, logWriter io.Writer) error {
 	nixpacksConfigPath := filepath.Join(buildDir, "nixpacks.toml")
-	
+
 	// Helper function to write to build logs if writer is available
 	writeBuildLog := func(format string, args ...interface{}) {
 		msg := fmt.Sprintf(format, args...)
@@ -916,14 +1101,14 @@ func createNixpacksConfig(buildDir, startCommand string, useRailwayProvider bool
 	} else {
 		writeBuildLog("✨ Obiente Cloud: Using provided start command: %s", startCommand)
 	}
-	
+
 	// Detect Node.js version requirement from package.json or .nvmrc
 	// detectNodeVersion checks .nvmrc first, then package.json engines.node
 	nvmrcPath := filepath.Join(buildDir, ".nvmrc")
 	packageJsonPath := filepath.Join(buildDir, "package.json")
 	nodeVersion := detectNodeVersion(buildDir)
 	versionSource := ""
-	
+
 	if nodeVersion != "" {
 		// Determine source for better logging
 		versionSource = "package.json engines.node"
@@ -945,7 +1130,7 @@ func createNixpacksConfig(buildDir, startCommand string, useRailwayProvider bool
 		// This is better than Nixpacks' default which uses an older version
 		nodeVersion = getDefaultNodeVersion()
 		versionSource = "Obiente Cloud default (latest LTS)"
-		
+
 		// Check if package.json exists to provide helpful message
 		if fileExists(packageJsonPath) {
 			writeBuildLog("✨ Obiente Cloud: No Node.js version specified in package.json or .nvmrc")
@@ -957,28 +1142,41 @@ func createNixpacksConfig(buildDir, startCommand string, useRailwayProvider bool
 			writeBuildLog("✨ Obiente Cloud: Using latest LTS Node.js version: %s (default)", nodeVersion)
 		}
 	}
-	
+
 	// Check if this is an Astro project and needs special build configuration
 	isAstro := fileExists(filepath.Join(buildDir, "astro.config.js")) ||
 		fileExists(filepath.Join(buildDir, "astro.config.mjs")) ||
 		fileExists(filepath.Join(buildDir, "astro.config.ts"))
-	
+
 	// Build nixpacks.toml content
 	var configParts []string
-	
+
 	// Add provider configuration for Railway Railpack if requested
 	if useRailwayProvider {
 		// Railway's Railpack uses railway provider which selects Railway's optimized base images
 		// This ensures we use ghcr.io/railwayapp/nixpacks base images instead of standard ones
 		configParts = append(configParts, "[provider]\nname = \"railway\"\n")
 	}
-	
+
 	// Set Node.js version via environment variable
 	// Nixpacks will read this along with .nvmrc file to determine the Node.js version
 	configParts = append(configParts, fmt.Sprintf("[variables]\nNODE_VERSION = %q\n", nodeVersion))
-	
+
+	// Add install phase if provided (overrides default npm ci)
+	if installCommand != "" {
+		configParts = append(configParts, fmt.Sprintf("[phases.install]\ncmds = [%q]\n", installCommand))
+		writeBuildLog("   📦 Configured install command: %s", installCommand)
+	}
+
+	// Add build phase if provided
+	if buildCommand != "" {
+		configParts = append(configParts, fmt.Sprintf("[phases.build]\ncmds = [%q]\n", buildCommand))
+		writeBuildLog("   🔨 Configured build command: %s", buildCommand)
+	}
+
 	// For Astro projects, ensure build command runs before start
-	if isAstro && startCommand != "" {
+	// Only add if buildCommand wasn't already provided
+	if isAstro && startCommand != "" && buildCommand == "" {
 		// Check if start command is a preview command (needs build first)
 		if strings.Contains(startCommand, "preview") {
 			// Detect package manager for build command
@@ -990,27 +1188,27 @@ func createNixpacksConfig(buildDir, startCommand string, useRailwayProvider bool
 			} else {
 				buildCmd = "npm run build"
 			}
-			
+
 			// Add build phase to ensure Astro builds before preview
 			configParts = append(configParts, fmt.Sprintf("[phases.build]\ncmds = [%q]\n", buildCmd))
 			writeBuildLog("   🔧 Detected Astro project - configuring build phase: %s", buildCmd)
 		}
 	}
-	
+
 	// Add start command if provided
 	if startCommand != "" {
 		configParts = append(configParts, fmt.Sprintf("[start]\ncmd = %q\n", startCommand))
 	}
-	
+
 	// If no configuration needed, don't create file (let nixpacks auto-detect)
 	if len(configParts) == 0 {
 		return nil
 	}
-	
+
 	// Check if files exist before creating them (to preserve user's custom configs)
 	nixpacksConfigExists := fileExists(nixpacksConfigPath)
 	nvmrcExists := fileExists(nvmrcPath)
-	
+
 	// Only create nixpacks.toml if it doesn't already exist (don't overwrite user's custom config)
 	if !nixpacksConfigExists {
 		configContent := strings.Join(configParts, "\n")
@@ -1024,7 +1222,7 @@ func createNixpacksConfig(buildDir, startCommand string, useRailwayProvider bool
 		configContent := strings.Join(configParts, "\n")
 		logger.Debug("[Nixpacks] Would have created nixpacks.toml with content:\n%s", configContent)
 	}
-	
+
 	// Create .nvmrc file for Node.js version specification
 	// Nixpacks automatically reads .nvmrc to determine the Node.js version
 	// This is the primary method for Node.js version specification in Nixpacks
@@ -1037,14 +1235,20 @@ func createNixpacksConfig(buildDir, startCommand string, useRailwayProvider bool
 			logger.Debug("[Nixpacks] Created .nvmrc file with version: %s", nodeVersion)
 		}
 	}
-	
+
 	// Provide user-friendly summary of what was configured
 	writeBuildLog("✅ Obiente Cloud: Build configuration complete")
 	writeBuildLog("   📌 Node.js version: %s (%s)", nodeVersion, versionSource)
+	if installCommand != "" {
+		writeBuildLog("   📌 Install command: %s", installCommand)
+	}
+	if buildCommand != "" {
+		writeBuildLog("   📌 Build command: %s", buildCommand)
+	}
 	if startCommand != "" {
 		writeBuildLog("   📌 Start command: %s", startCommand)
 	}
-	
+
 	// List which files were created vs preserved
 	var configFiles []string
 	if !nixpacksConfigExists {
@@ -1058,7 +1262,97 @@ func createNixpacksConfig(buildDir, startCommand string, useRailwayProvider bool
 		configFiles = append(configFiles, ".nvmrc (preserved)")
 	}
 	writeBuildLog("   📌 Configuration files: %s", strings.Join(configFiles, ", "))
-	
+
+	return nil
+}
+
+// createRailpackConfig creates a nixpacks.toml file with install, build, and start commands
+// Railpack reads nixpacks.toml files (same format as nixpacks)
+// This is more reliable than environment variables for BuildKit builds
+func createRailpackConfig(buildDir, installCommand, buildCommand, startCommand string, logWriter io.Writer) error {
+	nixpacksConfigPath := filepath.Join(buildDir, "nixpacks.toml")
+
+	// Helper function to write to build logs if writer is available
+	writeBuildLog := func(format string, args ...interface{}) {
+		msg := fmt.Sprintf(format, args...)
+		if logWriter != nil {
+			logWriter.Write([]byte(msg + "\n"))
+		}
+		logger.Debug("[Railpack] %s", msg)
+	}
+
+	// Check if config file already exists - don't overwrite user's custom config
+	if fileExists(nixpacksConfigPath) {
+		writeBuildLog("   📄 nixpacks.toml already exists, will append commands (user config preserved)")
+		// Read existing config to check if we need to add anything
+		existingContent, err := os.ReadFile(nixpacksConfigPath)
+		if err == nil {
+			existingStr := string(existingContent)
+			// If it already has install/build phases, don't override
+			if strings.Contains(existingStr, "[phases.install]") && installCommand != "" {
+				writeBuildLog("   ⚠️  Install command already specified in config, skipping")
+				installCommand = ""
+			}
+			if strings.Contains(existingStr, "[phases.build]") && buildCommand != "" {
+				writeBuildLog("   ⚠️  Build command already specified in config, skipping")
+				buildCommand = ""
+			}
+			if strings.Contains(existingStr, "[start]") && startCommand != "" {
+				writeBuildLog("   ⚠️  Start command already specified in config, skipping")
+				startCommand = ""
+			}
+		}
+	}
+
+	// Build config parts
+	var configParts []string
+
+	// Add install phase if provided
+	if installCommand != "" {
+		configParts = append(configParts, fmt.Sprintf("[phases.install]\ncmds = [%q]\n", installCommand))
+		writeBuildLog("   📦 Configured install command: %s", installCommand)
+	}
+
+	// Add build phase if provided
+	if buildCommand != "" {
+		configParts = append(configParts, fmt.Sprintf("[phases.build]\ncmds = [%q]\n", buildCommand))
+		writeBuildLog("   🔨 Configured build command: %s", buildCommand)
+	}
+
+	// Add start command if provided
+	if startCommand != "" {
+		configParts = append(configParts, fmt.Sprintf("[start]\ncmd = %q\n", startCommand))
+		writeBuildLog("   🚀 Configured start command: %s", startCommand)
+	}
+
+	// If no config to add, return
+	if len(configParts) == 0 {
+		return nil
+	}
+
+	// Append to existing file or create new one
+	configContent := strings.Join(configParts, "\n")
+	if fileExists(nixpacksConfigPath) {
+		// Append to existing file
+		existingContent, err := os.ReadFile(nixpacksConfigPath)
+		if err == nil {
+			existingStr := string(existingContent)
+			// Append new config to existing content
+			if !strings.HasSuffix(existingStr, "\n") {
+				configContent = existingStr + "\n" + configContent
+			} else {
+				configContent = existingStr + configContent
+			}
+		}
+	}
+
+	if err := os.WriteFile(nixpacksConfigPath, []byte(configContent), 0644); err != nil {
+		return fmt.Errorf("failed to write nixpacks.toml: %w", err)
+	}
+
+	writeBuildLog("   ✅ Created/updated nixpacks.toml with custom commands")
+	logger.Debug("[Railpack] Created nixpacks.toml with content:\n%s", configContent)
+
 	return nil
 }
 
@@ -1078,25 +1372,25 @@ func detectNodeVersion(buildDir string) string {
 			}
 		}
 	}
-	
+
 	// Then check package.json engines field
 	packageJsonPath := filepath.Join(buildDir, "package.json")
 	if !fileExists(packageJsonPath) {
 		return ""
 	}
-	
+
 	content, err := os.ReadFile(packageJsonPath)
 	if err != nil {
 		return ""
 	}
-	
+
 	// Parse package.json to extract engines.node
 	var pkg struct {
 		Engines struct {
 			Node string `json:"node"`
 		} `json:"engines"`
 	}
-	
+
 	if err := json.Unmarshal(content, &pkg); err != nil {
 		// If JSON parsing fails, try simple string matching as fallback
 		contentStr := string(content)
@@ -1113,13 +1407,13 @@ func detectNodeVersion(buildDir string) string {
 		}
 		return ""
 	}
-	
+
 	if pkg.Engines.Node != "" {
 		detected := normalizeNodeVersion(pkg.Engines.Node)
 		logger.Debug("[Nixpacks] Detected Node.js version from package.json engines.node: %s", detected)
 		return detected
 	}
-	
+
 	return ""
 }
 
@@ -1139,7 +1433,7 @@ func getDefaultNodeVersion() string {
 func normalizeNodeVersion(version string) string {
 	// Remove common version prefixes
 	version = strings.TrimSpace(version)
-	
+
 	// Handle ">=" constraints - take the minimum version and ensure it's used as-is
 	if strings.HasPrefix(version, ">=") {
 		version = strings.TrimPrefix(version, ">=")
@@ -1148,7 +1442,7 @@ func normalizeNodeVersion(version string) string {
 		// This ensures Nixpacks uses at least this version, not an older one
 		return version
 	}
-	
+
 	// Handle ">" constraints - bump patch version if needed
 	if strings.HasPrefix(version, ">") {
 		version = strings.TrimPrefix(version, ">")
@@ -1157,35 +1451,35 @@ func normalizeNodeVersion(version string) string {
 		// For now, return as-is and let Nixpacks resolve
 		return version
 	}
-	
+
 	// Remove other prefixes that don't affect minimum version
 	version = strings.TrimPrefix(version, "^")
 	version = strings.TrimPrefix(version, "~")
 	version = strings.TrimPrefix(version, "=")
-	
+
 	// Handle "x" versions like "18.x" or "20.x"
 	if strings.Contains(version, ".x") {
 		parts := strings.Split(version, ".")
 		if len(parts) > 0 {
 			major := parts[0]
 			// For "18.x", return "18" to let Nixpacks pick latest 18.x
-			// But if we detected a specific requirement like ">=18.20.8", 
+			// But if we detected a specific requirement like ">=18.20.8",
 			// we should have caught it above
 			return major
 		}
 	}
-	
+
 	// If it's a full version string like "18.20.8", return as-is
 	// If it's just major.minor like "18.20", that should work too
 	// For major only like "20", return as-is
-	
+
 	return version
 }
 
 // detectDefaultStartCommand attempts to detect a default start command from repository files
 func detectDefaultStartCommand(buildDir string) string {
 	packageJsonPath := filepath.Join(buildDir, "package.json")
-	
+
 	// Check for Astro first (needs special handling)
 	if fileExists(filepath.Join(buildDir, "astro.config.js")) || fileExists(filepath.Join(buildDir, "astro.config.mjs")) || fileExists(filepath.Join(buildDir, "astro.config.ts")) {
 		// Check if Astro is configured for server mode
@@ -1228,9 +1522,9 @@ func detectDefaultStartCommand(buildDir string) string {
 				// Use a simple static server if available, or fallback to preview
 				// Check for serve package
 				packageJsonPath := filepath.Join(buildDir, "package.json")
-			if fileExists(packageJsonPath) {
-				content, err := os.ReadFile(packageJsonPath)
-				if err == nil && strings.Contains(string(content), `"serve"`) {
+				if fileExists(packageJsonPath) {
+					content, err := os.ReadFile(packageJsonPath)
+					if err == nil && strings.Contains(string(content), `"serve"`) {
 						if fileExists(filepath.Join(buildDir, "pnpm-lock.yaml")) {
 							return "pnpm serve dist"
 						}
@@ -1259,7 +1553,7 @@ func detectDefaultStartCommand(buildDir string) string {
 			return "npm run preview -- --host"
 		}
 	}
-	
+
 	if fileExists(packageJsonPath) {
 		// Try to read package.json and extract start script
 		content, err := os.ReadFile(packageJsonPath)
@@ -1289,7 +1583,7 @@ func detectDefaultStartCommand(buildDir string) string {
 			}
 		}
 	}
-	
+
 	// Check for other common files
 	if fileExists(filepath.Join(buildDir, "main.py")) {
 		return "python main.py"
@@ -1303,7 +1597,7 @@ func detectDefaultStartCommand(buildDir string) string {
 	if fileExists(filepath.Join(buildDir, "index.js")) {
 		return "node index.js"
 	}
-	
+
 	return ""
 }
 
@@ -1600,71 +1894,261 @@ func (s *StaticStrategy) Build(ctx context.Context, deployment *database.Deploym
 		}
 	}
 
-	// Determine output directory
-	outputDir := config.BuildOutputPath
-	if outputDir == "" {
-		// Auto-detect if not specified
-		outputDir = s.findOutputDir(buildDir)
+	// Step 1: Use Railpack to build the application
+	// This will create an image with all dependencies and built files
+	railpackImageName := fmt.Sprintf("obiente/%s-railpack:%s", deployment.ID, deployment.Branch)
+
+	writeBuildLog := func(format string, args ...interface{}) {
+		msg := fmt.Sprintf(format, args...)
+		if config.LogWriter != nil {
+			config.LogWriter.Write([]byte(msg + "\n"))
+		}
+		logger.Debug("[Static] %s", msg)
+	}
+
+	writeBuildLog("🔨 Building with Railpack...")
+	writeBuildLog("   Expected image name: %s", railpackImageName)
+	
+	// Use Railpack to build - Railpack is a CLI tool that builds images
+	// Check if railpack is available, if not use the RailpackStrategy approach
+	railpackPath := "/usr/local/bin/railpack"
+	var usingRailpackCLI bool
+	if path, err := exec.LookPath("railpack"); err == nil {
+		railpackPath = path
+		usingRailpackCLI = true
+		writeBuildLog("   Found railpack CLI at: %s", path)
+	} else if _, err := os.Stat(railpackPath); err == nil {
+		usingRailpackCLI = true
+		writeBuildLog("   Found railpack CLI at: %s", railpackPath)
+	} else {
+		// Railpack CLI not found, use RailpackStrategy's build method instead
+		usingRailpackCLI = false
+		writeBuildLog("⚠️  Railpack CLI not found, using Railpack build method...")
+		writeBuildLog("   Searched in PATH and %s", railpackPath)
+		railpackStrategy := NewRailpackStrategy()
+
+		// Create a temporary build config for Railpack
+		railpackConfig := *config
+		railpackConfig.LogWriter = config.LogWriter
+		railpackConfig.LogWriterErr = config.LogWriterErr
+
+		// Build with Railpack (this will write all logs to LogWriter/LogWriterErr)
+		writeBuildLog("📝 Railpack build logs will be shown below...")
+		railpackResult, err := railpackStrategy.Build(ctx, deployment, &railpackConfig)
+		if err != nil || !railpackResult.Success {
+			writeBuildLog("❌ Railpack build failed")
+			if err != nil {
+				writeBuildLog("   Error: %v", err)
+			}
+			if railpackResult != nil && railpackResult.Error != nil {
+				writeBuildLog("   Build error: %v", railpackResult.Error)
+			}
+			return &BuildResult{Success: false, Error: fmt.Errorf("railpack build failed: %w", err)}, nil
+		}
+
+		// Use the Railpack-built image as our source
+		// Note: RailpackStrategy returns image name as obiente/{id}:{branch} (no -railpack suffix)
+		oldImageName := railpackImageName
+		railpackImageName = railpackResult.ImageName
+		writeBuildLog("✅ Railpack build completed (via RailpackStrategy)")
+		writeBuildLog("   Original expected name: %s", oldImageName)
+		writeBuildLog("   Actual image name: %s", railpackImageName)
+		
+		// Verify the image exists
+		verifyCmd := exec.CommandContext(ctx, "docker", "image", "inspect", railpackImageName)
+		verifyOutput, verifyErr := verifyCmd.CombinedOutput()
+		if verifyErr != nil {
+			writeBuildLog("❌ Railpack image %s not found after build", railpackImageName)
+			writeBuildLog("   Error: %v", verifyErr)
+			if len(verifyOutput) > 0 {
+				writeBuildLog("   Docker output: %s", strings.TrimSpace(string(verifyOutput)))
+			}
+			writeBuildLog("💡 This may indicate the build failed silently")
+			return &BuildResult{Success: false, Error: fmt.Errorf("railpack build completed but image %s was not created", railpackImageName)}, nil
+		}
+		writeBuildLog("   ✅ Image verified: %s", railpackImageName)
 	}
 	
-	// Ensure outputDir is relative to buildDir for Dockerfile COPY
-	// If it's absolute, make it relative
-	if filepath.IsAbs(outputDir) {
-		relPath, err := filepath.Rel(buildDir, outputDir)
-		if err != nil {
-			return &BuildResult{Success: false, Error: fmt.Errorf("failed to resolve output path: %w", err)}, nil
+	if usingRailpackCLI {
+		// Use railpack CLI directly
+		writeBuildLog("📦 Using railpack CLI at: %s", railpackPath)
+		writeBuildLog("📁 Build directory: %s", buildWorkDir)
+		// Use buildWorkDir (which includes BuildPath if set) instead of buildDir
+		cmd := exec.CommandContext(ctx, railpackPath, "build", buildWorkDir, "--name", railpackImageName)
+		
+		// Prepare environment variables - add RAILPACK_* vars to config.EnvVars before converting
+		// This ensures they override any existing values
+		railpackEnvVars := make(map[string]string)
+		// Copy existing env vars
+		for k, v := range config.EnvVars {
+			railpackEnvVars[k] = v
 		}
-		outputDir = relPath
+		// Override with RAILPACK_* commands if provided
+		// See https://railpack.com/config/environment-variables
+		if config.InstallCommand != "" {
+			railpackEnvVars["RAILPACK_INSTALL_CMD"] = config.InstallCommand
+			writeBuildLog("   📦 Install command: %s", config.InstallCommand)
+		}
+		if config.BuildCommand != "" {
+			railpackEnvVars["RAILPACK_BUILD_CMD"] = config.BuildCommand
+			writeBuildLog("   🔨 Build command: %s", config.BuildCommand)
+		}
+		if config.StartCommand != "" {
+			railpackEnvVars["RAILPACK_START_CMD"] = config.StartCommand
+			writeBuildLog("   🚀 Start command: %s", config.StartCommand)
+		}
+		
+		envVars := getEnvAsStringSlice(railpackEnvVars)
+
+		// Railpack requires BUILDKIT_HOST to be set for BuildKit builds
+		if !isBuildxAvailable(ctx) {
+			logger.Warn("[Static] Buildx not available, disabling BuildKit")
+			envVars = append(envVars, "DOCKER_BUILDKIT=0")
+		} else {
+			startBuildkitContainer(ctx)
+			envVars = append(envVars, "DOCKER_BUILDKIT=1")
+			envVars = append(envVars, "BUILDKIT_HOST=docker-container://obiente-cloud-buildkit")
+		}
+		cmd.Env = envVars
+
+		// Ensure railpack logs are captured in build logs
+		writeBuildLog("📝 Railpack build logs will be shown below...")
+		if config.LogWriter != nil {
+			cmd.Stdout = NewMultiWriter(os.Stdout, config.LogWriter)
+		} else {
+			cmd.Stdout = os.Stdout
+		}
+		if config.LogWriterErr != nil {
+			cmd.Stderr = NewMultiWriter(os.Stderr, config.LogWriterErr)
+		} else {
+			cmd.Stderr = os.Stderr
+		}
+
+		// Run railpack and wait for completion (cmd.Run() blocks until done)
+		if err := cmd.Run(); err != nil {
+			writeBuildLog("❌ Railpack build failed: %v", err)
+			return &BuildResult{Success: false, Error: fmt.Errorf("railpack build failed: %w", err)}, nil
+		}
+
+		// Verify the image was actually created (suppress output to avoid polluting logs)
+		verifyCmd := exec.CommandContext(ctx, "docker", "image", "inspect", railpackImageName)
+		verifyCmd.Stdout = nil
+		verifyCmd.Stderr = nil
+		if err := verifyCmd.Run(); err != nil {
+			writeBuildLog("❌ Railpack image %s not found after build completion", railpackImageName)
+			writeBuildLog("💡 This may indicate the build failed silently. Check railpack logs above for details.")
+			return &BuildResult{Success: false, Error: fmt.Errorf("railpack build completed but image %s was not created", railpackImageName)}, nil
+		}
+
+		writeBuildLog("✅ Railpack build completed and image verified")
 	}
 
-	// Run build command if provided
-	if config.BuildCommand != "" {
-		parts := strings.Fields(config.BuildCommand)
-		if len(parts) > 0 {
-			cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
-			cmd.Dir = buildWorkDir // Use configured build path
-			cmd.Env = getEnvAsStringSlice(config.EnvVars)
+	writeBuildLog("🐳 Creating multi-stage Dockerfile for static deployment...")
 
-			// Use log writers if provided, otherwise fallback to os.Stdout/Stderr
-			if config.LogWriter != nil {
-				cmd.Stdout = NewMultiWriter(os.Stdout, config.LogWriter)
-			} else {
-				cmd.Stdout = os.Stdout
-			}
-			if config.LogWriterErr != nil {
-				cmd.Stderr = NewMultiWriter(os.Stderr, config.LogWriterErr)
-			} else {
-				cmd.Stderr = os.Stderr
-			}
+	// Step 2: Determine output directory path in the built Railpack image
+	// First, verify the image exists
+	verifyCmd := exec.CommandContext(ctx, "docker", "image", "inspect", railpackImageName)
+	verifyOutput, verifyErr := verifyCmd.CombinedOutput()
+	if verifyErr != nil {
+		writeBuildLog("❌ Railpack image %s not found", railpackImageName)
+		writeBuildLog("   Error: %v", verifyErr)
+		if len(verifyOutput) > 0 {
+			writeBuildLog("   Docker output: %s", strings.TrimSpace(string(verifyOutput)))
+		}
+		return &BuildResult{Success: false, Error: fmt.Errorf("railpack build completed but image %s was not created", railpackImageName)}, nil
+	}
 
-			if err := cmd.Run(); err != nil {
-				return &BuildResult{Success: false, Error: fmt.Errorf("build command failed: %w", err)}, nil
+	// Determine output directory path in the built image
+	outputDir := config.BuildOutputPath
+	if outputDir == "" {
+		writeBuildLog("   Auto-detecting output directory from repository...")
+		// Auto-detect from repository
+		outputDir = s.findOutputDir(buildDir)
+		writeBuildLog("   Detected output directory: %s", outputDir)
+		// If auto-detection fails, default to "dist"
+		if outputDir == "" || outputDir == "public" {
+			outputDir = "dist"
+			writeBuildLog("   Using default output directory: dist")
+		}
+	} else {
+		writeBuildLog("   Using configured output directory: %s", outputDir)
+	}
+
+	// Try to find the actual output directory in the built image
+	// Check common locations in the Railpack image
+	possibleOutputPaths := []string{
+		"/app/" + outputDir,
+		"/app/dist",
+		"/app/build",
+		"/app/public",
+		"/app/out",
+		"/app/.next/out", // Next.js static export
+		"/app",
+	}
+
+	writeBuildLog("   Detecting output path in built image...")
+	var detectedOutputPath string
+	for _, path := range possibleOutputPaths {
+		// Check if directory exists and has files
+		checkCmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--entrypoint", "sh", railpackImageName,
+			"-c", fmt.Sprintf("test -d %s && (test -f %s/index.html || ls -A %s | head -1 > /dev/null) && echo %s", path, path, path, path))
+		if output, err := checkCmd.Output(); err == nil {
+			detectedPath := strings.TrimSpace(string(output))
+			if detectedPath != "" && detectedPath == path {
+				detectedOutputPath = path
+				writeBuildLog("   ✅ Found output at: %s", path)
+				break
 			}
 		}
 	}
 
-	// Create Dockerfile for static site
-	dockerfileContent := s.generateStaticDockerfile(outputDir, config.UseNginx, config.NginxConfig)
+	// Fallback: search for index.html
+	if detectedOutputPath == "" {
+		writeBuildLog("   Searching for index.html in image...")
+		findCmd := exec.CommandContext(ctx, "docker", "run", "--rm", "--entrypoint", "sh", railpackImageName,
+			"-c", "find /app -type f -name 'index.html' 2>/dev/null | head -1")
+		if output, err := findCmd.Output(); err == nil {
+			indexPath := strings.TrimSpace(string(output))
+			if indexPath != "" {
+				detectedOutputPath = filepath.Dir(indexPath)
+				writeBuildLog("   ✅ Found index.html at: %s (using parent directory)", indexPath)
+			}
+		}
+	}
+
+	// Final fallback: use /app
+	if detectedOutputPath == "" {
+		detectedOutputPath = "/app"
+		writeBuildLog("   ⚠️  Using /app as fallback")
+	}
+
+	writeBuildLog("   📦 Source path in Railpack image: %s", detectedOutputPath)
+
+	// Step 3: Create multi-stage Dockerfile that copies from the built Railpack image
+	writeBuildLog("🐳 Creating multi-stage Nginx Dockerfile...")
+	dockerfileContent := s.generateStaticDockerfile(railpackImageName, detectedOutputPath, config.NginxConfig)
 	dockerfilePath := filepath.Join(buildDir, ".obiente.Dockerfile")
 	if err := os.WriteFile(dockerfilePath, []byte(dockerfileContent), 0644); err != nil {
 		return &BuildResult{Success: false, Error: fmt.Errorf("failed to write Dockerfile: %w", err)}, nil
 	}
 
-	imageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
+	finalImageName := fmt.Sprintf("obiente/%s:%s", deployment.ID, deployment.Branch)
 
-	// Build Docker image
-	if err := buildDockerImage(ctx, buildDir, imageName, ".obiente.Dockerfile", config.LogWriter, config.LogWriterErr); err != nil {
+	// Build final minimal nginx image
+	if err := buildDockerImage(ctx, buildDir, finalImageName, ".obiente.Dockerfile", config.LogWriter, config.LogWriterErr); err != nil {
 		return &BuildResult{Success: false, Error: fmt.Errorf("docker build failed: %w", err)}, nil
 	}
+	
+	writeBuildLog("✅ Created minimal nginx image")
+	
+	// Clean up Railpack image (optional - we could keep it for caching)
+	// exec.CommandContext(ctx, "docker", "rmi", railpackImageName).Run()
 
-	// Determine port based on nginx usage
+	// Nginx always uses port 80
 	port := 80
-	if !config.UseNginx {
-		port = 3000 // Node serve uses port 3000
-	}
 
 	return &BuildResult{
-		ImageName: imageName,
+		ImageName: finalImageName,
 		Port:      port,
 		Success:   true,
 	}, nil
@@ -1693,20 +2177,14 @@ func (s *StaticStrategy) findOutputDir(repoPath string) string {
 		return "."
 	}
 
-	return "public" // Default fallback
+	return "dist" // Default fallback
 }
 
-func (s *StaticStrategy) generateStaticDockerfile(outputDir string, useNginx bool, nginxConfig string) string {
-	if !useNginx {
-		// Use a simple static file server (like serve or http-server)
-		return fmt.Sprintf(`FROM node:20-alpine
-WORKDIR /app
-RUN npm install -g serve
-COPY %s /app/public
-EXPOSE 3000
-CMD ["serve", "-s", "public", "-l", "3000"]`, outputDir)
-	}
+func (s *StaticStrategy) generateStaticDockerfile(sourceImage string, sourcePath string, nginxConfig string) string {
+	// Multi-stage Dockerfile that copies files directly from the built Railpack image
+	// This is much more reliable than extracting files manually
 	
+	// Always use nginx for static deployments
 	// Use nginx with custom or default config
 	nginxConfContent := nginxConfig
 	if nginxConfContent == "" {
@@ -1745,10 +2223,23 @@ CMD ["serve", "-s", "public", "-l", "3000"]`, outputDir)
     }
 }`
 	}
-	
-	return fmt.Sprintf(`FROM nginx:alpine
-COPY %s /usr/share/nginx/html
+
+	// Escape the nginx config for embedding in shell command
+	// Need to escape single quotes, backslashes, and newlines
+	escapedConfig := strings.ReplaceAll(nginxConfContent, "\\", "\\\\")
+	escapedConfig = strings.ReplaceAll(escapedConfig, "'", "'\\''")
+	escapedConfig = strings.ReplaceAll(escapedConfig, "\n", "\\n")
+
+	// Multi-stage Dockerfile:
+	// Stage 1: Use the built Railpack image as source
+	// Stage 2: Copy static files to minimal Nginx image
+	return fmt.Sprintf(`# Stage 1: Source image (built with Railpack)
+FROM %s AS builder
+
+# Stage 2: Minimal Nginx image with only static files
+FROM nginx:alpine
+COPY --from=builder %s /usr/share/nginx/html
 RUN echo '%s' > /etc/nginx/conf.d/default.conf
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]`, outputDir, strings.ReplaceAll(nginxConfContent, "'", "\\'"))
+CMD ["nginx", "-g", "daemon off;"]`, sourceImage, sourcePath, escapedConfig)
 }

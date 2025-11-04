@@ -128,9 +128,9 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				}
 			}
 
-			// Fallback to NIXPACKS if still unspecified
+			// Fallback to RAILPACK if still unspecified
 			if buildStrategy == deploymentsv1.BuildStrategy_BUILD_STRATEGY_UNSPECIFIED || buildStrategy == 0 {
-				buildStrategy = deploymentsv1.BuildStrategy_NIXPACKS
+				buildStrategy = deploymentsv1.BuildStrategy_RAILPACK
 				dbDeployment.BuildStrategy = int32(buildStrategy)
 				s.repo.Update(buildCtx, dbDeployment)
 			}
@@ -203,10 +203,8 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		if dbDeployment.BuildOutputPath != nil {
 			buildOutputPath = *dbDeployment.BuildOutputPath
 		}
-		useNginx := false
-		if dbDeployment.UseNginx != nil {
-			useNginx = *dbDeployment.UseNginx
-		}
+		// Static deployments always use nginx
+		useNginx := strategy.Name() == "Static"
 		nginxConfig := ""
 		if dbDeployment.NginxConfig != nil {
 			nginxConfig = *dbDeployment.NginxConfig
@@ -224,7 +222,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			ComposeFilePath: composeFilePath,
 			BuildPath:       buildPath,
 			BuildOutputPath: buildOutputPath,
-			UseNginx:        useNginx,
+			UseNginx:        useNginx, // Always true for static deployments
 			NginxConfig:     nginxConfig,
 			EnvVars:         parseEnvVars(dbDeployment.EnvVars),
 			Port:            port,
@@ -288,19 +286,25 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			
 			// Update deployment start command if it was modified by the build strategy
 			// (e.g., for Astro projects that need "pnpm build && pnpm preview --host")
-			if buildConfig.StartCommand != "" && buildConfig.StartCommand != startCmd {
-				dbDeployment.StartCommand = &buildConfig.StartCommand
-				logger.Info("[TriggerDeployment] Updated start command to: %s", buildConfig.StartCommand)
+			// Also update if start command was extracted from image (e.g., railpack images)
+			if buildConfig.StartCommand != "" {
+				if startCmd == "" || buildConfig.StartCommand != startCmd {
+					dbDeployment.StartCommand = &buildConfig.StartCommand
+					logger.Info("[TriggerDeployment] Updated start command to: %s", buildConfig.StartCommand)
+				}
 			}
 			
-			// Try to detect port from build logs if not already detected
-			if result.Port == 0 {
-				logPort := streamer.DetectPortFromLogs(100) // Check first 100 log lines
-				if logPort > 0 {
-					result.Port = logPort
-					logger.Debug("[TriggerDeployment] Detected port %d from build logs", logPort)
-					streamer.Write([]byte(fmt.Sprintf("🔍 Detected port %d from build logs\n", logPort)))
-				}
+			// Detect port from build logs (prioritize over repo detection)
+			// Build logs are more accurate as they show what the app actually started on
+			logPort := streamer.DetectPortFromLogs(200) // Check first 200 log lines for better coverage
+			if logPort > 0 {
+				result.Port = logPort
+				logger.Info("[TriggerDeployment] Detected port %d from build logs", logPort)
+				streamer.Write([]byte(fmt.Sprintf("🔍 Detected port %d from build logs\n", logPort)))
+			} else if result.Port == 0 {
+				// Fallback: if no port detected from logs and build didn't detect one, use default
+				// But prefer to use repo detection result which should already be set
+				logger.Debug("[TriggerDeployment] No port detected from logs, using build result port: %d", result.Port)
 			}
 			
 			streamer.Write([]byte("🚀 Deploying to orchestrator...\n"))

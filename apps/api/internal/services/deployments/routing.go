@@ -2,8 +2,10 @@ package deployments
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
@@ -85,9 +87,28 @@ func (s *Service) UpdateDeploymentRoutings(ctx context.Context, req *connect.Req
 		}
 	}
 
+	// Get available domains for this deployment (default + verified custom domains)
+	availableDomains := s.getAvailableDomainsForDeployment(dbDeployment)
+	
 	// Create new routing rules
 	newRules := make([]*deploymentsv1.RoutingRule, 0, len(req.Msg.GetRules()))
 	for _, rule := range req.Msg.GetRules() {
+		// Validate domain ownership
+		ruleDomain := rule.GetDomain()
+		if ruleDomain != "" {
+			domainAllowed := false
+			for _, allowedDomain := range availableDomains {
+				if allowedDomain == ruleDomain {
+					domainAllowed = true
+					break
+				}
+			}
+			
+			if !domainAllowed {
+				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("domain %s is not available for this deployment. You can only use the default domain or verified custom domains", ruleDomain))
+			}
+		}
+
 		// Generate ID if not provided
 		ruleID := rule.GetId()
 		if ruleID == "" {
@@ -213,5 +234,54 @@ func (s *Service) GetDeploymentServiceNames(ctx context.Context, req *connect.Re
 	return connect.NewResponse(&deploymentsv1.GetDeploymentServiceNamesResponse{
 		ServiceNames: serviceNames,
 	}), nil
+}
+
+// getAvailableDomainsForDeployment returns a list of domains that can be used for routing
+// Includes: default domain + verified custom domains
+func (s *Service) getAvailableDomainsForDeployment(dbDeployment *database.Deployment) []string {
+	domains := []string{}
+	
+	// Add default domain
+	if dbDeployment.Domain != "" {
+		domains = append(domains, dbDeployment.Domain)
+	}
+	
+	// Add verified custom domains
+	if dbDeployment.CustomDomains != "" {
+		var customDomains []string
+		if err := json.Unmarshal([]byte(dbDeployment.CustomDomains), &customDomains); err == nil {
+			for _, entry := range customDomains {
+				parts := strings.Split(entry, ":")
+				if len(parts) == 0 {
+					continue
+				}
+				domain := parts[0]
+				
+				// Check if domain is verified
+				isVerified := false
+				if len(parts) >= 2 && parts[1] == "verified" {
+					isVerified = true
+				} else if len(parts) >= 4 && parts[1] == "token" && parts[3] == "verified" {
+					isVerified = true
+				}
+				
+				if isVerified {
+					// Check for duplicates
+					alreadyAdded := false
+					for _, existingDomain := range domains {
+						if existingDomain == domain {
+							alreadyAdded = true
+							break
+						}
+					}
+					if !alreadyAdded {
+						domains = append(domains, domain)
+					}
+				}
+			}
+		}
+	}
+	
+	return domains
 }
 

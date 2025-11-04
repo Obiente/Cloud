@@ -2,6 +2,7 @@ package deployments
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	githubclient "api/internal/services/github"
 
 	"connectrpc.com/connect"
+	"gorm.io/gorm"
 )
 
 // containsAuthError checks if an error message indicates authentication failure
@@ -48,6 +50,9 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 					return integration.Token, nil
 				}
 			}
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			// Log unexpected errors, but ignore "record not found"
+			return "", fmt.Errorf("failed to get integration: %w", err)
 		}
 	}
 
@@ -62,6 +67,9 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 			if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err == nil {
 				return orgIntegration.Token, nil
 			}
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			// Log unexpected errors, but ignore "record not found"
+			return "", fmt.Errorf("failed to get organization integration: %w", err)
 		}
 	}
 
@@ -69,6 +77,9 @@ func (s *Service) getGitHubToken(ctx context.Context, orgID string, integrationI
 	var userIntegration database.GitHubIntegration
 	if err := database.DB.Where("user_id = ?", user.Id).First(&userIntegration).Error; err == nil {
 		return userIntegration.Token, nil
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		// Log unexpected errors, but ignore "record not found"
+		return "", fmt.Errorf("failed to get user integration: %w", err)
 	}
 
 	return "", fmt.Errorf("no GitHub integration found for user or organization")
@@ -240,6 +251,7 @@ func (s *Service) ListAvailableGitHubIntegrations(ctx context.Context, req *conn
 		if err := database.DB.Where("user_id = ?", user.Id).First(&userIntegration).Error; err == nil {
 			integrations = append(integrations, userIntegration)
 		}
+		// Ignore "record not found" errors - user may not have an integration
 
 		// Get organization's GitHub integration (if user is member)
 		var member database.OrganizationMember
@@ -248,7 +260,9 @@ func (s *Service) ListAvailableGitHubIntegrations(ctx context.Context, req *conn
 			if err := database.DB.Where("organization_id = ?", orgID).First(&orgIntegration).Error; err == nil {
 				integrations = append(integrations, orgIntegration)
 			}
+			// Ignore "record not found" errors - org may not have an integration
 		}
+		// Ignore "record not found" errors - user may not be a member
 	} else {
 		// Get all integrations user has access to
 		// User's personal integration
@@ -256,6 +270,7 @@ func (s *Service) ListAvailableGitHubIntegrations(ctx context.Context, req *conn
 		if err := database.DB.Where("user_id = ?", user.Id).First(&userIntegration).Error; err == nil {
 			integrations = append(integrations, userIntegration)
 		}
+		// Ignore "record not found" errors - user may not have an integration
 
 		// All organization integrations where user is a member
 		var orgMemberships []database.OrganizationMember
@@ -266,6 +281,7 @@ func (s *Service) ListAvailableGitHubIntegrations(ctx context.Context, req *conn
 			if err := database.DB.Where("organization_id = ?", membership.OrganizationID).First(&orgIntegration).Error; err == nil {
 				integrations = append(integrations, orgIntegration)
 			}
+			// Ignore "record not found" errors - org may not have an integration
 		}
 	}
 
@@ -287,6 +303,7 @@ func (s *Service) ListAvailableGitHubIntegrations(ctx context.Context, req *conn
 			if err := database.DB.Where("id = ?", *integration.OrganizationID).First(&org).Error; err == nil {
 				option.ObienteOrgName = org.Name
 			}
+			// Ignore "record not found" errors - org may have been deleted
 		}
 
 		protoIntegrations = append(protoIntegrations, option)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
@@ -132,7 +133,7 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 	deployment := &deploymentsv1.Deployment{
 		Id:             id,
 		Name:           req.Msg.GetName(),
-		Domain:         fmt.Sprintf("%s.obiente.cloud", req.Msg.GetName()),
+		Domain:         fmt.Sprintf("%s.my.obiente.cloud", id),
 		CustomDomains:  []string{},
 		Type:           deploymentsv1.DeploymentType_DEPLOYMENT_TYPE_UNSPECIFIED, // Will be auto-detected
 		BuildStrategy:  deploymentsv1.BuildStrategy_BUILD_STRATEGY_UNSPECIFIED,  // Will be auto-detected
@@ -331,16 +332,13 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 		useNginx := req.Msg.GetUseNginx()
 		dbDeployment.UseNginx = &useNginx
 	}
-		if req.Msg.NginxConfig != nil {
-			nginxConfig := req.Msg.GetNginxConfig()
-			if nginxConfig != "" {
-				dbDeployment.NginxConfig = &nginxConfig
-			} else {
-				dbDeployment.NginxConfig = nil
-			}
+	if req.Msg.NginxConfig != nil {
+		nginxConfig := req.Msg.GetNginxConfig()
+		if nginxConfig != "" {
+			dbDeployment.NginxConfig = &nginxConfig
+		} else {
+			dbDeployment.NginxConfig = nil
 		}
-		if req.Msg.Domain != nil {
-		dbDeployment.Domain = req.Msg.GetDomain()
 	}
 	if req.Msg.Port != nil {
 		port := req.Msg.GetPort()
@@ -365,16 +363,95 @@ func (s *Service) UpdateDeployment(ctx context.Context, req *connect.Request[dep
 		// Empty array was explicitly set
 		dbDeployment.Groups = "[]"
 	}
+	// Get deployment before making changes (to preserve original domain for validation)
+	originalDomain := dbDeployment.Domain
+	
 	// Handle custom_domains (repeated string -> JSON array)
-	if len(req.Msg.GetCustomDomains()) > 0 {
-		customDomainsJSON, err := json.Marshal(req.Msg.GetCustomDomains())
+	// Note: Handle this BEFORE domain validation so we can check against updated custom domains
+	// For protobuf repeated fields, the slice is always non-nil, so we process it if it's provided
+	// The frontend always sends custom_domains when updating, so we always process it
+	customDomains := req.Msg.GetCustomDomains()
+	if len(customDomains) > 0 {
+		// Preserve existing tokens for domains that already have them
+		// Get current deployment state to preserve existing tokens
+		var currentCustomDomains []string
+		if dbDeployment.CustomDomains != "" {
+			if err := json.Unmarshal([]byte(dbDeployment.CustomDomains), &currentCustomDomains); err != nil {
+				currentCustomDomains = []string{}
+			}
+		}
+		
+		// Map to preserve tokens: domain -> token entry
+		tokenMap := make(map[string]string)
+		for _, entry := range currentCustomDomains {
+			parts := strings.Split(entry, ":")
+			if len(parts) >= 3 && parts[1] == "token" {
+				domainName := parts[0] // Extract domain from entry
+				tokenMap[strings.ToLower(domainName)] = entry
+			}
+		}
+		
+		// Process new domains and preserve existing tokens
+		processedDomains := []string{}
+		for _, domain := range customDomains {
+			parts := strings.Split(domain, ":")
+			domainName := parts[0] // Extract domain from entry
+			domainLower := strings.ToLower(domainName)
+			
+			// If this domain already has a token, preserve it
+			if tokenEntry, exists := tokenMap[domainLower]; exists {
+				processedDomains = append(processedDomains, tokenEntry)
+				delete(tokenMap, domainLower) // Remove from map so we don't add it twice
+			} else {
+				// New domain or plain entry - add as-is (token will be created on first verification request)
+				processedDomains = append(processedDomains, domain)
+			}
+		}
+		
+		// Deduplicate domains (case-insensitive) before validating
+		customDomains = DeduplicateCustomDomains(processedDomains)
+		
+		// Validate custom domains before saving (check conflicts and verify ownership)
+		if err := s.ValidateCustomDomains(ctx, deploymentID, customDomains); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("custom domain validation failed: %w", err))
+		}
+		
+		customDomainsJSON, err := json.Marshal(customDomains)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal custom domains: %w", err))
 		}
 		dbDeployment.CustomDomains = string(customDomainsJSON)
-	} else if req.Msg.CustomDomains != nil {
-		// Empty array was explicitly set
+	} else {
+		// Empty array - clear custom domains
 		dbDeployment.CustomDomains = "[]"
+	}
+	
+	// Validate domain AFTER custom domains are updated (so we can check against newly verified custom domains)
+	// Note: Users can only set the domain to the original default domain or a verified custom domain
+	if req.Msg.Domain != nil {
+		newDomain := req.Msg.GetDomain()
+		// Validate that the domain is either the original default domain or a verified custom domain
+		if newDomain != "" {
+			// Get available domains (will include newly updated custom domains)
+			availableDomains := s.getAvailableDomainsForDeployment(dbDeployment)
+			// Also include the original default domain in case it's being changed
+			domainAllowed := false
+			if newDomain == originalDomain {
+				domainAllowed = true
+			} else {
+				for _, allowedDomain := range availableDomains {
+					if allowedDomain == newDomain {
+						domainAllowed = true
+						break
+					}
+				}
+			}
+			
+			if !domainAllowed {
+				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("domain %s is not available for this deployment. You can only use the default domain (%s) or verified custom domains", newDomain, originalDomain))
+			}
+		}
+		dbDeployment.Domain = newDomain
 	}
 
 	// NOTE: Do NOT update status fields on config save
@@ -404,6 +481,24 @@ func (s *Service) DeleteDeployment(ctx context.Context, req *connect.Request[dep
 	dbDep, err := s.repo.GetByID(ctx, deploymentID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("deployment %s not found", deploymentID))
+	}
+
+	// Delete all build logs and build history for this deployment
+	// Get all build IDs for this deployment before deleting
+	buildIDs, deletedCount, err := s.buildHistoryRepo.DeleteBuildsByDeployment(ctx, deploymentID)
+	if err != nil {
+		log.Printf("[DeleteDeployment] Failed to get builds for deployment %s: %v", deploymentID, err)
+		// Continue with deletion even if we can't get builds
+	} else if deletedCount > 0 {
+		// Delete build logs from TimescaleDB for each build
+		buildLogsRepo := database.NewBuildLogsRepository(database.MetricsDB)
+		for _, buildID := range buildIDs {
+			if err := buildLogsRepo.DeleteBuildLogs(ctx, buildID); err != nil {
+				log.Printf("[DeleteDeployment] Failed to delete logs for build %s: %v", buildID, err)
+				// Continue deleting other build logs
+			}
+		}
+		log.Printf("[DeleteDeployment] Deleted %d builds and their logs for deployment %s", deletedCount, deploymentID)
 	}
 
 	// Remove containers/stack before deleting from DB

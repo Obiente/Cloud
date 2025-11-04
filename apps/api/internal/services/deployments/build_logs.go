@@ -129,9 +129,9 @@ func detectLogLevel(line string, isStderr bool) deploymentsv1.LogLevel {
 		return deploymentsv1.LogLevel_LOG_LEVEL_DEBUG
 	}
 	
-	// Nixpacks/Railpacks specific patterns - these are INFO even if on stderr
+	// Nixpacks/Railpack specific patterns - these are INFO even if on stderr
 	// Nixpacks writes progress to stderr but it's informational
-	if strings.Contains(lineLower, "nixpacks") || strings.Contains(lineLower, "railpacks") ||
+	if strings.Contains(lineLower, "nixpacks") || strings.Contains(lineLower, "railpack") ||
 		strings.Contains(lineLower, "building") || strings.Contains(lineLower, "setup") ||
 		strings.Contains(lineLower, "install") || strings.Contains(lineLower, "build") ||
 		strings.Contains(lineLower, "start") || strings.Contains(lineLower, "transferring") ||
@@ -327,6 +327,8 @@ func detectPortFromLogLines(logLines []*deploymentsv1.DeploymentLogLine) int {
 
 	// Common port detection patterns
 	portPatterns := []*regexp.Regexp{
+		// Astro: "local: http://localhost:4321" or "!  local: http://localhost:4321"
+		regexp.MustCompile(`(?i)(?:local|network)\s*:\s*https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0|.*?):(\d+)`),
 		// "Listening on port 3000"
 		regexp.MustCompile(`(?i)(?:listening|listen|running|started|server).*?(?:on|at|port|:)\s*(?:port\s*:?\s*)?(\d+)`),
 		// "Server running on :8080"

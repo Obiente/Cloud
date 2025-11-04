@@ -2,6 +2,7 @@ package deployments
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -73,7 +74,7 @@ func NewBuildStrategyRegistry() *BuildStrategyRegistry {
 	}
 
 	// Register all strategies
-	registry.Register(deploymentsv1.BuildStrategy_RAILPACKS, NewRailpacksStrategy())
+	registry.Register(deploymentsv1.BuildStrategy_RAILPACK, NewRailpackStrategy())
 	registry.Register(deploymentsv1.BuildStrategy_NIXPACKS, NewNixpacksStrategy())
 	registry.Register(deploymentsv1.BuildStrategy_DOCKERFILE, NewDockerfileStrategy())
 	registry.Register(deploymentsv1.BuildStrategy_PLAIN_COMPOSE, NewPlainComposeStrategy())
@@ -103,8 +104,8 @@ func (r *BuildStrategyRegistry) AutoDetect(ctx context.Context, repoPath string)
 	detectionOrder := []deploymentsv1.BuildStrategy{
 		deploymentsv1.BuildStrategy_COMPOSE_REPO, // Check for docker-compose.yml in repo first
 		deploymentsv1.BuildStrategy_DOCKERFILE,   // Then Dockerfile
-		deploymentsv1.BuildStrategy_RAILPACKS,    // Then Rails/Nixpacks
-		deploymentsv1.BuildStrategy_NIXPACKS,     // Then generic Nixpacks
+		deploymentsv1.BuildStrategy_RAILPACK,    // Then Railpack (default for most languages)
+		deploymentsv1.BuildStrategy_NIXPACKS,     // Then generic Nixpacks (fallback)
 		deploymentsv1.BuildStrategy_STATIC_SITE,  // Finally static
 	}
 
@@ -126,8 +127,8 @@ func (r *BuildStrategyRegistry) AutoDetect(ctx context.Context, repoPath string)
 		}
 	}
 
-	// Default to NIXPACKS if nothing detected
-	return deploymentsv1.BuildStrategy_NIXPACKS, nil
+	// Default to RAILPACK if nothing detected
+	return deploymentsv1.BuildStrategy_RAILPACK, nil
 }
 
 // InferDeploymentType infers the deployment type from build strategy and repository contents
@@ -139,8 +140,8 @@ func (r *BuildStrategyRegistry) InferDeploymentType(ctx context.Context, buildSt
 	case deploymentsv1.BuildStrategy_PLAIN_COMPOSE, deploymentsv1.BuildStrategy_DOCKERFILE:
 		return deploymentsv1.DeploymentType_DOCKER
 
-	case deploymentsv1.BuildStrategy_RAILPACKS, deploymentsv1.BuildStrategy_NIXPACKS:
-		// Both Railpacks and Nixpacks can detect and build various languages:
+	case deploymentsv1.BuildStrategy_RAILPACK, deploymentsv1.BuildStrategy_NIXPACKS:
+		// Both Railpack and Nixpacks can detect and build various languages:
 		// Clojure, Cobol, Crystal, C#/.NET, Dart, Deno, Elixir, F#, Gleam, Go,
 		// Haskell, Java, Lunatic, Node, PHP, Python, Ruby, Rust, Scheme,
 		// Staticfile, Swift, Scala, Zig
@@ -153,7 +154,7 @@ func (r *BuildStrategyRegistry) InferDeploymentType(ctx context.Context, buildSt
 }
 
 // detectLanguageFromRepo detects the programming language from repository contents
-// Supports all languages that Railpacks/Nixpacks can build:
+// Supports all languages that Railpack/Nixpacks can build:
 // Clojure, Cobol, Crystal, C#/.NET, Dart, Deno, Elixir, F#, Gleam, Go, Haskell,
 // Java, Lunatic, Node, PHP, Python, Ruby, Rust, Scheme, Staticfile, Swift, Scala, Zig
 func detectLanguageFromRepo(repoPath string) deploymentsv1.DeploymentType {
@@ -411,11 +412,31 @@ func hasAnyFile(dir string, patterns ...string) bool {
 }
 
 // getEnvAsStringSlice converts a map[string]string to []string for exec commands
+// It preserves existing environment variables and allows overriding them
 func getEnvAsStringSlice(envVars map[string]string) []string {
-	env := os.Environ()
+	// Start with current environment
+	existingEnv := os.Environ()
+	envMap := make(map[string]string)
+	
+	// Parse existing environment into a map to allow overrides
+	for _, env := range existingEnv {
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+		}
+	}
+	
+	// Override/add custom environment variables
 	for k, v := range envVars {
+		envMap[k] = v
+	}
+	
+	// Convert back to []string format
+	env := make([]string, 0, len(envMap))
+	for k, v := range envMap {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
+	
 	return env
 }
 
@@ -466,6 +487,54 @@ func getImageSize(ctx context.Context, imageName string) (int64, error) {
 	}
 
 	return size, nil
+}
+
+// extractImageCmd extracts the CMD from a Docker image
+// Returns the CMD as a string that can be used as a start command, or empty string if not found
+func extractImageCmd(ctx context.Context, imageName string) (string, string) {
+	// Use docker image inspect to get the CMD and WorkingDir
+	cmdCmd := exec.CommandContext(ctx, "docker", "image", "inspect", imageName, "--format", "{{json .Config.Cmd}}")
+	cmdOutput, err := cmdCmd.Output()
+	if err != nil {
+		return "", ""
+	}
+
+	// Get working directory
+	workdirCmd := exec.CommandContext(ctx, "docker", "image", "inspect", imageName, "--format", "{{.Config.WorkingDir}}")
+	workdirOutput, err := workdirCmd.Output()
+	workingDir := strings.TrimSpace(string(workdirOutput))
+	if err != nil || workingDir == "" || workingDir == "<no value>" {
+		workingDir = ""
+	}
+
+	// Parse the output - Docker inspect returns CMD as a JSON array
+	cmdStr := strings.TrimSpace(string(cmdOutput))
+	if cmdStr == "" || cmdStr == "null" || cmdStr == "[]" {
+		return "", workingDir
+	}
+
+	// Parse as JSON array
+	var cmdParts []string
+	if err := json.Unmarshal([]byte(cmdStr), &cmdParts); err != nil {
+		return "", workingDir
+	}
+
+	if len(cmdParts) == 0 {
+		return "", workingDir
+	}
+
+	// If the command is just ["/bin/bash"] or similar shell, return empty (use image default)
+	if len(cmdParts) == 1 && (cmdParts[0] == "/bin/bash" || cmdParts[0] == "/bin/sh" || cmdParts[0] == "sh" || cmdParts[0] == "bash") {
+		return "", workingDir
+	}
+
+	// If it's ["/bin/bash", "-c", "command"], extract just the command
+	if len(cmdParts) >= 3 && (cmdParts[0] == "/bin/bash" || cmdParts[0] == "/bin/sh" || cmdParts[0] == "sh" || cmdParts[0] == "bash") && cmdParts[1] == "-c" {
+		return strings.Join(cmdParts[2:], " "), workingDir
+	}
+
+	// Otherwise, join all parts with spaces
+	return strings.Join(cmdParts, " "), workingDir
 }
 
 // deployResultToOrchestrator converts a BuildResult to orchestrator configuration

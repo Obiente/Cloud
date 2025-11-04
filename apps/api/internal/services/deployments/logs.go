@@ -248,8 +248,8 @@ func detectLogLevelFromContent(line string, isStderr bool) deploymentsv1.LogLeve
 		return deploymentsv1.LogLevel_LOG_LEVEL_DEBUG
 	}
 	
-	// Nixpacks/Railpacks specific patterns - these are INFO even if on stderr
-	if strings.Contains(lineLower, "nixpacks") || strings.Contains(lineLower, "railpacks") ||
+	// Nixpacks/Railpack specific patterns - these are INFO even if on stderr
+	if strings.Contains(lineLower, "nixpacks") || strings.Contains(lineLower, "railpack") ||
 		strings.Contains(lineLower, "building") || strings.Contains(lineLower, "setup") ||
 		strings.Contains(lineLower, "install") || strings.Contains(lineLower, "build") ||
 		strings.Contains(lineLower, "start") || strings.Contains(lineLower, "transferring") ||
