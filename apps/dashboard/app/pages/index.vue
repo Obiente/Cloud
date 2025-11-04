@@ -35,7 +35,7 @@
     </OuiContainer>
     <OuiContainer size="7xl" class="relative">
       <!-- Hero Content -->
-      <OuiStack gap="2xl" align="center" class="text-center py-32 md:py-40">
+      <OuiStack gap="2xl" align="center" class="text-center py-32 md:py-40 bg-gradient-to-b from-background via-background to-background-muted/20">
         <OuiStack gap="lg" align="center" class="max-w-4xl">
           <OuiText as="h1" size="6xl" weight="bold" color="primary">
             Deploy, Scale, and Manage Your Cloud Infrastructure <br />
@@ -92,7 +92,7 @@
     </OuiContainer>
 
     <!-- Features Section -->
-    <OuiContainer py="6xl" size="7xl">
+    <OuiContainer py="6xl" size="7xl" class="bg-gradient-to-b from-background-muted/20 to-background">
       <OuiStack gap="2xl" align="center">
         <OuiStack gap="lg" align="center" class="text-center max-w-3xl">
           <OuiText
@@ -278,6 +278,142 @@
       </OuiStack>
     </OuiContainer>
 
+    <!-- Infrastructure Section -->
+    <OuiContainer as="section" py="6xl" size="7xl" class="bg-gradient-to-b from-background to-background-muted/30">
+      <OuiStack gap="2xl" align="center">
+        <OuiStack gap="lg" align="center" class="text-center max-w-3xl">
+          <OuiText
+            as="h2"
+            size="3xl"
+            weight="bold"
+            color="primary"
+            class="md:text-5xl"
+          >
+            Enterprise-Grade Infrastructure
+          </OuiText>
+          <OuiText size="lg" color="secondary" class="md:text-xl">
+            Built on premium hardware with redundancy and reliability at its core.
+          </OuiText>
+        </OuiStack>
+
+        <OuiGrid cols="1" cols-md="2" cols-lg="3" gap="xl" class="w-full">
+          <!-- Premium Hardware -->
+          <OuiCard variant="raised" class="h-full">
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-primary/20 rounded-lg flex items-center justify-center">
+                  <ServerIcon class="h-6 w-6 text-accent-primary" />
+                </OuiBox>
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    Premium Hardware
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Powered by AMD Ryzen 7 7900X processors with DDR5 RAM and NVMe SSDs for exceptional performance.
+                  </OuiText>
+                </OuiStack>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+
+          <!-- High Availability -->
+          <OuiCard variant="raised" class="h-full">
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-success/20 rounded-lg flex items-center justify-center">
+                  <ShieldCheckIcon class="h-6 w-6 text-accent-success" />
+                </OuiBox>
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    High Availability
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Automatic failover to our fallback node ensures your services stay online even during main node outages.
+                  </OuiText>
+                </OuiStack>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+
+          <!-- Global CDN -->
+          <OuiCard variant="raised" class="h-full">
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-info/20 rounded-lg flex items-center justify-center">
+                  <ChartBarIcon class="h-6 w-6 text-accent-info" />
+                </OuiBox>
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    Global CDN
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Content delivered from edge locations worldwide for lightning-fast load times.
+                  </OuiText>
+                </OuiStack>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+
+          <!-- Free Support -->
+          <OuiCard variant="raised" class="h-full">
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-secondary/20 rounded-lg flex items-center justify-center">
+                  <ChatBubbleLeftRightIcon class="h-6 w-6 text-accent-secondary" />
+                </OuiBox>
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    Free Support
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Get help when you need it. Our support team is available to assist with deployment, configuration, and troubleshooting.
+                  </OuiText>
+                </OuiStack>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+
+          <!-- Monitoring -->
+          <OuiCard variant="raised" class="h-full">
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-warning/20 rounded-lg flex items-center justify-center">
+                  <ChartBarIcon class="h-6 w-6 text-accent-warning" />
+                </OuiBox>
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    Real-Time Monitoring
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Track performance metrics, resource usage, and receive instant alerts for any issues.
+                  </OuiText>
+                </OuiStack>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+
+          <!-- Security -->
+          <OuiCard variant="raised" class="h-full">
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-danger/20 rounded-lg flex items-center justify-center">
+                  <ShieldCheckIcon class="h-6 w-6 text-accent-danger" />
+                </OuiBox>
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    Enterprise Security
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    SSL certificates, automated backups, and comprehensive audit logs to keep your data secure.
+                  </OuiText>
+                </OuiStack>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+        </OuiGrid>
+      </OuiStack>
+    </OuiContainer>
+
     <!-- Pricing Section -->
     <OuiContainer as="section" py="6xl" size="7xl">
       <OuiStack gap="2xl" align="center">
@@ -292,22 +428,25 @@
             Simple, transparent pricing
           </OuiText>
           <OuiText size="lg" color="secondary">
-            Choose the plan that fits your needs. Pay only for what you use.
+            Pay only for what you use. No fixed plans, no hidden fees. Free support included.
+          </OuiText>
+          <OuiText size="sm" color="secondary" class="opacity-60 italic">
+            Students, open-source projects, non-profits, and early-stage startups may qualify for reduced pricing. Contact us to discuss.
           </OuiText>
         </OuiStack>
 
         <OuiGrid cols="1" cols-md="3" gap="xl" class="w-full max-w-5xl">
-          <!-- Starter Plan -->
+          <!-- Small App Example -->
           <OuiCard
             variant="raised"
             hoverable
-            class="text-center group hover:-translate-y-1 transition-all duration-300"
+            class="text-center group hover:-translate-y-1 transition-all duration-300 h-full flex flex-col"
           >
-            <OuiCardBody>
-              <OuiStack gap="lg">
+            <OuiCardBody class="flex flex-col h-full">
+              <OuiStack gap="lg" class="flex-1">
                 <OuiStack gap="md">
                   <OuiText size="lg" weight="semibold" color="primary"
-                    >Starter</OuiText
+                    >Small App</OuiText
                   >
                   <OuiText size="sm" color="secondary"
                     >Perfect for side projects</OuiText
@@ -315,67 +454,67 @@
                 </OuiStack>
 
                 <OuiStack gap="xs" align="center">
-                  <OuiText size="3xl" weight="bold" color="primary">$1</OuiText>
+                  <OuiText size="3xl" weight="bold" color="primary">~$5</OuiText>
                   <OuiText size="sm" color="secondary">per month</OuiText>
                 </OuiStack>
 
-                <OuiStack gap="sm" align="start" class="text-left">
+                <OuiStack gap="sm" align="start" class="text-left flex-1">
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
-                      >1 web deployment</OuiText
+                      >0.5 GB RAM running 24/7</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
-                      >1 game server slot</OuiText
+                      >0.25 CPU cores running 24/7</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
-                      >1 shared vCPU (Ryzen 7 7900x)</OuiText
+                      >~10 GB bandwidth/month</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">512MB RAM</OuiText>
-                  </OuiFlex>
-                  <OuiFlex align="center" gap="sm">
-                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">2GB storage</OuiText>
+                    <OuiText size="sm" color="secondary">~5 GB storage</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary">Free support</OuiText>
                   </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary">Automatic failover to fallback node</OuiText>
+                  </OuiFlex>
                 </OuiStack>
-
-                <OuiButton
-                  variant="outline"
-                  size="md"
-                  class="w-full"
-                  @click="navigateTo('/dashboard')"
-                >
-                  Start with Starter
-                </OuiButton>
               </OuiStack>
+
+              <OuiButton
+                variant="outline"
+                size="md"
+                class="w-full mt-auto"
+                @click="navigateTo('/dashboard')"
+              >
+                Get Started
+              </OuiButton>
             </OuiCardBody>
           </OuiCard>
 
-          <!-- Pro Plan -->
+          <!-- Medium App Example -->
           <OuiCard
             variant="raised"
             hoverable
-            class="text-center group hover:-translate-y-1 transition-all duration-300 ring-2 ring-accent-primary/50"
+            class="text-center group hover:-translate-y-1 transition-all duration-300 ring-2 ring-accent-primary/50 h-full flex flex-col"
           >
-            <OuiCardBody>
-              <OuiStack gap="lg">
+            <OuiCardBody class="flex flex-col h-full">
+              <OuiStack gap="lg" class="flex-1">
                 <OuiStack gap="md">
                   <OuiFlex align="center" justify="center" gap="sm">
                     <OuiText size="lg" weight="semibold" color="primary"
-                      >Pro</OuiText
+                      >Medium App</OuiText
                     >
                     <OuiBadge color="primary" size="sm">Popular</OuiBadge>
                   </OuiFlex>
@@ -386,39 +525,33 @@
 
                 <OuiStack gap="xs" align="center">
                   <OuiText size="3xl" weight="bold" color="primary"
-                    >$29</OuiText
+                    >~$14</OuiText
                   >
                   <OuiText size="sm" color="secondary">per month</OuiText>
                 </OuiStack>
 
-                <OuiStack gap="sm" align="start" class="text-left">
+                <OuiStack gap="sm" align="start" class="text-left flex-1">
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
-                      >10 web deployments</OuiText
+                      >2 GB RAM running 24/7</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
-                      >5 game servers</OuiText
+                      >1 CPU core running 24/7</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
-                      >2 shared vCPUs (Ryzen 7 7900x)</OuiText
+                      >~50 GB bandwidth/month</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary"
-                      >2GB RAM per instance</OuiText
-                    >
-                  </OuiFlex>
-                  <OuiFlex align="center" gap="sm">
-                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">50GB storage</OuiText>
+                    <OuiText size="sm" color="secondary">~25 GB storage</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
@@ -430,31 +563,35 @@
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary">Free support</OuiText>
                   </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary">Automatic failover to fallback node</OuiText>
+                  </OuiFlex>
                 </OuiStack>
-
-                <OuiButton
-                  color="primary"
-                  size="md"
-                  class="w-full shadow-lg shadow-accent-primary/25"
-                  @click="navigateTo('/dashboard')"
-                >
-                  Start Pro Trial
-                </OuiButton>
               </OuiStack>
+
+              <OuiButton
+                color="primary"
+                size="md"
+                class="w-full mt-auto shadow-lg shadow-accent-primary/25"
+                @click="navigateTo('/dashboard')"
+              >
+                Get Started
+              </OuiButton>
             </OuiCardBody>
           </OuiCard>
 
-          <!-- Enterprise Plan -->
+          <!-- Large App Example -->
           <OuiCard
             variant="raised"
             hoverable
-            class="text-center group hover:-translate-y-1 transition-all duration-300"
+            class="text-center group hover:-translate-y-1 transition-all duration-300 h-full flex flex-col"
           >
-            <OuiCardBody>
-              <OuiStack gap="lg">
+            <OuiCardBody class="flex flex-col h-full">
+              <OuiStack gap="lg" class="flex-1">
                 <OuiStack gap="md">
                   <OuiText size="lg" weight="semibold" color="primary"
-                    >Enterprise</OuiText
+                    >Large App</OuiText
                   >
                   <OuiText size="sm" color="secondary"
                     >For large organizations</OuiText
@@ -463,25 +600,33 @@
 
                 <OuiStack gap="xs" align="center">
                   <OuiText size="3xl" weight="bold" color="primary"
-                    >Pay as you grow</OuiText
+                    >~$44</OuiText
                   >
-                  <OuiText size="sm" color="secondary"
-                    >resource-based pricing</OuiText
-                  >
+                  <OuiText size="sm" color="secondary">per month</OuiText>
                 </OuiStack>
 
-                <OuiStack gap="sm" align="start" class="text-left">
+                <OuiStack gap="sm" align="start" class="text-left flex-1">
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
-                      >Unlimited deployments</OuiText
+                      >8 GB RAM running 24/7</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
-                      >Unlimited game servers</OuiText
+                      >2 CPU cores running 24/7</OuiText
                     >
+                  </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary"
+                      >~200 GB bandwidth/month</OuiText
+                    >
+                  </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary">~100 GB storage</OuiText>
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
@@ -499,21 +644,31 @@
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary">Free support</OuiText>
                   </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary">Automatic failover to fallback node</OuiText>
+                  </OuiFlex>
                 </OuiStack>
-
-                <OuiButton variant="outline" size="md" class="w-full">
-                  Contact Sales
-                </OuiButton>
               </OuiStack>
+
+              <OuiButton variant="outline" size="md" class="w-full mt-auto">
+                Get Started
+              </OuiButton>
             </OuiCardBody>
           </OuiCard>
         </OuiGrid>
+        
+        <OuiText size="sm" color="secondary" class="opacity-75 text-center max-w-2xl">
+          * Example costs based on 24/7 usage. You only pay for actual runtime - if your app runs part-time, you'll pay less. Use the calculator below to estimate your exact costs.
+        </OuiText>
       </OuiStack>
     </OuiContainer>
 
-    <!-- CTA Section -->
+    <!-- Pricing Calculator Section -->
+    <PricingCalculator />
 
-    <OuiContainer as="section" size="7xl" py="6xl">
+    <!-- CTA Section -->
+    <OuiContainer as="section" size="7xl" py="6xl" class="bg-gradient-to-b from-background to-background-muted/30">
       <OuiStack gap="xl" align="center" class="text-center">
         <OuiStack gap="lg" align="center" class="max-w-3xl">
           <OuiText
@@ -570,6 +725,7 @@ import {
   CheckIcon,
   ChatBubbleLeftRightIcon,
 } from "@heroicons/vue/24/outline";
+import PricingCalculator from "~/components/pricing/PricingCalculator.vue";
 
 // Page meta - no auth required for homepage
 definePageMeta({
