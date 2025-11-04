@@ -3,6 +3,7 @@
   import {
     OrganizationService,
     AdminService,
+    BillingService,
     type OrganizationMember,
   } from "@obiente/proto";
   import { useConnectClient } from "~/lib/connect-client";
@@ -12,6 +13,7 @@
     CreditCardIcon,
     PencilIcon,
     ArrowDownTrayIcon,
+    DocumentTextIcon,
   } from "@heroicons/vue/24/outline";
 
   const name = ref("");
@@ -23,7 +25,9 @@
   const auth = useAuth();
   const orgClient = useConnectClient(OrganizationService);
   const adminClient = useConnectClient(AdminService);
+  const billingClient = useConnectClient(BillingService);
   const route = useRoute();
+  const config = useRuntimeConfig();
 
   // Store the target org from query params before any other logic
   const targetOrgId =
@@ -274,27 +278,32 @@
   async function addCredits() {
     if (!selectedOrg.value || !addCreditsAmount.value) return;
     const amount = parseFloat(addCreditsAmount.value);
-    if (isNaN(amount) || amount <= 0) {
-      error.value = "Please enter a valid positive amount";
+    
+    // Validate minimum amount ($0.50 USD)
+    if (isNaN(amount) || amount < 0.50) {
+      const { toast } = useToast();
+      toast.error("Minimum purchase amount is $0.50 USD");
+      error.value = "Minimum purchase amount is $0.50 USD";
       return;
     }
     
     addCreditsLoading.value = true;
     error.value = "";
     try {
-      // Note: Proto files need to be generated
-      await (orgClient as any).addCredits({
+      // Create Stripe Checkout Session
+      const response = await billingClient.createCheckoutSession({
         organizationId: selectedOrg.value,
-        amountCents: Math.round(amount * 100), // Convert dollars to cents
-        note: addCreditsNote.value || undefined,
+        amountCents: BigInt(Math.round(amount * 100)), // Convert dollars to cents
       });
-      addCreditsDialogOpen.value = false;
-      addCreditsAmount.value = "";
-      addCreditsNote.value = "";
-      await syncOrganizations(); // Refresh organizations to get updated credits
+      
+      if (response.checkoutUrl) {
+        // Redirect to Stripe Checkout
+        window.location.href = response.checkoutUrl;
+      } else {
+        throw new Error("No checkout URL received");
+      }
     } catch (err: any) {
-      error.value = err.message || "Failed to add credits";
-    } finally {
+      error.value = err.message || "Failed to create checkout session";
       addCreditsLoading.value = false;
     }
   }
@@ -315,7 +324,6 @@
   const tabs = [
     { id: "members", label: "Members" },
     { id: "roles", label: "Roles" },
-    { id: "billing", label: "Billing" },
   ];
 
   const inviteDisabled = computed(
@@ -366,6 +374,129 @@
 
   const usage = computed(() => usageData.value);
   
+  // Fetch credit transactions (billing history)
+  const { data: creditLogData, refresh: refreshCreditLog } = await useAsyncData(
+    () =>
+      selectedOrg.value
+        ? `org-credit-log-${selectedOrg.value}`
+        : "org-credit-log-none",
+    async () => {
+      if (!selectedOrg.value) return { transactions: [], pagination: null };
+      const res = await orgClient.getCreditLog({
+        organizationId: selectedOrg.value,
+        page: 1,
+        perPage: 50,
+      });
+      return res;
+    },
+    { watch: [selectedOrg], server: false }
+  );
+
+  const billingHistory = computed(() => {
+    const transactions = creditLogData.value?.transactions || [];
+    return transactions
+      .filter((t) => t.type === "payment" && t.source === "stripe")
+      .map((t) => ({
+        id: t.id,
+        number: `#${t.id.substring(0, 8).toUpperCase()}`,
+        date: t.createdAt
+          ? new Date(Number(t.createdAt.seconds) * 1000).toLocaleDateString()
+          : "",
+        amount: formatCurrency(t.amountCents),
+        status: t.amountCents > 0 ? "Paid" : "Refunded",
+        transaction: t,
+      }));
+  });
+
+  // Fetch billing account
+  const { data: billingAccountData, refresh: refreshBillingAccount } =
+    await useAsyncData(
+      () =>
+        selectedOrg.value
+          ? `billing-account-${selectedOrg.value}`
+          : "billing-account-none",
+      async () => {
+        if (!selectedOrg.value) return null;
+        try {
+          const res = await billingClient.getBillingAccount({
+            organizationId: selectedOrg.value,
+          });
+          return res.account;
+        } catch (err) {
+          console.error("Failed to fetch billing account:", err);
+          return null;
+        }
+      },
+      { watch: [selectedOrg], server: false }
+    );
+
+  const billingAccount = computed(() => billingAccountData.value);
+
+  // Fetch payment methods
+  const { data: paymentMethodsData, refresh: refreshPaymentMethods } =
+    await useAsyncData(
+      () =>
+        selectedOrg.value
+          ? `payment-methods-${selectedOrg.value}`
+          : "payment-methods-none",
+      async () => {
+        if (!selectedOrg.value) return [];
+        try {
+          const res = await billingClient.listPaymentMethods({
+            organizationId: selectedOrg.value,
+          });
+          return res.paymentMethods || [];
+        } catch (err) {
+          console.error("Failed to fetch payment methods:", err);
+          return [];
+        }
+      },
+      { watch: [selectedOrg], server: false }
+    );
+
+  const paymentMethods = computed(() => paymentMethodsData.value || []);
+
+  // Fetch invoices
+  const { data: invoicesData, refresh: refreshInvoices } =
+    await useAsyncData(
+      () =>
+        selectedOrg.value
+          ? `invoices-${selectedOrg.value}`
+          : "invoices-none",
+      async () => {
+        if (!selectedOrg.value) return { invoices: [], hasMore: false };
+        try {
+          const res = await billingClient.listInvoices({
+            organizationId: selectedOrg.value,
+            limit: 20,
+          });
+          return { invoices: res.invoices || [], hasMore: res.hasMore || false };
+        } catch (err) {
+          console.error("Failed to fetch invoices:", err);
+          return { invoices: [], hasMore: false };
+        }
+      },
+      { watch: [selectedOrg], server: false }
+    );
+
+  const invoices = computed(() => invoicesData.value?.invoices || []);
+  const hasMoreInvoices = computed(() => invoicesData.value?.hasMore || false);
+
+  // Access Stripe Customer Portal
+  async function openCustomerPortal() {
+    if (!selectedOrg.value) return;
+    try {
+      const response = await billingClient.createPortalSession({
+        organizationId: selectedOrg.value,
+      });
+      if (response.portalUrl) {
+        window.location.href = response.portalUrl;
+      }
+    } catch (err: any) {
+      error.value = err.message || "Failed to open customer portal";
+    }
+  }
+  
   // Get current organization object to access credits
   const currentOrganization = computed(() => {
     if (!selectedOrg.value) return null;
@@ -381,13 +512,335 @@
   
   const addCreditsDialogOpen = ref(false);
   const addCreditsAmount = ref("");
-  const addCreditsNote = ref("");
   const addCreditsLoading = ref(false);
+
+  const addPaymentMethodDialogOpen = ref(false);
+  const addPaymentMethodLoading = ref(false);
+  const paymentElementLoading = ref(false);
+  const stripe = ref<any>(null);
+  const stripeElements = ref<any>(null);
+  const paymentElement = ref<any>(null);
+  const setupIntentClientSecret = ref<string>("");
+  const paymentElementContainer = ref<HTMLElement | null>(null);
+
+  // Initialize payment element when dialog opens
+  watch(addPaymentMethodDialogOpen, async (isOpen) => {
+    if (isOpen) {
+      paymentElementLoading.value = true;
+      error.value = "";
+
+      // Wait for Stripe to be loaded
+      if (!stripe.value) {
+        // Wait a bit for Stripe to load
+        let attempts = 0;
+        while (!stripe.value && attempts < 10) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+        
+        if (!stripe.value) {
+          error.value = "Stripe.js is not loaded. Please ensure NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is set and refresh the page.";
+          paymentElementLoading.value = false;
+          addPaymentMethodDialogOpen.value = false;
+          return;
+        }
+      }
+
+      if (!selectedOrg.value) {
+        error.value = "Please select an organization first.";
+        paymentElementLoading.value = false;
+        addPaymentMethodDialogOpen.value = false;
+        return;
+      }
+
+      try {
+        // Create setup intent
+        const response = await billingClient.createSetupIntent({
+          organizationId: selectedOrg.value,
+        });
+        setupIntentClientSecret.value = response.clientSecret;
+
+        // Wait for DOM to be ready - dialog uses ClientOnly so needs extra time
+        await nextTick();
+        // Additional delay to ensure dialog is fully rendered
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Wait for container to be available with retries
+        let container = paymentElementContainer.value;
+        if (!container) {
+          // Try to find it by ID as fallback
+          container = document.getElementById("payment-element");
+          if (container) {
+            paymentElementContainer.value = container;
+          }
+        }
+
+        // Retry finding the container if still not found
+        if (!container) {
+          let retries = 0;
+          while (!container && retries < 10) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            container = paymentElementContainer.value || document.getElementById("payment-element");
+            if (container && !paymentElementContainer.value) {
+              paymentElementContainer.value = container;
+            }
+            retries++;
+          }
+        }
+
+        if (!container) {
+          console.error("Payment element container not found after retries");
+          error.value = "Payment form container not found. Please try again.";
+          paymentElementLoading.value = false;
+          return;
+        }
+
+        // Clear any existing elements
+        if (stripeElements.value) {
+          stripeElements.value.clear();
+        }
+
+        // Import Stripe theme helper
+        const { getStripeAppearance } = await import('~/utils/stripe-theme');
+        
+        // Create elements with Oui-themed appearance
+        stripeElements.value = stripe.value.elements({
+          clientSecret: setupIntentClientSecret.value,
+          appearance: getStripeAppearance(),
+        });
+
+        paymentElement.value = stripeElements.value.create("payment");
+        paymentElement.value.mount(container);
+        paymentElementLoading.value = false;
+      } catch (err: any) {
+        console.error("Failed to initialize payment form:", err);
+        error.value = err.message || "Failed to initialize payment form";
+        paymentElementLoading.value = false;
+        addPaymentMethodDialogOpen.value = false;
+      }
+    } else if (!isOpen && paymentElement.value) {
+      // Cleanup when dialog closes
+      paymentElement.value?.unmount();
+      paymentElement.value = null;
+      stripeElements.value = null;
+      setupIntentClientSecret.value = "";
+      paymentElementLoading.value = false;
+    }
+  });
+
+  async function addPaymentMethod() {
+    if (!stripe.value || !paymentElement.value || !selectedOrg.value) return;
+
+    addPaymentMethodLoading.value = true;
+    error.value = "";
+
+    try {
+      // Confirm setup intent
+      const { setupIntent, error: confirmError } =
+        await stripe.value.confirmSetup({
+          elements: stripeElements.value,
+          redirect: "if_required",
+        });
+
+      if (confirmError) {
+        throw new Error(confirmError.message);
+      }
+
+      if (setupIntent && setupIntent.payment_method) {
+        // Attach payment method to customer
+        await billingClient.attachPaymentMethod({
+          organizationId: selectedOrg.value,
+          paymentMethodId: setupIntent.payment_method as string,
+        });
+
+        // Refresh payment methods
+        await refreshPaymentMethods();
+        await refreshBillingAccount();
+
+        addPaymentMethodDialogOpen.value = false;
+        useToast().toast.success("Payment method added successfully");
+      }
+    } catch (err: any) {
+      error.value = err.message || "Failed to add payment method";
+    } finally {
+      addPaymentMethodLoading.value = false;
+    }
+  }
+
+  async function setDefaultPaymentMethod(paymentMethodId: string) {
+    if (!selectedOrg.value) return;
+    try {
+      await billingClient.setDefaultPaymentMethod({
+        organizationId: selectedOrg.value,
+        paymentMethodId,
+      });
+      await refreshPaymentMethods();
+      await refreshBillingAccount();
+      useToast().toast.success("Default payment method updated");
+    } catch (err: any) {
+      error.value = err.message || "Failed to set default payment method";
+      useToast().toast.error(error.value);
+    }
+  }
+
+  async function removePaymentMethod(paymentMethodId: string) {
+    if (!selectedOrg.value) return;
+    if (!confirm("Are you sure you want to remove this payment method?")) {
+      return;
+    }
+    try {
+      await billingClient.detachPaymentMethod({
+        organizationId: selectedOrg.value,
+        paymentMethodId,
+      });
+      await refreshPaymentMethods();
+      await refreshBillingAccount();
+      useToast().toast.success("Payment method removed");
+    } catch (err: any) {
+      error.value = err.message || "Failed to remove payment method";
+      useToast().toast.error(error.value);
+    }
+  }
+
+  function formatCardBrand(brand: string): string {
+    const brands: Record<string, string> = {
+      visa: "Visa",
+      mastercard: "Mastercard",
+      amex: "American Express",
+      discover: "Discover",
+      jcb: "JCB",
+      diners: "Diners Club",
+      unionpay: "UnionPay",
+    };
+    return brands[brand.toLowerCase()] || brand;
+  }
+
+  function getInvoiceStatusVariant(status: string): "success" | "warning" | "danger" | "secondary" {
+    switch (status.toLowerCase()) {
+      case "paid":
+        return "success";
+      case "open":
+      case "draft":
+        return "warning";
+      case "uncollectible":
+      case "void":
+        return "danger";
+      default:
+        return "secondary";
+    }
+  }
+
+  function formatInvoiceDate(date: any): string {
+    if (!date) return "";
+    const seconds = typeof date === 'object' && 'seconds' ? Number(date.seconds) : typeof date === 'number' ? date : 0;
+    if (seconds === 0) return "";
+    return new Date(seconds * 1000).toLocaleDateString();
+  }
+
+  function openInvoiceUrl(url: string) {
+    if (typeof window !== 'undefined' && url) {
+      window.open(url, '_blank');
+    }
+  }
+
+  // Load Stripe.js and handle payment redirects
+  onMounted(async () => {
+    // Load Stripe.js
+    if (typeof window !== "undefined") {
+      const publishableKey = config.public.stripePublishableKey;
+      
+      // Check if Stripe is already loaded
+      if (window.Stripe) {
+        if (publishableKey) {
+          stripe.value = window.Stripe(publishableKey);
+        }
+      } else {
+        // Load Stripe.js dynamically
+        const stripeScript = document.createElement("script");
+        stripeScript.src = "https://js.stripe.com/v3/";
+        stripeScript.async = true;
+        document.head.appendChild(stripeScript);
+
+        stripeScript.onload = () => {
+          if (window.Stripe && publishableKey) {
+            stripe.value = window.Stripe(publishableKey);
+          } else {
+            console.error("Stripe.js loaded but publishable key not configured");
+          }
+        };
+
+        stripeScript.onerror = () => {
+          console.error("Failed to load Stripe.js");
+          error.value = "Failed to load payment form. Please refresh the page.";
+        };
+      }
+    }
+
+    // Handle payment success/cancel redirects
+    if (route.query.payment === "success") {
+      const { toast } = useToast();
+      
+      // Store initial credits balance for comparison
+      const initialCredits = currentOrganization.value?.credits 
+        ? (typeof currentOrganization.value.credits === 'bigint' 
+            ? Number(currentOrganization.value.credits) 
+            : currentOrganization.value.credits)
+        : 0;
+      
+      // Refresh data immediately
+      syncOrganizations().then(() => {
+        refreshCreditLog();
+        refreshBillingAccount();
+        refreshPaymentMethods();
+        refreshInvoices();
+      });
+      
+      // Retry syncing organizations a few times to catch webhook delay
+      // Webhooks might take a moment to process
+      let retries = 0;
+      const maxRetries = 5;
+      const retryInterval = 2000; // 2 seconds
+      
+      const retrySync = setInterval(async () => {
+        retries++;
+        await syncOrganizations();
+        
+        // Check if credits have updated
+        const currentOrg = organizations.value.find((o) => o.id === selectedOrg.value);
+        if (currentOrg?.credits) {
+          const currentCredits = typeof currentOrg.credits === 'bigint' 
+            ? Number(currentOrg.credits) 
+            : currentOrg.credits;
+          
+          if (currentCredits > initialCredits) {
+            clearInterval(retrySync);
+            toast.success("Payment successful! Credits have been added to your account.");
+            navigateTo({ query: { ...route.query, payment: undefined } });
+            return;
+          }
+        }
+        
+        if (retries >= maxRetries) {
+          clearInterval(retrySync);
+          toast.success("Payment successful! Credits are being processed and will appear shortly.");
+          navigateTo({ query: { ...route.query, payment: undefined } });
+        }
+      }, retryInterval);
+      
+      // Initial success message
+      toast.success("Payment successful! Updating credits...");
+    } else if (route.query.payment === "canceled") {
+      const { toast } = useToast();
+      toast.info("Payment canceled.");
+      navigateTo({ query: { ...route.query, payment: undefined } });
+    }
+  });
   
   // Format helper functions
-  const formatBytes = (bytes: number | bigint) => {
+  const formatBytes = (bytes: number | bigint | null | undefined) => {
+    if (bytes === null || bytes === undefined) return "0 B";
     const b = Number(bytes);
-    if (b === 0) return "0 B";
+    if (b === 0 || !Number.isFinite(b)) return "0 B";
     const k = 1024;
     const sizes = ["B", "KB", "MB", "GB", "TB"];
     const i = Math.floor(Math.log(b) / Math.log(k));
@@ -400,7 +853,8 @@
     return (b / (1024 * 1024 * 1024)).toFixed(2);
   };
 
-  const formatMemoryByteSecondsToGB = (byteSeconds: number | bigint) => {
+  const formatMemoryByteSecondsToGB = (byteSeconds: number | bigint | null | undefined) => {
+    if (byteSeconds === null || byteSeconds === undefined) return "0.00";
     const bs = Number(byteSeconds);
     if (bs === 0 || !Number.isFinite(bs)) return "0.00";
     // Convert byte-seconds to GB-hours, then show as GB (for average memory usage)
@@ -411,10 +865,22 @@
     return formatBytesToGB(avgBytes);
   };
 
-  const formatCoreSecondsToHours = (coreSeconds: number | bigint) => {
+  const formatCoreSecondsToHours = (coreSeconds: number | bigint | null | undefined) => {
+    if (coreSeconds === null || coreSeconds === undefined) return "0.00";
     const s = Number(coreSeconds);
     if (!Number.isFinite(s) || s === 0) return "0.00";
     return (s / 3600).toFixed(2);
+  };
+
+  const formatCPUUsage = (coreSeconds: number | bigint | null | undefined): string => {
+    if (coreSeconds === null || coreSeconds === undefined) return "0.00";
+    const s = Number(coreSeconds);
+    if (!Number.isFinite(s) || s === 0) return "0.00";
+    const hours = s / 3600;
+    if (hours < 1) {
+      return `${(s / 60).toFixed(1)} min`;
+    }
+    return `${hours.toFixed(1)} core-hrs`;
   };
 
   const formatCurrency = (cents: number | bigint) => {
@@ -441,30 +907,6 @@
     if (percentage >= 75) return "warning";
     return "success";
   };
-
-  const billingHistory = [
-    {
-      id: "1",
-      number: "#INV-2024-001",
-      date: "Jan 1, 2024",
-      amount: "$28.50",
-      status: "Paid",
-    },
-    {
-      id: "2",
-      number: "#INV-2023-012",
-      date: "Dec 1, 2023",
-      amount: "$31.75",
-      status: "Paid",
-    },
-    {
-      id: "3",
-      number: "#INV-2023-011",
-      date: "Nov 1, 2023",
-      amount: "$24.20",
-      status: "Paid",
-    },
-  ];
 </script>
 
 <template>
@@ -740,332 +1182,6 @@
               </OuiGrid>
             </OuiStack>
           </template>
-
-          <template #billing>
-            <OuiStack gap="xl">
-              <template v-if="!usage || !usage.current">
-                <OuiStack gap="md" align="center" class="py-12">
-                  <OuiText color="muted">Loading usage data...</OuiText>
-                  <OuiSkeleton width="100%" height="200px" />
-                </OuiStack>
-              </template>
-              <template v-else>
-                <!-- Current Usage -->
-                <OuiStack gap="lg">
-                  <OuiText size="2xl" weight="bold">Current Usage</OuiText>
-                  <OuiGrid cols="1" cols-md="2" cols-lg="3" gap="lg">
-                    <!-- vCPU Usage -->
-                    <OuiCard>
-                      <OuiCardBody>
-                        <OuiStack gap="md">
-                          <OuiFlex justify="between" align="start">
-                            <OuiStack gap="xs">
-                              <OuiText size="sm" color="muted">vCPU Hours</OuiText>
-                              <OuiText size="2xl" weight="bold">
-                                {{ formatCoreSecondsToHours(usage.current.cpuCoreSeconds) }}
-                              </OuiText>
-                            </OuiStack>
-                            <OuiBadge 
-                              :variant="getUsageBadgeVariant(
-                                getUsagePercentage(
-                                  usage.current.cpuCoreSeconds,
-                                  usage.quota?.cpuCoreSecondsMonthly || 0
-                                )
-                              )"
-                            >
-                              Active
-                            </OuiBadge>
-                          </OuiFlex>
-                          <OuiProgress 
-                            :value="getUsagePercentage(
-                              usage.current.cpuCoreSeconds,
-                              usage.quota?.cpuCoreSecondsMonthly || 0
-                            )" 
-                            :max="100" 
-                          />
-                          <OuiText size="sm" color="muted">
-                            <template v-if="Number(usage.quota?.cpuCoreSecondsMonthly || 0) === 0">
-                              Unlimited allocation
-                            </template>
-                            <template v-else>
-                              {{ getUsagePercentage(
-                                usage.current.cpuCoreSeconds,
-                                usage.quota?.cpuCoreSecondsMonthly || 0
-                              ) }}% of monthly allocation
-                              ({{ formatCoreSecondsToHours(usage.quota?.cpuCoreSecondsMonthly || 0) }} hours)
-                            </template>
-                          </OuiText>
-                        </OuiStack>
-                      </OuiCardBody>
-                    </OuiCard>
-
-                    <!-- Memory Usage -->
-                    <OuiCard>
-                      <OuiCardBody>
-                        <OuiStack gap="md">
-                          <OuiFlex justify="between" align="start">
-                            <OuiStack gap="xs">
-                              <OuiText size="sm" color="muted">Memory (GB avg)</OuiText>
-                              <OuiText size="2xl" weight="bold">
-                                {{ formatMemoryByteSecondsToGB(usage.current.memoryByteSeconds) }}
-                              </OuiText>
-                            </OuiStack>
-                            <OuiBadge 
-                              :variant="getUsageBadgeVariant(
-                                getUsagePercentage(
-                                  usage.current.memoryByteSeconds,
-                                  usage.quota?.memoryByteSecondsMonthly || 0
-                                )
-                              )"
-                            >
-                              <template v-if="getUsagePercentage(
-                                usage.current.memoryByteSeconds,
-                                usage.quota?.memoryByteSecondsMonthly || 0
-                              ) >= 90">High</template>
-                              <template v-else-if="getUsagePercentage(
-                                usage.current.memoryByteSeconds,
-                                usage.quota?.memoryByteSecondsMonthly || 0
-                              ) >= 75">Warning</template>
-                              <template v-else>Normal</template>
-                            </OuiBadge>
-                          </OuiFlex>
-                          <OuiProgress 
-                            :value="getUsagePercentage(
-                              usage.current.memoryByteSeconds,
-                              usage.quota?.memoryByteSecondsMonthly || 0
-                            )" 
-                            :max="100" 
-                          />
-                          <OuiText size="sm" color="muted">
-                            <template v-if="Number(usage.quota?.memoryByteSecondsMonthly || 0) === 0">
-                              Unlimited allocation
-                            </template>
-                            <template v-else>
-                              {{ getUsagePercentage(
-                                usage.current.memoryByteSeconds,
-                                usage.quota?.memoryByteSecondsMonthly || 0
-                              ) }}% of monthly allocation
-                              ({{ formatMemoryByteSecondsToGB(usage.quota?.memoryByteSecondsMonthly || 0) }} GB)
-                            </template>
-                          </OuiText>
-                        </OuiStack>
-                      </OuiCardBody>
-                    </OuiCard>
-
-                    <!-- Storage Usage -->
-                    <OuiCard>
-                      <OuiCardBody>
-                        <OuiStack gap="md">
-                          <OuiFlex justify="between" align="start">
-                            <OuiStack gap="xs">
-                              <OuiText size="sm" color="muted">Storage (GB)</OuiText>
-                              <OuiText size="2xl" weight="bold">
-                                {{ formatBytesToGB(usage.current.storageBytes) }}
-                              </OuiText>
-                            </OuiStack>
-                            <OuiBadge 
-                              :variant="getUsageBadgeVariant(
-                                getUsagePercentage(
-                                  usage.current.storageBytes,
-                                  usage.quota?.storageBytes || 0
-                                )
-                              )"
-                            >
-                              <template v-if="getUsagePercentage(
-                                usage.current.storageBytes,
-                                usage.quota?.storageBytes || 0
-                              ) >= 90">High</template>
-                              <template v-else-if="getUsagePercentage(
-                                usage.current.storageBytes,
-                                usage.quota?.storageBytes || 0
-                              ) >= 75">Warning</template>
-                              <template v-else>Normal</template>
-                            </OuiBadge>
-                          </OuiFlex>
-                          <OuiProgress 
-                            :value="getUsagePercentage(
-                              usage.current.storageBytes,
-                              usage.quota?.storageBytes || 0
-                            )" 
-                            :max="100" 
-                          />
-                          <OuiText size="sm" color="muted">
-                            <template v-if="Number(usage.quota?.storageBytes || 0) === 0">
-                              Unlimited allocation
-                            </template>
-                            <template v-else>
-                              {{ getUsagePercentage(
-                                usage.current.storageBytes,
-                                usage.quota?.storageBytes || 0
-                              ) }}% of monthly allocation
-                              ({{ formatBytesToGB(usage.quota?.storageBytes || 0) }} GB)
-                            </template>
-                          </OuiText>
-                        </OuiStack>
-                      </OuiCardBody>
-                    </OuiCard>
-                  </OuiGrid>
-
-                  <!-- Credits Balance -->
-                  <OuiCard variant="outline">
-                    <OuiCardBody>
-                      <OuiStack gap="lg">
-                        <OuiFlex justify="between" align="start">
-                          <OuiStack gap="xs">
-                            <OuiText size="sm" color="muted">Credits Balance</OuiText>
-                            <OuiText size="3xl" weight="bold">
-                              {{ formatCurrency(creditsBalance) }}
-                            </OuiText>
-                            <OuiText size="sm" color="muted">
-                              Available credits for your organization
-                            </OuiText>
-                          </OuiStack>
-                          <OuiButton 
-                            variant="solid" 
-                            size="sm" 
-                            @click="addCreditsDialogOpen = true"
-                            v-if="currentUserIsOwner"
-                          >
-                            <PlusIcon class="h-4 w-4 mr-2" />
-                            Add Credits
-                          </OuiButton>
-                        </OuiFlex>
-                      </OuiStack>
-                    </OuiCardBody>
-                  </OuiCard>
-
-                  <!-- Current Month Summary -->
-                  <OuiCard variant="outline">
-                    <OuiCardBody>
-                      <OuiStack gap="lg">
-                        <OuiText size="xl" weight="semibold">Current Month Estimate</OuiText>
-                        <OuiFlex justify="between" align="center">
-                          <OuiStack gap="xs">
-                            <OuiText size="sm" color="muted">{{ currentMonth }}</OuiText>
-                            <OuiText size="3xl" weight="bold">
-                              {{ usage.estimatedMonthly?.estimatedCostCents 
-                                ? formatCurrency(usage.estimatedMonthly.estimatedCostCents)
-                                : '$0.00' }}
-                            </OuiText>
-                            <OuiText size="sm" color="muted">
-                              Based on current usage patterns
-                            </OuiText>
-                          </OuiStack>
-                          <OuiButton variant="outline" size="sm" @click="refreshUsage">
-                            Refresh
-                          </OuiButton>
-                        </OuiFlex>
-                      </OuiStack>
-                    </OuiCardBody>
-                  </OuiCard>
-                </OuiStack>
-              </template>
-
-              <!-- Payment Methods -->
-              <OuiStack gap="lg">
-                <OuiFlex justify="between" align="center">
-                  <OuiText size="2xl" weight="bold">Payment Methods</OuiText>
-                  <OuiButton variant="solid" size="sm">
-                    <PlusIcon class="h-4 w-4 mr-2" />
-                    Add Payment Method
-                  </OuiButton>
-                </OuiFlex>
-
-                <OuiGrid cols="1" cols-lg="2" gap="lg">
-                  <!-- Primary Payment Method -->
-                  <OuiCard>
-                    <OuiCardBody>
-                      <OuiStack gap="lg">
-                        <OuiFlex justify="between" align="start">
-                          <OuiStack gap="sm">
-                            <OuiFlex align="center" gap="sm">
-                              <CreditCardIcon class="h-6 w-6 text-accent-primary" />
-                              <OuiText size="lg" weight="semibold">•••• •••• •••• 4242</OuiText>
-                              <OuiBadge variant="success">Primary</OuiBadge>
-                            </OuiFlex>
-                            <OuiText size="sm" color="muted">Visa • Expires 12/26</OuiText>
-                          </OuiStack>
-                          <OuiButton variant="ghost" size="sm">
-                            <PencilIcon class="h-4 w-4" />
-                          </OuiButton>
-                        </OuiFlex>
-                        <OuiFlex gap="sm">
-                          <OuiButton variant="outline" size="sm">Update</OuiButton>
-                          <OuiButton variant="ghost" size="sm">Remove</OuiButton>
-                        </OuiFlex>
-                      </OuiStack>
-                    </OuiCardBody>
-                  </OuiCard>
-
-                  <!-- Backup Payment Method -->
-                  <OuiCard variant="outline" class="border-dashed">
-                    <OuiCardBody>
-                      <OuiStack gap="lg" align="center">
-                        <OuiStack gap="sm" align="center">
-                          <CreditCardIcon class="h-12 w-12 text-muted" />
-                          <OuiText size="lg" weight="semibold">Add Backup Payment</OuiText>
-                          <OuiText size="sm" color="muted">
-                            Ensure uninterrupted service with a backup payment method
-                          </OuiText>
-                        </OuiStack>
-                        <OuiButton variant="outline" size="sm">Add Card</OuiButton>
-                      </OuiStack>
-                    </OuiCardBody>
-                  </OuiCard>
-                </OuiGrid>
-              </OuiStack>
-
-              <!-- Billing History -->
-              <OuiStack gap="lg">
-                <OuiFlex justify="between" align="center">
-                  <OuiText size="2xl" weight="bold">Billing History</OuiText>
-                  <OuiButton variant="outline" size="sm">
-                    <ArrowDownTrayIcon class="h-4 w-4 mr-2" />
-                    Download All
-                  </OuiButton>
-                </OuiFlex>
-
-                <OuiCard>
-                  <OuiCardBody class="p-0">
-                    <OuiStack>
-                      <!-- Table Header -->
-                      <OuiBox p="md" borderBottom="1" borderColor="muted">
-                        <OuiGrid cols="5" gap="md">
-                          <OuiText size="sm" weight="medium" color="muted">Invoice</OuiText>
-                          <OuiText size="sm" weight="medium" color="muted">Date</OuiText>
-                          <OuiText size="sm" weight="medium" color="muted">Amount</OuiText>
-                          <OuiText size="sm" weight="medium" color="muted">Status</OuiText>
-                          <OuiText size="sm" weight="medium" color="muted">Actions</OuiText>
-                        </OuiGrid>
-                      </OuiBox>
-
-                      <!-- Table Rows -->
-                      <OuiStack>
-                        <OuiBox
-                          v-for="invoice in billingHistory"
-                          :key="invoice.id"
-                          p="md"
-                          borderBottom="1"
-                          borderColor="muted"
-                        >
-                          <OuiGrid cols="5" gap="md" align="center">
-                            <OuiText size="sm" weight="medium">{{ invoice.number }}</OuiText>
-                            <OuiText size="sm" color="muted">{{ invoice.date }}</OuiText>
-                            <OuiText size="sm" weight="medium">{{ invoice.amount }}</OuiText>
-                            <OuiBadge variant="success">{{ invoice.status }}</OuiBadge>
-                            <OuiFlex gap="sm">
-                              <OuiButton variant="ghost" size="xs">View</OuiButton>
-                              <OuiButton variant="ghost" size="xs">Download</OuiButton>
-                            </OuiFlex>
-                          </OuiGrid>
-                        </OuiBox>
-                      </OuiStack>
-                    </OuiStack>
-                  </OuiCardBody>
-                </OuiCard>
-              </OuiStack>
-            </OuiStack>
-          </template>
         </OuiTabs>
       </OuiCardBody>
     </OuiCard>
@@ -1090,12 +1206,51 @@
       </template>
     </OuiDialog>
 
-    <!-- Add Credits Dialog -->
-    <OuiDialog v-model:open="addCreditsDialogOpen" title="Add Credits">
+    <!-- Add Payment Method Dialog -->
+    <OuiDialog v-model:open="addPaymentMethodDialogOpen" title="Add Payment Method">
       <OuiStack gap="lg">
         <OuiStack gap="xs">
           <OuiText size="sm" color="muted">
-            Add credits to your organization balance. Credits are stored in cents ($0.01 units).
+            Add a new payment method to your account. You can use this for future purchases.
+          </OuiText>
+          <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
+          <OuiText v-if="!config.public.stripePublishableKey" size="sm" color="warning">
+            Warning: Stripe publishable key not configured. Please set NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.
+          </OuiText>
+        </OuiStack>
+        
+        <!-- Payment Element Container -->
+        <div v-if="paymentElementLoading" class="min-h-[200px] flex items-center justify-center">
+          <OuiText size="sm" color="muted">Loading payment form...</OuiText>
+        </div>
+        <div 
+          ref="paymentElementContainer" 
+          id="payment-element" 
+          class="min-h-[200px]"
+          :class="{ 'hidden': paymentElementLoading }"
+        ></div>
+
+        <OuiFlex justify="end" gap="sm">
+          <OuiButton variant="ghost" @click="addPaymentMethodDialogOpen = false">
+            Cancel
+          </OuiButton>
+          <OuiButton 
+            variant="solid" 
+            @click="addPaymentMethod"
+            :disabled="addPaymentMethodLoading || paymentElementLoading || !paymentElement"
+          >
+            {{ addPaymentMethodLoading ? "Processing..." : "Add Payment Method" }}
+          </OuiButton>
+        </OuiFlex>
+      </OuiStack>
+    </OuiDialog>
+
+    <!-- Add Credits Dialog -->
+    <OuiDialog v-model:open="addCreditsDialogOpen" title="Purchase Credits">
+      <OuiStack gap="lg">
+        <OuiStack gap="xs">
+          <OuiText size="sm" color="muted">
+            Purchase credits for your organization. You will be redirected to Stripe Checkout to complete the payment.
           </OuiText>
           <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
         </OuiStack>
@@ -1107,18 +1262,13 @@
               v-model="addCreditsAmount"
               type="number"
               step="0.01"
-              min="0.01"
-              placeholder="0.00"
+              min="0.50"
+              placeholder="0.50"
+              :error="addCreditsAmount && parseFloat(addCreditsAmount) < 0.50 ? 'Minimum amount is $0.50 USD' : undefined"
             />
-          </OuiStack>
-          
-          <OuiStack gap="xs">
-            <OuiText size="sm" weight="medium">Note (Optional)</OuiText>
-            <OuiInput
-              v-model="addCreditsNote"
-              type="text"
-              placeholder="Reason for adding credits"
-            />
+            <OuiText size="xs" color="muted">
+              Minimum purchase amount is $0.50 USD
+            </OuiText>
           </OuiStack>
         </OuiStack>
 
@@ -1129,9 +1279,9 @@
           <OuiButton 
             variant="solid" 
             @click="addCredits"
-            :disabled="addCreditsLoading || !addCreditsAmount || parseFloat(addCreditsAmount) <= 0"
+            :disabled="addCreditsLoading || !addCreditsAmount || parseFloat(addCreditsAmount) < 0.50 || isNaN(parseFloat(addCreditsAmount))"
           >
-            {{ addCreditsLoading ? "Adding..." : "Add Credits" }}
+            {{ addCreditsLoading ? "Processing..." : "Continue to Payment" }}
           </OuiButton>
         </OuiFlex>
       </OuiStack>

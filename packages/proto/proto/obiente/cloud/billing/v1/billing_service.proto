@@ -1,0 +1,225 @@
+syntax = "proto3";
+
+package obiente.cloud.billing.v1;
+
+option go_package = "api/gen/proto/obiente/cloud/billing/v1;billingv1";
+
+import "google/protobuf/timestamp.proto";
+
+service BillingService {
+  // Create a Stripe Checkout Session for purchasing credits
+  rpc CreateCheckoutSession(CreateCheckoutSessionRequest) returns (CreateCheckoutSessionResponse);
+
+  // Create a Stripe Customer Portal session for managing billing
+  rpc CreatePortalSession(CreatePortalSessionRequest) returns (CreatePortalSessionResponse);
+
+  // Create a Setup Intent for collecting payment methods without a payment
+  rpc CreateSetupIntent(CreateSetupIntentRequest) returns (CreateSetupIntentResponse);
+
+  // Get billing account information for an organization
+  rpc GetBillingAccount(GetBillingAccountRequest) returns (GetBillingAccountResponse);
+
+  // Create or update billing account
+  rpc UpdateBillingAccount(UpdateBillingAccountRequest) returns (UpdateBillingAccountResponse);
+
+  // List payment methods for an organization
+  rpc ListPaymentMethods(ListPaymentMethodsRequest) returns (ListPaymentMethodsResponse);
+
+  // Attach a payment method to customer
+  rpc AttachPaymentMethod(AttachPaymentMethodRequest) returns (AttachPaymentMethodResponse);
+
+  // Detach a payment method from customer
+  rpc DetachPaymentMethod(DetachPaymentMethodRequest) returns (DetachPaymentMethodResponse);
+
+  // Set default payment method for customer
+  rpc SetDefaultPaymentMethod(SetDefaultPaymentMethodRequest) returns (SetDefaultPaymentMethodResponse);
+
+  // Get payment intent status
+  rpc GetPaymentStatus(GetPaymentStatusRequest) returns (GetPaymentStatusResponse);
+
+  // List invoices for an organization
+  rpc ListInvoices(ListInvoicesRequest) returns (ListInvoicesResponse);
+}
+
+message CreateCheckoutSessionRequest {
+  string organization_id = 1;
+  // Amount in cents ($0.01 units). Must be positive.
+  int64 amount_cents = 2;
+  // Optional: success URL (defaults to console URL)
+  optional string success_url = 3;
+  // Optional: cancel URL (defaults to console URL)
+  optional string cancel_url = 4;
+}
+
+message CreateCheckoutSessionResponse {
+  // Stripe Checkout Session ID
+  string session_id = 1;
+  // Stripe Checkout Session URL for redirect
+  string checkout_url = 2;
+}
+
+message CreatePortalSessionRequest {
+  string organization_id = 1;
+  // Optional: return URL (defaults to console URL)
+  optional string return_url = 2;
+}
+
+message CreatePortalSessionResponse {
+  // Stripe Customer Portal Session URL for redirect
+  string portal_url = 1;
+}
+
+message GetBillingAccountRequest {
+  string organization_id = 1;
+}
+
+message GetBillingAccountResponse {
+  BillingAccount account = 1;
+}
+
+message UpdateBillingAccountRequest {
+  string organization_id = 1;
+  optional string billing_email = 2;
+  optional string company_name = 3;
+  optional string tax_id = 4;
+  optional Address address = 5;
+}
+
+message UpdateBillingAccountResponse {
+  BillingAccount account = 1;
+}
+
+message ListPaymentMethodsRequest {
+  string organization_id = 1;
+}
+
+message ListPaymentMethodsResponse {
+  repeated PaymentMethod payment_methods = 1;
+}
+
+message GetPaymentStatusRequest {
+  string payment_intent_id = 1;
+}
+
+message GetPaymentStatusResponse {
+  string status = 1; // "succeeded", "pending", "failed", "canceled"
+  optional string error_message = 2;
+}
+
+message CreateSetupIntentRequest {
+  string organization_id = 1;
+  // Optional: return URL after setup completion
+  optional string return_url = 2;
+}
+
+message CreateSetupIntentResponse {
+  // Stripe Setup Intent client secret for frontend
+  string client_secret = 1;
+  // Setup Intent ID
+  string setup_intent_id = 2;
+}
+
+message AttachPaymentMethodRequest {
+  string organization_id = 1;
+  string payment_method_id = 2;
+}
+
+message AttachPaymentMethodResponse {
+  PaymentMethod payment_method = 1;
+}
+
+message DetachPaymentMethodRequest {
+  string organization_id = 1;
+  string payment_method_id = 2;
+}
+
+message DetachPaymentMethodResponse {
+  // Success indicator
+  bool success = 1;
+}
+
+message SetDefaultPaymentMethodRequest {
+  string organization_id = 1;
+  string payment_method_id = 2;
+}
+
+message SetDefaultPaymentMethodResponse {
+  // Success indicator
+  bool success = 1;
+}
+
+message ListInvoicesRequest {
+  string organization_id = 1;
+  // Optional: limit the number of invoices returned (default: 10, max: 100)
+  optional int32 limit = 2;
+}
+
+message ListInvoicesResponse {
+  repeated Invoice invoices = 1;
+  // Whether there are more invoices available
+  bool has_more = 2;
+}
+
+message Invoice {
+  string id = 1;
+  // Invoice number (human-readable)
+  string number = 2;
+  // Invoice status: "draft", "open", "paid", "uncollectible", "void"
+  string status = 3;
+  // Total amount in cents
+  int64 amount_due = 4;
+  // Amount paid in cents
+  int64 amount_paid = 5;
+  // Currency code (e.g., "usd")
+  string currency = 6;
+  // Invoice date
+  google.protobuf.Timestamp date = 7;
+  // Due date (if applicable)
+  optional google.protobuf.Timestamp due_date = 8;
+  // PDF download URL (if available)
+  optional string invoice_pdf = 9;
+  // Hosted invoice URL (if available)
+  optional string hosted_invoice_url = 10;
+  // Description or memo
+  optional string description = 11;
+}
+
+message BillingAccount {
+  string id = 1;
+  string organization_id = 2;
+  optional string stripe_customer_id = 3;
+  string status = 4; // "ACTIVE", "INACTIVE", "PAST_DUE", etc.
+  optional string billing_email = 5;
+  optional string company_name = 6;
+  optional string tax_id = 7;
+  optional Address address = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message PaymentMethod {
+  string id = 1;
+  string type = 2; // "card", "bank_account", etc.
+  // Card details (if type is "card")
+  optional CardDetails card = 3;
+  bool is_default = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message CardDetails {
+  string brand = 1; // "visa", "mastercard", "amex", etc.
+  string last4 = 2;
+  int32 exp_month = 3;
+  int32 exp_year = 4;
+  optional string name = 5;
+}
+
+message Address {
+  string line1 = 1;
+  optional string line2 = 2;
+  string city = 3;
+  optional string state = 4;
+  string postal_code = 5;
+  string country = 6;
+}
+

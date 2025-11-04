@@ -169,13 +169,21 @@
   }
 </style>
 <script setup lang="ts">
-  import { onBeforeUnmount, onMounted, computed, ref, type ComponentPublicInstance } from "vue";
+  import { onBeforeUnmount, onMounted, computed, ref, watch, type ComponentPublicInstance } from "vue";
   import { Bars3Icon, XMarkIcon } from "@heroicons/vue/24/outline";
   import AppHeader from "~/components/app/AppHeader.vue";
 
   // Pinia user store
   const user = useAuth();
   const superAdmin = useSuperAdmin();
+
+  // Reset superadmin state when user logs in or changes
+  watch(() => user.isAuthenticated, (isAuthenticated) => {
+    if (isAuthenticated) {
+      // Reset superadmin state when user logs in to force fresh check
+      superAdmin.reset();
+    }
+  }, { immediate: true });
 
   // Fetch superadmin overview - await on client side too to ensure state is initialized
   if (import.meta.server) {
@@ -226,18 +234,21 @@
     }
   };
 
-  if (import.meta.client) {
-    onMounted(() => {
+  // Register lifecycle hooks unconditionally (required by Vue)
+  onMounted(() => {
+    if (import.meta.client) {
       handleBreakpointChange();
       window.addEventListener("keydown", handleKeydown);
       window.addEventListener("resize", handleBreakpointChange);
-    });
+    }
+  });
 
-    onBeforeUnmount(() => {
+  onBeforeUnmount(() => {
+    if (import.meta.client) {
       window.removeEventListener("keydown", handleKeydown);
       window.removeEventListener("resize", handleBreakpointChange);
-    });
-  }
+    }
+  });
 
   // Organization switcher data and methods (Connect)
   import { useConnectClient } from "~/lib/connect-client";
