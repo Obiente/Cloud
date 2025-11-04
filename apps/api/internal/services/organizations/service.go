@@ -14,6 +14,7 @@ import (
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/email"
+	"api/internal/logger"
 	"api/internal/pricing"
 
 	"connectrpc.com/connect"
@@ -509,85 +510,154 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 	var deploymentsActivePeak int
 
 	if month == now.Format("2006-01") {
-		// Current month: calculate live from hourly aggregates (full month) + raw metrics (recent)
-		rawCutoff := time.Now().Add(-24 * time.Hour)
-		if rawCutoff.Before(monthStart) {
-			rawCutoff = monthStart
+		// Current month: calculate live from hourly aggregates (full month) + raw metrics (current incomplete hour)
+		
+		// Aggregate cutoff: current hour (aggregates exist up to current hour)
+		aggregateCutoff := time.Now().UTC().Truncate(time.Hour)
+		if aggregateCutoff.Before(monthStart) {
+			aggregateCutoff = monthStart
 		}
 
-		// Get usage from hourly aggregates for all org deployments (older than 24 hours)
+		// Get usage from hourly aggregates for all hours up to (but not including) current hour
+		// Use MetricsDB (TimescaleDB) for deployment_usage_hourly
 		var hourlyUsage struct {
 			CPUCoreSeconds    int64
 			MemoryByteSeconds int64
 			BandwidthRxBytes  int64
 			BandwidthTxBytes  int64
 		}
-		database.DB.Table("deployment_usage_hourly duh").
+		metricsDB := database.GetMetricsDB()
+		if metricsDB == nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("metrics database not available"))
+		}
+		metricsDB.Table("deployment_usage_hourly duh").
 			Select(`
-				COALESCE(SUM((duh.avg_cpu_usage / 100.0) * 3600), 0) as cpu_core_seconds,
+				COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
 				COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds,
 				COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
 				COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
 			`).
-			Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour < ?", orgID, monthStart, rawCutoff).
+			Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour <= ?", orgID, monthStart, aggregateCutoff).
 			Scan(&hourlyUsage)
+		
+		// Check if aggregates exist for the current hour (aggregateCutoff)
+		// If they do, we should exclude raw metrics for that hour to avoid double-counting
+		var currentHourAggregateCount int64
+		metricsDB.Table("deployment_usage_hourly duh").
+			Where("duh.organization_id = ? AND duh.hour = ?", orgID, aggregateCutoff).
+			Count(&currentHourAggregateCount)
+		
+		// Raw metrics start time: if aggregates exist for current hour, start from next hour
+		// Otherwise, start from current hour (aggregateCutoff)
+		rawMetricsStart := aggregateCutoff
+		if currentHourAggregateCount > 0 {
+			// Aggregates exist for current hour - only get raw metrics from next hour onwards
+			rawMetricsStart = aggregateCutoff.Add(1 * time.Hour)
+		}
+		
+		// Debug: Check if aggregates exist at all for this org
+		var aggregateCount int64
+		metricsDB.Table("deployment_usage_hourly duh").
+			Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour <= ?", orgID, monthStart, aggregateCutoff).
+			Count(&aggregateCount)
+		
+		logger.Debug("[Organizations] Aggregates for org %s: CPU=%d, Memory=%d bytes, Bandwidth=%d bytes, Hours=%s to %s (inclusive), Count=%d, CurrentHourAggregates=%d", 
+			orgID, hourlyUsage.CPUCoreSeconds, hourlyUsage.MemoryByteSeconds, 
+			hourlyUsage.BandwidthRxBytes+hourlyUsage.BandwidthTxBytes, monthStart, aggregateCutoff, aggregateCount, currentHourAggregateCount)
 
-		// Get recent usage from raw metrics (last 24 hours - not yet aggregated)
-		// We need to query by joining with deployments table to filter by organization
+		// Get recent usage from raw metrics (current incomplete hour only - not yet aggregated)
+		// Raw metrics are only needed for the current incomplete hour since aggregates exist up to current hour
+		// Use the SAME logic as deployment-level service: query from aggregateCutoff (current hour start)
+		// First get deployment IDs for this organization from main DB, then query metrics from MetricsDB
+		var deploymentIDs []string
+		database.DB.Table("deployments d").
+			Select("d.id").
+			Where("d.organization_id = ?", orgID).
+			Pluck("id", &deploymentIDs)
+		
+		// Calculate CPU and Memory from raw metrics per deployment (same approach as deployment-level)
+		// Only get metrics from aggregateCutoff onwards (current incomplete hour)
 		type metricTimestamp struct {
 			CPUUsage    float64
 			MemorySum   int64
 			Timestamp   time.Time
 		}
-		var metricTimestamps []metricTimestamp
-		database.DB.Table("deployment_metrics dm").
-			Select(`
-				AVG(dm.cpu_usage) as cpu_usage,
-				SUM(dm.memory_usage) as memory_sum,
-				dm.timestamp as timestamp
-			`).
-			Joins("JOIN deployments d ON d.id = dm.deployment_id").
-			Where("d.organization_id = ? AND dm.timestamp >= ?", orgID, rawCutoff).
-			Group("dm.timestamp").
-			Order("dm.timestamp ASC").
-			Scan(&metricTimestamps)
-		
-		var recentCPU int64
+		var recentCPUFloat float64 // Use float64 to avoid truncation of small values
 		var recentMemory int64
-		metricInterval := int64(5)
-		for i, m := range metricTimestamps {
-			interval := metricInterval
-			if i > 0 {
-				interval = int64(m.Timestamp.Sub(metricTimestamps[i-1].Timestamp).Seconds())
-				if interval <= 0 {
-					interval = metricInterval
+		
+		if len(deploymentIDs) > 0 {
+			// Process each deployment separately to avoid double-counting
+			// Only get raw metrics from aggregateCutoff (current hour start) onwards
+			for _, deploymentID := range deploymentIDs {
+				var deploymentTimestamps []metricTimestamp
+				metricsDB.Table("deployment_metrics dm").
+					Select(`
+						AVG(dm.cpu_usage) as cpu_usage,
+						SUM(dm.memory_usage) as memory_sum,
+						dm.timestamp as timestamp
+					`).
+					Where("dm.deployment_id = ? AND dm.timestamp >= ?", deploymentID, rawMetricsStart).
+					Group("dm.timestamp").
+					Order("dm.timestamp ASC").
+					Scan(&deploymentTimestamps)
+				
+				// Calculate byte-seconds from timestamped metrics (same logic as deployment service)
+				metricInterval := int64(5)
+				if len(deploymentTimestamps) > 0 {
+					// First timestamp: use time from rawMetricsStart to first timestamp, or default interval
+					firstTimestamp := deploymentTimestamps[0].Timestamp
+					firstInterval := int64(firstTimestamp.Sub(rawMetricsStart).Seconds())
+					if firstInterval <= 0 {
+						firstInterval = metricInterval
+					} else if firstInterval > 3600 {
+						firstInterval = metricInterval // Sanity check
+					}
+					recentCPUFloat += (deploymentTimestamps[0].CPUUsage / 100.0) * float64(firstInterval)
+					recentMemory += deploymentTimestamps[0].MemorySum * firstInterval
+					
+					// Subsequent timestamps: use actual interval between timestamps
+					// For each interval from timestamps[i-1] to timestamps[i], use memory[i-1] (the value at the start of the interval)
+					for i := 1; i < len(deploymentTimestamps); i++ {
+						interval := metricInterval
+						intervalSeconds := int64(deploymentTimestamps[i].Timestamp.Sub(deploymentTimestamps[i-1].Timestamp).Seconds())
+						if intervalSeconds > 0 && intervalSeconds <= 3600 {
+							interval = intervalSeconds
+						}
+						// Use memory from the PREVIOUS timestamp for this interval
+						recentCPUFloat += (deploymentTimestamps[i-1].CPUUsage / 100.0) * float64(interval)
+						recentMemory += deploymentTimestamps[i-1].MemorySum * interval
+					}
 				}
 			}
-			recentCPU += int64((m.CPUUsage / 100.0) * float64(interval))
-			recentMemory += m.MemorySum * interval
 		}
+		recentCPU := int64(recentCPUFloat) // Convert to int64 at the end
 
-		// Get bandwidth from raw metrics
+		// Get bandwidth from raw metrics (current incomplete hour only)
+		// Use MetricsDB (TimescaleDB) for deployment_metrics
 		var recentBandwidth struct {
 			BandwidthRxBytes int64
 			BandwidthTxBytes int64
 		}
-		database.DB.Table("deployment_metrics dm").
-			Select(`
-				COALESCE(SUM(dm.network_rx_bytes), 0) as bandwidth_rx_bytes,
-				COALESCE(SUM(dm.network_tx_bytes), 0) as bandwidth_tx_bytes
-			`).
-			Joins("JOIN deployments d ON d.id = dm.deployment_id").
-			Where("d.organization_id = ? AND dm.timestamp >= ?", orgID, rawCutoff).
-			Scan(&recentBandwidth)
+		if len(deploymentIDs) > 0 {
+			metricsDB.Table("deployment_metrics dm").
+				Select(`
+					COALESCE(SUM(dm.network_rx_bytes), 0) as bandwidth_rx_bytes,
+					COALESCE(SUM(dm.network_tx_bytes), 0) as bandwidth_tx_bytes
+				`).
+				Where("dm.deployment_id IN ? AND dm.timestamp >= ?", deploymentIDs, rawMetricsStart).
+				Scan(&recentBandwidth)
+		}
 
-		// Combine: hourly aggregates (older) + raw metrics (recent) = live current month usage
+		// Combine: hourly aggregates (all hours up to current hour) + raw metrics (current incomplete hour) = live current month usage
 		currentCPUCoreSeconds = hourlyUsage.CPUCoreSeconds + recentCPU
 		currentMemoryByteSeconds = hourlyUsage.MemoryByteSeconds + recentMemory
 		currentBandwidthRxBytes = hourlyUsage.BandwidthRxBytes + recentBandwidth.BandwidthRxBytes
 		currentBandwidthTxBytes = hourlyUsage.BandwidthTxBytes + recentBandwidth.BandwidthTxBytes
 		
-		// Storage: get current snapshot from deployments table
+		logger.Debug("[Organizations] Combined for org %s: CPU=%d (agg=%d + raw=%d), Memory=%d bytes (agg=%d + raw=%d), Bandwidth=%d bytes (agg=%d + raw=%d)", 
+			orgID, currentCPUCoreSeconds, hourlyUsage.CPUCoreSeconds, recentCPU,
+			currentMemoryByteSeconds, hourlyUsage.MemoryByteSeconds, recentMemory,
+			currentBandwidthRxBytes+currentBandwidthTxBytes, hourlyUsage.BandwidthRxBytes+hourlyUsage.BandwidthTxBytes, recentBandwidth.BandwidthRxBytes+recentBandwidth.BandwidthTxBytes)
 		var storageSum struct {
 			StorageBytes int64
 		}
@@ -608,13 +678,18 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 	} else {
 		// Historical month: calculate from deployment_usage_hourly
 		// Get usage from hourly aggregates for the entire requested month
+		// Use MetricsDB (TimescaleDB) for deployment_usage_hourly
 		var hourlyUsage struct {
 			CPUCoreSeconds    int64
 			MemoryByteSeconds int64
 			BandwidthRxBytes  int64
 			BandwidthTxBytes  int64
 		}
-		database.DB.Table("deployment_usage_hourly duh").
+		metricsDB := database.GetMetricsDB()
+		if metricsDB == nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("metrics database not available"))
+		}
+		metricsDB.Table("deployment_usage_hourly duh").
 			Select(`
 				COALESCE(SUM((duh.avg_cpu_usage / 100.0) * 3600), 0) as cpu_core_seconds,
 				COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds,
@@ -646,7 +721,14 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 	var estimatedMonthly *organizationsv1.UsageMetrics
 	if month == now.Format("2006-01") {
 		// Current month: project based on elapsed time using live calculated values
-		if elapsedRatio > 0 {
+		// Only project if we have sufficient data (at least 7 days) to avoid massive inflation early in the month
+		// Early in the month, elapsedRatio is very small (e.g., 0.033 for 1 day), causing 30x inflation
+		// This is inaccurate if deployments only ran briefly
+		daysElapsed := float64(now.Sub(monthStart).Hours()) / 24.0
+		minDaysForProjection := 7.0 // Only project if we have at least 7 days of data
+		
+		if elapsedRatio > 0 && elapsedRatio < 1.0 && daysElapsed >= minDaysForProjection {
+			// We have sufficient data - project to full month
 			estimatedMonthly = &organizationsv1.UsageMetrics{
 				CpuCoreSeconds:      int64(float64(currentCPUCoreSeconds) / elapsedRatio),
 				MemoryByteSeconds:   int64(float64(currentMemoryByteSeconds) / elapsedRatio),
@@ -655,7 +737,12 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 				StorageBytes:        currentStorageBytes, // Storage is snapshot, use current value for estimate
 				DeploymentsActivePeak: int32(deploymentsActivePeak),
 			}
+			logger.Debug("[Organizations] Projected for org %s: CPU=%d, Memory=%d bytes (from current=%d, ratio=%.3f, days=%.1f)", 
+				orgID, estimatedMonthly.CpuCoreSeconds, estimatedMonthly.MemoryByteSeconds, 
+				currentMemoryByteSeconds, elapsedRatio, daysElapsed)
 		} else {
+			// Not enough data for accurate projection - use current usage as estimate
+			// This avoids massive inflation early in the month when deployments may have only run briefly
 			estimatedMonthly = &organizationsv1.UsageMetrics{
 				CpuCoreSeconds:      currentCPUCoreSeconds,
 				MemoryByteSeconds:   currentMemoryByteSeconds,
@@ -663,6 +750,10 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 				BandwidthTxBytes:    currentBandwidthTxBytes,
 				StorageBytes:        currentStorageBytes,
 				DeploymentsActivePeak: int32(deploymentsActivePeak),
+			}
+			if daysElapsed < minDaysForProjection {
+				logger.Debug("[Organizations] Not projecting for org %s: only %.1f days elapsed (min=%d), using current usage as estimate", 
+					orgID, daysElapsed, int(minDaysForProjection))
 			}
 		}
 	} else {
@@ -680,12 +771,13 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 	// Calculate estimated cost using centralized pricing model
 	pricingModel := pricing.GetPricing()
 	bandwidthBytes := estimatedMonthly.BandwidthRxBytes + estimatedMonthly.BandwidthTxBytes
-	estimatedCostCents := pricingModel.CalculateTotalCost(
-		estimatedMonthly.CpuCoreSeconds,
-		estimatedMonthly.MemoryByteSeconds,
-		bandwidthBytes,
-		estimatedMonthly.StorageBytes,
-	)
+	
+	// Calculate per-resource costs for estimated monthly
+	estCPUCost := pricingModel.CalculateCPUCost(estimatedMonthly.CpuCoreSeconds)
+	estMemoryCost := pricingModel.CalculateMemoryCost(estimatedMonthly.MemoryByteSeconds)
+	estBandwidthCost := pricingModel.CalculateBandwidthCost(bandwidthBytes)
+	estStorageCost := pricingModel.CalculateStorageCost(estimatedMonthly.StorageBytes)
+	estimatedCostCents := estCPUCost + estMemoryCost + estBandwidthCost + estStorageCost
 
 	// Calculate current cost using centralized pricing model with live calculated values
 	// Note: Storage is billed monthly - for current cost, we need to prorate it
@@ -699,21 +791,38 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 	
 	// Storage cost is monthly rate, prorate for current cost calculation
 	var currentCostCents int64
+	var currentStorageCost int64
 	if month == now.Format("2006-01") && elapsedRatio > 0 {
 		storageCostFullMonth := pricingModel.CalculateStorageCost(currentStorageBytes)
-		storageCostProrated := int64(float64(storageCostFullMonth) * elapsedRatio)
-		currentCostCents = cpuCost + memoryCost + bandwidthCost + storageCostProrated
+		currentStorageCost = int64(float64(storageCostFullMonth) * elapsedRatio)
+		currentCostCents = cpuCost + memoryCost + bandwidthCost + currentStorageCost
 	} else {
 		// Historical month: storage is already for full month
-		currentCostCents = pricingModel.CalculateTotalCost(
-			currentCPUCoreSeconds,
-			currentMemoryByteSeconds,
-			currBandwidthBytes,
-			currentStorageBytes,
-		)
+		currentStorageCost = pricingModel.CalculateStorageCost(currentStorageBytes)
+		currentCostCents = cpuCost + memoryCost + bandwidthCost + currentStorageCost
 	}
 
+	// Set per-resource cost breakdown for estimated monthly
+	cpuCostPtr := int64(estCPUCost)
+	memoryCostPtr := int64(estMemoryCost)
+	bandwidthCostPtr := int64(estBandwidthCost)
+	storageCostPtr := int64(estStorageCost)
 	estimatedMonthly.EstimatedCostCents = estimatedCostCents
+	estimatedMonthly.CpuCostCents = &cpuCostPtr
+	estimatedMonthly.MemoryCostCents = &memoryCostPtr
+	estimatedMonthly.BandwidthCostCents = &bandwidthCostPtr
+	estimatedMonthly.StorageCostCents = &storageCostPtr
+	
+	logger.Debug("[Organizations] Cost breakdown for org %s: CPU=%d cents (%.2f), Memory=%d cents (%.2f), Bandwidth=%d cents (%.2f), Storage=%d cents (%.2f), Total=%d cents (%.2f)",
+		orgID, cpuCostPtr, float64(cpuCostPtr)/100, memoryCostPtr, float64(memoryCostPtr)/100,
+		bandwidthCostPtr, float64(bandwidthCostPtr)/100, storageCostPtr, float64(storageCostPtr)/100,
+		estimatedCostCents, float64(estimatedCostCents)/100)
+
+	// Set per-resource cost breakdown for current usage
+	currCPUCostPtr := int64(cpuCost)
+	currMemoryCostPtr := int64(memoryCost)
+	currBandwidthCostPtr := int64(bandwidthCost)
+	currStorageCostPtr := currentStorageCost
 
 	currentMetrics := &organizationsv1.UsageMetrics{
 		CpuCoreSeconds:      currentCPUCoreSeconds,
@@ -723,6 +832,10 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		StorageBytes:        currentStorageBytes,
 		DeploymentsActivePeak: int32(deploymentsActivePeak),
 		EstimatedCostCents: currentCostCents, // Current usage cost (calculated server-side with live data)
+		CpuCostCents:        &currCPUCostPtr,
+		MemoryCostCents:     &currMemoryCostPtr,
+		BandwidthCostCents:  &currBandwidthCostPtr,
+		StorageCostCents:    &currStorageCostPtr,
 	}
 
 	// Get quota information

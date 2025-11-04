@@ -115,14 +115,20 @@ func (r *userProfileResolver) UpdateProfile(ctx context.Context, userID string, 
 		return nil, fmt.Errorf("profile resolver not configured")
 	}
 
-	// Build update request body
+	// Build update request body for v2 API
+	// The v2 API requires specifying the user type (human) in the request body
 	updateBody := make(map[string]interface{})
+	human := make(map[string]interface{})
 	
 	if profile, ok := updates["profile"].(map[string]interface{}); ok {
-		updateBody["profile"] = profile
+		human["profile"] = profile
 	}
 	if preferredLanguage, ok := updates["preferredLanguage"].(string); ok {
-		updateBody["preferredLanguage"] = preferredLanguage
+		human["preferredLanguage"] = preferredLanguage
+	}
+	
+	if len(human) > 0 {
+		updateBody["human"] = human
 	}
 
 	// Serialize request body
@@ -131,9 +137,11 @@ func (r *userProfileResolver) UpdateProfile(ctx context.Context, userID string, 
 		return nil, fmt.Errorf("marshal update: %w", err)
 	}
 
-	// Create PUT request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, 
-		fmt.Sprintf("%s/management/v1/users/%s/human/profile", r.baseURL, userID),
+	// Create PATCH request to v2 API endpoint
+	// The v2 API uses /v2/users/:userId (without /management prefix)
+	// The request body must wrap human updates in a "human" object
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, 
+		fmt.Sprintf("%s/v2/users/%s", r.baseURL, userID),
 		strings.NewReader(string(bodyBytes)))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
