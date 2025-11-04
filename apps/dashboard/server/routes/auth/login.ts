@@ -4,7 +4,7 @@ export default eventHandler(async (event) => {
     authority: config.public.oidcBase + "/oauth/v2",
     redirectPath: "/auth/callback",
     postLogoutRedirectUri: "/",
-    scope: "openid profile email",
+    scope: "openid profile email offline_access", // offline_access is required for refresh tokens
     responseType: "code",
     clientId: config.public.oidcClientId,
   };

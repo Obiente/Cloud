@@ -1,7 +1,29 @@
 <template>
   <OuiContainer>
     <OuiStack gap="xl">
-      <!-- Header -->
+      <!-- Access Error State -->
+      <OuiCard v-if="accessError" variant="outline" class="border-danger/20">
+        <OuiCardBody>
+          <OuiStack gap="lg" align="center">
+            <ErrorAlert
+              :error="accessError"
+              title="Access Denied"
+              :hint="errorHint"
+            />
+            <OuiButton
+              variant="solid"
+              color="primary"
+              @click="router.push('/deployments')"
+            >
+              Go to Deployments
+            </OuiButton>
+          </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
+
+      <!-- Deployment Content (only show if no access error) -->
+      <template v-else>
+        <!-- Header -->
       <OuiCard variant="outline" class="border-border-default/50">
         <OuiCardBody>
           <OuiFlex justify="between" align="start" wrap="wrap" gap="lg">
@@ -251,6 +273,7 @@
           </OuiTabs>
         </OuiCard>
       </OuiStack>
+      </template>
     </OuiStack>
   </OuiContainer>
 </template>
@@ -299,6 +322,8 @@
   import { useDeploymentActions } from "~/composables/useDeploymentActions";
   import { useOrganizationsStore } from "~/stores/organizations";
   import { useDialog } from "~/composables/useDialog";
+  import { ConnectError, Code } from "@connectrpc/connect";
+  import ErrorAlert from "~/components/ErrorAlert.vue";
 
   definePageMeta({
     layout: "default",
@@ -317,24 +342,71 @@
 
   // Initialize deployment with a placeholder to avoid temporal dead zone
   const localDeployment = ref<Deployment | null>(null);
+  
+  // Error state for access/permission errors
+  const accessError = ref<Error | null>(null);
 
   // Fetch deployment data
-  const { data: deploymentData, refresh: refreshDeployment } = useAsyncData(
+  const { data: deploymentData, refresh: refreshDeployment, error: fetchError } = useAsyncData(
     `deployment-${id.value}`,
     async () => {
       if (!orgId.value) {
         return null;
       }
-      const response = await client.getDeployment({
-        organizationId: orgId.value,
-        deploymentId: id.value,
-      });
-      return response.deployment ?? null;
+      try {
+        const response = await client.getDeployment({
+          organizationId: orgId.value,
+          deploymentId: id.value,
+        });
+        // Clear any previous errors on success
+        accessError.value = null;
+        return response.deployment ?? null;
+      } catch (err) {
+        // Check if it's a permission denied or not found error
+        if (err instanceof ConnectError) {
+          if (
+            err.code === Code.PermissionDenied ||
+            err.code === Code.NotFound
+          ) {
+            accessError.value = err;
+            // Don't throw - let the error state be handled by the UI
+            return null;
+          }
+        }
+        // Re-throw other errors
+        throw err;
+      }
     },
     {
       watch: [orgId, id],
     }
   );
+  
+  // Watch for fetch errors and handle access errors
+  watch(fetchError, (err) => {
+    if (err instanceof ConnectError) {
+      if (err.code === Code.PermissionDenied || err.code === Code.NotFound) {
+        accessError.value = err;
+      }
+    }
+  });
+  
+  // Computed error hint message
+  const errorHint = computed(() => {
+    if (!accessError.value || !(accessError.value instanceof ConnectError)) {
+      return "You don't have permission to view this deployment, or it doesn't exist.";
+    }
+    
+    if (accessError.value.code === Code.PermissionDenied) {
+      return "You don't have permission to view this deployment. Please contact your organization administrator if you believe you should have access.";
+    }
+    
+    if (accessError.value.code === Code.NotFound) {
+      return "This deployment doesn't exist or may have been deleted.";
+    }
+    
+    return "You don't have permission to view this deployment, or it doesn't exist.";
+  });
 
   // Sync deploymentData to localDeployment
   watchEffect(() => {

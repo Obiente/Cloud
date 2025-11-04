@@ -1,18 +1,25 @@
 <template>
-  <OuiStack gap="md">
-    <OuiFlex justify="between" align="center">
-      <OuiStack gap="none">
-        <OuiText as="h3" size="md" weight="semibold">Routing & Domains</OuiText>
-        <OuiText size="sm" color="secondary">
-          Configure how traffic is routed to your deployment. You can route
-          multiple services on different ports to different domains.
-        </OuiText>
-      </OuiStack>
-      <OuiButton size="sm" @click="addRule">
-        <PlusIcon class="h-4 w-4 mr-2" />
-        Add Rule
-      </OuiButton>
-    </OuiFlex>
+  <OuiStack gap="lg">
+    <!-- Custom Domain Management -->
+    <CustomDomainManager :deployment="deployment" />
+
+    <!-- Routing Rules -->
+    <OuiCard variant="outline">
+      <OuiCardBody>
+        <OuiStack gap="md">
+          <OuiFlex justify="between" align="center">
+            <OuiStack gap="none">
+              <OuiText as="h3" size="md" weight="semibold">Routing Rules</OuiText>
+              <OuiText size="sm" color="secondary">
+                Configure how traffic is routed to your deployment. You can route
+                multiple services on different ports to different domains.
+              </OuiText>
+            </OuiStack>
+            <OuiButton size="sm" @click="addRule">
+              <PlusIcon class="h-4 w-4 mr-2" />
+              Add Rule
+            </OuiButton>
+          </OuiFlex>
 
     <OuiFlex v-if="isLoading" justify="center" class="py-8">
       <OuiText color="secondary">Loading routing rules...</OuiText>
@@ -57,10 +64,11 @@
             </OuiFlex>
 
             <OuiGrid cols="1" :cols-md="2" gap="md">
-              <OuiInput
+              <OuiSelect
                 v-model="rule.domain"
+                :items="domainOptions"
                 label="Domain"
-                placeholder="example.com"
+                placeholder="Select domain"
                 @update:model-value="markDirty"
               />
               <OuiSelect
@@ -131,11 +139,14 @@
       </OuiCard>
     </OuiStack>
 
-    <OuiFlex v-if="!isLoading" justify="end">
-      <OuiButton @click="saveRules" :disabled="!isDirty || isLoading" size="sm">
-        {{ isLoading ? "Saving..." : "Save Routing Rules" }}
-      </OuiButton>
-    </OuiFlex>
+          <OuiFlex v-if="!isLoading" justify="end">
+            <OuiButton @click="saveRules" :disabled="!isDirty || isLoading" size="sm">
+              {{ isLoading ? "Saving..." : "Save Routing Rules" }}
+            </OuiButton>
+          </OuiFlex>
+        </OuiStack>
+      </OuiCardBody>
+    </OuiCard>
   </OuiStack>
 </template>
 
@@ -147,6 +158,7 @@
   import type { Deployment, RoutingRule } from "@obiente/proto";
   import { useOrganizationsStore } from "~/stores/organizations";
   import { useDialog } from "~/composables/useDialog";
+  import CustomDomainManager from "./CustomDomainManager.vue";
 
   interface Props {
     deployment: Deployment;
@@ -183,6 +195,41 @@
   const serviceNameOptions = ref<Array<{ label: string; value: string }>>([
     { label: "Default", value: "default" },
   ]);
+
+  const domainOptions = computed(() => {
+    const options: Array<{ label: string; value: string }> = [];
+    
+    // Add default domain
+    if (props.deployment.domain) {
+      options.push({
+        label: `${props.deployment.domain} (default)`,
+        value: props.deployment.domain,
+      });
+    }
+    
+    // Add verified custom domains
+    if (props.deployment.customDomains && props.deployment.customDomains.length > 0) {
+      for (const entry of props.deployment.customDomains) {
+        const parts = entry.split(":");
+        const domain = parts[0];
+        if (!domain) continue;
+        
+        // Only include verified domains
+        const isVerified = 
+          (parts.length >= 2 && parts[1] === "verified") ||
+          (parts.length >= 4 && parts[1] === "token" && parts[3] === "verified");
+        
+        if (isVerified && !options.find(opt => opt.value === domain)) {
+          options.push({
+            label: domain,
+            value: domain,
+          });
+        }
+      }
+    }
+    
+    return options;
+  });
 
   const sslResolverOptions = [
     { label: "Let's Encrypt", value: "letsencrypt" },
@@ -256,10 +303,7 @@
       isDirty.value = false;
     } catch (error) {
       console.error("Failed to load routing rules:", error);
-      await showAlert({
-        title: "Error",
-        message: "Failed to load routing rules. Please try again.",
-      });
+      // Error is logged to console, no blocking dialog needed
     } finally {
       isLoading.value = false;
     }

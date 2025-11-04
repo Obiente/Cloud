@@ -545,12 +545,13 @@
                   </OuiText>
                   <OuiFlex gap="xs" wrap="wrap">
                     <OuiBadge
-                      v-for="domain in deployment.customDomains"
-                      :key="domain"
-                      variant="outline"
+                      v-for="domain in getDisplayDomains(deployment.customDomains)"
+                      :key="domain.domain"
+                      :variant="getDomainStatusVariant(domain.status)"
                       size="sm"
                     >
-                      {{ domain }}
+                      {{ domain.domain }}
+                      <span v-if="domain.status === 'pending'" class="ml-1">(pending)</span>
                     </OuiBadge>
                   </OuiFlex>
                 </OuiStack>
@@ -1100,8 +1101,8 @@ const getTypeLabel = (t: DeploymentType | number | undefined) => {
 
 const getBuildStrategyLabel = (strategy: BuildStrategy | number | undefined) => {
   switch (strategy) {
-    case BuildStrategy.RAILPACKS:
-      return "Railpacks";
+    case BuildStrategy.RAILPACK:
+      return "Railpack";
     case BuildStrategy.NIXPACKS:
       return "Nixpacks";
     case BuildStrategy.DOCKERFILE:
@@ -1147,6 +1148,35 @@ const getEnvironmentVariant = (env: string | EnvEnum | number): "success" | "war
     }
   }
   return "secondary";
+};
+
+const getDisplayDomains = (customDomains: string[]) => {
+  return customDomains.map((entry) => {
+    const parts = entry.split(":");
+    const domain = parts[0] || "";
+    let status = "pending";
+    
+    if (parts.length >= 4 && parts[1] === "token" && parts[3]) {
+      status = parts[3];
+    } else if (parts.length >= 2 && parts[1] === "verified") {
+      status = "verified";
+    }
+    
+    return { domain, status };
+  });
+};
+
+const getDomainStatusVariant = (status: string): "success" | "warning" | "danger" | "secondary" => {
+  switch (status) {
+    case "verified":
+      return "success";
+    case "failed":
+      return "danger";
+    case "expired":
+      return "warning";
+    default:
+      return "secondary";
+  }
 };
 
 const getStatusLabel = (status: DeploymentStatus | number) => {

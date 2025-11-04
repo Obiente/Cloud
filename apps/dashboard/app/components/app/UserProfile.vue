@@ -5,9 +5,7 @@
     <OuiFlex align="center" gap="md">
       <!-- Avatar -->
       <OuiBox class="relative">
-        <OuiBox
-          class="w-8 h-8 bg-surface-muted rounded-full"
-        >
+        <OuiBox class="w-8 h-8 bg-surface-muted rounded-full">
           <OuiFlex align="center" justify="center" class="h-full">
             <UserIcon class="w-5 h-5 text-text-secondary" />
           </OuiFlex>
@@ -19,12 +17,16 @@
       </OuiBox>
 
       <!-- User info -->
-      <OuiStack gap="xs" class="flex-1 min-w-0">
+      <OuiStack gap="none" class="flex-1 min-w-0">
         <OuiText size="sm" weight="medium" color="primary" truncate>
-          {{ auth.user?.preferred_username }}
+          {{ auth.user?.name || auth.user?.preferred_username }}
         </OuiText>
         <OuiText size="xs" color="secondary" truncate>
-          {{ auth.user?.email }}
+          {{
+            auth.user?.name
+              ? `@${auth.user.preferred_username}`
+              : auth.user?.email
+          }}
         </OuiText>
       </OuiStack>
 
@@ -43,7 +45,10 @@
 </template>
 
 <script setup lang="ts">
-import { UserIcon, ArrowRightOnRectangleIcon } from "@heroicons/vue/24/outline";
-import OuiText from "../oui/Text.vue";
-const auth = useAuth();
+  import {
+    UserIcon,
+    ArrowRightOnRectangleIcon,
+  } from "@heroicons/vue/24/outline";
+  import OuiText from "../oui/Text.vue";
+  const auth = useAuth();
 </script>

@@ -10,6 +10,8 @@
  * - Production: https://your-domain.com/api/github/callback
  * - Development: http://localhost:3000/api/github/callback
  */
+import type { ZitadelTokenResponse } from "@obiente/types";
+
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
   const { code, state, error } = query as {
@@ -187,6 +189,70 @@ export default defineEventHandler(async (event) => {
       console.log("[GitHub OAuth] Available cookies:", allCookies ? "present" : "none");
     }
 
+    // Always try to refresh the token proactively, even if we have one
+    // This ensures we have a fresh token before making the API call
+    if (!isAuthDisabled) {
+      try {
+        const { getUserSession } = await import("../../utils/session");
+        const session = await getUserSession(event);
+        const refreshToken = session?.secure?.refresh_token;
+        
+        if (refreshToken) {
+          console.log("[GitHub OAuth] Proactively refreshing token...");
+          const config = useRuntimeConfig();
+          
+          // Exchange refresh token for new tokens
+          const tokenResponse = await $fetch<ZitadelTokenResponse>(
+            `${config.public.oidcBase}/oauth/v2/token`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: new URLSearchParams({
+                grant_type: "refresh_token",
+                refresh_token: refreshToken,
+                client_id: config.public.oidcClientId,
+              }),
+            }
+          );
+          
+          if (tokenResponse?.access_token) {
+            // Update session with new tokens
+            const { setUserSession } = await import("../../utils/session");
+            await setUserSession(event, {
+              secure: {
+                scope: tokenResponse.scope,
+                token_type: tokenResponse.token_type,
+                expires_in: tokenResponse.expires_in,
+                refresh_token: tokenResponse.refresh_token,
+                access_token: tokenResponse.access_token,
+              },
+            });
+            
+            userAccessToken = tokenResponse.access_token;
+            console.log("[GitHub OAuth] Token refreshed proactively");
+            
+            // Update the cookie with the new token
+            const { AUTH_COOKIE_NAME } = await import("../../utils/auth");
+            setCookie(event, AUTH_COOKIE_NAME, tokenResponse.access_token, {
+              httpOnly: false,
+              path: "/",
+              maxAge: (tokenResponse.expires_in || 3600) - 60,
+              secure: process.env.NODE_ENV === "production",
+              sameSite: "lax",
+              domain: undefined,
+            });
+          } else {
+            console.warn("[GitHub OAuth] Token refresh returned no access token, using existing token");
+          }
+        } else {
+          console.warn("[GitHub OAuth] No refresh token available, using existing token if available");
+        }
+      } catch (refreshError: any) {
+        console.warn("[GitHub OAuth] Proactive token refresh failed, using existing token:", refreshError.message);
+        // Continue with existing token if refresh fails
+      }
+    }
+
     if (!userAccessToken) {
       if (isAuthDisabled) {
         // In development mode, use a dummy token - the Go API will ignore it
@@ -195,10 +261,10 @@ export default defineEventHandler(async (event) => {
         userAccessToken = "dev-dummy-token";
       } else {
         console.error("[GitHub OAuth] No user access token available - user must be logged in");
-        // Redirect with a more helpful error message
+        // Redirect to login with a helpful message
         return sendRedirect(
           event,
-          `/settings?tab=integrations&provider=github&error=${encodeURIComponent("Please log in to connect your GitHub account")}`
+          `/auth/login?redirect=${encodeURIComponent("/settings?tab=integrations&provider=github&error=" + encodeURIComponent("Please log in to connect your GitHub account"))}`
         );
       }
     }
@@ -293,9 +359,40 @@ export default defineEventHandler(async (event) => {
         console.error("[GitHub OAuth] API call failed:", {
           message: apiCallError.message,
           code: apiCallError.code,
+          codeType: typeof apiCallError.code,
           details: apiCallError.details,
+          errorObject: JSON.stringify(apiCallError, Object.getOwnPropertyNames(apiCallError)),
         });
-        apiError = apiCallError;
+        
+        // If the error is authentication-related, try refreshing the token once
+        // Connect-RPC error codes: 16 = UNAUTHENTICATED
+        const errorCode = apiCallError.code;
+        const errorMessage = apiCallError.message || "";
+        const isUnauthenticated = 
+          errorCode === "UNAUTHENTICATED" || 
+          errorCode === 16 || 
+          String(errorCode) === "16" ||
+          errorMessage.toLowerCase().includes("unauthenticated") ||
+          errorMessage.toLowerCase().includes("invalid authorization token");
+        
+        console.log("[GitHub OAuth] Error analysis:", {
+          errorCode,
+          errorCodeType: typeof errorCode,
+          errorMessage,
+          isUnauthenticated,
+          isAuthDisabled,
+          willAttemptRefresh: isUnauthenticated && !isAuthDisabled,
+        });
+        
+        // If we get an authentication error, it means the proactive refresh didn't work
+        // This could happen if the refresh token wasn't available or expired
+        // In this case, we can't retry - the user needs to log in again
+        if (isUnauthenticated && !isAuthDisabled) {
+          console.error("[GitHub OAuth] Authentication error after proactive refresh - user may need to log in again");
+          apiError = apiCallError;
+        } else {
+          apiError = apiCallError;
+        }
       }
 
       if (!success) {

@@ -32,41 +32,12 @@
             />
 
             <div>
-              <OuiText size="sm" weight="medium" class="mb-2 block"
-                >Groups/Labels</OuiText
-              >
-              <div
-                class="flex flex-wrap gap-2 mb-2 p-2 border border-border-default rounded-lg min-h-[2.5rem]"
-              >
-                <OuiBadge
-                  v-for="(group, idx) in localGroups"
-                  :key="idx"
-                  variant="outline"
-                  size="sm"
-                  class="gap-1"
-                >
-                  {{ group }}
-                  <button
-                    @click="removeGroup(idx)"
-                    class="ml-1 hover:text-danger"
-                    type="button"
-                  >
-                    <span class="sr-only">Remove</span>
-                    ×
-                  </button>
-                </OuiBadge>
-                <input
-                  v-model="newGroupInput"
-                  @keydown.enter.prevent="addGroup"
-                  @blur="addGroup"
-                  type="text"
+              <OuiTagsInput
+                v-model="localGroups"
+                label="Groups/Labels"
                   placeholder="Add group..."
-                  class="flex-1 min-w-[120px] border-0 outline-none bg-transparent text-sm"
+                @update:model-value="markGeneralDirty"
                 />
-              </div>
-              <OuiText size="xs" color="secondary">
-                Press Enter or click outside to add a group/label
-              </OuiText>
             </div>
           </OuiGrid>
         </OuiStack>
@@ -83,7 +54,7 @@
             >
             <OuiButton
               @click="saveConfig"
-              :disabled="!isConfigDirty || isSaving"
+              :disabled="!isConfigDirty || isSaving || !!repositoryUrlError"
               size="sm"
               variant="solid"
             >
@@ -100,7 +71,7 @@
 
           <!-- Connected Repository Display -->
           <OuiCard
-            v-if="config.repositoryUrl && config.repositoryUrl.trim()"
+            v-if="shouldShowRepositoryConnected"
             variant="outline"
             class="border-success/20 bg-success/5"
           >
@@ -154,7 +125,7 @@
 
           <!-- Repository Source Selection -->
           <OuiStack
-            v-if="!config.repositoryUrl || config.repositoryUrl.trim() === ''"
+            v-if="!shouldShowRepositoryConnected"
             gap="md"
           >
             <OuiText as="h4" size="sm" weight="semibold"
@@ -221,6 +192,7 @@
                 v-model="config.repositoryUrl"
                 label="Repository URL"
                 placeholder="https://github.com/org/repo or https://gitlab.com/org/repo"
+                :error="repositoryUrlError"
                 @update:model-value="handleManualUrlChange"
               />
               <OuiInput
@@ -300,9 +272,82 @@
               @update:model-value="markConfigDirty"
             />
           </OuiGrid>
+
+          <!-- Build Path Configuration -->
+          <OuiGrid
+            cols="1"
+            :cols-md="2"
+            gap="md"
+            v-if="showBuildPathConfig"
+          >
+            <OuiInput
+              v-model="config.buildPath"
+              label="Build Path"
+              placeholder=". (repository root)"
+              helper-text="Working directory for build command (relative to repo root, e.g., 'frontend', 'packages/web'). Defaults to repository root."
+              @update:model-value="markConfigDirty"
+            />
+            <OuiInput
+              v-model="config.buildOutputPath"
+              label="Build Output Path"
+              placeholder="Auto-detect (dist, build, public, etc.)"
+              helper-text="Path to built output files (relative to repo root, e.g., 'dist', 'build', 'public'). Leave empty to auto-detect."
+              @update:model-value="markConfigDirty"
+            />
+          </OuiGrid>
+
+          <!-- Nginx Configuration for Static Deployments -->
+          <OuiCard
+            v-if="buildStrategy === BuildStrategy.STATIC_SITE"
+            variant="outline"
+          >
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiStack gap="xs">
+                  <OuiText size="sm" weight="semibold">Nginx Configuration</OuiText>
+                  <OuiText size="xs" color="secondary">
+                    Static deployments use nginx for serving files. SSL/HTTPS is handled by Traefik.
+                  </OuiText>
+                </OuiStack>
+                <OuiFlex justify="between" align="center">
+                  <OuiText size="sm" weight="medium">Custom Nginx Config</OuiText>
+                  <OuiButton
+                    variant="ghost"
+                    size="sm"
+                    @click="resetNginxConfig"
+                  >
+                    Reset to Default
+                  </OuiButton>
+                </OuiFlex>
+                <OuiText size="xs" color="secondary">
+                  Customize your nginx configuration. Leave empty to use the default configuration optimized for static sites and SPAs.
+                </OuiText>
+                <textarea
+                  v-model="config.nginxConfig"
+                  @input="markConfigDirty"
+                  class="w-full min-h-[400px] font-mono text-sm p-3 border border-border-default rounded-lg bg-background-default resize-y"
+                  placeholder="server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html index.htm;
+
+    # Your custom nginx configuration here
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}"
+                  spellcheck="false"
+                />
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
         </OuiStack>
       </OuiCardBody>
     </OuiCard>
+
+    <!-- Custom Domain Management -->
+    <CustomDomainManager :deployment="deployment" />
 
     <!-- Danger Zone -->
     <OuiCard variant="outline" class="border-danger/20">
@@ -362,6 +407,7 @@
   import { useConnectClient } from "~/lib/connect-client";
   import GitHubRepoPicker from "./GitHubRepoPicker.vue";
   import OuiRadioGroup from "~/components/oui/RadioGroup.vue";
+  import CustomDomainManager from "./CustomDomainManager.vue";
 
   interface Props {
     deployment: Deployment;
@@ -379,7 +425,6 @@
   // General settings (environment, groups)
   const localEnvironment = ref<string>("");
   const localGroups = ref<string[]>([]);
-  const newGroupInput = ref<string>("");
   const isGeneralDirty = ref(false);
   const isSaving = ref(false);
   const error = ref("");
@@ -393,6 +438,7 @@
   const selectedGitHubRepo = ref("");
   const githubIntegrationId = ref<string>("");
   const isGitHubConnected = ref(false);
+  const repositoryUrlError = ref("");
   const buildStrategy = ref<BuildStrategy>(
     BuildStrategy.BUILD_STRATEGY_UNSPECIFIED
   );
@@ -423,6 +469,12 @@
         return deployment.composeFilePath ?? "";
       case "startCommand":
         return deployment.startCommand ?? "";
+      case "buildPath":
+        return deployment.buildPath ?? "";
+      case "buildOutputPath":
+        return deployment.buildOutputPath ?? "";
+      case "nginxConfig":
+        return deployment.nginxConfig ?? "";
       default:
         return "";
     }
@@ -436,6 +488,9 @@
     startCommand: getInitialValue("startCommand"),
     dockerfilePath: getInitialValue("dockerfilePath"),
     composeFilePath: getInitialValue("composeFilePath"),
+    buildPath: getInitialValue("buildPath"),
+    buildOutputPath: getInitialValue("buildOutputPath"),
+    nginxConfig: getInitialValue("nginxConfig"),
   });
 
   const environmentOptions = [
@@ -448,6 +503,10 @@
   const isClearingRepository = ref(false);
   // Track if user has explicitly cleared the repository (persists until they save or select a new one)
   const userClearedRepository = ref(false);
+  // Track if user is currently changing the repository (clicked "Change" button)
+  const isChangingRepository = ref(false);
+  // Track the saved repository URL from deployment
+  const savedRepositoryUrl = ref<string>("");
 
   // Initialize from deployment
   watchEffect(() => {
@@ -465,29 +524,48 @@
         : [];
 
       // Config settings - only set if we're not clearing and user hasn't explicitly cleared it
+      // Also don't overwrite if user has manually entered a different value
       const repoUrl =
         props.deployment.repositoryUrl ||
         (props.deployment as any).repository_url ||
         "";
-      if (!isClearingRepository.value && !userClearedRepository.value) {
+      const currentRepoUrl = config.repositoryUrl?.trim() || "";
+      const deploymentRepoUrl = repoUrl.trim();
+      
+      // Update saved repository URL whenever deployment changes
+      savedRepositoryUrl.value = deploymentRepoUrl;
+      
+      // Only overwrite if:
+      // 1. We're not clearing the repository AND
+      // 2. User hasn't explicitly cleared it AND
+      // 3. Either current value is empty OR it matches deployment value (don't overwrite user's manual input)
+      if (!isClearingRepository.value && !userClearedRepository.value && 
+          (currentRepoUrl === "" || currentRepoUrl === deploymentRepoUrl)) {
         config.repositoryUrl = repoUrl;
       }
-      config.branch =
-        props.deployment.branch !== undefined &&
-        props.deployment.branch !== null
-          ? props.deployment.branch
-          : "main";
-      const deploymentStrategy =
-        props.deployment.buildStrategy != null
-          ? props.deployment.buildStrategy
-          : BuildStrategy.BUILD_STRATEGY_UNSPECIFIED;
-      buildStrategy.value = deploymentStrategy;
-      previousBuildStrategy.value = deploymentStrategy;
-      config.installCommand = props.deployment.installCommand ?? "";
-      config.buildCommand = props.deployment.buildCommand ?? "";
-      config.startCommand = props.deployment.startCommand ?? "";
-      config.dockerfilePath = props.deployment.dockerfilePath ?? "";
-      config.composeFilePath = props.deployment.composeFilePath ?? "";
+      // Only reset config values if config is not dirty (user hasn't changed anything)
+      // This prevents watchEffect from overwriting user's input
+      if (!isConfigDirty.value) {
+        config.branch =
+          props.deployment.branch !== undefined &&
+          props.deployment.branch !== null
+            ? props.deployment.branch
+            : "main";
+        const deploymentStrategy =
+          props.deployment.buildStrategy != null
+            ? props.deployment.buildStrategy
+            : BuildStrategy.BUILD_STRATEGY_UNSPECIFIED;
+        buildStrategy.value = deploymentStrategy;
+        previousBuildStrategy.value = deploymentStrategy;
+        config.installCommand = props.deployment.installCommand ?? "";
+        config.buildCommand = props.deployment.buildCommand ?? "";
+        config.startCommand = props.deployment.startCommand ?? "";
+        config.dockerfilePath = props.deployment.dockerfilePath ?? "";
+        config.composeFilePath = props.deployment.composeFilePath ?? "";
+        config.buildPath = props.deployment.buildPath ?? "";
+        config.buildOutputPath = props.deployment.buildOutputPath ?? "";
+        config.nginxConfig = props.deployment.nginxConfig ?? "";
+      }
       // Only set githubIntegrationId from deployment if:
       // 1. We're not clearing the repository
       // 2. User hasn't explicitly cleared it
@@ -509,9 +587,37 @@
         // (picker has set it)
       }
 
-      // Reset dirty flags
-      isGeneralDirty.value = false;
-      isConfigDirty.value = false;
+      // Reset dirty flags only if config values match deployment values
+      // IMPORTANT: Only check this if config is NOT dirty, to avoid race conditions
+      // If config is already dirty, user has made changes and we shouldn't reset
+      if (!isConfigDirty.value) {
+        const configMatchesDeployment = 
+          currentRepoUrl === deploymentRepoUrl &&
+          config.branch === (props.deployment.branch ?? "main") &&
+          config.installCommand === (props.deployment.installCommand ?? "") &&
+          config.buildCommand === (props.deployment.buildCommand ?? "") &&
+          config.startCommand === (props.deployment.startCommand ?? "") &&
+          config.dockerfilePath === (props.deployment.dockerfilePath ?? "") &&
+          config.composeFilePath === (props.deployment.composeFilePath ?? "") &&
+          config.buildPath === (props.deployment.buildPath ?? "") &&
+          config.buildOutputPath === (props.deployment.buildOutputPath ?? "") &&
+          config.nginxConfig === (props.deployment.nginxConfig ?? "") &&
+          buildStrategy.value === (props.deployment.buildStrategy ?? BuildStrategy.BUILD_STRATEGY_UNSPECIFIED);
+
+        // Only reset dirty flag if config matches (meaning no user changes)
+        if (configMatchesDeployment) {
+          isConfigDirty.value = false;
+        }
+      }
+      
+      const generalMatchesDeployment = 
+        localEnvironment.value === String(props.deployment.environment ?? EnvEnum.PRODUCTION) &&
+        JSON.stringify(localGroups.value.sort()) === JSON.stringify(((props.deployment as any).groups || (props.deployment as any).group ? [(props.deployment as any).group].filter(Boolean) : []).sort());
+      
+      if (generalMatchesDeployment) {
+        isGeneralDirty.value = false;
+      }
+      
       saveSuccess.value = false;
       configSuccess.value = false;
       error.value = "";
@@ -544,6 +650,10 @@
           repositorySource.value = "manual";
           // Clear integration ID for manual URLs
           githubIntegrationId.value = "";
+          // Validate manual URL on initialization
+          if (repositorySource.value === "manual") {
+            repositoryUrlError.value = validateRepositoryUrl(config.repositoryUrl);
+          }
         }
       }
     }
@@ -554,11 +664,25 @@
       // User selected a repo, so clear the "user cleared" flag
       userClearedRepository.value = false;
       selectedGitHubRepo.value = repoFullName;
-      config.repositoryUrl = `https://github.com/${repoFullName}`;
+      const newUrl = `https://github.com/${repoFullName}`;
+      config.repositoryUrl = newUrl;
+      
+      // Check if the new URL matches the saved one
+      // If it matches, user is done changing (or selected the same repo)
+      // If it doesn't match, keep isChangingRepository true until save
+      const savedUrl = savedRepositoryUrl.value?.trim() || "";
+      if (newUrl.trim() === savedUrl) {
+        isChangingRepository.value = false;
+      } else {
+        isChangingRepository.value = true;
+      }
+      
       // Ensure repository source is set to GitHub when a repo is selected
       if (repositorySource.value !== "github") {
         repositorySource.value = "github";
       }
+      // Clear validation error for GitHub URLs (they're always valid)
+      repositoryUrlError.value = "";
       // Ensure integration ID is set when repo is selected (if not already set)
       // The GitHubRepoPicker should have already emitted it, but we ensure it's set
       if (
@@ -585,6 +709,12 @@
       config.repositoryUrl = "";
       // Clear integration ID when repo is cleared
       githubIntegrationId.value = "";
+      // Clear validation error
+      repositoryUrlError.value = "";
+      // If clearing repo and there was a saved repo, we're changing it
+      if (savedRepositoryUrl.value?.trim()) {
+        isChangingRepository.value = true;
+      }
       markConfigDirty();
     }
   };
@@ -600,11 +730,61 @@
     }
   };
 
+  // Validate repository URL
+  const validateRepositoryUrl = (url: string): string => {
+    if (!url || url.trim() === "") {
+      return ""; // Empty is valid (optional field)
+    }
+    
+    try {
+      const urlObj = new URL(url);
+      // Check if it's a valid http/https URL
+      if (!["http:", "https:"].includes(urlObj.protocol)) {
+        return "Repository URL must use http:// or https://";
+      }
+      
+      // Check if it's a valid Git hosting service (GitHub, GitLab, Bitbucket, etc.)
+      const hostname = urlObj.hostname.toLowerCase();
+      const validHosts = [
+        "github.com",
+        "gitlab.com",
+        "bitbucket.org",
+        "dev.azure.com",
+        "sourceforge.net",
+      ];
+      
+      // Allow any domain for flexibility, but validate URL structure
+      // A valid Git URL should have at least: protocol://domain/path
+      if (!urlObj.pathname || urlObj.pathname === "/") {
+        return "Repository URL must include a repository path (e.g., /org/repo)";
+      }
+      
+      return ""; // Valid URL
+    } catch (e) {
+      return "Please enter a valid URL (e.g., https://github.com/org/repo)";
+    }
+  };
+
   const handleManualUrlChange = () => {
     // User typed a URL manually, clear the "user cleared" flag
     if (config.repositoryUrl && config.repositoryUrl.trim()) {
       userClearedRepository.value = false;
     }
+    
+    // Check if the URL matches the saved one
+    const savedUrl = savedRepositoryUrl.value?.trim() || "";
+    const currentUrl = config.repositoryUrl?.trim() || "";
+    if (currentUrl === savedUrl) {
+      // URL matches saved one, not changing anymore
+      isChangingRepository.value = false;
+    } else {
+      // URL is different, user is changing it
+      isChangingRepository.value = true;
+    }
+    
+    // Validate the URL
+    repositoryUrlError.value = validateRepositoryUrl(config.repositoryUrl);
+    
     markConfigDirty();
   };
 
@@ -612,12 +792,14 @@
     // Set flags to prevent watchEffect from resetting values
     isClearingRepository.value = true;
     userClearedRepository.value = true;
+    isChangingRepository.value = true; // User clicked "Change", show selection UI
 
     // Clear the repository URL and selected repo to show the source selection
     config.repositoryUrl = "";
     selectedGitHubRepo.value = "";
     githubIntegrationId.value = "";
     repositorySource.value = "manual"; // Reset to manual, user can choose again
+    repositoryUrlError.value = ""; // Clear validation error
     markConfigDirty();
 
     // Reset the clearing flag after a tick to allow normal watchEffect behavior for other fields
@@ -636,6 +818,8 @@
   watch(selectedGitHubRepo, (repo) => {
     if (repo && repositorySource.value === "github") {
       config.repositoryUrl = `https://github.com/${repo}`;
+      // Clear validation error for GitHub URLs
+      repositoryUrlError.value = "";
       markConfigDirty();
     }
   });
@@ -645,12 +829,22 @@
     () => {
       if (repositorySource.value === "manual") {
         selectedGitHubRepo.value = "";
-      } else if (repositorySource.value === "github" && config.repositoryUrl) {
-        const match = config.repositoryUrl.match(
-          /github\.com\/([^\/]+\/[^\/]+)/
-        );
-        if (match && match[1]) {
-          selectedGitHubRepo.value = match[1].replace(/\.git$/, "");
+        // Validate URL when switching to manual if there's a URL
+        if (config.repositoryUrl) {
+          repositoryUrlError.value = validateRepositoryUrl(config.repositoryUrl);
+        } else {
+          repositoryUrlError.value = "";
+        }
+      } else if (repositorySource.value === "github") {
+        // Clear validation error when switching to GitHub (GitHub URLs are always valid)
+        repositoryUrlError.value = "";
+        if (config.repositoryUrl) {
+          const match = config.repositoryUrl.match(
+            /github\.com\/([^\/]+\/[^\/]+)/
+          );
+          if (match && match[1]) {
+            selectedGitHubRepo.value = match[1].replace(/\.git$/, "");
+          }
         }
       }
       markConfigDirty();
@@ -696,19 +890,6 @@
     error.value = "";
   };
 
-  const addGroup = () => {
-    const trimmed = newGroupInput.value.trim();
-    if (trimmed && !localGroups.value.includes(trimmed)) {
-      localGroups.value.push(trimmed);
-      newGroupInput.value = "";
-      markGeneralDirty();
-    }
-  };
-
-  const removeGroup = (index: number) => {
-    localGroups.value.splice(index, 1);
-    markGeneralDirty();
-  };
 
   const markConfigDirty = () => {
     isConfigDirty.value = true;
@@ -717,39 +898,46 @@
   };
 
   watch(buildStrategy, async (newValue, oldValue) => {
-    // Store the previous value before checking for Nixpacks
-    if (oldValue !== undefined) {
-      previousBuildStrategy.value = oldValue;
+    // Skip during initialization (when oldValue is undefined)
+    if (oldValue === undefined) {
+      return;
     }
 
-    // If user selected Nixpacks, show confirmation dialog recommending Railpacks
+    // Store the previous value before checking for Nixpacks
+    previousBuildStrategy.value = oldValue;
+
+    // If user selected Nixpacks, show confirmation dialog recommending Railpack
     if (
       newValue === BuildStrategy.NIXPACKS &&
       oldValue !== BuildStrategy.NIXPACKS
     ) {
       const confirmed = await showConfirm({
-        title: "Consider Railpacks Instead",
+        title: "Consider Railpack Instead",
         message:
-          "Railpacks provides smaller builds which will be more cost effective for you. Are you sure you want to use Nixpacks?",
+          "Railpack is the default build tool and provides smaller builds which will be more cost effective for you. Are you sure you want to use Nixpacks?",
         confirmLabel: "Yes, use Nixpacks",
-        cancelLabel: "Switch to Railpacks",
+        cancelLabel: "Switch to Railpack",
         variant: "default",
       });
 
       if (!confirmed) {
-        // User chose to switch to Railpacks
-        buildStrategy.value = BuildStrategy.RAILPACKS;
+        // User chose to switch to Railpack
+        buildStrategy.value = BuildStrategy.RAILPACK;
+        // Setting buildStrategy.value will trigger this watch again with RAILPACK as newValue
+        // So markConfigDirty will be called in that next watch cycle
         return;
       }
-      // User confirmed they want Nixpacks, proceed
+      // User confirmed they want Nixpacks, proceed to markConfigDirty below
     }
 
+    // Mark config as dirty for ANY strategy change (including all non-Nixpacks strategies)
+    // This ensures all strategy selections can be saved
     markConfigDirty();
   });
 
   const buildStrategyOptions = [
     { label: "Auto-detect", value: BuildStrategy.BUILD_STRATEGY_UNSPECIFIED },
-    { label: "Railpacks", value: BuildStrategy.RAILPACKS },
+    { label: "Railpack", value: BuildStrategy.RAILPACK },
     { label: "Nixpacks", value: BuildStrategy.NIXPACKS },
     { label: "Dockerfile", value: BuildStrategy.DOCKERFILE },
     { label: "Plain Compose", value: BuildStrategy.PLAIN_COMPOSE },
@@ -765,6 +953,38 @@
       buildStrategy.value !== BuildStrategy.DOCKERFILE
     );
   });
+
+  const showBuildPathConfig = computed(() => {
+    return (
+      buildStrategy.value === BuildStrategy.STATIC_SITE ||
+      buildStrategy.value === BuildStrategy.RAILPACK ||
+      buildStrategy.value === BuildStrategy.NIXPACKS
+    );
+  });
+
+  // Show repository connected card if:
+  // 1. There's a saved repository URL from the deployment
+  // 2. Current repository URL matches the saved one (or hasn't been changed)
+  // 3. User hasn't clicked "Change" button (isChangingRepository is false)
+  const shouldShowRepositoryConnected = computed(() => {
+    const savedUrl = savedRepositoryUrl.value?.trim() || "";
+    const currentUrl = config.repositoryUrl?.trim() || "";
+    
+    // Only show if:
+    // - There's a saved repository URL
+    // - Current URL matches saved URL (or both are empty)
+    // - User hasn't clicked "Change" button
+    if (!savedUrl) return false;
+    if (isChangingRepository.value) return false;
+    
+    // Show if current URL matches saved URL (repository hasn't been changed)
+    return currentUrl === savedUrl;
+  });
+
+  const resetNginxConfig = () => {
+    config.nginxConfig = "";
+    markConfigDirty();
+  };
 
   const installCommandLabel = computed(() => {
     const type = (props.deployment as any)?.type || DeploymentType.DOCKER;
@@ -862,6 +1082,16 @@
   async function saveConfig() {
     if (isSaving.value) return;
 
+    // Validate repository URL if using manual input
+    if (repositorySource.value === "manual" && config.repositoryUrl) {
+      repositoryUrlError.value = validateRepositoryUrl(config.repositoryUrl);
+      if (repositoryUrlError.value) {
+        configError.value = "Please fix the repository URL validation error before saving.";
+        isSaving.value = false;
+        return;
+      }
+    }
+
     isSaving.value = true;
     configError.value = "";
     configSuccess.value = false;
@@ -876,37 +1106,48 @@
           buildStrategy.value !== BuildStrategy.BUILD_STRATEGY_UNSPECIFIED
             ? buildStrategy.value
             : undefined,
-        buildCommand: config.buildCommand || undefined,
-        installCommand: config.installCommand || undefined,
-        startCommand: config.startCommand || undefined,
-        dockerfilePath: config.dockerfilePath || undefined,
-        composeFilePath: config.composeFilePath || undefined,
+        // Always include these fields - send empty string for empty values so backend can clear them
+        // Using empty string instead of null ensures protobuf includes the field
+        buildCommand: config.buildCommand?.trim() || "",
+        installCommand: config.installCommand?.trim() || "",
+        startCommand: config.startCommand?.trim() || "",
+        dockerfilePath: config.dockerfilePath?.trim() || "",
+        composeFilePath: config.composeFilePath?.trim() || "",
+        buildPath: config.buildPath?.trim() || "",
+        buildOutputPath: config.buildOutputPath?.trim() || "",
+        useNginx: true, // Always use nginx for static deployments
+        nginxConfig: config.nginxConfig?.trim() || "",
       };
 
-      // Always include repositoryUrl if we have any indication of a repo
+      // Always include repositoryUrl if we have a value OR if user explicitly cleared it
+      // Include it if:
+      // 1. We have a URL value, OR
+      // 2. User selected a GitHub repo (construct URL), OR
+      // 3. User cleared it (userClearedRepository is true) - send empty string to clear on backend
       const repoUrl = config.repositoryUrl?.trim() || "";
       const hasSelectedRepo =
         selectedGitHubRepo.value && selectedGitHubRepo.value.trim() !== "";
 
-      if (repoUrl !== "" || hasSelectedRepo) {
+      if (repoUrl !== "" || hasSelectedRepo || userClearedRepository.value) {
         // Use the URL from config if available, otherwise construct from selected repo
+        // If user cleared it, send null to clear on backend
         updates.repositoryUrl =
           repoUrl !== ""
             ? repoUrl
             : hasSelectedRepo
             ? `https://github.com/${selectedGitHubRepo.value}`
-            : "";
+            : null; // null clears the field on backend
       }
 
-      // Always include githubIntegrationId if it exists (even if empty string, backend will handle it)
+      // Always include githubIntegrationId if it exists - send null for empty to clear it
       // The value might be empty string initially, so we check if the ref itself has been set
       if (
         githubIntegrationId.value !== undefined &&
         githubIntegrationId.value !== null
       ) {
         const trimmed = githubIntegrationId.value.trim();
-        // Include it even if empty - the composable will convert empty to undefined
-        updates.githubIntegrationId = trimmed;
+        // Include it even if empty - send null so backend can clear it
+        updates.githubIntegrationId = trimmed || null;
       }
 
       console.log("[DeploymentSettings] Saving config:", {
@@ -926,6 +1167,11 @@
 
       // Reset user cleared flag after successful save
       userClearedRepository.value = false;
+      // Reset changing repository flag - repository is now saved
+      isChangingRepository.value = false;
+      // Update saved repository URL to match current one after save
+      const savedRepoUrl = updates.repositoryUrl || "";
+      savedRepositoryUrl.value = savedRepoUrl;
 
       await refreshNuxtData(`deployment-${route.params.id}`);
 

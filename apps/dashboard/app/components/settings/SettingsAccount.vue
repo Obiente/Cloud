@@ -175,6 +175,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import { ArrowTopRightOnSquareIcon, CheckIcon } from "@heroicons/vue/24/outline";
+import type { UserSession } from "@obiente/types";
 
 const auth = useAuth();
 const config = useRuntimeConfig();
@@ -255,9 +256,34 @@ const saveProfile = async () => {
 
     const response = await client.updateUserProfile(request);
 
-    // Update auth user state
-    if (response.user) {
-      await auth.fetch(); // Refresh user data
+    // Update auth user state directly with the response data
+    // This avoids refetching which might return cached data
+    if (response.user && auth.session) {
+      // Map the API response user to the User type format
+      const updatedUser = {
+        sub: response.user.id || auth.user.sub,
+        name: response.user.name || auth.user.name,
+        given_name: response.user.givenName || auth.user.given_name || "",
+        family_name: response.user.familyName || auth.user.family_name || "",
+        locale: response.user.locale || auth.user.locale || "",
+        updated_at: response.user.updatedAt 
+          ? (typeof response.user.updatedAt === 'object' && 'seconds' in response.user.updatedAt
+              ? Number(response.user.updatedAt.seconds)
+              : Math.floor(new Date(response.user.updatedAt as string | number | Date).getTime() / 1000))
+          : auth.user.updated_at,
+        preferred_username: response.user.preferredUsername || auth.user.preferred_username || "",
+        email: response.user.email || auth.user.email,
+        email_verified: response.user.emailVerified ?? auth.user.email_verified,
+      };
+      
+      // Update session state directly
+      const sessionState = useState<UserSession | null>("obiente-session", () => null);
+      if (sessionState.value) {
+        sessionState.value = {
+          ...sessionState.value,
+          user: updatedUser,
+        };
+      }
     }
 
     // Show success feedback

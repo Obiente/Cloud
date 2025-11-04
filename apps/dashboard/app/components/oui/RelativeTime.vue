@@ -1,5 +1,10 @@
 <template>
+  <ClientOnly>
   <span>{{ formattedRelativeTime }}</span>
+    <template #fallback>
+      <span>{{ fallbackText }}</span>
+    </template>
+  </ClientOnly>
 </template>
 
 <script setup lang="ts">
@@ -26,6 +31,32 @@ const dateValue = computed<Date>(() => {
   if (props.value instanceof Date) return props.value
   if (typeof props.value === 'number') return new Date(props.value)
   return new Date(props.value)
+})
+
+// Fallback text for SSR - use a simple format that matches Intl.RelativeTimeFormat short style (without period)
+const fallbackText = computed(() => {
+  if (!props.value) return ''
+  const date = dateValue.value
+  const now = new Date()
+  const diffMs = date.getTime() - now.getTime()
+  const diffMins = Math.round(Math.abs(diffMs) / (1000 * 60))
+  
+  if (diffMins < 1) {
+    return 'just now'
+  }
+  if (diffMins < 60) {
+    // Match short style format: "49 min ago" (no period)
+    return `${diffMins} min ago`
+  }
+  const diffHours = Math.round(Math.abs(diffMs) / (1000 * 60 * 60))
+  if (diffHours < 24) {
+    return `${diffHours} hr ago`
+  }
+  const diffDays = Math.round(Math.abs(diffMs) / (1000 * 60 * 60 * 24))
+  if (diffDays === 1) {
+    return '1 day ago'
+  }
+  return `${diffDays} days ago`
 })
 
 const formattedRelativeTime = computed(() => {

@@ -1,9 +1,10 @@
 <template>
+  <ClientOnly>
   <OuiFloatingPanel
     v-model="open"
     title="Notifications"
     :description="description"
-    :default-position="defaultPosition"
+      :default-position="clientPosition"
     :persist-rect="true"
     content-class="max-w-[560px]"
     @close="handleClose"
@@ -82,6 +83,7 @@
       </OuiStack>
     </div>
   </OuiFloatingPanel>
+  </ClientOnly>
 </template>
 
 <script setup lang="ts">
@@ -123,6 +125,13 @@ const handleClose = () => {
 // Calculate default position underneath the notification button
 // Use a ref with safe SSR default, then update on client
 const defaultPosition = ref<{ x: number; y: number }>({ x: 100, y: 80 });
+const clientPosition = computed(() => {
+  // Only use calculated position on client, otherwise use SSR-safe default
+  if (import.meta.client) {
+    return defaultPosition.value;
+  }
+  return { x: 100, y: 80 };
+});
 
 // Update position when anchor element changes or on mount
 const updatePosition = () => {
@@ -150,27 +159,29 @@ const updatePosition = () => {
   }
 };
 
-// Only update position on client side
+// Register lifecycle hooks unconditionally (required by Vue)
+onMounted(() => {
 if (import.meta.client) {
-  onMounted(() => {
     updatePosition();
+  }
   });
   
   // Watch for anchor element changes
   watch(() => props.anchorElement, () => {
+  if (import.meta.client) {
     updatePosition();
+  }
   }, { immediate: true });
   
   // Also update when panel opens
   watch(() => props.modelValue, (isOpen) => {
-    if (isOpen) {
+  if (isOpen && import.meta.client) {
       // Small delay to ensure DOM is ready
       nextTick(() => {
         updatePosition();
       });
     }
   });
-}
 
 const unreadCount = computed(() => props.items.filter((n) => !n.read).length);
 

@@ -10,7 +10,7 @@
               <OuiText size="lg" weight="bold" color="primary">O</OuiText>
             </OuiFlex>
           </OuiBox>
-          <OuiStack gap="xs" class="leading-tight">
+          <OuiStack gap="none" class="leading-tight">
             <OuiText size="xl" weight="bold" color="primary">Obiente</OuiText>
             <OuiText
               v-if="props.currentOrganization"
@@ -135,6 +135,12 @@
             to="/superadmin/usage"
             label="Usage"
             :icon="ChartBarIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
+            to="/superadmin/dns"
+            label="DNS"
+            :icon="ServerIcon"
             @navigate="handleNavigate"
           />
         </template>

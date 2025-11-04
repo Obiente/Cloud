@@ -772,12 +772,17 @@ const costBreakdown = computed(() => {
   
   const totalCents = Number(estimated.estimatedCostCents);
   if (totalCents > 0) {
-    // Calculate approximate breakdown (we don't have per-resource cost in org usage, so estimate)
+    // Use actual per-resource costs if available, otherwise fall back to percentages
+    const cpuCents = estimated.cpuCostCents != null ? Number(estimated.cpuCostCents) : totalCents * 0.4;
+    const memoryCents = estimated.memoryCostCents != null ? Number(estimated.memoryCostCents) : totalCents * 0.3;
+    const bandwidthCents = estimated.bandwidthCostCents != null ? Number(estimated.bandwidthCostCents) : totalCents * 0.2;
+    const storageCents = estimated.storageCostCents != null ? Number(estimated.storageCostCents) : totalCents * 0.1;
+    
     breakdown.push(
-      { label: "CPU", value: formatCurrency(totalCents * 0.4 / 100), color: "bg-accent-primary" },
-      { label: "Memory", value: formatCurrency(totalCents * 0.3 / 100), color: "bg-success" },
-      { label: "Bandwidth", value: formatCurrency(totalCents * 0.2 / 100), color: "bg-accent-secondary" },
-      { label: "Storage", value: formatCurrency(totalCents * 0.1 / 100), color: "bg-warning" },
+      { label: "CPU", value: formatCurrency(cpuCents / 100), color: "bg-accent-primary" },
+      { label: "Memory", value: formatCurrency(memoryCents / 100), color: "bg-success" },
+      { label: "Bandwidth", value: formatCurrency(bandwidthCents / 100), color: "bg-accent-secondary" },
+      { label: "Storage", value: formatCurrency(storageCents / 100), color: "bg-warning" },
     );
   }
   

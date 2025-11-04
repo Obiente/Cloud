@@ -508,39 +508,12 @@
               required
             />
 
-            <div>
-              <OuiText size="sm" weight="medium" class="mb-2 block">Groups/Labels (Optional)</OuiText>
-              <div class="flex flex-wrap gap-2 mb-2 p-2 border border-border-default rounded-lg min-h-[2.5rem]">
-                <OuiBadge
-                  v-for="(group, idx) in newDeploymentGroups"
-                  :key="idx"
-                  variant="outline"
-                  size="sm"
-                  class="gap-1"
-                >
-                  {{ group }}
-                  <button
-                    @click="removeNewGroup(idx)"
-                    class="ml-1 hover:text-danger"
-                    type="button"
-                  >
-                    <span class="sr-only">Remove</span>
-                    ×
-                  </button>
-                </OuiBadge>
-                <input
-                  v-model="newGroupInput"
-                  @keydown.enter.prevent="addNewGroup"
-                  @blur="addNewGroup"
-                  type="text"
-                  placeholder="Add group..."
-                  class="flex-1 min-w-[120px] border-0 outline-none bg-transparent text-sm"
-                />
-              </div>
-              <OuiText size="xs" color="secondary">
-                Press Enter or click outside to add a group/label
-              </OuiText>
-            </div>
+            <OuiTagsInput
+              v-model="newDeploymentGroups"
+              label="Groups/Labels (Optional)"
+              placeholder="Add group..."
+              helper-text="Press Enter or click outside to add a group/label"
+            />
 
             <OuiText size="xs" color="secondary">
               The deployment type will be automatically detected when you connect your repository. You can configure the repository and other settings after creating the deployment.
@@ -650,7 +623,6 @@
     environment: String(EnvEnum.PRODUCTION),
   });
   const newDeploymentGroups = ref<string[]>([]);
-  const newGroupInput = ref<string>("");
 
   const statusFilterOptions = [
     { label: "All Status", value: "" },
@@ -1175,17 +1147,6 @@
 
   const { showAlert } = useDialog();
 
-  const addNewGroup = () => {
-    const trimmed = newGroupInput.value.trim();
-    if (trimmed && !newDeploymentGroups.value.includes(trimmed)) {
-      newDeploymentGroups.value.push(trimmed);
-      newGroupInput.value = "";
-    }
-  };
-
-  const removeNewGroup = (index: number) => {
-    newDeploymentGroups.value.splice(index, 1);
-  };
 
   const createDeployment = async () => {
     if (!newDeployment.value.name.trim()) {
@@ -1213,7 +1174,6 @@
         environment: String(EnvEnum.PRODUCTION),
       };
       newDeploymentGroups.value = [];
-      newGroupInput.value = "";
 
       // Add to local deployments list if it's not there already
       if (

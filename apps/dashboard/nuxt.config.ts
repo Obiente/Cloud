@@ -26,7 +26,8 @@ export default defineNuxtConfig({
     apiSecret: "",
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET || "", // Server-side only - never expose to client
     session: {
-      password: process.env.NUXT_SESSION_PASSWORD || "changeme_" + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters
+      password:
+        process.env.NUXT_SESSION_PASSWORD || "changeme_" + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters
       cookie: {
         secure: true, // Set to true if using HTTPS
       },
@@ -40,6 +41,7 @@ export default defineNuxtConfig({
       oidcClientId: "339499954043158530",
       githubClientId: "",
       disableAuth: false,
+      stripePublishableKey: "",
     },
   },
 

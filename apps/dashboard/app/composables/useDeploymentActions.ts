@@ -266,6 +266,9 @@ export function useDeploymentActions(organizationId: string = "default") {
              startCommand?: string;
              dockerfilePath?: string;
              composeFilePath?: string;
+             buildPath?: string;
+             buildOutputPath?: string;
+             nginxConfig?: string;
              githubIntegrationId?: string;
              environment?: number; // Environment enum
              groups?: string[];
@@ -282,24 +285,45 @@ export function useDeploymentActions(organizationId: string = "default") {
              };
              
              if (updates.name !== undefined) request.name = updates.name;
-             // Include repositoryUrl if provided (convert empty string to undefined for backend)
+             // Include repositoryUrl if provided - send null for empty strings to clear it
              if (updates.repositoryUrl !== undefined) {
-               request.repositoryUrl = updates.repositoryUrl && updates.repositoryUrl.trim() !== "" 
-                 ? updates.repositoryUrl.trim() 
-                 : undefined;
+               request.repositoryUrl = updates.repositoryUrl === null || updates.repositoryUrl === "" 
+                 ? null 
+                 : updates.repositoryUrl.trim();
              }
              if (updates.branch !== undefined) request.branch = updates.branch;
-             if (updates.buildStrategy !== undefined) request.buildStrategy = updates.buildStrategy;
-             if (updates.buildCommand !== undefined) request.buildCommand = updates.buildCommand;
-             if (updates.installCommand !== undefined) request.installCommand = updates.installCommand;
-             if (updates.startCommand !== undefined) request.startCommand = updates.startCommand;
-             if (updates.dockerfilePath !== undefined) request.dockerfilePath = updates.dockerfilePath;
-             if (updates.composeFilePath !== undefined) request.composeFilePath = updates.composeFilePath;
-             // Include githubIntegrationId if provided
+            if (updates.buildStrategy !== undefined) request.buildStrategy = updates.buildStrategy;
+            // Always include these fields - send empty string for empty/null values so protobuf includes them
+            // Backend will clear fields when it receives empty strings
+            if (updates.buildCommand !== undefined) {
+              request.buildCommand = updates.buildCommand === null || updates.buildCommand === "" ? "" : updates.buildCommand;
+            }
+            if (updates.installCommand !== undefined) {
+              request.installCommand = updates.installCommand === null || updates.installCommand === "" ? "" : updates.installCommand;
+            }
+            if (updates.startCommand !== undefined) {
+              request.startCommand = updates.startCommand === null || updates.startCommand === "" ? "" : updates.startCommand;
+            }
+            if (updates.dockerfilePath !== undefined) {
+              request.dockerfilePath = updates.dockerfilePath === null || updates.dockerfilePath === "" ? "" : updates.dockerfilePath;
+            }
+            if (updates.composeFilePath !== undefined) {
+              request.composeFilePath = updates.composeFilePath === null || updates.composeFilePath === "" ? "" : updates.composeFilePath;
+            }
+            if (updates.buildPath !== undefined) {
+              request.buildPath = updates.buildPath === null || updates.buildPath === "" ? "" : updates.buildPath;
+            }
+            if (updates.buildOutputPath !== undefined) {
+              request.buildOutputPath = updates.buildOutputPath === null || updates.buildOutputPath === "" ? "" : updates.buildOutputPath;
+            }
+            if (updates.nginxConfig !== undefined) {
+              request.nginxConfig = updates.nginxConfig === null || updates.nginxConfig === "" ? "" : updates.nginxConfig;
+            }
+             // Include githubIntegrationId if provided - send null for empty strings to clear it
              if (updates.githubIntegrationId !== undefined) {
-               request.githubIntegrationId = updates.githubIntegrationId && updates.githubIntegrationId.trim() !== ""
-                 ? updates.githubIntegrationId.trim()
-                 : undefined;
+               request.githubIntegrationId = updates.githubIntegrationId === null || updates.githubIntegrationId === "" 
+                 ? null 
+                 : updates.githubIntegrationId.trim();
              }
              if (updates.environment !== undefined) request.environment = updates.environment;
              // Always include groups if provided (even if empty array) so backend can clear it

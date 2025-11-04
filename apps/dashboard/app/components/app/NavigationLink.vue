@@ -46,7 +46,21 @@ const isActive = computed(() => {
   if (props.exactMatch) {
     return route.path === props.to;
   }
-  return route.path.startsWith(props.to);
+  // Parse the 'to' prop to extract path and query params
+  const [path = '', queryString] = props.to.split('?');
+  const pathMatches = route.path.startsWith(path);
+  
+  // If query params are specified, check them too
+  if (queryString && pathMatches) {
+    const queryParams = new URLSearchParams(queryString);
+    for (const [key, value] of queryParams.entries()) {
+      if (route.query[key] !== value) {
+        return false;
+      }
+    }
+  }
+  
+  return pathMatches;
 });
 
 const handleClick = () => {
