@@ -163,6 +163,11 @@ type UsageMetrics struct {
 	DeploymentsActivePeak int32                  `protobuf:"varint,6,opt,name=deployments_active_peak,json=deploymentsActivePeak,proto3" json:"deployments_active_peak,omitempty"`
 	// Estimated cost in cents (e.g., 2347 = $23.47)
 	EstimatedCostCents int64 `protobuf:"varint,7,opt,name=estimated_cost_cents,json=estimatedCostCents,proto3" json:"estimated_cost_cents,omitempty"`
+	// Per-resource cost breakdown in cents (optional)
+	CpuCostCents       *int64 `protobuf:"varint,8,opt,name=cpu_cost_cents,json=cpuCostCents,proto3,oneof" json:"cpu_cost_cents,omitempty"`
+	MemoryCostCents    *int64 `protobuf:"varint,9,opt,name=memory_cost_cents,json=memoryCostCents,proto3,oneof" json:"memory_cost_cents,omitempty"`
+	BandwidthCostCents *int64 `protobuf:"varint,10,opt,name=bandwidth_cost_cents,json=bandwidthCostCents,proto3,oneof" json:"bandwidth_cost_cents,omitempty"`
+	StorageCostCents   *int64 `protobuf:"varint,11,opt,name=storage_cost_cents,json=storageCostCents,proto3,oneof" json:"storage_cost_cents,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -242,6 +247,34 @@ func (x *UsageMetrics) GetDeploymentsActivePeak() int32 {
 func (x *UsageMetrics) GetEstimatedCostCents() int64 {
 	if x != nil {
 		return x.EstimatedCostCents
+	}
+	return 0
+}
+
+func (x *UsageMetrics) GetCpuCostCents() int64 {
+	if x != nil && x.CpuCostCents != nil {
+		return *x.CpuCostCents
+	}
+	return 0
+}
+
+func (x *UsageMetrics) GetMemoryCostCents() int64 {
+	if x != nil && x.MemoryCostCents != nil {
+		return *x.MemoryCostCents
+	}
+	return 0
+}
+
+func (x *UsageMetrics) GetBandwidthCostCents() int64 {
+	if x != nil && x.BandwidthCostCents != nil {
+		return *x.BandwidthCostCents
+	}
+	return 0
+}
+
+func (x *UsageMetrics) GetStorageCostCents() int64 {
+	if x != nil && x.StorageCostCents != nil {
+		return *x.StorageCostCents
 	}
 	return 0
 }
@@ -2159,7 +2192,7 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\x05month\x18\x02 \x01(\tR\x05month\x12F\n" +
 	"\acurrent\x18\x03 \x01(\v2,.obiente.cloud.organizations.v1.UsageMetricsR\acurrent\x12Y\n" +
 	"\x11estimated_monthly\x18\x04 \x01(\v2,.obiente.cloud.organizations.v1.UsageMetricsR\x10estimatedMonthly\x12@\n" +
-	"\x05quota\x18\x05 \x01(\v2*.obiente.cloud.organizations.v1.UsageQuotaR\x05quota\"\xd3\x02\n" +
+	"\x05quota\x18\x05 \x01(\v2*.obiente.cloud.organizations.v1.UsageQuotaR\x05quota\"\xf2\x04\n" +
 	"\fUsageMetrics\x12(\n" +
 	"\x10cpu_core_seconds\x18\x01 \x01(\x03R\x0ecpuCoreSeconds\x12.\n" +
 	"\x13memory_byte_seconds\x18\x02 \x01(\x03R\x11memoryByteSeconds\x12,\n" +
@@ -2167,7 +2200,16 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\x12bandwidth_tx_bytes\x18\x04 \x01(\x03R\x10bandwidthTxBytes\x12#\n" +
 	"\rstorage_bytes\x18\x05 \x01(\x03R\fstorageBytes\x126\n" +
 	"\x17deployments_active_peak\x18\x06 \x01(\x05R\x15deploymentsActivePeak\x120\n" +
-	"\x14estimated_cost_cents\x18\a \x01(\x03R\x12estimatedCostCents\"\x8a\x02\n" +
+	"\x14estimated_cost_cents\x18\a \x01(\x03R\x12estimatedCostCents\x12)\n" +
+	"\x0ecpu_cost_cents\x18\b \x01(\x03H\x00R\fcpuCostCents\x88\x01\x01\x12/\n" +
+	"\x11memory_cost_cents\x18\t \x01(\x03H\x01R\x0fmemoryCostCents\x88\x01\x01\x125\n" +
+	"\x14bandwidth_cost_cents\x18\n" +
+	" \x01(\x03H\x02R\x12bandwidthCostCents\x88\x01\x01\x121\n" +
+	"\x12storage_cost_cents\x18\v \x01(\x03H\x03R\x10storageCostCents\x88\x01\x01B\x11\n" +
+	"\x0f_cpu_cost_centsB\x14\n" +
+	"\x12_memory_cost_centsB\x17\n" +
+	"\x15_bandwidth_cost_centsB\x15\n" +
+	"\x13_storage_cost_cents\"\x8a\x02\n" +
 	"\n" +
 	"UsageQuota\x127\n" +
 	"\x18cpu_core_seconds_monthly\x18\x01 \x01(\x03R\x15cpuCoreSecondsMonthly\x12=\n" +
@@ -2449,6 +2491,7 @@ func file_obiente_cloud_organizations_v1_organization_service_proto_init() {
 		return
 	}
 	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[0].OneofWrappers = []any{}
+	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[2].OneofWrappers = []any{}
 	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[4].OneofWrappers = []any{}
 	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[10].OneofWrappers = []any{}
 	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[16].OneofWrappers = []any{}

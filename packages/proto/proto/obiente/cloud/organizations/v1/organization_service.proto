@@ -75,6 +75,11 @@ message UsageMetrics {
   int32 deployments_active_peak = 6;
   // Estimated cost in cents (e.g., 2347 = $23.47)
   int64 estimated_cost_cents = 7;
+  // Per-resource cost breakdown in cents (optional)
+  optional int64 cpu_cost_cents = 8;
+  optional int64 memory_cost_cents = 9;
+  optional int64 bandwidth_cost_cents = 10;
+  optional int64 storage_cost_cents = 11;
 }
 
 message UsageQuota {

@@ -165,6 +165,12 @@ const (
 	// DeploymentServiceGetDeploymentServiceNamesProcedure is the fully-qualified name of the
 	// DeploymentService's GetDeploymentServiceNames RPC.
 	DeploymentServiceGetDeploymentServiceNamesProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetDeploymentServiceNames"
+	// DeploymentServiceGetDomainVerificationTokenProcedure is the fully-qualified name of the
+	// DeploymentService's GetDomainVerificationToken RPC.
+	DeploymentServiceGetDomainVerificationTokenProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetDomainVerificationToken"
+	// DeploymentServiceVerifyDomainOwnershipProcedure is the fully-qualified name of the
+	// DeploymentService's VerifyDomainOwnership RPC.
+	DeploymentServiceVerifyDomainOwnershipProcedure = "/obiente.cloud.deployments.v1.DeploymentService/VerifyDomainOwnership"
 	// DeploymentServiceListDeploymentContainersProcedure is the fully-qualified name of the
 	// DeploymentService's ListDeploymentContainers RPC.
 	DeploymentServiceListDeploymentContainersProcedure = "/obiente.cloud.deployments.v1.DeploymentService/ListDeploymentContainers"
@@ -282,6 +288,11 @@ type DeploymentServiceClient interface {
 	UpdateDeploymentRoutings(context.Context, *connect.Request[v1.UpdateDeploymentRoutingsRequest]) (*connect.Response[v1.UpdateDeploymentRoutingsResponse], error)
 	// Get available service names from Docker Compose
 	GetDeploymentServiceNames(context.Context, *connect.Request[v1.GetDeploymentServiceNamesRequest]) (*connect.Response[v1.GetDeploymentServiceNamesResponse], error)
+	// Domain verification
+	// Get verification token for a custom domain
+	GetDomainVerificationToken(context.Context, *connect.Request[v1.GetDomainVerificationTokenRequest]) (*connect.Response[v1.GetDomainVerificationTokenResponse], error)
+	// Verify domain ownership via DNS TXT record
+	VerifyDomainOwnership(context.Context, *connect.Request[v1.VerifyDomainOwnershipRequest]) (*connect.Response[v1.VerifyDomainOwnershipResponse], error)
 	// List all containers for a deployment
 	ListDeploymentContainers(context.Context, *connect.Request[v1.ListDeploymentContainersRequest]) (*connect.Response[v1.ListDeploymentContainersResponse], error)
 	// Stream logs from a specific container
@@ -570,6 +581,18 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentServiceNames")),
 			connect.WithClientOptions(opts...),
 		),
+		getDomainVerificationToken: connect.NewClient[v1.GetDomainVerificationTokenRequest, v1.GetDomainVerificationTokenResponse](
+			httpClient,
+			baseURL+DeploymentServiceGetDomainVerificationTokenProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("GetDomainVerificationToken")),
+			connect.WithClientOptions(opts...),
+		),
+		verifyDomainOwnership: connect.NewClient[v1.VerifyDomainOwnershipRequest, v1.VerifyDomainOwnershipResponse](
+			httpClient,
+			baseURL+DeploymentServiceVerifyDomainOwnershipProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("VerifyDomainOwnership")),
+			connect.WithClientOptions(opts...),
+		),
 		listDeploymentContainers: connect.NewClient[v1.ListDeploymentContainersRequest, v1.ListDeploymentContainersResponse](
 			httpClient,
 			baseURL+DeploymentServiceListDeploymentContainersProcedure,
@@ -649,6 +672,8 @@ type deploymentServiceClient struct {
 	getDeploymentRoutings           *connect.Client[v1.GetDeploymentRoutingsRequest, v1.GetDeploymentRoutingsResponse]
 	updateDeploymentRoutings        *connect.Client[v1.UpdateDeploymentRoutingsRequest, v1.UpdateDeploymentRoutingsResponse]
 	getDeploymentServiceNames       *connect.Client[v1.GetDeploymentServiceNamesRequest, v1.GetDeploymentServiceNamesResponse]
+	getDomainVerificationToken      *connect.Client[v1.GetDomainVerificationTokenRequest, v1.GetDomainVerificationTokenResponse]
+	verifyDomainOwnership           *connect.Client[v1.VerifyDomainOwnershipRequest, v1.VerifyDomainOwnershipResponse]
 	listDeploymentContainers        *connect.Client[v1.ListDeploymentContainersRequest, v1.ListDeploymentContainersResponse]
 	streamContainerLogs             *connect.Client[v1.StreamContainerLogsRequest, v1.DeploymentLogLine]
 	startContainer                  *connect.Client[v1.StartContainerRequest, v1.StartContainerResponse]
@@ -885,6 +910,17 @@ func (c *deploymentServiceClient) GetDeploymentServiceNames(ctx context.Context,
 	return c.getDeploymentServiceNames.CallUnary(ctx, req)
 }
 
+// GetDomainVerificationToken calls
+// obiente.cloud.deployments.v1.DeploymentService.GetDomainVerificationToken.
+func (c *deploymentServiceClient) GetDomainVerificationToken(ctx context.Context, req *connect.Request[v1.GetDomainVerificationTokenRequest]) (*connect.Response[v1.GetDomainVerificationTokenResponse], error) {
+	return c.getDomainVerificationToken.CallUnary(ctx, req)
+}
+
+// VerifyDomainOwnership calls obiente.cloud.deployments.v1.DeploymentService.VerifyDomainOwnership.
+func (c *deploymentServiceClient) VerifyDomainOwnership(ctx context.Context, req *connect.Request[v1.VerifyDomainOwnershipRequest]) (*connect.Response[v1.VerifyDomainOwnershipResponse], error) {
+	return c.verifyDomainOwnership.CallUnary(ctx, req)
+}
+
 // ListDeploymentContainers calls
 // obiente.cloud.deployments.v1.DeploymentService.ListDeploymentContainers.
 func (c *deploymentServiceClient) ListDeploymentContainers(ctx context.Context, req *connect.Request[v1.ListDeploymentContainersRequest]) (*connect.Response[v1.ListDeploymentContainersResponse], error) {
@@ -1011,6 +1047,11 @@ type DeploymentServiceHandler interface {
 	UpdateDeploymentRoutings(context.Context, *connect.Request[v1.UpdateDeploymentRoutingsRequest]) (*connect.Response[v1.UpdateDeploymentRoutingsResponse], error)
 	// Get available service names from Docker Compose
 	GetDeploymentServiceNames(context.Context, *connect.Request[v1.GetDeploymentServiceNamesRequest]) (*connect.Response[v1.GetDeploymentServiceNamesResponse], error)
+	// Domain verification
+	// Get verification token for a custom domain
+	GetDomainVerificationToken(context.Context, *connect.Request[v1.GetDomainVerificationTokenRequest]) (*connect.Response[v1.GetDomainVerificationTokenResponse], error)
+	// Verify domain ownership via DNS TXT record
+	VerifyDomainOwnership(context.Context, *connect.Request[v1.VerifyDomainOwnershipRequest]) (*connect.Response[v1.VerifyDomainOwnershipResponse], error)
 	// List all containers for a deployment
 	ListDeploymentContainers(context.Context, *connect.Request[v1.ListDeploymentContainersRequest]) (*connect.Response[v1.ListDeploymentContainersResponse], error)
 	// Stream logs from a specific container
@@ -1294,6 +1335,18 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		connect.WithSchema(deploymentServiceMethods.ByName("GetDeploymentServiceNames")),
 		connect.WithHandlerOptions(opts...),
 	)
+	deploymentServiceGetDomainVerificationTokenHandler := connect.NewUnaryHandler(
+		DeploymentServiceGetDomainVerificationTokenProcedure,
+		svc.GetDomainVerificationToken,
+		connect.WithSchema(deploymentServiceMethods.ByName("GetDomainVerificationToken")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceVerifyDomainOwnershipHandler := connect.NewUnaryHandler(
+		DeploymentServiceVerifyDomainOwnershipProcedure,
+		svc.VerifyDomainOwnership,
+		connect.WithSchema(deploymentServiceMethods.ByName("VerifyDomainOwnership")),
+		connect.WithHandlerOptions(opts...),
+	)
 	deploymentServiceListDeploymentContainersHandler := connect.NewUnaryHandler(
 		DeploymentServiceListDeploymentContainersProcedure,
 		svc.ListDeploymentContainers,
@@ -1414,6 +1467,10 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceUpdateDeploymentRoutingsHandler.ServeHTTP(w, r)
 		case DeploymentServiceGetDeploymentServiceNamesProcedure:
 			deploymentServiceGetDeploymentServiceNamesHandler.ServeHTTP(w, r)
+		case DeploymentServiceGetDomainVerificationTokenProcedure:
+			deploymentServiceGetDomainVerificationTokenHandler.ServeHTTP(w, r)
+		case DeploymentServiceVerifyDomainOwnershipProcedure:
+			deploymentServiceVerifyDomainOwnershipHandler.ServeHTTP(w, r)
 		case DeploymentServiceListDeploymentContainersProcedure:
 			deploymentServiceListDeploymentContainersHandler.ServeHTTP(w, r)
 		case DeploymentServiceStreamContainerLogsProcedure:
@@ -1607,6 +1664,14 @@ func (UnimplementedDeploymentServiceHandler) UpdateDeploymentRoutings(context.Co
 
 func (UnimplementedDeploymentServiceHandler) GetDeploymentServiceNames(context.Context, *connect.Request[v1.GetDeploymentServiceNamesRequest]) (*connect.Response[v1.GetDeploymentServiceNamesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetDeploymentServiceNames is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) GetDomainVerificationToken(context.Context, *connect.Request[v1.GetDomainVerificationTokenRequest]) (*connect.Response[v1.GetDomainVerificationTokenResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.GetDomainVerificationToken is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) VerifyDomainOwnership(context.Context, *connect.Request[v1.VerifyDomainOwnershipRequest]) (*connect.Response[v1.VerifyDomainOwnershipResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.VerifyDomainOwnership is not implemented"))
 }
 
 func (UnimplementedDeploymentServiceHandler) ListDeploymentContainers(context.Context, *connect.Request[v1.ListDeploymentContainersRequest]) (*connect.Response[v1.ListDeploymentContainersResponse], error) {

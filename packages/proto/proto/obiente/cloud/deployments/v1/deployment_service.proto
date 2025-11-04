@@ -36,7 +36,7 @@ enum LogLevel {
 // Build strategy determines how the deployment is built and deployed
 enum BuildStrategy {
   BUILD_STRATEGY_UNSPECIFIED = 0;
-  RAILPACKS = 1;        // Railpacks (Nixpacks variant, can build any language including Rails)
+  RAILPACK = 1;        // Railpack (Nixpacks variant, can build any language including Rails)
   NIXPACKS = 2;         // Nixpacks buildpacks (can build any language)
   DOCKERFILE = 3;       // Build from Dockerfile
   PLAIN_COMPOSE = 4;    // Plain Docker Compose (uses compose YAML from database, no repository)
@@ -211,6 +211,13 @@ service DeploymentService {
   // Get available service names from Docker Compose
   rpc GetDeploymentServiceNames(GetDeploymentServiceNamesRequest) returns (GetDeploymentServiceNamesResponse);
 
+  // Domain verification
+  // Get verification token for a custom domain
+  rpc GetDomainVerificationToken(GetDomainVerificationTokenRequest) returns (GetDomainVerificationTokenResponse);
+  
+  // Verify domain ownership via DNS TXT record
+  rpc VerifyDomainOwnership(VerifyDomainOwnershipRequest) returns (VerifyDomainOwnershipResponse);
+
   // List all containers for a deployment
   rpc ListDeploymentContainers(ListDeploymentContainersRequest) returns (ListDeploymentContainersResponse);
 
@@ -271,6 +278,10 @@ message UpdateDeploymentRequest {
   optional string start_command = 17; // Start command for running the application
   optional string dockerfile_path = 12; // Path to Dockerfile (relative to repo root)
   optional string compose_file_path = 13; // Path to compose file (relative to repo root)
+  optional string build_path = 18; // Working directory for build (relative to repo root, defaults to ".")
+  optional string build_output_path = 19; // Path to built output files (relative to repo root, auto-detected if empty)
+  optional bool use_nginx = 20; // Use nginx for static deployments
+  optional string nginx_config = 21; // Custom nginx configuration (optional, uses default if empty)
   optional string domain = 8;
   repeated string custom_domains = 9;
   optional int32 port = 10;
@@ -758,6 +769,34 @@ message GetDeploymentServiceNamesResponse {
   repeated string service_names = 1;
 }
 
+// Domain verification messages
+message GetDomainVerificationTokenRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string domain = 3;
+}
+
+message GetDomainVerificationTokenResponse {
+  string domain = 1;
+  string token = 2;
+  string txt_record_name = 3; // e.g., "_obiente-verification.example.com"
+  string txt_record_value = 4; // e.g., "obiente-verification=abc123..."
+  string status = 5; // "pending", "verified", "failed", "expired"
+}
+
+message VerifyDomainOwnershipRequest {
+  string organization_id = 1;
+  string deployment_id = 2;
+  string domain = 3;
+}
+
+message VerifyDomainOwnershipResponse {
+  string domain = 1;
+  bool verified = 2;
+  string status = 3; // "verified", "failed", "pending"
+  optional string message = 4; // Error message if verification failed
+}
+
 message GetDeploymentMetricsRequest {
   string deployment_id = 1;
   string organization_id = 2;
@@ -865,6 +904,10 @@ message Deployment {
   optional string start_command = 29; // Start command for running the application
   optional string dockerfile_path = 27; // Path to Dockerfile (relative to repo root, e.g., "Dockerfile", "backend/Dockerfile")
   optional string compose_file_path = 28; // Path to compose file (relative to repo root, e.g., "docker-compose.yml", "compose/production.yml")
+  optional string build_path = 34; // Working directory for build (relative to repo root, defaults to ".")
+  optional string build_output_path = 35; // Path to built output files (relative to repo root, auto-detected if empty)
+  optional bool use_nginx = 36; // Use nginx for static deployments
+  optional string nginx_config = 37; // Custom nginx configuration (optional, uses default if empty)
   DeploymentStatus status = 10;
   string health_status = 11;
   google.protobuf.Timestamp last_deployed_at = 12;
