@@ -46,7 +46,7 @@
           </OuiText>
 
           <OuiText size="xl" color="secondary" class="max-w-2xl md:text-2xl">
-            Deploy containerized applications with GitHub integration. Pay only for what you use with transparent, resource-based pricing.
+            Deploy containers, game servers, and VPS instances. Pay only for what you use with transparent, resource-based pricing. No more overpaying for unused resources.
           </OuiText>
         </OuiStack>
 
@@ -102,7 +102,7 @@
             Everything you need to deploy
           </OuiText>
           <OuiText size="lg" color="secondary" class="md:text-xl">
-            Container-based deployments with GitHub integration, custom domains, and powerful monitoring tools.
+            Deploy containers, game servers, and VPS instances. Pay-as-you-go pricing means you only pay for actual resource usage, not idle time.
           </OuiText>
         </OuiStack>
 
@@ -239,6 +239,29 @@
                   </OuiText>
                   <OuiText size="sm" color="secondary">
                     Upload, edit, and manage files directly through the dashboard. Terminal access for advanced configuration and debugging.
+                  </OuiText>
+                </OuiStack>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+
+          <!-- Pay-as-You-Go Pricing -->
+          <OuiCard
+            variant="default"
+            hoverable
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+          >
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-success/20 rounded-lg flex items-center justify-center">
+                  <CircleStackIcon class="h-6 w-6 text-accent-success" />
+                </OuiBox>
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    Pay-as-You-Go Pricing
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Only pay for resources you actually use. Perfect for game servers and VPSs where you often overpay for idle time. Stop wasting money on unused capacity.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -398,14 +421,14 @@
             Simple, transparent pricing
           </OuiText>
           <OuiText size="lg" color="secondary">
-            Pay only for what you use. No fixed plans, no hidden fees. Free support included.
+            Pay only for what you use. No fixed plans, no hidden fees. Free support included. Stop overpaying for unused resources.
           </OuiText>
           <OuiText size="sm" color="secondary" class="opacity-60 italic">
             Students, open-source projects, non-profits, and early-stage startups may qualify for reduced pricing. Contact us to discuss.
           </OuiText>
         </OuiStack>
 
-        <OuiGrid cols="1" cols-md="3" gap="xl" class="w-full max-w-5xl">
+        <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="xl" class="w-full max-w-6xl">
           <!-- Small App Example -->
           <OuiCard
             variant="default"
@@ -468,6 +491,150 @@
                 class="w-full mt-auto"
                 @click="navigateTo('/dashboard')"
               >
+                Get Started
+              </OuiButton>
+            </OuiCardBody>
+          </OuiCard>
+
+          <!-- Game Server Example -->
+          <OuiCard
+            variant="default"
+            hoverable
+            class="text-center group hover:-translate-y-1 transition-all duration-200 ring-2 ring-accent-success/50 h-full flex flex-col"
+          >
+            <OuiCardBody class="flex flex-col h-full">
+              <OuiStack gap="lg" class="flex-1">
+                <OuiStack gap="md">
+                  <OuiFlex align="center" justify="center" gap="sm">
+                    <OuiText size="lg" weight="semibold" color="primary"
+                      >Game Server</OuiText
+                    >
+                    <OuiBadge color="success" size="sm">Save 50%</OuiBadge>
+                  </OuiFlex>
+                  <OuiText size="sm" color="secondary"
+                    >12 hours/day runtime</OuiText
+                  >
+                </OuiStack>
+
+                <OuiStack gap="xs" align="center">
+                  <OuiText size="3xl" weight="bold" color="primary"
+                    >~$15</OuiText
+                  >
+                  <OuiText size="sm" color="secondary">per month</OuiText>
+                  <OuiText size="xs" color="secondary" class="opacity-75 italic line-through">
+                    Traditional hosting: $20-30/month
+                  </OuiText>
+                </OuiStack>
+
+                <OuiStack gap="sm" align="start" class="text-left flex-1">
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary"
+                      >4 GB RAM running 12h/day</OuiText
+                    >
+                  </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary"
+                      >2 vCPU cores average</OuiText
+                    >
+                  </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary"
+                      >~100 GB bandwidth/month</OuiText
+                    >
+                  </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary">~20 GB storage</OuiText>
+                  </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary"
+                      >Low costs when idle or offline</OuiText
+                    >
+                  </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary">Free support</OuiText>
+                  </OuiFlex>
+                </OuiStack>
+              </OuiStack>
+
+              <OuiButton
+                color="success"
+                size="md"
+                class="w-full mt-auto shadow-lg shadow-accent-success/25"
+                @click="navigateTo('/dashboard')"
+              >
+                Get Started
+              </OuiButton>
+            </OuiCardBody>
+          </OuiCard>
+
+          <!-- VPS Example -->
+          <OuiCard
+            variant="default"
+            hoverable
+            class="text-center group hover:-translate-y-1 transition-all duration-200 h-full flex flex-col"
+          >
+            <OuiCardBody class="flex flex-col h-full">
+              <OuiStack gap="lg" class="flex-1">
+                <OuiStack gap="md">
+                  <OuiText size="lg" weight="semibold" color="primary"
+                    >VPS Instance</OuiText
+                  >
+                  <OuiText size="sm" color="secondary"
+                    >Competitive pricing</OuiText
+                  >
+                </OuiStack>
+
+                <OuiStack gap="xs" align="center">
+                  <OuiText size="3xl" weight="bold" color="primary">~$8</OuiText>
+                  <OuiText size="sm" color="secondary">per month</OuiText>
+                  <OuiText size="xs" color="secondary" class="opacity-75 italic">
+                    Traditional VPS: $10-12/month
+                  </OuiText>
+                </OuiStack>
+
+                <OuiStack gap="sm" align="start" class="text-left flex-1">
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary"
+                      >2 GB RAM running 24/7</OuiText
+                    >
+                  </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary"
+                      >1 vCPU core running 24/7</OuiText
+                    >
+                  </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary"
+                      >~50 GB bandwidth/month</OuiText
+                    >
+                  </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary">~10 GB storage</OuiText>
+                  </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary"
+                      >Pay for actual usage, not idle time</OuiText
+                    >
+                  </OuiFlex>
+                  <OuiFlex align="center" gap="sm">
+                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
+                    <OuiText size="sm" color="secondary">Free support</OuiText>
+                  </OuiFlex>
+                </OuiStack>
+              </OuiStack>
+
+              <OuiButton variant="outline" size="md" class="w-full mt-auto">
                 Get Started
               </OuiButton>
             </OuiCardBody>
@@ -550,87 +717,67 @@
               </OuiButton>
             </OuiCardBody>
           </OuiCard>
-
-          <!-- Large App Example -->
-          <OuiCard
-            variant="default"
-            hoverable
-            class="text-center group hover:-translate-y-1 transition-all duration-200 h-full flex flex-col"
-          >
-            <OuiCardBody class="flex flex-col h-full">
-              <OuiStack gap="lg" class="flex-1">
-                <OuiStack gap="md">
-                  <OuiText size="lg" weight="semibold" color="primary"
-                    >Large App</OuiText
-                  >
-                  <OuiText size="sm" color="secondary"
-                    >For large organizations</OuiText
-                  >
-                </OuiStack>
-
-                <OuiStack gap="xs" align="center">
-                  <OuiText size="3xl" weight="bold" color="primary"
-                    >~$44</OuiText
-                  >
-                  <OuiText size="sm" color="secondary">per month</OuiText>
-                </OuiStack>
-
-                <OuiStack gap="sm" align="start" class="text-left flex-1">
-                  <OuiFlex align="center" gap="sm">
-                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary"
-                      >8 GB RAM running 24/7</OuiText
-                    >
-                  </OuiFlex>
-                  <OuiFlex align="center" gap="sm">
-                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary"
-                      >2 vCPU cores running 24/7</OuiText
-                    >
-                  </OuiFlex>
-                  <OuiFlex align="center" gap="sm">
-                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary"
-                      >~200 GB bandwidth/month</OuiText
-                    >
-                  </OuiFlex>
-                  <OuiFlex align="center" gap="sm">
-                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">~100 GB storage</OuiText>
-                  </OuiFlex>
-                  <OuiFlex align="center" gap="sm">
-                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary"
-                      >Scale resources as needed</OuiText
-                    >
-                  </OuiFlex>
-                  <OuiFlex align="center" gap="sm">
-                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary"
-                      >Premium hardware</OuiText
-                    >
-                  </OuiFlex>
-                  <OuiFlex align="center" gap="sm">
-                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Free support</OuiText>
-                  </OuiFlex>
-                  <OuiFlex align="center" gap="sm">
-                    <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Automatic failover to fallback node</OuiText>
-                  </OuiFlex>
-                </OuiStack>
-              </OuiStack>
-
-              <OuiButton variant="outline" size="md" class="w-full mt-auto">
-                Get Started
-              </OuiButton>
-            </OuiCardBody>
-          </OuiCard>
         </OuiGrid>
         
         <OuiText size="sm" color="secondary" class="opacity-75 text-center max-w-2xl">
           * Example costs based on 24/7 usage. You only pay for actual runtime - if your app runs part-time, you'll pay less. Use the calculator below to estimate your exact costs.
         </OuiText>
+        
+        <OuiCard variant="default" class="w-full max-w-4xl mt-4">
+          <OuiCardBody>
+            <OuiStack gap="md">
+              <OuiText size="lg" weight="semibold" color="primary" class="text-center">
+                Why Pay-as-You-Go Matters
+              </OuiText>
+              <OuiGrid cols="1" cols-md="2" gap="md">
+                <OuiFlex gap="sm" align="start">
+                  <ServerIcon class="h-5 w-5 text-accent-success shrink-0 mt-0.5" />
+                  <OuiStack gap="xs">
+                    <OuiText size="sm" weight="semibold" color="primary">
+                      Game Servers
+                    </OuiText>
+                    <OuiText size="sm" color="secondary">
+                      Low costs when idle or offline. Traditional hosting charges $20-40/month even when your server is empty.
+                    </OuiText>
+                  </OuiStack>
+                </OuiFlex>
+                <OuiFlex gap="sm" align="start">
+                  <ServerIcon class="h-5 w-5 text-accent-primary shrink-0 mt-0.5" />
+                  <OuiStack gap="xs">
+                    <OuiText size="sm" weight="semibold" color="primary">
+                      VPS Instances
+                    </OuiText>
+                    <OuiText size="sm" color="secondary">
+                      Pay for actual CPU and memory usage, not idle time. Most VPS providers charge full price regardless of utilization.
+                    </OuiText>
+                  </OuiStack>
+                </OuiFlex>
+                <OuiFlex gap="sm" align="start">
+                  <RocketLaunchIcon class="h-5 w-5 text-accent-secondary shrink-0 mt-0.5" />
+                  <OuiStack gap="xs">
+                    <OuiText size="sm" weight="semibold" color="primary">
+                      Development Environments
+                    </OuiText>
+                    <OuiText size="sm" color="secondary">
+                      Stop paying for resources that sit idle overnight or on weekends.
+                    </OuiText>
+                  </OuiStack>
+                </OuiFlex>
+                <OuiFlex gap="sm" align="start">
+                  <ChartBarIcon class="h-5 w-5 text-accent-warning shrink-0 mt-0.5" />
+                  <OuiStack gap="xs">
+                    <OuiText size="sm" weight="semibold" color="primary">
+                      Variable Workloads
+                    </OuiText>
+                    <OuiText size="sm" color="secondary">
+                      Scale costs automatically with demand - no over-provisioning required.
+                    </OuiText>
+                  </OuiStack>
+                </OuiFlex>
+              </OuiGrid>
+            </OuiStack>
+          </OuiCardBody>
+        </OuiCard>
       </OuiStack>
     </OuiContainer>
 
@@ -709,26 +856,26 @@ const isScrolled = computed(() => scrollY.value > 10);
 
 // SEO meta
 useHead({
-  title: "Obiente Cloud - Container Deployment Platform",
+  title: "Obiente Cloud - Container, Game Server & VPS Hosting",
   meta: [
     {
       name: "description",
       content:
-        "Deploy containerized applications with GitHub integration. Pay-as-you-go pricing with transparent resource-based costs. Docker and Docker Compose support.",
+        "Deploy containers, game servers, and VPS instances with pay-as-you-go pricing. Only pay for actual usage - no more overpaying for unused resources. Competitive with VPS providers.",
     },
     {
       name: "keywords",
       content:
-        "container hosting, docker deployment, docker compose, github deployment, cloud platform, pay as you go, vercel alternative",
+        "container hosting, docker deployment, game server hosting, vps hosting, pay as you go, cloud platform, minecraft hosting, competitive pricing",
     },
     {
       property: "og:title",
-      content: "Obiente Cloud - Container Deployment Platform",
+      content: "Obiente Cloud - Container, Game Server & VPS Hosting",
     },
     {
       property: "og:description",
       content:
-        "Deploy containerized applications with GitHub integration. Pay-as-you-go pricing with transparent resource-based costs.",
+        "Deploy containers, game servers, and VPS instances with pay-as-you-go pricing. Only pay for actual usage - no more overpaying for unused resources.",
     },
     { property: "og:type", content: "website" },
     { name: "twitter:card", content: "summary_large_image" },

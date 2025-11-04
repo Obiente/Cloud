@@ -4,11 +4,19 @@
 
 Obiente Cloud offers competitive, pay-as-you-go pricing designed to match traditional VPS providers while providing the flexibility of cloud-native resource allocation. Our pricing is competitive with major VPS providers like DigitalOcean, Linode, and Vultr.
 
+**Perfect for game servers and VPSs:** Traditional hosting providers charge you for full-time resources even when your server is idle or offline. With our pay-as-you-go model, you only pay for actual runtime and resource usage, saving money when your game server is offline or your VPS has low utilization.
+
 **Note:** As we grow and achieve better economies of scale, we plan to reduce pricing for storage and other resources. We're committed to passing cost savings along to our customers.
 
 ## Pricing Model
 
 All resources are billed based on actual usage with no upfront costs or minimum commitments. Perfect for applications that need VPS-like pricing with cloud flexibility.
+
+**Why pay-as-you-go matters:**
+- **Game servers:** Low costs when idle or offline. Traditional hosting charges $20-40/month even when your server is empty.
+- **VPS instances:** Pay for actual CPU and memory usage, not idle time. Most VPS providers charge full price regardless of utilization.
+- **Development environments:** Stop paying for resources that sit idle overnight or on weekends.
+- **Variable workloads:** Scale costs automatically with demand - no over-provisioning required.
 
 ---
 
@@ -117,6 +125,38 @@ All resources are billed based on actual usage with no upfront costs or minimum 
 - Bandwidth: $2.00
 - Storage: $20.00
 
+### Game Server Example
+
+- **4 GB RAM** running 12 hours/day (50% uptime)
+- **2 vCPU cores** average utilization
+- **100 GB bandwidth** per month
+- **20 GB storage**
+
+**Monthly Cost: ~$15.00**
+
+- Memory: $6.00 (12h/day = 50% of 24/7)
+- vCPU: $2.00 (12h/day = 50% of 24/7)
+- Bandwidth: $1.00
+- Storage: $4.00
+
+**Compare to traditional hosting:** A typical game server hosting plan charges $20-30/month for this configuration, even when your server is offline. With pay-as-you-go, you save 50% by paying low costs when idle or offline.
+
+### VPS Example
+
+- **2 GB RAM** running 24/7
+- **1 vCPU core** average utilization
+- **50 GB bandwidth** per month
+- **10 GB storage**
+
+**Monthly Cost: ~$8.00**
+
+- Memory: $6.00
+- vCPU: $2.00
+- Bandwidth: $0.50
+- Storage: $2.00
+
+**Compare to traditional VPS:** Similar VPS plans cost $10-12/month regardless of usage. If your VPS runs part-time or has low utilization, pay-as-you-go pricing saves you money.
+
 ---
 
 ## Comparison with VPS Providers
@@ -164,7 +204,7 @@ _Note: VPS providers typically bundle bandwidth and storage, while we charge sep
 A: No. We only charge for actual resource usage with no minimums or setup fees.
 
 **Q: How does this compare to traditional VPS pricing?**  
-A: Our pricing is competitive with VPS providers like DigitalOcean and Linode. For example, 1GB RAM + 1 vCPU running 24/7 costs $5/month, similar to entry-level VPS plans. The advantage is you only pay for what you use - if your app runs part-time, you pay less.
+A: Our pricing is competitive with VPS providers like DigitalOcean and Linode. For example, 1GB RAM + 1 vCPU running 24/7 costs $5/month, similar to entry-level VPS plans. The key advantage is you only pay for what you use - if your VPS runs part-time or has low utilization, you pay less than traditional fixed-price plans.
 
 **Q: How accurate are the cost estimates?**  
 A: Estimates are based on your actual usage patterns. For the current month, estimates project usage based on elapsed time. Historical months show actual costs.
@@ -179,7 +219,10 @@ A: View detailed billing history and cost breakdowns in your dashboard under Bil
 A: We offer free plans for certain customers (students, open-source projects, non-profits, and early-stage startups). Please reach out to our team for more details. Free plans are not available through the dashboard - you must contact us to discuss eligibility.
 
 **Q: What if my deployment only runs part-time?**  
-A: You only pay for actual runtime. If your deployment runs 12 hours/day instead of 24/7, you'll pay approximately half the monthly cost. This is a key advantage over traditional VPS where you pay for the full month regardless of usage.
+A: You only pay for actual runtime. If your deployment runs 12 hours/day instead of 24/7, you'll pay approximately half the monthly cost. This is a key advantage over traditional VPS where you pay for the full month regardless of usage. Perfect for game servers that are only active during peak hours or development environments used only during work hours.
+
+**Q: How much can I save with pay-as-you-go vs traditional hosting?**  
+A: Savings depend on your usage patterns. For game servers running 12 hours/day, you can save 50% compared to fixed-price hosting. For VPSs with low CPU utilization (under 50%), savings can be 30-40%. Development environments used only during work hours can save 60-70% compared to 24/7 hosting.
 
 **Q: Will pricing change over time?**  
 A: Yes, we plan to reduce pricing for storage and other resources as we grow and achieve better economies of scale. We're committed to passing cost savings along to our customers.
