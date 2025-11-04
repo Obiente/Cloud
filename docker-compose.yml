@@ -38,17 +38,31 @@ services:
       METRICS_RETRY_MAX_RETRIES: ${METRICS_RETRY_MAX_RETRIES:-5}
       METRICS_RETRY_INTERVAL: ${METRICS_RETRY_INTERVAL:-1m}
       METRICS_RETRY_MAX_QUEUE_SIZE: ${METRICS_RETRY_MAX_QUEUE_SIZE:-10000}
+      REDIS_URL: redis://redis:6379
       LOG_LEVEL: ${LOG_LEVEL:-debug}
+      DB_LOG_LEVEL: ${DB_LOG_LEVEL:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       ZITADEL_URL: ${ZITADEL_URL:-https://auth.obiente.cloud}
       ZITADEL_MANAGEMENT_TOKEN: ${ZITADEL_MANAGEMENT_TOKEN:-}
       DISABLE_AUTH: ${DISABLE_AUTH:-false}
       SKIP_TLS_VERIFY: ${SKIP_TLS_VERIFY:-false}
       SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
-      PRICING_CPU_COST_PER_CORE_SECOND: ${PRICING_CPU_COST_PER_CORE_SECOND:-0.0001}
-      PRICING_MEMORY_COST_PER_BYTE_SECOND: ${PRICING_MEMORY_COST_PER_BYTE_SECOND:-0.00000001}
-      PRICING_BANDWIDTH_COST_PER_BYTE: ${PRICING_BANDWIDTH_COST_PER_BYTE:-0.00000001}
-      PRICING_STORAGE_COST_PER_BYTE_MONTH: ${PRICING_STORAGE_COST_PER_BYTE_MONTH:-0.00000001}
+      TRAEFIK_IPS: ${TRAEFIK_IPS:-} # Format: "region1:ip1,ip2;region2:ip3,ip4" or simple "ip1,ip2"
+      DNS_IPS: ${DNS_IPS:-} # Comma-separated list of DNS server IPs
+      DNS_PORT: ${DNS_PORT:-53} # DNS server port (default: 53)
+      PRICING_CPU_COST_PER_CORE_SECOND: ${PRICING_CPU_COST_PER_CORE_SECOND:-0.000000761}
+      PRICING_MEMORY_COST_PER_BYTE_SECOND: ${PRICING_MEMORY_COST_PER_BYTE_SECOND:-0.000000000000001063}
+      PRICING_BANDWIDTH_COST_PER_BYTE: ${PRICING_BANDWIDTH_COST_PER_BYTE:-0.000000000009313}
+      PRICING_STORAGE_COST_PER_BYTE_MONTH: ${PRICING_STORAGE_COST_PER_BYTE_MONTH:-0.000000000186264}
+      # Stripe Payment Processing
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      # Console/Dashboard URL for redirects (used by billing service)
+      CONSOLE_URL: ${CONSOLE_URL:-${DASHBOARD_URL:-${APP_CONSOLE_URL:-http://localhost:3000}}}
+      DASHBOARD_URL: ${DASHBOARD_URL:-${CONSOLE_URL:-${APP_CONSOLE_URL:-http://localhost:3000}}}
+      APP_CONSOLE_URL: ${APP_CONSOLE_URL:-${CONSOLE_URL:-${DASHBOARD_URL:-http://localhost:3000}}}
+      # Support email (optional)
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -150,6 +164,39 @@ services:
       - "${PUBLIC_TRAEFIK_DASHBOARD_PORT:-8080}:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - obiente-network
+
+  dns:
+    image: obiente/cloud-api:latest
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: obiente-dns
+    command: ["./dns-server"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-obiente}
+      TRAEFIK_IPS: ${TRAEFIK_IPS:-} # Format: "region1:ip1,ip2;region2:ip3,ip4"
+      DNS_IPS: ${DNS_IPS:-} # Comma-separated list of DNS server IPs
+      DNS_PORT: ${DNS_PORT:-53} # DNS server port (default: 53)
+    ports:
+      - "${DNS_PORT:-53}:${DNS_PORT:-53}/udp"
+      - "${DNS_PORT:-53}:${DNS_PORT:-53}/tcp"
+    cap_add:
+      - NET_BIND_SERVICE
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nslookup -type=A deploy-test.my.obiente.cloud localhost || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     networks:
       - obiente-network
 
