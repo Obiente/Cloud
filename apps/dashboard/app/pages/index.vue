@@ -23,9 +23,7 @@
       </OuiFlex>
 
       <OuiFlex align="center" gap="md" class="md:flex">
-        <OuiButton variant="ghost" size="sm">Web Hosting</OuiButton>
-        <OuiButton variant="ghost" size="sm">Game Hosting</OuiButton>
-        <OuiButton variant="ghost" size="sm">VPS</OuiButton>
+        <OuiButton variant="ghost" size="sm">Features</OuiButton>
         <OuiButton variant="ghost" size="sm">Pricing</OuiButton>
         <OuiButton variant="ghost" size="sm">Docs</OuiButton>
         <OuiButton variant="outline" size="sm" @click="navigateTo('/dashboard')"
@@ -35,21 +33,20 @@
     </OuiContainer>
     <OuiContainer size="7xl" class="relative">
       <!-- Hero Content -->
-      <OuiStack gap="2xl" align="center" class="text-center py-32 md:py-40 bg-gradient-to-b from-background via-background to-background-muted/20">
+      <OuiStack gap="2xl" align="center" class="text-center py-32 md:py-40">
         <OuiStack gap="lg" align="center" class="max-w-4xl">
           <OuiText as="h1" size="6xl" weight="bold" color="primary">
             Deploy, Scale, and Manage Your Cloud Infrastructure <br />
             With
             <span
-              class="bg-linear-to-r from-accent-primary to-accent-primary bg-clip-text text-transparent"
+              class="bg-clip-text text-transparent bg-linear-to-r from-accent-primary to-accent-primary"
             >
               Obiente Cloud
             </span>
           </OuiText>
 
           <OuiText size="xl" color="secondary" class="max-w-2xl md:text-2xl">
-            The all-in-one platform for web apps, game servers, VPS instances,
-            and databases. Deploy in seconds, scale with confidence.
+            Deploy containerized applications with GitHub integration. Pay only for what you use with transparent, resource-based pricing.
           </OuiText>
         </OuiStack>
 
@@ -61,7 +58,7 @@
             @click="navigateTo('/dashboard')"
           >
             <RocketLaunchIcon class="h-5 w-5" />
-            Get Started Free
+            Get Started
           </OuiButton>
           <OuiButton variant="outline" size="lg" class="gap-2">
             <PlayIcon class="h-5 w-5" />
@@ -92,7 +89,7 @@
     </OuiContainer>
 
     <!-- Features Section -->
-    <OuiContainer py="6xl" size="7xl" class="bg-gradient-to-b from-background-muted/20 to-background">
+    <OuiContainer py="6xl" size="7xl">
       <OuiStack gap="2xl" align="center">
         <OuiStack gap="lg" align="center" class="text-center max-w-3xl">
           <OuiText
@@ -102,173 +99,146 @@
             color="primary"
             class="md:text-5xl"
           >
-            From web apps to game servers
+            Everything you need to deploy
           </OuiText>
           <OuiText size="lg" color="secondary" class="md:text-xl">
-            Deploy anything, anywhere. One platform for all your hosting needs.
+            Container-based deployments with GitHub integration, custom domains, and powerful monitoring tools.
           </OuiText>
         </OuiStack>
 
         <OuiGrid cols="1" cols-md="2" cols-lg="3" gap="xl" class="w-full">
-          <!-- Web Deployments -->
+          <!-- GitHub Integration -->
           <OuiCard
-            variant="raised"
+            variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:shadow-accent-primary/10"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
           >
-            <OuiCardBody class="text-center">
-              <OuiStack gap="lg">
-                <OuiBox
-                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-primary/20 to-accent-primary/10 rounded-xl flex items-center justify-center group-hover:from-accent-primary/30 group-hover:to-accent-primary/20 transition-colors"
-                >
-                  <RocketLaunchIcon class="h-8 w-8 text-accent-primary" />
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-primary/20 rounded-lg flex items-center justify-center">
+                  <RocketLaunchIcon class="h-6 w-6 text-accent-primary" />
                 </OuiBox>
-                <OuiStack gap="md">
-                  <OuiText as="h3" size="xl" weight="semibold" color="primary"
-                    >Web Deployments</OuiText
-                  >
-                  <OuiText color="secondary">
-                    Deploy React, Next.js, Vue, and more. Git-based deployments
-                    with automatic builds and global CDN.
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    GitHub Integration
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Deploy directly from GitHub repositories. Automatic builds on push with support for Docker and Docker Compose.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
             </OuiCardBody>
           </OuiCard>
 
-          <!-- Game Hosting -->
+          <!-- Custom Domains -->
           <OuiCard
-            variant="raised"
+            variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:shadow-accent-warning/10"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
           >
-            <OuiCardBody class="text-center">
-              <OuiStack gap="lg">
-                <OuiBox
-                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-warning/20 to-accent-warning/10 rounded-xl flex items-center justify-center group-hover:from-accent-warning/30 group-hover:to-accent-warning/20 transition-colors"
-                >
-                  <svg
-                    class="h-8 w-8 text-accent-warning"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      d="M7.5 6.5C7.5 8.981 9.519 11 12 11s4.5-2.019 4.5-4.5S14.481 2 12 2 7.5 4.019 7.5 6.5zM20 21h1v-1c0-3.859-3.141-7-7-7h-4c-3.859 0-7 3.141-7 7v1h1 1 14z"
-                    />
-                    <path d="M15.5 7.5a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-success/20 rounded-lg flex items-center justify-center">
+                  <ShieldCheckIcon class="h-6 w-6 text-accent-success" />
                 </OuiBox>
-                <OuiStack gap="md">
-                  <OuiText as="h3" size="xl" weight="semibold" color="primary"
-                    >Game Hosting</OuiText
-                  >
-                  <OuiText color="secondary">
-                    Host Minecraft, CS2, Rust, and more. Reliable performance
-                    with high-quality hardware.
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    Custom Domains
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Configure custom domains with automatic SSL certificates. Set up routing rules for multiple paths and domains.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
             </OuiCardBody>
           </OuiCard>
 
-          <!-- VPS Infrastructure -->
+          <!-- Container Deployments -->
           <OuiCard
-            variant="raised"
+            variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:shadow-accent-secondary/10"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
           >
-            <OuiCardBody class="text-center">
-              <OuiStack gap="lg">
-                <OuiBox
-                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-secondary/20 to-accent-secondary/10 rounded-xl flex items-center justify-center group-hover:from-accent-secondary/30 group-hover:to-accent-secondary/20 transition-colors"
-                >
-                  <ServerIcon class="h-8 w-8 text-accent-secondary" />
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-secondary/20 rounded-lg flex items-center justify-center">
+                  <ServerIcon class="h-6 w-6 text-accent-secondary" />
                 </OuiBox>
-                <OuiStack gap="md">
-                  <OuiText as="h3" size="xl" weight="semibold" color="primary"
-                    >VPS Infrastructure</OuiText
-                  >
-                  <OuiText color="secondary">
-                    Full Linux VPS instances with root access. Perfect for
-                    custom applications and microservices.
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    Container Deployments
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Deploy single containers or multi-container applications with Docker Compose. Full control over your application stack.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
             </OuiCardBody>
           </OuiCard>
 
-          <!-- Database Services -->
+          <!-- Environment Variables -->
           <OuiCard
-            variant="raised"
+            variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:shadow-accent-success/10"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
           >
-            <OuiCardBody class="text-center">
-              <OuiStack gap="lg">
-                <OuiBox
-                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-success/20 to-accent-success/10 rounded-xl flex items-center justify-center group-hover:from-accent-success/30 group-hover:to-accent-success/20 transition-colors"
-                >
-                  <CircleStackIcon class="h-8 w-8 text-accent-success" />
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-info/20 rounded-lg flex items-center justify-center">
+                  <CircleStackIcon class="h-6 w-6 text-accent-info" />
                 </OuiBox>
-                <OuiStack gap="md">
-                  <OuiText as="h3" size="xl" weight="semibold" color="primary"
-                    >Database Services</OuiText
-                  >
-                  <OuiText color="secondary">
-                    Managed PostgreSQL, MySQL, Redis, and MongoDB. Automatic
-                    backups and scaling.
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    Environment Variables
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Manage environment variables per deployment. Secure secrets management with easy configuration through the dashboard.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
             </OuiCardBody>
           </OuiCard>
 
-          <!-- Monitoring & Alerting -->
+          <!-- Real-Time Monitoring -->
           <OuiCard
-            variant="raised"
+            variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:shadow-accent-info/10"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
           >
-            <OuiCardBody class="text-center">
-              <OuiStack gap="lg">
-                <OuiBox
-                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-info/20 to-accent-info/10 rounded-xl flex items-center justify-center group-hover:from-accent-info/30 group-hover:to-accent-info/20 transition-colors"
-                >
-                  <ChartBarIcon class="h-8 w-8 text-accent-info" />
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-warning/20 rounded-lg flex items-center justify-center">
+                  <ChartBarIcon class="h-6 w-6 text-accent-warning" />
                 </OuiBox>
-                <OuiStack gap="md">
-                  <OuiText as="h3" size="xl" weight="semibold" color="primary"
-                    >Monitoring & Alerting</OuiText
-                  >
-                  <OuiText color="secondary">
-                    Real-time metrics, performance monitoring, and instant
-                    alerts to keep your services healthy.
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    Real-Time Monitoring
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Track vCPU, memory, bandwidth, and storage usage in real-time. View build logs, application logs, and performance metrics.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
             </OuiCardBody>
           </OuiCard>
 
-          <!-- Enterprise Security -->
+          <!-- File Management -->
           <OuiCard
-            variant="raised"
+            variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-300 hover:-translate-y-2 hover:shadow-xl hover:shadow-accent-danger/10"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
           >
-            <OuiCardBody class="text-center">
-              <OuiStack gap="lg">
-                <OuiBox
-                  class="mx-auto w-16 h-16 bg-linear-to-r from-accent-danger/20 to-accent-danger/10 rounded-xl flex items-center justify-center group-hover:from-accent-danger/30 group-hover:to-accent-danger/20 transition-colors"
-                >
-                  <ShieldCheckIcon class="h-8 w-8 text-accent-danger" />
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-danger/20 rounded-lg flex items-center justify-center">
+                  <FolderIcon class="h-6 w-6 text-accent-danger" />
                 </OuiBox>
-                <OuiStack gap="md">
-                  <OuiText as="h3" size="xl" weight="semibold" color="primary"
-                    >Enterprise Security</OuiText
-                  >
-                  <OuiText color="secondary">
-                    SOC 2 compliant with SSL certificates and comprehensive
-                    audit logs for security.
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    File Management
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Upload, edit, and manage files directly through the dashboard. Terminal access for advanced configuration and debugging.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -279,7 +249,7 @@
     </OuiContainer>
 
     <!-- Infrastructure Section -->
-    <OuiContainer as="section" py="6xl" size="7xl" class="bg-gradient-to-b from-background to-background-muted/30">
+    <OuiContainer as="section" py="6xl" size="7xl">
       <OuiStack gap="2xl" align="center">
         <OuiStack gap="lg" align="center" class="text-center max-w-3xl">
           <OuiText
@@ -298,7 +268,7 @@
 
         <OuiGrid cols="1" cols-md="2" cols-lg="3" gap="xl" class="w-full">
           <!-- Premium Hardware -->
-          <OuiCard variant="raised" class="h-full">
+          <OuiCard variant="default" class="h-full">
             <OuiCardBody>
               <OuiStack gap="md">
                 <OuiBox class="w-12 h-12 bg-accent-primary/20 rounded-lg flex items-center justify-center">
@@ -317,7 +287,7 @@
           </OuiCard>
 
           <!-- High Availability -->
-          <OuiCard variant="raised" class="h-full">
+          <OuiCard variant="default" class="h-full">
             <OuiCardBody>
               <OuiStack gap="md">
                 <OuiBox class="w-12 h-12 bg-accent-success/20 rounded-lg flex items-center justify-center">
@@ -335,27 +305,8 @@
             </OuiCardBody>
           </OuiCard>
 
-          <!-- Global CDN -->
-          <OuiCard variant="raised" class="h-full">
-            <OuiCardBody>
-              <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-info/20 rounded-lg flex items-center justify-center">
-                  <ChartBarIcon class="h-6 w-6 text-accent-info" />
-                </OuiBox>
-                <OuiStack gap="sm">
-                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
-                    Global CDN
-                  </OuiText>
-                  <OuiText size="sm" color="secondary">
-                    Content delivered from edge locations worldwide for lightning-fast load times.
-                  </OuiText>
-                </OuiStack>
-              </OuiStack>
-            </OuiCardBody>
-          </OuiCard>
-
           <!-- Free Support -->
-          <OuiCard variant="raised" class="h-full">
+          <OuiCard variant="default" class="h-full">
             <OuiCardBody>
               <OuiStack gap="md">
                 <OuiBox class="w-12 h-12 bg-accent-secondary/20 rounded-lg flex items-center justify-center">
@@ -373,8 +324,46 @@
             </OuiCardBody>
           </OuiCard>
 
-          <!-- Monitoring -->
-          <OuiCard variant="raised" class="h-full">
+          <!-- Security -->
+          <OuiCard variant="default" class="h-full">
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-danger/20 rounded-lg flex items-center justify-center">
+                  <ShieldCheckIcon class="h-6 w-6 text-accent-danger" />
+                </OuiBox>
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    Security
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    SSL certificates, automated backups, and comprehensive audit logs to keep your data secure.
+                  </OuiText>
+                </OuiStack>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+
+          <!-- DNS Management -->
+          <OuiCard variant="default" class="h-full">
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-info/20 rounded-lg flex items-center justify-center">
+                  <GlobeAltIcon class="h-6 w-6 text-accent-info" />
+                </OuiBox>
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    DNS Management
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Custom domain support with automatic DNS configuration. Verify domains and set up routing rules for your deployments.
+                  </OuiText>
+                </OuiStack>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+
+          <!-- Real-Time Monitoring -->
+          <OuiCard variant="default" class="h-full">
             <OuiCardBody>
               <OuiStack gap="md">
                 <OuiBox class="w-12 h-12 bg-accent-warning/20 rounded-lg flex items-center justify-center">
@@ -385,26 +374,7 @@
                     Real-Time Monitoring
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Track performance metrics, resource usage, and receive instant alerts for any issues.
-                  </OuiText>
-                </OuiStack>
-              </OuiStack>
-            </OuiCardBody>
-          </OuiCard>
-
-          <!-- Security -->
-          <OuiCard variant="raised" class="h-full">
-            <OuiCardBody>
-              <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-danger/20 rounded-lg flex items-center justify-center">
-                  <ShieldCheckIcon class="h-6 w-6 text-accent-danger" />
-                </OuiBox>
-                <OuiStack gap="sm">
-                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
-                    Enterprise Security
-                  </OuiText>
-                  <OuiText size="sm" color="secondary">
-                    SSL certificates, automated backups, and comprehensive audit logs to keep your data secure.
+                    Track vCPU, memory, bandwidth, and storage usage in real-time. View build logs, application logs, and performance metrics.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -438,9 +408,9 @@
         <OuiGrid cols="1" cols-md="3" gap="xl" class="w-full max-w-5xl">
           <!-- Small App Example -->
           <OuiCard
-            variant="raised"
+            variant="default"
             hoverable
-            class="text-center group hover:-translate-y-1 transition-all duration-300 h-full flex flex-col"
+            class="text-center group hover:-translate-y-1 transition-all duration-200 h-full flex flex-col"
           >
             <OuiCardBody class="flex flex-col h-full">
               <OuiStack gap="lg" class="flex-1">
@@ -468,7 +438,7 @@
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
-                      >0.25 CPU cores running 24/7</OuiText
+                      >0.25 vCPU cores running 24/7</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
@@ -505,9 +475,9 @@
 
           <!-- Medium App Example -->
           <OuiCard
-            variant="raised"
+            variant="default"
             hoverable
-            class="text-center group hover:-translate-y-1 transition-all duration-300 ring-2 ring-accent-primary/50 h-full flex flex-col"
+            class="text-center group hover:-translate-y-1 transition-all duration-200 ring-2 ring-accent-primary/50 h-full flex flex-col"
           >
             <OuiCardBody class="flex flex-col h-full">
               <OuiStack gap="lg" class="flex-1">
@@ -540,7 +510,7 @@
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
-                      >1 CPU core running 24/7</OuiText
+                      >1 vCPU core running 24/7</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
@@ -583,9 +553,9 @@
 
           <!-- Large App Example -->
           <OuiCard
-            variant="raised"
+            variant="default"
             hoverable
-            class="text-center group hover:-translate-y-1 transition-all duration-300 h-full flex flex-col"
+            class="text-center group hover:-translate-y-1 transition-all duration-200 h-full flex flex-col"
           >
             <OuiCardBody class="flex flex-col h-full">
               <OuiStack gap="lg" class="flex-1">
@@ -615,7 +585,7 @@
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
                     <OuiText size="sm" color="secondary"
-                      >2 CPU cores running 24/7</OuiText
+                      >2 vCPU cores running 24/7</OuiText
                     >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
@@ -668,7 +638,7 @@
     <PricingCalculator />
 
     <!-- CTA Section -->
-    <OuiContainer as="section" size="7xl" py="6xl" class="bg-gradient-to-b from-background to-background-muted/30">
+    <OuiContainer as="section" size="7xl" py="6xl">
       <OuiStack gap="xl" align="center" class="text-center">
         <OuiStack gap="lg" align="center" class="max-w-3xl">
           <OuiText
@@ -681,8 +651,7 @@
             Ready to get started?
           </OuiText>
           <OuiText size="lg" color="secondary" class="md:text-xl">
-            Join our growing community of developers and gamers building amazing
-            things.
+            Join our growing community of developers building and deploying containerized applications.
           </OuiText>
         </OuiStack>
         <OuiFlex gap="md" wrap="wrap" justify="center">
@@ -693,7 +662,7 @@
             @click="navigateTo('/dashboard')"
           >
             <RocketLaunchIcon class="h-5 w-5" />
-            Start for $1/month
+            Get Started
           </OuiButton>
           <OuiButton variant="outline" size="lg" class="gap-2">
             <ChatBubbleLeftRightIcon class="h-5 w-5" />
@@ -724,6 +693,8 @@ import {
   ShieldCheckIcon,
   CheckIcon,
   ChatBubbleLeftRightIcon,
+  FolderIcon,
+  GlobeAltIcon,
 } from "@heroicons/vue/24/outline";
 import PricingCalculator from "~/components/pricing/PricingCalculator.vue";
 
@@ -738,29 +709,37 @@ const isScrolled = computed(() => scrollY.value > 10);
 
 // SEO meta
 useHead({
-  title: "Obiente Cloud - Web Apps, Game Servers & VPS Hosting",
+  title: "Obiente Cloud - Container Deployment Platform",
   meta: [
     {
       name: "description",
       content:
-        "Deploy web apps, host game servers, and manage VPS infrastructure with Obiente Cloud. Like Vercel, but for everything.",
+        "Deploy containerized applications with GitHub integration. Pay-as-you-go pricing with transparent resource-based costs. Docker and Docker Compose support.",
     },
     {
       name: "keywords",
       content:
-        "web hosting, game hosting, minecraft hosting, vps, cloud platform, deployment, vercel alternative",
+        "container hosting, docker deployment, docker compose, github deployment, cloud platform, pay as you go, vercel alternative",
     },
     {
       property: "og:title",
-      content: "Obiente Cloud - Web Apps, Game Servers & VPS Hosting",
+      content: "Obiente Cloud - Container Deployment Platform",
     },
     {
       property: "og:description",
       content:
-        "Deploy web apps, host game servers, and manage VPS infrastructure with Obiente Cloud. Like Vercel, but for everything.",
+        "Deploy containerized applications with GitHub integration. Pay-as-you-go pricing with transparent resource-based costs.",
     },
     { property: "og:type", content: "website" },
     { name: "twitter:card", content: "summary_large_image" },
   ],
 });
 </script>
+
+<style>
+/* Ensure full page background coverage for homepage */
+html,
+body {
+  background-color: var(--oui-background) !important;
+}
+</style>

@@ -28,19 +28,19 @@ All resources are billed based on actual usage with no upfront costs or minimum 
 - 1 GB deployment running 24/7 for a month (730 hours) = **$3.00**
 - 512 MB deployment running 24/7 for a month = **$1.50**
 
-### ⚡ CPU
+### ⚡ vCPU
 
-**$0.00274 per core-hour** ($2.00 per core-month for 24/7 usage)
+**$0.00274 per vCPU-hour** ($2.00 per vCPU-month for 24/7 usage)
 
-- Billed per core-second of CPU usage
+- Billed per core-second of vCPU usage
 - Calculated based on actual CPU utilization percentage
 - Scales automatically with your workload
 
 **Example:**
 
-- 1 core running at 100% for 1 hour = **$0.00274**
-- 1 core running at 50% for 1 hour = **$0.00137**
-- 2 cores running at 100% for 1 hour = **$0.00548**
+- 1 vCPU running at 100% for 1 hour = **$0.00274**
+- 1 vCPU running at 50% for 1 hour = **$0.00137**
+- 2 vCPU cores running at 100% for 1 hour = **$0.00548**
 
 ### 🌐 Bandwidth
 
@@ -78,42 +78,42 @@ All resources are billed based on actual usage with no upfront costs or minimum 
 ### Small Application
 
 - **512 MB RAM** running 24/7
-- **0.25 CPU cores** average utilization
+- **0.25 vCPU cores** average utilization
 - **10 GB bandwidth** per month
 - **5 GB storage**
 
 **Monthly Cost: ~$5.35**
 
 - Memory: $1.50
-- CPU: $1.37
+- vCPU: $1.37
 - Bandwidth: $0.10
 - Storage: $1.00
 
 ### Medium Application
 
 - **2 GB RAM** running 24/7
-- **1 CPU core** average utilization
+- **1 vCPU core** average utilization
 - **50 GB bandwidth** per month
 - **25 GB storage**
 
 **Monthly Cost: ~$14.00**
 
 - Memory: $6.00
-- CPU: $2.00
+- vCPU: $2.00
 - Bandwidth: $0.50
 - Storage: $5.00
 
 ### Large Application
 
 - **8 GB RAM** running 24/7
-- **2 CPU cores** average utilization
+- **2 vCPU cores** average utilization
 - **200 GB bandwidth** per month
 - **100 GB storage**
 
 **Monthly Cost: ~$44.00**
 
 - Memory: $24.00
-- CPU: $4.00
+- vCPU: $4.00
 - Bandwidth: $2.00
 - Storage: $20.00
 
@@ -123,8 +123,8 @@ All resources are billed based on actual usage with no upfront costs or minimum 
 
 | Resource                   | Obiente Cloud    | DigitalOcean    | Linode          | Vultr           |
 | -------------------------- | ---------------- | --------------- | --------------- | --------------- |
-| **1GB RAM + 1 CPU** (24/7) | **$5.00/month**  | $4-6/month      | $5/month        | $4-6/month      |
-| **2GB RAM + 2 CPU** (24/7) | **$10.00/month** | $12/month       | $10/month       | $12/month       |
+| **1GB RAM + 1 vCPU** (24/7) | **$5.00/month**  | $4-6/month      | $5/month        | $4-6/month      |
+| **2GB RAM + 2 vCPU** (24/7) | **$10.00/month** | $12/month       | $10/month       | $12/month       |
 | **Bandwidth**              | $0.01/GB         | Included (1TB)  | Included (1TB)  | Included (1TB)  |
 | **Storage**                | $0.20/GB-month   | Included (25GB) | Included (25GB) | Included (10GB) |
 
@@ -137,12 +137,12 @@ _Note: VPS providers typically bundle bandwidth and storage, while we charge sep
 1. **Real-time Usage Tracking**: All resources are tracked in real-time using metrics collected every 5 seconds
 2. **Hourly Aggregation**: Usage is aggregated hourly for efficient storage and calculation
 3. **Monthly Billing**: Costs are calculated monthly and displayed in your dashboard
-4. **Cost Breakdown**: View detailed cost breakdowns by resource type (CPU, Memory, Bandwidth, Storage)
+4. **Cost Breakdown**: View detailed cost breakdowns by resource type (vCPU, Memory, Bandwidth, Storage)
 5. **Estimated Costs**: See projected monthly costs based on current usage patterns
 
 ### Cost Calculation Details
 
-- **Memory & CPU**: Billed based on actual usage (byte-seconds and core-seconds)
+- **Memory & vCPU**: Billed based on actual usage (byte-seconds and core-seconds)
 - **Bandwidth**: Billed per byte transferred (cumulative)
 - **Storage**: Billed monthly based on snapshot at end of month (prorated for partial months)
 
@@ -150,7 +150,7 @@ _Note: VPS providers typically bundle bandwidth and storage, while we charge sep
 
 ## Cost Optimization Tips
 
-1. **Right-size your deployments**: Match memory and CPU allocations to actual needs
+1. **Right-size your deployments**: Match memory and vCPU allocations to actual needs
 2. **Monitor usage**: Use the dashboard to identify resource-heavy deployments
 3. **Optimize storage**: Clean up unused Docker images and volumes regularly
 4. **Cache wisely**: Reduce bandwidth costs by implementing proper caching strategies
@@ -164,7 +164,7 @@ _Note: VPS providers typically bundle bandwidth and storage, while we charge sep
 A: No. We only charge for actual resource usage with no minimums or setup fees.
 
 **Q: How does this compare to traditional VPS pricing?**  
-A: Our pricing is competitive with VPS providers like DigitalOcean and Linode. For example, 1GB RAM + 1 CPU running 24/7 costs $5/month, similar to entry-level VPS plans. The advantage is you only pay for what you use - if your app runs part-time, you pay less.
+A: Our pricing is competitive with VPS providers like DigitalOcean and Linode. For example, 1GB RAM + 1 vCPU running 24/7 costs $5/month, similar to entry-level VPS plans. The advantage is you only pay for what you use - if your app runs part-time, you pay less.
 
 **Q: How accurate are the cost estimates?**  
 A: Estimates are based on your actual usage patterns. For the current month, estimates project usage based on elapsed time. Historical months show actual costs.

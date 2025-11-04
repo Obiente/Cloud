@@ -12,7 +12,7 @@
       </OuiStack>
 
       <!-- Pricing Info Banner -->
-      <OuiCard variant="raised" class="w-full max-w-4xl">
+      <OuiCard variant="default" class="w-full max-w-4xl">
         <OuiCardBody>
           <OuiFlex gap="md" align="center">
             <InformationCircleIcon class="h-5 w-5 text-accent-primary shrink-0" />
@@ -24,7 +24,7 @@
       </OuiCard>
 
       <!-- Scenario Selector -->
-      <OuiCard variant="raised" class="w-full max-w-4xl">
+      <OuiCard variant="default" class="w-full max-w-4xl">
         <OuiCardBody>
           <OuiStack gap="lg">
             <OuiText size="lg" weight="semibold" color="primary">
@@ -40,14 +40,14 @@
       </OuiCard>
 
       <!-- Calculator -->
-      <OuiCard variant="raised" class="w-full max-w-4xl">
+      <OuiCard variant="default" class="w-full max-w-4xl">
         <OuiCardBody>
           <OuiStack gap="xl">
             <!-- Memory Slider -->
             <OuiStack gap="md">
               <OuiFlex justify="between" align="center">
                 <OuiText size="lg" weight="medium" color="primary">
-                  💾 Memory (RAM)
+                  Memory (RAM)
                 </OuiText>
                 <OuiText size="lg" weight="bold" color="accent">
                   {{ formatMemory(memoryGB ?? 0) }}
@@ -58,7 +58,6 @@
                 :min="0.25"
                 :max="32"
                 :step="0.25"
-                label="Memory"
               />
               <OuiFlex justify="between" class="text-sm text-secondary">
                 <span>512 MB</span>
@@ -69,11 +68,11 @@
               </OuiText>
             </OuiStack>
 
-            <!-- CPU Slider -->
+            <!-- vCPU Slider -->
             <OuiStack gap="md">
               <OuiFlex justify="between" align="center">
                 <OuiText size="lg" weight="medium" color="primary">
-                  ⚡ CPU Cores
+                  vCPU Cores
                 </OuiText>
                 <OuiText size="lg" weight="bold" color="accent">
                   {{ (cpuCores ?? 0).toFixed(2) }} cores
@@ -84,7 +83,6 @@
                 :min="0.25"
                 :max="8"
                 :step="0.25"
-                label="CPU"
               />
               <OuiFlex justify="between" class="text-sm text-secondary">
                 <span>0.25 cores</span>
@@ -99,7 +97,7 @@
             <OuiStack gap="md">
               <OuiFlex justify="between" align="center">
                 <OuiText size="lg" weight="medium" color="primary">
-                  🌐 Bandwidth
+                  Bandwidth
                 </OuiText>
                 <OuiText size="lg" weight="bold" color="accent">
                   {{ formatBandwidth(bandwidthGB ?? 0) }}
@@ -110,7 +108,6 @@
                 :min="1"
                 :max="1000"
                 :step="1"
-                label="Bandwidth"
               />
               <OuiFlex justify="between" class="text-sm text-secondary">
                 <span>1 GB</span>
@@ -125,7 +122,7 @@
             <OuiStack gap="md">
               <OuiFlex justify="between" align="center">
                 <OuiText size="lg" weight="medium" color="primary">
-                  💿 Storage
+                  Storage
                 </OuiText>
                 <OuiText size="lg" weight="bold" color="accent">
                   {{ formatStorage(storageGB ?? 0) }}
@@ -136,7 +133,6 @@
                 :min="1"
                 :max="500"
                 :step="1"
-                label="Storage"
               />
               <OuiFlex justify="between" class="text-sm text-secondary">
                 <span>1 GB</span>
@@ -151,13 +147,13 @@
             </OuiStack>
 
             <!-- Cost Summary -->
-            <OuiCard variant="outline" class="mt-4 bg-accent-primary/10 border-accent-primary/20">
+            <OuiCard variant="default" class="mt-4">
               <OuiCardBody>
                 <OuiStack gap="md">
-                  <OuiText size="xl" weight="bold" color="primary" class="text-center">
+                  <OuiText size="lg" weight="semibold" color="primary" class="text-center">
                     Estimated Monthly Cost
                   </OuiText>
-                  <OuiText size="4xl" weight="bold" color="accent" class="text-center">
+                  <OuiText size="3xl" weight="bold" color="primary" class="text-center">
                     {{ formatCurrency(totalMonthlyCost) }}
                   </OuiText>
                   <OuiGrid cols="2" cols-md="4" gap="md" class="mt-4">
@@ -166,7 +162,7 @@
                       <OuiText size="md" weight="semibold">{{ formatCurrency(memoryCostMonthly) }}</OuiText>
                     </OuiStack>
                     <OuiStack gap="xs" align="center">
-                      <OuiText size="sm" color="secondary">CPU</OuiText>
+                      <OuiText size="sm" color="secondary">vCPU</OuiText>
                       <OuiText size="md" weight="semibold">{{ formatCurrency(cpuCostMonthly) }}</OuiText>
                     </OuiStack>
                     <OuiStack gap="xs" align="center">
@@ -186,7 +182,7 @@
       </OuiCard>
 
       <!-- FAQ Accordion -->
-      <OuiCard variant="raised" class="w-full max-w-4xl">
+      <OuiCard variant="default" class="w-full max-w-4xl">
         <OuiCardBody>
           <OuiStack gap="lg">
             <OuiText size="lg" weight="semibold" color="primary">
@@ -409,7 +405,7 @@ const faqItems = [
   {
     value: "vps-comparison",
     label: "How does this compare to traditional VPS pricing?",
-    content: "Our pricing is competitive with VPS providers like DigitalOcean and Linode. For example, 1GB RAM + 1 CPU running 24/7 costs $5/month, similar to entry-level VPS plans. The advantage is you only pay for what you use - if your app runs part-time, you pay less.",
+    content: "Our pricing is competitive with VPS providers like DigitalOcean and Linode. For example, 1GB RAM + 1 vCPU running 24/7 costs $5/month, similar to entry-level VPS plans. The advantage is you only pay for what you use - if your app runs part-time, you pay less.",
   },
   {
     value: "part-time",
