@@ -44,6 +44,13 @@
         />
 
         <AppNavigationLink
+          to="/gameservers"
+          label="Game Servers"
+          :icon="CubeIcon"
+          @navigate="handleNavigate"
+        />
+
+        <AppNavigationLink
           to="/vps"
           label="VPS Instances"
           :icon="ServerIcon"
@@ -168,6 +175,7 @@ import {
   ShieldCheckIcon,
   BuildingOfficeIcon,
   ChartBarIcon,
+  CubeIcon,
 } from "@heroicons/vue/24/outline";
 import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
 import { createListCollection } from "@ark-ui/vue";

@@ -12,6 +12,7 @@ import (
 	authv1connect "api/gen/proto/obiente/cloud/auth/v1/authv1connect"
 	billingv1connect "api/gen/proto/obiente/cloud/billing/v1/billingv1connect"
 	deploymentsv1connect "api/gen/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
+	gameserversv1connect "api/gen/proto/obiente/cloud/gameservers/v1/gameserversv1connect"
 	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
 	superadminv1connect "api/gen/proto/obiente/cloud/superadmin/v1/superadminv1connect"
 	"api/internal/auth"
@@ -24,6 +25,7 @@ import (
 	authsvc "api/internal/services/auth"
 	billingsvc "api/internal/services/billing"
 	deploymentsvc "api/internal/services/deployments"
+	gameserversvc "api/internal/services/gameservers"
 	orgsvc "api/internal/services/organizations"
 	superadminsvc "api/internal/services/superadmin"
 	"api/internal/stripe"
@@ -209,6 +211,8 @@ func registerServices(mux *http.ServeMux) {
 			&database.BuildLog{},
 			&database.BillingAccount{},
 			&database.CreditTransaction{},
+			&database.GameServer{},
+			&database.GameServerUsageHourly{},
 		); err != nil {
 			log.Printf("[Server] AutoMigrate warning: %v", err)
 		}
@@ -311,6 +315,15 @@ func registerServices(mux *http.ServeMux) {
 	)
 	mux.Handle(billingPath, billingHandler)
 
+	// Game Server service with auth
+	gameServerRepo := database.NewGameServerRepository(database.DB, database.RedisClient)
+	gameServerService := gameserversvc.NewService(gameServerRepo)
+	gameServersPath, gameServersHandler := gameserversv1connect.NewGameServerServiceHandler(
+		gameServerService,
+		connect.WithInterceptors(authInterceptor),
+	)
+	mux.Handle(gameServersPath, gameServersHandler)
+
 	// Stripe webhook endpoint (no auth required, uses webhook signature verification)
 	// Only register webhook handler if Stripe is configured
 	if stripeClient != nil {
@@ -336,6 +349,7 @@ func registerReflection(mux *http.ServeMux) {
 	reflector := grpcreflect.NewStaticReflector(
 		authv1connect.AuthServiceName,
 		deploymentsv1connect.DeploymentServiceName,
+		gameserversv1connect.GameServerServiceName,
 		organizationsv1connect.OrganizationServiceName,
 		billingv1connect.BillingServiceName,
 	)

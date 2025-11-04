@@ -1,0 +1,312 @@
+syntax = "proto3";
+
+package obiente.cloud.gameservers.v1;
+
+option go_package = "api/gen/proto/obiente/cloud/gameservers/v1;gameserversv1";
+
+import "google/protobuf/timestamp.proto";
+import "obiente/cloud/organizations/v1/organization_service.proto";
+
+// GameType represents the type of game server
+enum GameType {
+  GAME_TYPE_UNSPECIFIED = 0;
+  MINECRAFT = 1;         // Minecraft (Java/Bedrock)
+  MINECRAFT_JAVA = 2;    // Minecraft Java Edition
+  MINECRAFT_BEDROCK = 3; // Minecraft Bedrock Edition
+  VALHEIM = 4;           // Valheim
+  TERRARIA = 5;          // Terraria
+  RUST = 6;              // Rust
+  CS2 = 7;               // Counter-Strike 2
+  TF2 = 8;               // Team Fortress 2
+  ARK = 9;               // ARK: Survival Evolved
+  CONAN = 10;            // Conan Exiles
+  SEVEN_DAYS = 11;       // 7 Days to Die
+  FACTORIO = 12;         // Factorio
+  SPACED_ENGINEERS = 13; // Space Engineers
+  OTHER = 99;            // Other/Unknown game
+}
+
+// GameServerStatus represents the current status of a game server
+enum GameServerStatus {
+  GAME_SERVER_STATUS_UNSPECIFIED = 0;
+  CREATED = 1;      // Server created but not started
+  STARTING = 2;     // Server is starting
+  RUNNING = 3;      // Server is running
+  STOPPING = 4;     // Server is stopping
+  STOPPED = 5;      // Server is stopped
+  FAILED = 6;       // Server failed to start or crashed
+  RESTARTING = 7;   // Server is restarting
+}
+
+service GameServerService {
+  // List organization game servers
+  rpc ListGameServers(ListGameServersRequest) returns (ListGameServersResponse);
+  
+  // Create new game server
+  rpc CreateGameServer(CreateGameServerRequest) returns (CreateGameServerResponse);
+  
+  // Get game server details
+  rpc GetGameServer(GetGameServerRequest) returns (GetGameServerResponse);
+  
+  // Update game server configuration
+  rpc UpdateGameServer(UpdateGameServerRequest) returns (UpdateGameServerResponse);
+  
+  // Delete game server
+  rpc DeleteGameServer(DeleteGameServerRequest) returns (DeleteGameServerResponse);
+  
+  // Start a stopped game server
+  rpc StartGameServer(StartGameServerRequest) returns (StartGameServerResponse);
+  
+  // Stop a running game server
+  rpc StopGameServer(StopGameServerRequest) returns (StopGameServerResponse);
+  
+  // Restart a game server
+  rpc RestartGameServer(RestartGameServerRequest) returns (RestartGameServerResponse);
+  
+  // Stream game server status updates
+  rpc StreamGameServerStatus(StreamGameServerStatusRequest) returns (stream GameServerStatusUpdate);
+  
+  // Get game server logs
+  rpc GetGameServerLogs(GetGameServerLogsRequest) returns (GetGameServerLogsResponse);
+
+  // Stream game server logs (tail/follow)
+  rpc StreamGameServerLogs(StreamGameServerLogsRequest) returns (stream GameServerLogLine);
+
+  // Get game server metrics (real-time or historical)
+  rpc GetGameServerMetrics(GetGameServerMetricsRequest) returns (GetGameServerMetricsResponse);
+
+  // Stream real-time game server metrics
+  rpc StreamGameServerMetrics(StreamGameServerMetricsRequest) returns (stream GameServerMetric);
+
+  // Get aggregated usage for a game server
+  rpc GetGameServerUsage(GetGameServerUsageRequest) returns (GetGameServerUsageResponse);
+}
+
+// Request/Response messages
+message ListGameServersRequest {
+  string organization_id = 1;
+  optional string game_type = 2; // Filter by game type
+  optional GameServerStatus status = 3; // Filter by status
+}
+
+message ListGameServersResponse {
+  repeated GameServer game_servers = 1;
+}
+
+message CreateGameServerRequest {
+  string organization_id = 1;
+  string name = 2;
+  GameType game_type = 3;
+  
+  // Resource configuration
+  optional int64 memory_bytes = 4;    // Memory limit in bytes (e.g., 2147483648 for 2GB)
+  optional int32 cpu_cores = 5;       // CPU cores (e.g., 2 for 2 cores)
+  optional int32 port = 6;            // Game server port (auto-assigned if not specified)
+  
+  // Docker image configuration
+  optional string docker_image = 7;   // Custom Docker image (uses default for game type if not specified)
+  optional string start_command = 8;   // Custom start command (uses default for game type if not specified)
+  
+  // Environment variables
+  map<string, string> env_vars = 9;
+  
+  // Additional configuration
+  optional string server_version = 10; // Game server version (e.g., "1.20.1" for Minecraft)
+  optional string description = 11;    // Optional description
+}
+
+message CreateGameServerResponse {
+  GameServer game_server = 1;
+}
+
+message GetGameServerRequest {
+  string game_server_id = 1;
+}
+
+message GetGameServerResponse {
+  GameServer game_server = 1;
+}
+
+message UpdateGameServerRequest {
+  string game_server_id = 1;
+  
+  optional string name = 2;
+  optional int64 memory_bytes = 3;
+  optional int32 cpu_cores = 4;
+  map<string, string> env_vars = 5;  // Maps are optional by default in proto3
+  optional string start_command = 6;
+  optional string description = 7;
+}
+
+message UpdateGameServerResponse {
+  GameServer game_server = 1;
+}
+
+message DeleteGameServerRequest {
+  string game_server_id = 1;
+}
+
+message DeleteGameServerResponse {
+  bool success = 1;
+}
+
+message StartGameServerRequest {
+  string game_server_id = 1;
+}
+
+message StartGameServerResponse {
+  GameServer game_server = 1;
+}
+
+message StopGameServerRequest {
+  string game_server_id = 1;
+}
+
+message StopGameServerResponse {
+  GameServer game_server = 1;
+}
+
+message RestartGameServerRequest {
+  string game_server_id = 1;
+}
+
+message RestartGameServerResponse {
+  GameServer game_server = 1;
+}
+
+message StreamGameServerStatusRequest {
+  string game_server_id = 1;
+}
+
+message GameServerStatusUpdate {
+  string game_server_id = 1;
+  GameServerStatus status = 2;
+  optional string message = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message GetGameServerLogsRequest {
+  string game_server_id = 1;
+  optional int32 limit = 2;          // Max number of lines to return
+  optional google.protobuf.Timestamp since = 3; // Get logs since this timestamp
+}
+
+message GetGameServerLogsResponse {
+  repeated GameServerLogLine lines = 1;
+}
+
+message StreamGameServerLogsRequest {
+  string game_server_id = 1;
+  optional bool follow = 2;         // Follow logs (like tail -f)
+  optional int32 tail = 3;          // Number of lines to tail (default: 100)
+}
+
+message GameServerLogLine {
+  string line = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  optional LogLevel level = 3;
+}
+
+enum LogLevel {
+  LOG_LEVEL_UNSPECIFIED = 0;
+  LOG_LEVEL_TRACE = 1;
+  LOG_LEVEL_DEBUG = 2;
+  LOG_LEVEL_INFO = 3;
+  LOG_LEVEL_WARN = 4;
+  LOG_LEVEL_ERROR = 5;
+}
+
+message GetGameServerMetricsRequest {
+  string game_server_id = 1;
+  optional google.protobuf.Timestamp start_time = 2;
+  optional google.protobuf.Timestamp end_time = 3;
+  optional string aggregation = 4;  // "1m", "5m", "1h", etc.
+}
+
+message GetGameServerMetricsResponse {
+  repeated GameServerMetric metrics = 1;
+}
+
+message StreamGameServerMetricsRequest {
+  string game_server_id = 1;
+}
+
+message GameServerMetric {
+  string game_server_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  optional double cpu_usage_percent = 3;        // CPU usage percentage (0-100)
+  optional int64 memory_usage_bytes = 4;       // Current memory usage in bytes
+  optional int64 memory_limit_bytes = 5;       // Memory limit in bytes
+  optional int64 network_rx_bytes = 6;          // Network received bytes
+  optional int64 network_tx_bytes = 7;          // Network transmitted bytes
+  optional int32 player_count = 8;              // Current player count (if available)
+  optional int32 max_players = 9;               // Max player count (if available)
+}
+
+message GetGameServerUsageRequest {
+  string game_server_id = 1;
+  optional string month = 2;  // Format: "YYYY-MM" (e.g., "2024-01")
+}
+
+message GetGameServerUsageResponse {
+  string game_server_id = 1;
+  string month = 2;
+  
+  // Usage metrics
+  int64 cpu_core_seconds = 3;      // Total CPU core-seconds used
+  int64 memory_byte_seconds = 4;    // Total memory byte-seconds used
+  int64 bandwidth_bytes = 5;        // Total bandwidth used (inbound + outbound)
+  int64 storage_bytes = 6;          // Storage used
+  
+  // Cost breakdown
+  int64 cpu_cost_cents = 7;         // CPU cost in cents
+  int64 memory_cost_cents = 8;      // Memory cost in cents
+  int64 bandwidth_cost_cents = 9;   // Bandwidth cost in cents
+  int64 storage_cost_cents = 10;    // Storage cost in cents
+  int64 total_cost_cents = 11;      // Total cost in cents
+}
+
+// GameServer represents a game server instance
+message GameServer {
+  string id = 1;
+  string organization_id = 2;
+  string name = 3;
+  optional string description = 4;
+  GameType game_type = 5;
+  GameServerStatus status = 6;
+  
+  // Resource configuration
+  int64 memory_bytes = 7;
+  int32 cpu_cores = 8;
+  int32 port = 9;
+  
+  // Docker configuration
+  string docker_image = 10;
+  optional string start_command = 11;
+  
+  // Environment variables
+  map<string, string> env_vars = 12;
+  
+  // Game-specific configuration
+  optional string server_version = 13;
+  
+  // Resource usage (if available)
+  optional int32 player_count = 14;
+  optional int32 max_players = 15;
+  
+  // Timestamps
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+  optional google.protobuf.Timestamp last_started_at = 18;
+  
+  // Container information
+  optional string container_id = 19;
+  optional string container_name = 20;
+  
+  // Storage
+  int64 storage_bytes = 21;
+  
+  // Created by
+  string created_by = 22;
+}
+

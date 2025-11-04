@@ -35,6 +35,7 @@ type ResourceType string
 
 const (
 	ResourceTypeDeployment   ResourceType = "deployment"
+	ResourceTypeGameServer   ResourceType = "gameserver"
 	ResourceTypeOrganization ResourceType = "organization"
 	ResourceTypeUser         ResourceType = "user"
 	ResourceTypeVPS          ResourceType = "vps"
@@ -68,6 +69,8 @@ func (pc *PermissionChecker) CheckPermission(ctx context.Context, resourceType R
 	switch resourceType {
 	case ResourceTypeDeployment:
 		return pc.checkDeploymentPermission(ctx, userInfo, resourceID, permission)
+	case ResourceTypeGameServer:
+		return pc.checkGameServerPermission(ctx, userInfo, resourceID, permission)
 	case ResourceTypeOrganization:
 		return pc.checkOrganizationPermission(ctx, userInfo, resourceID, permission)
 	default:
@@ -128,6 +131,30 @@ func (pc *PermissionChecker) checkDeploymentPermission(ctx context.Context, user
 	if pc.HasRole(userInfo, RoleMember) {
 		// Members can read, update, but not delete
 		if permission == PermissionRead || permission == PermissionUpdate || permission == PermissionCreate {
+			return nil
+		}
+	}
+
+	if pc.HasRole(userInfo, RoleViewer) {
+		// Viewers can only read
+		if permission == PermissionRead {
+			return nil
+		}
+	}
+
+	return ErrInsufficientPermission
+}
+
+// checkGameServerPermission checks permissions for game server resources
+func (pc *PermissionChecker) checkGameServerPermission(ctx context.Context, userInfo *authv1.User, gameServerID, permission string) error {
+	// Similar to deployment permissions
+	if pc.HasRole(userInfo, RoleOwner) || pc.HasRole(userInfo, RoleAdmin) {
+		return nil // Owners and admins have full access
+	}
+
+	if pc.HasRole(userInfo, RoleMember) {
+		// Members can read, update, start/stop, but not delete
+		if permission == PermissionRead || permission == PermissionUpdate || permission == PermissionCreate || permission == "start" || permission == "stop" || permission == "restart" {
 			return nil
 		}
 	}

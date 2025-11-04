@@ -278,3 +278,90 @@ type StrayContainer struct {
 }
 
 func (StrayContainer) TableName() string { return "stray_containers" }
+
+// GameServer represents a game server instance in the database
+type GameServer struct {
+	ID             string    `gorm:"primaryKey;column:id" json:"id"`
+	Name           string    `gorm:"column:name" json:"name"`
+	Description    *string   `gorm:"column:description" json:"description"`
+	GameType       int32     `gorm:"column:game_type" json:"game_type"` // GameType enum
+	Status         int32     `gorm:"column:status;default:0" json:"status"` // GameServerStatus enum
+	
+	// Resource configuration
+	MemoryBytes    int64     `gorm:"column:memory_bytes" json:"memory_bytes"`
+	CPUCores       int32     `gorm:"column:cpu_cores" json:"cpu_cores"`
+	Port           int32     `gorm:"column:port" json:"port"`
+	
+	// Docker configuration
+	DockerImage    string    `gorm:"column:docker_image" json:"docker_image"`
+	StartCommand   *string   `gorm:"column:start_command" json:"start_command"`
+	
+	// Environment variables (stored as JSON object)
+	EnvVars        string    `gorm:"column:env_vars;type:jsonb" json:"env_vars"`
+	
+	// Game-specific configuration
+	ServerVersion  *string   `gorm:"column:server_version" json:"server_version"`
+	
+	// Container information
+	ContainerID    *string   `gorm:"column:container_id" json:"container_id"`
+	ContainerName  *string   `gorm:"column:container_name" json:"container_name"`
+	
+	// Resource usage
+	StorageBytes   int64     `gorm:"column:storage_bytes;default:0" json:"storage_bytes"`
+	BandwidthUsage int64     `gorm:"column:bandwidth_usage;default:0" json:"bandwidth_usage"`
+	
+	// Player information (if available)
+	PlayerCount    *int32    `gorm:"column:player_count" json:"player_count"`
+	MaxPlayers     *int32    `gorm:"column:max_players" json:"max_players"`
+	
+	// Timestamps
+	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt      time.Time `gorm:"column:updated_at" json:"updated_at"`
+	LastStartedAt  *time.Time `gorm:"column:last_started_at" json:"last_started_at"`
+	DeletedAt      *time.Time `gorm:"column:deleted_at;index" json:"deleted_at"` // Soft delete
+	
+	// Organization and ownership
+	OrganizationID string    `gorm:"column:organization_id;index" json:"organization_id"`
+	CreatedBy      string    `gorm:"column:created_by;index" json:"created_by"`
+}
+
+func (GameServer) TableName() string {
+	return "game_servers"
+}
+
+// BeforeCreate hook to set timestamps
+func (gs *GameServer) BeforeCreate(tx *gorm.DB) error {
+	now := time.Now()
+	if gs.CreatedAt.IsZero() {
+		gs.CreatedAt = now
+	}
+	if gs.UpdatedAt.IsZero() {
+		gs.UpdatedAt = now
+	}
+	return nil
+}
+
+// BeforeUpdate hook to set updated timestamp
+func (gs *GameServer) BeforeUpdate(tx *gorm.DB) error {
+	gs.UpdatedAt = time.Now()
+	return nil
+}
+
+// GameServerUsageHourly stores hourly aggregated metrics for game servers
+type GameServerUsageHourly struct {
+	ID                  uint      `gorm:"primaryKey" json:"id"`
+	GameServerID        string    `gorm:"index;not null" json:"game_server_id"`
+	OrganizationID      string    `gorm:"index;not null" json:"organization_id"` // Denormalized for easier querying
+	Hour                time.Time `gorm:"index" json:"hour"`                      // Truncated to hour
+	AvgCPUUsage         float64   `json:"avg_cpu_usage"`
+	AvgMemoryUsage      float64   `json:"avg_memory_usage"` // Average memory bytes per second for the hour (byte-seconds / 3600)
+	BandwidthRxBytes    int64     `json:"bandwidth_rx_bytes"`  // Sum of incremental values
+	BandwidthTxBytes    int64     `json:"bandwidth_tx_bytes"`  // Sum of incremental values
+	DiskReadBytes       int64     `json:"disk_read_bytes"`     // Sum of incremental values
+	DiskWriteBytes      int64     `json:"disk_write_bytes"`     // Sum of incremental values
+	SampleCount         int64     `json:"sample_count"`        // Number of raw metrics aggregated
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+}
+
+func (GameServerUsageHourly) TableName() string { return "game_server_usage_hourly" }

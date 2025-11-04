@@ -525,6 +525,7 @@ import {
   ServerIcon,
   CircleStackIcon,
   CheckCircleIcon,
+  CubeIcon,
 } from "@heroicons/vue/24/outline";
 
 // Page meta
@@ -548,6 +549,7 @@ import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 type DashboardData = {
   stats: {
     deployments: number;
+    gameServers: number;
     vpsInstances: number;
     databases: number;
     monthlySpend: number;
@@ -646,6 +648,7 @@ const { data, status, refresh: refreshDashboard } = await useAsyncData<Dashboard
 
     const stats = {
       deployments: deployments.length,
+      gameServers: 0, // TODO: Fetch from game server API
       vpsInstances: 0,
       databases: 0,
       monthlySpend: 0,
@@ -685,6 +688,7 @@ const stats = computed(
   () =>
     data.value?.stats ?? {
       deployments: 0,
+      gameServers: 0,
       vpsInstances: 0,
       databases: 0,
       monthlySpend: 0,
@@ -813,6 +817,14 @@ const kpiCards = computed(() => {
       iconBg: "bg-success/10",
       iconColor: "text-success",
       href: "/vps",
+    },
+    {
+      label: "Game Servers",
+      value: formatNumber(stats.value.gameServers),
+      icon: CubeIcon,
+      iconBg: "bg-accent-success/10",
+      iconColor: "text-accent-success",
+      href: "/gameservers",
     },
     {
       label: "Databases",
