@@ -603,6 +603,660 @@ func (x *OrganizationUsage) GetDeploymentsActivePeak() int32 {
 	return 0
 }
 
+// DNS Query Request
+type QueryDNSRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Domain        string                 `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`                           // Domain to query (e.g., deploy-123.my.obiente.cloud)
+	RecordType    string                 `protobuf:"bytes,2,opt,name=record_type,json=recordType,proto3" json:"record_type,omitempty"` // DNS record type (A, AAAA, TXT, etc.) - defaults to A
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryDNSRequest) Reset() {
+	*x = QueryDNSRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryDNSRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryDNSRequest) ProtoMessage() {}
+
+func (x *QueryDNSRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryDNSRequest.ProtoReflect.Descriptor instead.
+func (*QueryDNSRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *QueryDNSRequest) GetDomain() string {
+	if x != nil {
+		return x.Domain
+	}
+	return ""
+}
+
+func (x *QueryDNSRequest) GetRecordType() string {
+	if x != nil {
+		return x.RecordType
+	}
+	return ""
+}
+
+// DNS Query Response
+type QueryDNSResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Domain        string                 `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
+	RecordType    string                 `protobuf:"bytes,2,opt,name=record_type,json=recordType,proto3" json:"record_type,omitempty"`
+	Records       []string               `protobuf:"bytes,3,rep,name=records,proto3" json:"records,omitempty"` // IP addresses or record values
+	Error         string                 `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`     // Error message if query failed
+	Ttl           int64                  `protobuf:"varint,5,opt,name=ttl,proto3" json:"ttl,omitempty"`        // Time to live in seconds
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryDNSResponse) Reset() {
+	*x = QueryDNSResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryDNSResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryDNSResponse) ProtoMessage() {}
+
+func (x *QueryDNSResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryDNSResponse.ProtoReflect.Descriptor instead.
+func (*QueryDNSResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *QueryDNSResponse) GetDomain() string {
+	if x != nil {
+		return x.Domain
+	}
+	return ""
+}
+
+func (x *QueryDNSResponse) GetRecordType() string {
+	if x != nil {
+		return x.RecordType
+	}
+	return ""
+}
+
+func (x *QueryDNSResponse) GetRecords() []string {
+	if x != nil {
+		return x.Records
+	}
+	return nil
+}
+
+func (x *QueryDNSResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *QueryDNSResponse) GetTtl() int64 {
+	if x != nil {
+		return x.Ttl
+	}
+	return 0
+}
+
+// List DNS Records Request
+type ListDNSRecordsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	DeploymentId   *string                `protobuf:"bytes,1,opt,name=deployment_id,json=deploymentId,proto3,oneof" json:"deployment_id,omitempty"`       // Filter by deployment ID
+	OrganizationId *string                `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"` // Filter by organization ID
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ListDNSRecordsRequest) Reset() {
+	*x = ListDNSRecordsRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDNSRecordsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDNSRecordsRequest) ProtoMessage() {}
+
+func (x *ListDNSRecordsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDNSRecordsRequest.ProtoReflect.Descriptor instead.
+func (*ListDNSRecordsRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ListDNSRecordsRequest) GetDeploymentId() string {
+	if x != nil && x.DeploymentId != nil {
+		return *x.DeploymentId
+	}
+	return ""
+}
+
+func (x *ListDNSRecordsRequest) GetOrganizationId() string {
+	if x != nil && x.OrganizationId != nil {
+		return *x.OrganizationId
+	}
+	return ""
+}
+
+// DNS Record Information
+type DNSRecord struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	DeploymentId   string                 `protobuf:"bytes,1,opt,name=deployment_id,json=deploymentId,proto3" json:"deployment_id,omitempty"`
+	OrganizationId string                 `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	DeploymentName string                 `protobuf:"bytes,3,opt,name=deployment_name,json=deploymentName,proto3" json:"deployment_name,omitempty"`
+	Domain         string                 `protobuf:"bytes,4,opt,name=domain,proto3" json:"domain,omitempty"`                              // Full domain (e.g., deploy-123.my.obiente.cloud)
+	IpAddresses    []string               `protobuf:"bytes,5,rep,name=ip_addresses,json=ipAddresses,proto3" json:"ip_addresses,omitempty"` // Resolved IP addresses
+	Region         string                 `protobuf:"bytes,6,opt,name=region,proto3" json:"region,omitempty"`                              // Region where deployment is running
+	Status         string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`                              // Deployment status
+	LastResolved   *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=last_resolved,json=lastResolved,proto3" json:"last_resolved,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *DNSRecord) Reset() {
+	*x = DNSRecord{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DNSRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DNSRecord) ProtoMessage() {}
+
+func (x *DNSRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DNSRecord.ProtoReflect.Descriptor instead.
+func (*DNSRecord) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *DNSRecord) GetDeploymentId() string {
+	if x != nil {
+		return x.DeploymentId
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetDeploymentName() string {
+	if x != nil {
+		return x.DeploymentName
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetDomain() string {
+	if x != nil {
+		return x.Domain
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetIpAddresses() []string {
+	if x != nil {
+		return x.IpAddresses
+	}
+	return nil
+}
+
+func (x *DNSRecord) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetLastResolved() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastResolved
+	}
+	return nil
+}
+
+// List DNS Records Response
+type ListDNSRecordsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Records       []*DNSRecord           `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDNSRecordsResponse) Reset() {
+	*x = ListDNSRecordsResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDNSRecordsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDNSRecordsResponse) ProtoMessage() {}
+
+func (x *ListDNSRecordsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDNSRecordsResponse.ProtoReflect.Descriptor instead.
+func (*ListDNSRecordsResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ListDNSRecordsResponse) GetRecords() []*DNSRecord {
+	if x != nil {
+		return x.Records
+	}
+	return nil
+}
+
+// Get DNS Config Request
+type GetDNSConfigRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDNSConfigRequest) Reset() {
+	*x = GetDNSConfigRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDNSConfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDNSConfigRequest) ProtoMessage() {}
+
+func (x *GetDNSConfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDNSConfigRequest.ProtoReflect.Descriptor instead.
+func (*GetDNSConfigRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{12}
+}
+
+// DNS Configuration
+type DNSConfig struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	TraefikIps         []string               `protobuf:"bytes,1,rep,name=traefik_ips,json=traefikIps,proto3" json:"traefik_ips,omitempty"`                                                                                                       // All configured Traefik IPs
+	TraefikIpsByRegion map[string]*TraefikIPs `protobuf:"bytes,2,rep,name=traefik_ips_by_region,json=traefikIpsByRegion,proto3" json:"traefik_ips_by_region,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Traefik IPs grouped by region
+	DnsServerIps       []string               `protobuf:"bytes,3,rep,name=dns_server_ips,json=dnsServerIps,proto3" json:"dns_server_ips,omitempty"`                                                                                               // DNS server IPs
+	DnsPort            string                 `protobuf:"bytes,4,opt,name=dns_port,json=dnsPort,proto3" json:"dns_port,omitempty"`                                                                                                                // DNS server port
+	CacheTtlSeconds    int64                  `protobuf:"varint,5,opt,name=cache_ttl_seconds,json=cacheTtlSeconds,proto3" json:"cache_ttl_seconds,omitempty"`                                                                                     // Cache TTL in seconds
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *DNSConfig) Reset() {
+	*x = DNSConfig{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DNSConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DNSConfig) ProtoMessage() {}
+
+func (x *DNSConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DNSConfig.ProtoReflect.Descriptor instead.
+func (*DNSConfig) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *DNSConfig) GetTraefikIps() []string {
+	if x != nil {
+		return x.TraefikIps
+	}
+	return nil
+}
+
+func (x *DNSConfig) GetTraefikIpsByRegion() map[string]*TraefikIPs {
+	if x != nil {
+		return x.TraefikIpsByRegion
+	}
+	return nil
+}
+
+func (x *DNSConfig) GetDnsServerIps() []string {
+	if x != nil {
+		return x.DnsServerIps
+	}
+	return nil
+}
+
+func (x *DNSConfig) GetDnsPort() string {
+	if x != nil {
+		return x.DnsPort
+	}
+	return ""
+}
+
+func (x *DNSConfig) GetCacheTtlSeconds() int64 {
+	if x != nil {
+		return x.CacheTtlSeconds
+	}
+	return 0
+}
+
+type TraefikIPs struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Region        string                 `protobuf:"bytes,1,opt,name=region,proto3" json:"region,omitempty"`
+	Ips           []string               `protobuf:"bytes,2,rep,name=ips,proto3" json:"ips,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TraefikIPs) Reset() {
+	*x = TraefikIPs{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TraefikIPs) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TraefikIPs) ProtoMessage() {}
+
+func (x *TraefikIPs) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TraefikIPs.ProtoReflect.Descriptor instead.
+func (*TraefikIPs) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *TraefikIPs) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *TraefikIPs) GetIps() []string {
+	if x != nil {
+		return x.Ips
+	}
+	return nil
+}
+
+// Get DNS Config Response
+type GetDNSConfigResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Config        *DNSConfig             `protobuf:"bytes,1,opt,name=config,proto3" json:"config,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDNSConfigResponse) Reset() {
+	*x = GetDNSConfigResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDNSConfigResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDNSConfigResponse) ProtoMessage() {}
+
+func (x *GetDNSConfigResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDNSConfigResponse.ProtoReflect.Descriptor instead.
+func (*GetDNSConfigResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *GetDNSConfigResponse) GetConfig() *DNSConfig {
+	if x != nil {
+		return x.Config
+	}
+	return nil
+}
+
+// Get Pricing Request - public endpoint
+type GetPricingRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPricingRequest) Reset() {
+	*x = GetPricingRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPricingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPricingRequest) ProtoMessage() {}
+
+func (x *GetPricingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPricingRequest.ProtoReflect.Descriptor instead.
+func (*GetPricingRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{16}
+}
+
+// Get Pricing Response
+type GetPricingResponse struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	CpuCostPerCoreSecond    float64                `protobuf:"fixed64,1,opt,name=cpu_cost_per_core_second,json=cpuCostPerCoreSecond,proto3" json:"cpu_cost_per_core_second,omitempty"`
+	MemoryCostPerByteSecond float64                `protobuf:"fixed64,2,opt,name=memory_cost_per_byte_second,json=memoryCostPerByteSecond,proto3" json:"memory_cost_per_byte_second,omitempty"`
+	BandwidthCostPerByte    float64                `protobuf:"fixed64,3,opt,name=bandwidth_cost_per_byte,json=bandwidthCostPerByte,proto3" json:"bandwidth_cost_per_byte,omitempty"`
+	StorageCostPerByteMonth float64                `protobuf:"fixed64,4,opt,name=storage_cost_per_byte_month,json=storageCostPerByteMonth,proto3" json:"storage_cost_per_byte_month,omitempty"`
+	PricingInfo             string                 `protobuf:"bytes,5,opt,name=pricing_info,json=pricingInfo,proto3" json:"pricing_info,omitempty"` // Human-readable description
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *GetPricingResponse) Reset() {
+	*x = GetPricingResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPricingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPricingResponse) ProtoMessage() {}
+
+func (x *GetPricingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPricingResponse.ProtoReflect.Descriptor instead.
+func (*GetPricingResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *GetPricingResponse) GetCpuCostPerCoreSecond() float64 {
+	if x != nil {
+		return x.CpuCostPerCoreSecond
+	}
+	return 0
+}
+
+func (x *GetPricingResponse) GetMemoryCostPerByteSecond() float64 {
+	if x != nil {
+		return x.MemoryCostPerByteSecond
+	}
+	return 0
+}
+
+func (x *GetPricingResponse) GetBandwidthCostPerByte() float64 {
+	if x != nil {
+		return x.BandwidthCostPerByte
+	}
+	return 0
+}
+
+func (x *GetPricingResponse) GetStorageCostPerByteMonth() float64 {
+	if x != nil {
+		return x.StorageCostPerByteMonth
+	}
+	return 0
+}
+
+func (x *GetPricingResponse) GetPricingInfo() string {
+	if x != nil {
+		return x.PricingInfo
+	}
+	return ""
+}
+
 var File_obiente_cloud_superadmin_v1_superadmin_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
@@ -661,9 +1315,65 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\x12bandwidth_rx_bytes\x18\x06 \x01(\x03R\x10bandwidthRxBytes\x12,\n" +
 	"\x12bandwidth_tx_bytes\x18\a \x01(\x03R\x10bandwidthTxBytes\x12#\n" +
 	"\rstorage_bytes\x18\b \x01(\x03R\fstorageBytes\x126\n" +
-	"\x17deployments_active_peak\x18\t \x01(\x05R\x15deploymentsActivePeak2\x85\x01\n" +
+	"\x17deployments_active_peak\x18\t \x01(\x05R\x15deploymentsActivePeak\"J\n" +
+	"\x0fQueryDNSRequest\x12\x16\n" +
+	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x1f\n" +
+	"\vrecord_type\x18\x02 \x01(\tR\n" +
+	"recordType\"\x8d\x01\n" +
+	"\x10QueryDNSResponse\x12\x16\n" +
+	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x1f\n" +
+	"\vrecord_type\x18\x02 \x01(\tR\n" +
+	"recordType\x12\x18\n" +
+	"\arecords\x18\x03 \x03(\tR\arecords\x12\x14\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error\x12\x10\n" +
+	"\x03ttl\x18\x05 \x01(\x03R\x03ttl\"\x95\x01\n" +
+	"\x15ListDNSRecordsRequest\x12(\n" +
+	"\rdeployment_id\x18\x01 \x01(\tH\x00R\fdeploymentId\x88\x01\x01\x12,\n" +
+	"\x0forganization_id\x18\x02 \x01(\tH\x01R\x0eorganizationId\x88\x01\x01B\x10\n" +
+	"\x0e_deployment_idB\x12\n" +
+	"\x10_organization_id\"\xae\x02\n" +
+	"\tDNSRecord\x12#\n" +
+	"\rdeployment_id\x18\x01 \x01(\tR\fdeploymentId\x12'\n" +
+	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12'\n" +
+	"\x0fdeployment_name\x18\x03 \x01(\tR\x0edeploymentName\x12\x16\n" +
+	"\x06domain\x18\x04 \x01(\tR\x06domain\x12!\n" +
+	"\fip_addresses\x18\x05 \x03(\tR\vipAddresses\x12\x16\n" +
+	"\x06region\x18\x06 \x01(\tR\x06region\x12\x16\n" +
+	"\x06status\x18\a \x01(\tR\x06status\x12?\n" +
+	"\rlast_resolved\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\flastResolved\"Z\n" +
+	"\x16ListDNSRecordsResponse\x12@\n" +
+	"\arecords\x18\x01 \x03(\v2&.obiente.cloud.superadmin.v1.DNSRecordR\arecords\"\x15\n" +
+	"\x13GetDNSConfigRequest\"\xfc\x02\n" +
+	"\tDNSConfig\x12\x1f\n" +
+	"\vtraefik_ips\x18\x01 \x03(\tR\n" +
+	"traefikIps\x12q\n" +
+	"\x15traefik_ips_by_region\x18\x02 \x03(\v2>.obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntryR\x12traefikIpsByRegion\x12$\n" +
+	"\x0edns_server_ips\x18\x03 \x03(\tR\fdnsServerIps\x12\x19\n" +
+	"\bdns_port\x18\x04 \x01(\tR\adnsPort\x12*\n" +
+	"\x11cache_ttl_seconds\x18\x05 \x01(\x03R\x0fcacheTtlSeconds\x1an\n" +
+	"\x17TraefikIpsByRegionEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12=\n" +
+	"\x05value\x18\x02 \x01(\v2'.obiente.cloud.superadmin.v1.TraefikIPsR\x05value:\x028\x01\"6\n" +
+	"\n" +
+	"TraefikIPs\x12\x16\n" +
+	"\x06region\x18\x01 \x01(\tR\x06region\x12\x10\n" +
+	"\x03ips\x18\x02 \x03(\tR\x03ips\"V\n" +
+	"\x14GetDNSConfigResponse\x12>\n" +
+	"\x06config\x18\x01 \x01(\v2&.obiente.cloud.superadmin.v1.DNSConfigR\x06config\"\x13\n" +
+	"\x11GetPricingRequest\"\xa2\x02\n" +
+	"\x12GetPricingResponse\x126\n" +
+	"\x18cpu_cost_per_core_second\x18\x01 \x01(\x01R\x14cpuCostPerCoreSecond\x12<\n" +
+	"\x1bmemory_cost_per_byte_second\x18\x02 \x01(\x01R\x17memoryCostPerByteSecond\x125\n" +
+	"\x17bandwidth_cost_per_byte\x18\x03 \x01(\x01R\x14bandwidthCostPerByte\x12<\n" +
+	"\x1bstorage_cost_per_byte_month\x18\x04 \x01(\x01R\x17storageCostPerByteMonth\x12!\n" +
+	"\fpricing_info\x18\x05 \x01(\tR\vpricingInfo2\xcd\x04\n" +
 	"\x11SuperadminService\x12p\n" +
-	"\vGetOverview\x12/.obiente.cloud.superadmin.v1.GetOverviewRequest\x1a0.obiente.cloud.superadmin.v1.GetOverviewResponseB8Z6api/gen/proto/obiente/cloud/superadmin/v1;superadminv1b\x06proto3"
+	"\vGetOverview\x12/.obiente.cloud.superadmin.v1.GetOverviewRequest\x1a0.obiente.cloud.superadmin.v1.GetOverviewResponse\x12g\n" +
+	"\bQueryDNS\x12,.obiente.cloud.superadmin.v1.QueryDNSRequest\x1a-.obiente.cloud.superadmin.v1.QueryDNSResponse\x12y\n" +
+	"\x0eListDNSRecords\x122.obiente.cloud.superadmin.v1.ListDNSRecordsRequest\x1a3.obiente.cloud.superadmin.v1.ListDNSRecordsResponse\x12s\n" +
+	"\fGetDNSConfig\x120.obiente.cloud.superadmin.v1.GetDNSConfigRequest\x1a1.obiente.cloud.superadmin.v1.GetDNSConfigResponse\x12m\n" +
+	"\n" +
+	"GetPricing\x12..obiente.cloud.superadmin.v1.GetPricingRequest\x1a/.obiente.cloud.superadmin.v1.GetPricingResponseB8Z6api/gen/proto/obiente/cloud/superadmin/v1;superadminv1b\x06proto3"
 
 var (
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescOnce sync.Once
@@ -677,18 +1387,30 @@ func file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP() []b
 	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescData
 }
 
-var file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_obiente_cloud_superadmin_v1_superadmin_service_proto_goTypes = []any{
-	(*GetOverviewRequest)(nil),    // 0: obiente.cloud.superadmin.v1.GetOverviewRequest
-	(*GetOverviewResponse)(nil),   // 1: obiente.cloud.superadmin.v1.GetOverviewResponse
-	(*OverviewCounts)(nil),        // 2: obiente.cloud.superadmin.v1.OverviewCounts
-	(*OrganizationOverview)(nil),  // 3: obiente.cloud.superadmin.v1.OrganizationOverview
-	(*PendingInvite)(nil),         // 4: obiente.cloud.superadmin.v1.PendingInvite
-	(*DeploymentOverview)(nil),    // 5: obiente.cloud.superadmin.v1.DeploymentOverview
-	(*OrganizationUsage)(nil),     // 6: obiente.cloud.superadmin.v1.OrganizationUsage
-	(*timestamppb.Timestamp)(nil), // 7: google.protobuf.Timestamp
-	(v1.Environment)(0),           // 8: obiente.cloud.deployments.v1.Environment
-	(v1.DeploymentStatus)(0),      // 9: obiente.cloud.deployments.v1.DeploymentStatus
+	(*GetOverviewRequest)(nil),     // 0: obiente.cloud.superadmin.v1.GetOverviewRequest
+	(*GetOverviewResponse)(nil),    // 1: obiente.cloud.superadmin.v1.GetOverviewResponse
+	(*OverviewCounts)(nil),         // 2: obiente.cloud.superadmin.v1.OverviewCounts
+	(*OrganizationOverview)(nil),   // 3: obiente.cloud.superadmin.v1.OrganizationOverview
+	(*PendingInvite)(nil),          // 4: obiente.cloud.superadmin.v1.PendingInvite
+	(*DeploymentOverview)(nil),     // 5: obiente.cloud.superadmin.v1.DeploymentOverview
+	(*OrganizationUsage)(nil),      // 6: obiente.cloud.superadmin.v1.OrganizationUsage
+	(*QueryDNSRequest)(nil),        // 7: obiente.cloud.superadmin.v1.QueryDNSRequest
+	(*QueryDNSResponse)(nil),       // 8: obiente.cloud.superadmin.v1.QueryDNSResponse
+	(*ListDNSRecordsRequest)(nil),  // 9: obiente.cloud.superadmin.v1.ListDNSRecordsRequest
+	(*DNSRecord)(nil),              // 10: obiente.cloud.superadmin.v1.DNSRecord
+	(*ListDNSRecordsResponse)(nil), // 11: obiente.cloud.superadmin.v1.ListDNSRecordsResponse
+	(*GetDNSConfigRequest)(nil),    // 12: obiente.cloud.superadmin.v1.GetDNSConfigRequest
+	(*DNSConfig)(nil),              // 13: obiente.cloud.superadmin.v1.DNSConfig
+	(*TraefikIPs)(nil),             // 14: obiente.cloud.superadmin.v1.TraefikIPs
+	(*GetDNSConfigResponse)(nil),   // 15: obiente.cloud.superadmin.v1.GetDNSConfigResponse
+	(*GetPricingRequest)(nil),      // 16: obiente.cloud.superadmin.v1.GetPricingRequest
+	(*GetPricingResponse)(nil),     // 17: obiente.cloud.superadmin.v1.GetPricingResponse
+	nil,                            // 18: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
+	(*timestamppb.Timestamp)(nil),  // 19: google.protobuf.Timestamp
+	(v1.Environment)(0),            // 20: obiente.cloud.deployments.v1.Environment
+	(v1.DeploymentStatus)(0),       // 21: obiente.cloud.deployments.v1.DeploymentStatus
 }
 var file_obiente_cloud_superadmin_v1_superadmin_service_proto_depIdxs = []int32{
 	2,  // 0: obiente.cloud.superadmin.v1.GetOverviewResponse.counts:type_name -> obiente.cloud.superadmin.v1.OverviewCounts
@@ -696,19 +1418,32 @@ var file_obiente_cloud_superadmin_v1_superadmin_service_proto_depIdxs = []int32{
 	4,  // 2: obiente.cloud.superadmin.v1.GetOverviewResponse.pending_invites:type_name -> obiente.cloud.superadmin.v1.PendingInvite
 	5,  // 3: obiente.cloud.superadmin.v1.GetOverviewResponse.deployments:type_name -> obiente.cloud.superadmin.v1.DeploymentOverview
 	6,  // 4: obiente.cloud.superadmin.v1.GetOverviewResponse.usages:type_name -> obiente.cloud.superadmin.v1.OrganizationUsage
-	7,  // 5: obiente.cloud.superadmin.v1.OrganizationOverview.created_at:type_name -> google.protobuf.Timestamp
-	7,  // 6: obiente.cloud.superadmin.v1.PendingInvite.invited_at:type_name -> google.protobuf.Timestamp
-	8,  // 7: obiente.cloud.superadmin.v1.DeploymentOverview.environment:type_name -> obiente.cloud.deployments.v1.Environment
-	9,  // 8: obiente.cloud.superadmin.v1.DeploymentOverview.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
-	7,  // 9: obiente.cloud.superadmin.v1.DeploymentOverview.created_at:type_name -> google.protobuf.Timestamp
-	7,  // 10: obiente.cloud.superadmin.v1.DeploymentOverview.last_deployed_at:type_name -> google.protobuf.Timestamp
-	0,  // 11: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:input_type -> obiente.cloud.superadmin.v1.GetOverviewRequest
-	1,  // 12: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:output_type -> obiente.cloud.superadmin.v1.GetOverviewResponse
-	12, // [12:13] is the sub-list for method output_type
-	11, // [11:12] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	19, // 5: obiente.cloud.superadmin.v1.OrganizationOverview.created_at:type_name -> google.protobuf.Timestamp
+	19, // 6: obiente.cloud.superadmin.v1.PendingInvite.invited_at:type_name -> google.protobuf.Timestamp
+	20, // 7: obiente.cloud.superadmin.v1.DeploymentOverview.environment:type_name -> obiente.cloud.deployments.v1.Environment
+	21, // 8: obiente.cloud.superadmin.v1.DeploymentOverview.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
+	19, // 9: obiente.cloud.superadmin.v1.DeploymentOverview.created_at:type_name -> google.protobuf.Timestamp
+	19, // 10: obiente.cloud.superadmin.v1.DeploymentOverview.last_deployed_at:type_name -> google.protobuf.Timestamp
+	19, // 11: obiente.cloud.superadmin.v1.DNSRecord.last_resolved:type_name -> google.protobuf.Timestamp
+	10, // 12: obiente.cloud.superadmin.v1.ListDNSRecordsResponse.records:type_name -> obiente.cloud.superadmin.v1.DNSRecord
+	18, // 13: obiente.cloud.superadmin.v1.DNSConfig.traefik_ips_by_region:type_name -> obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
+	13, // 14: obiente.cloud.superadmin.v1.GetDNSConfigResponse.config:type_name -> obiente.cloud.superadmin.v1.DNSConfig
+	14, // 15: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry.value:type_name -> obiente.cloud.superadmin.v1.TraefikIPs
+	0,  // 16: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:input_type -> obiente.cloud.superadmin.v1.GetOverviewRequest
+	7,  // 17: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:input_type -> obiente.cloud.superadmin.v1.QueryDNSRequest
+	9,  // 18: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:input_type -> obiente.cloud.superadmin.v1.ListDNSRecordsRequest
+	12, // 19: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:input_type -> obiente.cloud.superadmin.v1.GetDNSConfigRequest
+	16, // 20: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:input_type -> obiente.cloud.superadmin.v1.GetPricingRequest
+	1,  // 21: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:output_type -> obiente.cloud.superadmin.v1.GetOverviewResponse
+	8,  // 22: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:output_type -> obiente.cloud.superadmin.v1.QueryDNSResponse
+	11, // 23: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:output_type -> obiente.cloud.superadmin.v1.ListDNSRecordsResponse
+	15, // 24: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:output_type -> obiente.cloud.superadmin.v1.GetDNSConfigResponse
+	17, // 25: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:output_type -> obiente.cloud.superadmin.v1.GetPricingResponse
+	21, // [21:26] is the sub-list for method output_type
+	16, // [16:21] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_superadmin_v1_superadmin_service_proto_init() }
@@ -718,13 +1453,14 @@ func file_obiente_cloud_superadmin_v1_superadmin_service_proto_init() {
 	}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[3].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[5].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[9].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc), len(file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

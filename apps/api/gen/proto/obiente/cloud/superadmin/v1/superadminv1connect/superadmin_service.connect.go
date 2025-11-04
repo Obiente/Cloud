@@ -36,6 +36,18 @@ const (
 	// SuperadminServiceGetOverviewProcedure is the fully-qualified name of the SuperadminService's
 	// GetOverview RPC.
 	SuperadminServiceGetOverviewProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetOverview"
+	// SuperadminServiceQueryDNSProcedure is the fully-qualified name of the SuperadminService's
+	// QueryDNS RPC.
+	SuperadminServiceQueryDNSProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/QueryDNS"
+	// SuperadminServiceListDNSRecordsProcedure is the fully-qualified name of the SuperadminService's
+	// ListDNSRecords RPC.
+	SuperadminServiceListDNSRecordsProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListDNSRecords"
+	// SuperadminServiceGetDNSConfigProcedure is the fully-qualified name of the SuperadminService's
+	// GetDNSConfig RPC.
+	SuperadminServiceGetDNSConfigProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetDNSConfig"
+	// SuperadminServiceGetPricingProcedure is the fully-qualified name of the SuperadminService's
+	// GetPricing RPC.
+	SuperadminServiceGetPricingProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetPricing"
 )
 
 // SuperadminServiceClient is a client for the obiente.cloud.superadmin.v1.SuperadminService
@@ -43,6 +55,12 @@ const (
 type SuperadminServiceClient interface {
 	// Returns a system-wide overview for superadmin operators.
 	GetOverview(context.Context, *connect.Request[v1.GetOverviewRequest]) (*connect.Response[v1.GetOverviewResponse], error)
+	// DNS management endpoints
+	QueryDNS(context.Context, *connect.Request[v1.QueryDNSRequest]) (*connect.Response[v1.QueryDNSResponse], error)
+	ListDNSRecords(context.Context, *connect.Request[v1.ListDNSRecordsRequest]) (*connect.Response[v1.ListDNSRecordsResponse], error)
+	GetDNSConfig(context.Context, *connect.Request[v1.GetDNSConfigRequest]) (*connect.Response[v1.GetDNSConfigResponse], error)
+	// Public pricing endpoint - no authentication required
+	GetPricing(context.Context, *connect.Request[v1.GetPricingRequest]) (*connect.Response[v1.GetPricingResponse], error)
 }
 
 // NewSuperadminServiceClient constructs a client for the
@@ -63,12 +81,40 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("GetOverview")),
 			connect.WithClientOptions(opts...),
 		),
+		queryDNS: connect.NewClient[v1.QueryDNSRequest, v1.QueryDNSResponse](
+			httpClient,
+			baseURL+SuperadminServiceQueryDNSProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("QueryDNS")),
+			connect.WithClientOptions(opts...),
+		),
+		listDNSRecords: connect.NewClient[v1.ListDNSRecordsRequest, v1.ListDNSRecordsResponse](
+			httpClient,
+			baseURL+SuperadminServiceListDNSRecordsProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListDNSRecords")),
+			connect.WithClientOptions(opts...),
+		),
+		getDNSConfig: connect.NewClient[v1.GetDNSConfigRequest, v1.GetDNSConfigResponse](
+			httpClient,
+			baseURL+SuperadminServiceGetDNSConfigProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("GetDNSConfig")),
+			connect.WithClientOptions(opts...),
+		),
+		getPricing: connect.NewClient[v1.GetPricingRequest, v1.GetPricingResponse](
+			httpClient,
+			baseURL+SuperadminServiceGetPricingProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("GetPricing")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // superadminServiceClient implements SuperadminServiceClient.
 type superadminServiceClient struct {
-	getOverview *connect.Client[v1.GetOverviewRequest, v1.GetOverviewResponse]
+	getOverview    *connect.Client[v1.GetOverviewRequest, v1.GetOverviewResponse]
+	queryDNS       *connect.Client[v1.QueryDNSRequest, v1.QueryDNSResponse]
+	listDNSRecords *connect.Client[v1.ListDNSRecordsRequest, v1.ListDNSRecordsResponse]
+	getDNSConfig   *connect.Client[v1.GetDNSConfigRequest, v1.GetDNSConfigResponse]
+	getPricing     *connect.Client[v1.GetPricingRequest, v1.GetPricingResponse]
 }
 
 // GetOverview calls obiente.cloud.superadmin.v1.SuperadminService.GetOverview.
@@ -76,11 +122,37 @@ func (c *superadminServiceClient) GetOverview(ctx context.Context, req *connect.
 	return c.getOverview.CallUnary(ctx, req)
 }
 
+// QueryDNS calls obiente.cloud.superadmin.v1.SuperadminService.QueryDNS.
+func (c *superadminServiceClient) QueryDNS(ctx context.Context, req *connect.Request[v1.QueryDNSRequest]) (*connect.Response[v1.QueryDNSResponse], error) {
+	return c.queryDNS.CallUnary(ctx, req)
+}
+
+// ListDNSRecords calls obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords.
+func (c *superadminServiceClient) ListDNSRecords(ctx context.Context, req *connect.Request[v1.ListDNSRecordsRequest]) (*connect.Response[v1.ListDNSRecordsResponse], error) {
+	return c.listDNSRecords.CallUnary(ctx, req)
+}
+
+// GetDNSConfig calls obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig.
+func (c *superadminServiceClient) GetDNSConfig(ctx context.Context, req *connect.Request[v1.GetDNSConfigRequest]) (*connect.Response[v1.GetDNSConfigResponse], error) {
+	return c.getDNSConfig.CallUnary(ctx, req)
+}
+
+// GetPricing calls obiente.cloud.superadmin.v1.SuperadminService.GetPricing.
+func (c *superadminServiceClient) GetPricing(ctx context.Context, req *connect.Request[v1.GetPricingRequest]) (*connect.Response[v1.GetPricingResponse], error) {
+	return c.getPricing.CallUnary(ctx, req)
+}
+
 // SuperadminServiceHandler is an implementation of the
 // obiente.cloud.superadmin.v1.SuperadminService service.
 type SuperadminServiceHandler interface {
 	// Returns a system-wide overview for superadmin operators.
 	GetOverview(context.Context, *connect.Request[v1.GetOverviewRequest]) (*connect.Response[v1.GetOverviewResponse], error)
+	// DNS management endpoints
+	QueryDNS(context.Context, *connect.Request[v1.QueryDNSRequest]) (*connect.Response[v1.QueryDNSResponse], error)
+	ListDNSRecords(context.Context, *connect.Request[v1.ListDNSRecordsRequest]) (*connect.Response[v1.ListDNSRecordsResponse], error)
+	GetDNSConfig(context.Context, *connect.Request[v1.GetDNSConfigRequest]) (*connect.Response[v1.GetDNSConfigResponse], error)
+	// Public pricing endpoint - no authentication required
+	GetPricing(context.Context, *connect.Request[v1.GetPricingRequest]) (*connect.Response[v1.GetPricingResponse], error)
 }
 
 // NewSuperadminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -96,10 +168,42 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		connect.WithSchema(superadminServiceMethods.ByName("GetOverview")),
 		connect.WithHandlerOptions(opts...),
 	)
+	superadminServiceQueryDNSHandler := connect.NewUnaryHandler(
+		SuperadminServiceQueryDNSProcedure,
+		svc.QueryDNS,
+		connect.WithSchema(superadminServiceMethods.ByName("QueryDNS")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceListDNSRecordsHandler := connect.NewUnaryHandler(
+		SuperadminServiceListDNSRecordsProcedure,
+		svc.ListDNSRecords,
+		connect.WithSchema(superadminServiceMethods.ByName("ListDNSRecords")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceGetDNSConfigHandler := connect.NewUnaryHandler(
+		SuperadminServiceGetDNSConfigProcedure,
+		svc.GetDNSConfig,
+		connect.WithSchema(superadminServiceMethods.ByName("GetDNSConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceGetPricingHandler := connect.NewUnaryHandler(
+		SuperadminServiceGetPricingProcedure,
+		svc.GetPricing,
+		connect.WithSchema(superadminServiceMethods.ByName("GetPricing")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.superadmin.v1.SuperadminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SuperadminServiceGetOverviewProcedure:
 			superadminServiceGetOverviewHandler.ServeHTTP(w, r)
+		case SuperadminServiceQueryDNSProcedure:
+			superadminServiceQueryDNSHandler.ServeHTTP(w, r)
+		case SuperadminServiceListDNSRecordsProcedure:
+			superadminServiceListDNSRecordsHandler.ServeHTTP(w, r)
+		case SuperadminServiceGetDNSConfigProcedure:
+			superadminServiceGetDNSConfigHandler.ServeHTTP(w, r)
+		case SuperadminServiceGetPricingProcedure:
+			superadminServiceGetPricingHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -111,4 +215,20 @@ type UnimplementedSuperadminServiceHandler struct{}
 
 func (UnimplementedSuperadminServiceHandler) GetOverview(context.Context, *connect.Request[v1.GetOverviewRequest]) (*connect.Response[v1.GetOverviewResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetOverview is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) QueryDNS(context.Context, *connect.Request[v1.QueryDNSRequest]) (*connect.Response[v1.QueryDNSResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.QueryDNS is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListDNSRecords(context.Context, *connect.Request[v1.ListDNSRecordsRequest]) (*connect.Response[v1.ListDNSRecordsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) GetDNSConfig(context.Context, *connect.Request[v1.GetDNSConfigRequest]) (*connect.Response[v1.GetDNSConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) GetPricing(context.Context, *connect.Request[v1.GetPricingRequest]) (*connect.Response[v1.GetPricingResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetPricing is not implemented"))
 }

@@ -10,6 +10,14 @@ import "obiente/cloud/deployments/v1/deployment_service.proto";
 service SuperadminService {
   // Returns a system-wide overview for superadmin operators.
   rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse);
+  
+  // DNS management endpoints
+  rpc QueryDNS(QueryDNSRequest) returns (QueryDNSResponse);
+  rpc ListDNSRecords(ListDNSRecordsRequest) returns (ListDNSRecordsResponse);
+  rpc GetDNSConfig(GetDNSConfigRequest) returns (GetDNSConfigResponse);
+  
+  // Public pricing endpoint - no authentication required
+  rpc GetPricing(GetPricingRequest) returns (GetPricingResponse);
 }
 
 message GetOverviewRequest {}
@@ -71,5 +79,77 @@ message OrganizationUsage {
   int64 bandwidth_tx_bytes = 7;
   int64 storage_bytes = 8;
   int32 deployments_active_peak = 9;
+}
+
+// DNS Query Request
+message QueryDNSRequest {
+  string domain = 1; // Domain to query (e.g., deploy-123.my.obiente.cloud)
+  string record_type = 2; // DNS record type (A, AAAA, TXT, etc.) - defaults to A
+}
+
+// DNS Query Response
+message QueryDNSResponse {
+  string domain = 1;
+  string record_type = 2;
+  repeated string records = 3; // IP addresses or record values
+  string error = 4; // Error message if query failed
+  int64 ttl = 5; // Time to live in seconds
+}
+
+// List DNS Records Request
+message ListDNSRecordsRequest {
+  optional string deployment_id = 1; // Filter by deployment ID
+  optional string organization_id = 2; // Filter by organization ID
+}
+
+// DNS Record Information
+message DNSRecord {
+  string deployment_id = 1;
+  string organization_id = 2;
+  string deployment_name = 3;
+  string domain = 4; // Full domain (e.g., deploy-123.my.obiente.cloud)
+  repeated string ip_addresses = 5; // Resolved IP addresses
+  string region = 6; // Region where deployment is running
+  string status = 7; // Deployment status
+  google.protobuf.Timestamp last_resolved = 8;
+}
+
+// List DNS Records Response
+message ListDNSRecordsResponse {
+  repeated DNSRecord records = 1;
+}
+
+// Get DNS Config Request
+message GetDNSConfigRequest {}
+
+// DNS Configuration
+message DNSConfig {
+  repeated string traefik_ips = 1; // All configured Traefik IPs
+  map<string, TraefikIPs> traefik_ips_by_region = 2; // Traefik IPs grouped by region
+  repeated string dns_server_ips = 3; // DNS server IPs
+  string dns_port = 4; // DNS server port
+  int64 cache_ttl_seconds = 5; // Cache TTL in seconds
+}
+
+message TraefikIPs {
+  string region = 1;
+  repeated string ips = 2;
+}
+
+// Get DNS Config Response
+message GetDNSConfigResponse {
+  DNSConfig config = 1;
+}
+
+// Get Pricing Request - public endpoint
+message GetPricingRequest {}
+
+// Get Pricing Response
+message GetPricingResponse {
+  double cpu_cost_per_core_second = 1;
+  double memory_cost_per_byte_second = 2;
+  double bandwidth_cost_per_byte = 3;
+  double storage_cost_per_byte_month = 4;
+  string pricing_info = 5; // Human-readable description
 }
 

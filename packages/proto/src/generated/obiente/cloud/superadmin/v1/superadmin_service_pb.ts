@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/superadmin/v1/superadmin_service.proto.
  */
 export const file_obiente_cloud_superadmin_v1_superadmin_service: GenFile = /*@__PURE__*/
-  fileDesc("CjRvYmllbnRlL2Nsb3VkL3N1cGVyYWRtaW4vdjEvc3VwZXJhZG1pbl9zZXJ2aWNlLnByb3RvEhtvYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEiFAoSR2V0T3ZlcnZpZXdSZXF1ZXN0IucCChNHZXRPdmVydmlld1Jlc3BvbnNlEjsKBmNvdW50cxgBIAEoCzIrLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5PdmVydmlld0NvdW50cxJICg1vcmdhbml6YXRpb25zGAIgAygLMjEub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLk9yZ2FuaXphdGlvbk92ZXJ2aWV3EkMKD3BlbmRpbmdfaW52aXRlcxgDIAMoCzIqLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5QZW5kaW5nSW52aXRlEkQKC2RlcGxveW1lbnRzGAQgAygLMi8ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkRlcGxveW1lbnRPdmVydmlldxI+CgZ1c2FnZXMYBSADKAsyLi5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuT3JnYW5pemF0aW9uVXNhZ2UieQoOT3ZlcnZpZXdDb3VudHMSGwoTdG90YWxfb3JnYW5pemF0aW9ucxgBIAEoAxIWCg5hY3RpdmVfbWVtYmVycxgCIAEoAxIXCg9wZW5kaW5nX2ludml0ZXMYAyABKAMSGQoRdG90YWxfZGVwbG95bWVudHMYBCABKAMi8gEKFE9yZ2FuaXphdGlvbk92ZXJ2aWV3EgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDAoEc2x1ZxgDIAEoCRITCgZkb21haW4YBCABKAlIAIgBARIMCgRwbGFuGAUgASgJEg4KBnN0YXR1cxgGIAEoCRIuCgpjcmVhdGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIUCgxtZW1iZXJfY291bnQYCCABKAMSFAoMaW52aXRlX2NvdW50GAkgASgDEhgKEGRlcGxveW1lbnRfY291bnQYCiABKANCCQoHX2RvbWFpbiKBAQoNUGVuZGluZ0ludml0ZRIKCgJpZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSDQoFZW1haWwYAyABKAkSDAoEcm9sZRgEIAEoCRIuCgppbnZpdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCLNAgoSRGVwbG95bWVudE92ZXJ2aWV3EgoKAmlkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRIMCgRuYW1lGAMgASgJEj4KC2Vudmlyb25tZW50GAQgASgOMikub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5FbnZpcm9ubWVudBI+CgZzdGF0dXMYBSABKA4yLi5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRTdGF0dXMSEwoGZG9tYWluGAYgASgJSACIAQESLgoKY3JlYXRlZF9hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNAoQbGFzdF9kZXBsb3llZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCCQoHX2RvbWFpbiL9AQoRT3JnYW5pemF0aW9uVXNhZ2USFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhkKEW9yZ2FuaXphdGlvbl9uYW1lGAIgASgJEg0KBW1vbnRoGAMgASgJEhgKEGNwdV9jb3JlX3NlY29uZHMYBCABKAMSGwoTbWVtb3J5X2J5dGVfc2Vjb25kcxgFIAEoAxIaChJiYW5kd2lkdGhfcnhfYnl0ZXMYBiABKAMSGgoSYmFuZHdpZHRoX3R4X2J5dGVzGAcgASgDEhUKDXN0b3JhZ2VfYnl0ZXMYCCABKAMSHwoXZGVwbG95bWVudHNfYWN0aXZlX3BlYWsYCSABKAUyhQEKEVN1cGVyYWRtaW5TZXJ2aWNlEnAKC0dldE92ZXJ2aWV3Ei8ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkdldE92ZXJ2aWV3UmVxdWVzdBowLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRPdmVydmlld1Jlc3BvbnNlQjhaNmFwaS9nZW4vcHJvdG8vb2JpZW50ZS9jbG91ZC9zdXBlcmFkbWluL3YxO3N1cGVyYWRtaW52MWIGcHJvdG8z", [file_google_protobuf_timestamp, file_obiente_cloud_deployments_v1_deployment_service]);
+  fileDesc("CjRvYmllbnRlL2Nsb3VkL3N1cGVyYWRtaW4vdjEvc3VwZXJhZG1pbl9zZXJ2aWNlLnByb3RvEhtvYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEiFAoSR2V0T3ZlcnZpZXdSZXF1ZXN0IucCChNHZXRPdmVydmlld1Jlc3BvbnNlEjsKBmNvdW50cxgBIAEoCzIrLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5PdmVydmlld0NvdW50cxJICg1vcmdhbml6YXRpb25zGAIgAygLMjEub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLk9yZ2FuaXphdGlvbk92ZXJ2aWV3EkMKD3BlbmRpbmdfaW52aXRlcxgDIAMoCzIqLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5QZW5kaW5nSW52aXRlEkQKC2RlcGxveW1lbnRzGAQgAygLMi8ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkRlcGxveW1lbnRPdmVydmlldxI+CgZ1c2FnZXMYBSADKAsyLi5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuT3JnYW5pemF0aW9uVXNhZ2UieQoOT3ZlcnZpZXdDb3VudHMSGwoTdG90YWxfb3JnYW5pemF0aW9ucxgBIAEoAxIWCg5hY3RpdmVfbWVtYmVycxgCIAEoAxIXCg9wZW5kaW5nX2ludml0ZXMYAyABKAMSGQoRdG90YWxfZGVwbG95bWVudHMYBCABKAMi8gEKFE9yZ2FuaXphdGlvbk92ZXJ2aWV3EgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDAoEc2x1ZxgDIAEoCRITCgZkb21haW4YBCABKAlIAIgBARIMCgRwbGFuGAUgASgJEg4KBnN0YXR1cxgGIAEoCRIuCgpjcmVhdGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIUCgxtZW1iZXJfY291bnQYCCABKAMSFAoMaW52aXRlX2NvdW50GAkgASgDEhgKEGRlcGxveW1lbnRfY291bnQYCiABKANCCQoHX2RvbWFpbiKBAQoNUGVuZGluZ0ludml0ZRIKCgJpZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSDQoFZW1haWwYAyABKAkSDAoEcm9sZRgEIAEoCRIuCgppbnZpdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCLNAgoSRGVwbG95bWVudE92ZXJ2aWV3EgoKAmlkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRIMCgRuYW1lGAMgASgJEj4KC2Vudmlyb25tZW50GAQgASgOMikub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5FbnZpcm9ubWVudBI+CgZzdGF0dXMYBSABKA4yLi5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRTdGF0dXMSEwoGZG9tYWluGAYgASgJSACIAQESLgoKY3JlYXRlZF9hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNAoQbGFzdF9kZXBsb3llZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCCQoHX2RvbWFpbiL9AQoRT3JnYW5pemF0aW9uVXNhZ2USFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhkKEW9yZ2FuaXphdGlvbl9uYW1lGAIgASgJEg0KBW1vbnRoGAMgASgJEhgKEGNwdV9jb3JlX3NlY29uZHMYBCABKAMSGwoTbWVtb3J5X2J5dGVfc2Vjb25kcxgFIAEoAxIaChJiYW5kd2lkdGhfcnhfYnl0ZXMYBiABKAMSGgoSYmFuZHdpZHRoX3R4X2J5dGVzGAcgASgDEhUKDXN0b3JhZ2VfYnl0ZXMYCCABKAMSHwoXZGVwbG95bWVudHNfYWN0aXZlX3BlYWsYCSABKAUiNgoPUXVlcnlETlNSZXF1ZXN0Eg4KBmRvbWFpbhgBIAEoCRITCgtyZWNvcmRfdHlwZRgCIAEoCSJkChBRdWVyeUROU1Jlc3BvbnNlEg4KBmRvbWFpbhgBIAEoCRITCgtyZWNvcmRfdHlwZRgCIAEoCRIPCgdyZWNvcmRzGAMgAygJEg0KBWVycm9yGAQgASgJEgsKA3R0bBgFIAEoAyJ3ChVMaXN0RE5TUmVjb3Jkc1JlcXVlc3QSGgoNZGVwbG95bWVudF9pZBgBIAEoCUgAiAEBEhwKD29yZ2FuaXphdGlvbl9pZBgCIAEoCUgBiAEBQhAKDl9kZXBsb3ltZW50X2lkQhIKEF9vcmdhbml6YXRpb25faWQizQEKCUROU1JlY29yZBIVCg1kZXBsb3ltZW50X2lkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRIXCg9kZXBsb3ltZW50X25hbWUYAyABKAkSDgoGZG9tYWluGAQgASgJEhQKDGlwX2FkZHJlc3NlcxgFIAMoCRIOCgZyZWdpb24YBiABKAkSDgoGc3RhdHVzGAcgASgJEjEKDWxhc3RfcmVzb2x2ZWQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlEKFkxpc3RETlNSZWNvcmRzUmVzcG9uc2USNwoHcmVjb3JkcxgBIAMoCzImLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5ETlNSZWNvcmQiFQoTR2V0RE5TQ29uZmlnUmVxdWVzdCKoAgoJRE5TQ29uZmlnEhMKC3RyYWVmaWtfaXBzGAEgAygJEl0KFXRyYWVmaWtfaXBzX2J5X3JlZ2lvbhgCIAMoCzI+Lm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5ETlNDb25maWcuVHJhZWZpa0lwc0J5UmVnaW9uRW50cnkSFgoOZG5zX3NlcnZlcl9pcHMYAyADKAkSEAoIZG5zX3BvcnQYBCABKAkSGQoRY2FjaGVfdHRsX3NlY29uZHMYBSABKAMaYgoXVHJhZWZpa0lwc0J5UmVnaW9uRW50cnkSCwoDa2V5GAEgASgJEjYKBXZhbHVlGAIgASgLMicub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLlRyYWVmaWtJUHM6AjgBIikKClRyYWVmaWtJUHMSDgoGcmVnaW9uGAEgASgJEgsKA2lwcxgCIAMoCSJOChRHZXRETlNDb25maWdSZXNwb25zZRI2CgZjb25maWcYASABKAsyJi5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuRE5TQ29uZmlnIhMKEUdldFByaWNpbmdSZXF1ZXN0IrcBChJHZXRQcmljaW5nUmVzcG9uc2USIAoYY3B1X2Nvc3RfcGVyX2NvcmVfc2Vjb25kGAEgASgBEiMKG21lbW9yeV9jb3N0X3Blcl9ieXRlX3NlY29uZBgCIAEoARIfChdiYW5kd2lkdGhfY29zdF9wZXJfYnl0ZRgDIAEoARIjChtzdG9yYWdlX2Nvc3RfcGVyX2J5dGVfbW9udGgYBCABKAESFAoMcHJpY2luZ19pbmZvGAUgASgJMs0EChFTdXBlcmFkbWluU2VydmljZRJwCgtHZXRPdmVydmlldxIvLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRPdmVydmlld1JlcXVlc3QaMC5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuR2V0T3ZlcnZpZXdSZXNwb25zZRJnCghRdWVyeUROUxIsLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5RdWVyeUROU1JlcXVlc3QaLS5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuUXVlcnlETlNSZXNwb25zZRJ5Cg5MaXN0RE5TUmVjb3JkcxIyLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5MaXN0RE5TUmVjb3Jkc1JlcXVlc3QaMy5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuTGlzdEROU1JlY29yZHNSZXNwb25zZRJzCgxHZXRETlNDb25maWcSMC5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuR2V0RE5TQ29uZmlnUmVxdWVzdBoxLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRETlNDb25maWdSZXNwb25zZRJtCgpHZXRQcmljaW5nEi4ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkdldFByaWNpbmdSZXF1ZXN0Gi8ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkdldFByaWNpbmdSZXNwb25zZUI4WjZhcGkvZ2VuL3Byb3RvL29iaWVudGUvY2xvdWQvc3VwZXJhZG1pbi92MTtzdXBlcmFkbWludjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_obiente_cloud_deployments_v1_deployment_service]);
 
 /**
  * @generated from message obiente.cloud.superadmin.v1.GetOverviewRequest
@@ -307,6 +307,349 @@ export const OrganizationUsageSchema: GenMessage<OrganizationUsage> = /*@__PURE_
   messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 6);
 
 /**
+ * DNS Query Request
+ *
+ * @generated from message obiente.cloud.superadmin.v1.QueryDNSRequest
+ */
+export type QueryDNSRequest = Message<"obiente.cloud.superadmin.v1.QueryDNSRequest"> & {
+  /**
+   * Domain to query (e.g., deploy-123.my.obiente.cloud)
+   *
+   * @generated from field: string domain = 1;
+   */
+  domain: string;
+
+  /**
+   * DNS record type (A, AAAA, TXT, etc.) - defaults to A
+   *
+   * @generated from field: string record_type = 2;
+   */
+  recordType: string;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.QueryDNSRequest.
+ * Use `create(QueryDNSRequestSchema)` to create a new message.
+ */
+export const QueryDNSRequestSchema: GenMessage<QueryDNSRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 7);
+
+/**
+ * DNS Query Response
+ *
+ * @generated from message obiente.cloud.superadmin.v1.QueryDNSResponse
+ */
+export type QueryDNSResponse = Message<"obiente.cloud.superadmin.v1.QueryDNSResponse"> & {
+  /**
+   * @generated from field: string domain = 1;
+   */
+  domain: string;
+
+  /**
+   * @generated from field: string record_type = 2;
+   */
+  recordType: string;
+
+  /**
+   * IP addresses or record values
+   *
+   * @generated from field: repeated string records = 3;
+   */
+  records: string[];
+
+  /**
+   * Error message if query failed
+   *
+   * @generated from field: string error = 4;
+   */
+  error: string;
+
+  /**
+   * Time to live in seconds
+   *
+   * @generated from field: int64 ttl = 5;
+   */
+  ttl: bigint;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.QueryDNSResponse.
+ * Use `create(QueryDNSResponseSchema)` to create a new message.
+ */
+export const QueryDNSResponseSchema: GenMessage<QueryDNSResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 8);
+
+/**
+ * List DNS Records Request
+ *
+ * @generated from message obiente.cloud.superadmin.v1.ListDNSRecordsRequest
+ */
+export type ListDNSRecordsRequest = Message<"obiente.cloud.superadmin.v1.ListDNSRecordsRequest"> & {
+  /**
+   * Filter by deployment ID
+   *
+   * @generated from field: optional string deployment_id = 1;
+   */
+  deploymentId?: string;
+
+  /**
+   * Filter by organization ID
+   *
+   * @generated from field: optional string organization_id = 2;
+   */
+  organizationId?: string;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.ListDNSRecordsRequest.
+ * Use `create(ListDNSRecordsRequestSchema)` to create a new message.
+ */
+export const ListDNSRecordsRequestSchema: GenMessage<ListDNSRecordsRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 9);
+
+/**
+ * DNS Record Information
+ *
+ * @generated from message obiente.cloud.superadmin.v1.DNSRecord
+ */
+export type DNSRecord = Message<"obiente.cloud.superadmin.v1.DNSRecord"> & {
+  /**
+   * @generated from field: string deployment_id = 1;
+   */
+  deploymentId: string;
+
+  /**
+   * @generated from field: string organization_id = 2;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string deployment_name = 3;
+   */
+  deploymentName: string;
+
+  /**
+   * Full domain (e.g., deploy-123.my.obiente.cloud)
+   *
+   * @generated from field: string domain = 4;
+   */
+  domain: string;
+
+  /**
+   * Resolved IP addresses
+   *
+   * @generated from field: repeated string ip_addresses = 5;
+   */
+  ipAddresses: string[];
+
+  /**
+   * Region where deployment is running
+   *
+   * @generated from field: string region = 6;
+   */
+  region: string;
+
+  /**
+   * Deployment status
+   *
+   * @generated from field: string status = 7;
+   */
+  status: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp last_resolved = 8;
+   */
+  lastResolved?: Timestamp;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.DNSRecord.
+ * Use `create(DNSRecordSchema)` to create a new message.
+ */
+export const DNSRecordSchema: GenMessage<DNSRecord> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 10);
+
+/**
+ * List DNS Records Response
+ *
+ * @generated from message obiente.cloud.superadmin.v1.ListDNSRecordsResponse
+ */
+export type ListDNSRecordsResponse = Message<"obiente.cloud.superadmin.v1.ListDNSRecordsResponse"> & {
+  /**
+   * @generated from field: repeated obiente.cloud.superadmin.v1.DNSRecord records = 1;
+   */
+  records: DNSRecord[];
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.ListDNSRecordsResponse.
+ * Use `create(ListDNSRecordsResponseSchema)` to create a new message.
+ */
+export const ListDNSRecordsResponseSchema: GenMessage<ListDNSRecordsResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 11);
+
+/**
+ * Get DNS Config Request
+ *
+ * @generated from message obiente.cloud.superadmin.v1.GetDNSConfigRequest
+ */
+export type GetDNSConfigRequest = Message<"obiente.cloud.superadmin.v1.GetDNSConfigRequest"> & {
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.GetDNSConfigRequest.
+ * Use `create(GetDNSConfigRequestSchema)` to create a new message.
+ */
+export const GetDNSConfigRequestSchema: GenMessage<GetDNSConfigRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 12);
+
+/**
+ * DNS Configuration
+ *
+ * @generated from message obiente.cloud.superadmin.v1.DNSConfig
+ */
+export type DNSConfig = Message<"obiente.cloud.superadmin.v1.DNSConfig"> & {
+  /**
+   * All configured Traefik IPs
+   *
+   * @generated from field: repeated string traefik_ips = 1;
+   */
+  traefikIps: string[];
+
+  /**
+   * Traefik IPs grouped by region
+   *
+   * @generated from field: map<string, obiente.cloud.superadmin.v1.TraefikIPs> traefik_ips_by_region = 2;
+   */
+  traefikIpsByRegion: { [key: string]: TraefikIPs };
+
+  /**
+   * DNS server IPs
+   *
+   * @generated from field: repeated string dns_server_ips = 3;
+   */
+  dnsServerIps: string[];
+
+  /**
+   * DNS server port
+   *
+   * @generated from field: string dns_port = 4;
+   */
+  dnsPort: string;
+
+  /**
+   * Cache TTL in seconds
+   *
+   * @generated from field: int64 cache_ttl_seconds = 5;
+   */
+  cacheTtlSeconds: bigint;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.DNSConfig.
+ * Use `create(DNSConfigSchema)` to create a new message.
+ */
+export const DNSConfigSchema: GenMessage<DNSConfig> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 13);
+
+/**
+ * @generated from message obiente.cloud.superadmin.v1.TraefikIPs
+ */
+export type TraefikIPs = Message<"obiente.cloud.superadmin.v1.TraefikIPs"> & {
+  /**
+   * @generated from field: string region = 1;
+   */
+  region: string;
+
+  /**
+   * @generated from field: repeated string ips = 2;
+   */
+  ips: string[];
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.TraefikIPs.
+ * Use `create(TraefikIPsSchema)` to create a new message.
+ */
+export const TraefikIPsSchema: GenMessage<TraefikIPs> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 14);
+
+/**
+ * Get DNS Config Response
+ *
+ * @generated from message obiente.cloud.superadmin.v1.GetDNSConfigResponse
+ */
+export type GetDNSConfigResponse = Message<"obiente.cloud.superadmin.v1.GetDNSConfigResponse"> & {
+  /**
+   * @generated from field: obiente.cloud.superadmin.v1.DNSConfig config = 1;
+   */
+  config?: DNSConfig;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.GetDNSConfigResponse.
+ * Use `create(GetDNSConfigResponseSchema)` to create a new message.
+ */
+export const GetDNSConfigResponseSchema: GenMessage<GetDNSConfigResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 15);
+
+/**
+ * Get Pricing Request - public endpoint
+ *
+ * @generated from message obiente.cloud.superadmin.v1.GetPricingRequest
+ */
+export type GetPricingRequest = Message<"obiente.cloud.superadmin.v1.GetPricingRequest"> & {
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.GetPricingRequest.
+ * Use `create(GetPricingRequestSchema)` to create a new message.
+ */
+export const GetPricingRequestSchema: GenMessage<GetPricingRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 16);
+
+/**
+ * Get Pricing Response
+ *
+ * @generated from message obiente.cloud.superadmin.v1.GetPricingResponse
+ */
+export type GetPricingResponse = Message<"obiente.cloud.superadmin.v1.GetPricingResponse"> & {
+  /**
+   * @generated from field: double cpu_cost_per_core_second = 1;
+   */
+  cpuCostPerCoreSecond: number;
+
+  /**
+   * @generated from field: double memory_cost_per_byte_second = 2;
+   */
+  memoryCostPerByteSecond: number;
+
+  /**
+   * @generated from field: double bandwidth_cost_per_byte = 3;
+   */
+  bandwidthCostPerByte: number;
+
+  /**
+   * @generated from field: double storage_cost_per_byte_month = 4;
+   */
+  storageCostPerByteMonth: number;
+
+  /**
+   * Human-readable description
+   *
+   * @generated from field: string pricing_info = 5;
+   */
+  pricingInfo: string;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.GetPricingResponse.
+ * Use `create(GetPricingResponseSchema)` to create a new message.
+ */
+export const GetPricingResponseSchema: GenMessage<GetPricingResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 17);
+
+/**
  * @generated from service obiente.cloud.superadmin.v1.SuperadminService
  */
 export const SuperadminService: GenService<{
@@ -319,6 +662,42 @@ export const SuperadminService: GenService<{
     methodKind: "unary";
     input: typeof GetOverviewRequestSchema;
     output: typeof GetOverviewResponseSchema;
+  },
+  /**
+   * DNS management endpoints
+   *
+   * @generated from rpc obiente.cloud.superadmin.v1.SuperadminService.QueryDNS
+   */
+  queryDNS: {
+    methodKind: "unary";
+    input: typeof QueryDNSRequestSchema;
+    output: typeof QueryDNSResponseSchema;
+  },
+  /**
+   * @generated from rpc obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords
+   */
+  listDNSRecords: {
+    methodKind: "unary";
+    input: typeof ListDNSRecordsRequestSchema;
+    output: typeof ListDNSRecordsResponseSchema;
+  },
+  /**
+   * @generated from rpc obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig
+   */
+  getDNSConfig: {
+    methodKind: "unary";
+    input: typeof GetDNSConfigRequestSchema;
+    output: typeof GetDNSConfigResponseSchema;
+  },
+  /**
+   * Public pricing endpoint - no authentication required
+   *
+   * @generated from rpc obiente.cloud.superadmin.v1.SuperadminService.GetPricing
+   */
+  getPricing: {
+    methodKind: "unary";
+    input: typeof GetPricingRequestSchema;
+    output: typeof GetPricingResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 0);
