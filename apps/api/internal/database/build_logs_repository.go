@@ -89,3 +89,8 @@ func (r *BuildLogsRepository) GetBuildLogs(ctx context.Context, buildID string, 
 	return logs, total, nil
 }
 
+// DeleteBuildLogs deletes all logs for a specific build
+func (r *BuildLogsRepository) DeleteBuildLogs(ctx context.Context, buildID string) error {
+	return r.db.WithContext(ctx).Where("build_id = ?", buildID).Delete(&BuildLog{}).Error
+}
+

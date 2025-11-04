@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-
-	"api/internal/logger"
 )
 
 type BuildHistoryRepository struct {
@@ -141,7 +139,8 @@ func (r *BuildHistoryRepository) GetLatestSuccessfulBuild(ctx context.Context, d
 	return &build, nil
 }
 
-// DeleteBuild deletes a build and its associated logs (cascade delete)
+// DeleteBuild deletes a build from PostgreSQL
+// Note: Build logs are stored in TimescaleDB and must be deleted separately
 func (r *BuildHistoryRepository) DeleteBuild(ctx context.Context, buildID, organizationID string) error {
 	// First verify the build belongs to the organization
 	var build BuildHistory
@@ -149,16 +148,17 @@ func (r *BuildHistoryRepository) DeleteBuild(ctx context.Context, buildID, organ
 		return err
 	}
 
-	// Delete the build (logs will be cascade deleted via foreign key)
+	// Delete the build (logs are handled separately in the service layer using TimescaleDB)
 	return r.db.WithContext(ctx).Where("id = ?", buildID).Delete(&BuildHistory{}).Error
 }
 
 // DeleteBuildsOlderThan deletes all builds older than the specified duration
-func (r *BuildHistoryRepository) DeleteBuildsOlderThan(ctx context.Context, olderThan time.Duration) (int64, error) {
+// Note: This function does NOT delete logs - logs are stored in TimescaleDB and must be deleted separately
+// The caller should use BuildLogsRepository to delete logs for the returned build IDs
+func (r *BuildHistoryRepository) DeleteBuildsOlderThan(ctx context.Context, olderThan time.Duration) ([]string, int64, error) {
 	cutoff := time.Now().Add(-olderThan)
 	
-	// Delete logs first (to avoid foreign key issues, though cascade should handle this)
-	// We'll delete logs for builds that will be deleted
+	// Get build IDs that will be deleted so caller can delete logs from TimescaleDB
 	var buildIDs []string
 	err := r.db.WithContext(ctx).
 		Model(&BuildHistory{}).
@@ -166,23 +166,13 @@ func (r *BuildHistoryRepository) DeleteBuildsOlderThan(ctx context.Context, olde
 		Pluck("id", &buildIDs).Error
 	
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 
-	// Delete logs for these builds
-	if len(buildIDs) > 0 {
-		if err := r.db.WithContext(ctx).
-			Where("build_id IN ?", buildIDs).
-			Delete(&BuildLog{}).Error; err != nil {
-			logger.Warn("[DeleteBuildsOlderThan] Failed to delete logs: %v", err)
-			// Continue anyway - cascade delete should handle this
-		}
-	}
-
-	// Delete builds
+	// Delete builds from PostgreSQL
 	result := r.db.WithContext(ctx).
 		Where("started_at < ?", cutoff).
 		Delete(&BuildHistory{})
 	
-	return result.RowsAffected, result.Error
+	return buildIDs, result.RowsAffected, result.Error
 }

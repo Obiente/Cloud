@@ -983,10 +983,21 @@ func (os *OrchestratorService) cleanupBuildHistory() {
 			
 			// Delete builds older than 30 days
 			buildHistoryRepo := database.NewBuildHistoryRepository(database.DB)
-			deletedCount, err := buildHistoryRepo.DeleteBuildsOlderThan(ctx, 30*24*time.Hour)
+			buildIDs, deletedCount, err := buildHistoryRepo.DeleteBuildsOlderThan(ctx, 30*24*time.Hour)
 			if err != nil {
 				logger.Warn("[Orchestrator] Failed to cleanup build history: %v", err)
 			} else {
+				// Delete logs from TimescaleDB for the deleted builds
+				if len(buildIDs) > 0 {
+					buildLogsRepo := database.NewBuildLogsRepository(database.MetricsDB)
+					for _, buildID := range buildIDs {
+						if err := buildLogsRepo.DeleteBuildLogs(ctx, buildID); err != nil {
+							logger.Warn("[Orchestrator] Failed to delete logs for build %s: %v", buildID, err)
+							// Continue with other builds
+						}
+					}
+					logger.Info("[Orchestrator] Deleted logs for %d build(s) from TimescaleDB", len(buildIDs))
+				}
 				logger.Info("[Orchestrator] Deleted %d build(s) older than 30 days", deletedCount)
 			}
 		case <-os.ctx.Done():

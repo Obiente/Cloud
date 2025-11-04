@@ -8,6 +8,7 @@ import (
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/logger"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -296,7 +297,14 @@ func (s *Service) DeleteBuild(ctx context.Context, req *connect.Request[deployme
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("build not found"))
 	}
 
-	// Delete the build
+	// Delete logs from TimescaleDB first (logs are stored separately from builds)
+	buildLogsRepo := database.NewBuildLogsRepository(database.MetricsDB)
+	if err := buildLogsRepo.DeleteBuildLogs(ctx, buildID); err != nil {
+		logger.Warn("[DeleteBuild] Failed to delete logs for build %s: %v", buildID, err)
+		// Continue anyway - try to delete the build
+	}
+
+	// Delete the build from PostgreSQL
 	if err := s.buildHistoryRepo.DeleteBuild(ctx, buildID, orgID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete build: %w", err))
 	}
