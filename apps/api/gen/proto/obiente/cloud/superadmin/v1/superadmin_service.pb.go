@@ -7,6 +7,7 @@
 package superadminv1
 
 import (
+	v11 "api/gen/proto/obiente/cloud/billing/v1"
 	v1 "api/gen/proto/obiente/cloud/deployments/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -2770,11 +2771,316 @@ func (x *PaymentMetrics) GetLargestPayment() float64 {
 	return 0
 }
 
+// List All Invoices Request
+type ListAllInvoicesRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId *string                `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"` // Filter by organization ID (optional)
+	Status         *string                `protobuf:"bytes,2,opt,name=status,proto3,oneof" json:"status,omitempty"`                                       // Filter by status: "draft", "open", "paid", "uncollectible", "void" (optional)
+	Limit          *int32                 `protobuf:"varint,3,opt,name=limit,proto3,oneof" json:"limit,omitempty"`                                        // Limit number of results (default: 50, max: 500)
+	StartDate      *string                `protobuf:"bytes,4,opt,name=start_date,json=startDate,proto3,oneof" json:"start_date,omitempty"`                // ISO 8601 date string (optional)
+	EndDate        *string                `protobuf:"bytes,5,opt,name=end_date,json=endDate,proto3,oneof" json:"end_date,omitempty"`                      // ISO 8601 date string (optional)
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ListAllInvoicesRequest) Reset() {
+	*x = ListAllInvoicesRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAllInvoicesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAllInvoicesRequest) ProtoMessage() {}
+
+func (x *ListAllInvoicesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAllInvoicesRequest.ProtoReflect.Descriptor instead.
+func (*ListAllInvoicesRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *ListAllInvoicesRequest) GetOrganizationId() string {
+	if x != nil && x.OrganizationId != nil {
+		return *x.OrganizationId
+	}
+	return ""
+}
+
+func (x *ListAllInvoicesRequest) GetStatus() string {
+	if x != nil && x.Status != nil {
+		return *x.Status
+	}
+	return ""
+}
+
+func (x *ListAllInvoicesRequest) GetLimit() int32 {
+	if x != nil && x.Limit != nil {
+		return *x.Limit
+	}
+	return 0
+}
+
+func (x *ListAllInvoicesRequest) GetStartDate() string {
+	if x != nil && x.StartDate != nil {
+		return *x.StartDate
+	}
+	return ""
+}
+
+func (x *ListAllInvoicesRequest) GetEndDate() string {
+	if x != nil && x.EndDate != nil {
+		return *x.EndDate
+	}
+	return ""
+}
+
+// List All Invoices Response
+type ListAllInvoicesResponse struct {
+	state         protoimpl.MessageState     `protogen:"open.v1"`
+	Invoices      []*InvoiceWithOrganization `protobuf:"bytes,1,rep,name=invoices,proto3" json:"invoices,omitempty"`
+	HasMore       bool                       `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
+	TotalCount    int64                      `protobuf:"varint,3,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAllInvoicesResponse) Reset() {
+	*x = ListAllInvoicesResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAllInvoicesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAllInvoicesResponse) ProtoMessage() {}
+
+func (x *ListAllInvoicesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAllInvoicesResponse.ProtoReflect.Descriptor instead.
+func (*ListAllInvoicesResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *ListAllInvoicesResponse) GetInvoices() []*InvoiceWithOrganization {
+	if x != nil {
+		return x.Invoices
+	}
+	return nil
+}
+
+func (x *ListAllInvoicesResponse) GetHasMore() bool {
+	if x != nil {
+		return x.HasMore
+	}
+	return false
+}
+
+func (x *ListAllInvoicesResponse) GetTotalCount() int64 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
+}
+
+// Invoice with Organization Info
+type InvoiceWithOrganization struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Invoice          *v11.Invoice           `protobuf:"bytes,1,opt,name=invoice,proto3" json:"invoice,omitempty"`
+	OrganizationId   string                 `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	OrganizationName string                 `protobuf:"bytes,3,opt,name=organization_name,json=organizationName,proto3" json:"organization_name,omitempty"`
+	CustomerEmail    string                 `protobuf:"bytes,4,opt,name=customer_email,json=customerEmail,proto3" json:"customer_email,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *InvoiceWithOrganization) Reset() {
+	*x = InvoiceWithOrganization{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InvoiceWithOrganization) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InvoiceWithOrganization) ProtoMessage() {}
+
+func (x *InvoiceWithOrganization) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InvoiceWithOrganization.ProtoReflect.Descriptor instead.
+func (*InvoiceWithOrganization) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *InvoiceWithOrganization) GetInvoice() *v11.Invoice {
+	if x != nil {
+		return x.Invoice
+	}
+	return nil
+}
+
+func (x *InvoiceWithOrganization) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *InvoiceWithOrganization) GetOrganizationName() string {
+	if x != nil {
+		return x.OrganizationName
+	}
+	return ""
+}
+
+func (x *InvoiceWithOrganization) GetCustomerEmail() string {
+	if x != nil {
+		return x.CustomerEmail
+	}
+	return ""
+}
+
+// Send Invoice Reminder Request
+type SendInvoiceReminderRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InvoiceId     string                 `protobuf:"bytes,1,opt,name=invoice_id,json=invoiceId,proto3" json:"invoice_id,omitempty"` // Stripe invoice ID
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SendInvoiceReminderRequest) Reset() {
+	*x = SendInvoiceReminderRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendInvoiceReminderRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendInvoiceReminderRequest) ProtoMessage() {}
+
+func (x *SendInvoiceReminderRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendInvoiceReminderRequest.ProtoReflect.Descriptor instead.
+func (*SendInvoiceReminderRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *SendInvoiceReminderRequest) GetInvoiceId() string {
+	if x != nil {
+		return x.InvoiceId
+	}
+	return ""
+}
+
+// Send Invoice Reminder Response
+type SendInvoiceReminderResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SendInvoiceReminderResponse) Reset() {
+	*x = SendInvoiceReminderResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendInvoiceReminderResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendInvoiceReminderResponse) ProtoMessage() {}
+
+func (x *SendInvoiceReminderResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendInvoiceReminderResponse.ProtoReflect.Descriptor instead.
+func (*SendInvoiceReminderResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *SendInvoiceReminderResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *SendInvoiceReminderResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
 var File_obiente_cloud_superadmin_v1_superadmin_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\n" +
-	"4obiente/cloud/superadmin/v1/superadmin_service.proto\x12\x1bobiente.cloud.superadmin.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a5obiente/cloud/deployments/v1/deployment_service.proto\"\x14\n" +
+	"4obiente/cloud/superadmin/v1/superadmin_service.proto\x12\x1bobiente.cloud.superadmin.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a5obiente/cloud/deployments/v1/deployment_service.proto\x1a.obiente/cloud/billing/v1/billing_service.proto\"\x14\n" +
 	"\x12GetOverviewRequest\"\xa3\x03\n" +
 	"\x13GetOverviewResponse\x12C\n" +
 	"\x06counts\x18\x01 \x01(\v2+.obiente.cloud.superadmin.v1.OverviewCountsR\x06counts\x12W\n" +
@@ -3015,7 +3321,35 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\x0ffailed_payments\x18\x03 \x01(\x03R\x0efailedPayments\x12)\n" +
 	"\x10pending_payments\x18\x04 \x01(\x03R\x0fpendingPayments\x124\n" +
 	"\x16average_payment_amount\x18\x05 \x01(\x01R\x14averagePaymentAmount\x12'\n" +
-	"\x0flargest_payment\x18\x06 \x01(\x01R\x0elargestPayment2\xf5\v\n" +
+	"\x0flargest_payment\x18\x06 \x01(\x01R\x0elargestPayment\"\x87\x02\n" +
+	"\x16ListAllInvoicesRequest\x12,\n" +
+	"\x0forganization_id\x18\x01 \x01(\tH\x00R\x0eorganizationId\x88\x01\x01\x12\x1b\n" +
+	"\x06status\x18\x02 \x01(\tH\x01R\x06status\x88\x01\x01\x12\x19\n" +
+	"\x05limit\x18\x03 \x01(\x05H\x02R\x05limit\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"start_date\x18\x04 \x01(\tH\x03R\tstartDate\x88\x01\x01\x12\x1e\n" +
+	"\bend_date\x18\x05 \x01(\tH\x04R\aendDate\x88\x01\x01B\x12\n" +
+	"\x10_organization_idB\t\n" +
+	"\a_statusB\b\n" +
+	"\x06_limitB\r\n" +
+	"\v_start_dateB\v\n" +
+	"\t_end_date\"\xa7\x01\n" +
+	"\x17ListAllInvoicesResponse\x12P\n" +
+	"\binvoices\x18\x01 \x03(\v24.obiente.cloud.superadmin.v1.InvoiceWithOrganizationR\binvoices\x12\x19\n" +
+	"\bhas_more\x18\x02 \x01(\bR\ahasMore\x12\x1f\n" +
+	"\vtotal_count\x18\x03 \x01(\x03R\n" +
+	"totalCount\"\xd3\x01\n" +
+	"\x17InvoiceWithOrganization\x12;\n" +
+	"\ainvoice\x18\x01 \x01(\v2!.obiente.cloud.billing.v1.InvoiceR\ainvoice\x12'\n" +
+	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12+\n" +
+	"\x11organization_name\x18\x03 \x01(\tR\x10organizationName\x12%\n" +
+	"\x0ecustomer_email\x18\x04 \x01(\tR\rcustomerEmail\";\n" +
+	"\x1aSendInvoiceReminderRequest\x12\x1d\n" +
+	"\n" +
+	"invoice_id\x18\x01 \x01(\tR\tinvoiceId\"Q\n" +
+	"\x1bSendInvoiceReminderResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage2\xfe\r\n" +
 	"\x11SuperadminService\x12p\n" +
 	"\vGetOverview\x12/.obiente.cloud.superadmin.v1.GetOverviewRequest\x1a0.obiente.cloud.superadmin.v1.GetOverviewResponse\x12g\n" +
 	"\bQueryDNS\x12,.obiente.cloud.superadmin.v1.QueryDNSRequest\x1a-.obiente.cloud.superadmin.v1.QueryDNSResponse\x12y\n" +
@@ -3028,7 +3362,9 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\n" +
 	"GetPricing\x12..obiente.cloud.superadmin.v1.GetPricingRequest\x1a/.obiente.cloud.superadmin.v1.GetPricingResponse\x12\x82\x01\n" +
 	"\x11GetAbuseDetection\x125.obiente.cloud.superadmin.v1.GetAbuseDetectionRequest\x1a6.obiente.cloud.superadmin.v1.GetAbuseDetectionResponse\x12\x82\x01\n" +
-	"\x11GetIncomeOverview\x125.obiente.cloud.superadmin.v1.GetIncomeOverviewRequest\x1a6.obiente.cloud.superadmin.v1.GetIncomeOverviewResponseB8Z6api/gen/proto/obiente/cloud/superadmin/v1;superadminv1b\x06proto3"
+	"\x11GetIncomeOverview\x125.obiente.cloud.superadmin.v1.GetIncomeOverviewRequest\x1a6.obiente.cloud.superadmin.v1.GetIncomeOverviewResponse\x12|\n" +
+	"\x0fListAllInvoices\x123.obiente.cloud.superadmin.v1.ListAllInvoicesRequest\x1a4.obiente.cloud.superadmin.v1.ListAllInvoicesResponse\x12\x88\x01\n" +
+	"\x13SendInvoiceReminder\x127.obiente.cloud.superadmin.v1.SendInvoiceReminderRequest\x1a8.obiente.cloud.superadmin.v1.SendInvoiceReminderResponseB8Z6api/gen/proto/obiente/cloud/superadmin/v1;superadminv1b\x06proto3"
 
 var (
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescOnce sync.Once
@@ -3042,7 +3378,7 @@ func file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP() []b
 	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescData
 }
 
-var file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
+var file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
 var file_obiente_cloud_superadmin_v1_superadmin_service_proto_goTypes = []any{
 	(*GetOverviewRequest)(nil),                               // 0: obiente.cloud.superadmin.v1.GetOverviewRequest
 	(*GetOverviewResponse)(nil),                              // 1: obiente.cloud.superadmin.v1.GetOverviewResponse
@@ -3083,10 +3419,16 @@ var file_obiente_cloud_superadmin_v1_superadmin_service_proto_goTypes = []any{
 	(*TopCustomer)(nil),                                      // 36: obiente.cloud.superadmin.v1.TopCustomer
 	(*BillingTransaction)(nil),                               // 37: obiente.cloud.superadmin.v1.BillingTransaction
 	(*PaymentMetrics)(nil),                                   // 38: obiente.cloud.superadmin.v1.PaymentMetrics
-	nil,                                                      // 39: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
-	(*timestamppb.Timestamp)(nil),                            // 40: google.protobuf.Timestamp
-	(v1.Environment)(0),                                      // 41: obiente.cloud.deployments.v1.Environment
-	(v1.DeploymentStatus)(0),                                 // 42: obiente.cloud.deployments.v1.DeploymentStatus
+	(*ListAllInvoicesRequest)(nil),                           // 39: obiente.cloud.superadmin.v1.ListAllInvoicesRequest
+	(*ListAllInvoicesResponse)(nil),                          // 40: obiente.cloud.superadmin.v1.ListAllInvoicesResponse
+	(*InvoiceWithOrganization)(nil),                          // 41: obiente.cloud.superadmin.v1.InvoiceWithOrganization
+	(*SendInvoiceReminderRequest)(nil),                       // 42: obiente.cloud.superadmin.v1.SendInvoiceReminderRequest
+	(*SendInvoiceReminderResponse)(nil),                      // 43: obiente.cloud.superadmin.v1.SendInvoiceReminderResponse
+	nil,                                                      // 44: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
+	(*timestamppb.Timestamp)(nil),                            // 45: google.protobuf.Timestamp
+	(v1.Environment)(0),                                      // 46: obiente.cloud.deployments.v1.Environment
+	(v1.DeploymentStatus)(0),                                 // 47: obiente.cloud.deployments.v1.DeploymentStatus
+	(*v11.Invoice)(nil),                                      // 48: obiente.cloud.billing.v1.Invoice
 }
 var file_obiente_cloud_superadmin_v1_superadmin_service_proto_depIdxs = []int32{
 	2,  // 0: obiente.cloud.superadmin.v1.GetOverviewResponse.counts:type_name -> obiente.cloud.superadmin.v1.OverviewCounts
@@ -3094,61 +3436,67 @@ var file_obiente_cloud_superadmin_v1_superadmin_service_proto_depIdxs = []int32{
 	4,  // 2: obiente.cloud.superadmin.v1.GetOverviewResponse.pending_invites:type_name -> obiente.cloud.superadmin.v1.PendingInvite
 	5,  // 3: obiente.cloud.superadmin.v1.GetOverviewResponse.deployments:type_name -> obiente.cloud.superadmin.v1.DeploymentOverview
 	6,  // 4: obiente.cloud.superadmin.v1.GetOverviewResponse.usages:type_name -> obiente.cloud.superadmin.v1.OrganizationUsage
-	40, // 5: obiente.cloud.superadmin.v1.OrganizationOverview.created_at:type_name -> google.protobuf.Timestamp
-	40, // 6: obiente.cloud.superadmin.v1.PendingInvite.invited_at:type_name -> google.protobuf.Timestamp
-	41, // 7: obiente.cloud.superadmin.v1.DeploymentOverview.environment:type_name -> obiente.cloud.deployments.v1.Environment
-	42, // 8: obiente.cloud.superadmin.v1.DeploymentOverview.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
-	40, // 9: obiente.cloud.superadmin.v1.DeploymentOverview.created_at:type_name -> google.protobuf.Timestamp
-	40, // 10: obiente.cloud.superadmin.v1.DeploymentOverview.last_deployed_at:type_name -> google.protobuf.Timestamp
-	40, // 11: obiente.cloud.superadmin.v1.DNSRecord.last_resolved:type_name -> google.protobuf.Timestamp
+	45, // 5: obiente.cloud.superadmin.v1.OrganizationOverview.created_at:type_name -> google.protobuf.Timestamp
+	45, // 6: obiente.cloud.superadmin.v1.PendingInvite.invited_at:type_name -> google.protobuf.Timestamp
+	46, // 7: obiente.cloud.superadmin.v1.DeploymentOverview.environment:type_name -> obiente.cloud.deployments.v1.Environment
+	47, // 8: obiente.cloud.superadmin.v1.DeploymentOverview.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
+	45, // 9: obiente.cloud.superadmin.v1.DeploymentOverview.created_at:type_name -> google.protobuf.Timestamp
+	45, // 10: obiente.cloud.superadmin.v1.DeploymentOverview.last_deployed_at:type_name -> google.protobuf.Timestamp
+	45, // 11: obiente.cloud.superadmin.v1.DNSRecord.last_resolved:type_name -> google.protobuf.Timestamp
 	10, // 12: obiente.cloud.superadmin.v1.ListDNSRecordsResponse.records:type_name -> obiente.cloud.superadmin.v1.DNSRecord
-	39, // 13: obiente.cloud.superadmin.v1.DNSConfig.traefik_ips_by_region:type_name -> obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
+	44, // 13: obiente.cloud.superadmin.v1.DNSConfig.traefik_ips_by_region:type_name -> obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
 	13, // 14: obiente.cloud.superadmin.v1.GetDNSConfigResponse.config:type_name -> obiente.cloud.superadmin.v1.DNSConfig
-	40, // 15: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.created_at:type_name -> google.protobuf.Timestamp
-	40, // 16: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.revoked_at:type_name -> google.protobuf.Timestamp
+	45, // 15: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.created_at:type_name -> google.protobuf.Timestamp
+	45, // 16: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.revoked_at:type_name -> google.protobuf.Timestamp
 	25, // 17: obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse.api_keys:type_name -> obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo
 	29, // 18: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.suspicious_organizations:type_name -> obiente.cloud.superadmin.v1.SuspiciousOrganization
 	30, // 19: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.suspicious_activities:type_name -> obiente.cloud.superadmin.v1.SuspiciousActivity
 	31, // 20: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.metrics:type_name -> obiente.cloud.superadmin.v1.AbuseMetrics
-	40, // 21: obiente.cloud.superadmin.v1.SuspiciousOrganization.created_at:type_name -> google.protobuf.Timestamp
-	40, // 22: obiente.cloud.superadmin.v1.SuspiciousOrganization.last_activity:type_name -> google.protobuf.Timestamp
-	40, // 23: obiente.cloud.superadmin.v1.SuspiciousActivity.occurred_at:type_name -> google.protobuf.Timestamp
+	45, // 21: obiente.cloud.superadmin.v1.SuspiciousOrganization.created_at:type_name -> google.protobuf.Timestamp
+	45, // 22: obiente.cloud.superadmin.v1.SuspiciousOrganization.last_activity:type_name -> google.protobuf.Timestamp
+	45, // 23: obiente.cloud.superadmin.v1.SuspiciousActivity.occurred_at:type_name -> google.protobuf.Timestamp
 	34, // 24: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.summary:type_name -> obiente.cloud.superadmin.v1.IncomeSummary
 	35, // 25: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.monthly_income:type_name -> obiente.cloud.superadmin.v1.MonthlyIncome
 	36, // 26: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.top_customers:type_name -> obiente.cloud.superadmin.v1.TopCustomer
 	37, // 27: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.transactions:type_name -> obiente.cloud.superadmin.v1.BillingTransaction
 	38, // 28: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.payment_metrics:type_name -> obiente.cloud.superadmin.v1.PaymentMetrics
-	40, // 29: obiente.cloud.superadmin.v1.TopCustomer.first_payment:type_name -> google.protobuf.Timestamp
-	40, // 30: obiente.cloud.superadmin.v1.TopCustomer.last_payment:type_name -> google.protobuf.Timestamp
-	40, // 31: obiente.cloud.superadmin.v1.BillingTransaction.created_at:type_name -> google.protobuf.Timestamp
-	14, // 32: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry.value:type_name -> obiente.cloud.superadmin.v1.TraefikIPs
-	0,  // 33: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:input_type -> obiente.cloud.superadmin.v1.GetOverviewRequest
-	7,  // 34: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:input_type -> obiente.cloud.superadmin.v1.QueryDNSRequest
-	9,  // 35: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:input_type -> obiente.cloud.superadmin.v1.ListDNSRecordsRequest
-	12, // 36: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:input_type -> obiente.cloud.superadmin.v1.GetDNSConfigRequest
-	18, // 37: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyRequest
-	24, // 38: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:input_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysRequest
-	20, // 39: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyRequest
-	22, // 40: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationRequest
-	16, // 41: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:input_type -> obiente.cloud.superadmin.v1.GetPricingRequest
-	27, // 42: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:input_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionRequest
-	32, // 43: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:input_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewRequest
-	1,  // 44: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:output_type -> obiente.cloud.superadmin.v1.GetOverviewResponse
-	8,  // 45: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:output_type -> obiente.cloud.superadmin.v1.QueryDNSResponse
-	11, // 46: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:output_type -> obiente.cloud.superadmin.v1.ListDNSRecordsResponse
-	15, // 47: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:output_type -> obiente.cloud.superadmin.v1.GetDNSConfigResponse
-	19, // 48: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyResponse
-	26, // 49: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:output_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse
-	21, // 50: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyResponse
-	23, // 51: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationResponse
-	17, // 52: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:output_type -> obiente.cloud.superadmin.v1.GetPricingResponse
-	28, // 53: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:output_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionResponse
-	33, // 54: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:output_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewResponse
-	44, // [44:55] is the sub-list for method output_type
-	33, // [33:44] is the sub-list for method input_type
-	33, // [33:33] is the sub-list for extension type_name
-	33, // [33:33] is the sub-list for extension extendee
-	0,  // [0:33] is the sub-list for field type_name
+	45, // 29: obiente.cloud.superadmin.v1.TopCustomer.first_payment:type_name -> google.protobuf.Timestamp
+	45, // 30: obiente.cloud.superadmin.v1.TopCustomer.last_payment:type_name -> google.protobuf.Timestamp
+	45, // 31: obiente.cloud.superadmin.v1.BillingTransaction.created_at:type_name -> google.protobuf.Timestamp
+	41, // 32: obiente.cloud.superadmin.v1.ListAllInvoicesResponse.invoices:type_name -> obiente.cloud.superadmin.v1.InvoiceWithOrganization
+	48, // 33: obiente.cloud.superadmin.v1.InvoiceWithOrganization.invoice:type_name -> obiente.cloud.billing.v1.Invoice
+	14, // 34: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry.value:type_name -> obiente.cloud.superadmin.v1.TraefikIPs
+	0,  // 35: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:input_type -> obiente.cloud.superadmin.v1.GetOverviewRequest
+	7,  // 36: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:input_type -> obiente.cloud.superadmin.v1.QueryDNSRequest
+	9,  // 37: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:input_type -> obiente.cloud.superadmin.v1.ListDNSRecordsRequest
+	12, // 38: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:input_type -> obiente.cloud.superadmin.v1.GetDNSConfigRequest
+	18, // 39: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyRequest
+	24, // 40: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:input_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysRequest
+	20, // 41: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyRequest
+	22, // 42: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationRequest
+	16, // 43: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:input_type -> obiente.cloud.superadmin.v1.GetPricingRequest
+	27, // 44: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:input_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionRequest
+	32, // 45: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:input_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewRequest
+	39, // 46: obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices:input_type -> obiente.cloud.superadmin.v1.ListAllInvoicesRequest
+	42, // 47: obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder:input_type -> obiente.cloud.superadmin.v1.SendInvoiceReminderRequest
+	1,  // 48: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:output_type -> obiente.cloud.superadmin.v1.GetOverviewResponse
+	8,  // 49: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:output_type -> obiente.cloud.superadmin.v1.QueryDNSResponse
+	11, // 50: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:output_type -> obiente.cloud.superadmin.v1.ListDNSRecordsResponse
+	15, // 51: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:output_type -> obiente.cloud.superadmin.v1.GetDNSConfigResponse
+	19, // 52: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyResponse
+	26, // 53: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:output_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse
+	21, // 54: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyResponse
+	23, // 55: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationResponse
+	17, // 56: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:output_type -> obiente.cloud.superadmin.v1.GetPricingResponse
+	28, // 57: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:output_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionResponse
+	33, // 58: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:output_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewResponse
+	40, // 59: obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices:output_type -> obiente.cloud.superadmin.v1.ListAllInvoicesResponse
+	43, // 60: obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder:output_type -> obiente.cloud.superadmin.v1.SendInvoiceReminderResponse
+	48, // [48:61] is the sub-list for method output_type
+	35, // [35:48] is the sub-list for method input_type
+	35, // [35:35] is the sub-list for extension type_name
+	35, // [35:35] is the sub-list for extension extendee
+	0,  // [0:35] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_superadmin_v1_superadmin_service_proto_init() }
@@ -3163,13 +3511,14 @@ func file_obiente_cloud_superadmin_v1_superadmin_service_proto_init() {
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[24].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[32].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[37].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[39].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc), len(file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   40,
+			NumMessages:   45,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

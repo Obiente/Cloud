@@ -66,6 +66,12 @@ const (
 	// SuperadminServiceGetIncomeOverviewProcedure is the fully-qualified name of the
 	// SuperadminService's GetIncomeOverview RPC.
 	SuperadminServiceGetIncomeOverviewProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetIncomeOverview"
+	// SuperadminServiceListAllInvoicesProcedure is the fully-qualified name of the SuperadminService's
+	// ListAllInvoices RPC.
+	SuperadminServiceListAllInvoicesProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListAllInvoices"
+	// SuperadminServiceSendInvoiceReminderProcedure is the fully-qualified name of the
+	// SuperadminService's SendInvoiceReminder RPC.
+	SuperadminServiceSendInvoiceReminderProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SendInvoiceReminder"
 )
 
 // SuperadminServiceClient is a client for the obiente.cloud.superadmin.v1.SuperadminService
@@ -88,6 +94,9 @@ type SuperadminServiceClient interface {
 	GetAbuseDetection(context.Context, *connect.Request[v1.GetAbuseDetectionRequest]) (*connect.Response[v1.GetAbuseDetectionResponse], error)
 	// Income and billing overview endpoints
 	GetIncomeOverview(context.Context, *connect.Request[v1.GetIncomeOverviewRequest]) (*connect.Response[v1.GetIncomeOverviewResponse], error)
+	// Invoice management endpoints
+	ListAllInvoices(context.Context, *connect.Request[v1.ListAllInvoicesRequest]) (*connect.Response[v1.ListAllInvoicesResponse], error)
+	SendInvoiceReminder(context.Context, *connect.Request[v1.SendInvoiceReminderRequest]) (*connect.Response[v1.SendInvoiceReminderResponse], error)
 }
 
 // NewSuperadminServiceClient constructs a client for the
@@ -168,6 +177,18 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("GetIncomeOverview")),
 			connect.WithClientOptions(opts...),
 		),
+		listAllInvoices: connect.NewClient[v1.ListAllInvoicesRequest, v1.ListAllInvoicesResponse](
+			httpClient,
+			baseURL+SuperadminServiceListAllInvoicesProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListAllInvoices")),
+			connect.WithClientOptions(opts...),
+		),
+		sendInvoiceReminder: connect.NewClient[v1.SendInvoiceReminderRequest, v1.SendInvoiceReminderResponse](
+			httpClient,
+			baseURL+SuperadminServiceSendInvoiceReminderProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SendInvoiceReminder")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -184,6 +205,8 @@ type superadminServiceClient struct {
 	getPricing                               *connect.Client[v1.GetPricingRequest, v1.GetPricingResponse]
 	getAbuseDetection                        *connect.Client[v1.GetAbuseDetectionRequest, v1.GetAbuseDetectionResponse]
 	getIncomeOverview                        *connect.Client[v1.GetIncomeOverviewRequest, v1.GetIncomeOverviewResponse]
+	listAllInvoices                          *connect.Client[v1.ListAllInvoicesRequest, v1.ListAllInvoicesResponse]
+	sendInvoiceReminder                      *connect.Client[v1.SendInvoiceReminderRequest, v1.SendInvoiceReminderResponse]
 }
 
 // GetOverview calls obiente.cloud.superadmin.v1.SuperadminService.GetOverview.
@@ -245,6 +268,16 @@ func (c *superadminServiceClient) GetIncomeOverview(ctx context.Context, req *co
 	return c.getIncomeOverview.CallUnary(ctx, req)
 }
 
+// ListAllInvoices calls obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices.
+func (c *superadminServiceClient) ListAllInvoices(ctx context.Context, req *connect.Request[v1.ListAllInvoicesRequest]) (*connect.Response[v1.ListAllInvoicesResponse], error) {
+	return c.listAllInvoices.CallUnary(ctx, req)
+}
+
+// SendInvoiceReminder calls obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder.
+func (c *superadminServiceClient) SendInvoiceReminder(ctx context.Context, req *connect.Request[v1.SendInvoiceReminderRequest]) (*connect.Response[v1.SendInvoiceReminderResponse], error) {
+	return c.sendInvoiceReminder.CallUnary(ctx, req)
+}
+
 // SuperadminServiceHandler is an implementation of the
 // obiente.cloud.superadmin.v1.SuperadminService service.
 type SuperadminServiceHandler interface {
@@ -265,6 +298,9 @@ type SuperadminServiceHandler interface {
 	GetAbuseDetection(context.Context, *connect.Request[v1.GetAbuseDetectionRequest]) (*connect.Response[v1.GetAbuseDetectionResponse], error)
 	// Income and billing overview endpoints
 	GetIncomeOverview(context.Context, *connect.Request[v1.GetIncomeOverviewRequest]) (*connect.Response[v1.GetIncomeOverviewResponse], error)
+	// Invoice management endpoints
+	ListAllInvoices(context.Context, *connect.Request[v1.ListAllInvoicesRequest]) (*connect.Response[v1.ListAllInvoicesResponse], error)
+	SendInvoiceReminder(context.Context, *connect.Request[v1.SendInvoiceReminderRequest]) (*connect.Response[v1.SendInvoiceReminderResponse], error)
 }
 
 // NewSuperadminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -340,6 +376,18 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		connect.WithSchema(superadminServiceMethods.ByName("GetIncomeOverview")),
 		connect.WithHandlerOptions(opts...),
 	)
+	superadminServiceListAllInvoicesHandler := connect.NewUnaryHandler(
+		SuperadminServiceListAllInvoicesProcedure,
+		svc.ListAllInvoices,
+		connect.WithSchema(superadminServiceMethods.ByName("ListAllInvoices")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceSendInvoiceReminderHandler := connect.NewUnaryHandler(
+		SuperadminServiceSendInvoiceReminderProcedure,
+		svc.SendInvoiceReminder,
+		connect.WithSchema(superadminServiceMethods.ByName("SendInvoiceReminder")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.superadmin.v1.SuperadminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SuperadminServiceGetOverviewProcedure:
@@ -364,6 +412,10 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceGetAbuseDetectionHandler.ServeHTTP(w, r)
 		case SuperadminServiceGetIncomeOverviewProcedure:
 			superadminServiceGetIncomeOverviewHandler.ServeHTTP(w, r)
+		case SuperadminServiceListAllInvoicesProcedure:
+			superadminServiceListAllInvoicesHandler.ServeHTTP(w, r)
+		case SuperadminServiceSendInvoiceReminderProcedure:
+			superadminServiceSendInvoiceReminderHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -415,4 +467,12 @@ func (UnimplementedSuperadminServiceHandler) GetAbuseDetection(context.Context, 
 
 func (UnimplementedSuperadminServiceHandler) GetIncomeOverview(context.Context, *connect.Request[v1.GetIncomeOverviewRequest]) (*connect.Response[v1.GetIncomeOverviewResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListAllInvoices(context.Context, *connect.Request[v1.ListAllInvoicesRequest]) (*connect.Response[v1.ListAllInvoicesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) SendInvoiceReminder(context.Context, *connect.Request[v1.SendInvoiceReminderRequest]) (*connect.Response[v1.SendInvoiceReminderResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder is not implemented"))
 }

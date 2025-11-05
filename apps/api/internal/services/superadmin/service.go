@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	billingv1 "api/gen/proto/obiente/cloud/billing/v1"
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	superadminv1 "api/gen/proto/obiente/cloud/superadmin/v1"
 	superadminv1connect "api/gen/proto/obiente/cloud/superadmin/v1/superadminv1connect"
@@ -1804,4 +1805,187 @@ func (s *Service) calculateEstimatedMonthlyIncome(ctx context.Context) float64 {
 
 	// Convert from cents to dollars
 	return float64(totalEstimatedIncome) / 100.0
+}
+
+// ListAllInvoices lists all invoices across all organizations
+func (s *Service) ListAllInvoices(ctx context.Context, req *connect.Request[superadminv1.ListAllInvoicesRequest]) (*connect.Response[superadminv1.ListAllInvoicesResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	if s.stripeClient == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("stripe is not configured"))
+	}
+
+	limit := int(req.Msg.GetLimit())
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	var status *string
+	if req.Msg.Status != nil && *req.Msg.Status != "" {
+		status = req.Msg.Status
+	}
+
+	var startDate, endDate *time.Time
+	if req.Msg.StartDate != nil && *req.Msg.StartDate != "" {
+		if parsed, err := time.Parse("2006-01-02", *req.Msg.StartDate); err == nil {
+			startDate = &parsed
+		}
+	}
+	if req.Msg.EndDate != nil && *req.Msg.EndDate != "" {
+		if parsed, err := time.Parse("2006-01-02", *req.Msg.EndDate); err == nil {
+			endDate = &parsed
+		}
+	}
+
+	// Get all invoices from Stripe
+	stripeInvoices, hasMore, err := s.stripeClient.ListAllInvoices(ctx, limit, status, startDate, endDate)
+	if err != nil {
+		logger.Error("[SuperAdmin] Failed to list all invoices: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list invoices: %w", err))
+	}
+
+	// Map customer IDs to organization info
+	customerToOrg := make(map[string]*customerOrgInfo)
+	var orgIDFilter *string
+	if req.Msg.OrganizationId != nil && *req.Msg.OrganizationId != "" {
+		orgIDFilter = req.Msg.OrganizationId
+	}
+
+	// Get all billing accounts with Stripe customer IDs
+	var billingAccounts []database.BillingAccount
+	query := database.DB.Where("stripe_customer_id IS NOT NULL AND stripe_customer_id != ''")
+	if orgIDFilter != nil {
+		query = query.Where("organization_id = ?", *orgIDFilter)
+	}
+	if err := query.Find(&billingAccounts).Error; err != nil {
+		logger.Error("[SuperAdmin] Failed to query billing accounts: %v", err)
+	} else {
+		for _, ba := range billingAccounts {
+			if ba.StripeCustomerID != nil {
+				// Get organization name
+				var org database.Organization
+				if err := database.DB.First(&org, "id = ?", ba.OrganizationID).Error; err == nil {
+					customerToOrg[*ba.StripeCustomerID] = &customerOrgInfo{
+						OrganizationID: ba.OrganizationID,
+						OrganizationName: org.Name,
+						BillingEmail: ba.BillingEmail,
+					}
+				}
+			}
+		}
+	}
+
+	// Convert Stripe invoices to proto
+	invoices := make([]*superadminv1.InvoiceWithOrganization, 0, len(stripeInvoices))
+	for _, inv := range stripeInvoices {
+		orgInfo := customerToOrg[inv.Customer.ID]
+		if orgIDFilter != nil && orgInfo == nil {
+			continue // Skip if org filter doesn't match
+		}
+
+		protoInvoice := &billingv1.Invoice{
+			Id:         inv.ID,
+			Number:     inv.Number,
+			Status:     string(inv.Status),
+			AmountDue:  inv.AmountDue,
+			AmountPaid: inv.AmountPaid,
+			Currency:   strings.ToUpper(string(inv.Currency)),
+		}
+
+		if inv.Created > 0 {
+			protoInvoice.Date = timestamppb.New(time.Unix(inv.Created, 0))
+		}
+
+		if inv.DueDate > 0 {
+			protoInvoice.DueDate = timestamppb.New(time.Unix(inv.DueDate, 0))
+		}
+
+		if inv.InvoicePDF != "" {
+			protoInvoice.InvoicePdf = &inv.InvoicePDF
+		}
+
+		if inv.HostedInvoiceURL != "" {
+			protoInvoice.HostedInvoiceUrl = &inv.HostedInvoiceURL
+		}
+
+		if inv.Description != "" {
+			protoInvoice.Description = &inv.Description
+		}
+
+		customerEmail := ""
+		if orgInfo != nil && orgInfo.BillingEmail != nil {
+			customerEmail = *orgInfo.BillingEmail
+		} else if inv.Customer.Email != "" {
+			customerEmail = inv.Customer.Email
+		}
+
+		orgID := ""
+		orgName := "Unknown"
+		if orgInfo != nil {
+			orgID = orgInfo.OrganizationID
+			orgName = orgInfo.OrganizationName
+		}
+
+		invoices = append(invoices, &superadminv1.InvoiceWithOrganization{
+			Invoice:          protoInvoice,
+			OrganizationId:   orgID,
+			OrganizationName: orgName,
+			CustomerEmail:    customerEmail,
+		})
+	}
+
+	return connect.NewResponse(&superadminv1.ListAllInvoicesResponse{
+		Invoices:   invoices,
+		HasMore:    hasMore,
+		TotalCount: int64(len(invoices)),
+	}), nil
+}
+
+// SendInvoiceReminder sends an invoice reminder email to the customer
+func (s *Service) SendInvoiceReminder(ctx context.Context, req *connect.Request[superadminv1.SendInvoiceReminderRequest]) (*connect.Response[superadminv1.SendInvoiceReminderResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	if s.stripeClient == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("stripe is not configured"))
+	}
+
+	invoiceID := strings.TrimSpace(req.Msg.GetInvoiceId())
+	if invoiceID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invoice_id is required"))
+	}
+
+	// Send invoice via Stripe
+	_, err = s.stripeClient.SendInvoice(ctx, invoiceID)
+	if err != nil {
+		logger.Error("[SuperAdmin] Failed to send invoice reminder: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to send invoice reminder: %w", err))
+	}
+
+	logger.Info("[SuperAdmin] Sent invoice reminder for invoice: %s", invoiceID)
+
+	return connect.NewResponse(&superadminv1.SendInvoiceReminderResponse{
+		Success: true,
+		Message: "Invoice reminder sent successfully",
+	}), nil
+}
+
+type customerOrgInfo struct {
+	OrganizationID   string
+	OrganizationName string
+	BillingEmail     *string
 }

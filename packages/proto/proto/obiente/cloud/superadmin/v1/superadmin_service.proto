@@ -6,6 +6,7 @@ option go_package = "api/gen/proto/obiente/cloud/superadmin/v1;superadminv1";
 
 import "google/protobuf/timestamp.proto";
 import "obiente/cloud/deployments/v1/deployment_service.proto";
+import "obiente/cloud/billing/v1/billing_service.proto";
 
 service SuperadminService {
   // Returns a system-wide overview for superadmin operators.
@@ -29,6 +30,10 @@ service SuperadminService {
   
   // Income and billing overview endpoints
   rpc GetIncomeOverview(GetIncomeOverviewRequest) returns (GetIncomeOverviewResponse);
+  
+  // Invoice management endpoints
+  rpc ListAllInvoices(ListAllInvoicesRequest) returns (ListAllInvoicesResponse);
+  rpc SendInvoiceReminder(SendInvoiceReminderRequest) returns (SendInvoiceReminderResponse);
 }
 
 message GetOverviewRequest {}
@@ -343,4 +348,41 @@ message PaymentMetrics {
   int64 pending_payments = 4;
   double average_payment_amount = 5;
   double largest_payment = 6;
+}
+
+// Invoice Management
+
+// List All Invoices Request
+message ListAllInvoicesRequest {
+  optional string organization_id = 1; // Filter by organization ID (optional)
+  optional string status = 2; // Filter by status: "draft", "open", "paid", "uncollectible", "void" (optional)
+  optional int32 limit = 3; // Limit number of results (default: 50, max: 500)
+  optional string start_date = 4; // ISO 8601 date string (optional)
+  optional string end_date = 5; // ISO 8601 date string (optional)
+}
+
+// List All Invoices Response
+message ListAllInvoicesResponse {
+  repeated InvoiceWithOrganization invoices = 1;
+  bool has_more = 2;
+  int64 total_count = 3;
+}
+
+// Invoice with Organization Info
+message InvoiceWithOrganization {
+  obiente.cloud.billing.v1.Invoice invoice = 1;
+  string organization_id = 2;
+  string organization_name = 3;
+  string customer_email = 4;
+}
+
+// Send Invoice Reminder Request
+message SendInvoiceReminderRequest {
+  string invoice_id = 1; // Stripe invoice ID
+}
+
+// Send Invoice Reminder Response
+message SendInvoiceReminderResponse {
+  bool success = 1;
+  string message = 2;
 }

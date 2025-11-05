@@ -179,6 +179,12 @@
             :icon="CurrencyDollarIcon"
             @navigate="handleNavigate"
           />
+          <AppNavigationLink
+            to="/superadmin/invoices"
+            label="Invoices"
+            :icon="DocumentTextIcon"
+            @navigate="handleNavigate"
+          />
         </template>
       </nav>
     </div>
@@ -210,6 +216,7 @@ import {
   ChatBubbleLeftRightIcon,
   BookOpenIcon,
   CurrencyDollarIcon,
+  DocumentTextIcon,
 } from "@heroicons/vue/24/outline";
 import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
 import { createListCollection } from "@ark-ui/vue";

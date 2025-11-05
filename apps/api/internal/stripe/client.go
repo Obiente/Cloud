@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/stripe/stripe-go/v83"
 	portalsession "github.com/stripe/stripe-go/v83/billingportal/session"
@@ -520,4 +521,60 @@ type SubscriptionCheckoutSessionParams struct {
 	CustomerID     string // Optional: existing Stripe customer ID
 	SuccessURL     string
 	CancelURL      string
+}
+
+// SendInvoice sends an invoice to the customer via email
+func (c *Client) SendInvoice(ctx context.Context, invoiceID string) (*stripe.Invoice, error) {
+	inv, err := invoice.SendInvoice(invoiceID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("send invoice: %w", err)
+	}
+	return inv, nil
+}
+
+// ListAllInvoices lists all invoices across all customers (for superadmin)
+func (c *Client) ListAllInvoices(ctx context.Context, limit int, status *string, startDate, endDate *time.Time) ([]*stripe.Invoice, bool, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	params := &stripe.InvoiceListParams{
+		ListParams: stripe.ListParams{
+			Limit: stripe.Int64(int64(limit)),
+		},
+	}
+
+	if status != nil && *status != "" {
+		params.Status = stripe.String(*status)
+	}
+
+	// Note: Stripe API doesn't support direct date filtering in ListParams
+	// We'll filter client-side if needed, or use created timestamp range
+	// For now, we'll fetch all and filter in the service layer if dates are provided
+
+	iter := invoice.List(params)
+	var invoices []*stripe.Invoice
+	for iter.Next() {
+		inv := iter.Invoice()
+		
+		// Filter by date range if provided
+		if startDate != nil && inv.Created < startDate.Unix() {
+			continue
+		}
+		if endDate != nil && inv.Created > endDate.Unix() {
+			continue
+		}
+		
+		invoices = append(invoices, inv)
+	}
+
+	hasMore := iter.Meta().HasMore
+	if err := iter.Err(); err != nil {
+		return nil, false, fmt.Errorf("list all invoices: %w", err)
+	}
+
+	return invoices, hasMore, nil
 }
