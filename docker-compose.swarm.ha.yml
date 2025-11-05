@@ -411,10 +411,12 @@ services:
 
   # Go API - ConnectRPC service for deployments
   api:
-    image: obiente/cloud-api:latest
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    image: ${API_IMAGE:-ghcr.io/obiente/cloud-api:latest}
+    # Build section removed - using image from GitHub Container Registry
+    # To build locally, set API_IMAGE=obiente/cloud-api:latest and uncomment build section below
+    # build:
+    #   context: .
+    #   dockerfile: apps/api/Dockerfile
     environment:
       PORT: ${GO_API_PORT:-3001}
       # Connect to PostgreSQL via PgPool
@@ -642,10 +644,12 @@ services:
   # DNS Server - Resolves *.my.obiente.cloud domains
   # Configured to run on specific nodes using placement constraints
   dns:
-    image: obiente/cloud-api:latest
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    image: ${API_IMAGE:-ghcr.io/obiente/cloud-api:latest}
+    # Build section removed - using image from GitHub Container Registry
+    # To build locally, set API_IMAGE=obiente/cloud-api:latest and uncomment build section below
+    # build:
+    #   context: .
+    #   dockerfile: apps/api/Dockerfile
     command: ["./dns-server"]
     environment:
       DB_HOST: pgpool
