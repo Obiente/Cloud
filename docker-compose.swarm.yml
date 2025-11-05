@@ -401,6 +401,8 @@ services:
       GF_SERVER_ROOT_URL: https://grafana.${DOMAIN:-localhost}
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
     depends_on:
       - prometheus
     deploy:

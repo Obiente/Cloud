@@ -1,0 +1,42 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: 15s
+      queryTimeout: 60s
+      httpMethod: POST
+
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: obiente
+    user: ${POSTGRES_USER:-obiente-postgres}
+    secureJsonData:
+      password: ${POSTGRES_PASSWORD:-obiente-postgres}
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: false
+    editable: true
+
+  - name: TimescaleDB (Metrics)
+    type: postgres
+    access: proxy
+    url: timescaledb:5432
+    database: obiente_metrics
+    user: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
+    secureJsonData:
+      password: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1600
+      timescaledb: true
+    editable: true
+
