@@ -219,7 +219,7 @@ services:
     command:
       - --api.dashboard=true
       - --api.insecure=true  # Set to true to allow direct access on port 8080 (use false for production)
-      - --providers.docker.swarm=true  # Use Swarm provider instead of docker.swarmmode
+      - --providers.docker=true  # Docker provider - auto-detects Swarm mode in v3
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=obiente-network
       - --entrypoints.web.address=:80
