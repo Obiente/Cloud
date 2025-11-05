@@ -167,6 +167,18 @@
             :icon="ServerIcon"
             @navigate="handleNavigate"
           />
+          <AppNavigationLink
+            to="/superadmin/abuse"
+            label="Abuse Detection"
+            :icon="ShieldExclamationIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
+            to="/superadmin/income"
+            label="Income Overview"
+            :icon="CurrencyDollarIcon"
+            @navigate="handleNavigate"
+          />
         </template>
       </nav>
     </div>
@@ -191,11 +203,13 @@ import {
   Cog6ToothIcon,
   UsersIcon,
   ShieldCheckIcon,
+  ShieldExclamationIcon,
   BuildingOfficeIcon,
   ChartBarIcon,
   CubeIcon,
   ChatBubbleLeftRightIcon,
   BookOpenIcon,
+  CurrencyDollarIcon,
 } from "@heroicons/vue/24/outline";
 import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
 import { createListCollection } from "@ark-ui/vue";

@@ -23,6 +23,12 @@ service SuperadminService {
   rpc RevokeDNSDelegationAPIKeyForOrganization(RevokeDNSDelegationAPIKeyForOrganizationRequest) returns (RevokeDNSDelegationAPIKeyForOrganizationResponse);
   // Public pricing endpoint - no authentication required
   rpc GetPricing(GetPricingRequest) returns (GetPricingResponse);
+  
+  // Abuse detection endpoints
+  rpc GetAbuseDetection(GetAbuseDetectionRequest) returns (GetAbuseDetectionResponse);
+  
+  // Income and billing overview endpoints
+  rpc GetIncomeOverview(GetIncomeOverviewRequest) returns (GetIncomeOverviewResponse);
 }
 
 message GetOverviewRequest {}
@@ -222,4 +228,119 @@ message DNSDelegationAPIKeyInfo {
 // List DNS Delegation API Keys Response
 message ListDNSDelegationAPIKeysResponse {
   repeated DNSDelegationAPIKeyInfo api_keys = 1;
+}
+
+// Abuse Detection
+
+// Get Abuse Detection Request
+message GetAbuseDetectionRequest {}
+
+// Abuse Detection Response
+message GetAbuseDetectionResponse {
+  repeated SuspiciousOrganization suspicious_organizations = 1;
+  repeated SuspiciousActivity suspicious_activities = 2;
+  AbuseMetrics metrics = 3;
+}
+
+// Suspicious Organization
+message SuspiciousOrganization {
+  string organization_id = 1;
+  string organization_name = 2;
+  string reason = 3; // Why it's flagged
+  int64 risk_score = 4; // 0-100, higher is more suspicious
+  int64 created_count_24h = 5; // Resources created in last 24h
+  int64 failed_deployments_24h = 6; // Failed deployments in last 24h
+  int64 total_credits_spent = 7; // Total credits spent
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp last_activity = 9;
+}
+
+// Suspicious Activity
+message SuspiciousActivity {
+  string id = 1;
+  string organization_id = 2;
+  string activity_type = 3; // "rapid_creation", "failed_payments", "unusual_usage", etc.
+  string description = 4;
+  int64 severity = 5; // 0-100
+  google.protobuf.Timestamp occurred_at = 6;
+}
+
+// Abuse Metrics
+message AbuseMetrics {
+  int64 total_suspicious_orgs = 1;
+  int64 high_risk_orgs = 2; // Risk score > 70
+  int64 rapid_creations_24h = 3; // Organizations with >10 resources created in 24h
+  int64 failed_payment_attempts_24h = 4;
+  int64 unusual_usage_spikes_24h = 5;
+}
+
+// Income Overview
+
+// Get Income Overview Request
+message GetIncomeOverviewRequest {
+  optional string start_date = 1; // ISO 8601 date string (optional, defaults to 30 days ago)
+  optional string end_date = 2; // ISO 8601 date string (optional, defaults to now)
+}
+
+// Income Overview Response
+message GetIncomeOverviewResponse {
+  IncomeSummary summary = 1;
+  repeated MonthlyIncome monthly_income = 2;
+  repeated TopCustomer top_customers = 3;
+  repeated BillingTransaction transactions = 4;
+  PaymentMetrics payment_metrics = 5;
+}
+
+// Income Summary
+message IncomeSummary {
+  double total_revenue = 1; // Total revenue in period
+  double monthly_recurring_revenue = 2; // Estimated MRR
+  double average_monthly_revenue = 3; // Average monthly revenue
+  int64 total_transactions = 4;
+  double total_refunds = 5;
+  double net_revenue = 6; // Revenue minus refunds
+  double estimated_monthly_income = 7; // Estimated monthly income from all orgs based on usage
+}
+
+// Monthly Income
+message MonthlyIncome {
+  string month = 1; // YYYY-MM format
+  double revenue = 2;
+  int64 transaction_count = 3;
+  double refunds = 4;
+}
+
+// Top Customer
+message TopCustomer {
+  string organization_id = 1;
+  string organization_name = 2;
+  double total_revenue = 3;
+  int64 transaction_count = 4;
+  google.protobuf.Timestamp first_payment = 5;
+  google.protobuf.Timestamp last_payment = 6;
+}
+
+// Billing Transaction
+message BillingTransaction {
+  string id = 1;
+  string organization_id = 2;
+  string organization_name = 3;
+  string type = 4; // "payment", "refund", "credit_add", "credit_remove"
+  double amount_cents = 5;
+  string currency = 6;
+  string status = 7; // "succeeded", "failed", "pending"
+  optional string stripe_invoice_id = 8;
+  optional string stripe_payment_intent_id = 9;
+  optional string note = 10;
+  google.protobuf.Timestamp created_at = 11;
+}
+
+// Payment Metrics
+message PaymentMetrics {
+  double success_rate = 1; // Percentage of successful payments
+  int64 successful_payments = 2;
+  int64 failed_payments = 3;
+  int64 pending_payments = 4;
+  double average_payment_amount = 5;
+  double largest_payment = 6;
 }

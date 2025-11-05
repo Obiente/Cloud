@@ -571,9 +571,9 @@
   const traefikIPsByRegion = computed(() => {
     if (!dnsConfig.value?.traefikIpsByRegion) return [];
     return Object.entries(dnsConfig.value.traefikIpsByRegion).map(
-      ([region, ips]: [string, any]) => ({
-        region,
-        ips: ips.ips || [],
+      ([regionKey, traefikIPs]: [string, any]) => ({
+        region: traefikIPs?.region || regionKey || "default",
+        ips: traefikIPs?.ips || traefikIPs?.Ips || [],
       })
     );
   });

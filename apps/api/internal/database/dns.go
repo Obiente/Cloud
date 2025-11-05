@@ -3,6 +3,7 @@ package database
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"gorm.io/gorm"
@@ -28,7 +29,7 @@ func GetDeploymentTraefikIP(deploymentID string, traefikIPMap map[string][]strin
 	location := locations[0]
 	var node NodeMetadata
 	var nodeRegion string
-	
+
 	if err := DB.First(&node, "id = ?", location.NodeID).Error; err != nil {
 		// If node doesn't exist (e.g., was deleted), fall back to default region
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -108,6 +109,7 @@ func GetDeploymentRegion(deploymentID string) (string, error) {
 // ParseTraefikIPsFromEnv parses the TRAEFIK_IPS environment variable
 // Format: "region1:ip1,ip2;region2:ip3,ip4"
 // Also supports simple format: "ip1,ip2" (defaults to "default" region)
+// Also supports space-separated format: "region1:ip1,ip2 region2:ip3,ip4" (when semicolons are not present)
 // Returns a map of region -> []IP addresses
 func ParseTraefikIPsFromEnv(traefikIPsEnv string) (map[string][]string, error) {
 	result := make(map[string][]string)
@@ -133,8 +135,71 @@ func ParseTraefikIPsFromEnv(traefikIPsEnv string) (map[string][]string, error) {
 		return result, nil
 	}
 
-	// Split by semicolon to get regions
-	regions := strings.Split(traefikIPsEnv, ";")
+	// Determine separator: prefer semicolon, but fall back to space if no semicolons present
+	var regions []string
+	if strings.Contains(traefikIPsEnv, ";") {
+		// Standard format: semicolon-separated
+		regions = strings.Split(traefikIPsEnv, ";")
+	} else {
+		// Space-separated format: use regex to find all "region:ip" patterns
+		// Pattern matches: word characters (region name), colon, then IP address(es) optionally separated by commas
+		// This handles formats like:
+		// - "us:1.2.3.4 nl:5.6.7.8"
+		// - "us 1.2.3.4 nl:5.6.7.8" (region name followed by space and IP)
+		// - "us:1.2.3.4,9.10.11.12 nl:5.6.7.8"
+
+		// First, try to find all patterns that match "region:ip" or "region:ip1,ip2"
+		// Pattern: one or more word chars, colon, then IP addresses (dots and numbers) possibly separated by commas
+		re := regexp.MustCompile(`\w+:\d+\.\d+\.\d+\.\d+(?:,\d+\.\d+\.\d+\.\d+)*`)
+		matches := re.FindAllString(traefikIPsEnv, -1)
+
+		if len(matches) > 0 {
+			// Found region:ip patterns
+			regions = matches
+		} else {
+			// Fallback: try to handle "region IP" format (region name followed by space and IP)
+			// Pattern: word chars (region), space, IP address
+			re2 := regexp.MustCompile(`(\w+)\s+(\d+\.\d+\.\d+\.\d+)`)
+			matches2 := re2.FindAllStringSubmatch(traefikIPsEnv, -1)
+			for _, match := range matches2 {
+				if len(match) >= 3 {
+					// Convert "region IP" to "region:IP" format
+					regions = append(regions, match[1]+":"+match[2])
+				}
+			}
+
+			// If still no matches, fall back to simple splitting
+			if len(regions) == 0 {
+				parts := strings.Fields(traefikIPsEnv)
+				var currentRegion string
+				for i, part := range parts {
+					if strings.Contains(part, ":") {
+						if currentRegion != "" {
+							regions = append(regions, currentRegion)
+						}
+						currentRegion = part
+					} else if currentRegion != "" {
+						if strings.Contains(currentRegion, ":") {
+							// Append IP to existing region:ip
+							parts := strings.SplitN(currentRegion, ":", 2)
+							if len(parts) == 2 {
+								currentRegion = parts[0] + ":" + parts[1] + "," + part
+							}
+						} else {
+							// Region name without colon, add colon and IP
+							currentRegion += ":" + part
+						}
+					} else {
+						currentRegion = part
+					}
+					if i == len(parts)-1 && currentRegion != "" {
+						regions = append(regions, currentRegion)
+					}
+				}
+			}
+		}
+	}
+
 	for _, regionStr := range regions {
 		regionStr = strings.TrimSpace(regionStr)
 		if regionStr == "" {
@@ -191,7 +256,7 @@ func GetGameServerLocation(gameServerID string) (string, int32, error) {
 
 	// Get the first location (game servers typically run on one node)
 	location := locations[0]
-	
+
 	// If NodeIP is not set, try to get it from NodeMetadata
 	if location.NodeIP == "" {
 		var node NodeMetadata
@@ -201,7 +266,7 @@ func GetGameServerLocation(gameServerID string) (string, int32, error) {
 			}
 			return "", 0, fmt.Errorf("failed to find node %s: %w", location.NodeID, err)
 		}
-		
+
 		// NodeMetadata.Address is a JSONB field that might contain IP
 		// For now, use NodeHostname if available, or try to parse Address
 		if location.NodeHostname != "" {
@@ -209,7 +274,7 @@ func GetGameServerLocation(gameServerID string) (string, int32, error) {
 			// For now, return hostname and let DNS resolve it
 			return location.NodeHostname, location.Port, nil
 		}
-		
+
 		// If Address is set, try to extract IP from it
 		// Address is JSONB, so it might be a JSON object or string
 		// For now, return error if we can't find IP

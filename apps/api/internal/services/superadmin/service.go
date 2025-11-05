@@ -3,6 +3,7 @@ package superadmin
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"sort"
@@ -1221,4 +1222,586 @@ func toTimestamp(t time.Time) *timestamppb.Timestamp {
 		return nil
 	}
 	return timestamppb.New(t)
+}
+
+// GetAbuseDetection returns suspicious organizations and activities for abuse detection
+func (s *Service) GetAbuseDetection(ctx context.Context, _ *connect.Request[superadminv1.GetAbuseDetectionRequest]) (*connect.Response[superadminv1.GetAbuseDetectionResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	// Calculate 24 hours ago
+	twentyFourHoursAgo := time.Now().Add(-24 * time.Hour)
+
+	// Find suspicious organizations
+	var suspiciousOrgs []*superadminv1.SuspiciousOrganization
+	
+	// Query organizations with high activity in last 24h
+	type orgActivity struct {
+		OrganizationID string
+		Name           string
+		CreatedAt      time.Time
+		Created24h     int64
+		Failed24h      int64
+		CreditsSpent   int64
+		LastActivity   time.Time
+	}
+
+	var activities []orgActivity
+	err = database.DB.Table("organizations o").
+		Select(`
+			o.id as organization_id,
+			o.name,
+			o.created_at,
+			COALESCE(COUNT(DISTINCT d.id), 0) as created_24h,
+			COALESCE(SUM(CASE WHEN d.status = 5 THEN 1 ELSE 0 END), 0) as failed_24h,
+			COALESCE(SUM(ABS(ct.amount_cents)), 0) as credits_spent,
+			COALESCE(MAX(GREATEST(d.created_at, d.last_deployed_at, ct.created_at)), o.created_at) as last_activity
+		`).
+		Joins("LEFT JOIN deployments d ON d.organization_id = o.id AND d.created_at >= ?", twentyFourHoursAgo).
+		Joins("LEFT JOIN credit_transactions ct ON ct.organization_id = o.id").
+		Group("o.id, o.name, o.created_at").
+		Having("COUNT(DISTINCT d.id) > 10 OR COALESCE(SUM(CASE WHEN d.status = 5 THEN 1 ELSE 0 END), 0) > 5").
+		Find(&activities).Error
+
+	if err != nil {
+		logger.Error("[SuperAdmin] Failed to query suspicious organizations: %v", err)
+	} else {
+		for _, act := range activities {
+			riskScore := int64(0)
+			reasons := []string{}
+
+			if act.Created24h > 10 {
+				riskScore += 30
+				reasons = append(reasons, fmt.Sprintf("Created %d resources in 24h", act.Created24h))
+			}
+			if act.Failed24h > 5 {
+				riskScore += 40
+				reasons = append(reasons, fmt.Sprintf("%d failed deployments in 24h", act.Failed24h))
+			}
+			if act.Created24h > 20 {
+				riskScore += 30
+			}
+			if act.CreditsSpent == 0 && act.Created24h > 5 {
+				riskScore += 20 // High activity but no payment
+			}
+
+			if riskScore > 0 {
+				suspiciousOrgs = append(suspiciousOrgs, &superadminv1.SuspiciousOrganization{
+					OrganizationId:      act.OrganizationID,
+					OrganizationName:    act.Name,
+					Reason:             strings.Join(reasons, "; "),
+					RiskScore:          riskScore,
+					CreatedCount_24H:    act.Created24h,
+					FailedDeployments_24H: act.Failed24h,
+					TotalCreditsSpent:  act.CreditsSpent,
+					CreatedAt:          timestamppb.New(act.CreatedAt),
+					LastActivity:       timestamppb.New(act.LastActivity),
+				})
+			}
+		}
+	}
+
+	// Find suspicious activities
+	var suspiciousActivities []*superadminv1.SuspiciousActivity
+	
+	// Check for rapid resource creation
+	var rapidCreations []struct {
+		OrganizationID string
+		Count          int64
+	}
+	database.DB.Table("deployments").
+		Select("organization_id, COUNT(*) as count").
+		Where("created_at >= ?", twentyFourHoursAgo).
+		Group("organization_id").
+		Having("COUNT(*) > 10").
+		Scan(&rapidCreations)
+
+	for _, rc := range rapidCreations {
+		var org database.Organization
+		if err := database.DB.First(&org, "id = ?", rc.OrganizationID).Error; err == nil {
+			suspiciousActivities = append(suspiciousActivities, &superadminv1.SuspiciousActivity{
+				Id:            fmt.Sprintf("rapid-%s", rc.OrganizationID),
+				OrganizationId: rc.OrganizationID,
+				ActivityType:  "rapid_creation",
+				Description:   fmt.Sprintf("Created %d resources in 24 hours", rc.Count),
+				Severity:      50,
+				OccurredAt:    timestamppb.New(time.Now()),
+			})
+		}
+	}
+
+	// Check for failed payment attempts (via credit transactions with negative amounts)
+	var failedPayments []struct {
+		OrganizationID string
+		Count          int64
+	}
+	database.DB.Table("credit_transactions").
+		Select("organization_id, COUNT(*) as count").
+		Where("created_at >= ? AND type = ? AND amount_cents < 0", twentyFourHoursAgo, "payment").
+		Group("organization_id").
+		Having("COUNT(*) > 2").
+		Scan(&failedPayments)
+
+	for _, fp := range failedPayments {
+		var org database.Organization
+		if err := database.DB.First(&org, "id = ?", fp.OrganizationID).Error; err == nil {
+			suspiciousActivities = append(suspiciousActivities, &superadminv1.SuspiciousActivity{
+				Id:            fmt.Sprintf("payment-%s", fp.OrganizationID),
+				OrganizationId: fp.OrganizationID,
+				ActivityType:  "failed_payments",
+				Description:   fmt.Sprintf("%d failed payment attempts in 24 hours", fp.Count),
+				Severity:      70,
+				OccurredAt:    timestamppb.New(time.Now()),
+			})
+		}
+	}
+
+	// Calculate metrics
+	highRiskCount := int64(0)
+	for _, org := range suspiciousOrgs {
+		if org.RiskScore > 70 {
+			highRiskCount++
+		}
+	}
+
+	metrics := &superadminv1.AbuseMetrics{
+		TotalSuspiciousOrgs:         int64(len(suspiciousOrgs)),
+		HighRiskOrgs:                highRiskCount,
+		RapidCreations_24H:            int64(len(rapidCreations)),
+		FailedPaymentAttempts_24H:    int64(len(failedPayments)),
+		UnusualUsageSpikes_24H:       0, // TODO: Implement usage spike detection
+	}
+
+	return connect.NewResponse(&superadminv1.GetAbuseDetectionResponse{
+		SuspiciousOrganizations: suspiciousOrgs,
+		SuspiciousActivities:    suspiciousActivities,
+		Metrics:                metrics,
+	}), nil
+}
+
+// GetIncomeOverview returns billing and income analytics
+func (s *Service) GetIncomeOverview(ctx context.Context, req *connect.Request[superadminv1.GetIncomeOverviewRequest]) (*connect.Response[superadminv1.GetIncomeOverviewResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	// Parse date range
+	now := time.Now()
+	startDate := now.AddDate(0, 0, -30) // Default to 30 days ago
+	endDate := now
+
+	if req.Msg.StartDate != nil && *req.Msg.StartDate != "" {
+		if parsed, err := time.Parse("2006-01-02", *req.Msg.StartDate); err == nil {
+			startDate = parsed
+		}
+	}
+	if req.Msg.EndDate != nil && *req.Msg.EndDate != "" {
+		if parsed, err := time.Parse("2006-01-02", *req.Msg.EndDate); err == nil {
+			endDate = parsed
+		}
+	}
+
+	// Get all credit transactions in period
+	var transactions []database.CreditTransaction
+	err = database.DB.Where("created_at >= ? AND created_at <= ?", startDate, endDate).
+		Order("created_at DESC").
+		Find(&transactions).Error
+	if err != nil {
+		logger.Error("[SuperAdmin] Failed to query transactions: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to query transactions: %w", err))
+	}
+
+	// Calculate summary
+	var totalRevenue float64
+	var totalRefunds float64
+	var successfulPayments int64
+	var failedPayments int64
+	var pendingPayments int64
+	var totalTransactionCount int64
+	var totalPaymentAmount float64
+	var largestPayment float64
+
+	// Map to track organization names
+	orgNames := make(map[string]string)
+
+	for _, t := range transactions {
+		totalTransactionCount++
+		amount := float64(t.AmountCents) / 100.0
+
+		// Get organization name
+		if _, ok := orgNames[t.OrganizationID]; !ok {
+			var org database.Organization
+			if err := database.DB.First(&org, "id = ?", t.OrganizationID).Error; err == nil {
+				orgNames[t.OrganizationID] = org.Name
+			} else {
+				orgNames[t.OrganizationID] = t.OrganizationID[:8]
+			}
+		}
+
+		if t.Type == "payment" {
+			if t.AmountCents > 0 {
+				totalRevenue += amount
+				successfulPayments++
+				totalPaymentAmount += amount
+				if amount > largestPayment {
+					largestPayment = amount
+				}
+			} else {
+				totalRefunds += math.Abs(amount)
+			}
+		} else if t.Type == "refund" {
+			totalRefunds += math.Abs(amount)
+		}
+	}
+
+	netRevenue := totalRevenue - totalRefunds
+	avgMonthlyRevenue := totalRevenue / float64(monthsBetween(startDate, endDate))
+	mrr := avgMonthlyRevenue // Estimate MRR as average monthly revenue
+
+	// Calculate estimated monthly income from all organizations based on usage
+	estimatedMonthlyIncome := s.calculateEstimatedMonthlyIncome(ctx)
+
+	successRate := float64(0)
+	if successfulPayments+failedPayments > 0 {
+		successRate = float64(successfulPayments) / float64(successfulPayments+failedPayments) * 100
+	}
+	avgPaymentAmount := float64(0)
+	if successfulPayments > 0 {
+		avgPaymentAmount = totalPaymentAmount / float64(successfulPayments)
+	}
+
+	summary := &superadminv1.IncomeSummary{
+		TotalRevenue:          totalRevenue,
+		MonthlyRecurringRevenue: mrr,
+		AverageMonthlyRevenue: avgMonthlyRevenue,
+		TotalTransactions:     totalTransactionCount,
+		TotalRefunds:          totalRefunds,
+		NetRevenue:           netRevenue,
+		EstimatedMonthlyIncome: estimatedMonthlyIncome,
+	}
+
+	// Calculate monthly income breakdown
+	monthlyIncomeMap := make(map[string]*monthlyIncomeData)
+	for _, t := range transactions {
+		if t.Type == "payment" && t.AmountCents > 0 {
+			month := t.CreatedAt.Format("2006-01")
+			if _, ok := monthlyIncomeMap[month]; !ok {
+				monthlyIncomeMap[month] = &monthlyIncomeData{
+					Revenue: 0,
+					Count:   0,
+					Refunds: 0,
+				}
+			}
+			monthlyIncomeMap[month].Revenue += float64(t.AmountCents) / 100.0
+			monthlyIncomeMap[month].Count++
+		} else if t.Type == "refund" || (t.Type == "payment" && t.AmountCents < 0) {
+			month := t.CreatedAt.Format("2006-01")
+			if _, ok := monthlyIncomeMap[month]; !ok {
+				monthlyIncomeMap[month] = &monthlyIncomeData{
+					Revenue: 0,
+					Count:   0,
+					Refunds: 0,
+				}
+			}
+			monthlyIncomeMap[month].Refunds += math.Abs(float64(t.AmountCents)) / 100.0
+		}
+	}
+
+	var monthlyIncome []*superadminv1.MonthlyIncome
+	for month, data := range monthlyIncomeMap {
+		monthlyIncome = append(monthlyIncome, &superadminv1.MonthlyIncome{
+			Month:           month,
+			Revenue:         data.Revenue,
+			TransactionCount: data.Count,
+			Refunds:         data.Refunds,
+		})
+	}
+	sort.Slice(monthlyIncome, func(i, j int) bool {
+		return monthlyIncome[i].Month < monthlyIncome[j].Month
+	})
+
+	// Calculate top customers
+	customerRevenue := make(map[string]*customerData)
+	for _, t := range transactions {
+		if t.Type == "payment" && t.AmountCents > 0 {
+			if _, ok := customerRevenue[t.OrganizationID]; !ok {
+				customerRevenue[t.OrganizationID] = &customerData{
+					TotalRevenue:  0,
+					Count:         0,
+					FirstPayment:  t.CreatedAt,
+					LastPayment:   t.CreatedAt,
+				}
+			}
+			customerRevenue[t.OrganizationID].TotalRevenue += float64(t.AmountCents) / 100.0
+			customerRevenue[t.OrganizationID].Count++
+			if t.CreatedAt.Before(customerRevenue[t.OrganizationID].FirstPayment) {
+				customerRevenue[t.OrganizationID].FirstPayment = t.CreatedAt
+			}
+			if t.CreatedAt.After(customerRevenue[t.OrganizationID].LastPayment) {
+				customerRevenue[t.OrganizationID].LastPayment = t.CreatedAt
+			}
+		}
+	}
+
+	type topCustomerData struct {
+		OrgID        string
+		OrgName      string
+		TotalRevenue float64
+		Count        int64
+		FirstPayment time.Time
+		LastPayment  time.Time
+	}
+
+	var topCustomersData []topCustomerData
+	for orgID, data := range customerRevenue {
+		topCustomersData = append(topCustomersData, topCustomerData{
+			OrgID:        orgID,
+			OrgName:      orgNames[orgID],
+			TotalRevenue: data.TotalRevenue,
+			Count:        data.Count,
+			FirstPayment: data.FirstPayment,
+			LastPayment:  data.LastPayment,
+		})
+	}
+
+	// Sort by revenue descending
+	sort.Slice(topCustomersData, func(i, j int) bool {
+		return topCustomersData[i].TotalRevenue > topCustomersData[j].TotalRevenue
+	})
+
+	// Take top 20
+	topCustomersLimit := 20
+	if len(topCustomersData) < topCustomersLimit {
+		topCustomersLimit = len(topCustomersData)
+	}
+
+	var topCustomers []*superadminv1.TopCustomer
+	for i := 0; i < topCustomersLimit; i++ {
+		tc := topCustomersData[i]
+		topCustomers = append(topCustomers, &superadminv1.TopCustomer{
+			OrganizationId:  tc.OrgID,
+			OrganizationName: tc.OrgName,
+			TotalRevenue:    tc.TotalRevenue,
+			TransactionCount: tc.Count,
+			FirstPayment:    timestamppb.New(tc.FirstPayment),
+			LastPayment:     timestamppb.New(tc.LastPayment),
+		})
+	}
+
+	// Convert transactions to proto (limit to 1000 most recent)
+	transactionLimit := 1000
+	if len(transactions) > transactionLimit {
+		transactions = transactions[:transactionLimit]
+	}
+
+	var billingTransactions []*superadminv1.BillingTransaction
+	for _, t := range transactions {
+		status := "succeeded"
+		if t.AmountCents < 0 {
+			status = "refunded"
+		}
+
+		// Extract Stripe IDs from note if available
+		var stripeInvoiceID, stripePaymentIntentID *string
+		if t.Note != nil {
+			if strings.Contains(*t.Note, "invoice") {
+				// Try to extract invoice ID from note
+				parts := strings.Fields(*t.Note)
+				for _, part := range parts {
+					if strings.HasPrefix(part, "in_") {
+						stripeInvoiceID = &part
+						break
+					}
+				}
+			}
+			if strings.Contains(*t.Note, "pi_") {
+				parts := strings.Fields(*t.Note)
+				for _, part := range parts {
+					if strings.HasPrefix(part, "pi_") {
+						stripePaymentIntentID = &part
+						break
+					}
+				}
+			}
+		}
+
+		billingTransactions = append(billingTransactions, &superadminv1.BillingTransaction{
+			Id:                    t.ID,
+			OrganizationId:        t.OrganizationID,
+			OrganizationName:      orgNames[t.OrganizationID],
+			Type:                 t.Type,
+			AmountCents:          float64(t.AmountCents),
+			Currency:             "USD",
+			Status:               status,
+			StripeInvoiceId:      stripeInvoiceID,
+			StripePaymentIntentId: stripePaymentIntentID,
+			Note:                 t.Note,
+			CreatedAt:            timestamppb.New(t.CreatedAt),
+		})
+	}
+
+	paymentMetrics := &superadminv1.PaymentMetrics{
+		SuccessRate:          successRate,
+		SuccessfulPayments:   successfulPayments,
+		FailedPayments:       failedPayments,
+		PendingPayments:      pendingPayments,
+		AveragePaymentAmount: avgPaymentAmount,
+		LargestPayment:       largestPayment,
+	}
+
+	return connect.NewResponse(&superadminv1.GetIncomeOverviewResponse{
+		Summary:        summary,
+		MonthlyIncome:  monthlyIncome,
+		TopCustomers:   topCustomers,
+		Transactions:   billingTransactions,
+		PaymentMetrics: paymentMetrics,
+	}), nil
+}
+
+type monthlyIncomeData struct {
+	Revenue float64
+	Count   int64
+	Refunds float64
+}
+
+type customerData struct {
+	TotalRevenue float64
+	Count        int64
+	FirstPayment time.Time
+	LastPayment  time.Time
+}
+
+func monthsBetween(start, end time.Time) int {
+	if start.After(end) {
+		return 1
+	}
+	months := int(end.Year()*12+int(end.Month())) - int(start.Year()*12+int(start.Month()))
+	if months < 1 {
+		return 1
+	}
+	return months
+}
+
+// calculateEstimatedMonthlyIncome calculates the total estimated monthly income
+// from all organizations based on their current usage patterns
+func (s *Service) calculateEstimatedMonthlyIncome(ctx context.Context) float64 {
+	now := time.Now().UTC()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0).Add(-time.Second)
+	
+	// Get all organizations
+	var orgs []database.Organization
+	if err := database.DB.Find(&orgs).Error; err != nil {
+		logger.Error("[SuperAdmin] Failed to query organizations for estimated income: %v", err)
+		return 0
+	}
+
+	pricingModel := pricing.GetPricing()
+	var totalEstimatedIncome int64
+
+	// Aggregate cutoff: current hour (aggregates exist up to current hour)
+	aggregateCutoff := now.Truncate(time.Hour)
+	if aggregateCutoff.Before(monthStart) {
+		aggregateCutoff = monthStart
+	}
+
+	// Get metrics DB for efficient querying
+	metricsDB := database.GetMetricsDB()
+	if metricsDB == nil {
+		logger.Warn("[SuperAdmin] Metrics database not available for estimated income calculation")
+		return 0
+	}
+
+	// Calculate elapsed ratio for projection
+	elapsed := now.Sub(monthStart)
+	monthDuration := monthEnd.Sub(monthStart)
+	elapsedRatio := float64(elapsed) / float64(monthDuration)
+	if elapsedRatio <= 0 {
+		elapsedRatio = 1.0 // Avoid division by zero
+	}
+
+	// Aggregate usage across all organizations efficiently
+	type orgUsage struct {
+		OrganizationID    string
+		CPUCoreSeconds    int64
+		MemoryByteSeconds int64
+		BandwidthRxBytes  int64
+		BandwidthTxBytes  int64
+		StorageBytes      int64
+	}
+
+	var usages []orgUsage
+	
+	// Get usage from hourly aggregates
+	metricsDB.Table("deployment_usage_hourly duh").
+		Select(`
+			duh.organization_id,
+			COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
+			COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds,
+			COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
+			COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
+		`).
+		Where("duh.hour >= ? AND duh.hour < ?", monthStart, aggregateCutoff).
+		Group("duh.organization_id").
+		Scan(&usages)
+
+	// Map organization IDs to usage
+	usageMap := make(map[string]*orgUsage)
+	for i := range usages {
+		usageMap[usages[i].OrganizationID] = &usages[i]
+	}
+
+	// Add storage for each organization
+	for _, org := range orgs {
+		if _, ok := usageMap[org.ID]; !ok {
+			usageMap[org.ID] = &orgUsage{
+				OrganizationID: org.ID,
+			}
+		}
+	}
+
+	// Get storage for all organizations
+	var storageResults []struct {
+		OrganizationID string
+		StorageBytes   int64
+	}
+	database.DB.Table("deployments d").
+		Select("d.organization_id, COALESCE(SUM(d.storage_bytes), 0) as storage_bytes").
+		Group("d.organization_id").
+		Scan(&storageResults)
+
+	for _, sr := range storageResults {
+		if usage, ok := usageMap[sr.OrganizationID]; ok {
+			usage.StorageBytes = sr.StorageBytes
+		}
+	}
+
+	// Calculate estimated monthly cost for each organization
+	for _, usage := range usageMap {
+		// Project current usage to full month
+		estimatedCPUCoreSeconds := int64(float64(usage.CPUCoreSeconds) / elapsedRatio)
+		estimatedMemoryByteSeconds := int64(float64(usage.MemoryByteSeconds) / elapsedRatio)
+		estimatedBandwidthBytes := usage.BandwidthRxBytes + usage.BandwidthTxBytes // Bandwidth is cumulative
+		estimatedStorageBytes := usage.StorageBytes // Storage is already monthly
+
+		// Calculate costs
+		estCPUCost := pricingModel.CalculateCPUCost(estimatedCPUCoreSeconds)
+		estMemoryCost := pricingModel.CalculateMemoryCost(estimatedMemoryByteSeconds)
+		estBandwidthCost := pricingModel.CalculateBandwidthCost(estimatedBandwidthBytes)
+		estStorageCost := pricingModel.CalculateStorageCost(estimatedStorageBytes)
+
+		totalEstimatedIncome += estCPUCost + estMemoryCost + estBandwidthCost + estStorageCost
+	}
+
+	// Convert from cents to dollars
+	return float64(totalEstimatedIncome) / 100.0
 }

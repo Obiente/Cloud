@@ -60,6 +60,12 @@ const (
 	// SuperadminServiceGetPricingProcedure is the fully-qualified name of the SuperadminService's
 	// GetPricing RPC.
 	SuperadminServiceGetPricingProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetPricing"
+	// SuperadminServiceGetAbuseDetectionProcedure is the fully-qualified name of the
+	// SuperadminService's GetAbuseDetection RPC.
+	SuperadminServiceGetAbuseDetectionProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetAbuseDetection"
+	// SuperadminServiceGetIncomeOverviewProcedure is the fully-qualified name of the
+	// SuperadminService's GetIncomeOverview RPC.
+	SuperadminServiceGetIncomeOverviewProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetIncomeOverview"
 )
 
 // SuperadminServiceClient is a client for the obiente.cloud.superadmin.v1.SuperadminService
@@ -78,6 +84,10 @@ type SuperadminServiceClient interface {
 	RevokeDNSDelegationAPIKeyForOrganization(context.Context, *connect.Request[v1.RevokeDNSDelegationAPIKeyForOrganizationRequest]) (*connect.Response[v1.RevokeDNSDelegationAPIKeyForOrganizationResponse], error)
 	// Public pricing endpoint - no authentication required
 	GetPricing(context.Context, *connect.Request[v1.GetPricingRequest]) (*connect.Response[v1.GetPricingResponse], error)
+	// Abuse detection endpoints
+	GetAbuseDetection(context.Context, *connect.Request[v1.GetAbuseDetectionRequest]) (*connect.Response[v1.GetAbuseDetectionResponse], error)
+	// Income and billing overview endpoints
+	GetIncomeOverview(context.Context, *connect.Request[v1.GetIncomeOverviewRequest]) (*connect.Response[v1.GetIncomeOverviewResponse], error)
 }
 
 // NewSuperadminServiceClient constructs a client for the
@@ -146,6 +156,18 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("GetPricing")),
 			connect.WithClientOptions(opts...),
 		),
+		getAbuseDetection: connect.NewClient[v1.GetAbuseDetectionRequest, v1.GetAbuseDetectionResponse](
+			httpClient,
+			baseURL+SuperadminServiceGetAbuseDetectionProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("GetAbuseDetection")),
+			connect.WithClientOptions(opts...),
+		),
+		getIncomeOverview: connect.NewClient[v1.GetIncomeOverviewRequest, v1.GetIncomeOverviewResponse](
+			httpClient,
+			baseURL+SuperadminServiceGetIncomeOverviewProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("GetIncomeOverview")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -160,6 +182,8 @@ type superadminServiceClient struct {
 	revokeDNSDelegationAPIKey                *connect.Client[v1.RevokeDNSDelegationAPIKeyRequest, v1.RevokeDNSDelegationAPIKeyResponse]
 	revokeDNSDelegationAPIKeyForOrganization *connect.Client[v1.RevokeDNSDelegationAPIKeyForOrganizationRequest, v1.RevokeDNSDelegationAPIKeyForOrganizationResponse]
 	getPricing                               *connect.Client[v1.GetPricingRequest, v1.GetPricingResponse]
+	getAbuseDetection                        *connect.Client[v1.GetAbuseDetectionRequest, v1.GetAbuseDetectionResponse]
+	getIncomeOverview                        *connect.Client[v1.GetIncomeOverviewRequest, v1.GetIncomeOverviewResponse]
 }
 
 // GetOverview calls obiente.cloud.superadmin.v1.SuperadminService.GetOverview.
@@ -211,6 +235,16 @@ func (c *superadminServiceClient) GetPricing(ctx context.Context, req *connect.R
 	return c.getPricing.CallUnary(ctx, req)
 }
 
+// GetAbuseDetection calls obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection.
+func (c *superadminServiceClient) GetAbuseDetection(ctx context.Context, req *connect.Request[v1.GetAbuseDetectionRequest]) (*connect.Response[v1.GetAbuseDetectionResponse], error) {
+	return c.getAbuseDetection.CallUnary(ctx, req)
+}
+
+// GetIncomeOverview calls obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview.
+func (c *superadminServiceClient) GetIncomeOverview(ctx context.Context, req *connect.Request[v1.GetIncomeOverviewRequest]) (*connect.Response[v1.GetIncomeOverviewResponse], error) {
+	return c.getIncomeOverview.CallUnary(ctx, req)
+}
+
 // SuperadminServiceHandler is an implementation of the
 // obiente.cloud.superadmin.v1.SuperadminService service.
 type SuperadminServiceHandler interface {
@@ -227,6 +261,10 @@ type SuperadminServiceHandler interface {
 	RevokeDNSDelegationAPIKeyForOrganization(context.Context, *connect.Request[v1.RevokeDNSDelegationAPIKeyForOrganizationRequest]) (*connect.Response[v1.RevokeDNSDelegationAPIKeyForOrganizationResponse], error)
 	// Public pricing endpoint - no authentication required
 	GetPricing(context.Context, *connect.Request[v1.GetPricingRequest]) (*connect.Response[v1.GetPricingResponse], error)
+	// Abuse detection endpoints
+	GetAbuseDetection(context.Context, *connect.Request[v1.GetAbuseDetectionRequest]) (*connect.Response[v1.GetAbuseDetectionResponse], error)
+	// Income and billing overview endpoints
+	GetIncomeOverview(context.Context, *connect.Request[v1.GetIncomeOverviewRequest]) (*connect.Response[v1.GetIncomeOverviewResponse], error)
 }
 
 // NewSuperadminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -290,6 +328,18 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		connect.WithSchema(superadminServiceMethods.ByName("GetPricing")),
 		connect.WithHandlerOptions(opts...),
 	)
+	superadminServiceGetAbuseDetectionHandler := connect.NewUnaryHandler(
+		SuperadminServiceGetAbuseDetectionProcedure,
+		svc.GetAbuseDetection,
+		connect.WithSchema(superadminServiceMethods.ByName("GetAbuseDetection")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceGetIncomeOverviewHandler := connect.NewUnaryHandler(
+		SuperadminServiceGetIncomeOverviewProcedure,
+		svc.GetIncomeOverview,
+		connect.WithSchema(superadminServiceMethods.ByName("GetIncomeOverview")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.superadmin.v1.SuperadminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SuperadminServiceGetOverviewProcedure:
@@ -310,6 +360,10 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceRevokeDNSDelegationAPIKeyForOrganizationHandler.ServeHTTP(w, r)
 		case SuperadminServiceGetPricingProcedure:
 			superadminServiceGetPricingHandler.ServeHTTP(w, r)
+		case SuperadminServiceGetAbuseDetectionProcedure:
+			superadminServiceGetAbuseDetectionHandler.ServeHTTP(w, r)
+		case SuperadminServiceGetIncomeOverviewProcedure:
+			superadminServiceGetIncomeOverviewHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -353,4 +407,12 @@ func (UnimplementedSuperadminServiceHandler) RevokeDNSDelegationAPIKeyForOrganiz
 
 func (UnimplementedSuperadminServiceHandler) GetPricing(context.Context, *connect.Request[v1.GetPricingRequest]) (*connect.Response[v1.GetPricingResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetPricing is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) GetAbuseDetection(context.Context, *connect.Request[v1.GetAbuseDetectionRequest]) (*connect.Response[v1.GetAbuseDetectionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) GetIncomeOverview(context.Context, *connect.Request[v1.GetIncomeOverviewRequest]) (*connect.Response[v1.GetIncomeOverviewResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview is not implemented"))
 }

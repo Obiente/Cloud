@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/superadmin/v1/superadmin_service.proto.
  */
 export const file_obiente_cloud_superadmin_v1_superadmin_service: GenFile = /*@__PURE__*/
-  fileDesc("CjRvYmllbnRlL2Nsb3VkL3N1cGVyYWRtaW4vdjEvc3VwZXJhZG1pbl9zZXJ2aWNlLnByb3RvEhtvYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEiFAoSR2V0T3ZlcnZpZXdSZXF1ZXN0IucCChNHZXRPdmVydmlld1Jlc3BvbnNlEjsKBmNvdW50cxgBIAEoCzIrLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5PdmVydmlld0NvdW50cxJICg1vcmdhbml6YXRpb25zGAIgAygLMjEub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLk9yZ2FuaXphdGlvbk92ZXJ2aWV3EkMKD3BlbmRpbmdfaW52aXRlcxgDIAMoCzIqLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5QZW5kaW5nSW52aXRlEkQKC2RlcGxveW1lbnRzGAQgAygLMi8ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkRlcGxveW1lbnRPdmVydmlldxI+CgZ1c2FnZXMYBSADKAsyLi5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuT3JnYW5pemF0aW9uVXNhZ2UieQoOT3ZlcnZpZXdDb3VudHMSGwoTdG90YWxfb3JnYW5pemF0aW9ucxgBIAEoAxIWCg5hY3RpdmVfbWVtYmVycxgCIAEoAxIXCg9wZW5kaW5nX2ludml0ZXMYAyABKAMSGQoRdG90YWxfZGVwbG95bWVudHMYBCABKAMi8gEKFE9yZ2FuaXphdGlvbk92ZXJ2aWV3EgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDAoEc2x1ZxgDIAEoCRITCgZkb21haW4YBCABKAlIAIgBARIMCgRwbGFuGAUgASgJEg4KBnN0YXR1cxgGIAEoCRIuCgpjcmVhdGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIUCgxtZW1iZXJfY291bnQYCCABKAMSFAoMaW52aXRlX2NvdW50GAkgASgDEhgKEGRlcGxveW1lbnRfY291bnQYCiABKANCCQoHX2RvbWFpbiKBAQoNUGVuZGluZ0ludml0ZRIKCgJpZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSDQoFZW1haWwYAyABKAkSDAoEcm9sZRgEIAEoCRIuCgppbnZpdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCLNAgoSRGVwbG95bWVudE92ZXJ2aWV3EgoKAmlkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRIMCgRuYW1lGAMgASgJEj4KC2Vudmlyb25tZW50GAQgASgOMikub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5FbnZpcm9ubWVudBI+CgZzdGF0dXMYBSABKA4yLi5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRTdGF0dXMSEwoGZG9tYWluGAYgASgJSACIAQESLgoKY3JlYXRlZF9hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNAoQbGFzdF9kZXBsb3llZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCCQoHX2RvbWFpbiL9AQoRT3JnYW5pemF0aW9uVXNhZ2USFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhkKEW9yZ2FuaXphdGlvbl9uYW1lGAIgASgJEg0KBW1vbnRoGAMgASgJEhgKEGNwdV9jb3JlX3NlY29uZHMYBCABKAMSGwoTbWVtb3J5X2J5dGVfc2Vjb25kcxgFIAEoAxIaChJiYW5kd2lkdGhfcnhfYnl0ZXMYBiABKAMSGgoSYmFuZHdpZHRoX3R4X2J5dGVzGAcgASgDEhUKDXN0b3JhZ2VfYnl0ZXMYCCABKAMSHwoXZGVwbG95bWVudHNfYWN0aXZlX3BlYWsYCSABKAUiNgoPUXVlcnlETlNSZXF1ZXN0Eg4KBmRvbWFpbhgBIAEoCRITCgtyZWNvcmRfdHlwZRgCIAEoCSJkChBRdWVyeUROU1Jlc3BvbnNlEg4KBmRvbWFpbhgBIAEoCRITCgtyZWNvcmRfdHlwZRgCIAEoCRIPCgdyZWNvcmRzGAMgAygJEg0KBWVycm9yGAQgASgJEgsKA3R0bBgFIAEoAyKhAQoVTGlzdEROU1JlY29yZHNSZXF1ZXN0EhoKDWRlcGxveW1lbnRfaWQYASABKAlIAIgBARIcCg9vcmdhbml6YXRpb25faWQYAiABKAlIAYgBARIYCgtyZWNvcmRfdHlwZRgDIAEoCUgCiAEBQhAKDl9kZXBsb3ltZW50X2lkQhIKEF9vcmdhbml6YXRpb25faWRCDgoMX3JlY29yZF90eXBlIrICCglETlNSZWNvcmQSEwoLcmVjb3JkX3R5cGUYASABKAkSFQoNZGVwbG95bWVudF9pZBgCIAEoCRIWCg5nYW1lX3NlcnZlcl9pZBgDIAEoCRIXCg9vcmdhbml6YXRpb25faWQYBCABKAkSFwoPZGVwbG95bWVudF9uYW1lGAUgASgJEhgKEGdhbWVfc2VydmVyX25hbWUYBiABKAkSDgoGZG9tYWluGAcgASgJEhQKDGlwX2FkZHJlc3NlcxgIIAMoCRIOCgZ0YXJnZXQYCSABKAkSDAoEcG9ydBgKIAEoBRIOCgZyZWdpb24YCyABKAkSDgoGc3RhdHVzGAwgASgJEjEKDWxhc3RfcmVzb2x2ZWQYDSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlEKFkxpc3RETlNSZWNvcmRzUmVzcG9uc2USNwoHcmVjb3JkcxgBIAMoCzImLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5ETlNSZWNvcmQiFQoTR2V0RE5TQ29uZmlnUmVxdWVzdCKoAgoJRE5TQ29uZmlnEhMKC3RyYWVmaWtfaXBzGAEgAygJEl0KFXRyYWVmaWtfaXBzX2J5X3JlZ2lvbhgCIAMoCzI+Lm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5ETlNDb25maWcuVHJhZWZpa0lwc0J5UmVnaW9uRW50cnkSFgoOZG5zX3NlcnZlcl9pcHMYAyADKAkSEAoIZG5zX3BvcnQYBCABKAkSGQoRY2FjaGVfdHRsX3NlY29uZHMYBSABKAMaYgoXVHJhZWZpa0lwc0J5UmVnaW9uRW50cnkSCwoDa2V5GAEgASgJEjYKBXZhbHVlGAIgASgLMicub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLlRyYWVmaWtJUHM6AjgBIikKClRyYWVmaWtJUHMSDgoGcmVnaW9uGAEgASgJEgsKA2lwcxgCIAMoCSJOChRHZXRETlNDb25maWdSZXNwb25zZRI2CgZjb25maWcYASABKAsyJi5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuRE5TQ29uZmlnIhMKEUdldFByaWNpbmdSZXF1ZXN0IrcBChJHZXRQcmljaW5nUmVzcG9uc2USIAoYY3B1X2Nvc3RfcGVyX2NvcmVfc2Vjb25kGAEgASgBEiMKG21lbW9yeV9jb3N0X3Blcl9ieXRlX3NlY29uZBgCIAEoARIfChdiYW5kd2lkdGhfY29zdF9wZXJfYnl0ZRgDIAEoARIjChtzdG9yYWdlX2Nvc3RfcGVyX2J5dGVfbW9udGgYBCABKAESFAoMcHJpY2luZ19pbmZvGAUgASgJIpEBCiBDcmVhdGVETlNEZWxlZ2F0aW9uQVBJS2V5UmVxdWVzdBITCgtkZXNjcmlwdGlvbhgBIAEoCRIXCgpzb3VyY2VfYXBpGAIgASgJSACIAQESHAoPb3JnYW5pemF0aW9uX2lkGAMgASgJSAGIAQFCDQoLX3NvdXJjZV9hcGlCEgoQX29yZ2FuaXphdGlvbl9pZCJaCiFDcmVhdGVETlNEZWxlZ2F0aW9uQVBJS2V5UmVzcG9uc2USDwoHYXBpX2tleRgBIAEoCRIPCgdtZXNzYWdlGAIgASgJEhMKC2Rlc2NyaXB0aW9uGAMgASgJIjMKIFJldm9rZUROU0RlbGVnYXRpb25BUElLZXlSZXF1ZXN0Eg8KB2FwaV9rZXkYASABKAkiRQohUmV2b2tlRE5TRGVsZWdhdGlvbkFQSUtleVJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSDwoHbWVzc2FnZRgCIAEoCSJKCi9SZXZva2VETlNEZWxlZ2F0aW9uQVBJS2V5Rm9yT3JnYW5pemF0aW9uUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkiVAowUmV2b2tlRE5TRGVsZWdhdGlvbkFQSUtleUZvck9yZ2FuaXphdGlvblJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSDwoHbWVzc2FnZRgCIAEoCSJTCh9MaXN0RE5TRGVsZWdhdGlvbkFQSUtleXNSZXF1ZXN0EhwKD29yZ2FuaXphdGlvbl9pZBgBIAEoCUgAiAEBQhIKEF9vcmdhbml6YXRpb25faWQi+gEKF0ROU0RlbGVnYXRpb25BUElLZXlJbmZvEgoKAmlkGAEgASgJEhMKC2Rlc2NyaXB0aW9uGAIgASgJEhIKCnNvdXJjZV9hcGkYAyABKAkSFwoPb3JnYW5pemF0aW9uX2lkGAQgASgJEhEKCWlzX2FjdGl2ZRgFIAEoCBIuCgpjcmVhdGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgpyZXZva2VkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIeChZzdHJpcGVfc3Vic2NyaXB0aW9uX2lkGAggASgJImoKIExpc3RETlNEZWxlZ2F0aW9uQVBJS2V5c1Jlc3BvbnNlEkYKCGFwaV9rZXlzGAEgAygLMjQub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkROU0RlbGVnYXRpb25BUElLZXlJbmZvMusJChFTdXBlcmFkbWluU2VydmljZRJwCgtHZXRPdmVydmlldxIvLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRPdmVydmlld1JlcXVlc3QaMC5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuR2V0T3ZlcnZpZXdSZXNwb25zZRJnCghRdWVyeUROUxIsLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5RdWVyeUROU1JlcXVlc3QaLS5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuUXVlcnlETlNSZXNwb25zZRJ5Cg5MaXN0RE5TUmVjb3JkcxIyLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5MaXN0RE5TUmVjb3Jkc1JlcXVlc3QaMy5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuTGlzdEROU1JlY29yZHNSZXNwb25zZRJzCgxHZXRETlNDb25maWcSMC5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuR2V0RE5TQ29uZmlnUmVxdWVzdBoxLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRETlNDb25maWdSZXNwb25zZRKaAQoZQ3JlYXRlRE5TRGVsZWdhdGlvbkFQSUtleRI9Lm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5DcmVhdGVETlNEZWxlZ2F0aW9uQVBJS2V5UmVxdWVzdBo+Lm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5DcmVhdGVETlNEZWxlZ2F0aW9uQVBJS2V5UmVzcG9uc2USlwEKGExpc3RETlNEZWxlZ2F0aW9uQVBJS2V5cxI8Lm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5MaXN0RE5TRGVsZWdhdGlvbkFQSUtleXNSZXF1ZXN0Gj0ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkxpc3RETlNEZWxlZ2F0aW9uQVBJS2V5c1Jlc3BvbnNlEpoBChlSZXZva2VETlNEZWxlZ2F0aW9uQVBJS2V5Ej0ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLlJldm9rZUROU0RlbGVnYXRpb25BUElLZXlSZXF1ZXN0Gj4ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLlJldm9rZUROU0RlbGVnYXRpb25BUElLZXlSZXNwb25zZRLHAQooUmV2b2tlRE5TRGVsZWdhdGlvbkFQSUtleUZvck9yZ2FuaXphdGlvbhJMLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5SZXZva2VETlNEZWxlZ2F0aW9uQVBJS2V5Rm9yT3JnYW5pemF0aW9uUmVxdWVzdBpNLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5SZXZva2VETlNEZWxlZ2F0aW9uQVBJS2V5Rm9yT3JnYW5pemF0aW9uUmVzcG9uc2USbQoKR2V0UHJpY2luZxIuLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRQcmljaW5nUmVxdWVzdBovLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRQcmljaW5nUmVzcG9uc2VCOFo2YXBpL2dlbi9wcm90by9vYmllbnRlL2Nsb3VkL3N1cGVyYWRtaW4vdjE7c3VwZXJhZG1pbnYxYgZwcm90bzM", [file_google_protobuf_timestamp, file_obiente_cloud_deployments_v1_deployment_service]);
+  fileDesc("CjRvYmllbnRlL2Nsb3VkL3N1cGVyYWRtaW4vdjEvc3VwZXJhZG1pbl9zZXJ2aWNlLnByb3RvEhtvYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEiFAoSR2V0T3ZlcnZpZXdSZXF1ZXN0IucCChNHZXRPdmVydmlld1Jlc3BvbnNlEjsKBmNvdW50cxgBIAEoCzIrLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5PdmVydmlld0NvdW50cxJICg1vcmdhbml6YXRpb25zGAIgAygLMjEub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLk9yZ2FuaXphdGlvbk92ZXJ2aWV3EkMKD3BlbmRpbmdfaW52aXRlcxgDIAMoCzIqLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5QZW5kaW5nSW52aXRlEkQKC2RlcGxveW1lbnRzGAQgAygLMi8ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkRlcGxveW1lbnRPdmVydmlldxI+CgZ1c2FnZXMYBSADKAsyLi5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuT3JnYW5pemF0aW9uVXNhZ2UieQoOT3ZlcnZpZXdDb3VudHMSGwoTdG90YWxfb3JnYW5pemF0aW9ucxgBIAEoAxIWCg5hY3RpdmVfbWVtYmVycxgCIAEoAxIXCg9wZW5kaW5nX2ludml0ZXMYAyABKAMSGQoRdG90YWxfZGVwbG95bWVudHMYBCABKAMi8gEKFE9yZ2FuaXphdGlvbk92ZXJ2aWV3EgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDAoEc2x1ZxgDIAEoCRITCgZkb21haW4YBCABKAlIAIgBARIMCgRwbGFuGAUgASgJEg4KBnN0YXR1cxgGIAEoCRIuCgpjcmVhdGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIUCgxtZW1iZXJfY291bnQYCCABKAMSFAoMaW52aXRlX2NvdW50GAkgASgDEhgKEGRlcGxveW1lbnRfY291bnQYCiABKANCCQoHX2RvbWFpbiKBAQoNUGVuZGluZ0ludml0ZRIKCgJpZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSDQoFZW1haWwYAyABKAkSDAoEcm9sZRgEIAEoCRIuCgppbnZpdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCLNAgoSRGVwbG95bWVudE92ZXJ2aWV3EgoKAmlkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRIMCgRuYW1lGAMgASgJEj4KC2Vudmlyb25tZW50GAQgASgOMikub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5FbnZpcm9ubWVudBI+CgZzdGF0dXMYBSABKA4yLi5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRTdGF0dXMSEwoGZG9tYWluGAYgASgJSACIAQESLgoKY3JlYXRlZF9hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNAoQbGFzdF9kZXBsb3llZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCCQoHX2RvbWFpbiL9AQoRT3JnYW5pemF0aW9uVXNhZ2USFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhkKEW9yZ2FuaXphdGlvbl9uYW1lGAIgASgJEg0KBW1vbnRoGAMgASgJEhgKEGNwdV9jb3JlX3NlY29uZHMYBCABKAMSGwoTbWVtb3J5X2J5dGVfc2Vjb25kcxgFIAEoAxIaChJiYW5kd2lkdGhfcnhfYnl0ZXMYBiABKAMSGgoSYmFuZHdpZHRoX3R4X2J5dGVzGAcgASgDEhUKDXN0b3JhZ2VfYnl0ZXMYCCABKAMSHwoXZGVwbG95bWVudHNfYWN0aXZlX3BlYWsYCSABKAUiNgoPUXVlcnlETlNSZXF1ZXN0Eg4KBmRvbWFpbhgBIAEoCRITCgtyZWNvcmRfdHlwZRgCIAEoCSJkChBRdWVyeUROU1Jlc3BvbnNlEg4KBmRvbWFpbhgBIAEoCRITCgtyZWNvcmRfdHlwZRgCIAEoCRIPCgdyZWNvcmRzGAMgAygJEg0KBWVycm9yGAQgASgJEgsKA3R0bBgFIAEoAyKhAQoVTGlzdEROU1JlY29yZHNSZXF1ZXN0EhoKDWRlcGxveW1lbnRfaWQYASABKAlIAIgBARIcCg9vcmdhbml6YXRpb25faWQYAiABKAlIAYgBARIYCgtyZWNvcmRfdHlwZRgDIAEoCUgCiAEBQhAKDl9kZXBsb3ltZW50X2lkQhIKEF9vcmdhbml6YXRpb25faWRCDgoMX3JlY29yZF90eXBlIrICCglETlNSZWNvcmQSEwoLcmVjb3JkX3R5cGUYASABKAkSFQoNZGVwbG95bWVudF9pZBgCIAEoCRIWCg5nYW1lX3NlcnZlcl9pZBgDIAEoCRIXCg9vcmdhbml6YXRpb25faWQYBCABKAkSFwoPZGVwbG95bWVudF9uYW1lGAUgASgJEhgKEGdhbWVfc2VydmVyX25hbWUYBiABKAkSDgoGZG9tYWluGAcgASgJEhQKDGlwX2FkZHJlc3NlcxgIIAMoCRIOCgZ0YXJnZXQYCSABKAkSDAoEcG9ydBgKIAEoBRIOCgZyZWdpb24YCyABKAkSDgoGc3RhdHVzGAwgASgJEjEKDWxhc3RfcmVzb2x2ZWQYDSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlEKFkxpc3RETlNSZWNvcmRzUmVzcG9uc2USNwoHcmVjb3JkcxgBIAMoCzImLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5ETlNSZWNvcmQiFQoTR2V0RE5TQ29uZmlnUmVxdWVzdCKoAgoJRE5TQ29uZmlnEhMKC3RyYWVmaWtfaXBzGAEgAygJEl0KFXRyYWVmaWtfaXBzX2J5X3JlZ2lvbhgCIAMoCzI+Lm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5ETlNDb25maWcuVHJhZWZpa0lwc0J5UmVnaW9uRW50cnkSFgoOZG5zX3NlcnZlcl9pcHMYAyADKAkSEAoIZG5zX3BvcnQYBCABKAkSGQoRY2FjaGVfdHRsX3NlY29uZHMYBSABKAMaYgoXVHJhZWZpa0lwc0J5UmVnaW9uRW50cnkSCwoDa2V5GAEgASgJEjYKBXZhbHVlGAIgASgLMicub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLlRyYWVmaWtJUHM6AjgBIikKClRyYWVmaWtJUHMSDgoGcmVnaW9uGAEgASgJEgsKA2lwcxgCIAMoCSJOChRHZXRETlNDb25maWdSZXNwb25zZRI2CgZjb25maWcYASABKAsyJi5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuRE5TQ29uZmlnIhMKEUdldFByaWNpbmdSZXF1ZXN0IrcBChJHZXRQcmljaW5nUmVzcG9uc2USIAoYY3B1X2Nvc3RfcGVyX2NvcmVfc2Vjb25kGAEgASgBEiMKG21lbW9yeV9jb3N0X3Blcl9ieXRlX3NlY29uZBgCIAEoARIfChdiYW5kd2lkdGhfY29zdF9wZXJfYnl0ZRgDIAEoARIjChtzdG9yYWdlX2Nvc3RfcGVyX2J5dGVfbW9udGgYBCABKAESFAoMcHJpY2luZ19pbmZvGAUgASgJIpEBCiBDcmVhdGVETlNEZWxlZ2F0aW9uQVBJS2V5UmVxdWVzdBITCgtkZXNjcmlwdGlvbhgBIAEoCRIXCgpzb3VyY2VfYXBpGAIgASgJSACIAQESHAoPb3JnYW5pemF0aW9uX2lkGAMgASgJSAGIAQFCDQoLX3NvdXJjZV9hcGlCEgoQX29yZ2FuaXphdGlvbl9pZCJaCiFDcmVhdGVETlNEZWxlZ2F0aW9uQVBJS2V5UmVzcG9uc2USDwoHYXBpX2tleRgBIAEoCRIPCgdtZXNzYWdlGAIgASgJEhMKC2Rlc2NyaXB0aW9uGAMgASgJIjMKIFJldm9rZUROU0RlbGVnYXRpb25BUElLZXlSZXF1ZXN0Eg8KB2FwaV9rZXkYASABKAkiRQohUmV2b2tlRE5TRGVsZWdhdGlvbkFQSUtleVJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSDwoHbWVzc2FnZRgCIAEoCSJKCi9SZXZva2VETlNEZWxlZ2F0aW9uQVBJS2V5Rm9yT3JnYW5pemF0aW9uUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkiVAowUmV2b2tlRE5TRGVsZWdhdGlvbkFQSUtleUZvck9yZ2FuaXphdGlvblJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSDwoHbWVzc2FnZRgCIAEoCSJTCh9MaXN0RE5TRGVsZWdhdGlvbkFQSUtleXNSZXF1ZXN0EhwKD29yZ2FuaXphdGlvbl9pZBgBIAEoCUgAiAEBQhIKEF9vcmdhbml6YXRpb25faWQi+gEKF0ROU0RlbGVnYXRpb25BUElLZXlJbmZvEgoKAmlkGAEgASgJEhMKC2Rlc2NyaXB0aW9uGAIgASgJEhIKCnNvdXJjZV9hcGkYAyABKAkSFwoPb3JnYW5pemF0aW9uX2lkGAQgASgJEhEKCWlzX2FjdGl2ZRgFIAEoCBIuCgpjcmVhdGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgpyZXZva2VkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIeChZzdHJpcGVfc3Vic2NyaXB0aW9uX2lkGAggASgJImoKIExpc3RETlNEZWxlZ2F0aW9uQVBJS2V5c1Jlc3BvbnNlEkYKCGFwaV9rZXlzGAEgAygLMjQub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkROU0RlbGVnYXRpb25BUElLZXlJbmZvIhoKGEdldEFidXNlRGV0ZWN0aW9uUmVxdWVzdCL+AQoZR2V0QWJ1c2VEZXRlY3Rpb25SZXNwb25zZRJVChhzdXNwaWNpb3VzX29yZ2FuaXphdGlvbnMYASADKAsyMy5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuU3VzcGljaW91c09yZ2FuaXphdGlvbhJOChVzdXNwaWNpb3VzX2FjdGl2aXRpZXMYAiADKAsyLy5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuU3VzcGljaW91c0FjdGl2aXR5EjoKB21ldHJpY3MYAyABKAsyKS5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuQWJ1c2VNZXRyaWNzIqsCChZTdXNwaWNpb3VzT3JnYW5pemF0aW9uEhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIZChFvcmdhbml6YXRpb25fbmFtZRgCIAEoCRIOCgZyZWFzb24YAyABKAkSEgoKcmlza19zY29yZRgEIAEoAxIZChFjcmVhdGVkX2NvdW50XzI0aBgFIAEoAxIeChZmYWlsZWRfZGVwbG95bWVudHNfMjRoGAYgASgDEhsKE3RvdGFsX2NyZWRpdHNfc3BlbnQYByABKAMSLgoKY3JlYXRlZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASMQoNbGFzdF9hY3Rpdml0eRgJIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiqAEKElN1c3BpY2lvdXNBY3Rpdml0eRIKCgJpZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSFQoNYWN0aXZpdHlfdHlwZRgDIAEoCRITCgtkZXNjcmlwdGlvbhgEIAEoCRIQCghzZXZlcml0eRgFIAEoAxIvCgtvY2N1cnJlZF9hdBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiqQEKDEFidXNlTWV0cmljcxIdChV0b3RhbF9zdXNwaWNpb3VzX29yZ3MYASABKAMSFgoOaGlnaF9yaXNrX29yZ3MYAiABKAMSGwoTcmFwaWRfY3JlYXRpb25zXzI0aBgDIAEoAxIjChtmYWlsZWRfcGF5bWVudF9hdHRlbXB0c18yNGgYBCABKAMSIAoYdW51c3VhbF91c2FnZV9zcGlrZXNfMjRoGAUgASgDImYKGEdldEluY29tZU92ZXJ2aWV3UmVxdWVzdBIXCgpzdGFydF9kYXRlGAEgASgJSACIAQESFQoIZW5kX2RhdGUYAiABKAlIAYgBAUINCgtfc3RhcnRfZGF0ZUILCglfZW5kX2RhdGUi6gIKGUdldEluY29tZU92ZXJ2aWV3UmVzcG9uc2USOwoHc3VtbWFyeRgBIAEoCzIqLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5JbmNvbWVTdW1tYXJ5EkIKDm1vbnRobHlfaW5jb21lGAIgAygLMioub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLk1vbnRobHlJbmNvbWUSPwoNdG9wX2N1c3RvbWVycxgDIAMoCzIoLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5Ub3BDdXN0b21lchJFCgx0cmFuc2FjdGlvbnMYBCADKAsyLy5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuQmlsbGluZ1RyYW5zYWN0aW9uEkQKD3BheW1lbnRfbWV0cmljcxgFIAEoCzIrLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5QYXltZW50TWV0cmljcyLUAQoNSW5jb21lU3VtbWFyeRIVCg10b3RhbF9yZXZlbnVlGAEgASgBEiEKGW1vbnRobHlfcmVjdXJyaW5nX3JldmVudWUYAiABKAESHwoXYXZlcmFnZV9tb250aGx5X3JldmVudWUYAyABKAESGgoSdG90YWxfdHJhbnNhY3Rpb25zGAQgASgDEhUKDXRvdGFsX3JlZnVuZHMYBSABKAESEwoLbmV0X3JldmVudWUYBiABKAESIAoYZXN0aW1hdGVkX21vbnRobHlfaW5jb21lGAcgASgBIlsKDU1vbnRobHlJbmNvbWUSDQoFbW9udGgYASABKAkSDwoHcmV2ZW51ZRgCIAEoARIZChF0cmFuc2FjdGlvbl9jb3VudBgDIAEoAxIPCgdyZWZ1bmRzGAQgASgBItgBCgtUb3BDdXN0b21lchIXCg9vcmdhbml6YXRpb25faWQYASABKAkSGQoRb3JnYW5pemF0aW9uX25hbWUYAiABKAkSFQoNdG90YWxfcmV2ZW51ZRgDIAEoARIZChF0cmFuc2FjdGlvbl9jb3VudBgEIAEoAxIxCg1maXJzdF9wYXltZW50GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIwCgxsYXN0X3BheW1lbnQYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIuACChJCaWxsaW5nVHJhbnNhY3Rpb24SCgoCaWQYASABKAkSFwoPb3JnYW5pemF0aW9uX2lkGAIgASgJEhkKEW9yZ2FuaXphdGlvbl9uYW1lGAMgASgJEgwKBHR5cGUYBCABKAkSFAoMYW1vdW50X2NlbnRzGAUgASgBEhAKCGN1cnJlbmN5GAYgASgJEg4KBnN0YXR1cxgHIAEoCRIeChFzdHJpcGVfaW52b2ljZV9pZBgIIAEoCUgAiAEBEiUKGHN0cmlwZV9wYXltZW50X2ludGVudF9pZBgJIAEoCUgBiAEBEhEKBG5vdGUYCiABKAlIAogBARIuCgpjcmVhdGVkX2F0GAsgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEIUChJfc3RyaXBlX2ludm9pY2VfaWRCGwoZX3N0cmlwZV9wYXltZW50X2ludGVudF9pZEIHCgVfbm90ZSKvAQoOUGF5bWVudE1ldHJpY3MSFAoMc3VjY2Vzc19yYXRlGAEgASgBEhsKE3N1Y2Nlc3NmdWxfcGF5bWVudHMYAiABKAMSFwoPZmFpbGVkX3BheW1lbnRzGAMgASgDEhgKEHBlbmRpbmdfcGF5bWVudHMYBCABKAMSHgoWYXZlcmFnZV9wYXltZW50X2Ftb3VudBgFIAEoARIXCg9sYXJnZXN0X3BheW1lbnQYBiABKAEy9QsKEVN1cGVyYWRtaW5TZXJ2aWNlEnAKC0dldE92ZXJ2aWV3Ei8ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkdldE92ZXJ2aWV3UmVxdWVzdBowLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRPdmVydmlld1Jlc3BvbnNlEmcKCFF1ZXJ5RE5TEiwub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLlF1ZXJ5RE5TUmVxdWVzdBotLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5RdWVyeUROU1Jlc3BvbnNlEnkKDkxpc3RETlNSZWNvcmRzEjIub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkxpc3RETlNSZWNvcmRzUmVxdWVzdBozLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5MaXN0RE5TUmVjb3Jkc1Jlc3BvbnNlEnMKDEdldEROU0NvbmZpZxIwLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRETlNDb25maWdSZXF1ZXN0GjEub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkdldEROU0NvbmZpZ1Jlc3BvbnNlEpoBChlDcmVhdGVETlNEZWxlZ2F0aW9uQVBJS2V5Ej0ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkNyZWF0ZUROU0RlbGVnYXRpb25BUElLZXlSZXF1ZXN0Gj4ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkNyZWF0ZUROU0RlbGVnYXRpb25BUElLZXlSZXNwb25zZRKXAQoYTGlzdEROU0RlbGVnYXRpb25BUElLZXlzEjwub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkxpc3RETlNEZWxlZ2F0aW9uQVBJS2V5c1JlcXVlc3QaPS5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuTGlzdEROU0RlbGVnYXRpb25BUElLZXlzUmVzcG9uc2USmgEKGVJldm9rZUROU0RlbGVnYXRpb25BUElLZXkSPS5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuUmV2b2tlRE5TRGVsZWdhdGlvbkFQSUtleVJlcXVlc3QaPi5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuUmV2b2tlRE5TRGVsZWdhdGlvbkFQSUtleVJlc3BvbnNlEscBCihSZXZva2VETlNEZWxlZ2F0aW9uQVBJS2V5Rm9yT3JnYW5pemF0aW9uEkwub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLlJldm9rZUROU0RlbGVnYXRpb25BUElLZXlGb3JPcmdhbml6YXRpb25SZXF1ZXN0Gk0ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLlJldm9rZUROU0RlbGVnYXRpb25BUElLZXlGb3JPcmdhbml6YXRpb25SZXNwb25zZRJtCgpHZXRQcmljaW5nEi4ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkdldFByaWNpbmdSZXF1ZXN0Gi8ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkdldFByaWNpbmdSZXNwb25zZRKCAQoRR2V0QWJ1c2VEZXRlY3Rpb24SNS5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuR2V0QWJ1c2VEZXRlY3Rpb25SZXF1ZXN0GjYub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkdldEFidXNlRGV0ZWN0aW9uUmVzcG9uc2USggEKEUdldEluY29tZU92ZXJ2aWV3EjUub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkdldEluY29tZU92ZXJ2aWV3UmVxdWVzdBo2Lm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRJbmNvbWVPdmVydmlld1Jlc3BvbnNlQjhaNmFwaS9nZW4vcHJvdG8vb2JpZW50ZS9jbG91ZC9zdXBlcmFkbWluL3YxO3N1cGVyYWRtaW52MWIGcHJvdG8z", [file_google_protobuf_timestamp, file_obiente_cloud_deployments_v1_deployment_service]);
 
 /**
  * @generated from message obiente.cloud.superadmin.v1.GetOverviewRequest
@@ -970,6 +970,535 @@ export const ListDNSDelegationAPIKeysResponseSchema: GenMessage<ListDNSDelegatio
   messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 26);
 
 /**
+ * Get Abuse Detection Request
+ *
+ * @generated from message obiente.cloud.superadmin.v1.GetAbuseDetectionRequest
+ */
+export type GetAbuseDetectionRequest = Message<"obiente.cloud.superadmin.v1.GetAbuseDetectionRequest"> & {
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.GetAbuseDetectionRequest.
+ * Use `create(GetAbuseDetectionRequestSchema)` to create a new message.
+ */
+export const GetAbuseDetectionRequestSchema: GenMessage<GetAbuseDetectionRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 27);
+
+/**
+ * Abuse Detection Response
+ *
+ * @generated from message obiente.cloud.superadmin.v1.GetAbuseDetectionResponse
+ */
+export type GetAbuseDetectionResponse = Message<"obiente.cloud.superadmin.v1.GetAbuseDetectionResponse"> & {
+  /**
+   * @generated from field: repeated obiente.cloud.superadmin.v1.SuspiciousOrganization suspicious_organizations = 1;
+   */
+  suspiciousOrganizations: SuspiciousOrganization[];
+
+  /**
+   * @generated from field: repeated obiente.cloud.superadmin.v1.SuspiciousActivity suspicious_activities = 2;
+   */
+  suspiciousActivities: SuspiciousActivity[];
+
+  /**
+   * @generated from field: obiente.cloud.superadmin.v1.AbuseMetrics metrics = 3;
+   */
+  metrics?: AbuseMetrics;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.
+ * Use `create(GetAbuseDetectionResponseSchema)` to create a new message.
+ */
+export const GetAbuseDetectionResponseSchema: GenMessage<GetAbuseDetectionResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 28);
+
+/**
+ * Suspicious Organization
+ *
+ * @generated from message obiente.cloud.superadmin.v1.SuspiciousOrganization
+ */
+export type SuspiciousOrganization = Message<"obiente.cloud.superadmin.v1.SuspiciousOrganization"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string organization_name = 2;
+   */
+  organizationName: string;
+
+  /**
+   * Why it's flagged
+   *
+   * @generated from field: string reason = 3;
+   */
+  reason: string;
+
+  /**
+   * 0-100, higher is more suspicious
+   *
+   * @generated from field: int64 risk_score = 4;
+   */
+  riskScore: bigint;
+
+  /**
+   * Resources created in last 24h
+   *
+   * @generated from field: int64 created_count_24h = 5;
+   */
+  createdCount24h: bigint;
+
+  /**
+   * Failed deployments in last 24h
+   *
+   * @generated from field: int64 failed_deployments_24h = 6;
+   */
+  failedDeployments24h: bigint;
+
+  /**
+   * Total credits spent
+   *
+   * @generated from field: int64 total_credits_spent = 7;
+   */
+  totalCreditsSpent: bigint;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 8;
+   */
+  createdAt?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp last_activity = 9;
+   */
+  lastActivity?: Timestamp;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.SuspiciousOrganization.
+ * Use `create(SuspiciousOrganizationSchema)` to create a new message.
+ */
+export const SuspiciousOrganizationSchema: GenMessage<SuspiciousOrganization> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 29);
+
+/**
+ * Suspicious Activity
+ *
+ * @generated from message obiente.cloud.superadmin.v1.SuspiciousActivity
+ */
+export type SuspiciousActivity = Message<"obiente.cloud.superadmin.v1.SuspiciousActivity"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string organization_id = 2;
+   */
+  organizationId: string;
+
+  /**
+   * "rapid_creation", "failed_payments", "unusual_usage", etc.
+   *
+   * @generated from field: string activity_type = 3;
+   */
+  activityType: string;
+
+  /**
+   * @generated from field: string description = 4;
+   */
+  description: string;
+
+  /**
+   * 0-100
+   *
+   * @generated from field: int64 severity = 5;
+   */
+  severity: bigint;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp occurred_at = 6;
+   */
+  occurredAt?: Timestamp;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.SuspiciousActivity.
+ * Use `create(SuspiciousActivitySchema)` to create a new message.
+ */
+export const SuspiciousActivitySchema: GenMessage<SuspiciousActivity> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 30);
+
+/**
+ * Abuse Metrics
+ *
+ * @generated from message obiente.cloud.superadmin.v1.AbuseMetrics
+ */
+export type AbuseMetrics = Message<"obiente.cloud.superadmin.v1.AbuseMetrics"> & {
+  /**
+   * @generated from field: int64 total_suspicious_orgs = 1;
+   */
+  totalSuspiciousOrgs: bigint;
+
+  /**
+   * Risk score > 70
+   *
+   * @generated from field: int64 high_risk_orgs = 2;
+   */
+  highRiskOrgs: bigint;
+
+  /**
+   * Organizations with >10 resources created in 24h
+   *
+   * @generated from field: int64 rapid_creations_24h = 3;
+   */
+  rapidCreations24h: bigint;
+
+  /**
+   * @generated from field: int64 failed_payment_attempts_24h = 4;
+   */
+  failedPaymentAttempts24h: bigint;
+
+  /**
+   * @generated from field: int64 unusual_usage_spikes_24h = 5;
+   */
+  unusualUsageSpikes24h: bigint;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.AbuseMetrics.
+ * Use `create(AbuseMetricsSchema)` to create a new message.
+ */
+export const AbuseMetricsSchema: GenMessage<AbuseMetrics> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 31);
+
+/**
+ * Get Income Overview Request
+ *
+ * @generated from message obiente.cloud.superadmin.v1.GetIncomeOverviewRequest
+ */
+export type GetIncomeOverviewRequest = Message<"obiente.cloud.superadmin.v1.GetIncomeOverviewRequest"> & {
+  /**
+   * ISO 8601 date string (optional, defaults to 30 days ago)
+   *
+   * @generated from field: optional string start_date = 1;
+   */
+  startDate?: string;
+
+  /**
+   * ISO 8601 date string (optional, defaults to now)
+   *
+   * @generated from field: optional string end_date = 2;
+   */
+  endDate?: string;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.GetIncomeOverviewRequest.
+ * Use `create(GetIncomeOverviewRequestSchema)` to create a new message.
+ */
+export const GetIncomeOverviewRequestSchema: GenMessage<GetIncomeOverviewRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 32);
+
+/**
+ * Income Overview Response
+ *
+ * @generated from message obiente.cloud.superadmin.v1.GetIncomeOverviewResponse
+ */
+export type GetIncomeOverviewResponse = Message<"obiente.cloud.superadmin.v1.GetIncomeOverviewResponse"> & {
+  /**
+   * @generated from field: obiente.cloud.superadmin.v1.IncomeSummary summary = 1;
+   */
+  summary?: IncomeSummary;
+
+  /**
+   * @generated from field: repeated obiente.cloud.superadmin.v1.MonthlyIncome monthly_income = 2;
+   */
+  monthlyIncome: MonthlyIncome[];
+
+  /**
+   * @generated from field: repeated obiente.cloud.superadmin.v1.TopCustomer top_customers = 3;
+   */
+  topCustomers: TopCustomer[];
+
+  /**
+   * @generated from field: repeated obiente.cloud.superadmin.v1.BillingTransaction transactions = 4;
+   */
+  transactions: BillingTransaction[];
+
+  /**
+   * @generated from field: obiente.cloud.superadmin.v1.PaymentMetrics payment_metrics = 5;
+   */
+  paymentMetrics?: PaymentMetrics;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.
+ * Use `create(GetIncomeOverviewResponseSchema)` to create a new message.
+ */
+export const GetIncomeOverviewResponseSchema: GenMessage<GetIncomeOverviewResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 33);
+
+/**
+ * Income Summary
+ *
+ * @generated from message obiente.cloud.superadmin.v1.IncomeSummary
+ */
+export type IncomeSummary = Message<"obiente.cloud.superadmin.v1.IncomeSummary"> & {
+  /**
+   * Total revenue in period
+   *
+   * @generated from field: double total_revenue = 1;
+   */
+  totalRevenue: number;
+
+  /**
+   * Estimated MRR
+   *
+   * @generated from field: double monthly_recurring_revenue = 2;
+   */
+  monthlyRecurringRevenue: number;
+
+  /**
+   * Average monthly revenue
+   *
+   * @generated from field: double average_monthly_revenue = 3;
+   */
+  averageMonthlyRevenue: number;
+
+  /**
+   * @generated from field: int64 total_transactions = 4;
+   */
+  totalTransactions: bigint;
+
+  /**
+   * @generated from field: double total_refunds = 5;
+   */
+  totalRefunds: number;
+
+  /**
+   * Revenue minus refunds
+   *
+   * @generated from field: double net_revenue = 6;
+   */
+  netRevenue: number;
+
+  /**
+   * Estimated monthly income from all orgs based on usage
+   *
+   * @generated from field: double estimated_monthly_income = 7;
+   */
+  estimatedMonthlyIncome: number;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.IncomeSummary.
+ * Use `create(IncomeSummarySchema)` to create a new message.
+ */
+export const IncomeSummarySchema: GenMessage<IncomeSummary> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 34);
+
+/**
+ * Monthly Income
+ *
+ * @generated from message obiente.cloud.superadmin.v1.MonthlyIncome
+ */
+export type MonthlyIncome = Message<"obiente.cloud.superadmin.v1.MonthlyIncome"> & {
+  /**
+   * YYYY-MM format
+   *
+   * @generated from field: string month = 1;
+   */
+  month: string;
+
+  /**
+   * @generated from field: double revenue = 2;
+   */
+  revenue: number;
+
+  /**
+   * @generated from field: int64 transaction_count = 3;
+   */
+  transactionCount: bigint;
+
+  /**
+   * @generated from field: double refunds = 4;
+   */
+  refunds: number;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.MonthlyIncome.
+ * Use `create(MonthlyIncomeSchema)` to create a new message.
+ */
+export const MonthlyIncomeSchema: GenMessage<MonthlyIncome> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 35);
+
+/**
+ * Top Customer
+ *
+ * @generated from message obiente.cloud.superadmin.v1.TopCustomer
+ */
+export type TopCustomer = Message<"obiente.cloud.superadmin.v1.TopCustomer"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string organization_name = 2;
+   */
+  organizationName: string;
+
+  /**
+   * @generated from field: double total_revenue = 3;
+   */
+  totalRevenue: number;
+
+  /**
+   * @generated from field: int64 transaction_count = 4;
+   */
+  transactionCount: bigint;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp first_payment = 5;
+   */
+  firstPayment?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp last_payment = 6;
+   */
+  lastPayment?: Timestamp;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.TopCustomer.
+ * Use `create(TopCustomerSchema)` to create a new message.
+ */
+export const TopCustomerSchema: GenMessage<TopCustomer> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 36);
+
+/**
+ * Billing Transaction
+ *
+ * @generated from message obiente.cloud.superadmin.v1.BillingTransaction
+ */
+export type BillingTransaction = Message<"obiente.cloud.superadmin.v1.BillingTransaction"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string organization_id = 2;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string organization_name = 3;
+   */
+  organizationName: string;
+
+  /**
+   * "payment", "refund", "credit_add", "credit_remove"
+   *
+   * @generated from field: string type = 4;
+   */
+  type: string;
+
+  /**
+   * @generated from field: double amount_cents = 5;
+   */
+  amountCents: number;
+
+  /**
+   * @generated from field: string currency = 6;
+   */
+  currency: string;
+
+  /**
+   * "succeeded", "failed", "pending"
+   *
+   * @generated from field: string status = 7;
+   */
+  status: string;
+
+  /**
+   * @generated from field: optional string stripe_invoice_id = 8;
+   */
+  stripeInvoiceId?: string;
+
+  /**
+   * @generated from field: optional string stripe_payment_intent_id = 9;
+   */
+  stripePaymentIntentId?: string;
+
+  /**
+   * @generated from field: optional string note = 10;
+   */
+  note?: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 11;
+   */
+  createdAt?: Timestamp;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.BillingTransaction.
+ * Use `create(BillingTransactionSchema)` to create a new message.
+ */
+export const BillingTransactionSchema: GenMessage<BillingTransaction> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 37);
+
+/**
+ * Payment Metrics
+ *
+ * @generated from message obiente.cloud.superadmin.v1.PaymentMetrics
+ */
+export type PaymentMetrics = Message<"obiente.cloud.superadmin.v1.PaymentMetrics"> & {
+  /**
+   * Percentage of successful payments
+   *
+   * @generated from field: double success_rate = 1;
+   */
+  successRate: number;
+
+  /**
+   * @generated from field: int64 successful_payments = 2;
+   */
+  successfulPayments: bigint;
+
+  /**
+   * @generated from field: int64 failed_payments = 3;
+   */
+  failedPayments: bigint;
+
+  /**
+   * @generated from field: int64 pending_payments = 4;
+   */
+  pendingPayments: bigint;
+
+  /**
+   * @generated from field: double average_payment_amount = 5;
+   */
+  averagePaymentAmount: number;
+
+  /**
+   * @generated from field: double largest_payment = 6;
+   */
+  largestPayment: number;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.PaymentMetrics.
+ * Use `create(PaymentMetricsSchema)` to create a new message.
+ */
+export const PaymentMetricsSchema: GenMessage<PaymentMetrics> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 38);
+
+/**
  * @generated from service obiente.cloud.superadmin.v1.SuperadminService
  */
 export const SuperadminService: GenService<{
@@ -1052,6 +1581,26 @@ export const SuperadminService: GenService<{
     methodKind: "unary";
     input: typeof GetPricingRequestSchema;
     output: typeof GetPricingResponseSchema;
+  },
+  /**
+   * Abuse detection endpoints
+   *
+   * @generated from rpc obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection
+   */
+  getAbuseDetection: {
+    methodKind: "unary";
+    input: typeof GetAbuseDetectionRequestSchema;
+    output: typeof GetAbuseDetectionResponseSchema;
+  },
+  /**
+   * Income and billing overview endpoints
+   *
+   * @generated from rpc obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview
+   */
+  getIncomeOverview: {
+    methodKind: "unary";
+    input: typeof GetIncomeOverviewRequestSchema;
+    output: typeof GetIncomeOverviewResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 0);
