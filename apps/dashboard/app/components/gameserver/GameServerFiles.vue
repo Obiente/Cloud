@@ -1375,59 +1375,38 @@
       return "text";
     }
 
-    // Check MIME type first (most reliable)
-    if (mimeType) {
-      if (mimeType.startsWith("image/")) return "image";
-      if (mimeType.startsWith("video/")) return "video";
-      if (mimeType.startsWith("audio/")) return "audio";
-      if (mimeType === "application/pdf") return "pdf";
-      // Text MIME types
-      if (
-        mimeType.startsWith("text/") ||
-        mimeType.includes("json") ||
-        mimeType.includes("xml") ||
-        mimeType.includes("javascript") ||
-        mimeType.includes("css") ||
-        mimeType.includes("html")
-      ) {
-        return "text";
-      }
-      // If it's a binary MIME type, return binary
-      if (
-        mimeType.startsWith("application/") &&
-        !mimeType.includes("json") &&
-        !mimeType.includes("xml") &&
-        mimeType !== "application/pdf"
-      ) {
-        return "binary";
-      }
-    }
-
-    // Fallback to file extension
+    // Extract filename and extension early for use in multiple checks
+    const filename = path.split("/").pop()?.toLowerCase() || "";
     const ext = path.split(".").pop()?.toLowerCase() || "";
-    const imageExts = [
-      "jpg",
-      "jpeg",
-      "png",
-      "gif",
-      "webp",
-      "svg",
-      "bmp",
-      "ico",
-      "tiff",
-      "tif",
+    const lowerPath = path.toLowerCase();
+
+    // Common text filenames (game server configs and other files without extensions)
+    // Check these BEFORE MIME type to override incorrect MIME type detection
+    const commonTextFilenames = [
+      "server.properties",
+      "server.properties.tmp",
+      "banned-players.json",
+      "banned-ips.json",
+      "ops.json",
+      "whitelist.json",
+      "usercache.json",
+      "eula.txt",
+      "bukkit.yml",
+      "spigot.yml",
+      "paper.yml",
+      "server.config",
+      "serverconfig.xml",
+      "valheim_server.config",
+      "server.cfg",
+      "serverconfig.txt",
+      "run.bat",
+      "run.sh",
+      "start.sh",
+      "start.bat",
+      "launch.sh",
+      "launch.bat",
     ];
-    const videoExts = ["mp4", "webm", "ogg", "mov", "avi", "mkv", "flv", "wmv"];
-    const audioExts = [
-      "mp3",
-      "wav",
-      "ogg",
-      "aac",
-      "flac",
-      "m4a",
-      "wma",
-      "opus",
-    ];
+
     // Common text file paths (especially system files without extensions)
     const commonTextPaths = [
       "/etc/",
@@ -1456,15 +1435,68 @@
       "LICENSE",
     ];
 
-    // Check if path matches common text file patterns
-    const lowerPath = path.toLowerCase();
-    if (
-      commonTextPaths.some((pattern) =>
-        lowerPath.includes(pattern.toLowerCase())
-      )
-    ) {
+    // Check if filename matches common text filenames (before MIME type check)
+    if (commonTextFilenames.some((name) => filename === name.toLowerCase())) {
       return "text";
     }
+
+    // Check if path matches common text file patterns (before MIME type check)
+    if (commonTextPaths.some((pattern) => lowerPath.includes(pattern.toLowerCase()))) {
+      return "text";
+    }
+
+    // Check MIME type (but don't trust it blindly for known text files)
+    if (mimeType) {
+      if (mimeType.startsWith("image/")) return "image";
+      if (mimeType.startsWith("video/")) return "video";
+      if (mimeType.startsWith("audio/")) return "audio";
+      if (mimeType === "application/pdf") return "pdf";
+      // Text MIME types
+      if (
+        mimeType.startsWith("text/") ||
+        mimeType.includes("json") ||
+        mimeType.includes("xml") ||
+        mimeType.includes("javascript") ||
+        mimeType.includes("css") ||
+        mimeType.includes("html")
+      ) {
+        return "text";
+      }
+      // If it's a binary MIME type, return binary (but only if we haven't already identified it as text)
+      if (
+        mimeType.startsWith("application/") &&
+        !mimeType.includes("json") &&
+        !mimeType.includes("xml") &&
+        mimeType !== "application/pdf"
+      ) {
+        return "binary";
+      }
+    }
+
+    // Fallback to file extension
+    const imageExts = [
+      "jpg",
+      "jpeg",
+      "png",
+      "gif",
+      "webp",
+      "svg",
+      "bmp",
+      "ico",
+      "tiff",
+      "tif",
+    ];
+    const videoExts = ["mp4", "webm", "ogg", "mov", "avi", "mkv", "flv", "wmv"];
+    const audioExts = [
+      "mp3",
+      "wav",
+      "ogg",
+      "aac",
+      "flac",
+      "m4a",
+      "wma",
+      "opus",
+    ];
 
     const textExts = [
       "txt",

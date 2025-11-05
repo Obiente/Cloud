@@ -1,58 +1,42 @@
 <template>
-  <OuiStack gap="md">
-    <OuiFlex justify="between" align="center">
-      <OuiText as="h3" size="md" weight="semibold">
-        Interactive Terminal
-      </OuiText>
-      <OuiFlex gap="sm">
-        <OuiButton
-          v-if="terminal"
-          variant="ghost"
-          size="sm"
-          @click="clearTerminal"
-          :disabled="!terminal"
-        >
-          Clear
-        </OuiButton>
-        <OuiButton
-          v-if="isConnected"
-          variant="ghost"
-          size="sm"
-          color="danger"
-          @click="disconnectTerminal"
-        >
-          Disconnect
-        </OuiButton>
-        <OuiButton
-          v-else
-          variant="ghost"
-          size="sm"
-          @click="connectTerminal"
-          :disabled="isLoading"
-        >
-          {{ isLoading ? "Connecting..." : "Connect" }}
-        </OuiButton>
-      </OuiFlex>
-    </OuiFlex>
-
-    <OuiText size="sm" color="secondary">
-      Access an interactive terminal session to run commands directly in your game server.
-      Tab autocomplete works for Minecraft and other game servers.
+  <OuiStack gap="sm">
+    <OuiText as="h3" size="sm" weight="semibold">
+      Command Input
     </OuiText>
 
-    <div class="terminal-wrapper">
-      <div class="terminal-container">
-        <div ref="terminalContainer" class="terminal-content" />
-        <div v-if="showSpinner" class="terminal-overlay">
-          <div class="terminal-spinner" aria-hidden="true"></div>
-        </div>
+    <div class="command-input-wrapper">
+      <div class="command-input-container">
+        <div class="command-prompt">$</div>
+        <input
+          ref="commandInput"
+          v-model="command"
+          type="text"
+          class="command-input"
+          placeholder="Type command and press Enter..."
+          :disabled="false"
+          :readonly="false"
+          autocomplete="off"
+          @keydown.enter="sendCommand"
+          @keydown.up="navigateHistory('up')"
+          @keydown.down="navigateHistory('down')"
+          @keydown.tab.prevent="handleTab"
+        />
+        <OuiButton
+          v-if="command.trim()"
+          variant="ghost"
+          size="sm"
+          @click="sendCommand"
+          class="command-send-button"
+        >
+          Send
+        </OuiButton>
       </div>
     </div>
 
     <OuiText v-if="error" size="xs" color="danger">{{ error }}</OuiText>
 
-    <OuiText v-if="isConnected && !error" size="xs" color="success">
-      ✓ Terminal connected. Type commands to interact with your game server.
+    <OuiText v-if="isConnected && !error" size="xs" color="secondary">
+      Press Enter to send commands to the game server stdin
     </OuiText>
   </OuiStack>
 </template>
@@ -68,185 +52,251 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const emit = defineEmits<{
+  "log-output": [text: string];
+}>();
 const orgsStore = useOrganizationsStore();
 const organizationId = computed(
   () => props.organizationId || orgsStore.currentOrgId || ""
 );
 const auth = useAuth();
 
-const terminalContainer = ref<HTMLElement | null>(null);
+const commandInput = ref<HTMLInputElement | null>(null);
+const command = ref("");
 const isConnected = ref(false);
 const isLoading = ref(false);
 const error = ref("");
+const commandHistory = ref<string[]>([]);
+const historyIndex = ref(-1);
+const awaitingTabCompletion = ref(false);
+const commandBeforeTab = ref("");
+let tabCompletionTimeout: ReturnType<typeof setTimeout> | null = null;
 
-let terminal: any = null;
-let fitAddon: any = null;
 let websocket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempts = 0;
-let Terminal: any = null;
-let FitAddon: any = null;
-
-const showSpinner = computed(() => isLoading.value && !isConnected.value);
+// Always attempt to reconnect - logs should always be connected
 const shouldAttemptReconnect = ref(true);
 
-async function initTerminal() {
-  if (typeof window === "undefined" || !terminalContainer.value) return;
-
-  if (!Terminal || !FitAddon) {
-    try {
-      import("@xterm/xterm/css/xterm.css").catch(() => {});
-      const [xtermModule, xtermAddonModule] = await Promise.all([
-        import("@xterm/xterm"),
-        import("@xterm/addon-fit"),
-      ]);
-      Terminal = xtermModule.Terminal;
-      FitAddon = xtermAddonModule.FitAddon;
-    } catch (err) {
-      console.error("Failed to load xterm:", err);
-      error.value = "Failed to load terminal. Please refresh the page.";
-      return;
-    }
+const sendCommand = () => {
+  if (!command.value.trim()) {
+    return;
   }
 
-  if (!Terminal || !FitAddon) return;
-
-  async function getOUITerminalTheme() {
-    if (typeof window === "undefined") {
-      return {
-        background: "var(--oui-surface-base)",
-        foreground: "var(--oui-text-primary)",
-        cursor: "var(--oui-accent-primary)",
-        selection: "#10b98140",
-      };
+  const cmd = command.value.trim();
+  
+  // Add to history
+  if (cmd && (commandHistory.value.length === 0 || commandHistory.value[commandHistory.value.length - 1] !== cmd)) {
+    commandHistory.value.push(cmd);
+    // Keep only last 50 commands
+    if (commandHistory.value.length > 50) {
+      commandHistory.value.shift();
     }
+  }
+  historyIndex.value = -1;
 
-    let chroma: any = null;
-    try {
-      const chromaModule = await import("chroma-js");
-      chroma = (chromaModule as any).default || chromaModule;
-    } catch (err) {
-      console.warn("Failed to load chroma-js, using fallback colors:", err);
+  // Check if connected before sending
+  if (!isConnected.value || !websocket || websocket.readyState !== WebSocket.OPEN) {
+    error.value = "Not connected. Commands will be sent when connection is established.";
+    // Try to reconnect if not already connecting
+    if (!isLoading.value && shouldAttemptReconnect.value) {
+      connectTerminal();
     }
+    command.value = "";
+    return;
+  }
 
-    const root = document.documentElement;
-    const getStyle = (prop: string) =>
-      getComputedStyle(root).getPropertyValue(prop).trim() || "";
+  // Send command to game server stdin
+  const encoder = new TextEncoder();
+  const input = encoder.encode(cmd + "\n");
+  try {
+    websocket.send(
+      JSON.stringify({
+        type: "input",
+        input: Array.from(input),
+      })
+    );
+    command.value = "";
+    error.value = "";
+  } catch (err) {
+    console.error("Failed to send command:", err);
+    error.value = "Failed to send command. Please try again.";
+  }
+};
 
-    const lighten = (color: string, amount = 0.3): string => {
-      if (!chroma) return color;
-      try {
-        return chroma(color).brighten(amount).saturate(0.2).hex();
-      } catch {
-        return color;
+const navigateHistory = (direction: "up" | "down") => {
+  if (commandHistory.value.length === 0) return;
+
+  if (direction === "up") {
+    if (historyIndex.value < commandHistory.value.length - 1) {
+      historyIndex.value++;
+      const cmd = commandHistory.value[commandHistory.value.length - 1 - historyIndex.value];
+      command.value = cmd ?? "";
+    }
+  } else {
+    if (historyIndex.value > 0) {
+      historyIndex.value--;
+      const cmd = commandHistory.value[commandHistory.value.length - 1 - historyIndex.value];
+      command.value = cmd ?? "";
+    } else {
+      historyIndex.value = -1;
+      command.value = "";
+    }
+  }
+};
+
+const handleTab = (event: KeyboardEvent) => {
+  // Prevent default tab behavior (focus navigation)
+  event.preventDefault();
+  
+  // Send Tab character (ASCII 9) to the backend for tab completion
+  if (!isConnected.value || !websocket || websocket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  // Clear any existing timeout
+  if (tabCompletionTimeout) {
+    clearTimeout(tabCompletionTimeout);
+  }
+
+  // Store current command before tab for completion processing
+  commandBeforeTab.value = command.value;
+  awaitingTabCompletion.value = true;
+  
+  // Set timeout to reset awaitingTabCompletion if no response comes
+  // Give more time for tab completion (some shells take longer)
+  tabCompletionTimeout = setTimeout(() => {
+    awaitingTabCompletion.value = false;
+    tabCompletionTimeout = null;
+  }, 2000);
+
+  const encoder = new TextEncoder();
+  
+  // IMPORTANT: Send the current command text first, then Tab
+  // The shell needs to know what text we're trying to complete
+  // We need to send it as if it was typed character by character
+  const currentCommand = command.value;
+  const commandBytes = encoder.encode(currentCommand);
+  const tabChar = encoder.encode("\t");
+  
+  // Combine command text + Tab character
+  const combinedInput = new Uint8Array(commandBytes.length + tabChar.length);
+  combinedInput.set(commandBytes, 0);
+  combinedInput.set(tabChar, commandBytes.length);
+  
+  try {
+    websocket.send(
+      JSON.stringify({
+        type: "input",
+        input: Array.from(combinedInput),
+      })
+    );
+  } catch (err) {
+    console.error("Failed to send tab completion:", err);
+    awaitingTabCompletion.value = false;
+    if (tabCompletionTimeout) {
+      clearTimeout(tabCompletionTimeout);
+      tabCompletionTimeout = null;
+    }
+  }
+};
+
+const handleTabCompletionOutput = (outputData: number[]) => {
+  if (!awaitingTabCompletion.value) return;
+  
+  try {
+    // Convert output data to string
+    const output = new Uint8Array(outputData);
+    const text = new TextDecoder().decode(output);
+    
+    // Remove ANSI escape codes (including cursor movement codes)
+    const ansiRegex = /\x1b\[[0-9;]*[a-zA-Z]/g;
+    let cleanText = text.replace(ansiRegex, "");
+    
+    // Also remove control characters except newlines
+    cleanText = cleanText.replace(/[\x00-\x08\x0B-\x1F\x7F]/g, "");
+    
+    // Get the prefix we had before Tab
+    const prefix = commandBeforeTab.value.trim();
+    
+    // For tab completion, shells typically output the completed text
+    // This might be mixed with other output, so we need to extract it carefully
+    
+    // Try to find the completed command in the output
+    // Look for text that starts with our prefix
+    const lines = cleanText.split(/\r?\n/);
+    
+    // Also check the raw text for completion patterns
+    // Tab completion often shows: "prefix" + "completion" or just the completion part
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      // If line starts with our prefix and is longer, extract completion
+      if (trimmedLine.startsWith(prefix) && trimmedLine.length > prefix.length) {
+        const completion = trimmedLine.substring(prefix.length);
+        // Update command with completion
+        command.value = commandBeforeTab.value + completion;
+        
+        // Clear timeout and reset flag
+        if (tabCompletionTimeout) {
+          clearTimeout(tabCompletionTimeout);
+          tabCompletionTimeout = null;
+        }
+        awaitingTabCompletion.value = false;
+        
+        // Set cursor position after completion
+        nextTick(() => {
+          const input = commandInput.value;
+          if (input) {
+            input.setSelectionRange(command.value.length, command.value.length);
+          }
+        });
+        return;
       }
-    };
-
-    const background = getStyle("--oui-surface-base") || "#111a16";
-    const foreground = getStyle("--oui-text-primary") || "#e9fff8";
-    const accentPrimary = getStyle("--oui-accent-primary") || "#10b981";
-    const accentDanger = getStyle("--oui-accent-danger") || "#f43f5e";
-    const accentSuccess = getStyle("--oui-accent-success") || "#22c55e";
-    const accentWarning = getStyle("--oui-accent-warning") || "#fbbf24";
-    const accentInfo = getStyle("--oui-accent-info") || "#38bdf8";
-    const accentSecondary = getStyle("--oui-accent-secondary") || "#67e8f9";
-    const textTertiary = getStyle("--oui-text-tertiary") || "#5ce1a6";
-    const ouiBackground = getStyle("--oui-background") || "#0a0f0c";
-
-    return {
-      background,
-      foreground,
-      cursor: accentPrimary,
-      selection: accentPrimary + "40",
-      cursorAccent: ouiBackground,
-      black: ouiBackground,
-      red: accentDanger,
-      green: accentSuccess,
-      yellow: accentWarning,
-      blue: accentInfo,
-      magenta: accentPrimary,
-      cyan: accentSecondary,
-      white: foreground,
-      brightBlack: lighten(textTertiary, 0.4),
-      brightRed: lighten(accentDanger, 0.4),
-      brightGreen: lighten(accentSuccess, 0.3),
-      brightYellow: lighten(accentWarning, 0.3),
-      brightBlue: lighten(accentInfo, 0.3),
-      brightMagenta: lighten(accentPrimary, 0.3),
-      brightCyan: lighten(accentSecondary, 0.3),
-      brightWhite: lighten(foreground, 0.2),
-    };
-  }
-
-  const terminalTheme = await getOUITerminalTheme();
-
-  terminal = new Terminal({
-    cursorBlink: true,
-    fontSize: 14,
-    fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-    theme: terminalTheme,
-    allowProposedApi: true,
-    disableStdin: false,
-  });
-
-  if (terminal.options) {
-    terminal.options.theme = terminalTheme;
-  }
-
-  fitAddon = new FitAddon();
-  terminal.loadAddon(fitAddon);
-  terminal.open(terminalContainer.value);
-
-  await nextTick();
-  fitAddon.fit();
-  terminal.focus();
-  terminal.options.theme = terminalTheme;
-  terminal.refresh(0, terminal.rows - 1);
-
-  const resizeObserver = new ResizeObserver(async () => {
-    if (!fitAddon || !terminal) return;
-    fitAddon.fit();
-    if (isConnected.value && websocket && websocket.readyState === WebSocket.OPEN) {
-      try {
-        websocket.send(
-          JSON.stringify({
-            type: "resize",
-            cols: terminal.cols || 80,
-            rows: terminal.rows || 24,
-          })
-        );
-      } catch (err) {
-        console.error("Failed to send resize:", err);
+      
+      // If we see a single word that could be a completion
+      if (lines.length === 1 && trimmedLine.length > 0 && !trimmedLine.includes(" ")) {
+        // Check if it's a continuation of our prefix
+        if (trimmedLine.startsWith(prefix)) {
+          command.value = trimmedLine;
+          
+          if (tabCompletionTimeout) {
+            clearTimeout(tabCompletionTimeout);
+            tabCompletionTimeout = null;
+          }
+          awaitingTabCompletion.value = false;
+          
+          nextTick(() => {
+            const input = commandInput.value;
+            if (input) {
+              input.setSelectionRange(command.value.length, command.value.length);
+            }
+          });
+          return;
+        }
       }
     }
-  });
-
-  if (terminalContainer.value) {
-    resizeObserver.observe(terminalContainer.value);
+    
+    // If we see common completion patterns (multiple options separated by spaces)
+    // This happens when there are multiple matches - we can't auto-complete
+    // But we'll reset the flag so next output messages aren't treated as completion
+    if (cleanText.includes("  ") || lines.length > 3) {
+      // Multiple options shown - don't auto-complete but reset flag
+      if (tabCompletionTimeout) {
+        clearTimeout(tabCompletionTimeout);
+        tabCompletionTimeout = null;
+      }
+      awaitingTabCompletion.value = false;
+    }
+  } catch (err) {
+    console.error("Failed to process tab completion:", err);
+    awaitingTabCompletion.value = false;
+    if (tabCompletionTimeout) {
+      clearTimeout(tabCompletionTimeout);
+      tabCompletionTimeout = null;
+    }
   }
-
-  terminal.onData((data: string) => {
-    // Allow input even if not fully connected (e.g., container is stopped)
-    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
-      return;
-    }
-
-    const encoder = new TextEncoder();
-    const input = encoder.encode(data);
-    try {
-      websocket.send(
-        JSON.stringify({
-          type: "input",
-          input: Array.from(input),
-          cols: terminal?.cols || 80,
-          rows: terminal?.rows || 24,
-        })
-      );
-    } catch (err) {
-      console.error("Failed to send terminal input:", err);
-    }
-  });
-}
+};
 
 const connectTerminal = async () => {
   // Don't connect if already connected
@@ -255,25 +305,10 @@ const connectTerminal = async () => {
   }
 
   shouldAttemptReconnect.value = true;
-
-  if (!terminal) {
-    await initTerminal();
-  }
-
-  if (!terminal) {
-    error.value = "Failed to initialize terminal";
-    isLoading.value = false;
-    return;
-  }
-
   isLoading.value = true;
   error.value = "";
 
   try {
-    if (!terminal) {
-      throw new Error("Terminal not initialized");
-    }
-
     const config = useRuntimeConfig();
     const apiBase = config.public.apiHost || config.public.requestHost;
     const disableAuth = Boolean(config.public.disableAuth);
@@ -304,7 +339,9 @@ const connectTerminal = async () => {
 
       if (!token) {
         error.value = "Authentication required. Please log in.";
+        isLoading.value = false;
         websocket?.close();
+        // Still attempt reconnect in case auth becomes available
         return;
       }
 
@@ -313,8 +350,8 @@ const connectTerminal = async () => {
         gameServerId: props.gameServerId,
         organizationId: organizationId.value,
         token,
-        cols: terminal.cols || 80,
-        rows: terminal.rows || 24,
+        cols: 80,
+        rows: 24,
       };
 
       websocket!.send(JSON.stringify(initMessage));
@@ -329,23 +366,33 @@ const connectTerminal = async () => {
           isLoading.value = false;
           reconnectAttempts = 0;
           shouldAttemptReconnect.value = true;
-          terminal?.focus();
-        } else if (message.type === "output" && terminal) {
-          if (message.data && Array.isArray(message.data) && message.data.length > 0) {
-            const output = new Uint8Array(message.data);
-            const text = new TextDecoder().decode(output);
-            terminal.write(text);
+          nextTick(() => {
+            commandInput.value?.focus();
+          });
+        } else if (message.type === "output") {
+          // Handle tab completion output - capture output for a short time after Tab press
+          if (awaitingTabCompletion.value && message.data && Array.isArray(message.data)) {
+            handleTabCompletionOutput(message.data);
+          }
+          // Convert output data to string and emit to parent logs component
+          if (message.data && Array.isArray(message.data)) {
+            try {
+              const outputBytes = new Uint8Array(message.data);
+              const outputText = new TextDecoder().decode(outputBytes);
+              console.log("[GameServer Terminal] Received output:", outputText.length, "chars, first 100:", outputText.substring(0, 100));
+              // Emit log output to parent component
+              emit("log-output", outputText);
+            } catch (err) {
+              console.error("Error decoding output:", err);
+            }
           }
         } else if (message.type === "closed") {
-          disconnectTerminal();
+          // Connection closed - will auto-reconnect
+          isConnected.value = false;
         } else if (message.type === "error") {
-          error.value = message.message || "Terminal error";
-          if (terminal) {
-            terminal.write(`\r\n\x1b[31m[ERROR]\x1b[0m ${message.message}\r\n`);
-          }
-          if (message.message.includes("Authentication required")) {
-            disconnectTerminal();
-          }
+          error.value = message.message || "Connection error";
+          isConnected.value = false;
+          // Will auto-reconnect via onclose handler
         }
       } catch (err) {
         console.error("Error processing WebSocket message:", err);
@@ -355,7 +402,8 @@ const connectTerminal = async () => {
     websocket.onerror = (err) => {
       console.error("WebSocket error:", err);
       if (!isConnected.value) {
-        error.value = "Failed to connect to terminal. Please try again.";
+        error.value = "Failed to connect. Please try again.";
+        isLoading.value = false;
       }
     };
 
@@ -370,25 +418,19 @@ const connectTerminal = async () => {
 
       if (shouldAttemptReconnect.value) {
         scheduleReconnect();
+      } else {
+        isLoading.value = false;
       }
     };
   } catch (err: any) {
-    console.error("Failed to connect terminal:", err);
-    const errMsg = err.message || "Failed to connect terminal. Please try again.";
+    console.error("Failed to connect:", err);
+    const errMsg = err.message || "Failed to connect. Please try again.";
     error.value = errMsg;
-
-    if (terminal) {
-      terminal.write(`\r\n\x1b[31m[ERROR]\x1b[0m ${errMsg}\r\n`);
-    }
-
     isConnected.value = false;
+    isLoading.value = false;
     if (websocket) {
       websocket.close();
       websocket = null;
-    }
-  } finally {
-    if (!isConnected.value) {
-      isLoading.value = false;
     }
   }
 };
@@ -408,7 +450,7 @@ function scheduleReconnect() {
 }
 
 const disconnectTerminal = () => {
-  shouldAttemptReconnect.value = false;
+  // Only used for cleanup on unmount - don't stop reconnection
   isConnected.value = false;
   isLoading.value = false;
 
@@ -425,99 +467,92 @@ const disconnectTerminal = () => {
     }
     websocket = null;
   }
-
-  if (terminal) {
-    terminal.write("\r\n\x1b[33m[Disconnected]\x1b[0m\r\n");
-  }
-};
-
-const clearTerminal = () => {
-  if (terminal) {
-    terminal.clear();
-  }
 };
 
 watch(
   () => props.gameServerId,
   async () => {
-    if (isConnected.value) {
-      disconnectTerminal();
-    }
+    // Reconnect when game server ID changes
+    disconnectTerminal();
     await nextTick();
-    if (terminal) {
-      await connectTerminal();
-    }
+    await connectTerminal();
   }
 );
 
 onMounted(async () => {
   await nextTick();
-  await initTerminal();
-  // Auto-connect when terminal is ready
-  if (terminal) {
-    await connectTerminal();
-  }
+  // Auto-connect when component mounts
+  await connectTerminal();
 });
 
 onUnmounted(() => {
+  // Stop reconnection when component unmounts
+  shouldAttemptReconnect.value = false;
   disconnectTerminal();
-  if (terminal) {
-    terminal.dispose();
-  }
-  if (fitAddon) {
-    fitAddon.dispose();
-  }
 });
 </script>
 
 <style scoped>
-.terminal-wrapper {
+.command-input-wrapper {
   width: 100%;
-  height: 600px;
-  position: relative;
 }
 
-.terminal-container {
+.command-input-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   width: 100%;
-  height: 100%;
   background: var(--oui-surface-base);
   border: 1px solid var(--oui-border-default);
   border-radius: var(--oui-radius-md);
-  overflow: hidden;
-  position: relative;
+  padding: 0.5rem 0.75rem;
+  transition: border-color 0.2s;
 }
 
-.terminal-content {
-  width: 100%;
-  height: 100%;
+.command-input-container:focus-within {
+  border-color: var(--oui-accent-primary);
+  outline: 2px solid var(--oui-accent-primary);
+  outline-offset: 2px;
 }
 
-.terminal-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 10;
+.command-prompt {
+  color: var(--oui-accent-primary);
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 0.875rem;
+  font-weight: 600;
+  user-select: none;
+  flex-shrink: 0;
 }
 
-.terminal-spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid var(--oui-border-default);
-  border-top-color: var(--oui-accent-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.command-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--oui-text-primary);
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 0.875rem;
+  padding: 0;
+  min-width: 0;
+  pointer-events: auto;
+  cursor: text;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.command-input::placeholder {
+  color: var(--oui-text-secondary);
+  opacity: 0.6;
+}
+
+.command-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.command-send-button {
+  flex-shrink: 0;
+  padding: 0.25rem 0.75rem;
+  height: auto;
 }
 </style>
 

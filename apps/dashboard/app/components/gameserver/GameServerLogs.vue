@@ -72,6 +72,7 @@
     <GameServerTerminal
       :game-server-id="props.gameServerId"
       :organization-id="props.organizationId"
+      @log-output="handleTerminalOutput"
     />
 
     <OuiText v-if="error" size="xs" color="danger">{{ error }}</OuiText>
@@ -118,6 +119,7 @@ let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_DELAY = 2000; // Start with 2 seconds, exponential backoff
 const logs = ref<Array<{ line: string; timestamp: string; level?: number }>>([]);
+let terminalOutputBuffer = ""; // Buffer for partial lines from terminal WebSocket
 
 // Format logs for OuiLogs component
 const formattedLogs = computed<LogEntry[]>(() => {
@@ -394,6 +396,59 @@ const handleTailChange = (value: string) => {
   }
 };
 
+// Handle output from terminal WebSocket
+const handleTerminalOutput = (text: string) => {
+  if (!text) return;
+  
+  console.log("[GameServer Logs] handleTerminalOutput called with:", text.length, "chars, first 100:", text.substring(0, 100));
+  
+  // Add to buffer
+  terminalOutputBuffer += text;
+  
+  // Split by newlines - keep incomplete line in buffer
+  const lines = terminalOutputBuffer.split(/\r?\n/);
+  
+  // If buffer ends with newline, last element will be empty string
+  // Otherwise, last element is an incomplete line that stays in buffer
+  if (terminalOutputBuffer.endsWith("\n") || terminalOutputBuffer.endsWith("\r")) {
+    terminalOutputBuffer = "";
+  } else {
+    terminalOutputBuffer = lines.pop() || ""; // Keep last incomplete line
+  }
+  
+  // Add complete lines to logs (including empty lines)
+  const linesAdded = lines.length;
+  for (const line of lines) {
+    // Add line even if empty (for proper spacing)
+    logs.value.push({
+      line: line || " ", // Use space for empty lines so they still render
+      timestamp: new Date().toISOString(),
+      level: undefined, // Terminal output doesn't have a log level
+    });
+    
+    // Keep only last 10000 lines
+    if (logs.value.length > 10000) {
+      logs.value = logs.value.slice(-10000);
+    }
+  }
+  
+  console.log("[GameServer Logs] Added", linesAdded, "lines to logs. Total logs:", logs.value.length);
+  
+  // Also flush buffer if it gets too large (in case we never get a newline)
+  if (terminalOutputBuffer.length > 1000) {
+    console.log("[GameServer Logs] Flushing large buffer:", terminalOutputBuffer.length, "chars");
+    logs.value.push({
+      line: terminalOutputBuffer,
+      timestamp: new Date().toISOString(),
+      level: undefined,
+    });
+    terminalOutputBuffer = "";
+    
+    if (logs.value.length > 10000) {
+      logs.value = logs.value.slice(-10000);
+    }
+  }
+};
 
 onMounted(() => {
   // Auto-start following logs when component mounts

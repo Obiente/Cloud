@@ -8,6 +8,20 @@ export default defineNuxtConfig({
       hmr: {
         port: 24678, // Use a different port for HMR
       },
+      watch: {
+        ignored: [
+          "**/node_modules/**",
+          "**/.git/**",
+          "**/packages/**",
+          "**/dist/**",
+          "**/.nuxt/**",
+          "**/apps/api/**",
+          "**/apps/*/dist/**",
+          "**/scripts/**",
+          "**/tools/**",
+          "**/.nx/**",
+        ],
+      },
     },
   },
   // Modules
