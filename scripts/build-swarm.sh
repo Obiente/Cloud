@@ -3,6 +3,7 @@
 # This script builds the required images before deploying the stack
 # For production, use images from GitHub Container Registry instead:
 #   ghcr.io/obiente/cloud-api:latest
+#   ghcr.io/obiente/cloud-dashboard:latest
 
 set -e
 
@@ -22,6 +23,10 @@ echo "  1. Push to GitHub Container Registry (recommended for production):"
 echo "     docker tag obiente/cloud-api:latest ghcr.io/obiente/cloud-api:latest"
 echo "     docker login ghcr.io"
 echo "     docker push ghcr.io/obiente/cloud-api:latest"
+echo ""
+echo "     # Dashboard image"
+echo "     docker tag obiente/cloud-dashboard:latest ghcr.io/obiente/cloud-dashboard:latest"
+echo "     docker push ghcr.io/obiente/cloud-dashboard:latest"
 echo ""
 echo "  2. Or push to another registry:"
 echo "     docker tag obiente/cloud-api:latest your-registry/obiente/cloud-api:latest"

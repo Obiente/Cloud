@@ -4,18 +4,24 @@ This repository uses GitHub Container Registry (ghcr.io) for Docker image builds
 
 ## Overview
 
-The Docker image for the API is automatically built and pushed to GitHub Container Registry on:
+Docker images for both the API and Dashboard are automatically built and pushed to GitHub Container Registry on:
 - Push to `main` branch
 - Push of version tags (e.g., `v1.0.0`)
 - Manual workflow dispatch
 
-## Image Location
+## Image Locations
 
-Images are available at:
+### API Images
 - `ghcr.io/obiente/cloud-api:latest` - Latest build from main branch
 - `ghcr.io/obiente/cloud-api:main` - Latest build from main branch (alternative tag)
 - `ghcr.io/obiente/cloud-api:v1.0.0` - Tagged versions
 - `ghcr.io/obiente/cloud-api:main-<sha>` - Build-specific tags
+
+### Dashboard Images
+- `ghcr.io/obiente/cloud-dashboard:latest` - Latest build from main branch
+- `ghcr.io/obiente/cloud-dashboard:main` - Latest build from main branch (alternative tag)
+- `ghcr.io/obiente/cloud-dashboard:v1.0.0` - Tagged versions
+- `ghcr.io/obiente/cloud-dashboard:main-<sha>` - Build-specific tags
 
 ## Authentication
 
@@ -49,7 +55,7 @@ gh auth token | docker login ghcr.io -u USERNAME --password-stdin
 
 If you want to make packages public (no authentication required):
 1. Go to your repository on GitHub
-2. Navigate to Packages → `obiente/cloud-api`
+2. Navigate to Packages → `obiente/cloud-api` or `obiente/cloud-dashboard`
 3. Click "Package settings"
 4. Scroll down to "Danger Zone" → "Change visibility"
 5. Select "Public"
@@ -84,8 +90,9 @@ API_IMAGE=ghcr.io/obiente/cloud-api:v1.0.0 ./scripts/deploy-swarm.sh
 
 ### Docker Compose
 
-The docker-compose files support the `API_IMAGE` environment variable:
+The docker-compose files support environment variables for image selection:
 
+#### API Images
 ```bash
 # Use registry image (default)
 API_IMAGE=ghcr.io/obiente/cloud-api:latest docker stack deploy -c docker-compose.swarm.yml obiente
@@ -94,19 +101,33 @@ API_IMAGE=ghcr.io/obiente/cloud-api:latest docker stack deploy -c docker-compose
 API_IMAGE=obiente/cloud-api:latest docker stack deploy -c docker-compose.swarm.yml obiente
 ```
 
+#### Dashboard Images
+```bash
+# Use registry image (default)
+DASHBOARD_IMAGE=ghcr.io/obiente/cloud-dashboard:latest docker compose -f docker-compose.dashboard.yml up -d
+
+# Use local build
+DASHBOARD_IMAGE=obiente/cloud-dashboard:latest docker compose -f docker-compose.dashboard.yml up -d
+```
+
 ## CI/CD Workflow
 
 The GitHub Actions workflow (`.github/workflows/docker-build.yml`) automatically:
-- Builds the Docker image with BuildKit
+- Builds both API and Dashboard Docker images with BuildKit
 - Pushes to ghcr.io on pushes to main
 - Creates tags for version releases
 - Uses GitHub Actions cache for faster builds
 - Supports multi-platform builds (currently linux/amd64)
 
+The workflow runs two parallel jobs:
+- `build-and-push-api` - Builds and pushes the API image
+- `build-and-push-dashboard` - Builds and pushes the Dashboard image
+
 ## Manual Image Push
 
-To manually push a locally built image:
+To manually push locally built images:
 
+### API Image
 ```bash
 # Build locally
 docker build -f apps/api/Dockerfile -t ghcr.io/obiente/cloud-api:latest .
@@ -116,6 +137,18 @@ docker login ghcr.io
 
 # Push
 docker push ghcr.io/obiente/cloud-api:latest
+```
+
+### Dashboard Image
+```bash
+# Build locally
+docker build -f apps/dashboard/Dockerfile -t ghcr.io/obiente/cloud-dashboard:latest .
+
+# Login
+docker login ghcr.io
+
+# Push
+docker push ghcr.io/obiente/cloud-dashboard:latest
 ```
 
 ## Troubleshooting
@@ -132,6 +165,7 @@ If you get authentication errors:
 If the image doesn't exist:
 1. Check the workflow ran successfully in GitHub Actions
 2. Verify the package exists at https://github.com/orgs/obiente/packages
+   - Look for `obiente/cloud-api` or `obiente/cloud-dashboard`
 3. Make sure you're using the correct image name and tag
 
 ### Permission Denied

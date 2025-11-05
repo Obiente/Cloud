@@ -1,11 +1,13 @@
 services:
   dashboard:
-    image: obiente/cloud-dashboard:latest
-    build:
-      context: .
-      dockerfile: apps/dashboard/Dockerfile
-      cache_from:
-        - obiente/cloud-dashboard:latest
+    image: ${DASHBOARD_IMAGE:-ghcr.io/obiente/cloud-dashboard:latest}
+    # Build section removed - using image from GitHub Container Registry
+    # To build locally, set DASHBOARD_IMAGE=obiente/cloud-dashboard:latest and uncomment build section below
+    # build:
+    #   context: .
+    #   dockerfile: apps/dashboard/Dockerfile
+    #   cache_from:
+    #     - obiente/cloud-dashboard:latest
     environment:
       NODE_ENV: production
       PORT: 3000
