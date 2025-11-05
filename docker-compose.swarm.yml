@@ -219,15 +219,17 @@ services:
     image: traefik:v3.0
     command:
       - --api.dashboard=true
-      - --api.insecure=true  # Set to true to allow direct access on port 8080 (use false for production)
-      - --providers.docker=true  # Docker provider - auto-detects Swarm mode in v3
-      - --providers.docker.exposedbydefault=false
-      - --providers.docker.network=obiente-network
-      - --providers.docker.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
+      - --api.insecure=true  # Enable API on port 8080 directly
+      - --providers.swarm=true  # Use Swarm provider for Docker Swarm mode (v3.0)
+      - --providers.swarm.exposedbydefault=false
+      - --providers.swarm.network=obiente-network
+      - --providers.swarm.watch=true  # Watch for service changes
+      - --providers.swarm.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       - --entrypoints.deployments.address=:8000
-      - --entrypoints.dashboard.address=:8080  # Entrypoint for routing Grafana on port 8080
+      # Port 8080 is used by Traefik API (--api.insecure=true)
+      # Grafana is accessible via port 80/443 at /grafana
       # Let's Encrypt
       - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
@@ -236,20 +238,36 @@ services:
       - --metrics.prometheus=true
       # Logging
       - --accesslog=true
-      - --log.level=INFO
+      - --log.level=DEBUG  # Enable debug logging to see service discovery
     ports:
-      - "80:80"
-      - "443:443"
-      - "8000:8000" # User deployments
-      - "8080:8080" # Traefik dashboard accessible on port 8080
+      - target: 80
+        published: 80
+        protocol: tcp
+        mode: ingress  # Ingress mode for Swarm load balancing
+      - target: 443
+        published: 443
+        protocol: tcp
+        mode: ingress  # Ingress mode for Swarm load balancing
+      - target: 8000
+        published: 8000
+        protocol: tcp
+        mode: ingress  # User deployments
+      - target: 8080
+        published: 8080
+        protocol: tcp
+        mode: ingress  # Traefik dashboard accessible on port 8080
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
     deploy:
-      mode: global # Run on all nodes for DNS to resolve properly
+      mode: replicated  # Use replicated mode with ingress for proper Swarm load balancing
+      replicas: 1
       update_config:
         parallelism: 1
         order: start-first
+      placement:
+        constraints:
+          - node.labels.traefik.exclude != true  # Exclude nodes labeled with traefik.exclude=true
       resources:
         limits:
           cpus: "1"
@@ -260,11 +278,12 @@ services:
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
+        # Traefik dashboard accessible directly on port 8080 via --api.insecure=true
+        # Also route Traefik dashboard via HTTPS
         - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.traefik.entrypoints=websecure"
         - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
         - "traefik.http.routers.traefik.service=api@internal"
-        - "traefik.http.services.traefik.loadbalancer.server.port=8080"
     networks:
       - obiente-network
 
@@ -379,8 +398,7 @@ services:
     image: grafana/grafana:latest
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
-      GF_SERVER_ROOT_URL: https://${DOMAIN:-localhost}/grafana
-      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SERVER_ROOT_URL: https://grafana.${DOMAIN:-localhost}
     volumes:
       - grafana_data:/var/lib/grafana
     depends_on:
@@ -400,20 +418,16 @@ services:
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
-        # Route Grafana at /grafana path on port 8080 (dashboard entrypoint)
-        - "traefik.http.routers.grafana.rule=PathPrefix(`/grafana`)"
-        - "traefik.http.routers.grafana.entrypoints=dashboard"
+        # Route Grafana at grafana.domain (Host-based routing)
+        - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.grafana.entrypoints=web"
         - "traefik.http.routers.grafana.service=grafana"
-        # Strip /grafana prefix when forwarding to Grafana (Grafana handles subpath internally)
-        - "traefik.http.middlewares.grafana-stripprefix.stripprefix.prefixes=/grafana"
-        - "traefik.http.routers.grafana.middlewares=grafana-stripprefix"
         - "traefik.http.services.grafana.loadbalancer.server.port=3000"
-        # Also route on HTTPS for production access
-        - "traefik.http.routers.grafana-secure.rule=PathPrefix(`/grafana`)"
+        # Route Grafana on HTTPS for production access
+        - "traefik.http.routers.grafana-secure.rule=Host(`grafana.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.grafana-secure.entrypoints=websecure"
         - "traefik.http.routers.grafana-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.grafana-secure.service=grafana"
-        - "traefik.http.routers.grafana-secure.middlewares=grafana-stripprefix"
     networks:
       - obiente-network
 
@@ -433,5 +447,5 @@ volumes:
 
 networks:
   obiente-network:
-    driver: overlay
-    attachable: true
+    external: true
+    name: obiente_obiente-network
