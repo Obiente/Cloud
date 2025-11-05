@@ -1,0 +1,286 @@
+# Obiente Cloud - Development Docker Swarm Configuration
+# This setup uses Swarm mode for development and delegates DNS to the main deployment
+
+services:
+  # ============================================================================
+  # DATABASE SERVICES
+  # ============================================================================
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-obiente}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - obiente-network
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: ${METRICS_DB_USER:-${POSTGRES_USER:-postgres}}
+      POSTGRES_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}
+      POSTGRES_DB: ${METRICS_DB_NAME:-obiente_metrics}
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${METRICS_DB_USER:-${POSTGRES_USER:-postgres}} -d ${METRICS_DB_NAME:-obiente_metrics}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    networks:
+      - obiente-network
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    networks:
+      - obiente-network
+
+  # ============================================================================
+  # OBIENTE CLOUD API SERVICES
+  # ============================================================================
+
+  api:
+    image: obiente/cloud-api:latest
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      PORT: ${GO_API_PORT:-3001}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-obiente}
+      METRICS_DB_HOST: timescaledb
+      METRICS_DB_PORT: 5432
+      METRICS_DB_USER: ${METRICS_DB_USER:-${POSTGRES_USER:-postgres}}
+      METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-postgres}}
+      METRICS_DB_NAME: ${METRICS_DB_NAME:-obiente_metrics}
+      METRICS_COLLECTION_INTERVAL: ${METRICS_COLLECTION_INTERVAL:-5s}
+      METRICS_STORAGE_INTERVAL: ${METRICS_STORAGE_INTERVAL:-60s}
+      METRICS_LIVE_RETENTION: ${METRICS_LIVE_RETENTION:-5m}
+      METRICS_MAX_WORKERS: ${METRICS_MAX_WORKERS:-50}
+      METRICS_BATCH_SIZE: ${METRICS_BATCH_SIZE:-100}
+      METRICS_MAX_LIVE_PER_DEPLOYMENT: ${METRICS_MAX_LIVE_PER_DEPLOYMENT:-1000}
+      METRICS_MAX_PREVIOUS_STATS: ${METRICS_MAX_PREVIOUS_STATS:-10000}
+      METRICS_DOCKER_API_TIMEOUT: ${METRICS_DOCKER_API_TIMEOUT:-10s}
+      METRICS_DOCKER_API_RETRY_MAX: ${METRICS_DOCKER_API_RETRY_MAX:-3}
+      METRICS_DOCKER_API_RETRY_BACKOFF_INITIAL: ${METRICS_DOCKER_API_RETRY_BACKOFF_INITIAL:-1s}
+      METRICS_DOCKER_API_RETRY_BACKOFF_MAX: ${METRICS_DOCKER_API_RETRY_BACKOFF_MAX:-30s}
+      METRICS_CIRCUIT_BREAKER_FAILURE_THRESHOLD: ${METRICS_CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
+      METRICS_CIRCUIT_BREAKER_COOLDOWN: ${METRICS_CIRCUIT_BREAKER_COOLDOWN:-1m}
+      METRICS_CIRCUIT_BREAKER_HALFOPEN_MAX: ${METRICS_CIRCUIT_BREAKER_HALFOPEN_MAX:-3}
+      METRICS_HEALTH_CHECK_INTERVAL: ${METRICS_HEALTH_CHECK_INTERVAL:-30s}
+      METRICS_HEALTH_CHECK_FAILURE_THRESHOLD: ${METRICS_HEALTH_CHECK_FAILURE_THRESHOLD:-3}
+      METRICS_SUBSCRIBER_BUFFER_SIZE: ${METRICS_SUBSCRIBER_BUFFER_SIZE:-100}
+      METRICS_SUBSCRIBER_SLOW_THRESHOLD: ${METRICS_SUBSCRIBER_SLOW_THRESHOLD:-5s}
+      METRICS_SUBSCRIBER_CLEANUP_INTERVAL: ${METRICS_SUBSCRIBER_CLEANUP_INTERVAL:-1m}
+      METRICS_RETRY_MAX_RETRIES: ${METRICS_RETRY_MAX_RETRIES:-5}
+      METRICS_RETRY_INTERVAL: ${METRICS_RETRY_INTERVAL:-1m}
+      METRICS_RETRY_MAX_QUEUE_SIZE: ${METRICS_RETRY_MAX_QUEUE_SIZE:-10000}
+      REDIS_URL: redis://redis:6379
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      DB_LOG_LEVEL: ${DB_LOG_LEVEL:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      ZITADEL_URL: ${ZITADEL_URL:-https://auth.obiente.cloud}
+      ZITADEL_MANAGEMENT_TOKEN: ${ZITADEL_MANAGEMENT_TOKEN:-}
+      DISABLE_AUTH: ${DISABLE_AUTH:-true} # Enable auth bypass for development
+      SKIP_TLS_VERIFY: ${SKIP_TLS_VERIFY:-true}
+      SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
+      TRAEFIK_IPS: ${TRAEFIK_IPS:-} # Format: "region1:ip1,ip2;region2:ip3,ip4"
+      # DNS configuration - uses main deployment's DNS server
+      DNS_IPS: ${MAIN_DNS_IPS:-} # Use main deployment DNS server IPs
+      DNS_PORT: ${DNS_PORT:-53} # DNS server port (default: 53)
+      PRICING_CPU_COST_PER_CORE_SECOND: ${PRICING_CPU_COST_PER_CORE_SECOND:-0.000000761}
+      PRICING_MEMORY_COST_PER_BYTE_SECOND: ${PRICING_MEMORY_COST_PER_BYTE_SECOND:-0.000000000000001063}
+      PRICING_BANDWIDTH_COST_PER_BYTE: ${PRICING_BANDWIDTH_COST_PER_BYTE:-0.000000000009313}
+      PRICING_STORAGE_COST_PER_BYTE_MONTH: ${PRICING_STORAGE_COST_PER_BYTE_MONTH:-0.000000000186264}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      CONSOLE_URL: ${CONSOLE_URL:-${DASHBOARD_URL:-${APP_CONSOLE_URL:-http://localhost:3000}}}
+      DASHBOARD_URL: ${DASHBOARD_URL:-${CONSOLE_URL:-${APP_CONSOLE_URL:-http://localhost:3000}}}
+      APP_CONSOLE_URL: ${APP_CONSOLE_URL:-${CONSOLE_URL:-${DASHBOARD_URL:-http://localhost:3000}}}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes:ro
+      - /var/lib/obiente:/var/lib/obiente
+      - /tmp/obiente-volumes:/tmp/obiente-volumes
+      - /tmp/obiente-deployments:/tmp/obiente-deployments
+    depends_on:
+      - postgres
+      - timescaledb
+      - redis
+    deploy:
+      mode: global # Run on all nodes (or use replicated with constraints)
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1G
+        reservations:
+          cpus: "1"
+          memory: 512M
+    # Configure DNS to use main deployment's DNS server
+    # Option 1: Set MAIN_DNS_IP environment variable to the IP of your main deployment's DNS server
+    # Example: MAIN_DNS_IP=10.0.9.10 (replace with actual DNS server IP)
+    # Option 2: Connect to main deployment's network (recommended - see networks section)
+    # This allows direct access to the main deployment's DNS server by service name (e.g., obiente_dns)
+    dns:
+      - ${MAIN_DNS_IP:-127.0.0.11} # Docker's default DNS if MAIN_DNS_IP not set
+    networks:
+      - obiente-network
+      # Option 2: Connect to main deployment's network (recommended)
+      # Uncomment and set MAIN_DEPLOYMENT_NETWORK to your main deployment's network name
+      # This allows direct access to the main deployment's DNS server via service name
+      # If connected, you can access DNS at: obiente_dns (or your main stack name + _dns)
+      # - main-deployment-network
+
+  # ============================================================================
+  # SERVICE DISCOVERY & ROUTING
+  # ============================================================================
+
+  traefik:
+    image: traefik:v3.0
+    command:
+      - --api.dashboard=true
+      - --api.insecure=false
+      - --providers.docker.swarmmode=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=obiente-network
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.deployments.address=:8000
+      - --log.level=INFO
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8000:8000"
+      - "8080:8080" # Traefik dashboard (exposed in dev)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.traefik.entrypoints=web"
+        - "traefik.http.routers.traefik.service=api@internal"
+        - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+        - "traefik.http.routers.api.rule=Host(`api.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.api.entrypoints=web"
+        - "traefik.http.services.api.loadbalancer.server.port=3001"
+    networks:
+      - obiente-network
+
+  # ============================================================================
+  # DNS SERVER - DISABLED FOR DEVELOPMENT
+  # ============================================================================
+  # DNS is delegated to the main deployment
+  # To use local DNS instead, uncomment the service below and set MAIN_DNS_IP to localhost
+  #
+  # dns:
+  #   image: obiente/cloud-api:latest
+  #   build:
+  #     context: .
+  #     dockerfile: apps/api/Dockerfile
+  #   command: ["./dns-server"]
+  #   environment:
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     DB_USER: ${POSTGRES_USER:-postgres}
+  #     DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+  #     DB_NAME: ${POSTGRES_DB:-obiente}
+  #     TRAEFIK_IPS: ${TRAEFIK_IPS:-}
+  #     DNS_IPS: ${DNS_IPS:-}
+  #     DNS_PORT: ${DNS_PORT:-53}
+  #   ports:
+  #     - "${DNS_PORT:-53}:${DNS_PORT:-53}/udp"
+  #     - "${DNS_PORT:-53}:${DNS_PORT:-53}/tcp"
+  #   deploy:
+  #     replicas: 1
+  #     resources:
+  #       limits:
+  #         cpus: "0.5"
+  #         memory: 256M
+  #   cap_add:
+  #     - NET_BIND_SERVICE
+  #   networks:
+  #     - obiente-network
+
+volumes:
+  postgres_data:
+    driver: local
+  timescaledb_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  obiente-network:
+    driver: overlay
+    attachable: true
+    # Use a different subnet for dev to avoid conflicts with main deployment
+    ipam:
+      config:
+        - subnet: 10.0.10.0/24
+  # Option 2: Connect to main deployment's network (recommended approach)
+  # Uncomment and configure to share the network with main deployment
+  # This allows direct access to the main deployment's DNS server by service name
+  # main-deployment-network:
+  #   external: true
+  #   name: ${MAIN_DEPLOYMENT_NETWORK:-obiente_obiente-network}
+

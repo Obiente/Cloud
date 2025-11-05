@@ -282,9 +282,29 @@ services:
       - "${DNS_PORT:-53}:${DNS_PORT:-53}/udp"
       - "${DNS_PORT:-53}:${DNS_PORT:-53}/tcp"
     deploy:
-      mode: global # Run on all nodes (same as API service)
-      # In Swarm mode, global mode ensures DNS runs on every node
-      # For single-node deployments, use docker-compose.yml instead
+      # Use placement constraints to control which nodes run DNS
+      # By default, DNS runs on all nodes (global mode)
+      # To delegate DNS to specific nodes:
+      #   1. Set DNS_MODE=replicated in your .env file
+      #   2. Set DNS_REPLICAS to the number of DNS instances you want
+      #   3. Add node labels: docker node update --label-add dns.enabled=true <node-name>
+      #   4. Uncomment/modify the constraint below to restrict DNS to specific nodes
+      # Examples:
+      #   - node.labels.dns.enabled == true (only runs on nodes with dns.enabled=true)
+      #   - node.role == manager (only runs on manager nodes)
+      #   - node.labels.dns.enabled != false (runs on all nodes except those with dns.enabled=false)
+      # To disable DNS on specific nodes, label them: docker node update --label-add dns.enabled=false <node-name>
+      mode: ${DNS_MODE:-global} # Options: global (all nodes), replicated (specific nodes)
+      replicas: ${DNS_REPLICAS:-1} # Only used if mode is replicated
+      placement:
+        constraints:
+          # Uncomment and modify the constraint below to restrict DNS to specific nodes
+          # Example: Run only on nodes with dns.enabled=true label
+          # - node.labels.dns.enabled == true
+          # Example: Run only on manager nodes
+          # - node.role == manager
+          # Example: Run on all nodes except those with dns.enabled=false
+          # - node.labels.dns.enabled != false
       update_config:
         parallelism: 1
         delay: 10s

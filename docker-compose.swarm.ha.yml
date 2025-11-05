@@ -634,6 +634,78 @@ services:
       - obiente-network
 
   # ============================================================================
+  # DNS SERVER
+  # ============================================================================
+
+  # DNS Server - Resolves *.my.obiente.cloud domains
+  # Configured to run on specific nodes using placement constraints
+  dns:
+    image: obiente/cloud-api:latest
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["./dns-server"]
+    environment:
+      DB_HOST: pgpool
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-obiente-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      DB_NAME: ${POSTGRES_DB:-obiente}
+      TRAEFIK_IPS: ${TRAEFIK_IPS:-} # Format: "region1:ip1,ip2;region2:ip3,ip4"
+      DNS_IPS: ${DNS_IPS:-} # Comma-separated list of DNS server IPs
+      DNS_PORT: ${DNS_PORT:-53} # DNS server port (default: 53)
+    ports:
+      - "${DNS_PORT:-53}:${DNS_PORT:-53}/udp"
+      - "${DNS_PORT:-53}:${DNS_PORT:-53}/tcp"
+    deploy:
+      # Use placement constraints to control which nodes run DNS
+      # By default, DNS runs on all nodes (global mode)
+      # To delegate DNS to specific nodes:
+      #   1. Set DNS_MODE=replicated in your .env file
+      #   2. Set DNS_REPLICAS to the number of DNS instances you want
+      #   3. Add node labels: docker node update --label-add dns.enabled=true <node-name>
+      #   4. Uncomment/modify the constraint below to restrict DNS to specific nodes
+      # Examples:
+      #   - node.labels.dns.enabled == true (only runs on nodes with dns.enabled=true)
+      #   - node.role == manager (only runs on manager nodes)
+      #   - node.labels.dns.enabled != false (runs on all nodes except those with dns.enabled=false)
+      # To disable DNS on specific nodes, label them: docker node update --label-add dns.enabled=false <node-name>
+      mode: ${DNS_MODE:-global} # Options: global (all nodes), replicated (specific nodes)
+      replicas: ${DNS_REPLICAS:-1} # Only used if mode is replicated
+      placement:
+        constraints:
+          # Uncomment and modify the constraint below to restrict DNS to specific nodes
+          # Example: Run only on nodes with dns.enabled=true label
+          # - node.labels.dns.enabled == true
+          # Example: Run only on manager nodes
+          # - node.role == manager
+          # Example: Run on all nodes except those with dns.enabled=false
+          # - node.labels.dns.enabled != false
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    cap_add:
+      - NET_BIND_SERVICE
+    depends_on:
+      - pgpool
+    healthcheck:
+      test: ["CMD-SHELL", "nslookup -type=A deploy-test.my.obiente.cloud localhost || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - obiente-network
+
+  # ============================================================================
   # MONITORING & OBSERVABILITY
   # ============================================================================
 

@@ -12,9 +12,10 @@ README.md
 AGENTS.md
 
 # Frontend/Dashboard (not needed for API build)
+# Note: apps/dashboard is excluded for API builds but needed for dashboard builds
+# Dashboard builds use docker-compose.dashboard.yml which may need different ignore rules
 node_modules
 .nx
-apps/dashboard
 packages/dashboard
 packages/database
 packages/proto/src/generated
@@ -53,18 +54,24 @@ temp
 docker-compose*.yml
 
 # Monitoring and tools
+# Note: tools directory is needed for dashboard builds
 monitoring
-tools
+# tools
 specs
 
 # Package managers
-pnpm-lock.yaml
-package.json
-tsconfig*.json
+# Note: These are needed for dashboard builds, but excluded for API builds
+# pnpm-lock.yaml
+# package.json
+# tsconfig*.json
 
 # Other packages (if not referenced by API)
+# Note: packages/config, packages/docker, packages/types, and packages/proto are needed for dashboard builds
 # Keep packages/proto since gen files might be there, but exclude src
-packages/config
-packages/docker
-packages/types
+# packages/config
+# packages/docker
+# packages/types
+packages/proto/src/generated
+packages/proto/src
+packages/proto/proto
 

@@ -48,8 +48,12 @@ services:
       SKIP_TLS_VERIFY: ${SKIP_TLS_VERIFY:-false}
       SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
       TRAEFIK_IPS: ${TRAEFIK_IPS:-} # Format: "region1:ip1,ip2;region2:ip3,ip4" or simple "ip1,ip2"
-      DNS_IPS: ${DNS_IPS:-} # Comma-separated list of DNS server IPs
-      DNS_PORT: ${DNS_PORT:-53} # DNS server port (default: 53)
+      # DNS configuration - optional, for documentation/deployment purposes only
+      # Set MAIN_DNS_IPS to production DNS IP addresses (e.g., export MAIN_DNS_IPS=10.0.9.10)
+      # Note: DNS_IPS must contain IP addresses, not container names or hostnames
+      # For local dev, containers can resolve via the 'dns' service name automatically
+      DNS_IPS: ${MAIN_DNS_IPS:-} # Comma-separated list of DNS server IP addresses (optional)
+      DNS_PORT: ${MAIN_DNS_PORT:-${DNS_PORT:-53}} # Use dev DNS port (53) by default, or production port if MAIN_DNS_PORT is set
       PRICING_CPU_COST_PER_CORE_SECOND: ${PRICING_CPU_COST_PER_CORE_SECOND:-0.000000761}
       PRICING_MEMORY_COST_PER_BYTE_SECOND: ${PRICING_MEMORY_COST_PER_BYTE_SECOND:-0.000000000000001063}
       PRICING_BANDWIDTH_COST_PER_BYTE: ${PRICING_BANDWIDTH_COST_PER_BYTE:-0.000000000009313}
@@ -63,13 +67,28 @@ services:
       APP_CONSOLE_URL: ${APP_CONSOLE_URL:-${CONSOLE_URL:-${DASHBOARD_URL:-http://localhost:3000}}}
       # Support email (optional)
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      # DNS Delegation Configuration (for dev/self-hosted APIs to push DNS records to production)
+      # Set DNS_DELEGATION_PRODUCTION_API_URL to production API URL (e.g., "https://api.obiente.cloud")
+      # Set DNS_DELEGATION_API_KEY to the API key received from production (see docs/deployment/dns-delegation.md)
+      # Set DNS_DELEGATION_PUSH_INTERVAL to how often to push records (default: 2m)
+      # Set DNS_DELEGATION_TTL to TTL for pushed records (default: 300s)
+      DNS_DELEGATION_PRODUCTION_API_URL: ${DNS_DELEGATION_PRODUCTION_API_URL:-} # URL of production API
+      DNS_DELEGATION_API_KEY: ${DNS_DELEGATION_API_KEY:-} # API key from production (required for pushing DNS records)
+      DNS_DELEGATION_PUSH_INTERVAL: ${DNS_DELEGATION_PUSH_INTERVAL:-2m} # How often to push DNS records
+      DNS_DELEGATION_TTL: ${DNS_DELEGATION_TTL:-300s} # TTL for pushed DNS records
     depends_on:
       postgres:
         condition: service_healthy
       timescaledb:
         condition: service_healthy
+    # Configure DNS resolver - only set if MAIN_DNS_IP is explicitly provided
+    # For local dev, containers can resolve via the 'dns' service name automatically
+    # Set MAIN_DNS_IP to use production DNS instead (e.g., export MAIN_DNS_IP=10.0.9.10)
+    # Note: Docker requires an IP address, not a container name, for the dns: field
     networks:
       - obiente-network
+      # Option 2: Connect to production Swarm network (uncomment if both dev and prod are on same host)
+      # - production-network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       # Mount Docker volumes directory for named volumes (read-only)
@@ -167,6 +186,11 @@ services:
     networks:
       - obiente-network
 
+  # DNS Server - Runs on port 53 inside Docker network only (not exposed to host)
+  # This allows dev deployments to resolve without binding port 53 on host
+  # The DNS server queries the dev database, so dev deployments resolve correctly
+  # Containers can resolve domains via this DNS server (no nameserver config needed)
+  # To use production DNS instead, set MAIN_DNS_IP and comment out this service
   dns:
     image: obiente/cloud-api:latest
     build:
@@ -180,14 +204,16 @@ services:
       DB_USER: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DB_NAME: ${POSTGRES_DB:-obiente}
-      TRAEFIK_IPS: ${TRAEFIK_IPS:-} # Format: "region1:ip1,ip2;region2:ip3,ip4"
-      DNS_IPS: ${DNS_IPS:-} # Comma-separated list of DNS server IPs
-      DNS_PORT: ${DNS_PORT:-53} # DNS server port (default: 53)
-    ports:
-      - "${DNS_PORT:-53}:${DNS_PORT:-53}/udp"
-      - "${DNS_PORT:-53}:${DNS_PORT:-53}/tcp"
-    cap_add:
-      - NET_BIND_SERVICE
+      TRAEFIK_IPS: ${TRAEFIK_IPS:-127.0.0.1} # Format: "region1:ip1,ip2;region2:ip3,ip4" or simple "ip1,ip2"
+      DNS_IPS: ${DNS_IPS:-} # Comma-separated list of DNS server IPs (optional)
+      DNS_PORT: ${DNS_PORT:-53} # Use port 53 inside Docker (not exposed to host)
+      # DNS Delegation Configuration (for production DNS to accept pushed records)
+      # Set DNS_DELEGATION_API_KEY to enable the /dns/push endpoint
+      # This allows dev/self-hosted APIs to push DNS records to production DNS
+      DNS_DELEGATION_API_KEY: ${DNS_DELEGATION_API_KEY:-} # Optional: API key for DNS delegation (enables /dns/push endpoint)
+      # Note: API keys are managed via /dns/delegation/api-keys/create endpoint (superadmin only)
+    # No ports exposed - DNS only accessible within Docker network
+    # Containers use this DNS via the 'dns:' field in docker-compose.yml
     depends_on:
       postgres:
         condition: service_healthy
@@ -208,3 +234,8 @@ volumes:
 networks:
   obiente-network:
     driver: bridge
+  # Option: Connect to production Swarm network (uncomment if both dev and prod are on same host)
+  # This allows direct access to production DNS server by service name
+  # production-network:
+  #   external: true
+  #   name: obiente_obiente-network  # Replace with your production network name
