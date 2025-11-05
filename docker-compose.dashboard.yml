@@ -64,15 +64,20 @@ services:
         # Example: If DOMAIN=obiente.cloud, dashboard will be at https://obiente.cloud
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
+        # HTTP router (redirect to HTTPS)
         - "traefik.http.routers.dashboard.rule=Host(`${DOMAIN:-localhost}`)"
         - "traefik.http.routers.dashboard.entrypoints=web"
         - "traefik.http.routers.dashboard.service=dashboard"
-        - "traefik.http.services.dashboard.loadbalancer.server.port=3000"
+        # HTTPS router (main)
         - "traefik.http.routers.dashboard-secure.rule=Host(`${DOMAIN:-localhost}`)"
         - "traefik.http.routers.dashboard-secure.entrypoints=websecure"
         - "traefik.http.routers.dashboard-secure.service=dashboard"
         - "traefik.http.routers.dashboard-secure.tls=true"
         - "traefik.http.routers.dashboard-secure.tls.certresolver=letsencrypt"
+        # Service configuration
+        - "traefik.http.services.dashboard.loadbalancer.server.port=3000"
+        - "traefik.http.services.dashboard.loadbalancer.healthcheck.path=/"
+        - "traefik.http.services.dashboard.loadbalancer.healthcheck.interval=30s"
 
 networks:
   obiente-network:

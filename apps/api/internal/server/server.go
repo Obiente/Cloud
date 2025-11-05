@@ -20,6 +20,7 @@ import (
 	"api/internal/database"
 	"api/internal/dnsdelegation"
 	"api/internal/email"
+	"api/internal/metrics"
 	"api/internal/middleware"
 	"api/internal/orchestrator"
 	"api/internal/quota"
@@ -52,8 +53,9 @@ func New() http.Handler {
 	h2cHandler := h2c.NewHandler(mux, &http2.Server{})
 
 	log.Println("[Server] Applying middleware stack...")
-	// Wrap with middleware (order matters: logging -> CORS -> handler)
+	// Wrap with middleware (order matters: metrics -> logging -> CORS -> handler)
 	handler := h2cHandler
+	handler = metrics.HTTPMetricsMiddleware(handler) // Prometheus metrics first
 	handler = middleware.CORSHandler(handler)
 	handler = middleware.CORSDebugLogger(handler)
 	handler = middleware.RequestLogger(handler)
@@ -184,6 +186,35 @@ func registerRoot(mux *http.ServeMux) {
 			stats.LastHealthCheckTime.Format(time.RFC3339),
 		)
 		_, _ = w.Write([]byte(json))
+	})
+
+	// Prometheus metrics endpoint (no auth required)
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Update Prometheus metrics from metrics streamer if available
+		streamer := orchestrator.GetGlobalMetricsStreamer()
+		if streamer != nil {
+			stats := streamer.GetStats()
+			metrics.UpdateMetricsFromStats(
+				stats.CollectionCount,
+				stats.CollectionErrors,
+				stats.ContainersProcessed,
+				stats.ContainersFailed,
+				stats.StorageBatchesWritten,
+				stats.StorageBatchesFailed,
+				stats.RetryQueueSize,
+				stats.ActiveSubscribers,
+				stats.CircuitBreakerState,
+				stats.IsHealthy,
+			)
+		}
+
+		// Serve Prometheus metrics
+		metrics.Handler().ServeHTTP(w, r)
 	})
 }
 

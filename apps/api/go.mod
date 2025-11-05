@@ -13,6 +13,7 @@ require (
 	github.com/moby/moby/client v0.1.0-beta.0
 	github.com/redis/go-redis/v9 v9.16.0
 	github.com/stripe/stripe-go/v83 v83.1.0
+	github.com/prometheus/client_golang v1.20.5
 	golang.org/x/net v0.43.0
 	google.golang.org/protobuf v1.36.9
 	gopkg.in/yaml.v3 v3.0.1

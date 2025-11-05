@@ -51,7 +51,7 @@ scrape_configs:
       - source_labels: [__meta_dockerswarm_service_label_com_obiente_service]
         target_label: obiente_service
 
-  # API instances
+  # API instances - Prometheus metrics endpoint
   - job_name: "api"
     dns_sd_configs:
       - names:
@@ -59,6 +59,7 @@ scrape_configs:
         type: "A"
         port: 3001
     metrics_path: /metrics
+    scrape_interval: 15s
 
   # Former Node API removed
 
