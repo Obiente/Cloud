@@ -894,3 +894,229 @@ func (s *Service) billingAccountToProto(ba *database.BillingAccount) *billingv1.
 func generateID(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
 }
+
+func (s *Service) CreateDNSDelegationSubscriptionCheckout(ctx context.Context, req *connect.Request[billingv1.CreateDNSDelegationSubscriptionCheckoutRequest]) (*connect.Response[billingv1.CreateDNSDelegationSubscriptionCheckoutResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	// Verify user has access to this organization
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		var member database.OrganizationMember
+		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("organization not found or access denied"))
+			}
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
+		}
+		// Only owners and admins can create subscription checkout
+		if member.Role != "owner" && member.Role != "admin" {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
+		}
+	}
+
+	// Get or create billing account
+	billingAccount, err := s.getOrCreateBillingAccount(orgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get billing account: %w", err))
+	}
+
+	// Get user email for Stripe customer
+	var userEmail string
+	if user.Email != "" {
+		userEmail = user.Email
+	} else if billingAccount.BillingEmail != nil {
+		userEmail = *billingAccount.BillingEmail
+	}
+
+	if userEmail == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("email is required for billing"))
+	}
+
+	if err := s.checkStripeConfigured(); err != nil {
+		return nil, err
+	}
+
+	successURL := req.Msg.GetSuccessUrl()
+	cancelURL := req.Msg.GetCancelUrl()
+
+	// Create subscription checkout session
+	sessionParams := &stripe.SubscriptionCheckoutSessionParams{
+		OrganizationID: orgID,
+		CustomerEmail:  userEmail,
+		SuccessURL:     successURL,
+		CancelURL:      cancelURL,
+	}
+
+	// If billing account already has a Stripe customer ID, use it
+	if billingAccount.StripeCustomerID != nil && *billingAccount.StripeCustomerID != "" {
+		sessionParams.CustomerID = *billingAccount.StripeCustomerID
+	}
+
+	checkoutSession, err := s.stripeClient.CreateSubscriptionCheckoutSession(ctx, sessionParams)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create subscription checkout session: %w", err))
+	}
+
+	// Update billing account with Stripe customer ID if not set
+	if billingAccount.StripeCustomerID == nil || *billingAccount.StripeCustomerID == "" {
+		if checkoutSession.Customer != nil {
+			customerID := checkoutSession.Customer.ID
+			billingAccount.StripeCustomerID = &customerID
+			if err := database.DB.Save(billingAccount).Error; err != nil {
+				log.Printf("[Billing] Failed to update billing account with customer ID: %v", err)
+			}
+		}
+	}
+
+	return connect.NewResponse(&billingv1.CreateDNSDelegationSubscriptionCheckoutResponse{
+		SessionId:   checkoutSession.ID,
+		CheckoutUrl: checkoutSession.URL,
+	}), nil
+}
+
+func (s *Service) GetDNSDelegationSubscriptionStatus(ctx context.Context, req *connect.Request[billingv1.GetDNSDelegationSubscriptionStatusRequest]) (*connect.Response[billingv1.GetDNSDelegationSubscriptionStatusResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	// Verify user has access to this organization
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		var member database.OrganizationMember
+		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("organization not found or access denied"))
+			}
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
+		}
+	}
+
+	// Check subscription status - first try database (API key method), then check Stripe directly
+	hasSubscription, subscriptionID, err := database.HasActiveDNSDelegationSubscription(orgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check subscription status: %w", err))
+	}
+
+	var cancelAtPeriodEnd bool
+	var currentPeriodEnd *timestamppb.Timestamp
+
+	// If not found in database, check Stripe directly (webhook might not have processed yet)
+	if !hasSubscription || subscriptionID == "" {
+		// Get billing account to find Stripe customer ID
+		var billingAccount database.BillingAccount
+		if err := database.DB.Where("organization_id = ?", orgID).First(&billingAccount).Error; err == nil {
+			if billingAccount.StripeCustomerID != nil && *billingAccount.StripeCustomerID != "" {
+				// Check Stripe for active DNS delegation subscription
+				sub, err := s.stripeClient.FindDNSDelegationSubscription(ctx, *billingAccount.StripeCustomerID)
+				if err == nil && sub != nil {
+					hasSubscription = true
+					subscriptionID = sub.ID
+					cancelAtPeriodEnd = sub.CancelAtPeriodEnd
+					// PeriodEnd not available in Stripe Go SDK, will be set when webhook processes
+				}
+			}
+		}
+	} else {
+		// Subscription found in database, get details from Stripe
+		sub, err := s.stripeClient.GetSubscription(ctx, subscriptionID)
+		if err == nil && sub != nil {
+			cancelAtPeriodEnd = sub.CancelAtPeriodEnd
+			// PeriodEnd not available in Stripe Go SDK, will be set when webhook processes
+		}
+	}
+
+	// Check if organization has an active API key
+	apiKey, err := database.GetActiveDNSDelegationAPIKeyForOrganization(orgID)
+	hasAPIKey := err == nil && apiKey != nil
+	var apiKeyCreatedAt *timestamppb.Timestamp
+	var apiKeyDescription string
+	if hasAPIKey && apiKey != nil {
+		apiKeyCreatedAt = timestamppb.New(apiKey.CreatedAt)
+		apiKeyDescription = apiKey.Description
+	}
+
+	return connect.NewResponse(&billingv1.GetDNSDelegationSubscriptionStatusResponse{
+		HasActiveSubscription: hasSubscription,
+		StripeSubscriptionId:   subscriptionID,
+		HasApiKey:             hasAPIKey,
+		ApiKeyCreatedAt:       apiKeyCreatedAt,
+		CancelAtPeriodEnd:     cancelAtPeriodEnd,
+		CurrentPeriodEnd:      currentPeriodEnd,
+		ApiKeyDescription:     apiKeyDescription,
+	}), nil
+}
+
+func (s *Service) CancelDNSDelegationSubscription(ctx context.Context, req *connect.Request[billingv1.CancelDNSDelegationSubscriptionRequest]) (*connect.Response[billingv1.CancelDNSDelegationSubscriptionResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	if err := s.checkStripeConfigured(); err != nil {
+		return nil, err
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	// Verify user has access to this organization and is owner/admin
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		var member database.OrganizationMember
+		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("organization not found or access denied"))
+			}
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
+		}
+		// Only owners and admins can cancel subscriptions
+		if member.Role != "owner" && member.Role != "admin" {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("only organization owners and admins can cancel subscriptions"))
+		}
+	}
+
+	// Get subscription ID
+	hasSubscription, subscriptionID, err := database.HasActiveDNSDelegationSubscription(orgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check subscription status: %w", err))
+	}
+	if !hasSubscription || subscriptionID == "" {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no active subscription found"))
+	}
+
+	// Cancel subscription via Stripe
+	canceledSub, err := s.stripeClient.CancelSubscription(ctx, subscriptionID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("cancel subscription: %w", err))
+	}
+
+	var canceledAt *timestamppb.Timestamp
+	var message string
+	if canceledSub.CancelAtPeriodEnd {
+		// Subscription will cancel at end of billing period
+		// PeriodEnd not available in Stripe Go SDK, will be set when webhook processes
+		message = "Subscription will be canceled at the end of the current billing period."
+	} else {
+		// Subscription canceled immediately
+		message = "Subscription has been canceled."
+	}
+
+	return connect.NewResponse(&billingv1.CancelDNSDelegationSubscriptionResponse{
+		Success:    true,
+		Message:    message,
+		CanceledAt: canceledAt,
+	}), nil
+}

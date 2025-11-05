@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 
@@ -14,7 +15,10 @@ import (
 	"github.com/stripe/stripe-go/v83/invoice"
 	"github.com/stripe/stripe-go/v83/paymentintent"
 	"github.com/stripe/stripe-go/v83/paymentmethod"
+	"github.com/stripe/stripe-go/v83/price"
+	"github.com/stripe/stripe-go/v83/product"
 	"github.com/stripe/stripe-go/v83/setupintent"
+	"github.com/stripe/stripe-go/v83/subscription"
 )
 
 // Client wraps Stripe API client
@@ -297,4 +301,223 @@ func formatAmount(cents int64) string {
 	dollars := cents / 100
 	remainingCents := cents % 100
 	return fmt.Sprintf("$%d.%02d", dollars, remainingCents)
+}
+
+// CreateSubscriptionCheckoutSession creates a Stripe Checkout Session for a subscription
+func (c *Client) CreateSubscriptionCheckoutSession(ctx context.Context, params *SubscriptionCheckoutSessionParams) (*stripe.CheckoutSession, error) {
+	successURL := params.SuccessURL
+	if successURL == "" {
+		successURL = os.Getenv("CONSOLE_URL") + "/organizations?tab=billing&payment=success"
+	}
+	cancelURL := params.CancelURL
+	if cancelURL == "" {
+		cancelURL = os.Getenv("CONSOLE_URL") + "/organizations?tab=billing&payment=canceled"
+	}
+
+	// Get or create Stripe customer
+	var customerID string
+	if params.CustomerID != "" {
+		customerID = params.CustomerID
+		// Ensure customer has organization_id in metadata
+		custParams := &stripe.CustomerParams{
+			Metadata: map[string]string{
+				"organization_id": params.OrganizationID,
+			},
+		}
+		if _, err := customer.Update(customerID, custParams); err != nil {
+			log.Printf("[Stripe] Warning: Failed to update customer metadata: %v", err)
+		}
+	} else {
+		custID, err := c.getOrCreateCustomer(ctx, params.OrganizationID, params.CustomerEmail)
+		if err != nil {
+			return nil, fmt.Errorf("get or create customer: %w", err)
+		}
+		customerID = custID
+	}
+
+	// Get or create DNS Delegation product and price
+	priceID, err := c.getOrCreateDNSDelegationPrice(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get or create DNS delegation price: %w", err)
+	}
+
+	// Create checkout session for subscription
+	sessionParams := &stripe.CheckoutSessionParams{
+		Customer: stripe.String(customerID),
+		PaymentMethodTypes: stripe.StringSlice([]string{
+			"card",
+		}),
+		LineItems: []*stripe.CheckoutSessionLineItemParams{
+			{
+				Price:    stripe.String(priceID),
+				Quantity: stripe.Int64(1),
+			},
+		},
+		Mode:       stripe.String(string(stripe.CheckoutSessionModeSubscription)),
+		SuccessURL: stripe.String(successURL),
+		CancelURL:  stripe.String(cancelURL),
+		Metadata: map[string]string{
+			"organization_id": params.OrganizationID,
+			"product_type":    "dns_delegation",
+		},
+	}
+
+	sess, err := session.New(sessionParams)
+	if err != nil {
+		return nil, fmt.Errorf("create subscription checkout session: %w", err)
+	}
+
+	return sess, nil
+}
+
+// GetSubscription retrieves a subscription by ID
+func (c *Client) GetSubscription(ctx context.Context, subscriptionID string) (*stripe.Subscription, error) {
+	sub, err := subscription.Get(subscriptionID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("get subscription: %w", err)
+	}
+	return sub, nil
+}
+
+// ListSubscriptionsForCustomer lists all subscriptions for a Stripe customer
+func (c *Client) ListSubscriptionsForCustomer(ctx context.Context, customerID string) ([]*stripe.Subscription, error) {
+	params := &stripe.SubscriptionListParams{
+		Customer: stripe.String(customerID),
+		Status:   stripe.String("active"), // Only get active subscriptions
+	}
+	
+	iter := subscription.List(params)
+	var subscriptions []*stripe.Subscription
+	for iter.Next() {
+		subscriptions = append(subscriptions, iter.Subscription())
+	}
+	
+	if err := iter.Err(); err != nil {
+		return nil, fmt.Errorf("list subscriptions: %w", err)
+	}
+	
+	return subscriptions, nil
+}
+
+// FindDNSDelegationSubscription finds an active DNS delegation subscription ($2/month) for a customer
+func (c *Client) FindDNSDelegationSubscription(ctx context.Context, customerID string) (*stripe.Subscription, error) {
+	subscriptions, err := c.ListSubscriptionsForCustomer(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Look for DNS delegation subscription ($2/month = 200 cents)
+	for _, sub := range subscriptions {
+		if len(sub.Items.Data) > 0 {
+			price := sub.Items.Data[0].Price
+			if price != nil && price.UnitAmount == 200 && price.Recurring != nil && price.Recurring.Interval == "month" {
+				// Check if subscription is active or trialing
+				if sub.Status == "active" || sub.Status == "trialing" {
+					return sub, nil
+				}
+			}
+		}
+	}
+	
+	return nil, nil // No active DNS delegation subscription found
+}
+
+// CancelSubscription cancels a subscription
+func (c *Client) CancelSubscription(ctx context.Context, subscriptionID string) (*stripe.Subscription, error) {
+	params := &stripe.SubscriptionParams{
+		CancelAtPeriodEnd: stripe.Bool(true), // Cancel at end of billing period
+	}
+	sub, err := subscription.Update(subscriptionID, params)
+	if err != nil {
+		return nil, fmt.Errorf("cancel subscription: %w", err)
+	}
+	return sub, nil
+}
+
+// getOrCreateDNSDelegationPrice gets or creates the DNS Delegation subscription price ($2/month)
+func (c *Client) getOrCreateDNSDelegationPrice(ctx context.Context) (string, error) {
+	// Check if we have a price ID in environment variable
+	priceID := os.Getenv("STRIPE_DNS_DELEGATION_PRICE_ID")
+	if priceID != "" {
+		return priceID, nil
+	}
+
+	// Try to find existing DNS Delegation product
+	productName := "DNS Delegation"
+	productParams := &stripe.ProductListParams{
+		ListParams: stripe.ListParams{
+			Limit: stripe.Int64(100),
+		},
+	}
+	products := product.List(productParams)
+	
+	var dnsProduct *stripe.Product
+	for products.Next() {
+		p := products.Product()
+		if p.Name == productName && p.Active {
+			dnsProduct = p
+			break
+		}
+	}
+
+	// Create product if it doesn't exist
+	if dnsProduct == nil {
+		prodParams := &stripe.ProductParams{
+			Name:        stripe.String(productName),
+			Description: stripe.String("DNS Delegation for Self-Hosted Obiente Cloud instances"),
+			Active:      stripe.Bool(true),
+		}
+		prod, err := product.New(prodParams)
+		if err != nil {
+			return "", fmt.Errorf("create DNS delegation product: %w", err)
+		}
+		dnsProduct = prod
+	}
+
+	// Try to find existing $2/month price
+	priceParams := &stripe.PriceListParams{
+		Product: stripe.String(dnsProduct.ID),
+		ListParams: stripe.ListParams{
+			Limit: stripe.Int64(100),
+		},
+	}
+	prices := price.List(priceParams)
+
+	var dnsPrice *stripe.Price
+	for prices.Next() {
+		p := prices.Price()
+		if p.UnitAmount == 200 && p.Currency == "usd" && p.Recurring != nil && p.Recurring.Interval == "month" && p.Active {
+			dnsPrice = p
+			break
+		}
+	}
+
+	// Create price if it doesn't exist
+	if dnsPrice == nil {
+		priceParams := &stripe.PriceParams{
+			Product:    stripe.String(dnsProduct.ID),
+			Currency:   stripe.String("usd"),
+			UnitAmount: stripe.Int64(200), // $2.00
+			Recurring: &stripe.PriceRecurringParams{
+				Interval: stripe.String("month"),
+			},
+			Active: stripe.Bool(true),
+		}
+		p, err := price.New(priceParams)
+		if err != nil {
+			return "", fmt.Errorf("create DNS delegation price: %w", err)
+		}
+		dnsPrice = p
+	}
+
+	return dnsPrice.ID, nil
+}
+
+// SubscriptionCheckoutSessionParams contains parameters for creating a subscription checkout session
+type SubscriptionCheckoutSessionParams struct {
+	OrganizationID string
+	CustomerEmail  string
+	CustomerID     string // Optional: existing Stripe customer ID
+	SuccessURL     string
+	CancelURL      string
 }

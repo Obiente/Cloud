@@ -39,6 +39,15 @@ service BillingService {
 
   // List invoices for an organization
   rpc ListInvoices(ListInvoicesRequest) returns (ListInvoicesResponse);
+
+  // Create a Stripe Checkout Session for DNS Delegation subscription ($2/month)
+  rpc CreateDNSDelegationSubscriptionCheckout(CreateDNSDelegationSubscriptionCheckoutRequest) returns (CreateDNSDelegationSubscriptionCheckoutResponse);
+
+  // Get DNS delegation subscription status for an organization
+  rpc GetDNSDelegationSubscriptionStatus(GetDNSDelegationSubscriptionStatusRequest) returns (GetDNSDelegationSubscriptionStatusResponse);
+
+  // Cancel DNS delegation subscription
+  rpc CancelDNSDelegationSubscription(CancelDNSDelegationSubscriptionRequest) returns (CancelDNSDelegationSubscriptionResponse);
 }
 
 message CreateCheckoutSessionRequest {
@@ -222,4 +231,44 @@ message Address {
   string postal_code = 5;
   string country = 6;
 }
+
+// DNS Delegation Subscription
+
+message CreateDNSDelegationSubscriptionCheckoutRequest {
+  string organization_id = 1;
+  // Optional: success URL (defaults to console URL)
+  optional string success_url = 2;
+  // Optional: cancel URL (defaults to console URL)
+  optional string cancel_url = 3;
+}
+
+message CreateDNSDelegationSubscriptionCheckoutResponse {
+  string session_id = 1;
+  string checkout_url = 2;
+}
+
+message GetDNSDelegationSubscriptionStatusRequest {
+  string organization_id = 1;
+}
+
+message GetDNSDelegationSubscriptionStatusResponse {
+  bool has_active_subscription = 1;
+  string stripe_subscription_id = 2; // Empty if no subscription
+  bool has_api_key = 3; // Whether organization has an active API key
+  google.protobuf.Timestamp api_key_created_at = 4; // When API key was created (if exists)
+  bool cancel_at_period_end = 5; // Whether subscription is scheduled to cancel
+  google.protobuf.Timestamp current_period_end = 6; // When current billing period ends
+  string api_key_description = 7; // Description of the API key (if exists)
+}
+
+message CancelDNSDelegationSubscriptionRequest {
+  string organization_id = 1;
+}
+
+message CancelDNSDelegationSubscriptionResponse {
+  bool success = 1;
+  string message = 2; // Status message
+  google.protobuf.Timestamp canceled_at = 3; // When subscription will be canceled (end of billing period)
+}
+
 
