@@ -38,7 +38,7 @@ git clone https://github.com/obiente/cloud.git
 cd cloud
 
 # Copy environment template
-cp env.swarm.example .env
+cp .env.example .env
 
 # Edit .env with your configuration
 nano .env

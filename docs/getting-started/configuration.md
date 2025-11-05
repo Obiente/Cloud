@@ -9,7 +9,7 @@ The primary configuration is through the `.env` file.
 Copy the example file:
 
 ```bash
-cp env.swarm.example .env
+cp .env.example .env
 ```
 
 ## Basic Configuration

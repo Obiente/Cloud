@@ -61,7 +61,7 @@ docker swarm join --token <WORKER-TOKEN> <MANAGER-IP>:2377
 Copy the example environment file:
 
 ```bash
-cp env.swarm.example .env
+cp .env.example .env
 ```
 
 Edit `.env` with your configuration:
