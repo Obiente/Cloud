@@ -218,7 +218,7 @@ services:
     image: traefik:v3.0
     command:
       - --api.dashboard=true
-      - --api.insecure=false
+      - --api.insecure=true  # Set to true to allow direct access on port 8080 (use false for production)
       - --providers.docker.swarmmode=true
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=obiente-network
@@ -238,7 +238,7 @@ services:
       - "80:80"
       - "443:443"
       - "8000:8000" # User deployments
-      # 8080 (Traefik dashboard) intentionally not exposed in Swarm by default
+      - "8080:8080" # Traefik dashboard (exposed for direct access)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
