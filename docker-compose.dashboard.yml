@@ -77,5 +77,5 @@ services:
 networks:
   obiente-network:
     external: true
-    name: ${STACK_NAME:-obiente}_obiente-network
+    name: obiente_obiente-network
 
