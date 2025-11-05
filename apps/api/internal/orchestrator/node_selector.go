@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"reflect"
 	"sort"
+	"strings"
 
 	"api/internal/database"
 
@@ -136,107 +139,184 @@ func (ns *NodeSelector) selectByResources(nodes []database.NodeMetadata) *databa
 // syncNodeMetadata synchronizes node metadata from Docker Swarm to the database
 // Falls back to registering local Docker daemon if not in Swarm mode (development)
 func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
+	// Check if swarm is explicitly disabled via environment variable
+	// This allows non-swarm compose files to disable swarm features even if node is in swarm
+	enableSwarm := os.Getenv("ENABLE_SWARM")
+	if enableSwarm == "false" || enableSwarm == "0" || enableSwarm == "" {
+		// Swarm explicitly disabled or not set - treat as non-swarm mode
+		log.Printf("[NodeSelector] Swarm features disabled via ENABLE_SWARM=false, registering local Docker daemon as node")
+		info, err := ns.dockerClient.Info(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get Docker info: %w", err)
+		}
+		return ns.registerLocalNode(ctx, info)
+	}
+
 	// Get Docker info to check if Swarm is enabled
 	info, err := ns.dockerClient.Info(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get Docker info: %w", err)
 	}
 
-	// If Swarm is enabled, sync from Swarm nodes
+	// If Swarm is enabled, sync from Swarm nodes (but only if we're a manager)
 	if info.Swarm.NodeID != "" {
-		// Get nodes from Docker Swarm
-		nodes, err := ns.dockerClient.NodeList(ctx, client.NodeListOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to list Docker nodes: %w", err)
-		}
-
-		for _, node := range nodes {
-			// Get node info
-			nodeInfo, _, err := ns.dockerClient.NodeInspectWithRaw(ctx, node.ID)
+		// Check if this node is a manager (can list nodes)
+		// If not, fall back to registering local node
+		if !info.Swarm.ControlAvailable {
+			log.Printf("[NodeSelector] Docker Swarm enabled but node is a worker (not manager), registering local node only")
+			// Fall through to register local node
+		} else {
+			// We're a manager - can list all nodes
+			nodes, err := ns.dockerClient.NodeList(ctx, client.NodeListOptions{})
 			if err != nil {
-				continue
-			}
-
-			// Calculate resources
-			totalCPU := int(nodeInfo.Description.Resources.NanoCPUs / 1e9)
-			totalMemory := nodeInfo.Description.Resources.MemoryBytes
-
-			// Get current resource usage (would require additional metrics)
-			// For now, we'll estimate based on deployment count
-			deploymentCount := ns.getNodeDeploymentCount(ctx, node.ID)
-
-			// Update or create node metadata
-			labelsJSON := "{}"
-			if len(node.Spec.Annotations.Labels) > 0 {
-				labelsBytes, err := json.Marshal(node.Spec.Annotations.Labels)
-				if err == nil {
-					labelsJSON = string(labelsBytes)
+				// If NodeList fails (e.g., permission denied), fall back to local node
+				if strings.Contains(err.Error(), "swarm manager") || strings.Contains(err.Error(), "not a swarm manager") {
+					log.Printf("[NodeSelector] Cannot list Docker Swarm nodes (worker node), registering local node only: %v", err)
+					// Fall through to register local node
+				} else {
+					return fmt.Errorf("failed to list Docker nodes: %w", err)
 				}
+			} else {
+				// Successfully got nodes - sync them
+				for _, node := range nodes {
+					// Get node info
+					nodeInfo, _, err := ns.dockerClient.NodeInspectWithRaw(ctx, node.ID)
+					if err != nil {
+						continue
+					}
+
+					// Calculate resources
+					totalCPU := int(nodeInfo.Description.Resources.NanoCPUs / 1e9)
+					totalMemory := nodeInfo.Description.Resources.MemoryBytes
+
+					// Get current resource usage (would require additional metrics)
+					// For now, we'll estimate based on deployment count
+					deploymentCount := ns.getNodeDeploymentCount(ctx, node.ID)
+
+					// Update or create node metadata
+					labelsJSON := "{}"
+					if len(node.Spec.Annotations.Labels) > 0 {
+						labelsBytes, err := json.Marshal(node.Spec.Annotations.Labels)
+						if err == nil {
+							labelsJSON = string(labelsBytes)
+						}
+					}
+					
+					metadata := &database.NodeMetadata{
+						ID:              node.ID,
+						Hostname:        nodeInfo.Description.Hostname,
+						Role:            string(node.Spec.Role),
+						Availability:    string(node.Spec.Availability),
+						Status:          string(node.Status.State),
+						TotalCPU:        totalCPU,
+						TotalMemory:     totalMemory,
+						DeploymentCount: deploymentCount,
+						MaxDeployments:  ns.maxDeploymentsPerNode,
+						Labels:          labelsJSON,
+					}
+
+					// Save to database
+					database.DB.Save(metadata)
+				}
+				// Successfully synced all nodes, return
+				return nil
 			}
-			
-			metadata := &database.NodeMetadata{
-				ID:              node.ID,
-				Hostname:        nodeInfo.Description.Hostname,
-				Role:            string(node.Spec.Role),
-				Availability:    string(node.Spec.Availability),
-				Status:          string(node.Status.State),
-				TotalCPU:        totalCPU,
-				TotalMemory:     totalMemory,
-				DeploymentCount: deploymentCount,
-				MaxDeployments:  ns.maxDeploymentsPerNode,
-				Labels:          labelsJSON,
-			}
-
-			// Save to database
-			database.DB.Save(metadata)
 		}
-	} else {
-		// Not in Swarm mode - register local Docker daemon as a node (development mode)
-		log.Printf("[NodeSelector] Docker Swarm not enabled, registering local Docker daemon as node")
-		
-		// Use system info to get resources
-		totalCPU := int(info.NCPU)
-		totalMemory := info.MemTotal
-		
-		// Create a synthetic node ID based on hostname (since we don't have a Swarm node ID)
-		nodeID := "local-" + info.Name
-		deploymentCount := ns.getNodeDeploymentCount(ctx, nodeID)
-
-		// Register local node with availability='active' and status='ready'
-		metadata := &database.NodeMetadata{
-			ID:              nodeID,
-			Hostname:        info.Name,
-			Role:            "worker",
-			Availability:    "active",
-			Status:          "ready",
-			TotalCPU:        totalCPU,
-			TotalMemory:     totalMemory,
-			DeploymentCount: deploymentCount,
-			MaxDeployments:  ns.maxDeploymentsPerNode,
-			UsedCPU:         0.0,
-			UsedMemory:      0,
-			Labels:          "{}", // Empty JSON object for jsonb field
-		}
-
-		// Use Save which will create or update based on primary key (ID)
-		result := database.DB.Save(metadata)
-		if result.Error != nil {
-			log.Printf("[NodeSelector] ERROR: Failed to save local node: %v", result.Error)
-			return fmt.Errorf("failed to save local node: %w", result.Error)
-		}
-		
-		log.Printf("[NodeSelector] Registered/Updated local node: %s (hostname: %s, CPU: %d, Memory: %d bytes, availability=%s, status=%s, rows=%d)", 
-			nodeID, info.Name, totalCPU, totalMemory, metadata.Availability, metadata.Status, result.RowsAffected)
-		
-		// Verify the node was saved correctly
-		var verifyNode database.NodeMetadata
-		if err := database.DB.First(&verifyNode, "id = ?", nodeID).Error; err != nil {
-			log.Printf("[NodeSelector] ERROR: Failed to verify saved node: %v", err)
-			return fmt.Errorf("failed to verify saved node: %w", err)
-		}
-		log.Printf("[NodeSelector] Verified node in DB: %s - availability=%s, status=%s", 
-			verifyNode.ID, verifyNode.Availability, verifyNode.Status)
 	}
+	
+	// Not in Swarm mode OR we're a worker node - register local Docker daemon as a node
+	return ns.registerLocalNode(ctx, info)
+}
+
+// registerLocalNode registers the local Docker daemon as a node in the database
+func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{}) error {
+	// Use reflection to access fields since we don't know the exact type name
+	v := reflect.ValueOf(info)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	
+	// Get Swarm field
+	swarmField := v.FieldByName("Swarm")
+	var swarmNodeID string
+	if swarmField.IsValid() {
+		if nodeIDField := swarmField.FieldByName("NodeID"); nodeIDField.IsValid() {
+			swarmNodeID = nodeIDField.String()
+		}
+	}
+	
+	// Get Name field
+	nameField := v.FieldByName("Name")
+	name := ""
+	if nameField.IsValid() {
+		name = nameField.String()
+	}
+	
+	// Get NCPU field
+	ncpuField := v.FieldByName("NCPU")
+	ncpu := 0
+	if ncpuField.IsValid() {
+		ncpu = int(ncpuField.Int())
+	}
+	
+	// Get MemTotal field
+	memTotalField := v.FieldByName("MemTotal")
+	memTotal := int64(0)
+	if memTotalField.IsValid() {
+		memTotal = memTotalField.Int()
+	}
+
+	if swarmNodeID == "" {
+		log.Printf("[NodeSelector] Docker Swarm not enabled, registering local Docker daemon as node")
+	} else {
+		log.Printf("[NodeSelector] Docker Swarm enabled but node is a worker (or swarm disabled), registering local Docker daemon as node")
+	}
+	
+	// Use system info to get resources
+	totalCPU := ncpu
+	totalMemory := memTotal
+	
+	// Use Swarm node ID if available, otherwise create synthetic ID
+	nodeID := swarmNodeID
+	if nodeID == "" {
+		nodeID = "local-" + name
+	}
+	deploymentCount := ns.getNodeDeploymentCount(ctx, nodeID)
+
+	// Register local node with availability='active' and status='ready'
+	metadata := &database.NodeMetadata{
+		ID:              nodeID,
+		Hostname:        name,
+		Role:            "worker",
+		Availability:    "active",
+		Status:          "ready",
+		TotalCPU:        totalCPU,
+		TotalMemory:     totalMemory,
+		DeploymentCount: deploymentCount,
+		MaxDeployments:  ns.maxDeploymentsPerNode,
+		UsedCPU:         0.0,
+		UsedMemory:      0,
+		Labels:          "{}", // Empty JSON object for jsonb field
+	}
+
+	// Use Save which will create or update based on primary key (ID)
+	result := database.DB.Save(metadata)
+	if result.Error != nil {
+		log.Printf("[NodeSelector] ERROR: Failed to save local node: %v", result.Error)
+		return fmt.Errorf("failed to save local node: %w", result.Error)
+	}
+	
+	log.Printf("[NodeSelector] Registered/Updated local node: %s (hostname: %s, CPU: %d, Memory: %d bytes, availability=%s, status=%s, rows=%d)", 
+		nodeID, name, totalCPU, totalMemory, metadata.Availability, metadata.Status, result.RowsAffected)
+	
+	// Verify the node was saved correctly
+	var verifyNode database.NodeMetadata
+	if err := database.DB.First(&verifyNode, "id = ?", nodeID).Error; err != nil {
+		log.Printf("[NodeSelector] ERROR: Failed to verify saved node: %v", err)
+		return fmt.Errorf("failed to verify saved node: %w", err)
+	}
+	log.Printf("[NodeSelector] Verified node in DB: %s - availability=%s, status=%s", 
+		verifyNode.ID, verifyNode.Availability, verifyNode.Status)
 
 	return nil
 }

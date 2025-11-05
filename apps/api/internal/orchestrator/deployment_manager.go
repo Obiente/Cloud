@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -728,8 +729,77 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 
 	// Check if we have any containers for this deployment
 	if len(locations) == 0 {
-		logger.Info("[DeploymentManager] No containers found for deployment %s, need to create them", deploymentID)
-		return fmt.Errorf("no containers found for deployment %s - deployment may need to be created first", deploymentID)
+		logger.Info("[DeploymentManager] No containers found for deployment %s, attempting to create them", deploymentID)
+		
+		// Try to get deployment from database to create containers
+		var deployment database.Deployment
+		if err := database.DB.Where("id = ?", deploymentID).First(&deployment).Error; err != nil {
+			return fmt.Errorf("failed to get deployment from database: %w", err)
+		}
+
+		// Only create containers if this is not a compose-based deployment
+		// Compose deployments should be handled by DeployComposeFile
+		if deployment.ComposeYaml == "" {
+			// Parse environment variables from JSON
+			envVars := make(map[string]string)
+			if deployment.EnvVars != "" {
+				if err := json.Unmarshal([]byte(deployment.EnvVars), &envVars); err != nil {
+					logger.Warn("[DeploymentManager] Failed to parse env vars for deployment %s: %v", deploymentID, err)
+					// Continue with empty env vars
+				}
+			}
+
+			// Build config from database deployment
+			image := ""
+			if deployment.Image != nil {
+				image = *deployment.Image
+			}
+			port := 8080
+			if deployment.Port != nil {
+				port = int(*deployment.Port)
+			}
+			memory := int64(512 * 1024 * 1024) // Default 512MB
+			if deployment.MemoryBytes != nil {
+				memory = *deployment.MemoryBytes
+			}
+			cpuShares := int64(1024) // Default
+			if deployment.CPUShares != nil {
+				cpuShares = *deployment.CPUShares
+			}
+			replicas := 1 // Default
+			if deployment.Replicas != nil {
+				replicas = int(*deployment.Replicas)
+			}
+
+			config := &DeploymentConfig{
+				DeploymentID: deploymentID,
+				Image:        image,
+				Domain:       deployment.Domain,
+				Port:         port,
+				EnvVars:      envVars,
+				Labels:       map[string]string{},
+				Memory:       memory,
+				CPUShares:    cpuShares,
+				Replicas:     replicas,
+				StartCommand: deployment.StartCommand,
+			}
+
+			// Create the containers
+			if err := dm.CreateDeployment(ctx, config); err != nil {
+				return fmt.Errorf("failed to create deployment containers: %w", err)
+			}
+
+			logger.Info("[DeploymentManager] Successfully created containers for deployment %s", deploymentID)
+			
+			// Refresh locations after creation
+			locations, err = dm.registry.GetDeploymentLocations(deploymentID)
+			if err != nil {
+				return fmt.Errorf("failed to get deployment locations after creation: %w", err)
+			}
+		} else {
+			// Compose-based deployment - return error suggesting to use DeployComposeFile
+			return fmt.Errorf("no containers found for deployment %s - compose deployments should use DeployComposeFile", deploymentID)
+		}
 	}
 
 	for _, location := range locations {
@@ -741,8 +811,102 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 		// Check if container exists and is stopped
 		containerInfo, err := dm.dockerClient.ContainerInspect(ctx, location.ContainerID)
 		if err != nil {
-			logger.Info("[DeploymentManager] Container %s not found or error inspecting: %v", location.ContainerID[:12], err)
-			continue
+			// Container doesn't exist - try to recreate it
+			logger.Warn("[DeploymentManager] Container %s doesn't exist, attempting to recreate deployment", location.ContainerID[:12])
+			
+			// Get deployment from database to recreate containers
+			var deployment database.Deployment
+			if err := database.DB.Where("id = ?", deploymentID).First(&deployment).Error; err != nil {
+				logger.Warn("[DeploymentManager] Failed to get deployment from database for recreation: %v", err)
+				continue
+			}
+
+			// Only recreate if this is not a compose-based deployment
+			if deployment.ComposeYaml == "" {
+				// Parse environment variables from JSON
+				envVars := make(map[string]string)
+				if deployment.EnvVars != "" {
+					if err := json.Unmarshal([]byte(deployment.EnvVars), &envVars); err != nil {
+						logger.Warn("[DeploymentManager] Failed to parse env vars for deployment %s: %v", deploymentID, err)
+						// Continue with empty env vars
+					}
+				}
+
+				// Build config from database deployment
+				image := ""
+				if deployment.Image != nil {
+					image = *deployment.Image
+				}
+				port := 8080
+				if deployment.Port != nil {
+					port = int(*deployment.Port)
+				}
+				memory := int64(512 * 1024 * 1024) // Default 512MB
+				if deployment.MemoryBytes != nil {
+					memory = *deployment.MemoryBytes
+				}
+				cpuShares := int64(1024) // Default
+				if deployment.CPUShares != nil {
+					cpuShares = *deployment.CPUShares
+				}
+				replicas := 1 // Default
+				if deployment.Replicas != nil {
+					replicas = int(*deployment.Replicas)
+				}
+
+				config := &DeploymentConfig{
+					DeploymentID: deploymentID,
+					Image:        image,
+					Domain:       deployment.Domain,
+					Port:         port,
+					EnvVars:      envVars,
+					Labels:       map[string]string{},
+					Memory:       memory,
+					CPUShares:    cpuShares,
+					Replicas:     replicas,
+					StartCommand: deployment.StartCommand,
+				}
+
+				// Recreate the containers
+				if err := dm.CreateDeployment(ctx, config); err != nil {
+					logger.Warn("[DeploymentManager] Failed to recreate deployment containers: %v", err)
+					continue
+				}
+
+				logger.Info("[DeploymentManager] Successfully recreated containers for deployment %s", deploymentID)
+				
+				// Refresh locations after recreation
+				locations, err = dm.registry.GetDeploymentLocations(deploymentID)
+				if err != nil {
+					logger.Warn("[DeploymentManager] Failed to get deployment locations after recreation: %v", err)
+					continue
+				}
+				
+				// Find the location for this container again
+				found := false
+				for _, loc := range locations {
+					if loc.NodeID == dm.nodeID {
+						location = loc
+						found = true
+						break
+					}
+				}
+				if !found {
+					logger.Warn("[DeploymentManager] Could not find recreated container location for deployment %s", deploymentID)
+					continue
+				}
+				
+				// Re-inspect the new container
+				containerInfo, err = dm.dockerClient.ContainerInspect(ctx, location.ContainerID)
+				if err != nil {
+					logger.Warn("[DeploymentManager] Failed to inspect recreated container: %v", err)
+					continue
+				}
+			} else {
+				// Compose-based deployment - skip this container
+				logger.Warn("[DeploymentManager] Container %s doesn't exist for compose deployment %s, skipping", location.ContainerID[:12], deploymentID)
+				continue
+			}
 		}
 
 		// Only start if not already running

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -187,6 +188,94 @@ func (c *Client) ContainerExec(ctx context.Context, containerID string, cols, ro
 	// Note: In TTY mode, output is raw without headers (unlike non-TTY mode which has 8-byte headers)
 	// Conn is a bidirectional stream that can be used for both reading and writing
 	return attachResp.Conn, nil
+}
+
+// ContainerAttach attaches to the container's main process stdin/stdout/stderr
+// This attaches directly to PID 1 (the main process), not a new exec session
+// Returns a ReadCloser (for stdout/stderr), WriteCloser (for stdin), and Close function
+// If Tty is true, the reader will return raw output (no 8-byte headers)
+// If Tty is false, the reader will demultiplex output with 8-byte headers
+func (c *Client) ContainerAttach(ctx context.Context, containerID string, opts ContainerAttachOptions) (io.ReadCloser, io.WriteCloser, func() error, error) {
+	if c == nil || c.api == nil {
+		return nil, nil, nil, ErrUninitialized
+	}
+
+	attachOpts := client.ContainerAttachOptions{
+		Stream: true,
+		Stdin:  opts.Stdin,
+		Stdout: opts.Stdout,
+		Stderr: opts.Stderr,
+	}
+
+	attachResp, err := c.api.ContainerAttach(ctx, containerID, attachOpts)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("attach container: %w", err)
+	}
+
+	// Wrap the reader based on TTY mode
+	var reader io.ReadCloser
+	if opts.Tty {
+		// TTY mode: raw output, no headers, use Conn directly for bidirectional communication
+		// In TTY mode, stdout/stderr are combined and raw (no 8-byte headers)
+		reader = &attachReadCloser{
+			reader: attachResp.Conn, // In TTY mode, read from Conn directly
+			closeFn: func() error {
+				attachResp.Close()
+				return nil
+			},
+		}
+	} else {
+		// Non-TTY mode: multiplexed output with 8-byte headers
+		reader = &attachReadCloser{
+			reader: attachResp.Reader, // In non-TTY mode, use Reader which handles headers
+			closeFn: func() error {
+				attachResp.Close()
+				return nil
+			},
+		}
+	}
+
+	// Return reader, writer, and close function
+	// Writer handles stdin (always use Conn for writing)
+	// Close function wraps attachResp.Close() to return error
+	closeFn := func() error {
+		attachResp.Close()
+		return nil
+	}
+	return reader, attachResp.Conn, closeFn, nil
+}
+
+// attachReadCloser wraps a bufio.Reader to implement io.ReadCloser
+type attachReadCloser struct {
+	reader  io.Reader
+	closeFn func() error
+	closed  bool
+	mu      sync.Mutex
+}
+
+func (a *attachReadCloser) Read(p []byte) (n int, err error) {
+	return a.reader.Read(p)
+}
+
+func (a *attachReadCloser) Close() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.closed {
+		return nil
+	}
+	a.closed = true
+	if a.closeFn != nil {
+		return a.closeFn()
+	}
+	return nil
+}
+
+// ContainerAttachOptions specifies what streams to attach to
+type ContainerAttachOptions struct {
+	Stdin  bool
+	Stdout bool
+	Stderr bool
+	Tty    bool // Whether to attach with TTY mode (must match container TTY setting)
 }
 
 // ContainerExecRun runs a command in the container and returns the output
@@ -456,6 +545,19 @@ func (c *Client) ContainerInspect(ctx context.Context, containerID string) (cont
 	}
 	
 	return c.api.ContainerInspect(ctx, containerID)
+}
+
+// ContainerResize resizes the TTY for a container
+// This is only effective if the container was created with TTY enabled
+func (c *Client) ContainerResize(ctx context.Context, containerID string, height, width int) error {
+	if c == nil || c.api == nil {
+		return ErrUninitialized
+	}
+	
+	return c.api.ContainerResize(ctx, containerID, client.ContainerResizeOptions{
+		Height: uint(height),
+		Width:  uint(width),
+	})
 }
 
 // ContainerUploadFiles uploads files to a container directory using Docker Copy API

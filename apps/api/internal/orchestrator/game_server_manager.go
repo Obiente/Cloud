@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
@@ -169,14 +170,96 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 		return fmt.Errorf("failed to get game server: %w", err)
 	}
 
+	// If container doesn't exist, create it first
 	if gameServer.ContainerID == nil {
-		return fmt.Errorf("game server %s has no container ID - may need to be created first", gameServerID)
+		logger.Info("[GameServerManager] Game server %s has no container ID, creating container first", gameServerID)
+		
+		// Parse environment variables from JSON
+		envVars := make(map[string]string)
+		if gameServer.EnvVars != "" {
+			if err := json.Unmarshal([]byte(gameServer.EnvVars), &envVars); err != nil {
+				logger.Warn("[GameServerManager] Failed to parse env vars for game server %s: %v", gameServerID, err)
+				// Continue with empty env vars
+			}
+		}
+
+		// Build config from database game server
+		config := &GameServerConfig{
+			GameServerID: gameServerID,
+			Image:        gameServer.DockerImage,
+			Port:         gameServer.Port,
+			EnvVars:      envVars,
+			MemoryBytes:  gameServer.MemoryBytes,
+			CPUCores:     gameServer.CPUCores,
+			StartCommand: gameServer.StartCommand,
+		}
+
+		// Create the container
+		if err := gsm.CreateGameServer(ctx, config); err != nil {
+			return fmt.Errorf("failed to create game server container: %w", err)
+		}
+
+		// Refresh game server to get the new container ID
+		gameServer, err = database.NewGameServerRepository(database.DB, database.RedisClient).GetByID(ctx, gameServerID)
+		if err != nil {
+			return fmt.Errorf("failed to refresh game server after creation: %w", err)
+		}
+
+		if gameServer.ContainerID == nil {
+			return fmt.Errorf("container was created but container ID was not set in database")
+		}
+
+		logger.Info("[GameServerManager] Successfully created container %s for game server %s", (*gameServer.ContainerID)[:12], gameServerID)
 	}
 
 	// Check if container exists and is stopped
 	containerInfo, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
 	if err != nil {
-		return fmt.Errorf("failed to inspect container: %w", err)
+		// Container doesn't exist - try to recreate it
+		logger.Warn("[GameServerManager] Container %s doesn't exist, attempting to recreate it", *gameServer.ContainerID)
+		
+		// Parse environment variables from JSON
+		envVars := make(map[string]string)
+		if gameServer.EnvVars != "" {
+			if err := json.Unmarshal([]byte(gameServer.EnvVars), &envVars); err != nil {
+				logger.Warn("[GameServerManager] Failed to parse env vars for game server %s: %v", gameServerID, err)
+				// Continue with empty env vars
+			}
+		}
+
+		// Build config from database game server
+		config := &GameServerConfig{
+			GameServerID: gameServerID,
+			Image:        gameServer.DockerImage,
+			Port:         gameServer.Port,
+			EnvVars:      envVars,
+			MemoryBytes:  gameServer.MemoryBytes,
+			CPUCores:     gameServer.CPUCores,
+			StartCommand: gameServer.StartCommand,
+		}
+
+		// Create the container
+		if err := gsm.CreateGameServer(ctx, config); err != nil {
+			return fmt.Errorf("failed to recreate game server container: %w", err)
+		}
+
+		// Refresh game server to get the new container ID
+		gameServer, err = database.NewGameServerRepository(database.DB, database.RedisClient).GetByID(ctx, gameServerID)
+		if err != nil {
+			return fmt.Errorf("failed to refresh game server after recreation: %w", err)
+		}
+
+		if gameServer.ContainerID == nil {
+			return fmt.Errorf("container was recreated but container ID was not set in database")
+		}
+
+		logger.Info("[GameServerManager] Successfully recreated container %s for game server %s", (*gameServer.ContainerID)[:12], gameServerID)
+		
+		// Re-inspect the new container
+		containerInfo, err = gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
+		if err != nil {
+			return fmt.Errorf("failed to inspect recreated container: %w", err)
+		}
 	}
 
 	// Only start if not already running
@@ -595,18 +678,16 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 		Env:          env,
 		Labels:       labels,
 		ExposedPorts: exposedPorts,
-		OpenStdin:    true,  // Enable stdin for command sending
-		Tty:          false, // Don't allocate TTY (stdin should still work)
+		OpenStdin:    true, // Enable stdin for command sending
+		Tty:          true, // Enable TTY for proper terminal support and tab completion
 		// Don't clear ENTRYPOINT - let the image use its default entrypoint
 		// Most game server images have proper entrypoints configured
 	}
 
 	// Override container CMD if start command is provided
-	// If no start command is provided, the image will use its default CMD/ENTRYPOINT
 	if config.StartCommand != nil && *config.StartCommand != "" {
-		// When overriding CMD, we need to clear ENTRYPOINT to avoid conflicts
 		containerConfig.Entrypoint = []string{}
-		containerConfig.Cmd = []string{"sh", "-c", *config.StartCommand}
+		containerConfig.Cmd = []string{"sh", "-c", "exec " + *config.StartCommand}
 	}
 
 	// Convert CPU cores to CPU shares (Docker uses shares, not cores)

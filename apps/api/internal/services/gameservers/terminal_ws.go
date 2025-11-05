@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"api/docker"
 	"api/internal/auth"
 
 	"connectrpc.com/connect"
@@ -142,11 +143,16 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 		connectErr, ok := err.(*connect.Error)
 		if ok && connectErr.Code() == connect.CodeFailedPrecondition {
 			// Container is stopped - this is expected
+			log.Printf("[GameServer Terminal WS] Container is stopped for game server %s", initMsg.GameServerID)
+		} else {
+			log.Printf("[GameServer Terminal WS] Failed to create terminal session: %v", err)
 		}
 		// Don't close connection - allow user to type "start" command
 		session = nil
 		cleanup = func() {}
 		created = false
+	} else {
+		log.Printf("[GameServer Terminal WS] Terminal session created successfully for game server %s (attached to main process)", initMsg.GameServerID)
 	}
 
 	var cleanupOnce sync.Once
@@ -154,23 +160,40 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 		cleanupOnce.Do(cleanup)
 	}
 	defer cleanupFn()
+	
+	// Use a mutex to protect session access from concurrent goroutines
+	var sessionMu sync.RWMutex
+	getSession := func() *TerminalSession {
+		sessionMu.RLock()
+		defer sessionMu.RUnlock()
+		return session
+	}
+	setSession := func(newSession *TerminalSession, newCleanup func()) {
+		sessionMu.Lock()
+		defer sessionMu.Unlock()
+		session = newSession
+		cleanup = newCleanup
+	}
 
-	if created && session != nil {
+	currentSession := getSession()
+	if created && currentSession != nil {
 		log.Printf("[GameServer Terminal WS] New terminal session created, sending initial newline")
-		if _, err := session.conn.Write([]byte("\r\n")); err != nil {
+		if _, err := currentSession.conn.Write([]byte("\r\n")); err != nil {
 			log.Printf("[GameServer Terminal WS] Failed to write initial newline: %v", err)
 		}
 	}
 
-	// Send connected message (or stopped message)
-	if session != nil {
-		if err := writeJSON(map[string]string{"type": "connected"}); err != nil {
-			log.Printf("[GameServer Terminal WS] Failed to send connected message: %v", err)
-			conn.Close(websocket.StatusInternalError, "failed to send connected")
-			return
-		}
-	} else {
-		// Container is stopped - send helpful message
+	// Always send connected message - WebSocket connection is established
+	// This allows the frontend to enable command input even when container is stopped
+	if err := writeJSON(map[string]string{"type": "connected"}); err != nil {
+		log.Printf("[GameServer Terminal WS] Failed to send connected message: %v", err)
+		conn.Close(websocket.StatusInternalError, "failed to send connected")
+		return
+	}
+
+	// If container is stopped, send helpful message
+	currentSession = getSession()
+	if currentSession == nil {
 		stoppedMsg := "Game server is stopped. Type 'start' to start the server first.\r\n"
 		data := make([]int, len(stoppedMsg))
 		for i, b := range []byte(stoppedMsg) {
@@ -187,7 +210,8 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 
 	// Forward container output to websocket client (only if session exists)
 	var outputDoneWg sync.WaitGroup
-	if session != nil {
+	currentSession = getSession()
+	if currentSession != nil {
 		outputDoneWg.Add(1)
 		go func() {
 			defer outputDoneWg.Done()
@@ -196,8 +220,30 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 
 			buf := make([]byte, 4096)
 			for {
-				n, err := session.conn.Read(buf)
+				// Set a read deadline to avoid blocking indefinitely
+				// This allows us to detect if the connection is alive
+				currentSession := getSession()
+				if currentSession == nil {
+					return
+				}
+				if conn, ok := currentSession.conn.(interface{ SetReadDeadline(time.Time) error }); ok {
+					conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+				}
+				
+				n, err := currentSession.conn.Read(buf)
+				
+				// Clear the deadline
+				if conn, ok := currentSession.conn.(interface{ SetReadDeadline(time.Time) error }); ok {
+					conn.SetReadDeadline(time.Time{})
+				}
+				
 				if n > 0 {
+					// Log first 100 bytes of output for debugging
+					previewLen := n
+					if previewLen > 100 {
+						previewLen = 100
+					}
+					log.Printf("[GameServer Terminal WS] Read %d bytes from game server attach stream: %q", n, string(buf[:previewLen]))
 					data := make([]int, n)
 					for i := 0; i < n; i++ {
 						data[i] = int(buf[i])
@@ -210,6 +256,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 
 				if err != nil {
 					if err == io.EOF {
+						log.Printf("[GameServer Terminal WS] Container output stream ended (EOF)")
 						_ = writeJSON(gameServerTerminalWSOutput{Type: "closed", Reason: "Terminal session ended", Exit: true})
 						conn.Close(websocket.StatusNormalClosure, "terminal closed")
 						closed = true
@@ -220,6 +267,97 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 						closed = true
 					}
 					return
+				}
+			}
+		}()
+		
+		// Also start a log reader as fallback (some game servers don't output to attach stream)
+		// Docker logs API reads from the logging driver and may be more reliable than attach
+		outputDoneWg.Add(1)
+		go func() {
+			defer outputDoneWg.Done()
+			
+			dcli, err := docker.New()
+			if err != nil {
+				log.Printf("[GameServer Terminal WS] Failed to create docker client for logs: %v", err)
+				return
+			}
+			defer dcli.Close()
+			
+			// Get the current session to access containerID
+			currentSession := getSession()
+			if currentSession == nil {
+				log.Printf("[GameServer Terminal WS] No session available for logs reader")
+				return
+			}
+			containerID := currentSession.containerID
+			
+			// Read logs with follow=true to stream new output
+			// Use tail=0 to get all logs, or a small number to get recent logs
+			logsReader, err := dcli.ContainerLogs(ctx, containerID, "0", true)
+			if err != nil {
+				log.Printf("[GameServer Terminal WS] Failed to start log stream: %v", err)
+				return
+			}
+			defer logsReader.Close()
+			
+			// Docker logs API returns frames with 8-byte headers for non-TTY containers
+			// Read frame by frame and strip headers
+			header := make([]byte, 8)
+			frameBuf := make([]byte, 32*1024)
+			
+			for {
+				select {
+				case <-outputCtx.Done():
+					return
+				default:
+				}
+				
+				// Read header
+				if _, err := io.ReadFull(logsReader, header); err != nil {
+					if err == io.EOF || err == io.ErrUnexpectedEOF {
+						return
+					}
+					log.Printf("[GameServer Terminal WS] Log stream header read error: %v", err)
+					return
+				}
+				
+				// Parse payload length (bytes 4-7, big-endian)
+				payloadLength := int(uint32(header[4])<<24 | uint32(header[5])<<16 | uint32(header[6])<<8 | uint32(header[7]))
+				if payloadLength == 0 {
+					continue // Empty frame, read next
+				}
+				
+				// Read payload
+				if payloadLength > len(frameBuf) {
+					frameBuf = make([]byte, payloadLength)
+				}
+				
+				n, err := io.ReadFull(logsReader, frameBuf[:payloadLength])
+				if err != nil {
+					if err == io.EOF || err == io.ErrUnexpectedEOF {
+						// Partial frame, send what we have
+						if n > 0 {
+							data := make([]int, n)
+							for i := 0; i < n; i++ {
+								data[i] = int(frameBuf[i])
+							}
+							log.Printf("[GameServer Terminal WS] Forwarding %d bytes from logs stream (partial)", n)
+							_ = writeJSON(gameServerTerminalWSOutput{Type: "output", Data: data})
+						}
+						return
+					}
+					log.Printf("[GameServer Terminal WS] Log stream payload read error: %v", err)
+					return
+				}
+				
+				if n > 0 {
+					data := make([]int, n)
+					for i := 0; i < n; i++ {
+						data[i] = int(frameBuf[i])
+					}
+					log.Printf("[GameServer Terminal WS] Forwarding %d bytes from logs stream", n)
+					_ = writeJSON(gameServerTerminalWSOutput{Type: "output", Data: data})
 				}
 			}
 		}()
@@ -255,7 +393,8 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 			}
 
 			// Check for "start" command when container is stopped
-			if session == nil {
+			currentSession := getSession()
+			if currentSession == nil {
 				inputBytes := make([]byte, len(msg.Input))
 				for i, v := range msg.Input {
 					inputBytes[i] = byte(v)
@@ -351,7 +490,26 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 						// Wait a moment for container to be ready
 						time.Sleep(500 * time.Millisecond)
 
-						// Try to initialize terminal session again
+						// Close old session before creating new one (to attach to new process)
+						// The old session was attached to PID 1 (wrapper script), we need a fresh attach
+						oldSession := getSession()
+						if oldSession != nil {
+							log.Printf("[GameServer Terminal WS] Closing old terminal session before creating new one")
+							oldCleanup := cleanup
+							if oldCleanup != nil {
+								oldCleanup()
+							}
+							// Also close the old session's connection explicitly
+							if oldSession.conn != nil {
+								oldSession.conn.Close()
+							}
+						}
+						
+						// Force close any existing session in the cache (ensures we get a fresh attach)
+						log.Printf("[GameServer Terminal WS] Removing old session from cache to force new attach")
+						s.CloseTerminalSession(initMsg.GameServerID)
+
+						// Try to initialize terminal session again (will create a new one)
 						var newSession *TerminalSession
 						var newCleanup func()
 						var newCreated bool
@@ -369,23 +527,56 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 						}
 
 						// Success! Update session
-						session = newSession
-						cleanup = newCleanup
+						setSession(newSession, newCleanup)
+						
+						log.Printf("[GameServer Terminal WS] Session updated after server start: containerID=%s, conn=%v", newSession.containerID, newSession.conn != nil)
+						
+						// Verify the connection is ready
+						if newSession.conn == nil {
+							log.Printf("[GameServer Terminal WS] ERROR: New session has nil connection!")
+							errMsg := "Error: Terminal session connection is invalid.\r\n"
+							errData := make([]int, len(errMsg))
+							for i, b := range []byte(errMsg) {
+								errData[i] = int(b)
+							}
+							_ = writeJSON(gameServerTerminalWSOutput{Type: "output", Data: errData})
+							continue
+						}
 
 						// Start output forwarding
 						outputDone = make(chan struct{})
 						outputCancel()
 						outputCtx, outputCancel = context.WithCancel(ctx)
+						
+						// Start attach stream reader
 						outputDoneWg.Add(1)
 						go func() {
 							defer outputDoneWg.Done()
 							defer close(outputDone)
 							defer outputCancel()
 
+							log.Printf("[GameServer Terminal WS] Attach stream reader goroutine started")
+							// Capture the session reference at the start
+							sessionConn := newSession.conn
+							if sessionConn == nil {
+								log.Printf("[GameServer Terminal WS] ERROR: Session connection is nil!")
+								return
+							}
+							
 							buf := make([]byte, 4096)
 							for {
-								n, err := session.conn.Read(buf)
+								// Check if context is cancelled
+								select {
+								case <-outputCtx.Done():
+									log.Printf("[GameServer Terminal WS] Attach stream reader: context cancelled")
+									return
+								default:
+								}
+								
+								// Read from the captured session connection
+								n, err := sessionConn.Read(buf)
 								if n > 0 {
+									log.Printf("[GameServer Terminal WS] Read %d bytes from attach stream", n)
 									data := make([]int, n)
 									for i := 0; i < n; i++ {
 										data[i] = int(buf[i])
@@ -398,6 +589,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 
 								if err != nil {
 									if err == io.EOF {
+										log.Printf("[GameServer Terminal WS] Attach stream reader: EOF")
 										_ = writeJSON(gameServerTerminalWSOutput{Type: "closed", Reason: "Terminal session ended", Exit: true})
 										conn.Close(websocket.StatusNormalClosure, "terminal closed")
 										closed = true
@@ -411,10 +603,99 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 								}
 							}
 						}()
+						
+						// Also restart logs reader goroutine with new container
+						outputDoneWg.Add(1)
+						go func() {
+							defer outputDoneWg.Done()
+							
+							dcli, err := docker.New()
+							if err != nil {
+								log.Printf("[GameServer Terminal WS] Failed to create docker client for logs: %v", err)
+								return
+							}
+							defer dcli.Close()
+							
+							// Get the current session to access containerID
+							currentSession := getSession()
+							if currentSession == nil {
+								log.Printf("[GameServer Terminal WS] No session available for logs reader")
+								return
+							}
+							containerID := currentSession.containerID
+							
+							// Read logs with follow=true to stream new output
+							logsReader, err := dcli.ContainerLogs(ctx, containerID, "0", true)
+							if err != nil {
+								log.Printf("[GameServer Terminal WS] Failed to start log stream: %v", err)
+								return
+							}
+							defer logsReader.Close()
+							
+							// Docker logs API returns frames with 8-byte headers for non-TTY containers
+							header := make([]byte, 8)
+							frameBuf := make([]byte, 32*1024)
+							
+							for {
+								select {
+								case <-outputCtx.Done():
+									return
+								default:
+								}
+								
+								// Read header
+								if _, err := io.ReadFull(logsReader, header); err != nil {
+									if err == io.EOF || err == io.ErrUnexpectedEOF {
+										return
+									}
+									log.Printf("[GameServer Terminal WS] Log stream header read error: %v", err)
+									return
+								}
+								
+								// Parse payload length (bytes 4-7, big-endian)
+								payloadLength := int(uint32(header[4])<<24 | uint32(header[5])<<16 | uint32(header[6])<<8 | uint32(header[7]))
+								if payloadLength == 0 {
+									continue // Empty frame, read next
+								}
+								
+								// Read payload
+								if payloadLength > len(frameBuf) {
+									frameBuf = make([]byte, payloadLength)
+								}
+								
+								n, err := io.ReadFull(logsReader, frameBuf[:payloadLength])
+								if err != nil {
+									if err == io.EOF || err == io.ErrUnexpectedEOF {
+										// Partial frame, send what we have
+										if n > 0 {
+											data := make([]int, n)
+											for i := 0; i < n; i++ {
+												data[i] = int(frameBuf[i])
+											}
+											log.Printf("[GameServer Terminal WS] Forwarding %d bytes from logs stream (partial)", n)
+											_ = writeJSON(gameServerTerminalWSOutput{Type: "output", Data: data})
+										}
+										return
+									}
+									log.Printf("[GameServer Terminal WS] Log stream payload read error: %v", err)
+									return
+								}
+								
+								if n > 0 {
+									data := make([]int, n)
+									for i := 0; i < n; i++ {
+										data[i] = int(frameBuf[i])
+									}
+									log.Printf("[GameServer Terminal WS] Forwarding %d bytes from logs stream", n)
+									_ = writeJSON(gameServerTerminalWSOutput{Type: "output", Data: data})
+								}
+							}
+						}()
 
 						// Send initial newline
-						if newCreated && session != nil {
-							if _, err := session.conn.Write([]byte("\r\n")); err != nil {
+						currentSession := getSession()
+						if newCreated && currentSession != nil {
+							if _, err := currentSession.conn.Write([]byte("\r\n")); err != nil {
 								log.Printf("[GameServer Terminal WS] Failed to write initial newline: %v", err)
 							}
 						}
@@ -440,19 +721,84 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 			}
 
 			// Normal input handling when session exists
+			// Extract the command string from input bytes
 			inputBytes := make([]byte, len(msg.Input))
 			for i, v := range msg.Input {
 				inputBytes[i] = byte(v)
 			}
-			if _, err := session.conn.Write(inputBytes); err != nil {
-				log.Printf("[GameServer Terminal WS] Failed to write input: %v", err)
-				sendError("Failed to send input")
-				conn.Close(websocket.StatusInternalError, "write error")
-				return
+			commandStr := strings.TrimSpace(string(inputBytes))
+			
+			log.Printf("[GameServer Terminal WS] Sending command to game server: %q", commandStr)
+			
+			// Get fresh session reference - session might have been updated after server start
+			currentSession = getSession()
+			if currentSession == nil {
+				log.Printf("[GameServer Terminal WS] No active session, cannot send command")
+				sendError("No active terminal session. Please wait for server to start.")
+				continue
+			}
+			
+			log.Printf("[GameServer Terminal WS] Session found: containerID=%s, conn=%v", currentSession.containerID, currentSession.conn != nil)
+			
+			// Verify connection is valid before writing
+			if currentSession.conn == nil {
+				log.Printf("[GameServer Terminal WS] ERROR: Session has nil connection!")
+				sendError("Terminal session connection is invalid. Please reconnect.")
+				continue
+			}
+			
+			// Try sending via stdin first (for real-time terminal interaction)
+			stdinWritten := false
+			if n, err := currentSession.conn.Write(inputBytes); err == nil {
+				log.Printf("[GameServer Terminal WS] Successfully wrote %d bytes to game server stdin", n)
+				stdinWritten = true
+				
+				// Try to flush if supported (important for TTY mode to ensure data is sent immediately)
+				if flusher, ok := currentSession.conn.(interface{ Flush() error }); ok {
+					if flushErr := flusher.Flush(); flushErr != nil {
+						log.Printf("[GameServer Terminal WS] Warning: Failed to flush stdin: %v", flushErr)
+					} else {
+						log.Printf("[GameServer Terminal WS] Flushed stdin successfully")
+					}
+				}
+			} else {
+				log.Printf("[GameServer Terminal WS] Failed to write to stdin: %v", err)
+			}
+			
+			// Also try via GameServerManager which uses multiple fallback methods
+			// (RCON, named pipes, wrapper scripts, etc.) - many game servers don't read from stdin
+			if manager, err := s.getGameServerManager(); err == nil {
+				if err := manager.SendGameServerCommand(ctx, initMsg.GameServerID, commandStr); err != nil {
+					log.Printf("[GameServer Terminal WS] Failed to send command via GameServerManager: %v", err)
+					if !stdinWritten {
+						// Both methods failed
+						sendError(fmt.Sprintf("Failed to send command: %v", err))
+					}
+				} else {
+					log.Printf("[GameServer Terminal WS] Successfully sent command via GameServerManager fallback methods")
+				}
+			} else {
+				log.Printf("[GameServer Terminal WS] Failed to get GameServerManager: %v", err)
+				if !stdinWritten {
+					sendError("Failed to send command")
+				}
 			}
 		case "resize":
-			// TODO: implement container resize support if needed
-			log.Printf("[GameServer Terminal WS] Resize event received: %dx%d (not implemented)", msg.Cols, msg.Rows)
+			// Resize container TTY (only works if container has TTY enabled)
+			currentSession := getSession()
+			if currentSession != nil && msg.Cols > 0 && msg.Rows > 0 {
+				dcli, err := docker.New()
+				if err == nil {
+					defer dcli.Close()
+					if err := dcli.ContainerResize(ctx, currentSession.containerID, msg.Rows, msg.Cols); err != nil {
+						log.Printf("[GameServer Terminal WS] Failed to resize container TTY: %v", err)
+					} else {
+						log.Printf("[GameServer Terminal WS] Resized container TTY to %dx%d", msg.Cols, msg.Rows)
+					}
+				}
+			} else {
+				log.Printf("[GameServer Terminal WS] Resize event received but no active session or invalid dimensions: %dx%d", msg.Cols, msg.Rows)
+			}
 		case "ping":
 			_ = writeJSON(map[string]string{"type": "pong"})
 		default:

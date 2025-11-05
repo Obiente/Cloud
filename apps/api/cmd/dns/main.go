@@ -105,6 +105,9 @@ func NewDNSServer() (*DNSServer, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
+	// Initialize the global database.DB variable so database functions can use it
+	database.DB = s.db
+
 	return s, nil
 }
 
