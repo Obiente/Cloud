@@ -16,6 +16,11 @@ service SuperadminService {
   rpc ListDNSRecords(ListDNSRecordsRequest) returns (ListDNSRecordsResponse);
   rpc GetDNSConfig(GetDNSConfigRequest) returns (GetDNSConfigResponse);
   
+  // DNS Delegation API Key management
+  rpc CreateDNSDelegationAPIKey(CreateDNSDelegationAPIKeyRequest) returns (CreateDNSDelegationAPIKeyResponse);
+  rpc ListDNSDelegationAPIKeys(ListDNSDelegationAPIKeysRequest) returns (ListDNSDelegationAPIKeysResponse);
+  rpc RevokeDNSDelegationAPIKey(RevokeDNSDelegationAPIKeyRequest) returns (RevokeDNSDelegationAPIKeyResponse);
+  rpc RevokeDNSDelegationAPIKeyForOrganization(RevokeDNSDelegationAPIKeyForOrganizationRequest) returns (RevokeDNSDelegationAPIKeyForOrganizationResponse);
   // Public pricing endpoint - no authentication required
   rpc GetPricing(GetPricingRequest) returns (GetPricingResponse);
 }
@@ -100,18 +105,24 @@ message QueryDNSResponse {
 message ListDNSRecordsRequest {
   optional string deployment_id = 1; // Filter by deployment ID
   optional string organization_id = 2; // Filter by organization ID
+  optional string record_type = 3; // Filter by record type (A, SRV) - empty means all
 }
 
 // DNS Record Information
 message DNSRecord {
-  string deployment_id = 1;
-  string organization_id = 2;
-  string deployment_name = 3;
-  string domain = 4; // Full domain (e.g., deploy-123.my.obiente.cloud)
-  repeated string ip_addresses = 5; // Resolved IP addresses
-  string region = 6; // Region where deployment is running
-  string status = 7; // Deployment status
-  google.protobuf.Timestamp last_resolved = 8;
+  string record_type = 1; // A or SRV
+  string deployment_id = 2; // Deployment ID (for A records)
+  string game_server_id = 3; // Game Server ID (for SRV records)
+  string organization_id = 4;
+  string deployment_name = 5; // Deployment name (for A records)
+  string game_server_name = 6; // Game server name (for SRV records)
+  string domain = 7; // Full domain (e.g., deploy-123.my.obiente.cloud or _minecraft._tcp.gameserver-123.my.obiente.cloud)
+  repeated string ip_addresses = 8; // Resolved IP addresses (for A records)
+  string target = 9; // SRV target hostname/IP (for SRV records)
+  int32 port = 10; // Port (for SRV records)
+  string region = 11; // Region where resource is running
+  string status = 12; // Resource status
+  google.protobuf.Timestamp last_resolved = 13;
 }
 
 // List DNS Records Response
@@ -153,3 +164,62 @@ message GetPricingResponse {
   string pricing_info = 5; // Human-readable description
 }
 
+// DNS Delegation API Key Management
+
+// Create DNS Delegation API Key Request
+message CreateDNSDelegationAPIKeyRequest {
+  string description = 1; // Description of who/what this key is for
+  optional string source_api = 2; // URL of the API that will use this key (optional)
+  optional string organization_id = 3; // Organization ID (optional, required for non-superadmins, inferred from user's memberships if not provided)
+}
+
+// Create DNS Delegation API Key Response
+message CreateDNSDelegationAPIKeyResponse {
+  string api_key = 1; // The generated API key (shown only once)
+  string message = 2; // Success message
+  string description = 3; // Description of the API key
+}
+
+// Revoke DNS Delegation API Key Request
+message RevokeDNSDelegationAPIKeyRequest {
+  string api_key = 1; // The API key to revoke
+}
+
+// Revoke DNS Delegation API Key Response
+message RevokeDNSDelegationAPIKeyResponse {
+  bool success = 1;
+  string message = 2; // Success message
+}
+
+// Revoke DNS Delegation API Key For Organization Request
+message RevokeDNSDelegationAPIKeyForOrganizationRequest {
+  string organization_id = 1; // Organization ID whose API key to revoke
+}
+
+// Revoke DNS Delegation API Key For Organization Response
+message RevokeDNSDelegationAPIKeyForOrganizationResponse {
+  bool success = 1;
+  string message = 2; // Success message
+}
+
+// List DNS Delegation API Keys Request
+message ListDNSDelegationAPIKeysRequest {
+  optional string organization_id = 1; // Filter by organization ID (optional)
+}
+
+// DNS Delegation API Key Info
+message DNSDelegationAPIKeyInfo {
+  string id = 1; // API key ID
+  string description = 2; // Description
+  string source_api = 3; // Source API URL (if set)
+  string organization_id = 4; // Organization ID (if set)
+  bool is_active = 5; // Whether the key is active
+  google.protobuf.Timestamp created_at = 6; // When the key was created
+  google.protobuf.Timestamp revoked_at = 7; // When the key was revoked (if revoked)
+  string stripe_subscription_id = 8; // Stripe subscription ID (if linked to subscription)
+}
+
+// List DNS Delegation API Keys Response
+message ListDNSDelegationAPIKeysResponse {
+  repeated DNSDelegationAPIKeyInfo api_keys = 1;
+}

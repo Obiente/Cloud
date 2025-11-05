@@ -173,3 +173,72 @@ func ParseTraefikIPsFromEnv(traefikIPsEnv string) (map[string][]string, error) {
 
 	return result, nil
 }
+
+// GetGameServerLocation returns the IP and port for a game server
+// This queries the game_server_locations table to find where the game server is running
+func GetGameServerLocation(gameServerID string) (string, int32, error) {
+	// Get game server locations (where game server is actually running)
+	var locations []GameServerLocation
+	result := DB.Where("game_server_id = ? AND status = ?", gameServerID, "running").
+		Find(&locations)
+	if result.Error != nil {
+		return "", 0, fmt.Errorf("failed to query game server locations: %w", result.Error)
+	}
+
+	if len(locations) == 0 {
+		return "", 0, fmt.Errorf("no running game server found for game_server_id: %s", gameServerID)
+	}
+
+	// Get the first location (game servers typically run on one node)
+	location := locations[0]
+	
+	// If NodeIP is not set, try to get it from NodeMetadata
+	if location.NodeIP == "" {
+		var node NodeMetadata
+		if err := DB.First(&node, "id = ?", location.NodeID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return "", 0, fmt.Errorf("node %s not found for game server %s", location.NodeID, gameServerID)
+			}
+			return "", 0, fmt.Errorf("failed to find node %s: %w", location.NodeID, err)
+		}
+		
+		// NodeMetadata.Address is a JSONB field that might contain IP
+		// For now, use NodeHostname if available, or try to parse Address
+		if location.NodeHostname != "" {
+			// Try to resolve hostname to IP (this is a fallback - ideally NodeIP should be populated)
+			// For now, return hostname and let DNS resolve it
+			return location.NodeHostname, location.Port, nil
+		}
+		
+		// If Address is set, try to extract IP from it
+		// Address is JSONB, so it might be a JSON object or string
+		// For now, return error if we can't find IP
+		return "", 0, fmt.Errorf("node %s has no IP address configured for game server %s", location.NodeID, gameServerID)
+	}
+
+	return location.NodeIP, location.Port, nil
+}
+
+// GetGameServerType returns the game type for a game server
+func GetGameServerType(gameServerID string) (int32, error) {
+	var gameServer struct {
+		GameType int32
+	}
+	result := DB.Table("game_servers").
+		Select("game_type").
+		Where("id = ?", gameServerID).
+		First(&gameServer)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return 0, fmt.Errorf("game server %s not found", gameServerID)
+		}
+		return 0, fmt.Errorf("failed to query game server: %w", result.Error)
+	}
+	return gameServer.GameType, nil
+}
+
+// GetGameServerIP returns the IP address for a game server (for A record queries)
+func GetGameServerIP(gameServerID string) (string, error) {
+	nodeIP, _, err := GetGameServerLocation(gameServerID)
+	return nodeIP, err
+}
