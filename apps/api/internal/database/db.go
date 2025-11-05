@@ -139,6 +139,8 @@ func InitDatabase() error {
 	if err := db.AutoMigrate(
 		&Deployment{},
 		&BuildHistory{},
+		&DelegatedDNSRecord{},
+		&DNSDelegationAPIKey{},
 	); err != nil {
 		return fmt.Errorf("failed to auto-migrate: %w", err)
 	}

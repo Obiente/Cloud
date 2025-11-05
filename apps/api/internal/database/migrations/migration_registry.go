@@ -20,6 +20,7 @@ func RegisterMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_12_28_001", "Create build_history and build_logs tables", createBuildHistoryTables)
 	registry.Register("2025_01_03_001", "Add configurable build paths and nginx config to deployments", addBuildPathsAndNginxConfig)
 	registry.Register("2025_01_03_002", "Add region column to node_metadata table", addRegionToNodeMetadata)
+	registry.Register("2025_01_03_003", "Create support_tickets and ticket_comments tables", createSupportTicketsTables)
 
 	// Add new migrations here
 }

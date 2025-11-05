@@ -204,3 +204,62 @@ func MigrateModels(db *gorm.DB) error {
 	logger.Info("Auto-migration completed successfully")
 	return nil
 }
+
+// createSupportTicketsTables creates the support_tickets and ticket_comments tables
+func createSupportTicketsTables(db *gorm.DB) error {
+	// Check if tables already exist
+	if db.Migrator().HasTable("support_tickets") && db.Migrator().HasTable("ticket_comments") {
+		return nil
+	}
+
+	// Create support_tickets table
+	if !db.Migrator().HasTable("support_tickets") {
+		if err := db.Exec(`
+			CREATE TABLE support_tickets (
+				id VARCHAR(255) PRIMARY KEY,
+				subject VARCHAR(500) NOT NULL,
+				description TEXT NOT NULL,
+				status INTEGER NOT NULL DEFAULT 1,
+				priority INTEGER NOT NULL DEFAULT 2,
+				category INTEGER NOT NULL DEFAULT 0,
+				created_by VARCHAR(255) NOT NULL,
+				assigned_to VARCHAR(255),
+				organization_id VARCHAR(255),
+				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				resolved_at TIMESTAMP,
+				INDEX idx_created_by (created_by),
+				INDEX idx_assigned_to (assigned_to),
+				INDEX idx_organization_id (organization_id),
+				INDEX idx_status (status),
+				INDEX idx_priority (priority),
+				INDEX idx_category (category),
+				INDEX idx_created_at (created_at)
+			)
+		`).Error; err != nil {
+			return err
+		}
+	}
+
+	// Create ticket_comments table
+	if !db.Migrator().HasTable("ticket_comments") {
+		if err := db.Exec(`
+			CREATE TABLE ticket_comments (
+				id VARCHAR(255) PRIMARY KEY,
+				ticket_id VARCHAR(255) NOT NULL,
+				content TEXT NOT NULL,
+				created_by VARCHAR(255) NOT NULL,
+				internal BOOLEAN NOT NULL DEFAULT false,
+				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				INDEX idx_ticket_id (ticket_id),
+				INDEX idx_created_by (created_by),
+				INDEX idx_created_at (created_at)
+			)
+		`).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

@@ -365,3 +365,91 @@ type GameServerUsageHourly struct {
 }
 
 func (GameServerUsageHourly) TableName() string { return "game_server_usage_hourly" }
+
+// GameServerMetrics stores historical metrics for game servers
+type GameServerMetrics struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	GameServerID  string    `gorm:"index;not null" json:"game_server_id"`
+	ContainerID   string    `gorm:"index" json:"container_id"`
+	NodeID        string    `gorm:"index" json:"node_id"`
+	CPUUsage      float64   `json:"cpu_usage"`
+	MemoryUsage   int64     `json:"memory_usage"`
+	NetworkRxBytes int64    `json:"network_rx_bytes"`
+	NetworkTxBytes int64    `json:"network_tx_bytes"`
+	DiskReadBytes int64     `json:"disk_read_bytes"`
+	DiskWriteBytes int64    `json:"disk_write_bytes"`
+	Timestamp      time.Time `gorm:"index" json:"timestamp"`
+}
+
+func (GameServerMetrics) TableName() string { return "game_server_metrics" }
+
+// SupportTicket represents a support ticket in the database
+type SupportTicket struct {
+	ID           string     `gorm:"primaryKey;column:id" json:"id"`
+	Subject      string     `gorm:"column:subject;not null" json:"subject"`
+	Description  string     `gorm:"column:description;type:text;not null" json:"description"`
+	Status       int32      `gorm:"column:status;default:1" json:"status"` // SupportTicketStatus enum (1=OPEN)
+	Priority     int32      `gorm:"column:priority;default:2" json:"priority"` // SupportTicketPriority enum (2=MEDIUM)
+	Category     int32      `gorm:"column:category;default:0" json:"category"` // SupportTicketCategory enum
+	CreatedBy    string     `gorm:"column:created_by;index;not null" json:"created_by"` // User ID who created the ticket
+	AssignedTo   *string    `gorm:"column:assigned_to;index" json:"assigned_to"` // User ID of assignee (superadmin)
+	OrganizationID *string  `gorm:"column:organization_id;index" json:"organization_id"`
+	CreatedAt    time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt    time.Time  `gorm:"column:updated_at" json:"updated_at"`
+	ResolvedAt   *time.Time `gorm:"column:resolved_at" json:"resolved_at"`
+}
+
+func (SupportTicket) TableName() string {
+	return "support_tickets"
+}
+
+// BeforeCreate hook to set timestamps
+func (st *SupportTicket) BeforeCreate(tx *gorm.DB) error {
+	now := time.Now()
+	if st.CreatedAt.IsZero() {
+		st.CreatedAt = now
+	}
+	if st.UpdatedAt.IsZero() {
+		st.UpdatedAt = now
+	}
+	return nil
+}
+
+// BeforeUpdate hook to set updated timestamp
+func (st *SupportTicket) BeforeUpdate(tx *gorm.DB) error {
+	st.UpdatedAt = time.Now()
+	return nil
+}
+
+// TicketComment represents a comment/reply on a support ticket
+type TicketComment struct {
+	ID        string    `gorm:"primaryKey;column:id" json:"id"`
+	TicketID  string    `gorm:"column:ticket_id;index;not null" json:"ticket_id"`
+	Content   string    `gorm:"column:content;type:text;not null" json:"content"`
+	CreatedBy string    `gorm:"column:created_by;index;not null" json:"created_by"` // User ID who created the comment
+	Internal  bool      `gorm:"column:internal;default:false" json:"internal"` // Internal comment (not visible to user)
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (TicketComment) TableName() string {
+	return "ticket_comments"
+}
+
+// BeforeCreate hook to set timestamps
+func (tc *TicketComment) BeforeCreate(tx *gorm.DB) error {
+	now := time.Now()
+	if tc.CreatedAt.IsZero() {
+		tc.CreatedAt = now
+	}
+	if tc.UpdatedAt.IsZero() {
+		tc.UpdatedAt = now
+	}
+	return nil
+}
+
+// BeforeUpdate hook to set updated timestamp
+func (tc *TicketComment) BeforeUpdate(tx *gorm.DB) error {
+	tc.UpdatedAt = time.Now()
+	return nil
+}

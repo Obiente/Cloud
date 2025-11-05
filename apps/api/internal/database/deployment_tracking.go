@@ -94,6 +94,7 @@ func InitDeploymentTracking() error {
 		&DeploymentLocation{},
 		&NodeMetadata{},
 		&DeploymentRouting{},
+		&GameServerLocation{},
 	); err != nil {
 		return err
 	}
@@ -142,6 +143,35 @@ func createMetricsIndexes() error {
 		ON deployment_usage_hourly(deployment_id, hour DESC)
 	`).Error; err != nil {
 		return fmt.Errorf("failed to create usage_hourly index: %w", err)
+	}
+
+	// Game server metrics indexes
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_game_server_metrics_gameserver_timestamp 
+		ON game_server_metrics(game_server_id, timestamp DESC)
+	`).Error; err != nil {
+		return fmt.Errorf("failed to create game_server_timestamp index: %w", err)
+	}
+	
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_game_server_metrics_timestamp_gameserver 
+		ON game_server_metrics(timestamp DESC, game_server_id)
+	`).Error; err != nil {
+		return fmt.Errorf("failed to create game_server_timestamp_deployment index: %w", err)
+	}
+	
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_game_server_metrics_container_timestamp 
+		ON game_server_metrics(container_id, timestamp DESC)
+	`).Error; err != nil {
+		return fmt.Errorf("failed to create game_server_container_timestamp index: %w", err)
+	}
+	
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_game_server_usage_hourly_gameserver_hour 
+		ON game_server_usage_hourly(game_server_id, hour DESC)
+	`).Error; err != nil {
+		return fmt.Errorf("failed to create game_server_usage_hourly index: %w", err)
 	}
 	
 	return nil
