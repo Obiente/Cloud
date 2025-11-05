@@ -583,9 +583,10 @@ services:
     command:
       - --api.dashboard=true
       - --api.insecure=false
-      - --providers.docker.swarmmode=true
+      - --providers.docker=true  # Docker provider - auto-detects Swarm mode in v3
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=obiente-network
+      - --providers.docker.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
       - --providers.etcd.endpoints=etcd:2379
       - --providers.etcd.rootkey=traefik
       - --entrypoints.web.address=:80
@@ -601,7 +602,7 @@ services:
       - "80:80"
       - "443:443"
       - "8000:8000" # User deployments
-      # 8080 (Traefik dashboard) intentionally not exposed in Swarm by default
+      # Traefik dashboard accessible via HTTPS at traefik.${DOMAIN} (port 8080 used by Grafana)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - traefik_letsencrypt:/letsencrypt
@@ -620,6 +621,7 @@ services:
           cpus: "0.5"
           memory: 128M
       labels:
+        - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
         - "traefik.http.routers.traefik.entrypoints=websecure"

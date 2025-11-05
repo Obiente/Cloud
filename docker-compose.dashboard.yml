@@ -24,22 +24,6 @@ services:
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
     networks:
       - obiente-network
-    # Traefik labels for automatic proxying
-    # DASHBOARD_HOSTNAME should be set to the hostname from DASHBOARD_URL
-    # Example: If DASHBOARD_URL=https://dashboard.obiente.cloud, set DASHBOARD_HOSTNAME=dashboard.obiente.cloud
-    # If not set, defaults to dashboard.${DOMAIN} or dashboard.localhost
-    labels:
-      - "cloud.obiente.traefik=true"
-      - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`${DASHBOARD_HOSTNAME:-dashboard.${DOMAIN:-localhost}}`)"
-      - "traefik.http.routers.dashboard.entrypoints=web"
-      - "traefik.http.routers.dashboard.service=dashboard"
-      - "traefik.http.services.dashboard.loadbalancer.server.port=3000"
-      - "traefik.http.routers.dashboard-secure.rule=Host(`${DASHBOARD_HOSTNAME:-dashboard.${DOMAIN:-localhost}}`)"
-      - "traefik.http.routers.dashboard-secure.entrypoints=websecure"
-      - "traefik.http.routers.dashboard-secure.service=dashboard"
-      - "traefik.http.routers.dashboard-secure.tls=true"
-      - "traefik.http.routers.dashboard-secure.tls.certresolver=letsencrypt"
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
       interval: 30s
@@ -74,6 +58,21 @@ services:
         constraints:
           - node.role == manager
         max_replicas_per_node: 1
+      labels:
+        # Traefik labels for automatic proxying (must be under deploy.labels for Swarm mode)
+        # Dashboard uses the domain directly (no dashboard prefix)
+        # Example: If DOMAIN=obiente.cloud, dashboard will be at https://obiente.cloud
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.dashboard.rule=Host(`${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.dashboard.entrypoints=web"
+        - "traefik.http.routers.dashboard.service=dashboard"
+        - "traefik.http.services.dashboard.loadbalancer.server.port=3000"
+        - "traefik.http.routers.dashboard-secure.rule=Host(`${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.dashboard-secure.entrypoints=websecure"
+        - "traefik.http.routers.dashboard-secure.service=dashboard"
+        - "traefik.http.routers.dashboard-secure.tls=true"
+        - "traefik.http.routers.dashboard-secure.tls.certresolver=letsencrypt"
 
 networks:
   obiente-network:

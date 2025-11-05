@@ -192,10 +192,11 @@ services:
     image: traefik:v3.0
     command:
       - --api.dashboard=true
-      - --api.insecure=false
-      - --providers.docker.swarmmode=true
+      - --api.insecure=true  # Set to true to allow direct access on port 8080 (use false for production)
+      - --providers.docker=true  # Docker provider - auto-detects Swarm mode in v3
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=obiente-network
+      - --providers.docker.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       - --entrypoints.deployments.address=:8000
@@ -204,7 +205,7 @@ services:
       - "80:80"
       - "443:443"
       - "8000:8000"
-      - "8080:8080" # Traefik dashboard (exposed in dev)
+      # Traefik dashboard accessible via HTTPS at traefik.${DOMAIN} (port 8080 used by Grafana)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     deploy:
@@ -217,6 +218,7 @@ services:
           cpus: "0.25"
           memory: 128M
       labels:
+        - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.traefik.entrypoints=web"

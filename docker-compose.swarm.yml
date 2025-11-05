@@ -196,6 +196,7 @@ services:
       labels:
         - "cloud.obiente.service=api"
         - "cloud.obiente.role=control-plane"
+        - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.api.rule=Host(`api.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.api.entrypoints=websecure"
@@ -222,9 +223,11 @@ services:
       - --providers.docker=true  # Docker provider - auto-detects Swarm mode in v3
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=obiente-network
+      - --providers.docker.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       - --entrypoints.deployments.address=:8000
+      - --entrypoints.dashboard.address=:8080  # Entrypoint for routing Grafana on port 8080
       # Let's Encrypt
       - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
@@ -238,7 +241,7 @@ services:
       - "80:80"
       - "443:443"
       - "8000:8000" # User deployments
-      - "8080:8080" # Traefik dashboard (exposed for direct access)
+      - "8080:8080" # Traefik dashboard accessible on port 8080
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
@@ -255,6 +258,7 @@ services:
           cpus: "0.5"
           memory: 128M
       labels:
+        - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.traefik.entrypoints=websecure"
@@ -334,6 +338,85 @@ services:
     networks:
       - obiente-network
 
+  # ============================================================================
+  # MONITORING & OBSERVABILITY
+  # ============================================================================
+
+  # Prometheus - Metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+    volumes:
+      - prometheus_data:/prometheus
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.prometheus.entrypoints=websecure"
+        - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+        - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+    networks:
+      - obiente-network
+
+  # Grafana - Metrics visualization dashboard accessible at /grafana via Traefik
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: https://${DOMAIN:-localhost}/grafana
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        # Route Grafana at /grafana path on port 8080 (dashboard entrypoint)
+        - "traefik.http.routers.grafana.rule=PathPrefix(`/grafana`)"
+        - "traefik.http.routers.grafana.entrypoints=dashboard"
+        - "traefik.http.routers.grafana.service=grafana"
+        # Strip /grafana prefix when forwarding to Grafana (Grafana handles subpath internally)
+        - "traefik.http.middlewares.grafana-stripprefix.stripprefix.prefixes=/grafana"
+        - "traefik.http.routers.grafana.middlewares=grafana-stripprefix"
+        - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+        # Also route on HTTPS for production access
+        - "traefik.http.routers.grafana-secure.rule=PathPrefix(`/grafana`)"
+        - "traefik.http.routers.grafana-secure.entrypoints=websecure"
+        - "traefik.http.routers.grafana-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.grafana-secure.service=grafana"
+        - "traefik.http.routers.grafana-secure.middlewares=grafana-stripprefix"
+    networks:
+      - obiente-network
+
 volumes:
   postgres_data:
     driver: local
@@ -342,6 +425,10 @@ volumes:
   redis_data:
     driver: local
   traefik_letsencrypt:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
     driver: local
 
 networks:
