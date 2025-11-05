@@ -677,7 +677,9 @@ services:
       #   - node.labels.dns.enabled != false (runs on all nodes except those with dns.enabled=false)
       # To disable DNS on specific nodes, label them: docker node update --label-add dns.enabled=false <node-name>
       mode: ${DNS_MODE:-global} # Options: global (all nodes), replicated (specific nodes)
-      replicas: ${DNS_REPLICAS:-1} # Only used if mode is replicated
+      # replicas is only valid when mode is replicated
+      # When using replicated mode, set DNS_REPLICAS environment variable and uncomment the line below
+      # replicas: ${DNS_REPLICAS:-1} # Only used if mode is replicated
       placement:
         constraints:
           # Uncomment and modify the constraint below to restrict DNS to specific nodes
