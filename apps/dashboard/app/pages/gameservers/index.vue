@@ -140,7 +140,7 @@
                   </OuiText>
                   <OuiFlex align="center" gap="xs">
                     <OuiText size="sm" color="secondary">
-                      {{ gameServer.gameType || "Unknown" }}
+                      {{ getGameTypeLabel(gameServer.gameType) || "Unknown" }}
                     </OuiText>
                   </OuiFlex>
                   <OuiFlex v-if="gameServer.port" align="center" gap="xs" class="mt-0.5">
@@ -198,7 +198,7 @@
                         <OuiText size="xs" color="secondary">Memory</OuiText>
                       </OuiFlex>
                       <OuiText size="sm" weight="semibold" color="primary">
-                        <OuiByte :bytes="gameServer.memoryBytes || 0" />
+                        <OuiByte :value="gameServer.memoryBytes || 0" />
                       </OuiText>
                     </OuiStack>
                   </OuiGrid>
@@ -208,7 +208,7 @@
                 <OuiFlex align="center" justify="between" class="pt-2 border-t border-border-muted">
                   <OuiText size="xs" color="secondary">
                     Updated
-                    <OuiRelativeTime :timestamp="gameServer.updatedAt" />
+                    <OuiRelativeTime :value="gameServer.updatedAt ? new Date(gameServer.updatedAt) : undefined" />
                   </OuiText>
                 </OuiFlex>
               </OuiStack>
@@ -259,12 +259,95 @@
         </OuiCard>
       </OuiGrid>
     </OuiStack>
+
+    <!-- Create Game Server Dialog -->
+    <OuiDialog
+      v-model:open="showCreateDialog"
+      title="Create New Game Server"
+      description="Deploy a game server with pay-as-you-go pricing"
+    >
+      <form @submit.prevent="createGameServer">
+        <OuiStack gap="lg">
+          <!-- Error display -->
+          <ErrorAlert
+            v-if="createError"
+            :error="createError"
+            title="Unable to create game server"
+            hint="Make sure you're logged in and have permission to create game servers."
+          />
+
+          <OuiInput
+            v-model="newGameServer.name"
+            label="Server Name"
+            placeholder="my-minecraft-server"
+            required
+          />
+
+          <OuiSelect
+            v-model="newGameServer.gameType"
+            label="Game Type"
+            :items="gameTypeOptions"
+            required
+          />
+
+          <OuiInput
+            v-model="newGameServer.memoryGBStr"
+            label="Memory (GB) - Max Limit"
+            type="number"
+            min="0.5"
+            max="32"
+            step="0.5"
+            placeholder="2"
+            required
+          />
+
+          <OuiInput
+            v-model="newGameServer.cpuCoresStr"
+            label="vCPU Cores - Max Limit"
+            type="number"
+            min="0.25"
+            max="8"
+            step="0.25"
+            placeholder="1"
+            required
+          />
+
+          <OuiInput
+            v-model="newGameServer.serverVersion"
+            label="Server Version (Optional)"
+            placeholder="e.g., 1.20.1 for Minecraft"
+          />
+
+          <OuiTextarea
+            v-model="newGameServer.description"
+            label="Description (Optional)"
+            placeholder="A brief description of your game server"
+          />
+        </OuiStack>
+      </form>
+      <template #footer>
+        <OuiFlex justify="end" gap="sm">
+          <OuiButton variant="ghost" @click="showCreateDialog = false">
+            Cancel
+          </OuiButton>
+          <OuiButton
+            color="primary"
+            :loading="isCreating"
+            @click="createGameServer"
+            class="gap-2 shadow-lg shadow-primary/20"
+          >
+            <CubeIcon class="h-4 w-4" />
+            <OuiText as="span" size="sm" weight="medium">Create Server</OuiText>
+          </OuiButton>
+        </OuiFlex>
+      </template>
+    </OuiDialog>
   </OuiContainer>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import {
   ArrowPathIcon,
   CpuChipIcon,
@@ -284,7 +367,9 @@ import ErrorAlert from "~/components/ErrorAlert.vue";
 import { useOrganizationsStore } from "~/stores/organizations";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 import OuiByte from "~/components/oui/Byte.vue";
+import { date } from "@obiente/proto/utils";
 import { useToast } from "~/composables/useToast";
+import { GameServerService, GameType } from "@obiente/proto";
 
 definePageMeta({
   layout: "default",
@@ -294,12 +379,11 @@ definePageMeta({
 const route = useRoute();
 const router = useRouter();
 const { toast } = useToast();
+const orgsStore = useOrganizationsStore();
+const client = useConnectClient(GameServerService);
 
 // Error handling
 const listError = ref<Error | null>(null);
-
-// Organizations
-const orgsStore = useOrganizationsStore();
 
 // Check for organizationId in query params (from superadmin navigation)
 if (route.query.organizationId && typeof route.query.organizationId === "string") {
@@ -310,15 +394,84 @@ const effectiveOrgId = computed(() => {
   return orgsStore.currentOrgId || "";
 });
 
+// Fetch game servers via Nuxt's useAsyncData
+const { data: gameServersData, refresh: refreshGameServers } = await useAsyncData(
+  () => `game-servers-list-${effectiveOrgId.value}`,
+  async () => {
+    try {
+      const response = await client.listGameServers({
+        organizationId: effectiveOrgId.value || undefined,
+      });
+      return response.gameServers || [];
+    } catch (error) {
+      console.error("Failed to list game servers:", error);
+      listError.value = error as Error;
+      return [];
+    }
+  }
+);
+
+// Convert game servers to local format
+const gameServers = computed(() => {
+  return (gameServersData.value || []).map((gs) => {
+    const updatedAt = gs.updatedAt 
+      ? (typeof gs.updatedAt === 'string' 
+          ? gs.updatedAt 
+          : date(gs.updatedAt)?.toISOString() || new Date().toISOString())
+      : new Date().toISOString();
+    
+    return {
+      id: gs.id,
+      name: gs.name,
+      gameType: gs.gameType?.toString(),
+      status: gs.status?.toString() || "CREATED",
+      port: gs.port,
+      cpuCores: gs.cpuCores,
+      memoryBytes: gs.memoryBytes ? Number(gs.memoryBytes) : undefined,
+      updatedAt: updatedAt,
+    };
+  });
+});
+
 // Filters
 const searchQuery = ref("");
-const statusFilter = ref<string | undefined>(undefined);
-const gameTypeFilter = ref<string | undefined>(undefined);
+const statusFilter = ref<string>("");
+const gameTypeFilter = ref<string>("");
 const showCreateDialog = ref(false);
+const isCreating = ref(false);
+const createError = ref<Error | null>(null);
+
+// New game server form
+const newGameServer = ref({
+  name: "",
+  gameType: GameType.MINECRAFT,
+  memoryGBStr: "2",
+  cpuCoresStr: "1",
+  serverVersion: "",
+  description: "",
+});
+
+// Game type options
+const gameTypeOptions = [
+  { label: "Minecraft", value: GameType.MINECRAFT },
+  { label: "Minecraft Java", value: GameType.MINECRAFT_JAVA },
+  { label: "Minecraft Bedrock", value: GameType.MINECRAFT_BEDROCK },
+  { label: "Valheim", value: GameType.VALHEIM },
+  { label: "Terraria", value: GameType.TERRARIA },
+  { label: "Rust", value: GameType.RUST },
+  { label: "Counter-Strike 2", value: GameType.CS2 },
+  { label: "Team Fortress 2", value: GameType.TF2 },
+  { label: "ARK: Survival Evolved", value: GameType.ARK },
+  { label: "Conan Exiles", value: GameType.CONAN },
+  { label: "7 Days to Die", value: GameType.SEVEN_DAYS },
+  { label: "Factorio", value: GameType.FACTORIO },
+  { label: "Space Engineers", value: GameType.SPACED_ENGINEERS },
+  { label: "Other", value: GameType.OTHER },
+];
 
 // Status filter options
 const statusFilterOptions = [
-  { label: "All Status", value: undefined },
+  { label: "All Status", value: "" },
   { label: "Running", value: "RUNNING" },
   { label: "Stopped", value: "STOPPED" },
   { label: "Starting", value: "STARTING" },
@@ -326,30 +479,24 @@ const statusFilterOptions = [
   { label: "Error", value: "ERROR" },
 ];
 
-// Game type filter options (placeholder - will be populated from API)
+// Game type filter options
 const gameTypeFilterOptions = [
-  { label: "All Game Types", value: undefined },
+  { label: "All Game Types", value: "" },
   { label: "Minecraft", value: "MINECRAFT" },
+  { label: "Minecraft Java", value: "MINECRAFT_JAVA" },
+  { label: "Minecraft Bedrock", value: "MINECRAFT_BEDROCK" },
   { label: "Valheim", value: "VALHEIM" },
   { label: "Terraria", value: "TERRARIA" },
   { label: "Rust", value: "RUST" },
-  { label: "CS2", value: "CS2" },
+  { label: "Counter-Strike 2", value: "CS2" },
+  { label: "Team Fortress 2", value: "TF2" },
+  { label: "ARK", value: "ARK" },
+  { label: "Conan Exiles", value: "CONAN" },
+  { label: "7 Days to Die", value: "SEVEN_DAYS" },
+  { label: "Factorio", value: "FACTORIO" },
+  { label: "Space Engineers", value: "SPACED_ENGINEERS" },
   { label: "Other", value: "OTHER" },
 ];
-
-// Placeholder game servers data (will be replaced with API call)
-const gameServers = ref<
-  Array<{
-    id: string;
-    name: string;
-    gameType?: string;
-    status: string;
-    port?: number;
-    cpuCores?: number;
-    memoryBytes?: number;
-    updatedAt: string;
-  }>
->([]);
 
 // Filtered game servers
 const filteredGameServers = computed(() => {
@@ -460,13 +607,117 @@ const handleRefresh = async (id: string) => {
   console.log("Refresh game server:", id);
 };
 
+// Create game server
+const createGameServer = async () => {
+  if (!newGameServer.value.name || !effectiveOrgId.value) {
+    toast.error("Please fill in all required fields");
+    return;
+  }
+
+  isCreating.value = true;
+  createError.value = null;
+
+  try {
+    const memoryGB = parseFloat(newGameServer.value.memoryGBStr) || 2;
+    const cpuCores = parseFloat(newGameServer.value.cpuCoresStr) || 1;
+
+    const request: any = {
+      organizationId: effectiveOrgId.value,
+      name: newGameServer.value.name,
+      gameType: newGameServer.value.gameType,
+      memoryBytes: BigInt(Math.floor(memoryGB * 1024 * 1024 * 1024)),
+      cpuCores: cpuCores,
+      envVars: {},
+    };
+
+    if (newGameServer.value.serverVersion) {
+      request.serverVersion = newGameServer.value.serverVersion;
+    }
+
+    if (newGameServer.value.description) {
+      request.description = newGameServer.value.description;
+    }
+
+    const response = await client.createGameServer(request);
+    
+    if (!response.gameServer) {
+      throw new Error("No game server returned from API");
+    }
+    
+    toast.success("Game server created successfully!");
+    showCreateDialog.value = false;
+    
+    // Reset form
+        newGameServer.value = {
+          name: "",
+          gameType: GameType.MINECRAFT,
+          memoryGBStr: "2",
+          cpuCoresStr: "1",
+          serverVersion: "",
+          description: "",
+        };
+
+    // Add to local list if not already there
+    const gameServer = response.gameServer;
+    if (!gameServers.value.find((gs) => gs.id === gameServer.id)) {
+      const updatedAt = gameServer.updatedAt 
+        ? (typeof gameServer.updatedAt === 'string' 
+            ? gameServer.updatedAt 
+            : date(gameServer.updatedAt)?.toISOString() || new Date().toISOString())
+        : new Date().toISOString();
+      
+      // Refresh the list to include the new game server
+      await refreshGameServers();
+    }
+
+    // Navigate to the detail page
+    router.push(`/gameservers/${gameServer.id}`);
+  } catch (error: any) {
+    console.error("Failed to create game server:", error);
+    createError.value = error;
+    toast.error("Failed to create game server");
+  } finally {
+    isCreating.value = false;
+  }
+};
+
 // Watch for organization changes
 watch(
   () => effectiveOrgId.value,
   () => {
-    // TODO: Reload game servers when organization changes
-    // loadGameServers();
+    // Reload game servers when organization changes
+    refreshGameServers();
   }
 );
+
+// Helper function to get game type label
+const getGameTypeLabel = (gameType: string | number | undefined): string => {
+  if (gameType === undefined || gameType === null) {
+    return "Unknown";
+  }
+  
+  // Convert to number if it's a string
+  const typeNum = typeof gameType === "string" ? parseInt(gameType, 10) : gameType;
+  
+  // Map GameType enum values to labels
+  const types: Record<number, string> = {
+    [GameType.MINECRAFT]: "Minecraft",
+    [GameType.MINECRAFT_JAVA]: "Minecraft Java",
+    [GameType.MINECRAFT_BEDROCK]: "Minecraft Bedrock",
+    [GameType.VALHEIM]: "Valheim",
+    [GameType.TERRARIA]: "Terraria",
+    [GameType.RUST]: "Rust",
+    [GameType.CS2]: "Counter-Strike 2",
+    [GameType.TF2]: "Team Fortress 2",
+    [GameType.ARK]: "ARK: Survival Evolved",
+    [GameType.CONAN]: "Conan Exiles",
+    [GameType.SEVEN_DAYS]: "7 Days to Die",
+    [GameType.FACTORIO]: "Factorio",
+    [GameType.SPACED_ENGINEERS]: "Space Engineers",
+    [GameType.OTHER]: "Other",
+  };
+  
+  return types[typeNum] || "Unknown";
+};
 </script>
 

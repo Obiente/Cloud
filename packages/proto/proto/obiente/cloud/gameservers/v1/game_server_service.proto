@@ -6,6 +6,7 @@ option go_package = "api/gen/proto/obiente/cloud/gameservers/v1;gameserversv1";
 
 import "google/protobuf/timestamp.proto";
 import "obiente/cloud/organizations/v1/organization_service.proto";
+import "obiente/cloud/common/v1/common.proto";
 
 // GameType represents the type of game server
 enum GameType {
@@ -72,6 +73,9 @@ service GameServerService {
   // Stream game server logs (tail/follow)
   rpc StreamGameServerLogs(StreamGameServerLogsRequest) returns (stream GameServerLogLine);
 
+  // Send a command to a running game server
+  rpc SendGameServerCommand(SendGameServerCommandRequest) returns (SendGameServerCommandResponse);
+
   // Get game server metrics (real-time or historical)
   rpc GetGameServerMetrics(GetGameServerMetricsRequest) returns (GetGameServerMetricsResponse);
 
@@ -80,6 +84,28 @@ service GameServerService {
 
   // Get aggregated usage for a game server
   rpc GetGameServerUsage(GetGameServerUsageRequest) returns (GetGameServerUsageResponse);
+
+  // File system operations
+  // List files in a game server container or volume
+  rpc ListGameServerFiles(ListGameServerFilesRequest) returns (ListGameServerFilesResponse);
+  
+  // Get file contents from a game server container or volume
+  rpc GetGameServerFile(GetGameServerFileRequest) returns (GetGameServerFileResponse);
+  
+  // Upload files to a game server container or volume
+  rpc UploadGameServerFiles(UploadGameServerFilesRequest) returns (UploadGameServerFilesResponse);
+  
+  // Delete files or directories from a game server
+  rpc DeleteGameServerEntries(DeleteGameServerEntriesRequest) returns (DeleteGameServerEntriesResponse);
+  
+  // Create a file, directory, or symlink in a game server
+  rpc CreateGameServerEntry(CreateGameServerEntryRequest) returns (CreateGameServerEntryResponse);
+  
+  // Write or update file contents in a game server
+  rpc WriteGameServerFile(WriteGameServerFileRequest) returns (WriteGameServerFileResponse);
+  
+  // Rename a file or directory in a game server
+  rpc RenameGameServerEntry(RenameGameServerEntryRequest) returns (RenameGameServerEntryResponse);
 }
 
 // Request/Response messages
@@ -204,16 +230,17 @@ message StreamGameServerLogsRequest {
 message GameServerLogLine {
   string line = 1;
   google.protobuf.Timestamp timestamp = 2;
-  optional LogLevel level = 3;
+  optional obiente.cloud.common.v1.LogLevel level = 3;
 }
 
-enum LogLevel {
-  LOG_LEVEL_UNSPECIFIED = 0;
-  LOG_LEVEL_TRACE = 1;
-  LOG_LEVEL_DEBUG = 2;
-  LOG_LEVEL_INFO = 3;
-  LOG_LEVEL_WARN = 4;
-  LOG_LEVEL_ERROR = 5;
+message SendGameServerCommandRequest {
+  string game_server_id = 1;
+  string command = 2;  // Command to send to the game server
+}
+
+message SendGameServerCommandResponse {
+  bool success = 1;
+  optional string error_message = 2;
 }
 
 message GetGameServerMetricsRequest {
@@ -239,6 +266,8 @@ message GameServerMetric {
   optional int64 memory_limit_bytes = 5;       // Memory limit in bytes
   optional int64 network_rx_bytes = 6;          // Network received bytes
   optional int64 network_tx_bytes = 7;          // Network transmitted bytes
+  optional int64 disk_read_bytes = 10;          // Disk read bytes
+  optional int64 disk_write_bytes = 11;         // Disk write bytes
   optional int32 player_count = 8;              // Current player count (if available)
   optional int32 max_players = 9;               // Max player count (if available)
 }
@@ -308,5 +337,157 @@ message GameServer {
   
   // Created by
   string created_by = 22;
+}
+
+// File system messages (similar to deployments)
+message GameServerFile {
+  string name = 1;
+  string path = 2;
+  bool is_directory = 3;
+  int64 size = 4;
+  string permissions = 5;
+  optional string volume_name = 6; // If this file is in a volume, the volume name
+  optional string owner = 7;
+  optional string group = 8;
+  optional uint32 mode_octal = 9;
+  optional bool is_symlink = 10;
+  optional string symlink_target = 11;
+  optional string mime_type = 12;
+  optional google.protobuf.Timestamp modified_time = 13;
+  optional google.protobuf.Timestamp created_time = 14;
+}
+
+message GameServerVolumeInfo {
+  string name = 1; // Volume name
+  string mount_point = 2; // Mount point inside container (e.g., "/data")
+  string source = 3; // Volume source path on host
+  bool is_persistent = 4; // Whether this is a persistent volume
+}
+
+message ListGameServerFilesRequest {
+  string game_server_id = 1;
+  string path = 2; // Directory path (default: "/")
+  optional string volume_name = 3; // If specified, list files from this volume instead of container filesystem
+  optional string cursor = 4; // Pagination cursor
+  optional int32 page_size = 5; // Number of files per page
+  optional bool list_volumes = 6; // If true, only return available volumes
+}
+
+message ListGameServerFilesResponse {
+  repeated GameServerFile files = 1;
+  string current_path = 2;
+  repeated GameServerVolumeInfo volumes = 3; // Available persistent volumes (only when list_volumes=true)
+  bool is_volume = 4; // Whether the current listing is from a volume
+  bool container_running = 5; // Whether the container is currently running
+  bool has_more = 6;
+  optional string next_cursor = 7;
+}
+
+message GetGameServerFileRequest {
+  string game_server_id = 1;
+  string path = 2; // File path
+  optional string volume_name = 3; // If specified, read file from this volume instead of container filesystem
+}
+
+message GetGameServerFileResponse {
+  string content = 1;
+  string encoding = 2; // "text" or "base64"
+  int64 size = 3;
+  optional bool truncated = 4;
+  optional GameServerFile metadata = 5;
+}
+
+message UploadGameServerFilesRequest {
+  UploadGameServerFilesMetadata metadata = 1; // Metadata about the upload
+  bytes tar_data = 2; // Complete tar archive containing all files
+}
+
+message UploadGameServerFilesMetadata {
+  string game_server_id = 1;
+  string destination_path = 2; // Directory path where files should be extracted (default: "/")
+  repeated GameServerFileMetadata files = 3; // Metadata about files being uploaded
+  optional string volume_name = 4; // If specified, upload files to this volume instead of container filesystem
+}
+
+message GameServerFileMetadata {
+  string name = 1; // File name
+  int64 size = 2; // File size in bytes
+  bool is_directory = 3; // Whether this is a directory
+  string path = 4; // Relative path within the archive
+}
+
+message UploadGameServerFilesResponse {
+  bool success = 1;
+  optional string error = 2;
+  int32 files_uploaded = 3; // Number of files successfully uploaded
+}
+
+enum GameServerEntryType {
+  GAME_SERVER_ENTRY_TYPE_UNSPECIFIED = 0;
+  GAME_SERVER_ENTRY_TYPE_FILE = 1;
+  GAME_SERVER_ENTRY_TYPE_DIRECTORY = 2;
+  GAME_SERVER_ENTRY_TYPE_SYMLINK = 3;
+}
+
+message DeleteGameServerEntriesRequest {
+  string game_server_id = 1;
+  repeated string paths = 2;
+  optional string volume_name = 3;
+  bool recursive = 4;
+  bool force = 5;
+}
+
+message DeleteGameServerEntriesError {
+  string path = 1;
+  string message = 2;
+}
+
+message DeleteGameServerEntriesResponse {
+  bool success = 1;
+  repeated string deleted_paths = 2;
+  repeated DeleteGameServerEntriesError errors = 3;
+}
+
+message RenameGameServerEntryRequest {
+  string game_server_id = 1;
+  string source_path = 2;
+  string target_path = 3;
+  optional string volume_name = 4;
+  bool overwrite = 5;
+}
+
+message RenameGameServerEntryResponse {
+  bool success = 1;
+  optional GameServerFile entry = 2;
+}
+
+message CreateGameServerEntryRequest {
+  string game_server_id = 1;
+  string parent_path = 2;
+  string name = 3;
+  GameServerEntryType type = 4;
+  optional string template = 5; // Optional template identifier for seeded content (required for symlinks - target path)
+  optional string volume_name = 6;
+  optional uint32 mode_octal = 7;
+}
+
+message CreateGameServerEntryResponse {
+  GameServerFile entry = 1;
+}
+
+message WriteGameServerFileRequest {
+  string game_server_id = 1;
+  string path = 2;
+  optional string volume_name = 3;
+  string content = 4;
+  string encoding = 5; // "text" or "base64"
+  bool create_if_missing = 6;
+  optional uint32 mode_octal = 7;
+}
+
+message WriteGameServerFileResponse {
+  bool success = 1;
+  optional GameServerFile entry = 2;
+  optional string error = 3;
 }
 

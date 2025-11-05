@@ -1,0 +1,523 @@
+<template>
+  <OuiStack gap="md">
+    <OuiFlex justify="between" align="center">
+      <OuiText as="h3" size="md" weight="semibold">
+        Interactive Terminal
+      </OuiText>
+      <OuiFlex gap="sm">
+        <OuiButton
+          v-if="terminal"
+          variant="ghost"
+          size="sm"
+          @click="clearTerminal"
+          :disabled="!terminal"
+        >
+          Clear
+        </OuiButton>
+        <OuiButton
+          v-if="isConnected"
+          variant="ghost"
+          size="sm"
+          color="danger"
+          @click="disconnectTerminal"
+        >
+          Disconnect
+        </OuiButton>
+        <OuiButton
+          v-else
+          variant="ghost"
+          size="sm"
+          @click="connectTerminal"
+          :disabled="isLoading"
+        >
+          {{ isLoading ? "Connecting..." : "Connect" }}
+        </OuiButton>
+      </OuiFlex>
+    </OuiFlex>
+
+    <OuiText size="sm" color="secondary">
+      Access an interactive terminal session to run commands directly in your game server.
+      Tab autocomplete works for Minecraft and other game servers.
+    </OuiText>
+
+    <div class="terminal-wrapper">
+      <div class="terminal-container">
+        <div ref="terminalContainer" class="terminal-content" />
+        <div v-if="showSpinner" class="terminal-overlay">
+          <div class="terminal-spinner" aria-hidden="true"></div>
+        </div>
+      </div>
+    </div>
+
+    <OuiText v-if="error" size="xs" color="danger">{{ error }}</OuiText>
+
+    <OuiText v-if="isConnected && !error" size="xs" color="success">
+      ✓ Terminal connected. Type commands to interact with your game server.
+    </OuiText>
+  </OuiStack>
+</template>
+
+<script setup lang="ts">
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { useAuth } from "~/composables/useAuth";
+import { useOrganizationsStore } from "~/stores/organizations";
+
+interface Props {
+  gameServerId: string;
+  organizationId?: string;
+}
+
+const props = defineProps<Props>();
+const orgsStore = useOrganizationsStore();
+const organizationId = computed(
+  () => props.organizationId || orgsStore.currentOrgId || ""
+);
+const auth = useAuth();
+
+const terminalContainer = ref<HTMLElement | null>(null);
+const isConnected = ref(false);
+const isLoading = ref(false);
+const error = ref("");
+
+let terminal: any = null;
+let fitAddon: any = null;
+let websocket: WebSocket | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectAttempts = 0;
+let Terminal: any = null;
+let FitAddon: any = null;
+
+const showSpinner = computed(() => isLoading.value && !isConnected.value);
+const shouldAttemptReconnect = ref(true);
+
+async function initTerminal() {
+  if (typeof window === "undefined" || !terminalContainer.value) return;
+
+  if (!Terminal || !FitAddon) {
+    try {
+      import("@xterm/xterm/css/xterm.css").catch(() => {});
+      const [xtermModule, xtermAddonModule] = await Promise.all([
+        import("@xterm/xterm"),
+        import("@xterm/addon-fit"),
+      ]);
+      Terminal = xtermModule.Terminal;
+      FitAddon = xtermAddonModule.FitAddon;
+    } catch (err) {
+      console.error("Failed to load xterm:", err);
+      error.value = "Failed to load terminal. Please refresh the page.";
+      return;
+    }
+  }
+
+  if (!Terminal || !FitAddon) return;
+
+  async function getOUITerminalTheme() {
+    if (typeof window === "undefined") {
+      return {
+        background: "var(--oui-surface-base)",
+        foreground: "var(--oui-text-primary)",
+        cursor: "var(--oui-accent-primary)",
+        selection: "#10b98140",
+      };
+    }
+
+    let chroma: any = null;
+    try {
+      const chromaModule = await import("chroma-js");
+      chroma = (chromaModule as any).default || chromaModule;
+    } catch (err) {
+      console.warn("Failed to load chroma-js, using fallback colors:", err);
+    }
+
+    const root = document.documentElement;
+    const getStyle = (prop: string) =>
+      getComputedStyle(root).getPropertyValue(prop).trim() || "";
+
+    const lighten = (color: string, amount = 0.3): string => {
+      if (!chroma) return color;
+      try {
+        return chroma(color).brighten(amount).saturate(0.2).hex();
+      } catch {
+        return color;
+      }
+    };
+
+    const background = getStyle("--oui-surface-base") || "#111a16";
+    const foreground = getStyle("--oui-text-primary") || "#e9fff8";
+    const accentPrimary = getStyle("--oui-accent-primary") || "#10b981";
+    const accentDanger = getStyle("--oui-accent-danger") || "#f43f5e";
+    const accentSuccess = getStyle("--oui-accent-success") || "#22c55e";
+    const accentWarning = getStyle("--oui-accent-warning") || "#fbbf24";
+    const accentInfo = getStyle("--oui-accent-info") || "#38bdf8";
+    const accentSecondary = getStyle("--oui-accent-secondary") || "#67e8f9";
+    const textTertiary = getStyle("--oui-text-tertiary") || "#5ce1a6";
+    const ouiBackground = getStyle("--oui-background") || "#0a0f0c";
+
+    return {
+      background,
+      foreground,
+      cursor: accentPrimary,
+      selection: accentPrimary + "40",
+      cursorAccent: ouiBackground,
+      black: ouiBackground,
+      red: accentDanger,
+      green: accentSuccess,
+      yellow: accentWarning,
+      blue: accentInfo,
+      magenta: accentPrimary,
+      cyan: accentSecondary,
+      white: foreground,
+      brightBlack: lighten(textTertiary, 0.4),
+      brightRed: lighten(accentDanger, 0.4),
+      brightGreen: lighten(accentSuccess, 0.3),
+      brightYellow: lighten(accentWarning, 0.3),
+      brightBlue: lighten(accentInfo, 0.3),
+      brightMagenta: lighten(accentPrimary, 0.3),
+      brightCyan: lighten(accentSecondary, 0.3),
+      brightWhite: lighten(foreground, 0.2),
+    };
+  }
+
+  const terminalTheme = await getOUITerminalTheme();
+
+  terminal = new Terminal({
+    cursorBlink: true,
+    fontSize: 14,
+    fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+    theme: terminalTheme,
+    allowProposedApi: true,
+    disableStdin: false,
+  });
+
+  if (terminal.options) {
+    terminal.options.theme = terminalTheme;
+  }
+
+  fitAddon = new FitAddon();
+  terminal.loadAddon(fitAddon);
+  terminal.open(terminalContainer.value);
+
+  await nextTick();
+  fitAddon.fit();
+  terminal.focus();
+  terminal.options.theme = terminalTheme;
+  terminal.refresh(0, terminal.rows - 1);
+
+  const resizeObserver = new ResizeObserver(async () => {
+    if (!fitAddon || !terminal) return;
+    fitAddon.fit();
+    if (isConnected.value && websocket && websocket.readyState === WebSocket.OPEN) {
+      try {
+        websocket.send(
+          JSON.stringify({
+            type: "resize",
+            cols: terminal.cols || 80,
+            rows: terminal.rows || 24,
+          })
+        );
+      } catch (err) {
+        console.error("Failed to send resize:", err);
+      }
+    }
+  });
+
+  if (terminalContainer.value) {
+    resizeObserver.observe(terminalContainer.value);
+  }
+
+  terminal.onData((data: string) => {
+    // Allow input even if not fully connected (e.g., container is stopped)
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    const encoder = new TextEncoder();
+    const input = encoder.encode(data);
+    try {
+      websocket.send(
+        JSON.stringify({
+          type: "input",
+          input: Array.from(input),
+          cols: terminal?.cols || 80,
+          rows: terminal?.rows || 24,
+        })
+      );
+    } catch (err) {
+      console.error("Failed to send terminal input:", err);
+    }
+  });
+}
+
+const connectTerminal = async () => {
+  // Don't connect if already connected
+  if (isConnected.value) {
+    return;
+  }
+
+  shouldAttemptReconnect.value = true;
+
+  if (!terminal) {
+    await initTerminal();
+  }
+
+  if (!terminal) {
+    error.value = "Failed to initialize terminal";
+    isLoading.value = false;
+    return;
+  }
+
+  isLoading.value = true;
+  error.value = "";
+
+  try {
+    if (!terminal) {
+      throw new Error("Terminal not initialized");
+    }
+
+    const config = useRuntimeConfig();
+    const apiBase = config.public.apiHost || config.public.requestHost;
+    const disableAuth = Boolean(config.public.disableAuth);
+    const wsUrlObject = new URL("/gameservers/terminal/ws", apiBase);
+    wsUrlObject.protocol = wsUrlObject.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = wsUrlObject.toString();
+
+    websocket = new WebSocket(wsUrl);
+
+    websocket.onopen = async () => {
+      if (!auth.ready) {
+        await new Promise((resolve) => {
+          const checkReady = () => {
+            if (auth.ready) {
+              resolve(undefined);
+            } else {
+              setTimeout(checkReady, 100);
+            }
+          };
+          checkReady();
+        });
+      }
+
+      let token = await auth.getAccessToken();
+      if (!token && disableAuth) {
+        token = "dev-dummy-token";
+      }
+
+      if (!token) {
+        error.value = "Authentication required. Please log in.";
+        websocket?.close();
+        return;
+      }
+
+      const initMessage: any = {
+        type: "init",
+        gameServerId: props.gameServerId,
+        organizationId: organizationId.value,
+        token,
+        cols: terminal.cols || 80,
+        rows: terminal.rows || 24,
+      };
+
+      websocket!.send(JSON.stringify(initMessage));
+    };
+
+    websocket.onmessage = (event: MessageEvent) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        if (message.type === "connected") {
+          isConnected.value = true;
+          isLoading.value = false;
+          reconnectAttempts = 0;
+          shouldAttemptReconnect.value = true;
+          terminal?.focus();
+        } else if (message.type === "output" && terminal) {
+          if (message.data && Array.isArray(message.data) && message.data.length > 0) {
+            const output = new Uint8Array(message.data);
+            const text = new TextDecoder().decode(output);
+            terminal.write(text);
+          }
+        } else if (message.type === "closed") {
+          disconnectTerminal();
+        } else if (message.type === "error") {
+          error.value = message.message || "Terminal error";
+          if (terminal) {
+            terminal.write(`\r\n\x1b[31m[ERROR]\x1b[0m ${message.message}\r\n`);
+          }
+          if (message.message.includes("Authentication required")) {
+            disconnectTerminal();
+          }
+        }
+      } catch (err) {
+        console.error("Error processing WebSocket message:", err);
+      }
+    };
+
+    websocket.onerror = (err) => {
+      console.error("WebSocket error:", err);
+      if (!isConnected.value) {
+        error.value = "Failed to connect to terminal. Please try again.";
+      }
+    };
+
+    websocket.onclose = () => {
+      const wasConnected = isConnected.value;
+      isConnected.value = false;
+      websocket = null;
+
+      if (shouldAttemptReconnect.value && wasConnected) {
+        isLoading.value = true;
+      }
+
+      if (shouldAttemptReconnect.value) {
+        scheduleReconnect();
+      }
+    };
+  } catch (err: any) {
+    console.error("Failed to connect terminal:", err);
+    const errMsg = err.message || "Failed to connect terminal. Please try again.";
+    error.value = errMsg;
+
+    if (terminal) {
+      terminal.write(`\r\n\x1b[31m[ERROR]\x1b[0m ${errMsg}\r\n`);
+    }
+
+    isConnected.value = false;
+    if (websocket) {
+      websocket.close();
+      websocket = null;
+    }
+  } finally {
+    if (!isConnected.value) {
+      isLoading.value = false;
+    }
+  }
+};
+
+function scheduleReconnect() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+  }
+
+  const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+  reconnectAttempts += 1;
+
+  reconnectTimer = setTimeout(async () => {
+    reconnectTimer = null;
+    await connectTerminal();
+  }, delay);
+}
+
+const disconnectTerminal = () => {
+  shouldAttemptReconnect.value = false;
+  isConnected.value = false;
+  isLoading.value = false;
+
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  if (websocket) {
+    try {
+      websocket.close();
+    } catch {
+      // ignore
+    }
+    websocket = null;
+  }
+
+  if (terminal) {
+    terminal.write("\r\n\x1b[33m[Disconnected]\x1b[0m\r\n");
+  }
+};
+
+const clearTerminal = () => {
+  if (terminal) {
+    terminal.clear();
+  }
+};
+
+watch(
+  () => props.gameServerId,
+  async () => {
+    if (isConnected.value) {
+      disconnectTerminal();
+    }
+    await nextTick();
+    if (terminal) {
+      await connectTerminal();
+    }
+  }
+);
+
+onMounted(async () => {
+  await nextTick();
+  await initTerminal();
+  // Auto-connect when terminal is ready
+  if (terminal) {
+    await connectTerminal();
+  }
+});
+
+onUnmounted(() => {
+  disconnectTerminal();
+  if (terminal) {
+    terminal.dispose();
+  }
+  if (fitAddon) {
+    fitAddon.dispose();
+  }
+});
+</script>
+
+<style scoped>
+.terminal-wrapper {
+  width: 100%;
+  height: 600px;
+  position: relative;
+}
+
+.terminal-container {
+  width: 100%;
+  height: 100%;
+  background: var(--oui-surface-base);
+  border: 1px solid var(--oui-border-default);
+  border-radius: var(--oui-radius-md);
+  overflow: hidden;
+  position: relative;
+}
+
+.terminal-content {
+  width: 100%;
+  height: 100%;
+}
+
+.terminal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+
+.terminal-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--oui-border-default);
+  border-top-color: var(--oui-accent-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>
+

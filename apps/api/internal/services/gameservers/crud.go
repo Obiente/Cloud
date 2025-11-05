@@ -9,6 +9,8 @@ import (
 	gameserversv1 "api/gen/proto/obiente/cloud/gameservers/v1"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/logger"
+	"api/internal/orchestrator"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -173,6 +175,42 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create game server: %w", err))
 	}
 
+	// Parse environment variables for container creation
+	envVars := make(map[string]string)
+	if len(req.Msg.GetEnvVars()) > 0 {
+		envVars = req.Msg.GetEnvVars()
+	}
+
+	// Add game-specific default environment variables
+	var serverVersion *string
+	if sv := req.Msg.GetServerVersion(); sv != "" {
+		serverVersion = &sv
+	}
+	addGameSpecificEnvVars(envVars, req.Msg.GetGameType(), serverVersion)
+
+	// Create Docker container using orchestrator
+	manager, err := s.getGameServerManager()
+	if err != nil {
+		// Log error but don't fail - container can be created later when starting
+		logger.Warn("[GameServerService] Failed to get game server manager during creation: %v", err)
+	} else {
+		config := &orchestrator.GameServerConfig{
+			GameServerID: id,
+			Image:        dockerImage,
+			Port:         port,
+			EnvVars:      envVars,
+			MemoryBytes:  memoryBytes,
+			CPUCores:     cpuCores,
+			StartCommand: req.Msg.StartCommand,
+		}
+
+		if err := manager.CreateGameServer(ctx, config); err != nil {
+			// Update status to FAILED if container creation fails
+			_ = s.repo.UpdateStatus(ctx, id, int32(gameserversv1.GameServerStatus_FAILED))
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create game server container: %w", err))
+		}
+	}
+
 	// Fetch the created game server
 	createdGameServer, err := s.repo.GetByID(ctx, id)
 	if err != nil {
@@ -267,10 +305,14 @@ func (s *Service) DeleteGameServer(ctx context.Context, req *connect.Request[gam
 		return nil, err
 	}
 
-	// TODO: Stop and remove container if running
-	// if err := s.manager.StopGameServer(ctx, gameServerID); err != nil {
-	// 	return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to stop game server: %w", err))
-	// }
+	// Stop and remove container if running
+	manager, err := s.getGameServerManager()
+	if err == nil {
+		// Try to delete container, but don't fail if it doesn't exist or is already removed
+		if err := manager.DeleteGameServer(ctx, gameServerID); err != nil {
+			logger.Warn("[GameServerService] Failed to delete game server container: %v", err)
+		}
+	}
 
 	if err := s.repo.Delete(ctx, gameServerID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete game server: %w", err))
@@ -289,27 +331,21 @@ func (s *Service) StartGameServer(ctx context.Context, req *connect.Request[game
 		return nil, err
 	}
 
-	dbGameServer, err := s.repo.GetByID(ctx, gameServerID)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("game server %s not found", gameServerID))
-	}
-
 	// Update status to STARTING
 	if err := s.repo.UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_STARTING)); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update status: %w", err))
 	}
 
-	// TODO: Integrate with orchestrator to start Docker container
-	// if err := s.manager.StartGameServer(ctx, dbGameServer); err != nil {
-	// 	s.repo.UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_FAILED))
-	// 	return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start game server: %w", err))
-	// }
+	// Start Docker container using orchestrator
+	manager, err := s.getGameServerManager()
+	if err != nil {
+		_ = s.repo.UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_FAILED))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get game server manager: %w", err))
+	}
 
-	// For now, just update status to RUNNING (will be replaced with actual container management)
-	now := time.Now()
-	dbGameServer.LastStartedAt = &now
-	if err := s.repo.UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_RUNNING)); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update status: %w", err))
+	if err := manager.StartGameServer(ctx, gameServerID); err != nil {
+		_ = s.repo.UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_FAILED))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start game server container: %w", err))
 	}
 
 	updatedGameServer, err := s.repo.GetByID(ctx, gameServerID)
@@ -337,14 +373,14 @@ func (s *Service) StopGameServer(ctx context.Context, req *connect.Request[games
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update status: %w", err))
 	}
 
-	// TODO: Integrate with orchestrator to stop Docker container
-	// if err := s.manager.StopGameServer(ctx, gameServerID); err != nil {
-	// 	return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to stop game server: %w", err))
-	// }
+	// Stop Docker container using orchestrator
+	manager, err := s.getGameServerManager()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get game server manager: %w", err))
+	}
 
-	// Update status to STOPPED
-	if err := s.repo.UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_STOPPED)); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update status: %w", err))
+	if err := manager.StopGameServer(ctx, gameServerID); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to stop game server container: %w", err))
 	}
 
 	updatedGameServer, err := s.repo.GetByID(ctx, gameServerID)
@@ -367,18 +403,24 @@ func (s *Service) RestartGameServer(ctx context.Context, req *connect.Request[ga
 		return nil, err
 	}
 
-	// Stop first
-	if _, err := s.StopGameServer(ctx, connect.NewRequest(&gameserversv1.StopGameServerRequest{
-		GameServerId: gameServerID,
-	})); err != nil {
-		return nil, err
+	// Update status to RESTARTING
+	if err := s.repo.UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_RESTARTING)); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update status: %w", err))
 	}
 
-	// Wait a bit before starting (optional)
-	time.Sleep(2 * time.Second)
+	// Restart Docker container using orchestrator
+	manager, err := s.getGameServerManager()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get game server manager: %w", err))
+	}
 
-	// Start again
-	startResp, err := s.StartGameServer(ctx, connect.NewRequest(&gameserversv1.StartGameServerRequest{
+	if err := manager.RestartGameServer(ctx, gameServerID); err != nil {
+		_ = s.repo.UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_FAILED))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart game server container: %w", err))
+	}
+
+	// Fetch updated game server
+	startResp, err := s.GetGameServer(ctx, connect.NewRequest(&gameserversv1.GetGameServerRequest{
 		GameServerId: gameServerID,
 	}))
 	if err != nil {
@@ -432,34 +474,78 @@ func dbGameServerToProto(dbGS *database.GameServer) *gameserversv1.GameServer {
 }
 
 // getDefaultDockerImage returns the default Docker image for a game type
-// These are based on Pterodactyl's game server images
+// Uses commonly available game server images from Docker Hub
 func getDefaultDockerImage(gameType gameserversv1.GameType) string {
 	switch gameType {
 	case gameserversv1.GameType_MINECRAFT, gameserversv1.GameType_MINECRAFT_JAVA:
-		return "ghcr.io/pterodactyl/minecraft:latest"
+		// itzg/minecraft-server is the most popular Minecraft server image
+		return "itzg/minecraft-server:latest"
 	case gameserversv1.GameType_MINECRAFT_BEDROCK:
-		return "ghcr.io/pterodactyl/minecraft-bedrock:latest"
+		// itzg/minecraft-bedrock-server for Bedrock Edition
+		return "itzg/minecraft-bedrock-server:latest"
 	case gameserversv1.GameType_VALHEIM:
-		return "ghcr.io/pterodactyl/valheim:latest"
+		// lloesche/valheim-server is a popular Valheim server image
+		return "lloesche/valheim-server:latest"
 	case gameserversv1.GameType_TERRARIA:
-		return "ghcr.io/pterodactyl/terraria:latest"
+		// ryansheehan/terraria is a popular Terraria server image
+		return "ryansheehan/terraria:latest"
 	case gameserversv1.GameType_RUST:
-		return "ghcr.io/pterodactyl/rust:latest"
+		// didstopia/rust-server is a popular Rust server image
+		return "didstopia/rust-server:latest"
 	case gameserversv1.GameType_CS2:
-		return "ghcr.io/pterodactyl/csgo:latest" // CS2 may use CSGO image
+		// cs2server is a common CS2 server image
+		return "cs2server/cs2:latest"
 	case gameserversv1.GameType_TF2:
-		return "ghcr.io/pterodactyl/tf2:latest"
+		// tf2server is a common TF2 server image
+		return "tf2server/tf2:latest"
 	case gameserversv1.GameType_ARK:
-		return "ghcr.io/pterodactyl/ark:latest"
+		// didstopia/ark-server is a popular ARK server image
+		return "didstopia/ark-server:latest"
 	case gameserversv1.GameType_CONAN:
-		return "ghcr.io/pterodactyl/conan:latest"
+		// didstopia/conan-exiles-server is a popular Conan Exiles server image
+		return "didstopia/conan-exiles-server:latest"
 	case gameserversv1.GameType_SEVEN_DAYS:
-		return "ghcr.io/pterodactyl/7days:latest"
+		// didstopia/7dtd-server is a popular 7 Days to Die server image
+		return "didstopia/7dtd-server:latest"
 	case gameserversv1.GameType_FACTORIO:
-		return "ghcr.io/pterodactyl/factorio:latest"
+		// factoriotools/factorio is the official Factorio server image
+		return "factoriotools/factorio:latest"
 	case gameserversv1.GameType_SPACED_ENGINEERS:
-		return "ghcr.io/pterodactyl/space-engineers:latest"
+		// spaceengineers/space-engineers is a Space Engineers server image
+		return "spaceengineers/space-engineers:latest"
 	default:
-		return "ghcr.io/pterodactyl/generic:latest"
+		// Use a generic Linux image as fallback
+		return "alpine:latest"
+	}
+}
+
+// addGameSpecificEnvVars adds default environment variables for specific game types
+func addGameSpecificEnvVars(envVars map[string]string, gameType gameserversv1.GameType, serverVersion *string) {
+	switch gameType {
+	case gameserversv1.GameType_MINECRAFT, gameserversv1.GameType_MINECRAFT_JAVA:
+		// itzg/minecraft-server requires EULA=TRUE
+		if _, exists := envVars["EULA"]; !exists {
+			envVars["EULA"] = "TRUE"
+		}
+		// Set version if provided
+		if serverVersion != nil && *serverVersion != "" {
+			if _, exists := envVars["VERSION"]; !exists {
+				envVars["VERSION"] = *serverVersion
+			}
+		}
+		// Default to VANILLA server type if not specified
+		if _, exists := envVars["TYPE"]; !exists {
+			envVars["TYPE"] = "VANILLA"
+		}
+	case gameserversv1.GameType_MINECRAFT_BEDROCK:
+		// itzg/minecraft-bedrock-server requires EULA=TRUE
+		if _, exists := envVars["EULA"]; !exists {
+			envVars["EULA"] = "TRUE"
+		}
+		if serverVersion != nil && *serverVersion != "" {
+			if _, exists := envVars["VERSION"]; !exists {
+				envVars["VERSION"] = *serverVersion
+			}
+		}
 	}
 }

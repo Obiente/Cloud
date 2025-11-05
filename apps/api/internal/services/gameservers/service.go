@@ -3,13 +3,13 @@ package gameservers
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
-	gameserversv1 "api/gen/proto/obiente/cloud/gameservers/v1"
 	gameserversv1connect "api/gen/proto/obiente/cloud/gameservers/v1/gameserversv1connect"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/logger"
+	"api/internal/orchestrator"
 
 	"connectrpc.com/connect"
 )
@@ -18,8 +18,6 @@ type Service struct {
 	gameserversv1connect.UnimplementedGameServerServiceHandler
 	repo              *database.GameServerRepository
 	permissionChecker *auth.PermissionChecker
-	// TODO: Add orchestrator manager for container management
-	// manager           *orchestrator.GameServerManager
 }
 
 func NewService(repo *database.GameServerRepository) *Service {
@@ -27,6 +25,19 @@ func NewService(repo *database.GameServerRepository) *Service {
 		repo:              repo,
 		permissionChecker: auth.NewPermissionChecker(),
 	}
+}
+
+// getGameServerManager returns the game server manager from the orchestrator service
+func (s *Service) getGameServerManager() (*orchestrator.GameServerManager, error) {
+	orchestratorService := orchestrator.GetGlobalOrchestratorService()
+	if orchestratorService == nil {
+		return nil, fmt.Errorf("orchestrator service not initialized")
+	}
+	manager := orchestratorService.GetGameServerManager()
+	if manager == nil {
+		return nil, fmt.Errorf("game server manager not initialized")
+	}
+	return manager, nil
 }
 
 // ensureAuthenticated ensures the user is authenticated for streaming RPCs
@@ -50,11 +61,11 @@ func (s *Service) ensureAuthenticated(ctx context.Context, req connect.AnyReques
 	// Use AuthenticateAndSetContext helper which handles token validation and context setup
 	ctx, userInfo, err := auth.AuthenticateAndSetContext(ctx, authHeader)
 	if err != nil {
-		log.Printf("[StreamAuth] Token validation failed for procedure %s: %v", req.Spec().Procedure, err)
+		logger.Warn("[StreamAuth] Token validation failed for procedure %s: %v", req.Spec().Procedure, err)
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required"))
 	}
 
-	log.Printf("[StreamAuth] Authenticated user: %s for procedure: %s", userInfo.Id, req.Spec().Procedure)
+	logger.Debug("[StreamAuth] Authenticated user: %s for procedure: %s", userInfo.Id, req.Spec().Procedure)
 
 	return ctx, nil
 }
