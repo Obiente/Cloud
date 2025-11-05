@@ -50,16 +50,21 @@ COPY --from=deps /app/nx.json ./nx.json
 COPY --from=deps /app/tsconfig.base.json ./tsconfig.base.json
 COPY --from=deps /app/tsconfig.json ./tsconfig.json
 
+# Copy workspace configuration files for pnpm workspace resolution
+COPY --from=deps /app/package.json ./package.json
+COPY --from=deps /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=deps /app/pnpm-lock.yaml ./pnpm-lock.yaml
+
 # Copy source code from deps stage (already includes packages and dashboard)
 COPY --from=deps /app/apps/dashboard ./apps/dashboard
 COPY --from=deps /app/packages ./packages
 COPY --from=deps /app/tools ./tools
 
 # Build the application with cache mounts for build artifacts
+# Run from workspace root - pnpm exec will find nx in root node_modules/.bin
 RUN --mount=type=cache,id=nuxt-build,target=/app/apps/dashboard/.nuxt \
     --mount=type=cache,id=nuxt-nitro,target=/app/apps/dashboard/.nitro \
-    cd apps/dashboard && \
-    pnpm run build
+    pnpm --filter "@obiente/dashboard" exec nx nuxt:build
 
 # Production image
 FROM node:20-alpine AS runner
