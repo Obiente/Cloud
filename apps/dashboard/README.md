@@ -185,6 +185,77 @@ pnpm preview
 pnpm generate
 ```
 
+### Docker Deployment
+
+The dashboard includes a production-ready Dockerfile with heavy caching optimizations for faster builds.
+
+#### Prerequisites
+
+- Docker 24.0+ with BuildKit enabled
+- Docker Compose (optional)
+
+#### Build with Docker
+
+```bash
+# Enable BuildKit for optimal caching
+export DOCKER_BUILDKIT=1
+
+# Build the image
+docker build -f apps/dashboard/Dockerfile -t obiente/cloud-dashboard:latest .
+
+# Or use docker-compose
+docker compose -f docker-compose.dashboard.yml build
+```
+
+#### Run with Docker Compose
+
+```bash
+# Start the dashboard
+docker compose -f docker-compose.dashboard.yml up -d
+
+# View logs
+docker compose -f docker-compose.dashboard.yml logs -f
+
+# Stop the dashboard
+docker compose -f docker-compose.dashboard.yml down
+```
+
+#### Docker Caching Features
+
+The Dockerfile is optimized with multiple caching strategies:
+
+1. **pnpm Store Caching**: Uses BuildKit cache mounts to persist the pnpm store across builds, dramatically speeding up dependency installation
+2. **Build Artifact Caching**: Caches `.nuxt` and `.nitro` directories to reuse build artifacts
+3. **Layer Optimization**: Dependencies are installed in a separate layer that's cached independently from source code changes
+4. **Workspace Support**: Properly handles Nx workspace dependencies and builds them efficiently
+
+#### Environment Variables
+
+Configure the dashboard using environment variables in `docker-compose.dashboard.yml`:
+
+```yaml
+environment:
+  NODE_ENV: production
+  PORT: 3000
+  NUXT_SESSION_PASSWORD: ${NUXT_SESSION_PASSWORD:-changeme}
+  NUXT_PUBLIC_API_HOST: ${API_URL:-http://api.${DOMAIN:-localhost}}
+  NUXT_PUBLIC_OIDC_ISSUER: ${ZITADEL_URL:-https://obiente.cloud}
+  # ... see docker-compose.dashboard.yml for full list
+```
+
+**Important**: Set `NUXT_SESSION_PASSWORD` to a secure random string in production (minimum 32 characters).
+
+#### Multi-Stage Build
+
+The Dockerfile uses a multi-stage build process:
+
+1. **Base Stage**: Sets up Node.js and pnpm
+2. **Deps Stage**: Installs dependencies with caching
+3. **Builder Stage**: Builds the application
+4. **Runner Stage**: Minimal production image with only runtime files
+
+This approach results in a smaller final image and faster builds through layer caching.
+
 ### Environment Variables
 
 Ensure all required environment variables are set in production.

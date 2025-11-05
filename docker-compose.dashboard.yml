@@ -1,0 +1,31 @@
+services:
+  dashboard:
+    image: obiente/cloud-dashboard:latest
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+      cache_from:
+        - obiente/cloud-dashboard:latest
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+      NUXT_SESSION_PASSWORD: ${NUXT_SESSION_PASSWORD:-changeme}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      NUXT_PUBLIC_REQUEST_HOST: ${DASHBOARD_URL:-http://localhost:3000}
+      NUXT_PUBLIC_API_HOST: ${API_URL:-http://api.${DOMAIN:-localhost}}
+      NUXT_PUBLIC_OIDC_ISSUER: ${ZITADEL_URL:-https://obiente.cloud}
+      NUXT_PUBLIC_OIDC_BASE: ${ZITADEL_BASE_URL:-https://auth.obiente.cloud}
+      NUXT_PUBLIC_OIDC_CLIENT_ID: ${ZITADEL_CLIENT_ID:-339499954043158530}
+      NUXT_PUBLIC_GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      NUXT_PUBLIC_DISABLE_AUTH: ${DISABLE_AUTH:-false}
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+    ports:
+      - "${DASHBOARD_PORT:-3000}:3000"
+    networks:
+      - dashboard-network
+
+networks:
+  dashboard-network:
+    driver: bridge
+
