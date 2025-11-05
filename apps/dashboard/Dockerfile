@@ -26,10 +26,10 @@ COPY tools ./tools
 # Clear pnpm store cache if corrupted and retry install in case of registry issues
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm store prune || true && \
-    pnpm install --frozen-lockfile --network-timeout=60000 || \
+    pnpm install --frozen-lockfile --fetch-timeout=60000 || \
     (echo "First install attempt failed, clearing cache and retrying..." && \
      pnpm store prune && \
-     pnpm install --frozen-lockfile --network-timeout=60000)
+     pnpm install --frozen-lockfile --fetch-timeout=60000)
 
 # Copy TypeScript config files needed for builds
 COPY nx.json tsconfig.base.json tsconfig.json ./
