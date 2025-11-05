@@ -50,3 +50,5 @@ Thumbs.db
 *.tsbuildinfo
 tsconfig.tsbuildinfo
 
+# Note: We DO NOT exclude packages/proto/src here because dashboard needs it
+# The root .dockerignore excludes it, but we'll use --ignorefile to override

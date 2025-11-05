@@ -311,13 +311,9 @@ export default defineEventHandler(async (event) => {
       });
 
       const { createClient } = await import("@connectrpc/connect");
-      const { AuthService } = await import("@obiente/proto");
+      const { AuthService, ConnectOrganizationGitHubRequestSchema, ConnectGitHubRequestSchema } = await import("@obiente/proto");
+      const { create } = await import("@bufbuild/protobuf");
       const client = createClient(AuthService, transport);
-
-      const authHeaders = new Headers();
-      if (userAccessToken) {
-        authHeaders.set("Authorization", `Bearer ${userAccessToken}`);
-      }
 
       let success = false;
       let apiError: Error | null = null;
@@ -334,12 +330,13 @@ export default defineEventHandler(async (event) => {
       try {
         if (connectionType === "organization" && orgId) {
           // Connect as organization
-          const response = await client.connectOrganizationGitHub({
+          const request = create(ConnectOrganizationGitHubRequestSchema, {
             organizationId: orgId,
             accessToken: tokenResponse.access_token,
             username: userResponse.login,
             scope: tokenResponse.scope || "",
-          }, { headers: authHeaders });
+          });
+          const response = await client.connectOrganizationGitHub(request);
           success = response.success;
           if (success && orgId) {
             redirectUrl += `&orgId=${encodeURIComponent(orgId)}`;
@@ -347,11 +344,12 @@ export default defineEventHandler(async (event) => {
           console.log("[GitHub OAuth] Organization connection response:", { success, orgId });
         } else {
           // Connect as user
-          const response = await client.connectGitHub({
+          const request = create(ConnectGitHubRequestSchema, {
             accessToken: tokenResponse.access_token,
             username: userResponse.login,
             scope: tokenResponse.scope || "",
-          }, { headers: authHeaders });
+          });
+          const response = await client.connectGitHub(request);
           success = response.success;
           console.log("[GitHub OAuth] User connection response:", { success, username: response.username });
         }

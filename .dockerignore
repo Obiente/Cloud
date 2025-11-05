@@ -18,9 +18,10 @@ node_modules
 .nx
 packages/dashboard
 packages/database
-packages/proto/src/generated
-packages/proto/src
-packages/proto/proto
+# Note: packages/proto is needed for dashboard builds, so we don't exclude it here
+# packages/proto/src/generated
+# packages/proto/src
+# packages/proto/proto
 
 # Build artifacts
 *.test
@@ -67,11 +68,11 @@ specs
 
 # Other packages (if not referenced by API)
 # Note: packages/config, packages/docker, packages/types, and packages/proto are needed for dashboard builds
-# Keep packages/proto since gen files might be there, but exclude src
+# packages/proto is needed for dashboard builds (includes generated files)
 # packages/config
 # packages/docker
 # packages/types
-packages/proto/src/generated
-packages/proto/src
-packages/proto/proto
+# packages/proto/src/generated
+# packages/proto/src
+# packages/proto/proto
 

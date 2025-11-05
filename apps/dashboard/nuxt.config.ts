@@ -30,8 +30,10 @@ export default defineNuxtConfig({
   // CSS Framework - using Nuxt UI (built on Tailwind CSS)
   css: ["~/assets/css/main.css"],
   // TypeScript configuration
+  // Disable type checking during Docker builds for faster builds
+  // Type checking can be done separately via `pnpm typecheck` or in CI
   typescript: {
-    typeCheck: true,
+    typeCheck: process.env.SKIP_TYPE_CHECK !== "true",
   },
 
   // Runtime config

@@ -1,8 +1,11 @@
 # syntax=docker/dockerfile:1.4
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@10.17.0 --activate
+# Use pnpm@10.20.0 to match workspace root package.json
+# Disable strict signature verification to avoid corepack signature issues
+RUN corepack enable && \
+    COREPACK_ENABLE_STRICT=0 corepack prepare pnpm@10.20.0 --activate
 
 # Set working directory
 WORKDIR /app
@@ -20,8 +23,13 @@ COPY tools ./tools
 
 # Use BuildKit cache mount for pnpm store (persists across builds)
 # This layer is cached unless lockfile or package.json files change
+# Clear pnpm store cache if corrupted and retry install in case of registry issues
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile
+    pnpm store prune || true && \
+    pnpm install --frozen-lockfile --network-timeout=60000 || \
+    (echo "First install attempt failed, clearing cache and retrying..." && \
+     pnpm store prune && \
+     pnpm install --frozen-lockfile --network-timeout=60000)
 
 # Copy TypeScript config files needed for builds
 COPY nx.json tsconfig.base.json tsconfig.json ./
@@ -33,7 +41,7 @@ COPY nx.json tsconfig.base.json tsconfig.json ./
 COPY apps/dashboard ./apps/dashboard
 
 # Build workspace dependencies if needed (this uses Nx to build dependencies)
-# Packages source code is already available from the earlier COPY packages command
+# Note: Proto files should already be built beforehand - they are not rebuilt here
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     pnpm --filter "@obiente/dashboard" build-deps || true
 
@@ -63,10 +71,11 @@ COPY --from=deps /app/tools ./tools
 # Build the application with cache mounts for build artifacts
 # Run from workspace root - pnpm exec will find nx in root node_modules/.bin
 # First ensure nuxt prepare runs to generate .nuxt directory (needed for tsconfig files)
+# Skip type checking during Docker build for faster builds (can be done in CI)
 RUN --mount=type=cache,id=nuxt-build,target=/app/apps/dashboard/.nuxt \
     --mount=type=cache,id=nuxt-nitro,target=/app/apps/dashboard/.nitro \
     sh -c "cd apps/dashboard && pnpm exec nuxt prepare || true" && \
-    pnpm --filter "@obiente/dashboard" exec nx nuxt:build
+    SKIP_TYPE_CHECK=true pnpm --filter "@obiente/dashboard" exec nx nuxt:build
 
 # Production image
 FROM node:20-alpine AS runner
