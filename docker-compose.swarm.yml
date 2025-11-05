@@ -243,10 +243,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
     deploy:
-      replicas: 2
-      placement:
-        constraints:
-          - node.role == manager
+      mode: global # Run on all nodes for DNS to resolve properly
       update_config:
         parallelism: 1
         order: start-first

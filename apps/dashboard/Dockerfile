@@ -62,8 +62,10 @@ COPY --from=deps /app/tools ./tools
 
 # Build the application with cache mounts for build artifacts
 # Run from workspace root - pnpm exec will find nx in root node_modules/.bin
+# First ensure nuxt prepare runs to generate .nuxt directory (needed for tsconfig files)
 RUN --mount=type=cache,id=nuxt-build,target=/app/apps/dashboard/.nuxt \
     --mount=type=cache,id=nuxt-nitro,target=/app/apps/dashboard/.nitro \
+    sh -c "cd apps/dashboard && pnpm exec nuxt prepare || true" && \
     pnpm --filter "@obiente/dashboard" exec nx nuxt:build
 
 # Production image

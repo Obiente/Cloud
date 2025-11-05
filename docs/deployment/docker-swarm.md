@@ -71,7 +71,41 @@ Edit `.env` with your configuration:
 - Set your domain name
 - Generate secrets for JWT and sessions
 
-### 4. Deploy the Stack
+### 4. Prepare All Nodes (Required)
+
+The API service runs on **ALL nodes** (mode: global). You **must** create required directories on each node before deploying:
+
+**On Manager Node:**
+```bash
+./scripts/setup-swarm-nodes.sh
+```
+
+**On Each Worker Node:**
+```bash
+# SSH to worker node
+ssh worker-node-1
+
+# Copy and run the setup script
+scp scripts/setup-swarm-nodes.sh worker-node-1:/tmp/
+ssh worker-node-1 "bash /tmp/setup-swarm-nodes.sh"
+
+# Or manually create directories
+mkdir -p /var/lib/obiente/volumes
+mkdir -p /tmp/obiente-volumes
+mkdir -p /tmp/obiente-deployments
+chmod 755 /var/lib/obiente /tmp/obiente-volumes /tmp/obiente-deployments
+```
+
+**Alternative: Run on all nodes via SSH:**
+```bash
+# If you have SSH access to all nodes
+for node in manager-1 worker-1 worker-2; do
+  echo "Setting up $node..."
+  ssh $node "mkdir -p /var/lib/obiente/volumes /tmp/obiente-volumes /tmp/obiente-deployments && chmod 755 /var/lib/obiente /tmp/obiente-volumes /tmp/obiente-deployments"
+done
+```
+
+### 5. Deploy the Stack
 
 Deploy to the Swarm cluster:
 
@@ -79,7 +113,13 @@ Deploy to the Swarm cluster:
 docker stack deploy -c docker-compose.swarm.yml obiente
 ```
 
-### 5. Verify Deployment
+Or use the deploy script (recommended):
+
+```bash
+./scripts/deploy-swarm.sh
+```
+
+### 6. Verify Deployment
 
 Check service status:
 
