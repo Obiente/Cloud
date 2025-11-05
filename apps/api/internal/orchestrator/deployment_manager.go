@@ -43,6 +43,7 @@ type dockerHelper interface {
     RemoveContainer(ctx context.Context, containerID string, force bool) error
     RestartContainer(ctx context.Context, containerID string, timeout time.Duration) error
     ContainerLogs(ctx context.Context, containerID string, tail string, follow bool) (io.ReadCloser, error)
+    ContainerExecRun(ctx context.Context, containerID string, cmd []string) (string, error)
 }
 
 // DeploymentConfig holds configuration for a new deployment

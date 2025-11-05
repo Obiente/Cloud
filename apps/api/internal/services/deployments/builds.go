@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	commonv1 "api/gen/proto/obiente/cloud/common/v1"
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/auth"
 	"api/internal/database"
@@ -109,7 +110,7 @@ func (s *Service) GetBuildLogs(ctx context.Context, req *connect.Request[deploym
 			Line:         logEntry.Line,
 			Timestamp:    timestamppb.New(logEntry.Timestamp),
 			Stderr:       logEntry.Stderr,
-			LogLevel:     deploymentsv1.LogLevel_LOG_LEVEL_INFO, // Default, could be enhanced
+			LogLevel:     commonv1.LogLevel_LOG_LEVEL_INFO, // Default, could be enhanced
 		})
 	}
 

@@ -123,23 +123,28 @@
     <!-- Unauthenticated View -->
     <div
       v-else
-      class="main-content flex flex-col justify-center items-center min-h-screen"
+      class="flex min-h-screen items-center justify-center bg-surface-base"
     >
-      <OuiText v-if="user.isLoading" size="2xl" weight="extrabold"
-        >loading</OuiText
-      >
-      <OuiText v-else-if="user.isAuthenticated" size="2xl" weight="extrabold"
-        >logging you in</OuiText
-      >
-      <OuiButton
-        v-else
-        size="xl"
-        weight="extrabold"
-        color="neutral"
-        @click="user.popupLogin()"
-      >
-        Log In
-      </OuiButton>
+      <div class="text-center">
+        <OuiStack gap="lg" align="center">
+          <LockClosedIcon class="h-16 w-16 text-muted" />
+          <OuiStack gap="xs">
+            <OuiText size="2xl" weight="bold">Authentication Required</OuiText>
+            <OuiText color="muted">Please sign in to access the dashboard.</OuiText>
+          </OuiStack>
+          <OuiButton 
+            v-if="!user.isLoading"
+            size="lg"
+            @click="user.popupLogin()"
+          >
+            Sign In
+          </OuiButton>
+          <OuiStack v-else gap="sm" align="center">
+            <ArrowPathIcon class="h-6 w-6 text-muted animate-spin" />
+            <OuiText size="sm" color="muted">Loading...</OuiText>
+          </OuiStack>
+        </OuiStack>
+      </div>
     </div>
   </div>
 </template>
@@ -170,7 +175,7 @@
 </style>
 <script setup lang="ts">
   import { onBeforeUnmount, onMounted, computed, ref, watch, type ComponentPublicInstance } from "vue";
-  import { Bars3Icon, XMarkIcon } from "@heroicons/vue/24/outline";
+  import { Bars3Icon, XMarkIcon, LockClosedIcon, ArrowPathIcon } from "@heroicons/vue/24/outline";
   import AppHeader from "~/components/app/AppHeader.vue";
 
   // Pinia user store

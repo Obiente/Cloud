@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"api/internal/database"
+	"api/internal/dnsdelegation"
 	"api/internal/logger"
 	"api/internal/orchestrator"
 	apisrv "api/internal/server"
@@ -77,6 +78,15 @@ func main() {
 				orchService.Stop()
 			}
 		}()
+	}
+
+	// Start DNS pusher service (for dev/self-hosted APIs to push DNS records to production)
+	pusherConfig := dnsdelegation.ParsePusherConfig()
+	if pusherConfig.ProductionAPIURL != "" && pusherConfig.APIKey != "" {
+		dnsdelegation.StartDNSPusher(pusherConfig)
+		logger.Info("✓ DNS pusher service started (pushing DNS records to production)")
+	} else {
+		logger.Debug("DNS pusher not configured (set DNS_DELEGATION_PRODUCTION_API_URL and DNS_DELEGATION_API_KEY to enable)")
 	}
 
 	port := os.Getenv("PORT")

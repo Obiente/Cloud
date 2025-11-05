@@ -16,18 +16,35 @@ import (
 
 // LiveMetric represents a live metric in memory
 type LiveMetric struct {
-	DeploymentID   string
-	ContainerID    string
-	NodeID         string
-	CPUUsage       float64
-	MemoryUsage    int64
-	NetworkRxBytes int64
-	NetworkTxBytes int64
-	DiskReadBytes  int64
-	DiskWriteBytes int64
-	RequestCount   int64
-	ErrorCount     int64
-	Timestamp      time.Time
+	ResourceType   string    // "deployment" or "gameserver"
+	ResourceID     string    // DeploymentID or GameServerID
+	ContainerID    string    `json:"container_id"`
+	NodeID         string    `json:"node_id"`
+	CPUUsage       float64   `json:"cpu_usage"`
+	MemoryUsage    int64     `json:"memory_usage"`
+	NetworkRxBytes int64     `json:"network_rx_bytes"`
+	NetworkTxBytes int64     `json:"network_tx_bytes"`
+	DiskReadBytes  int64     `json:"disk_read_bytes"`
+	DiskWriteBytes int64     `json:"disk_write_bytes"`
+	RequestCount   int64     `json:"request_count"` // Only for deployments
+	ErrorCount     int64     `json:"error_count"`   // Only for deployments
+	Timestamp      time.Time `json:"timestamp"`
+}
+
+// DeploymentID returns the deployment ID (for backward compatibility)
+func (m *LiveMetric) DeploymentID() string {
+	if m.ResourceType == "deployment" {
+		return m.ResourceID
+	}
+	return ""
+}
+
+// GameServerID returns the game server ID
+func (m *LiveMetric) GameServerID() string {
+	if m.ResourceType == "gameserver" {
+		return m.ResourceID
+	}
+	return ""
 }
 
 // MetricsStreamer handles live metrics streaming and periodic storage
@@ -182,12 +199,12 @@ func (ms *MetricsStreamer) Unsubscribe(deploymentID string, ch <-chan LiveMetric
 	ms.stats.UpdateSubscriberStats(totalSubs, 0, 0)
 }
 
-// GetLatestMetrics returns the latest metrics for a deployment
-func (ms *MetricsStreamer) GetLatestMetrics(deploymentID string) []LiveMetric {
+// GetLatestMetrics returns the latest metrics for a deployment or game server
+func (ms *MetricsStreamer) GetLatestMetrics(resourceID string) []LiveMetric {
 	ms.liveMetricsMutex.RLock()
 	defer ms.liveMetricsMutex.RUnlock()
 
-	metrics, exists := ms.liveMetrics[deploymentID]
+	metrics, exists := ms.liveMetrics[resourceID]
 	if !exists {
 		return []LiveMetric{}
 	}
@@ -205,63 +222,74 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	lastLogTime := time.Now()
-
 	for {
 		select {
 		case <-ticker.C:
-			shouldLog := time.Since(lastLogTime) >= 30*time.Second
-			if shouldLog {
-				log.Printf("[MetricsStreamer] Collecting live metrics...")
-				lastLogTime = time.Now()
-			}
-
 			nodeID := ms.serviceRegistry.NodeID()
-			locations, err := ms.serviceRegistry.GetNodeDeployments(nodeID)
+
+			// Collect deployment metrics
+			deploymentLocations, err := ms.serviceRegistry.GetNodeDeployments(nodeID)
 			if err != nil {
-				if shouldLog {
-					log.Printf("[MetricsStreamer] Failed to get node deployments: %v", err)
-				}
-				continue
+				// Silently continue - will retry next cycle
 			}
 
-			if len(locations) == 0 {
-				continue
+			// Collect game server metrics
+			gameServerLocations, err := ms.serviceRegistry.GetNodeGameServers(nodeID)
+			if err != nil {
+				// Silently continue - will retry next cycle
 			}
 
-			// Collect stats in parallel using worker pool
-			metrics, containersFailed := ms.collectStatsParallel(locations, shouldLog)
+			var allMetrics []LiveMetric
+			containersFailed := 0
+
+			if len(deploymentLocations) > 0 {
+				// Collect stats in parallel using worker pool
+				deploymentMetrics, failed := ms.collectDeploymentStatsParallel(deploymentLocations, false)
+				allMetrics = append(allMetrics, deploymentMetrics...)
+				containersFailed += failed
+			}
+
+			if len(gameServerLocations) > 0 {
+				// Collect stats using the same Docker container logic as deployments
+				gameServerMetrics, failed := ms.collectGameServerStatsParallel(gameServerLocations, false)
+				allMetrics = append(allMetrics, gameServerMetrics...)
+				containersFailed += failed
+			}
+
+			if len(allMetrics) == 0 {
+				continue
+			}
 
 			// Store in live cache and stream to subscribers
 			now := time.Now()
-			for _, metric := range metrics {
-				// Add to live cache
+			for _, metric := range allMetrics {
+				// Add to live cache (keyed by resource ID)
 				ms.liveMetricsMutex.Lock()
-				if ms.liveMetrics[metric.DeploymentID] == nil {
-					ms.liveMetrics[metric.DeploymentID] = make([]LiveMetric, 0)
+				if ms.liveMetrics[metric.ResourceID] == nil {
+					ms.liveMetrics[metric.ResourceID] = make([]LiveMetric, 0)
 				}
-				ms.liveMetrics[metric.DeploymentID] = append(ms.liveMetrics[metric.DeploymentID], metric)
+				ms.liveMetrics[metric.ResourceID] = append(ms.liveMetrics[metric.ResourceID], metric)
 
 				// Trim old metrics (keep only last N minutes or max size)
 				retentionCutoff := now.Add(-ms.config.LiveRetention)
-				trimmed := ms.liveMetrics[metric.DeploymentID][:0]
-				for _, m := range ms.liveMetrics[metric.DeploymentID] {
+				trimmed := ms.liveMetrics[metric.ResourceID][:0]
+				for _, m := range ms.liveMetrics[metric.ResourceID] {
 					if m.Timestamp.After(retentionCutoff) {
 						trimmed = append(trimmed, m)
 					}
 				}
-				// Enforce max size per deployment
+				// Enforce max size per resource
 				if len(trimmed) > ms.config.MaxLiveMetricsPerDeployment {
 					// Keep only the most recent metrics
 					startIdx := len(trimmed) - ms.config.MaxLiveMetricsPerDeployment
 					trimmed = trimmed[startIdx:]
 				}
-				ms.liveMetrics[metric.DeploymentID] = trimmed
+				ms.liveMetrics[metric.ResourceID] = trimmed
 				ms.liveMetricsMutex.Unlock()
 
 				// Stream to subscribers (non-blocking with backpressure detection)
 				ms.subscribersMutex.RLock()
-				subs := ms.subscribers[metric.DeploymentID]
+				subs := ms.subscribers[metric.ResourceID]
 				ms.subscribersMutex.RUnlock()
 
 				var overflows int64
@@ -284,8 +312,8 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 			}
 
 			// Update stats
-			success := len(metrics) > 0
-			containersProcessed := len(metrics)
+			success := len(allMetrics) > 0
+			containersProcessed := len(allMetrics)
 			ms.stats.RecordCollection(success, containersProcessed, containersFailed)
 			
 			// Update cache stats
@@ -299,10 +327,6 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 			previousStatsSize := len(ms.previousStats)
 			ms.statsMutex.RUnlock()
 			ms.stats.UpdateCacheStats(totalLiveMetrics, previousStatsSize)
-			
-			if shouldLog && len(metrics) > 0 {
-				log.Printf("[MetricsStreamer] Collected %d live metrics for %d deployments", len(metrics), len(locations))
-			}
 
 		case <-ms.ctx.Done():
 			return
@@ -313,6 +337,12 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 // collectStatsParallel collects container stats in parallel using worker pool
 // Returns metrics and count of failed containers
 func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentLocation, shouldLog bool) ([]LiveMetric, int) {
+	return ms.collectDeploymentStatsParallel(locations, shouldLog)
+}
+
+// collectDeploymentStatsParallel collects deployment container stats in parallel using worker pool
+func (ms *MetricsStreamer) collectDeploymentStatsParallel(locations []database.DeploymentLocation, shouldLog bool) ([]LiveMetric, int) {
+	_ = shouldLog // Unused but kept for API compatibility
 	type statsJob struct {
 		location database.DeploymentLocation
 		index    int
@@ -338,6 +368,25 @@ func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentL
 					results <- statsResult{err: nil, index: job.index} // Skip non-running
 					continue
 				}
+				
+				// Verify container actually exists before trying to get stats
+				_, inspectErr := ms.serviceRegistry.DockerClient().ContainerInspect(context.Background(), job.location.ContainerID)
+				if inspectErr != nil {
+					// Container doesn't exist - update status in database and skip
+					if strings.Contains(job.location.DeploymentID, "gs-") {
+						// Game server - update GameServerLocation
+						database.DB.Model(&database.GameServerLocation{}).
+							Where("container_id = ?", job.location.ContainerID).
+							Update("status", "stopped")
+					} else {
+						// Deployment - update DeploymentLocation
+						database.DB.Model(&database.DeploymentLocation{}).
+							Where("container_id = ?", job.location.ContainerID).
+							Update("status", "stopped")
+					}
+					results <- statsResult{err: nil, index: job.index} // Skip non-existent container
+					continue
+				}
 
 				// Use circuit breaker and retry for Docker API calls
 				var currentStats *containerStats
@@ -353,11 +402,7 @@ func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentL
 				})
 				
 				if err != nil || currentStats == nil {
-					if err != ErrCircuitOpen {
-						// Log error with context but don't fail completely
-						log.Printf("[MetricsStreamer] Failed to get stats for container %s (deployment %s): %v", 
-							job.location.ContainerID[:12], job.location.DeploymentID, err)
-					}
+					// Silently skip failed containers - they'll be retried next cycle
 					results <- statsResult{err: err, index: job.index}
 					continue
 				}
@@ -393,7 +438,8 @@ func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentL
 				}
 
 				metric := LiveMetric{
-					DeploymentID:   job.location.DeploymentID,
+					ResourceType:   "deployment",
+					ResourceID:     job.location.DeploymentID,
 					ContainerID:    job.location.ContainerID,
 					NodeID:         job.location.NodeID,
 					CPUUsage:       currentStats.CPUUsage,
@@ -402,6 +448,8 @@ func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentL
 					NetworkTxBytes: networkTxDelta,
 					DiskReadBytes:  diskReadDelta,
 					DiskWriteBytes: diskWriteDelta,
+					RequestCount:   0, // Not tracked for deployments via Docker stats
+					ErrorCount:     0, // Not tracked for deployments via Docker stats
 					Timestamp:      time.Now(),
 				}
 
@@ -439,7 +487,7 @@ func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentL
 			errorList = append(errorList, result.err)
 			continue
 		}
-		if result.metric.DeploymentID != "" {
+		if result.metric.ResourceID != "" {
 			resultMap[result.index] = result.metric
 		}
 	}
@@ -453,10 +501,54 @@ func (ms *MetricsStreamer) collectStatsParallel(locations []database.DeploymentL
 	}
 
 	if shouldLog && len(errorList) > 0 {
-		log.Printf("[MetricsStreamer] %d errors during stats collection out of %d containers", len(errorList), len(locations))
 	}
 
 	return metrics, len(errorList)
+}
+
+// collectGameServerStatsParallel collects game server container stats in parallel using worker pool
+// This reuses the same Docker container stats collection logic as deployments
+func (ms *MetricsStreamer) collectGameServerStatsParallel(locations []database.GameServerLocation, shouldLog bool) ([]LiveMetric, int) {
+	_ = shouldLog // Unused but kept for API compatibility
+	// Convert game server locations to deployment-like format to reuse collection logic
+	deploymentLikeLocations := make([]database.DeploymentLocation, len(locations))
+	for i, gsLoc := range locations {
+		deploymentLikeLocations[i] = database.DeploymentLocation{
+			ID:           gsLoc.ID,
+			DeploymentID: gsLoc.GameServerID, // Reuse DeploymentID field temporarily
+			NodeID:       gsLoc.NodeID,
+			NodeHostname: gsLoc.NodeHostname,
+			ContainerID:  gsLoc.ContainerID,
+			Status:       gsLoc.Status,
+			Port:         0,
+			CreatedAt:    gsLoc.CreatedAt,
+			UpdatedAt:    gsLoc.UpdatedAt,
+		}
+	}
+	
+	// Use deployment collection function - it's the same Docker container logic
+	deploymentMetrics, failed := ms.collectDeploymentStatsParallel(deploymentLikeLocations, false)
+	
+	// Convert metrics back to game server format
+	gameServerMetrics := make([]LiveMetric, 0, len(deploymentMetrics))
+	for _, metric := range deploymentMetrics {
+		// Change ResourceType from "deployment" to "gameserver"
+		metric.ResourceType = "gameserver"
+		// ResourceID is already correct (GameServerID was stored in DeploymentID field)
+		
+		// Update game server location in database
+		_ = database.DB.Model(&database.GameServerLocation{}).
+			Where("container_id = ?", metric.ContainerID).
+			Updates(map[string]interface{}{
+				"cpu_usage":    metric.CPUUsage,
+				"memory_usage": metric.MemoryUsage,
+				"updated_at":   time.Now(),
+			})
+		
+		gameServerMetrics = append(gameServerMetrics, metric)
+	}
+	
+	return gameServerMetrics, failed
 }
 
 // getContainerStatsWithRetry retrieves container stats with exponential backoff retry
@@ -581,27 +673,31 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 		select {
 		case <-ticker.C:
 			ms.liveMetricsMutex.RLock()
-			deploymentIDs := make([]string, 0, len(ms.liveMetrics))
-			for depID := range ms.liveMetrics {
-				deploymentIDs = append(deploymentIDs, depID)
+			resourceIDs := make([]string, 0, len(ms.liveMetrics))
+			for resourceID := range ms.liveMetrics {
+				resourceIDs = append(resourceIDs, resourceID)
 			}
 			ms.liveMetricsMutex.RUnlock()
 
-			if len(deploymentIDs) == 0 {
+			if len(resourceIDs) == 0 {
 				continue
 			}
 
-			// Aggregate metrics per deployment (average over the storage interval)
-			var metricsToStore []database.DeploymentMetrics
+			// Aggregate metrics per resource (deployment or game server)
+			var deploymentMetricsToStore []database.DeploymentMetrics
+			var gameServerMetricsToStore []database.GameServerMetrics
 
-			for _, deploymentID := range deploymentIDs {
+			for _, resourceID := range resourceIDs {
 				ms.liveMetricsMutex.RLock()
-				liveMetrics := ms.liveMetrics[deploymentID]
+				liveMetrics := ms.liveMetrics[resourceID]
 				ms.liveMetricsMutex.RUnlock()
 
 				if len(liveMetrics) == 0 {
 					continue
 				}
+
+				// Determine resource type from first metric
+				resourceType := liveMetrics[0].ResourceType
 
 				// Group by container and aggregate
 				containerMetrics := make(map[string][]LiveMetric)
@@ -638,53 +734,87 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 					// Use the latest timestamp
 					latestTimestamp := metrics[len(metrics)-1].Timestamp
 
-					metricsToStore = append(metricsToStore, database.DeploymentMetrics{
-						DeploymentID:   deploymentID,
-						ContainerID:    containerID,
-						NodeID:         metrics[0].NodeID,
-						CPUUsage:       avgCPU,
-						MemoryUsage:    avgMemory,
-						NetworkRxBytes: sumNetworkRx,
-						NetworkTxBytes: sumNetworkTx,
-						DiskReadBytes:  sumDiskRead,
-						DiskWriteBytes: sumDiskWrite,
-						Timestamp:      latestTimestamp,
-					})
+					if resourceType == "deployment" {
+						deploymentMetricsToStore = append(deploymentMetricsToStore, database.DeploymentMetrics{
+							DeploymentID:   resourceID,
+							ContainerID:    containerID,
+							NodeID:         metrics[0].NodeID,
+							CPUUsage:       avgCPU,
+							MemoryUsage:    avgMemory,
+							NetworkRxBytes: sumNetworkRx,
+							NetworkTxBytes: sumNetworkTx,
+							DiskReadBytes:  sumDiskRead,
+							DiskWriteBytes: sumDiskWrite,
+							Timestamp:      latestTimestamp,
+						})
 
-					if len(metricsToStore) >= ms.config.BatchSize {
-						// Batch insert using MetricsDB if available, otherwise fallback to main DB
-						targetDB := database.MetricsDB
-						if targetDB == nil {
-							targetDB = database.DB
+						if len(deploymentMetricsToStore) >= ms.config.BatchSize {
+							targetDB := database.MetricsDB
+							if targetDB == nil {
+								targetDB = database.DB
+							}
+							
+							if err := targetDB.CreateInBatches(deploymentMetricsToStore, ms.config.BatchSize).Error; err != nil {
+								log.Printf("[MetricsStreamer] Failed to store deployment metrics batch (%d metrics): %v", len(deploymentMetricsToStore), err)
+								ms.stats.RecordStorage(false, len(deploymentMetricsToStore))
+							} else {
+								ms.stats.RecordStorage(true, len(deploymentMetricsToStore))
+							}
+							deploymentMetricsToStore = deploymentMetricsToStore[:0]
 						}
-						
-						if err := targetDB.CreateInBatches(metricsToStore, ms.config.BatchSize).Error; err != nil {
-							log.Printf("[MetricsStreamer] Failed to store metrics batch (%d metrics): %v", len(metricsToStore), err)
-							// Add to retry queue
-							ms.retryQueue.AddFailedBatch(metricsToStore, err)
-							ms.stats.RecordStorage(false, len(metricsToStore))
-						} else {
-							ms.stats.RecordStorage(true, len(metricsToStore))
+					} else if resourceType == "gameserver" {
+						gameServerMetricsToStore = append(gameServerMetricsToStore, database.GameServerMetrics{
+							GameServerID:   resourceID,
+							ContainerID:    containerID,
+							NodeID:         metrics[0].NodeID,
+							CPUUsage:       avgCPU,
+							MemoryUsage:    avgMemory,
+							NetworkRxBytes: sumNetworkRx,
+							NetworkTxBytes: sumNetworkTx,
+							DiskReadBytes:  sumDiskRead,
+							DiskWriteBytes: sumDiskWrite,
+							Timestamp:      latestTimestamp,
+						})
+
+						if len(gameServerMetricsToStore) >= ms.config.BatchSize {
+							targetDB := database.MetricsDB
+							if targetDB == nil {
+								targetDB = database.DB
+							}
+							
+							if err := targetDB.CreateInBatches(gameServerMetricsToStore, ms.config.BatchSize).Error; err != nil {
+								log.Printf("[MetricsStreamer] Failed to store game server metrics batch (%d metrics): %v", len(gameServerMetricsToStore), err)
+								ms.stats.RecordStorage(false, len(gameServerMetricsToStore))
+							} else {
+								ms.stats.RecordStorage(true, len(gameServerMetricsToStore))
+							}
+							gameServerMetricsToStore = gameServerMetricsToStore[:0]
 						}
-						metricsToStore = metricsToStore[:0]
 					}
 				}
 			}
 
 			// Store remaining metrics
-			if len(metricsToStore) > 0 {
-				targetDB := database.MetricsDB
-				if targetDB == nil {
-					targetDB = database.DB
-				}
-				
-				if err := targetDB.CreateInBatches(metricsToStore, ms.config.BatchSize).Error; err != nil {
-					log.Printf("[MetricsStreamer] Failed to store final metrics batch (%d metrics): %v", len(metricsToStore), err)
-					// Add to retry queue
-					ms.retryQueue.AddFailedBatch(metricsToStore, err)
-					ms.stats.RecordStorage(false, len(metricsToStore))
+			targetDB := database.MetricsDB
+			if targetDB == nil {
+				targetDB = database.DB
+			}
+
+			if len(deploymentMetricsToStore) > 0 {
+				if err := targetDB.CreateInBatches(deploymentMetricsToStore, ms.config.BatchSize).Error; err != nil {
+					log.Printf("[MetricsStreamer] Failed to store final deployment metrics batch (%d metrics): %v", len(deploymentMetricsToStore), err)
+					ms.stats.RecordStorage(false, len(deploymentMetricsToStore))
 				} else {
-					ms.stats.RecordStorage(true, len(metricsToStore))
+					ms.stats.RecordStorage(true, len(deploymentMetricsToStore))
+				}
+			}
+
+			if len(gameServerMetricsToStore) > 0 {
+				if err := targetDB.CreateInBatches(gameServerMetricsToStore, ms.config.BatchSize).Error; err != nil {
+					log.Printf("[MetricsStreamer] Failed to store final game server metrics batch (%d metrics): %v", len(gameServerMetricsToStore), err)
+					ms.stats.RecordStorage(false, len(gameServerMetricsToStore))
+				} else {
+					ms.stats.RecordStorage(true, len(gameServerMetricsToStore))
 				}
 			}
 

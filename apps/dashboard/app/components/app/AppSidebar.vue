@@ -82,6 +82,13 @@
         />
 
         <AppNavigationLink
+          to="/docs"
+          label="Documentation"
+          :icon="BookOpenIcon"
+          @navigate="handleNavigate"
+        />
+
+        <AppNavigationLink
           to="/settings"
           label="Settings"
           :icon="Cog6ToothIcon"
@@ -165,7 +172,7 @@
     </div>
 
     <!-- Footer - Fixed at bottom -->
-    <div class="flex-shrink-0 border-t border-border-muted bg-surface-subtle">
+    <div class="shrink-0 border-t border-border-muted bg-surface-subtle">
       <!-- User section -->
       <div class="px-4 py-4">
         <AppUserProfile />
@@ -188,6 +195,7 @@ import {
   ChartBarIcon,
   CubeIcon,
   ChatBubbleLeftRightIcon,
+  BookOpenIcon,
 } from "@heroicons/vue/24/outline";
 import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
 import { createListCollection } from "@ark-ui/vue";

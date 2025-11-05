@@ -290,6 +290,7 @@
   } from "vue";
   import { useRoute, useRouter } from "vue-router";
   import type { TabItem } from "~/components/oui/Tabs.vue";
+  import { useTabQuery } from "~/composables/useTabQuery";
   import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
   import {
     ArrowPathIcon,
@@ -470,51 +471,8 @@
     return baseTabs;
   });
 
-  // Get initial tab from query parameter or default to "overview"
-  const getInitialTab = () => {
-    const tabParam = route.query.tab;
-    if (typeof tabParam === "string") {
-      // Validate that the tab exists
-      const tabIds = tabs.value.map((t: TabItem) => t.id);
-      return tabIds.includes(tabParam) ? tabParam : "overview";
-    }
-    return "overview";
-  };
-
-  const activeTab = ref(getInitialTab());
-
-  // Watch for tab changes and update query parameter
-  watch(activeTab, (newTab) => {
-    const availableTabs = tabs.value.map((t: TabItem) => t.id);
-    // If tab is removed from available tabs (e.g., compose tab hidden), switch to overview
-    if (!availableTabs.includes(newTab)) {
-      activeTab.value = "overview";
-      return;
-    }
-    if (route.query.tab !== newTab) {
-      router.replace({
-        query: {
-          ...route.query,
-          tab: newTab === "overview" ? undefined : newTab, // Remove query param for default tab
-        },
-      });
-    }
-  });
-
-  // Watch for query parameter changes (e.g., back/forward navigation)
-  watch(
-    () => route.query.tab,
-    (tabParam) => {
-      if (typeof tabParam === "string") {
-        const tabIds = tabs.value.map((t: TabItem) => t.id);
-        if (tabIds.includes(tabParam) && activeTab.value !== tabParam) {
-          activeTab.value = tabParam;
-        }
-      } else if (!tabParam && activeTab.value !== "overview") {
-        activeTab.value = "overview";
-      }
-    }
-  );
+  // Use composable for tab query parameter management
+  const activeTab = useTabQuery(tabs);
 
   const getStatusMeta = (status: number) => {
     switch (status) {

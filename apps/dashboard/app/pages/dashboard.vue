@@ -30,7 +30,7 @@
       </OuiFlex>
 
       <!-- Enhanced KPI Overview -->
-      <OuiGrid cols="1" cols-sm="2" cols-lg="4" gap="lg">
+      <OuiGrid cols="1" cols-sm="2" cols-md="3" cols-lg="5" gap="md">
         <OuiCard
           v-for="card in kpiCards"
           :key="card.label"
@@ -40,45 +40,50 @@
           @click="card.href && navigateTo(card.href)"
         >
           <OuiCardBody>
-            <OuiStack gap="sm">
-              <OuiFlex align="center" justify="between" gap="md">
-                <OuiBox
-                  p="sm"
-                  rounded="lg"
-                  :class="card.iconBg"
-                  class="flex items-center justify-center"
-                >
-                  <component
-                    :is="card.icon"
-                    class="h-6 w-6"
-                    :class="card.iconColor"
-                  />
-                </OuiBox>
-                <OuiBadge v-if="card.badge" :variant="card.badgeVariant" size="sm">
-                  {{ card.badge }}
-                </OuiBadge>
-              </OuiFlex>
-              <OuiStack gap="xs">
+            <OuiFlex align="center" justify="between" gap="md" class="relative">
+              <OuiStack gap="xs" class="flex-1 min-w-0">
                 <OuiSkeleton
                   v-if="isLoading"
-                  width="3.5rem"
+                  width="3rem"
                   height="1.5rem"
                   variant="text"
                 />
-                <OuiText
-                  v-else
-                  as="h3"
-                  size="2xl"
-                  weight="bold"
-                  color="primary"
-                  >{{ card.value }}</OuiText
-                >
-                <OuiText size="sm" color="secondary">{{ card.label }}</OuiText>
-                <OuiText v-if="card.subtitle" size="xs" color="secondary" class="mt-1">
-                  {{ card.subtitle }}
+                <OuiFlex v-else align="baseline" gap="sm" wrap="wrap">
+                  <OuiText
+                    as="h3"
+                    size="2xl"
+                    weight="bold"
+                    color="primary"
+                    class="leading-tight"
+                  >
+                    {{ card.value }}
+                  </OuiText>
+                  <OuiText 
+                    v-if="card.subtitle" 
+                    size="sm" 
+                    color="secondary"
+                    class="leading-tight"
+                  >
+                    {{ card.subtitle }}
+                  </OuiText>
+                </OuiFlex>
+                <OuiText size="xs" weight="medium" color="secondary" class="line-clamp-1">
+                  {{ card.label }}
                 </OuiText>
               </OuiStack>
-            </OuiStack>
+              <OuiBox
+                p="md"
+                rounded="lg"
+                :class="card.iconBg"
+                class="flex items-center justify-center flex-shrink-0"
+              >
+                <component
+                  :is="card.icon"
+                  class="h-7 w-7"
+                  :class="card.iconColor"
+                />
+              </OuiBox>
+            </OuiFlex>
           </OuiCardBody>
         </OuiCard>
       </OuiGrid>
@@ -807,8 +812,6 @@ const kpiCards = computed(() => {
       iconBg: "bg-primary/10",
       iconColor: "text-accent-primary",
       href: "/deployments",
-      badge: runningCount.value > 0 ? `${runningCount.value}` : undefined,
-      badgeVariant: "success" as const,
     },
     {
       label: "VPS Instances",

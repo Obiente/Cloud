@@ -742,6 +742,7 @@
   });
 
   const explorer = useFileExplorer({
+    type: "deployment",
     organizationId: props.organizationId || "",
     deploymentId: props.deploymentId,
   });
@@ -1019,7 +1020,7 @@
 
     try {
       // createEntry now handles refreshing the parent directory
-      await createEntry(payload);
+      await createEntry(payload as Parameters<typeof createEntry>[0]);
     } catch (err: any) {
       console.error("Failed to create entry:", err);
       await dialog.showAlert({

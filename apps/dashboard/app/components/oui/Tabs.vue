@@ -176,6 +176,7 @@ function shouldRenderTab(tabId: string): boolean {
 const defaultValue = computed(() => {
   if (props.defaultValue !== undefined) return props.defaultValue
   if (modelValue.value !== undefined && modelValue.value !== '') return undefined
+  if (!props.tabs || props.tabs.length === 0) return undefined
   const firstTab = props.tabs[0]
   if (firstTab) return firstTab.id
   return undefined

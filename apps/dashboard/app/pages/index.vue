@@ -25,7 +25,7 @@
       <OuiFlex align="center" gap="md" class="md:flex">
         <OuiButton variant="ghost" size="sm">Features</OuiButton>
         <OuiButton variant="ghost" size="sm">Pricing</OuiButton>
-        <OuiButton variant="ghost" size="sm">Docs</OuiButton>
+        <OuiButton variant="ghost" size="sm" @click="navigateTo('/docs')">Docs</OuiButton>
         <OuiButton variant="outline" size="sm" @click="navigateTo('/dashboard')"
           >Sign In</OuiButton
         >

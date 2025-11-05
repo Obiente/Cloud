@@ -85,18 +85,26 @@ func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 			// Check if origin is allowed
 			allowedOrigin := ""
 
-			// If wildcard is configured
-			if len(config.AllowedOrigins) == 1 && config.AllowedOrigins[0] == "*" {
+			// Check if wildcard is configured
+			isWildcard := len(config.AllowedOrigins) == 1 && config.AllowedOrigins[0] == "*"
+			
+			if isWildcard {
 				// When credentials are enabled, we MUST echo the origin, not use "*"
 				// Browsers reject "Access-Control-Allow-Origin: *" with credentials
 				if config.AllowCredentials && origin != "" {
+					// Always echo the origin when wildcard is configured and credentials are enabled
 					allowedOrigin = origin
-					logger.Debug("[CORS] Wildcard mode: echoing origin %s", origin)
+					logger.Debug("[CORS] Wildcard mode with credentials: echoing origin %s", origin)
 				} else if !config.AllowCredentials {
 					allowedOrigin = "*"
-				} else {
-					// No origin header but credentials enabled, allow anyway
+					logger.Debug("[CORS] Wildcard mode without credentials: using *")
+				} else if origin == "" {
+					// No origin header - might be same-origin request
+					// For streaming endpoints, we should still allow the request
+					// Note: Cannot use "*" with credentials, but since there's no origin header,
+					// this might be a same-origin request, so we'll allow it
 					allowedOrigin = "*"
+					logger.Debug("[CORS] Wildcard mode: no origin header, allowing with *")
 				}
 			} else if origin != "" {
 				// Check if the specific origin is in the allowed list
@@ -117,8 +125,11 @@ func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 				}
 			} else {
 				// No Origin header - might be same-origin request or browser didn't send it
-				// Still allow OPTIONS for preflight from same-origin
-				if r.Method == http.MethodOptions {
+				// For streaming endpoints and API calls, we should still allow if wildcard is configured
+				if isWildcard && !config.AllowCredentials {
+					allowedOrigin = "*"
+					logger.Debug("[CORS] No origin header but wildcard configured, allowing")
+				} else if r.Method == http.MethodOptions {
 					logger.Debug("[CORS] OPTIONS request with no Origin header")
 				}
 			}
@@ -151,6 +162,9 @@ func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 				if config.MaxAge != "" {
 					w.Header().Set("Access-Control-Max-Age", config.MaxAge)
 				}
+			} else if origin != "" {
+				// Origin was provided but didn't match - log for debugging
+				logger.Debug("[CORS] Origin %s not allowed, not setting CORS headers", origin)
 			}
 
 			// Handle preflight OPTIONS request

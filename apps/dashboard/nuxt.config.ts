@@ -27,7 +27,7 @@ export default defineNuxtConfig({
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET || "", // Server-side only - never expose to client
     session: {
       password:
-        process.env.NUXT_SESSION_PASSWORD || "changeme_" + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters
+         "changeme_" + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters
       cookie: {
         secure: true, // Set to true if using HTTPS
       },

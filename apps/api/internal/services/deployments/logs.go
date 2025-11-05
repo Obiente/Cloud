@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"api/docker"
+	commonv1 "api/gen/proto/obiente/cloud/common/v1"
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/auth"
 	"api/internal/database"
@@ -227,25 +228,25 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 
 // detectLogLevelFromContent detects log level from log line content
 // This is a shared function for both build logs and container logs
-func detectLogLevelFromContent(line string, isStderr bool) deploymentsv1.LogLevel {
+func detectLogLevelFromContent(line string, isStderr bool) commonv1.LogLevel {
 	lineLower := strings.ToLower(strings.TrimSpace(line))
 	
 	// Check for explicit log level markers (case-insensitive)
 	if strings.Contains(lineLower, "[error]") || strings.Contains(lineLower, "error:") ||
 		strings.Contains(lineLower, "fatal:") || strings.Contains(lineLower, "failed") ||
 		strings.HasPrefix(lineLower, "error") || strings.Contains(lineLower, " ❌ ") {
-		return deploymentsv1.LogLevel_LOG_LEVEL_ERROR
+		return commonv1.LogLevel_LOG_LEVEL_ERROR
 	}
 	
 	if strings.Contains(lineLower, "[warn]") || strings.Contains(lineLower, "[warning]") ||
 		strings.Contains(lineLower, "warning:") || strings.Contains(lineLower, "⚠️") ||
 		strings.HasPrefix(lineLower, "warn") {
-		return deploymentsv1.LogLevel_LOG_LEVEL_WARN
+		return commonv1.LogLevel_LOG_LEVEL_WARN
 	}
 	
 	if strings.Contains(lineLower, "[debug]") || strings.Contains(lineLower, "[trace]") ||
 		strings.HasPrefix(lineLower, "debug") || strings.HasPrefix(lineLower, "trace") {
-		return deploymentsv1.LogLevel_LOG_LEVEL_DEBUG
+		return commonv1.LogLevel_LOG_LEVEL_DEBUG
 	}
 	
 	// Nixpacks/Railpack specific patterns - these are INFO even if on stderr
@@ -258,26 +259,26 @@ func detectLogLevelFromContent(line string, isStderr bool) deploymentsv1.LogLeve
 		strings.Contains(lineLower, "sha256:") || strings.Contains(lineLower, "done") ||
 		strings.Contains(lineLower, "dockerfile:") || strings.Contains(lineLower, "context:") ||
 		strings.Contains(lineLower, "metadata") {
-		return deploymentsv1.LogLevel_LOG_LEVEL_INFO
+		return commonv1.LogLevel_LOG_LEVEL_INFO
 	}
 	
 	// Docker build output patterns - usually INFO
 	if strings.Contains(lineLower, "[") && strings.Contains(lineLower, "]") &&
 		(strings.Contains(lineLower, "step") || strings.Contains(lineLower, "from") ||
 		strings.Contains(lineLower, "running") || strings.Contains(lineLower, "executing")) {
-		return deploymentsv1.LogLevel_LOG_LEVEL_INFO
+		return commonv1.LogLevel_LOG_LEVEL_INFO
 	}
 	
 	// Default: if stderr is true and no pattern matched, it might be an error
 	if isStderr {
 		if strings.Contains(lineLower, "error") || strings.Contains(lineLower, "fail") {
-			return deploymentsv1.LogLevel_LOG_LEVEL_WARN
+			return commonv1.LogLevel_LOG_LEVEL_WARN
 		}
-		return deploymentsv1.LogLevel_LOG_LEVEL_INFO
+		return commonv1.LogLevel_LOG_LEVEL_INFO
 	}
 	
 	// Default to INFO for stdout
-	return deploymentsv1.LogLevel_LOG_LEVEL_INFO
+	return commonv1.LogLevel_LOG_LEVEL_INFO
 }
 
 // formatDockerEvent formats a Docker event into a log line

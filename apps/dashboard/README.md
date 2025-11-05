@@ -207,6 +207,71 @@ docker build -f apps/dashboard/Dockerfile -t obiente/cloud-dashboard:latest .
 docker compose -f docker-compose.dashboard.yml build
 ```
 
+#### Development with Docker Swarm
+
+**For development on manager nodes only** (worker nodes cannot deploy stacks):
+
+```bash
+# Verify you're a manager node (not a worker)
+docker node ls  # Should work, not show "not a manager" error
+
+# Build images first (required before deploying)
+export DOCKER_BUILDKIT=1
+docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
+
+# Set main deployment DNS server IP (replace with your actual DNS server IP)
+export MAIN_DNS_IP=10.0.9.10  # Replace with your main deployment's DNS server IP
+
+# Deploy development stack using docker stack deploy (NOT docker compose)
+docker stack deploy -c docker-compose.swarm.dev.yml obiente-dev
+
+# View logs
+docker service logs -f obiente-dev_api
+
+# List services
+docker stack services obiente-dev
+
+# Remove stack
+docker stack rm obiente-dev
+```
+
+**Note**: The `docker-compose.swarm.dev.yml` file uses Swarm-specific features (overlay networks) and **must** be deployed with `docker stack deploy`, not `docker compose`. Docker Swarm doesn't support building images during deployment - you must build them first.
+
+**Worker Nodes**: If you're on a worker node, use regular `docker compose` with production DNS instead (see Docker Compose section above).
+
+**DNS Configuration**: The development stack uses the main deployment's DNS server. **Important**: Production DNS queries the production database, so it can only resolve production deployments, not dev deployments. For dev deployments to resolve, use local DNS (default) or see [DNS Development Guide](../../docs/deployment/dns-development.md).
+
+You have two options:
+
+**Option 1: Set DNS IP directly** (simple but requires knowing the IP):
+```bash
+export MAIN_DNS_IP=10.0.9.10  # Replace with your main deployment's DNS server IP
+```
+
+**Option 2: Connect to main deployment's network** (recommended):
+1. Find your main deployment's network name:
+   ```bash
+   docker network ls | grep obiente
+   ```
+
+2. In `docker-compose.swarm.dev.yml`, uncomment the main deployment network:
+   ```yaml
+   networks:
+     main-deployment-network:
+       external: true
+       name: obiente_obiente-network  # Replace with your actual network name
+   ```
+
+3. Update the API service to connect to it:
+   ```yaml
+   api:
+     networks:
+       - obiente-network
+       - main-deployment-network  # Add this line
+   ```
+
+   This allows DNS resolution via service name (e.g., `obiente_dns` if your main stack is named `obiente`).
+
 #### Run with Docker Compose
 
 ```bash

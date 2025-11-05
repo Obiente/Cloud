@@ -34,12 +34,14 @@
 <script setup lang="ts">
 import { Accordion } from "@ark-ui/vue/accordion";
 import { ChevronDownIcon } from "@heroicons/vue/24/outline";
+import type { Component } from "vue";
 
 interface AccordionItem {
   value: string;
   label: string;
   content?: string;
   disabled?: boolean;
+  icon?: Component;
 }
 
 interface Props {

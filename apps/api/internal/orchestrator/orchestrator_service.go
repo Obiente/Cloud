@@ -22,6 +22,7 @@ import (
 // OrchestratorService is the main orchestration service that runs continuously
 type OrchestratorService struct {
 	deploymentManager *DeploymentManager
+	gameServerManager *GameServerManager
 	serviceRegistry   *registry.ServiceRegistry
 	healthChecker     *registry.HealthChecker
 	metricsStreamer   *MetricsStreamer
@@ -33,6 +34,13 @@ type OrchestratorService struct {
 // NewOrchestratorService creates a new orchestrator service
 func NewOrchestratorService(strategy string, maxDeploymentsPerNode int, syncInterval time.Duration) (*OrchestratorService, error) {
 	deploymentManager, err := NewDeploymentManager(strategy, maxDeploymentsPerNode)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create game server manager (using same strategy and max deployments for now)
+	// TODO: Consider separate configuration for game servers
+	gameServerManager, err := NewGameServerManager(strategy, maxDeploymentsPerNode)
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +60,7 @@ func NewOrchestratorService(strategy string, maxDeploymentsPerNode int, syncInte
 	
 	service := &OrchestratorService{
 		deploymentManager: deploymentManager,
+		gameServerManager: gameServerManager,
 		serviceRegistry:   serviceRegistry,
 		healthChecker:     healthChecker,
 		metricsStreamer:   metricsStreamer,
@@ -130,6 +139,11 @@ func (os *OrchestratorService) Stop() {
 // GetMetricsStreamer returns the metrics streamer instance
 func (os *OrchestratorService) GetMetricsStreamer() *MetricsStreamer {
 	return os.metricsStreamer
+}
+
+// GetGameServerManager returns the game server manager instance
+func (os *OrchestratorService) GetGameServerManager() *GameServerManager {
+	return os.gameServerManager
 }
 
 // containerStats holds container resource usage statistics
@@ -260,7 +274,7 @@ func (os *OrchestratorService) cleanupTasks() {
 			// Aggregate older metrics into hourly summaries
 			aggregateCutoff := time.Now().Add(-24 * time.Hour).Truncate(time.Hour)
 			
-			// Get all deployments that have metrics older than cutoff
+			// Get all deployments and game servers that have metrics older than cutoff
 			var deploymentIDs []string
 			metricsDB := database.GetMetricsDB()
 			metricsDB.Table("deployment_metrics").
@@ -268,21 +282,27 @@ func (os *OrchestratorService) cleanupTasks() {
 				Where("timestamp < ?", aggregateCutoff).
 				Pluck("deployment_id", &deploymentIDs)
 			
-			if len(deploymentIDs) == 0 {
+			var gameServerIDs []string
+			metricsDB.Table("game_server_metrics").
+				Select("DISTINCT game_server_id").
+				Where("timestamp < ?", aggregateCutoff).
+				Pluck("game_server_id", &gameServerIDs)
+			
+			if len(deploymentIDs) == 0 && len(gameServerIDs) == 0 {
 				logger.Debug("[Orchestrator] No old metrics to aggregate")
 				logger.Debug("[Orchestrator] Cleanup tasks completed")
 				continue
 			}
 			
-			logger.Debug("[Orchestrator] Aggregating metrics for %d deployments", len(deploymentIDs))
+			logger.Debug("[Orchestrator] Aggregating metrics for %d deployments, %d game servers", len(deploymentIDs), len(gameServerIDs))
 			
-			// Process deployments in parallel batches
-			const batchSize = 10 // Process 10 deployments concurrently
+			// Process deployments and game servers in parallel batches
+			const batchSize = 10 // Process 10 resources concurrently
 			totalAggregated := 0
 			totalDeleted := int64(0)
 			var aggMutex sync.Mutex
 			
-			// Process in batches
+			// Process deployments in batches
 			for i := 0; i < len(deploymentIDs); i += batchSize {
 				end := i + batchSize
 				if end > len(deploymentIDs) {
@@ -307,7 +327,30 @@ func (os *OrchestratorService) cleanupTasks() {
 				wg.Wait()
 			}
 			
-			// Helper function moved to separate method
+			// Process game servers in batches
+			for i := 0; i < len(gameServerIDs); i += batchSize {
+				end := i + batchSize
+				if end > len(gameServerIDs) {
+					end = len(gameServerIDs)
+				}
+				batch := gameServerIDs[i:end]
+				
+				var wg sync.WaitGroup
+				for _, gameServerID := range batch {
+					wg.Add(1)
+					go func(gsID string) {
+						defer wg.Done()
+						aggregated, deleted := os.aggregateGameServerMetrics(gsID, aggregateCutoff)
+						if aggregated > 0 || deleted > 0 {
+							aggMutex.Lock()
+							totalAggregated += aggregated
+							totalDeleted += deleted
+							aggMutex.Unlock()
+						}
+					}(gameServerID)
+				}
+				wg.Wait()
+			}
 			
 			logger.Debug("[Orchestrator] Aggregated %d hours, deleted %d raw metrics, cleanup tasks completed", totalAggregated, totalDeleted)
 		case <-os.ctx.Done():
@@ -559,6 +602,214 @@ func (os *OrchestratorService) GetServiceRegistry() *registry.ServiceRegistry {
 // GetHealthChecker returns the health checker instance
 func (os *OrchestratorService) GetHealthChecker() *registry.HealthChecker {
 	return os.healthChecker
+}
+
+// aggregateGameServerMetrics aggregates metrics for a single game server (called in parallel)
+func (os *OrchestratorService) aggregateGameServerMetrics(gameServerID string, aggregateCutoff time.Time) (aggregated int, deleted int64) {
+	// Get org ID once
+	var orgID string
+	database.DB.Table("game_servers").
+		Select("organization_id").
+		Where("id = ?", gameServerID).
+		Pluck("organization_id", &orgID)
+	
+	if orgID == "" {
+		return 0, 0
+	}
+	
+	// Find the oldest metric for this game server
+	var oldestTime time.Time
+	metricsDB := database.GetMetricsDB()
+	metricsDB.Table("game_server_metrics").
+		Select("MIN(timestamp)").
+		Where("game_server_id = ? AND timestamp < ?", gameServerID, aggregateCutoff).
+		Scan(&oldestTime)
+	
+	if oldestTime.IsZero() {
+		return 0, 0
+	}
+	
+	// Aggregate hour by hour
+	currentHour := oldestTime.Truncate(time.Hour)
+	deletedInGameServer := int64(0)
+	aggregatedCount := 0
+	
+	for currentHour.Before(aggregateCutoff) {
+		nextHour := currentHour.Add(1 * time.Hour)
+		
+		// Check if hourly aggregate already exists
+		var existingHourly database.GameServerUsageHourly
+		err := metricsDB.Where("game_server_id = ? AND hour = ?", gameServerID, currentHour).
+			First(&existingHourly).Error
+		
+		// Check if raw metrics still exist for this hour (if not, we can't recalculate)
+		var rawMetricsCount int64
+		metricsDB.Table("game_server_metrics").
+			Where("game_server_id = ? AND timestamp >= ? AND timestamp < ?", gameServerID, currentHour, nextHour).
+			Count(&rawMetricsCount)
+		
+		// Only create/recalculate if raw metrics exist
+		if rawMetricsCount > 0 {
+			// Delete existing aggregate if present (to allow recalculation)
+			if err == nil {
+				metricsDB.Where("game_server_id = ? AND hour = ?", gameServerID, currentHour).
+					Delete(&database.GameServerUsageHourly{})
+			}
+			
+			// Aggregate metrics for this hour
+			type hourlyAgg struct {
+				AvgCPUUsage      float64
+				SumMemoryUsage   float64
+				AvgMemoryUsage   float64
+				SumNetworkRx     int64
+				SumNetworkTx     int64
+				SumDiskRead      int64
+				SumDiskWrite     int64
+				Count            int64
+				TimestampCount   int64
+			}
+			var agg hourlyAgg
+			
+			err := metricsDB.Table("game_server_metrics").
+				Select(`
+					AVG(cpu_usage) as avg_cpu_usage,
+					AVG(memory_usage) as avg_memory_usage,
+					SUM(memory_usage) as sum_memory_usage,
+					COALESCE(SUM(network_rx_bytes), 0) as sum_network_rx,
+					COALESCE(SUM(network_tx_bytes), 0) as sum_network_tx,
+					COALESCE(SUM(disk_read_bytes), 0) as sum_disk_read,
+					COALESCE(SUM(disk_write_bytes), 0) as sum_disk_write,
+					COUNT(*) as count,
+					COUNT(DISTINCT timestamp) as timestamp_count
+				`).
+				Where("game_server_id = ? AND timestamp >= ? AND timestamp < ?",
+					gameServerID, currentHour, nextHour).
+				Scan(&agg).Error
+			
+			if err != nil {
+				logger.Warn("[Orchestrator] Failed to query game server metrics for %s at %s: %v", gameServerID, currentHour, err)
+				currentHour = nextHour
+				continue
+			}
+			
+			if agg.Count == 0 {
+				currentHour = nextHour
+				continue
+			}
+			
+			// Calculate CPU core-seconds and memory byte-seconds using actual timestamp intervals
+			type metricTimestamp struct {
+				CPUUsage    float64
+				MemorySum   int64
+				Timestamp   time.Time
+			}
+			var timestamps []metricTimestamp
+			
+			err = metricsDB.Table("game_server_metrics").
+				Select("cpu_usage, memory_usage, timestamp").
+				Where("game_server_id = ? AND timestamp >= ? AND timestamp < ?",
+					gameServerID, currentHour, nextHour).
+				Order("timestamp ASC").
+				Scan(&timestamps).Error
+			
+			var cpuCoreSeconds float64
+			var memoryByteSeconds int64
+			
+			if err == nil && len(timestamps) > 1 {
+				// Calculate intervals between timestamps
+				for i := 0; i < len(timestamps)-1; i++ {
+					interval := int64(timestamps[i+1].Timestamp.Sub(timestamps[i].Timestamp).Seconds())
+					if interval <= 0 {
+						interval = 5 // Default 5-second interval
+					}
+					
+					cpuCoreSeconds += (timestamps[i].CPUUsage / 100.0) * float64(interval)
+					memoryByteSeconds += timestamps[i].MemorySum * interval
+				}
+				
+				// Handle last timestamp: if it's not at the end of the hour, use remaining time
+				if len(timestamps) > 0 {
+					lastTimestamp := timestamps[len(timestamps)-1].Timestamp
+					timeRemaining := int64(nextHour.Sub(lastTimestamp).Seconds())
+					if timeRemaining > 0 && timeRemaining <= 3600 {
+						lastCPU := timestamps[len(timestamps)-1].CPUUsage
+						lastMemory := timestamps[len(timestamps)-1].MemorySum
+						cpuCoreSeconds += (lastCPU / 100.0) * float64(timeRemaining)
+						memoryByteSeconds += lastMemory * timeRemaining
+					}
+				}
+				
+				// Store avg_cpu_usage as average CPU for the hour (core-seconds / 3600)
+				if cpuCoreSeconds > 0 {
+					agg.AvgCPUUsage = (cpuCoreSeconds / 3600.0) * 100.0 // Convert back to percentage
+				}
+				
+				// Store avg_memory_usage as average memory for the hour (byte-seconds / 3600)
+				if memoryByteSeconds > 0 {
+					agg.AvgMemoryUsage = float64(memoryByteSeconds) / 3600.0
+				} else if agg.TimestampCount > 0 {
+					avgMemoryBytes := agg.SumMemoryUsage / float64(agg.TimestampCount)
+					metricInterval := int64(5)
+					fallbackByteSeconds := int64(avgMemoryBytes * float64(metricInterval) * float64(agg.TimestampCount))
+					agg.AvgMemoryUsage = float64(fallbackByteSeconds) / 3600.0
+				} else if agg.Count > 0 {
+					avgMemoryBytes := agg.SumMemoryUsage / float64(agg.Count)
+					metricInterval := int64(5)
+					estimatedTimestamps := float64(agg.Count) / 1.0
+					fallbackByteSeconds := int64(avgMemoryBytes * float64(metricInterval) * estimatedTimestamps)
+					agg.AvgMemoryUsage = float64(fallbackByteSeconds) / 3600.0
+				} else {
+					agg.AvgMemoryUsage = 0
+				}
+			} else {
+				// Fallback calculation
+				if agg.TimestampCount > 0 {
+					avgMemoryBytes := agg.SumMemoryUsage / float64(agg.TimestampCount)
+					metricInterval := int64(5)
+					fallbackByteSeconds := int64(avgMemoryBytes * float64(metricInterval) * float64(agg.TimestampCount))
+					agg.AvgMemoryUsage = float64(fallbackByteSeconds) / 3600.0
+				} else if agg.Count > 0 {
+					avgMemoryBytes := agg.SumMemoryUsage / float64(agg.Count)
+					metricInterval := int64(5)
+					estimatedTimestamps := float64(agg.Count) / 1.0
+					fallbackByteSeconds := int64(avgMemoryBytes * float64(metricInterval) * estimatedTimestamps)
+					agg.AvgMemoryUsage = float64(fallbackByteSeconds) / 3600.0
+				}
+			}
+			
+			hourlyUsage := database.GameServerUsageHourly{
+				GameServerID:     gameServerID,
+				OrganizationID:    orgID,
+				Hour:              currentHour,
+				AvgCPUUsage:       agg.AvgCPUUsage,
+				AvgMemoryUsage:    agg.AvgMemoryUsage,
+				BandwidthRxBytes:  agg.SumNetworkRx,
+				BandwidthTxBytes:  agg.SumNetworkTx,
+				DiskReadBytes:     agg.SumDiskRead,
+				DiskWriteBytes:    agg.SumDiskWrite,
+				SampleCount:       agg.Count,
+			}
+			
+			if err := metricsDB.Create(&hourlyUsage).Error; err != nil {
+				logger.Warn("[Orchestrator] Failed to create hourly aggregate for game server %s at %s: %v", gameServerID, currentHour, err)
+			} else {
+				aggregatedCount++
+				
+				// Delete the raw metrics for this hour in batch
+				result := metricsDB.Where("game_server_id = ? AND timestamp >= ? AND timestamp < ?",
+					gameServerID, currentHour, nextHour).
+					Delete(&database.GameServerMetrics{})
+				
+				if result.Error == nil {
+					deletedInGameServer += result.RowsAffected
+				}
+			}
+		}
+		
+		currentHour = nextHour
+	}
+	
+	return aggregatedCount, deletedInGameServer
 }
 
 // aggregateDeploymentMetrics aggregates metrics for a single deployment (called in parallel)

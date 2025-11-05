@@ -15,8 +15,10 @@ import (
 	gameserversv1connect "api/gen/proto/obiente/cloud/gameservers/v1/gameserversv1connect"
 	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
 	superadminv1connect "api/gen/proto/obiente/cloud/superadmin/v1/superadminv1connect"
+	supportv1connect "api/gen/proto/obiente/cloud/support/v1/supportv1connect"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/dnsdelegation"
 	"api/internal/email"
 	"api/internal/middleware"
 	"api/internal/orchestrator"
@@ -28,6 +30,7 @@ import (
 	gameserversvc "api/internal/services/gameservers"
 	orgsvc "api/internal/services/organizations"
 	superadminsvc "api/internal/services/superadmin"
+	supportsvc "api/internal/services/support"
 	"api/internal/stripe"
 
 	"connectrpc.com/connect"
@@ -213,6 +216,8 @@ func registerServices(mux *http.ServeMux) {
 			&database.CreditTransaction{},
 			&database.GameServer{},
 			&database.GameServerUsageHourly{},
+			&database.SupportTicket{},
+			&database.TicketComment{},
 		); err != nil {
 			log.Printf("[Server] AutoMigrate warning: %v", err)
 		}
@@ -324,6 +329,17 @@ func registerServices(mux *http.ServeMux) {
 	)
 	mux.Handle(gameServersPath, gameServersHandler)
 
+	// WebSocket terminal endpoint for game servers (bypasses Connect RPC for direct access)
+	mux.HandleFunc("/gameservers/terminal/ws", gameServerService.HandleTerminalWebSocket)
+
+	// Support service with auth
+	supportService := supportsvc.NewService(database.DB)
+	supportPath, supportHandler := supportv1connect.NewSupportServiceHandler(
+		supportService,
+		connect.WithInterceptors(authInterceptor),
+	)
+	mux.Handle(supportPath, supportHandler)
+
 	// Stripe webhook endpoint (no auth required, uses webhook signature verification)
 	// Only register webhook handler if Stripe is configured
 	if stripeClient != nil {
@@ -332,6 +348,12 @@ func registerServices(mux *http.ServeMux) {
 	} else {
 		log.Println("[Server] ⚠️  Billing service registered but Stripe not configured (webhook disabled)")
 	}
+
+	// DNS delegation push endpoints (public, API key authenticated)
+	// Allows dev/self-hosted APIs to push DNS records to production DNS
+	mux.HandleFunc("/dns/push", dnsdelegation.HandlePushDNSRecord)
+	mux.HandleFunc("/dns/push/batch", dnsdelegation.HandlePushDNSRecords)
+	log.Println("[Server] ✓ DNS delegation push endpoints registered at /dns/push and /dns/push/batch")
 
 }
 
@@ -352,6 +374,7 @@ func registerReflection(mux *http.ServeMux) {
 		gameserversv1connect.GameServerServiceName,
 		organizationsv1connect.OrganizationServiceName,
 		billingv1connect.BillingServiceName,
+		supportv1connect.SupportServiceName,
 	)
 
 	grpcPath, grpcHandler := grpcreflect.NewHandlerV1(reflector)

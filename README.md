@@ -20,30 +20,83 @@
 
 ### Docker Compose (Local Development)
 
+**For development on worker nodes or single-machine setups:**
+
 ```bash
 # Clone the repository
 git clone https://github.com/obiente/cloud.git
 cd cloud
 
-# Start services
+# Option 1: Use local DNS (default)
+docker compose up -d
+
+# Option 2: Use production DNS (recommended if you have a production deployment)
+# Set production DNS server IP
+export MAIN_DNS_IP=10.0.9.10  # Replace with your production DNS server IP
+
+# Disable local DNS service (comment out lines 186-217 in docker-compose.yml)
+# Or skip it: docker compose up -d --scale dns=0
 docker compose up -d
 
 # Check status
 docker compose ps
 ```
 
+**DNS Configuration**: By default, a local DNS server runs inside Docker on port 53 (not exposed to host, so no port conflict). It queries the dev database, so dev deployments resolve correctly. All containers automatically use this DNS server. To use production DNS instead, set `MAIN_DNS_IP` and `MAIN_DNS_PORT` - but note that production DNS queries the production database, so it won't resolve dev deployments. See [DNS Development Guide](docs/deployment/dns-development.md) for details.
+
+**Note**: Worker nodes cannot deploy Docker Swarm stacks. Use `docker compose` for development on worker nodes.
+
+### Docker Swarm (Development - Uses Main Deployment DNS)
+
+**For development on manager nodes only** (worker nodes cannot deploy stacks):
+
+```bash
+# Verify you're a manager node
+docker node ls  # Should work, not show "not a manager" error
+
+# Build images first (required before deploying)
+export DOCKER_BUILDKIT=1
+docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
+
+# Set main deployment DNS server IP (replace with your actual DNS server IP)
+export MAIN_DNS_IP=10.0.9.10  # Replace with your main deployment's DNS server IP
+
+# Deploy development stack using docker stack deploy (NOT docker compose)
+docker stack deploy -c docker-compose.swarm.dev.yml obiente-dev
+
+# View logs
+docker service logs -f obiente-dev_api
+
+# Remove stack
+docker stack rm obiente-dev
+```
+
+**Note**: The `docker-compose.swarm.dev.yml` file uses Swarm-specific features (overlay networks) and **must** be deployed with `docker stack deploy`, not `docker compose`. Only manager nodes can deploy stacks. Worker nodes should use regular `docker compose` (see above).
+
 ### Docker Swarm (Production)
 
 ```bash
-# Initialize Swarm
+# Initialize Docker Swarm (if not already initialized)
 docker swarm init
 
-# Deploy
+# Build and deploy (recommended - uses helper script)
+./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml
+
+# Or build manually, then deploy:
+export DOCKER_BUILDKIT=1
+docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
 docker stack deploy -c docker-compose.swarm.yml obiente
 
-# Verify
+# For multi-node deployments, push images to a registry or use docker save/load
+# docker tag obiente/cloud-api:latest your-registry/obiente/cloud-api:latest
+# docker push your-registry/obiente/cloud-api:latest
+
+# Check status
 docker service ls
+docker stack services obiente
 ```
+
+**Important**: Docker Swarm doesn't support building images during deployment. You must build images first, then deploy. On multi-node setups, ensure images are available on all nodes (use a registry or `docker save/load`).
 
 See the [Installation Guide](docs/getting-started/installation.md) for detailed instructions.
 

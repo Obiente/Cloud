@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	commonv1 "api/gen/proto/obiente/cloud/common/v1"
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/database"
 	"api/internal/logger"
@@ -107,7 +108,7 @@ func (s *BuildLogStreamer) WriteStderr(p []byte) (n int, err error) {
 // detectLogLevel intelligently detects the log level from log line content
 // This is important because build tools like nixpacks write normal output to stderr
 // but those lines are not actually errors - they're informational build progress
-func detectLogLevel(line string, isStderr bool) deploymentsv1.LogLevel {
+func detectLogLevel(line string, isStderr bool) commonv1.LogLevel {
 	// Use shared detection function (duplicated here to avoid circular imports)
 	lineLower := strings.ToLower(strings.TrimSpace(line))
 	
@@ -115,18 +116,18 @@ func detectLogLevel(line string, isStderr bool) deploymentsv1.LogLevel {
 	if strings.Contains(lineLower, "[error]") || strings.Contains(lineLower, "error:") ||
 		strings.Contains(lineLower, "fatal:") || strings.Contains(lineLower, "failed") ||
 		strings.HasPrefix(lineLower, "error") || strings.Contains(lineLower, " ❌ ") {
-		return deploymentsv1.LogLevel_LOG_LEVEL_ERROR
+		return commonv1.LogLevel_LOG_LEVEL_ERROR
 	}
 	
 	if strings.Contains(lineLower, "[warn]") || strings.Contains(lineLower, "[warning]") ||
 		strings.Contains(lineLower, "warning:") || strings.Contains(lineLower, "⚠️") ||
 		strings.HasPrefix(lineLower, "warn") {
-		return deploymentsv1.LogLevel_LOG_LEVEL_WARN
+		return commonv1.LogLevel_LOG_LEVEL_WARN
 	}
 	
 	if strings.Contains(lineLower, "[debug]") || strings.Contains(lineLower, "[trace]") ||
 		strings.HasPrefix(lineLower, "debug") || strings.HasPrefix(lineLower, "trace") {
-		return deploymentsv1.LogLevel_LOG_LEVEL_DEBUG
+		return commonv1.LogLevel_LOG_LEVEL_DEBUG
 	}
 	
 	// Nixpacks/Railpack specific patterns - these are INFO even if on stderr
@@ -140,14 +141,14 @@ func detectLogLevel(line string, isStderr bool) deploymentsv1.LogLevel {
 		strings.Contains(lineLower, "sha256:") || strings.Contains(lineLower, "done") ||
 		strings.Contains(lineLower, "dockerfile:") || strings.Contains(lineLower, "context:") ||
 		strings.Contains(lineLower, "metadata") {
-		return deploymentsv1.LogLevel_LOG_LEVEL_INFO
+		return commonv1.LogLevel_LOG_LEVEL_INFO
 	}
 	
 	// Docker build output patterns - usually INFO
 	if strings.Contains(lineLower, "[") && strings.Contains(lineLower, "]") &&
 		(strings.Contains(lineLower, "step") || strings.Contains(lineLower, "from") ||
 		strings.Contains(lineLower, "running") || strings.Contains(lineLower, "executing")) {
-		return deploymentsv1.LogLevel_LOG_LEVEL_INFO
+		return commonv1.LogLevel_LOG_LEVEL_INFO
 	}
 	
 	// Default: if stderr is true and no pattern matched, it might be an error
@@ -156,13 +157,13 @@ func detectLogLevel(line string, isStderr bool) deploymentsv1.LogLevel {
 		// Be conservative: if it's on stderr and looks suspicious, mark as WARN
 		// Otherwise treat as INFO (common for build tools)
 		if strings.Contains(lineLower, "error") || strings.Contains(lineLower, "fail") {
-			return deploymentsv1.LogLevel_LOG_LEVEL_WARN
+			return commonv1.LogLevel_LOG_LEVEL_WARN
 		}
-		return deploymentsv1.LogLevel_LOG_LEVEL_INFO
+		return commonv1.LogLevel_LOG_LEVEL_INFO
 	}
 	
 	// Default to INFO for stdout
-	return deploymentsv1.LogLevel_LOG_LEVEL_INFO
+	return commonv1.LogLevel_LOG_LEVEL_INFO
 }
 
 // writeLine writes a log line and broadcasts it to all subscribers

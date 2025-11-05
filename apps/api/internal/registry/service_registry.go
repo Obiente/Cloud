@@ -48,9 +48,12 @@ func NewServiceRegistry() (*ServiceRegistry, error) {
 	if nodeID == "" {
 		// Not in swarm mode - use hostname or ID as node identifier
 		// In single-node setups, we can use the hostname or generate a stable ID
+		// Prefix with "local-" to match GameServerManager format
 		nodeID = info.Name
 		if nodeID == "" {
 			nodeID = "local-node"
+		} else {
+			nodeID = "local-" + nodeID
 		}
 	}
 
@@ -149,6 +152,13 @@ func (sr *ServiceRegistry) GetDeploymentByDomain(domain string) (*database.Deplo
 // GetNodeDeployments returns all deployments on a specific node
 func (sr *ServiceRegistry) GetNodeDeployments(nodeID string) ([]database.DeploymentLocation, error) {
 	var locations []database.DeploymentLocation
+	err := database.DB.Where("node_id = ? AND status = ?", nodeID, "running").Find(&locations).Error
+	return locations, err
+}
+
+// GetNodeGameServers returns all game servers on a specific node
+func (sr *ServiceRegistry) GetNodeGameServers(nodeID string) ([]database.GameServerLocation, error) {
+	var locations []database.GameServerLocation
 	err := database.DB.Where("node_id = ? AND status = ?", nodeID, "running").Find(&locations).Error
 	return locations, err
 }

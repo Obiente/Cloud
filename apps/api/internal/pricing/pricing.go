@@ -18,16 +18,16 @@ type PricingModel struct {
 	StorageCostPerByteMonth float64
 }
 
-	var (
-		// Default pricing model (fallback if env vars not set)
+var (
+	// Default pricing model (fallback if env vars not set)
 		// Competitive VPS-like pricing: ~$5/month for 1GB RAM + 1 CPU core running 24/7
 		// Storage pricing is higher to reflect limited capacity (not a storage provider)
-		defaultPricing = PricingModel{
+	defaultPricing = PricingModel{
 			CPUCostPerCoreSecond:    0.000000761,        // $0.000000761 per core-second = $0.00274 per core-hour = $2.00/month for 1 core 24/7
 			MemoryCostPerByteSecond: 0.000000000000001063, // $0.000000000000001063 per byte-second = $0.00411 per GB-hour = $3.00/month for 1GB 24/7
 			BandwidthCostPerByte:    0.000000000009313, // $0.000000000009313 per byte = $0.01 per GB (very cheap, like VPS)
 			StorageCostPerByteMonth: 0.000000000186264, // $0.000000000186264 per byte-month = $0.20 per GB-month (higher due to limited capacity)
-		}
+	}
 
 	// Singleton instance
 	globalPricing *PricingModel
