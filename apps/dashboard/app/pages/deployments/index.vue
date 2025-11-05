@@ -866,6 +866,20 @@
     }
   );
 
+  // Custom refresh function that preserves existing data during fetch
+  const refreshDeploymentsWithoutClearing = async () => {
+    try {
+      const response = await client.listDeployments({});
+      // Only update if we got a successful response
+      deployments.value = response.deployments;
+      listError.value = null;
+    } catch (error) {
+      console.error("Failed to refresh deployments:", error);
+      // Don't clear the data on error, just log it
+      // Don't set listError here to avoid breaking the UI
+    }
+  };
+
   // Periodic refresh - faster when deployments are building/deploying
   const hasActiveDeployments = computed(() => {
     return (deployments.value ?? []).some(
@@ -897,12 +911,7 @@
     if (isVisible.value && !listError.value) {
       refreshIntervalId.value = setInterval(async () => {
         if (isVisible.value && !listError.value) {
-          try {
-            await refreshDeployments();
-          } catch (error) {
-            console.error("Failed to refresh deployments:", error);
-            // Don't set listError here to avoid breaking the UI
-          }
+          await refreshDeploymentsWithoutClearing();
         }
       }, refreshIntervalMs.value);
     }
@@ -1120,20 +1129,20 @@
 
   const stopDeployment = async (id: string) => {
     await deploymentActions.stopDeployment(id, deployments.value ?? []);
-    // Refresh to get latest status from server
-    await refreshDeployments();
+    // Refresh to get latest status from server (preserve data during refresh)
+    await refreshDeploymentsWithoutClearing();
   };
 
   const startDeployment = async (id: string) => {
     await deploymentActions.startDeployment(id, deployments.value ?? []);
-    // Refresh to get latest status from server
-    await refreshDeployments();
+    // Refresh to get latest status from server (preserve data during refresh)
+    await refreshDeploymentsWithoutClearing();
   };
 
   const redeployApp = async (id: string) => {
     await deploymentActions.redeployDeployment(id, deployments.value ?? []);
-    // Refresh to get latest status from server
-    await refreshDeployments();
+    // Refresh to get latest status from server (preserve data during refresh)
+    await refreshDeploymentsWithoutClearing();
   };
 
   const viewDeployment = (id: string) => {
