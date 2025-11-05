@@ -7,7 +7,7 @@
 // Store colors cache to avoid repeated DOM queries
 let colorsCache: Record<string, string> | null = null;
 
-export function getOUIColors(): Record<string, string> {
+export function getOUIHighlightColors(): Record<string, string> {
   // Return cached colors if available
   if (colorsCache) {
     return colorsCache;
@@ -61,7 +61,7 @@ export function applyOUIThemeToHighlightJS() {
     return;
   }
 
-  const colors = getOUIColors();
+  const colors = getOUIHighlightColors();
   
   // If we couldn't get colors, skip
   if (!colors || Object.keys(colors).length === 0) {

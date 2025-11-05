@@ -39,7 +39,7 @@
               />
               <OuiInput
                 v-else
-                v-model="(resourceIds as any)"
+                v-model="resourceIdsString"
                 placeholder="* for all"
               />
             </div>
@@ -84,6 +84,17 @@ const userId = ref("");
 const roleId = ref("");
 const resourceType = ref("");
 const resourceIds = ref<string[] | string>("");
+
+// Computed property for OuiInput (string) binding
+const resourceIdsString = computed({
+  get: () => {
+    const value = resourceIds.value;
+    return Array.isArray(value) ? value.join(",") : value || "";
+  },
+  set: (val: string) => {
+    resourceIds.value = val;
+  },
+});
 
 const resourceTypeItems = [
   { label: "Deployment", value: "deployment" },
