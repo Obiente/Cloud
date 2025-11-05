@@ -10,6 +10,18 @@ COMPOSE_FILE="${2:-docker-compose.swarm.yml}"
 BUILD_LOCAL="${BUILD_LOCAL:-false}"
 API_IMAGE="${API_IMAGE:-ghcr.io/obiente/cloud-api:latest}"
 
+# Load .env file if it exists
+if [ -f .env ]; then
+  echo "📝 Loading environment variables from .env file..."
+  # Export variables from .env file (handles comments and empty lines)
+  set -a
+  source .env
+  set +a
+elif [ -f .env.example ]; then
+  echo "⚠️  Warning: .env file not found. Using .env.example as reference."
+  echo "   Copy .env.example to .env and configure it: cp .env.example .env"
+fi
+
 if [ "$BUILD_LOCAL" = "true" ]; then
   echo "🔨 Building Obiente Cloud images locally..."
   
@@ -42,8 +54,8 @@ fi
 echo ""
 echo "🚀 Deploying stack '$STACK_NAME'..."
 
-# Deploy the stack with the API_IMAGE environment variable
-API_IMAGE="$API_IMAGE" docker stack deploy -c "$COMPOSE_FILE" "$STACK_NAME"
+# Deploy the stack with environment variables loaded from .env
+docker stack deploy -c "$COMPOSE_FILE" "$STACK_NAME"
 
 echo ""
 echo "✅ Deployment started!"
