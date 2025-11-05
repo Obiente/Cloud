@@ -50,8 +50,11 @@ FROM rust:1.75-alpine AS nixpacks-builder
 # Install build dependencies
 RUN apk add --no-cache musl-dev
 
-# Install nixpacks via cargo
-RUN cargo install nixpacks --locked
+# Install nixpacks via cargo with cache mounts for faster rebuilds
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/root/.cargo/registry \
+    cargo install nixpacks --locked
 
 # Final stage
 FROM alpine:latest
@@ -59,6 +62,7 @@ FROM alpine:latest
 # Install CA certificates for HTTPS requests
 # Install docker CLI and docker-compose for deployment management
 # Install git and curl for repository cloning and downloading buildx
+# This layer will be cached unless package versions change
 RUN apk --no-cache add \
     ca-certificates \
     docker-cli \
@@ -66,22 +70,26 @@ RUN apk --no-cache add \
     git \
     curl
 
+# Set environment variables early for better layer caching
+ENV DOCKER_CLI_PLUGIN_PATH=/root/.docker/cli-plugins \
+    BUILDX_VERSION=0.29.1 \
+    MISE_VERSION=2025.10.13 \
+    RAILPACK_VERSION=0.9.2
+
 # Install docker-buildx plugin from Docker's official releases
 # BuildKit requires buildx for advanced build features (faster builds, better caching)
-RUN BUILDX_VERSION="0.29.1" && \
+# This layer will be cached unless BUILDX_VERSION changes
+RUN mkdir -p /root/.docker/cli-plugins && \
     curl -fsSL "https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-amd64" -o /tmp/docker-buildx && \
     chmod +x /tmp/docker-buildx && \
-    mkdir -p /root/.docker/cli-plugins && \
-    mv /tmp/docker-buildx /root/.docker/cli-plugins/docker-buildx
-
-# Set DOCKER_CLI_PLUGIN_PATH so Docker can find buildx
-ENV DOCKER_CLI_PLUGIN_PATH=/root/.docker/cli-plugins
+    mv /tmp/docker-buildx /root/.docker/cli-plugins/docker-buildx && \
+    rm -f /tmp/docker-buildx
 
 # Install mise (version manager used by railpack and for installing railpack)
 # Mise is used by railpack to install tools like pnpm, nodejs, etc.
 # Railpack expects mise at /tmp/railpack/mise/mise-{version}, so we install it there
-RUN MISE_VERSION="2025.10.13" && \
-    curl https://mise.run | sh && \
+# This layer will be cached unless MISE_VERSION changes
+RUN curl https://mise.run | sh && \
     mkdir -p /tmp/railpack/mise && \
     cp /root/.local/bin/mise /tmp/railpack/mise/mise-${MISE_VERSION} && \
     chmod +x /tmp/railpack/mise/mise-${MISE_VERSION} && \
@@ -90,12 +98,13 @@ RUN MISE_VERSION="2025.10.13" && \
 # Install railpack using mise (Railway's build tool, separate from nixpacks)
 # Railpack is a Go-based tool that replaces nixpacks with improved performance
 # According to https://railpack.com/installation, use: mise use ubi:railwayapp/railpack@latest
-RUN RAILPACK_VERSION="0.9.2" && \
-    mkdir -p /tmp/mise-install && \
+# This layer will be cached unless RAILPACK_VERSION changes
+RUN mkdir -p /tmp/mise-install && \
     cd /tmp/mise-install && \
     mise use ubi:railwayapp/railpack@${RAILPACK_VERSION} && \
     RAILPACK_PATH=$(mise which railpack) && \
     ln -sf "$RAILPACK_PATH" /usr/local/bin/railpack && \
+    cd / && \
     rm -rf /tmp/mise-install
 
 # Copy nixpacks binary from builder (still needed for NIXPACKS strategy)
