@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package obiente.cloud.common.v1;
+
+option go_package = "api/gen/proto/obiente/cloud/common/v1;commonv1";
+
+// LogLevel represents the severity/type of a log line
+enum LogLevel {
+  LOG_LEVEL_UNSPECIFIED = 0;
+  LOG_LEVEL_TRACE = 1;    // Trace-level debugging
+  LOG_LEVEL_DEBUG = 2;    // Debug information
+  LOG_LEVEL_INFO = 3;     // Informational messages (default)
+  LOG_LEVEL_WARN = 4;     // Warning messages
+  LOG_LEVEL_ERROR = 5;    // Error messages
+}
+

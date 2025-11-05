@@ -1,0 +1,150 @@
+syntax = "proto3";
+
+package obiente.cloud.support.v1;
+
+option go_package = "api/gen/proto/obiente/cloud/support/v1;supportv1";
+
+import "google/protobuf/timestamp.proto";
+
+// SupportTicketStatus represents the current status of a support ticket
+enum SupportTicketStatus {
+  SUPPORT_TICKET_STATUS_UNSPECIFIED = 0;
+  OPEN = 1;           // Ticket is open and awaiting response
+  IN_PROGRESS = 2;    // Ticket is being worked on
+  WAITING_FOR_USER = 3; // Waiting for user response
+  RESOLVED = 4;       // Ticket has been resolved
+  CLOSED = 5;         // Ticket has been closed
+}
+
+// SupportTicketPriority represents the priority level of a support ticket
+enum SupportTicketPriority {
+  SUPPORT_TICKET_PRIORITY_UNSPECIFIED = 0;
+  LOW = 1;
+  MEDIUM = 2;
+  HIGH = 3;
+  URGENT = 4;
+}
+
+// SupportTicketCategory represents the category of a support ticket
+enum SupportTicketCategory {
+  SUPPORT_TICKET_CATEGORY_UNSPECIFIED = 0;
+  TECHNICAL = 1;
+  BILLING = 2;
+  FEATURE_REQUEST = 3;
+  BUG_REPORT = 4;
+  ACCOUNT = 5;
+  OTHER = 99;
+}
+
+service SupportService {
+  // Create a new support ticket
+  rpc CreateTicket(CreateTicketRequest) returns (CreateTicketResponse);
+  
+  // List support tickets (users see their own, superadmins see all)
+  rpc ListTickets(ListTicketsRequest) returns (ListTicketsResponse);
+  
+  // Get a specific ticket by ID
+  rpc GetTicket(GetTicketRequest) returns (GetTicketResponse);
+  
+  // Update a ticket (status, priority, etc.)
+  rpc UpdateTicket(UpdateTicketRequest) returns (UpdateTicketResponse);
+  
+  // Add a comment/reply to a ticket
+  rpc AddComment(AddCommentRequest) returns (AddCommentResponse);
+  
+  // List comments for a ticket
+  rpc ListComments(ListCommentsRequest) returns (ListCommentsResponse);
+}
+
+// Request/Response messages
+message CreateTicketRequest {
+  string subject = 1;
+  string description = 2;
+  SupportTicketCategory category = 3;
+  SupportTicketPriority priority = 4;
+  optional string organization_id = 5; // Optional organization context
+}
+
+message CreateTicketResponse {
+  SupportTicket ticket = 1;
+}
+
+message ListTicketsRequest {
+  optional SupportTicketStatus status = 1;
+  optional SupportTicketCategory category = 2;
+  optional SupportTicketPriority priority = 3;
+  optional string organization_id = 4;
+  optional int32 page_size = 5;
+  optional string page_token = 6;
+}
+
+message ListTicketsResponse {
+  repeated SupportTicket tickets = 1;
+  optional string next_page_token = 2;
+}
+
+message GetTicketRequest {
+  string ticket_id = 1;
+}
+
+message GetTicketResponse {
+  SupportTicket ticket = 1;
+}
+
+message UpdateTicketRequest {
+  string ticket_id = 1;
+  optional SupportTicketStatus status = 2;
+  optional SupportTicketPriority priority = 3;
+  optional string assigned_to = 4; // User ID of assignee (superadmin only)
+}
+
+message UpdateTicketResponse {
+  SupportTicket ticket = 1;
+}
+
+message AddCommentRequest {
+  string ticket_id = 1;
+  string content = 2;
+  optional bool internal = 3; // Internal comment (superadmin only, not visible to user)
+}
+
+message AddCommentResponse {
+  TicketComment comment = 1;
+}
+
+message ListCommentsRequest {
+  string ticket_id = 1;
+}
+
+message ListCommentsResponse {
+  repeated TicketComment comments = 1;
+}
+
+// SupportTicket represents a support ticket
+message SupportTicket {
+  string id = 1;
+  string subject = 2;
+  string description = 3;
+  SupportTicketStatus status = 4;
+  SupportTicketPriority priority = 5;
+  SupportTicketCategory category = 6;
+  string created_by = 7; // User ID who created the ticket
+  optional string assigned_to = 8; // User ID of assignee (superadmin)
+  optional string organization_id = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+  google.protobuf.Timestamp resolved_at = 12;
+  int32 comment_count = 13; // Number of comments on this ticket
+}
+
+// TicketComment represents a comment/reply on a support ticket
+message TicketComment {
+  string id = 1;
+  string ticket_id = 2;
+  string content = 3;
+  string created_by = 4; // User ID who created the comment
+  bool internal = 5; // Internal comment (not visible to user)
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
