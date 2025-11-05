@@ -1,7 +1,8 @@
 <template>
-  <nav class="flex flex-col min-h-screen bg-surface-base" :class="$attrs.class">
-    <div class="p-6">
-      <OuiFlex align="center" justify="between" class="mb-6">
+  <nav class="flex flex-col h-full min-h-0 bg-surface-base" :class="$attrs.class">
+    <!-- Header - Fixed at top -->
+    <div class="shrink-0 p-6 border-b border-border-muted">
+      <OuiFlex align="center" justify="between" >
         <OuiFlex align="start" gap="md">
           <OuiBox
             class="w-8 h-8 bg-primary rounded-xl mt-1"
@@ -26,9 +27,11 @@
           <OrgSwitcher :collection="organization" :multiple="false" @change="(v:any)=>emit('organization-change', v)" @create="emit('new-organization')" />
         </div>
       </OuiFlex>
+    </div>
 
-      <!-- Navigation -->
-      <nav class="space-y-2">
+    <!-- Navigation - Scrollable middle section -->
+    <div class="flex-1 min-h-0 overflow-y-auto sidebar-scrollable">
+      <nav class="px-6 pt-6 pb-20 space-y-2">
         <AppNavigationLink
           to="/dashboard"
           label="Dashboard"
@@ -68,6 +71,13 @@
           to="/billing"
           label="Billing"
           :icon="CreditCardIcon"
+          @navigate="handleNavigate"
+        />
+
+        <AppNavigationLink
+          to="/support"
+          label="Support"
+          :icon="ChatBubbleLeftRightIcon"
           @navigate="handleNavigate"
         />
 
@@ -154,7 +164,8 @@
       </nav>
     </div>
 
-    <div class="mt-auto border-t border-border-muted bg-surface-subtle">
+    <!-- Footer - Fixed at bottom -->
+    <div class="flex-shrink-0 border-t border-border-muted bg-surface-subtle">
       <!-- User section -->
       <div class="px-4 py-4">
         <AppUserProfile />
@@ -176,6 +187,7 @@ import {
   BuildingOfficeIcon,
   ChartBarIcon,
   CubeIcon,
+  ChatBubbleLeftRightIcon,
 } from "@heroicons/vue/24/outline";
 import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
 import { createListCollection } from "@ark-ui/vue";
@@ -211,3 +223,15 @@ const handleNavigate = () => {
   emit("navigate");
 };
 </script>
+
+<style scoped>
+/* Hide scrollbar for sidebar scrollable section */
+.sidebar-scrollable {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.sidebar-scrollable::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+</style>

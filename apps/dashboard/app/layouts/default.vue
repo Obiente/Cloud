@@ -23,7 +23,7 @@
         class="fixed inset-y-0 left-0 z-50 flex h-full w-72 max-w-[80vw] flex-col lg:hidden"
       >
         <AppSidebar
-          class="sidebar-drawer relative h-full overflow-y-auto border-r border-border-muted bg-surface-base shadow-2xl"
+          class="sidebar-drawer relative h-full border-r border-border-muted bg-surface-base shadow-2xl"
           :organization-options="organizationOptions"
           :current-organization="currentOrganization"
           :show-super-admin="showSuperAdmin"
@@ -47,9 +47,9 @@
     <div v-if="user.user && user.isAuthenticated" class="flex min-h-screen">
       <!-- Desktop Sidebar -->
       <div class="hidden lg:block lg:w-64 lg:shrink-0">
-        <div class="sticky top-0 h-screen overflow-y-auto bg-surface-base">
+        <div class="sticky top-0 h-screen bg-surface-base">
           <AppSidebar
-            class="w-full relative z-0"
+            class="w-full h-full relative z-0"
             :organization-options="organizationOptions"
             :current-organization="currentOrganization"
             :show-super-admin="showSuperAdmin"
