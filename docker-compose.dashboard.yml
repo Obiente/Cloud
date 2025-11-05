@@ -17,15 +17,63 @@ services:
       NUXT_PUBLIC_OIDC_ISSUER: ${ZITADEL_URL:-https://obiente.cloud}
       NUXT_PUBLIC_OIDC_BASE: ${ZITADEL_BASE_URL:-https://auth.obiente.cloud}
       NUXT_PUBLIC_OIDC_CLIENT_ID: ${ZITADEL_CLIENT_ID:-339499954043158530}
-      NUXT_PUBLIC_GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      NUXT_PUBLIC_GITHUB_CLIENT_ID: ${NUXT_PUBLIC_GITHUB_CLIENT_ID:-}
       NUXT_PUBLIC_DISABLE_AUTH: ${DISABLE_AUTH:-false}
-      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
-    ports:
-      - "${DASHBOARD_PORT:-3000}:3000"
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
     networks:
-      - dashboard-network
+      - obiente-network
+    # Traefik labels for automatic proxying
+    # DASHBOARD_HOSTNAME should be set to the hostname from DASHBOARD_URL
+    # Example: If DASHBOARD_URL=https://dashboard.obiente.cloud, set DASHBOARD_HOSTNAME=dashboard.obiente.cloud
+    # If not set, defaults to dashboard.${DOMAIN} or dashboard.localhost
+    labels:
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`${DASHBOARD_HOSTNAME:-dashboard.${DOMAIN:-localhost}}`)"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+      - "traefik.http.routers.dashboard.service=dashboard"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=3000"
+      - "traefik.http.routers.dashboard-secure.rule=Host(`${DASHBOARD_HOSTNAME:-dashboard.${DOMAIN:-localhost}}`)"
+      - "traefik.http.routers.dashboard-secure.entrypoints=websecure"
+      - "traefik.http.routers.dashboard-secure.service=dashboard"
+      - "traefik.http.routers.dashboard-secure.tls=true"
+      - "traefik.http.routers.dashboard-secure.tls.certresolver=letsencrypt"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Swarm deployment configuration for high availability
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+      placement:
+        constraints:
+          - node.role == manager
+        max_replicas_per_node: 1
 
 networks:
-  dashboard-network:
-    driver: bridge
+  obiente-network:
+    external: true
 

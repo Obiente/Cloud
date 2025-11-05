@@ -76,6 +76,8 @@ services:
       DNS_DELEGATION_API_KEY: ${DNS_DELEGATION_API_KEY:-} # API key from production (required for pushing DNS records)
       DNS_DELEGATION_PUSH_INTERVAL: ${DNS_DELEGATION_PUSH_INTERVAL:-2m} # How often to push DNS records
       DNS_DELEGATION_TTL: ${DNS_DELEGATION_TTL:-300s} # TTL for pushed DNS records
+      # Swarm configuration - disable swarm features for non-swarm deployments
+      ENABLE_SWARM: ${ENABLE_SWARM:-false} # Set to 'true' to enable Docker Swarm features (default: false for non-swarm)
     depends_on:
       postgres:
         condition: service_healthy

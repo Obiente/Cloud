@@ -482,6 +482,8 @@ services:
       APP_CONSOLE_URL: ${APP_CONSOLE_URL:-${CONSOLE_URL:-${DASHBOARD_URL:-https://app.obiente.cloud}}}
       # Support email (optional)
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      # Swarm configuration - enable swarm features for HA swarm deployments
+      ENABLE_SWARM: ${ENABLE_SWARM:-true} # Set to 'true' to enable Docker Swarm features (default: true for HA swarm)
     volumes:
       # Mount Docker socket for managing deployments
       - /var/run/docker.sock:/var/run/docker.sock
