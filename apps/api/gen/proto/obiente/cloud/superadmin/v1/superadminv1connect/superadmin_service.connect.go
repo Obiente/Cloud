@@ -45,6 +45,18 @@ const (
 	// SuperadminServiceGetDNSConfigProcedure is the fully-qualified name of the SuperadminService's
 	// GetDNSConfig RPC.
 	SuperadminServiceGetDNSConfigProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetDNSConfig"
+	// SuperadminServiceCreateDNSDelegationAPIKeyProcedure is the fully-qualified name of the
+	// SuperadminService's CreateDNSDelegationAPIKey RPC.
+	SuperadminServiceCreateDNSDelegationAPIKeyProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/CreateDNSDelegationAPIKey"
+	// SuperadminServiceListDNSDelegationAPIKeysProcedure is the fully-qualified name of the
+	// SuperadminService's ListDNSDelegationAPIKeys RPC.
+	SuperadminServiceListDNSDelegationAPIKeysProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListDNSDelegationAPIKeys"
+	// SuperadminServiceRevokeDNSDelegationAPIKeyProcedure is the fully-qualified name of the
+	// SuperadminService's RevokeDNSDelegationAPIKey RPC.
+	SuperadminServiceRevokeDNSDelegationAPIKeyProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/RevokeDNSDelegationAPIKey"
+	// SuperadminServiceRevokeDNSDelegationAPIKeyForOrganizationProcedure is the fully-qualified name of
+	// the SuperadminService's RevokeDNSDelegationAPIKeyForOrganization RPC.
+	SuperadminServiceRevokeDNSDelegationAPIKeyForOrganizationProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/RevokeDNSDelegationAPIKeyForOrganization"
 	// SuperadminServiceGetPricingProcedure is the fully-qualified name of the SuperadminService's
 	// GetPricing RPC.
 	SuperadminServiceGetPricingProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetPricing"
@@ -59,6 +71,11 @@ type SuperadminServiceClient interface {
 	QueryDNS(context.Context, *connect.Request[v1.QueryDNSRequest]) (*connect.Response[v1.QueryDNSResponse], error)
 	ListDNSRecords(context.Context, *connect.Request[v1.ListDNSRecordsRequest]) (*connect.Response[v1.ListDNSRecordsResponse], error)
 	GetDNSConfig(context.Context, *connect.Request[v1.GetDNSConfigRequest]) (*connect.Response[v1.GetDNSConfigResponse], error)
+	// DNS Delegation API Key management
+	CreateDNSDelegationAPIKey(context.Context, *connect.Request[v1.CreateDNSDelegationAPIKeyRequest]) (*connect.Response[v1.CreateDNSDelegationAPIKeyResponse], error)
+	ListDNSDelegationAPIKeys(context.Context, *connect.Request[v1.ListDNSDelegationAPIKeysRequest]) (*connect.Response[v1.ListDNSDelegationAPIKeysResponse], error)
+	RevokeDNSDelegationAPIKey(context.Context, *connect.Request[v1.RevokeDNSDelegationAPIKeyRequest]) (*connect.Response[v1.RevokeDNSDelegationAPIKeyResponse], error)
+	RevokeDNSDelegationAPIKeyForOrganization(context.Context, *connect.Request[v1.RevokeDNSDelegationAPIKeyForOrganizationRequest]) (*connect.Response[v1.RevokeDNSDelegationAPIKeyForOrganizationResponse], error)
 	// Public pricing endpoint - no authentication required
 	GetPricing(context.Context, *connect.Request[v1.GetPricingRequest]) (*connect.Response[v1.GetPricingResponse], error)
 }
@@ -99,6 +116,30 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("GetDNSConfig")),
 			connect.WithClientOptions(opts...),
 		),
+		createDNSDelegationAPIKey: connect.NewClient[v1.CreateDNSDelegationAPIKeyRequest, v1.CreateDNSDelegationAPIKeyResponse](
+			httpClient,
+			baseURL+SuperadminServiceCreateDNSDelegationAPIKeyProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("CreateDNSDelegationAPIKey")),
+			connect.WithClientOptions(opts...),
+		),
+		listDNSDelegationAPIKeys: connect.NewClient[v1.ListDNSDelegationAPIKeysRequest, v1.ListDNSDelegationAPIKeysResponse](
+			httpClient,
+			baseURL+SuperadminServiceListDNSDelegationAPIKeysProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListDNSDelegationAPIKeys")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeDNSDelegationAPIKey: connect.NewClient[v1.RevokeDNSDelegationAPIKeyRequest, v1.RevokeDNSDelegationAPIKeyResponse](
+			httpClient,
+			baseURL+SuperadminServiceRevokeDNSDelegationAPIKeyProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("RevokeDNSDelegationAPIKey")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeDNSDelegationAPIKeyForOrganization: connect.NewClient[v1.RevokeDNSDelegationAPIKeyForOrganizationRequest, v1.RevokeDNSDelegationAPIKeyForOrganizationResponse](
+			httpClient,
+			baseURL+SuperadminServiceRevokeDNSDelegationAPIKeyForOrganizationProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("RevokeDNSDelegationAPIKeyForOrganization")),
+			connect.WithClientOptions(opts...),
+		),
 		getPricing: connect.NewClient[v1.GetPricingRequest, v1.GetPricingResponse](
 			httpClient,
 			baseURL+SuperadminServiceGetPricingProcedure,
@@ -110,11 +151,15 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 
 // superadminServiceClient implements SuperadminServiceClient.
 type superadminServiceClient struct {
-	getOverview    *connect.Client[v1.GetOverviewRequest, v1.GetOverviewResponse]
-	queryDNS       *connect.Client[v1.QueryDNSRequest, v1.QueryDNSResponse]
-	listDNSRecords *connect.Client[v1.ListDNSRecordsRequest, v1.ListDNSRecordsResponse]
-	getDNSConfig   *connect.Client[v1.GetDNSConfigRequest, v1.GetDNSConfigResponse]
-	getPricing     *connect.Client[v1.GetPricingRequest, v1.GetPricingResponse]
+	getOverview                              *connect.Client[v1.GetOverviewRequest, v1.GetOverviewResponse]
+	queryDNS                                 *connect.Client[v1.QueryDNSRequest, v1.QueryDNSResponse]
+	listDNSRecords                           *connect.Client[v1.ListDNSRecordsRequest, v1.ListDNSRecordsResponse]
+	getDNSConfig                             *connect.Client[v1.GetDNSConfigRequest, v1.GetDNSConfigResponse]
+	createDNSDelegationAPIKey                *connect.Client[v1.CreateDNSDelegationAPIKeyRequest, v1.CreateDNSDelegationAPIKeyResponse]
+	listDNSDelegationAPIKeys                 *connect.Client[v1.ListDNSDelegationAPIKeysRequest, v1.ListDNSDelegationAPIKeysResponse]
+	revokeDNSDelegationAPIKey                *connect.Client[v1.RevokeDNSDelegationAPIKeyRequest, v1.RevokeDNSDelegationAPIKeyResponse]
+	revokeDNSDelegationAPIKeyForOrganization *connect.Client[v1.RevokeDNSDelegationAPIKeyForOrganizationRequest, v1.RevokeDNSDelegationAPIKeyForOrganizationResponse]
+	getPricing                               *connect.Client[v1.GetPricingRequest, v1.GetPricingResponse]
 }
 
 // GetOverview calls obiente.cloud.superadmin.v1.SuperadminService.GetOverview.
@@ -137,6 +182,30 @@ func (c *superadminServiceClient) GetDNSConfig(ctx context.Context, req *connect
 	return c.getDNSConfig.CallUnary(ctx, req)
 }
 
+// CreateDNSDelegationAPIKey calls
+// obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey.
+func (c *superadminServiceClient) CreateDNSDelegationAPIKey(ctx context.Context, req *connect.Request[v1.CreateDNSDelegationAPIKeyRequest]) (*connect.Response[v1.CreateDNSDelegationAPIKeyResponse], error) {
+	return c.createDNSDelegationAPIKey.CallUnary(ctx, req)
+}
+
+// ListDNSDelegationAPIKeys calls
+// obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys.
+func (c *superadminServiceClient) ListDNSDelegationAPIKeys(ctx context.Context, req *connect.Request[v1.ListDNSDelegationAPIKeysRequest]) (*connect.Response[v1.ListDNSDelegationAPIKeysResponse], error) {
+	return c.listDNSDelegationAPIKeys.CallUnary(ctx, req)
+}
+
+// RevokeDNSDelegationAPIKey calls
+// obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey.
+func (c *superadminServiceClient) RevokeDNSDelegationAPIKey(ctx context.Context, req *connect.Request[v1.RevokeDNSDelegationAPIKeyRequest]) (*connect.Response[v1.RevokeDNSDelegationAPIKeyResponse], error) {
+	return c.revokeDNSDelegationAPIKey.CallUnary(ctx, req)
+}
+
+// RevokeDNSDelegationAPIKeyForOrganization calls
+// obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization.
+func (c *superadminServiceClient) RevokeDNSDelegationAPIKeyForOrganization(ctx context.Context, req *connect.Request[v1.RevokeDNSDelegationAPIKeyForOrganizationRequest]) (*connect.Response[v1.RevokeDNSDelegationAPIKeyForOrganizationResponse], error) {
+	return c.revokeDNSDelegationAPIKeyForOrganization.CallUnary(ctx, req)
+}
+
 // GetPricing calls obiente.cloud.superadmin.v1.SuperadminService.GetPricing.
 func (c *superadminServiceClient) GetPricing(ctx context.Context, req *connect.Request[v1.GetPricingRequest]) (*connect.Response[v1.GetPricingResponse], error) {
 	return c.getPricing.CallUnary(ctx, req)
@@ -151,6 +220,11 @@ type SuperadminServiceHandler interface {
 	QueryDNS(context.Context, *connect.Request[v1.QueryDNSRequest]) (*connect.Response[v1.QueryDNSResponse], error)
 	ListDNSRecords(context.Context, *connect.Request[v1.ListDNSRecordsRequest]) (*connect.Response[v1.ListDNSRecordsResponse], error)
 	GetDNSConfig(context.Context, *connect.Request[v1.GetDNSConfigRequest]) (*connect.Response[v1.GetDNSConfigResponse], error)
+	// DNS Delegation API Key management
+	CreateDNSDelegationAPIKey(context.Context, *connect.Request[v1.CreateDNSDelegationAPIKeyRequest]) (*connect.Response[v1.CreateDNSDelegationAPIKeyResponse], error)
+	ListDNSDelegationAPIKeys(context.Context, *connect.Request[v1.ListDNSDelegationAPIKeysRequest]) (*connect.Response[v1.ListDNSDelegationAPIKeysResponse], error)
+	RevokeDNSDelegationAPIKey(context.Context, *connect.Request[v1.RevokeDNSDelegationAPIKeyRequest]) (*connect.Response[v1.RevokeDNSDelegationAPIKeyResponse], error)
+	RevokeDNSDelegationAPIKeyForOrganization(context.Context, *connect.Request[v1.RevokeDNSDelegationAPIKeyForOrganizationRequest]) (*connect.Response[v1.RevokeDNSDelegationAPIKeyForOrganizationResponse], error)
 	// Public pricing endpoint - no authentication required
 	GetPricing(context.Context, *connect.Request[v1.GetPricingRequest]) (*connect.Response[v1.GetPricingResponse], error)
 }
@@ -186,6 +260,30 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		connect.WithSchema(superadminServiceMethods.ByName("GetDNSConfig")),
 		connect.WithHandlerOptions(opts...),
 	)
+	superadminServiceCreateDNSDelegationAPIKeyHandler := connect.NewUnaryHandler(
+		SuperadminServiceCreateDNSDelegationAPIKeyProcedure,
+		svc.CreateDNSDelegationAPIKey,
+		connect.WithSchema(superadminServiceMethods.ByName("CreateDNSDelegationAPIKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceListDNSDelegationAPIKeysHandler := connect.NewUnaryHandler(
+		SuperadminServiceListDNSDelegationAPIKeysProcedure,
+		svc.ListDNSDelegationAPIKeys,
+		connect.WithSchema(superadminServiceMethods.ByName("ListDNSDelegationAPIKeys")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceRevokeDNSDelegationAPIKeyHandler := connect.NewUnaryHandler(
+		SuperadminServiceRevokeDNSDelegationAPIKeyProcedure,
+		svc.RevokeDNSDelegationAPIKey,
+		connect.WithSchema(superadminServiceMethods.ByName("RevokeDNSDelegationAPIKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceRevokeDNSDelegationAPIKeyForOrganizationHandler := connect.NewUnaryHandler(
+		SuperadminServiceRevokeDNSDelegationAPIKeyForOrganizationProcedure,
+		svc.RevokeDNSDelegationAPIKeyForOrganization,
+		connect.WithSchema(superadminServiceMethods.ByName("RevokeDNSDelegationAPIKeyForOrganization")),
+		connect.WithHandlerOptions(opts...),
+	)
 	superadminServiceGetPricingHandler := connect.NewUnaryHandler(
 		SuperadminServiceGetPricingProcedure,
 		svc.GetPricing,
@@ -202,6 +300,14 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceListDNSRecordsHandler.ServeHTTP(w, r)
 		case SuperadminServiceGetDNSConfigProcedure:
 			superadminServiceGetDNSConfigHandler.ServeHTTP(w, r)
+		case SuperadminServiceCreateDNSDelegationAPIKeyProcedure:
+			superadminServiceCreateDNSDelegationAPIKeyHandler.ServeHTTP(w, r)
+		case SuperadminServiceListDNSDelegationAPIKeysProcedure:
+			superadminServiceListDNSDelegationAPIKeysHandler.ServeHTTP(w, r)
+		case SuperadminServiceRevokeDNSDelegationAPIKeyProcedure:
+			superadminServiceRevokeDNSDelegationAPIKeyHandler.ServeHTTP(w, r)
+		case SuperadminServiceRevokeDNSDelegationAPIKeyForOrganizationProcedure:
+			superadminServiceRevokeDNSDelegationAPIKeyForOrganizationHandler.ServeHTTP(w, r)
 		case SuperadminServiceGetPricingProcedure:
 			superadminServiceGetPricingHandler.ServeHTTP(w, r)
 		default:
@@ -227,6 +333,22 @@ func (UnimplementedSuperadminServiceHandler) ListDNSRecords(context.Context, *co
 
 func (UnimplementedSuperadminServiceHandler) GetDNSConfig(context.Context, *connect.Request[v1.GetDNSConfigRequest]) (*connect.Response[v1.GetDNSConfigResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) CreateDNSDelegationAPIKey(context.Context, *connect.Request[v1.CreateDNSDelegationAPIKeyRequest]) (*connect.Response[v1.CreateDNSDelegationAPIKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListDNSDelegationAPIKeys(context.Context, *connect.Request[v1.ListDNSDelegationAPIKeysRequest]) (*connect.Response[v1.ListDNSDelegationAPIKeysResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) RevokeDNSDelegationAPIKey(context.Context, *connect.Request[v1.RevokeDNSDelegationAPIKeyRequest]) (*connect.Response[v1.RevokeDNSDelegationAPIKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) RevokeDNSDelegationAPIKeyForOrganization(context.Context, *connect.Request[v1.RevokeDNSDelegationAPIKeyForOrganizationRequest]) (*connect.Response[v1.RevokeDNSDelegationAPIKeyForOrganizationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization is not implemented"))
 }
 
 func (UnimplementedSuperadminServiceHandler) GetPricing(context.Context, *connect.Request[v1.GetPricingRequest]) (*connect.Response[v1.GetPricingResponse], error) {

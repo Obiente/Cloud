@@ -6,6 +6,7 @@ option go_package = "api/gen/proto/obiente/cloud/deployments/v1;deploymentsv1";
 
 import "google/protobuf/timestamp.proto";
 import "obiente/cloud/organizations/v1/organization_service.proto";
+import "obiente/cloud/common/v1/common.proto";
 
 // Enumerations for typed fields used by the frontend
 // DeploymentType represents the runtime/language type of the application
@@ -23,15 +24,6 @@ enum DeploymentType {
   GENERIC = 10;        // Generic/unknown runtime (use when can't detect)
 }
 
-// LogLevel represents the severity/type of a log line
-enum LogLevel {
-  LOG_LEVEL_UNSPECIFIED = 0;
-  LOG_LEVEL_TRACE = 1;    // Trace-level debugging
-  LOG_LEVEL_DEBUG = 2;    // Debug information
-  LOG_LEVEL_INFO = 3;     // Informational messages (default)
-  LOG_LEVEL_WARN = 4;     // Warning messages
-  LOG_LEVEL_ERROR = 5;    // Error messages
-}
 
 // Build strategy determines how the deployment is built and deployed
 enum BuildStrategy {
@@ -346,7 +338,7 @@ message DeploymentLogLine {
   string line = 2;
   google.protobuf.Timestamp timestamp = 3;
   bool stderr = 4; // Deprecated: Use log_level instead. Kept for backward compatibility.
-  LogLevel log_level = 5; // Log level (INFO, WARN, ERROR, DEBUG, TRACE)
+  obiente.cloud.common.v1.LogLevel log_level = 5; // Log level (INFO, WARN, ERROR, DEBUG, TRACE)
 }
 
 message StartDeploymentRequest {

@@ -66,6 +66,9 @@ const (
 	// GameServerServiceStreamGameServerLogsProcedure is the fully-qualified name of the
 	// GameServerService's StreamGameServerLogs RPC.
 	GameServerServiceStreamGameServerLogsProcedure = "/obiente.cloud.gameservers.v1.GameServerService/StreamGameServerLogs"
+	// GameServerServiceSendGameServerCommandProcedure is the fully-qualified name of the
+	// GameServerService's SendGameServerCommand RPC.
+	GameServerServiceSendGameServerCommandProcedure = "/obiente.cloud.gameservers.v1.GameServerService/SendGameServerCommand"
 	// GameServerServiceGetGameServerMetricsProcedure is the fully-qualified name of the
 	// GameServerService's GetGameServerMetrics RPC.
 	GameServerServiceGetGameServerMetricsProcedure = "/obiente.cloud.gameservers.v1.GameServerService/GetGameServerMetrics"
@@ -75,6 +78,27 @@ const (
 	// GameServerServiceGetGameServerUsageProcedure is the fully-qualified name of the
 	// GameServerService's GetGameServerUsage RPC.
 	GameServerServiceGetGameServerUsageProcedure = "/obiente.cloud.gameservers.v1.GameServerService/GetGameServerUsage"
+	// GameServerServiceListGameServerFilesProcedure is the fully-qualified name of the
+	// GameServerService's ListGameServerFiles RPC.
+	GameServerServiceListGameServerFilesProcedure = "/obiente.cloud.gameservers.v1.GameServerService/ListGameServerFiles"
+	// GameServerServiceGetGameServerFileProcedure is the fully-qualified name of the
+	// GameServerService's GetGameServerFile RPC.
+	GameServerServiceGetGameServerFileProcedure = "/obiente.cloud.gameservers.v1.GameServerService/GetGameServerFile"
+	// GameServerServiceUploadGameServerFilesProcedure is the fully-qualified name of the
+	// GameServerService's UploadGameServerFiles RPC.
+	GameServerServiceUploadGameServerFilesProcedure = "/obiente.cloud.gameservers.v1.GameServerService/UploadGameServerFiles"
+	// GameServerServiceDeleteGameServerEntriesProcedure is the fully-qualified name of the
+	// GameServerService's DeleteGameServerEntries RPC.
+	GameServerServiceDeleteGameServerEntriesProcedure = "/obiente.cloud.gameservers.v1.GameServerService/DeleteGameServerEntries"
+	// GameServerServiceCreateGameServerEntryProcedure is the fully-qualified name of the
+	// GameServerService's CreateGameServerEntry RPC.
+	GameServerServiceCreateGameServerEntryProcedure = "/obiente.cloud.gameservers.v1.GameServerService/CreateGameServerEntry"
+	// GameServerServiceWriteGameServerFileProcedure is the fully-qualified name of the
+	// GameServerService's WriteGameServerFile RPC.
+	GameServerServiceWriteGameServerFileProcedure = "/obiente.cloud.gameservers.v1.GameServerService/WriteGameServerFile"
+	// GameServerServiceRenameGameServerEntryProcedure is the fully-qualified name of the
+	// GameServerService's RenameGameServerEntry RPC.
+	GameServerServiceRenameGameServerEntryProcedure = "/obiente.cloud.gameservers.v1.GameServerService/RenameGameServerEntry"
 )
 
 // GameServerServiceClient is a client for the obiente.cloud.gameservers.v1.GameServerService
@@ -102,12 +126,29 @@ type GameServerServiceClient interface {
 	GetGameServerLogs(context.Context, *connect.Request[v1.GetGameServerLogsRequest]) (*connect.Response[v1.GetGameServerLogsResponse], error)
 	// Stream game server logs (tail/follow)
 	StreamGameServerLogs(context.Context, *connect.Request[v1.StreamGameServerLogsRequest]) (*connect.ServerStreamForClient[v1.GameServerLogLine], error)
+	// Send a command to a running game server
+	SendGameServerCommand(context.Context, *connect.Request[v1.SendGameServerCommandRequest]) (*connect.Response[v1.SendGameServerCommandResponse], error)
 	// Get game server metrics (real-time or historical)
 	GetGameServerMetrics(context.Context, *connect.Request[v1.GetGameServerMetricsRequest]) (*connect.Response[v1.GetGameServerMetricsResponse], error)
 	// Stream real-time game server metrics
 	StreamGameServerMetrics(context.Context, *connect.Request[v1.StreamGameServerMetricsRequest]) (*connect.ServerStreamForClient[v1.GameServerMetric], error)
 	// Get aggregated usage for a game server
 	GetGameServerUsage(context.Context, *connect.Request[v1.GetGameServerUsageRequest]) (*connect.Response[v1.GetGameServerUsageResponse], error)
+	// File system operations
+	// List files in a game server container or volume
+	ListGameServerFiles(context.Context, *connect.Request[v1.ListGameServerFilesRequest]) (*connect.Response[v1.ListGameServerFilesResponse], error)
+	// Get file contents from a game server container or volume
+	GetGameServerFile(context.Context, *connect.Request[v1.GetGameServerFileRequest]) (*connect.Response[v1.GetGameServerFileResponse], error)
+	// Upload files to a game server container or volume
+	UploadGameServerFiles(context.Context, *connect.Request[v1.UploadGameServerFilesRequest]) (*connect.Response[v1.UploadGameServerFilesResponse], error)
+	// Delete files or directories from a game server
+	DeleteGameServerEntries(context.Context, *connect.Request[v1.DeleteGameServerEntriesRequest]) (*connect.Response[v1.DeleteGameServerEntriesResponse], error)
+	// Create a file, directory, or symlink in a game server
+	CreateGameServerEntry(context.Context, *connect.Request[v1.CreateGameServerEntryRequest]) (*connect.Response[v1.CreateGameServerEntryResponse], error)
+	// Write or update file contents in a game server
+	WriteGameServerFile(context.Context, *connect.Request[v1.WriteGameServerFileRequest]) (*connect.Response[v1.WriteGameServerFileResponse], error)
+	// Rename a file or directory in a game server
+	RenameGameServerEntry(context.Context, *connect.Request[v1.RenameGameServerEntryRequest]) (*connect.Response[v1.RenameGameServerEntryResponse], error)
 }
 
 // NewGameServerServiceClient constructs a client for the
@@ -188,6 +229,12 @@ func NewGameServerServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(gameServerServiceMethods.ByName("StreamGameServerLogs")),
 			connect.WithClientOptions(opts...),
 		),
+		sendGameServerCommand: connect.NewClient[v1.SendGameServerCommandRequest, v1.SendGameServerCommandResponse](
+			httpClient,
+			baseURL+GameServerServiceSendGameServerCommandProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("SendGameServerCommand")),
+			connect.WithClientOptions(opts...),
+		),
 		getGameServerMetrics: connect.NewClient[v1.GetGameServerMetricsRequest, v1.GetGameServerMetricsResponse](
 			httpClient,
 			baseURL+GameServerServiceGetGameServerMetricsProcedure,
@@ -206,6 +253,48 @@ func NewGameServerServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(gameServerServiceMethods.ByName("GetGameServerUsage")),
 			connect.WithClientOptions(opts...),
 		),
+		listGameServerFiles: connect.NewClient[v1.ListGameServerFilesRequest, v1.ListGameServerFilesResponse](
+			httpClient,
+			baseURL+GameServerServiceListGameServerFilesProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("ListGameServerFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		getGameServerFile: connect.NewClient[v1.GetGameServerFileRequest, v1.GetGameServerFileResponse](
+			httpClient,
+			baseURL+GameServerServiceGetGameServerFileProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("GetGameServerFile")),
+			connect.WithClientOptions(opts...),
+		),
+		uploadGameServerFiles: connect.NewClient[v1.UploadGameServerFilesRequest, v1.UploadGameServerFilesResponse](
+			httpClient,
+			baseURL+GameServerServiceUploadGameServerFilesProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("UploadGameServerFiles")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteGameServerEntries: connect.NewClient[v1.DeleteGameServerEntriesRequest, v1.DeleteGameServerEntriesResponse](
+			httpClient,
+			baseURL+GameServerServiceDeleteGameServerEntriesProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("DeleteGameServerEntries")),
+			connect.WithClientOptions(opts...),
+		),
+		createGameServerEntry: connect.NewClient[v1.CreateGameServerEntryRequest, v1.CreateGameServerEntryResponse](
+			httpClient,
+			baseURL+GameServerServiceCreateGameServerEntryProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("CreateGameServerEntry")),
+			connect.WithClientOptions(opts...),
+		),
+		writeGameServerFile: connect.NewClient[v1.WriteGameServerFileRequest, v1.WriteGameServerFileResponse](
+			httpClient,
+			baseURL+GameServerServiceWriteGameServerFileProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("WriteGameServerFile")),
+			connect.WithClientOptions(opts...),
+		),
+		renameGameServerEntry: connect.NewClient[v1.RenameGameServerEntryRequest, v1.RenameGameServerEntryResponse](
+			httpClient,
+			baseURL+GameServerServiceRenameGameServerEntryProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("RenameGameServerEntry")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -222,9 +311,17 @@ type gameServerServiceClient struct {
 	streamGameServerStatus  *connect.Client[v1.StreamGameServerStatusRequest, v1.GameServerStatusUpdate]
 	getGameServerLogs       *connect.Client[v1.GetGameServerLogsRequest, v1.GetGameServerLogsResponse]
 	streamGameServerLogs    *connect.Client[v1.StreamGameServerLogsRequest, v1.GameServerLogLine]
+	sendGameServerCommand   *connect.Client[v1.SendGameServerCommandRequest, v1.SendGameServerCommandResponse]
 	getGameServerMetrics    *connect.Client[v1.GetGameServerMetricsRequest, v1.GetGameServerMetricsResponse]
 	streamGameServerMetrics *connect.Client[v1.StreamGameServerMetricsRequest, v1.GameServerMetric]
 	getGameServerUsage      *connect.Client[v1.GetGameServerUsageRequest, v1.GetGameServerUsageResponse]
+	listGameServerFiles     *connect.Client[v1.ListGameServerFilesRequest, v1.ListGameServerFilesResponse]
+	getGameServerFile       *connect.Client[v1.GetGameServerFileRequest, v1.GetGameServerFileResponse]
+	uploadGameServerFiles   *connect.Client[v1.UploadGameServerFilesRequest, v1.UploadGameServerFilesResponse]
+	deleteGameServerEntries *connect.Client[v1.DeleteGameServerEntriesRequest, v1.DeleteGameServerEntriesResponse]
+	createGameServerEntry   *connect.Client[v1.CreateGameServerEntryRequest, v1.CreateGameServerEntryResponse]
+	writeGameServerFile     *connect.Client[v1.WriteGameServerFileRequest, v1.WriteGameServerFileResponse]
+	renameGameServerEntry   *connect.Client[v1.RenameGameServerEntryRequest, v1.RenameGameServerEntryResponse]
 }
 
 // ListGameServers calls obiente.cloud.gameservers.v1.GameServerService.ListGameServers.
@@ -283,6 +380,11 @@ func (c *gameServerServiceClient) StreamGameServerLogs(ctx context.Context, req 
 	return c.streamGameServerLogs.CallServerStream(ctx, req)
 }
 
+// SendGameServerCommand calls obiente.cloud.gameservers.v1.GameServerService.SendGameServerCommand.
+func (c *gameServerServiceClient) SendGameServerCommand(ctx context.Context, req *connect.Request[v1.SendGameServerCommandRequest]) (*connect.Response[v1.SendGameServerCommandResponse], error) {
+	return c.sendGameServerCommand.CallUnary(ctx, req)
+}
+
 // GetGameServerMetrics calls obiente.cloud.gameservers.v1.GameServerService.GetGameServerMetrics.
 func (c *gameServerServiceClient) GetGameServerMetrics(ctx context.Context, req *connect.Request[v1.GetGameServerMetricsRequest]) (*connect.Response[v1.GetGameServerMetricsResponse], error) {
 	return c.getGameServerMetrics.CallUnary(ctx, req)
@@ -297,6 +399,42 @@ func (c *gameServerServiceClient) StreamGameServerMetrics(ctx context.Context, r
 // GetGameServerUsage calls obiente.cloud.gameservers.v1.GameServerService.GetGameServerUsage.
 func (c *gameServerServiceClient) GetGameServerUsage(ctx context.Context, req *connect.Request[v1.GetGameServerUsageRequest]) (*connect.Response[v1.GetGameServerUsageResponse], error) {
 	return c.getGameServerUsage.CallUnary(ctx, req)
+}
+
+// ListGameServerFiles calls obiente.cloud.gameservers.v1.GameServerService.ListGameServerFiles.
+func (c *gameServerServiceClient) ListGameServerFiles(ctx context.Context, req *connect.Request[v1.ListGameServerFilesRequest]) (*connect.Response[v1.ListGameServerFilesResponse], error) {
+	return c.listGameServerFiles.CallUnary(ctx, req)
+}
+
+// GetGameServerFile calls obiente.cloud.gameservers.v1.GameServerService.GetGameServerFile.
+func (c *gameServerServiceClient) GetGameServerFile(ctx context.Context, req *connect.Request[v1.GetGameServerFileRequest]) (*connect.Response[v1.GetGameServerFileResponse], error) {
+	return c.getGameServerFile.CallUnary(ctx, req)
+}
+
+// UploadGameServerFiles calls obiente.cloud.gameservers.v1.GameServerService.UploadGameServerFiles.
+func (c *gameServerServiceClient) UploadGameServerFiles(ctx context.Context, req *connect.Request[v1.UploadGameServerFilesRequest]) (*connect.Response[v1.UploadGameServerFilesResponse], error) {
+	return c.uploadGameServerFiles.CallUnary(ctx, req)
+}
+
+// DeleteGameServerEntries calls
+// obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerEntries.
+func (c *gameServerServiceClient) DeleteGameServerEntries(ctx context.Context, req *connect.Request[v1.DeleteGameServerEntriesRequest]) (*connect.Response[v1.DeleteGameServerEntriesResponse], error) {
+	return c.deleteGameServerEntries.CallUnary(ctx, req)
+}
+
+// CreateGameServerEntry calls obiente.cloud.gameservers.v1.GameServerService.CreateGameServerEntry.
+func (c *gameServerServiceClient) CreateGameServerEntry(ctx context.Context, req *connect.Request[v1.CreateGameServerEntryRequest]) (*connect.Response[v1.CreateGameServerEntryResponse], error) {
+	return c.createGameServerEntry.CallUnary(ctx, req)
+}
+
+// WriteGameServerFile calls obiente.cloud.gameservers.v1.GameServerService.WriteGameServerFile.
+func (c *gameServerServiceClient) WriteGameServerFile(ctx context.Context, req *connect.Request[v1.WriteGameServerFileRequest]) (*connect.Response[v1.WriteGameServerFileResponse], error) {
+	return c.writeGameServerFile.CallUnary(ctx, req)
+}
+
+// RenameGameServerEntry calls obiente.cloud.gameservers.v1.GameServerService.RenameGameServerEntry.
+func (c *gameServerServiceClient) RenameGameServerEntry(ctx context.Context, req *connect.Request[v1.RenameGameServerEntryRequest]) (*connect.Response[v1.RenameGameServerEntryResponse], error) {
+	return c.renameGameServerEntry.CallUnary(ctx, req)
 }
 
 // GameServerServiceHandler is an implementation of the
@@ -324,12 +462,29 @@ type GameServerServiceHandler interface {
 	GetGameServerLogs(context.Context, *connect.Request[v1.GetGameServerLogsRequest]) (*connect.Response[v1.GetGameServerLogsResponse], error)
 	// Stream game server logs (tail/follow)
 	StreamGameServerLogs(context.Context, *connect.Request[v1.StreamGameServerLogsRequest], *connect.ServerStream[v1.GameServerLogLine]) error
+	// Send a command to a running game server
+	SendGameServerCommand(context.Context, *connect.Request[v1.SendGameServerCommandRequest]) (*connect.Response[v1.SendGameServerCommandResponse], error)
 	// Get game server metrics (real-time or historical)
 	GetGameServerMetrics(context.Context, *connect.Request[v1.GetGameServerMetricsRequest]) (*connect.Response[v1.GetGameServerMetricsResponse], error)
 	// Stream real-time game server metrics
 	StreamGameServerMetrics(context.Context, *connect.Request[v1.StreamGameServerMetricsRequest], *connect.ServerStream[v1.GameServerMetric]) error
 	// Get aggregated usage for a game server
 	GetGameServerUsage(context.Context, *connect.Request[v1.GetGameServerUsageRequest]) (*connect.Response[v1.GetGameServerUsageResponse], error)
+	// File system operations
+	// List files in a game server container or volume
+	ListGameServerFiles(context.Context, *connect.Request[v1.ListGameServerFilesRequest]) (*connect.Response[v1.ListGameServerFilesResponse], error)
+	// Get file contents from a game server container or volume
+	GetGameServerFile(context.Context, *connect.Request[v1.GetGameServerFileRequest]) (*connect.Response[v1.GetGameServerFileResponse], error)
+	// Upload files to a game server container or volume
+	UploadGameServerFiles(context.Context, *connect.Request[v1.UploadGameServerFilesRequest]) (*connect.Response[v1.UploadGameServerFilesResponse], error)
+	// Delete files or directories from a game server
+	DeleteGameServerEntries(context.Context, *connect.Request[v1.DeleteGameServerEntriesRequest]) (*connect.Response[v1.DeleteGameServerEntriesResponse], error)
+	// Create a file, directory, or symlink in a game server
+	CreateGameServerEntry(context.Context, *connect.Request[v1.CreateGameServerEntryRequest]) (*connect.Response[v1.CreateGameServerEntryResponse], error)
+	// Write or update file contents in a game server
+	WriteGameServerFile(context.Context, *connect.Request[v1.WriteGameServerFileRequest]) (*connect.Response[v1.WriteGameServerFileResponse], error)
+	// Rename a file or directory in a game server
+	RenameGameServerEntry(context.Context, *connect.Request[v1.RenameGameServerEntryRequest]) (*connect.Response[v1.RenameGameServerEntryResponse], error)
 }
 
 // NewGameServerServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -405,6 +560,12 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 		connect.WithSchema(gameServerServiceMethods.ByName("StreamGameServerLogs")),
 		connect.WithHandlerOptions(opts...),
 	)
+	gameServerServiceSendGameServerCommandHandler := connect.NewUnaryHandler(
+		GameServerServiceSendGameServerCommandProcedure,
+		svc.SendGameServerCommand,
+		connect.WithSchema(gameServerServiceMethods.ByName("SendGameServerCommand")),
+		connect.WithHandlerOptions(opts...),
+	)
 	gameServerServiceGetGameServerMetricsHandler := connect.NewUnaryHandler(
 		GameServerServiceGetGameServerMetricsProcedure,
 		svc.GetGameServerMetrics,
@@ -421,6 +582,48 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 		GameServerServiceGetGameServerUsageProcedure,
 		svc.GetGameServerUsage,
 		connect.WithSchema(gameServerServiceMethods.ByName("GetGameServerUsage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceListGameServerFilesHandler := connect.NewUnaryHandler(
+		GameServerServiceListGameServerFilesProcedure,
+		svc.ListGameServerFiles,
+		connect.WithSchema(gameServerServiceMethods.ByName("ListGameServerFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceGetGameServerFileHandler := connect.NewUnaryHandler(
+		GameServerServiceGetGameServerFileProcedure,
+		svc.GetGameServerFile,
+		connect.WithSchema(gameServerServiceMethods.ByName("GetGameServerFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceUploadGameServerFilesHandler := connect.NewUnaryHandler(
+		GameServerServiceUploadGameServerFilesProcedure,
+		svc.UploadGameServerFiles,
+		connect.WithSchema(gameServerServiceMethods.ByName("UploadGameServerFiles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceDeleteGameServerEntriesHandler := connect.NewUnaryHandler(
+		GameServerServiceDeleteGameServerEntriesProcedure,
+		svc.DeleteGameServerEntries,
+		connect.WithSchema(gameServerServiceMethods.ByName("DeleteGameServerEntries")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceCreateGameServerEntryHandler := connect.NewUnaryHandler(
+		GameServerServiceCreateGameServerEntryProcedure,
+		svc.CreateGameServerEntry,
+		connect.WithSchema(gameServerServiceMethods.ByName("CreateGameServerEntry")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceWriteGameServerFileHandler := connect.NewUnaryHandler(
+		GameServerServiceWriteGameServerFileProcedure,
+		svc.WriteGameServerFile,
+		connect.WithSchema(gameServerServiceMethods.ByName("WriteGameServerFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceRenameGameServerEntryHandler := connect.NewUnaryHandler(
+		GameServerServiceRenameGameServerEntryProcedure,
+		svc.RenameGameServerEntry,
+		connect.WithSchema(gameServerServiceMethods.ByName("RenameGameServerEntry")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/obiente.cloud.gameservers.v1.GameServerService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -447,12 +650,28 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 			gameServerServiceGetGameServerLogsHandler.ServeHTTP(w, r)
 		case GameServerServiceStreamGameServerLogsProcedure:
 			gameServerServiceStreamGameServerLogsHandler.ServeHTTP(w, r)
+		case GameServerServiceSendGameServerCommandProcedure:
+			gameServerServiceSendGameServerCommandHandler.ServeHTTP(w, r)
 		case GameServerServiceGetGameServerMetricsProcedure:
 			gameServerServiceGetGameServerMetricsHandler.ServeHTTP(w, r)
 		case GameServerServiceStreamGameServerMetricsProcedure:
 			gameServerServiceStreamGameServerMetricsHandler.ServeHTTP(w, r)
 		case GameServerServiceGetGameServerUsageProcedure:
 			gameServerServiceGetGameServerUsageHandler.ServeHTTP(w, r)
+		case GameServerServiceListGameServerFilesProcedure:
+			gameServerServiceListGameServerFilesHandler.ServeHTTP(w, r)
+		case GameServerServiceGetGameServerFileProcedure:
+			gameServerServiceGetGameServerFileHandler.ServeHTTP(w, r)
+		case GameServerServiceUploadGameServerFilesProcedure:
+			gameServerServiceUploadGameServerFilesHandler.ServeHTTP(w, r)
+		case GameServerServiceDeleteGameServerEntriesProcedure:
+			gameServerServiceDeleteGameServerEntriesHandler.ServeHTTP(w, r)
+		case GameServerServiceCreateGameServerEntryProcedure:
+			gameServerServiceCreateGameServerEntryHandler.ServeHTTP(w, r)
+		case GameServerServiceWriteGameServerFileProcedure:
+			gameServerServiceWriteGameServerFileHandler.ServeHTTP(w, r)
+		case GameServerServiceRenameGameServerEntryProcedure:
+			gameServerServiceRenameGameServerEntryHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -506,6 +725,10 @@ func (UnimplementedGameServerServiceHandler) StreamGameServerLogs(context.Contex
 	return connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.StreamGameServerLogs is not implemented"))
 }
 
+func (UnimplementedGameServerServiceHandler) SendGameServerCommand(context.Context, *connect.Request[v1.SendGameServerCommandRequest]) (*connect.Response[v1.SendGameServerCommandResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.SendGameServerCommand is not implemented"))
+}
+
 func (UnimplementedGameServerServiceHandler) GetGameServerMetrics(context.Context, *connect.Request[v1.GetGameServerMetricsRequest]) (*connect.Response[v1.GetGameServerMetricsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.GetGameServerMetrics is not implemented"))
 }
@@ -516,4 +739,32 @@ func (UnimplementedGameServerServiceHandler) StreamGameServerMetrics(context.Con
 
 func (UnimplementedGameServerServiceHandler) GetGameServerUsage(context.Context, *connect.Request[v1.GetGameServerUsageRequest]) (*connect.Response[v1.GetGameServerUsageResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.GetGameServerUsage is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) ListGameServerFiles(context.Context, *connect.Request[v1.ListGameServerFilesRequest]) (*connect.Response[v1.ListGameServerFilesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.ListGameServerFiles is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) GetGameServerFile(context.Context, *connect.Request[v1.GetGameServerFileRequest]) (*connect.Response[v1.GetGameServerFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.GetGameServerFile is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) UploadGameServerFiles(context.Context, *connect.Request[v1.UploadGameServerFilesRequest]) (*connect.Response[v1.UploadGameServerFilesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.UploadGameServerFiles is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) DeleteGameServerEntries(context.Context, *connect.Request[v1.DeleteGameServerEntriesRequest]) (*connect.Response[v1.DeleteGameServerEntriesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerEntries is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) CreateGameServerEntry(context.Context, *connect.Request[v1.CreateGameServerEntryRequest]) (*connect.Response[v1.CreateGameServerEntryResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.CreateGameServerEntry is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) WriteGameServerFile(context.Context, *connect.Request[v1.WriteGameServerFileRequest]) (*connect.Response[v1.WriteGameServerFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.WriteGameServerFile is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) RenameGameServerEntry(context.Context, *connect.Request[v1.RenameGameServerEntryRequest]) (*connect.Response[v1.RenameGameServerEntryResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.RenameGameServerEntry is not implemented"))
 }

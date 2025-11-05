@@ -1627,6 +1627,360 @@ func (x *Address) GetCountry() string {
 	return ""
 }
 
+type CreateDNSDelegationSubscriptionCheckoutRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	// Optional: success URL (defaults to console URL)
+	SuccessUrl *string `protobuf:"bytes,2,opt,name=success_url,json=successUrl,proto3,oneof" json:"success_url,omitempty"`
+	// Optional: cancel URL (defaults to console URL)
+	CancelUrl     *string `protobuf:"bytes,3,opt,name=cancel_url,json=cancelUrl,proto3,oneof" json:"cancel_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateDNSDelegationSubscriptionCheckoutRequest) Reset() {
+	*x = CreateDNSDelegationSubscriptionCheckoutRequest{}
+	mi := &file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateDNSDelegationSubscriptionCheckoutRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateDNSDelegationSubscriptionCheckoutRequest) ProtoMessage() {}
+
+func (x *CreateDNSDelegationSubscriptionCheckoutRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateDNSDelegationSubscriptionCheckoutRequest.ProtoReflect.Descriptor instead.
+func (*CreateDNSDelegationSubscriptionCheckoutRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_billing_v1_billing_service_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *CreateDNSDelegationSubscriptionCheckoutRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *CreateDNSDelegationSubscriptionCheckoutRequest) GetSuccessUrl() string {
+	if x != nil && x.SuccessUrl != nil {
+		return *x.SuccessUrl
+	}
+	return ""
+}
+
+func (x *CreateDNSDelegationSubscriptionCheckoutRequest) GetCancelUrl() string {
+	if x != nil && x.CancelUrl != nil {
+		return *x.CancelUrl
+	}
+	return ""
+}
+
+type CreateDNSDelegationSubscriptionCheckoutResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	CheckoutUrl   string                 `protobuf:"bytes,2,opt,name=checkout_url,json=checkoutUrl,proto3" json:"checkout_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateDNSDelegationSubscriptionCheckoutResponse) Reset() {
+	*x = CreateDNSDelegationSubscriptionCheckoutResponse{}
+	mi := &file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateDNSDelegationSubscriptionCheckoutResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateDNSDelegationSubscriptionCheckoutResponse) ProtoMessage() {}
+
+func (x *CreateDNSDelegationSubscriptionCheckoutResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateDNSDelegationSubscriptionCheckoutResponse.ProtoReflect.Descriptor instead.
+func (*CreateDNSDelegationSubscriptionCheckoutResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_billing_v1_billing_service_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *CreateDNSDelegationSubscriptionCheckoutResponse) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *CreateDNSDelegationSubscriptionCheckoutResponse) GetCheckoutUrl() string {
+	if x != nil {
+		return x.CheckoutUrl
+	}
+	return ""
+}
+
+type GetDNSDelegationSubscriptionStatusRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetDNSDelegationSubscriptionStatusRequest) Reset() {
+	*x = GetDNSDelegationSubscriptionStatusRequest{}
+	mi := &file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDNSDelegationSubscriptionStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDNSDelegationSubscriptionStatusRequest) ProtoMessage() {}
+
+func (x *GetDNSDelegationSubscriptionStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDNSDelegationSubscriptionStatusRequest.ProtoReflect.Descriptor instead.
+func (*GetDNSDelegationSubscriptionStatusRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_billing_v1_billing_service_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *GetDNSDelegationSubscriptionStatusRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+type GetDNSDelegationSubscriptionStatusResponse struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	HasActiveSubscription bool                   `protobuf:"varint,1,opt,name=has_active_subscription,json=hasActiveSubscription,proto3" json:"has_active_subscription,omitempty"`
+	StripeSubscriptionId  string                 `protobuf:"bytes,2,opt,name=stripe_subscription_id,json=stripeSubscriptionId,proto3" json:"stripe_subscription_id,omitempty"` // Empty if no subscription
+	HasApiKey             bool                   `protobuf:"varint,3,opt,name=has_api_key,json=hasApiKey,proto3" json:"has_api_key,omitempty"`                                 // Whether organization has an active API key
+	ApiKeyCreatedAt       *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=api_key_created_at,json=apiKeyCreatedAt,proto3" json:"api_key_created_at,omitempty"`              // When API key was created (if exists)
+	CancelAtPeriodEnd     bool                   `protobuf:"varint,5,opt,name=cancel_at_period_end,json=cancelAtPeriodEnd,proto3" json:"cancel_at_period_end,omitempty"`       // Whether subscription is scheduled to cancel
+	CurrentPeriodEnd      *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=current_period_end,json=currentPeriodEnd,proto3" json:"current_period_end,omitempty"`             // When current billing period ends
+	ApiKeyDescription     string                 `protobuf:"bytes,7,opt,name=api_key_description,json=apiKeyDescription,proto3" json:"api_key_description,omitempty"`          // Description of the API key (if exists)
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *GetDNSDelegationSubscriptionStatusResponse) Reset() {
+	*x = GetDNSDelegationSubscriptionStatusResponse{}
+	mi := &file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDNSDelegationSubscriptionStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDNSDelegationSubscriptionStatusResponse) ProtoMessage() {}
+
+func (x *GetDNSDelegationSubscriptionStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDNSDelegationSubscriptionStatusResponse.ProtoReflect.Descriptor instead.
+func (*GetDNSDelegationSubscriptionStatusResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_billing_v1_billing_service_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *GetDNSDelegationSubscriptionStatusResponse) GetHasActiveSubscription() bool {
+	if x != nil {
+		return x.HasActiveSubscription
+	}
+	return false
+}
+
+func (x *GetDNSDelegationSubscriptionStatusResponse) GetStripeSubscriptionId() string {
+	if x != nil {
+		return x.StripeSubscriptionId
+	}
+	return ""
+}
+
+func (x *GetDNSDelegationSubscriptionStatusResponse) GetHasApiKey() bool {
+	if x != nil {
+		return x.HasApiKey
+	}
+	return false
+}
+
+func (x *GetDNSDelegationSubscriptionStatusResponse) GetApiKeyCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ApiKeyCreatedAt
+	}
+	return nil
+}
+
+func (x *GetDNSDelegationSubscriptionStatusResponse) GetCancelAtPeriodEnd() bool {
+	if x != nil {
+		return x.CancelAtPeriodEnd
+	}
+	return false
+}
+
+func (x *GetDNSDelegationSubscriptionStatusResponse) GetCurrentPeriodEnd() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CurrentPeriodEnd
+	}
+	return nil
+}
+
+func (x *GetDNSDelegationSubscriptionStatusResponse) GetApiKeyDescription() string {
+	if x != nil {
+		return x.ApiKeyDescription
+	}
+	return ""
+}
+
+type CancelDNSDelegationSubscriptionRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CancelDNSDelegationSubscriptionRequest) Reset() {
+	*x = CancelDNSDelegationSubscriptionRequest{}
+	mi := &file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelDNSDelegationSubscriptionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelDNSDelegationSubscriptionRequest) ProtoMessage() {}
+
+func (x *CancelDNSDelegationSubscriptionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelDNSDelegationSubscriptionRequest.ProtoReflect.Descriptor instead.
+func (*CancelDNSDelegationSubscriptionRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_billing_v1_billing_service_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *CancelDNSDelegationSubscriptionRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+type CancelDNSDelegationSubscriptionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`                         // Status message
+	CanceledAt    *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=canceled_at,json=canceledAt,proto3" json:"canceled_at,omitempty"` // When subscription will be canceled (end of billing period)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelDNSDelegationSubscriptionResponse) Reset() {
+	*x = CancelDNSDelegationSubscriptionResponse{}
+	mi := &file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelDNSDelegationSubscriptionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelDNSDelegationSubscriptionResponse) ProtoMessage() {}
+
+func (x *CancelDNSDelegationSubscriptionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelDNSDelegationSubscriptionResponse.ProtoReflect.Descriptor instead.
+func (*CancelDNSDelegationSubscriptionResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_billing_v1_billing_service_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *CancelDNSDelegationSubscriptionResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *CancelDNSDelegationSubscriptionResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *CancelDNSDelegationSubscriptionResponse) GetCanceledAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CanceledAt
+	}
+	return nil
+}
+
 var File_obiente_cloud_billing_v1_billing_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_billing_v1_billing_service_proto_rawDesc = "" +
@@ -1775,7 +2129,36 @@ const file_obiente_cloud_billing_v1_billing_service_proto_rawDesc = "" +
 	"postalCode\x12\x18\n" +
 	"\acountry\x18\x06 \x01(\tR\acountryB\b\n" +
 	"\x06_line2B\b\n" +
-	"\x06_state2\xaa\v\n" +
+	"\x06_state\"\xc2\x01\n" +
+	".CreateDNSDelegationSubscriptionCheckoutRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12$\n" +
+	"\vsuccess_url\x18\x02 \x01(\tH\x00R\n" +
+	"successUrl\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"cancel_url\x18\x03 \x01(\tH\x01R\tcancelUrl\x88\x01\x01B\x0e\n" +
+	"\f_success_urlB\r\n" +
+	"\v_cancel_url\"s\n" +
+	"/CreateDNSDelegationSubscriptionCheckoutResponse\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12!\n" +
+	"\fcheckout_url\x18\x02 \x01(\tR\vcheckoutUrl\"T\n" +
+	")GetDNSDelegationSubscriptionStatusRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\"\xae\x03\n" +
+	"*GetDNSDelegationSubscriptionStatusResponse\x126\n" +
+	"\x17has_active_subscription\x18\x01 \x01(\bR\x15hasActiveSubscription\x124\n" +
+	"\x16stripe_subscription_id\x18\x02 \x01(\tR\x14stripeSubscriptionId\x12\x1e\n" +
+	"\vhas_api_key\x18\x03 \x01(\bR\thasApiKey\x12G\n" +
+	"\x12api_key_created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x0fapiKeyCreatedAt\x12/\n" +
+	"\x14cancel_at_period_end\x18\x05 \x01(\bR\x11cancelAtPeriodEnd\x12H\n" +
+	"\x12current_period_end\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\x10currentPeriodEnd\x12.\n" +
+	"\x13api_key_description\x18\a \x01(\tR\x11apiKeyDescription\"Q\n" +
+	"&CancelDNSDelegationSubscriptionRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\"\x9a\x01\n" +
+	"'CancelDNSDelegationSubscriptionResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12;\n" +
+	"\vcanceled_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"canceledAt2\xc6\x0f\n" +
 	"\x0eBillingService\x12\x88\x01\n" +
 	"\x15CreateCheckoutSession\x126.obiente.cloud.billing.v1.CreateCheckoutSessionRequest\x1a7.obiente.cloud.billing.v1.CreateCheckoutSessionResponse\x12\x82\x01\n" +
 	"\x13CreatePortalSession\x124.obiente.cloud.billing.v1.CreatePortalSessionRequest\x1a5.obiente.cloud.billing.v1.CreatePortalSessionResponse\x12|\n" +
@@ -1787,7 +2170,10 @@ const file_obiente_cloud_billing_v1_billing_service_proto_rawDesc = "" +
 	"\x13DetachPaymentMethod\x124.obiente.cloud.billing.v1.DetachPaymentMethodRequest\x1a5.obiente.cloud.billing.v1.DetachPaymentMethodResponse\x12\x8e\x01\n" +
 	"\x17SetDefaultPaymentMethod\x128.obiente.cloud.billing.v1.SetDefaultPaymentMethodRequest\x1a9.obiente.cloud.billing.v1.SetDefaultPaymentMethodResponse\x12y\n" +
 	"\x10GetPaymentStatus\x121.obiente.cloud.billing.v1.GetPaymentStatusRequest\x1a2.obiente.cloud.billing.v1.GetPaymentStatusResponse\x12m\n" +
-	"\fListInvoices\x12-.obiente.cloud.billing.v1.ListInvoicesRequest\x1a..obiente.cloud.billing.v1.ListInvoicesResponseB2Z0api/gen/proto/obiente/cloud/billing/v1;billingv1b\x06proto3"
+	"\fListInvoices\x12-.obiente.cloud.billing.v1.ListInvoicesRequest\x1a..obiente.cloud.billing.v1.ListInvoicesResponse\x12\xbe\x01\n" +
+	"'CreateDNSDelegationSubscriptionCheckout\x12H.obiente.cloud.billing.v1.CreateDNSDelegationSubscriptionCheckoutRequest\x1aI.obiente.cloud.billing.v1.CreateDNSDelegationSubscriptionCheckoutResponse\x12\xaf\x01\n" +
+	"\"GetDNSDelegationSubscriptionStatus\x12C.obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusRequest\x1aD.obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusResponse\x12\xa6\x01\n" +
+	"\x1fCancelDNSDelegationSubscription\x12@.obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionRequest\x1aA.obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionResponseB2Z0api/gen/proto/obiente/cloud/billing/v1;billingv1b\x06proto3"
 
 var (
 	file_obiente_cloud_billing_v1_billing_service_proto_rawDescOnce sync.Once
@@ -1801,36 +2187,42 @@ func file_obiente_cloud_billing_v1_billing_service_proto_rawDescGZIP() []byte {
 	return file_obiente_cloud_billing_v1_billing_service_proto_rawDescData
 }
 
-var file_obiente_cloud_billing_v1_billing_service_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_obiente_cloud_billing_v1_billing_service_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_obiente_cloud_billing_v1_billing_service_proto_goTypes = []any{
-	(*CreateCheckoutSessionRequest)(nil),    // 0: obiente.cloud.billing.v1.CreateCheckoutSessionRequest
-	(*CreateCheckoutSessionResponse)(nil),   // 1: obiente.cloud.billing.v1.CreateCheckoutSessionResponse
-	(*CreatePortalSessionRequest)(nil),      // 2: obiente.cloud.billing.v1.CreatePortalSessionRequest
-	(*CreatePortalSessionResponse)(nil),     // 3: obiente.cloud.billing.v1.CreatePortalSessionResponse
-	(*GetBillingAccountRequest)(nil),        // 4: obiente.cloud.billing.v1.GetBillingAccountRequest
-	(*GetBillingAccountResponse)(nil),       // 5: obiente.cloud.billing.v1.GetBillingAccountResponse
-	(*UpdateBillingAccountRequest)(nil),     // 6: obiente.cloud.billing.v1.UpdateBillingAccountRequest
-	(*UpdateBillingAccountResponse)(nil),    // 7: obiente.cloud.billing.v1.UpdateBillingAccountResponse
-	(*ListPaymentMethodsRequest)(nil),       // 8: obiente.cloud.billing.v1.ListPaymentMethodsRequest
-	(*ListPaymentMethodsResponse)(nil),      // 9: obiente.cloud.billing.v1.ListPaymentMethodsResponse
-	(*GetPaymentStatusRequest)(nil),         // 10: obiente.cloud.billing.v1.GetPaymentStatusRequest
-	(*GetPaymentStatusResponse)(nil),        // 11: obiente.cloud.billing.v1.GetPaymentStatusResponse
-	(*CreateSetupIntentRequest)(nil),        // 12: obiente.cloud.billing.v1.CreateSetupIntentRequest
-	(*CreateSetupIntentResponse)(nil),       // 13: obiente.cloud.billing.v1.CreateSetupIntentResponse
-	(*AttachPaymentMethodRequest)(nil),      // 14: obiente.cloud.billing.v1.AttachPaymentMethodRequest
-	(*AttachPaymentMethodResponse)(nil),     // 15: obiente.cloud.billing.v1.AttachPaymentMethodResponse
-	(*DetachPaymentMethodRequest)(nil),      // 16: obiente.cloud.billing.v1.DetachPaymentMethodRequest
-	(*DetachPaymentMethodResponse)(nil),     // 17: obiente.cloud.billing.v1.DetachPaymentMethodResponse
-	(*SetDefaultPaymentMethodRequest)(nil),  // 18: obiente.cloud.billing.v1.SetDefaultPaymentMethodRequest
-	(*SetDefaultPaymentMethodResponse)(nil), // 19: obiente.cloud.billing.v1.SetDefaultPaymentMethodResponse
-	(*ListInvoicesRequest)(nil),             // 20: obiente.cloud.billing.v1.ListInvoicesRequest
-	(*ListInvoicesResponse)(nil),            // 21: obiente.cloud.billing.v1.ListInvoicesResponse
-	(*Invoice)(nil),                         // 22: obiente.cloud.billing.v1.Invoice
-	(*BillingAccount)(nil),                  // 23: obiente.cloud.billing.v1.BillingAccount
-	(*PaymentMethod)(nil),                   // 24: obiente.cloud.billing.v1.PaymentMethod
-	(*CardDetails)(nil),                     // 25: obiente.cloud.billing.v1.CardDetails
-	(*Address)(nil),                         // 26: obiente.cloud.billing.v1.Address
-	(*timestamppb.Timestamp)(nil),           // 27: google.protobuf.Timestamp
+	(*CreateCheckoutSessionRequest)(nil),                    // 0: obiente.cloud.billing.v1.CreateCheckoutSessionRequest
+	(*CreateCheckoutSessionResponse)(nil),                   // 1: obiente.cloud.billing.v1.CreateCheckoutSessionResponse
+	(*CreatePortalSessionRequest)(nil),                      // 2: obiente.cloud.billing.v1.CreatePortalSessionRequest
+	(*CreatePortalSessionResponse)(nil),                     // 3: obiente.cloud.billing.v1.CreatePortalSessionResponse
+	(*GetBillingAccountRequest)(nil),                        // 4: obiente.cloud.billing.v1.GetBillingAccountRequest
+	(*GetBillingAccountResponse)(nil),                       // 5: obiente.cloud.billing.v1.GetBillingAccountResponse
+	(*UpdateBillingAccountRequest)(nil),                     // 6: obiente.cloud.billing.v1.UpdateBillingAccountRequest
+	(*UpdateBillingAccountResponse)(nil),                    // 7: obiente.cloud.billing.v1.UpdateBillingAccountResponse
+	(*ListPaymentMethodsRequest)(nil),                       // 8: obiente.cloud.billing.v1.ListPaymentMethodsRequest
+	(*ListPaymentMethodsResponse)(nil),                      // 9: obiente.cloud.billing.v1.ListPaymentMethodsResponse
+	(*GetPaymentStatusRequest)(nil),                         // 10: obiente.cloud.billing.v1.GetPaymentStatusRequest
+	(*GetPaymentStatusResponse)(nil),                        // 11: obiente.cloud.billing.v1.GetPaymentStatusResponse
+	(*CreateSetupIntentRequest)(nil),                        // 12: obiente.cloud.billing.v1.CreateSetupIntentRequest
+	(*CreateSetupIntentResponse)(nil),                       // 13: obiente.cloud.billing.v1.CreateSetupIntentResponse
+	(*AttachPaymentMethodRequest)(nil),                      // 14: obiente.cloud.billing.v1.AttachPaymentMethodRequest
+	(*AttachPaymentMethodResponse)(nil),                     // 15: obiente.cloud.billing.v1.AttachPaymentMethodResponse
+	(*DetachPaymentMethodRequest)(nil),                      // 16: obiente.cloud.billing.v1.DetachPaymentMethodRequest
+	(*DetachPaymentMethodResponse)(nil),                     // 17: obiente.cloud.billing.v1.DetachPaymentMethodResponse
+	(*SetDefaultPaymentMethodRequest)(nil),                  // 18: obiente.cloud.billing.v1.SetDefaultPaymentMethodRequest
+	(*SetDefaultPaymentMethodResponse)(nil),                 // 19: obiente.cloud.billing.v1.SetDefaultPaymentMethodResponse
+	(*ListInvoicesRequest)(nil),                             // 20: obiente.cloud.billing.v1.ListInvoicesRequest
+	(*ListInvoicesResponse)(nil),                            // 21: obiente.cloud.billing.v1.ListInvoicesResponse
+	(*Invoice)(nil),                                         // 22: obiente.cloud.billing.v1.Invoice
+	(*BillingAccount)(nil),                                  // 23: obiente.cloud.billing.v1.BillingAccount
+	(*PaymentMethod)(nil),                                   // 24: obiente.cloud.billing.v1.PaymentMethod
+	(*CardDetails)(nil),                                     // 25: obiente.cloud.billing.v1.CardDetails
+	(*Address)(nil),                                         // 26: obiente.cloud.billing.v1.Address
+	(*CreateDNSDelegationSubscriptionCheckoutRequest)(nil),  // 27: obiente.cloud.billing.v1.CreateDNSDelegationSubscriptionCheckoutRequest
+	(*CreateDNSDelegationSubscriptionCheckoutResponse)(nil), // 28: obiente.cloud.billing.v1.CreateDNSDelegationSubscriptionCheckoutResponse
+	(*GetDNSDelegationSubscriptionStatusRequest)(nil),       // 29: obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusRequest
+	(*GetDNSDelegationSubscriptionStatusResponse)(nil),      // 30: obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusResponse
+	(*CancelDNSDelegationSubscriptionRequest)(nil),          // 31: obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionRequest
+	(*CancelDNSDelegationSubscriptionResponse)(nil),         // 32: obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionResponse
+	(*timestamppb.Timestamp)(nil),                           // 33: google.protobuf.Timestamp
 }
 var file_obiente_cloud_billing_v1_billing_service_proto_depIdxs = []int32{
 	23, // 0: obiente.cloud.billing.v1.GetBillingAccountResponse.account:type_name -> obiente.cloud.billing.v1.BillingAccount
@@ -1839,40 +2231,49 @@ var file_obiente_cloud_billing_v1_billing_service_proto_depIdxs = []int32{
 	24, // 3: obiente.cloud.billing.v1.ListPaymentMethodsResponse.payment_methods:type_name -> obiente.cloud.billing.v1.PaymentMethod
 	24, // 4: obiente.cloud.billing.v1.AttachPaymentMethodResponse.payment_method:type_name -> obiente.cloud.billing.v1.PaymentMethod
 	22, // 5: obiente.cloud.billing.v1.ListInvoicesResponse.invoices:type_name -> obiente.cloud.billing.v1.Invoice
-	27, // 6: obiente.cloud.billing.v1.Invoice.date:type_name -> google.protobuf.Timestamp
-	27, // 7: obiente.cloud.billing.v1.Invoice.due_date:type_name -> google.protobuf.Timestamp
+	33, // 6: obiente.cloud.billing.v1.Invoice.date:type_name -> google.protobuf.Timestamp
+	33, // 7: obiente.cloud.billing.v1.Invoice.due_date:type_name -> google.protobuf.Timestamp
 	26, // 8: obiente.cloud.billing.v1.BillingAccount.address:type_name -> obiente.cloud.billing.v1.Address
-	27, // 9: obiente.cloud.billing.v1.BillingAccount.created_at:type_name -> google.protobuf.Timestamp
-	27, // 10: obiente.cloud.billing.v1.BillingAccount.updated_at:type_name -> google.protobuf.Timestamp
+	33, // 9: obiente.cloud.billing.v1.BillingAccount.created_at:type_name -> google.protobuf.Timestamp
+	33, // 10: obiente.cloud.billing.v1.BillingAccount.updated_at:type_name -> google.protobuf.Timestamp
 	25, // 11: obiente.cloud.billing.v1.PaymentMethod.card:type_name -> obiente.cloud.billing.v1.CardDetails
-	27, // 12: obiente.cloud.billing.v1.PaymentMethod.created_at:type_name -> google.protobuf.Timestamp
-	0,  // 13: obiente.cloud.billing.v1.BillingService.CreateCheckoutSession:input_type -> obiente.cloud.billing.v1.CreateCheckoutSessionRequest
-	2,  // 14: obiente.cloud.billing.v1.BillingService.CreatePortalSession:input_type -> obiente.cloud.billing.v1.CreatePortalSessionRequest
-	12, // 15: obiente.cloud.billing.v1.BillingService.CreateSetupIntent:input_type -> obiente.cloud.billing.v1.CreateSetupIntentRequest
-	4,  // 16: obiente.cloud.billing.v1.BillingService.GetBillingAccount:input_type -> obiente.cloud.billing.v1.GetBillingAccountRequest
-	6,  // 17: obiente.cloud.billing.v1.BillingService.UpdateBillingAccount:input_type -> obiente.cloud.billing.v1.UpdateBillingAccountRequest
-	8,  // 18: obiente.cloud.billing.v1.BillingService.ListPaymentMethods:input_type -> obiente.cloud.billing.v1.ListPaymentMethodsRequest
-	14, // 19: obiente.cloud.billing.v1.BillingService.AttachPaymentMethod:input_type -> obiente.cloud.billing.v1.AttachPaymentMethodRequest
-	16, // 20: obiente.cloud.billing.v1.BillingService.DetachPaymentMethod:input_type -> obiente.cloud.billing.v1.DetachPaymentMethodRequest
-	18, // 21: obiente.cloud.billing.v1.BillingService.SetDefaultPaymentMethod:input_type -> obiente.cloud.billing.v1.SetDefaultPaymentMethodRequest
-	10, // 22: obiente.cloud.billing.v1.BillingService.GetPaymentStatus:input_type -> obiente.cloud.billing.v1.GetPaymentStatusRequest
-	20, // 23: obiente.cloud.billing.v1.BillingService.ListInvoices:input_type -> obiente.cloud.billing.v1.ListInvoicesRequest
-	1,  // 24: obiente.cloud.billing.v1.BillingService.CreateCheckoutSession:output_type -> obiente.cloud.billing.v1.CreateCheckoutSessionResponse
-	3,  // 25: obiente.cloud.billing.v1.BillingService.CreatePortalSession:output_type -> obiente.cloud.billing.v1.CreatePortalSessionResponse
-	13, // 26: obiente.cloud.billing.v1.BillingService.CreateSetupIntent:output_type -> obiente.cloud.billing.v1.CreateSetupIntentResponse
-	5,  // 27: obiente.cloud.billing.v1.BillingService.GetBillingAccount:output_type -> obiente.cloud.billing.v1.GetBillingAccountResponse
-	7,  // 28: obiente.cloud.billing.v1.BillingService.UpdateBillingAccount:output_type -> obiente.cloud.billing.v1.UpdateBillingAccountResponse
-	9,  // 29: obiente.cloud.billing.v1.BillingService.ListPaymentMethods:output_type -> obiente.cloud.billing.v1.ListPaymentMethodsResponse
-	15, // 30: obiente.cloud.billing.v1.BillingService.AttachPaymentMethod:output_type -> obiente.cloud.billing.v1.AttachPaymentMethodResponse
-	17, // 31: obiente.cloud.billing.v1.BillingService.DetachPaymentMethod:output_type -> obiente.cloud.billing.v1.DetachPaymentMethodResponse
-	19, // 32: obiente.cloud.billing.v1.BillingService.SetDefaultPaymentMethod:output_type -> obiente.cloud.billing.v1.SetDefaultPaymentMethodResponse
-	11, // 33: obiente.cloud.billing.v1.BillingService.GetPaymentStatus:output_type -> obiente.cloud.billing.v1.GetPaymentStatusResponse
-	21, // 34: obiente.cloud.billing.v1.BillingService.ListInvoices:output_type -> obiente.cloud.billing.v1.ListInvoicesResponse
-	24, // [24:35] is the sub-list for method output_type
-	13, // [13:24] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	33, // 12: obiente.cloud.billing.v1.PaymentMethod.created_at:type_name -> google.protobuf.Timestamp
+	33, // 13: obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusResponse.api_key_created_at:type_name -> google.protobuf.Timestamp
+	33, // 14: obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusResponse.current_period_end:type_name -> google.protobuf.Timestamp
+	33, // 15: obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionResponse.canceled_at:type_name -> google.protobuf.Timestamp
+	0,  // 16: obiente.cloud.billing.v1.BillingService.CreateCheckoutSession:input_type -> obiente.cloud.billing.v1.CreateCheckoutSessionRequest
+	2,  // 17: obiente.cloud.billing.v1.BillingService.CreatePortalSession:input_type -> obiente.cloud.billing.v1.CreatePortalSessionRequest
+	12, // 18: obiente.cloud.billing.v1.BillingService.CreateSetupIntent:input_type -> obiente.cloud.billing.v1.CreateSetupIntentRequest
+	4,  // 19: obiente.cloud.billing.v1.BillingService.GetBillingAccount:input_type -> obiente.cloud.billing.v1.GetBillingAccountRequest
+	6,  // 20: obiente.cloud.billing.v1.BillingService.UpdateBillingAccount:input_type -> obiente.cloud.billing.v1.UpdateBillingAccountRequest
+	8,  // 21: obiente.cloud.billing.v1.BillingService.ListPaymentMethods:input_type -> obiente.cloud.billing.v1.ListPaymentMethodsRequest
+	14, // 22: obiente.cloud.billing.v1.BillingService.AttachPaymentMethod:input_type -> obiente.cloud.billing.v1.AttachPaymentMethodRequest
+	16, // 23: obiente.cloud.billing.v1.BillingService.DetachPaymentMethod:input_type -> obiente.cloud.billing.v1.DetachPaymentMethodRequest
+	18, // 24: obiente.cloud.billing.v1.BillingService.SetDefaultPaymentMethod:input_type -> obiente.cloud.billing.v1.SetDefaultPaymentMethodRequest
+	10, // 25: obiente.cloud.billing.v1.BillingService.GetPaymentStatus:input_type -> obiente.cloud.billing.v1.GetPaymentStatusRequest
+	20, // 26: obiente.cloud.billing.v1.BillingService.ListInvoices:input_type -> obiente.cloud.billing.v1.ListInvoicesRequest
+	27, // 27: obiente.cloud.billing.v1.BillingService.CreateDNSDelegationSubscriptionCheckout:input_type -> obiente.cloud.billing.v1.CreateDNSDelegationSubscriptionCheckoutRequest
+	29, // 28: obiente.cloud.billing.v1.BillingService.GetDNSDelegationSubscriptionStatus:input_type -> obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusRequest
+	31, // 29: obiente.cloud.billing.v1.BillingService.CancelDNSDelegationSubscription:input_type -> obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionRequest
+	1,  // 30: obiente.cloud.billing.v1.BillingService.CreateCheckoutSession:output_type -> obiente.cloud.billing.v1.CreateCheckoutSessionResponse
+	3,  // 31: obiente.cloud.billing.v1.BillingService.CreatePortalSession:output_type -> obiente.cloud.billing.v1.CreatePortalSessionResponse
+	13, // 32: obiente.cloud.billing.v1.BillingService.CreateSetupIntent:output_type -> obiente.cloud.billing.v1.CreateSetupIntentResponse
+	5,  // 33: obiente.cloud.billing.v1.BillingService.GetBillingAccount:output_type -> obiente.cloud.billing.v1.GetBillingAccountResponse
+	7,  // 34: obiente.cloud.billing.v1.BillingService.UpdateBillingAccount:output_type -> obiente.cloud.billing.v1.UpdateBillingAccountResponse
+	9,  // 35: obiente.cloud.billing.v1.BillingService.ListPaymentMethods:output_type -> obiente.cloud.billing.v1.ListPaymentMethodsResponse
+	15, // 36: obiente.cloud.billing.v1.BillingService.AttachPaymentMethod:output_type -> obiente.cloud.billing.v1.AttachPaymentMethodResponse
+	17, // 37: obiente.cloud.billing.v1.BillingService.DetachPaymentMethod:output_type -> obiente.cloud.billing.v1.DetachPaymentMethodResponse
+	19, // 38: obiente.cloud.billing.v1.BillingService.SetDefaultPaymentMethod:output_type -> obiente.cloud.billing.v1.SetDefaultPaymentMethodResponse
+	11, // 39: obiente.cloud.billing.v1.BillingService.GetPaymentStatus:output_type -> obiente.cloud.billing.v1.GetPaymentStatusResponse
+	21, // 40: obiente.cloud.billing.v1.BillingService.ListInvoices:output_type -> obiente.cloud.billing.v1.ListInvoicesResponse
+	28, // 41: obiente.cloud.billing.v1.BillingService.CreateDNSDelegationSubscriptionCheckout:output_type -> obiente.cloud.billing.v1.CreateDNSDelegationSubscriptionCheckoutResponse
+	30, // 42: obiente.cloud.billing.v1.BillingService.GetDNSDelegationSubscriptionStatus:output_type -> obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusResponse
+	32, // 43: obiente.cloud.billing.v1.BillingService.CancelDNSDelegationSubscription:output_type -> obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionResponse
+	30, // [30:44] is the sub-list for method output_type
+	16, // [16:30] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_billing_v1_billing_service_proto_init() }
@@ -1891,13 +2292,14 @@ func file_obiente_cloud_billing_v1_billing_service_proto_init() {
 	file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[24].OneofWrappers = []any{}
 	file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[25].OneofWrappers = []any{}
 	file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[26].OneofWrappers = []any{}
+	file_obiente_cloud_billing_v1_billing_service_proto_msgTypes[27].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_billing_v1_billing_service_proto_rawDesc), len(file_obiente_cloud_billing_v1_billing_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   27,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

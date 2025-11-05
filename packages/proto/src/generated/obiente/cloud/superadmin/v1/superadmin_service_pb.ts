@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/superadmin/v1/superadmin_service.proto.
  */
 export const file_obiente_cloud_superadmin_v1_superadmin_service: GenFile = /*@__PURE__*/
-  fileDesc("CjRvYmllbnRlL2Nsb3VkL3N1cGVyYWRtaW4vdjEvc3VwZXJhZG1pbl9zZXJ2aWNlLnByb3RvEhtvYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEiFAoSR2V0T3ZlcnZpZXdSZXF1ZXN0IucCChNHZXRPdmVydmlld1Jlc3BvbnNlEjsKBmNvdW50cxgBIAEoCzIrLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5PdmVydmlld0NvdW50cxJICg1vcmdhbml6YXRpb25zGAIgAygLMjEub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLk9yZ2FuaXphdGlvbk92ZXJ2aWV3EkMKD3BlbmRpbmdfaW52aXRlcxgDIAMoCzIqLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5QZW5kaW5nSW52aXRlEkQKC2RlcGxveW1lbnRzGAQgAygLMi8ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkRlcGxveW1lbnRPdmVydmlldxI+CgZ1c2FnZXMYBSADKAsyLi5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuT3JnYW5pemF0aW9uVXNhZ2UieQoOT3ZlcnZpZXdDb3VudHMSGwoTdG90YWxfb3JnYW5pemF0aW9ucxgBIAEoAxIWCg5hY3RpdmVfbWVtYmVycxgCIAEoAxIXCg9wZW5kaW5nX2ludml0ZXMYAyABKAMSGQoRdG90YWxfZGVwbG95bWVudHMYBCABKAMi8gEKFE9yZ2FuaXphdGlvbk92ZXJ2aWV3EgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDAoEc2x1ZxgDIAEoCRITCgZkb21haW4YBCABKAlIAIgBARIMCgRwbGFuGAUgASgJEg4KBnN0YXR1cxgGIAEoCRIuCgpjcmVhdGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIUCgxtZW1iZXJfY291bnQYCCABKAMSFAoMaW52aXRlX2NvdW50GAkgASgDEhgKEGRlcGxveW1lbnRfY291bnQYCiABKANCCQoHX2RvbWFpbiKBAQoNUGVuZGluZ0ludml0ZRIKCgJpZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSDQoFZW1haWwYAyABKAkSDAoEcm9sZRgEIAEoCRIuCgppbnZpdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCLNAgoSRGVwbG95bWVudE92ZXJ2aWV3EgoKAmlkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRIMCgRuYW1lGAMgASgJEj4KC2Vudmlyb25tZW50GAQgASgOMikub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5FbnZpcm9ubWVudBI+CgZzdGF0dXMYBSABKA4yLi5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRTdGF0dXMSEwoGZG9tYWluGAYgASgJSACIAQESLgoKY3JlYXRlZF9hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNAoQbGFzdF9kZXBsb3llZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCCQoHX2RvbWFpbiL9AQoRT3JnYW5pemF0aW9uVXNhZ2USFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhkKEW9yZ2FuaXphdGlvbl9uYW1lGAIgASgJEg0KBW1vbnRoGAMgASgJEhgKEGNwdV9jb3JlX3NlY29uZHMYBCABKAMSGwoTbWVtb3J5X2J5dGVfc2Vjb25kcxgFIAEoAxIaChJiYW5kd2lkdGhfcnhfYnl0ZXMYBiABKAMSGgoSYmFuZHdpZHRoX3R4X2J5dGVzGAcgASgDEhUKDXN0b3JhZ2VfYnl0ZXMYCCABKAMSHwoXZGVwbG95bWVudHNfYWN0aXZlX3BlYWsYCSABKAUiNgoPUXVlcnlETlNSZXF1ZXN0Eg4KBmRvbWFpbhgBIAEoCRITCgtyZWNvcmRfdHlwZRgCIAEoCSJkChBRdWVyeUROU1Jlc3BvbnNlEg4KBmRvbWFpbhgBIAEoCRITCgtyZWNvcmRfdHlwZRgCIAEoCRIPCgdyZWNvcmRzGAMgAygJEg0KBWVycm9yGAQgASgJEgsKA3R0bBgFIAEoAyJ3ChVMaXN0RE5TUmVjb3Jkc1JlcXVlc3QSGgoNZGVwbG95bWVudF9pZBgBIAEoCUgAiAEBEhwKD29yZ2FuaXphdGlvbl9pZBgCIAEoCUgBiAEBQhAKDl9kZXBsb3ltZW50X2lkQhIKEF9vcmdhbml6YXRpb25faWQizQEKCUROU1JlY29yZBIVCg1kZXBsb3ltZW50X2lkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRIXCg9kZXBsb3ltZW50X25hbWUYAyABKAkSDgoGZG9tYWluGAQgASgJEhQKDGlwX2FkZHJlc3NlcxgFIAMoCRIOCgZyZWdpb24YBiABKAkSDgoGc3RhdHVzGAcgASgJEjEKDWxhc3RfcmVzb2x2ZWQYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlEKFkxpc3RETlNSZWNvcmRzUmVzcG9uc2USNwoHcmVjb3JkcxgBIAMoCzImLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5ETlNSZWNvcmQiFQoTR2V0RE5TQ29uZmlnUmVxdWVzdCKoAgoJRE5TQ29uZmlnEhMKC3RyYWVmaWtfaXBzGAEgAygJEl0KFXRyYWVmaWtfaXBzX2J5X3JlZ2lvbhgCIAMoCzI+Lm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5ETlNDb25maWcuVHJhZWZpa0lwc0J5UmVnaW9uRW50cnkSFgoOZG5zX3NlcnZlcl9pcHMYAyADKAkSEAoIZG5zX3BvcnQYBCABKAkSGQoRY2FjaGVfdHRsX3NlY29uZHMYBSABKAMaYgoXVHJhZWZpa0lwc0J5UmVnaW9uRW50cnkSCwoDa2V5GAEgASgJEjYKBXZhbHVlGAIgASgLMicub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLlRyYWVmaWtJUHM6AjgBIikKClRyYWVmaWtJUHMSDgoGcmVnaW9uGAEgASgJEgsKA2lwcxgCIAMoCSJOChRHZXRETlNDb25maWdSZXNwb25zZRI2CgZjb25maWcYASABKAsyJi5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuRE5TQ29uZmlnIhMKEUdldFByaWNpbmdSZXF1ZXN0IrcBChJHZXRQcmljaW5nUmVzcG9uc2USIAoYY3B1X2Nvc3RfcGVyX2NvcmVfc2Vjb25kGAEgASgBEiMKG21lbW9yeV9jb3N0X3Blcl9ieXRlX3NlY29uZBgCIAEoARIfChdiYW5kd2lkdGhfY29zdF9wZXJfYnl0ZRgDIAEoARIjChtzdG9yYWdlX2Nvc3RfcGVyX2J5dGVfbW9udGgYBCABKAESFAoMcHJpY2luZ19pbmZvGAUgASgJMs0EChFTdXBlcmFkbWluU2VydmljZRJwCgtHZXRPdmVydmlldxIvLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRPdmVydmlld1JlcXVlc3QaMC5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuR2V0T3ZlcnZpZXdSZXNwb25zZRJnCghRdWVyeUROUxIsLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5RdWVyeUROU1JlcXVlc3QaLS5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuUXVlcnlETlNSZXNwb25zZRJ5Cg5MaXN0RE5TUmVjb3JkcxIyLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5MaXN0RE5TUmVjb3Jkc1JlcXVlc3QaMy5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuTGlzdEROU1JlY29yZHNSZXNwb25zZRJzCgxHZXRETlNDb25maWcSMC5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuR2V0RE5TQ29uZmlnUmVxdWVzdBoxLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRETlNDb25maWdSZXNwb25zZRJtCgpHZXRQcmljaW5nEi4ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkdldFByaWNpbmdSZXF1ZXN0Gi8ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkdldFByaWNpbmdSZXNwb25zZUI4WjZhcGkvZ2VuL3Byb3RvL29iaWVudGUvY2xvdWQvc3VwZXJhZG1pbi92MTtzdXBlcmFkbWludjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_obiente_cloud_deployments_v1_deployment_service]);
+  fileDesc("CjRvYmllbnRlL2Nsb3VkL3N1cGVyYWRtaW4vdjEvc3VwZXJhZG1pbl9zZXJ2aWNlLnByb3RvEhtvYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEiFAoSR2V0T3ZlcnZpZXdSZXF1ZXN0IucCChNHZXRPdmVydmlld1Jlc3BvbnNlEjsKBmNvdW50cxgBIAEoCzIrLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5PdmVydmlld0NvdW50cxJICg1vcmdhbml6YXRpb25zGAIgAygLMjEub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLk9yZ2FuaXphdGlvbk92ZXJ2aWV3EkMKD3BlbmRpbmdfaW52aXRlcxgDIAMoCzIqLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5QZW5kaW5nSW52aXRlEkQKC2RlcGxveW1lbnRzGAQgAygLMi8ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkRlcGxveW1lbnRPdmVydmlldxI+CgZ1c2FnZXMYBSADKAsyLi5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuT3JnYW5pemF0aW9uVXNhZ2UieQoOT3ZlcnZpZXdDb3VudHMSGwoTdG90YWxfb3JnYW5pemF0aW9ucxgBIAEoAxIWCg5hY3RpdmVfbWVtYmVycxgCIAEoAxIXCg9wZW5kaW5nX2ludml0ZXMYAyABKAMSGQoRdG90YWxfZGVwbG95bWVudHMYBCABKAMi8gEKFE9yZ2FuaXphdGlvbk92ZXJ2aWV3EgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDAoEc2x1ZxgDIAEoCRITCgZkb21haW4YBCABKAlIAIgBARIMCgRwbGFuGAUgASgJEg4KBnN0YXR1cxgGIAEoCRIuCgpjcmVhdGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIUCgxtZW1iZXJfY291bnQYCCABKAMSFAoMaW52aXRlX2NvdW50GAkgASgDEhgKEGRlcGxveW1lbnRfY291bnQYCiABKANCCQoHX2RvbWFpbiKBAQoNUGVuZGluZ0ludml0ZRIKCgJpZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSDQoFZW1haWwYAyABKAkSDAoEcm9sZRgEIAEoCRIuCgppbnZpdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCLNAgoSRGVwbG95bWVudE92ZXJ2aWV3EgoKAmlkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRIMCgRuYW1lGAMgASgJEj4KC2Vudmlyb25tZW50GAQgASgOMikub2JpZW50ZS5jbG91ZC5kZXBsb3ltZW50cy52MS5FbnZpcm9ubWVudBI+CgZzdGF0dXMYBSABKA4yLi5vYmllbnRlLmNsb3VkLmRlcGxveW1lbnRzLnYxLkRlcGxveW1lbnRTdGF0dXMSEwoGZG9tYWluGAYgASgJSACIAQESLgoKY3JlYXRlZF9hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASNAoQbGFzdF9kZXBsb3llZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCCQoHX2RvbWFpbiL9AQoRT3JnYW5pemF0aW9uVXNhZ2USFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhkKEW9yZ2FuaXphdGlvbl9uYW1lGAIgASgJEg0KBW1vbnRoGAMgASgJEhgKEGNwdV9jb3JlX3NlY29uZHMYBCABKAMSGwoTbWVtb3J5X2J5dGVfc2Vjb25kcxgFIAEoAxIaChJiYW5kd2lkdGhfcnhfYnl0ZXMYBiABKAMSGgoSYmFuZHdpZHRoX3R4X2J5dGVzGAcgASgDEhUKDXN0b3JhZ2VfYnl0ZXMYCCABKAMSHwoXZGVwbG95bWVudHNfYWN0aXZlX3BlYWsYCSABKAUiNgoPUXVlcnlETlNSZXF1ZXN0Eg4KBmRvbWFpbhgBIAEoCRITCgtyZWNvcmRfdHlwZRgCIAEoCSJkChBRdWVyeUROU1Jlc3BvbnNlEg4KBmRvbWFpbhgBIAEoCRITCgtyZWNvcmRfdHlwZRgCIAEoCRIPCgdyZWNvcmRzGAMgAygJEg0KBWVycm9yGAQgASgJEgsKA3R0bBgFIAEoAyKhAQoVTGlzdEROU1JlY29yZHNSZXF1ZXN0EhoKDWRlcGxveW1lbnRfaWQYASABKAlIAIgBARIcCg9vcmdhbml6YXRpb25faWQYAiABKAlIAYgBARIYCgtyZWNvcmRfdHlwZRgDIAEoCUgCiAEBQhAKDl9kZXBsb3ltZW50X2lkQhIKEF9vcmdhbml6YXRpb25faWRCDgoMX3JlY29yZF90eXBlIrICCglETlNSZWNvcmQSEwoLcmVjb3JkX3R5cGUYASABKAkSFQoNZGVwbG95bWVudF9pZBgCIAEoCRIWCg5nYW1lX3NlcnZlcl9pZBgDIAEoCRIXCg9vcmdhbml6YXRpb25faWQYBCABKAkSFwoPZGVwbG95bWVudF9uYW1lGAUgASgJEhgKEGdhbWVfc2VydmVyX25hbWUYBiABKAkSDgoGZG9tYWluGAcgASgJEhQKDGlwX2FkZHJlc3NlcxgIIAMoCRIOCgZ0YXJnZXQYCSABKAkSDAoEcG9ydBgKIAEoBRIOCgZyZWdpb24YCyABKAkSDgoGc3RhdHVzGAwgASgJEjEKDWxhc3RfcmVzb2x2ZWQYDSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlEKFkxpc3RETlNSZWNvcmRzUmVzcG9uc2USNwoHcmVjb3JkcxgBIAMoCzImLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5ETlNSZWNvcmQiFQoTR2V0RE5TQ29uZmlnUmVxdWVzdCKoAgoJRE5TQ29uZmlnEhMKC3RyYWVmaWtfaXBzGAEgAygJEl0KFXRyYWVmaWtfaXBzX2J5X3JlZ2lvbhgCIAMoCzI+Lm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5ETlNDb25maWcuVHJhZWZpa0lwc0J5UmVnaW9uRW50cnkSFgoOZG5zX3NlcnZlcl9pcHMYAyADKAkSEAoIZG5zX3BvcnQYBCABKAkSGQoRY2FjaGVfdHRsX3NlY29uZHMYBSABKAMaYgoXVHJhZWZpa0lwc0J5UmVnaW9uRW50cnkSCwoDa2V5GAEgASgJEjYKBXZhbHVlGAIgASgLMicub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLlRyYWVmaWtJUHM6AjgBIikKClRyYWVmaWtJUHMSDgoGcmVnaW9uGAEgASgJEgsKA2lwcxgCIAMoCSJOChRHZXRETlNDb25maWdSZXNwb25zZRI2CgZjb25maWcYASABKAsyJi5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuRE5TQ29uZmlnIhMKEUdldFByaWNpbmdSZXF1ZXN0IrcBChJHZXRQcmljaW5nUmVzcG9uc2USIAoYY3B1X2Nvc3RfcGVyX2NvcmVfc2Vjb25kGAEgASgBEiMKG21lbW9yeV9jb3N0X3Blcl9ieXRlX3NlY29uZBgCIAEoARIfChdiYW5kd2lkdGhfY29zdF9wZXJfYnl0ZRgDIAEoARIjChtzdG9yYWdlX2Nvc3RfcGVyX2J5dGVfbW9udGgYBCABKAESFAoMcHJpY2luZ19pbmZvGAUgASgJIpEBCiBDcmVhdGVETlNEZWxlZ2F0aW9uQVBJS2V5UmVxdWVzdBITCgtkZXNjcmlwdGlvbhgBIAEoCRIXCgpzb3VyY2VfYXBpGAIgASgJSACIAQESHAoPb3JnYW5pemF0aW9uX2lkGAMgASgJSAGIAQFCDQoLX3NvdXJjZV9hcGlCEgoQX29yZ2FuaXphdGlvbl9pZCJaCiFDcmVhdGVETlNEZWxlZ2F0aW9uQVBJS2V5UmVzcG9uc2USDwoHYXBpX2tleRgBIAEoCRIPCgdtZXNzYWdlGAIgASgJEhMKC2Rlc2NyaXB0aW9uGAMgASgJIjMKIFJldm9rZUROU0RlbGVnYXRpb25BUElLZXlSZXF1ZXN0Eg8KB2FwaV9rZXkYASABKAkiRQohUmV2b2tlRE5TRGVsZWdhdGlvbkFQSUtleVJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSDwoHbWVzc2FnZRgCIAEoCSJKCi9SZXZva2VETlNEZWxlZ2F0aW9uQVBJS2V5Rm9yT3JnYW5pemF0aW9uUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkiVAowUmV2b2tlRE5TRGVsZWdhdGlvbkFQSUtleUZvck9yZ2FuaXphdGlvblJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSDwoHbWVzc2FnZRgCIAEoCSJTCh9MaXN0RE5TRGVsZWdhdGlvbkFQSUtleXNSZXF1ZXN0EhwKD29yZ2FuaXphdGlvbl9pZBgBIAEoCUgAiAEBQhIKEF9vcmdhbml6YXRpb25faWQi+gEKF0ROU0RlbGVnYXRpb25BUElLZXlJbmZvEgoKAmlkGAEgASgJEhMKC2Rlc2NyaXB0aW9uGAIgASgJEhIKCnNvdXJjZV9hcGkYAyABKAkSFwoPb3JnYW5pemF0aW9uX2lkGAQgASgJEhEKCWlzX2FjdGl2ZRgFIAEoCBIuCgpjcmVhdGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgpyZXZva2VkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIeChZzdHJpcGVfc3Vic2NyaXB0aW9uX2lkGAggASgJImoKIExpc3RETlNEZWxlZ2F0aW9uQVBJS2V5c1Jlc3BvbnNlEkYKCGFwaV9rZXlzGAEgAygLMjQub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkROU0RlbGVnYXRpb25BUElLZXlJbmZvMusJChFTdXBlcmFkbWluU2VydmljZRJwCgtHZXRPdmVydmlldxIvLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRPdmVydmlld1JlcXVlc3QaMC5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuR2V0T3ZlcnZpZXdSZXNwb25zZRJnCghRdWVyeUROUxIsLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5RdWVyeUROU1JlcXVlc3QaLS5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuUXVlcnlETlNSZXNwb25zZRJ5Cg5MaXN0RE5TUmVjb3JkcxIyLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5MaXN0RE5TUmVjb3Jkc1JlcXVlc3QaMy5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuTGlzdEROU1JlY29yZHNSZXNwb25zZRJzCgxHZXRETlNDb25maWcSMC5vYmllbnRlLmNsb3VkLnN1cGVyYWRtaW4udjEuR2V0RE5TQ29uZmlnUmVxdWVzdBoxLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRETlNDb25maWdSZXNwb25zZRKaAQoZQ3JlYXRlRE5TRGVsZWdhdGlvbkFQSUtleRI9Lm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5DcmVhdGVETlNEZWxlZ2F0aW9uQVBJS2V5UmVxdWVzdBo+Lm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5DcmVhdGVETlNEZWxlZ2F0aW9uQVBJS2V5UmVzcG9uc2USlwEKGExpc3RETlNEZWxlZ2F0aW9uQVBJS2V5cxI8Lm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5MaXN0RE5TRGVsZWdhdGlvbkFQSUtleXNSZXF1ZXN0Gj0ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLkxpc3RETlNEZWxlZ2F0aW9uQVBJS2V5c1Jlc3BvbnNlEpoBChlSZXZva2VETlNEZWxlZ2F0aW9uQVBJS2V5Ej0ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLlJldm9rZUROU0RlbGVnYXRpb25BUElLZXlSZXF1ZXN0Gj4ub2JpZW50ZS5jbG91ZC5zdXBlcmFkbWluLnYxLlJldm9rZUROU0RlbGVnYXRpb25BUElLZXlSZXNwb25zZRLHAQooUmV2b2tlRE5TRGVsZWdhdGlvbkFQSUtleUZvck9yZ2FuaXphdGlvbhJMLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5SZXZva2VETlNEZWxlZ2F0aW9uQVBJS2V5Rm9yT3JnYW5pemF0aW9uUmVxdWVzdBpNLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5SZXZva2VETlNEZWxlZ2F0aW9uQVBJS2V5Rm9yT3JnYW5pemF0aW9uUmVzcG9uc2USbQoKR2V0UHJpY2luZxIuLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRQcmljaW5nUmVxdWVzdBovLm9iaWVudGUuY2xvdWQuc3VwZXJhZG1pbi52MS5HZXRQcmljaW5nUmVzcG9uc2VCOFo2YXBpL2dlbi9wcm90by9vYmllbnRlL2Nsb3VkL3N1cGVyYWRtaW4vdjE7c3VwZXJhZG1pbnYxYgZwcm90bzM", [file_google_protobuf_timestamp, file_obiente_cloud_deployments_v1_deployment_service]);
 
 /**
  * @generated from message obiente.cloud.superadmin.v1.GetOverviewRequest
@@ -398,6 +398,13 @@ export type ListDNSRecordsRequest = Message<"obiente.cloud.superadmin.v1.ListDNS
    * @generated from field: optional string organization_id = 2;
    */
   organizationId?: string;
+
+  /**
+   * Filter by record type (A, SRV) - empty means all
+   *
+   * @generated from field: optional string record_type = 3;
+   */
+  recordType?: string;
 };
 
 /**
@@ -414,50 +421,89 @@ export const ListDNSRecordsRequestSchema: GenMessage<ListDNSRecordsRequest> = /*
  */
 export type DNSRecord = Message<"obiente.cloud.superadmin.v1.DNSRecord"> & {
   /**
-   * @generated from field: string deployment_id = 1;
+   * A or SRV
+   *
+   * @generated from field: string record_type = 1;
+   */
+  recordType: string;
+
+  /**
+   * Deployment ID (for A records)
+   *
+   * @generated from field: string deployment_id = 2;
    */
   deploymentId: string;
 
   /**
-   * @generated from field: string organization_id = 2;
+   * Game Server ID (for SRV records)
+   *
+   * @generated from field: string game_server_id = 3;
+   */
+  gameServerId: string;
+
+  /**
+   * @generated from field: string organization_id = 4;
    */
   organizationId: string;
 
   /**
-   * @generated from field: string deployment_name = 3;
+   * Deployment name (for A records)
+   *
+   * @generated from field: string deployment_name = 5;
    */
   deploymentName: string;
 
   /**
-   * Full domain (e.g., deploy-123.my.obiente.cloud)
+   * Game server name (for SRV records)
    *
-   * @generated from field: string domain = 4;
+   * @generated from field: string game_server_name = 6;
+   */
+  gameServerName: string;
+
+  /**
+   * Full domain (e.g., deploy-123.my.obiente.cloud or _minecraft._tcp.gameserver-123.my.obiente.cloud)
+   *
+   * @generated from field: string domain = 7;
    */
   domain: string;
 
   /**
-   * Resolved IP addresses
+   * Resolved IP addresses (for A records)
    *
-   * @generated from field: repeated string ip_addresses = 5;
+   * @generated from field: repeated string ip_addresses = 8;
    */
   ipAddresses: string[];
 
   /**
-   * Region where deployment is running
+   * SRV target hostname/IP (for SRV records)
    *
-   * @generated from field: string region = 6;
+   * @generated from field: string target = 9;
+   */
+  target: string;
+
+  /**
+   * Port (for SRV records)
+   *
+   * @generated from field: int32 port = 10;
+   */
+  port: number;
+
+  /**
+   * Region where resource is running
+   *
+   * @generated from field: string region = 11;
    */
   region: string;
 
   /**
-   * Deployment status
+   * Resource status
    *
-   * @generated from field: string status = 7;
+   * @generated from field: string status = 12;
    */
   status: string;
 
   /**
-   * @generated from field: google.protobuf.Timestamp last_resolved = 8;
+   * @generated from field: google.protobuf.Timestamp last_resolved = 13;
    */
   lastResolved?: Timestamp;
 };
@@ -650,6 +696,280 @@ export const GetPricingResponseSchema: GenMessage<GetPricingResponse> = /*@__PUR
   messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 17);
 
 /**
+ * Create DNS Delegation API Key Request
+ *
+ * @generated from message obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyRequest
+ */
+export type CreateDNSDelegationAPIKeyRequest = Message<"obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyRequest"> & {
+  /**
+   * Description of who/what this key is for
+   *
+   * @generated from field: string description = 1;
+   */
+  description: string;
+
+  /**
+   * URL of the API that will use this key (optional)
+   *
+   * @generated from field: optional string source_api = 2;
+   */
+  sourceApi?: string;
+
+  /**
+   * Organization ID (optional, required for non-superadmins, inferred from user's memberships if not provided)
+   *
+   * @generated from field: optional string organization_id = 3;
+   */
+  organizationId?: string;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyRequest.
+ * Use `create(CreateDNSDelegationAPIKeyRequestSchema)` to create a new message.
+ */
+export const CreateDNSDelegationAPIKeyRequestSchema: GenMessage<CreateDNSDelegationAPIKeyRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 18);
+
+/**
+ * Create DNS Delegation API Key Response
+ *
+ * @generated from message obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyResponse
+ */
+export type CreateDNSDelegationAPIKeyResponse = Message<"obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyResponse"> & {
+  /**
+   * The generated API key (shown only once)
+   *
+   * @generated from field: string api_key = 1;
+   */
+  apiKey: string;
+
+  /**
+   * Success message
+   *
+   * @generated from field: string message = 2;
+   */
+  message: string;
+
+  /**
+   * Description of the API key
+   *
+   * @generated from field: string description = 3;
+   */
+  description: string;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyResponse.
+ * Use `create(CreateDNSDelegationAPIKeyResponseSchema)` to create a new message.
+ */
+export const CreateDNSDelegationAPIKeyResponseSchema: GenMessage<CreateDNSDelegationAPIKeyResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 19);
+
+/**
+ * Revoke DNS Delegation API Key Request
+ *
+ * @generated from message obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyRequest
+ */
+export type RevokeDNSDelegationAPIKeyRequest = Message<"obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyRequest"> & {
+  /**
+   * The API key to revoke
+   *
+   * @generated from field: string api_key = 1;
+   */
+  apiKey: string;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyRequest.
+ * Use `create(RevokeDNSDelegationAPIKeyRequestSchema)` to create a new message.
+ */
+export const RevokeDNSDelegationAPIKeyRequestSchema: GenMessage<RevokeDNSDelegationAPIKeyRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 20);
+
+/**
+ * Revoke DNS Delegation API Key Response
+ *
+ * @generated from message obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyResponse
+ */
+export type RevokeDNSDelegationAPIKeyResponse = Message<"obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * Success message
+   *
+   * @generated from field: string message = 2;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyResponse.
+ * Use `create(RevokeDNSDelegationAPIKeyResponseSchema)` to create a new message.
+ */
+export const RevokeDNSDelegationAPIKeyResponseSchema: GenMessage<RevokeDNSDelegationAPIKeyResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 21);
+
+/**
+ * Revoke DNS Delegation API Key For Organization Request
+ *
+ * @generated from message obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationRequest
+ */
+export type RevokeDNSDelegationAPIKeyForOrganizationRequest = Message<"obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationRequest"> & {
+  /**
+   * Organization ID whose API key to revoke
+   *
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationRequest.
+ * Use `create(RevokeDNSDelegationAPIKeyForOrganizationRequestSchema)` to create a new message.
+ */
+export const RevokeDNSDelegationAPIKeyForOrganizationRequestSchema: GenMessage<RevokeDNSDelegationAPIKeyForOrganizationRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 22);
+
+/**
+ * Revoke DNS Delegation API Key For Organization Response
+ *
+ * @generated from message obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationResponse
+ */
+export type RevokeDNSDelegationAPIKeyForOrganizationResponse = Message<"obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * Success message
+   *
+   * @generated from field: string message = 2;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationResponse.
+ * Use `create(RevokeDNSDelegationAPIKeyForOrganizationResponseSchema)` to create a new message.
+ */
+export const RevokeDNSDelegationAPIKeyForOrganizationResponseSchema: GenMessage<RevokeDNSDelegationAPIKeyForOrganizationResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 23);
+
+/**
+ * List DNS Delegation API Keys Request
+ *
+ * @generated from message obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysRequest
+ */
+export type ListDNSDelegationAPIKeysRequest = Message<"obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysRequest"> & {
+  /**
+   * Filter by organization ID (optional)
+   *
+   * @generated from field: optional string organization_id = 1;
+   */
+  organizationId?: string;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysRequest.
+ * Use `create(ListDNSDelegationAPIKeysRequestSchema)` to create a new message.
+ */
+export const ListDNSDelegationAPIKeysRequestSchema: GenMessage<ListDNSDelegationAPIKeysRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 24);
+
+/**
+ * DNS Delegation API Key Info
+ *
+ * @generated from message obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo
+ */
+export type DNSDelegationAPIKeyInfo = Message<"obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo"> & {
+  /**
+   * API key ID
+   *
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * Description
+   *
+   * @generated from field: string description = 2;
+   */
+  description: string;
+
+  /**
+   * Source API URL (if set)
+   *
+   * @generated from field: string source_api = 3;
+   */
+  sourceApi: string;
+
+  /**
+   * Organization ID (if set)
+   *
+   * @generated from field: string organization_id = 4;
+   */
+  organizationId: string;
+
+  /**
+   * Whether the key is active
+   *
+   * @generated from field: bool is_active = 5;
+   */
+  isActive: boolean;
+
+  /**
+   * When the key was created
+   *
+   * @generated from field: google.protobuf.Timestamp created_at = 6;
+   */
+  createdAt?: Timestamp;
+
+  /**
+   * When the key was revoked (if revoked)
+   *
+   * @generated from field: google.protobuf.Timestamp revoked_at = 7;
+   */
+  revokedAt?: Timestamp;
+
+  /**
+   * Stripe subscription ID (if linked to subscription)
+   *
+   * @generated from field: string stripe_subscription_id = 8;
+   */
+  stripeSubscriptionId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.
+ * Use `create(DNSDelegationAPIKeyInfoSchema)` to create a new message.
+ */
+export const DNSDelegationAPIKeyInfoSchema: GenMessage<DNSDelegationAPIKeyInfo> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 25);
+
+/**
+ * List DNS Delegation API Keys Response
+ *
+ * @generated from message obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse
+ */
+export type ListDNSDelegationAPIKeysResponse = Message<"obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse"> & {
+  /**
+   * @generated from field: repeated obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo api_keys = 1;
+   */
+  apiKeys: DNSDelegationAPIKeyInfo[];
+};
+
+/**
+ * Describes the message obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse.
+ * Use `create(ListDNSDelegationAPIKeysResponseSchema)` to create a new message.
+ */
+export const ListDNSDelegationAPIKeysResponseSchema: GenMessage<ListDNSDelegationAPIKeysResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_superadmin_v1_superadmin_service, 26);
+
+/**
  * @generated from service obiente.cloud.superadmin.v1.SuperadminService
  */
 export const SuperadminService: GenService<{
@@ -688,6 +1008,40 @@ export const SuperadminService: GenService<{
     methodKind: "unary";
     input: typeof GetDNSConfigRequestSchema;
     output: typeof GetDNSConfigResponseSchema;
+  },
+  /**
+   * DNS Delegation API Key management
+   *
+   * @generated from rpc obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey
+   */
+  createDNSDelegationAPIKey: {
+    methodKind: "unary";
+    input: typeof CreateDNSDelegationAPIKeyRequestSchema;
+    output: typeof CreateDNSDelegationAPIKeyResponseSchema;
+  },
+  /**
+   * @generated from rpc obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys
+   */
+  listDNSDelegationAPIKeys: {
+    methodKind: "unary";
+    input: typeof ListDNSDelegationAPIKeysRequestSchema;
+    output: typeof ListDNSDelegationAPIKeysResponseSchema;
+  },
+  /**
+   * @generated from rpc obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey
+   */
+  revokeDNSDelegationAPIKey: {
+    methodKind: "unary";
+    input: typeof RevokeDNSDelegationAPIKeyRequestSchema;
+    output: typeof RevokeDNSDelegationAPIKeyResponseSchema;
+  },
+  /**
+   * @generated from rpc obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization
+   */
+  revokeDNSDelegationAPIKeyForOrganization: {
+    methodKind: "unary";
+    input: typeof RevokeDNSDelegationAPIKeyForOrganizationRequestSchema;
+    output: typeof RevokeDNSDelegationAPIKeyForOrganizationResponseSchema;
   },
   /**
    * Public pricing endpoint - no authentication required
