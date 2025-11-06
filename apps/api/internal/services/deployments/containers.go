@@ -1,9 +1,13 @@
 package deployments
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 
 	"api/docker"
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
@@ -44,11 +48,11 @@ func (s *Service) findContainerForDeployment(ctx context.Context, deploymentID, 
 	if containerID != "" {
 		// Normalize the input container ID (lowercase, no spaces)
 		normalizedInputID := strings.ToLower(strings.TrimSpace(containerID))
-		
+
 		for _, loc := range locations {
 			// Normalize stored container ID
 			normalizedStoredID := strings.ToLower(strings.TrimSpace(loc.ContainerID))
-			
+
 			// Exact match or prefix match (Docker-style)
 			if normalizedStoredID == normalizedInputID ||
 				strings.HasPrefix(normalizedStoredID, normalizedInputID) ||
@@ -56,14 +60,14 @@ func (s *Service) findContainerForDeployment(ctx context.Context, deploymentID, 
 				return &loc, nil
 			}
 		}
-		
+
 		// If not found, try refreshing locations and search again
 		// This helps when containers were recently created or the database is stale
 		refreshedLocations, refreshErr := database.ValidateAndRefreshLocations(deploymentID)
 		if refreshErr == nil && len(refreshedLocations) > 0 {
 			for _, loc := range refreshedLocations {
 				normalizedStoredID := strings.ToLower(strings.TrimSpace(loc.ContainerID))
-				
+
 				if normalizedStoredID == normalizedInputID ||
 					strings.HasPrefix(normalizedStoredID, normalizedInputID) ||
 					strings.HasPrefix(normalizedInputID, normalizedStoredID) {
@@ -71,7 +75,7 @@ func (s *Service) findContainerForDeployment(ctx context.Context, deploymentID, 
 				}
 			}
 		}
-		
+
 		// Extract short ID for error message
 		shortID := containerID
 		if len(shortID) > 12 {
@@ -304,6 +308,12 @@ func (s *Service) StreamContainerLogs(ctx context.Context, req *connect.Request[
 		return connect.NewError(connect.CodeNotFound, err)
 	}
 
+	// Check if we need to forward to another node
+	if shouldForward, targetNodeID := s.shouldForwardToNode(loc); shouldForward {
+		log.Printf("[StreamContainerLogs] Container %s is on node %s, forwarding request", loc.ContainerID[:12], targetNodeID)
+		return s.forwardStreamContainerLogs(ctx, req, stream, targetNodeID)
+	}
+
 	tail := req.Msg.GetTail()
 	if tail <= 0 {
 		tail = 200
@@ -341,6 +351,87 @@ func (s *Service) StreamContainerLogs(ctx context.Context, req *connect.Request[
 	return nil
 }
 
+// forwardStreamContainerLogs forwards a streaming container log request to another node
+func (s *Service) forwardStreamContainerLogs(ctx context.Context, req *connect.Request[deploymentsv1.StreamContainerLogsRequest], stream *connect.ServerStream[deploymentsv1.DeploymentLogLine], targetNodeID string) error {
+	if s.forwarder == nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("node forwarder not available"))
+	}
+
+	// Serialize request
+	reqBody, err := json.Marshal(req.Msg)
+	if err != nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal request: %w", err))
+	}
+
+	// Forward the request
+	path := "/obiente.cloud.deployments.v1.DeploymentService/StreamContainerLogs"
+	headers := map[string]string{
+		"Authorization": req.Header().Get("Authorization"),
+	}
+
+	resp, err := s.forwarder.ForwardConnectRPCRequest(ctx, targetNodeID, "POST", path, bytes.NewReader(reqBody), headers)
+	if err != nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		code := connect.CodeInternal
+		if resp.StatusCode == http.StatusUnauthorized {
+			code = connect.CodeUnauthenticated
+		} else if resp.StatusCode == http.StatusForbidden {
+			code = connect.CodePermissionDenied
+		} else if resp.StatusCode == http.StatusNotFound {
+			code = connect.CodeNotFound
+		}
+		return connect.NewError(code, fmt.Errorf("node returned status %d: %s", resp.StatusCode, string(bodyBytes)))
+	}
+
+	// Stream the response
+	decoder := json.NewDecoder(resp.Body)
+	for {
+		var logLine deploymentsv1.DeploymentLogLine
+		if err := decoder.Decode(&logLine); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+
+		if err := stream.Send(&logLine); err != nil {
+			return err
+		}
+	}
+}
+
+// forwardUnaryRequest forwards a unary ConnectRPC request to another node
+func (s *Service) forwardUnaryRequest(ctx context.Context, reqBody []byte, targetNodeID string, path string, headers map[string]string, respType interface{}) ([]byte, error) {
+	if s.forwarder == nil {
+		return nil, fmt.Errorf("node forwarder not available")
+	}
+
+	// Forward the request
+	resp, err := s.forwarder.ForwardConnectRPCRequest(ctx, targetNodeID, "POST", path, bytes.NewReader(reqBody), headers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to forward request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("node returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	// Read response body
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	return bodyBytes, nil
+}
+
 // StartContainer starts a specific container
 func (s *Service) StartContainer(ctx context.Context, req *connect.Request[deploymentsv1.StartContainerRequest]) (*connect.Response[deploymentsv1.StartContainerResponse], error) {
 	deploymentID := req.Msg.GetDeploymentId()
@@ -361,6 +452,22 @@ func (s *Service) StartContainer(ctx context.Context, req *connect.Request[deplo
 	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, "", dcli)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	// Check if we need to forward to another node
+	if shouldForward, targetNodeID := s.shouldForwardToNode(loc); shouldForward {
+		log.Printf("[StartContainer] Container %s is on node %s, forwarding request", loc.ContainerID[:12], targetNodeID)
+		reqBody, _ := json.Marshal(req.Msg)
+		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/StartContainer", headers, &deploymentsv1.StartContainerResponse{})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+		var response deploymentsv1.StartContainerResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
 	}
 
 	if err := dcli.StartContainer(ctx, loc.ContainerID); err != nil {
@@ -402,6 +509,22 @@ func (s *Service) StopContainer(ctx context.Context, req *connect.Request[deploy
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 
+	// Check if we need to forward to another node
+	if shouldForward, targetNodeID := s.shouldForwardToNode(loc); shouldForward {
+		log.Printf("[StopContainer] Container %s is on node %s, forwarding request", loc.ContainerID[:12], targetNodeID)
+		reqBody, _ := json.Marshal(req.Msg)
+		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/StopContainer", headers, &deploymentsv1.StopContainerResponse{})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+		var response deploymentsv1.StopContainerResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
+	}
+
 	if err := dcli.StopContainer(ctx, loc.ContainerID, 30*time.Second); err != nil {
 		return connect.NewResponse(&deploymentsv1.StopContainerResponse{
 			Success: false,
@@ -439,6 +562,22 @@ func (s *Service) RestartContainer(ctx context.Context, req *connect.Request[dep
 	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, "", dcli)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	// Check if we need to forward to another node
+	if shouldForward, targetNodeID := s.shouldForwardToNode(loc); shouldForward {
+		log.Printf("[RestartContainer] Container %s is on node %s, forwarding request", loc.ContainerID[:12], targetNodeID)
+		reqBody, _ := json.Marshal(req.Msg)
+		headers := map[string]string{"Authorization": req.Header().Get("Authorization")}
+		bodyBytes, err := s.forwardUnaryRequest(ctx, reqBody, targetNodeID, "/obiente.cloud.deployments.v1.DeploymentService/RestartContainer", headers, &deploymentsv1.RestartContainerResponse{})
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+		}
+		var response deploymentsv1.RestartContainerResponse
+		if err := json.Unmarshal(bodyBytes, &response); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+		return connect.NewResponse(&response), nil
 	}
 
 	if err := dcli.RestartContainer(ctx, loc.ContainerID, 30*time.Second); err != nil {

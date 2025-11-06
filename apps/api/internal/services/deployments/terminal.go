@@ -59,6 +59,17 @@ func (s *Service) ensureTerminalSession(ctx context.Context, deploymentID, orgID
 		return nil, nil, false, connect.NewError(connect.CodeNotFound, err)
 	}
 
+	// Check if we need to forward to another node
+	// Note: Terminal operations require direct Docker exec access, so forwarding is complex
+	// For now, we'll return an error if the container is on a different node
+	// TODO: Implement terminal forwarding via WebSocket proxy
+	if shouldForward, targetNodeID := s.shouldForwardToNode(loc); shouldForward {
+		return nil, nil, false, connect.NewError(
+			connect.CodeFailedPrecondition,
+			fmt.Errorf("container is on node %s. Terminal access requires direct node access. Please connect to node %s", targetNodeID, targetNodeID),
+		)
+	}
+
 	// Check if container is running - Docker exec requires running containers
 	containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
 	if err != nil {
@@ -283,6 +294,18 @@ func (s *Service) StreamTerminalOutput(ctx context.Context, req *connect.Request
 	}
 
 	loc := locations[0]
+
+	// Check if we need to forward to another node
+	// Note: Terminal operations require direct Docker exec access, so forwarding is complex
+	// For now, we'll return an error if the container is on a different node
+	// TODO: Implement terminal forwarding via WebSocket proxy
+	if shouldForward, targetNodeID := s.shouldForwardToNode(&loc); shouldForward {
+		return connect.NewError(
+			connect.CodeFailedPrecondition,
+			fmt.Errorf("container is on node %s. Terminal access requires direct node access. Please connect to node %s", targetNodeID, targetNodeID),
+		)
+	}
+
 	dcli, err := docker.New()
 	if err != nil {
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))

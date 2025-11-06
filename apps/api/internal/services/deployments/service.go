@@ -24,9 +24,11 @@ type Service struct {
 	manager           *orchestrator.DeploymentManager
 	quotaChecker      *quota.Checker
 	buildRegistry     *BuildStrategyRegistry
+	forwarder         *orchestrator.NodeForwarder
 }
 
 func NewService(repo *database.DeploymentRepository, manager *orchestrator.DeploymentManager, qc *quota.Checker) *Service {
+	forwarder := orchestrator.NewNodeForwarder()
 	return &Service{
 		repo:              repo,
 		buildHistoryRepo:  database.NewBuildHistoryRepository(database.DB),
@@ -34,6 +36,7 @@ func NewService(repo *database.DeploymentRepository, manager *orchestrator.Deplo
 		manager:           manager,
 		quotaChecker:      qc,
 		buildRegistry:     NewBuildStrategyRegistry(),
+		forwarder:         forwarder,
 	}
 }
 
@@ -99,6 +102,22 @@ func (s *Service) checkDeploymentPermission(ctx context.Context, deploymentID st
 	}
 	
 	return nil
+}
+
+// shouldForwardToNode checks if a container location is on a different node and forwarding is possible
+func (s *Service) shouldForwardToNode(location *database.DeploymentLocation) (bool, string) {
+	if s.manager == nil {
+		return false, ""
+	}
+	currentNodeID := s.manager.GetNodeID()
+	if location.NodeID == currentNodeID {
+		return false, ""
+	}
+	// Check if forwarding is possible
+	if s.forwarder != nil && s.forwarder.CanForward(location.NodeID) {
+		return true, location.NodeID
+	}
+	return false, ""
 }
 
 // Config operations (GetDeploymentEnvVars, UpdateDeploymentEnvVars, parseEnvVars, parseEnvFileToMap)

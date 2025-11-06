@@ -1,9 +1,13 @@
 package deployments
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -63,6 +67,12 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	loc, err := s.findContainerForDeployment(ctx, deploymentID, containerID, serviceName, dcli)
 	if err != nil {
 		return connect.NewError(connect.CodeNotFound, err)
+	}
+
+	// Check if we need to forward to another node
+	if shouldForward, targetNodeID := s.shouldForwardToNode(loc); shouldForward {
+		log.Printf("[StreamDeploymentLogs] Container %s is on node %s, forwarding request", loc.ContainerID[:12], targetNodeID)
+		return s.forwardStreamDeploymentLogs(ctx, req, stream, targetNodeID)
 	}
 	
 	// Get all containers for this deployment to filter events
@@ -436,6 +446,60 @@ func (s *Service) formatDockerEvent(deploymentID string, event events.Message, c
 		Line:         line,
 		Timestamp:    timestamppb.New(timestamp),
 		Stderr:       false, // Events are informational, not errors
+	}
+}
+
+// forwardStreamDeploymentLogs forwards a streaming log request to another node
+func (s *Service) forwardStreamDeploymentLogs(ctx context.Context, req *connect.Request[deploymentsv1.StreamDeploymentLogsRequest], stream *connect.ServerStream[deploymentsv1.DeploymentLogLine], targetNodeID string) error {
+	if s.forwarder == nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("node forwarder not available"))
+	}
+
+	// Serialize request
+	reqBody, err := json.Marshal(req.Msg)
+	if err != nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal request: %w", err))
+	}
+
+	// Forward the request
+	path := "/obiente.cloud.deployments.v1.DeploymentService/StreamDeploymentLogs"
+	headers := map[string]string{
+		"Authorization": req.Header().Get("Authorization"),
+	}
+
+	resp, err := s.forwarder.ForwardConnectRPCRequest(ctx, targetNodeID, "POST", path, bytes.NewReader(reqBody), headers)
+	if err != nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to forward request: %w", err))
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		code := connect.CodeInternal
+		if resp.StatusCode == http.StatusUnauthorized {
+			code = connect.CodeUnauthenticated
+		} else if resp.StatusCode == http.StatusForbidden {
+			code = connect.CodePermissionDenied
+		} else if resp.StatusCode == http.StatusNotFound {
+			code = connect.CodeNotFound
+		}
+		return connect.NewError(code, fmt.Errorf("node returned status %d: %s", resp.StatusCode, string(bodyBytes)))
+	}
+
+	// Stream the response
+	decoder := json.NewDecoder(resp.Body)
+	for {
+		var logLine deploymentsv1.DeploymentLogLine
+		if err := decoder.Decode(&logLine); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to decode response: %w", err))
+		}
+
+		if err := stream.Send(&logLine); err != nil {
+			return err
+		}
 	}
 }
 

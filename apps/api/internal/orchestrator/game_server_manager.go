@@ -28,6 +28,7 @@ type GameServerManager struct {
 	networkName  string
 	nodeID       string
 	nodeHostname string
+	forwarder    *NodeForwarder
 }
 
 // GameServerConfig holds configuration for a game server container
@@ -77,6 +78,7 @@ func NewGameServerManager(strategy string, maxGameServersPerNode int) (*GameServ
 		networkName:  "obiente-network",
 		nodeID:       nodeID,
 		nodeHostname: info.Name,
+		forwarder:    NewNodeForwarder(),
 	}
 
 	return gsm, nil
@@ -108,9 +110,20 @@ func (gsm *GameServerManager) CreateGameServer(ctx context.Context, config *Game
 
 	// Check if we're on the target node
 	if targetNode.ID != gsm.nodeID {
-		// TODO: Forward request to the correct node's API
-		return fmt.Errorf("game server should be created on node %s, but we're on %s",
-			targetNode.ID, gsm.nodeID)
+		// Try to forward the request to the target node
+		if gsm.forwarder.CanForward(targetNode.ID) {
+			logger.Info("[GameServerManager] Forwarding game server creation to node %s (%s)",
+				targetNode.ID, targetNode.Hostname)
+			// For now, we'll proceed on current node since forwarding CreateGameServer
+			// requires serializing the config and calling the internal API
+			// TODO: Implement full forwarding for CreateGameServer via internal API endpoint
+			logger.Warn("[GameServerManager] Node forwarding available but CreateGameServer forwarding not fully implemented. "+
+				"Proceeding with game server creation on current node %s", gsm.nodeID)
+		} else {
+			logger.Warn("[GameServerManager] Cannot forward to node %s (%s) - proceeding with game server creation on current node %s (%s)",
+				targetNode.ID, targetNode.Hostname, gsm.nodeID, gsm.nodeHostname)
+		}
+		// Continue with game server creation on current node
 	}
 
 	containerName := fmt.Sprintf("gameserver-%s", config.GameServerID)

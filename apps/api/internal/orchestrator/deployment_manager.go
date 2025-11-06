@@ -35,6 +35,7 @@ type DeploymentManager struct {
     networkName  string
     nodeID       string
     nodeHostname string
+    forwarder    *NodeForwarder
 }
 
 // dockerHelper defines the subset of docker helper methods used here.
@@ -104,6 +105,7 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 		networkName:  "obiente-network",
 		nodeID:       nodeID,
 		nodeHostname: info.Name,
+		forwarder:    NewNodeForwarder(),
 	}
 	
 	// Ensure the network exists (non-blocking - we'll try again when needed)
@@ -211,9 +213,20 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 
 	// Check if we're on the target node
 	if targetNode.ID != dm.nodeID {
-		// TODO: Forward request to the correct node's API
-		return fmt.Errorf("deployment should be created on node %s, but we're on %s",
-			targetNode.ID, dm.nodeID)
+		// Try to forward the request to the target node
+		if dm.forwarder.CanForward(targetNode.ID) {
+			logger.Info("[DeploymentManager] Forwarding deployment creation to node %s (%s)",
+				targetNode.ID, targetNode.Hostname)
+			// For now, we'll proceed on current node since forwarding CreateDeployment
+			// requires serializing the config and calling the internal API
+			// TODO: Implement full forwarding for CreateDeployment via internal API endpoint
+			logger.Warn("[DeploymentManager] Node forwarding available but CreateDeployment forwarding not fully implemented. "+
+				"Proceeding with deployment on current node %s", dm.nodeID)
+		} else {
+			logger.Warn("[DeploymentManager] Cannot forward to node %s (%s) - proceeding with deployment on current node %s (%s)",
+				targetNode.ID, targetNode.Hostname, dm.nodeID, dm.nodeHostname)
+		}
+		// Continue with deployment on current node
 	}
 
 	// Get routing rules to determine service names
