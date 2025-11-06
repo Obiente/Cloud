@@ -117,6 +117,24 @@ fi
 echo ""
 echo "🚀 Deploying main stack '$STACK_NAME'..."
 
+# Check if required overlay network exists (must be created manually on manager node)
+NETWORK_NAME="${STACK_NAME}_obiente-network"
+if ! docker network inspect "$NETWORK_NAME" &>/dev/null; then
+  echo "❌ Error: Required overlay network '$NETWORK_NAME' does not exist!"
+  echo ""
+  echo "📋 Create the network first on a Swarm manager node:"
+  echo ""
+  echo "  Option 1: Use the script (recommended):"
+  echo "    ./scripts/create-swarm-network.sh --subnet 10.0.9.0/24"
+  echo ""
+  echo "  Option 2: Manual creation:"
+  echo "    docker network create --driver overlay --subnet 10.0.9.0/24 $NETWORK_NAME"
+  echo ""
+  echo "💡 Note: Overlay networks can only be created on Swarm manager nodes"
+  echo ""
+  exit 1
+fi
+
 # Deploy the main stack with environment variables loaded from .env
 # Use --resolve-image always to force pulling latest images
 docker stack deploy --resolve-image always -c "$COMPOSE_FILE" "$STACK_NAME"
