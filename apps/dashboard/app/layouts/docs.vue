@@ -94,32 +94,34 @@
       </Transition>
 
       <!-- Content Area -->
-      <div class="flex-1 overflow-y-auto">
-        <OuiContainer size="full" py="xl">
-          <slot />
-        </OuiContainer>
+      <div class="flex-1 min-w-0 flex flex-col">
+        <div class="flex-1 overflow-y-auto">
+          <OuiContainer size="full" py="xl">
+            <slot />
+          </OuiContainer>
+        </div>
+        
+        <!-- Footer -->
+        <footer class="border-t border-border-muted bg-surface-subtle shrink-0">
+          <OuiContainer size="full" py="xl">
+            <OuiStack gap="md" align="center">
+              <OuiFlex align="center" gap="sm" wrap="wrap" justify="center">
+                <OuiText size="sm" color="secondary">
+                  © {{ new Date().getFullYear() }} Obiente Cloud
+                </OuiText>
+                <OuiText size="sm" color="secondary">•</OuiText>
+                <NuxtLink to="/support" class="text-sm text-secondary hover:text-primary transition-colors">
+                  Support
+                </NuxtLink>
+              </OuiFlex>
+              <OuiText size="xs" color="secondary" class="text-center max-w-2xl">
+                This documentation is publicly accessible. Sign in to access your dashboard and manage your resources.
+              </OuiText>
+            </OuiStack>
+          </OuiContainer>
+        </footer>
       </div>
     </main>
-
-    <!-- Footer -->
-    <footer class="border-t border-border-muted bg-surface-subtle mt-auto">
-      <OuiContainer size="full" py="xl">
-        <OuiStack gap="md" align="center">
-          <OuiFlex align="center" gap="sm" wrap="wrap" justify="center">
-            <OuiText size="sm" color="secondary">
-              © {{ new Date().getFullYear() }} Obiente Cloud
-            </OuiText>
-            <OuiText size="sm" color="secondary">•</OuiText>
-            <NuxtLink to="/support" class="text-sm text-secondary hover:text-primary transition-colors">
-              Support
-            </NuxtLink>
-          </OuiFlex>
-          <OuiText size="xs" color="secondary" class="text-center max-w-2xl">
-            This documentation is publicly accessible. Sign in to access your dashboard and manage your resources.
-          </OuiText>
-        </OuiStack>
-      </OuiContainer>
-    </footer>
   </div>
 </template>
 

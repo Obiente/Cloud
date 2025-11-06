@@ -60,9 +60,9 @@
             <RocketLaunchIcon class="h-5 w-5" />
             Get Started
           </OuiButton>
-          <OuiButton variant="outline" size="lg" class="gap-2">
-            <PlayIcon class="h-5 w-5" />
-            Watch Demo
+          <OuiButton variant="outline" size="lg" class="gap-2" @click="navigateTo('/docs')">
+            <ChatBubbleLeftRightIcon class="h-5 w-5" />
+            View Documentation
           </OuiButton>
         </OuiFlex>
 
@@ -262,6 +262,52 @@
                   </OuiText>
                   <OuiText size="sm" color="secondary">
                     Only pay for resources you actually use. Perfect for game servers and VPSs where you often overpay for idle time. Stop wasting money on unused capacity.
+                  </OuiText>
+                </OuiStack>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+
+          <!-- Game Server Hosting -->
+          <OuiCard
+            variant="default"
+            hoverable
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+          >
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-primary/20 rounded-lg flex items-center justify-center">
+                  <ServerIcon class="h-6 w-6 text-accent-primary" />
+                </OuiBox>
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    Game Server Hosting
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Deploy dedicated game servers with Docker support. Pay only when your server is running - perfect for Minecraft, game servers, and multiplayer applications.
+                  </OuiText>
+                </OuiStack>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+
+          <!-- VPS Instances -->
+          <OuiCard
+            variant="default"
+            hoverable
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+          >
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiBox class="w-12 h-12 bg-accent-info/20 rounded-lg flex items-center justify-center">
+                  <ServerIcon class="h-6 w-6 text-accent-info" />
+                </OuiBox>
+                <OuiStack gap="sm">
+                  <OuiText as="h3" size="lg" weight="semibold" color="primary">
+                    VPS Instances
+                  </OuiText>
+                  <OuiText size="sm" color="secondary">
+                    Get full root access VPS instances with complete control. Pay only for actual CPU and memory usage - perfect for development, hosting, and personal projects where you need full flexibility.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -484,15 +530,6 @@
                   </OuiFlex>
                 </OuiStack>
               </OuiStack>
-
-              <OuiButton
-                variant="outline"
-                size="md"
-                class="w-full mt-auto"
-                @click="navigateTo('/dashboard')"
-              >
-                Get Started
-              </OuiButton>
             </OuiCardBody>
           </OuiCard>
 
@@ -561,15 +598,6 @@
                   </OuiFlex>
                 </OuiStack>
               </OuiStack>
-
-              <OuiButton
-                color="success"
-                size="md"
-                class="w-full mt-auto shadow-lg shadow-accent-success/25"
-                @click="navigateTo('/dashboard')"
-              >
-                Get Started
-              </OuiButton>
             </OuiCardBody>
           </OuiCard>
 
@@ -633,10 +661,6 @@
                   </OuiFlex>
                 </OuiStack>
               </OuiStack>
-
-              <OuiButton variant="outline" size="md" class="w-full mt-auto">
-                Get Started
-              </OuiButton>
             </OuiCardBody>
           </OuiCard>
 
@@ -706,18 +730,21 @@
                   </OuiFlex>
                 </OuiStack>
               </OuiStack>
-
-              <OuiButton
-                color="primary"
-                size="md"
-                class="w-full mt-auto shadow-lg shadow-accent-primary/25"
-                @click="navigateTo('/dashboard')"
-              >
-                Get Started
-              </OuiButton>
             </OuiCardBody>
           </OuiCard>
         </OuiGrid>
+        
+        <OuiFlex gap="md" wrap="wrap" justify="center" class="mt-8">
+          <OuiButton
+            size="lg"
+            color="primary"
+            class="gap-2 shadow-lg shadow-accent-primary/25"
+            @click="navigateTo('/dashboard')"
+          >
+            <RocketLaunchIcon class="h-5 w-5" />
+            Get Started
+          </OuiButton>
+        </OuiFlex>
         
         <OuiText size="sm" color="secondary" class="opacity-75 text-center max-w-2xl">
           * Example costs based on 24/7 usage. You only pay for actual runtime - if your app runs part-time, you'll pay less. Use the calculator below to estimate your exact costs.
@@ -833,7 +860,6 @@ import { computed } from "vue";
 import { useWindowScroll } from "@vueuse/core";
 import {
   RocketLaunchIcon,
-  PlayIcon,
   ServerIcon,
   CircleStackIcon,
   ChartBarIcon,

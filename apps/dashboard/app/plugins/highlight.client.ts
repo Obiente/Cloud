@@ -4,8 +4,26 @@ export default defineNuxtPlugin({
   async setup() {
     if (typeof window === "undefined") return;
 
-    // Import highlight.js
-    const hljs = await import("highlight.js");
+    // Import highlight.js - handle both default and named exports for v11 compatibility
+    let highlightInstance: any;
+    try {
+      const hljs = await import("highlight.js");
+      // highlight.js v11 uses default export
+      highlightInstance = hljs.default || hljs;
+      
+      // If it's still not available, try named imports
+      if (!highlightInstance && (hljs as any).highlight) {
+        highlightInstance = hljs;
+      }
+    } catch (err) {
+      console.error("Failed to load highlight.js:", err);
+      return;
+    }
+    
+    if (!highlightInstance) {
+      console.error("highlight.js instance not available");
+      return;
+    }
     
     // Import and apply OUI theme utility
     const { applyOUIThemeToHighlightJS } = await import("~/utils/highlight-theme");
@@ -14,7 +32,6 @@ export default defineNuxtPlugin({
     applyOUIThemeToHighlightJS();
 
     // Make highlight.js available globally
-    const highlightInstance = hljs.default;
     (window as any).hljs = highlightInstance;
 
     // Helper function to highlight code blocks
@@ -24,7 +41,21 @@ export default defineNuxtPlugin({
       document.querySelectorAll("pre code").forEach((block) => {
         // Only highlight if not already highlighted
         if (!block.classList.contains("hljs")) {
-          highlightInstance.highlightElement(block as HTMLElement);
+          // Use highlightElement if available, otherwise use highlight API
+          if (highlightInstance.highlightElement) {
+            highlightInstance.highlightElement(block as HTMLElement);
+          } else if (highlightInstance.highlight) {
+            const code = block.textContent || "";
+            const language = block.className.match(/language-(\w+)/)?.[1] || "plaintext";
+            try {
+              const result = highlightInstance.highlight(code, { language });
+              block.innerHTML = result.value;
+              block.classList.add("hljs");
+            } catch {
+              // Fallback: just add the class
+              block.classList.add("hljs");
+            }
+          }
         }
       });
     };

@@ -93,9 +93,10 @@ export default defineNuxtConfig({
         "@vueuse/nuxt",
         "@pinia/nuxt",
         "@connectrpc/connect-web",
+        "highlight.js", // Include highlight.js so Vite can properly optimize it
       ],
       // Exclude heavy libraries from pre-bundling (they're lazy-loaded)
-      exclude: ["monaco-editor", "@xterm/xterm", "echarts", "highlight.js", "prettier"],
+      exclude: ["monaco-editor", "@xterm/xterm", "echarts", "prettier"],
     },
   },
   // Modules
