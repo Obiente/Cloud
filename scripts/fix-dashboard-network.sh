@@ -61,7 +61,10 @@ echo ""
 echo -e "${YELLOW}Option 1: Redeploy via docker-compose (RECOMMENDED)${NC}"
 echo "  This ensures the service uses the correct network from the compose file:"
 echo ""
-echo "  cd ~/Cloud"
+# Get the directory containing this script, then go up to project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+echo "  cd \"$PROJECT_ROOT\""
 echo "  export DOMAIN=\"\${DOMAIN:-obiente.cloud}\""
 echo "  STACK_NAME=\"$STACK_NAME\" docker stack deploy --resolve-image always -c docker-compose.dashboard.yml $STACK_NAME"
 echo ""
@@ -118,6 +121,9 @@ fi
 echo ""
 echo -e "${BLUE}📋 Quick Fix Command:${NC}"
 echo ""
-echo -e "${GREEN}  cd ~/Cloud && export DOMAIN=\"\${DOMAIN:-obiente.cloud}\" && STACK_NAME=\"$STACK_NAME\" docker stack deploy --resolve-image always -c docker-compose.dashboard.yml $STACK_NAME${NC}"
+# Get the directory containing this script, then go up to project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+echo -e "${GREEN}  cd \"$PROJECT_ROOT\" && export DOMAIN=\"\${DOMAIN:-obiente.cloud}\" && STACK_NAME=\"$STACK_NAME\" docker stack deploy --resolve-image always -c docker-compose.dashboard.yml $STACK_NAME${NC}"
 echo ""
 

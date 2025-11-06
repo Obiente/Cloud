@@ -1,6 +1,7 @@
 #!/bin/bash
-# Cleanup script for Docker Swarm
-# Removes old stopped containers, unused images, and cleans up Swarm tasks
+# Cleanup script for Docker Swarm - Obiente Cloud Only
+# Removes old stopped Obiente containers, unused Obiente images, and cleans up Obiente Swarm tasks
+# Only targets Obiente Cloud resources - other Docker resources are safe
 # Usage: ./scripts/cleanup-swarm.sh [--dry-run] [--all-nodes]
 
 set -e
@@ -40,8 +41,8 @@ execute() {
   fi
 }
 
-# 1. Remove old stopped containers (on all nodes if requested)
-echo -e "${BLUE}1️⃣  Cleaning up old containers...${NC}"
+# 1. Remove old stopped Obiente containers (on all nodes if requested)
+echo -e "${BLUE}1️⃣  Cleaning up old Obiente containers...${NC}"
 
 if [ "$ALL_NODES" = "--all-nodes" ]; then
   echo -e "${BLUE}   Running on all nodes...${NC}"
@@ -51,15 +52,19 @@ if [ "$ALL_NODES" = "--all-nodes" ]; then
     echo -e "${BLUE}   Node: ${NODE}${NC}"
     execute "docker node update --availability drain \"\$NODE\" 2>/dev/null || true" "Draining node (if needed)"
     
-    # Remove stopped containers on this node
-    execute "docker ps -a --filter 'status=exited' --filter 'status=dead' --format '{{.ID}}' | xargs -r docker rm -f 2>/dev/null || true" "Removing stopped containers"
+    # Remove only stopped Obiente containers
+    execute "docker ps -a --filter 'status=exited' --filter 'status=dead' --filter \"label=com.docker.stack.namespace=${STACK_NAME}\" --format '{{.ID}}' | xargs -r docker rm -f 2>/dev/null || true" "Removing stopped Obiente containers"
+    execute "docker ps -a --filter 'status=exited' --filter 'status=dead' --filter \"label=com.docker.stack.namespace=${STACK_NAME}_dashboard\" --format '{{.ID}}' | xargs -r docker rm -f 2>/dev/null || true" "Removing stopped Obiente dashboard containers"
+    execute "docker ps -a --filter 'status=exited' --filter 'status=dead' --filter \"name=${STACK_NAME}_\" --format '{{.ID}}' | xargs -r docker rm -f 2>/dev/null || true" "Removing stopped Obiente containers by name"
     
     execute "docker node update --availability active \"\$NODE\" 2>/dev/null || true" "Reactivating node"
   done
 else
   # Just clean up on current node
   echo -e "${BLUE}   Running on current node only (use --all-nodes for all nodes)...${NC}"
-  execute "docker ps -a --filter 'status=exited' --filter 'status=dead' --format '{{.ID}}' | xargs -r docker rm -f 2>/dev/null || true" "Removing stopped containers"
+  execute "docker ps -a --filter 'status=exited' --filter 'status=dead' --filter \"label=com.docker.stack.namespace=${STACK_NAME}\" --format '{{.ID}}' | xargs -r docker rm -f 2>/dev/null || true" "Removing stopped Obiente containers"
+  execute "docker ps -a --filter 'status=exited' --filter 'status=dead' --filter \"label=com.docker.stack.namespace=${STACK_NAME}_dashboard\" --format '{{.ID}}' | xargs -r docker rm -f 2>/dev/null || true" "Removing stopped Obiente dashboard containers"
+  execute "docker ps -a --filter 'status=exited' --filter 'status=dead' --filter \"name=${STACK_NAME}_\" --format '{{.ID}}' | xargs -r docker rm -f 2>/dev/null || true" "Removing stopped Obiente containers by name"
 fi
 
 echo ""
@@ -111,21 +116,45 @@ fi
 
 echo ""
 
-# 3. Prune unused images
-echo -e "${BLUE}3️⃣  Cleaning up unused images...${NC}"
-execute "docker image prune -a -f --filter 'until=24h'" "Removing unused images older than 24h"
+# 3. Remove Obiente-related unused images only
+echo -e "${BLUE}3️⃣  Cleaning up unused Obiente images...${NC}"
+# Only remove Obiente-related images that are unused
+OBIENTE_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" --filter "dangling=true" 2>/dev/null | grep -E "(obiente|ghcr.io/obiente)" || echo "")
+if [ -n "$OBIENTE_IMAGES" ]; then
+  while IFS= read -r img; do
+    if [ -n "$img" ]; then
+      execute "docker rmi \"$img\" 2>/dev/null || true" "Removing unused Obiente image: $img"
+    fi
+  done <<< "$OBIENTE_IMAGES"
+else
+  echo -e "${GREEN}  No unused Obiente images found${NC}"
+fi
 
 echo ""
 
-# 4. Prune unused networks
-echo -e "${BLUE}4️⃣  Cleaning up unused networks...${NC}"
-execute "docker network prune -f" "Removing unused networks"
+# 4. Remove only Obiente-related unused networks
+echo -e "${BLUE}4️⃣  Cleaning up unused Obiente networks...${NC}"
+# Only remove networks that match Obiente stack naming
+OBIENTE_NETWORKS=$(docker network ls --filter driver=overlay --format "{{.Name}}" 2>/dev/null | grep -E "(^${STACK_NAME}_|${STACK_NAME})" || echo "")
+if [ -n "$OBIENTE_NETWORKS" ]; then
+  while IFS= read -r net; do
+    if [ -n "$net" ]; then
+      # Check if network is unused
+      if ! docker network inspect "$net" --format '{{.Containers}}' 2>/dev/null | grep -q "."; then
+        execute "docker network rm \"$net\" 2>/dev/null || true" "Removing unused Obiente network: $net"
+      fi
+    fi
+  done <<< "$OBIENTE_NETWORKS"
+else
+  echo -e "${GREEN}  No unused Obiente networks found${NC}"
+fi
 
 echo ""
 
-# 5. Prune build cache (optional, but can free up space)
-echo -e "${BLUE}5️⃣  Cleaning up build cache...${NC}"
-execute "docker builder prune -f --filter 'until=168h'" "Removing build cache older than 7 days"
+# 5. Note: We don't prune build cache as it's shared across all projects
+echo -e "${BLUE}5️⃣  Build cache cleanup skipped${NC}"
+echo -e "${GREEN}  Build cache is shared across all projects - skipping cleanup${NC}"
+echo -e "${YELLOW}  To clean build cache manually: docker builder prune -f${NC}"
 
 echo ""
 

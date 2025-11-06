@@ -1,7 +1,8 @@
 #!/bin/bash
-# Complete cleanup script for Docker Swarm deployment
-# Removes all stacks, services, containers, volumes, and networks
-# WARNING: This will delete all data including volumes!
+# Complete cleanup script for Obiente Cloud Docker Swarm deployment
+# Removes all Obiente Cloud stacks, services, containers, volumes, and networks
+# SAFE: Only targets Obiente Cloud resources - other Docker resources are NOT touched
+# WARNING: This will delete all Obiente Cloud data including volumes!
 # Usage: ./scripts/cleanup-swarm-complete.sh [--confirm]
 
 set -e
@@ -16,15 +17,18 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${RED}⚠️  WARNING: This will completely remove all Docker Swarm resources!${NC}"
+echo -e "${RED}⚠️  WARNING: This will completely remove all Obiente Cloud resources!${NC}"
 echo ""
 echo -e "${YELLOW}This includes:${NC}"
-echo "  - All stacks (${STACK_NAME} and ${STACK_NAME}_dashboard)"
-echo "  - All services"
-echo "  - All containers"
-echo "  - All volumes (DATA WILL BE LOST)"
-echo "  - All networks"
-echo "  - All unused images"
+echo "  - Obiente Cloud stacks (${STACK_NAME} and ${STACK_NAME}_dashboard)"
+echo "  - Obiente Cloud services"
+echo "  - Obiente Cloud containers and tasks"
+echo "  - Obiente Cloud volumes (DATA WILL BE LOST)"
+echo "  - Obiente Cloud networks"
+echo "  - Obiente Cloud related images"
+echo ""
+echo -e "${GREEN}✅ This script ONLY removes Obiente Cloud resources${NC}"
+echo -e "${GREEN}   Other Docker resources are safe and will NOT be touched${NC}"
 echo ""
 
 # Check if we're on a manager node
@@ -78,39 +82,55 @@ safe_remove "stack" "${STACK_NAME}_dashboard" "Dashboard stack"
 # Wait a moment for stacks to remove
 sleep 5
 
-# 2. Remove any remaining services
+# 2. Remove any remaining Obiente services
 echo ""
-echo -e "${BLUE}2️⃣  Removing remaining services...${NC}"
+echo -e "${BLUE}2️⃣  Removing remaining Obiente services...${NC}"
 echo ""
 
-SERVICES=$(docker service ls --format "{{.Name}}" 2>/dev/null || echo "")
-if [ -n "$SERVICES" ]; then
+# Only remove services that belong to Obiente stacks
+ALL_SERVICES=$(docker service ls --format "{{.Name}}" 2>/dev/null || echo "")
+if [ -n "$ALL_SERVICES" ]; then
   while IFS= read -r service; do
     if [ -n "$service" ]; then
-      echo -e "${BLUE}  Removing service: ${service}${NC}"
-      docker service rm "$service" 2>/dev/null || true
+      # Check if service belongs to Obiente stacks
+      if [[ "$service" == "${STACK_NAME}_"* ]] || [[ "$service" == *"_${STACK_NAME}_"* ]]; then
+        echo -e "${BLUE}  Removing Obiente service: ${service}${NC}"
+        docker service rm "$service" 2>/dev/null || true
+      else
+        echo -e "${GREEN}  Skipping non-Obiente service: ${service}${NC}"
+      fi
     fi
-  done <<< "$SERVICES"
+  done <<< "$ALL_SERVICES"
 else
   echo -e "${GREEN}  No services found${NC}"
 fi
 
 echo ""
 
-# 3. Stop and remove all containers
-echo -e "${BLUE}3️⃣  Removing all containers...${NC}"
+# 3. Stop and remove only Obiente containers
+echo -e "${BLUE}3️⃣  Removing Obiente containers...${NC}"
 echo ""
 
-# Stop all containers
-CONTAINERS=$(docker ps -a -q 2>/dev/null || echo "")
-if [ -n "$CONTAINERS" ]; then
-  echo -e "${BLUE}  Stopping ${#CONTAINERS[@]} containers...${NC}"
-  docker stop $CONTAINERS 2>/dev/null || true
+# Get containers that belong to Obiente services
+OBIENTE_CONTAINERS=$(docker ps -a --filter "label=com.docker.stack.namespace=${STACK_NAME}" --format "{{.ID}}" 2>/dev/null || echo "")
+OBIENTE_CONTAINERS="$OBIENTE_CONTAINERS $(docker ps -a --filter "label=com.docker.stack.namespace=${STACK_NAME}_dashboard" --format "{{.ID}}" 2>/dev/null || echo "")"
+
+# Also check by container name pattern
+OBIENTE_CONTAINERS="$OBIENTE_CONTAINERS $(docker ps -a --filter "name=${STACK_NAME}_" --format "{{.ID}}" 2>/dev/null || echo "")"
+
+# Remove duplicates and empty lines
+OBIENTE_CONTAINERS=$(echo "$OBIENTE_CONTAINERS" | tr ' ' '\n' | grep -v '^$' | sort -u | tr '\n' ' ')
+
+if [ -n "$OBIENTE_CONTAINERS" ]; then
+  CONTAINER_COUNT=$(echo "$OBIENTE_CONTAINERS" | wc -w)
+  echo -e "${BLUE}  Found ${CONTAINER_COUNT} Obiente container(s)...${NC}"
+  echo -e "${BLUE}  Stopping containers...${NC}"
+  docker stop $OBIENTE_CONTAINERS 2>/dev/null || true
   
   echo -e "${BLUE}  Removing containers...${NC}"
-  docker rm -f $CONTAINERS 2>/dev/null || true
+  docker rm -f $OBIENTE_CONTAINERS 2>/dev/null || true
 else
-  echo -e "${GREEN}  No containers found${NC}"
+  echo -e "${GREEN}  No Obiente containers found${NC}"
 fi
 
 echo ""
@@ -137,9 +157,8 @@ else
   echo -e "${GREEN}  No matching volumes found${NC}"
 fi
 
-# Prune all unused volumes
-echo -e "${BLUE}  Pruning all unused volumes...${NC}"
-docker volume prune -af 2>/dev/null || true
+# Only remove Obiente-related volumes (already filtered above)
+# Do NOT prune all volumes - this would remove other projects' volumes
 
 echo ""
 
@@ -160,18 +179,25 @@ fi
 
 echo ""
 
-# 6. Prune system
-echo -e "${BLUE}6️⃣  Pruning Docker system...${NC}"
+# 6. Remove Obiente-related images only
+echo -e "${BLUE}6️⃣  Removing Obiente-related images...${NC}"
 echo ""
 
-echo -e "${BLUE}  Pruning unused images...${NC}"
-docker image prune -af 2>/dev/null || true
+# Only remove images that are clearly Obiente-related
+OBIENTE_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" 2>/dev/null | grep -E "(obiente|ghcr.io/obiente)" || echo "")
+if [ -n "$OBIENTE_IMAGES" ]; then
+  echo -e "${BLUE}  Obiente images found:${NC}"
+  echo "$OBIENTE_IMAGES" | while read img; do
+    if [ -n "$img" ]; then
+      echo "    - $img"
+      docker rmi "$img" 2>/dev/null || echo -e "${YELLOW}      ⚠️  Failed to remove (may be in use)${NC}"
+    fi
+  done
+else
+  echo -e "${GREEN}  No Obiente images found${NC}"
+fi
 
-echo -e "${BLUE}  Pruning unused build cache...${NC}"
-docker builder prune -af 2>/dev/null || true
-
-echo -e "${BLUE}  Pruning unused networks...${NC}"
-docker network prune -f 2>/dev/null || true
+# Do NOT prune all images/build cache/networks - this would affect other projects
 
 echo ""
 
