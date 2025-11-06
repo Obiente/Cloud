@@ -118,7 +118,8 @@ echo ""
 echo "🚀 Deploying main stack '$STACK_NAME'..."
 
 # Deploy the main stack with environment variables loaded from .env
-docker stack deploy -c "$COMPOSE_FILE" "$STACK_NAME"
+# Use --resolve-image always to force pulling latest images
+docker stack deploy --resolve-image always -c "$COMPOSE_FILE" "$STACK_NAME"
 
 echo ""
 echo "✅ Main stack deployment started!"
@@ -144,7 +145,8 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   export DOMAIN="${DOMAIN:-obiente.cloud}"
   TEMP_DASHBOARD_COMPOSE=$(mktemp)
   sed "s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
-  STACK_NAME="$STACK_NAME" DASHBOARD_IMAGE="$DASHBOARD_IMAGE" docker stack deploy -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}"
+  # Use --resolve-image always to force pulling latest images
+  STACK_NAME="$STACK_NAME" DASHBOARD_IMAGE="$DASHBOARD_IMAGE" docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}"
   rm -f "$TEMP_DASHBOARD_COMPOSE"
   
   echo ""
