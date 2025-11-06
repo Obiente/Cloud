@@ -99,6 +99,13 @@ show_overview() {
     "Run on each worker node before first deployment"
   
   print_script \
+    "create-swarm-network.sh" \
+    "Setup" \
+    "Create Docker Swarm overlay network for Obiente Cloud" \
+    "./scripts/create-swarm-network.sh [--subnet <subnet>]" \
+    "Create network before deployment (optional - stacks will create it automatically)"
+  
+  print_script \
     "cleanup-swarm.sh" \
     "Maintenance" \
     "Clean up old Obiente containers, tasks, and unused Obiente resources (SAFE: only targets Obiente resources)" \
