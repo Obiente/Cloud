@@ -73,11 +73,16 @@ export default defineNuxtConfig({
           // Optimize chunk file names for better caching
           chunkFileNames: "js/[name]-[hash].js",
           entryFileNames: "js/[name]-[hash].js",
+          // Don't customize CSS files - let Nuxt handle CSS extraction completely
+          // Only customize non-CSS assets to avoid breaking Nuxt's CSS extraction
           assetFileNames: (assetInfo) => {
-            if (assetInfo.name?.endsWith(".css")) {
-              return "css/[name]-[hash][extname]";
+            // For CSS files, don't customize - let Nuxt handle extraction
+            // For other assets, organize them in assets folder
+            if (!assetInfo.name?.endsWith(".css")) {
+              return "assets/[name]-[hash][extname]";
             }
-            return "assets/[name]-[hash][extname]";
+            // Default Rollup pattern for CSS (Nuxt will handle it)
+            return "[name]-[hash][extname]";
           },
         },
       },
