@@ -10,6 +10,7 @@ import (
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/services/organizations"
+	"api/internal/zitadel"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -27,6 +28,39 @@ func NewService() authv1connect.AuthServiceHandler {
 	return &Service{
 		db: database.DB,
 	}
+}
+
+func (s *Service) Login(ctx context.Context, req *connect.Request[authv1.LoginRequest]) (*connect.Response[authv1.LoginResponse], error) {
+	email := strings.TrimSpace(req.Msg.GetEmail())
+	password := req.Msg.GetPassword()
+
+	if email == "" || password == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("email and password are required"))
+	}
+
+	// Use Zitadel client to authenticate
+	zitadelClient := zitadel.NewClient()
+	loginResp, err := zitadelClient.Login(email, password)
+	if err != nil {
+		// Handle error - loginResp might be nil or have error details
+		errorMsg := "Authentication failed"
+		if loginResp != nil && loginResp.Message != "" {
+			errorMsg = loginResp.Message
+		} else if err != nil {
+			errorMsg = err.Error()
+		}
+		return connect.NewResponse(&authv1.LoginResponse{
+			Success: false,
+			Message: errorMsg,
+		}), nil
+	}
+
+	return connect.NewResponse(&authv1.LoginResponse{
+		Success:      loginResp.Success,
+		AccessToken:  loginResp.AccessToken,
+		RefreshToken: loginResp.RefreshToken,
+		ExpiresIn:    loginResp.ExpiresIn,
+	}), nil
 }
 
 func (s *Service) GetCurrentUser(ctx context.Context, _ *connect.Request[authv1.GetCurrentUserRequest]) (*connect.Response[authv1.GetCurrentUserResponse], error) {

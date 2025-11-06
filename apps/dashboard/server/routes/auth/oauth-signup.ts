@@ -11,11 +11,8 @@ export default eventHandler(async (event) => {
 
   const { code_challenge, code_challenge_method } = await handlePKCE(event);
 
-  const session = getCookie(event, "access_token");
-  const isSilent = !session;
-
   const params = new URLSearchParams({
-    prompt: isSilent ? "none" : "login",
+    prompt: "register", // Force registration prompt
     client_id: OIDC.clientId,
     redirect_uri: config.public.requestHost + OIDC.redirectPath,
     response_type: OIDC.responseType,
@@ -26,3 +23,4 @@ export default eventHandler(async (event) => {
 
   sendRedirect(event, `${OIDC.authority}/authorize?${params.toString()}`);
 });
+

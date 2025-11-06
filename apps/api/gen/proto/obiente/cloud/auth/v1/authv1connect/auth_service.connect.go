@@ -33,6 +33,8 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
+	// AuthServiceLoginProcedure is the fully-qualified name of the AuthService's Login RPC.
+	AuthServiceLoginProcedure = "/obiente.cloud.auth.v1.AuthService/Login"
 	// AuthServiceGetCurrentUserProcedure is the fully-qualified name of the AuthService's
 	// GetCurrentUser RPC.
 	AuthServiceGetCurrentUserProcedure = "/obiente.cloud.auth.v1.AuthService/GetCurrentUser"
@@ -61,6 +63,9 @@ const (
 
 // AuthServiceClient is a client for the obiente.cloud.auth.v1.AuthService service.
 type AuthServiceClient interface {
+	// Login with email and password using service account
+	// This endpoint does not require authentication (public)
+	Login(context.Context, *connect.Request[v1.LoginRequest]) (*connect.Response[v1.LoginResponse], error)
 	// Get current authenticated user
 	GetCurrentUser(context.Context, *connect.Request[v1.GetCurrentUserRequest]) (*connect.Response[v1.GetCurrentUserResponse], error)
 	// Update user profile information
@@ -92,6 +97,12 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 	baseURL = strings.TrimRight(baseURL, "/")
 	authServiceMethods := v1.File_obiente_cloud_auth_v1_auth_service_proto.Services().ByName("AuthService").Methods()
 	return &authServiceClient{
+		login: connect.NewClient[v1.LoginRequest, v1.LoginResponse](
+			httpClient,
+			baseURL+AuthServiceLoginProcedure,
+			connect.WithSchema(authServiceMethods.ByName("Login")),
+			connect.WithClientOptions(opts...),
+		),
 		getCurrentUser: connect.NewClient[v1.GetCurrentUserRequest, v1.GetCurrentUserResponse](
 			httpClient,
 			baseURL+AuthServiceGetCurrentUserProcedure,
@@ -145,6 +156,7 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 
 // authServiceClient implements AuthServiceClient.
 type authServiceClient struct {
+	login                        *connect.Client[v1.LoginRequest, v1.LoginResponse]
 	getCurrentUser               *connect.Client[v1.GetCurrentUserRequest, v1.GetCurrentUserResponse]
 	updateUserProfile            *connect.Client[v1.UpdateUserProfileRequest, v1.UpdateUserProfileResponse]
 	connectGitHub                *connect.Client[v1.ConnectGitHubRequest, v1.ConnectGitHubResponse]
@@ -153,6 +165,11 @@ type authServiceClient struct {
 	connectOrganizationGitHub    *connect.Client[v1.ConnectOrganizationGitHubRequest, v1.ConnectOrganizationGitHubResponse]
 	disconnectOrganizationGitHub *connect.Client[v1.DisconnectOrganizationGitHubRequest, v1.DisconnectOrganizationGitHubResponse]
 	listGitHubIntegrations       *connect.Client[v1.ListGitHubIntegrationsRequest, v1.ListGitHubIntegrationsResponse]
+}
+
+// Login calls obiente.cloud.auth.v1.AuthService.Login.
+func (c *authServiceClient) Login(ctx context.Context, req *connect.Request[v1.LoginRequest]) (*connect.Response[v1.LoginResponse], error) {
+	return c.login.CallUnary(ctx, req)
 }
 
 // GetCurrentUser calls obiente.cloud.auth.v1.AuthService.GetCurrentUser.
@@ -198,6 +215,9 @@ func (c *authServiceClient) ListGitHubIntegrations(ctx context.Context, req *con
 
 // AuthServiceHandler is an implementation of the obiente.cloud.auth.v1.AuthService service.
 type AuthServiceHandler interface {
+	// Login with email and password using service account
+	// This endpoint does not require authentication (public)
+	Login(context.Context, *connect.Request[v1.LoginRequest]) (*connect.Response[v1.LoginResponse], error)
 	// Get current authenticated user
 	GetCurrentUser(context.Context, *connect.Request[v1.GetCurrentUserRequest]) (*connect.Response[v1.GetCurrentUserResponse], error)
 	// Update user profile information
@@ -225,6 +245,12 @@ type AuthServiceHandler interface {
 // and JSON codecs. They also support gzip compression.
 func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
 	authServiceMethods := v1.File_obiente_cloud_auth_v1_auth_service_proto.Services().ByName("AuthService").Methods()
+	authServiceLoginHandler := connect.NewUnaryHandler(
+		AuthServiceLoginProcedure,
+		svc.Login,
+		connect.WithSchema(authServiceMethods.ByName("Login")),
+		connect.WithHandlerOptions(opts...),
+	)
 	authServiceGetCurrentUserHandler := connect.NewUnaryHandler(
 		AuthServiceGetCurrentUserProcedure,
 		svc.GetCurrentUser,
@@ -275,6 +301,8 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 	)
 	return "/obiente.cloud.auth.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case AuthServiceLoginProcedure:
+			authServiceLoginHandler.ServeHTTP(w, r)
 		case AuthServiceGetCurrentUserProcedure:
 			authServiceGetCurrentUserHandler.ServeHTTP(w, r)
 		case AuthServiceUpdateUserProfileProcedure:
@@ -299,6 +327,10 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 
 // UnimplementedAuthServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedAuthServiceHandler struct{}
+
+func (UnimplementedAuthServiceHandler) Login(context.Context, *connect.Request[v1.LoginRequest]) (*connect.Response[v1.LoginResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.auth.v1.AuthService.Login is not implemented"))
+}
 
 func (UnimplementedAuthServiceHandler) GetCurrentUser(context.Context, *connect.Request[v1.GetCurrentUserRequest]) (*connect.Response[v1.GetCurrentUserResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.auth.v1.AuthService.GetCurrentUser is not implemented"))

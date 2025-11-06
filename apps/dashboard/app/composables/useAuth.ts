@@ -65,6 +65,60 @@ export const useAuth = () => {
     orgStore.reset();
   };
 
+  // Silent authentication using iframe (Zitadel allows iframes when configured)
+  const trySilentAuth = async (): Promise<boolean> => {
+    if (import.meta.server) return false;
+
+    return new Promise((resolve) => {
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "none";
+      iframe.style.position = "absolute";
+      iframe.style.visibility = "hidden";
+
+      let resolved = false;
+      const cleanup = () => {
+        if (resolved) return;
+        resolved = true;
+        try {
+          if (iframe.parentNode) {
+            document.body.removeChild(iframe);
+          }
+        } catch (e) {
+          // Iframe might already be removed
+        }
+        window.removeEventListener("message", messageHandler);
+      };
+
+      const timeout = setTimeout(() => {
+        cleanup();
+        resolve(false);
+      }, 5000); // 5 second timeout for iframe
+
+      const messageHandler = (e: MessageEvent) => {
+        if (resolved) return;
+        if (e.origin !== window.location.origin) return;
+
+        if (e.data?.type === "silent-auth-success") {
+          cleanup();
+          clearTimeout(timeout);
+          // Refresh session after successful silent auth
+          fetch().then(() => resolve(true));
+        } else if (e.data?.type === "silent-auth-error") {
+          cleanup();
+          clearTimeout(timeout);
+          resolve(false);
+        }
+      };
+
+      window.addEventListener("message", messageHandler);
+      iframe.src = "/auth/silent-check";
+      document.body.appendChild(iframe);
+    });
+  };
+
   // Popup authentication support
   const popupListener = (e: StorageEvent) => {
     if (e.key === "auth-completed") {
@@ -73,8 +127,49 @@ export const useAuth = () => {
     }
   };
 
+  // Message listener for OAuth errors from popup
+  const messageListener = (e: MessageEvent) => {
+    if (e.origin !== window.location.origin) return;
+    
+    if (e.data?.type === "oauth-error") {
+      console.log("[Auth] OAuth error from popup:", e.data.error);
+      // If silent auth failed (no session), open regular login page
+      if (e.data.error === "login_required" || e.data.error === "interaction_required" || e.data.error === "no_session") {
+        window.removeEventListener("message", messageListener);
+        // Open regular login page (not OAuth, so user can enter credentials)
+        popupLogin("/auth/login");
+      }
+    }
+  };
+
   const popupLogin = (
-    route: string = "/auth/login",
+    route: string = "/auth/oauth-login",
+    size: { width?: number; height?: number } = {}
+  ) => {
+    const width = size.width ?? 500;
+    const height = size.height ?? 700;
+    const top =
+      (window.top?.outerHeight ?? 0) / 2 +
+      (window.top?.screenY ?? 0) -
+      height / 2;
+    const left =
+      (window.top?.outerWidth ?? 0) / 2 +
+      (window.top?.screenX ?? 0) -
+      width / 2;
+
+    // Add message listener when opening popup
+    window.addEventListener("message", messageListener);
+
+    window.open(
+      route,
+      "_blank",
+      `width=${width}, height=${height}, top=${top}, left=${left}, toolbar=no, location=no, directories=no, status=no, menubar=no, scrollbars=no, resizable=no, copyhistory=no`
+    );
+    window.addEventListener("storage", popupListener);
+  };
+
+  const popupSignup = (
+    route: string = "/auth/signup",
     size: { width?: number; height?: number } = {}
   ) => {
     const width = size.width ?? 500;
@@ -232,6 +327,16 @@ export const useAuth = () => {
     fetch();
 
     if (import.meta.client) {
+      // Try silent auth first if no session exists
+      if (!sessionState.value || !user.value) {
+        trySilentAuth().then((success) => {
+          if (!success) {
+            // Silent auth failed, but don't auto-open popup here
+            // Let the middleware handle it if needed
+          }
+        });
+      }
+
       const tokenCheckInterval = setInterval(() => {
         if (tokenExpiry.value && Date.now() >= tokenExpiry.value) {
           refreshAccessToken(true).catch(console.error);
@@ -260,7 +365,9 @@ export const useAuth = () => {
     setOrganizations: orgStore.setOrganizations,
     notifyOrganizationsUpdated: orgStore.notifyOrganizationsUpdated,
     getCurrentUser: fetch,
+    trySilentAuth,
     popupLogin,
+    popupSignup,
 
     getAccessToken,
     refreshAccessToken,

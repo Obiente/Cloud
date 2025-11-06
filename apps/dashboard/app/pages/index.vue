@@ -26,6 +26,9 @@
         <OuiButton variant="ghost" size="sm">Features</OuiButton>
         <OuiButton variant="ghost" size="sm">Pricing</OuiButton>
         <OuiButton variant="ghost" size="sm" @click="navigateTo('/docs')">Docs</OuiButton>
+        <OuiButton variant="outline" size="sm" @click="handleSignUp">
+          Sign Up
+        </OuiButton>
         <OuiButton variant="outline" size="sm" @click="navigateTo('/dashboard')"
           >Sign In</OuiButton
         >
@@ -879,6 +882,18 @@ definePageMeta({
 // Scroll state for header effect using VueUse
 const { y: scrollY } = useWindowScroll();
 const isScrolled = computed(() => scrollY.value > 10);
+
+// Auth composable for sign-up
+const auth = useAuth();
+
+// Handle sign-up click
+const handleSignUp = () => {
+  if (import.meta.client) {
+    auth.popupSignup();
+  } else {
+    navigateTo("/auth/signup");
+  }
+};
 
 // SEO meta
 useHead({

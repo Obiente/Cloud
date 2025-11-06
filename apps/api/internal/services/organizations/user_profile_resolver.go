@@ -75,7 +75,8 @@ func (r *userProfileResolver) Resolve(ctx context.Context, userID string) (*auth
 	}
 	r.mu.RUnlock()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/management/v1/users/%s", r.baseURL, userID), nil)
+	// Use Zitadel API v2 for user lookup
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/v2/users/%s", r.baseURL, userID), nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}

@@ -7,6 +7,10 @@ option go_package = "api/gen/proto/obiente/cloud/auth/v1;authv1";
 import "google/protobuf/timestamp.proto";
 
 service AuthService {
+  // Login with email and password using service account
+  // This endpoint does not require authentication (public)
+  rpc Login(LoginRequest) returns (LoginResponse);
+  
   // Get current authenticated user
   rpc GetCurrentUser(GetCurrentUserRequest) returns (GetCurrentUserResponse);
   
@@ -136,4 +140,19 @@ message UpdateUserProfileRequest {
 
 message UpdateUserProfileResponse {
   User user = 1; // Updated user information
+}
+
+// Login Messages
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+  bool remember_me = 3; // Whether to set a longer session expiry
+}
+
+message LoginResponse {
+  bool success = 1;
+  string access_token = 2; // OAuth2 access token
+  string refresh_token = 3; // OAuth2 refresh token
+  int32 expires_in = 4; // Token expiry in seconds
+  string message = 5; // Error message if success is false
 }

@@ -132,17 +132,35 @@
             <OuiText size="2xl" weight="bold">Authentication Required</OuiText>
             <OuiText color="muted">Please sign in to access the dashboard.</OuiText>
           </OuiStack>
-          <OuiButton 
-            v-if="!user.isLoading"
-            size="lg"
-            @click="user.popupLogin()"
-          >
-            Sign In
-          </OuiButton>
+          <OuiFlex v-if="!user.isLoading" gap="md" align="center" justify="center">
+            <OuiButton 
+              size="lg"
+              variant="outline"
+              @click="user.popupSignup()"
+            >
+              Sign Up
+            </OuiButton>
+            <OuiButton 
+              size="lg"
+              @click="user.popupLogin()"
+            >
+              Sign In
+            </OuiButton>
+          </OuiFlex>
           <OuiStack v-else gap="sm" align="center">
             <ArrowPathIcon class="h-6 w-6 text-muted animate-spin" />
             <OuiText size="sm" color="muted">Loading...</OuiText>
           </OuiStack>
+          <OuiButton
+            v-if="!user.isLoading"
+            variant="ghost"
+            size="md"
+            @click="navigateTo('/')"
+            class="mt-4"
+          >
+            <HomeIcon class="h-4 w-4 mr-2" />
+            Go back home
+          </OuiButton>
         </OuiStack>
       </div>
     </div>
@@ -175,7 +193,7 @@
 </style>
 <script setup lang="ts">
   import { onBeforeUnmount, onMounted, computed, ref, watch, type ComponentPublicInstance } from "vue";
-  import { Bars3Icon, XMarkIcon, LockClosedIcon, ArrowPathIcon } from "@heroicons/vue/24/outline";
+  import { Bars3Icon, XMarkIcon, LockClosedIcon, ArrowPathIcon, HomeIcon } from "@heroicons/vue/24/outline";
   import AppHeader from "~/components/app/AppHeader.vue";
 
   // Pinia user store

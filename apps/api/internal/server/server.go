@@ -264,8 +264,11 @@ func registerServices(mux *http.ServeMux) {
 	authInterceptor := auth.MiddlewareInterceptor(authConfig)
 
 	// Configure services
+	// Note: Login RPC does not require authentication (public endpoint)
 	authPath, authHandler := authv1connect.NewAuthServiceHandler(
 		authsvc.NewService(),
+		// Login doesn't need auth interceptor, but other methods do
+		// We'll handle this in the service itself
 		connect.WithInterceptors(authInterceptor),
 	)
 	mux.Handle(authPath, authHandler)

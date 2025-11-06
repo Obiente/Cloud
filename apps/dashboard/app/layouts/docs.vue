@@ -36,14 +36,22 @@
             >
               Dashboard
             </OuiButton>
-            <OuiButton
-              v-else
-              variant="ghost"
-              size="sm"
-              @click="user.popupLogin()"
-            >
-              Sign In
-            </OuiButton>
+            <template v-else>
+              <OuiButton
+                variant="outline"
+                size="sm"
+                @click="user.popupSignup()"
+              >
+                Sign Up
+              </OuiButton>
+              <OuiButton
+                variant="ghost"
+                size="sm"
+                @click="user.popupLogin()"
+              >
+                Sign In
+              </OuiButton>
+            </template>
           </OuiFlex>
         </OuiFlex>
       </OuiContainer>
