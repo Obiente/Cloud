@@ -26,83 +26,6 @@ export default defineNuxtConfig({
         ],
       },
     },
-    build: {
-      // Enable minification and tree-shaking
-      minify: "terser",
-      terserOptions: {
-        compress: {
-          drop_console: process.env.NODE_ENV === "production", // Remove console.log in production
-          drop_debugger: true,
-          pure_funcs: process.env.NODE_ENV === "production" ? ["console.log", "console.info"] : [],
-        },
-      },
-      // Optimize chunk splitting for better code splitting
-      rollupOptions: {
-        output: {
-          // Separate vendor chunks for better caching
-          manualChunks: (id) => {
-            // Separate heavy libraries into their own chunks
-            if (id.includes("monaco-editor")) {
-              return "monaco";
-            }
-            if (id.includes("echarts") || id.includes("vue-echarts")) {
-              return "echarts";
-            }
-            if (id.includes("@xterm")) {
-              return "xterm";
-            }
-            if (id.includes("highlight.js")) {
-              return "highlight";
-            }
-            if (id.includes("prettier")) {
-              return "prettier";
-            }
-            // Separate Vue ecosystem
-            if (id.includes("vue") || id.includes("pinia") || id.includes("@vueuse")) {
-              return "vue-vendor";
-            }
-            // Separate connectrpc
-            if (id.includes("@connectrpc") || id.includes("@bufbuild")) {
-              return "grpc";
-            }
-            // Separate node_modules into vendor chunk
-            if (id.includes("node_modules")) {
-              return "vendor";
-            }
-          },
-          // Optimize chunk file names for better caching
-          chunkFileNames: "js/[name]-[hash].js",
-          entryFileNames: "js/[name]-[hash].js",
-          // Don't customize CSS files - let Nuxt handle CSS extraction completely
-          // Only customize non-CSS assets to avoid breaking Nuxt's CSS extraction
-          assetFileNames: (assetInfo) => {
-            // For CSS files, don't customize - let Nuxt handle extraction
-            // For other assets, organize them in assets folder
-            if (!assetInfo.name?.endsWith(".css")) {
-              return "assets/[name]-[hash][extname]";
-            }
-            // Default Rollup pattern for CSS (Nuxt will handle it)
-            return "[name]-[hash][extname]";
-          },
-        },
-      },
-      // Increase chunk size warning limit (some heavy libraries are legitimately large)
-      chunkSizeWarningLimit: 1000,
-    },
-    // Optimize dependencies
-    optimizeDeps: {
-      include: [
-        "vue",
-        "pinia",
-        "@vueuse/core",
-        "@vueuse/nuxt",
-        "@pinia/nuxt",
-        "@connectrpc/connect-web",
-        "highlight.js", // Include highlight.js so Vite can properly optimize it
-      ],
-      // Exclude heavy libraries from pre-bundling (they're lazy-loaded)
-      exclude: ["monaco-editor", "@xterm/xterm", "echarts", "prettier"],
-    },
   },
   // Modules
   modules: ["@pinia/nuxt", "@vueuse/nuxt", "@nuxt/icon"],
@@ -177,19 +100,5 @@ export default defineNuxtConfig({
       wasm: true,
       websocket: true,
     },
-    // Enable compression for production builds
-    compressPublicAssets: process.env.NODE_ENV === "production",
-    // Optimize prerendering
-    prerender: {
-      crawlLinks: false, // Disable link crawling for faster builds
-      concurrency: 1,
-    },
-    // Minify server output
-    minify: process.env.NODE_ENV === "production",
-  },
-
-  // Build optimization
-  experimental: {
-    payloadExtraction: true, // Extract payloads for better caching
   },
 });
