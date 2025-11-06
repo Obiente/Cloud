@@ -25,14 +25,15 @@ services:
     networks:
       - obiente-network
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
+      # Use node to make HTTP request (wget/curl not available in minimal alpine)
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     # Swarm deployment configuration for high availability
     deploy:
-      replicas: 2
+      replicas: 5
       update_config:
         parallelism: 1
         delay: 10s
@@ -58,7 +59,7 @@ services:
         # Spread across nodes - prefer manager nodes but allow workers if needed
         # Remove 'node.role == manager' constraint to allow deployment on worker nodes
         # This ensures multi-node deployment even with single manager node
-        max_replicas_per_node: 1
+        max_replicas_per_node: 2
         # Optional: Uncomment below to restrict to manager nodes only
         # constraints:
         #   - node.role == manager
