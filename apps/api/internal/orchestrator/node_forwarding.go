@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
 	"api/internal/database"
 	"api/internal/logger"
+
+	"nhooyr.io/websocket"
 )
 
 // NodeForwarder handles forwarding requests to other nodes in the cluster
@@ -158,5 +161,46 @@ func (nf *NodeForwarder) ForwardConnectRPCStream(ctx context.Context, nodeID str
 func (nf *NodeForwarder) CanForward(nodeID string) bool {
 	_, err := nf.GetNodeAPIURL(nodeID)
 	return err == nil
+}
+
+// ForwardWebSocket forwards a WebSocket connection to another node
+// It dials a WebSocket connection to the target node and proxies messages bidirectionally
+func (nf *NodeForwarder) ForwardWebSocket(ctx context.Context, nodeID string, path string, headers http.Header) (*websocket.Conn, error) {
+	nodeURL, err := nf.GetNodeAPIURL(nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get node API URL: %w", err)
+	}
+
+	// Construct WebSocket URL
+	wsURL := nodeURL
+	if strings.HasPrefix(wsURL, "http://") {
+		wsURL = strings.Replace(wsURL, "http://", "ws://", 1)
+	} else if strings.HasPrefix(wsURL, "https://") {
+		wsURL = strings.Replace(wsURL, "https://", "wss://", 1)
+	} else {
+		wsURL = "ws://" + wsURL
+	}
+
+	wsURL = wsURL + path
+
+	logger.Info("[NodeForwarder] Forwarding WebSocket connection to node %s: %s", nodeID, wsURL)
+
+	// Parse URL
+	u, err := url.Parse(wsURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse WebSocket URL: %w", err)
+	}
+
+	// Dial WebSocket connection
+	dialOptions := &websocket.DialOptions{
+		HTTPHeader: headers,
+	}
+
+	conn, _, err := websocket.Dial(ctx, u.String(), dialOptions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dial WebSocket to node %s: %w", nodeID, err)
+	}
+
+	return conn, nil
 }
 

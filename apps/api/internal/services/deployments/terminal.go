@@ -60,13 +60,17 @@ func (s *Service) ensureTerminalSession(ctx context.Context, deploymentID, orgID
 	}
 
 	// Check if we need to forward to another node
-	// Note: Terminal operations require direct Docker exec access, so forwarding is complex
-	// For now, we'll return an error if the container is on a different node
-	// TODO: Implement terminal forwarding via WebSocket proxy
+	// For terminal operations, we can't forward Docker exec directly, but the WebSocket handler
+	// will handle forwarding. Here we just allow it to proceed and let the WebSocket handler
+	// detect and forward if needed.
+	// Note: This function is called from both WebSocket handler and ConnectRPC streams.
+	// For ConnectRPC streams, we still need to return an error since we can't forward those easily.
 	if shouldForward, targetNodeID := s.shouldForwardToNode(loc); shouldForward {
+		// Check if this is being called from a WebSocket context (which can handle forwarding)
+		// For now, return error - WebSocket handler will handle forwarding separately
 		return nil, nil, false, connect.NewError(
 			connect.CodeFailedPrecondition,
-			fmt.Errorf("container is on node %s. Terminal access requires direct node access. Please connect to node %s", targetNodeID, targetNodeID),
+			fmt.Errorf("container is on node %s. Terminal access via WebSocket will be automatically forwarded", targetNodeID),
 		)
 	}
 
@@ -236,9 +240,15 @@ func (s *Service) StreamTerminal(ctx context.Context, stream *connect.BidiStream
 
 			// Handle resize
 			if input.GetCols() > 0 && input.GetRows() > 0 && session != nil {
-				// TODO: Implement terminal resize via exec resize API
-				// For now, just log it
-				log.Printf("[Terminal] Resize requested: %dx%d (not implemented)", input.GetCols(), input.GetRows())
+				dcli, err := docker.New()
+				if err == nil {
+					defer dcli.Close()
+					if err := dcli.ContainerResize(ctx, session.containerID, int(input.GetRows()), int(input.GetCols())); err != nil {
+						log.Printf("[Terminal] Failed to resize container TTY: %v", err)
+					} else {
+						log.Printf("[Terminal] Resized container TTY to %dx%d", input.GetCols(), input.GetRows())
+					}
+				}
 			}
 		}
 	}()
@@ -296,13 +306,12 @@ func (s *Service) StreamTerminalOutput(ctx context.Context, req *connect.Request
 	loc := locations[0]
 
 	// Check if we need to forward to another node
-	// Note: Terminal operations require direct Docker exec access, so forwarding is complex
-	// For now, we'll return an error if the container is on a different node
-	// TODO: Implement terminal forwarding via WebSocket proxy
+	// StreamTerminalOutput uses ConnectRPC streaming which is harder to forward.
+	// For now, return an error suggesting to use WebSocket terminal instead.
 	if shouldForward, targetNodeID := s.shouldForwardToNode(&loc); shouldForward {
 		return connect.NewError(
 			connect.CodeFailedPrecondition,
-			fmt.Errorf("container is on node %s. Terminal access requires direct node access. Please connect to node %s", targetNodeID, targetNodeID),
+			fmt.Errorf("container is on node %s. Please use WebSocket terminal (/terminal/ws) which supports automatic forwarding", targetNodeID),
 		)
 	}
 
@@ -411,8 +420,15 @@ func (s *Service) SendTerminalInput(ctx context.Context, req *connect.Request[de
 
 	// Handle resize if dimensions changed
 	if req.Msg.GetCols() > 0 && req.Msg.GetRows() > 0 {
-		// TODO: Implement terminal resize via exec resize API
-		log.Printf("[Terminal] Resize requested: %dx%d (not implemented)", req.Msg.GetCols(), req.Msg.GetRows())
+		dcli, err := docker.New()
+		if err == nil {
+			defer dcli.Close()
+			if err := dcli.ContainerResize(ctx, session.containerID, int(req.Msg.GetRows()), int(req.Msg.GetCols())); err != nil {
+				log.Printf("[Terminal] Failed to resize container TTY: %v", err)
+			} else {
+				log.Printf("[Terminal] Resized container TTY to %dx%d", req.Msg.GetCols(), req.Msg.GetRows())
+			}
+		}
 	}
 
 	return connect.NewResponse(&deploymentsv1.SendTerminalInputResponse{

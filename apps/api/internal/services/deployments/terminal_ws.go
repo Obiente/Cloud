@@ -126,6 +126,28 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 	// Track container info for "start" command
 	var currentContainerID string
 
+	// Check if we need to forward to another node before creating session
+	dcli, dcliErr := docker.New()
+	var targetNodeID string
+	var shouldForwardWS bool
+	if dcliErr == nil {
+		loc, findErr := s.findContainerForDeployment(ctx, initMsg.DeploymentID, initMsg.ContainerID, initMsg.ServiceName, dcli)
+		if findErr == nil {
+			if shouldForward, nodeID := s.shouldForwardToNode(loc); shouldForward {
+				shouldForwardWS = true
+				targetNodeID = nodeID
+				currentContainerID = loc.ContainerID
+			}
+		}
+		dcli.Close()
+	}
+
+	// If we need to forward, proxy the WebSocket connection to the target node
+	if shouldForwardWS {
+		s.forwardTerminalWebSocket(ctx, w, r, targetNodeID, initMsg)
+		return
+	}
+
 	// Try to initialize terminal session
 	session, cleanup, created, err := s.ensureTerminalSession(ctx, initMsg.DeploymentID, initMsg.OrganizationID, initMsg.Cols, initMsg.Rows, initMsg.ContainerID, initMsg.ServiceName)
 
@@ -467,12 +489,136 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 				return
 			}
 		case "resize":
-			// TODO: implement container resize support if needed
-			log.Printf("[Terminal WS] Resize event received: %dx%d (not implemented)", msg.Cols, msg.Rows)
+			// Resize container TTY (only works if container has TTY enabled)
+			if session != nil && msg.Cols > 0 && msg.Rows > 0 {
+				dcli, err := docker.New()
+				if err == nil {
+					defer dcli.Close()
+					if err := dcli.ContainerResize(ctx, session.containerID, msg.Rows, msg.Cols); err != nil {
+						log.Printf("[Terminal WS] Failed to resize container TTY: %v", err)
+					} else {
+						log.Printf("[Terminal WS] Resized container TTY to %dx%d", msg.Cols, msg.Rows)
+					}
+				}
+			} else {
+				log.Printf("[Terminal WS] Resize event received but no active session or invalid dimensions: %dx%d", msg.Cols, msg.Rows)
+			}
 		case "ping":
 			_ = writeJSON(map[string]string{"type": "pong"})
 		default:
 			sendError("Unknown message type")
+		}
+	}
+}
+
+// forwardTerminalWebSocket forwards a terminal WebSocket connection to another node
+func (s *Service) forwardTerminalWebSocket(ctx context.Context, w http.ResponseWriter, r *http.Request, targetNodeID string, initMsg terminalWSMessage) {
+	if s.forwarder == nil {
+		http.Error(w, "Node forwarder not available", http.StatusInternalServerError)
+		return
+	}
+
+	// Get the original WebSocket connection from the client
+	clientConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		log.Printf("[Terminal WS Forward] Failed to accept client WebSocket: %v", err)
+		return
+	}
+	defer clientConn.Close(websocket.StatusInternalError, "")
+
+	// Prepare headers for forwarding
+	headers := make(http.Header)
+	if auth := r.Header.Get("Authorization"); auth != "" {
+		headers.Set("Authorization", auth)
+	}
+	// Also include the token from init message
+	if initMsg.Token != "" {
+		headers.Set("Authorization", "Bearer "+strings.TrimSpace(initMsg.Token))
+	}
+
+	// Forward WebSocket connection to target node
+	targetPath := "/terminal/ws"
+	targetConn, err := s.forwarder.ForwardWebSocket(ctx, targetNodeID, targetPath, headers)
+	if err != nil {
+		log.Printf("[Terminal WS Forward] Failed to connect to target node %s: %v", targetNodeID, err)
+		_ = wsjson.Write(ctx, clientConn, terminalWSOutput{
+			Type:    "error",
+			Message: fmt.Sprintf("Failed to connect to node %s: %v", targetNodeID, err),
+		})
+		return
+	}
+	defer targetConn.Close(websocket.StatusInternalError, "")
+
+	log.Printf("[Terminal WS Forward] Successfully connected to target node %s, proxying messages", targetNodeID)
+
+	// Send init message to target node
+	if err := wsjson.Write(ctx, targetConn, initMsg); err != nil {
+		log.Printf("[Terminal WS Forward] Failed to send init message to target: %v", err)
+		return
+	}
+
+	// Read initial response from target (connected/error message)
+	var initResponse terminalWSOutput
+	if err := wsjson.Read(ctx, targetConn, &initResponse); err != nil {
+		log.Printf("[Terminal WS Forward] Failed to read init response: %v", err)
+		return
+	}
+	// Forward initial response to client
+	if err := wsjson.Write(ctx, clientConn, initResponse); err != nil {
+		log.Printf("[Terminal WS Forward] Failed to forward init response: %v", err)
+		return
+	}
+
+	// Proxy messages bidirectionally
+	errChan := make(chan error, 2)
+
+	// Forward messages from client to target node
+	go func() {
+		for {
+			var msg terminalWSMessage
+			if err := wsjson.Read(ctx, clientConn, &msg); err != nil {
+				if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
+					errChan <- nil
+					return
+				}
+				errChan <- fmt.Errorf("failed to read from client: %w", err)
+				return
+			}
+			if err := wsjson.Write(ctx, targetConn, msg); err != nil {
+				errChan <- fmt.Errorf("failed to write to target: %w", err)
+				return
+			}
+		}
+	}()
+
+	// Forward messages from target node to client
+	go func() {
+		for {
+			var output terminalWSOutput
+			if err := wsjson.Read(ctx, targetConn, &output); err != nil {
+				if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
+					errChan <- nil
+					return
+				}
+				errChan <- fmt.Errorf("failed to read from target: %w", err)
+				return
+			}
+			if err := wsjson.Write(ctx, clientConn, output); err != nil {
+				errChan <- fmt.Errorf("failed to write to client: %w", err)
+				return
+			}
+		}
+	}()
+
+	// Wait for an error or context cancellation
+	select {
+	case <-ctx.Done():
+		log.Printf("[Terminal WS Forward] Context cancelled")
+	case err := <-errChan:
+		if err != nil {
+			log.Printf("[Terminal WS Forward] Proxy error: %v", err)
 		}
 	}
 }
