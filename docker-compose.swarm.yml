@@ -93,7 +93,6 @@ services:
     # build:
     #   context: .
     #   dockerfile: apps/api/Dockerfile
-    pull_policy: always  # Always pull latest image to ensure updates
     environment:
       PORT: ${GO_API_PORT:-3001}
       DB_HOST: postgres
@@ -295,7 +294,6 @@ services:
     # build:
     #   context: .
     #   dockerfile: apps/api/Dockerfile
-    pull_policy: always  # Always pull latest image to ensure updates
     command: ["./dns-server"]
     environment:
       DB_HOST: postgres

@@ -8,7 +8,6 @@ services:
     #   dockerfile: apps/dashboard/Dockerfile
     #   cache_from:
     #     - obiente/cloud-dashboard:latest
-    pull_policy: always  # Always pull latest image to ensure updates
     environment:
       NODE_ENV: production
       PORT: 3000
