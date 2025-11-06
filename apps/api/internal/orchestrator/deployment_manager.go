@@ -28,24 +28,24 @@ import (
 
 // DeploymentManager manages the lifecycle of user deployments
 type DeploymentManager struct {
-    dockerClient client.APIClient
-    dockerHelper dockerHelper
-    nodeSelector *NodeSelector
-    registry     *registry.ServiceRegistry
-    networkName  string
-    nodeID       string
-    nodeHostname string
-    forwarder    *NodeForwarder
+	dockerClient client.APIClient
+	dockerHelper dockerHelper
+	nodeSelector *NodeSelector
+	registry     *registry.ServiceRegistry
+	networkName  string
+	nodeID       string
+	nodeHostname string
+	forwarder    *NodeForwarder
 }
 
 // dockerHelper defines the subset of docker helper methods used here.
 type dockerHelper interface {
-    StartContainer(ctx context.Context, containerID string) error
-    StopContainer(ctx context.Context, containerID string, timeout time.Duration) error
-    RemoveContainer(ctx context.Context, containerID string, force bool) error
-    RestartContainer(ctx context.Context, containerID string, timeout time.Duration) error
-    ContainerLogs(ctx context.Context, containerID string, tail string, follow bool) (io.ReadCloser, error)
-    ContainerExecRun(ctx context.Context, containerID string, cmd []string) (string, error)
+	StartContainer(ctx context.Context, containerID string) error
+	StopContainer(ctx context.Context, containerID string, timeout time.Duration) error
+	RemoveContainer(ctx context.Context, containerID string, force bool) error
+	RestartContainer(ctx context.Context, containerID string, timeout time.Duration) error
+	ContainerLogs(ctx context.Context, containerID string, tail string, follow bool) (io.ReadCloser, error)
+	ContainerExecRun(ctx context.Context, containerID string, cmd []string) (string, error)
 }
 
 // DeploymentConfig holds configuration for a new deployment
@@ -69,7 +69,7 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
 
-    nodeSelector, err := NewNodeSelector(strategy, maxDeploymentsPerNode)
+	nodeSelector, err := NewNodeSelector(strategy, maxDeploymentsPerNode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create node selector: %w", err)
 	}
@@ -79,16 +79,16 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 		return nil, fmt.Errorf("failed to create service registry: %w", err)
 	}
 
-    // Get node info
+	// Get node info
 	info, err := cli.Info(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Docker info: %w", err)
 	}
 
-    helper, err := docker.New()
-    if err != nil {
-        return nil, fmt.Errorf("failed to init docker helper: %w", err)
-    }
+	helper, err := docker.New()
+	if err != nil {
+		return nil, fmt.Errorf("failed to init docker helper: %w", err)
+	}
 
 	// Determine node ID - use Swarm node ID if available, otherwise use synthetic local ID
 	nodeID := info.Swarm.NodeID
@@ -98,8 +98,8 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 	}
 
 	dm := &DeploymentManager{
-        dockerClient: cli,
-        dockerHelper: helper,
+		dockerClient: cli,
+		dockerHelper: helper,
 		nodeSelector: nodeSelector,
 		registry:     serviceRegistry,
 		networkName:  "obiente-network",
@@ -107,7 +107,7 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 		nodeHostname: info.Name,
 		forwarder:    NewNodeForwarder(),
 	}
-	
+
 	// Ensure the network exists (non-blocking - we'll try again when needed)
 	// If this fails, we'll attempt to create it later when actually deploying
 	if err := dm.ensureNetwork(context.Background()); err != nil {
@@ -116,7 +116,7 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 		// Don't fail initialization - network creation will be retried during deployment
 		// This allows the system to start even if Docker has temporary issues
 	}
-	
+
 	return dm, nil
 }
 
@@ -137,19 +137,19 @@ func (dm *DeploymentManager) ensureNetwork(ctx context.Context) error {
 			stderr := string(exitError.Stderr)
 			logger.Info("[DeploymentManager] Failed to check for network (exit code %d): %s", exitError.ExitCode(), stderr)
 			// If Docker is not available, return a more helpful error
-			if strings.Contains(stderr, "Cannot connect to the Docker daemon") || 
-			   strings.Contains(stderr, "Is the docker daemon running") {
+			if strings.Contains(stderr, "Cannot connect to the Docker daemon") ||
+				strings.Contains(stderr, "Is the docker daemon running") {
 				return fmt.Errorf("docker daemon is not accessible: %s", stderr)
 			}
 		}
 		logger.Warn("[DeploymentManager] Failed to check for network: %v", err)
 	}
-	
+
 	if strings.TrimSpace(string(output)) == dm.networkName {
 		logger.Info("[DeploymentManager] Network %s already exists", dm.networkName)
 		return nil
 	}
-	
+
 	// Network doesn't exist, create it
 	logger.Info("[DeploymentManager] Creating network %s", dm.networkName)
 	createCmd := exec.CommandContext(ctx, "docker", "network", "create", "--driver", "bridge", "--label", "cloud.obiente.managed=true", dm.networkName)
@@ -162,7 +162,7 @@ func (dm *DeploymentManager) ensureNetwork(ctx context.Context) error {
 			logger.Info("[DeploymentManager] Network %s was created by another process", dm.networkName)
 			return nil
 		}
-		
+
 		// Capture stderr for better error messages
 		errorOutput := stderr.String()
 		if errorOutput == "" {
@@ -170,24 +170,24 @@ func (dm *DeploymentManager) ensureNetwork(ctx context.Context) error {
 				errorOutput = string(exitError.Stderr)
 			}
 		}
-		
+
 		// Provide more specific error messages
 		if strings.Contains(errorOutput, "already exists") {
 			logger.Info("[DeploymentManager] Network %s already exists (race condition)", dm.networkName)
 			return nil
 		}
 		if strings.Contains(errorOutput, "Cannot connect to the Docker daemon") ||
-		   strings.Contains(errorOutput, "Is the docker daemon running") {
+			strings.Contains(errorOutput, "Is the docker daemon running") {
 			return fmt.Errorf("docker daemon is not accessible: %s", errorOutput)
 		}
 		if strings.Contains(errorOutput, "permission denied") {
 			return fmt.Errorf("permission denied: unable to create Docker network (check Docker permissions): %s", errorOutput)
 		}
-		
+
 		logger.Info("[DeploymentManager] Failed to create network: %v, stderr: %s", err, errorOutput)
 		return fmt.Errorf("failed to create network: %w (stderr: %s)", err, errorOutput)
 	}
-	
+
 	logger.Info("[DeploymentManager] Successfully created network %s", dm.networkName)
 	return nil
 }
@@ -195,7 +195,7 @@ func (dm *DeploymentManager) ensureNetwork(ctx context.Context) error {
 // CreateDeployment creates a new deployment on the cluster
 func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *DeploymentConfig) error {
 	logger.Info("[DeploymentManager] Creating deployment %s", config.DeploymentID)
-	
+
 	// Ensure network exists before creating containers (retry if it failed during initialization)
 	if err := dm.ensureNetwork(ctx); err != nil {
 		return fmt.Errorf("network is required but could not be created: %w", err)
@@ -318,17 +318,17 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 
 	// Create default deployment routing (for backward compatibility)
 	routing := &database.DeploymentRouting{
-		ID:                fmt.Sprintf("route-%s", config.DeploymentID),
-		DeploymentID:      config.DeploymentID,
-		Domain:            config.Domain,
-		ServiceName:       "default",
-		TargetPort:        config.Port,
-		Protocol:          "http",
-		SSLEnabled:        false, // Default to no SSL for HTTP protocol
-		SSLCertResolver:   "letsencrypt",
-		Middleware:        "{}", // Empty JSON object for jsonb field
-		CreatedAt:         time.Now(),
-		UpdatedAt:         time.Now(),
+		ID:              fmt.Sprintf("route-%s", config.DeploymentID),
+		DeploymentID:    config.DeploymentID,
+		Domain:          config.Domain,
+		ServiceName:     "default",
+		TargetPort:      config.Port,
+		Protocol:        "http",
+		SSLEnabled:      false, // Default to no SSL for HTTP protocol
+		SSLCertResolver: "letsencrypt",
+		Middleware:      "{}", // Empty JSON object for jsonb field
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	}
 
 	if err := database.UpsertDeploymentRouting(routing); err != nil {
@@ -343,7 +343,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 // If no routing rules exist and servicePort is provided, it will create basic labels with port
 func generateTraefikLabels(deploymentID string, serviceName string, routings []database.DeploymentRouting, servicePort *int) map[string]string {
 	labels := make(map[string]string)
-	
+
 	// Filter routings for this service name
 	serviceRoutings := []database.DeploymentRouting{}
 	for _, routing := range routings {
@@ -351,7 +351,7 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 			serviceRoutings = append(serviceRoutings, routing)
 		}
 	}
-	
+
 	// If no specific routing found, don't enable Traefik unless we have a port
 	// User must configure routing before the service will be accessible via Traefik
 	if len(serviceRoutings) == 0 {
@@ -359,11 +359,11 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 		// We still need to NOT enable it to avoid Traefik errors
 		return labels // Return empty - don't enable Traefik for services without routing rules
 	}
-	
+
 	// Enable Traefik only when we have routing rules
 	labels["traefik.enable"] = "true"
 	labels["cloud.obiente.traefik"] = "true" // Required for Traefik to discover this container
-	
+
 	// Generate labels for each routing rule
 	for idx, routing := range serviceRoutings {
 		routerName := deploymentID
@@ -373,14 +373,14 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 		if idx > 0 {
 			routerName = fmt.Sprintf("%s-%d", routerName, idx)
 		}
-		
+
 		// Build rule: Host or Host + PathPrefix
 		rule := "Host(`" + routing.Domain + "`)"
 		if routing.PathPrefix != "" {
 			rule = rule + " && PathPrefix(`" + routing.PathPrefix + "`)"
 		}
 		labels["traefik.http.routers."+routerName+".rule"] = rule
-		
+
 		// Entrypoints - respect protocol field
 		// HTTP protocol should use web (no SSL), HTTPS protocol or SSLEnabled=true should use websecure
 		shouldUseSSL := false
@@ -394,7 +394,7 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 			// For other protocols (grpc, etc.) or if protocol is not set, use SSLEnabled flag
 			shouldUseSSL = routing.SSLEnabled
 		}
-		
+
 		if shouldUseSSL {
 			labels["traefik.http.routers."+routerName+".entrypoints"] = "websecure"
 			if routing.SSLCertResolver != "" && routing.SSLCertResolver != "internal" {
@@ -410,12 +410,12 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 			// Note: Docker label deletion in compose requires the label to not exist at all
 			// We rely on only setting web entrypoint which won't trigger TLS
 		}
-		
+
 		// Service port
 		serviceNameLabel := routerName
 		labels["traefik.http.services."+serviceNameLabel+".loadbalancer.server.port"] = strconv.Itoa(routing.TargetPort)
 	}
-	
+
 	return labels
 }
 
@@ -462,10 +462,10 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 						}
 					}
 				}
-				
+
 				// Generate Traefik labels for this service
 				traefikLabels := generateTraefikLabels(deploymentID, serviceName, routings, servicePort)
-				
+
 				// Get or create labels map for this service
 				var labels map[string]interface{}
 				if existingLabels, ok := service["labels"].(map[string]interface{}); ok {
@@ -487,26 +487,26 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 				} else {
 					labels = make(map[string]interface{})
 				}
-				
+
 				// Remove old Traefik labels that might conflict (e.g., TLS labels for HTTP-only services)
 				// We'll rebuild all Traefik labels from scratch based on current routing rules
 				traefikKeysToRemove := []string{}
 				for key := range labels {
-					if strings.HasPrefix(key, "traefik.http.routers.") || 
-					   strings.HasPrefix(key, "traefik.http.services.") ||
-					   key == "traefik.enable" {
+					if strings.HasPrefix(key, "traefik.http.routers.") ||
+						strings.HasPrefix(key, "traefik.http.services.") ||
+						key == "traefik.enable" {
 						traefikKeysToRemove = append(traefikKeysToRemove, key)
 					}
 				}
 				for _, key := range traefikKeysToRemove {
 					delete(labels, key)
 				}
-				
+
 				// Merge new Traefik labels (Traefik labels take precedence)
 				for k, v := range traefikLabels {
 					labels[k] = v
 				}
-				
+
 				// Add management labels
 				labels["cloud.obiente.managed"] = "true"
 				labels["cloud.obiente.deployment_id"] = deploymentID
@@ -518,7 +518,7 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 				if deploymentDomain != "" {
 					labels["cloud.obiente.domain"] = deploymentDomain
 				}
-				
+
 				// Update service with labels
 				service["labels"] = labels
 			}
@@ -540,33 +540,33 @@ func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containe
 	// Docker API accepts both with and without leading "/"
 	containerNameWithSlash := "/" + containerName
 	containerNameWithoutSlash := strings.TrimPrefix(containerName, "/")
-	
+
 	// Try both variations
 	for _, nameToTry := range []string{containerNameWithSlash, containerNameWithoutSlash} {
 		containerInfo, err := dm.dockerClient.ContainerInspect(ctx, nameToTry)
 		if err == nil {
 			// Container exists, remove it
 			logger.Info("[DeploymentManager] Removing existing container %s (ID: %s) for redeployment", containerName, containerInfo.ID[:12])
-			
+
 			// Stop container first
 			timeout := 10 * time.Second
 			_ = dm.dockerHelper.StopContainer(ctx, containerInfo.ID, timeout)
-			
+
 			// Remove container
 			if err := dm.dockerHelper.RemoveContainer(ctx, containerInfo.ID, true); err != nil {
 				return fmt.Errorf("failed to remove existing container %s: %w", containerName, err)
 			}
-			
+
 			// Unregister from registry if it was registered
 			_ = dm.registry.UnregisterDeployment(ctx, containerInfo.ID)
-			
+
 			logger.Info("[DeploymentManager] Successfully removed existing container %s", containerName)
 			return nil
 		}
 		// If error is "not found", continue to next name variation
 		// If it's another error, we'll try the list approach as fallback
 	}
-	
+
 	// Fallback: List all containers and find by exact name match
 	// This handles edge cases where inspect might not work
 	allContainers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
@@ -583,19 +583,19 @@ func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containe
 			nTrimmed := strings.TrimPrefix(n, "/")
 			if nTrimmed == containerNameWithoutSlash || n == containerNameWithSlash {
 				logger.Info("[DeploymentManager] Removing existing container %s (ID: %s) for redeployment", containerName, cnt.ID[:12])
-				
+
 				// Stop container first
 				timeout := 10 * time.Second
 				_ = dm.dockerHelper.StopContainer(ctx, cnt.ID, timeout)
-				
+
 				// Remove container
 				if err := dm.dockerHelper.RemoveContainer(ctx, cnt.ID, true); err != nil {
 					return fmt.Errorf("failed to remove existing container %s: %w", containerName, err)
 				}
-				
+
 				// Unregister from registry if it was registered
 				_ = dm.registry.UnregisterDeployment(ctx, cnt.ID)
-				
+
 				logger.Info("[DeploymentManager] Successfully removed existing container %s", containerName)
 				return nil
 			}
@@ -609,7 +609,7 @@ func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containe
 func (dm *DeploymentManager) createContainer(ctx context.Context, config *DeploymentConfig, name string, replicaIndex int, serviceName string) (string, error) {
 	// Get routing rules for this deployment
 	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
-	
+
 	// Prepare labels
 	labels := map[string]string{
 		"cloud.obiente.managed":       "true",
@@ -618,7 +618,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		"cloud.obiente.service_name":  serviceName,
 		"cloud.obiente.replica":       strconv.Itoa(replicaIndex),
 	}
-	
+
 	// Generate Traefik labels from routing rules
 	// Note: For non-compose deployments, we don't have service port info here, pass nil
 	traefikLabels := generateTraefikLabels(config.DeploymentID, serviceName, routings, nil)
@@ -671,7 +671,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 			Retries:  3,
 		},
 	}
-	
+
 	// Override container CMD if start command is provided
 	if config.StartCommand != nil && *config.StartCommand != "" {
 		// Use sh -c to preserve working directory and handle relative paths
@@ -710,13 +710,13 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		// Check for name conflict error - if container was created by another process
 		if strings.Contains(err.Error(), "is already in use") || strings.Contains(err.Error(), "already exists") {
 			logger.Info("[DeploymentManager] Container name conflict for %s: %v. Attempting to remove and retry...", name, err)
-			
+
 			// Try to remove the conflicting container
 			if removeErr := dm.removeContainerByName(ctx, name); removeErr != nil {
 				logger.Info("[DeploymentManager] Failed to remove conflicting container %s: %v", name, removeErr)
 				return "", fmt.Errorf("container name %s is in use and could not be removed: %w (original error: %v)", name, removeErr, err)
 			}
-			
+
 			// Retry container creation once
 			logger.Info("[DeploymentManager] Retrying container creation for %s after removing conflicting container", name)
 			resp, err = dm.dockerClient.ContainerCreate(ctx, containerConfig, hostConfig, networkConfig, nil, name)
@@ -743,7 +743,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 	// Check if we have any containers for this deployment
 	if len(locations) == 0 {
 		logger.Info("[DeploymentManager] No containers found for deployment %s, attempting to create them", deploymentID)
-		
+
 		// Try to get deployment from database to create containers
 		var deployment database.Deployment
 		if err := database.DB.Where("id = ?", deploymentID).First(&deployment).Error; err != nil {
@@ -803,7 +803,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 			}
 
 			logger.Info("[DeploymentManager] Successfully created containers for deployment %s", deploymentID)
-			
+
 			// Refresh locations after creation
 			locations, err = dm.registry.GetDeploymentLocations(deploymentID)
 			if err != nil {
@@ -826,7 +826,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 		if err != nil {
 			// Container doesn't exist - try to recreate it
 			logger.Warn("[DeploymentManager] Container %s doesn't exist, attempting to recreate deployment", location.ContainerID[:12])
-			
+
 			// Get deployment from database to recreate containers
 			var deployment database.Deployment
 			if err := database.DB.Where("id = ?", deploymentID).First(&deployment).Error; err != nil {
@@ -887,14 +887,14 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				}
 
 				logger.Info("[DeploymentManager] Successfully recreated containers for deployment %s", deploymentID)
-				
+
 				// Refresh locations after recreation
 				locations, err = dm.registry.GetDeploymentLocations(deploymentID)
 				if err != nil {
 					logger.Warn("[DeploymentManager] Failed to get deployment locations after recreation: %v", err)
 					continue
 				}
-				
+
 				// Find the location for this container again
 				found := false
 				for _, loc := range locations {
@@ -908,7 +908,7 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 					logger.Warn("[DeploymentManager] Could not find recreated container location for deployment %s", deploymentID)
 					continue
 				}
-				
+
 				// Re-inspect the new container
 				containerInfo, err = dm.dockerClient.ContainerInspect(ctx, location.ContainerID)
 				if err != nil {
@@ -959,9 +959,9 @@ func (dm *DeploymentManager) StopDeployment(ctx context.Context, deploymentID st
 			continue
 		}
 
-        // Stop container
-        timeout := int(30) // 30 seconds
-        if err := dm.dockerHelper.StopContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second); err != nil {
+		// Stop container
+		timeout := int(30) // 30 seconds
+		if err := dm.dockerHelper.StopContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second); err != nil {
 			logger.Info("[DeploymentManager] Failed to stop container %s: %v", location.ContainerID, err)
 			continue
 		}
@@ -992,12 +992,12 @@ func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID 
 			continue
 		}
 
-        // Stop container first
-        timeout := int(10)
-        _ = dm.dockerHelper.StopContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second)
+		// Stop container first
+		timeout := int(10)
+		_ = dm.dockerHelper.StopContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second)
 
-        // Remove container
-        if err := dm.dockerHelper.RemoveContainer(ctx, location.ContainerID, true); err != nil {
+		// Remove container
+		if err := dm.dockerHelper.RemoveContainer(ctx, location.ContainerID, true); err != nil {
 			logger.Info("[DeploymentManager] Failed to remove container %s: %v", location.ContainerID, err)
 			continue
 		}
@@ -1031,8 +1031,8 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 			continue
 		}
 
-        timeout := int(30)
-        if err := dm.dockerHelper.RestartContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second); err != nil {
+		timeout := int(30)
+		if err := dm.dockerHelper.RestartContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second); err != nil {
 			logger.Info("[DeploymentManager] Failed to restart container %s: %v", location.ContainerID, err)
 			continue
 		}
@@ -1075,11 +1075,11 @@ func (dm *DeploymentManager) ScaleDeployment(ctx context.Context, deploymentID s
 				continue
 			}
 
-            // Stop and remove container
-            timeout := int(10)
-            _ = dm.dockerHelper.StopContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second)
-            _ = dm.dockerHelper.RemoveContainer(ctx, location.ContainerID, true)
-            dm.registry.UnregisterDeployment(ctx, location.ContainerID)
+			// Stop and remove container
+			timeout := int(10)
+			_ = dm.dockerHelper.StopContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second)
+			_ = dm.dockerHelper.RemoveContainer(ctx, location.ContainerID, true)
+			dm.registry.UnregisterDeployment(ctx, location.ContainerID)
 
 			logger.Info("[DeploymentManager] Removed replica %s", location.ContainerID[:12])
 		}
@@ -1102,7 +1102,7 @@ func (dm *DeploymentManager) GetDeploymentLogs(ctx context.Context, deploymentID
 	// Get logs from first container on this node
 	for _, location := range locations {
 		if location.NodeID == dm.nodeID {
-            logs, err := dm.dockerHelper.ContainerLogs(ctx, location.ContainerID, tail, false) // follow=false for non-streaming logs
+			logs, err := dm.dockerHelper.ContainerLogs(ctx, location.ContainerID, tail, false) // follow=false for non-streaming logs
 			if err != nil {
 				return "", fmt.Errorf("failed to get logs: %w", err)
 			}
@@ -1127,7 +1127,7 @@ func (dm *DeploymentManager) GetDeploymentLogs(ctx context.Context, deploymentID
 // DeployComposeFile deploys a Docker Compose file for a deployment
 func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID string, composeYaml string) error {
 	logger.Info("[DeploymentManager] Deploying compose file for deployment %s", deploymentID)
-	
+
 	// Ensure network exists before deploying (retry if it failed during initialization)
 	if err := dm.ensureNetwork(ctx); err != nil {
 		return fmt.Errorf("network is required but could not be created: %w", err)
@@ -1153,7 +1153,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 		defaultRoutingID := fmt.Sprintf("route-%s-default", deploymentID)
 		var existingDefaultRouting database.DeploymentRouting
 		dbErr := database.DB.Where("id = ?", defaultRoutingID).First(&existingDefaultRouting).Error
-		
+
 		// If a default routing exists, preserve all user settings (especially port)
 		if dbErr == nil {
 			// User has set routing rules - preserve them completely
@@ -1198,22 +1198,22 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 					}
 				}
 			}
-			
+
 			// Create default routing for compose deployment
 			defaultRouting := &database.DeploymentRouting{
-				ID:                defaultRoutingID,
-				DeploymentID:      deploymentID,
-				Domain:            "", // Domain can be set later through routing UI
-				ServiceName:       "default",
-				TargetPort:        targetPort,
-				Protocol:          "http",
-				SSLEnabled:        false, // Default to no SSL for HTTP protocol
-				SSLCertResolver:   "letsencrypt",
-				Middleware:        "{}",
-				CreatedAt:         time.Now(),
-				UpdatedAt:         time.Now(),
+				ID:              defaultRoutingID,
+				DeploymentID:    deploymentID,
+				Domain:          "", // Domain can be set later through routing UI
+				ServiceName:     "default",
+				TargetPort:      targetPort,
+				Protocol:        "http",
+				SSLEnabled:      false, // Default to no SSL for HTTP protocol
+				SSLCertResolver: "letsencrypt",
+				Middleware:      "{}",
+				CreatedAt:       time.Now(),
+				UpdatedAt:       time.Now(),
 			}
-			
+
 			if upsertErr := database.UpsertDeploymentRouting(defaultRouting); upsertErr != nil {
 				logger.Warn("[DeploymentManager] Failed to create default routing: %v", upsertErr)
 			} else {
@@ -1241,7 +1241,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 		"/tmp/obiente-deployments",
 		os.TempDir(),
 	}
-	
+
 	for _, baseDir := range possibleDirs {
 		testDir := filepath.Join(baseDir, deploymentID)
 		if err := os.MkdirAll(testDir, 0755); err == nil {
@@ -1254,7 +1254,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 			}
 		}
 	}
-	
+
 	if deployDir == "" {
 		return fmt.Errorf("failed to create deployment directory in any of the attempted locations")
 	}
@@ -1300,7 +1300,7 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 	// Note: Docker Compose may normalize the project name (e.g., lowercase), so we try both
 	filterArgs := filters.NewArgs()
 	filterArgs.Add("label", fmt.Sprintf("com.docker.compose.project=%s", projectName))
-	
+
 	containers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
 		Filters: filterArgs,
@@ -1314,7 +1314,7 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 		logger.Info("[DeploymentManager] No containers found with project name %s, trying lowercase version", projectName)
 		filterArgsLower := filters.NewArgs()
 		filterArgsLower.Add("label", fmt.Sprintf("com.docker.compose.project=%s", strings.ToLower(projectName)))
-		
+
 		containers, err = dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 			All:     true,
 			Filters: filterArgsLower,
@@ -1329,7 +1329,7 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 		logger.Info("[DeploymentManager] Still no containers found, listing all containers with compose labels")
 		allFilterArgs := filters.NewArgs()
 		allFilterArgs.Add("label", "com.docker.compose.project")
-		
+
 		allContainers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 			All:     true,
 			Filters: allFilterArgs,
@@ -1348,7 +1348,7 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 	if len(containers) == 0 {
 		logger.Info("[DeploymentManager] WARNING: No containers found for compose project %s (deployment %s). "+
 			"This might indicate the compose file failed to create containers. Checking all containers...", projectName, deploymentID)
-		
+
 		// Last resort: list all containers to see what exists
 		allContainers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{All: true})
 		if err == nil {
@@ -1360,7 +1360,7 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 				}
 			}
 		}
-		
+
 		return fmt.Errorf("no containers found for compose project %s", projectName)
 	}
 
@@ -1497,7 +1497,7 @@ func (dm *DeploymentManager) StopComposeDeployment(ctx context.Context, deployme
 func (dm *DeploymentManager) stopComposeContainersByLabel(ctx context.Context, projectName string) error {
 	filterArgs := filters.NewArgs()
 	filterArgs.Add("label", fmt.Sprintf("com.docker.compose.project=%s", projectName))
-	
+
 	containers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
 		Filters: filterArgs,
@@ -1532,7 +1532,7 @@ func (dm *DeploymentManager) RemoveComposeDeployment(ctx context.Context, deploy
 	// Find containers by project label
 	filterArgs := filters.NewArgs()
 	filterArgs.Add("label", fmt.Sprintf("com.docker.compose.project=%s", projectName))
-	
+
 	containers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
 		Filters: filterArgs,
@@ -1600,4 +1600,3 @@ func (dm *DeploymentManager) Close() error {
 	}
 	return dm.dockerClient.Close()
 }
-

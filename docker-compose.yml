@@ -43,7 +43,9 @@ services:
       DB_LOG_LEVEL: ${DB_LOG_LEVEL:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       ZITADEL_URL: ${ZITADEL_URL:-https://auth.obiente.cloud}
+      ZITADEL_CLIENT_ID: ${ZITADEL_CLIENT_ID:-}
       ZITADEL_MANAGEMENT_TOKEN: ${ZITADEL_MANAGEMENT_TOKEN:-}
+      ZITADEL_ORGANIZATION_ID: ${ZITADEL_ORGANIZATION_ID:-}  # REQUIRED: Service users don't have a default organization
       DISABLE_AUTH: ${DISABLE_AUTH:-false}
       SKIP_TLS_VERIFY: ${SKIP_TLS_VERIFY:-false}
       SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
@@ -83,10 +85,13 @@ services:
         condition: service_healthy
       timescaledb:
         condition: service_healthy
-    # Configure DNS resolver - only set if MAIN_DNS_IP is explicitly provided
-    # For local dev, containers can resolve via the 'dns' service name automatically
-    # Set MAIN_DNS_IP to use production DNS instead (e.g., export MAIN_DNS_IP=10.0.9.10)
-    # Note: Docker requires an IP address, not a container name, for the dns: field
+      dns:
+        condition: service_started
+    # Configure DNS resolver to use local DNS server for *.my.obiente.cloud resolution
+    # DNS server is accessible via service name 'dns' on the Docker network
+    # Docker's default DNS (127.0.0.11) is kept as fallback for other queries
+    # Note: For containers to use the DNS server, you may need to configure dns: with the DNS server's IP
+    # Get the IP with: docker inspect obiente-dns | grep IPAddress
     networks:
       - obiente-network
       # Option 2: Connect to production Swarm network (uncomment if both dev and prod are on same host)
@@ -215,7 +220,7 @@ services:
       DNS_DELEGATION_API_KEY: ${DNS_DELEGATION_API_KEY:-} # Optional: API key for DNS delegation (enables /dns/push endpoint)
       # Note: API keys are managed via /dns/delegation/api-keys/create endpoint (superadmin only)
     # No ports exposed - DNS only accessible within Docker network
-    # Containers use this DNS via the 'dns:' field in docker-compose.yml
+    # For external DNS queries, use Swarm deployment (docker-compose.swarm.yml) which exposes port 53
     depends_on:
       postgres:
         condition: service_healthy

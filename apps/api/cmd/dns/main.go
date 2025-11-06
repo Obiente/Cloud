@@ -144,8 +144,11 @@ func (s *DNSServer) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 
 	for _, q := range r.Question {
 		domain := strings.ToLower(q.Name)
-		if !strings.HasSuffix(domain, ".my.obiente.cloud.") {
+		// Normalize domain - remove trailing dot if present for comparison
+		domainNormalized := strings.TrimSuffix(domain, ".")
+		if !strings.HasSuffix(domainNormalized, ".my.obiente.cloud") {
 			// Not our domain, return NXDOMAIN
+			log.Printf("[DNS] Query for non-my.obiente.cloud domain: %s", domain)
 			msg.SetRcode(r, dns.RcodeNameError)
 			w.WriteMsg(msg)
 			return
@@ -189,14 +192,23 @@ func (s *DNSServer) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 // - Rust: _rust._udp.gameserver-123.my.obiente.cloud
 func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) bool {
 	// Parse SRV query format: _service._protocol.gameserver-123.my.obiente.cloud.
-	parts := strings.Split(domain, ".")
-	if len(parts) < 4 {
+	// Normalize domain - remove trailing dot if present
+	domainNormalized := strings.TrimSuffix(domain, ".")
+	parts := strings.Split(domainNormalized, ".")
+	// Need at least: _service._protocol.gameserver-123.my.obiente.cloud = 5 parts
+	if len(parts) < 5 {
+		log.Printf("[DNS] Invalid SRV domain format (too few parts): %s (parts: %v)", domain, parts)
 		return false
 	}
 
 	service := parts[0]  // _minecraft, _rust, etc.
 	protocol := parts[1] // _tcp, _udp
 	gameServerID := parts[2]
+	
+	if service == "" || protocol == "" || gameServerID == "" {
+		log.Printf("[DNS] Empty service/protocol/gameserver ID in SRV domain: %s", domain)
+		return false
+	}
 
 	// Extract game server ID (gameserver-123)
 	if !strings.HasPrefix(gameServerID, "gameserver-") {
@@ -321,12 +333,21 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 // Format: deploy-123.my.obiente.cloud -> deploy-123 (deployments)
 // Format: gameserver-123.my.obiente.cloud -> gameserver-123 (game servers)
 func (s *DNSServer) handleAQuery(msg *dns.Msg, domain string, q dns.Question) bool {
-	parts := strings.Split(domain, ".")
-	if len(parts) < 3 {
+	// Normalize domain - remove trailing dot if present
+	domainNormalized := strings.TrimSuffix(domain, ".")
+	parts := strings.Split(domainNormalized, ".")
+	// Need at least: resourceID.my.obiente.cloud = 4 parts
+	if len(parts) < 4 {
+		log.Printf("[DNS] Invalid domain format (too few parts): %s (parts: %v)", domain, parts)
 		return false
 	}
 
+	// Extract resource ID (first part)
 	resourceID := parts[0]
+	if resourceID == "" {
+		log.Printf("[DNS] Empty resource ID in domain: %s", domain)
+		return false
+	}
 
 	// Check if this is a game server (gameserver-123)
 	if strings.HasPrefix(resourceID, "gameserver-") {

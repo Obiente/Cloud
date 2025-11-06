@@ -50,6 +50,11 @@ export const useAuth = () => {
 
   // Logout function
   const logout = async () => {
+    // Set flag to prevent silent auth immediately after logout
+    if (import.meta.client) {
+      sessionStorage.setItem("obiente_logout_time", Date.now().toString());
+    }
+
     await useRequestFetch()("/auth/session", {
       method: "DELETE",
       onResponse({ response: { headers } }) {
@@ -63,11 +68,32 @@ export const useAuth = () => {
     sessionState.value = null;
     authReadyState.value = false;
     orgStore.reset();
+
+    // Redirect to Zitadel logout endpoint to clear Zitadel session
+    if (import.meta.client) {
+      const config = useRuntimeConfig();
+      const logoutUrl = `${config.public.oidcBase}/oidc/v1/end_session?post_logout_redirect_uri=${encodeURIComponent(window.location.origin)}`;
+      window.location.href = logoutUrl;
+    }
   };
 
   // Silent authentication using iframe (Zitadel allows iframes when configured)
   const trySilentAuth = async (): Promise<boolean> => {
     if (import.meta.server) return false;
+
+    // Check if we just logged out (prevent silent auth for 1 minute after logout)
+    if (import.meta.client) {
+      const logoutTime = sessionStorage.getItem("obiente_logout_time");
+      if (logoutTime) {
+        const timeSinceLogout = Date.now() - parseInt(logoutTime, 10);
+        // Prevent silent auth for 1 minute after logout
+        if (timeSinceLogout < 60000) {
+          return false;
+        }
+        // Clear the flag after timeout
+        sessionStorage.removeItem("obiente_logout_time");
+      }
+    }
 
     return new Promise((resolve) => {
       const iframe = document.createElement("iframe");
