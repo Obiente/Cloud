@@ -10,23 +10,26 @@ DASHBOARD_STACK="${STACK_NAME}-dashboard"
 echo "🔍 Checking Dashboard Traefik Discovery Configuration"
 echo ""
 
-# Check if dashboard service exists
-if ! docker service ls --format "{{.Name}}" | grep -q "^${DASHBOARD_STACK}_dashboard$"; then
-  echo "❌ Dashboard service not found: ${DASHBOARD_STACK}_dashboard"
+# Find dashboard service (try both possible names)
+DASHBOARD_SERVICE=$(docker service ls --format "{{.Name}}" | grep -iE "(dashboard|^${STACK_NAME}_dashboard$|^${DASHBOARD_STACK}_dashboard$)" | head -n 1)
+
+if [ -z "$DASHBOARD_SERVICE" ]; then
+  echo "❌ Dashboard service not found!"
+  echo "   Searched for: ${STACK_NAME}_dashboard, ${DASHBOARD_STACK}_dashboard"
   exit 1
 fi
 
-echo "✅ Dashboard service found: ${DASHBOARD_STACK}_dashboard"
+echo "✅ Dashboard service found: $DASHBOARD_SERVICE"
 echo ""
 
 # Check all labels
 echo "📋 All Dashboard Service Labels:"
-docker service inspect "${DASHBOARD_STACK}_dashboard" --format '{{json .Spec.Labels}}' | jq '.'
+docker service inspect "$DASHBOARD_SERVICE" --format '{{json .Spec.Labels}}' | jq '.'
 echo ""
 
 # Check cloud.obiente.traefik label
 echo "🔍 Checking cloud.obiente.traefik label:"
-TRAEFIK_LABEL=$(docker service inspect "${DASHBOARD_STACK}_dashboard" --format '{{index .Spec.Labels "cloud.obiente.traefik"}}')
+TRAEFIK_LABEL=$(docker service inspect "$DASHBOARD_SERVICE" --format '{{index .Spec.Labels "cloud.obiente.traefik"}}')
 if [ "$TRAEFIK_LABEL" = "true" ]; then
   echo "  ✅ cloud.obiente.traefik=true found"
 else
@@ -36,7 +39,7 @@ echo ""
 
 # Check network
 echo "🌐 Dashboard Network Configuration:"
-docker service inspect "${DASHBOARD_STACK}_dashboard" --format '{{json .Spec.TaskTemplate.Networks}}' | jq '.'
+docker service inspect "$DASHBOARD_SERVICE" --format '{{json .Spec.TaskTemplate.Networks}}' | jq '.'
 echo ""
 
 # Check Traefik network configuration
@@ -45,7 +48,7 @@ docker service inspect "${STACK_NAME}_traefik" --format '{{range .Spec.TaskTempl
 echo ""
 
 # Check if services are on the same network
-DASHBOARD_NETWORK=$(docker service inspect "${DASHBOARD_STACK}_dashboard" --format '{{index (index .Spec.TaskTemplate.Networks 0) "Target"}}')
+DASHBOARD_NETWORK=$(docker service inspect "$DASHBOARD_SERVICE" --format '{{index (index .Spec.TaskTemplate.Networks 0) "Target"}}')
 TRAEFIK_NETWORK=$(docker service inspect "${STACK_NAME}_traefik" --format '{{index (index .Spec.TaskTemplate.Networks 0) "Target"}}')
 
 echo "Network Comparison:"

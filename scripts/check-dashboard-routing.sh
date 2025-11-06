@@ -1,11 +1,11 @@
 #!/bin/bash
-# Troubleshooting script for Dashboard routing with Traefik
+# Check dashboard routing configuration
 # Run this on a Docker Swarm manager node
 
 set -e
 
-echo "🔍 Checking Dashboard routing configuration..."
-echo ""
+STACK_NAME="${1:-obiente}"
+DOMAIN="${DOMAIN:-obiente.cloud}"
 
 # Colors
 RED='\033[0;31m'
@@ -14,9 +14,25 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Check if dashboard service exists
+echo "🔍 Checking Dashboard routing configuration..."
+echo ""
+
+# 1. Check if dashboard service exists (try both possible names)
 echo -e "${BLUE}1. Checking dashboard service...${NC}"
-DASHBOARD_SERVICE=$(docker service ls --format "{{.Name}}" | grep -i dashboard || echo "")
+
+# Try to find dashboard service - check both possible names
+DASHBOARD_SERVICE=$(docker service ls --format "{{.Name}}" | grep -E "^${STACK_NAME}_dashboard$" | head -n 1)
+
+# If not found, try with dash separator
+if [ -z "$DASHBOARD_SERVICE" ]; then
+  DASHBOARD_SERVICE=$(docker service ls --format "{{.Name}}" | grep -E "^${STACK_NAME}-dashboard_dashboard$" | head -n 1)
+fi
+
+# If still not found, try any dashboard service
+if [ -z "$DASHBOARD_SERVICE" ]; then
+  DASHBOARD_SERVICE=$(docker service ls --format "{{.Name}}" | grep -i dashboard | head -n 1)
+fi
+
 if [ -z "$DASHBOARD_SERVICE" ]; then
   echo -e "${RED}❌ Dashboard service not found!${NC}"
   echo "   Deploy it with: docker stack deploy -c docker-compose.dashboard.yml obiente-dashboard"
@@ -28,61 +44,45 @@ fi
 # Check service status
 echo ""
 echo -e "${BLUE}2. Checking dashboard service status...${NC}"
-docker service ps "$DASHBOARD_SERVICE" --no-trunc | head -5
+docker service ps "$DASHBOARD_SERVICE" --no-trunc | head -5 || echo "Could not get service status"
 
 # Check labels
 echo ""
 echo -e "${BLUE}3. Checking dashboard service labels...${NC}"
-docker service inspect "$DASHBOARD_SERVICE" --format '{{json .Spec.Labels}}' | jq '.' | grep -E "(traefik|cloud.obiente)" || echo "No Traefik labels found!"
+DASHBOARD_LABELS=$(docker service inspect "$DASHBOARD_SERVICE" --format '{{json .Spec.Labels}}' 2>/dev/null || echo "{}")
+echo "$DASHBOARD_LABELS" | jq '.' | grep -E "(traefik|cloud.obiente)" || echo "No Traefik labels found!"
+echo ""
 
 # Check network
-echo ""
 echo -e "${BLUE}4. Checking network configuration...${NC}"
-DASHBOARD_NETWORKS=$(docker service inspect "$DASHBOARD_SERVICE" --format '{{range .Spec.TaskTemplate.Networks}}{{.Target}}{{end}}')
-echo "Dashboard networks: $DASHBOARD_NETWORKS"
+DASHBOARD_NETWORKS=$(docker service inspect "$DASHBOARD_SERVICE" --format '{{json .Spec.TaskTemplate.Networks}}' 2>/dev/null || echo "[]")
+echo "Dashboard networks:"
+echo "$DASHBOARD_NETWORKS" | jq '.'
+echo ""
 
-TRAEFIK_NETWORK=$(docker network ls --format "{{.Name}}" | grep obiente-network | head -1)
-if [ -z "$TRAEFIK_NETWORK" ]; then
-  echo -e "${RED}❌ obiente-network not found!${NC}"
-else
-  echo -e "${GREEN}✅ Network found: ${TRAEFIK_NETWORK}${NC}"
-fi
+TRAEFIK_SERVICE="${STACK_NAME}_traefik"
+TRAEFIK_NETWORK=$(docker service inspect "$TRAEFIK_SERVICE" --format '{{json .Spec.TaskTemplate.Networks}}' 2>/dev/null || echo "[]")
+echo "Traefik networks:"
+echo "$TRAEFIK_NETWORK" | jq '.'
+echo ""
 
 # Check Traefik service
-echo ""
 echo -e "${BLUE}5. Checking Traefik service...${NC}"
-TRAEFIK_SERVICE=$(docker service ls --format "{{.Name}}" | grep traefik | head -1)
-if [ -z "$TRAEFIK_SERVICE" ]; then
-  echo -e "${RED}❌ Traefik service not found!${NC}"
-else
-  echo -e "${GREEN}✅ Traefik service found: ${TRAEFIK_SERVICE}${NC}"
-fi
+docker service ps "$TRAEFIK_SERVICE" --no-trunc | head -5 || echo "Traefik service not found or not running"
 
-# Check Traefik routes
+# Check Traefik discovered routers
 echo ""
-echo -e "${BLUE}6. Checking Traefik HTTP routers...${NC}"
-echo "Querying Traefik API for routes..."
-curl -s http://localhost:8080/api/http/routers | jq -r '.[] | select(.name | contains("dashboard")) | {name: .name, rule: .rule, service: .service}' 2>/dev/null || echo -e "${YELLOW}⚠️  Could not query Traefik API. Is Traefik accessible on port 8080?${NC}"
-
-# Check if services are on same network
-echo ""
-echo -e "${BLUE}7. Verifying network connectivity...${NC}"
-DASHBOARD_TASK=$(docker service ps "$DASHBOARD_SERVICE" --no-trunc --format "{{.Name}}" | head -1)
-if [ -n "$DASHBOARD_TASK" ]; then
-  echo "Dashboard task: $DASHBOARD_TASK"
-  # Get container ID
-  CONTAINER_ID=$(docker ps --filter "name=$DASHBOARD_TASK" --format "{{.ID}}" | head -1)
-  if [ -n "$CONTAINER_ID" ]; then
-    echo "Container ID: $CONTAINER_ID"
-    docker inspect "$CONTAINER_ID" --format '{{range $key, $value := .NetworkSettings.Networks}}{{$key}}{{end}}' 2>/dev/null || echo "Could not inspect container"
-  fi
-fi
+echo -e "${BLUE}6. Checking Traefik discovered routers...${NC}"
+echo "Looking for dashboard routes in Traefik..."
+curl -s http://localhost:8080/api/http/routers 2>/dev/null | jq '.[] | select(.name | contains("dashboard")) | {name: .name, rule: .rule, service: .service}' || echo "Could not query Traefik API or parse response"
 
 # Summary
 echo ""
-echo -e "${BLUE}📋 Summary:${NC}"
+echo -e "${BLUE}📊 Summary:${NC}"
+echo "  Dashboard service: $DASHBOARD_SERVICE"
+echo "  Traefik service: $TRAEFIK_SERVICE"
 echo ""
-echo "To fix dashboard routing, try:"
+echo -e "${YELLOW}💡 To fix routing issues:${NC}"
 echo "1. Ensure DOMAIN environment variable is set when deploying:"
 echo "   DOMAIN=obiente.cloud docker stack deploy -c docker-compose.dashboard.yml obiente-dashboard"
 echo ""
@@ -95,5 +95,3 @@ echo ""
 echo "4. Check Traefik logs for discovery issues:"
 echo "   docker service logs ${TRAEFIK_SERVICE} --tail 50 | grep -i dashboard"
 echo ""
-
-

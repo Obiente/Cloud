@@ -38,6 +38,8 @@ docker service update --force "${STACK_NAME}_traefik" || echo "⚠️  Could not
 echo ""
 echo "✅ Done! Wait ~10 seconds for Traefik to discover the dashboard."
 echo "📋 Check dashboard labels:"
-echo "   docker service inspect ${STACK_NAME}-dashboard_dashboard --format '{{json .Spec.Labels}}' | jq 'to_entries | map(select(.key | startswith(\"traefik\")))'"
+echo "   # Find dashboard service name first:"
+echo "   DASHBOARD_SERVICE=\$(docker service ls --format '{{.Name}}' | grep -i dashboard | head -1)"
+echo "   docker service inspect \$DASHBOARD_SERVICE --format '{{json .Spec.Labels}}' | jq 'to_entries | map(select(.key | startswith(\"traefik\")))'"
 echo ""
 
