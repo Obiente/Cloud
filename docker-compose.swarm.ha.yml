@@ -742,6 +742,7 @@ services:
     volumes:
       - prometheus_data:/prometheus
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Required for Docker Swarm service discovery
     deploy:
       replicas: 1
       placement:

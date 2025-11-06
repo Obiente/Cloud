@@ -5,6 +5,7 @@ datasources:
     type: prometheus
     access: proxy
     url: http://prometheus:9090
+    uid: prometheus
     isDefault: true
     editable: true
     jsonData:
@@ -16,6 +17,7 @@ datasources:
     type: postgres
     access: proxy
     url: postgres:5432
+    uid: postgresql
     database: obiente
     user: ${POSTGRES_USER:-obiente-postgres}
     secureJsonData:
@@ -30,6 +32,7 @@ datasources:
     type: postgres
     access: proxy
     url: timescaledb:5432
+    uid: timescaledb-metrics
     database: obiente_metrics
     user: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
     secureJsonData:
