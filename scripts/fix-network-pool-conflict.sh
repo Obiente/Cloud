@@ -199,29 +199,86 @@ if docker network inspect "$NETWORK_NAME" &>/dev/null; then
     sleep 10
   fi
   
-  docker network rm "$NETWORK_NAME" 2>/dev/null && {
+  NETWORK_REMOVED=false
+  if docker network rm "$NETWORK_NAME" 2>/dev/null; then
     echo -e "${GREEN}    ✅ Removed${NC}"
-  } || {
+    NETWORK_REMOVED=true
+  else
     echo -e "${YELLOW}    ⚠️  Failed to remove (may need to remove services first)${NC}"
     echo -e "${YELLOW}    Try: docker stack rm ${STACK_NAME} ${STACK_NAME}_dashboard${NC}"
-  }
+  fi
 else
   echo -e "${GREEN}  Target network does not exist - skipping removal${NC}"
+  NETWORK_REMOVED=false
 fi
 
 echo ""
 
-# Step 4c: Create network with specific subnet
+# Step 4c: Wait a moment for network removal to complete
+if [ "$NETWORK_REMOVED" = "true" ]; then
+  echo -e "${BLUE}  Waiting for network removal to complete...${NC}"
+  sleep 3
+fi
+
+# Verify we're still on a manager node
+if ! docker node ls &>/dev/null; then
+  echo -e "${RED}    ❌ Error: This node is not a Swarm manager${NC}"
+  echo ""
+  echo "Overlay networks can only be created on manager nodes."
+  echo ""
+  echo "Options:"
+  echo "  1. Run this script on a manager node:"
+  echo "     # Find manager nodes:"
+  echo "     docker node ls"
+  echo "     # Then SSH to a manager node and run this script"
+  echo ""
+  echo "  2. Just deploy the stack - it will create the network automatically:"
+  echo "     ./scripts/deploy-swarm.sh"
+  echo "     # The updated docker-compose.swarm.yml will create the network with subnet ${SUBNET}"
+  echo ""
+  exit 1
+fi
+
+# Step 4d: Create network with specific subnet
 echo -e "${BLUE}  Creating network with subnet ${SUBNET}...${NC}"
-if docker network create --driver overlay --subnet "$SUBNET" "$NETWORK_NAME" 2>/dev/null; then
+NETWORK_CREATE_OUTPUT=$(docker network create --driver overlay --subnet "$SUBNET" "$NETWORK_NAME" 2>&1)
+NETWORK_CREATE_EXIT=$?
+
+if [ $NETWORK_CREATE_EXIT -eq 0 ]; then
   echo -e "${GREEN}    ✅ Network created successfully${NC}"
 else
   echo -e "${RED}    ❌ Failed to create network${NC}"
   echo ""
-  echo -e "${YELLOW}    Possible causes:${NC}"
-  echo "      - Subnet still conflicts with existing network"
-  echo "      - Network name already exists"
-  echo "      - Insufficient permissions"
+  echo -e "${YELLOW}    Error output:${NC}"
+  echo "$NETWORK_CREATE_OUTPUT" | sed 's/^/      /'
+  echo ""
+  
+  # Check if network already exists
+  if docker network inspect "$NETWORK_NAME" &>/dev/null; then
+    CURRENT_SUBNET=$(docker network inspect "$NETWORK_NAME" --format '{{json .IPAM}}' 2>/dev/null | jq -r '.Config[0].Subnet // "none"' 2>/dev/null || echo "none")
+    echo -e "${YELLOW}    Network exists with subnet: ${CURRENT_SUBNET}${NC}"
+    if [ "$CURRENT_SUBNET" = "$SUBNET" ]; then
+      echo -e "${GREEN}    ✅ Network already has correct subnet - no action needed${NC}"
+      exit 0
+    else
+      echo -e "${YELLOW}    Network has different subnet - manual removal may be needed${NC}"
+      echo "    Try: docker network rm $NETWORK_NAME"
+    fi
+  else
+    echo -e "${YELLOW}    Possible causes:${NC}"
+    echo "      - Subnet conflicts with existing network"
+    echo "      - Cannot create overlay network (not a Swarm manager)"
+    echo "      - Insufficient permissions"
+    echo ""
+    echo -e "${BLUE}    Checking all overlay networks for subnet conflicts...${NC}"
+    docker network ls --filter driver=overlay --format "{{.ID}}" | while read net_id; do
+      net_name=$(docker network inspect "$net_id" --format '{{.Name}}' 2>/dev/null || echo "unknown")
+      net_subnet=$(docker network inspect "$net_id" --format '{{json .IPAM}}' 2>/dev/null | jq -r '.Config[0].Subnet // "none"' 2>/dev/null || echo "none")
+      if [ "$net_subnet" != "none" ] && [ "$net_subnet" != "null" ]; then
+        echo "      - $net_name: $net_subnet"
+      fi
+    done
+  fi
   echo ""
   exit 1
 fi
