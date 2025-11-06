@@ -166,6 +166,13 @@ show_overview() {
     "When seeing 'Pool overlaps with other one' errors"
   
   print_script \
+    "fix-network-pool-conflict.sh" \
+    "Troubleshooting" \
+    "Fix network IP pool conflicts by removing conflicting networks and recreating with specific subnet" \
+    "./scripts/fix-network-pool-conflict.sh [--subnet <subnet>] [--force]" \
+    "When getting 'Pool overlaps' errors - use --force to apply fixes"
+  
+  print_script \
     "fix-dashboard-network.sh" \
     "Troubleshooting" \
     "Fix dashboard service network configuration" \

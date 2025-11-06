@@ -450,5 +450,9 @@ volumes:
 
 networks:
   obiente-network:
-    external: true
-    name: obiente_obiente-network
+    driver: overlay
+    attachable: true
+    # Specify subnet to prevent IP pool conflicts
+    ipam:
+      config:
+        - subnet: 10.0.9.0/24

@@ -94,3 +94,5 @@ networks:
   obiente-network:
     external: true
     name: obiente_obiente-network
+    # Network is created by main stack (docker-compose.swarm.yml)
+    # with subnet: 10.0.9.0/24
