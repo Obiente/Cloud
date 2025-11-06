@@ -140,7 +140,12 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   
   # Deploy dashboard stack (uses external network from main stack)
   # The network name in docker-compose.dashboard.yml references: ${STACK_NAME}_obiente-network
-  STACK_NAME="$STACK_NAME" DASHBOARD_IMAGE="$DASHBOARD_IMAGE" docker stack deploy -c docker-compose.dashboard.yml "${STACK_NAME}-dashboard"
+  # Substitute DOMAIN variable in labels (Docker Swarm doesn't expand env vars in labels)
+  export DOMAIN="${DOMAIN:-obiente.cloud}"
+  TEMP_DASHBOARD_COMPOSE=$(mktemp)
+  sed "s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
+  STACK_NAME="$STACK_NAME" DASHBOARD_IMAGE="$DASHBOARD_IMAGE" docker stack deploy -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}-dashboard"
+  rm -f "$TEMP_DASHBOARD_COMPOSE"
   
   echo ""
   echo "✅ Dashboard stack deployment started!"

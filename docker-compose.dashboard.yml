@@ -55,9 +55,13 @@ services:
           cpus: "0.5"
           memory: 256M
       placement:
-        constraints:
-          - node.role == manager
+        # Spread across nodes - prefer manager nodes but allow workers if needed
+        # Remove 'node.role == manager' constraint to allow deployment on worker nodes
+        # This ensures multi-node deployment even with single manager node
         max_replicas_per_node: 1
+        # Optional: Uncomment below to restrict to manager nodes only
+        # constraints:
+        #   - node.role == manager
       labels:
         # Traefik labels for automatic proxying (must be under deploy.labels for Swarm mode)
         # Dashboard uses the domain directly (no dashboard prefix)
@@ -83,4 +87,3 @@ networks:
   obiente-network:
     external: true
     name: obiente_obiente-network
-

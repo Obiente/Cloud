@@ -61,7 +61,13 @@ echo ""
 # Redeploy dashboard stack if enabled
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo -e "${BLUE}🚀 Redeploying dashboard stack...${NC}"
-  STACK_NAME="$STACK_NAME" docker stack deploy -c docker-compose.dashboard.yml "${STACK_NAME}-dashboard"
+  # Ensure DOMAIN is set for label substitution
+  export DOMAIN="${DOMAIN:-obiente.cloud}"
+  # Substitute DOMAIN variable in labels (Docker Swarm doesn't expand env vars in labels)
+  TEMP_DASHBOARD_COMPOSE=$(mktemp)
+  sed "s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
+  STACK_NAME="$STACK_NAME" docker stack deploy -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}-dashboard"
+  rm -f "$TEMP_DASHBOARD_COMPOSE"
   echo -e "${GREEN}✅ Dashboard stack redeployed!${NC}"
   echo ""
 fi
