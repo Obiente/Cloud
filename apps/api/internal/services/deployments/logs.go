@@ -523,15 +523,38 @@ func (s *Service) StreamBuildLogs(ctx context.Context, req *connect.Request[depl
 	// Get or create build log streamer
 	buildStreamer := GetBuildLogStreamer(deploymentID)
 
-	// Subscribe to build logs
-	logChan := buildStreamer.Subscribe()
-	defer func() {
-		// Unsubscribe when done
-		buildStreamer.Unsubscribe(logChan)
-	}()
-
 	// Send buffered logs first
 	bufferedLogs := buildStreamer.GetLogs()
+	
+	// If no buffered logs, try to load from database (for builds happening on other nodes)
+	if len(bufferedLogs) == 0 {
+		// Get latest active build for this deployment
+		builds, _, err := s.buildHistoryRepo.ListBuilds(ctx, deploymentID, orgID, 1, 0)
+		if err == nil && len(builds) > 0 {
+			build := builds[0]
+			// Check if build is currently building (status 2 = BUILD_BUILDING)
+			if build.Status == 2 {
+				// Load logs from database for this build
+				buildLogsRepo := database.NewBuildLogsRepository(database.MetricsDB)
+				dbLogs, _, err := buildLogsRepo.GetBuildLogs(ctx, build.ID, 10000, 0)
+				if err == nil {
+					// Convert database logs to proto format
+					for _, logEntry := range dbLogs {
+						logLine := &deploymentsv1.DeploymentLogLine{
+							DeploymentId: deploymentID,
+							Line:         logEntry.Line,
+							Timestamp:    timestamppb.New(logEntry.Timestamp),
+							Stderr:       logEntry.Stderr,
+							LogLevel:     commonv1.LogLevel_LOG_LEVEL_INFO,
+						}
+						bufferedLogs = append(bufferedLogs, logLine)
+					}
+				}
+			}
+		}
+	}
+
+	// Send buffered logs
 	for _, logLine := range bufferedLogs {
 		// Check context before sending
 		if ctx.Err() != nil {
@@ -546,6 +569,13 @@ func (s *Service) StreamBuildLogs(ctx context.Context, req *connect.Request[depl
 			return nil
 		}
 	}
+
+	// Subscribe to build logs for real-time updates
+	logChan := buildStreamer.Subscribe()
+	defer func() {
+		// Unsubscribe when done
+		buildStreamer.Unsubscribe(logChan)
+	}()
 
 	// Stream new logs to client
 	for {

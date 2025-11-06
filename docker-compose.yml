@@ -6,7 +6,7 @@ services:
       dockerfile: apps/api/Dockerfile
     environment:
       PORT: ${GO_API_PORT:-3001}
-      DB_HOST: postgres
+      DB_HOST: postgres  # Use container name to avoid DNS search domain issues
       DB_PORT: 5432
       DB_USER: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -87,11 +87,10 @@ services:
         condition: service_healthy
       dns:
         condition: service_started
-    # Configure DNS resolver to use local DNS server for *.my.obiente.cloud resolution
-    # DNS server is accessible via service name 'dns' on the Docker network
-    # Docker's default DNS (127.0.0.11) is kept as fallback for other queries
-    # Note: For containers to use the DNS server, you may need to configure dns: with the DNS server's IP
-    # Get the IP with: docker inspect obiente-dns | grep IPAddress
+    # Explicitly configure DNS to prevent search domain issues
+    # Docker's DNS (127.0.0.11) resolves service names, but we need to clear search domains
+    # to prevent "postgres" from resolving to "postgres.my.obiente.cloud" (external IPs)
+    dns_search: []  # Clear search domains - prevents appending .my.obiente.cloud to service names
     networks:
       - obiente-network
       # Option 2: Connect to production Swarm network (uncomment if both dev and prod are on same host)
@@ -241,6 +240,11 @@ volumes:
 networks:
   obiente-network:
     driver: bridge
+    # Configure network to prevent DNS search domain issues
+    # This ensures service names like "postgres" resolve correctly without appending .my.obiente.cloud
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.driver.mtu: "1500"
   # Option: Connect to production Swarm network (uncomment if both dev and prod are on same host)
   # This allows direct access to production DNS server by service name
   # production-network:
