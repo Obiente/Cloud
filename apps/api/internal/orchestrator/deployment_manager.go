@@ -1147,66 +1147,79 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 	// Get routing rules (create default if none exist)
 	routings, _ := database.GetDeploymentRoutings(deploymentID)
 	if len(routings) == 0 {
-		// Try to parse compose file to detect port, otherwise use default
-		var targetPort int = 8080
+		// Check if a default routing already exists (might have been created previously)
+		// This handles the case where GetDeploymentRoutings returns empty but a routing exists in DB
+		// (e.g., due to race conditions or if user manually set a port)
+		defaultRoutingID := fmt.Sprintf("route-%s-default", deploymentID)
+		var existingDefaultRouting database.DeploymentRouting
+		dbErr := database.DB.Where("id = ?", defaultRoutingID).First(&existingDefaultRouting).Error
 		
-		// Parse compose to detect exposed ports from first service
-		var compose map[string]interface{}
-		if err := yaml.Unmarshal([]byte(composeYaml), &compose); err == nil {
-			if services, ok := compose["services"].(map[string]interface{}); ok {
-				// Get first service to detect port
-				for _, serviceData := range services {
-					if service, ok := serviceData.(map[string]interface{}); ok {
-						// Check for exposed port or port mapping
-						if ports, ok := service["ports"].([]interface{}); ok && len(ports) > 0 {
-							// Try to extract port from first port mapping
-							if portStr, ok := ports[0].(string); ok {
-								// Format: "host:container" or just "container"
-								parts := strings.Split(portStr, ":")
-								if len(parts) >= 2 {
-									if p, err := strconv.Atoi(parts[len(parts)-1]); err == nil {
-										targetPort = p
+		// If a default routing exists, preserve all user settings (especially port)
+		if dbErr == nil {
+			// User has set routing rules - preserve them completely
+			routings = []database.DeploymentRouting{existingDefaultRouting}
+			logger.Info("[DeploymentManager] Found existing default routing for deployment %s, preserving all user settings (port: %d)", deploymentID, existingDefaultRouting.TargetPort)
+		} else {
+			// No existing routing found, try to parse compose file to detect port
+			var targetPort int = 8080
+			// Parse compose to detect exposed ports from first service
+			var compose map[string]interface{}
+			if err := yaml.Unmarshal([]byte(composeYaml), &compose); err == nil {
+				if services, ok := compose["services"].(map[string]interface{}); ok {
+					// Get first service to detect port
+					for _, serviceData := range services {
+						if service, ok := serviceData.(map[string]interface{}); ok {
+							// Check for exposed port or port mapping
+							if ports, ok := service["ports"].([]interface{}); ok && len(ports) > 0 {
+								// Try to extract port from first port mapping
+								if portStr, ok := ports[0].(string); ok {
+									// Format: "host:container" or just "container"
+									parts := strings.Split(portStr, ":")
+									if len(parts) >= 2 {
+										if p, err := strconv.Atoi(parts[len(parts)-1]); err == nil {
+											targetPort = p
+										}
+									} else if len(parts) == 1 {
+										if p, err := strconv.Atoi(parts[0]); err == nil {
+											targetPort = p
+										}
 									}
-								} else if len(parts) == 1 {
-									if p, err := strconv.Atoi(parts[0]); err == nil {
+								}
+							} else if expose, ok := service["expose"].([]interface{}); ok && len(expose) > 0 {
+								// Check exposed ports
+								if portStr, ok := expose[0].(string); ok {
+									if p, err := strconv.Atoi(portStr); err == nil {
 										targetPort = p
 									}
 								}
 							}
-						} else if expose, ok := service["expose"].([]interface{}); ok && len(expose) > 0 {
-							// Check exposed ports
-							if portStr, ok := expose[0].(string); ok {
-								if p, err := strconv.Atoi(portStr); err == nil {
-									targetPort = p
-								}
-							}
+							break // Only check first service for default
 						}
-						break // Only check first service for default
 					}
 				}
 			}
-		}
-		
-		// Create default routing for compose deployment
-		defaultRouting := &database.DeploymentRouting{
-			ID:                fmt.Sprintf("route-%s-default", deploymentID),
-			DeploymentID:      deploymentID,
-			Domain:            "", // Domain can be set later through routing UI
-			ServiceName:       "default",
-			TargetPort:        targetPort,
-			Protocol:          "http",
-			SSLEnabled:        false, // Default to no SSL for HTTP protocol
-			SSLCertResolver:   "letsencrypt",
-			Middleware:        "{}",
-			CreatedAt:         time.Now(),
-			UpdatedAt:         time.Now(),
-		}
-		
-		if err := database.UpsertDeploymentRouting(defaultRouting); err != nil {
-			logger.Warn("[DeploymentManager] Failed to create default routing: %v", err)
-		} else {
-			routings = []database.DeploymentRouting{*defaultRouting}
-			logger.Info("[DeploymentManager] Created default routing for compose deployment %s (port: %d)", deploymentID, targetPort)
+			
+			// Create default routing for compose deployment
+			defaultRouting := &database.DeploymentRouting{
+				ID:                defaultRoutingID,
+				DeploymentID:      deploymentID,
+				Domain:            "", // Domain can be set later through routing UI
+				ServiceName:       "default",
+				TargetPort:        targetPort,
+				Protocol:          "http",
+				SSLEnabled:        false, // Default to no SSL for HTTP protocol
+				SSLCertResolver:   "letsencrypt",
+				Middleware:        "{}",
+				CreatedAt:         time.Now(),
+				UpdatedAt:         time.Now(),
+			}
+			
+			if upsertErr := database.UpsertDeploymentRouting(defaultRouting); upsertErr != nil {
+				logger.Warn("[DeploymentManager] Failed to create default routing: %v", upsertErr)
+			} else {
+				routings = []database.DeploymentRouting{*defaultRouting}
+				logger.Info("[DeploymentManager] Created default routing for compose deployment %s (port: %d)", deploymentID, targetPort)
+			}
 		}
 	}
 
