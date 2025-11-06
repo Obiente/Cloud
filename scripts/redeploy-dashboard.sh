@@ -25,7 +25,7 @@ TEMP_DASHBOARD_COMPOSE=$(mktemp)
 sed "s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
 
 # Deploy dashboard stack
-docker stack deploy -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}-dashboard"
+docker stack deploy -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}_dashboard"
 rm -f "$TEMP_DASHBOARD_COMPOSE"
 
 echo "✅ Dashboard redeployed!"

@@ -66,7 +66,7 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   # Substitute DOMAIN variable in labels (Docker Swarm doesn't expand env vars in labels)
   TEMP_DASHBOARD_COMPOSE=$(mktemp)
   sed "s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
-  STACK_NAME="$STACK_NAME" docker stack deploy -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}-dashboard"
+  STACK_NAME="$STACK_NAME" docker stack deploy -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}_dashboard"
   rm -f "$TEMP_DASHBOARD_COMPOSE"
   echo -e "${GREEN}✅ Dashboard stack redeployed!${NC}"
   echo ""
@@ -98,7 +98,7 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo -e "${BLUE}📦 Step 3: Force updating dashboard services...${NC}"
   echo ""
   
-  DASHBOARD_SERVICES=$(get_stack_services "${STACK_NAME}-dashboard")
+  DASHBOARD_SERVICES=$(get_stack_services "${STACK_NAME}_dashboard")
   if [ -z "$DASHBOARD_SERVICES" ]; then
     echo -e "${YELLOW}⚠️  No services found in dashboard stack${NC}"
   else
@@ -123,7 +123,7 @@ docker stack services "$STACK_NAME" --format "table {{.Name}}\t{{.Replicas}}\t{{
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo ""
   echo -e "${BLUE}Dashboard stack services:${NC}"
-  docker stack services "${STACK_NAME}-dashboard" --format "table {{.Name}}\t{{.Replicas}}\t{{.Image}}"
+  docker stack services "${STACK_NAME}_dashboard" --format "table {{.Name}}\t{{.Replicas}}\t{{.Image}}"
 fi
 
 echo ""
@@ -131,10 +131,10 @@ echo -e "${BLUE}📋 Useful commands:${NC}"
 echo "  View all services:  docker stack services $STACK_NAME"
 echo "  View service logs:  docker service logs -f ${STACK_NAME}_api"
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
-  echo "  Dashboard logs:     docker service logs -f ${STACK_NAME}-dashboard_dashboard"
+  echo "  Dashboard logs:     docker service logs -f ${STACK_NAME}_dashboard"
 fi
 echo "  Service status:     docker service ps ${STACK_NAME}_api"
-echo "  Remove stacks:      docker stack rm $STACK_NAME${DEPLOY_DASHBOARD:+ ${STACK_NAME}-dashboard}"
+echo "  Remove stacks:      docker stack rm $STACK_NAME${DEPLOY_DASHBOARD:+ ${STACK_NAME}_dashboard}"
 echo ""
 echo -e "${YELLOW}💡 Note: Services are being updated. Check status with: docker service ps <service-name>${NC}"
 echo ""

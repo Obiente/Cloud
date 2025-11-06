@@ -5,7 +5,7 @@
 set -e
 
 STACK_NAME="${STACK_NAME:-obiente}"
-DASHBOARD_STACK="${STACK_NAME}-dashboard"
+DASHBOARD_STACK="${STACK_NAME}_dashboard"
 
 echo "🔍 Checking Dashboard Traefik Discovery Configuration"
 echo ""

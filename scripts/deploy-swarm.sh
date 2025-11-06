@@ -144,7 +144,7 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   export DOMAIN="${DOMAIN:-obiente.cloud}"
   TEMP_DASHBOARD_COMPOSE=$(mktemp)
   sed "s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
-  STACK_NAME="$STACK_NAME" DASHBOARD_IMAGE="$DASHBOARD_IMAGE" docker stack deploy -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}-dashboard"
+  STACK_NAME="$STACK_NAME" DASHBOARD_IMAGE="$DASHBOARD_IMAGE" docker stack deploy -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}_dashboard"
   rm -f "$TEMP_DASHBOARD_COMPOSE"
   
   echo ""
@@ -158,9 +158,9 @@ echo "📋 Useful commands:"
 echo "  View services:     docker stack services $STACK_NAME"
 echo "  View logs:         docker service logs -f ${STACK_NAME}_api"
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
-  echo "  Dashboard logs:    docker service logs -f ${STACK_NAME}-dashboard_dashboard"
+  echo "  Dashboard logs:    docker service logs -f ${STACK_NAME}_dashboard"
 fi
-echo "  Remove stacks:     docker stack rm $STACK_NAME${DEPLOY_DASHBOARD:+ ${STACK_NAME}-dashboard}"
+echo "  Remove stacks:     docker stack rm $STACK_NAME${DEPLOY_DASHBOARD:+ ${STACK_NAME}_dashboard}"
 echo "  List tasks:        docker stack ps $STACK_NAME"
 echo ""
 echo "⚠️  If you see mount errors on worker nodes, ensure directories exist:"

@@ -23,16 +23,6 @@ echo -e "${BLUE}1. Checking dashboard service...${NC}"
 # Try to find dashboard service - check both possible names
 DASHBOARD_SERVICE=$(docker service ls --format "{{.Name}}" | grep -E "^${STACK_NAME}_dashboard$" | head -n 1)
 
-# If not found, try with dash separator
-if [ -z "$DASHBOARD_SERVICE" ]; then
-  DASHBOARD_SERVICE=$(docker service ls --format "{{.Name}}" | grep -E "^${STACK_NAME}-dashboard_dashboard$" | head -n 1)
-fi
-
-# If still not found, try any dashboard service
-if [ -z "$DASHBOARD_SERVICE" ]; then
-  DASHBOARD_SERVICE=$(docker service ls --format "{{.Name}}" | grep -i dashboard | head -n 1)
-fi
-
 if [ -z "$DASHBOARD_SERVICE" ]; then
   echo -e "${RED}❌ Dashboard service not found!${NC}"
   echo "   Deploy it with: docker stack deploy -c docker-compose.dashboard.yml obiente-dashboard"
