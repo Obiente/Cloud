@@ -14,8 +14,8 @@ services:
       HOST: 0.0.0.0
       NUXT_SESSION_PASSWORD: ${SESSION_SECRET:-changeme}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
-      NUXT_PUBLIC_REQUEST_HOST: ${DASHBOARD_URL:-http://localhost:3000}
-      NUXT_PUBLIC_API_HOST: ${API_URL:-http://api.${DOMAIN:-localhost}}
+      NUXT_PUBLIC_REQUEST_HOST: ${DOMAIN:-obiente.cloud}
+      NUXT_PUBLIC_API_HOST: ${API_URL:-https://api.${DOMAIN:-obiente.cloud}}
       NUXT_PUBLIC_OIDC_ISSUER: ${ZITADEL_URL:-https://obiente.cloud}
       NUXT_PUBLIC_OIDC_BASE: ${ZITADEL_BASE_URL:-https://auth.obiente.cloud}
       NUXT_PUBLIC_OIDC_CLIENT_ID: ${ZITADEL_CLIENT_ID:-339499954043158530}
