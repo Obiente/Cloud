@@ -2,6 +2,7 @@ package superadmin
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	authv1 "api/gen/proto/obiente/cloud/auth/v1"
 	billingv1 "api/gen/proto/obiente/cloud/billing/v1"
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	superadminv1 "api/gen/proto/obiente/cloud/superadmin/v1"
@@ -18,6 +20,7 @@ import (
 	"api/internal/database"
 	"api/internal/logger"
 	"api/internal/pricing"
+	"api/internal/services/organizations"
 	"api/internal/stripe"
 
 	"errors"
@@ -624,6 +627,125 @@ func (s *Service) GetDNSConfig(ctx context.Context, _ *connect.Request[superadmi
 	}), nil
 }
 
+// ListDelegatedDNSRecords lists delegated DNS records with optional filters
+func (s *Service) ListDelegatedDNSRecords(ctx context.Context, req *connect.Request[superadminv1.ListDelegatedDNSRecordsRequest]) (*connect.Response[superadminv1.ListDelegatedDNSRecordsResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	
+	// Non-superadmins can only see their own organization's records
+	var organizationID string
+	if !isSuperAdmin {
+		// Get user's organization memberships
+		var memberships []database.OrganizationMember
+		if err := database.DB.Where("user_id = ? AND status = ?", user.Id, "active").Find(&memberships).Error; err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get user memberships: %w", err))
+		}
+		
+		if len(memberships) == 0 {
+			return connect.NewResponse(&superadminv1.ListDelegatedDNSRecordsResponse{
+				Records: []*superadminv1.DelegatedDNSRecord{},
+			}), nil
+		}
+		
+		// If user specified an organization ID, verify they're a member
+		if reqOrgID := req.Msg.GetOrganizationId(); reqOrgID != "" {
+			hasAccess := false
+			for _, m := range memberships {
+				if m.OrganizationID == reqOrgID {
+					hasAccess = true
+					break
+				}
+			}
+			if !hasAccess {
+				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("access denied to organization"))
+			}
+			organizationID = reqOrgID
+		} else {
+			// Use first organization (or could return all)
+			organizationID = memberships[0].OrganizationID
+		}
+	} else {
+		// Superadmins can filter by any organization
+		if reqOrgID := req.Msg.GetOrganizationId(); reqOrgID != "" {
+			organizationID = reqOrgID
+		}
+	}
+
+	// Get filters
+	apiKeyID := req.Msg.GetApiKeyId()
+	recordType := req.Msg.GetRecordType()
+
+	// Query delegated DNS records
+	dbRecords, err := database.ListDelegatedDNSRecords(organizationID, apiKeyID, recordType)
+	if err != nil {
+		logger.Error("[SuperAdmin] Failed to list delegated DNS records: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list delegated DNS records: %w", err))
+	}
+
+	// Convert to proto records
+	records := make([]*superadminv1.DelegatedDNSRecord, 0, len(dbRecords))
+	for _, dbRecord := range dbRecords {
+		// Parse records JSON
+		var recordValues []string
+		if err := json.Unmarshal([]byte(dbRecord.Records), &recordValues); err != nil {
+			logger.Warn("[SuperAdmin] Failed to parse records JSON for %s: %v", dbRecord.Domain, err)
+			continue
+		}
+
+		records = append(records, &superadminv1.DelegatedDNSRecord{
+			Id:             dbRecord.ID,
+			Domain:         dbRecord.Domain,
+			RecordType:     dbRecord.RecordType,
+			Records:        recordValues,
+			SourceApi:      dbRecord.SourceAPI,
+			ApiKeyId:       dbRecord.APIKeyID,
+			OrganizationId: dbRecord.OrganizationID,
+			Ttl:            dbRecord.TTL,
+			ExpiresAt:      timestamppb.New(dbRecord.ExpiresAt),
+			LastUpdated:    timestamppb.New(dbRecord.LastUpdated),
+			CreatedAt:      timestamppb.New(dbRecord.CreatedAt),
+		})
+	}
+
+	return connect.NewResponse(&superadminv1.ListDelegatedDNSRecordsResponse{
+		Records: records,
+	}), nil
+}
+
+// HasDelegatedDNS checks if the current user has delegated DNS
+func (s *Service) HasDelegatedDNS(ctx context.Context, _ *connect.Request[superadminv1.HasDelegatedDNSRequest]) (*connect.Response[superadminv1.HasDelegatedDNSResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	// Get user's organization memberships
+	var memberships []database.OrganizationMember
+	if err := database.DB.Where("user_id = ? AND status = ?", user.Id, "active").Find(&memberships).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get user memberships: %w", err))
+	}
+
+	// Check each organization for active DNS delegation API key
+	for _, membership := range memberships {
+		apiKey, err := database.GetActiveDNSDelegationAPIKeyForOrganization(membership.OrganizationID)
+		if err == nil && apiKey != nil {
+			return connect.NewResponse(&superadminv1.HasDelegatedDNSResponse{
+				HasDelegatedDns: true,
+				OrganizationId:   membership.OrganizationID,
+				ApiKeyId:         apiKey.ID,
+			}), nil
+		}
+	}
+
+	return connect.NewResponse(&superadminv1.HasDelegatedDNSResponse{
+		HasDelegatedDns: false,
+	}), nil
+}
+
 // GetPricing returns current pricing information - public endpoint, no authentication required
 func (s *Service) GetPricing(ctx context.Context, _ *connect.Request[superadminv1.GetPricingRequest]) (*connect.Response[superadminv1.GetPricingResponse], error) {
 	pricingModel := pricing.GetPricing()
@@ -974,16 +1096,16 @@ func loadOrganizationOverviews() ([]*superadminv1.OrganizationOverview, error) {
 	return items, nil
 }
 
-func loadPendingInvites() ([]*superadminv1.PendingInvite, error) {
+func loadPendingInvites() ([]*superadminv1.SuperadminPendingInvite, error) {
 	var rows []database.OrganizationMember
 	if err := database.DB.Where("status = ?", "invited").Order("joined_at DESC").Limit(overviewLimit).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("load invites: %w", err)
 	}
 
-	items := make([]*superadminv1.PendingInvite, 0, len(rows))
+	items := make([]*superadminv1.SuperadminPendingInvite, 0, len(rows))
 	for _, row := range rows {
 		email := strings.TrimPrefix(row.UserID, "pending:")
-		items = append(items, &superadminv1.PendingInvite{
+		items = append(items, &superadminv1.SuperadminPendingInvite{
 			Id:             row.ID,
 			OrganizationId: row.OrganizationID,
 			Email:          email,
@@ -1747,7 +1869,7 @@ func (s *Service) calculateEstimatedMonthlyIncome(ctx context.Context) float64 {
 		Select(`
 			duh.organization_id,
 			COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
-			COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds,
+			COALESCE(CAST(SUM(duh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
 			COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
 			COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
 		`).
@@ -1988,4 +2110,416 @@ type customerOrgInfo struct {
 	OrganizationID   string
 	OrganizationName string
 	BillingEmail     *string
+}
+
+// Plan Management Endpoints
+
+func (s *Service) ListPlans(ctx context.Context, _ *connect.Request[superadminv1.ListPlansRequest]) (*connect.Response[superadminv1.ListPlansResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	var plans []database.OrganizationPlan
+	if err := database.DB.Order("name ASC").Find(&plans).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list plans: %w", err))
+	}
+
+	protoPlans := make([]*superadminv1.Plan, len(plans))
+	for i, plan := range plans {
+		protoPlans[i] = &superadminv1.Plan{
+			Id:                      plan.ID,
+			Name:                    plan.Name,
+			CpuCores:                int32(plan.CPUCores),
+			MemoryBytes:             plan.MemoryBytes,
+			DeploymentsMax:          int32(plan.DeploymentsMax),
+			BandwidthBytesMonth:     plan.BandwidthBytesMonth,
+			StorageBytes:            plan.StorageBytes,
+			MinimumPaymentCents:     plan.MinimumPaymentCents,
+			MonthlyFreeCreditsCents: plan.MonthlyFreeCreditsCents,
+			Description:             plan.Description,
+		}
+	}
+
+	return connect.NewResponse(&superadminv1.ListPlansResponse{
+		Plans: protoPlans,
+	}), nil
+}
+
+func (s *Service) CreatePlan(ctx context.Context, req *connect.Request[superadminv1.CreatePlanRequest]) (*connect.Response[superadminv1.CreatePlanResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	plan := &database.OrganizationPlan{
+		ID:                      fmt.Sprintf("plan-%d", time.Now().UnixNano()),
+		Name:                    req.Msg.GetName(),
+		CPUCores:                int(req.Msg.GetCpuCores()),
+		MemoryBytes:             req.Msg.GetMemoryBytes(),
+		DeploymentsMax:          int(req.Msg.GetDeploymentsMax()),
+		BandwidthBytesMonth:     req.Msg.GetBandwidthBytesMonth(),
+		StorageBytes:            req.Msg.GetStorageBytes(),
+		MinimumPaymentCents:     req.Msg.GetMinimumPaymentCents(),
+		MonthlyFreeCreditsCents: req.Msg.GetMonthlyFreeCreditsCents(),
+		Description:             req.Msg.GetDescription(),
+	}
+
+	if err := database.DB.Create(plan).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create plan: %w", err))
+	}
+
+	protoPlan := &superadminv1.Plan{
+		Id:                      plan.ID,
+		Name:                    plan.Name,
+		CpuCores:                int32(plan.CPUCores),
+		MemoryBytes:             plan.MemoryBytes,
+		DeploymentsMax:          int32(plan.DeploymentsMax),
+		BandwidthBytesMonth:     plan.BandwidthBytesMonth,
+		StorageBytes:            plan.StorageBytes,
+		MinimumPaymentCents:     plan.MinimumPaymentCents,
+		MonthlyFreeCreditsCents: plan.MonthlyFreeCreditsCents,
+		Description:             plan.Description,
+	}
+
+	return connect.NewResponse(&superadminv1.CreatePlanResponse{
+		Plan: protoPlan,
+	}), nil
+}
+
+func (s *Service) UpdatePlan(ctx context.Context, req *connect.Request[superadminv1.UpdatePlanRequest]) (*connect.Response[superadminv1.UpdatePlanResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	var plan database.OrganizationPlan
+	if err := database.DB.First(&plan, "id = ?", req.Msg.GetId()).Error; err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("plan not found"))
+	}
+
+	if req.Msg.Name != nil {
+		plan.Name = *req.Msg.Name
+	}
+	if req.Msg.CpuCores != nil {
+		plan.CPUCores = int(*req.Msg.CpuCores)
+	}
+	if req.Msg.MemoryBytes != nil {
+		plan.MemoryBytes = *req.Msg.MemoryBytes
+	}
+	if req.Msg.DeploymentsMax != nil {
+		plan.DeploymentsMax = int(*req.Msg.DeploymentsMax)
+	}
+	if req.Msg.BandwidthBytesMonth != nil {
+		plan.BandwidthBytesMonth = *req.Msg.BandwidthBytesMonth
+	}
+	if req.Msg.StorageBytes != nil {
+		plan.StorageBytes = *req.Msg.StorageBytes
+	}
+	if req.Msg.MinimumPaymentCents != nil {
+		plan.MinimumPaymentCents = *req.Msg.MinimumPaymentCents
+	}
+	if req.Msg.MonthlyFreeCreditsCents != nil {
+		plan.MonthlyFreeCreditsCents = *req.Msg.MonthlyFreeCreditsCents
+	}
+	if req.Msg.Description != nil {
+		plan.Description = *req.Msg.Description
+	}
+
+	if err := database.DB.Save(&plan).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update plan: %w", err))
+	}
+
+	protoPlan := &superadminv1.Plan{
+		Id:                      plan.ID,
+		Name:                    plan.Name,
+		CpuCores:                int32(plan.CPUCores),
+		MemoryBytes:             plan.MemoryBytes,
+		DeploymentsMax:          int32(plan.DeploymentsMax),
+		BandwidthBytesMonth:     plan.BandwidthBytesMonth,
+		StorageBytes:            plan.StorageBytes,
+		MinimumPaymentCents:     plan.MinimumPaymentCents,
+		MonthlyFreeCreditsCents: plan.MonthlyFreeCreditsCents,
+		Description:             plan.Description,
+	}
+
+	return connect.NewResponse(&superadminv1.UpdatePlanResponse{
+		Plan: protoPlan,
+	}), nil
+}
+
+func (s *Service) DeletePlan(ctx context.Context, req *connect.Request[superadminv1.DeletePlanRequest]) (*connect.Response[superadminv1.DeletePlanResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	// Check if any organizations are using this plan
+	var count int64
+	if err := database.DB.Model(&database.OrgQuota{}).Where("plan_id = ?", req.Msg.GetId()).Count(&count).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check plan usage: %w", err))
+	}
+	if count > 0 {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("cannot delete plan: %d organizations are using it", count))
+	}
+
+	if err := database.DB.Delete(&database.OrganizationPlan{}, "id = ?", req.Msg.GetId()).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("delete plan: %w", err))
+	}
+
+	return connect.NewResponse(&superadminv1.DeletePlanResponse{
+		Success: true,
+	}), nil
+}
+
+func (s *Service) AssignPlanToOrganization(ctx context.Context, req *connect.Request[superadminv1.AssignPlanToOrganizationRequest]) (*connect.Response[superadminv1.AssignPlanToOrganizationResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	// Verify plan exists
+	var plan database.OrganizationPlan
+	if err := database.DB.First(&plan, "id = ?", req.Msg.GetPlanId()).Error; err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("plan not found"))
+	}
+
+	// Verify organization exists
+	var org database.Organization
+	if err := database.DB.First(&org, "id = ?", req.Msg.GetOrganizationId()).Error; err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
+	}
+
+	// Get or create OrgQuota
+	var quota database.OrgQuota
+	if err := database.DB.First(&quota, "organization_id = ?", req.Msg.GetOrganizationId()).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			quota = database.OrgQuota{
+				OrganizationID: req.Msg.GetOrganizationId(),
+				PlanID:        req.Msg.GetPlanId(),
+			}
+			if err := database.DB.Create(&quota).Error; err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create quota: %w", err))
+			}
+		} else {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get quota: %w", err))
+		}
+	} else {
+		quota.PlanID = req.Msg.GetPlanId()
+		if err := database.DB.Save(&quota).Error; err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update quota: %w", err))
+		}
+	}
+
+	return connect.NewResponse(&superadminv1.AssignPlanToOrganizationResponse{
+		Success: true,
+		Message: fmt.Sprintf("Plan %s assigned to organization %s", plan.Name, org.Name),
+	}), nil
+}
+
+func (s *Service) ListUsers(ctx context.Context, req *connect.Request[superadminv1.ListUsersRequest]) (*connect.Response[superadminv1.ListUsersResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	// Pagination
+	page := int(req.Msg.GetPage())
+	if page < 1 {
+		page = 1
+	}
+	perPage := int(req.Msg.GetPerPage())
+	if perPage < 1 {
+		perPage = 50
+	}
+	if perPage > 100 {
+		perPage = 100
+	}
+	offset := (page - 1) * perPage
+
+	// Get all unique user IDs from organization members
+	// We'll need to query the database to get distinct user IDs
+	var userIDs []string
+	query := database.DB.Model(&database.OrganizationMember{}).
+		Distinct("user_id").
+		Where("user_id NOT LIKE ?", "pending:%")
+
+	// Apply search filter if provided
+	search := strings.TrimSpace(req.Msg.GetSearch())
+	if search != "" {
+		// For now, we can only search by user_id since we don't have user data in DB
+		// The resolver will fetch full user details
+		query = query.Where("user_id LIKE ?", "%"+search+"%")
+	}
+
+	// Get total count
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("count users: %w", err))
+	}
+
+	// Get paginated user IDs
+	if err := query.
+		Order("user_id ASC").
+		Limit(perPage).
+		Offset(offset).
+		Pluck("user_id", &userIDs).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list users: %w", err))
+	}
+
+	// Resolve user profiles using the user profile resolver
+	resolver := organizations.GetUserProfileResolver()
+	users := make([]*superadminv1.UserInfo, 0, len(userIDs))
+	
+	for _, userID := range userIDs {
+		userInfo := &superadminv1.UserInfo{
+			Id: userID,
+		}
+
+		// Try to resolve profile from Zitadel
+		if resolver != nil && resolver.IsConfigured() {
+			if profile, err := resolver.Resolve(ctx, userID); err == nil && profile != nil {
+				userInfo.Id = profile.Id
+				userInfo.Email = profile.Email
+				userInfo.Name = profile.Name
+				userInfo.PreferredUsername = profile.PreferredUsername
+				userInfo.Locale = profile.Locale
+				userInfo.EmailVerified = profile.EmailVerified
+				if profile.AvatarUrl != "" {
+					userInfo.AvatarUrl = &profile.AvatarUrl
+				}
+				if profile.UpdatedAt != nil {
+					userInfo.UpdatedAt = profile.UpdatedAt
+				}
+			}
+		}
+
+		// Get user roles (check if superadmin)
+		// Roles are determined by SUPERADMIN_EMAILS env var
+		if userInfo.Email != "" {
+			var roles []string
+			// Check if user is superadmin by checking the superadmin emails map
+			// We need to check the auth config's superadmin emails
+			// For now, we'll check via HasRole which uses the same mechanism
+			testUser := &authv1.User{Email: userInfo.Email, Roles: []string{}}
+			if auth.HasRole(testUser, auth.RoleSuperAdmin) {
+				roles = append(roles, auth.RoleSuperAdmin)
+			}
+			userInfo.Roles = roles
+		}
+
+		users = append(users, userInfo)
+	}
+
+	totalPages := (int(total) + perPage - 1) / perPage
+
+	return connect.NewResponse(&superadminv1.ListUsersResponse{
+		Users: users,
+		Pagination: &superadminv1.SuperadminPagination{
+			Page:       int32(page),
+			PerPage:    int32(perPage),
+			Total:      int32(total),
+			TotalPages: int32(totalPages),
+		},
+	}), nil
+}
+
+func (s *Service) GetUser(ctx context.Context, req *connect.Request[superadminv1.GetUserRequest]) (*connect.Response[superadminv1.GetUserResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	userID := strings.TrimSpace(req.Msg.GetUserId())
+	if userID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("user_id is required"))
+	}
+
+	// Resolve user profile
+	resolver := organizations.GetUserProfileResolver()
+	userInfo := &superadminv1.UserInfo{
+		Id: userID,
+	}
+
+	// Try to resolve profile from Zitadel
+	if resolver != nil && resolver.IsConfigured() {
+		if profile, err := resolver.Resolve(ctx, userID); err == nil && profile != nil {
+			userInfo.Id = profile.Id
+			userInfo.Email = profile.Email
+			userInfo.Name = profile.Name
+			userInfo.PreferredUsername = profile.PreferredUsername
+			userInfo.Locale = profile.Locale
+			userInfo.EmailVerified = profile.EmailVerified
+			if profile.AvatarUrl != "" {
+				userInfo.AvatarUrl = &profile.AvatarUrl
+			}
+			if profile.UpdatedAt != nil {
+				userInfo.UpdatedAt = profile.UpdatedAt
+			}
+			if profile.CreatedAt != nil {
+				userInfo.CreatedAt = profile.CreatedAt
+			}
+		}
+	}
+
+	// Get user roles
+	// Roles are determined by SUPERADMIN_EMAILS env var
+	if userInfo.Email != "" {
+		var roles []string
+		// Check if user is superadmin by checking the superadmin emails map
+		testUser := &authv1.User{Email: userInfo.Email, Roles: []string{}}
+		if auth.HasRole(testUser, auth.RoleSuperAdmin) {
+			roles = append(roles, auth.RoleSuperAdmin)
+		}
+		userInfo.Roles = roles
+	}
+
+	// Get all organizations this user belongs to
+	var members []database.OrganizationMember
+	if err := database.DB.Where("user_id = ?", userID).Find(&members).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get user organizations: %w", err))
+	}
+
+	orgs := make([]*superadminv1.UserOrganization, 0, len(members))
+	for _, member := range members {
+		var org database.Organization
+		if err := database.DB.First(&org, "id = ?", member.OrganizationID).Error; err != nil {
+			logger.Warn("[SuperAdmin] Failed to load organization %s for user %s: %v", member.OrganizationID, userID, err)
+			continue
+		}
+
+		orgs = append(orgs, &superadminv1.UserOrganization{
+			OrganizationId:   org.ID,
+			OrganizationName: org.Name,
+			Role:            member.Role,
+			Status:          member.Status,
+			JoinedAt:        timestamppb.New(member.JoinedAt),
+		})
+	}
+
+	return connect.NewResponse(&superadminv1.GetUserResponse{
+		User:          userInfo,
+		Organizations: orgs,
+	}), nil
 }
