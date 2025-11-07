@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package obiente.cloud.audit.v1;
+
+option go_package = "api/gen/proto/obiente/cloud/audit/v1;auditv1";
+
+import "google/protobuf/timestamp.proto";
+
+service AuditService {
+  // List audit logs with filtering options
+  rpc ListAuditLogs(ListAuditLogsRequest) returns (ListAuditLogsResponse);
+  
+  // Get a specific audit log entry by ID
+  rpc GetAuditLog(GetAuditLogRequest) returns (GetAuditLogResponse);
+}
+
+// Request/Response messages
+message ListAuditLogsRequest {
+  // Filter by organization ID (optional)
+  optional string organization_id = 1;
+  
+  // Filter by resource type (optional, e.g., "deployment", "organization")
+  optional string resource_type = 2;
+  
+  // Filter by resource ID (optional)
+  optional string resource_id = 3;
+  
+  // Filter by user ID (optional)
+  optional string user_id = 4;
+  
+  // Filter by service name (optional, e.g., "DeploymentService")
+  optional string service = 5;
+  
+  // Filter by action name (optional, e.g., "CreateDeployment")
+  optional string action = 6;
+  
+  // Filter by time range (optional)
+  optional google.protobuf.Timestamp start_time = 7;
+  optional google.protobuf.Timestamp end_time = 8;
+  
+  // Pagination
+  optional int32 page_size = 9; // Default: 50, Max: 1000
+  optional string page_token = 10; // Token from previous response for pagination
+}
+
+message ListAuditLogsResponse {
+  repeated AuditLogEntry audit_logs = 1;
+  string next_page_token = 2; // Token for next page, empty if no more pages
+}
+
+message GetAuditLogRequest {
+  string audit_log_id = 1;
+}
+
+message GetAuditLogResponse {
+  AuditLogEntry audit_log = 1;
+}
+
+// AuditLogEntry represents a single audit log entry
+message AuditLogEntry {
+  string id = 1;
+  string user_id = 2;
+  optional string user_name = 15; // Resolved user name (for display)
+  optional string user_email = 16; // Resolved user email (for display)
+  optional string organization_id = 3;
+  string action = 4; // RPC method name (e.g., "CreateDeployment")
+  string service = 5; // Service name (e.g., "DeploymentService")
+  optional string resource_type = 6; // Type of resource affected
+  optional string resource_id = 7; // ID of the affected resource
+  string ip_address = 8;
+  string user_agent = 9;
+  string request_data = 10; // JSON-encoded request data (sanitized)
+  int32 response_status = 11; // HTTP/Connect status code
+  optional string error_message = 12; // Error message if action failed
+  int64 duration_ms = 13; // Request duration in milliseconds
+  google.protobuf.Timestamp created_at = 14;
+}
+
