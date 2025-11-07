@@ -111,9 +111,9 @@ dig deploy-123.my.obiente.cloud
 
 **For Development:** If you're developing locally and need an API key for testing, you can:
 - Subscribe to DNS delegation for your development organization
-- Contact the production administrator for a temporary key (superadmin only)
+- Contact superadmins for a temporary key
 
-**For Superadmins:** Superadmins can still create API keys manually for any organization without requiring a subscription.
+**For Superadmins:** Superadmins can create API keys manually for any organization without requiring a subscription.
 
 ### Creating API Keys (Self-Service)
 

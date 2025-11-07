@@ -4,22 +4,23 @@ Complete reference for all Obiente Cloud environment variables.
 
 ## Quick Reference
 
-| Variable             | Default                      | Required | Description                                      |
-| -------------------- | ---------------------------- | -------- | ------------------------------------------------ |
-| `POSTGRES_USER`      | `obiente`                    | ❌       | PostgreSQL username                              |
-| `POSTGRES_PASSWORD`  | -                            | ✅       | PostgreSQL password                              |
-| `ZITADEL_URL`        | `https://auth.obiente.cloud` | ❌       | Zitadel instance URL                             |
-| `LOG_LEVEL`          | `info`                       | ❌       | Application logging level                        |
-| `DB_LOG_LEVEL`      | (uses LOG_LEVEL)             | ❌       | Database query logging level                     |
-| `CORS_ORIGIN`        | `*`                          | ❌       | Allowed CORS origins                             |
-| `SMTP_HOST`          | -                            | ❌       | SMTP server host (required to enable email)      |
-| `SMTP_FROM_ADDRESS`  | -                            | ❌       | From address used for outbound email             |
-| `CONSOLE_URL`        | `https://app.obiente.cloud`  | ❌       | Dashboard URL used in invitation call-to-action  |
-| `SUPPORT_EMAIL`      | -                            | ❌       | Support contact displayed in email footers       |
-| `SUPERADMIN_EMAILS`  | -                            | ❌       | Comma-separated list of emails with global access |
-| `STRIPE_SECRET_KEY`  | -                            | ✅ (billing) | Stripe secret API key for payment processing |
-| `STRIPE_WEBHOOK_SECRET` | -                        | ✅ (webhooks) | Stripe webhook signing secret for webhook verification |
-| `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | -            | ✅ (frontend) | Stripe publishable key for client-side Stripe.js |
+| Variable                             | Default                      | Required      | Description                                                                                                         |
+| ------------------------------------ | ---------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_USER`                      | `obiente`                    | ❌            | PostgreSQL username                                                                                                 |
+| `POSTGRES_PASSWORD`                  | -                            | ✅            | PostgreSQL password                                                                                                 |
+| `ZITADEL_URL`                        | `https://auth.obiente.cloud` | ❌            | Zitadel instance URL                                                                                                |
+| `LOG_LEVEL`                          | `info`                       | ❌            | Application logging level                                                                                           |
+| `DB_LOG_LEVEL`                       | (uses LOG_LEVEL)             | ❌            | Database query logging level                                                                                        |
+| `CORS_ORIGIN`                        | `*`                          | ❌            | Allowed CORS origins                                                                                                |
+| `SMTP_HOST`                          | -                            | ❌            | SMTP server host (required to enable email)                                                                         |
+| `SMTP_FROM_ADDRESS`                  | -                            | ❌            | From address used for outbound email                                                                                |
+| `CONSOLE_URL`                        | `https://app.obiente.cloud`  | ❌            | Dashboard URL used in invitation call-to-action                                                                     |
+| `SUPPORT_EMAIL`                      | -                            | ❌            | Support contact displayed in email footers                                                                          |
+| `SUPERADMIN_EMAILS`                  | -                            | ❌            | Comma-separated list of emails with global access (superadmins for self-hosted, The Obiente Cloud Team for managed) |
+| `SELF_HOSTED`                        | `false`                      | ❌            | Set to `true` if this is a self-hosted deployment (affects terminology in UI/docs)                                  |
+| `STRIPE_SECRET_KEY`                  | -                            | ✅ (billing)  | Stripe secret API key for payment processing                                                                        |
+| `STRIPE_WEBHOOK_SECRET`              | -                            | ✅ (webhooks) | Stripe webhook signing secret for webhook verification                                                              |
+| `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | -                            | ✅ (frontend) | Stripe publishable key for client-side Stripe.js                                                                    |
 
 ## Configuration Sections
 
@@ -122,19 +123,19 @@ CORS_ORIGIN=https://obiente.cloud
 
 ### Email Delivery
 
-| Variable                 | Type    | Default                     | Required |
-| ------------------------ | ------- | --------------------------- | -------- |
-| `SMTP_HOST`              | string  | -                           | ✅ (email) |
-| `SMTP_PORT`              | number  | `587`                       | ❌        |
-| `SMTP_USERNAME`          | string  | -                           | ❌        |
-| `SMTP_PASSWORD`          | string  | -                           | ❌        |
-| `SMTP_FROM_ADDRESS`      | string  | -                           | ✅ (email) |
-| `SMTP_FROM_NAME`         | string  | `Obiente Cloud`             | ❌        |
-| `SMTP_REPLY_TO`          | string  | -                           | ❌        |
-| `SMTP_USE_STARTTLS`      | boolean | `true`                      | ❌        |
-| `SMTP_SKIP_TLS_VERIFY`   | boolean | `false`                     | ❌        |
-| `SMTP_TIMEOUT_SECONDS`   | number  | `10`                        | ❌        |
-| `SMTP_LOCAL_NAME`        | string  | `api.obiente.local`         | ❌        |
+| Variable               | Type    | Default             | Required   |
+| ---------------------- | ------- | ------------------- | ---------- |
+| `SMTP_HOST`            | string  | -                   | ✅ (email) |
+| `SMTP_PORT`            | number  | `587`               | ❌         |
+| `SMTP_USERNAME`        | string  | -                   | ❌         |
+| `SMTP_PASSWORD`        | string  | -                   | ❌         |
+| `SMTP_FROM_ADDRESS`    | string  | -                   | ✅ (email) |
+| `SMTP_FROM_NAME`       | string  | `Obiente Cloud`     | ❌         |
+| `SMTP_REPLY_TO`        | string  | -                   | ❌         |
+| `SMTP_USE_STARTTLS`    | boolean | `true`              | ❌         |
+| `SMTP_SKIP_TLS_VERIFY` | boolean | `false`             | ❌         |
+| `SMTP_TIMEOUT_SECONDS` | number  | `10`                | ❌         |
+| `SMTP_LOCAL_NAME`      | string  | `api.obiente.local` | ❌         |
 
 **Notes:**
 
@@ -156,15 +157,17 @@ SMTP_REPLY_TO=support@obiente.cloud
 
 ### Console & Support
 
-| Variable         | Type   | Default                    | Required |
-| ---------------- | ------ | -------------------------- | -------- |
-| `CONSOLE_URL`    | string | `https://app.obiente.cloud` | ❌       |
-| `DASHBOARD_URL`  | string | -                          | ❌       |
-| `APP_CONSOLE_URL`| string | -                          | ❌       |
-| `SUPPORT_EMAIL`  | string | -                          | ❌       |
-| `SUPERADMIN_EMAILS` | string | -                       | ❌       |
+| Variable            | Type   | Default                     | Required |
+| ------------------- | ------ | --------------------------- | -------- |
+| `CONSOLE_URL`       | string | `https://app.obiente.cloud` | ❌       |
+| `DASHBOARD_URL`     | string | -                           | ❌       |
+| `APP_CONSOLE_URL`   | string | -                           | ❌       |
+| `SUPPORT_EMAIL`     | string | -                           | ❌       |
+| `SUPERADMIN_EMAILS` | string | -                           | ❌       |
+| `SELF_HOSTED`       | bool   | `false`                     | ❌       |
+| `BILLING_ENABLED`   | bool   | `true`                      | ❌       |
 
-The API resolves the first non-empty value from `CONSOLE_URL`, `DASHBOARD_URL`, and `APP_CONSOLE_URL` to build links in transactional emails. Configure `SUPPORT_EMAIL` to surface a contact address in email footers. `SUPERADMIN_EMAILS` grants Obiente operators system-wide access to the Superadmin API and dashboard (provide a comma-separated list of email addresses matching your identity provider).
+The API resolves the first non-empty value from `CONSOLE_URL`, `DASHBOARD_URL`, and `APP_CONSOLE_URL` to build links in transactional emails. Configure `SUPPORT_EMAIL` to surface a contact address in email footers. `SUPERADMIN_EMAILS` grants system-wide access to the Superadmin API and dashboard (provide a comma-separated list of email addresses matching your identity provider). For self-hosted deployments, these are superadmins. For Obiente Cloud managed deployments, this refers to The Obiente Cloud Team. Set `SELF_HOSTED=true` to indicate this is a self-hosted deployment. Set `BILLING_ENABLED=false` to disable all billing functionality (hides billing pages, disables payment processing, and ignores webhooks).
 
 ### Orchestration
 
@@ -181,13 +184,13 @@ The API resolves the first non-empty value from `CONSOLE_URL`, `DASHBOARD_URL`, 
 
 ### Metrics Database Configuration
 
-| Variable              | Type   | Default                      | Required |
-| --------------------- | ------ | ---------------------------- | -------- |
-| `METRICS_DB_HOST`     | string | `timescaledb`                | ❌       |
-| `METRICS_DB_PORT`     | number | `5432`                       | ❌       |
-| `METRICS_DB_USER`     | string | `POSTGRES_USER` or `postgres`| ❌       |
-| `METRICS_DB_PASSWORD` | string | `POSTGRES_PASSWORD` or `postgres` | ❌ |
-| `METRICS_DB_NAME`     | string | `obiente_metrics`            | ❌       |
+| Variable              | Type   | Default                           | Required |
+| --------------------- | ------ | --------------------------------- | -------- |
+| `METRICS_DB_HOST`     | string | `timescaledb`                     | ❌       |
+| `METRICS_DB_PORT`     | number | `5432`                            | ❌       |
+| `METRICS_DB_USER`     | string | `POSTGRES_USER` or `postgres`     | ❌       |
+| `METRICS_DB_PASSWORD` | string | `POSTGRES_PASSWORD` or `postgres` | ❌       |
+| `METRICS_DB_NAME`     | string | `obiente_metrics`                 | ❌       |
 
 **Notes:**
 
@@ -197,15 +200,15 @@ The API resolves the first non-empty value from `CONSOLE_URL`, `DASHBOARD_URL`, 
 
 ### Metrics Collection Configuration
 
-| Variable                            | Type         | Default     | Required | Description                                    |
-| ---------------------------------- | ------------ | ----------- | -------- | ---------------------------------------------- |
-| `METRICS_COLLECTION_INTERVAL`      | duration     | `5s`        | ❌       | How often to collect metrics from containers   |
-| `METRICS_STORAGE_INTERVAL`         | duration     | `60s`       | ❌       | How often to batch write metrics to database  |
-| `METRICS_LIVE_RETENTION`           | duration     | `5m`        | ❌       | How long to keep live metrics in memory       |
-| `METRICS_MAX_WORKERS`              | number       | `50`        | ❌       | Max parallel workers for stats collection      |
-| `METRICS_BATCH_SIZE`               | number       | `100`       | ❌       | Batch size for database writes                |
-| `METRICS_MAX_LIVE_PER_DEPLOYMENT`  | number       | `1000`      | ❌       | Max metrics to keep in memory per deployment   |
-| `METRICS_MAX_PREVIOUS_STATS`       | number       | `10000`     | ❌       | Max container stats to cache for delta calc    |
+| Variable                          | Type     | Default | Required | Description                                  |
+| --------------------------------- | -------- | ------- | -------- | -------------------------------------------- |
+| `METRICS_COLLECTION_INTERVAL`     | duration | `5s`    | ❌       | How often to collect metrics from containers |
+| `METRICS_STORAGE_INTERVAL`        | duration | `60s`   | ❌       | How often to batch write metrics to database |
+| `METRICS_LIVE_RETENTION`          | duration | `5m`    | ❌       | How long to keep live metrics in memory      |
+| `METRICS_MAX_WORKERS`             | number   | `50`    | ❌       | Max parallel workers for stats collection    |
+| `METRICS_BATCH_SIZE`              | number   | `100`   | ❌       | Batch size for database writes               |
+| `METRICS_MAX_LIVE_PER_DEPLOYMENT` | number   | `1000`  | ❌       | Max metrics to keep in memory per deployment |
+| `METRICS_MAX_PREVIOUS_STATS`      | number   | `10000` | ❌       | Max container stats to cache for delta calc  |
 
 **Duration Format:**
 
@@ -229,12 +232,12 @@ METRICS_MAX_WORKERS=100
 
 ### Metrics Docker API Configuration
 
-| Variable                              | Type         | Default     | Required | Description                              |
-| ------------------------------------- | ------------ | ----------- | -------- | ---------------------------------------- |
-| `METRICS_DOCKER_API_TIMEOUT`          | duration     | `10s`       | ❌       | Timeout for Docker API calls             |
-| `METRICS_DOCKER_API_RETRY_MAX`        | number       | `3`         | ❌       | Max retry attempts for failed API calls  |
-| `METRICS_DOCKER_API_RETRY_BACKOFF_INITIAL` | duration  | `1s`        | ❌       | Initial backoff delay for retries        |
-| `METRICS_DOCKER_API_RETRY_BACKOFF_MAX` | duration     | `30s`       | ❌       | Maximum backoff delay for retries         |
+| Variable                                   | Type     | Default | Required | Description                             |
+| ------------------------------------------ | -------- | ------- | -------- | --------------------------------------- |
+| `METRICS_DOCKER_API_TIMEOUT`               | duration | `10s`   | ❌       | Timeout for Docker API calls            |
+| `METRICS_DOCKER_API_RETRY_MAX`             | number   | `3`     | ❌       | Max retry attempts for failed API calls |
+| `METRICS_DOCKER_API_RETRY_BACKOFF_INITIAL` | duration | `1s`    | ❌       | Initial backoff delay for retries       |
+| `METRICS_DOCKER_API_RETRY_BACKOFF_MAX`     | duration | `30s`   | ❌       | Maximum backoff delay for retries       |
 
 **Example:**
 
@@ -249,11 +252,11 @@ METRICS_DOCKER_API_RETRY_BACKOFF_INITIAL=500ms
 
 ### Metrics Circuit Breaker Configuration
 
-| Variable                                  | Type         | Default | Required | Description                                    |
-| ----------------------------------------- | ------------ | ------- | -------- | ---------------------------------------------- |
-| `METRICS_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | number     | `5`     | ❌       | Failures before opening circuit               |
-| `METRICS_CIRCUIT_BREAKER_COOLDOWN`        | duration     | `1m`    | ❌       | Cooldown period before attempting half-open    |
-| `METRICS_CIRCUIT_BREAKER_HALFOPEN_MAX`    | number       | `3`     | ❌       | Successful calls needed to close circuit       |
+| Variable                                    | Type     | Default | Required | Description                                 |
+| ------------------------------------------- | -------- | ------- | -------- | ------------------------------------------- |
+| `METRICS_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | number   | `5`     | ❌       | Failures before opening circuit             |
+| `METRICS_CIRCUIT_BREAKER_COOLDOWN`          | duration | `1m`    | ❌       | Cooldown period before attempting half-open |
+| `METRICS_CIRCUIT_BREAKER_HALFOPEN_MAX`      | number   | `3`     | ❌       | Successful calls needed to close circuit    |
 
 **Circuit Breaker States:**
 
@@ -273,10 +276,10 @@ METRICS_CIRCUIT_BREAKER_COOLDOWN=5m
 
 ### Metrics Health Check Configuration
 
-| Variable                           | Type         | Default | Required | Description                              |
-| ---------------------------------- | ------------ | ------- | -------- | ---------------------------------------- |
-| `METRICS_HEALTH_CHECK_INTERVAL`    | duration     | `30s`   | ❌       | How often to run health checks           |
-| `METRICS_HEALTH_CHECK_FAILURE_THRESHOLD` | number | `3`     | ❌       | Consecutive failures before unhealthy     |
+| Variable                                 | Type     | Default | Required | Description                           |
+| ---------------------------------------- | -------- | ------- | -------- | ------------------------------------- |
+| `METRICS_HEALTH_CHECK_INTERVAL`          | duration | `30s`   | ❌       | How often to run health checks        |
+| `METRICS_HEALTH_CHECK_FAILURE_THRESHOLD` | number   | `3`     | ❌       | Consecutive failures before unhealthy |
 
 **Example:**
 
@@ -290,11 +293,11 @@ METRICS_HEALTH_CHECK_FAILURE_THRESHOLD=2
 
 ### Metrics Backpressure & Subscriber Configuration
 
-| Variable                        | Type         | Default | Required | Description                              |
-| ------------------------------- | ------------ | ------- | -------- | ---------------------------------------- |
-| `METRICS_SUBSCRIBER_BUFFER_SIZE` | number       | `100`   | ❌       | Buffer size for subscriber channels      |
-| `METRICS_SUBSCRIBER_SLOW_THRESHOLD` | duration     | `5s`    | ❌       | Time before marking subscriber as slow   |
-| `METRICS_SUBSCRIBER_CLEANUP_INTERVAL` | duration | `1m`   | ❌       | How often to cleanup dead subscribers    |
+| Variable                              | Type     | Default | Required | Description                            |
+| ------------------------------------- | -------- | ------- | -------- | -------------------------------------- |
+| `METRICS_SUBSCRIBER_BUFFER_SIZE`      | number   | `100`   | ❌       | Buffer size for subscriber channels    |
+| `METRICS_SUBSCRIBER_SLOW_THRESHOLD`   | duration | `5s`    | ❌       | Time before marking subscriber as slow |
+| `METRICS_SUBSCRIBER_CLEANUP_INTERVAL` | duration | `1m`    | ❌       | How often to cleanup dead subscribers  |
 
 **Example:**
 
@@ -309,11 +312,11 @@ METRICS_SUBSCRIBER_CLEANUP_INTERVAL=30s
 
 ### Metrics Retry Queue Configuration
 
-| Variable                   | Type         | Default | Required | Description                              |
-| -------------------------- | ------------ | ------- | -------- | ---------------------------------------- |
-| `METRICS_RETRY_MAX_RETRIES` | number       | `5`     | ❌       | Max retries for failed database writes   |
-| `METRICS_RETRY_INTERVAL`   | duration     | `1m`    | ❌       | Interval between retry attempts          |
-| `METRICS_RETRY_MAX_QUEUE_SIZE` | number   | `10000` | ❌       | Max size of retry queue                  |
+| Variable                       | Type     | Default | Required | Description                            |
+| ------------------------------ | -------- | ------- | -------- | -------------------------------------- |
+| `METRICS_RETRY_MAX_RETRIES`    | number   | `5`     | ❌       | Max retries for failed database writes |
+| `METRICS_RETRY_INTERVAL`       | duration | `1m`    | ❌       | Interval between retry attempts        |
+| `METRICS_RETRY_MAX_QUEUE_SIZE` | number   | `10000` | ❌       | Max size of retry queue                |
 
 **Example:**
 
@@ -342,22 +345,24 @@ ACME_EMAIL=admin@obiente.cloud
 
 ### DNS Configuration
 
-| Variable     | Type   | Default | Required | Description                                      |
-| ------------ | ------ | ------- | -------- | ------------------------------------------------ |
+| Variable      | Type   | Default | Required | Description                                                                                |
+| ------------- | ------ | ------- | -------- | ------------------------------------------------------------------------------------------ |
 | `TRAEFIK_IPS` | string | -       | ✅       | Traefik IPs per region (format: `"region1:ip1,ip2;region2:ip3,ip4"` or simple `"ip1,ip2"`) |
-| `DNS_IPS`    | string | -       | ❌       | DNS server IPs (comma-separated) for nameserver configuration |
-| `DNS_PORT`   | number | `53`    | ❌       | DNS server port (use different port if 53 is in use) |
+| `DNS_IPS`     | string | -       | ❌       | DNS server IPs (comma-separated) for nameserver configuration                              |
+| `DNS_PORT`    | number | `53`    | ❌       | DNS server port (use different port if 53 is in use)                                       |
 
 **TRAEFIK_IPS Format:**
 
 Two formats are supported:
 
 **Simple format** (single IP or comma-separated IPs, defaults to "default" region):
+
 ```
 ip1,ip2
 ```
 
 **Multi-region format**:
+
 ```
 region1:ip1,ip2;region2:ip3,ip4
 ```
@@ -426,10 +431,10 @@ SECRET=<generated_value>
 
 ### Stripe Payment Processing
 
-| Variable                         | Type   | Default | Required     |
-| -------------------------------- | ------ | ------- | ------------ |
-| `STRIPE_SECRET_KEY`              | string | -       | ✅ (billing) |
-| `STRIPE_WEBHOOK_SECRET`          | string | -       | ✅ (webhooks) |
+| Variable                             | Type   | Default | Required      |
+| ------------------------------------ | ------ | ------- | ------------- |
+| `STRIPE_SECRET_KEY`                  | string | -       | ✅ (billing)  |
+| `STRIPE_WEBHOOK_SECRET`              | string | -       | ✅ (webhooks) |
 | `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | string | -       | ✅ (frontend) |
 
 **Setup:**
@@ -478,12 +483,12 @@ NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 
 ### Monitoring
 
-| Variable                 | Type   | Default                      | Required     | Description                                    |
-| ------------------------ | ------ | ---------------------------- | ------------ | ---------------------------------------------- |
-| `GRAFANA_PASSWORD`       | string | `admin`                      | ❌           | Grafana admin password                         |
-| `GRAFANA_POSTGRES_HOST`  | string | `postgres` (Swarm)<br>`pgpool` (HA) | ❌ | PostgreSQL service hostname for Grafana datasource |
-| `GRAFANA_METRICS_DB_HOST` | string | `timescaledb` (Swarm)<br>`metrics-pgpool` (HA) | ❌ | TimescaleDB service hostname for Grafana datasource |
-| `ALERT_EMAIL`            | string | `admin@example.com`          | ❌           | Email address for Grafana alert notifications  |
+| Variable                  | Type   | Default                                        | Required | Description                                         |
+| ------------------------- | ------ | ---------------------------------------------- | -------- | --------------------------------------------------- |
+| `GRAFANA_PASSWORD`        | string | `admin`                                        | ❌       | Grafana admin password                              |
+| `GRAFANA_POSTGRES_HOST`   | string | `postgres` (Swarm)<br>`pgpool` (HA)            | ❌       | PostgreSQL service hostname for Grafana datasource  |
+| `GRAFANA_METRICS_DB_HOST` | string | `timescaledb` (Swarm)<br>`metrics-pgpool` (HA) | ❌       | TimescaleDB service hostname for Grafana datasource |
+| `ALERT_EMAIL`             | string | `admin@example.com`                            | ❌       | Email address for Grafana alert notifications       |
 
 **Grafana Configuration:**
 
@@ -494,10 +499,10 @@ Grafana automatically provisions datasources using environment variables. The `G
 
 ### Dashboard Replica Configuration
 
-| Variable                        | Type   | Default | Required | Description                                    |
-| ------------------------------- | ------ | ------- | -------- | ---------------------------------------------- |
-| `DASHBOARD_REPLICAS`            | number | `5`     | ❌       | Number of dashboard replicas to deploy         |
-| `DASHBOARD_MAX_REPLICAS_PER_NODE` | number | `2`   | ❌       | Maximum replicas allowed per node              |
+| Variable                          | Type   | Default | Required | Description                            |
+| --------------------------------- | ------ | ------- | -------- | -------------------------------------- |
+| `DASHBOARD_REPLICAS`              | number | `5`     | ❌       | Number of dashboard replicas to deploy |
+| `DASHBOARD_MAX_REPLICAS_PER_NODE` | number | `2`     | ❌       | Maximum replicas allowed per node      |
 
 **Replica Configuration:**
 
