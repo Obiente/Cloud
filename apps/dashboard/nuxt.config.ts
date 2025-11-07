@@ -35,11 +35,6 @@ export default defineNuxtConfig({
       chunkSizeWarningLimit: 1000,
       minify: "esbuild", // Use esbuild instead of terser for lower memory usage
       rollupOptions: {
-        external: [
-          "packages/proto",
-
-          /^@obiente\/proto/, // or use exact paths like 'packages/proto/src/generated/...'
-        ],
         output: {
           // Manual chunk splitting to reduce memory pressure
           manualChunks: (id) => {
@@ -51,10 +46,7 @@ export default defineNuxtConfig({
               if (id.includes("echarts") || id.includes("vue-echarts")) {
                 return "charts";
               }
-              if (id.includes("@ark-ui")) {
-                return "ark-ui";
-              }
-              // Group other large dependencies
+
               return "vendor";
             }
           },
