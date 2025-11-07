@@ -165,5 +165,14 @@ export default defineNuxtConfig({
       wasm: true,
       websocket: true,
     },
+    // Optimize Nitro build to reduce memory usage
+    minify: true,
+    sourceMap: false, // Disable source maps to reduce memory usage during build
+    rollupConfig: {
+      output: {
+        chunkFileNames: "chunks/[name]-[hash].js",
+        entryFileNames: "entry-[hash].js",
+      },
+    },
   },
 });
