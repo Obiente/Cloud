@@ -488,11 +488,21 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 				// Generate Traefik labels for this service
 				traefikLabels := generateTraefikLabels(deploymentID, serviceName, routings, servicePort)
 
-				// Get or create labels map for this service
+				// For Docker Swarm mode, Traefik requires labels to be in deploy.labels, not top-level labels
+				// Get or create deploy section
+				var deploy map[string]interface{}
+				if existingDeploy, ok := service["deploy"].(map[string]interface{}); ok {
+					deploy = existingDeploy
+				} else {
+					deploy = make(map[string]interface{})
+					service["deploy"] = deploy
+				}
+
+				// Get or create labels map under deploy.labels
 				var labels map[string]interface{}
-				if existingLabels, ok := service["labels"].(map[string]interface{}); ok {
+				if existingLabels, ok := deploy["labels"].(map[string]interface{}); ok {
 					labels = existingLabels
-				} else if existingLabelsList, ok := service["labels"].([]interface{}); ok {
+				} else if existingLabelsList, ok := deploy["labels"].([]interface{}); ok {
 					// Convert list format to map format
 					labels = make(map[string]interface{})
 					for _, labelItem := range existingLabelsList {
@@ -516,7 +526,8 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 				for key := range labels {
 					if strings.HasPrefix(key, "traefik.http.routers.") ||
 						strings.HasPrefix(key, "traefik.http.services.") ||
-						key == "traefik.enable" {
+						key == "traefik.enable" ||
+						key == "cloud.obiente.traefik" {
 						traefikKeysToRemove = append(traefikKeysToRemove, key)
 					}
 				}
@@ -541,8 +552,8 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 					labels["cloud.obiente.domain"] = deploymentDomain
 				}
 
-				// Update service with labels
-				service["labels"] = labels
+				// Update deploy.labels (required for Swarm mode Traefik discovery)
+				deploy["labels"] = labels
 			}
 		}
 	}
