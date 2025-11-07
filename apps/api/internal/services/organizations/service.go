@@ -1112,29 +1112,76 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		// Get plan details
 		var plan database.OrganizationPlan
 		if err := database.DB.First(&plan, "id = ?", orgQuota.PlanID).Error; err == nil {
+			// Get effective limits: use overrides if set, but cap them to plan limits
+			// Plan limits are the final boundary - org overrides cannot exceed them
 			cpuLimit := plan.CPUCores
-			if orgQuota.CPUCoresOverride != nil && *orgQuota.CPUCoresOverride > 0 {
-				cpuLimit = *orgQuota.CPUCoresOverride
+			if orgQuota.CPUCoresOverride != nil {
+				overrideCPU := *orgQuota.CPUCoresOverride
+				if overrideCPU > 0 {
+					// Cap override to plan limit (plan limit is the maximum)
+					if plan.CPUCores > 0 && overrideCPU > plan.CPUCores {
+						cpuLimit = plan.CPUCores
+					} else {
+						cpuLimit = overrideCPU
+					}
+				}
+				// If override is 0, keep plan limit (0 means use plan default, not unlimited)
 			}
 			
 			memoryLimit := plan.MemoryBytes
-			if orgQuota.MemoryBytesOverride != nil && *orgQuota.MemoryBytesOverride > 0 {
-				memoryLimit = *orgQuota.MemoryBytesOverride
+			if orgQuota.MemoryBytesOverride != nil {
+				overrideMem := *orgQuota.MemoryBytesOverride
+				if overrideMem > 0 {
+					// Cap override to plan limit (plan limit is the maximum)
+					if plan.MemoryBytes > 0 && overrideMem > plan.MemoryBytes {
+						memoryLimit = plan.MemoryBytes
+					} else {
+						memoryLimit = overrideMem
+					}
+				}
+				// If override is 0, keep plan limit (0 means use plan default, not unlimited)
 			}
 			
 			bandwidthLimit := plan.BandwidthBytesMonth
-			if orgQuota.BandwidthBytesMonthOverride != nil && *orgQuota.BandwidthBytesMonthOverride > 0 {
-				bandwidthLimit = *orgQuota.BandwidthBytesMonthOverride
+			if orgQuota.BandwidthBytesMonthOverride != nil {
+				overrideBandwidth := *orgQuota.BandwidthBytesMonthOverride
+				if overrideBandwidth > 0 {
+					// Cap override to plan limit (plan limit is the maximum)
+					if plan.BandwidthBytesMonth > 0 && overrideBandwidth > plan.BandwidthBytesMonth {
+						bandwidthLimit = plan.BandwidthBytesMonth
+					} else {
+						bandwidthLimit = overrideBandwidth
+					}
+				}
+				// If override is 0, keep plan limit (0 means use plan default, not unlimited)
 			}
 			
 			storageLimit := plan.StorageBytes
-			if orgQuota.StorageBytesOverride != nil && *orgQuota.StorageBytesOverride > 0 {
-				storageLimit = *orgQuota.StorageBytesOverride
+			if orgQuota.StorageBytesOverride != nil {
+				overrideStorage := *orgQuota.StorageBytesOverride
+				if overrideStorage > 0 {
+					// Cap override to plan limit (plan limit is the maximum)
+					if plan.StorageBytes > 0 && overrideStorage > plan.StorageBytes {
+						storageLimit = plan.StorageBytes
+					} else {
+						storageLimit = overrideStorage
+					}
+				}
+				// If override is 0, keep plan limit (0 means use plan default, not unlimited)
 			}
 			
 			deploymentsMax := plan.DeploymentsMax
-			if orgQuota.DeploymentsMaxOverride != nil && *orgQuota.DeploymentsMaxOverride > 0 {
-				deploymentsMax = *orgQuota.DeploymentsMaxOverride
+			if orgQuota.DeploymentsMaxOverride != nil {
+				overrideDeployMax := *orgQuota.DeploymentsMaxOverride
+				if overrideDeployMax > 0 {
+					// Cap override to plan limit (plan limit is the maximum)
+					if plan.DeploymentsMax > 0 && overrideDeployMax > plan.DeploymentsMax {
+						deploymentsMax = plan.DeploymentsMax
+					} else {
+						deploymentsMax = overrideDeployMax
+					}
+				}
+				// If override is 0, keep plan limit (0 means use plan default, not unlimited)
 			}
 
 			// Convert to monthly limits (CPU and Memory are per-second, so multiply by seconds in month)
