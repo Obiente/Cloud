@@ -62,12 +62,41 @@ func New() *ServerInfo {
 	h2cHandler := h2c.NewHandler(mux, &http2.Server{})
 
 	log.Println("[Server] Applying middleware stack...")
-	// Wrap with middleware (order matters: metrics -> logging -> CORS -> handler)
-	handler := h2cHandler
-	handler = metrics.HTTPMetricsMiddleware(handler) // Prometheus metrics first
-	handler = middleware.CORSHandler(handler)
-	handler = middleware.CORSDebugLogger(handler)
-	handler = middleware.RequestLogger(handler)
+	// Apply middleware to h2c handler (for non-WebSocket requests)
+	var h2cWithMiddleware http.Handler = h2cHandler
+	h2cWithMiddleware = metrics.HTTPMetricsMiddleware(h2cWithMiddleware) // Prometheus metrics first
+	h2cWithMiddleware = middleware.CORSHandler(h2cWithMiddleware)
+	h2cWithMiddleware = middleware.CORSDebugLogger(h2cWithMiddleware)
+	h2cWithMiddleware = middleware.RequestLogger(h2cWithMiddleware)
+
+	// Apply middleware to mux for WebSocket requests (CORS is important for WebSocket)
+	var muxWithMiddleware http.Handler = mux
+	muxWithMiddleware = middleware.CORSHandler(muxWithMiddleware) // CORS is needed for WebSocket
+	// Note: We skip RequestLogger and metrics for WebSocket to avoid wrapping ResponseWriter
+	// which can break the Hijacker interface needed for WebSocket upgrades
+
+	// Create a handler that checks for WebSocket upgrades BEFORE middleware
+	// WebSocket requests must bypass h2c and go directly to mux to preserve Hijacker interface
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check if this is a WebSocket upgrade request
+		// WebSocket upgrade requests have:
+		// - Upgrade: websocket header
+		// - Connection header containing "upgrade" (case-insensitive)
+		upgrade := strings.ToLower(strings.TrimSpace(r.Header.Get("Upgrade")))
+		connection := strings.ToLower(r.Header.Get("Connection"))
+		isWebSocket := upgrade == "websocket" && strings.Contains(connection, "upgrade")
+
+		if isWebSocket {
+			// Bypass h2c and most middleware for WebSocket upgrades
+			// Route directly to mux with only CORS middleware (which doesn't wrap ResponseWriter)
+			// This preserves the Hijacker interface needed for WebSocket upgrades
+			log.Printf("[Server] WebSocket upgrade detected for %s %s - bypassing h2c and ResponseWriter-wrapping middleware", r.Method, r.URL.Path)
+			muxWithMiddleware.ServeHTTP(w, r)
+		} else {
+			// Use h2c with full middleware stack for all other requests
+			h2cWithMiddleware.ServeHTTP(w, r)
+		}
+	})
 
 	log.Println("[Server] Handler chain complete")
 	return &ServerInfo{

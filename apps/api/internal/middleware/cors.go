@@ -51,6 +51,13 @@ func DefaultCORSConfig() *CORSConfig {
 			"Origin",
 			"X-Requested-With",
 			"X-CSRF-Token",
+			// WebSocket headers
+			"Upgrade",
+			"Connection",
+			"Sec-WebSocket-Key",
+			"Sec-WebSocket-Version",
+			"Sec-WebSocket-Protocol",
+			"Sec-WebSocket-Extensions",
 			// Connect-RPC specific headers
 			"Connect-Protocol-Version",
 			"Connect-Timeout-Ms",

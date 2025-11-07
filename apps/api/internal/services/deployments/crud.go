@@ -228,6 +228,30 @@ func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploy
 				}
 			}
 		}
+		
+		// Get health status from Docker containers
+		healthStatus, err := s.getDeploymentHealthStatus(ctx, deploymentID)
+		if err == nil && healthStatus != "" {
+			deployment.HealthStatus = healthStatus
+			// Optionally update DB to keep it in sync (async to not block response)
+			go func() {
+				if err := s.repo.UpdateHealthStatus(context.Background(), deploymentID, healthStatus); err != nil {
+					log.Printf("[GetDeployment] Failed to sync health status: %v", err)
+				}
+			}()
+		}
+	} else {
+		// For image-based deployments, also check health status
+		healthStatus, err := s.getDeploymentHealthStatus(ctx, deploymentID)
+		if err == nil && healthStatus != "" {
+			deployment.HealthStatus = healthStatus
+			// Optionally update DB to keep it in sync (async to not block response)
+			go func() {
+				if err := s.repo.UpdateHealthStatus(context.Background(), deploymentID, healthStatus); err != nil {
+					log.Printf("[GetDeployment] Failed to sync health status: %v", err)
+				}
+			}()
+		}
 	}
 	
 	res := connect.NewResponse(&deploymentsv1.GetDeploymentResponse{Deployment: deployment})

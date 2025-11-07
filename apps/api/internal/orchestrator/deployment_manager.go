@@ -449,6 +449,17 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 		return "", fmt.Errorf("failed to parse compose YAML: %w", err)
 	}
 
+	// Detect if we're in Swarm mode using ENABLE_SWARM environment variable
+	// In Swarm mode, labels must be in deploy.labels
+	// In non-Swarm mode, labels must be at the top-level labels
+	enableSwarm := os.Getenv("ENABLE_SWARM")
+	isSwarmMode := enableSwarm == "true" || enableSwarm == "1"
+	if isSwarmMode {
+		logger.Debug("[DeploymentManager] ENABLE_SWARM=true - labels will be placed in deploy.labels")
+	} else {
+		logger.Debug("[DeploymentManager] ENABLE_SWARM=false or not set - labels will be placed at top-level")
+	}
+
 	// Get deployment domain from routings if available
 	var deploymentDomain string
 	if len(routings) > 0 {
@@ -488,72 +499,286 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 				// Generate Traefik labels for this service
 				traefikLabels := generateTraefikLabels(deploymentID, serviceName, routings, servicePort)
 
-				// For Docker Swarm mode, Traefik requires labels to be in deploy.labels, not top-level labels
-				// Get or create deploy section
-				var deploy map[string]interface{}
-				if existingDeploy, ok := service["deploy"].(map[string]interface{}); ok {
-					deploy = existingDeploy
-				} else {
-					deploy = make(map[string]interface{})
-					service["deploy"] = deploy
+				// When Traefik handles routing, we should not expose ports to the host
+				// Convert ports to expose (internal network only) if Traefik labels are present
+				if len(traefikLabels) > 0 {
+					// Check if service has ports that should be converted to expose
+					if ports, ok := service["ports"].([]interface{}); ok && len(ports) > 0 {
+						// Extract container ports from ports mapping
+						exposedPorts := []interface{}{}
+						for _, port := range ports {
+							var containerPort string
+							switch v := port.(type) {
+							case string:
+								// Format: "host:container" or "container" or "container/protocol"
+								if strings.Contains(v, ":") {
+									parts := strings.SplitN(v, ":", 2)
+									if len(parts) == 2 {
+										containerPort = strings.TrimSpace(parts[1])
+									}
+								} else {
+									containerPort = v
+								}
+							case map[string]interface{}:
+								// Port mapping object format
+								if target, ok := v["target"].(int); ok {
+									containerPort = strconv.Itoa(target)
+								} else if published, ok := v["published"].(int); ok {
+									containerPort = strconv.Itoa(published)
+								}
+							}
+							if containerPort != "" {
+								exposedPorts = append(exposedPorts, containerPort)
+							}
+						}
+
+						// Remove ports and add expose instead (internal network only)
+						delete(service, "ports")
+						if len(exposedPorts) > 0 {
+							// Merge with existing expose if present
+							var existingExpose []interface{}
+							if existing, ok := service["expose"].([]interface{}); ok {
+								existingExpose = existing
+							}
+							// Combine and deduplicate
+							exposeMap := make(map[string]bool)
+							for _, p := range existingExpose {
+								if portStr, ok := p.(string); ok {
+									exposeMap[portStr] = true
+								}
+							}
+							for _, p := range exposedPorts {
+								if portStr, ok := p.(string); ok {
+									exposeMap[portStr] = true
+								}
+							}
+							// Convert back to list
+							finalExpose := []interface{}{}
+							for port := range exposeMap {
+								finalExpose = append(finalExpose, port)
+							}
+							if len(finalExpose) > 0 {
+								service["expose"] = finalExpose
+								logger.Info("[DeploymentManager] Converted ports to expose for service %s (Traefik routing - no host port exposure)", serviceName)
+							}
+						}
+					}
 				}
 
-				// Get or create labels map under deploy.labels
-				var labels map[string]interface{}
-				if existingLabels, ok := deploy["labels"].(map[string]interface{}); ok {
-					labels = existingLabels
-				} else if existingLabelsList, ok := deploy["labels"].([]interface{}); ok {
-					// Convert list format to map format
-					labels = make(map[string]interface{})
-					for _, labelItem := range existingLabelsList {
-						if labelStr, ok := labelItem.(string); ok {
-							// Parse "key=value" or "key: value" format
-							if strings.Contains(labelStr, "=") {
-								parts := strings.SplitN(labelStr, "=", 2)
-								if len(parts) == 2 {
-									labels[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+				// Determine the health check port - ALWAYS use routing target port if available
+				// Never use compose file port as it may be a default value
+				var healthCheckPort *int
+				routingPortUsed := false
+				
+				if len(routings) > 0 {
+					// Find routing for this service
+					// Service name matching: exact match, or "default" service matches routing with ServiceName="default" or ""
+					for _, routing := range routings {
+						serviceMatches := routing.ServiceName == serviceName ||
+							(serviceName == "default" && (routing.ServiceName == "" || routing.ServiceName == "default")) ||
+							(routing.ServiceName == "default" && serviceName == "")
+						
+						if serviceMatches {
+							if routing.TargetPort > 0 {
+								healthCheckPort = &routing.TargetPort
+								routingPortUsed = true
+								logger.Info("[DeploymentManager] Using routing target port %d for health check (service: %s, routing service: %s, domain: %s)", routing.TargetPort, serviceName, routing.ServiceName, routing.Domain)
+								break
+							}
+						}
+					}
+					
+					// If no matching service found but we have routings, use first routing's target port as fallback
+					if !routingPortUsed && len(routings) > 0 && routings[0].TargetPort > 0 {
+						healthCheckPort = &routings[0].TargetPort
+						routingPortUsed = true
+						logger.Info("[DeploymentManager] No exact service match found, using first routing's target port %d for health check (service: %s, routing service: %s)", routings[0].TargetPort, serviceName, routings[0].ServiceName)
+					}
+				}
+				
+				// Only fall back to compose file port if no routing found at all
+				if healthCheckPort == nil && servicePort != nil && *servicePort > 0 {
+					healthCheckPort = servicePort
+					logger.Debug("[DeploymentManager] Health check will use compose file port: %d (no routing found)", *servicePort)
+				}
+
+				// If we still don't have a port, try to extract from expose (after ports conversion)
+				if healthCheckPort == nil {
+					if expose, ok := service["expose"].([]interface{}); ok && len(expose) > 0 {
+						// Check exposed ports
+						if portStr, ok := expose[0].(string); ok {
+							// Remove protocol if present (e.g., "4321/tcp" -> "4321")
+							portStr = strings.Split(portStr, "/")[0]
+							if p, err := strconv.Atoi(portStr); err == nil && p > 0 {
+								healthCheckPort = &p
+								logger.Debug("[DeploymentManager] Health check will use exposed port: %d (no routing found)", p)
+							}
+						}
+					}
+				}
+
+				// Inject health check if we have a port and no existing health check
+				// Health checks are important for Traefik to know when services are ready
+				// Without health checks, containers may stay in "starting" status even when running
+				if healthCheckPort != nil {
+					// Check if health check already exists
+					_, hasHealthcheck := service["healthcheck"]
+					if !hasHealthcheck {
+						// Add health check configuration using netcat (nc) - smallest tool for TCP port checks
+						// Netcat is much lighter than curl/wget since we only need to check if port is listening
+						// Try netcat first, if not found install it (supports Alpine, Debian/Ubuntu, and CentOS/RHEL)
+						// Uses TCP connection test: nc -z localhost PORT (returns 0 if port is open)
+						healthcheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, *healthCheckPort, *healthCheckPort)
+						healthcheck := map[string]interface{}{
+							"test":        []interface{}{"CMD-SHELL", healthcheckCmd},
+							"interval":    "30s",
+							"timeout":     "10s",
+							"retries":     3,
+							"start_period": "40s", // Give container time to start before health checks begin
+						}
+						service["healthcheck"] = healthcheck
+						logger.Info("[DeploymentManager] Added health check for service %s on port %d - using netcat for TCP port check", serviceName, *healthCheckPort)
+					} else {
+						logger.Debug("[DeploymentManager] Service %s already has a health check, skipping", serviceName)
+					}
+				} else {
+					logger.Warn("[DeploymentManager] Cannot add health check for service %s - no port found (servicePort=%v, routings=%d)", serviceName, servicePort, len(routings))
+				}
+
+				// Ensure netcat is available by adding environment variables for nixpacks/railpacks
+				// These env vars tell the build system to install netcat (only if we added a health check)
+				if healthCheckPort != nil {
+					var env map[string]interface{}
+					if existingEnv, ok := service["environment"].(map[string]interface{}); ok {
+						env = existingEnv
+					} else if existingEnvList, ok := service["environment"].([]interface{}); ok {
+						// Convert list format to map format
+						env = make(map[string]interface{})
+						for _, envItem := range existingEnvList {
+							if envStr, ok := envItem.(string); ok {
+								if strings.Contains(envStr, "=") {
+									parts := strings.SplitN(envStr, "=", 2)
+									if len(parts) == 2 {
+										env[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+									}
+								}
+							}
+						}
+					} else {
+						env = make(map[string]interface{})
+					}
+
+					// Add nixpacks/railpacks environment variables to ensure netcat is installed
+					// Only add if not already set (don't override user's custom values)
+					// NIXPACKS_APT_PKGS is for Apt packages (netcat-openbsd is an apt package)
+					if _, exists := env["NIXPACKS_APT_PKGS"]; !exists {
+						env["NIXPACKS_APT_PKGS"] = "netcat-openbsd"
+					}
+					// RAILPACK_DEPLOY_APT_PACKAGES installs packages in the final image (what we need for health checks)
+					if _, exists := env["RAILPACK_DEPLOY_APT_PACKAGES"]; !exists {
+						env["RAILPACK_DEPLOY_APT_PACKAGES"] = "netcat-openbsd"
+					}
+
+					// Update environment in service
+					service["environment"] = env
+					logger.Debug("[DeploymentManager] Added netcat installation env vars for service %s (NIXPACKS_APT_PKGS, RAILPACK_DEPLOY_APT_PACKAGES)", serviceName)
+				}
+
+				// Helper function to get or create labels map from various formats
+				getLabelsMap := func(labelsValue interface{}) map[string]interface{} {
+					labels := make(map[string]interface{})
+					if labelsValue == nil {
+						return labels
+					}
+					if existingLabels, ok := labelsValue.(map[string]interface{}); ok {
+						labels = existingLabels
+					} else if existingLabelsList, ok := labelsValue.([]interface{}); ok {
+						// Convert list format to map format
+						for _, labelItem := range existingLabelsList {
+							if labelStr, ok := labelItem.(string); ok {
+								// Parse "key=value" or "key: value" format
+								if strings.Contains(labelStr, "=") {
+									parts := strings.SplitN(labelStr, "=", 2)
+									if len(parts) == 2 {
+										labels[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+									}
 								}
 							}
 						}
 					}
-				} else {
-					labels = make(map[string]interface{})
+					return labels
 				}
 
-				// Remove old Traefik labels that might conflict (e.g., TLS labels for HTTP-only services)
-				// We'll rebuild all Traefik labels from scratch based on current routing rules
-				traefikKeysToRemove := []string{}
-				for key := range labels {
-					if strings.HasPrefix(key, "traefik.http.routers.") ||
-						strings.HasPrefix(key, "traefik.http.services.") ||
-						key == "traefik.enable" ||
-						key == "cloud.obiente.traefik" {
-						traefikKeysToRemove = append(traefikKeysToRemove, key)
+				// Remove old Traefik labels that might conflict
+				removeTraefikLabels := func(labels map[string]interface{}) {
+					traefikKeysToRemove := []string{}
+					for key := range labels {
+						if strings.HasPrefix(key, "traefik.http.routers.") ||
+							strings.HasPrefix(key, "traefik.http.services.") ||
+							key == "traefik.enable" ||
+							key == "cloud.obiente.traefik" {
+							traefikKeysToRemove = append(traefikKeysToRemove, key)
+						}
+					}
+					for _, key := range traefikKeysToRemove {
+						delete(labels, key)
 					}
 				}
-				for _, key := range traefikKeysToRemove {
-					delete(labels, key)
+
+				// Add Traefik and management labels
+				addLabels := func(labels map[string]interface{}) {
+					// Merge new Traefik labels (Traefik labels take precedence)
+					for k, v := range traefikLabels {
+						labels[k] = v
+					}
+
+					// Add management labels
+					labels["cloud.obiente.managed"] = "true"
+					labels["cloud.obiente.deployment_id"] = deploymentID
+					labels["cloud.obiente.service_name"] = serviceName
+					// Only set cloud.obiente.traefik if Traefik labels were generated (i.e., routing rules exist)
+					if len(traefikLabels) > 0 {
+						labels["cloud.obiente.traefik"] = "true" // Required for Traefik discovery
+					}
+					if deploymentDomain != "" {
+						labels["cloud.obiente.domain"] = deploymentDomain
+					}
 				}
 
-				// Merge new Traefik labels (Traefik labels take precedence)
-				for k, v := range traefikLabels {
-					labels[k] = v
-				}
+				if isSwarmMode {
+					// For Docker Swarm mode, Traefik requires labels to be in deploy.labels
+					// Get or create deploy section
+					var deploy map[string]interface{}
+					if existingDeploy, ok := service["deploy"].(map[string]interface{}); ok {
+						deploy = existingDeploy
+					} else {
+						deploy = make(map[string]interface{})
+						service["deploy"] = deploy
+					}
 
-				// Add management labels
-				labels["cloud.obiente.managed"] = "true"
-				labels["cloud.obiente.deployment_id"] = deploymentID
-				labels["cloud.obiente.service_name"] = serviceName
-				// Only set cloud.obiente.traefik if Traefik labels were generated (i.e., routing rules exist)
-				if len(traefikLabels) > 0 {
-					labels["cloud.obiente.traefik"] = "true" // Required for Traefik discovery
-				}
-				if deploymentDomain != "" {
-					labels["cloud.obiente.domain"] = deploymentDomain
-				}
+					// Get or create labels map under deploy.labels
+					labels := getLabelsMap(deploy["labels"])
+					removeTraefikLabels(labels)
+					addLabels(labels)
 
-				// Update deploy.labels (required for Swarm mode Traefik discovery)
-				deploy["labels"] = labels
+					// Update deploy.labels (required for Swarm mode Traefik discovery)
+					deploy["labels"] = labels
+					if len(traefikLabels) > 0 {
+						logger.Debug("[DeploymentManager] Added %d Traefik labels to deploy.labels for service %s (Swarm mode)", len(traefikLabels), serviceName)
+					}
+				} else {
+					// For non-Swarm mode (Docker Compose), Traefik reads labels from top-level labels
+					// Get or create top-level labels
+					labels := getLabelsMap(service["labels"])
+					removeTraefikLabels(labels)
+					addLabels(labels)
+
+					// Update top-level labels (required for non-Swarm mode Traefik discovery)
+					service["labels"] = labels
+					if len(traefikLabels) > 0 {
+						logger.Debug("[DeploymentManager] Added %d Traefik labels to top-level labels for service %s (non-Swarm mode)", len(traefikLabels), serviceName)
+					}
+				}
 			}
 		}
 	}
@@ -653,14 +878,47 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	}
 
 	// Generate Traefik labels from routing rules
-	// Note: For non-compose deployments, we don't have service port info here, pass nil
-	traefikLabels := generateTraefikLabels(config.DeploymentID, serviceName, routings, nil)
+	// Use config.Port for service port (which should be from routing target port if available)
+	servicePort := config.Port
+	traefikLabels := generateTraefikLabels(config.DeploymentID, serviceName, routings, &servicePort)
 	for k, v := range traefikLabels {
 		labels[k] = v
 	}
 	// Only set cloud.obiente.traefik if we actually generated Traefik labels (i.e., routing rules exist)
 	if len(traefikLabels) > 0 {
 		labels["cloud.obiente.traefik"] = "true" // Required for Traefik discovery
+	}
+
+	// Determine health check port - ALWAYS use routing target port if available
+	// Never use config.Port as it may be a default value
+	healthCheckPort := 0
+	if len(routings) > 0 {
+		// Find routing for this service
+		for _, routing := range routings {
+			if routing.ServiceName == serviceName || (serviceName == "default" && (routing.ServiceName == "" || routing.ServiceName == "default")) {
+				if routing.TargetPort > 0 {
+					healthCheckPort = routing.TargetPort
+					logger.Debug("[DeploymentManager] Using routing target port %d for health check (service: %s)", healthCheckPort, serviceName)
+					break
+				}
+			}
+		}
+		// If no exact match, use first routing's target port
+		if healthCheckPort == 0 && len(routings) > 0 && routings[0].TargetPort > 0 {
+			healthCheckPort = routings[0].TargetPort
+			logger.Debug("[DeploymentManager] Using first routing target port %d for health check (service: %s)", healthCheckPort, serviceName)
+		}
+	}
+	
+	// Fallback to config.Port only if no routing found and config.Port is set
+	if healthCheckPort == 0 && config.Port > 0 {
+		healthCheckPort = config.Port
+		logger.Debug("[DeploymentManager] Using config port %d for health check (no routing found)", healthCheckPort)
+	}
+	
+	// If still no port, we can't add health check
+	if healthCheckPort == 0 {
+		logger.Warn("[DeploymentManager] Cannot determine health check port for service %s - no routing target port or config port available", serviceName)
 	}
 
 	// Add custom labels
@@ -674,35 +932,120 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
 
+	// Ensure netcat is available by adding environment variables for nixpacks/railpacks
+	// These env vars tell the build system to install netcat (only if we need a health check)
+	// Note: These only work if the image is built with Nixpacks/Railpacks
+	// For pre-built images, the health check will install netcat at runtime
+	if healthCheckPort > 0 {
+		// Check if env vars are already set (don't override user's custom values)
+		addedVars := []string{}
+		if _, exists := config.EnvVars["NIXPACKS_APT_PKGS"]; !exists {
+			env = append(env, "NIXPACKS_APT_PKGS=netcat-openbsd")
+			addedVars = append(addedVars, "NIXPACKS_APT_PKGS")
+		}
+		if _, exists := config.EnvVars["RAILPACK_DEPLOY_APT_PACKAGES"]; !exists {
+			// RAILPACK_DEPLOY_APT_PACKAGES installs packages in the final image (what we need for health checks)
+			env = append(env, "RAILPACK_DEPLOY_APT_PACKAGES=netcat-openbsd")
+			addedVars = append(addedVars, "RAILPACK_DEPLOY_APT_PACKAGES")
+		}
+		if len(addedVars) > 0 {
+			logger.Info("[DeploymentManager] Added netcat installation env vars for container %s: %v (these work during build if using Nixpacks/Railpacks; health check will install netcat at runtime if needed)", name, addedVars)
+		} else {
+			logger.Debug("[DeploymentManager] Netcat installation env vars already set by user for container %s", name)
+		}
+	}
+
+	// Determine container port - use routing target port if available, otherwise config.Port
+	containerPortNum := config.Port
+	if len(routings) > 0 {
+		// Find routing for this service
+		for _, routing := range routings {
+			if routing.ServiceName == serviceName || (serviceName == "default" && (routing.ServiceName == "" || routing.ServiceName == "default")) {
+				if routing.TargetPort > 0 {
+					containerPortNum = routing.TargetPort
+					logger.Debug("[DeploymentManager] Using routing target port %d for container port (service: %s)", containerPortNum, serviceName)
+					break
+				}
+			}
+		}
+		// If no exact match, use first routing's target port
+		if containerPortNum == config.Port && len(routings) > 0 && routings[0].TargetPort > 0 {
+			containerPortNum = routings[0].TargetPort
+			logger.Debug("[DeploymentManager] Using first routing target port %d for container port (service: %s)", containerPortNum, serviceName)
+		}
+	}
+
 	// Prepare port bindings
-	// SECURITY: Always use random host ports (HostPort: "0") to prevent users from binding to specific host ports
-	// This prevents port conflicts and unauthorized access to host services
+	// When Traefik handles routing, we should NOT expose ports to the host
+	// Only expose ports internally (no host binding) when Traefik labels are present
 	exposedPorts := nat.PortSet{}
 	portBindings := nat.PortMap{}
 
-	containerPort := nat.Port(fmt.Sprintf("%d/tcp", config.Port))
-	exposedPorts[containerPort] = struct{}{}
-	portBindings[containerPort] = []nat.PortBinding{
-		{
-			HostIP:   "0.0.0.0",
-			HostPort: "0", // SECURITY: Docker assigns random port - users cannot bind to specific host ports
-		},
+	if containerPortNum > 0 {
+		containerPort := nat.Port(fmt.Sprintf("%d/tcp", containerPortNum))
+		exposedPorts[containerPort] = struct{}{}
+		
+		// Only bind to host if Traefik is NOT handling routing
+		// If Traefik labels exist, don't expose to host (Traefik will route internally)
+		if len(traefikLabels) == 0 {
+			// No Traefik routing - expose to host with random port for security
+			portBindings[containerPort] = []nat.PortBinding{
+				{
+					HostIP:   "0.0.0.0",
+					HostPort: "0", // SECURITY: Docker assigns random port - users cannot bind to specific host ports
+				},
+			}
+			logger.Debug("[DeploymentManager] Exposing container port %d to host (random port) - no Traefik routing", containerPortNum)
+		} else {
+			// Traefik handles routing - don't expose to host, only expose internally
+			logger.Info("[DeploymentManager] Not exposing container port %d to host - Traefik will handle routing", containerPortNum)
+		}
+	}
+
+	// Only add health check if we have a valid port from routing
+	// Health check port must be from routing target port, not a default
+	var healthcheck *container.HealthConfig
+	if healthCheckPort > 0 {
+		// Health check command using netcat (nc) - smallest tool for TCP port checks
+		// Netcat is much lighter than curl/wget since we only need to check if port is listening
+		// Try netcat first, if not found install it (supports Alpine, Debian/Ubuntu, and CentOS/RHEL)
+		// Uses TCP connection test: nc -z localhost PORT (returns 0 if port is open)
+		healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, healthCheckPort, healthCheckPort)
+		
+		healthcheck = &container.HealthConfig{
+			Test:        []string{"CMD-SHELL", healthCheckCmd},
+			Interval:    30 * time.Second,
+			Timeout:    10 * time.Second,
+			Retries:    3,
+			StartPeriod: 40 * time.Second, // Give container time to start before health checks begin
+		}
+		logger.Info("[DeploymentManager] Added health check for container %s on port %d (from routing) - using netcat for TCP port check", name, healthCheckPort)
+	} else {
+		logger.Warn("[DeploymentManager] Skipping health check for container %s - no valid port found from routing", name)
 	}
 
 	// Container configuration
 	containerConfig := &container.Config{
 		Image:        config.Image,
-		Env:          env,
+		Env:          env, // Environment variables including NIXPACKS_PKGS/RAILPACK_* if health check is needed
 		Labels:       labels,
 		ExposedPorts: exposedPorts,
 		// Clear ENTRYPOINT to avoid conflicts when overriding CMD
 		Entrypoint: []string{},
-		Healthcheck: &container.HealthConfig{
-			Test:     []string{"CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:" + strconv.Itoa(config.Port) + "/health || exit 1"},
-			Interval: 30 * time.Second,
-			Timeout:  10 * time.Second,
-			Retries:  3,
-		},
+		Healthcheck: healthcheck, // Only set if we have a valid port from routing
+	}
+	
+	// Log environment variables for debugging (only curl-related ones to avoid spam)
+	if healthCheckPort > 0 {
+		curlEnvVars := []string{}
+		for _, e := range env {
+			if strings.Contains(e, "NIXPACKS") || strings.Contains(e, "RAILPACK") {
+				curlEnvVars = append(curlEnvVars, e)
+			}
+		}
+		if len(curlEnvVars) > 0 {
+			logger.Debug("[DeploymentManager] Container %s will have these curl-related env vars: %v", name, curlEnvVars)
+		}
 	}
 
 	// Override container CMD if start command is provided
@@ -801,30 +1144,36 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				image = *deployment.Image
 			}
 			
-			// Get port from routing configuration if available, otherwise use deployment port
-			port := 8080
-			if deployment.Port != nil {
-				port = int(*deployment.Port)
-			}
-			
-			// Check routing configuration for target port (takes precedence)
+			// Get port from routing configuration (required - no default)
+			port := 0
 			routings, routingErr := database.GetDeploymentRoutings(deploymentID)
 			if routingErr == nil && len(routings) > 0 {
-				// Track if we found a routing rule
-				foundRouting := false
 				// Find routing rule for "default" service (or first one if no service name specified)
+				foundRouting := false
 				for _, routing := range routings {
 					if routing.ServiceName == "" || routing.ServiceName == "default" {
-						port = routing.TargetPort
-						logger.Info("[StartDeployment] Using target port %d from routing configuration (default service) for deployment %s", port, deploymentID)
-						foundRouting = true
-						break
+						if routing.TargetPort > 0 {
+							port = routing.TargetPort
+							logger.Info("[StartDeployment] Using target port %d from routing configuration (default service) for deployment %s", port, deploymentID)
+							foundRouting = true
+							break
+						}
 					}
 				}
 				// If no default service routing found, use first routing's target port
-				if !foundRouting {
+				if !foundRouting && len(routings) > 0 && routings[0].TargetPort > 0 {
 					port = routings[0].TargetPort
 					logger.Info("[StartDeployment] Using target port %d from first routing rule for deployment %s", port, deploymentID)
+				}
+			}
+			
+			// Fallback to deployment port only if no routing found
+			if port == 0 {
+				if deployment.Port != nil && *deployment.Port > 0 {
+					port = int(*deployment.Port)
+					logger.Info("[StartDeployment] Using deployment port %d (no routing found) for deployment %s", port, deploymentID)
+				} else {
+					return fmt.Errorf("deployment %s has no port configured in routing rules or deployment settings", deploymentID)
 				}
 			}
 			
@@ -908,30 +1257,37 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 					image = *deployment.Image
 				}
 				
-				// Get port from routing configuration if available, otherwise use deployment port
-				port := 8080
-				if deployment.Port != nil {
-					port = int(*deployment.Port)
-				}
-				
-				// Check routing configuration for target port (takes precedence)
+				// Get port from routing configuration (required - no default)
+				port := 0
 				routings, routingErr := database.GetDeploymentRoutings(deploymentID)
 				if routingErr == nil && len(routings) > 0 {
-					// Track if we found a routing rule
-					foundRouting := false
 					// Find routing rule for "default" service (or first one if no service name specified)
+					foundRouting := false
 					for _, routing := range routings {
 						if routing.ServiceName == "" || routing.ServiceName == "default" {
-							port = routing.TargetPort
-							logger.Info("[StartDeployment] Using target port %d from routing configuration (default service) for deployment %s (recreate)", port, deploymentID)
-							foundRouting = true
-							break
+							if routing.TargetPort > 0 {
+								port = routing.TargetPort
+								logger.Info("[StartDeployment] Using target port %d from routing configuration (default service) for deployment %s (recreate)", port, deploymentID)
+								foundRouting = true
+								break
+							}
 						}
 					}
 					// If no default service routing found, use first routing's target port
-					if !foundRouting {
+					if !foundRouting && len(routings) > 0 && routings[0].TargetPort > 0 {
 						port = routings[0].TargetPort
 						logger.Info("[StartDeployment] Using target port %d from first routing rule for deployment %s (recreate)", port, deploymentID)
+					}
+				}
+				
+				// Fallback to deployment port only if no routing found
+				if port == 0 {
+					if deployment.Port != nil && *deployment.Port > 0 {
+						port = int(*deployment.Port)
+						logger.Info("[StartDeployment] Using deployment port %d (no routing found) for deployment %s (recreate)", port, deploymentID)
+					} else {
+						logger.Warn("[StartDeployment] Deployment %s has no port configured, skipping recreation", deploymentID)
+						continue
 					}
 				}
 				
@@ -1097,71 +1453,147 @@ func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID 
 	return nil
 }
 
-// RestartDeployment restarts all containers for a deployment
+// RestartDeployment restarts all containers for a deployment by recreating them
+// This ensures that configs (labels, health checks, etc.) are updated
 func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID string) error {
-	logger.Info("[DeploymentManager] Restarting deployment %s", deploymentID)
+	logger.Info("[DeploymentManager] Restarting deployment %s (will recreate containers to update configs)", deploymentID)
 
-	// Get all locations (not just running ones) to handle stopped containers
+	// Get deployment from database to check if it's compose-based
+	var deployment database.Deployment
+	if err := database.DB.Where("id = ?", deploymentID).First(&deployment).Error; err != nil {
+		return fmt.Errorf("failed to get deployment from database: %w", err)
+	}
+
+	// For compose deployments, stop and redeploy (which already updates configs)
+	if deployment.ComposeYaml != "" {
+		logger.Info("[DeploymentManager] Compose-based deployment - stopping and redeploying to update configs")
+		_ = dm.StopComposeDeployment(ctx, deploymentID)
+		return dm.DeployComposeFile(ctx, deploymentID, deployment.ComposeYaml)
+	}
+
+	// For image-based deployments, recreate containers with updated configs
+	logger.Info("[DeploymentManager] Image-based deployment - recreating containers to update configs")
+
+	// Get all locations to stop and remove existing containers
 	locations, err := database.GetAllDeploymentLocations(deploymentID)
 	if err != nil {
-		return fmt.Errorf("failed to get deployment locations: %w", err)
+		logger.Warn("[DeploymentManager] Failed to get deployment locations: %v, will proceed with recreation", err)
+		locations = []database.DeploymentLocation{}
 	}
 
-	// If no locations found, try to validate and refresh
-	if len(locations) == 0 {
-		locations, err = database.ValidateAndRefreshLocations(deploymentID)
-		if err != nil {
-			logger.Warn("[DeploymentManager] Failed to validate locations for deployment %s: %v", deploymentID, err)
-		}
-	}
-
-	// Track if we found any containers to restart
-	foundContainers := false
-	restartedCount := 0
-
+	// Stop and remove existing containers on this node
 	for _, location := range locations {
-		// Only restart containers on this node
 		if location.NodeID != dm.nodeID {
 			continue
 		}
 
-		foundContainers = true
-
-		// Check if container exists in Docker
+		// Check if container exists
 		_, err := dm.dockerClient.ContainerInspect(ctx, location.ContainerID)
 		if err != nil {
-			// Container doesn't exist - skip it (will be handled by StartDeployment if needed)
-			logger.Warn("[DeploymentManager] Container %s doesn't exist, skipping restart", location.ContainerID[:12])
+			logger.Debug("[DeploymentManager] Container %s doesn't exist, skipping removal", location.ContainerID[:12])
 			continue
 		}
 
-		timeout := int(30)
-		if err := dm.dockerHelper.RestartContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second); err != nil {
-			logger.Warn("[DeploymentManager] Failed to restart container %s: %v", location.ContainerID[:12], err)
+		// Stop container
+		timeout := 10 * time.Second
+		_ = dm.dockerHelper.StopContainer(ctx, location.ContainerID, timeout)
+
+		// Remove container
+		if err := dm.dockerHelper.RemoveContainer(ctx, location.ContainerID, true); err != nil {
+			logger.Warn("[DeploymentManager] Failed to remove container %s: %v", location.ContainerID[:12], err)
 			continue
 		}
 
-		// Update status
-		database.DB.Model(&database.DeploymentLocation{}).
-			Where("container_id = ?", location.ContainerID).
-			Updates(map[string]interface{}{
-				"status":     "running",
-				"updated_at": time.Now(),
-			})
-
-		restartedCount++
-		logger.Info("[DeploymentManager] Restarted container %s", location.ContainerID[:12])
+		// Unregister from registry
+		_ = dm.registry.UnregisterDeployment(ctx, location.ContainerID)
+		logger.Info("[DeploymentManager] Removed container %s for recreation", location.ContainerID[:12])
 	}
 
-	// If no containers found, try to start the deployment (which will create/start containers)
-	if !foundContainers || restartedCount == 0 {
-		logger.Info("[DeploymentManager] No containers found for restart, attempting to start deployment %s", deploymentID)
-		if err := dm.StartDeployment(ctx, deploymentID); err != nil {
-			return fmt.Errorf("failed to start deployment (no containers to restart): %w", err)
+	// Recreate containers with updated config from database
+	// Parse environment variables from JSON
+	envVars := make(map[string]string)
+	if deployment.EnvVars != "" {
+		if err := json.Unmarshal([]byte(deployment.EnvVars), &envVars); err != nil {
+			logger.Warn("[DeploymentManager] Failed to parse env vars for deployment %s: %v", deploymentID, err)
 		}
-		logger.Info("[DeploymentManager] Successfully started deployment %s after restart attempt", deploymentID)
 	}
 
+	// Get image
+	image := ""
+	if deployment.Image != nil {
+		image = *deployment.Image
+	}
+	if image == "" {
+		return fmt.Errorf("deployment %s has no image configured", deploymentID)
+	}
+
+	// Get port from routing configuration (required - no default)
+	port := 0
+	routings, routingErr := database.GetDeploymentRoutings(deploymentID)
+	if routingErr == nil && len(routings) > 0 {
+		// Find routing rule for "default" service (or first one if no service name specified)
+		foundRouting := false
+		for _, routing := range routings {
+			if routing.ServiceName == "" || routing.ServiceName == "default" {
+				if routing.TargetPort > 0 {
+					port = routing.TargetPort
+					logger.Info("[DeploymentManager] Using target port %d from routing configuration (default service) for restart", port)
+					foundRouting = true
+					break
+				}
+			}
+		}
+		// If no default service routing found, use first routing's target port
+		if !foundRouting && len(routings) > 0 && routings[0].TargetPort > 0 {
+			port = routings[0].TargetPort
+			logger.Info("[DeploymentManager] Using target port %d from first routing rule for restart", port)
+		}
+	}
+	
+	// Fallback to deployment port only if no routing found
+	if port == 0 {
+		if deployment.Port != nil && *deployment.Port > 0 {
+			port = int(*deployment.Port)
+			logger.Info("[DeploymentManager] Using deployment port %d (no routing found) for restart", port)
+		} else {
+			return fmt.Errorf("deployment %s has no port configured in routing rules or deployment settings", deploymentID)
+		}
+	}
+
+	// Get resource limits
+	memory := int64(512 * 1024 * 1024) // Default 512MB
+	if deployment.MemoryBytes != nil {
+		memory = *deployment.MemoryBytes
+	}
+	cpuShares := int64(1024) // Default
+	if deployment.CPUShares != nil {
+		cpuShares = *deployment.CPUShares
+	}
+	replicas := 1 // Default
+	if deployment.Replicas != nil {
+		replicas = int(*deployment.Replicas)
+	}
+
+	// Create deployment config
+	config := &DeploymentConfig{
+		DeploymentID: deploymentID,
+		Image:        image,
+		Domain:       deployment.Domain,
+		Port:         port,
+		EnvVars:      envVars,
+		Labels:       map[string]string{},
+		Memory:       memory,
+		CPUShares:    cpuShares,
+		Replicas:     replicas,
+		StartCommand: deployment.StartCommand,
+	}
+
+	// Recreate containers with updated config
+	if err := dm.CreateDeployment(ctx, config); err != nil {
+		return fmt.Errorf("failed to recreate deployment containers: %w", err)
+	}
+
+	logger.Info("[DeploymentManager] Successfully recreated containers for deployment %s with updated configs", deploymentID)
 	return nil
 }
 
@@ -1275,7 +1707,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 			logger.Info("[DeploymentManager] Found existing default routing for deployment %s, preserving all user settings (port: %d)", deploymentID, existingDefaultRouting.TargetPort)
 		} else {
 			// No existing routing found, try to parse compose file to detect port
-			var targetPort int = 8080
+			var targetPort int = 0
 			// Parse compose to detect exposed ports from first service
 			var compose map[string]interface{}
 			if err := yaml.Unmarshal([]byte(composeYaml), &compose); err == nil {
@@ -1313,26 +1745,30 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 				}
 			}
 
-			// Create default routing for compose deployment
-			defaultRouting := &database.DeploymentRouting{
-				ID:              defaultRoutingID,
-				DeploymentID:    deploymentID,
-				Domain:          "", // Domain can be set later through routing UI
-				ServiceName:     "default",
-				TargetPort:      targetPort,
-				Protocol:        "http",
-				SSLEnabled:      false, // Default to no SSL for HTTP protocol
-				SSLCertResolver: "letsencrypt",
-				Middleware:      "{}",
-				CreatedAt:       time.Now(),
-				UpdatedAt:       time.Now(),
-			}
+			// Only create default routing if we found a port from compose file
+			if targetPort > 0 {
+				defaultRouting := &database.DeploymentRouting{
+					ID:              defaultRoutingID,
+					DeploymentID:    deploymentID,
+					Domain:          "", // Domain can be set later through routing UI
+					ServiceName:     "default",
+					TargetPort:      targetPort,
+					Protocol:        "http",
+					SSLEnabled:      false, // Default to no SSL for HTTP protocol
+					SSLCertResolver: "letsencrypt",
+					Middleware:      "{}",
+					CreatedAt:       time.Now(),
+					UpdatedAt:       time.Now(),
+				}
 
-			if upsertErr := database.UpsertDeploymentRouting(defaultRouting); upsertErr != nil {
-				logger.Warn("[DeploymentManager] Failed to create default routing: %v", upsertErr)
+				if upsertErr := database.UpsertDeploymentRouting(defaultRouting); upsertErr != nil {
+					logger.Warn("[DeploymentManager] Failed to create default routing: %v", upsertErr)
+				} else {
+					routings = []database.DeploymentRouting{*defaultRouting}
+					logger.Info("[DeploymentManager] Created default routing for compose deployment %s (port: %d)", deploymentID, targetPort)
+				}
 			} else {
-				routings = []database.DeploymentRouting{*defaultRouting}
-				logger.Info("[DeploymentManager] Created default routing for compose deployment %s (port: %d)", deploymentID, targetPort)
+				logger.Warn("[DeploymentManager] Could not detect port from compose file for deployment %s - routing must be configured manually", deploymentID)
 			}
 		}
 	}
@@ -1343,7 +1779,11 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 		logger.Warn("[DeploymentManager] Failed to inject Traefik labels into compose YAML for deployment %s: %v. Using sanitized YAML without labels.", deploymentID, err)
 		labeledYaml = sanitizedYaml
 	} else {
-		logger.Info("[DeploymentManager] Injected Traefik labels into compose YAML for deployment %s", deploymentID)
+		logger.Info("[DeploymentManager] Injected Traefik labels into compose YAML for deployment %s (found %d routing rules)", deploymentID, len(routings))
+		// Log a sample of the labels for debugging
+		if len(routings) > 0 {
+			logger.Debug("[DeploymentManager] Sample Traefik labels for deployment %s: traefik.enable=true, cloud.obiente.traefik=true", deploymentID)
+		}
 		sanitizedYaml = labeledYaml
 	}
 
@@ -1382,8 +1822,22 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 	// Note: Docker Compose normalizes project names (lowercase, etc.), but we'll use the label to find containers
 	projectName := fmt.Sprintf("deploy-%s", deploymentID)
 
-	// Run docker compose up -d
-	cmd := exec.CommandContext(ctx, "docker", "compose", "-p", projectName, "-f", composeFile, "up", "-d")
+	// Check if we're in Swarm mode using ENABLE_SWARM environment variable
+	enableSwarm := os.Getenv("ENABLE_SWARM")
+	isSwarmMode := enableSwarm == "true" || enableSwarm == "1"
+
+	// Run docker compose up -d with flags to ensure labels are updated
+	// In Swarm mode, we need to ensure services are updated with new labels
+	args := []string{"compose", "-p", projectName, "-f", composeFile, "up", "-d", "--force-recreate", "--remove-orphans"}
+	if isSwarmMode {
+		// In Swarm mode, also use --pull always to ensure we get latest images and force service updates
+		args = append(args, "--pull", "always")
+		logger.Info("[DeploymentManager] Deploying in Swarm mode (ENABLE_SWARM=true) - will force recreate services with updated labels")
+	} else {
+		logger.Info("[DeploymentManager] Deploying in non-Swarm mode (ENABLE_SWARM=false or not set) - will force recreate containers with updated labels")
+	}
+	
+	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Dir = deployDir
 	var stderr bytes.Buffer
 	var stdout bytes.Buffer
@@ -1505,13 +1959,19 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 			serviceName = "default"
 		}
 
-		// Determine public port
-		publicPort := 8080 // Default
+		// Determine public port from routing (required - no default)
+		publicPort := 0
 		for _, routing := range routings {
 			if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
-				publicPort = routing.TargetPort
-				break
+				if routing.TargetPort > 0 {
+					publicPort = routing.TargetPort
+					break
+				}
 			}
+		}
+		// If no exact match, use first routing's target port
+		if publicPort == 0 && len(routings) > 0 && routings[0].TargetPort > 0 {
+			publicPort = routings[0].TargetPort
 		}
 
 		// Extract port from container info if available

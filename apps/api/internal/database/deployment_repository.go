@@ -142,6 +142,17 @@ func (r *DeploymentRepository) UpdateStatus(ctx context.Context, id string, stat
 		Update("status", status).Error
 }
 
+func (r *DeploymentRepository) UpdateHealthStatus(ctx context.Context, id string, healthStatus string) error {
+	// Clear cache
+	if r.cache != nil {
+		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", id))
+	}
+
+	return r.db.WithContext(ctx).Model(&Deployment{}).
+		Where("id = ?", id).
+		Update("health_status", healthStatus).Error
+}
+
 func (r *DeploymentRepository) UpdateStorage(ctx context.Context, id string, storageBytes int64) error {
 	// Clear cache
 	if r.cache != nil {

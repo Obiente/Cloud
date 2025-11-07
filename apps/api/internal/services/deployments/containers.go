@@ -464,6 +464,84 @@ func (s *Service) getDeploymentContainerStatus(ctx context.Context, deploymentID
 	return runningCount, totalCount, nil
 }
 
+// getDeploymentHealthStatus gets the health status from Docker containers
+// Returns the health status: "none", "starting", "healthy", "unhealthy", or empty string if no health check
+func (s *Service) getDeploymentHealthStatus(ctx context.Context, deploymentID string) (string, error) {
+	dcli, err := docker.New()
+	if err != nil {
+		return "", fmt.Errorf("docker client: %w", err)
+	}
+	defer dcli.Close()
+
+	// Get all locations for this deployment
+	locations, err := database.GetAllDeploymentLocations(deploymentID)
+	if err != nil {
+		// Fallback to validate and refresh if GetAllDeploymentLocations fails
+		locations, err = database.ValidateAndRefreshLocations(deploymentID)
+		if err != nil {
+			return "", fmt.Errorf("failed to get locations: %w", err)
+		}
+	}
+
+	if len(locations) == 0 {
+		return "", nil // No containers, no health status
+	}
+
+	// Check health status of all containers
+	// If any container is unhealthy, deployment is unhealthy
+	// If all containers are healthy, deployment is healthy
+	// If any container is starting, deployment is starting
+	// If no health check, return empty string
+	hasHealthCheck := false
+	hasUnhealthy := false
+	hasStarting := false
+	allHealthy := true
+
+	for _, loc := range locations {
+		containerInfo, err := dcli.ContainerInspect(ctx, loc.ContainerID)
+		if err != nil {
+			// Container might not exist, skip it
+			continue
+		}
+
+		// Check health status from Docker
+		if containerInfo.State != nil && containerInfo.State.Health != nil {
+			hasHealthCheck = true
+			healthStatus := containerInfo.State.Health.Status
+			
+			switch healthStatus {
+			case "unhealthy":
+				hasUnhealthy = true
+				allHealthy = false
+			case "starting":
+				hasStarting = true
+				allHealthy = false
+			case "healthy":
+				// Container is healthy, continue checking others
+			case "none":
+				// No health check configured for this container
+			}
+		}
+	}
+
+	// Determine overall health status
+	if !hasHealthCheck {
+		return "", nil // No health checks configured
+	}
+	
+	if hasUnhealthy {
+		return "unhealthy", nil
+	}
+	if hasStarting {
+		return "starting", nil
+	}
+	if allHealthy {
+		return "healthy", nil
+	}
+	
+	return "unknown", nil
+}
+
 // StreamContainerLogs streams logs from a specific container
 func (s *Service) StreamContainerLogs(ctx context.Context, req *connect.Request[deploymentsv1.StreamContainerLogsRequest], stream *connect.ServerStream[deploymentsv1.DeploymentLogLine]) error {
 	// Ensure user is authenticated for streaming RPCs
