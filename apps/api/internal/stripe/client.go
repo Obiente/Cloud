@@ -203,6 +203,29 @@ func (c *Client) GetPaymentIntent(ctx context.Context, paymentIntentID string) (
 	return pi, nil
 }
 
+// CreatePaymentIntent creates a Payment Intent for charging an existing payment method
+func (c *Client) CreatePaymentIntent(ctx context.Context, customerID string, amountCents int64, paymentMethodID string) (*stripe.PaymentIntent, error) {
+	params := &stripe.PaymentIntentParams{
+		Amount:   stripe.Int64(amountCents),
+		Currency: stripe.String("usd"),
+		Customer: stripe.String(customerID),
+		PaymentMethod: stripe.String(paymentMethodID),
+		ConfirmationMethod: stripe.String(string(stripe.PaymentIntentConfirmationMethodAutomatic)),
+		Confirm: stripe.Bool(true),
+		OffSession: stripe.Bool(true), // Indicates this is an off-session payment
+		Metadata: map[string]string{
+			"description": fmt.Sprintf("Add %s credits to account", formatAmount(amountCents)),
+		},
+	}
+
+	pi, err := paymentintent.New(params)
+	if err != nil {
+		return nil, fmt.Errorf("create payment intent: %w", err)
+	}
+
+	return pi, nil
+}
+
 // ListInvoices lists all invoices for a customer
 func (c *Client) ListInvoices(ctx context.Context, customerID string, limit int) ([]*stripe.Invoice, bool, error) {
 	if limit <= 0 {
@@ -432,6 +455,20 @@ func (c *Client) CancelSubscription(ctx context.Context, subscriptionID string) 
 	if err != nil {
 		return nil, fmt.Errorf("cancel subscription: %w", err)
 	}
+	return sub, nil
+}
+
+// UpdateSubscriptionPaymentMethod updates the payment method for a subscription
+func (c *Client) UpdateSubscriptionPaymentMethod(ctx context.Context, subscriptionID, paymentMethodID string) (*stripe.Subscription, error) {
+	params := &stripe.SubscriptionParams{
+		DefaultPaymentMethod: stripe.String(paymentMethodID),
+	}
+	
+	sub, err := subscription.Update(subscriptionID, params)
+	if err != nil {
+		return nil, fmt.Errorf("update subscription payment method: %w", err)
+	}
+	
 	return sub, nil
 }
 

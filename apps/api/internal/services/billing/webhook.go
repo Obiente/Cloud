@@ -8,9 +8,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"api/internal/database"
+	"api/internal/services/organizations"
 
 	"github.com/stripe/stripe-go/v83"
 	"github.com/stripe/stripe-go/v83/webhook"
@@ -18,7 +20,25 @@ import (
 )
 
 // HandleStripeWebhook processes Stripe webhook events
+//
+// Stripe automatically retries failed webhooks:
+// - Live mode: up to 3 days with exponential backoff
+// - Test mode: 3 retries over a few hours
+//
+// To prevent duplicate processing, we implement idempotency by:
+// 1. Tracking processed event IDs in the database
+// 2. Checking if an event was already processed before handling
+// 3. Returning 200 OK for already-processed events (to stop retries)
+// 4. Making handlers idempotent (safe to run multiple times)
 func HandleStripeWebhook(w http.ResponseWriter, r *http.Request) {
+	// Check if billing is enabled
+	billingEnabled := os.Getenv("BILLING_ENABLED") != "false" && os.Getenv("BILLING_ENABLED") != "0"
+	if !billingEnabled {
+		log.Printf("[Stripe Webhook] Billing is disabled, ignoring webhook")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	
 	const MaxBodyBytes = int64(65536)
 	r.Body = http.MaxBytesReader(w, r.Body, MaxBodyBytes)
 
@@ -46,6 +66,45 @@ func HandleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[Stripe Webhook] Signature verification failed: %v", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
+	}
+
+	// Check if event has already been processed (idempotency)
+	var existingEvent database.StripeWebhookEvent
+	if err := database.DB.Where("id = ?", event.ID).First(&existingEvent).Error; err == nil {
+		log.Printf("[Stripe Webhook] Event %s (type: %s) already processed at %s, skipping", 
+			event.ID, event.Type, existingEvent.ProcessedAt.Format(time.RFC3339))
+		w.WriteHeader(http.StatusOK) // Return 200 to stop Stripe from retrying
+		return
+	}
+
+	// Mark event as being processed (with a small delay to handle race conditions)
+	// Use a transaction to ensure atomicity
+	var processedEvent database.StripeWebhookEvent
+	err = database.DB.Transaction(func(tx *gorm.DB) error {
+		// Double-check in transaction
+		if err := tx.Where("id = ?", event.ID).First(&existingEvent).Error; err == nil {
+			return fmt.Errorf("event already processed")
+		}
+		
+		// Create record
+		processedEvent = database.StripeWebhookEvent{
+			ID:         event.ID,
+			EventType:  string(event.Type),
+			ProcessedAt: time.Now(),
+			CreatedAt:  time.Now(),
+		}
+		return tx.Create(&processedEvent).Error
+	})
+	
+	if err != nil {
+		// Event was already processed (race condition)
+		if err.Error() == "event already processed" {
+			log.Printf("[Stripe Webhook] Event %s already processed (race condition), skipping", event.ID)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		log.Printf("[Stripe Webhook] Error recording event %s: %v", event.ID, err)
+		// Continue processing - we'll try to be idempotent in handlers
 	}
 
 	// Handle the event
@@ -119,6 +178,19 @@ func HandleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		handlePaymentIntentFailed(&paymentIntent)
+
+	case "invoice.paid":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.paid: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if err := handleInvoicePaid(&invoice, event.Data.Raw); err != nil {
+			log.Printf("[Stripe Webhook] Error handling invoice.paid: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 	default:
 		log.Printf("[Stripe Webhook] Unhandled event type: %s", event.Type)
@@ -344,17 +416,147 @@ func handlePaymentIntentFailed(paymentIntent *stripe.PaymentIntent) {
 	// Could send notification to user, update billing account status, etc.
 }
 
+// handleInvoicePaid handles when an invoice is paid
+func handleInvoicePaid(invoice *stripe.Invoice, rawData []byte) error {
+	// Get customer ID
+	var customerID string
+	if invoice.Customer != nil {
+		customerID = invoice.Customer.ID
+	} else {
+		// Try to get from raw JSON if Customer wasn't expanded
+		var rawInvoice map[string]interface{}
+		if err := json.Unmarshal(rawData, &rawInvoice); err == nil {
+			if cust, ok := rawInvoice["customer"].(string); ok {
+				customerID = cust
+			}
+		}
+	}
+
+	if customerID == "" {
+		return fmt.Errorf("missing customer in invoice")
+	}
+
+	// Find organization by Stripe customer ID
+	var billingAccount database.BillingAccount
+	if err := database.DB.Where("stripe_customer_id = ?", customerID).First(&billingAccount).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("[Stripe Webhook] No billing account found for customer %s (invoice %s)", customerID, invoice.ID)
+			return nil // Don't fail, just log - invoice might be for a different system
+		}
+		return fmt.Errorf("find billing account: %w", err)
+	}
+
+	// Only create transaction if this invoice actually resulted in credits being added
+	// Check if invoice amount is positive and invoice is paid
+	if invoice.AmountPaid <= 0 {
+		log.Printf("[Stripe Webhook] Invoice %s has no amount paid, skipping transaction", invoice.ID)
+		return nil
+	}
+
+	// Check if transaction already exists for this invoice
+	var existingTransaction database.CreditTransaction
+	notePattern := fmt.Sprintf("%%Invoice %s%%", invoice.ID)
+	if err := database.DB.Where("organization_id = ? AND note LIKE ?", billingAccount.OrganizationID, notePattern).First(&existingTransaction).Error; err == nil {
+		log.Printf("[Stripe Webhook] Transaction already exists for invoice %s", invoice.ID)
+		return nil // Transaction already exists
+	}
+
+	// Create transaction for invoice payment
+	note := fmt.Sprintf("Payment via Stripe Invoice %s", invoice.ID)
+	transaction := &database.CreditTransaction{
+		ID:             generateID("ct"),
+		OrganizationID: billingAccount.OrganizationID,
+		AmountCents:    invoice.AmountPaid,
+		Type:           "payment",
+		Source:         "stripe",
+		Note:           &note,
+		CreatedAt:      time.Now(),
+	}
+
+	// Get current organization credits to calculate balance after
+	var org database.Organization
+	if err := database.DB.First(&org, "id = ?", billingAccount.OrganizationID).Error; err != nil {
+		return fmt.Errorf("organization not found: %w", err)
+	}
+
+	// Only add credits if this is a credit purchase invoice (not a subscription invoice)
+	// Check invoice metadata or description to determine if it's a credit purchase
+	isCreditPurchase := false
+	if invoice.Metadata != nil {
+		if orgID, ok := invoice.Metadata["organization_id"]; ok && orgID == billingAccount.OrganizationID {
+			isCreditPurchase = true
+		}
+	}
+	// Also check if invoice description mentions credits
+	if !isCreditPurchase && invoice.Description != "" {
+		if strings.Contains(strings.ToLower(invoice.Description), "credit") {
+			isCreditPurchase = true
+		}
+	}
+
+	if isCreditPurchase {
+		// Update credits and total paid, then check for plan upgrade
+		oldBalance := org.Credits
+		org.Credits += invoice.AmountPaid
+		
+		// Update total paid for safety check/auto-upgrade
+		org.TotalPaidCents += invoice.AmountPaid
+		
+		if err := database.DB.Save(&org).Error; err != nil {
+			return fmt.Errorf("update credits: %w", err)
+		}
+		transaction.BalanceAfter = org.Credits
+		log.Printf("[Stripe Webhook] Added %d cents to organization %s from invoice %s (balance: %d -> %d, total paid: %d)", 
+			invoice.AmountPaid, billingAccount.OrganizationID, invoice.ID, oldBalance, org.Credits, org.TotalPaidCents)
+		
+		// Check and upgrade plan if eligible
+		if err := checkAndUpgradePlan(billingAccount.OrganizationID, database.DB); err != nil {
+			log.Printf("[Stripe Webhook] Warning: failed to check/upgrade plan: %v", err)
+		}
+	} else {
+		// For non-credit invoices (like subscriptions), update total paid and check for upgrade
+		// This handles the case where users pay for usage directly (safety check)
+		org.TotalPaidCents += invoice.AmountPaid
+		if err := database.DB.Save(&org).Error; err != nil {
+			return fmt.Errorf("update total paid: %w", err)
+		}
+		transaction.BalanceAfter = org.Credits
+		log.Printf("[Stripe Webhook] Recorded payment transaction for invoice %s (subscription/service payment, total paid: %d)", 
+			invoice.ID, org.TotalPaidCents)
+		
+		// Check and upgrade plan if eligible
+		if err := checkAndUpgradePlan(billingAccount.OrganizationID, database.DB); err != nil {
+			log.Printf("[Stripe Webhook] Warning: failed to check/upgrade plan: %v", err)
+		}
+	}
+
+	// Create transaction record
+	if err := database.DB.Create(transaction).Error; err != nil {
+		return fmt.Errorf("create transaction: %w", err)
+	}
+
+	return nil
+}
+
 func addCreditsFromPayment(orgID string, amountCents int64, sessionID, customerID string) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {
+		// Check if transaction already exists for this checkout session (idempotency)
+		var existingTransaction database.CreditTransaction
+		notePattern := fmt.Sprintf("%%Checkout Session %s%%", sessionID)
+		if err := tx.Where("organization_id = ? AND note LIKE ?", orgID, notePattern).First(&existingTransaction).Error; err == nil {
+			log.Printf("[Stripe Webhook] Transaction already exists for checkout session %s", sessionID)
+			return nil // Already processed, return success
+		}
+
 		// Get organization
 		var org database.Organization
 		if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
 			return fmt.Errorf("organization not found: %w", err)
 		}
 
-		// Update credits
-		oldBalance := org.Credits
+		// Update credits and total paid
 		org.Credits += amountCents
+		org.TotalPaidCents += amountCents
 		if err := tx.Save(&org).Error; err != nil {
 			return fmt.Errorf("update credits: %w", err)
 		}
@@ -373,6 +575,12 @@ func addCreditsFromPayment(orgID string, amountCents int64, sessionID, customerI
 		}
 		if err := tx.Create(transaction).Error; err != nil {
 			return fmt.Errorf("create transaction: %w", err)
+		}
+
+		// Check and upgrade plan if eligible (after credits are added)
+		if err := checkAndUpgradePlan(orgID, tx); err != nil {
+			log.Printf("[Stripe Webhook] Warning: failed to check/upgrade plan: %v", err)
+			// Don't fail the transaction if upgrade check fails
 		}
 
 		// Update billing account with customer ID if not set
@@ -403,7 +611,15 @@ func addCreditsFromPayment(orgID string, amountCents int64, sessionID, customerI
 			}
 		}
 
-		log.Printf("[Stripe Webhook] Added %d cents to organization %s (balance: %d -> %d)", amountCents, orgID, oldBalance, org.Credits)
 		return nil
 	})
+	
+	// Ensure organization has a plan assigned (defaults to Starter plan)
+	// This is called after the transaction commits to ensure plan is assigned
+	if err := organizations.EnsurePlanAssigned(orgID); err != nil {
+		log.Printf("[Stripe Webhook] Warning: failed to ensure plan assigned: %v", err)
+		// Don't fail the payment processing if plan assignment fails
+	}
+	
+	return nil
 }

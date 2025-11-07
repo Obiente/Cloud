@@ -16,21 +16,32 @@ import (
 	"api/internal/stripe"
 
 	"connectrpc.com/connect"
+	stripego "github.com/stripe/stripe-go/v83"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gorm.io/gorm"
 )
 
 type Service struct {
 	billingv1connect.UnimplementedBillingServiceHandler
-	stripeClient *stripe.Client
-	consoleURL   string
+	stripeClient   *stripe.Client
+	consoleURL     string
+	billingEnabled bool
 }
 
-func NewService(stripeClient *stripe.Client, consoleURL string) billingv1connect.BillingServiceHandler {
+func NewService(stripeClient *stripe.Client, consoleURL string, billingEnabled bool) billingv1connect.BillingServiceHandler {
 	return &Service{
-		stripeClient: stripeClient,
-		consoleURL:   strings.TrimSuffix(strings.TrimSpace(consoleURL), "/"),
+		stripeClient:   stripeClient,
+		consoleURL:     strings.TrimSuffix(strings.TrimSpace(consoleURL), "/"),
+		billingEnabled: billingEnabled,
 	}
+}
+
+// checkBillingEnabled returns an error if billing is disabled
+func (s *Service) checkBillingEnabled() error {
+	if !s.billingEnabled {
+		return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("billing is disabled"))
+	}
+	return nil
 }
 
 // checkStripeConfigured returns an error if Stripe is not configured
@@ -42,6 +53,10 @@ func (s *Service) checkStripeConfigured() error {
 }
 
 func (s *Service) CreateCheckoutSession(ctx context.Context, req *connect.Request[billingv1.CreateCheckoutSessionRequest]) (*connect.Response[billingv1.CreateCheckoutSessionResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -136,7 +151,105 @@ func (s *Service) CreateCheckoutSession(ctx context.Context, req *connect.Reques
 	}), nil
 }
 
+func (s *Service) CreatePaymentIntent(ctx context.Context, req *connect.Request[billingv1.CreatePaymentIntentRequest]) (*connect.Response[billingv1.CreatePaymentIntentResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	// Verify user has access to this organization
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		var member database.OrganizationMember
+		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("organization not found or access denied"))
+			}
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
+		}
+		// Only owners and admins can create payment intents
+		if member.Role != "owner" && member.Role != "admin" {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
+		}
+	}
+
+	amountCents := req.Msg.GetAmountCents()
+	if amountCents <= 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("amount_cents must be positive"))
+	}
+
+	// Get billing account
+	billingAccount, err := s.getOrCreateBillingAccount(orgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get billing account: %w", err))
+	}
+
+	if billingAccount.StripeCustomerID == nil || *billingAccount.StripeCustomerID == "" {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no Stripe customer found. Please add a payment method first"))
+	}
+
+	if err := s.checkStripeConfigured(); err != nil {
+		return nil, err
+	}
+
+	// Get default payment method if not specified
+	paymentMethodID := req.Msg.GetPaymentMethodId()
+	if paymentMethodID == "" {
+		// Get customer to find default payment method
+		cust, err := s.stripeClient.GetCustomer(ctx, *billingAccount.StripeCustomerID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get customer: %w", err))
+		}
+
+		if cust.InvoiceSettings == nil || cust.InvoiceSettings.DefaultPaymentMethod == nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no default payment method found. Please set a default payment method or use checkout session"))
+		}
+		paymentMethodID = cust.InvoiceSettings.DefaultPaymentMethod.ID
+	}
+
+	// Verify payment method belongs to customer
+	paymentMethods, err := s.stripeClient.ListPaymentMethods(ctx, *billingAccount.StripeCustomerID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list payment methods: %w", err))
+	}
+
+	belongsToCustomer := false
+	for _, pm := range paymentMethods {
+		if pm.ID == paymentMethodID {
+			belongsToCustomer = true
+			break
+		}
+	}
+
+	if !belongsToCustomer {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("payment method does not belong to this customer"))
+	}
+
+	// Create payment intent
+	paymentIntent, err := s.stripeClient.CreatePaymentIntent(ctx, *billingAccount.StripeCustomerID, amountCents, paymentMethodID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create payment intent: %w", err))
+	}
+
+	return connect.NewResponse(&billingv1.CreatePaymentIntentResponse{
+		PaymentIntentId: paymentIntent.ID,
+		ClientSecret:    paymentIntent.ClientSecret,
+	}), nil
+}
+
 func (s *Service) CreatePortalSession(ctx context.Context, req *connect.Request[billingv1.CreatePortalSessionRequest]) (*connect.Response[billingv1.CreatePortalSessionResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -183,6 +296,10 @@ func (s *Service) CreatePortalSession(ctx context.Context, req *connect.Request[
 
 	portalSession, err := s.stripeClient.CreatePortalSession(ctx, *billingAccount.StripeCustomerID, returnURL)
 	if err != nil {
+		// Check if it's a configuration error
+		if strings.Contains(err.Error(), "No configuration provided") || strings.Contains(err.Error(), "default configuration has not been created") {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("Stripe Customer Portal is not configured. Please configure it in your Stripe Dashboard at https://dashboard.stripe.com/test/settings/billing/portal (test mode) or https://dashboard.stripe.com/settings/billing/portal (live mode)"))
+		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create portal session: %w", err))
 	}
 
@@ -192,6 +309,10 @@ func (s *Service) CreatePortalSession(ctx context.Context, req *connect.Request[
 }
 
 func (s *Service) GetBillingAccount(ctx context.Context, req *connect.Request[billingv1.GetBillingAccountRequest]) (*connect.Response[billingv1.GetBillingAccountResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -236,6 +357,10 @@ func (s *Service) GetBillingAccount(ctx context.Context, req *connect.Request[bi
 }
 
 func (s *Service) UpdateBillingAccount(ctx context.Context, req *connect.Request[billingv1.UpdateBillingAccountRequest]) (*connect.Response[billingv1.UpdateBillingAccountResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -297,8 +422,55 @@ func (s *Service) UpdateBillingAccount(ctx context.Context, req *connect.Request
 
 	// Update Stripe customer if customer ID exists
 	if billingAccount.StripeCustomerID != nil && *billingAccount.StripeCustomerID != "" {
-		// Update Stripe customer with new information
-		// This would require updating the Stripe client
+		customerParams := &stripego.CustomerParams{}
+		
+		if billingAccount.BillingEmail != nil && *billingAccount.BillingEmail != "" {
+			customerParams.Email = stripego.String(*billingAccount.BillingEmail)
+		}
+		
+		if billingAccount.CompanyName != nil && *billingAccount.CompanyName != "" {
+			customerParams.Name = stripego.String(*billingAccount.CompanyName)
+		}
+		
+		if billingAccount.Address != nil && *billingAccount.Address != "" {
+			var address billingv1.Address
+			if err := json.Unmarshal([]byte(*billingAccount.Address), &address); err == nil {
+				addrParams := &stripego.AddressParams{}
+				if address.Line1 != "" {
+					addrParams.Line1 = stripego.String(address.Line1)
+				}
+				if address.Line2 != nil && *address.Line2 != "" {
+					addrParams.Line2 = stripego.String(*address.Line2)
+				}
+				if address.City != "" {
+					addrParams.City = stripego.String(address.City)
+				}
+				if address.State != nil && *address.State != "" {
+					addrParams.State = stripego.String(*address.State)
+				}
+				if address.PostalCode != "" {
+					addrParams.PostalCode = stripego.String(address.PostalCode)
+				}
+				if address.Country != "" {
+					addrParams.Country = stripego.String(address.Country)
+				}
+				customerParams.Address = addrParams
+			}
+		}
+		
+		if billingAccount.TaxID != nil && *billingAccount.TaxID != "" {
+			// Stripe tax IDs are managed separately via TaxID API
+			// For now, we'll store it in metadata
+			if customerParams.Metadata == nil {
+				customerParams.Metadata = make(map[string]string)
+			}
+			customerParams.Metadata["tax_id"] = *billingAccount.TaxID
+		}
+		
+		if _, err := s.stripeClient.UpdateCustomer(ctx, *billingAccount.StripeCustomerID, customerParams); err != nil {
+			log.Printf("[Billing] Failed to update Stripe customer: %v", err)
+			// Don't fail the request, just log the error
+		}
 	}
 
 	protoAccount := s.billingAccountToProto(billingAccount)
@@ -309,6 +481,10 @@ func (s *Service) UpdateBillingAccount(ctx context.Context, req *connect.Request
 }
 
 func (s *Service) CreateSetupIntent(ctx context.Context, req *connect.Request[billingv1.CreateSetupIntentRequest]) (*connect.Response[billingv1.CreateSetupIntentResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -387,6 +563,10 @@ func (s *Service) CreateSetupIntent(ctx context.Context, req *connect.Request[bi
 }
 
 func (s *Service) ListPaymentMethods(ctx context.Context, req *connect.Request[billingv1.ListPaymentMethodsRequest]) (*connect.Response[billingv1.ListPaymentMethodsResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -477,6 +657,10 @@ func (s *Service) ListPaymentMethods(ctx context.Context, req *connect.Request[b
 }
 
 func (s *Service) AttachPaymentMethod(ctx context.Context, req *connect.Request[billingv1.AttachPaymentMethodRequest]) (*connect.Response[billingv1.AttachPaymentMethodResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -554,6 +738,10 @@ func (s *Service) AttachPaymentMethod(ctx context.Context, req *connect.Request[
 }
 
 func (s *Service) DetachPaymentMethod(ctx context.Context, req *connect.Request[billingv1.DetachPaymentMethodRequest]) (*connect.Response[billingv1.DetachPaymentMethodResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -630,6 +818,10 @@ func (s *Service) DetachPaymentMethod(ctx context.Context, req *connect.Request[
 }
 
 func (s *Service) SetDefaultPaymentMethod(ctx context.Context, req *connect.Request[billingv1.SetDefaultPaymentMethodRequest]) (*connect.Response[billingv1.SetDefaultPaymentMethodResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -706,6 +898,10 @@ func (s *Service) SetDefaultPaymentMethod(ctx context.Context, req *connect.Requ
 }
 
 func (s *Service) GetPaymentStatus(ctx context.Context, req *connect.Request[billingv1.GetPaymentStatusRequest]) (*connect.Response[billingv1.GetPaymentStatusResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
 	paymentIntentID := strings.TrimSpace(req.Msg.GetPaymentIntentId())
 	if paymentIntentID == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("payment_intent_id is required"))
@@ -734,6 +930,10 @@ func (s *Service) GetPaymentStatus(ctx context.Context, req *connect.Request[bil
 }
 
 func (s *Service) ListInvoices(ctx context.Context, req *connect.Request[billingv1.ListInvoicesRequest]) (*connect.Response[billingv1.ListInvoicesResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -896,6 +1096,10 @@ func generateID(prefix string) string {
 }
 
 func (s *Service) CreateDNSDelegationSubscriptionCheckout(ctx context.Context, req *connect.Request[billingv1.CreateDNSDelegationSubscriptionCheckoutRequest]) (*connect.Response[billingv1.CreateDNSDelegationSubscriptionCheckoutResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -982,6 +1186,10 @@ func (s *Service) CreateDNSDelegationSubscriptionCheckout(ctx context.Context, r
 }
 
 func (s *Service) GetDNSDelegationSubscriptionStatus(ctx context.Context, req *connect.Request[billingv1.GetDNSDelegationSubscriptionStatusRequest]) (*connect.Response[billingv1.GetDNSDelegationSubscriptionStatusResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -1059,6 +1267,10 @@ func (s *Service) GetDNSDelegationSubscriptionStatus(ctx context.Context, req *c
 }
 
 func (s *Service) CancelDNSDelegationSubscription(ctx context.Context, req *connect.Request[billingv1.CancelDNSDelegationSubscriptionRequest]) (*connect.Response[billingv1.CancelDNSDelegationSubscriptionResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
 	user, err := auth.GetUserFromContext(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
@@ -1118,5 +1330,395 @@ func (s *Service) CancelDNSDelegationSubscription(ctx context.Context, req *conn
 		Success:    true,
 		Message:    message,
 		CanceledAt: canceledAt,
+	}), nil
+}
+
+func (s *Service) ListSubscriptions(ctx context.Context, req *connect.Request[billingv1.ListSubscriptionsRequest]) (*connect.Response[billingv1.ListSubscriptionsResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	// Verify user has access to this organization
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		var member database.OrganizationMember
+		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("organization not found or access denied"))
+			}
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
+		}
+		// Only owners and admins can view subscriptions
+		if member.Role != "owner" && member.Role != "admin" {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
+		}
+	}
+
+	if err := s.checkStripeConfigured(); err != nil {
+		return nil, err
+	}
+
+	// Get billing account
+	var billingAccount database.BillingAccount
+	if err := database.DB.Where("organization_id = ?", orgID).First(&billingAccount).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return connect.NewResponse(&billingv1.ListSubscriptionsResponse{
+				Subscriptions: []*billingv1.Subscription{},
+			}), nil
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get billing account: %w", err))
+	}
+
+	if billingAccount.StripeCustomerID == nil || *billingAccount.StripeCustomerID == "" {
+		return connect.NewResponse(&billingv1.ListSubscriptionsResponse{
+			Subscriptions: []*billingv1.Subscription{},
+		}), nil
+	}
+
+	// List subscriptions from Stripe
+	stripeSubscriptions, err := s.stripeClient.ListSubscriptionsForCustomer(ctx, *billingAccount.StripeCustomerID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list subscriptions: %w", err))
+	}
+
+	// Convert to proto
+	protoSubscriptions := make([]*billingv1.Subscription, 0, len(stripeSubscriptions))
+	for _, sub := range stripeSubscriptions {
+		amount := int64(0)
+		currency := "usd"
+		interval := ""
+		intervalCount := int32(1)
+		description := ""
+
+		if len(sub.Items.Data) > 0 {
+			item := sub.Items.Data[0]
+			if item.Price != nil {
+				amount = item.Price.UnitAmount
+				currency = string(item.Price.Currency)
+				if item.Price.Recurring != nil {
+					interval = string(item.Price.Recurring.Interval)
+					intervalCount = int32(item.Price.Recurring.IntervalCount)
+				}
+				if item.Price.Nickname != "" {
+					description = item.Price.Nickname
+				} else if item.Price.Product != nil {
+					description = item.Price.Product.Name
+				}
+			}
+		}
+
+		protoSub := &billingv1.Subscription{
+			Id:                sub.ID,
+			Status:            string(sub.Status),
+			Amount:            amount,
+			Currency:          currency,
+			Interval:          interval,
+			IntervalCount:     intervalCount,
+			Description:       description,
+			CancelAtPeriodEnd: sub.CancelAtPeriodEnd,
+		}
+
+		// Stripe subscription period fields
+		// Note: These fields may need to be accessed differently in Stripe Go SDK v83
+		// For now, we'll leave them unset and they can be populated from webhooks or when we fix field access
+		// TODO: Fix field access once we confirm the correct field names in Stripe Go SDK v83
+		if sub.CanceledAt > 0 {
+			protoSub.CanceledAt = timestamppb.New(time.Unix(sub.CanceledAt, 0))
+		}
+		if sub.Created > 0 {
+			protoSub.Created = timestamppb.New(time.Unix(sub.Created, 0))
+		}
+
+		protoSubscriptions = append(protoSubscriptions, protoSub)
+	}
+
+	return connect.NewResponse(&billingv1.ListSubscriptionsResponse{
+		Subscriptions: protoSubscriptions,
+	}), nil
+}
+
+func (s *Service) UpdateSubscriptionPaymentMethod(ctx context.Context, req *connect.Request[billingv1.UpdateSubscriptionPaymentMethodRequest]) (*connect.Response[billingv1.UpdateSubscriptionPaymentMethodResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	subscriptionID := strings.TrimSpace(req.Msg.GetSubscriptionId())
+	if subscriptionID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("subscription_id is required"))
+	}
+
+	paymentMethodID := strings.TrimSpace(req.Msg.GetPaymentMethodId())
+	if paymentMethodID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("payment_method_id is required"))
+	}
+
+	// Verify user has access to this organization
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		var member database.OrganizationMember
+		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("organization not found or access denied"))
+			}
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
+		}
+		// Only owners and admins can update subscriptions
+		if member.Role != "owner" && member.Role != "admin" {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
+		}
+	}
+
+	if err := s.checkStripeConfigured(); err != nil {
+		return nil, err
+	}
+
+	// Get billing account to verify subscription belongs to this organization
+	var billingAccount database.BillingAccount
+	if err := database.DB.Where("organization_id = ?", orgID).First(&billingAccount).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get billing account: %w", err))
+	}
+
+	if billingAccount.StripeCustomerID == nil || *billingAccount.StripeCustomerID == "" {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no Stripe customer found"))
+	}
+
+	// Verify subscription belongs to this customer
+	subscriptions, err := s.stripeClient.ListSubscriptionsForCustomer(ctx, *billingAccount.StripeCustomerID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list subscriptions: %w", err))
+	}
+
+	subscriptionBelongsToCustomer := false
+	for _, sub := range subscriptions {
+		if sub.ID == subscriptionID {
+			subscriptionBelongsToCustomer = true
+			break
+		}
+	}
+
+	if !subscriptionBelongsToCustomer {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("subscription does not belong to this organization"))
+	}
+
+	// Verify payment method belongs to customer
+	paymentMethods, err := s.stripeClient.ListPaymentMethods(ctx, *billingAccount.StripeCustomerID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list payment methods: %w", err))
+	}
+
+	paymentMethodBelongsToCustomer := false
+	for _, pm := range paymentMethods {
+		if pm.ID == paymentMethodID {
+			paymentMethodBelongsToCustomer = true
+			break
+		}
+	}
+
+	if !paymentMethodBelongsToCustomer {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("payment method does not belong to this customer"))
+	}
+
+	// Update subscription payment method
+	updatedSub, err := s.stripeClient.UpdateSubscriptionPaymentMethod(ctx, subscriptionID, paymentMethodID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update subscription payment method: %w", err))
+	}
+
+	// Convert to proto
+	amount := int64(0)
+	currency := "usd"
+	interval := ""
+	intervalCount := int32(1)
+	description := ""
+
+	if len(updatedSub.Items.Data) > 0 {
+		item := updatedSub.Items.Data[0]
+		if item.Price != nil {
+			amount = item.Price.UnitAmount
+			currency = string(item.Price.Currency)
+			if item.Price.Recurring != nil {
+				interval = string(item.Price.Recurring.Interval)
+				intervalCount = int32(item.Price.Recurring.IntervalCount)
+			}
+			if item.Price.Nickname != "" {
+				description = item.Price.Nickname
+			} else if item.Price.Product != nil {
+				description = item.Price.Product.Name
+			}
+		}
+	}
+
+	protoSub := &billingv1.Subscription{
+		Id:                updatedSub.ID,
+		Status:            string(updatedSub.Status),
+		Amount:            amount,
+		Currency:          currency,
+		Interval:          interval,
+		IntervalCount:     intervalCount,
+		Description:       description,
+		CancelAtPeriodEnd: updatedSub.CancelAtPeriodEnd,
+	}
+
+	// Stripe subscription period fields
+	// Note: These fields may need to be accessed differently in Stripe Go SDK v83
+	// For now, we'll leave them unset and they can be populated from webhooks or when we fix field access
+	// TODO: Fix field access once we confirm the correct field names in Stripe Go SDK v83
+	if updatedSub.CanceledAt > 0 {
+		protoSub.CanceledAt = timestamppb.New(time.Unix(updatedSub.CanceledAt, 0))
+	}
+	if updatedSub.Created > 0 {
+		protoSub.Created = timestamppb.New(time.Unix(updatedSub.Created, 0))
+	}
+
+	return connect.NewResponse(&billingv1.UpdateSubscriptionPaymentMethodResponse{
+		Success:     true,
+		Subscription: protoSub,
+	}), nil
+}
+
+func (s *Service) CancelSubscription(ctx context.Context, req *connect.Request[billingv1.CancelSubscriptionRequest]) (*connect.Response[billingv1.CancelSubscriptionResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	subscriptionID := strings.TrimSpace(req.Msg.GetSubscriptionId())
+	if subscriptionID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("subscription_id is required"))
+	}
+
+	// Verify user has access to this organization
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		var member database.OrganizationMember
+		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("organization not found or access denied"))
+			}
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
+		}
+		// Only owners and admins can cancel subscriptions
+		if member.Role != "owner" && member.Role != "admin" {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
+		}
+	}
+
+	if err := s.checkStripeConfigured(); err != nil {
+		return nil, err
+	}
+
+	// Get billing account to verify subscription belongs to this organization
+	var billingAccount database.BillingAccount
+	if err := database.DB.Where("organization_id = ?", orgID).First(&billingAccount).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get billing account: %w", err))
+	}
+
+	if billingAccount.StripeCustomerID == nil || *billingAccount.StripeCustomerID == "" {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("no Stripe customer found"))
+	}
+
+	// Verify subscription belongs to this customer
+	subscriptions, err := s.stripeClient.ListSubscriptionsForCustomer(ctx, *billingAccount.StripeCustomerID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list subscriptions: %w", err))
+	}
+
+	subscriptionBelongsToCustomer := false
+	for _, sub := range subscriptions {
+		if sub.ID == subscriptionID {
+			subscriptionBelongsToCustomer = true
+			break
+		}
+	}
+
+	if !subscriptionBelongsToCustomer {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("subscription does not belong to this organization"))
+	}
+
+	// Cancel subscription via Stripe
+	canceledSub, err := s.stripeClient.CancelSubscription(ctx, subscriptionID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("cancel subscription: %w", err))
+	}
+
+	// Convert to proto
+	amount := int64(0)
+	currency := "usd"
+	interval := ""
+	intervalCount := int32(1)
+	description := ""
+
+	if len(canceledSub.Items.Data) > 0 {
+		item := canceledSub.Items.Data[0]
+		if item.Price != nil {
+			amount = item.Price.UnitAmount
+			currency = string(item.Price.Currency)
+			if item.Price.Recurring != nil {
+				interval = string(item.Price.Recurring.Interval)
+				intervalCount = int32(item.Price.Recurring.IntervalCount)
+			}
+			if item.Price.Nickname != "" {
+				description = item.Price.Nickname
+			} else if item.Price.Product != nil {
+				description = item.Price.Product.Name
+			}
+		}
+	}
+
+	protoSub := &billingv1.Subscription{
+		Id:                canceledSub.ID,
+		Status:            string(canceledSub.Status),
+		Amount:            amount,
+		Currency:          currency,
+		Interval:          interval,
+		IntervalCount:     intervalCount,
+		Description:       description,
+		CancelAtPeriodEnd: canceledSub.CancelAtPeriodEnd,
+	}
+
+	if canceledSub.CanceledAt > 0 {
+		protoSub.CanceledAt = timestamppb.New(time.Unix(canceledSub.CanceledAt, 0))
+	}
+	if canceledSub.Created > 0 {
+		protoSub.Created = timestamppb.New(time.Unix(canceledSub.Created, 0))
+	}
+
+	var message string
+	if canceledSub.CancelAtPeriodEnd {
+		message = "Subscription will be canceled at the end of the current billing period."
+	} else {
+		message = "Subscription has been canceled."
+	}
+
+	return connect.NewResponse(&billingv1.CancelSubscriptionResponse{
+		Success:     true,
+		Message:     message,
+		Subscription: protoSub,
 	}), nil
 }
