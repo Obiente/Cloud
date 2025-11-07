@@ -107,5 +107,62 @@ func (c *Checker) currentAllocations(orgID string) (replicas int, memBytes int64
 	return int(count), a.Mem, int(a.CPU), nil
 }
 
+// GetEffectiveLimits returns the effective memory and CPU limits for an organization
+// Plan limits are the maximum boundary - org overrides cannot exceed them
+// Returns (memoryBytes, cpuCores, error)
+// Zero values mean unlimited
+func GetEffectiveLimits(organizationID string) (memoryBytes int64, cpuCores int, err error) {
+	// Get organization quota
+	var quota database.OrgQuota
+	if err := database.DB.Where("organization_id = ?", organizationID).First(&quota).Error; err != nil {
+		// No quota exists - no limits (unlimited)
+		return 0, 0, nil
+	}
+
+	// Get plan limits first (these are the maximum boundary)
+	var plan database.OrganizationPlan
+	planMem := int64(0)
+	planCPU := 0
+	if quota.PlanID != "" {
+		if err := database.DB.First(&plan, "id = ?", quota.PlanID).Error; err == nil {
+			planMem = plan.MemoryBytes
+			planCPU = plan.CPUCores
+		}
+	}
+
+	// Get effective limits: use overrides if set, but cap them to plan limits
+	// Plan limits are the final boundary - org overrides cannot exceed them
+	effMem := planMem
+	if quota.MemoryBytesOverride != nil {
+		overrideMem := *quota.MemoryBytesOverride
+		if overrideMem > 0 {
+			// Cap override to plan limit (plan limit is the maximum)
+			if planMem > 0 && overrideMem > planMem {
+				effMem = planMem
+			} else {
+				effMem = overrideMem
+			}
+		}
+		// If override is 0, keep plan limit (0 means use plan default, not unlimited)
+	}
+
+	effCPU := planCPU
+	if quota.CPUCoresOverride != nil {
+		overrideCPU := *quota.CPUCoresOverride
+		if overrideCPU > 0 {
+			// Cap override to plan limit (plan limit is the maximum)
+			if planCPU > 0 && overrideCPU > planCPU {
+				effCPU = planCPU
+			} else {
+				effCPU = overrideCPU
+			}
+		}
+		// If override is 0, keep plan limit (0 means use plan default, not unlimited)
+	}
+
+	// Zero means unlimited
+	return effMem, effCPU, nil
+}
+
 func valueOr(p *int, d int) int { if p == nil { return d }; return *p }
 func valueOr64(p *int64, d int64) int64 { if p == nil { return d }; return *p }

@@ -16,6 +16,7 @@ import (
 	"api/docker"
 	"api/internal/database"
 	"api/internal/logger"
+	"api/internal/quota"
 	"api/internal/registry"
 
 	"github.com/docker/go-connections/nat"
@@ -210,8 +211,64 @@ func (dm *DeploymentManager) ensureNetwork(ctx context.Context) error {
 }
 
 // CreateDeployment creates a new deployment on the cluster
+// getPlanLimitsForDeployment retrieves plan limits for a deployment's organization
+// Returns memoryBytes (max memory in bytes) and cpuCores (max CPU cores)
+// Returns 0, 0 if no plan is found or limits are unlimited
+// Uses the shared quota.GetEffectiveLimits helper function
+func (dm *DeploymentManager) getPlanLimitsForDeployment(deploymentID string) (maxMemoryBytes int64, maxCPUCores int, err error) {
+	// Get deployment to find organization ID
+	var deployment database.Deployment
+	if err := database.DB.Where("id = ?", deploymentID).First(&deployment).Error; err != nil {
+		return 0, 0, fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	// Use shared helper function to get effective limits
+	maxMemoryBytes, maxCPUCores, err = quota.GetEffectiveLimits(deployment.OrganizationID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get effective limits: %w", err)
+	}
+
+	// Log warning if limits were capped (this would be logged in GetEffectiveLimits if we add logging there)
+	// For now, we'll log here if needed
+	return maxMemoryBytes, maxCPUCores, nil
+}
+
+// applyPlanLimits caps memory and CPU values to not exceed plan limits
+func (dm *DeploymentManager) applyPlanLimits(config *DeploymentConfig) error {
+	maxMemoryBytes, maxCPUCores, err := dm.getPlanLimitsForDeployment(config.DeploymentID)
+	if err != nil {
+		logger.Warn("[DeploymentManager] Failed to get plan limits for deployment %s: %v", config.DeploymentID, err)
+		// Continue without limits if we can't get them
+		return nil
+	}
+
+	// Cap memory if limit is set (non-zero)
+	if maxMemoryBytes > 0 && config.Memory > maxMemoryBytes {
+		logger.Info("[DeploymentManager] Capping memory for deployment %s from %d bytes to plan limit %d bytes", config.DeploymentID, config.Memory, maxMemoryBytes)
+		config.Memory = maxMemoryBytes
+	}
+
+	// Cap CPU if limit is set (non-zero)
+	// Convert CPU cores to CPU shares (1024 shares = 1 core)
+	if maxCPUCores > 0 {
+		maxCPUShares := int64(maxCPUCores) * 1024
+		if config.CPUShares > maxCPUShares {
+			logger.Info("[DeploymentManager] Capping CPU for deployment %s from %d shares (%d cores) to plan limit %d shares (%d cores)", 
+				config.DeploymentID, config.CPUShares, config.CPUShares/1024, maxCPUShares, maxCPUCores)
+			config.CPUShares = maxCPUShares
+		}
+	}
+
+	return nil
+}
+
 func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *DeploymentConfig) error {
 	logger.Info("[DeploymentManager] Creating deployment %s", config.DeploymentID)
+
+	// Apply plan limits to cap memory and CPU
+	if err := dm.applyPlanLimits(config); err != nil {
+		logger.Warn("[DeploymentManager] Failed to apply plan limits: %v (continuing anyway)", err)
+	}
 
 	// Ensure network exists before creating containers (retry if it failed during initialization)
 	if err := dm.ensureNetwork(ctx); err != nil {
@@ -543,6 +600,235 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 	}
 
 	return labels
+}
+
+// injectPlanLimitsIntoCompose injects plan limits (memory and CPU) into a Docker Compose YAML string
+// For Swarm mode: limits go in deploy.resources.limits
+// For non-Swarm mode: limits go in resources.limits
+func (dm *DeploymentManager) injectPlanLimitsIntoCompose(composeYaml string, deploymentID string, maxMemoryBytes int64, maxCPUCores int) (string, error) {
+	// Parse YAML
+	var compose map[string]interface{}
+	if err := yaml.Unmarshal([]byte(composeYaml), &compose); err != nil {
+		return "", fmt.Errorf("failed to parse compose YAML: %w", err)
+	}
+
+	// Detect if we're in Swarm mode
+	isSwarmMode := isSwarmModeEnabled()
+
+	// Convert CPU cores to CPU shares (1024 shares = 1 core)
+	maxCPUShares := int64(maxCPUCores) * 1024
+
+	// Inject limits into each service
+	if services, ok := compose["services"].(map[string]interface{}); ok {
+		for serviceName, serviceData := range services {
+			service, ok := serviceData.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			if isSwarmMode {
+				// For Swarm mode, limits go in deploy.resources.limits
+				var deploy map[string]interface{}
+				if existingDeploy, ok := service["deploy"].(map[string]interface{}); ok {
+					deploy = existingDeploy
+				} else {
+					deploy = make(map[string]interface{})
+					service["deploy"] = deploy
+				}
+
+				// Get or create resources section
+				var resources map[string]interface{}
+				if existingResources, ok := deploy["resources"].(map[string]interface{}); ok {
+					resources = existingResources
+				} else {
+					resources = make(map[string]interface{})
+					deploy["resources"] = resources
+				}
+
+				// Get or create limits section
+				var limits map[string]interface{}
+				if existingLimits, ok := resources["limits"].(map[string]interface{}); ok {
+					limits = existingLimits
+				} else {
+					limits = make(map[string]interface{})
+					resources["limits"] = limits
+				}
+
+				// Apply memory limit (cap existing limit if present, or set if not)
+				if maxMemoryBytes > 0 {
+					// Convert bytes to a human-readable format for compose (e.g., "2G" for 2GB)
+					maxMemoryMB := maxMemoryBytes / (1024 * 1024)
+					var maxMemoryStr string
+					if maxMemoryMB >= 1024 {
+						maxMemoryStr = fmt.Sprintf("%dG", maxMemoryMB/1024)
+					} else {
+						maxMemoryStr = fmt.Sprintf("%dM", maxMemoryMB)
+					}
+
+					// Cap existing memory limit if present, otherwise set it
+					if existingMemory, ok := limits["memory"].(string); ok && existingMemory != "" {
+						// Parse existing memory limit and cap it
+						existingBytes := parseMemoryString(existingMemory)
+						if existingBytes > maxMemoryBytes {
+							limits["memory"] = maxMemoryStr
+							logger.Info("[DeploymentManager] Capped memory limit for service %s from %s to plan limit %s", serviceName, existingMemory, maxMemoryStr)
+						}
+					} else {
+						limits["memory"] = maxMemoryStr
+					}
+				}
+
+				// Apply CPU limit (cap existing limit if present, or set if not)
+				if maxCPUCores > 0 {
+					maxCPUsStr := fmt.Sprintf("%.2f", float64(maxCPUCores))
+					// Cap existing CPU limit if present, otherwise set it
+					if existingCPUs, ok := limits["cpus"].(string); ok && existingCPUs != "" {
+						// Parse existing CPU limit and cap it
+						existingCores := parseCPUString(existingCPUs)
+						if existingCores > float64(maxCPUCores) {
+							limits["cpus"] = maxCPUsStr
+							logger.Info("[DeploymentManager] Capped CPU limit for service %s from %s to plan limit %s", serviceName, existingCPUs, maxCPUsStr)
+						}
+					} else {
+						limits["cpus"] = maxCPUsStr
+					}
+				}
+
+				logger.Debug("[DeploymentManager] Applied plan limits to service %s in deploy.resources.limits (Swarm mode): memory=%s, cpus=%s", 
+					serviceName, limits["memory"], limits["cpus"])
+			} else {
+				// For non-Swarm mode, limits go in resources.limits
+				var resources map[string]interface{}
+				if existingResources, ok := service["resources"].(map[string]interface{}); ok {
+					resources = existingResources
+				} else {
+					resources = make(map[string]interface{})
+					service["resources"] = resources
+				}
+
+				// Get or create limits section
+				var limits map[string]interface{}
+				if existingLimits, ok := resources["limits"].(map[string]interface{}); ok {
+					limits = existingLimits
+				} else {
+					limits = make(map[string]interface{})
+					resources["limits"] = limits
+				}
+
+				// Apply memory limit (cap existing limit if present, or set if not)
+				if maxMemoryBytes > 0 {
+					maxMemoryMB := maxMemoryBytes / (1024 * 1024)
+					var maxMemoryStr string
+					if maxMemoryMB >= 1024 {
+						maxMemoryStr = fmt.Sprintf("%dG", maxMemoryMB/1024)
+					} else {
+						maxMemoryStr = fmt.Sprintf("%dM", maxMemoryMB)
+					}
+
+					// Cap existing memory limit if present, otherwise set it
+					if existingMemory, ok := limits["memory"].(string); ok && existingMemory != "" {
+						existingBytes := parseMemoryString(existingMemory)
+						if existingBytes > maxMemoryBytes {
+							limits["memory"] = maxMemoryStr
+							logger.Info("[DeploymentManager] Capped memory limit for service %s from %s to plan limit %s", serviceName, existingMemory, maxMemoryStr)
+						}
+					} else {
+						limits["memory"] = maxMemoryStr
+					}
+				}
+
+				// Apply CPU limit (cap existing limit if present, or set if not)
+				if maxCPUShares > 0 {
+					maxCPUsStr := fmt.Sprintf("%.2f", float64(maxCPUShares)/1024.0)
+					// Cap existing CPU limit if present, otherwise set it
+					if existingCPUs, ok := limits["cpus"].(string); ok && existingCPUs != "" {
+						existingCores := parseCPUString(existingCPUs)
+						maxCores := float64(maxCPUShares) / 1024.0
+						if existingCores > maxCores {
+							limits["cpus"] = maxCPUsStr
+							logger.Info("[DeploymentManager] Capped CPU limit for service %s from %s to plan limit %s", serviceName, existingCPUs, maxCPUsStr)
+						}
+					} else {
+						limits["cpus"] = maxCPUsStr
+					}
+				}
+
+				logger.Debug("[DeploymentManager] Applied plan limits to service %s in resources.limits (non-Swarm mode): memory=%s, cpus=%s", 
+					serviceName, limits["memory"], limits["cpus"])
+			}
+		}
+	}
+
+	// Marshal back to YAML
+	modifiedYaml, err := yaml.Marshal(compose)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal modified compose YAML: %w", err)
+	}
+
+	return string(modifiedYaml), nil
+}
+
+// parseMemoryString parses a memory string (e.g., "512M", "2G") and returns bytes
+func parseMemoryString(memoryStr string) int64 {
+	memoryStr = strings.TrimSpace(memoryStr)
+	if memoryStr == "" {
+		return 0
+	}
+
+	// Remove any whitespace and convert to uppercase for parsing
+	memoryStr = strings.ToUpper(strings.TrimSpace(memoryStr))
+	
+	// Extract number and unit
+	var numStr string
+	var unit string
+	for i, r := range memoryStr {
+		if r >= '0' && r <= '9' || r == '.' {
+			numStr += string(r)
+		} else {
+			unit = memoryStr[i:]
+			break
+		}
+	}
+
+	if numStr == "" {
+		return 0
+	}
+
+	num, err := strconv.ParseFloat(numStr, 64)
+	if err != nil {
+		return 0
+	}
+
+	// Convert to bytes based on unit
+	switch unit {
+	case "B", "":
+		return int64(num)
+	case "K", "KB":
+		return int64(num * 1024)
+	case "M", "MB":
+		return int64(num * 1024 * 1024)
+	case "G", "GB":
+		return int64(num * 1024 * 1024 * 1024)
+	case "T", "TB":
+		return int64(num * 1024 * 1024 * 1024 * 1024)
+	default:
+		return 0
+	}
+}
+
+// parseCPUString parses a CPU string (e.g., "1.0", "0.5") and returns CPU cores as float64
+func parseCPUString(cpuStr string) float64 {
+	cpuStr = strings.TrimSpace(cpuStr)
+	if cpuStr == "" {
+		return 0
+	}
+
+	cores, err := strconv.ParseFloat(cpuStr, 64)
+	if err != nil {
+		return 0
+	}
+
+	return cores
 }
 
 // injectTraefikLabelsIntoCompose injects Traefik labels into a Docker Compose YAML string
@@ -1378,13 +1664,19 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	}
 
 	// Add resource limits
-	args = append(args,
-		"--limit-memory", fmt.Sprintf("%d", config.Memory),
-		"--limit-cpu", fmt.Sprintf("%d", config.CPUShares),
-	)
+	// Memory is in bytes (correct for Swarm)
+	args = append(args, "--limit-memory", fmt.Sprintf("%d", config.Memory))
+	
+	// CPU: Docker Swarm expects CPU cores, not CPU shares
+	// Convert CPU shares to cores (1024 shares = 1 core)
+	// Use float64 to support fractional cores (e.g., 0.5, 0.25)
+	cpuCores := float64(config.CPUShares) / 1024.0
+	args = append(args, "--limit-cpu", fmt.Sprintf("%.2f", cpuCores))
 
 	// Add restart policy
-	args = append(args, "--restart-condition", "unless-stopped")
+	// For Swarm services, valid conditions are: none, on-failure, any
+	// Use "any" to always restart (closest to "unless-stopped" behavior)
+	args = append(args, "--restart-condition", "any")
 
 	// Add image
 	args = append(args, config.Image)
@@ -1751,6 +2043,45 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 func (dm *DeploymentManager) StopDeployment(ctx context.Context, deploymentID string) error {
 	logger.Info("[DeploymentManager] Stopping deployment %s", deploymentID)
 
+	// Check if we're in Swarm mode
+	isSwarmMode := isSwarmModeEnabled()
+
+	if isSwarmMode {
+		// In Swarm mode, we need to remove Swarm services
+		// Find all services for this deployment
+		// Service names follow pattern: deploy-{deploymentID}-{serviceName} or deploy-{deploymentID}-{serviceName}-replica-{i}
+		cmd := exec.CommandContext(ctx, "docker", "service", "ls", "--format", "{{.Name}}")
+		var stdout bytes.Buffer
+		cmd.Stdout = &stdout
+		if err := cmd.Run(); err == nil {
+			serviceNames := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+			prefix := fmt.Sprintf("deploy-%s-", deploymentID)
+			for _, serviceName := range serviceNames {
+				serviceName = strings.TrimSpace(serviceName)
+				if strings.HasPrefix(serviceName, prefix) {
+					// Remove the Swarm service
+					rmArgs := []string{"service", "rm", serviceName}
+					rmCmd := exec.CommandContext(ctx, "docker", rmArgs...)
+					var rmStderr bytes.Buffer
+					rmCmd.Stderr = &rmStderr
+					if err := rmCmd.Run(); err != nil {
+						logger.Warn("[DeploymentManager] Failed to remove Swarm service %s: %v (stderr: %s)", serviceName, err, rmStderr.String())
+					} else {
+						logger.Info("[DeploymentManager] Removed Swarm service %s", serviceName)
+					}
+				}
+			}
+		}
+
+		// Update all locations to stopped status
+		database.DB.Model(&database.DeploymentLocation{}).
+			Where("deployment_id = ?", deploymentID).
+			Update("status", "stopped")
+
+		return nil
+	}
+
+	// Non-Swarm mode: stop containers
 	locations, err := dm.registry.GetDeploymentLocations(deploymentID)
 	if err != nil {
 		return fmt.Errorf("failed to get deployment locations: %w", err)
@@ -2136,6 +2467,23 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 			} else {
 				logger.Warn("[DeploymentManager] Could not detect port from compose file for deployment %s - routing must be configured manually", deploymentID)
 			}
+		}
+	}
+
+	// Get plan limits for this deployment
+	maxMemoryBytes, maxCPUCores, err := dm.getPlanLimitsForDeployment(deploymentID)
+	if err != nil {
+		logger.Warn("[DeploymentManager] Failed to get plan limits for deployment %s: %v (continuing without limits)", deploymentID, err)
+	}
+
+	// Inject plan limits into compose file (if limits are set)
+	if maxMemoryBytes > 0 || maxCPUCores > 0 {
+		limitedYaml, err := dm.injectPlanLimitsIntoCompose(sanitizedYaml, deploymentID, maxMemoryBytes, maxCPUCores)
+		if err != nil {
+			logger.Warn("[DeploymentManager] Failed to inject plan limits into compose file: %v (using original YAML)", err)
+		} else {
+			sanitizedYaml = limitedYaml
+			logger.Info("[DeploymentManager] Applied plan limits to compose file: memory=%d bytes, cpu=%d cores", maxMemoryBytes, maxCPUCores)
 		}
 	}
 
