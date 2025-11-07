@@ -707,8 +707,8 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 				}
 
 				// Create one aggregated metric per container for this interval
-				for containerID, metrics := range containerMetrics {
-					if len(metrics) == 0 {
+				for containerID, containerMetricsSlice := range containerMetrics {
+					if len(containerMetricsSlice) == 0 {
 						continue
 					}
 
@@ -720,7 +720,7 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 					var sumDiskRead int64
 					var sumDiskWrite int64
 
-					for _, m := range metrics {
+					for _, m := range containerMetricsSlice {
 						sumCPU += m.CPUUsage
 						sumMemory += m.MemoryUsage
 						sumNetworkRx += m.NetworkRxBytes
@@ -729,17 +729,17 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 						sumDiskWrite += m.DiskWriteBytes
 					}
 
-					avgCPU := sumCPU / float64(len(metrics))
-					avgMemory := sumMemory / int64(len(metrics))
+					avgCPU := sumCPU / float64(len(containerMetricsSlice))
+					avgMemory := sumMemory / int64(len(containerMetricsSlice))
 
 					// Use the latest timestamp
-					latestTimestamp := metrics[len(metrics)-1].Timestamp
+					latestTimestamp := containerMetricsSlice[len(containerMetricsSlice)-1].Timestamp
 
 					if resourceType == "deployment" {
 						// Aggregate request and error counts
 						var sumRequestCount int64
 						var sumErrorCount int64
-						for _, m := range metrics {
+						for _, m := range containerMetricsSlice {
 							sumRequestCount += m.RequestCount
 							sumErrorCount += m.ErrorCount
 						}
@@ -747,7 +747,7 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 						deploymentMetricsToStore = append(deploymentMetricsToStore, database.DeploymentMetrics{
 							DeploymentID:   resourceID,
 							ContainerID:    containerID,
-							NodeID:         metrics[0].NodeID,
+							NodeID:         containerMetricsSlice[0].NodeID,
 							CPUUsage:       avgCPU,
 							MemoryUsage:    avgMemory,
 							NetworkRxBytes: sumNetworkRx,
@@ -790,7 +790,7 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 						gameServerMetricsToStore = append(gameServerMetricsToStore, database.GameServerMetrics{
 							GameServerID:   resourceID,
 							ContainerID:    containerID,
-							NodeID:         metrics[0].NodeID,
+							NodeID:         containerMetricsSlice[0].NodeID,
 							CPUUsage:       avgCPU,
 							MemoryUsage:    avgMemory,
 							NetworkRxBytes: sumNetworkRx,
