@@ -16,6 +16,7 @@ export interface SecureSessionData {
   expires_in: number;
   refresh_token?: string;
   access_token: string;
+  id_token?: string; // ID token for logout (OIDC)
 }
 export interface SessionResponse {
   session: UserSession | null;
