@@ -75,9 +75,6 @@ groups:
         maxDataPoints: 43200
         refId: B
         type: classic_conditions
-        relativeTimeRange:
-          from: 0
-          to: 0
     noDataState: Alerting
     execErrState: Alerting
     for: 2m
@@ -127,9 +124,6 @@ groups:
         maxDataPoints: 43200
         refId: B
         type: classic_conditions
-        relativeTimeRange:
-          from: 0
-          to: 0
     noDataState: NoData
     execErrState: Alerting
     for: 5m
@@ -179,9 +173,6 @@ groups:
         maxDataPoints: 43200
         refId: B
         type: classic_conditions
-        relativeTimeRange:
-          from: 0
-          to: 0
     noDataState: NoData
     execErrState: Alerting
     for: 1m
@@ -232,9 +223,6 @@ groups:
         maxDataPoints: 43200
         refId: B
         type: classic_conditions
-        relativeTimeRange:
-          from: 0
-          to: 0
     noDataState: NoData
     execErrState: Alerting
     for: 5m
@@ -285,9 +273,6 @@ groups:
         maxDataPoints: 43200
         refId: B
         type: classic_conditions
-        relativeTimeRange:
-          from: 0
-          to: 0
     noDataState: NoData
     execErrState: Alerting
     for: 5m
@@ -337,9 +322,6 @@ groups:
         maxDataPoints: 43200
         refId: B
         type: classic_conditions
-        relativeTimeRange:
-          from: 0
-          to: 0
     noDataState: NoData
     execErrState: Alerting
     for: 10m
@@ -395,9 +377,6 @@ groups:
         maxDataPoints: 43200
         refId: B
         type: classic_conditions
-        relativeTimeRange:
-          from: 0
-          to: 0
     noDataState: NoData
     execErrState: Alerting
     for: 5m
@@ -447,9 +426,6 @@ groups:
         maxDataPoints: 43200
         refId: B
         type: classic_conditions
-        relativeTimeRange:
-          from: 0
-          to: 0
     noDataState: NoData
     execErrState: Alerting
     for: 5m
@@ -500,9 +476,6 @@ groups:
         maxDataPoints: 43200
         refId: B
         type: classic_conditions
-        relativeTimeRange:
-          from: 0
-          to: 0
     noDataState: NoData
     execErrState: Alerting
     for: 10m
