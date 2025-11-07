@@ -318,7 +318,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(obiente_api_http_requests_total[5m])) by (status_code) or vector(0)",
+          "expr": "sum(rate(obiente_api_http_requests_total[5m])) by (status_code)",
           "legendFormat": "{{status_code}}",
           "range": true,
           "refId": "A"
@@ -410,7 +410,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum(rate(obiente_api_http_request_duration_seconds_bucket[5m])) by (le, method, endpoint)) or vector(0)",
+          "expr": "histogram_quantile(0.95, sum(rate(obiente_api_http_request_duration_seconds_bucket[5m])) by (le, method, endpoint))",
           "legendFormat": "p95 - {{method}} {{endpoint}}",
           "range": true,
           "refId": "A"
@@ -421,7 +421,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum(rate(obiente_api_http_request_duration_seconds_bucket[5m])) by (le, method, endpoint)) or vector(0)",
+          "expr": "histogram_quantile(0.99, sum(rate(obiente_api_http_request_duration_seconds_bucket[5m])) by (le, method, endpoint))",
           "legendFormat": "p99 - {{method}} {{endpoint}}",
           "range": true,
           "refId": "B"
@@ -770,7 +770,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(obiente_api_metrics_containers_processed_total[5m])) by (instance) or vector(0)",
+          "expr": "sum(rate(obiente_api_metrics_containers_processed_total[5m])) by (instance)",
           "legendFormat": "{{instance}}",
           "range": true,
           "refId": "A"

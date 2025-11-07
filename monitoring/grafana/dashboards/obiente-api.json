@@ -267,7 +267,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "obiente_api_http_requests_in_flight",
+          "expr": "obiente_api_http_requests_in_flight or vector(0)",
           "legendFormat": "In Flight",
           "range": true,
           "refId": "A"
@@ -326,7 +326,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(obiente_api_http_requests_total[5m]))",
+          "expr": "sum(rate(obiente_api_http_requests_total[5m])) or vector(0)",
           "legendFormat": "Total Requests/sec",
           "range": true,
           "refId": "A"
@@ -385,7 +385,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(obiente_api_http_requests_total{status_code=~\"5..\"}[5m]))",
+          "expr": "sum(rate(obiente_api_http_requests_total{status_code=~\"5..\"}[5m])) or vector(0)",
           "legendFormat": "5xx Errors/sec",
           "range": true,
           "refId": "A"
@@ -444,7 +444,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(obiente_api_http_requests_total{status_code=~\"4..\"}[5m]))",
+          "expr": "sum(rate(obiente_api_http_requests_total{status_code=~\"4..\"}[5m])) or vector(0)",
           "legendFormat": "4xx Errors/sec",
           "range": true,
           "refId": "A"
@@ -622,7 +622,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(obiente_api_metrics_collection_count_total[5m])",
+          "expr": "rate(obiente_api_metrics_collection_count_total[5m]) or vector(0)",
           "legendFormat": "Collections/sec",
           "range": true,
           "refId": "A"
@@ -800,7 +800,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(obiente_api_metrics_collection_errors_total[5m])",
+          "expr": "rate(obiente_api_metrics_collection_errors_total[5m]) or vector(0)",
           "legendFormat": "Errors/sec",
           "range": true,
           "refId": "A"
@@ -879,7 +879,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "obiente_api_metrics_healthy",
+          "expr": "obiente_api_metrics_healthy or vector(0)",
           "legendFormat": "Health Status",
           "range": true,
           "refId": "A"
@@ -938,7 +938,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "obiente_api_metrics_retry_queue_size",
+          "expr": "obiente_api_metrics_retry_queue_size or vector(0)",
           "legendFormat": "Queue Size",
           "range": true,
           "refId": "A"
@@ -997,7 +997,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "obiente_api_metrics_active_subscribers",
+          "expr": "obiente_api_metrics_active_subscribers or vector(0)",
           "legendFormat": "Subscribers",
           "range": true,
           "refId": "A"
@@ -1056,7 +1056,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "obiente_api_metrics_circuit_breaker_state",
+          "expr": "obiente_api_metrics_circuit_breaker_state or vector(0)",
           "legendFormat": "State (0=closed, 1=open, 2=half-open)",
           "range": true,
           "refId": "A"
