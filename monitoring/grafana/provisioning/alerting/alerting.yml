@@ -56,6 +56,9 @@ groups:
               intervalMs: 15000
               maxDataPoints: 43200
               format: 'time_series'
+            relativeTimeRange:
+              from: 300
+              to: 0
         noDataState: 'Alerting'
         execErrState: 'Alerting'
         for: '2m'
@@ -78,6 +81,9 @@ groups:
               intervalMs: 15000
               maxDataPoints: 43200
               format: 'time_series'
+            relativeTimeRange:
+              from: 600
+              to: 0
         noDataState: 'NoData'
         execErrState: 'Alerting'
         for: '5m'
@@ -100,6 +106,9 @@ groups:
               intervalMs: 15000
               maxDataPoints: 43200
               format: 'time_series'
+            relativeTimeRange:
+              from: 300
+              to: 0
         noDataState: 'NoData'
         execErrState: 'Alerting'
         for: '1m'
@@ -122,6 +131,9 @@ groups:
               intervalMs: 15000
               maxDataPoints: 43200
               format: 'time_series'
+            relativeTimeRange:
+              from: 600
+              to: 0
         noDataState: 'NoData'
         execErrState: 'Alerting'
         for: '5m'
@@ -144,6 +156,9 @@ groups:
               intervalMs: 15000
               maxDataPoints: 43200
               format: 'time_series'
+            relativeTimeRange:
+              from: 600
+              to: 0
         noDataState: 'NoData'
         execErrState: 'Alerting'
         for: '5m'
@@ -166,6 +181,9 @@ groups:
               intervalMs: 15000
               maxDataPoints: 43200
               format: 'time_series'
+            relativeTimeRange:
+              from: 600
+              to: 0
         noDataState: 'NoData'
         execErrState: 'Alerting'
         for: '10m'
@@ -193,6 +211,9 @@ groups:
               intervalMs: 15000
               maxDataPoints: 43200
               format: 'time_series'
+            relativeTimeRange:
+              from: 300
+              to: 0
         noDataState: 'NoData'
         execErrState: 'Alerting'
         for: '5m'
@@ -215,6 +236,9 @@ groups:
               intervalMs: 15000
               maxDataPoints: 43200
               format: 'time_series'
+            relativeTimeRange:
+              from: 600
+              to: 0
         noDataState: 'NoData'
         execErrState: 'Alerting'
         for: '5m'
@@ -237,6 +261,9 @@ groups:
               intervalMs: 15000
               maxDataPoints: 43200
               format: 'time_series'
+            relativeTimeRange:
+              from: 600
+              to: 0
         noDataState: 'NoData'
         execErrState: 'Alerting'
         for: '10m'
