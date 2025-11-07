@@ -265,53 +265,131 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 		}
 	}
 
-	// Create containers for each service and replica
+	// Check if we're in Swarm mode
+	isSwarmMode := isSwarmModeEnabled()
+
+	// Create containers/services for each service and replica
 	for _, serviceName := range serviceNames {
 		for i := 0; i < config.Replicas; i++ {
 			containerName := fmt.Sprintf("%s-%s-replica-%d", config.DeploymentID, serviceName, i)
 
-			// Remove existing container with this name if it exists (for redeployments)
-			if err := dm.removeContainerByName(ctx, containerName); err != nil {
-				logger.Warn("[DeploymentManager] Failed to remove existing container %s: %v (will attempt to create anyway)", containerName, err)
-			}
+			var containerID string
+			var err error
 
-			containerID, err := dm.createContainer(ctx, config, containerName, i, serviceName)
-			if err != nil {
-				return fmt.Errorf("failed to create container: %w", err)
-			}
+			if isSwarmMode {
+				// In Swarm mode, create Swarm services instead of plain containers
+				logger.Info("[DeploymentManager] Creating Swarm service for deployment %s (service: %s, replica: %d)", config.DeploymentID, serviceName, i)
 
-			// Start container
-			if err := dm.dockerHelper.StartContainer(ctx, containerID); err != nil {
-				return fmt.Errorf("failed to start container: %w", err)
-			}
+				// Remove existing service if it exists
+				swarmServiceName := fmt.Sprintf("deploy-%s-%s", config.DeploymentID, serviceName)
+				if i > 0 {
+					swarmServiceName = fmt.Sprintf("deploy-%s-%s-replica-%d", config.DeploymentID, serviceName, i)
+				}
+				rmArgs := []string{"service", "rm", swarmServiceName}
+				rmCmd := exec.CommandContext(ctx, "docker", rmArgs...)
+				rmCmd.Run() // Ignore errors - service might not exist
 
-			// Get container details
-			containerInfo, err := dm.dockerClient.ContainerInspect(ctx, containerID)
-			if err != nil {
-				return fmt.Errorf("failed to inspect container: %w", err)
-			}
+				// Wait a moment for service removal
+				time.Sleep(1 * time.Second)
 
-			// Determine the public port (find port for this service from routing)
-			publicPort := config.Port
-			for _, routing := range routings {
-				if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
-					publicPort = routing.TargetPort
-					break
+				// Create Swarm service
+				_, containerID, err = dm.createSwarmService(ctx, config, serviceName, i)
+				if err != nil {
+					return fmt.Errorf("failed to create Swarm service: %w", err)
+				}
+
+				// For Swarm services, containerID might be empty initially - try to get it from service tasks
+				if containerID == "" {
+					// Wait a bit more for task to be created
+					time.Sleep(2 * time.Second)
+					// Try to find container by service name label
+					filterArgs := filters.NewArgs()
+					filterArgs.Add("label", fmt.Sprintf("com.docker.swarm.service.name=%s", swarmServiceName))
+					containers, listErr := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+						All:     true,
+						Filters: filterArgs,
+					})
+					if listErr == nil && len(containers) > 0 {
+						containerID = containers[0].ID
+					}
+				}
+
+				if containerID == "" {
+					logger.Warn("[DeploymentManager] Could not get container ID from Swarm service %s - service created but container lookup failed", swarmServiceName)
+					// Continue anyway - the service exists and Traefik can discover it
+					// We'll use a placeholder container ID
+					containerID = "swarm-service-" + swarmServiceName
+				}
+			} else {
+				// In non-Swarm mode, create plain containers
+				// Remove existing container with this name if it exists (for redeployments)
+				if err := dm.removeContainerByName(ctx, containerName); err != nil {
+					logger.Warn("[DeploymentManager] Failed to remove existing container %s: %v (will attempt to create anyway)", containerName, err)
+				}
+
+				containerID, err = dm.createContainer(ctx, config, containerName, i, serviceName)
+				if err != nil {
+					return fmt.Errorf("failed to create container: %w", err)
+				}
+
+				// Start container
+				if err := dm.dockerHelper.StartContainer(ctx, containerID); err != nil {
+					return fmt.Errorf("failed to start container: %w", err)
 				}
 			}
-			if len(containerInfo.NetworkSettings.Ports) > 0 {
-				for _, bindings := range containerInfo.NetworkSettings.Ports {
-					if len(bindings) > 0 {
-						if port, err := strconv.Atoi(bindings[0].HostPort); err == nil {
-							publicPort = port
+
+			// Get container details (if containerID is valid, not a placeholder)
+			var publicPort int
+			if !strings.HasPrefix(containerID, "swarm-service-") {
+				info, err := dm.dockerClient.ContainerInspect(ctx, containerID)
+				if err == nil {
+					// Determine the public port (find port for this service from routing)
+					publicPort = config.Port
+					for _, routing := range routings {
+						if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
+							publicPort = routing.TargetPort
+							break
 						}
+					}
+					if len(info.NetworkSettings.Ports) > 0 {
+						for _, bindings := range info.NetworkSettings.Ports {
+							if len(bindings) > 0 {
+								if port, err := strconv.Atoi(bindings[0].HostPort); err == nil {
+									publicPort = port
+								}
+							}
+						}
+					}
+				} else {
+					logger.Warn("[DeploymentManager] Failed to inspect container %s: %v", containerID, err)
+					publicPort = config.Port
+					for _, routing := range routings {
+						if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
+							publicPort = routing.TargetPort
+							break
+						}
+					}
+				}
+			} else {
+				// Placeholder container ID - use routing port
+				publicPort = config.Port
+				for _, routing := range routings {
+					if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
+						publicPort = routing.TargetPort
+						break
 					}
 				}
 			}
 
 			// Register deployment location
 			location := &database.DeploymentLocation{
-				ID:           fmt.Sprintf("loc-%s-%s", config.DeploymentID, containerID[:12]),
+				ID: func() string {
+					shortID := containerID
+					if len(shortID) > 12 {
+						shortID = shortID[:12]
+					}
+					return fmt.Sprintf("loc-%s-%s", config.DeploymentID, shortID)
+				}(),
 				DeploymentID: config.DeploymentID,
 				NodeID:       dm.nodeID,
 				NodeHostname: dm.nodeHostname,
@@ -328,8 +406,17 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				logger.Warn("[DeploymentManager] Failed to register deployment: %v", err)
 			}
 
-			logger.Info("[DeploymentManager] Successfully created container %s for deployment %s (service: %s)",
-				containerID[:12], config.DeploymentID, serviceName)
+			if isSwarmMode {
+				shortID := containerID
+				if len(shortID) > 12 {
+					shortID = shortID[:12]
+				}
+				logger.Info("[DeploymentManager] Successfully created Swarm service for deployment %s (service: %s, replica: %d, container: %s)",
+					config.DeploymentID, serviceName, i, shortID)
+			} else {
+				logger.Info("[DeploymentManager] Successfully created container %s for deployment %s (service: %s)",
+					containerID[:12], config.DeploymentID, serviceName)
+			}
 		}
 	}
 
@@ -1171,6 +1258,216 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	}
 
 	return resp.ID, nil
+}
+
+// createSwarmService creates a Swarm service for a deployment
+// Returns the service ID and container ID (from the first task)
+func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int) (string, string, error) {
+	// Get routing rules for this deployment
+	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
+
+	// Prepare labels
+	labels := map[string]string{
+		"cloud.obiente.managed":       "true",
+		"cloud.obiente.deployment_id": config.DeploymentID,
+		"cloud.obiente.domain":        config.Domain,
+		"cloud.obiente.service_name":  serviceName,
+		"cloud.obiente.replica":       strconv.Itoa(replicaIndex),
+	}
+
+	// Generate Traefik labels from routing rules
+	servicePort := config.Port
+	traefikLabels := generateTraefikLabels(config.DeploymentID, serviceName, routings, &servicePort)
+	for k, v := range traefikLabels {
+		labels[k] = v
+	}
+	// Only set cloud.obiente.traefik if we actually generated Traefik labels
+	if len(traefikLabels) > 0 {
+		labels["cloud.obiente.traefik"] = "true" // Required for Traefik discovery
+	}
+
+	// Determine health check port - ALWAYS use routing target port if available
+	healthCheckPort := 0
+	if len(routings) > 0 {
+		for _, routing := range routings {
+			if routing.ServiceName == serviceName || (serviceName == "default" && (routing.ServiceName == "" || routing.ServiceName == "default")) {
+				if routing.TargetPort > 0 {
+					healthCheckPort = routing.TargetPort
+					break
+				}
+			}
+		}
+		if healthCheckPort == 0 && len(routings) > 0 && routings[0].TargetPort > 0 {
+			healthCheckPort = routings[0].TargetPort
+		}
+	}
+	if healthCheckPort == 0 && config.Port > 0 {
+		healthCheckPort = config.Port
+	}
+
+	// Determine container port
+	containerPortNum := config.Port
+	if len(routings) > 0 {
+		for _, routing := range routings {
+			if routing.ServiceName == serviceName || (serviceName == "default" && (routing.ServiceName == "" || routing.ServiceName == "default")) {
+				if routing.TargetPort > 0 {
+					containerPortNum = routing.TargetPort
+					break
+				}
+			}
+		}
+		if containerPortNum == config.Port && len(routings) > 0 && routings[0].TargetPort > 0 {
+			containerPortNum = routings[0].TargetPort
+		}
+	}
+
+	// Add custom labels
+	for k, v := range config.Labels {
+		labels[k] = v
+	}
+
+	// Prepare environment variables
+	env := []string{}
+	for k, v := range config.EnvVars {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	// Ensure netcat is available for health checks
+	if healthCheckPort > 0 {
+		if _, exists := config.EnvVars["NIXPACKS_APT_PKGS"]; !exists {
+			env = append(env, "NIXPACKS_APT_PKGS=netcat-openbsd")
+		}
+		if _, exists := config.EnvVars["RAILPACK_DEPLOY_APT_PACKAGES"]; !exists {
+			env = append(env, "RAILPACK_DEPLOY_APT_PACKAGES=netcat-openbsd")
+		}
+	}
+
+	// Service name format: deploy-{deploymentID}-{serviceName}
+	swarmServiceName := fmt.Sprintf("deploy-%s-%s", config.DeploymentID, serviceName)
+	if replicaIndex > 0 {
+		swarmServiceName = fmt.Sprintf("deploy-%s-%s-replica-%d", config.DeploymentID, serviceName, replicaIndex)
+	}
+
+	// Build docker service create command
+	args := []string{"service", "create",
+		"--name", swarmServiceName,
+		"--network", "obiente_obiente-network", // Use the Swarm network name
+		"--replicas", "1",
+	}
+
+	// Add labels
+	for k, v := range labels {
+		args = append(args, "--label", fmt.Sprintf("%s=%s", k, v))
+	}
+
+	// Add environment variables
+	for _, e := range env {
+		args = append(args, "--env", e)
+	}
+
+	// Add start command if provided
+	if config.StartCommand != nil && *config.StartCommand != "" {
+		args = append(args, "--command", *config.StartCommand)
+	}
+
+	// Add health check if we have a port
+	if healthCheckPort > 0 {
+		healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, healthCheckPort, healthCheckPort)
+		args = append(args,
+			"--health-cmd", healthCheckCmd,
+			"--health-interval", "30s",
+			"--health-timeout", "10s",
+			"--health-retries", "3",
+			"--health-start-period", "40s",
+		)
+	}
+
+	// Add resource limits
+	args = append(args,
+		"--limit-memory", fmt.Sprintf("%d", config.Memory),
+		"--limit-cpu", fmt.Sprintf("%d", config.CPUShares),
+	)
+
+	// Add restart policy
+	args = append(args, "--restart-condition", "unless-stopped")
+
+	// Add image
+	args = append(args, config.Image)
+
+	// Execute docker service create
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	var stderr bytes.Buffer
+	var stdout bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Stdout = &stdout
+
+	if err := cmd.Run(); err != nil {
+		errorOutput := stderr.String()
+		stdOutput := stdout.String()
+		logger.Error("[DeploymentManager] Failed to create Swarm service %s: %v\nStderr: %s\nStdout: %s", swarmServiceName, err, errorOutput, stdOutput)
+		return "", "", fmt.Errorf("failed to create Swarm service: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
+	}
+
+	serviceID := strings.TrimSpace(stdout.String())
+	logger.Info("[DeploymentManager] Created Swarm service %s (ID: %s)", swarmServiceName, serviceID)
+
+	// Wait a moment for the service to create a task
+	time.Sleep(2 * time.Second)
+
+	// Get container ID from service tasks
+	// In Swarm, we need to inspect the service and get the task's container ID
+	inspectArgs := []string{"service", "inspect", swarmServiceName, "--format", "{{.ID}}"}
+	inspectCmd := exec.CommandContext(ctx, "docker", inspectArgs...)
+	var inspectStdout bytes.Buffer
+	inspectCmd.Stdout = &inspectStdout
+	if err := inspectCmd.Run(); err == nil {
+		serviceID = strings.TrimSpace(inspectStdout.String())
+	}
+
+	// Get tasks for this service to find the container ID
+	taskArgs := []string{"service", "ps", swarmServiceName, "--format", "{{.ID}}", "--no-trunc"}
+	taskCmd := exec.CommandContext(ctx, "docker", taskArgs...)
+	var taskStdout bytes.Buffer
+	taskCmd.Stdout = &taskStdout
+	var containerID string
+	if err := taskCmd.Run(); err == nil {
+		taskIDs := strings.TrimSpace(taskStdout.String())
+		if taskIDs != "" {
+			taskIDList := strings.Split(taskIDs, "\n")
+			if len(taskIDList) > 0 {
+				// Get container ID from the first task
+				taskID := strings.TrimSpace(taskIDList[0])
+				if taskID != "" {
+					// Inspect the task to get container ID
+					taskInspectArgs := []string{"inspect", taskID, "--format", "{{.Status.ContainerStatus.ContainerID}}"}
+					taskInspectCmd := exec.CommandContext(ctx, "docker", taskInspectArgs...)
+					var taskInspectStdout bytes.Buffer
+					taskInspectCmd.Stdout = &taskInspectStdout
+					if err := taskInspectCmd.Run(); err == nil {
+						containerID = strings.TrimSpace(taskInspectStdout.String())
+					}
+				}
+			}
+		}
+	}
+
+	// If we couldn't get container ID from task, we'll use the service ID as a placeholder
+	// The container will be created by Swarm and we can look it up later
+	if containerID == "" {
+		logger.Warn("[DeploymentManager] Could not get container ID from Swarm service %s tasks - will look up later", swarmServiceName)
+		// Try to find container by service label
+		filterArgs := filters.NewArgs()
+		filterArgs.Add("label", fmt.Sprintf("com.docker.swarm.service.name=%s", swarmServiceName))
+		containers, _ := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+			All:     true,
+			Filters: filterArgs,
+		})
+		if len(containers) > 0 {
+			containerID = containers[0].ID
+		}
+	}
+
+	return serviceID, containerID, nil
 }
 
 // StartDeployment starts all containers for a deployment

@@ -66,7 +66,7 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   # Substitute DOMAIN variable in labels (Docker Swarm doesn't expand env vars in labels)
   TEMP_DASHBOARD_COMPOSE=$(mktemp)
   sed "s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
-  STACK_NAME="$STACK_NAME" docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}_dashboard"
+  STACK_NAME="$STACK_NAME" docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}"
   rm -f "$TEMP_DASHBOARD_COMPOSE"
   echo -e "${GREEN}✅ Dashboard stack redeployed!${NC}"
   echo ""
