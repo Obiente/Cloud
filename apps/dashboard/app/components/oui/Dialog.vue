@@ -14,10 +14,10 @@
           class="fixed inset-0 z-50 flex items-center justify-center p-4"
         >
           <Dialog.Content
-            class="w-full max-w-lg max-h-[85vh] overflow-auto animate-in fade-in-0 zoom-in-95 duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
+            class="w-full max-w-lg max-h-[85vh] flex flex-col animate-in fade-in-0 zoom-in-95 duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
           >
-            <OuiCard variant="raised" class="shadow-2xl">
-              <OuiCardHeader class="flex items-center justify-between">
+            <OuiCard variant="raised" class="shadow-2xl flex flex-col flex-1 min-h-0">
+              <OuiCardHeader class="flex items-center justify-between flex-shrink-0">
                 <Dialog.Title>
                   <OuiText v-if="title" as="h2" size="lg" weight="semibold" color="primary">
                     {{ title }}
@@ -36,7 +36,7 @@
                 </Dialog.CloseTrigger>
               </OuiCardHeader>
 
-              <OuiCardBody>
+              <OuiCardBody class="flex-1 overflow-auto min-h-0">
                 <Dialog.Description v-if="description" class="mb-4">
                   <OuiText color="secondary">
                     {{ description }}
@@ -48,7 +48,7 @@
 
               <OuiCardFooter
                 v-if="$slots.footer"
-                class="flex justify-end space-x-3"
+                class="flex justify-end space-x-3 flex-shrink-0"
               >
                 <slot name="footer" />
               </OuiCardFooter>
