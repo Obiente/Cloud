@@ -139,6 +139,12 @@
             exact-match
           />
           <AppNavigationLink
+            to="/superadmin/audit-logs"
+            label="Global Audit Logs"
+            :icon="ClipboardDocumentListIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
             to="/superadmin/organizations"
             label="Organizations"
             :icon="BuildingOfficeIcon"

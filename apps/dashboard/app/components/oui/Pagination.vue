@@ -68,9 +68,9 @@ const emit = defineEmits<{
 
 const totalPages = computed(() => Math.ceil(props.count / props.pageSize))
 
-const handlePageChange = (details: { page: number }) => {
-  emit('update:page', details.page)
-  emit('page-change', details.page)
+const handlePageChange = (page: number) => {
+  emit('update:page', page)
+  emit('page-change', page)
 }
 </script>
 

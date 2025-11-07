@@ -5,31 +5,27 @@
       <OuiFlex justify="between" align="center" wrap="wrap" gap="lg">
         <OuiStack gap="xs" class="flex-1">
           <OuiText as="h1" size="3xl" weight="bold" color="primary">
-            Audit Logs
+            Global Audit Logs
           </OuiText>
           <OuiText color="secondary">
-            View audit logs for your organization. Accessible to admins and superadmins.
+            View all audit logs across all resources and organizations. Only accessible to superadmins.
           </OuiText>
         </OuiStack>
       </OuiFlex>
 
-      <!-- Audit Logs Component (scoped to selected organization) -->
-      <AuditLogs :organization-id="organizationId" />
+      <!-- Audit Logs Component (no organizationId prop = shows ALL audit logs from ALL organizations) -->
+      <AuditLogs />
     </OuiStack>
   </OuiContainer>
 </template>
 
 <script setup lang="ts">
 import AuditLogs from "~/components/audit/AuditLogs.vue";
-import { useOrganizationId } from "~/composables/useOrganizationId";
 
-// Page meta - require auth (API will check for admin/superadmin role)
+// Page meta - require superadmin access
 definePageMeta({
   layout: "default",
-  middleware: "auth",
+  middleware: ["auth", "superadmin"],
 });
-
-// Get organizationId using SSR-compatible composable
-const organizationId = useOrganizationId();
 </script>
 

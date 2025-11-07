@@ -77,6 +77,8 @@ func (s *Service) ListAuditLogs(ctx context.Context, req *connect.Request[auditv
 	query := database.MetricsDB.Model(&database.AuditLog{})
 
 	// Apply filters
+	// Note: If OrganizationId is not provided, all audit logs from all organizations are returned
+	// This allows superadmins/admins to view global audit logs
 	if req.Msg.OrganizationId != nil && *req.Msg.OrganizationId != "" {
 		query = query.Where("organization_id = ?", *req.Msg.OrganizationId)
 	}

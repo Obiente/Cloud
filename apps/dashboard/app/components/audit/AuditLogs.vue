@@ -5,7 +5,7 @@
       <OuiText as="h3" size="lg" weight="bold">Audit Logs</OuiText>
       <OuiFlex gap="sm" align="center" wrap="wrap">
         <OuiText v-if="!isLoading" size="sm" color="secondary">
-          {{ total }} log{{ total !== 1 ? 's' : '' }}
+          {{ estimatedTotal }} log{{ estimatedTotal !== 1 ? 's' : '' }}
         </OuiText>
         <OuiButton
           variant="ghost"
@@ -22,6 +22,15 @@
     <OuiCard v-if="hasMultipleFilterOptions" variant="outline">
       <OuiCardBody>
         <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="md">
+          <OuiStack v-if="!props.organizationId && organizationOptions.length > 1" gap="xs">
+            <OuiText size="sm" weight="medium">Organization</OuiText>
+            <OuiSelect
+              v-model="filters.organizationId"
+              :items="organizationOptions"
+              placeholder="All organizations"
+              clearable
+            />
+          </OuiStack>
           <OuiStack v-if="serviceOptions.length > 1" gap="xs">
             <OuiText size="sm" weight="medium">Service</OuiText>
             <OuiSelect
@@ -159,7 +168,7 @@
     </OuiFlex>
 
     <!-- Details Dialog -->
-    <OuiDialog v-model="detailsDialogOpen" title="Audit Log Details">
+    <OuiDialog v-model:open="detailsDialogOpen" title="Audit Log Details">
       <OuiStack gap="md" v-if="selectedLog">
         <OuiGrid cols="1" cols-md="2" gap="md">
           <OuiStack gap="xs">
@@ -243,7 +252,7 @@ import {
   DocumentTextIcon,
   EyeIcon,
 } from "@heroicons/vue/24/outline";
-import { AuditService, type AuditLogEntry } from "@obiente/proto";
+import { AuditService, OrganizationService, type AuditLogEntry } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { date } from "@obiente/proto/utils";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
@@ -261,6 +270,7 @@ interface Props {
 const props = defineProps<Props>();
 
 const client = useConnectClient(AuditService);
+const orgClient = useConnectClient(OrganizationService);
 
 const auditLogs = ref<AuditLogEntry[]>([]);
 const isLoading = ref(false);
@@ -286,6 +296,7 @@ const filterOptionsData = ref<AuditLogEntry[]>([]);
 const isLoadingFilterOptions = ref(false);
 
 const filters = ref({
+  organizationId: undefined as string | undefined,
   service: undefined as string | undefined,
   action: undefined as string | undefined,
   userId: undefined as string | undefined,
@@ -302,9 +313,11 @@ const loadFilterOptions = async () => {
       pageSize: 1000, // Load a large sample to get all available filter values
     };
 
-    // Apply organization filter for filter options (if provided as prop)
+    // Apply organization filter for filter options (if provided as prop or filter)
     if (props.organizationId) {
       request.organizationId = props.organizationId;
+    } else if (filters.value.organizationId != null && filters.value.organizationId !== "") {
+      request.organizationId = filters.value.organizationId;
     }
 
     // If resourceType/resourceId are provided, filter options to that resource
@@ -414,9 +427,40 @@ const statusOptions = computed(() => {
   return options;
 });
 
+// Load organizations for filter (only when not scoped to a specific org)
+const organizations = ref<Array<{ id: string; name: string }>>([]);
+const isLoadingOrganizations = ref(false);
+
+const loadOrganizations = async () => {
+  // Only load if we're not scoped to a specific organization (global view)
+  if (props.organizationId || isLoadingOrganizations.value) return;
+  
+  isLoadingOrganizations.value = true;
+  try {
+    const response = await orgClient.listOrganizations({
+      onlyMine: false, // Get all organizations for superadmins
+    });
+    organizations.value = (response.organizations || []).map((org) => ({
+      id: org.id,
+      name: org.name || org.slug || org.id,
+    }));
+  } catch (error) {
+    console.error("Failed to load organizations:", error);
+  } finally {
+    isLoadingOrganizations.value = false;
+  }
+};
+
+const organizationOptions = computed(() => {
+  return organizations.value
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((org) => ({ label: org.name, value: org.id }));
+});
+
 // Check if there are multiple filter options (to decide if we should show the filter card)
 const hasMultipleFilterOptions = computed(() => {
-  return serviceOptions.value.length > 1 ||
+  return (!props.organizationId && organizationOptions.value.length > 1) ||
+         serviceOptions.value.length > 1 ||
          actionOptions.value.length > 1 ||
          userOptions.value.length > 1 ||
          statusOptions.value.length > 1;
@@ -445,8 +489,11 @@ const loadAuditLogs = async (page: number = currentPage.value) => {
       pageSize: pageSize.value,
     };
 
+    // Use prop organizationId if provided, otherwise use filter
     if (props.organizationId) {
       request.organizationId = props.organizationId;
+    } else if (filters.value.organizationId != null && filters.value.organizationId !== "") {
+      request.organizationId = filters.value.organizationId;
     }
 
     if (props.resourceType) {
@@ -521,6 +568,7 @@ const handlePageChange = (page: number) => {
 // Watch filters and reload when they change
 watch(
   () => [
+    filters.value.organizationId,
     filters.value.service,
     filters.value.action,
     filters.value.userId,
@@ -530,6 +578,10 @@ watch(
     // Reset pagination when filters change
     currentPage.value = 1;
     nextPageToken.value = undefined;
+    // Reload filter options when organization filter changes (to update other filter options)
+    if (filters.value.organizationId !== undefined) {
+      loadFilterOptions();
+    }
     loadAuditLogs(1);
   }
 );
@@ -580,6 +632,8 @@ const formatRequestData = (data: string): string => {
         );
 
         onMounted(() => {
+          // Load organizations for filter (if global view)
+          loadOrganizations();
           // Load filter options first, then load the actual filtered results
           loadFilterOptions();
           loadAuditLogs(1);
