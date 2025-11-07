@@ -12,21 +12,75 @@ export default defineNuxtConfig({
         port: 24678, // Use a different port for HMR
       },
       watch: {
+        usePolling: true, // Use polling to avoid EMFILE errors
+        interval: 1000, // Poll every 1 second
         ignored: [
-          "**/node_modules/**",
-          "**/.git/**",
-          "**/packages/**",
-          "**/dist/**",
-          "**/.nuxt/**",
-          "**/apps/api/**",
-          "**/apps/*/dist/**",
-          "**/scripts/**",
-          "**/tools/**",
-          "**/.nx/**",
+          /node_modules/,
+          /\.git/,
+          /packages/,
+          /dist/,
+          /\.nuxt/,
+          /apps\/api/,
+          /scripts/,
+          /tools/,
+          /\.nx/,
+          /tsconfig\.tsbuildinfo/,
+          /\.log$/,
+          /\.turbo/,
         ],
       },
     },
+    build: {
+      rollupOptions: {
+        external: [
+          "packages/proto",
+
+          /^@obiente\/proto/, // or use exact paths like 'packages/proto/src/generated/...'
+        ],
+
+        watch: {
+          // Exclude directories that shouldn't be watched
+          // Note: Rollup watches all files in the dependency graph, so we can't completely avoid watching packages/node_modules
+          // but we can exclude them from the watch list to reduce file handles
+          exclude: [
+            "**/node_modules/**",
+            "**/.git/**",
+            "**/packages/**",
+            "**/dist/**",
+            "**/.nuxt/**",
+            "**/apps/api/**",
+            "**/scripts/**",
+            "**/tools/**",
+            "**/.nx/**",
+            "**/tsconfig.tsbuildinfo",
+            "**/*.log",
+            "**/.turbo/**",
+          ],
+        },
+      },
+    },
   },
+  // Nuxt-level watch configuration
+  watch: [
+    // Only watch files within the dashboard app directory
+    "apps/dashboard/**",
+  ],
+  ignore: [
+    // Ignore patterns for Nuxt's watcher
+    "**/node_modules/**",
+    "**/.git/**",
+    "**/packages/**",
+    "**/dist/**",
+    "**/.nuxt/**",
+    "**/apps/api/**",
+    "**/apps/*/dist/**",
+    "**/scripts/**",
+    "**/tools/**",
+    "**/.nx/**",
+    "**/tsconfig.tsbuildinfo",
+    "**/*.log",
+    "**/.turbo/**",
+  ],
   // Modules
   modules: ["@pinia/nuxt", "@vueuse/nuxt", "@nuxt/icon"],
 
@@ -45,8 +99,7 @@ export default defineNuxtConfig({
     apiSecret: "",
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET || "", // Server-side only - never expose to client
     session: {
-      password:
-         "changeme_" + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters
+      password: "changeme_" + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters
       cookie: {
         secure: true, // Set to true if using HTTPS
       },
@@ -59,7 +112,6 @@ export default defineNuxtConfig({
       oidcBase: "https://auth.obiente.cloud",
       oidcClientId: "339499954043158530",
       githubClientId: "",
-      disableAuth: false,
       stripePublishableKey: "",
     },
   },
