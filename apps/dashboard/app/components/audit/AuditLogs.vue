@@ -123,7 +123,7 @@
           </template>
 
           <template #cell-duration="{ row }">
-            <OuiText size="sm">{{ formatDuration(row.durationMs) }}</OuiText>
+            <OuiDuration :value="row.durationMs" />
           </template>
 
           <template #cell-time="{ row }">
@@ -211,7 +211,7 @@
           </OuiStack>
           <OuiStack gap="xs">
             <OuiText size="xs" color="muted" weight="semibold" transform="uppercase">Duration</OuiText>
-            <OuiText size="sm">{{ formatDuration(selectedLog.durationMs) }}</OuiText>
+            <OuiDuration :value="selectedLog.durationMs" />
           </OuiStack>
         </OuiGrid>
 
@@ -249,6 +249,7 @@ import { useConnectClient } from "~/lib/connect-client";
 import { date } from "@obiente/proto/utils";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 import OuiCode from "~/components/oui/Code.vue";
+import OuiDuration from "~/components/oui/Duration.vue";
 
 interface Props {
   organizationId?: string;
@@ -550,34 +551,6 @@ const getRowClass = (row: AuditLogEntry) => {
     return "bg-danger/5";
   }
   return "";
-};
-
-const formatDuration = (ms: number | bigint): string => {
-  const msNum = typeof ms === 'bigint' ? Number(ms) : ms;
-  
-  // Less than 1 second - show milliseconds
-  if (msNum < 1000) {
-    return `${msNum}ms`;
-  }
-  
-  // Less than 1 minute - show seconds with appropriate precision
-  if (msNum < 60000) {
-    const seconds = msNum / 1000;
-    // If less than 10 seconds, show 2 decimal places, otherwise 1
-    if (seconds < 10) {
-      return `${seconds.toFixed(2)}s`;
-    }
-    return `${seconds.toFixed(1)}s`;
-  }
-  
-  // 1 minute or more - show minutes and seconds
-  const minutes = Math.floor(msNum / 60000);
-  const remainingSeconds = Math.floor((msNum % 60000) / 1000);
-  
-  if (remainingSeconds === 0) {
-    return `${minutes}m`;
-  }
-  return `${minutes}m ${remainingSeconds}s`;
 };
 
 const formatRequestData = (data: string): string => {
