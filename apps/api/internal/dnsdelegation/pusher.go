@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"api/internal/database"
+	"api/internal/logger"
 )
 
 // PusherConfig represents configuration for DNS record pusher
@@ -141,20 +141,34 @@ func PushAllDNSRecords(config PusherConfig) error {
 				continue
 			}
 
+			// Get organization ID from deployment
+			var organizationID string
+			if err := database.DB.Table("deployments").
+				Select("organization_id").
+				Where("id = ?", deploymentID).
+				Pluck("organization_id", &organizationID).Error; err != nil {
+				logger.Warn("[DNS Pusher] Failed to get organization ID for deployment %s: %v", deploymentID, err)
+				// Continue anyway - we'll try to store without org ID
+			}
+
 			ips, err := database.GetDeploymentTraefikIP(deploymentID, traefikIPMap)
 			if err != nil {
-				log.Printf("[DNS Pusher] Failed to get IPs for deployment %s: %v", deploymentID, err)
+				logger.Warn("[DNS Pusher] Failed to get IPs for deployment %s: %v", deploymentID, err)
 				continue
 			}
 
 			if len(ips) > 0 {
 				domain := deploymentID + ".my.obiente.cloud"
-				records = append(records, map[string]interface{}{
+				record := map[string]interface{}{
 					"domain":      domain,
 					"record_type": "A",
 					"records":     ips,
 					"ttl":         config.TTL,
-				})
+				}
+				if organizationID != "" {
+					record["organization_id"] = organizationID
+				}
+				records = append(records, record)
 			}
 		}
 		deploymentLocations.Close()
@@ -172,21 +186,35 @@ func PushAllDNSRecords(config PusherConfig) error {
 				continue
 			}
 
+			// Get organization ID from game server
+			var organizationID string
+			if err := database.DB.Table("game_servers").
+				Select("organization_id").
+				Where("id = ?", gameServerID).
+				Pluck("organization_id", &organizationID).Error; err != nil {
+				logger.Warn("[DNS Pusher] Failed to get organization ID for game server %s: %v", gameServerID, err)
+				// Continue anyway - we'll try to store without org ID
+			}
+
 			if nodeIP != "" {
 				domain := gameServerID + ".my.obiente.cloud"
-				records = append(records, map[string]interface{}{
+				record := map[string]interface{}{
 					"domain":      domain,
 					"record_type": "A",
 					"records":     []string{nodeIP},
 					"ttl":         config.TTL,
-				})
+				}
+				if organizationID != "" {
+					record["organization_id"] = organizationID
+				}
+				records = append(records, record)
 			}
 		}
 		gameServerLocations.Close()
 	}
 
 	if len(records) == 0 {
-		log.Printf("[DNS Pusher] No DNS records to push")
+		logger.Info("[DNS Pusher] No DNS records to push")
 		return nil
 	}
 
@@ -233,18 +261,73 @@ func PushAllDNSRecords(config PusherConfig) error {
 		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	log.Printf("[DNS Pusher] Successfully pushed %d DNS records", len(records))
+	logger.Info("[DNS Pusher] Successfully pushed %d DNS records to production", len(records))
+
+	// Also store records locally so they appear in the superadmin DNS page
+	// Get API key ID (for tracking, but organization ID comes from each deployment/game server)
+	var apiKeyID string
+	apiKeyInfo, err := database.GetDNSDelegationAPIKeyByHash(config.APIKey)
+	if err == nil {
+		apiKeyID = apiKeyInfo.ID
+		logger.Info("[DNS Pusher] Found API key in local database: key=%s", apiKeyID)
+	}
+
+	// Get source API URL for tracking (reuse the one already set above)
+	if sourceAPI == "" {
+		sourceAPI = os.Getenv("DASHBOARD_URL")
+	}
+	if sourceAPI == "" {
+		sourceAPI = "local" // Fallback if no URL is set
+	}
+
+	// Store each record locally with its own organization ID
+	localStoreCount := 0
+	for _, recordData := range records {
+		domain, _ := recordData["domain"].(string)
+		recordType, _ := recordData["record_type"].(string)
+		recordsList, _ := recordData["records"].([]string)
+		ttl, _ := recordData["ttl"].(int64)
+		// Get organization ID from the record (set when building the record)
+		recordOrgID, _ := recordData["organization_id"].(string)
+
+		if domain == "" || recordType == "" || len(recordsList) == 0 {
+			continue
+		}
+
+		// Convert records to JSON
+		recordsJSON, err := json.Marshal(recordsList)
+		if err != nil {
+			logger.Warn("[DNS Pusher] Failed to marshal records for local storage (%s): %v", domain, err)
+			continue
+		}
+
+		// Store locally with the organization ID from the deployment/game server
+		if err := database.UpsertDelegatedDNSRecordWithAPIKey(domain, recordType, string(recordsJSON), sourceAPI, apiKeyID, recordOrgID, ttl); err != nil {
+			logger.Warn("[DNS Pusher] Failed to store record locally (%s): %v", domain, err)
+			continue
+		}
+
+		localStoreCount++
+		if recordOrgID != "" {
+			logger.Debug("[DNS Pusher] Stored record %s for organization %s", domain, recordOrgID)
+		}
+	}
+
+	if localStoreCount > 0 {
+		logger.Info("[DNS Pusher] Stored %d DNS records locally", localStoreCount)
+	}
+
 	return nil
 }
 
 // StartDNSPusher starts a background goroutine that periodically pushes DNS records
 func StartDNSPusher(config PusherConfig) {
 	if config.ProductionAPIURL == "" || config.APIKey == "" {
-		log.Printf("[DNS Pusher] DNS delegation not configured, pusher not started")
+		logger.Info("[DNS Pusher] DNS delegation not configured, pusher not started")
 		return
 	}
 
-	log.Printf("[DNS Pusher] Starting DNS pusher (interval: %v, TTL: %d)", config.PushInterval, config.TTL)
+	logger.Info("[DNS Pusher] Starting DNS pusher (interval: %v, TTL: %d)", config.PushInterval, config.TTL)
 
 	go func() {
 		ticker := time.NewTicker(config.PushInterval)
@@ -252,12 +335,12 @@ func StartDNSPusher(config PusherConfig) {
 
 		// Push immediately on start
 		if err := PushAllDNSRecords(config); err != nil {
-			log.Printf("[DNS Pusher] Initial push failed: %v", err)
+			logger.Warn("[DNS Pusher] Initial push failed: %v", err)
 		}
 
 		for range ticker.C {
 			if err := PushAllDNSRecords(config); err != nil {
-				log.Printf("[DNS Pusher] Failed to push DNS records: %v", err)
+				logger.Warn("[DNS Pusher] Failed to push DNS records: %v", err)
 			}
 		}
 	}()

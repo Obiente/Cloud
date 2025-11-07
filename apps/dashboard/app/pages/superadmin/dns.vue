@@ -36,7 +36,7 @@
       <OuiAlert variant="info" size="sm">
         <OuiText size="xs">
           <strong>Delegated DNS Active:</strong> Your organization ({{ delegatedDNSInfo?.organizationId }}) is using DNS delegation. 
-          You can view your delegated DNS records below.
+          Records are filtered to your organization by default. Clear the organization filter to see all records.
         </OuiText>
       </OuiAlert>
 
@@ -65,6 +65,15 @@
                   v-model="delegatedRecordsRecordTypeFilter"
                   :items="recordTypeFilterOptions"
                   placeholder="Record Type"
+                  clearable
+                  size="sm"
+                />
+              </div>
+              <div class="min-w-[160px]">
+                <OuiSelect
+                  v-model="delegatedRecordsOrgFilter"
+                  :items="delegatedOrgFilterOptions"
+                  placeholder="Organization"
                   clearable
                   size="sm"
                 />
@@ -1113,12 +1122,21 @@
           organizationId: response.organizationId,
           apiKeyId: response.apiKeyId,
         };
-        // Auto-filter to user's organization
+        // Auto-filter to user's organization (only for non-superadmin users)
+        // Superadmins should see all records by default
+        // Note: This page requires superadmin access, so users here are always superadmins
+        // But if they have delegated DNS, we still auto-filter to their org for convenience
         delegatedRecordsOrgFilter.value = response.organizationId;
+      } else {
+        // For superadmins without delegated DNS, don't filter by default
+        // They can manually filter if needed
+        delegatedRecordsOrgFilter.value = null;
       }
     } catch (err) {
       console.error("Failed to check delegated DNS status:", err);
       hasDelegatedDNS.value = false;
+      // Don't filter by default for superadmins
+      delegatedRecordsOrgFilter.value = null;
     }
   }
 
