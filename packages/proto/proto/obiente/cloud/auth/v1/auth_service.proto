@@ -7,6 +7,9 @@ option go_package = "api/gen/proto/obiente/cloud/auth/v1;authv1";
 import "google/protobuf/timestamp.proto";
 
 service AuthService {
+  // Get public configuration (no authentication required)
+  rpc GetPublicConfig(GetPublicConfigRequest) returns (GetPublicConfigResponse);
+  
   // Login with email and password using service account
   // This endpoint does not require authentication (public)
   rpc Login(LoginRequest) returns (LoginResponse);
@@ -36,6 +39,15 @@ service AuthService {
   
   // List all GitHub integrations (user and organizations)
   rpc ListGitHubIntegrations(ListGitHubIntegrationsRequest) returns (ListGitHubIntegrationsResponse);
+}
+
+// Public Configuration Messages
+message GetPublicConfigRequest {}
+
+message GetPublicConfigResponse {
+  bool billing_enabled = 1;
+  bool self_hosted = 2;
+  bool disable_auth = 3;
 }
 
 // Empty request for getting current user

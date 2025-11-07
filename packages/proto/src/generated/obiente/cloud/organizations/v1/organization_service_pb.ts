@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/organizations/v1/organization_service.proto.
  */
 export const file_obiente_cloud_organizations_v1_organization_service: GenFile = /*@__PURE__*/
-  fileDesc("CjlvYmllbnRlL2Nsb3VkL29yZ2FuaXphdGlvbnMvdjEvb3JnYW5pemF0aW9uX3NlcnZpY2UucHJvdG8SHm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MSJICg9HZXRVc2FnZVJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhIKBW1vbnRoGAIgASgJSACIAQFCCAoGX21vbnRoIv0BChBHZXRVc2FnZVJlc3BvbnNlEhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRINCgVtb250aBgCIAEoCRI9CgdjdXJyZW50GAMgASgLMiwub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlVzYWdlTWV0cmljcxJHChFlc3RpbWF0ZWRfbW9udGhseRgEIAEoCzIsLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5Vc2FnZU1ldHJpY3MSOQoFcXVvdGEYBSABKAsyKi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuVXNhZ2VRdW90YSKtAwoMVXNhZ2VNZXRyaWNzEhgKEGNwdV9jb3JlX3NlY29uZHMYASABKAMSGwoTbWVtb3J5X2J5dGVfc2Vjb25kcxgCIAEoAxIaChJiYW5kd2lkdGhfcnhfYnl0ZXMYAyABKAMSGgoSYmFuZHdpZHRoX3R4X2J5dGVzGAQgASgDEhUKDXN0b3JhZ2VfYnl0ZXMYBSABKAMSHwoXZGVwbG95bWVudHNfYWN0aXZlX3BlYWsYBiABKAUSHAoUZXN0aW1hdGVkX2Nvc3RfY2VudHMYByABKAMSGwoOY3B1X2Nvc3RfY2VudHMYCCABKANIAIgBARIeChFtZW1vcnlfY29zdF9jZW50cxgJIAEoA0gBiAEBEiEKFGJhbmR3aWR0aF9jb3N0X2NlbnRzGAogASgDSAKIAQESHwoSc3RvcmFnZV9jb3N0X2NlbnRzGAsgASgDSAOIAQFCEQoPX2NwdV9jb3N0X2NlbnRzQhQKEl9tZW1vcnlfY29zdF9jZW50c0IXChVfYmFuZHdpZHRoX2Nvc3RfY2VudHNCFQoTX3N0b3JhZ2VfY29zdF9jZW50cyKkAQoKVXNhZ2VRdW90YRIgChhjcHVfY29yZV9zZWNvbmRzX21vbnRobHkYASABKAMSIwobbWVtb3J5X2J5dGVfc2Vjb25kc19tb250aGx5GAIgASgDEh8KF2JhbmR3aWR0aF9ieXRlc19tb250aGx5GAMgASgDEhUKDXN0b3JhZ2VfYnl0ZXMYBCABKAMSFwoPZGVwbG95bWVudHNfbWF4GAUgASgFImAKGExpc3RPcmdhbml6YXRpb25zUmVxdWVzdBIMCgRwYWdlGAEgASgFEhAKCHBlcl9wYWdlGAIgASgFEhYKCW9ubHlfbWluZRgDIAEoCEgAiAEBQgwKCl9vbmx5X21pbmUioAEKGUxpc3RPcmdhbml6YXRpb25zUmVzcG9uc2USQwoNb3JnYW5pemF0aW9ucxgBIAMoCzIsLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5Pcmdhbml6YXRpb24SPgoKcGFnaW5hdGlvbhgCIAEoCzIqLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5QYWdpbmF0aW9uIkUKGUNyZWF0ZU9yZ2FuaXphdGlvblJlcXVlc3QSDAoEbmFtZRgBIAEoCRIMCgRzbHVnGAIgASgJEgwKBHBsYW4YAyABKAkiYAoaQ3JlYXRlT3JnYW5pemF0aW9uUmVzcG9uc2USQgoMb3JnYW5pemF0aW9uGAEgASgLMiwub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbiIxChZHZXRPcmdhbml6YXRpb25SZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCSJdChdHZXRPcmdhbml6YXRpb25SZXNwb25zZRJCCgxvcmdhbml6YXRpb24YASABKAsyLC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuT3JnYW5pemF0aW9uInAKGVVwZGF0ZU9yZ2FuaXphdGlvblJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhEKBG5hbWUYAiABKAlIAIgBARITCgZkb21haW4YAyABKAlIAYgBAUIHCgVfbmFtZUIJCgdfZG9tYWluImAKGlVwZGF0ZU9yZ2FuaXphdGlvblJlc3BvbnNlEkIKDG9yZ2FuaXphdGlvbhgBIAEoCzIsLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5Pcmdhbml6YXRpb24iTQoSTGlzdE1lbWJlcnNSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIMCgRwYWdlGAIgASgFEhAKCHBlcl9wYWdlGAMgASgFIpoBChNMaXN0TWVtYmVyc1Jlc3BvbnNlEkMKB21lbWJlcnMYASADKAsyMi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuT3JnYW5pemF0aW9uTWVtYmVyEj4KCnBhZ2luYXRpb24YAiABKAsyKi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuUGFnaW5hdGlvbiJLChNJbnZpdGVNZW1iZXJSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRINCgVlbWFpbBgCIAEoCRIMCgRyb2xlGAMgASgJIloKFEludml0ZU1lbWJlclJlc3BvbnNlEkIKBm1lbWJlchgBIAEoCzIyLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5Pcmdhbml6YXRpb25NZW1iZXIiXQoTVXBkYXRlTWVtYmVyUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSEQoJbWVtYmVyX2lkGAIgASgJEhEKBHJvbGUYAyABKAlIAIgBAUIHCgVfcm9sZSJaChRVcGRhdGVNZW1iZXJSZXNwb25zZRJCCgZtZW1iZXIYASABKAsyMi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuT3JnYW5pemF0aW9uTWVtYmVyIkEKE1JlbW92ZU1lbWJlclJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhEKCW1lbWJlcl9pZBgCIAEoCSInChRSZW1vdmVNZW1iZXJSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIImcKGFRyYW5zZmVyT3duZXJzaGlwUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSGwoTbmV3X293bmVyX21lbWJlcl9pZBgCIAEoCRIVCg1mYWxsYmFja19yb2xlGAMgASgJIoIBChlUcmFuc2Zlck93bmVyc2hpcFJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSIAoYcHJldmlvdXNfb3duZXJfbWVtYmVyX2lkGAIgASgJEhsKE25ld19vd25lcl9tZW1iZXJfaWQYAyABKAkSFQoNZmFsbGJhY2tfcm9sZRgEIAEoCSKDAgoMT3JnYW5pemF0aW9uEgoKAmlkGAEgASgJEgwKBG5hbWUYAiABKAkSDAoEc2x1ZxgDIAEoCRITCgZkb21haW4YBCABKAlIAIgBARIMCgRwbGFuGAUgASgJEg4KBnN0YXR1cxgGIAEoCRIuCgpjcmVhdGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIXCg9tYXhfZGVwbG95bWVudHMYCCABKAUSGQoRbWF4X3Zwc19pbnN0YW5jZXMYCSABKAUSGAoQbWF4X3RlYW1fbWVtYmVycxgKIAEoBRIPCgdjcmVkaXRzGAsgASgDQgkKB19kb21haW4imAEKEk9yZ2FuaXphdGlvbk1lbWJlchIKCgJpZBgBIAEoCRIpCgR1c2VyGAIgASgLMhsub2JpZW50ZS5jbG91ZC5hdXRoLnYxLlVzZXISDAoEcm9sZRgDIAEoCRIOCgZzdGF0dXMYBCABKAkSLQoJam9pbmVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJQCgpQYWdpbmF0aW9uEgwKBHBhZ2UYASABKAUSEAoIcGVyX3BhZ2UYAiABKAUSDQoFdG90YWwYAyABKAUSEwoLdG90YWxfcGFnZXMYBCABKAUiXgoRQWRkQ3JlZGl0c1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhQKDGFtb3VudF9jZW50cxgCIAEoAxIRCgRub3RlGAMgASgJSACIAQFCBwoFX25vdGUijwEKEkFkZENyZWRpdHNSZXNwb25zZRJCCgxvcmdhbml6YXRpb24YASABKAsyLC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuT3JnYW5pemF0aW9uEhkKEW5ld19iYWxhbmNlX2NlbnRzGAIgASgDEhoKEmFtb3VudF9hZGRlZF9jZW50cxgDIAEoAyJjChZBZG1pbkFkZENyZWRpdHNSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIUCgxhbW91bnRfY2VudHMYAiABKAMSEQoEbm90ZRgDIAEoCUgAiAEBQgcKBV9ub3RlIpQBChdBZG1pbkFkZENyZWRpdHNSZXNwb25zZRJCCgxvcmdhbml6YXRpb24YASABKAsyLC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuT3JnYW5pemF0aW9uEhkKEW5ld19iYWxhbmNlX2NlbnRzGAIgASgDEhoKEmFtb3VudF9hZGRlZF9jZW50cxgDIAEoAyJmChlBZG1pblJlbW92ZUNyZWRpdHNSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIUCgxhbW91bnRfY2VudHMYAiABKAMSEQoEbm90ZRgDIAEoCUgAiAEBQgcKBV9ub3RlIpkBChpBZG1pblJlbW92ZUNyZWRpdHNSZXNwb25zZRJCCgxvcmdhbml6YXRpb24YASABKAsyLC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuT3JnYW5pemF0aW9uEhkKEW5ld19iYWxhbmNlX2NlbnRzGAIgASgDEhwKFGFtb3VudF9yZW1vdmVkX2NlbnRzGAMgASgDIk4KE0dldENyZWRpdExvZ1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEgwKBHBhZ2UYAiABKAUSEAoIcGVyX3BhZ2UYAyABKAUinwEKFEdldENyZWRpdExvZ1Jlc3BvbnNlEkcKDHRyYW5zYWN0aW9ucxgBIAMoCzIxLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5DcmVkaXRUcmFuc2FjdGlvbhI+CgpwYWdpbmF0aW9uGAIgASgLMioub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlBhZ2luYXRpb24i9wEKEUNyZWRpdFRyYW5zYWN0aW9uEgoKAmlkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRIUCgxhbW91bnRfY2VudHMYAyABKAMSFQoNYmFsYW5jZV9hZnRlchgEIAEoAxIMCgR0eXBlGAUgASgJEg4KBnNvdXJjZRgGIAEoCRIRCgRub3RlGAcgASgJSACIAQESFwoKY3JlYXRlZF9ieRgIIAEoCUgBiAEBEi4KCmNyZWF0ZWRfYXQYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wQgcKBV9ub3RlQg0KC19jcmVhdGVkX2J5MqcOChNPcmdhbml6YXRpb25TZXJ2aWNlEogBChFMaXN0T3JnYW5pemF0aW9ucxI4Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5MaXN0T3JnYW5pemF0aW9uc1JlcXVlc3QaOS5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuTGlzdE9yZ2FuaXphdGlvbnNSZXNwb25zZRKLAQoSQ3JlYXRlT3JnYW5pemF0aW9uEjkub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkNyZWF0ZU9yZ2FuaXphdGlvblJlcXVlc3QaOi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuQ3JlYXRlT3JnYW5pemF0aW9uUmVzcG9uc2USggEKD0dldE9yZ2FuaXphdGlvbhI2Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5HZXRPcmdhbml6YXRpb25SZXF1ZXN0Gjcub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkdldE9yZ2FuaXphdGlvblJlc3BvbnNlEosBChJVcGRhdGVPcmdhbml6YXRpb24SOS5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuVXBkYXRlT3JnYW5pemF0aW9uUmVxdWVzdBo6Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5VcGRhdGVPcmdhbml6YXRpb25SZXNwb25zZRJ2CgtMaXN0TWVtYmVycxIyLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5MaXN0TWVtYmVyc1JlcXVlc3QaMy5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuTGlzdE1lbWJlcnNSZXNwb25zZRJ5CgxJbnZpdGVNZW1iZXISMy5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuSW52aXRlTWVtYmVyUmVxdWVzdBo0Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5JbnZpdGVNZW1iZXJSZXNwb25zZRJ5CgxVcGRhdGVNZW1iZXISMy5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuVXBkYXRlTWVtYmVyUmVxdWVzdBo0Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5VcGRhdGVNZW1iZXJSZXNwb25zZRJ5CgxSZW1vdmVNZW1iZXISMy5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuUmVtb3ZlTWVtYmVyUmVxdWVzdBo0Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5SZW1vdmVNZW1iZXJSZXNwb25zZRKIAQoRVHJhbnNmZXJPd25lcnNoaXASOC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuVHJhbnNmZXJPd25lcnNoaXBSZXF1ZXN0Gjkub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlRyYW5zZmVyT3duZXJzaGlwUmVzcG9uc2USbQoIR2V0VXNhZ2USLy5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuR2V0VXNhZ2VSZXF1ZXN0GjAub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkdldFVzYWdlUmVzcG9uc2UScwoKQWRkQ3JlZGl0cxIxLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5BZGRDcmVkaXRzUmVxdWVzdBoyLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5BZGRDcmVkaXRzUmVzcG9uc2USggEKD0FkbWluQWRkQ3JlZGl0cxI2Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5BZG1pbkFkZENyZWRpdHNSZXF1ZXN0Gjcub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkFkbWluQWRkQ3JlZGl0c1Jlc3BvbnNlEosBChJBZG1pblJlbW92ZUNyZWRpdHMSOS5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuQWRtaW5SZW1vdmVDcmVkaXRzUmVxdWVzdBo6Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5BZG1pblJlbW92ZUNyZWRpdHNSZXNwb25zZRJ5CgxHZXRDcmVkaXRMb2cSMy5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuR2V0Q3JlZGl0TG9nUmVxdWVzdBo0Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5HZXRDcmVkaXRMb2dSZXNwb25zZUI+WjxhcGkvZ2VuL3Byb3RvL29iaWVudGUvY2xvdWQvb3JnYW5pemF0aW9ucy92MTtvcmdhbml6YXRpb25zdjFiBnByb3RvMw", [file_google_protobuf_timestamp, file_obiente_cloud_auth_v1_auth_service]);
+  fileDesc("CjlvYmllbnRlL2Nsb3VkL29yZ2FuaXphdGlvbnMvdjEvb3JnYW5pemF0aW9uX3NlcnZpY2UucHJvdG8SHm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MSJICg9HZXRVc2FnZVJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhIKBW1vbnRoGAIgASgJSACIAQFCCAoGX21vbnRoIv0BChBHZXRVc2FnZVJlc3BvbnNlEhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRINCgVtb250aBgCIAEoCRI9CgdjdXJyZW50GAMgASgLMiwub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlVzYWdlTWV0cmljcxJHChFlc3RpbWF0ZWRfbW9udGhseRgEIAEoCzIsLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5Vc2FnZU1ldHJpY3MSOQoFcXVvdGEYBSABKAsyKi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuVXNhZ2VRdW90YSKtAwoMVXNhZ2VNZXRyaWNzEhgKEGNwdV9jb3JlX3NlY29uZHMYASABKAMSGwoTbWVtb3J5X2J5dGVfc2Vjb25kcxgCIAEoAxIaChJiYW5kd2lkdGhfcnhfYnl0ZXMYAyABKAMSGgoSYmFuZHdpZHRoX3R4X2J5dGVzGAQgASgDEhUKDXN0b3JhZ2VfYnl0ZXMYBSABKAMSHwoXZGVwbG95bWVudHNfYWN0aXZlX3BlYWsYBiABKAUSHAoUZXN0aW1hdGVkX2Nvc3RfY2VudHMYByABKAMSGwoOY3B1X2Nvc3RfY2VudHMYCCABKANIAIgBARIeChFtZW1vcnlfY29zdF9jZW50cxgJIAEoA0gBiAEBEiEKFGJhbmR3aWR0aF9jb3N0X2NlbnRzGAogASgDSAKIAQESHwoSc3RvcmFnZV9jb3N0X2NlbnRzGAsgASgDSAOIAQFCEQoPX2NwdV9jb3N0X2NlbnRzQhQKEl9tZW1vcnlfY29zdF9jZW50c0IXChVfYmFuZHdpZHRoX2Nvc3RfY2VudHNCFQoTX3N0b3JhZ2VfY29zdF9jZW50cyKkAQoKVXNhZ2VRdW90YRIgChhjcHVfY29yZV9zZWNvbmRzX21vbnRobHkYASABKAMSIwobbWVtb3J5X2J5dGVfc2Vjb25kc19tb250aGx5GAIgASgDEh8KF2JhbmR3aWR0aF9ieXRlc19tb250aGx5GAMgASgDEhUKDXN0b3JhZ2VfYnl0ZXMYBCABKAMSFwoPZGVwbG95bWVudHNfbWF4GAUgASgFImAKGExpc3RPcmdhbml6YXRpb25zUmVxdWVzdBIMCgRwYWdlGAEgASgFEhAKCHBlcl9wYWdlGAIgASgFEhYKCW9ubHlfbWluZRgDIAEoCEgAiAEBQgwKCl9vbmx5X21pbmUioAEKGUxpc3RPcmdhbml6YXRpb25zUmVzcG9uc2USQwoNb3JnYW5pemF0aW9ucxgBIAMoCzIsLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5Pcmdhbml6YXRpb24SPgoKcGFnaW5hdGlvbhgCIAEoCzIqLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5QYWdpbmF0aW9uIkUKGUNyZWF0ZU9yZ2FuaXphdGlvblJlcXVlc3QSDAoEbmFtZRgBIAEoCRIMCgRzbHVnGAIgASgJEgwKBHBsYW4YAyABKAkiYAoaQ3JlYXRlT3JnYW5pemF0aW9uUmVzcG9uc2USQgoMb3JnYW5pemF0aW9uGAEgASgLMiwub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbiIxChZHZXRPcmdhbml6YXRpb25SZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCSJdChdHZXRPcmdhbml6YXRpb25SZXNwb25zZRJCCgxvcmdhbml6YXRpb24YASABKAsyLC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuT3JnYW5pemF0aW9uInAKGVVwZGF0ZU9yZ2FuaXphdGlvblJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhEKBG5hbWUYAiABKAlIAIgBARITCgZkb21haW4YAyABKAlIAYgBAUIHCgVfbmFtZUIJCgdfZG9tYWluImAKGlVwZGF0ZU9yZ2FuaXphdGlvblJlc3BvbnNlEkIKDG9yZ2FuaXphdGlvbhgBIAEoCzIsLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5Pcmdhbml6YXRpb24iTQoSTGlzdE1lbWJlcnNSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIMCgRwYWdlGAIgASgFEhAKCHBlcl9wYWdlGAMgASgFIpoBChNMaXN0TWVtYmVyc1Jlc3BvbnNlEkMKB21lbWJlcnMYASADKAsyMi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuT3JnYW5pemF0aW9uTWVtYmVyEj4KCnBhZ2luYXRpb24YAiABKAsyKi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuUGFnaW5hdGlvbiJLChNJbnZpdGVNZW1iZXJSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRINCgVlbWFpbBgCIAEoCRIMCgRyb2xlGAMgASgJIloKFEludml0ZU1lbWJlclJlc3BvbnNlEkIKBm1lbWJlchgBIAEoCzIyLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5Pcmdhbml6YXRpb25NZW1iZXIiQQoTUmVzZW5kSW52aXRlUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSEQoJbWVtYmVyX2lkGAIgASgJIicKFFJlc2VuZEludml0ZVJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgiNgoUTGlzdE15SW52aXRlc1JlcXVlc3QSDAoEcGFnZRgBIAEoBRIQCghwZXJfcGFnZRgCIAEoBSKXAQoVTGlzdE15SW52aXRlc1Jlc3BvbnNlEj4KB2ludml0ZXMYASADKAsyLS5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuUGVuZGluZ0ludml0ZRI+CgpwYWdpbmF0aW9uGAIgASgLMioub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlBhZ2luYXRpb24ipAEKDVBlbmRpbmdJbnZpdGUSCgoCaWQYASABKAkSFwoPb3JnYW5pemF0aW9uX2lkGAIgASgJEhkKEW9yZ2FuaXphdGlvbl9uYW1lGAMgASgJEgwKBHJvbGUYBCABKAkSLgoKaW52aXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFQoNaW52aXRlcl9lbWFpbBgGIAEoCSJBChNBY2NlcHRJbnZpdGVSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIRCgltZW1iZXJfaWQYAiABKAkingEKFEFjY2VwdEludml0ZVJlc3BvbnNlEkIKBm1lbWJlchgBIAEoCzIyLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5Pcmdhbml6YXRpb25NZW1iZXISQgoMb3JnYW5pemF0aW9uGAIgASgLMiwub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbiJCChREZWNsaW5lSW52aXRlUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSEQoJbWVtYmVyX2lkGAIgASgJIigKFURlY2xpbmVJbnZpdGVSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIIl0KE1VwZGF0ZU1lbWJlclJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhEKCW1lbWJlcl9pZBgCIAEoCRIRCgRyb2xlGAMgASgJSACIAQFCBwoFX3JvbGUiWgoUVXBkYXRlTWVtYmVyUmVzcG9uc2USQgoGbWVtYmVyGAEgASgLMjIub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbk1lbWJlciJBChNSZW1vdmVNZW1iZXJSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIRCgltZW1iZXJfaWQYAiABKAkiJwoUUmVtb3ZlTWVtYmVyUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCCJnChhUcmFuc2Zlck93bmVyc2hpcFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhsKE25ld19vd25lcl9tZW1iZXJfaWQYAiABKAkSFQoNZmFsbGJhY2tfcm9sZRgDIAEoCSKCAQoZVHJhbnNmZXJPd25lcnNoaXBSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEiAKGHByZXZpb3VzX293bmVyX21lbWJlcl9pZBgCIAEoCRIbChNuZXdfb3duZXJfbWVtYmVyX2lkGAMgASgJEhUKDWZhbGxiYWNrX3JvbGUYBCABKAki7QIKDE9yZ2FuaXphdGlvbhIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEgwKBHNsdWcYAyABKAkSEwoGZG9tYWluGAQgASgJSACIAQESDAoEcGxhbhgFIAEoCRIOCgZzdGF0dXMYBiABKAkSLgoKY3JlYXRlZF9hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFwoPbWF4X2RlcGxveW1lbnRzGAggASgFEhkKEW1heF92cHNfaW5zdGFuY2VzGAkgASgFEhgKEG1heF90ZWFtX21lbWJlcnMYCiABKAUSDwoHY3JlZGl0cxgLIAEoAxJACglwbGFuX2luZm8YDCABKAsyKC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuUGxhbkluZm9IAYgBARIYChB0b3RhbF9wYWlkX2NlbnRzGA0gASgDQgkKB19kb21haW5CDAoKX3BsYW5faW5mbyL+AQoIUGxhbkluZm8SDwoHcGxhbl9pZBgBIAEoCRIRCglwbGFuX25hbWUYAiABKAkSEwoLZGVzY3JpcHRpb24YAyABKAkSEQoJY3B1X2NvcmVzGAQgASgFEhQKDG1lbW9yeV9ieXRlcxgFIAEoAxIXCg9kZXBsb3ltZW50c19tYXgYBiABKAUSHQoVYmFuZHdpZHRoX2J5dGVzX21vbnRoGAcgASgDEhUKDXN0b3JhZ2VfYnl0ZXMYCCABKAMSHQoVbWluaW11bV9wYXltZW50X2NlbnRzGAkgASgDEiIKGm1vbnRobHlfZnJlZV9jcmVkaXRzX2NlbnRzGAogASgDIpgBChJPcmdhbml6YXRpb25NZW1iZXISCgoCaWQYASABKAkSKQoEdXNlchgCIAEoCzIbLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Vc2VyEgwKBHJvbGUYAyABKAkSDgoGc3RhdHVzGAQgASgJEi0KCWpvaW5lZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiUAoKUGFnaW5hdGlvbhIMCgRwYWdlGAEgASgFEhAKCHBlcl9wYWdlGAIgASgFEg0KBXRvdGFsGAMgASgFEhMKC3RvdGFsX3BhZ2VzGAQgASgFIl4KEUFkZENyZWRpdHNSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIUCgxhbW91bnRfY2VudHMYAiABKAMSEQoEbm90ZRgDIAEoCUgAiAEBQgcKBV9ub3RlIo8BChJBZGRDcmVkaXRzUmVzcG9uc2USQgoMb3JnYW5pemF0aW9uGAEgASgLMiwub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbhIZChFuZXdfYmFsYW5jZV9jZW50cxgCIAEoAxIaChJhbW91bnRfYWRkZWRfY2VudHMYAyABKAMiYwoWQWRtaW5BZGRDcmVkaXRzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFAoMYW1vdW50X2NlbnRzGAIgASgDEhEKBG5vdGUYAyABKAlIAIgBAUIHCgVfbm90ZSKUAQoXQWRtaW5BZGRDcmVkaXRzUmVzcG9uc2USQgoMb3JnYW5pemF0aW9uGAEgASgLMiwub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbhIZChFuZXdfYmFsYW5jZV9jZW50cxgCIAEoAxIaChJhbW91bnRfYWRkZWRfY2VudHMYAyABKAMiZgoZQWRtaW5SZW1vdmVDcmVkaXRzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFAoMYW1vdW50X2NlbnRzGAIgASgDEhEKBG5vdGUYAyABKAlIAIgBAUIHCgVfbm90ZSKZAQoaQWRtaW5SZW1vdmVDcmVkaXRzUmVzcG9uc2USQgoMb3JnYW5pemF0aW9uGAEgASgLMiwub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLk9yZ2FuaXphdGlvbhIZChFuZXdfYmFsYW5jZV9jZW50cxgCIAEoAxIcChRhbW91bnRfcmVtb3ZlZF9jZW50cxgDIAEoAyJOChNHZXRDcmVkaXRMb2dSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIMCgRwYWdlGAIgASgFEhAKCHBlcl9wYWdlGAMgASgFIp8BChRHZXRDcmVkaXRMb2dSZXNwb25zZRJHCgx0cmFuc2FjdGlvbnMYASADKAsyMS5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuQ3JlZGl0VHJhbnNhY3Rpb24SPgoKcGFnaW5hdGlvbhgCIAEoCzIqLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5QYWdpbmF0aW9uIvcBChFDcmVkaXRUcmFuc2FjdGlvbhIKCgJpZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSFAoMYW1vdW50X2NlbnRzGAMgASgDEhUKDWJhbGFuY2VfYWZ0ZXIYBCABKAMSDAoEdHlwZRgFIAEoCRIOCgZzb3VyY2UYBiABKAkSEQoEbm90ZRgHIAEoCUgAiAEBEhcKCmNyZWF0ZWRfYnkYCCABKAlIAYgBARIuCgpjcmVhdGVkX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEIHCgVfbm90ZUINCgtfY3JlYXRlZF9ieTKZEgoTT3JnYW5pemF0aW9uU2VydmljZRKIAQoRTGlzdE9yZ2FuaXphdGlvbnMSOC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuTGlzdE9yZ2FuaXphdGlvbnNSZXF1ZXN0Gjkub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkxpc3RPcmdhbml6YXRpb25zUmVzcG9uc2USiwEKEkNyZWF0ZU9yZ2FuaXphdGlvbhI5Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5DcmVhdGVPcmdhbml6YXRpb25SZXF1ZXN0Gjoub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkNyZWF0ZU9yZ2FuaXphdGlvblJlc3BvbnNlEoIBCg9HZXRPcmdhbml6YXRpb24SNi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuR2V0T3JnYW5pemF0aW9uUmVxdWVzdBo3Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5HZXRPcmdhbml6YXRpb25SZXNwb25zZRKLAQoSVXBkYXRlT3JnYW5pemF0aW9uEjkub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlVwZGF0ZU9yZ2FuaXphdGlvblJlcXVlc3QaOi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuVXBkYXRlT3JnYW5pemF0aW9uUmVzcG9uc2USdgoLTGlzdE1lbWJlcnMSMi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuTGlzdE1lbWJlcnNSZXF1ZXN0GjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkxpc3RNZW1iZXJzUmVzcG9uc2USeQoMSW52aXRlTWVtYmVyEjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkludml0ZU1lbWJlclJlcXVlc3QaNC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuSW52aXRlTWVtYmVyUmVzcG9uc2USeQoMUmVzZW5kSW52aXRlEjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlJlc2VuZEludml0ZVJlcXVlc3QaNC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuUmVzZW5kSW52aXRlUmVzcG9uc2USfAoNTGlzdE15SW52aXRlcxI0Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5MaXN0TXlJbnZpdGVzUmVxdWVzdBo1Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5MaXN0TXlJbnZpdGVzUmVzcG9uc2USeQoMQWNjZXB0SW52aXRlEjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkFjY2VwdEludml0ZVJlcXVlc3QaNC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuQWNjZXB0SW52aXRlUmVzcG9uc2USfAoNRGVjbGluZUludml0ZRI0Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5EZWNsaW5lSW52aXRlUmVxdWVzdBo1Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5EZWNsaW5lSW52aXRlUmVzcG9uc2USeQoMVXBkYXRlTWVtYmVyEjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlVwZGF0ZU1lbWJlclJlcXVlc3QaNC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuVXBkYXRlTWVtYmVyUmVzcG9uc2USeQoMUmVtb3ZlTWVtYmVyEjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlJlbW92ZU1lbWJlclJlcXVlc3QaNC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuUmVtb3ZlTWVtYmVyUmVzcG9uc2USiAEKEVRyYW5zZmVyT3duZXJzaGlwEjgub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLlRyYW5zZmVyT3duZXJzaGlwUmVxdWVzdBo5Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5UcmFuc2Zlck93bmVyc2hpcFJlc3BvbnNlEm0KCEdldFVzYWdlEi8ub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkdldFVzYWdlUmVxdWVzdBowLm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5HZXRVc2FnZVJlc3BvbnNlEnMKCkFkZENyZWRpdHMSMS5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuQWRkQ3JlZGl0c1JlcXVlc3QaMi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuQWRkQ3JlZGl0c1Jlc3BvbnNlEoIBCg9BZG1pbkFkZENyZWRpdHMSNi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuQWRtaW5BZGRDcmVkaXRzUmVxdWVzdBo3Lm9iaWVudGUuY2xvdWQub3JnYW5pemF0aW9ucy52MS5BZG1pbkFkZENyZWRpdHNSZXNwb25zZRKLAQoSQWRtaW5SZW1vdmVDcmVkaXRzEjkub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkFkbWluUmVtb3ZlQ3JlZGl0c1JlcXVlc3QaOi5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuQWRtaW5SZW1vdmVDcmVkaXRzUmVzcG9uc2USeQoMR2V0Q3JlZGl0TG9nEjMub2JpZW50ZS5jbG91ZC5vcmdhbml6YXRpb25zLnYxLkdldENyZWRpdExvZ1JlcXVlc3QaNC5vYmllbnRlLmNsb3VkLm9yZ2FuaXphdGlvbnMudjEuR2V0Q3JlZGl0TG9nUmVzcG9uc2VCPlo8YXBpL2dlbi9wcm90by9vYmllbnRlL2Nsb3VkL29yZ2FuaXphdGlvbnMvdjE7b3JnYW5pemF0aW9uc3YxYgZwcm90bzM", [file_google_protobuf_timestamp, file_obiente_cloud_auth_v1_auth_service]);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.GetUsageRequest
@@ -461,6 +461,218 @@ export const InviteMemberResponseSchema: GenMessage<InviteMemberResponse> = /*@_
   messageDesc(file_obiente_cloud_organizations_v1_organization_service, 15);
 
 /**
+ * @generated from message obiente.cloud.organizations.v1.ResendInviteRequest
+ */
+export type ResendInviteRequest = Message<"obiente.cloud.organizations.v1.ResendInviteRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string member_id = 2;
+   */
+  memberId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.ResendInviteRequest.
+ * Use `create(ResendInviteRequestSchema)` to create a new message.
+ */
+export const ResendInviteRequestSchema: GenMessage<ResendInviteRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 16);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.ResendInviteResponse
+ */
+export type ResendInviteResponse = Message<"obiente.cloud.organizations.v1.ResendInviteResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.ResendInviteResponse.
+ * Use `create(ResendInviteResponseSchema)` to create a new message.
+ */
+export const ResendInviteResponseSchema: GenMessage<ResendInviteResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 17);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.ListMyInvitesRequest
+ */
+export type ListMyInvitesRequest = Message<"obiente.cloud.organizations.v1.ListMyInvitesRequest"> & {
+  /**
+   * Optional pagination
+   *
+   * @generated from field: int32 page = 1;
+   */
+  page: number;
+
+  /**
+   * @generated from field: int32 per_page = 2;
+   */
+  perPage: number;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.ListMyInvitesRequest.
+ * Use `create(ListMyInvitesRequestSchema)` to create a new message.
+ */
+export const ListMyInvitesRequestSchema: GenMessage<ListMyInvitesRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 18);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.ListMyInvitesResponse
+ */
+export type ListMyInvitesResponse = Message<"obiente.cloud.organizations.v1.ListMyInvitesResponse"> & {
+  /**
+   * @generated from field: repeated obiente.cloud.organizations.v1.PendingInvite invites = 1;
+   */
+  invites: PendingInvite[];
+
+  /**
+   * @generated from field: obiente.cloud.organizations.v1.Pagination pagination = 2;
+   */
+  pagination?: Pagination;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.ListMyInvitesResponse.
+ * Use `create(ListMyInvitesResponseSchema)` to create a new message.
+ */
+export const ListMyInvitesResponseSchema: GenMessage<ListMyInvitesResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 19);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.PendingInvite
+ */
+export type PendingInvite = Message<"obiente.cloud.organizations.v1.PendingInvite"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string organization_id = 2;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string organization_name = 3;
+   */
+  organizationName: string;
+
+  /**
+   * @generated from field: string role = 4;
+   */
+  role: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp invited_at = 5;
+   */
+  invitedAt?: Timestamp;
+
+  /**
+   * Email of the person who sent the invite
+   *
+   * @generated from field: string inviter_email = 6;
+   */
+  inviterEmail: string;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.PendingInvite.
+ * Use `create(PendingInviteSchema)` to create a new message.
+ */
+export const PendingInviteSchema: GenMessage<PendingInvite> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 20);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.AcceptInviteRequest
+ */
+export type AcceptInviteRequest = Message<"obiente.cloud.organizations.v1.AcceptInviteRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string member_id = 2;
+   */
+  memberId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.AcceptInviteRequest.
+ * Use `create(AcceptInviteRequestSchema)` to create a new message.
+ */
+export const AcceptInviteRequestSchema: GenMessage<AcceptInviteRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 21);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.AcceptInviteResponse
+ */
+export type AcceptInviteResponse = Message<"obiente.cloud.organizations.v1.AcceptInviteResponse"> & {
+  /**
+   * @generated from field: obiente.cloud.organizations.v1.OrganizationMember member = 1;
+   */
+  member?: OrganizationMember;
+
+  /**
+   * @generated from field: obiente.cloud.organizations.v1.Organization organization = 2;
+   */
+  organization?: Organization;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.AcceptInviteResponse.
+ * Use `create(AcceptInviteResponseSchema)` to create a new message.
+ */
+export const AcceptInviteResponseSchema: GenMessage<AcceptInviteResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 22);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.DeclineInviteRequest
+ */
+export type DeclineInviteRequest = Message<"obiente.cloud.organizations.v1.DeclineInviteRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string member_id = 2;
+   */
+  memberId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.DeclineInviteRequest.
+ * Use `create(DeclineInviteRequestSchema)` to create a new message.
+ */
+export const DeclineInviteRequestSchema: GenMessage<DeclineInviteRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 23);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.DeclineInviteResponse
+ */
+export type DeclineInviteResponse = Message<"obiente.cloud.organizations.v1.DeclineInviteResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.DeclineInviteResponse.
+ * Use `create(DeclineInviteResponseSchema)` to create a new message.
+ */
+export const DeclineInviteResponseSchema: GenMessage<DeclineInviteResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 24);
+
+/**
  * @generated from message obiente.cloud.organizations.v1.UpdateMemberRequest
  */
 export type UpdateMemberRequest = Message<"obiente.cloud.organizations.v1.UpdateMemberRequest"> & {
@@ -485,7 +697,7 @@ export type UpdateMemberRequest = Message<"obiente.cloud.organizations.v1.Update
  * Use `create(UpdateMemberRequestSchema)` to create a new message.
  */
 export const UpdateMemberRequestSchema: GenMessage<UpdateMemberRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 16);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 25);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.UpdateMemberResponse
@@ -502,7 +714,7 @@ export type UpdateMemberResponse = Message<"obiente.cloud.organizations.v1.Updat
  * Use `create(UpdateMemberResponseSchema)` to create a new message.
  */
 export const UpdateMemberResponseSchema: GenMessage<UpdateMemberResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 17);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 26);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.RemoveMemberRequest
@@ -524,7 +736,7 @@ export type RemoveMemberRequest = Message<"obiente.cloud.organizations.v1.Remove
  * Use `create(RemoveMemberRequestSchema)` to create a new message.
  */
 export const RemoveMemberRequestSchema: GenMessage<RemoveMemberRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 18);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 27);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.RemoveMemberResponse
@@ -541,7 +753,7 @@ export type RemoveMemberResponse = Message<"obiente.cloud.organizations.v1.Remov
  * Use `create(RemoveMemberResponseSchema)` to create a new message.
  */
 export const RemoveMemberResponseSchema: GenMessage<RemoveMemberResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 19);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 28);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.TransferOwnershipRequest
@@ -570,7 +782,7 @@ export type TransferOwnershipRequest = Message<"obiente.cloud.organizations.v1.T
  * Use `create(TransferOwnershipRequestSchema)` to create a new message.
  */
 export const TransferOwnershipRequestSchema: GenMessage<TransferOwnershipRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 20);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 29);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.TransferOwnershipResponse
@@ -602,7 +814,7 @@ export type TransferOwnershipResponse = Message<"obiente.cloud.organizations.v1.
  * Use `create(TransferOwnershipResponseSchema)` to create a new message.
  */
 export const TransferOwnershipResponseSchema: GenMessage<TransferOwnershipResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 21);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 30);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.Organization
@@ -664,6 +876,20 @@ export type Organization = Message<"obiente.cloud.organizations.v1.Organization"
    * @generated from field: int64 credits = 11;
    */
   credits: bigint;
+
+  /**
+   * Current plan information (if assigned via plan management)
+   *
+   * @generated from field: optional obiente.cloud.organizations.v1.PlanInfo plan_info = 12;
+   */
+  planInfo?: PlanInfo;
+
+  /**
+   * Total amount paid in cents (for safety check/auto-upgrade)
+   *
+   * @generated from field: int64 total_paid_cents = 13;
+   */
+  totalPaidCents: bigint;
 };
 
 /**
@@ -671,7 +897,75 @@ export type Organization = Message<"obiente.cloud.organizations.v1.Organization"
  * Use `create(OrganizationSchema)` to create a new message.
  */
 export const OrganizationSchema: GenMessage<Organization> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 22);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 31);
+
+/**
+ * @generated from message obiente.cloud.organizations.v1.PlanInfo
+ */
+export type PlanInfo = Message<"obiente.cloud.organizations.v1.PlanInfo"> & {
+  /**
+   * @generated from field: string plan_id = 1;
+   */
+  planId: string;
+
+  /**
+   * @generated from field: string plan_name = 2;
+   */
+  planName: string;
+
+  /**
+   * @generated from field: string description = 3;
+   */
+  description: string;
+
+  /**
+   * Resource limits from the plan
+   *
+   * @generated from field: int32 cpu_cores = 4;
+   */
+  cpuCores: number;
+
+  /**
+   * @generated from field: int64 memory_bytes = 5;
+   */
+  memoryBytes: bigint;
+
+  /**
+   * @generated from field: int32 deployments_max = 6;
+   */
+  deploymentsMax: number;
+
+  /**
+   * @generated from field: int64 bandwidth_bytes_month = 7;
+   */
+  bandwidthBytesMonth: bigint;
+
+  /**
+   * @generated from field: int64 storage_bytes = 8;
+   */
+  storageBytes: bigint;
+
+  /**
+   * Minimum payment required to qualify for this plan (in cents)
+   *
+   * @generated from field: int64 minimum_payment_cents = 9;
+   */
+  minimumPaymentCents: bigint;
+
+  /**
+   * Monthly free credits in cents granted to organizations on this plan
+   *
+   * @generated from field: int64 monthly_free_credits_cents = 10;
+   */
+  monthlyFreeCreditsCents: bigint;
+};
+
+/**
+ * Describes the message obiente.cloud.organizations.v1.PlanInfo.
+ * Use `create(PlanInfoSchema)` to create a new message.
+ */
+export const PlanInfoSchema: GenMessage<PlanInfo> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 32);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.OrganizationMember
@@ -708,7 +1002,7 @@ export type OrganizationMember = Message<"obiente.cloud.organizations.v1.Organiz
  * Use `create(OrganizationMemberSchema)` to create a new message.
  */
 export const OrganizationMemberSchema: GenMessage<OrganizationMember> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 23);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 33);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.Pagination
@@ -740,7 +1034,7 @@ export type Pagination = Message<"obiente.cloud.organizations.v1.Pagination"> & 
  * Use `create(PaginationSchema)` to create a new message.
  */
 export const PaginationSchema: GenMessage<Pagination> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 24);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 34);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.AddCreditsRequest
@@ -771,7 +1065,7 @@ export type AddCreditsRequest = Message<"obiente.cloud.organizations.v1.AddCredi
  * Use `create(AddCreditsRequestSchema)` to create a new message.
  */
 export const AddCreditsRequestSchema: GenMessage<AddCreditsRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 25);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 35);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.AddCreditsResponse
@@ -802,7 +1096,7 @@ export type AddCreditsResponse = Message<"obiente.cloud.organizations.v1.AddCred
  * Use `create(AddCreditsResponseSchema)` to create a new message.
  */
 export const AddCreditsResponseSchema: GenMessage<AddCreditsResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 26);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 36);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.AdminAddCreditsRequest
@@ -833,7 +1127,7 @@ export type AdminAddCreditsRequest = Message<"obiente.cloud.organizations.v1.Adm
  * Use `create(AdminAddCreditsRequestSchema)` to create a new message.
  */
 export const AdminAddCreditsRequestSchema: GenMessage<AdminAddCreditsRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 27);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 37);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.AdminAddCreditsResponse
@@ -864,7 +1158,7 @@ export type AdminAddCreditsResponse = Message<"obiente.cloud.organizations.v1.Ad
  * Use `create(AdminAddCreditsResponseSchema)` to create a new message.
  */
 export const AdminAddCreditsResponseSchema: GenMessage<AdminAddCreditsResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 28);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 38);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.AdminRemoveCreditsRequest
@@ -895,7 +1189,7 @@ export type AdminRemoveCreditsRequest = Message<"obiente.cloud.organizations.v1.
  * Use `create(AdminRemoveCreditsRequestSchema)` to create a new message.
  */
 export const AdminRemoveCreditsRequestSchema: GenMessage<AdminRemoveCreditsRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 29);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 39);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.AdminRemoveCreditsResponse
@@ -926,7 +1220,7 @@ export type AdminRemoveCreditsResponse = Message<"obiente.cloud.organizations.v1
  * Use `create(AdminRemoveCreditsResponseSchema)` to create a new message.
  */
 export const AdminRemoveCreditsResponseSchema: GenMessage<AdminRemoveCreditsResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 30);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 40);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.GetCreditLogRequest
@@ -955,7 +1249,7 @@ export type GetCreditLogRequest = Message<"obiente.cloud.organizations.v1.GetCre
  * Use `create(GetCreditLogRequestSchema)` to create a new message.
  */
 export const GetCreditLogRequestSchema: GenMessage<GetCreditLogRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 31);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 41);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.GetCreditLogResponse
@@ -977,7 +1271,7 @@ export type GetCreditLogResponse = Message<"obiente.cloud.organizations.v1.GetCr
  * Use `create(GetCreditLogResponseSchema)` to create a new message.
  */
 export const GetCreditLogResponseSchema: GenMessage<GetCreditLogResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 32);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 42);
 
 /**
  * @generated from message obiente.cloud.organizations.v1.CreditTransaction
@@ -1046,7 +1340,7 @@ export type CreditTransaction = Message<"obiente.cloud.organizations.v1.CreditTr
  * Use `create(CreditTransactionSchema)` to create a new message.
  */
 export const CreditTransactionSchema: GenMessage<CreditTransaction> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 33);
+  messageDesc(file_obiente_cloud_organizations_v1_organization_service, 43);
 
 /**
  * @generated from service obiente.cloud.organizations.v1.OrganizationService
@@ -1111,6 +1405,46 @@ export const OrganizationService: GenService<{
     methodKind: "unary";
     input: typeof InviteMemberRequestSchema;
     output: typeof InviteMemberResponseSchema;
+  },
+  /**
+   * Resend invitation email to a pending member
+   *
+   * @generated from rpc obiente.cloud.organizations.v1.OrganizationService.ResendInvite
+   */
+  resendInvite: {
+    methodKind: "unary";
+    input: typeof ResendInviteRequestSchema;
+    output: typeof ResendInviteResponseSchema;
+  },
+  /**
+   * List invites sent to the current user
+   *
+   * @generated from rpc obiente.cloud.organizations.v1.OrganizationService.ListMyInvites
+   */
+  listMyInvites: {
+    methodKind: "unary";
+    input: typeof ListMyInvitesRequestSchema;
+    output: typeof ListMyInvitesResponseSchema;
+  },
+  /**
+   * Accept an invitation to join an organization
+   *
+   * @generated from rpc obiente.cloud.organizations.v1.OrganizationService.AcceptInvite
+   */
+  acceptInvite: {
+    methodKind: "unary";
+    input: typeof AcceptInviteRequestSchema;
+    output: typeof AcceptInviteResponseSchema;
+  },
+  /**
+   * Decline an invitation to join an organization
+   *
+   * @generated from rpc obiente.cloud.organizations.v1.OrganizationService.DeclineInvite
+   */
+  declineInvite: {
+    methodKind: "unary";
+    input: typeof DeclineInviteRequestSchema;
+    output: typeof DeclineInviteResponseSchema;
   },
   /**
    * Update member role/permissions

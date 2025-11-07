@@ -36,6 +36,9 @@ const (
 	// BillingServiceCreateCheckoutSessionProcedure is the fully-qualified name of the BillingService's
 	// CreateCheckoutSession RPC.
 	BillingServiceCreateCheckoutSessionProcedure = "/obiente.cloud.billing.v1.BillingService/CreateCheckoutSession"
+	// BillingServiceCreatePaymentIntentProcedure is the fully-qualified name of the BillingService's
+	// CreatePaymentIntent RPC.
+	BillingServiceCreatePaymentIntentProcedure = "/obiente.cloud.billing.v1.BillingService/CreatePaymentIntent"
 	// BillingServiceCreatePortalSessionProcedure is the fully-qualified name of the BillingService's
 	// CreatePortalSession RPC.
 	BillingServiceCreatePortalSessionProcedure = "/obiente.cloud.billing.v1.BillingService/CreatePortalSession"
@@ -75,12 +78,23 @@ const (
 	// BillingServiceCancelDNSDelegationSubscriptionProcedure is the fully-qualified name of the
 	// BillingService's CancelDNSDelegationSubscription RPC.
 	BillingServiceCancelDNSDelegationSubscriptionProcedure = "/obiente.cloud.billing.v1.BillingService/CancelDNSDelegationSubscription"
+	// BillingServiceListSubscriptionsProcedure is the fully-qualified name of the BillingService's
+	// ListSubscriptions RPC.
+	BillingServiceListSubscriptionsProcedure = "/obiente.cloud.billing.v1.BillingService/ListSubscriptions"
+	// BillingServiceUpdateSubscriptionPaymentMethodProcedure is the fully-qualified name of the
+	// BillingService's UpdateSubscriptionPaymentMethod RPC.
+	BillingServiceUpdateSubscriptionPaymentMethodProcedure = "/obiente.cloud.billing.v1.BillingService/UpdateSubscriptionPaymentMethod"
+	// BillingServiceCancelSubscriptionProcedure is the fully-qualified name of the BillingService's
+	// CancelSubscription RPC.
+	BillingServiceCancelSubscriptionProcedure = "/obiente.cloud.billing.v1.BillingService/CancelSubscription"
 )
 
 // BillingServiceClient is a client for the obiente.cloud.billing.v1.BillingService service.
 type BillingServiceClient interface {
 	// Create a Stripe Checkout Session for purchasing credits
 	CreateCheckoutSession(context.Context, *connect.Request[v1.CreateCheckoutSessionRequest]) (*connect.Response[v1.CreateCheckoutSessionResponse], error)
+	// Create a Payment Intent for purchasing credits using an existing payment method
+	CreatePaymentIntent(context.Context, *connect.Request[v1.CreatePaymentIntentRequest]) (*connect.Response[v1.CreatePaymentIntentResponse], error)
 	// Create a Stripe Customer Portal session for managing billing
 	CreatePortalSession(context.Context, *connect.Request[v1.CreatePortalSessionRequest]) (*connect.Response[v1.CreatePortalSessionResponse], error)
 	// Create a Setup Intent for collecting payment methods without a payment
@@ -107,6 +121,12 @@ type BillingServiceClient interface {
 	GetDNSDelegationSubscriptionStatus(context.Context, *connect.Request[v1.GetDNSDelegationSubscriptionStatusRequest]) (*connect.Response[v1.GetDNSDelegationSubscriptionStatusResponse], error)
 	// Cancel DNS delegation subscription
 	CancelDNSDelegationSubscription(context.Context, *connect.Request[v1.CancelDNSDelegationSubscriptionRequest]) (*connect.Response[v1.CancelDNSDelegationSubscriptionResponse], error)
+	// List all subscriptions for an organization
+	ListSubscriptions(context.Context, *connect.Request[v1.ListSubscriptionsRequest]) (*connect.Response[v1.ListSubscriptionsResponse], error)
+	// Update subscription payment method
+	UpdateSubscriptionPaymentMethod(context.Context, *connect.Request[v1.UpdateSubscriptionPaymentMethodRequest]) (*connect.Response[v1.UpdateSubscriptionPaymentMethodResponse], error)
+	// Cancel a subscription by ID
+	CancelSubscription(context.Context, *connect.Request[v1.CancelSubscriptionRequest]) (*connect.Response[v1.CancelSubscriptionResponse], error)
 }
 
 // NewBillingServiceClient constructs a client for the obiente.cloud.billing.v1.BillingService
@@ -124,6 +144,12 @@ func NewBillingServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			httpClient,
 			baseURL+BillingServiceCreateCheckoutSessionProcedure,
 			connect.WithSchema(billingServiceMethods.ByName("CreateCheckoutSession")),
+			connect.WithClientOptions(opts...),
+		),
+		createPaymentIntent: connect.NewClient[v1.CreatePaymentIntentRequest, v1.CreatePaymentIntentResponse](
+			httpClient,
+			baseURL+BillingServiceCreatePaymentIntentProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("CreatePaymentIntent")),
 			connect.WithClientOptions(opts...),
 		),
 		createPortalSession: connect.NewClient[v1.CreatePortalSessionRequest, v1.CreatePortalSessionResponse](
@@ -204,12 +230,31 @@ func NewBillingServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(billingServiceMethods.ByName("CancelDNSDelegationSubscription")),
 			connect.WithClientOptions(opts...),
 		),
+		listSubscriptions: connect.NewClient[v1.ListSubscriptionsRequest, v1.ListSubscriptionsResponse](
+			httpClient,
+			baseURL+BillingServiceListSubscriptionsProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("ListSubscriptions")),
+			connect.WithClientOptions(opts...),
+		),
+		updateSubscriptionPaymentMethod: connect.NewClient[v1.UpdateSubscriptionPaymentMethodRequest, v1.UpdateSubscriptionPaymentMethodResponse](
+			httpClient,
+			baseURL+BillingServiceUpdateSubscriptionPaymentMethodProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("UpdateSubscriptionPaymentMethod")),
+			connect.WithClientOptions(opts...),
+		),
+		cancelSubscription: connect.NewClient[v1.CancelSubscriptionRequest, v1.CancelSubscriptionResponse](
+			httpClient,
+			baseURL+BillingServiceCancelSubscriptionProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("CancelSubscription")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // billingServiceClient implements BillingServiceClient.
 type billingServiceClient struct {
 	createCheckoutSession                   *connect.Client[v1.CreateCheckoutSessionRequest, v1.CreateCheckoutSessionResponse]
+	createPaymentIntent                     *connect.Client[v1.CreatePaymentIntentRequest, v1.CreatePaymentIntentResponse]
 	createPortalSession                     *connect.Client[v1.CreatePortalSessionRequest, v1.CreatePortalSessionResponse]
 	createSetupIntent                       *connect.Client[v1.CreateSetupIntentRequest, v1.CreateSetupIntentResponse]
 	getBillingAccount                       *connect.Client[v1.GetBillingAccountRequest, v1.GetBillingAccountResponse]
@@ -223,11 +268,19 @@ type billingServiceClient struct {
 	createDNSDelegationSubscriptionCheckout *connect.Client[v1.CreateDNSDelegationSubscriptionCheckoutRequest, v1.CreateDNSDelegationSubscriptionCheckoutResponse]
 	getDNSDelegationSubscriptionStatus      *connect.Client[v1.GetDNSDelegationSubscriptionStatusRequest, v1.GetDNSDelegationSubscriptionStatusResponse]
 	cancelDNSDelegationSubscription         *connect.Client[v1.CancelDNSDelegationSubscriptionRequest, v1.CancelDNSDelegationSubscriptionResponse]
+	listSubscriptions                       *connect.Client[v1.ListSubscriptionsRequest, v1.ListSubscriptionsResponse]
+	updateSubscriptionPaymentMethod         *connect.Client[v1.UpdateSubscriptionPaymentMethodRequest, v1.UpdateSubscriptionPaymentMethodResponse]
+	cancelSubscription                      *connect.Client[v1.CancelSubscriptionRequest, v1.CancelSubscriptionResponse]
 }
 
 // CreateCheckoutSession calls obiente.cloud.billing.v1.BillingService.CreateCheckoutSession.
 func (c *billingServiceClient) CreateCheckoutSession(ctx context.Context, req *connect.Request[v1.CreateCheckoutSessionRequest]) (*connect.Response[v1.CreateCheckoutSessionResponse], error) {
 	return c.createCheckoutSession.CallUnary(ctx, req)
+}
+
+// CreatePaymentIntent calls obiente.cloud.billing.v1.BillingService.CreatePaymentIntent.
+func (c *billingServiceClient) CreatePaymentIntent(ctx context.Context, req *connect.Request[v1.CreatePaymentIntentRequest]) (*connect.Response[v1.CreatePaymentIntentResponse], error) {
+	return c.createPaymentIntent.CallUnary(ctx, req)
 }
 
 // CreatePortalSession calls obiente.cloud.billing.v1.BillingService.CreatePortalSession.
@@ -298,11 +351,29 @@ func (c *billingServiceClient) CancelDNSDelegationSubscription(ctx context.Conte
 	return c.cancelDNSDelegationSubscription.CallUnary(ctx, req)
 }
 
+// ListSubscriptions calls obiente.cloud.billing.v1.BillingService.ListSubscriptions.
+func (c *billingServiceClient) ListSubscriptions(ctx context.Context, req *connect.Request[v1.ListSubscriptionsRequest]) (*connect.Response[v1.ListSubscriptionsResponse], error) {
+	return c.listSubscriptions.CallUnary(ctx, req)
+}
+
+// UpdateSubscriptionPaymentMethod calls
+// obiente.cloud.billing.v1.BillingService.UpdateSubscriptionPaymentMethod.
+func (c *billingServiceClient) UpdateSubscriptionPaymentMethod(ctx context.Context, req *connect.Request[v1.UpdateSubscriptionPaymentMethodRequest]) (*connect.Response[v1.UpdateSubscriptionPaymentMethodResponse], error) {
+	return c.updateSubscriptionPaymentMethod.CallUnary(ctx, req)
+}
+
+// CancelSubscription calls obiente.cloud.billing.v1.BillingService.CancelSubscription.
+func (c *billingServiceClient) CancelSubscription(ctx context.Context, req *connect.Request[v1.CancelSubscriptionRequest]) (*connect.Response[v1.CancelSubscriptionResponse], error) {
+	return c.cancelSubscription.CallUnary(ctx, req)
+}
+
 // BillingServiceHandler is an implementation of the obiente.cloud.billing.v1.BillingService
 // service.
 type BillingServiceHandler interface {
 	// Create a Stripe Checkout Session for purchasing credits
 	CreateCheckoutSession(context.Context, *connect.Request[v1.CreateCheckoutSessionRequest]) (*connect.Response[v1.CreateCheckoutSessionResponse], error)
+	// Create a Payment Intent for purchasing credits using an existing payment method
+	CreatePaymentIntent(context.Context, *connect.Request[v1.CreatePaymentIntentRequest]) (*connect.Response[v1.CreatePaymentIntentResponse], error)
 	// Create a Stripe Customer Portal session for managing billing
 	CreatePortalSession(context.Context, *connect.Request[v1.CreatePortalSessionRequest]) (*connect.Response[v1.CreatePortalSessionResponse], error)
 	// Create a Setup Intent for collecting payment methods without a payment
@@ -329,6 +400,12 @@ type BillingServiceHandler interface {
 	GetDNSDelegationSubscriptionStatus(context.Context, *connect.Request[v1.GetDNSDelegationSubscriptionStatusRequest]) (*connect.Response[v1.GetDNSDelegationSubscriptionStatusResponse], error)
 	// Cancel DNS delegation subscription
 	CancelDNSDelegationSubscription(context.Context, *connect.Request[v1.CancelDNSDelegationSubscriptionRequest]) (*connect.Response[v1.CancelDNSDelegationSubscriptionResponse], error)
+	// List all subscriptions for an organization
+	ListSubscriptions(context.Context, *connect.Request[v1.ListSubscriptionsRequest]) (*connect.Response[v1.ListSubscriptionsResponse], error)
+	// Update subscription payment method
+	UpdateSubscriptionPaymentMethod(context.Context, *connect.Request[v1.UpdateSubscriptionPaymentMethodRequest]) (*connect.Response[v1.UpdateSubscriptionPaymentMethodResponse], error)
+	// Cancel a subscription by ID
+	CancelSubscription(context.Context, *connect.Request[v1.CancelSubscriptionRequest]) (*connect.Response[v1.CancelSubscriptionResponse], error)
 }
 
 // NewBillingServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -342,6 +419,12 @@ func NewBillingServiceHandler(svc BillingServiceHandler, opts ...connect.Handler
 		BillingServiceCreateCheckoutSessionProcedure,
 		svc.CreateCheckoutSession,
 		connect.WithSchema(billingServiceMethods.ByName("CreateCheckoutSession")),
+		connect.WithHandlerOptions(opts...),
+	)
+	billingServiceCreatePaymentIntentHandler := connect.NewUnaryHandler(
+		BillingServiceCreatePaymentIntentProcedure,
+		svc.CreatePaymentIntent,
+		connect.WithSchema(billingServiceMethods.ByName("CreatePaymentIntent")),
 		connect.WithHandlerOptions(opts...),
 	)
 	billingServiceCreatePortalSessionHandler := connect.NewUnaryHandler(
@@ -422,10 +505,30 @@ func NewBillingServiceHandler(svc BillingServiceHandler, opts ...connect.Handler
 		connect.WithSchema(billingServiceMethods.ByName("CancelDNSDelegationSubscription")),
 		connect.WithHandlerOptions(opts...),
 	)
+	billingServiceListSubscriptionsHandler := connect.NewUnaryHandler(
+		BillingServiceListSubscriptionsProcedure,
+		svc.ListSubscriptions,
+		connect.WithSchema(billingServiceMethods.ByName("ListSubscriptions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	billingServiceUpdateSubscriptionPaymentMethodHandler := connect.NewUnaryHandler(
+		BillingServiceUpdateSubscriptionPaymentMethodProcedure,
+		svc.UpdateSubscriptionPaymentMethod,
+		connect.WithSchema(billingServiceMethods.ByName("UpdateSubscriptionPaymentMethod")),
+		connect.WithHandlerOptions(opts...),
+	)
+	billingServiceCancelSubscriptionHandler := connect.NewUnaryHandler(
+		BillingServiceCancelSubscriptionProcedure,
+		svc.CancelSubscription,
+		connect.WithSchema(billingServiceMethods.ByName("CancelSubscription")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.billing.v1.BillingService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case BillingServiceCreateCheckoutSessionProcedure:
 			billingServiceCreateCheckoutSessionHandler.ServeHTTP(w, r)
+		case BillingServiceCreatePaymentIntentProcedure:
+			billingServiceCreatePaymentIntentHandler.ServeHTTP(w, r)
 		case BillingServiceCreatePortalSessionProcedure:
 			billingServiceCreatePortalSessionHandler.ServeHTTP(w, r)
 		case BillingServiceCreateSetupIntentProcedure:
@@ -452,6 +555,12 @@ func NewBillingServiceHandler(svc BillingServiceHandler, opts ...connect.Handler
 			billingServiceGetDNSDelegationSubscriptionStatusHandler.ServeHTTP(w, r)
 		case BillingServiceCancelDNSDelegationSubscriptionProcedure:
 			billingServiceCancelDNSDelegationSubscriptionHandler.ServeHTTP(w, r)
+		case BillingServiceListSubscriptionsProcedure:
+			billingServiceListSubscriptionsHandler.ServeHTTP(w, r)
+		case BillingServiceUpdateSubscriptionPaymentMethodProcedure:
+			billingServiceUpdateSubscriptionPaymentMethodHandler.ServeHTTP(w, r)
+		case BillingServiceCancelSubscriptionProcedure:
+			billingServiceCancelSubscriptionHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -463,6 +572,10 @@ type UnimplementedBillingServiceHandler struct{}
 
 func (UnimplementedBillingServiceHandler) CreateCheckoutSession(context.Context, *connect.Request[v1.CreateCheckoutSessionRequest]) (*connect.Response[v1.CreateCheckoutSessionResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.billing.v1.BillingService.CreateCheckoutSession is not implemented"))
+}
+
+func (UnimplementedBillingServiceHandler) CreatePaymentIntent(context.Context, *connect.Request[v1.CreatePaymentIntentRequest]) (*connect.Response[v1.CreatePaymentIntentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.billing.v1.BillingService.CreatePaymentIntent is not implemented"))
 }
 
 func (UnimplementedBillingServiceHandler) CreatePortalSession(context.Context, *connect.Request[v1.CreatePortalSessionRequest]) (*connect.Response[v1.CreatePortalSessionResponse], error) {
@@ -515,4 +628,16 @@ func (UnimplementedBillingServiceHandler) GetDNSDelegationSubscriptionStatus(con
 
 func (UnimplementedBillingServiceHandler) CancelDNSDelegationSubscription(context.Context, *connect.Request[v1.CancelDNSDelegationSubscriptionRequest]) (*connect.Response[v1.CancelDNSDelegationSubscriptionResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.billing.v1.BillingService.CancelDNSDelegationSubscription is not implemented"))
+}
+
+func (UnimplementedBillingServiceHandler) ListSubscriptions(context.Context, *connect.Request[v1.ListSubscriptionsRequest]) (*connect.Response[v1.ListSubscriptionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.billing.v1.BillingService.ListSubscriptions is not implemented"))
+}
+
+func (UnimplementedBillingServiceHandler) UpdateSubscriptionPaymentMethod(context.Context, *connect.Request[v1.UpdateSubscriptionPaymentMethodRequest]) (*connect.Response[v1.UpdateSubscriptionPaymentMethodResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.billing.v1.BillingService.UpdateSubscriptionPaymentMethod is not implemented"))
+}
+
+func (UnimplementedBillingServiceHandler) CancelSubscription(context.Context, *connect.Request[v1.CancelSubscriptionRequest]) (*connect.Response[v1.CancelSubscriptionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.billing.v1.BillingService.CancelSubscription is not implemented"))
 }

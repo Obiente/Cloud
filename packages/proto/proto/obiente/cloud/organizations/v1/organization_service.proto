@@ -26,6 +26,18 @@ service OrganizationService {
   // Invite user to organization
   rpc InviteMember(InviteMemberRequest) returns (InviteMemberResponse);
   
+  // Resend invitation email to a pending member
+  rpc ResendInvite(ResendInviteRequest) returns (ResendInviteResponse);
+  
+  // List invites sent to the current user
+  rpc ListMyInvites(ListMyInvitesRequest) returns (ListMyInvitesResponse);
+  
+  // Accept an invitation to join an organization
+  rpc AcceptInvite(AcceptInviteRequest) returns (AcceptInviteResponse);
+  
+  // Decline an invitation to join an organization
+  rpc DeclineInvite(DeclineInviteRequest) returns (DeclineInviteResponse);
+  
   // Update member role/permissions
   rpc UpdateMember(UpdateMemberRequest) returns (UpdateMemberResponse);
   
@@ -152,6 +164,54 @@ message InviteMemberResponse {
   OrganizationMember member = 1;
 }
 
+message ResendInviteRequest {
+  string organization_id = 1;
+  string member_id = 2;
+}
+
+message ResendInviteResponse {
+  bool success = 1;
+}
+
+message ListMyInvitesRequest {
+  // Optional pagination
+  int32 page = 1;
+  int32 per_page = 2;
+}
+
+message ListMyInvitesResponse {
+  repeated PendingInvite invites = 1;
+  Pagination pagination = 2;
+}
+
+message PendingInvite {
+  string id = 1;
+  string organization_id = 2;
+  string organization_name = 3;
+  string role = 4;
+  google.protobuf.Timestamp invited_at = 5;
+  string inviter_email = 6; // Email of the person who sent the invite
+}
+
+message AcceptInviteRequest {
+  string organization_id = 1;
+  string member_id = 2;
+}
+
+message AcceptInviteResponse {
+  OrganizationMember member = 1;
+  Organization organization = 2;
+}
+
+message DeclineInviteRequest {
+  string organization_id = 1;
+  string member_id = 2;
+}
+
+message DeclineInviteResponse {
+  bool success = 1;
+}
+
 message UpdateMemberRequest {
   string organization_id = 1;
   string member_id = 2;
@@ -198,6 +258,26 @@ message Organization {
   int32 max_team_members = 10;
   // Credits balance in cents ($0.01 units)
   int64 credits = 11;
+  // Current plan information (if assigned via plan management)
+  optional PlanInfo plan_info = 12;
+  // Total amount paid in cents (for safety check/auto-upgrade)
+  int64 total_paid_cents = 13;
+}
+
+message PlanInfo {
+  string plan_id = 1;
+  string plan_name = 2;
+  string description = 3;
+  // Resource limits from the plan
+  int32 cpu_cores = 4;
+  int64 memory_bytes = 5;
+  int32 deployments_max = 6;
+  int64 bandwidth_bytes_month = 7;
+  int64 storage_bytes = 8;
+  // Minimum payment required to qualify for this plan (in cents)
+  int64 minimum_payment_cents = 9;
+  // Monthly free credits in cents granted to organizations on this plan
+  int64 monthly_free_credits_cents = 10;
 }
 
 message OrganizationMember {

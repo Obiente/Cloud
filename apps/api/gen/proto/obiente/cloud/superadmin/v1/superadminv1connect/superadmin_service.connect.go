@@ -45,6 +45,12 @@ const (
 	// SuperadminServiceGetDNSConfigProcedure is the fully-qualified name of the SuperadminService's
 	// GetDNSConfig RPC.
 	SuperadminServiceGetDNSConfigProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetDNSConfig"
+	// SuperadminServiceListDelegatedDNSRecordsProcedure is the fully-qualified name of the
+	// SuperadminService's ListDelegatedDNSRecords RPC.
+	SuperadminServiceListDelegatedDNSRecordsProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListDelegatedDNSRecords"
+	// SuperadminServiceHasDelegatedDNSProcedure is the fully-qualified name of the SuperadminService's
+	// HasDelegatedDNS RPC.
+	SuperadminServiceHasDelegatedDNSProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/HasDelegatedDNS"
 	// SuperadminServiceCreateDNSDelegationAPIKeyProcedure is the fully-qualified name of the
 	// SuperadminService's CreateDNSDelegationAPIKey RPC.
 	SuperadminServiceCreateDNSDelegationAPIKeyProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/CreateDNSDelegationAPIKey"
@@ -72,6 +78,27 @@ const (
 	// SuperadminServiceSendInvoiceReminderProcedure is the fully-qualified name of the
 	// SuperadminService's SendInvoiceReminder RPC.
 	SuperadminServiceSendInvoiceReminderProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SendInvoiceReminder"
+	// SuperadminServiceListPlansProcedure is the fully-qualified name of the SuperadminService's
+	// ListPlans RPC.
+	SuperadminServiceListPlansProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListPlans"
+	// SuperadminServiceCreatePlanProcedure is the fully-qualified name of the SuperadminService's
+	// CreatePlan RPC.
+	SuperadminServiceCreatePlanProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/CreatePlan"
+	// SuperadminServiceUpdatePlanProcedure is the fully-qualified name of the SuperadminService's
+	// UpdatePlan RPC.
+	SuperadminServiceUpdatePlanProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/UpdatePlan"
+	// SuperadminServiceDeletePlanProcedure is the fully-qualified name of the SuperadminService's
+	// DeletePlan RPC.
+	SuperadminServiceDeletePlanProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/DeletePlan"
+	// SuperadminServiceAssignPlanToOrganizationProcedure is the fully-qualified name of the
+	// SuperadminService's AssignPlanToOrganization RPC.
+	SuperadminServiceAssignPlanToOrganizationProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/AssignPlanToOrganization"
+	// SuperadminServiceListUsersProcedure is the fully-qualified name of the SuperadminService's
+	// ListUsers RPC.
+	SuperadminServiceListUsersProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListUsers"
+	// SuperadminServiceGetUserProcedure is the fully-qualified name of the SuperadminService's GetUser
+	// RPC.
+	SuperadminServiceGetUserProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetUser"
 )
 
 // SuperadminServiceClient is a client for the obiente.cloud.superadmin.v1.SuperadminService
@@ -83,6 +110,8 @@ type SuperadminServiceClient interface {
 	QueryDNS(context.Context, *connect.Request[v1.QueryDNSRequest]) (*connect.Response[v1.QueryDNSResponse], error)
 	ListDNSRecords(context.Context, *connect.Request[v1.ListDNSRecordsRequest]) (*connect.Response[v1.ListDNSRecordsResponse], error)
 	GetDNSConfig(context.Context, *connect.Request[v1.GetDNSConfigRequest]) (*connect.Response[v1.GetDNSConfigResponse], error)
+	ListDelegatedDNSRecords(context.Context, *connect.Request[v1.ListDelegatedDNSRecordsRequest]) (*connect.Response[v1.ListDelegatedDNSRecordsResponse], error)
+	HasDelegatedDNS(context.Context, *connect.Request[v1.HasDelegatedDNSRequest]) (*connect.Response[v1.HasDelegatedDNSResponse], error)
 	// DNS Delegation API Key management
 	CreateDNSDelegationAPIKey(context.Context, *connect.Request[v1.CreateDNSDelegationAPIKeyRequest]) (*connect.Response[v1.CreateDNSDelegationAPIKeyResponse], error)
 	ListDNSDelegationAPIKeys(context.Context, *connect.Request[v1.ListDNSDelegationAPIKeysRequest]) (*connect.Response[v1.ListDNSDelegationAPIKeysResponse], error)
@@ -97,6 +126,15 @@ type SuperadminServiceClient interface {
 	// Invoice management endpoints
 	ListAllInvoices(context.Context, *connect.Request[v1.ListAllInvoicesRequest]) (*connect.Response[v1.ListAllInvoicesResponse], error)
 	SendInvoiceReminder(context.Context, *connect.Request[v1.SendInvoiceReminderRequest]) (*connect.Response[v1.SendInvoiceReminderResponse], error)
+	// Plan management endpoints
+	ListPlans(context.Context, *connect.Request[v1.ListPlansRequest]) (*connect.Response[v1.ListPlansResponse], error)
+	CreatePlan(context.Context, *connect.Request[v1.CreatePlanRequest]) (*connect.Response[v1.CreatePlanResponse], error)
+	UpdatePlan(context.Context, *connect.Request[v1.UpdatePlanRequest]) (*connect.Response[v1.UpdatePlanResponse], error)
+	DeletePlan(context.Context, *connect.Request[v1.DeletePlanRequest]) (*connect.Response[v1.DeletePlanResponse], error)
+	AssignPlanToOrganization(context.Context, *connect.Request[v1.AssignPlanToOrganizationRequest]) (*connect.Response[v1.AssignPlanToOrganizationResponse], error)
+	// User management endpoints
+	ListUsers(context.Context, *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error)
+	GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error)
 }
 
 // NewSuperadminServiceClient constructs a client for the
@@ -133,6 +171,18 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			httpClient,
 			baseURL+SuperadminServiceGetDNSConfigProcedure,
 			connect.WithSchema(superadminServiceMethods.ByName("GetDNSConfig")),
+			connect.WithClientOptions(opts...),
+		),
+		listDelegatedDNSRecords: connect.NewClient[v1.ListDelegatedDNSRecordsRequest, v1.ListDelegatedDNSRecordsResponse](
+			httpClient,
+			baseURL+SuperadminServiceListDelegatedDNSRecordsProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListDelegatedDNSRecords")),
+			connect.WithClientOptions(opts...),
+		),
+		hasDelegatedDNS: connect.NewClient[v1.HasDelegatedDNSRequest, v1.HasDelegatedDNSResponse](
+			httpClient,
+			baseURL+SuperadminServiceHasDelegatedDNSProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("HasDelegatedDNS")),
 			connect.WithClientOptions(opts...),
 		),
 		createDNSDelegationAPIKey: connect.NewClient[v1.CreateDNSDelegationAPIKeyRequest, v1.CreateDNSDelegationAPIKeyResponse](
@@ -189,6 +239,48 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("SendInvoiceReminder")),
 			connect.WithClientOptions(opts...),
 		),
+		listPlans: connect.NewClient[v1.ListPlansRequest, v1.ListPlansResponse](
+			httpClient,
+			baseURL+SuperadminServiceListPlansProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListPlans")),
+			connect.WithClientOptions(opts...),
+		),
+		createPlan: connect.NewClient[v1.CreatePlanRequest, v1.CreatePlanResponse](
+			httpClient,
+			baseURL+SuperadminServiceCreatePlanProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("CreatePlan")),
+			connect.WithClientOptions(opts...),
+		),
+		updatePlan: connect.NewClient[v1.UpdatePlanRequest, v1.UpdatePlanResponse](
+			httpClient,
+			baseURL+SuperadminServiceUpdatePlanProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("UpdatePlan")),
+			connect.WithClientOptions(opts...),
+		),
+		deletePlan: connect.NewClient[v1.DeletePlanRequest, v1.DeletePlanResponse](
+			httpClient,
+			baseURL+SuperadminServiceDeletePlanProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("DeletePlan")),
+			connect.WithClientOptions(opts...),
+		),
+		assignPlanToOrganization: connect.NewClient[v1.AssignPlanToOrganizationRequest, v1.AssignPlanToOrganizationResponse](
+			httpClient,
+			baseURL+SuperadminServiceAssignPlanToOrganizationProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("AssignPlanToOrganization")),
+			connect.WithClientOptions(opts...),
+		),
+		listUsers: connect.NewClient[v1.ListUsersRequest, v1.ListUsersResponse](
+			httpClient,
+			baseURL+SuperadminServiceListUsersProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListUsers")),
+			connect.WithClientOptions(opts...),
+		),
+		getUser: connect.NewClient[v1.GetUserRequest, v1.GetUserResponse](
+			httpClient,
+			baseURL+SuperadminServiceGetUserProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("GetUser")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -198,6 +290,8 @@ type superadminServiceClient struct {
 	queryDNS                                 *connect.Client[v1.QueryDNSRequest, v1.QueryDNSResponse]
 	listDNSRecords                           *connect.Client[v1.ListDNSRecordsRequest, v1.ListDNSRecordsResponse]
 	getDNSConfig                             *connect.Client[v1.GetDNSConfigRequest, v1.GetDNSConfigResponse]
+	listDelegatedDNSRecords                  *connect.Client[v1.ListDelegatedDNSRecordsRequest, v1.ListDelegatedDNSRecordsResponse]
+	hasDelegatedDNS                          *connect.Client[v1.HasDelegatedDNSRequest, v1.HasDelegatedDNSResponse]
 	createDNSDelegationAPIKey                *connect.Client[v1.CreateDNSDelegationAPIKeyRequest, v1.CreateDNSDelegationAPIKeyResponse]
 	listDNSDelegationAPIKeys                 *connect.Client[v1.ListDNSDelegationAPIKeysRequest, v1.ListDNSDelegationAPIKeysResponse]
 	revokeDNSDelegationAPIKey                *connect.Client[v1.RevokeDNSDelegationAPIKeyRequest, v1.RevokeDNSDelegationAPIKeyResponse]
@@ -207,6 +301,13 @@ type superadminServiceClient struct {
 	getIncomeOverview                        *connect.Client[v1.GetIncomeOverviewRequest, v1.GetIncomeOverviewResponse]
 	listAllInvoices                          *connect.Client[v1.ListAllInvoicesRequest, v1.ListAllInvoicesResponse]
 	sendInvoiceReminder                      *connect.Client[v1.SendInvoiceReminderRequest, v1.SendInvoiceReminderResponse]
+	listPlans                                *connect.Client[v1.ListPlansRequest, v1.ListPlansResponse]
+	createPlan                               *connect.Client[v1.CreatePlanRequest, v1.CreatePlanResponse]
+	updatePlan                               *connect.Client[v1.UpdatePlanRequest, v1.UpdatePlanResponse]
+	deletePlan                               *connect.Client[v1.DeletePlanRequest, v1.DeletePlanResponse]
+	assignPlanToOrganization                 *connect.Client[v1.AssignPlanToOrganizationRequest, v1.AssignPlanToOrganizationResponse]
+	listUsers                                *connect.Client[v1.ListUsersRequest, v1.ListUsersResponse]
+	getUser                                  *connect.Client[v1.GetUserRequest, v1.GetUserResponse]
 }
 
 // GetOverview calls obiente.cloud.superadmin.v1.SuperadminService.GetOverview.
@@ -227,6 +328,17 @@ func (c *superadminServiceClient) ListDNSRecords(ctx context.Context, req *conne
 // GetDNSConfig calls obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig.
 func (c *superadminServiceClient) GetDNSConfig(ctx context.Context, req *connect.Request[v1.GetDNSConfigRequest]) (*connect.Response[v1.GetDNSConfigResponse], error) {
 	return c.getDNSConfig.CallUnary(ctx, req)
+}
+
+// ListDelegatedDNSRecords calls
+// obiente.cloud.superadmin.v1.SuperadminService.ListDelegatedDNSRecords.
+func (c *superadminServiceClient) ListDelegatedDNSRecords(ctx context.Context, req *connect.Request[v1.ListDelegatedDNSRecordsRequest]) (*connect.Response[v1.ListDelegatedDNSRecordsResponse], error) {
+	return c.listDelegatedDNSRecords.CallUnary(ctx, req)
+}
+
+// HasDelegatedDNS calls obiente.cloud.superadmin.v1.SuperadminService.HasDelegatedDNS.
+func (c *superadminServiceClient) HasDelegatedDNS(ctx context.Context, req *connect.Request[v1.HasDelegatedDNSRequest]) (*connect.Response[v1.HasDelegatedDNSResponse], error) {
+	return c.hasDelegatedDNS.CallUnary(ctx, req)
 }
 
 // CreateDNSDelegationAPIKey calls
@@ -278,6 +390,42 @@ func (c *superadminServiceClient) SendInvoiceReminder(ctx context.Context, req *
 	return c.sendInvoiceReminder.CallUnary(ctx, req)
 }
 
+// ListPlans calls obiente.cloud.superadmin.v1.SuperadminService.ListPlans.
+func (c *superadminServiceClient) ListPlans(ctx context.Context, req *connect.Request[v1.ListPlansRequest]) (*connect.Response[v1.ListPlansResponse], error) {
+	return c.listPlans.CallUnary(ctx, req)
+}
+
+// CreatePlan calls obiente.cloud.superadmin.v1.SuperadminService.CreatePlan.
+func (c *superadminServiceClient) CreatePlan(ctx context.Context, req *connect.Request[v1.CreatePlanRequest]) (*connect.Response[v1.CreatePlanResponse], error) {
+	return c.createPlan.CallUnary(ctx, req)
+}
+
+// UpdatePlan calls obiente.cloud.superadmin.v1.SuperadminService.UpdatePlan.
+func (c *superadminServiceClient) UpdatePlan(ctx context.Context, req *connect.Request[v1.UpdatePlanRequest]) (*connect.Response[v1.UpdatePlanResponse], error) {
+	return c.updatePlan.CallUnary(ctx, req)
+}
+
+// DeletePlan calls obiente.cloud.superadmin.v1.SuperadminService.DeletePlan.
+func (c *superadminServiceClient) DeletePlan(ctx context.Context, req *connect.Request[v1.DeletePlanRequest]) (*connect.Response[v1.DeletePlanResponse], error) {
+	return c.deletePlan.CallUnary(ctx, req)
+}
+
+// AssignPlanToOrganization calls
+// obiente.cloud.superadmin.v1.SuperadminService.AssignPlanToOrganization.
+func (c *superadminServiceClient) AssignPlanToOrganization(ctx context.Context, req *connect.Request[v1.AssignPlanToOrganizationRequest]) (*connect.Response[v1.AssignPlanToOrganizationResponse], error) {
+	return c.assignPlanToOrganization.CallUnary(ctx, req)
+}
+
+// ListUsers calls obiente.cloud.superadmin.v1.SuperadminService.ListUsers.
+func (c *superadminServiceClient) ListUsers(ctx context.Context, req *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error) {
+	return c.listUsers.CallUnary(ctx, req)
+}
+
+// GetUser calls obiente.cloud.superadmin.v1.SuperadminService.GetUser.
+func (c *superadminServiceClient) GetUser(ctx context.Context, req *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error) {
+	return c.getUser.CallUnary(ctx, req)
+}
+
 // SuperadminServiceHandler is an implementation of the
 // obiente.cloud.superadmin.v1.SuperadminService service.
 type SuperadminServiceHandler interface {
@@ -287,6 +435,8 @@ type SuperadminServiceHandler interface {
 	QueryDNS(context.Context, *connect.Request[v1.QueryDNSRequest]) (*connect.Response[v1.QueryDNSResponse], error)
 	ListDNSRecords(context.Context, *connect.Request[v1.ListDNSRecordsRequest]) (*connect.Response[v1.ListDNSRecordsResponse], error)
 	GetDNSConfig(context.Context, *connect.Request[v1.GetDNSConfigRequest]) (*connect.Response[v1.GetDNSConfigResponse], error)
+	ListDelegatedDNSRecords(context.Context, *connect.Request[v1.ListDelegatedDNSRecordsRequest]) (*connect.Response[v1.ListDelegatedDNSRecordsResponse], error)
+	HasDelegatedDNS(context.Context, *connect.Request[v1.HasDelegatedDNSRequest]) (*connect.Response[v1.HasDelegatedDNSResponse], error)
 	// DNS Delegation API Key management
 	CreateDNSDelegationAPIKey(context.Context, *connect.Request[v1.CreateDNSDelegationAPIKeyRequest]) (*connect.Response[v1.CreateDNSDelegationAPIKeyResponse], error)
 	ListDNSDelegationAPIKeys(context.Context, *connect.Request[v1.ListDNSDelegationAPIKeysRequest]) (*connect.Response[v1.ListDNSDelegationAPIKeysResponse], error)
@@ -301,6 +451,15 @@ type SuperadminServiceHandler interface {
 	// Invoice management endpoints
 	ListAllInvoices(context.Context, *connect.Request[v1.ListAllInvoicesRequest]) (*connect.Response[v1.ListAllInvoicesResponse], error)
 	SendInvoiceReminder(context.Context, *connect.Request[v1.SendInvoiceReminderRequest]) (*connect.Response[v1.SendInvoiceReminderResponse], error)
+	// Plan management endpoints
+	ListPlans(context.Context, *connect.Request[v1.ListPlansRequest]) (*connect.Response[v1.ListPlansResponse], error)
+	CreatePlan(context.Context, *connect.Request[v1.CreatePlanRequest]) (*connect.Response[v1.CreatePlanResponse], error)
+	UpdatePlan(context.Context, *connect.Request[v1.UpdatePlanRequest]) (*connect.Response[v1.UpdatePlanResponse], error)
+	DeletePlan(context.Context, *connect.Request[v1.DeletePlanRequest]) (*connect.Response[v1.DeletePlanResponse], error)
+	AssignPlanToOrganization(context.Context, *connect.Request[v1.AssignPlanToOrganizationRequest]) (*connect.Response[v1.AssignPlanToOrganizationResponse], error)
+	// User management endpoints
+	ListUsers(context.Context, *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error)
+	GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error)
 }
 
 // NewSuperadminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -332,6 +491,18 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		SuperadminServiceGetDNSConfigProcedure,
 		svc.GetDNSConfig,
 		connect.WithSchema(superadminServiceMethods.ByName("GetDNSConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceListDelegatedDNSRecordsHandler := connect.NewUnaryHandler(
+		SuperadminServiceListDelegatedDNSRecordsProcedure,
+		svc.ListDelegatedDNSRecords,
+		connect.WithSchema(superadminServiceMethods.ByName("ListDelegatedDNSRecords")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceHasDelegatedDNSHandler := connect.NewUnaryHandler(
+		SuperadminServiceHasDelegatedDNSProcedure,
+		svc.HasDelegatedDNS,
+		connect.WithSchema(superadminServiceMethods.ByName("HasDelegatedDNS")),
 		connect.WithHandlerOptions(opts...),
 	)
 	superadminServiceCreateDNSDelegationAPIKeyHandler := connect.NewUnaryHandler(
@@ -388,6 +559,48 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		connect.WithSchema(superadminServiceMethods.ByName("SendInvoiceReminder")),
 		connect.WithHandlerOptions(opts...),
 	)
+	superadminServiceListPlansHandler := connect.NewUnaryHandler(
+		SuperadminServiceListPlansProcedure,
+		svc.ListPlans,
+		connect.WithSchema(superadminServiceMethods.ByName("ListPlans")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceCreatePlanHandler := connect.NewUnaryHandler(
+		SuperadminServiceCreatePlanProcedure,
+		svc.CreatePlan,
+		connect.WithSchema(superadminServiceMethods.ByName("CreatePlan")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceUpdatePlanHandler := connect.NewUnaryHandler(
+		SuperadminServiceUpdatePlanProcedure,
+		svc.UpdatePlan,
+		connect.WithSchema(superadminServiceMethods.ByName("UpdatePlan")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceDeletePlanHandler := connect.NewUnaryHandler(
+		SuperadminServiceDeletePlanProcedure,
+		svc.DeletePlan,
+		connect.WithSchema(superadminServiceMethods.ByName("DeletePlan")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceAssignPlanToOrganizationHandler := connect.NewUnaryHandler(
+		SuperadminServiceAssignPlanToOrganizationProcedure,
+		svc.AssignPlanToOrganization,
+		connect.WithSchema(superadminServiceMethods.ByName("AssignPlanToOrganization")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceListUsersHandler := connect.NewUnaryHandler(
+		SuperadminServiceListUsersProcedure,
+		svc.ListUsers,
+		connect.WithSchema(superadminServiceMethods.ByName("ListUsers")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceGetUserHandler := connect.NewUnaryHandler(
+		SuperadminServiceGetUserProcedure,
+		svc.GetUser,
+		connect.WithSchema(superadminServiceMethods.ByName("GetUser")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.superadmin.v1.SuperadminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SuperadminServiceGetOverviewProcedure:
@@ -398,6 +611,10 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceListDNSRecordsHandler.ServeHTTP(w, r)
 		case SuperadminServiceGetDNSConfigProcedure:
 			superadminServiceGetDNSConfigHandler.ServeHTTP(w, r)
+		case SuperadminServiceListDelegatedDNSRecordsProcedure:
+			superadminServiceListDelegatedDNSRecordsHandler.ServeHTTP(w, r)
+		case SuperadminServiceHasDelegatedDNSProcedure:
+			superadminServiceHasDelegatedDNSHandler.ServeHTTP(w, r)
 		case SuperadminServiceCreateDNSDelegationAPIKeyProcedure:
 			superadminServiceCreateDNSDelegationAPIKeyHandler.ServeHTTP(w, r)
 		case SuperadminServiceListDNSDelegationAPIKeysProcedure:
@@ -416,6 +633,20 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceListAllInvoicesHandler.ServeHTTP(w, r)
 		case SuperadminServiceSendInvoiceReminderProcedure:
 			superadminServiceSendInvoiceReminderHandler.ServeHTTP(w, r)
+		case SuperadminServiceListPlansProcedure:
+			superadminServiceListPlansHandler.ServeHTTP(w, r)
+		case SuperadminServiceCreatePlanProcedure:
+			superadminServiceCreatePlanHandler.ServeHTTP(w, r)
+		case SuperadminServiceUpdatePlanProcedure:
+			superadminServiceUpdatePlanHandler.ServeHTTP(w, r)
+		case SuperadminServiceDeletePlanProcedure:
+			superadminServiceDeletePlanHandler.ServeHTTP(w, r)
+		case SuperadminServiceAssignPlanToOrganizationProcedure:
+			superadminServiceAssignPlanToOrganizationHandler.ServeHTTP(w, r)
+		case SuperadminServiceListUsersProcedure:
+			superadminServiceListUsersHandler.ServeHTTP(w, r)
+		case SuperadminServiceGetUserProcedure:
+			superadminServiceGetUserHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -439,6 +670,14 @@ func (UnimplementedSuperadminServiceHandler) ListDNSRecords(context.Context, *co
 
 func (UnimplementedSuperadminServiceHandler) GetDNSConfig(context.Context, *connect.Request[v1.GetDNSConfigRequest]) (*connect.Response[v1.GetDNSConfigResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListDelegatedDNSRecords(context.Context, *connect.Request[v1.ListDelegatedDNSRecordsRequest]) (*connect.Response[v1.ListDelegatedDNSRecordsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListDelegatedDNSRecords is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) HasDelegatedDNS(context.Context, *connect.Request[v1.HasDelegatedDNSRequest]) (*connect.Response[v1.HasDelegatedDNSResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.HasDelegatedDNS is not implemented"))
 }
 
 func (UnimplementedSuperadminServiceHandler) CreateDNSDelegationAPIKey(context.Context, *connect.Request[v1.CreateDNSDelegationAPIKeyRequest]) (*connect.Response[v1.CreateDNSDelegationAPIKeyResponse], error) {
@@ -475,4 +714,32 @@ func (UnimplementedSuperadminServiceHandler) ListAllInvoices(context.Context, *c
 
 func (UnimplementedSuperadminServiceHandler) SendInvoiceReminder(context.Context, *connect.Request[v1.SendInvoiceReminderRequest]) (*connect.Response[v1.SendInvoiceReminderResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListPlans(context.Context, *connect.Request[v1.ListPlansRequest]) (*connect.Response[v1.ListPlansResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListPlans is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) CreatePlan(context.Context, *connect.Request[v1.CreatePlanRequest]) (*connect.Response[v1.CreatePlanResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.CreatePlan is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) UpdatePlan(context.Context, *connect.Request[v1.UpdatePlanRequest]) (*connect.Response[v1.UpdatePlanResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.UpdatePlan is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) DeletePlan(context.Context, *connect.Request[v1.DeletePlanRequest]) (*connect.Response[v1.DeletePlanResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.DeletePlan is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) AssignPlanToOrganization(context.Context, *connect.Request[v1.AssignPlanToOrganizationRequest]) (*connect.Response[v1.AssignPlanToOrganizationResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.AssignPlanToOrganization is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListUsers(context.Context, *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListUsers is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetUser is not implemented"))
 }

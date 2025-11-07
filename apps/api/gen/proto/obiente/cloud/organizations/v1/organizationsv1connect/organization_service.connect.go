@@ -51,6 +51,18 @@ const (
 	// OrganizationServiceInviteMemberProcedure is the fully-qualified name of the OrganizationService's
 	// InviteMember RPC.
 	OrganizationServiceInviteMemberProcedure = "/obiente.cloud.organizations.v1.OrganizationService/InviteMember"
+	// OrganizationServiceResendInviteProcedure is the fully-qualified name of the OrganizationService's
+	// ResendInvite RPC.
+	OrganizationServiceResendInviteProcedure = "/obiente.cloud.organizations.v1.OrganizationService/ResendInvite"
+	// OrganizationServiceListMyInvitesProcedure is the fully-qualified name of the
+	// OrganizationService's ListMyInvites RPC.
+	OrganizationServiceListMyInvitesProcedure = "/obiente.cloud.organizations.v1.OrganizationService/ListMyInvites"
+	// OrganizationServiceAcceptInviteProcedure is the fully-qualified name of the OrganizationService's
+	// AcceptInvite RPC.
+	OrganizationServiceAcceptInviteProcedure = "/obiente.cloud.organizations.v1.OrganizationService/AcceptInvite"
+	// OrganizationServiceDeclineInviteProcedure is the fully-qualified name of the
+	// OrganizationService's DeclineInvite RPC.
+	OrganizationServiceDeclineInviteProcedure = "/obiente.cloud.organizations.v1.OrganizationService/DeclineInvite"
 	// OrganizationServiceUpdateMemberProcedure is the fully-qualified name of the OrganizationService's
 	// UpdateMember RPC.
 	OrganizationServiceUpdateMemberProcedure = "/obiente.cloud.organizations.v1.OrganizationService/UpdateMember"
@@ -92,6 +104,14 @@ type OrganizationServiceClient interface {
 	ListMembers(context.Context, *connect.Request[v1.ListMembersRequest]) (*connect.Response[v1.ListMembersResponse], error)
 	// Invite user to organization
 	InviteMember(context.Context, *connect.Request[v1.InviteMemberRequest]) (*connect.Response[v1.InviteMemberResponse], error)
+	// Resend invitation email to a pending member
+	ResendInvite(context.Context, *connect.Request[v1.ResendInviteRequest]) (*connect.Response[v1.ResendInviteResponse], error)
+	// List invites sent to the current user
+	ListMyInvites(context.Context, *connect.Request[v1.ListMyInvitesRequest]) (*connect.Response[v1.ListMyInvitesResponse], error)
+	// Accept an invitation to join an organization
+	AcceptInvite(context.Context, *connect.Request[v1.AcceptInviteRequest]) (*connect.Response[v1.AcceptInviteResponse], error)
+	// Decline an invitation to join an organization
+	DeclineInvite(context.Context, *connect.Request[v1.DeclineInviteRequest]) (*connect.Response[v1.DeclineInviteResponse], error)
 	// Update member role/permissions
 	UpdateMember(context.Context, *connect.Request[v1.UpdateMemberRequest]) (*connect.Response[v1.UpdateMemberResponse], error)
 	// Remove member from organization
@@ -158,6 +178,30 @@ func NewOrganizationServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(organizationServiceMethods.ByName("InviteMember")),
 			connect.WithClientOptions(opts...),
 		),
+		resendInvite: connect.NewClient[v1.ResendInviteRequest, v1.ResendInviteResponse](
+			httpClient,
+			baseURL+OrganizationServiceResendInviteProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("ResendInvite")),
+			connect.WithClientOptions(opts...),
+		),
+		listMyInvites: connect.NewClient[v1.ListMyInvitesRequest, v1.ListMyInvitesResponse](
+			httpClient,
+			baseURL+OrganizationServiceListMyInvitesProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("ListMyInvites")),
+			connect.WithClientOptions(opts...),
+		),
+		acceptInvite: connect.NewClient[v1.AcceptInviteRequest, v1.AcceptInviteResponse](
+			httpClient,
+			baseURL+OrganizationServiceAcceptInviteProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("AcceptInvite")),
+			connect.WithClientOptions(opts...),
+		),
+		declineInvite: connect.NewClient[v1.DeclineInviteRequest, v1.DeclineInviteResponse](
+			httpClient,
+			baseURL+OrganizationServiceDeclineInviteProcedure,
+			connect.WithSchema(organizationServiceMethods.ByName("DeclineInvite")),
+			connect.WithClientOptions(opts...),
+		),
 		updateMember: connect.NewClient[v1.UpdateMemberRequest, v1.UpdateMemberResponse](
 			httpClient,
 			baseURL+OrganizationServiceUpdateMemberProcedure,
@@ -217,6 +261,10 @@ type organizationServiceClient struct {
 	updateOrganization *connect.Client[v1.UpdateOrganizationRequest, v1.UpdateOrganizationResponse]
 	listMembers        *connect.Client[v1.ListMembersRequest, v1.ListMembersResponse]
 	inviteMember       *connect.Client[v1.InviteMemberRequest, v1.InviteMemberResponse]
+	resendInvite       *connect.Client[v1.ResendInviteRequest, v1.ResendInviteResponse]
+	listMyInvites      *connect.Client[v1.ListMyInvitesRequest, v1.ListMyInvitesResponse]
+	acceptInvite       *connect.Client[v1.AcceptInviteRequest, v1.AcceptInviteResponse]
+	declineInvite      *connect.Client[v1.DeclineInviteRequest, v1.DeclineInviteResponse]
 	updateMember       *connect.Client[v1.UpdateMemberRequest, v1.UpdateMemberResponse]
 	removeMember       *connect.Client[v1.RemoveMemberRequest, v1.RemoveMemberResponse]
 	transferOwnership  *connect.Client[v1.TransferOwnershipRequest, v1.TransferOwnershipResponse]
@@ -255,6 +303,26 @@ func (c *organizationServiceClient) ListMembers(ctx context.Context, req *connec
 // InviteMember calls obiente.cloud.organizations.v1.OrganizationService.InviteMember.
 func (c *organizationServiceClient) InviteMember(ctx context.Context, req *connect.Request[v1.InviteMemberRequest]) (*connect.Response[v1.InviteMemberResponse], error) {
 	return c.inviteMember.CallUnary(ctx, req)
+}
+
+// ResendInvite calls obiente.cloud.organizations.v1.OrganizationService.ResendInvite.
+func (c *organizationServiceClient) ResendInvite(ctx context.Context, req *connect.Request[v1.ResendInviteRequest]) (*connect.Response[v1.ResendInviteResponse], error) {
+	return c.resendInvite.CallUnary(ctx, req)
+}
+
+// ListMyInvites calls obiente.cloud.organizations.v1.OrganizationService.ListMyInvites.
+func (c *organizationServiceClient) ListMyInvites(ctx context.Context, req *connect.Request[v1.ListMyInvitesRequest]) (*connect.Response[v1.ListMyInvitesResponse], error) {
+	return c.listMyInvites.CallUnary(ctx, req)
+}
+
+// AcceptInvite calls obiente.cloud.organizations.v1.OrganizationService.AcceptInvite.
+func (c *organizationServiceClient) AcceptInvite(ctx context.Context, req *connect.Request[v1.AcceptInviteRequest]) (*connect.Response[v1.AcceptInviteResponse], error) {
+	return c.acceptInvite.CallUnary(ctx, req)
+}
+
+// DeclineInvite calls obiente.cloud.organizations.v1.OrganizationService.DeclineInvite.
+func (c *organizationServiceClient) DeclineInvite(ctx context.Context, req *connect.Request[v1.DeclineInviteRequest]) (*connect.Response[v1.DeclineInviteResponse], error) {
+	return c.declineInvite.CallUnary(ctx, req)
 }
 
 // UpdateMember calls obiente.cloud.organizations.v1.OrganizationService.UpdateMember.
@@ -312,6 +380,14 @@ type OrganizationServiceHandler interface {
 	ListMembers(context.Context, *connect.Request[v1.ListMembersRequest]) (*connect.Response[v1.ListMembersResponse], error)
 	// Invite user to organization
 	InviteMember(context.Context, *connect.Request[v1.InviteMemberRequest]) (*connect.Response[v1.InviteMemberResponse], error)
+	// Resend invitation email to a pending member
+	ResendInvite(context.Context, *connect.Request[v1.ResendInviteRequest]) (*connect.Response[v1.ResendInviteResponse], error)
+	// List invites sent to the current user
+	ListMyInvites(context.Context, *connect.Request[v1.ListMyInvitesRequest]) (*connect.Response[v1.ListMyInvitesResponse], error)
+	// Accept an invitation to join an organization
+	AcceptInvite(context.Context, *connect.Request[v1.AcceptInviteRequest]) (*connect.Response[v1.AcceptInviteResponse], error)
+	// Decline an invitation to join an organization
+	DeclineInvite(context.Context, *connect.Request[v1.DeclineInviteRequest]) (*connect.Response[v1.DeclineInviteResponse], error)
 	// Update member role/permissions
 	UpdateMember(context.Context, *connect.Request[v1.UpdateMemberRequest]) (*connect.Response[v1.UpdateMemberResponse], error)
 	// Remove member from organization
@@ -371,6 +447,30 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 		OrganizationServiceInviteMemberProcedure,
 		svc.InviteMember,
 		connect.WithSchema(organizationServiceMethods.ByName("InviteMember")),
+		connect.WithHandlerOptions(opts...),
+	)
+	organizationServiceResendInviteHandler := connect.NewUnaryHandler(
+		OrganizationServiceResendInviteProcedure,
+		svc.ResendInvite,
+		connect.WithSchema(organizationServiceMethods.ByName("ResendInvite")),
+		connect.WithHandlerOptions(opts...),
+	)
+	organizationServiceListMyInvitesHandler := connect.NewUnaryHandler(
+		OrganizationServiceListMyInvitesProcedure,
+		svc.ListMyInvites,
+		connect.WithSchema(organizationServiceMethods.ByName("ListMyInvites")),
+		connect.WithHandlerOptions(opts...),
+	)
+	organizationServiceAcceptInviteHandler := connect.NewUnaryHandler(
+		OrganizationServiceAcceptInviteProcedure,
+		svc.AcceptInvite,
+		connect.WithSchema(organizationServiceMethods.ByName("AcceptInvite")),
+		connect.WithHandlerOptions(opts...),
+	)
+	organizationServiceDeclineInviteHandler := connect.NewUnaryHandler(
+		OrganizationServiceDeclineInviteProcedure,
+		svc.DeclineInvite,
+		connect.WithSchema(organizationServiceMethods.ByName("DeclineInvite")),
 		connect.WithHandlerOptions(opts...),
 	)
 	organizationServiceUpdateMemberHandler := connect.NewUnaryHandler(
@@ -435,6 +535,14 @@ func NewOrganizationServiceHandler(svc OrganizationServiceHandler, opts ...conne
 			organizationServiceListMembersHandler.ServeHTTP(w, r)
 		case OrganizationServiceInviteMemberProcedure:
 			organizationServiceInviteMemberHandler.ServeHTTP(w, r)
+		case OrganizationServiceResendInviteProcedure:
+			organizationServiceResendInviteHandler.ServeHTTP(w, r)
+		case OrganizationServiceListMyInvitesProcedure:
+			organizationServiceListMyInvitesHandler.ServeHTTP(w, r)
+		case OrganizationServiceAcceptInviteProcedure:
+			organizationServiceAcceptInviteHandler.ServeHTTP(w, r)
+		case OrganizationServiceDeclineInviteProcedure:
+			organizationServiceDeclineInviteHandler.ServeHTTP(w, r)
 		case OrganizationServiceUpdateMemberProcedure:
 			organizationServiceUpdateMemberHandler.ServeHTTP(w, r)
 		case OrganizationServiceRemoveMemberProcedure:
@@ -482,6 +590,22 @@ func (UnimplementedOrganizationServiceHandler) ListMembers(context.Context, *con
 
 func (UnimplementedOrganizationServiceHandler) InviteMember(context.Context, *connect.Request[v1.InviteMemberRequest]) (*connect.Response[v1.InviteMemberResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.InviteMember is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) ResendInvite(context.Context, *connect.Request[v1.ResendInviteRequest]) (*connect.Response[v1.ResendInviteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.ResendInvite is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) ListMyInvites(context.Context, *connect.Request[v1.ListMyInvitesRequest]) (*connect.Response[v1.ListMyInvitesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.ListMyInvites is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) AcceptInvite(context.Context, *connect.Request[v1.AcceptInviteRequest]) (*connect.Response[v1.AcceptInviteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.AcceptInvite is not implemented"))
+}
+
+func (UnimplementedOrganizationServiceHandler) DeclineInvite(context.Context, *connect.Request[v1.DeclineInviteRequest]) (*connect.Response[v1.DeclineInviteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.organizations.v1.OrganizationService.DeclineInvite is not implemented"))
 }
 
 func (UnimplementedOrganizationServiceHandler) UpdateMember(context.Context, *connect.Request[v1.UpdateMemberRequest]) (*connect.Response[v1.UpdateMemberResponse], error) {

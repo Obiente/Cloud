@@ -10,6 +10,9 @@ service BillingService {
   // Create a Stripe Checkout Session for purchasing credits
   rpc CreateCheckoutSession(CreateCheckoutSessionRequest) returns (CreateCheckoutSessionResponse);
 
+  // Create a Payment Intent for purchasing credits using an existing payment method
+  rpc CreatePaymentIntent(CreatePaymentIntentRequest) returns (CreatePaymentIntentResponse);
+
   // Create a Stripe Customer Portal session for managing billing
   rpc CreatePortalSession(CreatePortalSessionRequest) returns (CreatePortalSessionResponse);
 
@@ -48,6 +51,15 @@ service BillingService {
 
   // Cancel DNS delegation subscription
   rpc CancelDNSDelegationSubscription(CancelDNSDelegationSubscriptionRequest) returns (CancelDNSDelegationSubscriptionResponse);
+
+  // List all subscriptions for an organization
+  rpc ListSubscriptions(ListSubscriptionsRequest) returns (ListSubscriptionsResponse);
+
+  // Update subscription payment method
+  rpc UpdateSubscriptionPaymentMethod(UpdateSubscriptionPaymentMethodRequest) returns (UpdateSubscriptionPaymentMethodResponse);
+
+  // Cancel a subscription by ID
+  rpc CancelSubscription(CancelSubscriptionRequest) returns (CancelSubscriptionResponse);
 }
 
 message CreateCheckoutSessionRequest {
@@ -65,6 +77,21 @@ message CreateCheckoutSessionResponse {
   string session_id = 1;
   // Stripe Checkout Session URL for redirect
   string checkout_url = 2;
+}
+
+message CreatePaymentIntentRequest {
+  string organization_id = 1;
+  // Amount in cents ($0.01 units). Must be positive.
+  int64 amount_cents = 2;
+  // Optional: payment method ID to use (defaults to customer's default payment method)
+  optional string payment_method_id = 3;
+}
+
+message CreatePaymentIntentResponse {
+  // Stripe Payment Intent ID
+  string payment_intent_id = 1;
+  // Stripe Payment Intent client secret for frontend confirmation
+  string client_secret = 2;
 }
 
 message CreatePortalSessionRequest {
@@ -269,6 +296,51 @@ message CancelDNSDelegationSubscriptionResponse {
   bool success = 1;
   string message = 2; // Status message
   google.protobuf.Timestamp canceled_at = 3; // When subscription will be canceled (end of billing period)
+}
+
+message ListSubscriptionsRequest {
+  string organization_id = 1;
+}
+
+message ListSubscriptionsResponse {
+  repeated Subscription subscriptions = 1;
+}
+
+message Subscription {
+  string id = 1;
+  string status = 2; // "active", "canceled", "past_due", "unpaid", "trialing", etc.
+  google.protobuf.Timestamp current_period_start = 3;
+  google.protobuf.Timestamp current_period_end = 4;
+  google.protobuf.Timestamp canceled_at = 5; // If subscription is canceled
+  bool cancel_at_period_end = 6; // Whether subscription will cancel at period end
+  int64 amount = 7; // Amount in cents
+  string currency = 8;
+  string interval = 9; // "month", "year", etc.
+  int32 interval_count = 10; // Number of intervals
+  string description = 11;
+  google.protobuf.Timestamp created = 12;
+}
+
+message UpdateSubscriptionPaymentMethodRequest {
+  string organization_id = 1;
+  string subscription_id = 2;
+  string payment_method_id = 3;
+}
+
+message UpdateSubscriptionPaymentMethodResponse {
+  bool success = 1;
+  Subscription subscription = 2;
+}
+
+message CancelSubscriptionRequest {
+  string organization_id = 1;
+  string subscription_id = 2;
+}
+
+message CancelSubscriptionResponse {
+  bool success = 1;
+  string message = 2; // Status message
+  Subscription subscription = 3;
 }
 
 

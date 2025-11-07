@@ -4,15 +4,57 @@
 
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Timestamp } from "../../../../google/protobuf/timestamp_pb.js";
-import { file_google_protobuf_timestamp } from "../../../../google/protobuf/timestamp_pb.js";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file obiente/cloud/auth/v1/auth_service.proto.
  */
 export const file_obiente_cloud_auth_v1_auth_service: GenFile = /*@__PURE__*/
-  fileDesc("CihvYmllbnRlL2Nsb3VkL2F1dGgvdjEvYXV0aF9zZXJ2aWNlLnByb3RvEhVvYmllbnRlLmNsb3VkLmF1dGgudjEiFwoVR2V0Q3VycmVudFVzZXJSZXF1ZXN0IkMKFkdldEN1cnJlbnRVc2VyUmVzcG9uc2USKQoEdXNlchgBIAEoCzIbLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Vc2VyIrECCgRVc2VyEgoKAmlkGAEgASgJEg0KBWVtYWlsGAIgASgJEgwKBG5hbWUYAyABKAkSEgoKYXZhdGFyX3VybBgEIAEoCRIuCgpjcmVhdGVkX2F0GAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCgh0aW1lem9uZRgGIAEoCRISCgpnaXZlbl9uYW1lGAcgASgJEhMKC2ZhbWlseV9uYW1lGAggASgJEhoKEnByZWZlcnJlZF91c2VybmFtZRgJIAEoCRIWCg5lbWFpbF92ZXJpZmllZBgKIAEoCBIOCgZsb2NhbGUYCyABKAkSLgoKdXBkYXRlZF9hdBgMIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDQoFcm9sZXMYDSADKAkiTQoUQ29ubmVjdEdpdEh1YlJlcXVlc3QSFAoMYWNjZXNzX3Rva2VuGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEg0KBXNjb3BlGAMgASgJIjoKFUNvbm5lY3RHaXRIdWJSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEhAKCHVzZXJuYW1lGAIgASgJIhkKF0Rpc2Nvbm5lY3RHaXRIdWJSZXF1ZXN0IisKGERpc2Nvbm5lY3RHaXRIdWJSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIIhgKFkdldEdpdEh1YlN0YXR1c1JlcXVlc3QiPgoXR2V0R2l0SHViU3RhdHVzUmVzcG9uc2USEQoJY29ubmVjdGVkGAEgASgIEhAKCHVzZXJuYW1lGAIgASgJInIKIENvbm5lY3RPcmdhbml6YXRpb25HaXRIdWJSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIUCgxhY2Nlc3NfdG9rZW4YAiABKAkSEAoIdXNlcm5hbWUYAyABKAkSDQoFc2NvcGUYBCABKAkiRgohQ29ubmVjdE9yZ2FuaXphdGlvbkdpdEh1YlJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSEAoIdXNlcm5hbWUYAiABKAkiPgojRGlzY29ubmVjdE9yZ2FuaXphdGlvbkdpdEh1YlJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJIjcKJERpc2Nvbm5lY3RPcmdhbml6YXRpb25HaXRIdWJSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIIh8KHUxpc3RHaXRIdWJJbnRlZ3JhdGlvbnNSZXF1ZXN0IrsBChVHaXRIdWJJbnRlZ3JhdGlvbkluZm8SCgoCaWQYASABKAkSEAoIdXNlcm5hbWUYAiABKAkSDQoFc2NvcGUYAyABKAkSDwoHaXNfdXNlchgEIAEoCBIXCg9vcmdhbml6YXRpb25faWQYBSABKAkSGQoRb3JnYW5pemF0aW9uX25hbWUYBiABKAkSMAoMY29ubmVjdGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJkCh5MaXN0R2l0SHViSW50ZWdyYXRpb25zUmVzcG9uc2USQgoMaW50ZWdyYXRpb25zGAEgAygLMiwub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkdpdEh1YkludGVncmF0aW9uSW5mbyLgAQoYVXBkYXRlVXNlclByb2ZpbGVSZXF1ZXN0EhcKCmdpdmVuX25hbWUYASABKAlIAIgBARIYCgtmYW1pbHlfbmFtZRgCIAEoCUgBiAEBEhEKBG5hbWUYAyABKAlIAogBARIfChJwcmVmZXJyZWRfdXNlcm5hbWUYBCABKAlIA4gBARITCgZsb2NhbGUYBSABKAlIBIgBAUINCgtfZ2l2ZW5fbmFtZUIOCgxfZmFtaWx5X25hbWVCBwoFX25hbWVCFQoTX3ByZWZlcnJlZF91c2VybmFtZUIJCgdfbG9jYWxlIkYKGVVwZGF0ZVVzZXJQcm9maWxlUmVzcG9uc2USKQoEdXNlchgBIAEoCzIbLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Vc2VyIkQKDExvZ2luUmVxdWVzdBINCgVlbWFpbBgBIAEoCRIQCghwYXNzd29yZBgCIAEoCRITCgtyZW1lbWJlcl9tZRgDIAEoCCJyCg1Mb2dpblJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSFAoMYWNjZXNzX3Rva2VuGAIgASgJEhUKDXJlZnJlc2hfdG9rZW4YAyABKAkSEgoKZXhwaXJlc19pbhgEIAEoBRIPCgdtZXNzYWdlGAUgASgJMs4ICgtBdXRoU2VydmljZRJSCgVMb2dpbhIjLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Mb2dpblJlcXVlc3QaJC5vYmllbnRlLmNsb3VkLmF1dGgudjEuTG9naW5SZXNwb25zZRJtCg5HZXRDdXJyZW50VXNlchIsLm9iaWVudGUuY2xvdWQuYXV0aC52MS5HZXRDdXJyZW50VXNlclJlcXVlc3QaLS5vYmllbnRlLmNsb3VkLmF1dGgudjEuR2V0Q3VycmVudFVzZXJSZXNwb25zZRJ2ChFVcGRhdGVVc2VyUHJvZmlsZRIvLm9iaWVudGUuY2xvdWQuYXV0aC52MS5VcGRhdGVVc2VyUHJvZmlsZVJlcXVlc3QaMC5vYmllbnRlLmNsb3VkLmF1dGgudjEuVXBkYXRlVXNlclByb2ZpbGVSZXNwb25zZRJqCg1Db25uZWN0R2l0SHViEisub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkNvbm5lY3RHaXRIdWJSZXF1ZXN0Giwub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkNvbm5lY3RHaXRIdWJSZXNwb25zZRJzChBEaXNjb25uZWN0R2l0SHViEi4ub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkRpc2Nvbm5lY3RHaXRIdWJSZXF1ZXN0Gi8ub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkRpc2Nvbm5lY3RHaXRIdWJSZXNwb25zZRJwCg9HZXRHaXRIdWJTdGF0dXMSLS5vYmllbnRlLmNsb3VkLmF1dGgudjEuR2V0R2l0SHViU3RhdHVzUmVxdWVzdBouLm9iaWVudGUuY2xvdWQuYXV0aC52MS5HZXRHaXRIdWJTdGF0dXNSZXNwb25zZRKOAQoZQ29ubmVjdE9yZ2FuaXphdGlvbkdpdEh1YhI3Lm9iaWVudGUuY2xvdWQuYXV0aC52MS5Db25uZWN0T3JnYW5pemF0aW9uR2l0SHViUmVxdWVzdBo4Lm9iaWVudGUuY2xvdWQuYXV0aC52MS5Db25uZWN0T3JnYW5pemF0aW9uR2l0SHViUmVzcG9uc2USlwEKHERpc2Nvbm5lY3RPcmdhbml6YXRpb25HaXRIdWISOi5vYmllbnRlLmNsb3VkLmF1dGgudjEuRGlzY29ubmVjdE9yZ2FuaXphdGlvbkdpdEh1YlJlcXVlc3QaOy5vYmllbnRlLmNsb3VkLmF1dGgudjEuRGlzY29ubmVjdE9yZ2FuaXphdGlvbkdpdEh1YlJlc3BvbnNlEoUBChZMaXN0R2l0SHViSW50ZWdyYXRpb25zEjQub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkxpc3RHaXRIdWJJbnRlZ3JhdGlvbnNSZXF1ZXN0GjUub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkxpc3RHaXRIdWJJbnRlZ3JhdGlvbnNSZXNwb25zZUIsWiphcGkvZ2VuL3Byb3RvL29iaWVudGUvY2xvdWQvYXV0aC92MTthdXRodjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("CihvYmllbnRlL2Nsb3VkL2F1dGgvdjEvYXV0aF9zZXJ2aWNlLnByb3RvEhVvYmllbnRlLmNsb3VkLmF1dGgudjEiGAoWR2V0UHVibGljQ29uZmlnUmVxdWVzdCJdChdHZXRQdWJsaWNDb25maWdSZXNwb25zZRIXCg9iaWxsaW5nX2VuYWJsZWQYASABKAgSEwoLc2VsZl9ob3N0ZWQYAiABKAgSFAoMZGlzYWJsZV9hdXRoGAMgASgIIhcKFUdldEN1cnJlbnRVc2VyUmVxdWVzdCJDChZHZXRDdXJyZW50VXNlclJlc3BvbnNlEikKBHVzZXIYASABKAsyGy5vYmllbnRlLmNsb3VkLmF1dGgudjEuVXNlciKxAgoEVXNlchIKCgJpZBgBIAEoCRINCgVlbWFpbBgCIAEoCRIMCgRuYW1lGAMgASgJEhIKCmF2YXRhcl91cmwYBCABKAkSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIdGltZXpvbmUYBiABKAkSEgoKZ2l2ZW5fbmFtZRgHIAEoCRITCgtmYW1pbHlfbmFtZRgIIAEoCRIaChJwcmVmZXJyZWRfdXNlcm5hbWUYCSABKAkSFgoOZW1haWxfdmVyaWZpZWQYCiABKAgSDgoGbG9jYWxlGAsgASgJEi4KCnVwZGF0ZWRfYXQYDCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg0KBXJvbGVzGA0gAygJIk0KFENvbm5lY3RHaXRIdWJSZXF1ZXN0EhQKDGFjY2Vzc190b2tlbhgBIAEoCRIQCgh1c2VybmFtZRgCIAEoCRINCgVzY29wZRgDIAEoCSI6ChVDb25uZWN0R2l0SHViUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBIQCgh1c2VybmFtZRgCIAEoCSIZChdEaXNjb25uZWN0R2l0SHViUmVxdWVzdCIrChhEaXNjb25uZWN0R2l0SHViUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCCIYChZHZXRHaXRIdWJTdGF0dXNSZXF1ZXN0Ij4KF0dldEdpdEh1YlN0YXR1c1Jlc3BvbnNlEhEKCWNvbm5lY3RlZBgBIAEoCBIQCgh1c2VybmFtZRgCIAEoCSJyCiBDb25uZWN0T3JnYW5pemF0aW9uR2l0SHViUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFAoMYWNjZXNzX3Rva2VuGAIgASgJEhAKCHVzZXJuYW1lGAMgASgJEg0KBXNjb3BlGAQgASgJIkYKIUNvbm5lY3RPcmdhbml6YXRpb25HaXRIdWJSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEhAKCHVzZXJuYW1lGAIgASgJIj4KI0Rpc2Nvbm5lY3RPcmdhbml6YXRpb25HaXRIdWJSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCSI3CiREaXNjb25uZWN0T3JnYW5pemF0aW9uR2l0SHViUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCCIfCh1MaXN0R2l0SHViSW50ZWdyYXRpb25zUmVxdWVzdCK7AQoVR2l0SHViSW50ZWdyYXRpb25JbmZvEgoKAmlkGAEgASgJEhAKCHVzZXJuYW1lGAIgASgJEg0KBXNjb3BlGAMgASgJEg8KB2lzX3VzZXIYBCABKAgSFwoPb3JnYW5pemF0aW9uX2lkGAUgASgJEhkKEW9yZ2FuaXphdGlvbl9uYW1lGAYgASgJEjAKDGNvbm5lY3RlZF9hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiZAoeTGlzdEdpdEh1YkludGVncmF0aW9uc1Jlc3BvbnNlEkIKDGludGVncmF0aW9ucxgBIAMoCzIsLm9iaWVudGUuY2xvdWQuYXV0aC52MS5HaXRIdWJJbnRlZ3JhdGlvbkluZm8i4AEKGFVwZGF0ZVVzZXJQcm9maWxlUmVxdWVzdBIXCgpnaXZlbl9uYW1lGAEgASgJSACIAQESGAoLZmFtaWx5X25hbWUYAiABKAlIAYgBARIRCgRuYW1lGAMgASgJSAKIAQESHwoScHJlZmVycmVkX3VzZXJuYW1lGAQgASgJSAOIAQESEwoGbG9jYWxlGAUgASgJSASIAQFCDQoLX2dpdmVuX25hbWVCDgoMX2ZhbWlseV9uYW1lQgcKBV9uYW1lQhUKE19wcmVmZXJyZWRfdXNlcm5hbWVCCQoHX2xvY2FsZSJGChlVcGRhdGVVc2VyUHJvZmlsZVJlc3BvbnNlEikKBHVzZXIYASABKAsyGy5vYmllbnRlLmNsb3VkLmF1dGgudjEuVXNlciJECgxMb2dpblJlcXVlc3QSDQoFZW1haWwYASABKAkSEAoIcGFzc3dvcmQYAiABKAkSEwoLcmVtZW1iZXJfbWUYAyABKAgicgoNTG9naW5SZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEhQKDGFjY2Vzc190b2tlbhgCIAEoCRIVCg1yZWZyZXNoX3Rva2VuGAMgASgJEhIKCmV4cGlyZXNfaW4YBCABKAUSDwoHbWVzc2FnZRgFIAEoCTLACQoLQXV0aFNlcnZpY2UScAoPR2V0UHVibGljQ29uZmlnEi0ub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkdldFB1YmxpY0NvbmZpZ1JlcXVlc3QaLi5vYmllbnRlLmNsb3VkLmF1dGgudjEuR2V0UHVibGljQ29uZmlnUmVzcG9uc2USUgoFTG9naW4SIy5vYmllbnRlLmNsb3VkLmF1dGgudjEuTG9naW5SZXF1ZXN0GiQub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkxvZ2luUmVzcG9uc2USbQoOR2V0Q3VycmVudFVzZXISLC5vYmllbnRlLmNsb3VkLmF1dGgudjEuR2V0Q3VycmVudFVzZXJSZXF1ZXN0Gi0ub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkdldEN1cnJlbnRVc2VyUmVzcG9uc2USdgoRVXBkYXRlVXNlclByb2ZpbGUSLy5vYmllbnRlLmNsb3VkLmF1dGgudjEuVXBkYXRlVXNlclByb2ZpbGVSZXF1ZXN0GjAub2JpZW50ZS5jbG91ZC5hdXRoLnYxLlVwZGF0ZVVzZXJQcm9maWxlUmVzcG9uc2USagoNQ29ubmVjdEdpdEh1YhIrLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Db25uZWN0R2l0SHViUmVxdWVzdBosLm9iaWVudGUuY2xvdWQuYXV0aC52MS5Db25uZWN0R2l0SHViUmVzcG9uc2UScwoQRGlzY29ubmVjdEdpdEh1YhIuLm9iaWVudGUuY2xvdWQuYXV0aC52MS5EaXNjb25uZWN0R2l0SHViUmVxdWVzdBovLm9iaWVudGUuY2xvdWQuYXV0aC52MS5EaXNjb25uZWN0R2l0SHViUmVzcG9uc2UScAoPR2V0R2l0SHViU3RhdHVzEi0ub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkdldEdpdEh1YlN0YXR1c1JlcXVlc3QaLi5vYmllbnRlLmNsb3VkLmF1dGgudjEuR2V0R2l0SHViU3RhdHVzUmVzcG9uc2USjgEKGUNvbm5lY3RPcmdhbml6YXRpb25HaXRIdWISNy5vYmllbnRlLmNsb3VkLmF1dGgudjEuQ29ubmVjdE9yZ2FuaXphdGlvbkdpdEh1YlJlcXVlc3QaOC5vYmllbnRlLmNsb3VkLmF1dGgudjEuQ29ubmVjdE9yZ2FuaXphdGlvbkdpdEh1YlJlc3BvbnNlEpcBChxEaXNjb25uZWN0T3JnYW5pemF0aW9uR2l0SHViEjoub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkRpc2Nvbm5lY3RPcmdhbml6YXRpb25HaXRIdWJSZXF1ZXN0Gjsub2JpZW50ZS5jbG91ZC5hdXRoLnYxLkRpc2Nvbm5lY3RPcmdhbml6YXRpb25HaXRIdWJSZXNwb25zZRKFAQoWTGlzdEdpdEh1YkludGVncmF0aW9ucxI0Lm9iaWVudGUuY2xvdWQuYXV0aC52MS5MaXN0R2l0SHViSW50ZWdyYXRpb25zUmVxdWVzdBo1Lm9iaWVudGUuY2xvdWQuYXV0aC52MS5MaXN0R2l0SHViSW50ZWdyYXRpb25zUmVzcG9uc2VCLFoqYXBpL2dlbi9wcm90by9vYmllbnRlL2Nsb3VkL2F1dGgvdjE7YXV0aHYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+
+/**
+ * Public Configuration Messages
+ *
+ * @generated from message obiente.cloud.auth.v1.GetPublicConfigRequest
+ */
+export type GetPublicConfigRequest = Message<"obiente.cloud.auth.v1.GetPublicConfigRequest"> & {
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.GetPublicConfigRequest.
+ * Use `create(GetPublicConfigRequestSchema)` to create a new message.
+ */
+export const GetPublicConfigRequestSchema: GenMessage<GetPublicConfigRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 0);
+
+/**
+ * @generated from message obiente.cloud.auth.v1.GetPublicConfigResponse
+ */
+export type GetPublicConfigResponse = Message<"obiente.cloud.auth.v1.GetPublicConfigResponse"> & {
+  /**
+   * @generated from field: bool billing_enabled = 1;
+   */
+  billingEnabled: boolean;
+
+  /**
+   * @generated from field: bool self_hosted = 2;
+   */
+  selfHosted: boolean;
+
+  /**
+   * @generated from field: bool disable_auth = 3;
+   */
+  disableAuth: boolean;
+};
+
+/**
+ * Describes the message obiente.cloud.auth.v1.GetPublicConfigResponse.
+ * Use `create(GetPublicConfigResponseSchema)` to create a new message.
+ */
+export const GetPublicConfigResponseSchema: GenMessage<GetPublicConfigResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 1);
 
 /**
  * Empty request for getting current user
@@ -27,7 +69,7 @@ export type GetCurrentUserRequest = Message<"obiente.cloud.auth.v1.GetCurrentUse
  * Use `create(GetCurrentUserRequestSchema)` to create a new message.
  */
 export const GetCurrentUserRequestSchema: GenMessage<GetCurrentUserRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 0);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 2);
 
 /**
  * @generated from message obiente.cloud.auth.v1.GetCurrentUserResponse
@@ -44,7 +86,7 @@ export type GetCurrentUserResponse = Message<"obiente.cloud.auth.v1.GetCurrentUs
  * Use `create(GetCurrentUserResponseSchema)` to create a new message.
  */
 export const GetCurrentUserResponseSchema: GenMessage<GetCurrentUserResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 1);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 3);
 
 /**
  * @generated from message obiente.cloud.auth.v1.User
@@ -123,7 +165,7 @@ export type User = Message<"obiente.cloud.auth.v1.User"> & {
  * Use `create(UserSchema)` to create a new message.
  */
 export const UserSchema: GenMessage<User> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 2);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 4);
 
 /**
  * GitHub Integration Messages
@@ -158,7 +200,7 @@ export type ConnectGitHubRequest = Message<"obiente.cloud.auth.v1.ConnectGitHubR
  * Use `create(ConnectGitHubRequestSchema)` to create a new message.
  */
 export const ConnectGitHubRequestSchema: GenMessage<ConnectGitHubRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 3);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 5);
 
 /**
  * @generated from message obiente.cloud.auth.v1.ConnectGitHubResponse
@@ -182,7 +224,7 @@ export type ConnectGitHubResponse = Message<"obiente.cloud.auth.v1.ConnectGitHub
  * Use `create(ConnectGitHubResponseSchema)` to create a new message.
  */
 export const ConnectGitHubResponseSchema: GenMessage<ConnectGitHubResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 4);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 6);
 
 /**
  * @generated from message obiente.cloud.auth.v1.DisconnectGitHubRequest
@@ -195,7 +237,7 @@ export type DisconnectGitHubRequest = Message<"obiente.cloud.auth.v1.DisconnectG
  * Use `create(DisconnectGitHubRequestSchema)` to create a new message.
  */
 export const DisconnectGitHubRequestSchema: GenMessage<DisconnectGitHubRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 5);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 7);
 
 /**
  * @generated from message obiente.cloud.auth.v1.DisconnectGitHubResponse
@@ -212,7 +254,7 @@ export type DisconnectGitHubResponse = Message<"obiente.cloud.auth.v1.Disconnect
  * Use `create(DisconnectGitHubResponseSchema)` to create a new message.
  */
 export const DisconnectGitHubResponseSchema: GenMessage<DisconnectGitHubResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 6);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 8);
 
 /**
  * @generated from message obiente.cloud.auth.v1.GetGitHubStatusRequest
@@ -225,7 +267,7 @@ export type GetGitHubStatusRequest = Message<"obiente.cloud.auth.v1.GetGitHubSta
  * Use `create(GetGitHubStatusRequestSchema)` to create a new message.
  */
 export const GetGitHubStatusRequestSchema: GenMessage<GetGitHubStatusRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 7);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 9);
 
 /**
  * @generated from message obiente.cloud.auth.v1.GetGitHubStatusResponse
@@ -249,7 +291,7 @@ export type GetGitHubStatusResponse = Message<"obiente.cloud.auth.v1.GetGitHubSt
  * Use `create(GetGitHubStatusResponseSchema)` to create a new message.
  */
 export const GetGitHubStatusResponseSchema: GenMessage<GetGitHubStatusResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 8);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 10);
 
 /**
  * Organization GitHub Integration Messages
@@ -289,7 +331,7 @@ export type ConnectOrganizationGitHubRequest = Message<"obiente.cloud.auth.v1.Co
  * Use `create(ConnectOrganizationGitHubRequestSchema)` to create a new message.
  */
 export const ConnectOrganizationGitHubRequestSchema: GenMessage<ConnectOrganizationGitHubRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 9);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 11);
 
 /**
  * @generated from message obiente.cloud.auth.v1.ConnectOrganizationGitHubResponse
@@ -313,7 +355,7 @@ export type ConnectOrganizationGitHubResponse = Message<"obiente.cloud.auth.v1.C
  * Use `create(ConnectOrganizationGitHubResponseSchema)` to create a new message.
  */
 export const ConnectOrganizationGitHubResponseSchema: GenMessage<ConnectOrganizationGitHubResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 10);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 12);
 
 /**
  * @generated from message obiente.cloud.auth.v1.DisconnectOrganizationGitHubRequest
@@ -330,7 +372,7 @@ export type DisconnectOrganizationGitHubRequest = Message<"obiente.cloud.auth.v1
  * Use `create(DisconnectOrganizationGitHubRequestSchema)` to create a new message.
  */
 export const DisconnectOrganizationGitHubRequestSchema: GenMessage<DisconnectOrganizationGitHubRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 11);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 13);
 
 /**
  * @generated from message obiente.cloud.auth.v1.DisconnectOrganizationGitHubResponse
@@ -347,7 +389,7 @@ export type DisconnectOrganizationGitHubResponse = Message<"obiente.cloud.auth.v
  * Use `create(DisconnectOrganizationGitHubResponseSchema)` to create a new message.
  */
 export const DisconnectOrganizationGitHubResponseSchema: GenMessage<DisconnectOrganizationGitHubResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 12);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 14);
 
 /**
  * @generated from message obiente.cloud.auth.v1.ListGitHubIntegrationsRequest
@@ -360,7 +402,7 @@ export type ListGitHubIntegrationsRequest = Message<"obiente.cloud.auth.v1.ListG
  * Use `create(ListGitHubIntegrationsRequestSchema)` to create a new message.
  */
 export const ListGitHubIntegrationsRequestSchema: GenMessage<ListGitHubIntegrationsRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 13);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 15);
 
 /**
  * @generated from message obiente.cloud.auth.v1.GitHubIntegrationInfo
@@ -413,7 +455,7 @@ export type GitHubIntegrationInfo = Message<"obiente.cloud.auth.v1.GitHubIntegra
  * Use `create(GitHubIntegrationInfoSchema)` to create a new message.
  */
 export const GitHubIntegrationInfoSchema: GenMessage<GitHubIntegrationInfo> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 14);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 16);
 
 /**
  * @generated from message obiente.cloud.auth.v1.ListGitHubIntegrationsResponse
@@ -430,7 +472,7 @@ export type ListGitHubIntegrationsResponse = Message<"obiente.cloud.auth.v1.List
  * Use `create(ListGitHubIntegrationsResponseSchema)` to create a new message.
  */
 export const ListGitHubIntegrationsResponseSchema: GenMessage<ListGitHubIntegrationsResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 15);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 17);
 
 /**
  * User Profile Update Messages
@@ -479,7 +521,7 @@ export type UpdateUserProfileRequest = Message<"obiente.cloud.auth.v1.UpdateUser
  * Use `create(UpdateUserProfileRequestSchema)` to create a new message.
  */
 export const UpdateUserProfileRequestSchema: GenMessage<UpdateUserProfileRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 16);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 18);
 
 /**
  * @generated from message obiente.cloud.auth.v1.UpdateUserProfileResponse
@@ -498,7 +540,7 @@ export type UpdateUserProfileResponse = Message<"obiente.cloud.auth.v1.UpdateUse
  * Use `create(UpdateUserProfileResponseSchema)` to create a new message.
  */
 export const UpdateUserProfileResponseSchema: GenMessage<UpdateUserProfileResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 17);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 19);
 
 /**
  * Login Messages
@@ -529,7 +571,7 @@ export type LoginRequest = Message<"obiente.cloud.auth.v1.LoginRequest"> & {
  * Use `create(LoginRequestSchema)` to create a new message.
  */
 export const LoginRequestSchema: GenMessage<LoginRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 18);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 20);
 
 /**
  * @generated from message obiente.cloud.auth.v1.LoginResponse
@@ -574,12 +616,22 @@ export type LoginResponse = Message<"obiente.cloud.auth.v1.LoginResponse"> & {
  * Use `create(LoginResponseSchema)` to create a new message.
  */
 export const LoginResponseSchema: GenMessage<LoginResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_auth_v1_auth_service, 19);
+  messageDesc(file_obiente_cloud_auth_v1_auth_service, 21);
 
 /**
  * @generated from service obiente.cloud.auth.v1.AuthService
  */
 export const AuthService: GenService<{
+  /**
+   * Get public configuration (no authentication required)
+   *
+   * @generated from rpc obiente.cloud.auth.v1.AuthService.GetPublicConfig
+   */
+  getPublicConfig: {
+    methodKind: "unary";
+    input: typeof GetPublicConfigRequestSchema;
+    output: typeof GetPublicConfigResponseSchema;
+  },
   /**
    * Login with email and password using service account
    * This endpoint does not require authentication (public)

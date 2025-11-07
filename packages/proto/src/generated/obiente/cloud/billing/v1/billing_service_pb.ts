@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/billing/v1/billing_service.proto.
  */
 export const file_obiente_cloud_billing_v1_billing_service: GenFile = /*@__PURE__*/
-  fileDesc("Ci5vYmllbnRlL2Nsb3VkL2JpbGxpbmcvdjEvYmlsbGluZ19zZXJ2aWNlLnByb3RvEhhvYmllbnRlLmNsb3VkLmJpbGxpbmcudjEinwEKHENyZWF0ZUNoZWNrb3V0U2Vzc2lvblJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhQKDGFtb3VudF9jZW50cxgCIAEoAxIYCgtzdWNjZXNzX3VybBgDIAEoCUgAiAEBEhcKCmNhbmNlbF91cmwYBCABKAlIAYgBAUIOCgxfc3VjY2Vzc191cmxCDQoLX2NhbmNlbF91cmwiSQodQ3JlYXRlQ2hlY2tvdXRTZXNzaW9uUmVzcG9uc2USEgoKc2Vzc2lvbl9pZBgBIAEoCRIUCgxjaGVja291dF91cmwYAiABKAkiXQoaQ3JlYXRlUG9ydGFsU2Vzc2lvblJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhcKCnJldHVybl91cmwYAiABKAlIAIgBAUINCgtfcmV0dXJuX3VybCIxChtDcmVhdGVQb3J0YWxTZXNzaW9uUmVzcG9uc2USEgoKcG9ydGFsX3VybBgBIAEoCSIzChhHZXRCaWxsaW5nQWNjb3VudFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJIlYKGUdldEJpbGxpbmdBY2NvdW50UmVzcG9uc2USOQoHYWNjb3VudBgBIAEoCzIoLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5CaWxsaW5nQWNjb3VudCL1AQobVXBkYXRlQmlsbGluZ0FjY291bnRSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIaCg1iaWxsaW5nX2VtYWlsGAIgASgJSACIAQESGQoMY29tcGFueV9uYW1lGAMgASgJSAGIAQESEwoGdGF4X2lkGAQgASgJSAKIAQESNwoHYWRkcmVzcxgFIAEoCzIhLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5BZGRyZXNzSAOIAQFCEAoOX2JpbGxpbmdfZW1haWxCDwoNX2NvbXBhbnlfbmFtZUIJCgdfdGF4X2lkQgoKCF9hZGRyZXNzIlkKHFVwZGF0ZUJpbGxpbmdBY2NvdW50UmVzcG9uc2USOQoHYWNjb3VudBgBIAEoCzIoLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5CaWxsaW5nQWNjb3VudCI0ChlMaXN0UGF5bWVudE1ldGhvZHNSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCSJeChpMaXN0UGF5bWVudE1ldGhvZHNSZXNwb25zZRJACg9wYXltZW50X21ldGhvZHMYASADKAsyJy5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuUGF5bWVudE1ldGhvZCI0ChdHZXRQYXltZW50U3RhdHVzUmVxdWVzdBIZChFwYXltZW50X2ludGVudF9pZBgBIAEoCSJYChhHZXRQYXltZW50U3RhdHVzUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJEhoKDWVycm9yX21lc3NhZ2UYAiABKAlIAIgBAUIQCg5fZXJyb3JfbWVzc2FnZSJbChhDcmVhdGVTZXR1cEludGVudFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhcKCnJldHVybl91cmwYAiABKAlIAIgBAUINCgtfcmV0dXJuX3VybCJLChlDcmVhdGVTZXR1cEludGVudFJlc3BvbnNlEhUKDWNsaWVudF9zZWNyZXQYASABKAkSFwoPc2V0dXBfaW50ZW50X2lkGAIgASgJIlAKGkF0dGFjaFBheW1lbnRNZXRob2RSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIZChFwYXltZW50X21ldGhvZF9pZBgCIAEoCSJeChtBdHRhY2hQYXltZW50TWV0aG9kUmVzcG9uc2USPwoOcGF5bWVudF9tZXRob2QYASABKAsyJy5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuUGF5bWVudE1ldGhvZCJQChpEZXRhY2hQYXltZW50TWV0aG9kUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSGQoRcGF5bWVudF9tZXRob2RfaWQYAiABKAkiLgobRGV0YWNoUGF5bWVudE1ldGhvZFJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgiVAoeU2V0RGVmYXVsdFBheW1lbnRNZXRob2RSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIZChFwYXltZW50X21ldGhvZF9pZBgCIAEoCSIyCh9TZXREZWZhdWx0UGF5bWVudE1ldGhvZFJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgiTAoTTGlzdEludm9pY2VzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSEgoFbGltaXQYAiABKAVIAIgBAUIICgZfbGltaXQiXQoUTGlzdEludm9pY2VzUmVzcG9uc2USMwoIaW52b2ljZXMYASADKAsyIS5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuSW52b2ljZRIQCghoYXNfbW9yZRgCIAEoCCLmAgoHSW52b2ljZRIKCgJpZBgBIAEoCRIOCgZudW1iZXIYAiABKAkSDgoGc3RhdHVzGAMgASgJEhIKCmFtb3VudF9kdWUYBCABKAMSEwoLYW1vdW50X3BhaWQYBSABKAMSEAoIY3VycmVuY3kYBiABKAkSKAoEZGF0ZRgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASMQoIZHVlX2RhdGUYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSACIAQESGAoLaW52b2ljZV9wZGYYCSABKAlIAYgBARIfChJob3N0ZWRfaW52b2ljZV91cmwYCiABKAlIAogBARIYCgtkZXNjcmlwdGlvbhgLIAEoCUgDiAEBQgsKCV9kdWVfZGF0ZUIOCgxfaW52b2ljZV9wZGZCFQoTX2hvc3RlZF9pbnZvaWNlX3VybEIOCgxfZGVzY3JpcHRpb24inAMKDkJpbGxpbmdBY2NvdW50EgoKAmlkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRIfChJzdHJpcGVfY3VzdG9tZXJfaWQYAyABKAlIAIgBARIOCgZzdGF0dXMYBCABKAkSGgoNYmlsbGluZ19lbWFpbBgFIAEoCUgBiAEBEhkKDGNvbXBhbnlfbmFtZRgGIAEoCUgCiAEBEhMKBnRheF9pZBgHIAEoCUgDiAEBEjcKB2FkZHJlc3MYCCABKAsyIS5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuQWRkcmVzc0gEiAEBEi4KCmNyZWF0ZWRfYXQYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi4KCnVwZGF0ZWRfYXQYCiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wQhUKE19zdHJpcGVfY3VzdG9tZXJfaWRCEAoOX2JpbGxpbmdfZW1haWxCDwoNX2NvbXBhbnlfbmFtZUIJCgdfdGF4X2lkQgoKCF9hZGRyZXNzIrABCg1QYXltZW50TWV0aG9kEgoKAmlkGAEgASgJEgwKBHR5cGUYAiABKAkSOAoEY2FyZBgDIAEoCzIlLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5DYXJkRGV0YWlsc0gAiAEBEhIKCmlzX2RlZmF1bHQYBCABKAgSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCBwoFX2NhcmQibAoLQ2FyZERldGFpbHMSDQoFYnJhbmQYASABKAkSDQoFbGFzdDQYAiABKAkSEQoJZXhwX21vbnRoGAMgASgFEhAKCGV4cF95ZWFyGAQgASgFEhEKBG5hbWUYBSABKAlIAIgBAUIHCgVfbmFtZSKIAQoHQWRkcmVzcxINCgVsaW5lMRgBIAEoCRISCgVsaW5lMhgCIAEoCUgAiAEBEgwKBGNpdHkYAyABKAkSEgoFc3RhdGUYBCABKAlIAYgBARITCgtwb3N0YWxfY29kZRgFIAEoCRIPCgdjb3VudHJ5GAYgASgJQggKBl9saW5lMkIICgZfc3RhdGUimwEKLkNyZWF0ZUROU0RlbGVnYXRpb25TdWJzY3JpcHRpb25DaGVja291dFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhgKC3N1Y2Nlc3NfdXJsGAIgASgJSACIAQESFwoKY2FuY2VsX3VybBgDIAEoCUgBiAEBQg4KDF9zdWNjZXNzX3VybEINCgtfY2FuY2VsX3VybCJbCi9DcmVhdGVETlNEZWxlZ2F0aW9uU3Vic2NyaXB0aW9uQ2hlY2tvdXRSZXNwb25zZRISCgpzZXNzaW9uX2lkGAEgASgJEhQKDGNoZWNrb3V0X3VybBgCIAEoCSJECilHZXRETlNEZWxlZ2F0aW9uU3Vic2NyaXB0aW9uU3RhdHVzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkirQIKKkdldEROU0RlbGVnYXRpb25TdWJzY3JpcHRpb25TdGF0dXNSZXNwb25zZRIfChdoYXNfYWN0aXZlX3N1YnNjcmlwdGlvbhgBIAEoCBIeChZzdHJpcGVfc3Vic2NyaXB0aW9uX2lkGAIgASgJEhMKC2hhc19hcGlfa2V5GAMgASgIEjYKEmFwaV9rZXlfY3JlYXRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASHAoUY2FuY2VsX2F0X3BlcmlvZF9lbmQYBSABKAgSNgoSY3VycmVudF9wZXJpb2RfZW5kGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIbChNhcGlfa2V5X2Rlc2NyaXB0aW9uGAcgASgJIkEKJkNhbmNlbEROU0RlbGVnYXRpb25TdWJzY3JpcHRpb25SZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCSJ8CidDYW5jZWxETlNEZWxlZ2F0aW9uU3Vic2NyaXB0aW9uUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBIPCgdtZXNzYWdlGAIgASgJEi8KC2NhbmNlbGVkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcDLGDwoOQmlsbGluZ1NlcnZpY2USiAEKFUNyZWF0ZUNoZWNrb3V0U2Vzc2lvbhI2Lm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5DcmVhdGVDaGVja291dFNlc3Npb25SZXF1ZXN0Gjcub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkNyZWF0ZUNoZWNrb3V0U2Vzc2lvblJlc3BvbnNlEoIBChNDcmVhdGVQb3J0YWxTZXNzaW9uEjQub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkNyZWF0ZVBvcnRhbFNlc3Npb25SZXF1ZXN0GjUub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkNyZWF0ZVBvcnRhbFNlc3Npb25SZXNwb25zZRJ8ChFDcmVhdGVTZXR1cEludGVudBIyLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5DcmVhdGVTZXR1cEludGVudFJlcXVlc3QaMy5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuQ3JlYXRlU2V0dXBJbnRlbnRSZXNwb25zZRJ8ChFHZXRCaWxsaW5nQWNjb3VudBIyLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5HZXRCaWxsaW5nQWNjb3VudFJlcXVlc3QaMy5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuR2V0QmlsbGluZ0FjY291bnRSZXNwb25zZRKFAQoUVXBkYXRlQmlsbGluZ0FjY291bnQSNS5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuVXBkYXRlQmlsbGluZ0FjY291bnRSZXF1ZXN0GjYub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLlVwZGF0ZUJpbGxpbmdBY2NvdW50UmVzcG9uc2USfwoSTGlzdFBheW1lbnRNZXRob2RzEjMub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkxpc3RQYXltZW50TWV0aG9kc1JlcXVlc3QaNC5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuTGlzdFBheW1lbnRNZXRob2RzUmVzcG9uc2USggEKE0F0dGFjaFBheW1lbnRNZXRob2QSNC5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuQXR0YWNoUGF5bWVudE1ldGhvZFJlcXVlc3QaNS5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuQXR0YWNoUGF5bWVudE1ldGhvZFJlc3BvbnNlEoIBChNEZXRhY2hQYXltZW50TWV0aG9kEjQub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkRldGFjaFBheW1lbnRNZXRob2RSZXF1ZXN0GjUub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkRldGFjaFBheW1lbnRNZXRob2RSZXNwb25zZRKOAQoXU2V0RGVmYXVsdFBheW1lbnRNZXRob2QSOC5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuU2V0RGVmYXVsdFBheW1lbnRNZXRob2RSZXF1ZXN0Gjkub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLlNldERlZmF1bHRQYXltZW50TWV0aG9kUmVzcG9uc2USeQoQR2V0UGF5bWVudFN0YXR1cxIxLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5HZXRQYXltZW50U3RhdHVzUmVxdWVzdBoyLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5HZXRQYXltZW50U3RhdHVzUmVzcG9uc2USbQoMTGlzdEludm9pY2VzEi0ub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkxpc3RJbnZvaWNlc1JlcXVlc3QaLi5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuTGlzdEludm9pY2VzUmVzcG9uc2USvgEKJ0NyZWF0ZUROU0RlbGVnYXRpb25TdWJzY3JpcHRpb25DaGVja291dBJILm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5DcmVhdGVETlNEZWxlZ2F0aW9uU3Vic2NyaXB0aW9uQ2hlY2tvdXRSZXF1ZXN0Gkkub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkNyZWF0ZUROU0RlbGVnYXRpb25TdWJzY3JpcHRpb25DaGVja291dFJlc3BvbnNlEq8BCiJHZXRETlNEZWxlZ2F0aW9uU3Vic2NyaXB0aW9uU3RhdHVzEkMub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkdldEROU0RlbGVnYXRpb25TdWJzY3JpcHRpb25TdGF0dXNSZXF1ZXN0GkQub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkdldEROU0RlbGVnYXRpb25TdWJzY3JpcHRpb25TdGF0dXNSZXNwb25zZRKmAQofQ2FuY2VsRE5TRGVsZWdhdGlvblN1YnNjcmlwdGlvbhJALm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5DYW5jZWxETlNEZWxlZ2F0aW9uU3Vic2NyaXB0aW9uUmVxdWVzdBpBLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5DYW5jZWxETlNEZWxlZ2F0aW9uU3Vic2NyaXB0aW9uUmVzcG9uc2VCMlowYXBpL2dlbi9wcm90by9vYmllbnRlL2Nsb3VkL2JpbGxpbmcvdjE7YmlsbGluZ3YxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("Ci5vYmllbnRlL2Nsb3VkL2JpbGxpbmcvdjEvYmlsbGluZ19zZXJ2aWNlLnByb3RvEhhvYmllbnRlLmNsb3VkLmJpbGxpbmcudjEinwEKHENyZWF0ZUNoZWNrb3V0U2Vzc2lvblJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhQKDGFtb3VudF9jZW50cxgCIAEoAxIYCgtzdWNjZXNzX3VybBgDIAEoCUgAiAEBEhcKCmNhbmNlbF91cmwYBCABKAlIAYgBAUIOCgxfc3VjY2Vzc191cmxCDQoLX2NhbmNlbF91cmwiSQodQ3JlYXRlQ2hlY2tvdXRTZXNzaW9uUmVzcG9uc2USEgoKc2Vzc2lvbl9pZBgBIAEoCRIUCgxjaGVja291dF91cmwYAiABKAkigQEKGkNyZWF0ZVBheW1lbnRJbnRlbnRSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIUCgxhbW91bnRfY2VudHMYAiABKAMSHgoRcGF5bWVudF9tZXRob2RfaWQYAyABKAlIAIgBAUIUChJfcGF5bWVudF9tZXRob2RfaWQiTwobQ3JlYXRlUGF5bWVudEludGVudFJlc3BvbnNlEhkKEXBheW1lbnRfaW50ZW50X2lkGAEgASgJEhUKDWNsaWVudF9zZWNyZXQYAiABKAkiXQoaQ3JlYXRlUG9ydGFsU2Vzc2lvblJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhcKCnJldHVybl91cmwYAiABKAlIAIgBAUINCgtfcmV0dXJuX3VybCIxChtDcmVhdGVQb3J0YWxTZXNzaW9uUmVzcG9uc2USEgoKcG9ydGFsX3VybBgBIAEoCSIzChhHZXRCaWxsaW5nQWNjb3VudFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJIlYKGUdldEJpbGxpbmdBY2NvdW50UmVzcG9uc2USOQoHYWNjb3VudBgBIAEoCzIoLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5CaWxsaW5nQWNjb3VudCL1AQobVXBkYXRlQmlsbGluZ0FjY291bnRSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIaCg1iaWxsaW5nX2VtYWlsGAIgASgJSACIAQESGQoMY29tcGFueV9uYW1lGAMgASgJSAGIAQESEwoGdGF4X2lkGAQgASgJSAKIAQESNwoHYWRkcmVzcxgFIAEoCzIhLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5BZGRyZXNzSAOIAQFCEAoOX2JpbGxpbmdfZW1haWxCDwoNX2NvbXBhbnlfbmFtZUIJCgdfdGF4X2lkQgoKCF9hZGRyZXNzIlkKHFVwZGF0ZUJpbGxpbmdBY2NvdW50UmVzcG9uc2USOQoHYWNjb3VudBgBIAEoCzIoLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5CaWxsaW5nQWNjb3VudCI0ChlMaXN0UGF5bWVudE1ldGhvZHNSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCSJeChpMaXN0UGF5bWVudE1ldGhvZHNSZXNwb25zZRJACg9wYXltZW50X21ldGhvZHMYASADKAsyJy5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuUGF5bWVudE1ldGhvZCI0ChdHZXRQYXltZW50U3RhdHVzUmVxdWVzdBIZChFwYXltZW50X2ludGVudF9pZBgBIAEoCSJYChhHZXRQYXltZW50U3RhdHVzUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJEhoKDWVycm9yX21lc3NhZ2UYAiABKAlIAIgBAUIQCg5fZXJyb3JfbWVzc2FnZSJbChhDcmVhdGVTZXR1cEludGVudFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhcKCnJldHVybl91cmwYAiABKAlIAIgBAUINCgtfcmV0dXJuX3VybCJLChlDcmVhdGVTZXR1cEludGVudFJlc3BvbnNlEhUKDWNsaWVudF9zZWNyZXQYASABKAkSFwoPc2V0dXBfaW50ZW50X2lkGAIgASgJIlAKGkF0dGFjaFBheW1lbnRNZXRob2RSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIZChFwYXltZW50X21ldGhvZF9pZBgCIAEoCSJeChtBdHRhY2hQYXltZW50TWV0aG9kUmVzcG9uc2USPwoOcGF5bWVudF9tZXRob2QYASABKAsyJy5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuUGF5bWVudE1ldGhvZCJQChpEZXRhY2hQYXltZW50TWV0aG9kUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSGQoRcGF5bWVudF9tZXRob2RfaWQYAiABKAkiLgobRGV0YWNoUGF5bWVudE1ldGhvZFJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgiVAoeU2V0RGVmYXVsdFBheW1lbnRNZXRob2RSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIZChFwYXltZW50X21ldGhvZF9pZBgCIAEoCSIyCh9TZXREZWZhdWx0UGF5bWVudE1ldGhvZFJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgiTAoTTGlzdEludm9pY2VzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSEgoFbGltaXQYAiABKAVIAIgBAUIICgZfbGltaXQiXQoUTGlzdEludm9pY2VzUmVzcG9uc2USMwoIaW52b2ljZXMYASADKAsyIS5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuSW52b2ljZRIQCghoYXNfbW9yZRgCIAEoCCLmAgoHSW52b2ljZRIKCgJpZBgBIAEoCRIOCgZudW1iZXIYAiABKAkSDgoGc3RhdHVzGAMgASgJEhIKCmFtb3VudF9kdWUYBCABKAMSEwoLYW1vdW50X3BhaWQYBSABKAMSEAoIY3VycmVuY3kYBiABKAkSKAoEZGF0ZRgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASMQoIZHVlX2RhdGUYCCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSACIAQESGAoLaW52b2ljZV9wZGYYCSABKAlIAYgBARIfChJob3N0ZWRfaW52b2ljZV91cmwYCiABKAlIAogBARIYCgtkZXNjcmlwdGlvbhgLIAEoCUgDiAEBQgsKCV9kdWVfZGF0ZUIOCgxfaW52b2ljZV9wZGZCFQoTX2hvc3RlZF9pbnZvaWNlX3VybEIOCgxfZGVzY3JpcHRpb24inAMKDkJpbGxpbmdBY2NvdW50EgoKAmlkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRIfChJzdHJpcGVfY3VzdG9tZXJfaWQYAyABKAlIAIgBARIOCgZzdGF0dXMYBCABKAkSGgoNYmlsbGluZ19lbWFpbBgFIAEoCUgBiAEBEhkKDGNvbXBhbnlfbmFtZRgGIAEoCUgCiAEBEhMKBnRheF9pZBgHIAEoCUgDiAEBEjcKB2FkZHJlc3MYCCABKAsyIS5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuQWRkcmVzc0gEiAEBEi4KCmNyZWF0ZWRfYXQYCSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi4KCnVwZGF0ZWRfYXQYCiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wQhUKE19zdHJpcGVfY3VzdG9tZXJfaWRCEAoOX2JpbGxpbmdfZW1haWxCDwoNX2NvbXBhbnlfbmFtZUIJCgdfdGF4X2lkQgoKCF9hZGRyZXNzIrABCg1QYXltZW50TWV0aG9kEgoKAmlkGAEgASgJEgwKBHR5cGUYAiABKAkSOAoEY2FyZBgDIAEoCzIlLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5DYXJkRGV0YWlsc0gAiAEBEhIKCmlzX2RlZmF1bHQYBCABKAgSLgoKY3JlYXRlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCBwoFX2NhcmQibAoLQ2FyZERldGFpbHMSDQoFYnJhbmQYASABKAkSDQoFbGFzdDQYAiABKAkSEQoJZXhwX21vbnRoGAMgASgFEhAKCGV4cF95ZWFyGAQgASgFEhEKBG5hbWUYBSABKAlIAIgBAUIHCgVfbmFtZSKIAQoHQWRkcmVzcxINCgVsaW5lMRgBIAEoCRISCgVsaW5lMhgCIAEoCUgAiAEBEgwKBGNpdHkYAyABKAkSEgoFc3RhdGUYBCABKAlIAYgBARITCgtwb3N0YWxfY29kZRgFIAEoCRIPCgdjb3VudHJ5GAYgASgJQggKBl9saW5lMkIICgZfc3RhdGUimwEKLkNyZWF0ZUROU0RlbGVnYXRpb25TdWJzY3JpcHRpb25DaGVja291dFJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEhgKC3N1Y2Nlc3NfdXJsGAIgASgJSACIAQESFwoKY2FuY2VsX3VybBgDIAEoCUgBiAEBQg4KDF9zdWNjZXNzX3VybEINCgtfY2FuY2VsX3VybCJbCi9DcmVhdGVETlNEZWxlZ2F0aW9uU3Vic2NyaXB0aW9uQ2hlY2tvdXRSZXNwb25zZRISCgpzZXNzaW9uX2lkGAEgASgJEhQKDGNoZWNrb3V0X3VybBgCIAEoCSJECilHZXRETlNEZWxlZ2F0aW9uU3Vic2NyaXB0aW9uU3RhdHVzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkirQIKKkdldEROU0RlbGVnYXRpb25TdWJzY3JpcHRpb25TdGF0dXNSZXNwb25zZRIfChdoYXNfYWN0aXZlX3N1YnNjcmlwdGlvbhgBIAEoCBIeChZzdHJpcGVfc3Vic2NyaXB0aW9uX2lkGAIgASgJEhMKC2hhc19hcGlfa2V5GAMgASgIEjYKEmFwaV9rZXlfY3JlYXRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASHAoUY2FuY2VsX2F0X3BlcmlvZF9lbmQYBSABKAgSNgoSY3VycmVudF9wZXJpb2RfZW5kGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIbChNhcGlfa2V5X2Rlc2NyaXB0aW9uGAcgASgJIkEKJkNhbmNlbEROU0RlbGVnYXRpb25TdWJzY3JpcHRpb25SZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCSJ8CidDYW5jZWxETlNEZWxlZ2F0aW9uU3Vic2NyaXB0aW9uUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBIPCgdtZXNzYWdlGAIgASgJEi8KC2NhbmNlbGVkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIzChhMaXN0U3Vic2NyaXB0aW9uc1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJIloKGUxpc3RTdWJzY3JpcHRpb25zUmVzcG9uc2USPQoNc3Vic2NyaXB0aW9ucxgBIAMoCzImLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5TdWJzY3JpcHRpb24i+QIKDFN1YnNjcmlwdGlvbhIKCgJpZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSOAoUY3VycmVudF9wZXJpb2Rfc3RhcnQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjYKEmN1cnJlbnRfcGVyaW9kX2VuZBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLwoLY2FuY2VsZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhwKFGNhbmNlbF9hdF9wZXJpb2RfZW5kGAYgASgIEg4KBmFtb3VudBgHIAEoAxIQCghjdXJyZW5jeRgIIAEoCRIQCghpbnRlcnZhbBgJIAEoCRIWCg5pbnRlcnZhbF9jb3VudBgKIAEoBRITCgtkZXNjcmlwdGlvbhgLIAEoCRIrCgdjcmVhdGVkGAwgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJ1CiZVcGRhdGVTdWJzY3JpcHRpb25QYXltZW50TWV0aG9kUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFwoPc3Vic2NyaXB0aW9uX2lkGAIgASgJEhkKEXBheW1lbnRfbWV0aG9kX2lkGAMgASgJIngKJ1VwZGF0ZVN1YnNjcmlwdGlvblBheW1lbnRNZXRob2RSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEjwKDHN1YnNjcmlwdGlvbhgCIAEoCzImLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5TdWJzY3JpcHRpb24iTQoZQ2FuY2VsU3Vic2NyaXB0aW9uUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSFwoPc3Vic2NyaXB0aW9uX2lkGAIgASgJInwKGkNhbmNlbFN1YnNjcmlwdGlvblJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSDwoHbWVzc2FnZRgCIAEoCRI8CgxzdWJzY3JpcHRpb24YAyABKAsyJi5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuU3Vic2NyaXB0aW9uMvMTCg5CaWxsaW5nU2VydmljZRKIAQoVQ3JlYXRlQ2hlY2tvdXRTZXNzaW9uEjYub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkNyZWF0ZUNoZWNrb3V0U2Vzc2lvblJlcXVlc3QaNy5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuQ3JlYXRlQ2hlY2tvdXRTZXNzaW9uUmVzcG9uc2USggEKE0NyZWF0ZVBheW1lbnRJbnRlbnQSNC5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuQ3JlYXRlUGF5bWVudEludGVudFJlcXVlc3QaNS5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuQ3JlYXRlUGF5bWVudEludGVudFJlc3BvbnNlEoIBChNDcmVhdGVQb3J0YWxTZXNzaW9uEjQub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkNyZWF0ZVBvcnRhbFNlc3Npb25SZXF1ZXN0GjUub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkNyZWF0ZVBvcnRhbFNlc3Npb25SZXNwb25zZRJ8ChFDcmVhdGVTZXR1cEludGVudBIyLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5DcmVhdGVTZXR1cEludGVudFJlcXVlc3QaMy5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuQ3JlYXRlU2V0dXBJbnRlbnRSZXNwb25zZRJ8ChFHZXRCaWxsaW5nQWNjb3VudBIyLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5HZXRCaWxsaW5nQWNjb3VudFJlcXVlc3QaMy5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuR2V0QmlsbGluZ0FjY291bnRSZXNwb25zZRKFAQoUVXBkYXRlQmlsbGluZ0FjY291bnQSNS5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuVXBkYXRlQmlsbGluZ0FjY291bnRSZXF1ZXN0GjYub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLlVwZGF0ZUJpbGxpbmdBY2NvdW50UmVzcG9uc2USfwoSTGlzdFBheW1lbnRNZXRob2RzEjMub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkxpc3RQYXltZW50TWV0aG9kc1JlcXVlc3QaNC5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuTGlzdFBheW1lbnRNZXRob2RzUmVzcG9uc2USggEKE0F0dGFjaFBheW1lbnRNZXRob2QSNC5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuQXR0YWNoUGF5bWVudE1ldGhvZFJlcXVlc3QaNS5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuQXR0YWNoUGF5bWVudE1ldGhvZFJlc3BvbnNlEoIBChNEZXRhY2hQYXltZW50TWV0aG9kEjQub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkRldGFjaFBheW1lbnRNZXRob2RSZXF1ZXN0GjUub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkRldGFjaFBheW1lbnRNZXRob2RSZXNwb25zZRKOAQoXU2V0RGVmYXVsdFBheW1lbnRNZXRob2QSOC5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuU2V0RGVmYXVsdFBheW1lbnRNZXRob2RSZXF1ZXN0Gjkub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLlNldERlZmF1bHRQYXltZW50TWV0aG9kUmVzcG9uc2USeQoQR2V0UGF5bWVudFN0YXR1cxIxLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5HZXRQYXltZW50U3RhdHVzUmVxdWVzdBoyLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5HZXRQYXltZW50U3RhdHVzUmVzcG9uc2USbQoMTGlzdEludm9pY2VzEi0ub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkxpc3RJbnZvaWNlc1JlcXVlc3QaLi5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuTGlzdEludm9pY2VzUmVzcG9uc2USvgEKJ0NyZWF0ZUROU0RlbGVnYXRpb25TdWJzY3JpcHRpb25DaGVja291dBJILm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5DcmVhdGVETlNEZWxlZ2F0aW9uU3Vic2NyaXB0aW9uQ2hlY2tvdXRSZXF1ZXN0Gkkub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkNyZWF0ZUROU0RlbGVnYXRpb25TdWJzY3JpcHRpb25DaGVja291dFJlc3BvbnNlEq8BCiJHZXRETlNEZWxlZ2F0aW9uU3Vic2NyaXB0aW9uU3RhdHVzEkMub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkdldEROU0RlbGVnYXRpb25TdWJzY3JpcHRpb25TdGF0dXNSZXF1ZXN0GkQub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkdldEROU0RlbGVnYXRpb25TdWJzY3JpcHRpb25TdGF0dXNSZXNwb25zZRKmAQofQ2FuY2VsRE5TRGVsZWdhdGlvblN1YnNjcmlwdGlvbhJALm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5DYW5jZWxETlNEZWxlZ2F0aW9uU3Vic2NyaXB0aW9uUmVxdWVzdBpBLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5DYW5jZWxETlNEZWxlZ2F0aW9uU3Vic2NyaXB0aW9uUmVzcG9uc2USfAoRTGlzdFN1YnNjcmlwdGlvbnMSMi5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuTGlzdFN1YnNjcmlwdGlvbnNSZXF1ZXN0GjMub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkxpc3RTdWJzY3JpcHRpb25zUmVzcG9uc2USpgEKH1VwZGF0ZVN1YnNjcmlwdGlvblBheW1lbnRNZXRob2QSQC5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuVXBkYXRlU3Vic2NyaXB0aW9uUGF5bWVudE1ldGhvZFJlcXVlc3QaQS5vYmllbnRlLmNsb3VkLmJpbGxpbmcudjEuVXBkYXRlU3Vic2NyaXB0aW9uUGF5bWVudE1ldGhvZFJlc3BvbnNlEn8KEkNhbmNlbFN1YnNjcmlwdGlvbhIzLm9iaWVudGUuY2xvdWQuYmlsbGluZy52MS5DYW5jZWxTdWJzY3JpcHRpb25SZXF1ZXN0GjQub2JpZW50ZS5jbG91ZC5iaWxsaW5nLnYxLkNhbmNlbFN1YnNjcmlwdGlvblJlc3BvbnNlQjJaMGFwaS9nZW4vcHJvdG8vb2JpZW50ZS9jbG91ZC9iaWxsaW5nL3YxO2JpbGxpbmd2MWIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message obiente.cloud.billing.v1.CreateCheckoutSessionRequest
@@ -79,6 +79,63 @@ export const CreateCheckoutSessionResponseSchema: GenMessage<CreateCheckoutSessi
   messageDesc(file_obiente_cloud_billing_v1_billing_service, 1);
 
 /**
+ * @generated from message obiente.cloud.billing.v1.CreatePaymentIntentRequest
+ */
+export type CreatePaymentIntentRequest = Message<"obiente.cloud.billing.v1.CreatePaymentIntentRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * Amount in cents ($0.01 units). Must be positive.
+   *
+   * @generated from field: int64 amount_cents = 2;
+   */
+  amountCents: bigint;
+
+  /**
+   * Optional: payment method ID to use (defaults to customer's default payment method)
+   *
+   * @generated from field: optional string payment_method_id = 3;
+   */
+  paymentMethodId?: string;
+};
+
+/**
+ * Describes the message obiente.cloud.billing.v1.CreatePaymentIntentRequest.
+ * Use `create(CreatePaymentIntentRequestSchema)` to create a new message.
+ */
+export const CreatePaymentIntentRequestSchema: GenMessage<CreatePaymentIntentRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 2);
+
+/**
+ * @generated from message obiente.cloud.billing.v1.CreatePaymentIntentResponse
+ */
+export type CreatePaymentIntentResponse = Message<"obiente.cloud.billing.v1.CreatePaymentIntentResponse"> & {
+  /**
+   * Stripe Payment Intent ID
+   *
+   * @generated from field: string payment_intent_id = 1;
+   */
+  paymentIntentId: string;
+
+  /**
+   * Stripe Payment Intent client secret for frontend confirmation
+   *
+   * @generated from field: string client_secret = 2;
+   */
+  clientSecret: string;
+};
+
+/**
+ * Describes the message obiente.cloud.billing.v1.CreatePaymentIntentResponse.
+ * Use `create(CreatePaymentIntentResponseSchema)` to create a new message.
+ */
+export const CreatePaymentIntentResponseSchema: GenMessage<CreatePaymentIntentResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 3);
+
+/**
  * @generated from message obiente.cloud.billing.v1.CreatePortalSessionRequest
  */
 export type CreatePortalSessionRequest = Message<"obiente.cloud.billing.v1.CreatePortalSessionRequest"> & {
@@ -100,7 +157,7 @@ export type CreatePortalSessionRequest = Message<"obiente.cloud.billing.v1.Creat
  * Use `create(CreatePortalSessionRequestSchema)` to create a new message.
  */
 export const CreatePortalSessionRequestSchema: GenMessage<CreatePortalSessionRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 2);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 4);
 
 /**
  * @generated from message obiente.cloud.billing.v1.CreatePortalSessionResponse
@@ -119,7 +176,7 @@ export type CreatePortalSessionResponse = Message<"obiente.cloud.billing.v1.Crea
  * Use `create(CreatePortalSessionResponseSchema)` to create a new message.
  */
 export const CreatePortalSessionResponseSchema: GenMessage<CreatePortalSessionResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 3);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 5);
 
 /**
  * @generated from message obiente.cloud.billing.v1.GetBillingAccountRequest
@@ -136,7 +193,7 @@ export type GetBillingAccountRequest = Message<"obiente.cloud.billing.v1.GetBill
  * Use `create(GetBillingAccountRequestSchema)` to create a new message.
  */
 export const GetBillingAccountRequestSchema: GenMessage<GetBillingAccountRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 4);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 6);
 
 /**
  * @generated from message obiente.cloud.billing.v1.GetBillingAccountResponse
@@ -153,7 +210,7 @@ export type GetBillingAccountResponse = Message<"obiente.cloud.billing.v1.GetBil
  * Use `create(GetBillingAccountResponseSchema)` to create a new message.
  */
 export const GetBillingAccountResponseSchema: GenMessage<GetBillingAccountResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 5);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 7);
 
 /**
  * @generated from message obiente.cloud.billing.v1.UpdateBillingAccountRequest
@@ -190,7 +247,7 @@ export type UpdateBillingAccountRequest = Message<"obiente.cloud.billing.v1.Upda
  * Use `create(UpdateBillingAccountRequestSchema)` to create a new message.
  */
 export const UpdateBillingAccountRequestSchema: GenMessage<UpdateBillingAccountRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 6);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 8);
 
 /**
  * @generated from message obiente.cloud.billing.v1.UpdateBillingAccountResponse
@@ -207,7 +264,7 @@ export type UpdateBillingAccountResponse = Message<"obiente.cloud.billing.v1.Upd
  * Use `create(UpdateBillingAccountResponseSchema)` to create a new message.
  */
 export const UpdateBillingAccountResponseSchema: GenMessage<UpdateBillingAccountResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 7);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 9);
 
 /**
  * @generated from message obiente.cloud.billing.v1.ListPaymentMethodsRequest
@@ -224,7 +281,7 @@ export type ListPaymentMethodsRequest = Message<"obiente.cloud.billing.v1.ListPa
  * Use `create(ListPaymentMethodsRequestSchema)` to create a new message.
  */
 export const ListPaymentMethodsRequestSchema: GenMessage<ListPaymentMethodsRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 8);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 10);
 
 /**
  * @generated from message obiente.cloud.billing.v1.ListPaymentMethodsResponse
@@ -241,7 +298,7 @@ export type ListPaymentMethodsResponse = Message<"obiente.cloud.billing.v1.ListP
  * Use `create(ListPaymentMethodsResponseSchema)` to create a new message.
  */
 export const ListPaymentMethodsResponseSchema: GenMessage<ListPaymentMethodsResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 9);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 11);
 
 /**
  * @generated from message obiente.cloud.billing.v1.GetPaymentStatusRequest
@@ -258,7 +315,7 @@ export type GetPaymentStatusRequest = Message<"obiente.cloud.billing.v1.GetPayme
  * Use `create(GetPaymentStatusRequestSchema)` to create a new message.
  */
 export const GetPaymentStatusRequestSchema: GenMessage<GetPaymentStatusRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 10);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 12);
 
 /**
  * @generated from message obiente.cloud.billing.v1.GetPaymentStatusResponse
@@ -282,7 +339,7 @@ export type GetPaymentStatusResponse = Message<"obiente.cloud.billing.v1.GetPaym
  * Use `create(GetPaymentStatusResponseSchema)` to create a new message.
  */
 export const GetPaymentStatusResponseSchema: GenMessage<GetPaymentStatusResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 11);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 13);
 
 /**
  * @generated from message obiente.cloud.billing.v1.CreateSetupIntentRequest
@@ -306,7 +363,7 @@ export type CreateSetupIntentRequest = Message<"obiente.cloud.billing.v1.CreateS
  * Use `create(CreateSetupIntentRequestSchema)` to create a new message.
  */
 export const CreateSetupIntentRequestSchema: GenMessage<CreateSetupIntentRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 12);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 14);
 
 /**
  * @generated from message obiente.cloud.billing.v1.CreateSetupIntentResponse
@@ -332,7 +389,7 @@ export type CreateSetupIntentResponse = Message<"obiente.cloud.billing.v1.Create
  * Use `create(CreateSetupIntentResponseSchema)` to create a new message.
  */
 export const CreateSetupIntentResponseSchema: GenMessage<CreateSetupIntentResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 13);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 15);
 
 /**
  * @generated from message obiente.cloud.billing.v1.AttachPaymentMethodRequest
@@ -354,7 +411,7 @@ export type AttachPaymentMethodRequest = Message<"obiente.cloud.billing.v1.Attac
  * Use `create(AttachPaymentMethodRequestSchema)` to create a new message.
  */
 export const AttachPaymentMethodRequestSchema: GenMessage<AttachPaymentMethodRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 14);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 16);
 
 /**
  * @generated from message obiente.cloud.billing.v1.AttachPaymentMethodResponse
@@ -371,7 +428,7 @@ export type AttachPaymentMethodResponse = Message<"obiente.cloud.billing.v1.Atta
  * Use `create(AttachPaymentMethodResponseSchema)` to create a new message.
  */
 export const AttachPaymentMethodResponseSchema: GenMessage<AttachPaymentMethodResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 15);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 17);
 
 /**
  * @generated from message obiente.cloud.billing.v1.DetachPaymentMethodRequest
@@ -393,7 +450,7 @@ export type DetachPaymentMethodRequest = Message<"obiente.cloud.billing.v1.Detac
  * Use `create(DetachPaymentMethodRequestSchema)` to create a new message.
  */
 export const DetachPaymentMethodRequestSchema: GenMessage<DetachPaymentMethodRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 16);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 18);
 
 /**
  * @generated from message obiente.cloud.billing.v1.DetachPaymentMethodResponse
@@ -412,7 +469,7 @@ export type DetachPaymentMethodResponse = Message<"obiente.cloud.billing.v1.Deta
  * Use `create(DetachPaymentMethodResponseSchema)` to create a new message.
  */
 export const DetachPaymentMethodResponseSchema: GenMessage<DetachPaymentMethodResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 17);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 19);
 
 /**
  * @generated from message obiente.cloud.billing.v1.SetDefaultPaymentMethodRequest
@@ -434,7 +491,7 @@ export type SetDefaultPaymentMethodRequest = Message<"obiente.cloud.billing.v1.S
  * Use `create(SetDefaultPaymentMethodRequestSchema)` to create a new message.
  */
 export const SetDefaultPaymentMethodRequestSchema: GenMessage<SetDefaultPaymentMethodRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 18);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 20);
 
 /**
  * @generated from message obiente.cloud.billing.v1.SetDefaultPaymentMethodResponse
@@ -453,7 +510,7 @@ export type SetDefaultPaymentMethodResponse = Message<"obiente.cloud.billing.v1.
  * Use `create(SetDefaultPaymentMethodResponseSchema)` to create a new message.
  */
 export const SetDefaultPaymentMethodResponseSchema: GenMessage<SetDefaultPaymentMethodResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 19);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 21);
 
 /**
  * @generated from message obiente.cloud.billing.v1.ListInvoicesRequest
@@ -477,7 +534,7 @@ export type ListInvoicesRequest = Message<"obiente.cloud.billing.v1.ListInvoices
  * Use `create(ListInvoicesRequestSchema)` to create a new message.
  */
 export const ListInvoicesRequestSchema: GenMessage<ListInvoicesRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 20);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 22);
 
 /**
  * @generated from message obiente.cloud.billing.v1.ListInvoicesResponse
@@ -501,7 +558,7 @@ export type ListInvoicesResponse = Message<"obiente.cloud.billing.v1.ListInvoice
  * Use `create(ListInvoicesResponseSchema)` to create a new message.
  */
 export const ListInvoicesResponseSchema: GenMessage<ListInvoicesResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 21);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 23);
 
 /**
  * @generated from message obiente.cloud.billing.v1.Invoice
@@ -588,7 +645,7 @@ export type Invoice = Message<"obiente.cloud.billing.v1.Invoice"> & {
  * Use `create(InvoiceSchema)` to create a new message.
  */
 export const InvoiceSchema: GenMessage<Invoice> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 22);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 24);
 
 /**
  * @generated from message obiente.cloud.billing.v1.BillingAccount
@@ -652,7 +709,7 @@ export type BillingAccount = Message<"obiente.cloud.billing.v1.BillingAccount"> 
  * Use `create(BillingAccountSchema)` to create a new message.
  */
 export const BillingAccountSchema: GenMessage<BillingAccount> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 23);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 25);
 
 /**
  * @generated from message obiente.cloud.billing.v1.PaymentMethod
@@ -693,7 +750,7 @@ export type PaymentMethod = Message<"obiente.cloud.billing.v1.PaymentMethod"> & 
  * Use `create(PaymentMethodSchema)` to create a new message.
  */
 export const PaymentMethodSchema: GenMessage<PaymentMethod> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 24);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 26);
 
 /**
  * @generated from message obiente.cloud.billing.v1.CardDetails
@@ -732,7 +789,7 @@ export type CardDetails = Message<"obiente.cloud.billing.v1.CardDetails"> & {
  * Use `create(CardDetailsSchema)` to create a new message.
  */
 export const CardDetailsSchema: GenMessage<CardDetails> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 25);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 27);
 
 /**
  * @generated from message obiente.cloud.billing.v1.Address
@@ -774,7 +831,7 @@ export type Address = Message<"obiente.cloud.billing.v1.Address"> & {
  * Use `create(AddressSchema)` to create a new message.
  */
 export const AddressSchema: GenMessage<Address> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 26);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 28);
 
 /**
  * @generated from message obiente.cloud.billing.v1.CreateDNSDelegationSubscriptionCheckoutRequest
@@ -805,7 +862,7 @@ export type CreateDNSDelegationSubscriptionCheckoutRequest = Message<"obiente.cl
  * Use `create(CreateDNSDelegationSubscriptionCheckoutRequestSchema)` to create a new message.
  */
 export const CreateDNSDelegationSubscriptionCheckoutRequestSchema: GenMessage<CreateDNSDelegationSubscriptionCheckoutRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 27);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 29);
 
 /**
  * @generated from message obiente.cloud.billing.v1.CreateDNSDelegationSubscriptionCheckoutResponse
@@ -827,7 +884,7 @@ export type CreateDNSDelegationSubscriptionCheckoutResponse = Message<"obiente.c
  * Use `create(CreateDNSDelegationSubscriptionCheckoutResponseSchema)` to create a new message.
  */
 export const CreateDNSDelegationSubscriptionCheckoutResponseSchema: GenMessage<CreateDNSDelegationSubscriptionCheckoutResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 28);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 30);
 
 /**
  * @generated from message obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusRequest
@@ -844,7 +901,7 @@ export type GetDNSDelegationSubscriptionStatusRequest = Message<"obiente.cloud.b
  * Use `create(GetDNSDelegationSubscriptionStatusRequestSchema)` to create a new message.
  */
 export const GetDNSDelegationSubscriptionStatusRequestSchema: GenMessage<GetDNSDelegationSubscriptionStatusRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 29);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 31);
 
 /**
  * @generated from message obiente.cloud.billing.v1.GetDNSDelegationSubscriptionStatusResponse
@@ -903,7 +960,7 @@ export type GetDNSDelegationSubscriptionStatusResponse = Message<"obiente.cloud.
  * Use `create(GetDNSDelegationSubscriptionStatusResponseSchema)` to create a new message.
  */
 export const GetDNSDelegationSubscriptionStatusResponseSchema: GenMessage<GetDNSDelegationSubscriptionStatusResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 30);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 32);
 
 /**
  * @generated from message obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionRequest
@@ -920,7 +977,7 @@ export type CancelDNSDelegationSubscriptionRequest = Message<"obiente.cloud.bill
  * Use `create(CancelDNSDelegationSubscriptionRequestSchema)` to create a new message.
  */
 export const CancelDNSDelegationSubscriptionRequestSchema: GenMessage<CancelDNSDelegationSubscriptionRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 31);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 33);
 
 /**
  * @generated from message obiente.cloud.billing.v1.CancelDNSDelegationSubscriptionResponse
@@ -951,7 +1008,225 @@ export type CancelDNSDelegationSubscriptionResponse = Message<"obiente.cloud.bil
  * Use `create(CancelDNSDelegationSubscriptionResponseSchema)` to create a new message.
  */
 export const CancelDNSDelegationSubscriptionResponseSchema: GenMessage<CancelDNSDelegationSubscriptionResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_billing_v1_billing_service, 32);
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 34);
+
+/**
+ * @generated from message obiente.cloud.billing.v1.ListSubscriptionsRequest
+ */
+export type ListSubscriptionsRequest = Message<"obiente.cloud.billing.v1.ListSubscriptionsRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.billing.v1.ListSubscriptionsRequest.
+ * Use `create(ListSubscriptionsRequestSchema)` to create a new message.
+ */
+export const ListSubscriptionsRequestSchema: GenMessage<ListSubscriptionsRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 35);
+
+/**
+ * @generated from message obiente.cloud.billing.v1.ListSubscriptionsResponse
+ */
+export type ListSubscriptionsResponse = Message<"obiente.cloud.billing.v1.ListSubscriptionsResponse"> & {
+  /**
+   * @generated from field: repeated obiente.cloud.billing.v1.Subscription subscriptions = 1;
+   */
+  subscriptions: Subscription[];
+};
+
+/**
+ * Describes the message obiente.cloud.billing.v1.ListSubscriptionsResponse.
+ * Use `create(ListSubscriptionsResponseSchema)` to create a new message.
+ */
+export const ListSubscriptionsResponseSchema: GenMessage<ListSubscriptionsResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 36);
+
+/**
+ * @generated from message obiente.cloud.billing.v1.Subscription
+ */
+export type Subscription = Message<"obiente.cloud.billing.v1.Subscription"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * "active", "canceled", "past_due", "unpaid", "trialing", etc.
+   *
+   * @generated from field: string status = 2;
+   */
+  status: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp current_period_start = 3;
+   */
+  currentPeriodStart?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp current_period_end = 4;
+   */
+  currentPeriodEnd?: Timestamp;
+
+  /**
+   * If subscription is canceled
+   *
+   * @generated from field: google.protobuf.Timestamp canceled_at = 5;
+   */
+  canceledAt?: Timestamp;
+
+  /**
+   * Whether subscription will cancel at period end
+   *
+   * @generated from field: bool cancel_at_period_end = 6;
+   */
+  cancelAtPeriodEnd: boolean;
+
+  /**
+   * Amount in cents
+   *
+   * @generated from field: int64 amount = 7;
+   */
+  amount: bigint;
+
+  /**
+   * @generated from field: string currency = 8;
+   */
+  currency: string;
+
+  /**
+   * "month", "year", etc.
+   *
+   * @generated from field: string interval = 9;
+   */
+  interval: string;
+
+  /**
+   * Number of intervals
+   *
+   * @generated from field: int32 interval_count = 10;
+   */
+  intervalCount: number;
+
+  /**
+   * @generated from field: string description = 11;
+   */
+  description: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created = 12;
+   */
+  created?: Timestamp;
+};
+
+/**
+ * Describes the message obiente.cloud.billing.v1.Subscription.
+ * Use `create(SubscriptionSchema)` to create a new message.
+ */
+export const SubscriptionSchema: GenMessage<Subscription> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 37);
+
+/**
+ * @generated from message obiente.cloud.billing.v1.UpdateSubscriptionPaymentMethodRequest
+ */
+export type UpdateSubscriptionPaymentMethodRequest = Message<"obiente.cloud.billing.v1.UpdateSubscriptionPaymentMethodRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string subscription_id = 2;
+   */
+  subscriptionId: string;
+
+  /**
+   * @generated from field: string payment_method_id = 3;
+   */
+  paymentMethodId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.billing.v1.UpdateSubscriptionPaymentMethodRequest.
+ * Use `create(UpdateSubscriptionPaymentMethodRequestSchema)` to create a new message.
+ */
+export const UpdateSubscriptionPaymentMethodRequestSchema: GenMessage<UpdateSubscriptionPaymentMethodRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 38);
+
+/**
+ * @generated from message obiente.cloud.billing.v1.UpdateSubscriptionPaymentMethodResponse
+ */
+export type UpdateSubscriptionPaymentMethodResponse = Message<"obiente.cloud.billing.v1.UpdateSubscriptionPaymentMethodResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * @generated from field: obiente.cloud.billing.v1.Subscription subscription = 2;
+   */
+  subscription?: Subscription;
+};
+
+/**
+ * Describes the message obiente.cloud.billing.v1.UpdateSubscriptionPaymentMethodResponse.
+ * Use `create(UpdateSubscriptionPaymentMethodResponseSchema)` to create a new message.
+ */
+export const UpdateSubscriptionPaymentMethodResponseSchema: GenMessage<UpdateSubscriptionPaymentMethodResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 39);
+
+/**
+ * @generated from message obiente.cloud.billing.v1.CancelSubscriptionRequest
+ */
+export type CancelSubscriptionRequest = Message<"obiente.cloud.billing.v1.CancelSubscriptionRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string subscription_id = 2;
+   */
+  subscriptionId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.billing.v1.CancelSubscriptionRequest.
+ * Use `create(CancelSubscriptionRequestSchema)` to create a new message.
+ */
+export const CancelSubscriptionRequestSchema: GenMessage<CancelSubscriptionRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 40);
+
+/**
+ * @generated from message obiente.cloud.billing.v1.CancelSubscriptionResponse
+ */
+export type CancelSubscriptionResponse = Message<"obiente.cloud.billing.v1.CancelSubscriptionResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * Status message
+   *
+   * @generated from field: string message = 2;
+   */
+  message: string;
+
+  /**
+   * @generated from field: obiente.cloud.billing.v1.Subscription subscription = 3;
+   */
+  subscription?: Subscription;
+};
+
+/**
+ * Describes the message obiente.cloud.billing.v1.CancelSubscriptionResponse.
+ * Use `create(CancelSubscriptionResponseSchema)` to create a new message.
+ */
+export const CancelSubscriptionResponseSchema: GenMessage<CancelSubscriptionResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_billing_v1_billing_service, 41);
 
 /**
  * @generated from service obiente.cloud.billing.v1.BillingService
@@ -966,6 +1241,16 @@ export const BillingService: GenService<{
     methodKind: "unary";
     input: typeof CreateCheckoutSessionRequestSchema;
     output: typeof CreateCheckoutSessionResponseSchema;
+  },
+  /**
+   * Create a Payment Intent for purchasing credits using an existing payment method
+   *
+   * @generated from rpc obiente.cloud.billing.v1.BillingService.CreatePaymentIntent
+   */
+  createPaymentIntent: {
+    methodKind: "unary";
+    input: typeof CreatePaymentIntentRequestSchema;
+    output: typeof CreatePaymentIntentResponseSchema;
   },
   /**
    * Create a Stripe Customer Portal session for managing billing
@@ -1096,6 +1381,36 @@ export const BillingService: GenService<{
     methodKind: "unary";
     input: typeof CancelDNSDelegationSubscriptionRequestSchema;
     output: typeof CancelDNSDelegationSubscriptionResponseSchema;
+  },
+  /**
+   * List all subscriptions for an organization
+   *
+   * @generated from rpc obiente.cloud.billing.v1.BillingService.ListSubscriptions
+   */
+  listSubscriptions: {
+    methodKind: "unary";
+    input: typeof ListSubscriptionsRequestSchema;
+    output: typeof ListSubscriptionsResponseSchema;
+  },
+  /**
+   * Update subscription payment method
+   *
+   * @generated from rpc obiente.cloud.billing.v1.BillingService.UpdateSubscriptionPaymentMethod
+   */
+  updateSubscriptionPaymentMethod: {
+    methodKind: "unary";
+    input: typeof UpdateSubscriptionPaymentMethodRequestSchema;
+    output: typeof UpdateSubscriptionPaymentMethodResponseSchema;
+  },
+  /**
+   * Cancel a subscription by ID
+   *
+   * @generated from rpc obiente.cloud.billing.v1.BillingService.CancelSubscription
+   */
+  cancelSubscription: {
+    methodKind: "unary";
+    input: typeof CancelSubscriptionRequestSchema;
+    output: typeof CancelSubscriptionResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_obiente_cloud_billing_v1_billing_service, 0);

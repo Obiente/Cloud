@@ -981,6 +981,491 @@ func (x *InviteMemberResponse) GetMember() *OrganizationMember {
 	return nil
 }
 
+type ResendInviteRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	MemberId       string                 `protobuf:"bytes,2,opt,name=member_id,json=memberId,proto3" json:"member_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ResendInviteRequest) Reset() {
+	*x = ResendInviteRequest{}
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResendInviteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResendInviteRequest) ProtoMessage() {}
+
+func (x *ResendInviteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResendInviteRequest.ProtoReflect.Descriptor instead.
+func (*ResendInviteRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ResendInviteRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *ResendInviteRequest) GetMemberId() string {
+	if x != nil {
+		return x.MemberId
+	}
+	return ""
+}
+
+type ResendInviteResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResendInviteResponse) Reset() {
+	*x = ResendInviteResponse{}
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResendInviteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResendInviteResponse) ProtoMessage() {}
+
+func (x *ResendInviteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResendInviteResponse.ProtoReflect.Descriptor instead.
+func (*ResendInviteResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ResendInviteResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+type ListMyInvitesRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Optional pagination
+	Page          int32 `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
+	PerPage       int32 `protobuf:"varint,2,opt,name=per_page,json=perPage,proto3" json:"per_page,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMyInvitesRequest) Reset() {
+	*x = ListMyInvitesRequest{}
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMyInvitesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMyInvitesRequest) ProtoMessage() {}
+
+func (x *ListMyInvitesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMyInvitesRequest.ProtoReflect.Descriptor instead.
+func (*ListMyInvitesRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ListMyInvitesRequest) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListMyInvitesRequest) GetPerPage() int32 {
+	if x != nil {
+		return x.PerPage
+	}
+	return 0
+}
+
+type ListMyInvitesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Invites       []*PendingInvite       `protobuf:"bytes,1,rep,name=invites,proto3" json:"invites,omitempty"`
+	Pagination    *Pagination            `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMyInvitesResponse) Reset() {
+	*x = ListMyInvitesResponse{}
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMyInvitesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMyInvitesResponse) ProtoMessage() {}
+
+func (x *ListMyInvitesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMyInvitesResponse.ProtoReflect.Descriptor instead.
+func (*ListMyInvitesResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ListMyInvitesResponse) GetInvites() []*PendingInvite {
+	if x != nil {
+		return x.Invites
+	}
+	return nil
+}
+
+func (x *ListMyInvitesResponse) GetPagination() *Pagination {
+	if x != nil {
+		return x.Pagination
+	}
+	return nil
+}
+
+type PendingInvite struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OrganizationId   string                 `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	OrganizationName string                 `protobuf:"bytes,3,opt,name=organization_name,json=organizationName,proto3" json:"organization_name,omitempty"`
+	Role             string                 `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
+	InvitedAt        *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=invited_at,json=invitedAt,proto3" json:"invited_at,omitempty"`
+	InviterEmail     string                 `protobuf:"bytes,6,opt,name=inviter_email,json=inviterEmail,proto3" json:"inviter_email,omitempty"` // Email of the person who sent the invite
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *PendingInvite) Reset() {
+	*x = PendingInvite{}
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PendingInvite) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PendingInvite) ProtoMessage() {}
+
+func (x *PendingInvite) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PendingInvite.ProtoReflect.Descriptor instead.
+func (*PendingInvite) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *PendingInvite) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PendingInvite) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *PendingInvite) GetOrganizationName() string {
+	if x != nil {
+		return x.OrganizationName
+	}
+	return ""
+}
+
+func (x *PendingInvite) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *PendingInvite) GetInvitedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.InvitedAt
+	}
+	return nil
+}
+
+func (x *PendingInvite) GetInviterEmail() string {
+	if x != nil {
+		return x.InviterEmail
+	}
+	return ""
+}
+
+type AcceptInviteRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	MemberId       string                 `protobuf:"bytes,2,opt,name=member_id,json=memberId,proto3" json:"member_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AcceptInviteRequest) Reset() {
+	*x = AcceptInviteRequest{}
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AcceptInviteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AcceptInviteRequest) ProtoMessage() {}
+
+func (x *AcceptInviteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AcceptInviteRequest.ProtoReflect.Descriptor instead.
+func (*AcceptInviteRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *AcceptInviteRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *AcceptInviteRequest) GetMemberId() string {
+	if x != nil {
+		return x.MemberId
+	}
+	return ""
+}
+
+type AcceptInviteResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Member        *OrganizationMember    `protobuf:"bytes,1,opt,name=member,proto3" json:"member,omitempty"`
+	Organization  *Organization          `protobuf:"bytes,2,opt,name=organization,proto3" json:"organization,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AcceptInviteResponse) Reset() {
+	*x = AcceptInviteResponse{}
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AcceptInviteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AcceptInviteResponse) ProtoMessage() {}
+
+func (x *AcceptInviteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AcceptInviteResponse.ProtoReflect.Descriptor instead.
+func (*AcceptInviteResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *AcceptInviteResponse) GetMember() *OrganizationMember {
+	if x != nil {
+		return x.Member
+	}
+	return nil
+}
+
+func (x *AcceptInviteResponse) GetOrganization() *Organization {
+	if x != nil {
+		return x.Organization
+	}
+	return nil
+}
+
+type DeclineInviteRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	MemberId       string                 `protobuf:"bytes,2,opt,name=member_id,json=memberId,proto3" json:"member_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *DeclineInviteRequest) Reset() {
+	*x = DeclineInviteRequest{}
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeclineInviteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeclineInviteRequest) ProtoMessage() {}
+
+func (x *DeclineInviteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeclineInviteRequest.ProtoReflect.Descriptor instead.
+func (*DeclineInviteRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *DeclineInviteRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *DeclineInviteRequest) GetMemberId() string {
+	if x != nil {
+		return x.MemberId
+	}
+	return ""
+}
+
+type DeclineInviteResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeclineInviteResponse) Reset() {
+	*x = DeclineInviteResponse{}
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeclineInviteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeclineInviteResponse) ProtoMessage() {}
+
+func (x *DeclineInviteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeclineInviteResponse.ProtoReflect.Descriptor instead.
+func (*DeclineInviteResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *DeclineInviteResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 type UpdateMemberRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
@@ -992,7 +1477,7 @@ type UpdateMemberRequest struct {
 
 func (x *UpdateMemberRequest) Reset() {
 	*x = UpdateMemberRequest{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[16]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1004,7 +1489,7 @@ func (x *UpdateMemberRequest) String() string {
 func (*UpdateMemberRequest) ProtoMessage() {}
 
 func (x *UpdateMemberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[16]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1017,7 +1502,7 @@ func (x *UpdateMemberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateMemberRequest.ProtoReflect.Descriptor instead.
 func (*UpdateMemberRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{16}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *UpdateMemberRequest) GetOrganizationId() string {
@@ -1050,7 +1535,7 @@ type UpdateMemberResponse struct {
 
 func (x *UpdateMemberResponse) Reset() {
 	*x = UpdateMemberResponse{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[17]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1062,7 +1547,7 @@ func (x *UpdateMemberResponse) String() string {
 func (*UpdateMemberResponse) ProtoMessage() {}
 
 func (x *UpdateMemberResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[17]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1075,7 +1560,7 @@ func (x *UpdateMemberResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateMemberResponse.ProtoReflect.Descriptor instead.
 func (*UpdateMemberResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{17}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *UpdateMemberResponse) GetMember() *OrganizationMember {
@@ -1095,7 +1580,7 @@ type RemoveMemberRequest struct {
 
 func (x *RemoveMemberRequest) Reset() {
 	*x = RemoveMemberRequest{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[18]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1107,7 +1592,7 @@ func (x *RemoveMemberRequest) String() string {
 func (*RemoveMemberRequest) ProtoMessage() {}
 
 func (x *RemoveMemberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[18]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1120,7 +1605,7 @@ func (x *RemoveMemberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveMemberRequest.ProtoReflect.Descriptor instead.
 func (*RemoveMemberRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{18}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RemoveMemberRequest) GetOrganizationId() string {
@@ -1146,7 +1631,7 @@ type RemoveMemberResponse struct {
 
 func (x *RemoveMemberResponse) Reset() {
 	*x = RemoveMemberResponse{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[19]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1158,7 +1643,7 @@ func (x *RemoveMemberResponse) String() string {
 func (*RemoveMemberResponse) ProtoMessage() {}
 
 func (x *RemoveMemberResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[19]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1171,7 +1656,7 @@ func (x *RemoveMemberResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveMemberResponse.ProtoReflect.Descriptor instead.
 func (*RemoveMemberResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{19}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RemoveMemberResponse) GetSuccess() bool {
@@ -1193,7 +1678,7 @@ type TransferOwnershipRequest struct {
 
 func (x *TransferOwnershipRequest) Reset() {
 	*x = TransferOwnershipRequest{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[20]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1205,7 +1690,7 @@ func (x *TransferOwnershipRequest) String() string {
 func (*TransferOwnershipRequest) ProtoMessage() {}
 
 func (x *TransferOwnershipRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[20]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1218,7 +1703,7 @@ func (x *TransferOwnershipRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferOwnershipRequest.ProtoReflect.Descriptor instead.
 func (*TransferOwnershipRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{20}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *TransferOwnershipRequest) GetOrganizationId() string {
@@ -1254,7 +1739,7 @@ type TransferOwnershipResponse struct {
 
 func (x *TransferOwnershipResponse) Reset() {
 	*x = TransferOwnershipResponse{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[21]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1266,7 +1751,7 @@ func (x *TransferOwnershipResponse) String() string {
 func (*TransferOwnershipResponse) ProtoMessage() {}
 
 func (x *TransferOwnershipResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[21]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1279,7 +1764,7 @@ func (x *TransferOwnershipResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferOwnershipResponse.ProtoReflect.Descriptor instead.
 func (*TransferOwnershipResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{21}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *TransferOwnershipResponse) GetSuccess() bool {
@@ -1323,14 +1808,18 @@ type Organization struct {
 	MaxVpsInstances int32                  `protobuf:"varint,9,opt,name=max_vps_instances,json=maxVpsInstances,proto3" json:"max_vps_instances,omitempty"`
 	MaxTeamMembers  int32                  `protobuf:"varint,10,opt,name=max_team_members,json=maxTeamMembers,proto3" json:"max_team_members,omitempty"`
 	// Credits balance in cents ($0.01 units)
-	Credits       int64 `protobuf:"varint,11,opt,name=credits,proto3" json:"credits,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Credits int64 `protobuf:"varint,11,opt,name=credits,proto3" json:"credits,omitempty"`
+	// Current plan information (if assigned via plan management)
+	PlanInfo *PlanInfo `protobuf:"bytes,12,opt,name=plan_info,json=planInfo,proto3,oneof" json:"plan_info,omitempty"`
+	// Total amount paid in cents (for safety check/auto-upgrade)
+	TotalPaidCents int64 `protobuf:"varint,13,opt,name=total_paid_cents,json=totalPaidCents,proto3" json:"total_paid_cents,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Organization) Reset() {
 	*x = Organization{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[22]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1342,7 +1831,7 @@ func (x *Organization) String() string {
 func (*Organization) ProtoMessage() {}
 
 func (x *Organization) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[22]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1355,7 +1844,7 @@ func (x *Organization) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Organization.ProtoReflect.Descriptor instead.
 func (*Organization) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{22}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *Organization) GetId() string {
@@ -1435,6 +1924,139 @@ func (x *Organization) GetCredits() int64 {
 	return 0
 }
 
+func (x *Organization) GetPlanInfo() *PlanInfo {
+	if x != nil {
+		return x.PlanInfo
+	}
+	return nil
+}
+
+func (x *Organization) GetTotalPaidCents() int64 {
+	if x != nil {
+		return x.TotalPaidCents
+	}
+	return 0
+}
+
+type PlanInfo struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	PlanId      string                 `protobuf:"bytes,1,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
+	PlanName    string                 `protobuf:"bytes,2,opt,name=plan_name,json=planName,proto3" json:"plan_name,omitempty"`
+	Description string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	// Resource limits from the plan
+	CpuCores            int32 `protobuf:"varint,4,opt,name=cpu_cores,json=cpuCores,proto3" json:"cpu_cores,omitempty"`
+	MemoryBytes         int64 `protobuf:"varint,5,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
+	DeploymentsMax      int32 `protobuf:"varint,6,opt,name=deployments_max,json=deploymentsMax,proto3" json:"deployments_max,omitempty"`
+	BandwidthBytesMonth int64 `protobuf:"varint,7,opt,name=bandwidth_bytes_month,json=bandwidthBytesMonth,proto3" json:"bandwidth_bytes_month,omitempty"`
+	StorageBytes        int64 `protobuf:"varint,8,opt,name=storage_bytes,json=storageBytes,proto3" json:"storage_bytes,omitempty"`
+	// Minimum payment required to qualify for this plan (in cents)
+	MinimumPaymentCents int64 `protobuf:"varint,9,opt,name=minimum_payment_cents,json=minimumPaymentCents,proto3" json:"minimum_payment_cents,omitempty"`
+	// Monthly free credits in cents granted to organizations on this plan
+	MonthlyFreeCreditsCents int64 `protobuf:"varint,10,opt,name=monthly_free_credits_cents,json=monthlyFreeCreditsCents,proto3" json:"monthly_free_credits_cents,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *PlanInfo) Reset() {
+	*x = PlanInfo{}
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlanInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlanInfo) ProtoMessage() {}
+
+func (x *PlanInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlanInfo.ProtoReflect.Descriptor instead.
+func (*PlanInfo) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *PlanInfo) GetPlanId() string {
+	if x != nil {
+		return x.PlanId
+	}
+	return ""
+}
+
+func (x *PlanInfo) GetPlanName() string {
+	if x != nil {
+		return x.PlanName
+	}
+	return ""
+}
+
+func (x *PlanInfo) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *PlanInfo) GetCpuCores() int32 {
+	if x != nil {
+		return x.CpuCores
+	}
+	return 0
+}
+
+func (x *PlanInfo) GetMemoryBytes() int64 {
+	if x != nil {
+		return x.MemoryBytes
+	}
+	return 0
+}
+
+func (x *PlanInfo) GetDeploymentsMax() int32 {
+	if x != nil {
+		return x.DeploymentsMax
+	}
+	return 0
+}
+
+func (x *PlanInfo) GetBandwidthBytesMonth() int64 {
+	if x != nil {
+		return x.BandwidthBytesMonth
+	}
+	return 0
+}
+
+func (x *PlanInfo) GetStorageBytes() int64 {
+	if x != nil {
+		return x.StorageBytes
+	}
+	return 0
+}
+
+func (x *PlanInfo) GetMinimumPaymentCents() int64 {
+	if x != nil {
+		return x.MinimumPaymentCents
+	}
+	return 0
+}
+
+func (x *PlanInfo) GetMonthlyFreeCreditsCents() int64 {
+	if x != nil {
+		return x.MonthlyFreeCreditsCents
+	}
+	return 0
+}
+
 type OrganizationMember struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1448,7 +2070,7 @@ type OrganizationMember struct {
 
 func (x *OrganizationMember) Reset() {
 	*x = OrganizationMember{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[23]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1460,7 +2082,7 @@ func (x *OrganizationMember) String() string {
 func (*OrganizationMember) ProtoMessage() {}
 
 func (x *OrganizationMember) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[23]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1473,7 +2095,7 @@ func (x *OrganizationMember) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrganizationMember.ProtoReflect.Descriptor instead.
 func (*OrganizationMember) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{23}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *OrganizationMember) GetId() string {
@@ -1523,7 +2145,7 @@ type Pagination struct {
 
 func (x *Pagination) Reset() {
 	*x = Pagination{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[24]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1535,7 +2157,7 @@ func (x *Pagination) String() string {
 func (*Pagination) ProtoMessage() {}
 
 func (x *Pagination) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[24]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1548,7 +2170,7 @@ func (x *Pagination) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pagination.ProtoReflect.Descriptor instead.
 func (*Pagination) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{24}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *Pagination) GetPage() int32 {
@@ -1592,7 +2214,7 @@ type AddCreditsRequest struct {
 
 func (x *AddCreditsRequest) Reset() {
 	*x = AddCreditsRequest{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[25]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1604,7 +2226,7 @@ func (x *AddCreditsRequest) String() string {
 func (*AddCreditsRequest) ProtoMessage() {}
 
 func (x *AddCreditsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[25]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1617,7 +2239,7 @@ func (x *AddCreditsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddCreditsRequest.ProtoReflect.Descriptor instead.
 func (*AddCreditsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{25}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *AddCreditsRequest) GetOrganizationId() string {
@@ -1654,7 +2276,7 @@ type AddCreditsResponse struct {
 
 func (x *AddCreditsResponse) Reset() {
 	*x = AddCreditsResponse{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[26]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1666,7 +2288,7 @@ func (x *AddCreditsResponse) String() string {
 func (*AddCreditsResponse) ProtoMessage() {}
 
 func (x *AddCreditsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[26]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1679,7 +2301,7 @@ func (x *AddCreditsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddCreditsResponse.ProtoReflect.Descriptor instead.
 func (*AddCreditsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{26}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *AddCreditsResponse) GetOrganization() *Organization {
@@ -1716,7 +2338,7 @@ type AdminAddCreditsRequest struct {
 
 func (x *AdminAddCreditsRequest) Reset() {
 	*x = AdminAddCreditsRequest{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[27]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1728,7 +2350,7 @@ func (x *AdminAddCreditsRequest) String() string {
 func (*AdminAddCreditsRequest) ProtoMessage() {}
 
 func (x *AdminAddCreditsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[27]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1741,7 +2363,7 @@ func (x *AdminAddCreditsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminAddCreditsRequest.ProtoReflect.Descriptor instead.
 func (*AdminAddCreditsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{27}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *AdminAddCreditsRequest) GetOrganizationId() string {
@@ -1778,7 +2400,7 @@ type AdminAddCreditsResponse struct {
 
 func (x *AdminAddCreditsResponse) Reset() {
 	*x = AdminAddCreditsResponse{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[28]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1790,7 +2412,7 @@ func (x *AdminAddCreditsResponse) String() string {
 func (*AdminAddCreditsResponse) ProtoMessage() {}
 
 func (x *AdminAddCreditsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[28]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1803,7 +2425,7 @@ func (x *AdminAddCreditsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminAddCreditsResponse.ProtoReflect.Descriptor instead.
 func (*AdminAddCreditsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{28}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *AdminAddCreditsResponse) GetOrganization() *Organization {
@@ -1840,7 +2462,7 @@ type AdminRemoveCreditsRequest struct {
 
 func (x *AdminRemoveCreditsRequest) Reset() {
 	*x = AdminRemoveCreditsRequest{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[29]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1852,7 +2474,7 @@ func (x *AdminRemoveCreditsRequest) String() string {
 func (*AdminRemoveCreditsRequest) ProtoMessage() {}
 
 func (x *AdminRemoveCreditsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[29]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1865,7 +2487,7 @@ func (x *AdminRemoveCreditsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminRemoveCreditsRequest.ProtoReflect.Descriptor instead.
 func (*AdminRemoveCreditsRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{29}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *AdminRemoveCreditsRequest) GetOrganizationId() string {
@@ -1902,7 +2524,7 @@ type AdminRemoveCreditsResponse struct {
 
 func (x *AdminRemoveCreditsResponse) Reset() {
 	*x = AdminRemoveCreditsResponse{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[30]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1914,7 +2536,7 @@ func (x *AdminRemoveCreditsResponse) String() string {
 func (*AdminRemoveCreditsResponse) ProtoMessage() {}
 
 func (x *AdminRemoveCreditsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[30]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1927,7 +2549,7 @@ func (x *AdminRemoveCreditsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AdminRemoveCreditsResponse.ProtoReflect.Descriptor instead.
 func (*AdminRemoveCreditsResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{30}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *AdminRemoveCreditsResponse) GetOrganization() *Organization {
@@ -1963,7 +2585,7 @@ type GetCreditLogRequest struct {
 
 func (x *GetCreditLogRequest) Reset() {
 	*x = GetCreditLogRequest{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[31]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1975,7 +2597,7 @@ func (x *GetCreditLogRequest) String() string {
 func (*GetCreditLogRequest) ProtoMessage() {}
 
 func (x *GetCreditLogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[31]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1988,7 +2610,7 @@ func (x *GetCreditLogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCreditLogRequest.ProtoReflect.Descriptor instead.
 func (*GetCreditLogRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{31}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *GetCreditLogRequest) GetOrganizationId() string {
@@ -2022,7 +2644,7 @@ type GetCreditLogResponse struct {
 
 func (x *GetCreditLogResponse) Reset() {
 	*x = GetCreditLogResponse{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[32]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2034,7 +2656,7 @@ func (x *GetCreditLogResponse) String() string {
 func (*GetCreditLogResponse) ProtoMessage() {}
 
 func (x *GetCreditLogResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[32]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2047,7 +2669,7 @@ func (x *GetCreditLogResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCreditLogResponse.ProtoReflect.Descriptor instead.
 func (*GetCreditLogResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{32}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *GetCreditLogResponse) GetTransactions() []*CreditTransaction {
@@ -2087,7 +2709,7 @@ type CreditTransaction struct {
 
 func (x *CreditTransaction) Reset() {
 	*x = CreditTransaction{}
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[33]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2099,7 +2721,7 @@ func (x *CreditTransaction) String() string {
 func (*CreditTransaction) ProtoMessage() {}
 
 func (x *CreditTransaction) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[33]
+	mi := &file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2112,7 +2734,7 @@ func (x *CreditTransaction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreditTransaction.ProtoReflect.Descriptor instead.
 func (*CreditTransaction) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{33}
+	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *CreditTransaction) GetId() string {
@@ -2260,7 +2882,39 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\x05email\x18\x02 \x01(\tR\x05email\x12\x12\n" +
 	"\x04role\x18\x03 \x01(\tR\x04role\"b\n" +
 	"\x14InviteMemberResponse\x12J\n" +
-	"\x06member\x18\x01 \x01(\v22.obiente.cloud.organizations.v1.OrganizationMemberR\x06member\"}\n" +
+	"\x06member\x18\x01 \x01(\v22.obiente.cloud.organizations.v1.OrganizationMemberR\x06member\"[\n" +
+	"\x13ResendInviteRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x1b\n" +
+	"\tmember_id\x18\x02 \x01(\tR\bmemberId\"0\n" +
+	"\x14ResendInviteResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"E\n" +
+	"\x14ListMyInvitesRequest\x12\x12\n" +
+	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x19\n" +
+	"\bper_page\x18\x02 \x01(\x05R\aperPage\"\xac\x01\n" +
+	"\x15ListMyInvitesResponse\x12G\n" +
+	"\ainvites\x18\x01 \x03(\v2-.obiente.cloud.organizations.v1.PendingInviteR\ainvites\x12J\n" +
+	"\n" +
+	"pagination\x18\x02 \x01(\v2*.obiente.cloud.organizations.v1.PaginationR\n" +
+	"pagination\"\xe9\x01\n" +
+	"\rPendingInvite\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12'\n" +
+	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12+\n" +
+	"\x11organization_name\x18\x03 \x01(\tR\x10organizationName\x12\x12\n" +
+	"\x04role\x18\x04 \x01(\tR\x04role\x129\n" +
+	"\n" +
+	"invited_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tinvitedAt\x12#\n" +
+	"\rinviter_email\x18\x06 \x01(\tR\finviterEmail\"[\n" +
+	"\x13AcceptInviteRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x1b\n" +
+	"\tmember_id\x18\x02 \x01(\tR\bmemberId\"\xb4\x01\n" +
+	"\x14AcceptInviteResponse\x12J\n" +
+	"\x06member\x18\x01 \x01(\v22.obiente.cloud.organizations.v1.OrganizationMemberR\x06member\x12P\n" +
+	"\forganization\x18\x02 \x01(\v2,.obiente.cloud.organizations.v1.OrganizationR\forganization\"\\\n" +
+	"\x14DeclineInviteRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x1b\n" +
+	"\tmember_id\x18\x02 \x01(\tR\bmemberId\"1\n" +
+	"\x15DeclineInviteResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"}\n" +
 	"\x13UpdateMemberRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x1b\n" +
 	"\tmember_id\x18\x02 \x01(\tR\bmemberId\x12\x17\n" +
@@ -2281,7 +2935,7 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x127\n" +
 	"\x18previous_owner_member_id\x18\x02 \x01(\tR\x15previousOwnerMemberId\x12-\n" +
 	"\x13new_owner_member_id\x18\x03 \x01(\tR\x10newOwnerMemberId\x12#\n" +
-	"\rfallback_role\x18\x04 \x01(\tR\ffallbackRole\"\xee\x02\n" +
+	"\rfallback_role\x18\x04 \x01(\tR\ffallbackRole\"\xf2\x03\n" +
 	"\fOrganization\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -2295,8 +2949,24 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\x11max_vps_instances\x18\t \x01(\x05R\x0fmaxVpsInstances\x12(\n" +
 	"\x10max_team_members\x18\n" +
 	" \x01(\x05R\x0emaxTeamMembers\x12\x18\n" +
-	"\acredits\x18\v \x01(\x03R\acreditsB\t\n" +
-	"\a_domain\"\xba\x01\n" +
+	"\acredits\x18\v \x01(\x03R\acredits\x12J\n" +
+	"\tplan_info\x18\f \x01(\v2(.obiente.cloud.organizations.v1.PlanInfoH\x01R\bplanInfo\x88\x01\x01\x12(\n" +
+	"\x10total_paid_cents\x18\r \x01(\x03R\x0etotalPaidCentsB\t\n" +
+	"\a_domainB\f\n" +
+	"\n" +
+	"_plan_info\"\x95\x03\n" +
+	"\bPlanInfo\x12\x17\n" +
+	"\aplan_id\x18\x01 \x01(\tR\x06planId\x12\x1b\n" +
+	"\tplan_name\x18\x02 \x01(\tR\bplanName\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x1b\n" +
+	"\tcpu_cores\x18\x04 \x01(\x05R\bcpuCores\x12!\n" +
+	"\fmemory_bytes\x18\x05 \x01(\x03R\vmemoryBytes\x12'\n" +
+	"\x0fdeployments_max\x18\x06 \x01(\x05R\x0edeploymentsMax\x122\n" +
+	"\x15bandwidth_bytes_month\x18\a \x01(\x03R\x13bandwidthBytesMonth\x12#\n" +
+	"\rstorage_bytes\x18\b \x01(\x03R\fstorageBytes\x122\n" +
+	"\x15minimum_payment_cents\x18\t \x01(\x03R\x13minimumPaymentCents\x12;\n" +
+	"\x1amonthly_free_credits_cents\x18\n" +
+	" \x01(\x03R\x17monthlyFreeCreditsCents\"\xba\x01\n" +
 	"\x12OrganizationMember\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12/\n" +
 	"\x04user\x18\x02 \x01(\v2\x1b.obiente.cloud.auth.v1.UserR\x04user\x12\x12\n" +
@@ -2359,7 +3029,7 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\n" +
 	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAtB\a\n" +
 	"\x05_noteB\r\n" +
-	"\v_created_by2\xa7\x0e\n" +
+	"\v_created_by2\x99\x12\n" +
 	"\x13OrganizationService\x12\x88\x01\n" +
 	"\x11ListOrganizations\x128.obiente.cloud.organizations.v1.ListOrganizationsRequest\x1a9.obiente.cloud.organizations.v1.ListOrganizationsResponse\x12\x8b\x01\n" +
 	"\x12CreateOrganization\x129.obiente.cloud.organizations.v1.CreateOrganizationRequest\x1a:.obiente.cloud.organizations.v1.CreateOrganizationResponse\x12\x82\x01\n" +
@@ -2367,6 +3037,10 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\x12UpdateOrganization\x129.obiente.cloud.organizations.v1.UpdateOrganizationRequest\x1a:.obiente.cloud.organizations.v1.UpdateOrganizationResponse\x12v\n" +
 	"\vListMembers\x122.obiente.cloud.organizations.v1.ListMembersRequest\x1a3.obiente.cloud.organizations.v1.ListMembersResponse\x12y\n" +
 	"\fInviteMember\x123.obiente.cloud.organizations.v1.InviteMemberRequest\x1a4.obiente.cloud.organizations.v1.InviteMemberResponse\x12y\n" +
+	"\fResendInvite\x123.obiente.cloud.organizations.v1.ResendInviteRequest\x1a4.obiente.cloud.organizations.v1.ResendInviteResponse\x12|\n" +
+	"\rListMyInvites\x124.obiente.cloud.organizations.v1.ListMyInvitesRequest\x1a5.obiente.cloud.organizations.v1.ListMyInvitesResponse\x12y\n" +
+	"\fAcceptInvite\x123.obiente.cloud.organizations.v1.AcceptInviteRequest\x1a4.obiente.cloud.organizations.v1.AcceptInviteResponse\x12|\n" +
+	"\rDeclineInvite\x124.obiente.cloud.organizations.v1.DeclineInviteRequest\x1a5.obiente.cloud.organizations.v1.DeclineInviteResponse\x12y\n" +
 	"\fUpdateMember\x123.obiente.cloud.organizations.v1.UpdateMemberRequest\x1a4.obiente.cloud.organizations.v1.UpdateMemberResponse\x12y\n" +
 	"\fRemoveMember\x123.obiente.cloud.organizations.v1.RemoveMemberRequest\x1a4.obiente.cloud.organizations.v1.RemoveMemberResponse\x12\x88\x01\n" +
 	"\x11TransferOwnership\x128.obiente.cloud.organizations.v1.TransferOwnershipRequest\x1a9.obiente.cloud.organizations.v1.TransferOwnershipResponse\x12m\n" +
@@ -2389,7 +3063,7 @@ func file_obiente_cloud_organizations_v1_organization_service_proto_rawDescGZIP(
 	return file_obiente_cloud_organizations_v1_organization_service_proto_rawDescData
 }
 
-var file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_obiente_cloud_organizations_v1_organization_service_proto_goTypes = []any{
 	(*GetUsageRequest)(nil),            // 0: obiente.cloud.organizations.v1.GetUsageRequest
 	(*GetUsageResponse)(nil),           // 1: obiente.cloud.organizations.v1.GetUsageResponse
@@ -2407,82 +3081,106 @@ var file_obiente_cloud_organizations_v1_organization_service_proto_goTypes = []a
 	(*ListMembersResponse)(nil),        // 13: obiente.cloud.organizations.v1.ListMembersResponse
 	(*InviteMemberRequest)(nil),        // 14: obiente.cloud.organizations.v1.InviteMemberRequest
 	(*InviteMemberResponse)(nil),       // 15: obiente.cloud.organizations.v1.InviteMemberResponse
-	(*UpdateMemberRequest)(nil),        // 16: obiente.cloud.organizations.v1.UpdateMemberRequest
-	(*UpdateMemberResponse)(nil),       // 17: obiente.cloud.organizations.v1.UpdateMemberResponse
-	(*RemoveMemberRequest)(nil),        // 18: obiente.cloud.organizations.v1.RemoveMemberRequest
-	(*RemoveMemberResponse)(nil),       // 19: obiente.cloud.organizations.v1.RemoveMemberResponse
-	(*TransferOwnershipRequest)(nil),   // 20: obiente.cloud.organizations.v1.TransferOwnershipRequest
-	(*TransferOwnershipResponse)(nil),  // 21: obiente.cloud.organizations.v1.TransferOwnershipResponse
-	(*Organization)(nil),               // 22: obiente.cloud.organizations.v1.Organization
-	(*OrganizationMember)(nil),         // 23: obiente.cloud.organizations.v1.OrganizationMember
-	(*Pagination)(nil),                 // 24: obiente.cloud.organizations.v1.Pagination
-	(*AddCreditsRequest)(nil),          // 25: obiente.cloud.organizations.v1.AddCreditsRequest
-	(*AddCreditsResponse)(nil),         // 26: obiente.cloud.organizations.v1.AddCreditsResponse
-	(*AdminAddCreditsRequest)(nil),     // 27: obiente.cloud.organizations.v1.AdminAddCreditsRequest
-	(*AdminAddCreditsResponse)(nil),    // 28: obiente.cloud.organizations.v1.AdminAddCreditsResponse
-	(*AdminRemoveCreditsRequest)(nil),  // 29: obiente.cloud.organizations.v1.AdminRemoveCreditsRequest
-	(*AdminRemoveCreditsResponse)(nil), // 30: obiente.cloud.organizations.v1.AdminRemoveCreditsResponse
-	(*GetCreditLogRequest)(nil),        // 31: obiente.cloud.organizations.v1.GetCreditLogRequest
-	(*GetCreditLogResponse)(nil),       // 32: obiente.cloud.organizations.v1.GetCreditLogResponse
-	(*CreditTransaction)(nil),          // 33: obiente.cloud.organizations.v1.CreditTransaction
-	(*timestamppb.Timestamp)(nil),      // 34: google.protobuf.Timestamp
-	(*v1.User)(nil),                    // 35: obiente.cloud.auth.v1.User
+	(*ResendInviteRequest)(nil),        // 16: obiente.cloud.organizations.v1.ResendInviteRequest
+	(*ResendInviteResponse)(nil),       // 17: obiente.cloud.organizations.v1.ResendInviteResponse
+	(*ListMyInvitesRequest)(nil),       // 18: obiente.cloud.organizations.v1.ListMyInvitesRequest
+	(*ListMyInvitesResponse)(nil),      // 19: obiente.cloud.organizations.v1.ListMyInvitesResponse
+	(*PendingInvite)(nil),              // 20: obiente.cloud.organizations.v1.PendingInvite
+	(*AcceptInviteRequest)(nil),        // 21: obiente.cloud.organizations.v1.AcceptInviteRequest
+	(*AcceptInviteResponse)(nil),       // 22: obiente.cloud.organizations.v1.AcceptInviteResponse
+	(*DeclineInviteRequest)(nil),       // 23: obiente.cloud.organizations.v1.DeclineInviteRequest
+	(*DeclineInviteResponse)(nil),      // 24: obiente.cloud.organizations.v1.DeclineInviteResponse
+	(*UpdateMemberRequest)(nil),        // 25: obiente.cloud.organizations.v1.UpdateMemberRequest
+	(*UpdateMemberResponse)(nil),       // 26: obiente.cloud.organizations.v1.UpdateMemberResponse
+	(*RemoveMemberRequest)(nil),        // 27: obiente.cloud.organizations.v1.RemoveMemberRequest
+	(*RemoveMemberResponse)(nil),       // 28: obiente.cloud.organizations.v1.RemoveMemberResponse
+	(*TransferOwnershipRequest)(nil),   // 29: obiente.cloud.organizations.v1.TransferOwnershipRequest
+	(*TransferOwnershipResponse)(nil),  // 30: obiente.cloud.organizations.v1.TransferOwnershipResponse
+	(*Organization)(nil),               // 31: obiente.cloud.organizations.v1.Organization
+	(*PlanInfo)(nil),                   // 32: obiente.cloud.organizations.v1.PlanInfo
+	(*OrganizationMember)(nil),         // 33: obiente.cloud.organizations.v1.OrganizationMember
+	(*Pagination)(nil),                 // 34: obiente.cloud.organizations.v1.Pagination
+	(*AddCreditsRequest)(nil),          // 35: obiente.cloud.organizations.v1.AddCreditsRequest
+	(*AddCreditsResponse)(nil),         // 36: obiente.cloud.organizations.v1.AddCreditsResponse
+	(*AdminAddCreditsRequest)(nil),     // 37: obiente.cloud.organizations.v1.AdminAddCreditsRequest
+	(*AdminAddCreditsResponse)(nil),    // 38: obiente.cloud.organizations.v1.AdminAddCreditsResponse
+	(*AdminRemoveCreditsRequest)(nil),  // 39: obiente.cloud.organizations.v1.AdminRemoveCreditsRequest
+	(*AdminRemoveCreditsResponse)(nil), // 40: obiente.cloud.organizations.v1.AdminRemoveCreditsResponse
+	(*GetCreditLogRequest)(nil),        // 41: obiente.cloud.organizations.v1.GetCreditLogRequest
+	(*GetCreditLogResponse)(nil),       // 42: obiente.cloud.organizations.v1.GetCreditLogResponse
+	(*CreditTransaction)(nil),          // 43: obiente.cloud.organizations.v1.CreditTransaction
+	(*timestamppb.Timestamp)(nil),      // 44: google.protobuf.Timestamp
+	(*v1.User)(nil),                    // 45: obiente.cloud.auth.v1.User
 }
 var file_obiente_cloud_organizations_v1_organization_service_proto_depIdxs = []int32{
 	2,  // 0: obiente.cloud.organizations.v1.GetUsageResponse.current:type_name -> obiente.cloud.organizations.v1.UsageMetrics
 	2,  // 1: obiente.cloud.organizations.v1.GetUsageResponse.estimated_monthly:type_name -> obiente.cloud.organizations.v1.UsageMetrics
 	3,  // 2: obiente.cloud.organizations.v1.GetUsageResponse.quota:type_name -> obiente.cloud.organizations.v1.UsageQuota
-	22, // 3: obiente.cloud.organizations.v1.ListOrganizationsResponse.organizations:type_name -> obiente.cloud.organizations.v1.Organization
-	24, // 4: obiente.cloud.organizations.v1.ListOrganizationsResponse.pagination:type_name -> obiente.cloud.organizations.v1.Pagination
-	22, // 5: obiente.cloud.organizations.v1.CreateOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
-	22, // 6: obiente.cloud.organizations.v1.GetOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
-	22, // 7: obiente.cloud.organizations.v1.UpdateOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
-	23, // 8: obiente.cloud.organizations.v1.ListMembersResponse.members:type_name -> obiente.cloud.organizations.v1.OrganizationMember
-	24, // 9: obiente.cloud.organizations.v1.ListMembersResponse.pagination:type_name -> obiente.cloud.organizations.v1.Pagination
-	23, // 10: obiente.cloud.organizations.v1.InviteMemberResponse.member:type_name -> obiente.cloud.organizations.v1.OrganizationMember
-	23, // 11: obiente.cloud.organizations.v1.UpdateMemberResponse.member:type_name -> obiente.cloud.organizations.v1.OrganizationMember
-	34, // 12: obiente.cloud.organizations.v1.Organization.created_at:type_name -> google.protobuf.Timestamp
-	35, // 13: obiente.cloud.organizations.v1.OrganizationMember.user:type_name -> obiente.cloud.auth.v1.User
-	34, // 14: obiente.cloud.organizations.v1.OrganizationMember.joined_at:type_name -> google.protobuf.Timestamp
-	22, // 15: obiente.cloud.organizations.v1.AddCreditsResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
-	22, // 16: obiente.cloud.organizations.v1.AdminAddCreditsResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
-	22, // 17: obiente.cloud.organizations.v1.AdminRemoveCreditsResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
-	33, // 18: obiente.cloud.organizations.v1.GetCreditLogResponse.transactions:type_name -> obiente.cloud.organizations.v1.CreditTransaction
-	24, // 19: obiente.cloud.organizations.v1.GetCreditLogResponse.pagination:type_name -> obiente.cloud.organizations.v1.Pagination
-	34, // 20: obiente.cloud.organizations.v1.CreditTransaction.created_at:type_name -> google.protobuf.Timestamp
-	4,  // 21: obiente.cloud.organizations.v1.OrganizationService.ListOrganizations:input_type -> obiente.cloud.organizations.v1.ListOrganizationsRequest
-	6,  // 22: obiente.cloud.organizations.v1.OrganizationService.CreateOrganization:input_type -> obiente.cloud.organizations.v1.CreateOrganizationRequest
-	8,  // 23: obiente.cloud.organizations.v1.OrganizationService.GetOrganization:input_type -> obiente.cloud.organizations.v1.GetOrganizationRequest
-	10, // 24: obiente.cloud.organizations.v1.OrganizationService.UpdateOrganization:input_type -> obiente.cloud.organizations.v1.UpdateOrganizationRequest
-	12, // 25: obiente.cloud.organizations.v1.OrganizationService.ListMembers:input_type -> obiente.cloud.organizations.v1.ListMembersRequest
-	14, // 26: obiente.cloud.organizations.v1.OrganizationService.InviteMember:input_type -> obiente.cloud.organizations.v1.InviteMemberRequest
-	16, // 27: obiente.cloud.organizations.v1.OrganizationService.UpdateMember:input_type -> obiente.cloud.organizations.v1.UpdateMemberRequest
-	18, // 28: obiente.cloud.organizations.v1.OrganizationService.RemoveMember:input_type -> obiente.cloud.organizations.v1.RemoveMemberRequest
-	20, // 29: obiente.cloud.organizations.v1.OrganizationService.TransferOwnership:input_type -> obiente.cloud.organizations.v1.TransferOwnershipRequest
-	0,  // 30: obiente.cloud.organizations.v1.OrganizationService.GetUsage:input_type -> obiente.cloud.organizations.v1.GetUsageRequest
-	25, // 31: obiente.cloud.organizations.v1.OrganizationService.AddCredits:input_type -> obiente.cloud.organizations.v1.AddCreditsRequest
-	27, // 32: obiente.cloud.organizations.v1.OrganizationService.AdminAddCredits:input_type -> obiente.cloud.organizations.v1.AdminAddCreditsRequest
-	29, // 33: obiente.cloud.organizations.v1.OrganizationService.AdminRemoveCredits:input_type -> obiente.cloud.organizations.v1.AdminRemoveCreditsRequest
-	31, // 34: obiente.cloud.organizations.v1.OrganizationService.GetCreditLog:input_type -> obiente.cloud.organizations.v1.GetCreditLogRequest
-	5,  // 35: obiente.cloud.organizations.v1.OrganizationService.ListOrganizations:output_type -> obiente.cloud.organizations.v1.ListOrganizationsResponse
-	7,  // 36: obiente.cloud.organizations.v1.OrganizationService.CreateOrganization:output_type -> obiente.cloud.organizations.v1.CreateOrganizationResponse
-	9,  // 37: obiente.cloud.organizations.v1.OrganizationService.GetOrganization:output_type -> obiente.cloud.organizations.v1.GetOrganizationResponse
-	11, // 38: obiente.cloud.organizations.v1.OrganizationService.UpdateOrganization:output_type -> obiente.cloud.organizations.v1.UpdateOrganizationResponse
-	13, // 39: obiente.cloud.organizations.v1.OrganizationService.ListMembers:output_type -> obiente.cloud.organizations.v1.ListMembersResponse
-	15, // 40: obiente.cloud.organizations.v1.OrganizationService.InviteMember:output_type -> obiente.cloud.organizations.v1.InviteMemberResponse
-	17, // 41: obiente.cloud.organizations.v1.OrganizationService.UpdateMember:output_type -> obiente.cloud.organizations.v1.UpdateMemberResponse
-	19, // 42: obiente.cloud.organizations.v1.OrganizationService.RemoveMember:output_type -> obiente.cloud.organizations.v1.RemoveMemberResponse
-	21, // 43: obiente.cloud.organizations.v1.OrganizationService.TransferOwnership:output_type -> obiente.cloud.organizations.v1.TransferOwnershipResponse
-	1,  // 44: obiente.cloud.organizations.v1.OrganizationService.GetUsage:output_type -> obiente.cloud.organizations.v1.GetUsageResponse
-	26, // 45: obiente.cloud.organizations.v1.OrganizationService.AddCredits:output_type -> obiente.cloud.organizations.v1.AddCreditsResponse
-	28, // 46: obiente.cloud.organizations.v1.OrganizationService.AdminAddCredits:output_type -> obiente.cloud.organizations.v1.AdminAddCreditsResponse
-	30, // 47: obiente.cloud.organizations.v1.OrganizationService.AdminRemoveCredits:output_type -> obiente.cloud.organizations.v1.AdminRemoveCreditsResponse
-	32, // 48: obiente.cloud.organizations.v1.OrganizationService.GetCreditLog:output_type -> obiente.cloud.organizations.v1.GetCreditLogResponse
-	35, // [35:49] is the sub-list for method output_type
-	21, // [21:35] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	31, // 3: obiente.cloud.organizations.v1.ListOrganizationsResponse.organizations:type_name -> obiente.cloud.organizations.v1.Organization
+	34, // 4: obiente.cloud.organizations.v1.ListOrganizationsResponse.pagination:type_name -> obiente.cloud.organizations.v1.Pagination
+	31, // 5: obiente.cloud.organizations.v1.CreateOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
+	31, // 6: obiente.cloud.organizations.v1.GetOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
+	31, // 7: obiente.cloud.organizations.v1.UpdateOrganizationResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
+	33, // 8: obiente.cloud.organizations.v1.ListMembersResponse.members:type_name -> obiente.cloud.organizations.v1.OrganizationMember
+	34, // 9: obiente.cloud.organizations.v1.ListMembersResponse.pagination:type_name -> obiente.cloud.organizations.v1.Pagination
+	33, // 10: obiente.cloud.organizations.v1.InviteMemberResponse.member:type_name -> obiente.cloud.organizations.v1.OrganizationMember
+	20, // 11: obiente.cloud.organizations.v1.ListMyInvitesResponse.invites:type_name -> obiente.cloud.organizations.v1.PendingInvite
+	34, // 12: obiente.cloud.organizations.v1.ListMyInvitesResponse.pagination:type_name -> obiente.cloud.organizations.v1.Pagination
+	44, // 13: obiente.cloud.organizations.v1.PendingInvite.invited_at:type_name -> google.protobuf.Timestamp
+	33, // 14: obiente.cloud.organizations.v1.AcceptInviteResponse.member:type_name -> obiente.cloud.organizations.v1.OrganizationMember
+	31, // 15: obiente.cloud.organizations.v1.AcceptInviteResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
+	33, // 16: obiente.cloud.organizations.v1.UpdateMemberResponse.member:type_name -> obiente.cloud.organizations.v1.OrganizationMember
+	44, // 17: obiente.cloud.organizations.v1.Organization.created_at:type_name -> google.protobuf.Timestamp
+	32, // 18: obiente.cloud.organizations.v1.Organization.plan_info:type_name -> obiente.cloud.organizations.v1.PlanInfo
+	45, // 19: obiente.cloud.organizations.v1.OrganizationMember.user:type_name -> obiente.cloud.auth.v1.User
+	44, // 20: obiente.cloud.organizations.v1.OrganizationMember.joined_at:type_name -> google.protobuf.Timestamp
+	31, // 21: obiente.cloud.organizations.v1.AddCreditsResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
+	31, // 22: obiente.cloud.organizations.v1.AdminAddCreditsResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
+	31, // 23: obiente.cloud.organizations.v1.AdminRemoveCreditsResponse.organization:type_name -> obiente.cloud.organizations.v1.Organization
+	43, // 24: obiente.cloud.organizations.v1.GetCreditLogResponse.transactions:type_name -> obiente.cloud.organizations.v1.CreditTransaction
+	34, // 25: obiente.cloud.organizations.v1.GetCreditLogResponse.pagination:type_name -> obiente.cloud.organizations.v1.Pagination
+	44, // 26: obiente.cloud.organizations.v1.CreditTransaction.created_at:type_name -> google.protobuf.Timestamp
+	4,  // 27: obiente.cloud.organizations.v1.OrganizationService.ListOrganizations:input_type -> obiente.cloud.organizations.v1.ListOrganizationsRequest
+	6,  // 28: obiente.cloud.organizations.v1.OrganizationService.CreateOrganization:input_type -> obiente.cloud.organizations.v1.CreateOrganizationRequest
+	8,  // 29: obiente.cloud.organizations.v1.OrganizationService.GetOrganization:input_type -> obiente.cloud.organizations.v1.GetOrganizationRequest
+	10, // 30: obiente.cloud.organizations.v1.OrganizationService.UpdateOrganization:input_type -> obiente.cloud.organizations.v1.UpdateOrganizationRequest
+	12, // 31: obiente.cloud.organizations.v1.OrganizationService.ListMembers:input_type -> obiente.cloud.organizations.v1.ListMembersRequest
+	14, // 32: obiente.cloud.organizations.v1.OrganizationService.InviteMember:input_type -> obiente.cloud.organizations.v1.InviteMemberRequest
+	16, // 33: obiente.cloud.organizations.v1.OrganizationService.ResendInvite:input_type -> obiente.cloud.organizations.v1.ResendInviteRequest
+	18, // 34: obiente.cloud.organizations.v1.OrganizationService.ListMyInvites:input_type -> obiente.cloud.organizations.v1.ListMyInvitesRequest
+	21, // 35: obiente.cloud.organizations.v1.OrganizationService.AcceptInvite:input_type -> obiente.cloud.organizations.v1.AcceptInviteRequest
+	23, // 36: obiente.cloud.organizations.v1.OrganizationService.DeclineInvite:input_type -> obiente.cloud.organizations.v1.DeclineInviteRequest
+	25, // 37: obiente.cloud.organizations.v1.OrganizationService.UpdateMember:input_type -> obiente.cloud.organizations.v1.UpdateMemberRequest
+	27, // 38: obiente.cloud.organizations.v1.OrganizationService.RemoveMember:input_type -> obiente.cloud.organizations.v1.RemoveMemberRequest
+	29, // 39: obiente.cloud.organizations.v1.OrganizationService.TransferOwnership:input_type -> obiente.cloud.organizations.v1.TransferOwnershipRequest
+	0,  // 40: obiente.cloud.organizations.v1.OrganizationService.GetUsage:input_type -> obiente.cloud.organizations.v1.GetUsageRequest
+	35, // 41: obiente.cloud.organizations.v1.OrganizationService.AddCredits:input_type -> obiente.cloud.organizations.v1.AddCreditsRequest
+	37, // 42: obiente.cloud.organizations.v1.OrganizationService.AdminAddCredits:input_type -> obiente.cloud.organizations.v1.AdminAddCreditsRequest
+	39, // 43: obiente.cloud.organizations.v1.OrganizationService.AdminRemoveCredits:input_type -> obiente.cloud.organizations.v1.AdminRemoveCreditsRequest
+	41, // 44: obiente.cloud.organizations.v1.OrganizationService.GetCreditLog:input_type -> obiente.cloud.organizations.v1.GetCreditLogRequest
+	5,  // 45: obiente.cloud.organizations.v1.OrganizationService.ListOrganizations:output_type -> obiente.cloud.organizations.v1.ListOrganizationsResponse
+	7,  // 46: obiente.cloud.organizations.v1.OrganizationService.CreateOrganization:output_type -> obiente.cloud.organizations.v1.CreateOrganizationResponse
+	9,  // 47: obiente.cloud.organizations.v1.OrganizationService.GetOrganization:output_type -> obiente.cloud.organizations.v1.GetOrganizationResponse
+	11, // 48: obiente.cloud.organizations.v1.OrganizationService.UpdateOrganization:output_type -> obiente.cloud.organizations.v1.UpdateOrganizationResponse
+	13, // 49: obiente.cloud.organizations.v1.OrganizationService.ListMembers:output_type -> obiente.cloud.organizations.v1.ListMembersResponse
+	15, // 50: obiente.cloud.organizations.v1.OrganizationService.InviteMember:output_type -> obiente.cloud.organizations.v1.InviteMemberResponse
+	17, // 51: obiente.cloud.organizations.v1.OrganizationService.ResendInvite:output_type -> obiente.cloud.organizations.v1.ResendInviteResponse
+	19, // 52: obiente.cloud.organizations.v1.OrganizationService.ListMyInvites:output_type -> obiente.cloud.organizations.v1.ListMyInvitesResponse
+	22, // 53: obiente.cloud.organizations.v1.OrganizationService.AcceptInvite:output_type -> obiente.cloud.organizations.v1.AcceptInviteResponse
+	24, // 54: obiente.cloud.organizations.v1.OrganizationService.DeclineInvite:output_type -> obiente.cloud.organizations.v1.DeclineInviteResponse
+	26, // 55: obiente.cloud.organizations.v1.OrganizationService.UpdateMember:output_type -> obiente.cloud.organizations.v1.UpdateMemberResponse
+	28, // 56: obiente.cloud.organizations.v1.OrganizationService.RemoveMember:output_type -> obiente.cloud.organizations.v1.RemoveMemberResponse
+	30, // 57: obiente.cloud.organizations.v1.OrganizationService.TransferOwnership:output_type -> obiente.cloud.organizations.v1.TransferOwnershipResponse
+	1,  // 58: obiente.cloud.organizations.v1.OrganizationService.GetUsage:output_type -> obiente.cloud.organizations.v1.GetUsageResponse
+	36, // 59: obiente.cloud.organizations.v1.OrganizationService.AddCredits:output_type -> obiente.cloud.organizations.v1.AddCreditsResponse
+	38, // 60: obiente.cloud.organizations.v1.OrganizationService.AdminAddCredits:output_type -> obiente.cloud.organizations.v1.AdminAddCreditsResponse
+	40, // 61: obiente.cloud.organizations.v1.OrganizationService.AdminRemoveCredits:output_type -> obiente.cloud.organizations.v1.AdminRemoveCreditsResponse
+	42, // 62: obiente.cloud.organizations.v1.OrganizationService.GetCreditLog:output_type -> obiente.cloud.organizations.v1.GetCreditLogResponse
+	45, // [45:63] is the sub-list for method output_type
+	27, // [27:45] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_organizations_v1_organization_service_proto_init() }
@@ -2494,19 +3192,19 @@ func file_obiente_cloud_organizations_v1_organization_service_proto_init() {
 	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[2].OneofWrappers = []any{}
 	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[4].OneofWrappers = []any{}
 	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[10].OneofWrappers = []any{}
-	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[16].OneofWrappers = []any{}
-	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[22].OneofWrappers = []any{}
 	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[25].OneofWrappers = []any{}
-	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[27].OneofWrappers = []any{}
-	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[29].OneofWrappers = []any{}
-	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[33].OneofWrappers = []any{}
+	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[31].OneofWrappers = []any{}
+	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[35].OneofWrappers = []any{}
+	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[37].OneofWrappers = []any{}
+	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[39].OneofWrappers = []any{}
+	file_obiente_cloud_organizations_v1_organization_service_proto_msgTypes[43].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc), len(file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   34,
+			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -61,12 +61,12 @@ func (*GetOverviewRequest) Descriptor() ([]byte, []int) {
 }
 
 type GetOverviewResponse struct {
-	state          protoimpl.MessageState  `protogen:"open.v1"`
-	Counts         *OverviewCounts         `protobuf:"bytes,1,opt,name=counts,proto3" json:"counts,omitempty"`
-	Organizations  []*OrganizationOverview `protobuf:"bytes,2,rep,name=organizations,proto3" json:"organizations,omitempty"`
-	PendingInvites []*PendingInvite        `protobuf:"bytes,3,rep,name=pending_invites,json=pendingInvites,proto3" json:"pending_invites,omitempty"`
-	Deployments    []*DeploymentOverview   `protobuf:"bytes,4,rep,name=deployments,proto3" json:"deployments,omitempty"`
-	Usages         []*OrganizationUsage    `protobuf:"bytes,5,rep,name=usages,proto3" json:"usages,omitempty"`
+	state          protoimpl.MessageState     `protogen:"open.v1"`
+	Counts         *OverviewCounts            `protobuf:"bytes,1,opt,name=counts,proto3" json:"counts,omitempty"`
+	Organizations  []*OrganizationOverview    `protobuf:"bytes,2,rep,name=organizations,proto3" json:"organizations,omitempty"`
+	PendingInvites []*SuperadminPendingInvite `protobuf:"bytes,3,rep,name=pending_invites,json=pendingInvites,proto3" json:"pending_invites,omitempty"`
+	Deployments    []*DeploymentOverview      `protobuf:"bytes,4,rep,name=deployments,proto3" json:"deployments,omitempty"`
+	Usages         []*OrganizationUsage       `protobuf:"bytes,5,rep,name=usages,proto3" json:"usages,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -115,7 +115,7 @@ func (x *GetOverviewResponse) GetOrganizations() []*OrganizationOverview {
 	return nil
 }
 
-func (x *GetOverviewResponse) GetPendingInvites() []*PendingInvite {
+func (x *GetOverviewResponse) GetPendingInvites() []*SuperadminPendingInvite {
 	if x != nil {
 		return x.PendingInvites
 	}
@@ -320,7 +320,7 @@ func (x *OrganizationOverview) GetDeploymentCount() int64 {
 	return 0
 }
 
-type PendingInvite struct {
+type SuperadminPendingInvite struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	OrganizationId string                 `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
@@ -331,20 +331,20 @@ type PendingInvite struct {
 	sizeCache      protoimpl.SizeCache
 }
 
-func (x *PendingInvite) Reset() {
-	*x = PendingInvite{}
+func (x *SuperadminPendingInvite) Reset() {
+	*x = SuperadminPendingInvite{}
 	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PendingInvite) String() string {
+func (x *SuperadminPendingInvite) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PendingInvite) ProtoMessage() {}
+func (*SuperadminPendingInvite) ProtoMessage() {}
 
-func (x *PendingInvite) ProtoReflect() protoreflect.Message {
+func (x *SuperadminPendingInvite) ProtoReflect() protoreflect.Message {
 	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -356,40 +356,40 @@ func (x *PendingInvite) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PendingInvite.ProtoReflect.Descriptor instead.
-func (*PendingInvite) Descriptor() ([]byte, []int) {
+// Deprecated: Use SuperadminPendingInvite.ProtoReflect.Descriptor instead.
+func (*SuperadminPendingInvite) Descriptor() ([]byte, []int) {
 	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *PendingInvite) GetId() string {
+func (x *SuperadminPendingInvite) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *PendingInvite) GetOrganizationId() string {
+func (x *SuperadminPendingInvite) GetOrganizationId() string {
 	if x != nil {
 		return x.OrganizationId
 	}
 	return ""
 }
 
-func (x *PendingInvite) GetEmail() string {
+func (x *SuperadminPendingInvite) GetEmail() string {
 	if x != nil {
 		return x.Email
 	}
 	return ""
 }
 
-func (x *PendingInvite) GetRole() string {
+func (x *SuperadminPendingInvite) GetRole() string {
 	if x != nil {
 		return x.Role
 	}
 	return ""
 }
 
-func (x *PendingInvite) GetInvitedAt() *timestamppb.Timestamp {
+func (x *SuperadminPendingInvite) GetInvitedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.InvitedAt
 	}
@@ -1192,6 +1192,335 @@ func (x *GetDNSConfigResponse) GetConfig() *DNSConfig {
 	return nil
 }
 
+// List Delegated DNS Records Request
+type ListDelegatedDNSRecordsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId *string                `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"` // Filter by organization ID
+	ApiKeyId       *string                `protobuf:"bytes,2,opt,name=api_key_id,json=apiKeyId,proto3,oneof" json:"api_key_id,omitempty"`                 // Filter by API key ID
+	RecordType     *string                `protobuf:"bytes,3,opt,name=record_type,json=recordType,proto3,oneof" json:"record_type,omitempty"`             // Filter by record type (A, SRV) - empty means all
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ListDelegatedDNSRecordsRequest) Reset() {
+	*x = ListDelegatedDNSRecordsRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDelegatedDNSRecordsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDelegatedDNSRecordsRequest) ProtoMessage() {}
+
+func (x *ListDelegatedDNSRecordsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDelegatedDNSRecordsRequest.ProtoReflect.Descriptor instead.
+func (*ListDelegatedDNSRecordsRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ListDelegatedDNSRecordsRequest) GetOrganizationId() string {
+	if x != nil && x.OrganizationId != nil {
+		return *x.OrganizationId
+	}
+	return ""
+}
+
+func (x *ListDelegatedDNSRecordsRequest) GetApiKeyId() string {
+	if x != nil && x.ApiKeyId != nil {
+		return *x.ApiKeyId
+	}
+	return ""
+}
+
+func (x *ListDelegatedDNSRecordsRequest) GetRecordType() string {
+	if x != nil && x.RecordType != nil {
+		return *x.RecordType
+	}
+	return ""
+}
+
+// Delegated DNS Record Information
+type DelegatedDNSRecord struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Domain         string                 `protobuf:"bytes,2,opt,name=domain,proto3" json:"domain,omitempty"`                                       // Full domain (e.g., deploy-123.my.obiente.cloud)
+	RecordType     string                 `protobuf:"bytes,3,opt,name=record_type,json=recordType,proto3" json:"record_type,omitempty"`             // A or SRV
+	Records        []string               `protobuf:"bytes,4,rep,name=records,proto3" json:"records,omitempty"`                                     // Record values (IP addresses for A, SRV strings for SRV)
+	SourceApi      string                 `protobuf:"bytes,5,opt,name=source_api,json=sourceApi,proto3" json:"source_api,omitempty"`                // URL of the API that pushed this record
+	ApiKeyId       string                 `protobuf:"bytes,6,opt,name=api_key_id,json=apiKeyId,proto3" json:"api_key_id,omitempty"`                 // ID of the API key that delegated this record
+	OrganizationId string                 `protobuf:"bytes,7,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"` // Organization that owns the API key
+	Ttl            int64                  `protobuf:"varint,8,opt,name=ttl,proto3" json:"ttl,omitempty"`                                            // TTL in seconds
+	ExpiresAt      *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`                // When this record expires
+	LastUpdated    *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=last_updated,json=lastUpdated,proto3" json:"last_updated,omitempty"`         // Last time this record was updated
+	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *DelegatedDNSRecord) Reset() {
+	*x = DelegatedDNSRecord{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DelegatedDNSRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DelegatedDNSRecord) ProtoMessage() {}
+
+func (x *DelegatedDNSRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DelegatedDNSRecord.ProtoReflect.Descriptor instead.
+func (*DelegatedDNSRecord) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *DelegatedDNSRecord) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *DelegatedDNSRecord) GetDomain() string {
+	if x != nil {
+		return x.Domain
+	}
+	return ""
+}
+
+func (x *DelegatedDNSRecord) GetRecordType() string {
+	if x != nil {
+		return x.RecordType
+	}
+	return ""
+}
+
+func (x *DelegatedDNSRecord) GetRecords() []string {
+	if x != nil {
+		return x.Records
+	}
+	return nil
+}
+
+func (x *DelegatedDNSRecord) GetSourceApi() string {
+	if x != nil {
+		return x.SourceApi
+	}
+	return ""
+}
+
+func (x *DelegatedDNSRecord) GetApiKeyId() string {
+	if x != nil {
+		return x.ApiKeyId
+	}
+	return ""
+}
+
+func (x *DelegatedDNSRecord) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *DelegatedDNSRecord) GetTtl() int64 {
+	if x != nil {
+		return x.Ttl
+	}
+	return 0
+}
+
+func (x *DelegatedDNSRecord) GetExpiresAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return nil
+}
+
+func (x *DelegatedDNSRecord) GetLastUpdated() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastUpdated
+	}
+	return nil
+}
+
+func (x *DelegatedDNSRecord) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+// List Delegated DNS Records Response
+type ListDelegatedDNSRecordsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Records       []*DelegatedDNSRecord  `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDelegatedDNSRecordsResponse) Reset() {
+	*x = ListDelegatedDNSRecordsResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDelegatedDNSRecordsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDelegatedDNSRecordsResponse) ProtoMessage() {}
+
+func (x *ListDelegatedDNSRecordsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDelegatedDNSRecordsResponse.ProtoReflect.Descriptor instead.
+func (*ListDelegatedDNSRecordsResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ListDelegatedDNSRecordsResponse) GetRecords() []*DelegatedDNSRecord {
+	if x != nil {
+		return x.Records
+	}
+	return nil
+}
+
+// Has Delegated DNS Request
+type HasDelegatedDNSRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HasDelegatedDNSRequest) Reset() {
+	*x = HasDelegatedDNSRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HasDelegatedDNSRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HasDelegatedDNSRequest) ProtoMessage() {}
+
+func (x *HasDelegatedDNSRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HasDelegatedDNSRequest.ProtoReflect.Descriptor instead.
+func (*HasDelegatedDNSRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{19}
+}
+
+// Has Delegated DNS Response
+type HasDelegatedDNSResponse struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	HasDelegatedDns bool                   `protobuf:"varint,1,opt,name=has_delegated_dns,json=hasDelegatedDns,proto3" json:"has_delegated_dns,omitempty"` // Whether the user has delegated DNS
+	OrganizationId  string                 `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`       // Organization ID that has delegated DNS (if any)
+	ApiKeyId        string                 `protobuf:"bytes,3,opt,name=api_key_id,json=apiKeyId,proto3" json:"api_key_id,omitempty"`                       // API key ID (if any)
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *HasDelegatedDNSResponse) Reset() {
+	*x = HasDelegatedDNSResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HasDelegatedDNSResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HasDelegatedDNSResponse) ProtoMessage() {}
+
+func (x *HasDelegatedDNSResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HasDelegatedDNSResponse.ProtoReflect.Descriptor instead.
+func (*HasDelegatedDNSResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *HasDelegatedDNSResponse) GetHasDelegatedDns() bool {
+	if x != nil {
+		return x.HasDelegatedDns
+	}
+	return false
+}
+
+func (x *HasDelegatedDNSResponse) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *HasDelegatedDNSResponse) GetApiKeyId() string {
+	if x != nil {
+		return x.ApiKeyId
+	}
+	return ""
+}
+
 // Get Pricing Request - public endpoint
 type GetPricingRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1201,7 +1530,7 @@ type GetPricingRequest struct {
 
 func (x *GetPricingRequest) Reset() {
 	*x = GetPricingRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[16]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1213,7 +1542,7 @@ func (x *GetPricingRequest) String() string {
 func (*GetPricingRequest) ProtoMessage() {}
 
 func (x *GetPricingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[16]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1226,7 +1555,7 @@ func (x *GetPricingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPricingRequest.ProtoReflect.Descriptor instead.
 func (*GetPricingRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{16}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{21}
 }
 
 // Get Pricing Response
@@ -1243,7 +1572,7 @@ type GetPricingResponse struct {
 
 func (x *GetPricingResponse) Reset() {
 	*x = GetPricingResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[17]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1255,7 +1584,7 @@ func (x *GetPricingResponse) String() string {
 func (*GetPricingResponse) ProtoMessage() {}
 
 func (x *GetPricingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[17]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1268,7 +1597,7 @@ func (x *GetPricingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPricingResponse.ProtoReflect.Descriptor instead.
 func (*GetPricingResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{17}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GetPricingResponse) GetCpuCostPerCoreSecond() float64 {
@@ -1318,7 +1647,7 @@ type CreateDNSDelegationAPIKeyRequest struct {
 
 func (x *CreateDNSDelegationAPIKeyRequest) Reset() {
 	*x = CreateDNSDelegationAPIKeyRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[18]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1330,7 +1659,7 @@ func (x *CreateDNSDelegationAPIKeyRequest) String() string {
 func (*CreateDNSDelegationAPIKeyRequest) ProtoMessage() {}
 
 func (x *CreateDNSDelegationAPIKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[18]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1343,7 +1672,7 @@ func (x *CreateDNSDelegationAPIKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDNSDelegationAPIKeyRequest.ProtoReflect.Descriptor instead.
 func (*CreateDNSDelegationAPIKeyRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{18}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CreateDNSDelegationAPIKeyRequest) GetDescription() string {
@@ -1379,7 +1708,7 @@ type CreateDNSDelegationAPIKeyResponse struct {
 
 func (x *CreateDNSDelegationAPIKeyResponse) Reset() {
 	*x = CreateDNSDelegationAPIKeyResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[19]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1391,7 +1720,7 @@ func (x *CreateDNSDelegationAPIKeyResponse) String() string {
 func (*CreateDNSDelegationAPIKeyResponse) ProtoMessage() {}
 
 func (x *CreateDNSDelegationAPIKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[19]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1404,7 +1733,7 @@ func (x *CreateDNSDelegationAPIKeyResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use CreateDNSDelegationAPIKeyResponse.ProtoReflect.Descriptor instead.
 func (*CreateDNSDelegationAPIKeyResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{19}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *CreateDNSDelegationAPIKeyResponse) GetApiKey() string {
@@ -1438,7 +1767,7 @@ type RevokeDNSDelegationAPIKeyRequest struct {
 
 func (x *RevokeDNSDelegationAPIKeyRequest) Reset() {
 	*x = RevokeDNSDelegationAPIKeyRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[20]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1450,7 +1779,7 @@ func (x *RevokeDNSDelegationAPIKeyRequest) String() string {
 func (*RevokeDNSDelegationAPIKeyRequest) ProtoMessage() {}
 
 func (x *RevokeDNSDelegationAPIKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[20]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1463,7 +1792,7 @@ func (x *RevokeDNSDelegationAPIKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeDNSDelegationAPIKeyRequest.ProtoReflect.Descriptor instead.
 func (*RevokeDNSDelegationAPIKeyRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{20}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *RevokeDNSDelegationAPIKeyRequest) GetApiKey() string {
@@ -1484,7 +1813,7 @@ type RevokeDNSDelegationAPIKeyResponse struct {
 
 func (x *RevokeDNSDelegationAPIKeyResponse) Reset() {
 	*x = RevokeDNSDelegationAPIKeyResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[21]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1496,7 +1825,7 @@ func (x *RevokeDNSDelegationAPIKeyResponse) String() string {
 func (*RevokeDNSDelegationAPIKeyResponse) ProtoMessage() {}
 
 func (x *RevokeDNSDelegationAPIKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[21]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1509,7 +1838,7 @@ func (x *RevokeDNSDelegationAPIKeyResponse) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use RevokeDNSDelegationAPIKeyResponse.ProtoReflect.Descriptor instead.
 func (*RevokeDNSDelegationAPIKeyResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{21}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RevokeDNSDelegationAPIKeyResponse) GetSuccess() bool {
@@ -1536,7 +1865,7 @@ type RevokeDNSDelegationAPIKeyForOrganizationRequest struct {
 
 func (x *RevokeDNSDelegationAPIKeyForOrganizationRequest) Reset() {
 	*x = RevokeDNSDelegationAPIKeyForOrganizationRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[22]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1548,7 +1877,7 @@ func (x *RevokeDNSDelegationAPIKeyForOrganizationRequest) String() string {
 func (*RevokeDNSDelegationAPIKeyForOrganizationRequest) ProtoMessage() {}
 
 func (x *RevokeDNSDelegationAPIKeyForOrganizationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[22]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1561,7 +1890,7 @@ func (x *RevokeDNSDelegationAPIKeyForOrganizationRequest) ProtoReflect() protore
 
 // Deprecated: Use RevokeDNSDelegationAPIKeyForOrganizationRequest.ProtoReflect.Descriptor instead.
 func (*RevokeDNSDelegationAPIKeyForOrganizationRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{22}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RevokeDNSDelegationAPIKeyForOrganizationRequest) GetOrganizationId() string {
@@ -1582,7 +1911,7 @@ type RevokeDNSDelegationAPIKeyForOrganizationResponse struct {
 
 func (x *RevokeDNSDelegationAPIKeyForOrganizationResponse) Reset() {
 	*x = RevokeDNSDelegationAPIKeyForOrganizationResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[23]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1594,7 +1923,7 @@ func (x *RevokeDNSDelegationAPIKeyForOrganizationResponse) String() string {
 func (*RevokeDNSDelegationAPIKeyForOrganizationResponse) ProtoMessage() {}
 
 func (x *RevokeDNSDelegationAPIKeyForOrganizationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[23]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1607,7 +1936,7 @@ func (x *RevokeDNSDelegationAPIKeyForOrganizationResponse) ProtoReflect() protor
 
 // Deprecated: Use RevokeDNSDelegationAPIKeyForOrganizationResponse.ProtoReflect.Descriptor instead.
 func (*RevokeDNSDelegationAPIKeyForOrganizationResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{23}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RevokeDNSDelegationAPIKeyForOrganizationResponse) GetSuccess() bool {
@@ -1634,7 +1963,7 @@ type ListDNSDelegationAPIKeysRequest struct {
 
 func (x *ListDNSDelegationAPIKeysRequest) Reset() {
 	*x = ListDNSDelegationAPIKeysRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[24]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1646,7 +1975,7 @@ func (x *ListDNSDelegationAPIKeysRequest) String() string {
 func (*ListDNSDelegationAPIKeysRequest) ProtoMessage() {}
 
 func (x *ListDNSDelegationAPIKeysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[24]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1659,7 +1988,7 @@ func (x *ListDNSDelegationAPIKeysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDNSDelegationAPIKeysRequest.ProtoReflect.Descriptor instead.
 func (*ListDNSDelegationAPIKeysRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{24}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ListDNSDelegationAPIKeysRequest) GetOrganizationId() string {
@@ -1686,7 +2015,7 @@ type DNSDelegationAPIKeyInfo struct {
 
 func (x *DNSDelegationAPIKeyInfo) Reset() {
 	*x = DNSDelegationAPIKeyInfo{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[25]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1698,7 +2027,7 @@ func (x *DNSDelegationAPIKeyInfo) String() string {
 func (*DNSDelegationAPIKeyInfo) ProtoMessage() {}
 
 func (x *DNSDelegationAPIKeyInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[25]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1711,7 +2040,7 @@ func (x *DNSDelegationAPIKeyInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DNSDelegationAPIKeyInfo.ProtoReflect.Descriptor instead.
 func (*DNSDelegationAPIKeyInfo) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{25}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *DNSDelegationAPIKeyInfo) GetId() string {
@@ -1780,7 +2109,7 @@ type ListDNSDelegationAPIKeysResponse struct {
 
 func (x *ListDNSDelegationAPIKeysResponse) Reset() {
 	*x = ListDNSDelegationAPIKeysResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[26]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1792,7 +2121,7 @@ func (x *ListDNSDelegationAPIKeysResponse) String() string {
 func (*ListDNSDelegationAPIKeysResponse) ProtoMessage() {}
 
 func (x *ListDNSDelegationAPIKeysResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[26]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1805,7 +2134,7 @@ func (x *ListDNSDelegationAPIKeysResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDNSDelegationAPIKeysResponse.ProtoReflect.Descriptor instead.
 func (*ListDNSDelegationAPIKeysResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{26}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ListDNSDelegationAPIKeysResponse) GetApiKeys() []*DNSDelegationAPIKeyInfo {
@@ -1824,7 +2153,7 @@ type GetAbuseDetectionRequest struct {
 
 func (x *GetAbuseDetectionRequest) Reset() {
 	*x = GetAbuseDetectionRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[27]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1836,7 +2165,7 @@ func (x *GetAbuseDetectionRequest) String() string {
 func (*GetAbuseDetectionRequest) ProtoMessage() {}
 
 func (x *GetAbuseDetectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[27]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1849,7 +2178,7 @@ func (x *GetAbuseDetectionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAbuseDetectionRequest.ProtoReflect.Descriptor instead.
 func (*GetAbuseDetectionRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{27}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{32}
 }
 
 // Abuse Detection Response
@@ -1864,7 +2193,7 @@ type GetAbuseDetectionResponse struct {
 
 func (x *GetAbuseDetectionResponse) Reset() {
 	*x = GetAbuseDetectionResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[28]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1876,7 +2205,7 @@ func (x *GetAbuseDetectionResponse) String() string {
 func (*GetAbuseDetectionResponse) ProtoMessage() {}
 
 func (x *GetAbuseDetectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[28]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1889,7 +2218,7 @@ func (x *GetAbuseDetectionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAbuseDetectionResponse.ProtoReflect.Descriptor instead.
 func (*GetAbuseDetectionResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{28}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *GetAbuseDetectionResponse) GetSuspiciousOrganizations() []*SuspiciousOrganization {
@@ -1931,7 +2260,7 @@ type SuspiciousOrganization struct {
 
 func (x *SuspiciousOrganization) Reset() {
 	*x = SuspiciousOrganization{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[29]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1943,7 +2272,7 @@ func (x *SuspiciousOrganization) String() string {
 func (*SuspiciousOrganization) ProtoMessage() {}
 
 func (x *SuspiciousOrganization) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[29]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1956,7 +2285,7 @@ func (x *SuspiciousOrganization) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuspiciousOrganization.ProtoReflect.Descriptor instead.
 func (*SuspiciousOrganization) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{29}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *SuspiciousOrganization) GetOrganizationId() string {
@@ -2037,7 +2366,7 @@ type SuspiciousActivity struct {
 
 func (x *SuspiciousActivity) Reset() {
 	*x = SuspiciousActivity{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[30]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2049,7 +2378,7 @@ func (x *SuspiciousActivity) String() string {
 func (*SuspiciousActivity) ProtoMessage() {}
 
 func (x *SuspiciousActivity) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[30]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2062,7 +2391,7 @@ func (x *SuspiciousActivity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SuspiciousActivity.ProtoReflect.Descriptor instead.
 func (*SuspiciousActivity) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{30}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *SuspiciousActivity) GetId() string {
@@ -2121,7 +2450,7 @@ type AbuseMetrics struct {
 
 func (x *AbuseMetrics) Reset() {
 	*x = AbuseMetrics{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[31]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2133,7 +2462,7 @@ func (x *AbuseMetrics) String() string {
 func (*AbuseMetrics) ProtoMessage() {}
 
 func (x *AbuseMetrics) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[31]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2146,7 +2475,7 @@ func (x *AbuseMetrics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AbuseMetrics.ProtoReflect.Descriptor instead.
 func (*AbuseMetrics) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{31}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *AbuseMetrics) GetTotalSuspiciousOrgs() int64 {
@@ -2195,7 +2524,7 @@ type GetIncomeOverviewRequest struct {
 
 func (x *GetIncomeOverviewRequest) Reset() {
 	*x = GetIncomeOverviewRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[32]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2207,7 +2536,7 @@ func (x *GetIncomeOverviewRequest) String() string {
 func (*GetIncomeOverviewRequest) ProtoMessage() {}
 
 func (x *GetIncomeOverviewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[32]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2220,7 +2549,7 @@ func (x *GetIncomeOverviewRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIncomeOverviewRequest.ProtoReflect.Descriptor instead.
 func (*GetIncomeOverviewRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{32}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *GetIncomeOverviewRequest) GetStartDate() string {
@@ -2251,7 +2580,7 @@ type GetIncomeOverviewResponse struct {
 
 func (x *GetIncomeOverviewResponse) Reset() {
 	*x = GetIncomeOverviewResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[33]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2263,7 +2592,7 @@ func (x *GetIncomeOverviewResponse) String() string {
 func (*GetIncomeOverviewResponse) ProtoMessage() {}
 
 func (x *GetIncomeOverviewResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[33]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2276,7 +2605,7 @@ func (x *GetIncomeOverviewResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIncomeOverviewResponse.ProtoReflect.Descriptor instead.
 func (*GetIncomeOverviewResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{33}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *GetIncomeOverviewResponse) GetSummary() *IncomeSummary {
@@ -2330,7 +2659,7 @@ type IncomeSummary struct {
 
 func (x *IncomeSummary) Reset() {
 	*x = IncomeSummary{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[34]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2342,7 +2671,7 @@ func (x *IncomeSummary) String() string {
 func (*IncomeSummary) ProtoMessage() {}
 
 func (x *IncomeSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[34]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2355,7 +2684,7 @@ func (x *IncomeSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IncomeSummary.ProtoReflect.Descriptor instead.
 func (*IncomeSummary) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{34}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *IncomeSummary) GetTotalRevenue() float64 {
@@ -2420,7 +2749,7 @@ type MonthlyIncome struct {
 
 func (x *MonthlyIncome) Reset() {
 	*x = MonthlyIncome{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[35]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2432,7 +2761,7 @@ func (x *MonthlyIncome) String() string {
 func (*MonthlyIncome) ProtoMessage() {}
 
 func (x *MonthlyIncome) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[35]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2445,7 +2774,7 @@ func (x *MonthlyIncome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MonthlyIncome.ProtoReflect.Descriptor instead.
 func (*MonthlyIncome) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{35}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *MonthlyIncome) GetMonth() string {
@@ -2491,7 +2820,7 @@ type TopCustomer struct {
 
 func (x *TopCustomer) Reset() {
 	*x = TopCustomer{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[36]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2503,7 +2832,7 @@ func (x *TopCustomer) String() string {
 func (*TopCustomer) ProtoMessage() {}
 
 func (x *TopCustomer) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[36]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2516,7 +2845,7 @@ func (x *TopCustomer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TopCustomer.ProtoReflect.Descriptor instead.
 func (*TopCustomer) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{36}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *TopCustomer) GetOrganizationId() string {
@@ -2581,7 +2910,7 @@ type BillingTransaction struct {
 
 func (x *BillingTransaction) Reset() {
 	*x = BillingTransaction{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[37]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2593,7 +2922,7 @@ func (x *BillingTransaction) String() string {
 func (*BillingTransaction) ProtoMessage() {}
 
 func (x *BillingTransaction) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[37]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2606,7 +2935,7 @@ func (x *BillingTransaction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BillingTransaction.ProtoReflect.Descriptor instead.
 func (*BillingTransaction) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{37}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *BillingTransaction) GetId() string {
@@ -2701,7 +3030,7 @@ type PaymentMetrics struct {
 
 func (x *PaymentMetrics) Reset() {
 	*x = PaymentMetrics{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[38]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2713,7 +3042,7 @@ func (x *PaymentMetrics) String() string {
 func (*PaymentMetrics) ProtoMessage() {}
 
 func (x *PaymentMetrics) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[38]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2726,7 +3055,7 @@ func (x *PaymentMetrics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PaymentMetrics.ProtoReflect.Descriptor instead.
 func (*PaymentMetrics) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{38}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *PaymentMetrics) GetSuccessRate() float64 {
@@ -2785,7 +3114,7 @@ type ListAllInvoicesRequest struct {
 
 func (x *ListAllInvoicesRequest) Reset() {
 	*x = ListAllInvoicesRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[39]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2797,7 +3126,7 @@ func (x *ListAllInvoicesRequest) String() string {
 func (*ListAllInvoicesRequest) ProtoMessage() {}
 
 func (x *ListAllInvoicesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[39]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2810,7 +3139,7 @@ func (x *ListAllInvoicesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAllInvoicesRequest.ProtoReflect.Descriptor instead.
 func (*ListAllInvoicesRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{39}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *ListAllInvoicesRequest) GetOrganizationId() string {
@@ -2860,7 +3189,7 @@ type ListAllInvoicesResponse struct {
 
 func (x *ListAllInvoicesResponse) Reset() {
 	*x = ListAllInvoicesResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[40]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2872,7 +3201,7 @@ func (x *ListAllInvoicesResponse) String() string {
 func (*ListAllInvoicesResponse) ProtoMessage() {}
 
 func (x *ListAllInvoicesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[40]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2885,7 +3214,7 @@ func (x *ListAllInvoicesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAllInvoicesResponse.ProtoReflect.Descriptor instead.
 func (*ListAllInvoicesResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{40}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *ListAllInvoicesResponse) GetInvoices() []*InvoiceWithOrganization {
@@ -2922,7 +3251,7 @@ type InvoiceWithOrganization struct {
 
 func (x *InvoiceWithOrganization) Reset() {
 	*x = InvoiceWithOrganization{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[41]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2934,7 +3263,7 @@ func (x *InvoiceWithOrganization) String() string {
 func (*InvoiceWithOrganization) ProtoMessage() {}
 
 func (x *InvoiceWithOrganization) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[41]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2947,7 +3276,7 @@ func (x *InvoiceWithOrganization) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvoiceWithOrganization.ProtoReflect.Descriptor instead.
 func (*InvoiceWithOrganization) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{41}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *InvoiceWithOrganization) GetInvoice() *v11.Invoice {
@@ -2988,7 +3317,7 @@ type SendInvoiceReminderRequest struct {
 
 func (x *SendInvoiceReminderRequest) Reset() {
 	*x = SendInvoiceReminderRequest{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[42]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3000,7 +3329,7 @@ func (x *SendInvoiceReminderRequest) String() string {
 func (*SendInvoiceReminderRequest) ProtoMessage() {}
 
 func (x *SendInvoiceReminderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[42]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3013,7 +3342,7 @@ func (x *SendInvoiceReminderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendInvoiceReminderRequest.ProtoReflect.Descriptor instead.
 func (*SendInvoiceReminderRequest) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{42}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *SendInvoiceReminderRequest) GetInvoiceId() string {
@@ -3034,7 +3363,7 @@ type SendInvoiceReminderResponse struct {
 
 func (x *SendInvoiceReminderResponse) Reset() {
 	*x = SendInvoiceReminderResponse{}
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[43]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3046,7 +3375,7 @@ func (x *SendInvoiceReminderResponse) String() string {
 func (*SendInvoiceReminderResponse) ProtoMessage() {}
 
 func (x *SendInvoiceReminderResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[43]
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3059,7 +3388,7 @@ func (x *SendInvoiceReminderResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendInvoiceReminderResponse.ProtoReflect.Descriptor instead.
 func (*SendInvoiceReminderResponse) Descriptor() ([]byte, []int) {
-	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{43}
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *SendInvoiceReminderResponse) GetSuccess() bool {
@@ -3076,16 +3405,1202 @@ func (x *SendInvoiceReminderResponse) GetMessage() string {
 	return ""
 }
 
+// List Plans Request
+type ListPlansRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPlansRequest) Reset() {
+	*x = ListPlansRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPlansRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPlansRequest) ProtoMessage() {}
+
+func (x *ListPlansRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPlansRequest.ProtoReflect.Descriptor instead.
+func (*ListPlansRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{49}
+}
+
+// List Plans Response
+type ListPlansResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Plans         []*Plan                `protobuf:"bytes,1,rep,name=plans,proto3" json:"plans,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPlansResponse) Reset() {
+	*x = ListPlansResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPlansResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPlansResponse) ProtoMessage() {}
+
+func (x *ListPlansResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPlansResponse.ProtoReflect.Descriptor instead.
+func (*ListPlansResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *ListPlansResponse) GetPlans() []*Plan {
+	if x != nil {
+		return x.Plans
+	}
+	return nil
+}
+
+// Create Plan Request
+type CreatePlanRequest struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	Name                    string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	CpuCores                int32                  `protobuf:"varint,2,opt,name=cpu_cores,json=cpuCores,proto3" json:"cpu_cores,omitempty"`
+	MemoryBytes             int64                  `protobuf:"varint,3,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
+	DeploymentsMax          int32                  `protobuf:"varint,4,opt,name=deployments_max,json=deploymentsMax,proto3" json:"deployments_max,omitempty"`
+	BandwidthBytesMonth     int64                  `protobuf:"varint,5,opt,name=bandwidth_bytes_month,json=bandwidthBytesMonth,proto3" json:"bandwidth_bytes_month,omitempty"`
+	StorageBytes            int64                  `protobuf:"varint,6,opt,name=storage_bytes,json=storageBytes,proto3" json:"storage_bytes,omitempty"`
+	MinimumPaymentCents     int64                  `protobuf:"varint,7,opt,name=minimum_payment_cents,json=minimumPaymentCents,proto3" json:"minimum_payment_cents,omitempty"`               // Minimum payment in cents to automatically upgrade to this plan
+	MonthlyFreeCreditsCents int64                  `protobuf:"varint,8,opt,name=monthly_free_credits_cents,json=monthlyFreeCreditsCents,proto3" json:"monthly_free_credits_cents,omitempty"` // Monthly free credits in cents granted to organizations on this plan
+	Description             string                 `protobuf:"bytes,9,opt,name=description,proto3" json:"description,omitempty"`                                                             // Optional description of the plan
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *CreatePlanRequest) Reset() {
+	*x = CreatePlanRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreatePlanRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreatePlanRequest) ProtoMessage() {}
+
+func (x *CreatePlanRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreatePlanRequest.ProtoReflect.Descriptor instead.
+func (*CreatePlanRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *CreatePlanRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreatePlanRequest) GetCpuCores() int32 {
+	if x != nil {
+		return x.CpuCores
+	}
+	return 0
+}
+
+func (x *CreatePlanRequest) GetMemoryBytes() int64 {
+	if x != nil {
+		return x.MemoryBytes
+	}
+	return 0
+}
+
+func (x *CreatePlanRequest) GetDeploymentsMax() int32 {
+	if x != nil {
+		return x.DeploymentsMax
+	}
+	return 0
+}
+
+func (x *CreatePlanRequest) GetBandwidthBytesMonth() int64 {
+	if x != nil {
+		return x.BandwidthBytesMonth
+	}
+	return 0
+}
+
+func (x *CreatePlanRequest) GetStorageBytes() int64 {
+	if x != nil {
+		return x.StorageBytes
+	}
+	return 0
+}
+
+func (x *CreatePlanRequest) GetMinimumPaymentCents() int64 {
+	if x != nil {
+		return x.MinimumPaymentCents
+	}
+	return 0
+}
+
+func (x *CreatePlanRequest) GetMonthlyFreeCreditsCents() int64 {
+	if x != nil {
+		return x.MonthlyFreeCreditsCents
+	}
+	return 0
+}
+
+func (x *CreatePlanRequest) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+// Create Plan Response
+type CreatePlanResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Plan          *Plan                  `protobuf:"bytes,1,opt,name=plan,proto3" json:"plan,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreatePlanResponse) Reset() {
+	*x = CreatePlanResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreatePlanResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreatePlanResponse) ProtoMessage() {}
+
+func (x *CreatePlanResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreatePlanResponse.ProtoReflect.Descriptor instead.
+func (*CreatePlanResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *CreatePlanResponse) GetPlan() *Plan {
+	if x != nil {
+		return x.Plan
+	}
+	return nil
+}
+
+// Update Plan Request
+type UpdatePlanRequest struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	Id                      string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name                    *string                `protobuf:"bytes,2,opt,name=name,proto3,oneof" json:"name,omitempty"`
+	CpuCores                *int32                 `protobuf:"varint,3,opt,name=cpu_cores,json=cpuCores,proto3,oneof" json:"cpu_cores,omitempty"`
+	MemoryBytes             *int64                 `protobuf:"varint,4,opt,name=memory_bytes,json=memoryBytes,proto3,oneof" json:"memory_bytes,omitempty"`
+	DeploymentsMax          *int32                 `protobuf:"varint,5,opt,name=deployments_max,json=deploymentsMax,proto3,oneof" json:"deployments_max,omitempty"`
+	BandwidthBytesMonth     *int64                 `protobuf:"varint,6,opt,name=bandwidth_bytes_month,json=bandwidthBytesMonth,proto3,oneof" json:"bandwidth_bytes_month,omitempty"`
+	StorageBytes            *int64                 `protobuf:"varint,7,opt,name=storage_bytes,json=storageBytes,proto3,oneof" json:"storage_bytes,omitempty"`
+	MinimumPaymentCents     *int64                 `protobuf:"varint,8,opt,name=minimum_payment_cents,json=minimumPaymentCents,proto3,oneof" json:"minimum_payment_cents,omitempty"`
+	MonthlyFreeCreditsCents *int64                 `protobuf:"varint,9,opt,name=monthly_free_credits_cents,json=monthlyFreeCreditsCents,proto3,oneof" json:"monthly_free_credits_cents,omitempty"`
+	Description             *string                `protobuf:"bytes,10,opt,name=description,proto3,oneof" json:"description,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *UpdatePlanRequest) Reset() {
+	*x = UpdatePlanRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdatePlanRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdatePlanRequest) ProtoMessage() {}
+
+func (x *UpdatePlanRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdatePlanRequest.ProtoReflect.Descriptor instead.
+func (*UpdatePlanRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *UpdatePlanRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *UpdatePlanRequest) GetName() string {
+	if x != nil && x.Name != nil {
+		return *x.Name
+	}
+	return ""
+}
+
+func (x *UpdatePlanRequest) GetCpuCores() int32 {
+	if x != nil && x.CpuCores != nil {
+		return *x.CpuCores
+	}
+	return 0
+}
+
+func (x *UpdatePlanRequest) GetMemoryBytes() int64 {
+	if x != nil && x.MemoryBytes != nil {
+		return *x.MemoryBytes
+	}
+	return 0
+}
+
+func (x *UpdatePlanRequest) GetDeploymentsMax() int32 {
+	if x != nil && x.DeploymentsMax != nil {
+		return *x.DeploymentsMax
+	}
+	return 0
+}
+
+func (x *UpdatePlanRequest) GetBandwidthBytesMonth() int64 {
+	if x != nil && x.BandwidthBytesMonth != nil {
+		return *x.BandwidthBytesMonth
+	}
+	return 0
+}
+
+func (x *UpdatePlanRequest) GetStorageBytes() int64 {
+	if x != nil && x.StorageBytes != nil {
+		return *x.StorageBytes
+	}
+	return 0
+}
+
+func (x *UpdatePlanRequest) GetMinimumPaymentCents() int64 {
+	if x != nil && x.MinimumPaymentCents != nil {
+		return *x.MinimumPaymentCents
+	}
+	return 0
+}
+
+func (x *UpdatePlanRequest) GetMonthlyFreeCreditsCents() int64 {
+	if x != nil && x.MonthlyFreeCreditsCents != nil {
+		return *x.MonthlyFreeCreditsCents
+	}
+	return 0
+}
+
+func (x *UpdatePlanRequest) GetDescription() string {
+	if x != nil && x.Description != nil {
+		return *x.Description
+	}
+	return ""
+}
+
+// Update Plan Response
+type UpdatePlanResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Plan          *Plan                  `protobuf:"bytes,1,opt,name=plan,proto3" json:"plan,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdatePlanResponse) Reset() {
+	*x = UpdatePlanResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdatePlanResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdatePlanResponse) ProtoMessage() {}
+
+func (x *UpdatePlanResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdatePlanResponse.ProtoReflect.Descriptor instead.
+func (*UpdatePlanResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *UpdatePlanResponse) GetPlan() *Plan {
+	if x != nil {
+		return x.Plan
+	}
+	return nil
+}
+
+// Delete Plan Request
+type DeletePlanRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeletePlanRequest) Reset() {
+	*x = DeletePlanRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeletePlanRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeletePlanRequest) ProtoMessage() {}
+
+func (x *DeletePlanRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeletePlanRequest.ProtoReflect.Descriptor instead.
+func (*DeletePlanRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *DeletePlanRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+// Delete Plan Response
+type DeletePlanResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeletePlanResponse) Reset() {
+	*x = DeletePlanResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeletePlanResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeletePlanResponse) ProtoMessage() {}
+
+func (x *DeletePlanResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeletePlanResponse.ProtoReflect.Descriptor instead.
+func (*DeletePlanResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *DeletePlanResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+// Plan
+type Plan struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	Id                      string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name                    string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	CpuCores                int32                  `protobuf:"varint,3,opt,name=cpu_cores,json=cpuCores,proto3" json:"cpu_cores,omitempty"`
+	MemoryBytes             int64                  `protobuf:"varint,4,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
+	DeploymentsMax          int32                  `protobuf:"varint,5,opt,name=deployments_max,json=deploymentsMax,proto3" json:"deployments_max,omitempty"`
+	BandwidthBytesMonth     int64                  `protobuf:"varint,6,opt,name=bandwidth_bytes_month,json=bandwidthBytesMonth,proto3" json:"bandwidth_bytes_month,omitempty"`
+	StorageBytes            int64                  `protobuf:"varint,7,opt,name=storage_bytes,json=storageBytes,proto3" json:"storage_bytes,omitempty"`
+	MinimumPaymentCents     int64                  `protobuf:"varint,8,opt,name=minimum_payment_cents,json=minimumPaymentCents,proto3" json:"minimum_payment_cents,omitempty"`               // Minimum payment in cents to automatically upgrade to this plan
+	MonthlyFreeCreditsCents int64                  `protobuf:"varint,9,opt,name=monthly_free_credits_cents,json=monthlyFreeCreditsCents,proto3" json:"monthly_free_credits_cents,omitempty"` // Monthly free credits in cents granted to organizations on this plan
+	Description             string                 `protobuf:"bytes,10,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *Plan) Reset() {
+	*x = Plan{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Plan) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Plan) ProtoMessage() {}
+
+func (x *Plan) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Plan.ProtoReflect.Descriptor instead.
+func (*Plan) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *Plan) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Plan) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Plan) GetCpuCores() int32 {
+	if x != nil {
+		return x.CpuCores
+	}
+	return 0
+}
+
+func (x *Plan) GetMemoryBytes() int64 {
+	if x != nil {
+		return x.MemoryBytes
+	}
+	return 0
+}
+
+func (x *Plan) GetDeploymentsMax() int32 {
+	if x != nil {
+		return x.DeploymentsMax
+	}
+	return 0
+}
+
+func (x *Plan) GetBandwidthBytesMonth() int64 {
+	if x != nil {
+		return x.BandwidthBytesMonth
+	}
+	return 0
+}
+
+func (x *Plan) GetStorageBytes() int64 {
+	if x != nil {
+		return x.StorageBytes
+	}
+	return 0
+}
+
+func (x *Plan) GetMinimumPaymentCents() int64 {
+	if x != nil {
+		return x.MinimumPaymentCents
+	}
+	return 0
+}
+
+func (x *Plan) GetMonthlyFreeCreditsCents() int64 {
+	if x != nil {
+		return x.MonthlyFreeCreditsCents
+	}
+	return 0
+}
+
+func (x *Plan) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+// Assign Plan To Organization Request
+type AssignPlanToOrganizationRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	PlanId         string                 `protobuf:"bytes,2,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AssignPlanToOrganizationRequest) Reset() {
+	*x = AssignPlanToOrganizationRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AssignPlanToOrganizationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AssignPlanToOrganizationRequest) ProtoMessage() {}
+
+func (x *AssignPlanToOrganizationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AssignPlanToOrganizationRequest.ProtoReflect.Descriptor instead.
+func (*AssignPlanToOrganizationRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *AssignPlanToOrganizationRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *AssignPlanToOrganizationRequest) GetPlanId() string {
+	if x != nil {
+		return x.PlanId
+	}
+	return ""
+}
+
+// Assign Plan To Organization Response
+type AssignPlanToOrganizationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AssignPlanToOrganizationResponse) Reset() {
+	*x = AssignPlanToOrganizationResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AssignPlanToOrganizationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AssignPlanToOrganizationResponse) ProtoMessage() {}
+
+func (x *AssignPlanToOrganizationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AssignPlanToOrganizationResponse.ProtoReflect.Descriptor instead.
+func (*AssignPlanToOrganizationResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *AssignPlanToOrganizationResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *AssignPlanToOrganizationResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+// List Users Request
+type ListUsersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Page          *int32                 `protobuf:"varint,1,opt,name=page,proto3,oneof" json:"page,omitempty"`                      // Page number (default: 1)
+	PerPage       *int32                 `protobuf:"varint,2,opt,name=per_page,json=perPage,proto3,oneof" json:"per_page,omitempty"` // Results per page (default: 50, max: 100)
+	Search        *string                `protobuf:"bytes,3,opt,name=search,proto3,oneof" json:"search,omitempty"`                   // Search by email, name, or user ID
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListUsersRequest) Reset() {
+	*x = ListUsersRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListUsersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListUsersRequest) ProtoMessage() {}
+
+func (x *ListUsersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListUsersRequest.ProtoReflect.Descriptor instead.
+func (*ListUsersRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *ListUsersRequest) GetPage() int32 {
+	if x != nil && x.Page != nil {
+		return *x.Page
+	}
+	return 0
+}
+
+func (x *ListUsersRequest) GetPerPage() int32 {
+	if x != nil && x.PerPage != nil {
+		return *x.PerPage
+	}
+	return 0
+}
+
+func (x *ListUsersRequest) GetSearch() string {
+	if x != nil && x.Search != nil {
+		return *x.Search
+	}
+	return ""
+}
+
+// List Users Response
+type ListUsersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Users         []*UserInfo            `protobuf:"bytes,1,rep,name=users,proto3" json:"users,omitempty"`
+	Pagination    *SuperadminPagination  `protobuf:"bytes,2,opt,name=pagination,proto3" json:"pagination,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListUsersResponse) Reset() {
+	*x = ListUsersResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListUsersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListUsersResponse) ProtoMessage() {}
+
+func (x *ListUsersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListUsersResponse.ProtoReflect.Descriptor instead.
+func (*ListUsersResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *ListUsersResponse) GetUsers() []*UserInfo {
+	if x != nil {
+		return x.Users
+	}
+	return nil
+}
+
+func (x *ListUsersResponse) GetPagination() *SuperadminPagination {
+	if x != nil {
+		return x.Pagination
+	}
+	return nil
+}
+
+// Get User Request
+type GetUserRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // User ID to fetch
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUserRequest) Reset() {
+	*x = GetUserRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUserRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUserRequest) ProtoMessage() {}
+
+func (x *GetUserRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUserRequest.ProtoReflect.Descriptor instead.
+func (*GetUserRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *GetUserRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+// Get User Response
+type GetUserResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	User          *UserInfo              `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	Organizations []*UserOrganization    `protobuf:"bytes,2,rep,name=organizations,proto3" json:"organizations,omitempty"` // Organizations this user belongs to
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUserResponse) Reset() {
+	*x = GetUserResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUserResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUserResponse) ProtoMessage() {}
+
+func (x *GetUserResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUserResponse.ProtoReflect.Descriptor instead.
+func (*GetUserResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{63}
+}
+
+func (x *GetUserResponse) GetUser() *UserInfo {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+func (x *GetUserResponse) GetOrganizations() []*UserOrganization {
+	if x != nil {
+		return x.Organizations
+	}
+	return nil
+}
+
+// User Info
+type UserInfo struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Email             string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	Name              string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	PreferredUsername string                 `protobuf:"bytes,4,opt,name=preferred_username,json=preferredUsername,proto3" json:"preferred_username,omitempty"`
+	Locale            string                 `protobuf:"bytes,5,opt,name=locale,proto3" json:"locale,omitempty"`
+	EmailVerified     bool                   `protobuf:"varint,6,opt,name=email_verified,json=emailVerified,proto3" json:"email_verified,omitempty"`
+	AvatarUrl         *string                `protobuf:"bytes,7,opt,name=avatar_url,json=avatarUrl,proto3,oneof" json:"avatar_url,omitempty"`
+	CreatedAt         *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt         *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Roles             []string               `protobuf:"bytes,10,rep,name=roles,proto3" json:"roles,omitempty"` // User roles (e.g., "superadmin")
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *UserInfo) Reset() {
+	*x = UserInfo{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[64]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserInfo) ProtoMessage() {}
+
+func (x *UserInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[64]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserInfo.ProtoReflect.Descriptor instead.
+func (*UserInfo) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{64}
+}
+
+func (x *UserInfo) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *UserInfo) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *UserInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UserInfo) GetPreferredUsername() string {
+	if x != nil {
+		return x.PreferredUsername
+	}
+	return ""
+}
+
+func (x *UserInfo) GetLocale() string {
+	if x != nil {
+		return x.Locale
+	}
+	return ""
+}
+
+func (x *UserInfo) GetEmailVerified() bool {
+	if x != nil {
+		return x.EmailVerified
+	}
+	return false
+}
+
+func (x *UserInfo) GetAvatarUrl() string {
+	if x != nil && x.AvatarUrl != nil {
+		return *x.AvatarUrl
+	}
+	return ""
+}
+
+func (x *UserInfo) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *UserInfo) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *UserInfo) GetRoles() []string {
+	if x != nil {
+		return x.Roles
+	}
+	return nil
+}
+
+// User Organization
+type UserOrganization struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId   string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	OrganizationName string                 `protobuf:"bytes,2,opt,name=organization_name,json=organizationName,proto3" json:"organization_name,omitempty"`
+	Role             string                 `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`     // Member role in this organization
+	Status           string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"` // "active" or "invited"
+	JoinedAt         *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=joined_at,json=joinedAt,proto3" json:"joined_at,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *UserOrganization) Reset() {
+	*x = UserOrganization{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserOrganization) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserOrganization) ProtoMessage() {}
+
+func (x *UserOrganization) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserOrganization.ProtoReflect.Descriptor instead.
+func (*UserOrganization) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *UserOrganization) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *UserOrganization) GetOrganizationName() string {
+	if x != nil {
+		return x.OrganizationName
+	}
+	return ""
+}
+
+func (x *UserOrganization) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *UserOrganization) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *UserOrganization) GetJoinedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.JoinedAt
+	}
+	return nil
+}
+
+// Pagination
+type SuperadminPagination struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
+	PerPage       int32                  `protobuf:"varint,2,opt,name=per_page,json=perPage,proto3" json:"per_page,omitempty"`
+	Total         int32                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
+	TotalPages    int32                  `protobuf:"varint,4,opt,name=total_pages,json=totalPages,proto3" json:"total_pages,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SuperadminPagination) Reset() {
+	*x = SuperadminPagination{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SuperadminPagination) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SuperadminPagination) ProtoMessage() {}
+
+func (x *SuperadminPagination) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SuperadminPagination.ProtoReflect.Descriptor instead.
+func (*SuperadminPagination) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *SuperadminPagination) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *SuperadminPagination) GetPerPage() int32 {
+	if x != nil {
+		return x.PerPage
+	}
+	return 0
+}
+
+func (x *SuperadminPagination) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *SuperadminPagination) GetTotalPages() int32 {
+	if x != nil {
+		return x.TotalPages
+	}
+	return 0
+}
+
 var File_obiente_cloud_superadmin_v1_superadmin_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\n" +
 	"4obiente/cloud/superadmin/v1/superadmin_service.proto\x12\x1bobiente.cloud.superadmin.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a5obiente/cloud/deployments/v1/deployment_service.proto\x1a.obiente/cloud/billing/v1/billing_service.proto\"\x14\n" +
-	"\x12GetOverviewRequest\"\xa3\x03\n" +
+	"\x12GetOverviewRequest\"\xad\x03\n" +
 	"\x13GetOverviewResponse\x12C\n" +
 	"\x06counts\x18\x01 \x01(\v2+.obiente.cloud.superadmin.v1.OverviewCountsR\x06counts\x12W\n" +
-	"\rorganizations\x18\x02 \x03(\v21.obiente.cloud.superadmin.v1.OrganizationOverviewR\rorganizations\x12S\n" +
-	"\x0fpending_invites\x18\x03 \x03(\v2*.obiente.cloud.superadmin.v1.PendingInviteR\x0ependingInvites\x12Q\n" +
+	"\rorganizations\x18\x02 \x03(\v21.obiente.cloud.superadmin.v1.OrganizationOverviewR\rorganizations\x12]\n" +
+	"\x0fpending_invites\x18\x03 \x03(\v24.obiente.cloud.superadmin.v1.SuperadminPendingInviteR\x0ependingInvites\x12Q\n" +
 	"\vdeployments\x18\x04 \x03(\v2/.obiente.cloud.superadmin.v1.DeploymentOverviewR\vdeployments\x12F\n" +
 	"\x06usages\x18\x05 \x03(\v2..obiente.cloud.superadmin.v1.OrganizationUsageR\x06usages\"\xbe\x01\n" +
 	"\x0eOverviewCounts\x12/\n" +
@@ -3106,8 +4621,8 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\finvite_count\x18\t \x01(\x03R\vinviteCount\x12)\n" +
 	"\x10deployment_count\x18\n" +
 	" \x01(\x03R\x0fdeploymentCountB\t\n" +
-	"\a_domain\"\xad\x01\n" +
-	"\rPendingInvite\x12\x0e\n" +
+	"\a_domain\"\xb7\x01\n" +
+	"\x17SuperadminPendingInvite\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12'\n" +
 	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12\x14\n" +
 	"\x05email\x18\x03 \x01(\tR\x05email\x12\x12\n" +
@@ -3188,7 +4703,42 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\x06region\x18\x01 \x01(\tR\x06region\x12\x10\n" +
 	"\x03ips\x18\x02 \x03(\tR\x03ips\"V\n" +
 	"\x14GetDNSConfigResponse\x12>\n" +
-	"\x06config\x18\x01 \x01(\v2&.obiente.cloud.superadmin.v1.DNSConfigR\x06config\"\x13\n" +
+	"\x06config\x18\x01 \x01(\v2&.obiente.cloud.superadmin.v1.DNSConfigR\x06config\"\xca\x01\n" +
+	"\x1eListDelegatedDNSRecordsRequest\x12,\n" +
+	"\x0forganization_id\x18\x01 \x01(\tH\x00R\x0eorganizationId\x88\x01\x01\x12!\n" +
+	"\n" +
+	"api_key_id\x18\x02 \x01(\tH\x01R\bapiKeyId\x88\x01\x01\x12$\n" +
+	"\vrecord_type\x18\x03 \x01(\tH\x02R\n" +
+	"recordType\x88\x01\x01B\x12\n" +
+	"\x10_organization_idB\r\n" +
+	"\v_api_key_idB\x0e\n" +
+	"\f_record_type\"\xa4\x03\n" +
+	"\x12DelegatedDNSRecord\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
+	"\x06domain\x18\x02 \x01(\tR\x06domain\x12\x1f\n" +
+	"\vrecord_type\x18\x03 \x01(\tR\n" +
+	"recordType\x12\x18\n" +
+	"\arecords\x18\x04 \x03(\tR\arecords\x12\x1d\n" +
+	"\n" +
+	"source_api\x18\x05 \x01(\tR\tsourceApi\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x06 \x01(\tR\bapiKeyId\x12'\n" +
+	"\x0forganization_id\x18\a \x01(\tR\x0eorganizationId\x12\x10\n" +
+	"\x03ttl\x18\b \x01(\x03R\x03ttl\x129\n" +
+	"\n" +
+	"expires_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\texpiresAt\x12=\n" +
+	"\flast_updated\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\vlastUpdated\x129\n" +
+	"\n" +
+	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"l\n" +
+	"\x1fListDelegatedDNSRecordsResponse\x12I\n" +
+	"\arecords\x18\x01 \x03(\v2/.obiente.cloud.superadmin.v1.DelegatedDNSRecordR\arecords\"\x18\n" +
+	"\x16HasDelegatedDNSRequest\"\x8c\x01\n" +
+	"\x17HasDelegatedDNSResponse\x12*\n" +
+	"\x11has_delegated_dns\x18\x01 \x01(\bR\x0fhasDelegatedDns\x12'\n" +
+	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12\x1c\n" +
+	"\n" +
+	"api_key_id\x18\x03 \x01(\tR\bapiKeyId\"\x13\n" +
 	"\x11GetPricingRequest\"\xa2\x02\n" +
 	"\x12GetPricingResponse\x126\n" +
 	"\x18cpu_cost_per_core_second\x18\x01 \x01(\x01R\x14cpuCostPerCoreSecond\x12<\n" +
@@ -3349,12 +4899,120 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"invoice_id\x18\x01 \x01(\tR\tinvoiceId\"Q\n" +
 	"\x1bSendInvoiceReminderResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage2\xfe\r\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\x12\n" +
+	"\x10ListPlansRequest\"L\n" +
+	"\x11ListPlansResponse\x127\n" +
+	"\x05plans\x18\x01 \x03(\v2!.obiente.cloud.superadmin.v1.PlanR\x05plans\"\xfc\x02\n" +
+	"\x11CreatePlanRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n" +
+	"\tcpu_cores\x18\x02 \x01(\x05R\bcpuCores\x12!\n" +
+	"\fmemory_bytes\x18\x03 \x01(\x03R\vmemoryBytes\x12'\n" +
+	"\x0fdeployments_max\x18\x04 \x01(\x05R\x0edeploymentsMax\x122\n" +
+	"\x15bandwidth_bytes_month\x18\x05 \x01(\x03R\x13bandwidthBytesMonth\x12#\n" +
+	"\rstorage_bytes\x18\x06 \x01(\x03R\fstorageBytes\x122\n" +
+	"\x15minimum_payment_cents\x18\a \x01(\x03R\x13minimumPaymentCents\x12;\n" +
+	"\x1amonthly_free_credits_cents\x18\b \x01(\x03R\x17monthlyFreeCreditsCents\x12 \n" +
+	"\vdescription\x18\t \x01(\tR\vdescription\"K\n" +
+	"\x12CreatePlanResponse\x125\n" +
+	"\x04plan\x18\x01 \x01(\v2!.obiente.cloud.superadmin.v1.PlanR\x04plan\"\xea\x04\n" +
+	"\x11UpdatePlanRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\x04name\x18\x02 \x01(\tH\x00R\x04name\x88\x01\x01\x12 \n" +
+	"\tcpu_cores\x18\x03 \x01(\x05H\x01R\bcpuCores\x88\x01\x01\x12&\n" +
+	"\fmemory_bytes\x18\x04 \x01(\x03H\x02R\vmemoryBytes\x88\x01\x01\x12,\n" +
+	"\x0fdeployments_max\x18\x05 \x01(\x05H\x03R\x0edeploymentsMax\x88\x01\x01\x127\n" +
+	"\x15bandwidth_bytes_month\x18\x06 \x01(\x03H\x04R\x13bandwidthBytesMonth\x88\x01\x01\x12(\n" +
+	"\rstorage_bytes\x18\a \x01(\x03H\x05R\fstorageBytes\x88\x01\x01\x127\n" +
+	"\x15minimum_payment_cents\x18\b \x01(\x03H\x06R\x13minimumPaymentCents\x88\x01\x01\x12@\n" +
+	"\x1amonthly_free_credits_cents\x18\t \x01(\x03H\aR\x17monthlyFreeCreditsCents\x88\x01\x01\x12%\n" +
+	"\vdescription\x18\n" +
+	" \x01(\tH\bR\vdescription\x88\x01\x01B\a\n" +
+	"\x05_nameB\f\n" +
+	"\n" +
+	"_cpu_coresB\x0f\n" +
+	"\r_memory_bytesB\x12\n" +
+	"\x10_deployments_maxB\x18\n" +
+	"\x16_bandwidth_bytes_monthB\x10\n" +
+	"\x0e_storage_bytesB\x18\n" +
+	"\x16_minimum_payment_centsB\x1d\n" +
+	"\x1b_monthly_free_credits_centsB\x0e\n" +
+	"\f_description\"K\n" +
+	"\x12UpdatePlanResponse\x125\n" +
+	"\x04plan\x18\x01 \x01(\v2!.obiente.cloud.superadmin.v1.PlanR\x04plan\"#\n" +
+	"\x11DeletePlanRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\".\n" +
+	"\x12DeletePlanResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xff\x02\n" +
+	"\x04Plan\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
+	"\tcpu_cores\x18\x03 \x01(\x05R\bcpuCores\x12!\n" +
+	"\fmemory_bytes\x18\x04 \x01(\x03R\vmemoryBytes\x12'\n" +
+	"\x0fdeployments_max\x18\x05 \x01(\x05R\x0edeploymentsMax\x122\n" +
+	"\x15bandwidth_bytes_month\x18\x06 \x01(\x03R\x13bandwidthBytesMonth\x12#\n" +
+	"\rstorage_bytes\x18\a \x01(\x03R\fstorageBytes\x122\n" +
+	"\x15minimum_payment_cents\x18\b \x01(\x03R\x13minimumPaymentCents\x12;\n" +
+	"\x1amonthly_free_credits_cents\x18\t \x01(\x03R\x17monthlyFreeCreditsCents\x12 \n" +
+	"\vdescription\x18\n" +
+	" \x01(\tR\vdescription\"c\n" +
+	"\x1fAssignPlanToOrganizationRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x17\n" +
+	"\aplan_id\x18\x02 \x01(\tR\x06planId\"V\n" +
+	" AssignPlanToOrganizationResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\x89\x01\n" +
+	"\x10ListUsersRequest\x12\x17\n" +
+	"\x04page\x18\x01 \x01(\x05H\x00R\x04page\x88\x01\x01\x12\x1e\n" +
+	"\bper_page\x18\x02 \x01(\x05H\x01R\aperPage\x88\x01\x01\x12\x1b\n" +
+	"\x06search\x18\x03 \x01(\tH\x02R\x06search\x88\x01\x01B\a\n" +
+	"\x05_pageB\v\n" +
+	"\t_per_pageB\t\n" +
+	"\a_search\"\xa3\x01\n" +
+	"\x11ListUsersResponse\x12;\n" +
+	"\x05users\x18\x01 \x03(\v2%.obiente.cloud.superadmin.v1.UserInfoR\x05users\x12Q\n" +
+	"\n" +
+	"pagination\x18\x02 \x01(\v21.obiente.cloud.superadmin.v1.SuperadminPaginationR\n" +
+	"pagination\")\n" +
+	"\x0eGetUserRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xa1\x01\n" +
+	"\x0fGetUserResponse\x129\n" +
+	"\x04user\x18\x01 \x01(\v2%.obiente.cloud.superadmin.v1.UserInfoR\x04user\x12S\n" +
+	"\rorganizations\x18\x02 \x03(\v2-.obiente.cloud.superadmin.v1.UserOrganizationR\rorganizations\"\xf1\x02\n" +
+	"\bUserInfo\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12-\n" +
+	"\x12preferred_username\x18\x04 \x01(\tR\x11preferredUsername\x12\x16\n" +
+	"\x06locale\x18\x05 \x01(\tR\x06locale\x12%\n" +
+	"\x0eemail_verified\x18\x06 \x01(\bR\remailVerified\x12\"\n" +
+	"\n" +
+	"avatar_url\x18\a \x01(\tH\x00R\tavatarUrl\x88\x01\x01\x129\n" +
+	"\n" +
+	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x14\n" +
+	"\x05roles\x18\n" +
+	" \x03(\tR\x05rolesB\r\n" +
+	"\v_avatar_url\"\xcd\x01\n" +
+	"\x10UserOrganization\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12+\n" +
+	"\x11organization_name\x18\x02 \x01(\tR\x10organizationName\x12\x12\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x127\n" +
+	"\tjoined_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\bjoinedAt\"|\n" +
+	"\x14SuperadminPagination\x12\x12\n" +
+	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x19\n" +
+	"\bper_page\x18\x02 \x01(\x05R\aperPage\x12\x14\n" +
+	"\x05total\x18\x03 \x01(\x05R\x05total\x12\x1f\n" +
+	"\vtotal_pages\x18\x04 \x01(\x05R\n" +
+	"totalPages2\xb8\x16\n" +
 	"\x11SuperadminService\x12p\n" +
 	"\vGetOverview\x12/.obiente.cloud.superadmin.v1.GetOverviewRequest\x1a0.obiente.cloud.superadmin.v1.GetOverviewResponse\x12g\n" +
 	"\bQueryDNS\x12,.obiente.cloud.superadmin.v1.QueryDNSRequest\x1a-.obiente.cloud.superadmin.v1.QueryDNSResponse\x12y\n" +
 	"\x0eListDNSRecords\x122.obiente.cloud.superadmin.v1.ListDNSRecordsRequest\x1a3.obiente.cloud.superadmin.v1.ListDNSRecordsResponse\x12s\n" +
-	"\fGetDNSConfig\x120.obiente.cloud.superadmin.v1.GetDNSConfigRequest\x1a1.obiente.cloud.superadmin.v1.GetDNSConfigResponse\x12\x9a\x01\n" +
+	"\fGetDNSConfig\x120.obiente.cloud.superadmin.v1.GetDNSConfigRequest\x1a1.obiente.cloud.superadmin.v1.GetDNSConfigResponse\x12\x94\x01\n" +
+	"\x17ListDelegatedDNSRecords\x12;.obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsRequest\x1a<.obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsResponse\x12|\n" +
+	"\x0fHasDelegatedDNS\x123.obiente.cloud.superadmin.v1.HasDelegatedDNSRequest\x1a4.obiente.cloud.superadmin.v1.HasDelegatedDNSResponse\x12\x9a\x01\n" +
 	"\x19CreateDNSDelegationAPIKey\x12=.obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyRequest\x1a>.obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyResponse\x12\x97\x01\n" +
 	"\x18ListDNSDelegationAPIKeys\x12<.obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysRequest\x1a=.obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse\x12\x9a\x01\n" +
 	"\x19RevokeDNSDelegationAPIKey\x12=.obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyRequest\x1a>.obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyResponse\x12\xc7\x01\n" +
@@ -3364,7 +5022,17 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\x11GetAbuseDetection\x125.obiente.cloud.superadmin.v1.GetAbuseDetectionRequest\x1a6.obiente.cloud.superadmin.v1.GetAbuseDetectionResponse\x12\x82\x01\n" +
 	"\x11GetIncomeOverview\x125.obiente.cloud.superadmin.v1.GetIncomeOverviewRequest\x1a6.obiente.cloud.superadmin.v1.GetIncomeOverviewResponse\x12|\n" +
 	"\x0fListAllInvoices\x123.obiente.cloud.superadmin.v1.ListAllInvoicesRequest\x1a4.obiente.cloud.superadmin.v1.ListAllInvoicesResponse\x12\x88\x01\n" +
-	"\x13SendInvoiceReminder\x127.obiente.cloud.superadmin.v1.SendInvoiceReminderRequest\x1a8.obiente.cloud.superadmin.v1.SendInvoiceReminderResponseB8Z6api/gen/proto/obiente/cloud/superadmin/v1;superadminv1b\x06proto3"
+	"\x13SendInvoiceReminder\x127.obiente.cloud.superadmin.v1.SendInvoiceReminderRequest\x1a8.obiente.cloud.superadmin.v1.SendInvoiceReminderResponse\x12j\n" +
+	"\tListPlans\x12-.obiente.cloud.superadmin.v1.ListPlansRequest\x1a..obiente.cloud.superadmin.v1.ListPlansResponse\x12m\n" +
+	"\n" +
+	"CreatePlan\x12..obiente.cloud.superadmin.v1.CreatePlanRequest\x1a/.obiente.cloud.superadmin.v1.CreatePlanResponse\x12m\n" +
+	"\n" +
+	"UpdatePlan\x12..obiente.cloud.superadmin.v1.UpdatePlanRequest\x1a/.obiente.cloud.superadmin.v1.UpdatePlanResponse\x12m\n" +
+	"\n" +
+	"DeletePlan\x12..obiente.cloud.superadmin.v1.DeletePlanRequest\x1a/.obiente.cloud.superadmin.v1.DeletePlanResponse\x12\x97\x01\n" +
+	"\x18AssignPlanToOrganization\x12<.obiente.cloud.superadmin.v1.AssignPlanToOrganizationRequest\x1a=.obiente.cloud.superadmin.v1.AssignPlanToOrganizationResponse\x12j\n" +
+	"\tListUsers\x12-.obiente.cloud.superadmin.v1.ListUsersRequest\x1a..obiente.cloud.superadmin.v1.ListUsersResponse\x12d\n" +
+	"\aGetUser\x12+.obiente.cloud.superadmin.v1.GetUserRequest\x1a,.obiente.cloud.superadmin.v1.GetUserResponseB8Z6api/gen/proto/obiente/cloud/superadmin/v1;superadminv1b\x06proto3"
 
 var (
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescOnce sync.Once
@@ -3378,13 +5046,13 @@ func file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP() []b
 	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescData
 }
 
-var file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes = make([]protoimpl.MessageInfo, 45)
+var file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes = make([]protoimpl.MessageInfo, 68)
 var file_obiente_cloud_superadmin_v1_superadmin_service_proto_goTypes = []any{
 	(*GetOverviewRequest)(nil),                               // 0: obiente.cloud.superadmin.v1.GetOverviewRequest
 	(*GetOverviewResponse)(nil),                              // 1: obiente.cloud.superadmin.v1.GetOverviewResponse
 	(*OverviewCounts)(nil),                                   // 2: obiente.cloud.superadmin.v1.OverviewCounts
 	(*OrganizationOverview)(nil),                             // 3: obiente.cloud.superadmin.v1.OrganizationOverview
-	(*PendingInvite)(nil),                                    // 4: obiente.cloud.superadmin.v1.PendingInvite
+	(*SuperadminPendingInvite)(nil),                          // 4: obiente.cloud.superadmin.v1.SuperadminPendingInvite
 	(*DeploymentOverview)(nil),                               // 5: obiente.cloud.superadmin.v1.DeploymentOverview
 	(*OrganizationUsage)(nil),                                // 6: obiente.cloud.superadmin.v1.OrganizationUsage
 	(*QueryDNSRequest)(nil),                                  // 7: obiente.cloud.superadmin.v1.QueryDNSRequest
@@ -3396,107 +5064,162 @@ var file_obiente_cloud_superadmin_v1_superadmin_service_proto_goTypes = []any{
 	(*DNSConfig)(nil),                                        // 13: obiente.cloud.superadmin.v1.DNSConfig
 	(*TraefikIPs)(nil),                                       // 14: obiente.cloud.superadmin.v1.TraefikIPs
 	(*GetDNSConfigResponse)(nil),                             // 15: obiente.cloud.superadmin.v1.GetDNSConfigResponse
-	(*GetPricingRequest)(nil),                                // 16: obiente.cloud.superadmin.v1.GetPricingRequest
-	(*GetPricingResponse)(nil),                               // 17: obiente.cloud.superadmin.v1.GetPricingResponse
-	(*CreateDNSDelegationAPIKeyRequest)(nil),                 // 18: obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyRequest
-	(*CreateDNSDelegationAPIKeyResponse)(nil),                // 19: obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyResponse
-	(*RevokeDNSDelegationAPIKeyRequest)(nil),                 // 20: obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyRequest
-	(*RevokeDNSDelegationAPIKeyResponse)(nil),                // 21: obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyResponse
-	(*RevokeDNSDelegationAPIKeyForOrganizationRequest)(nil),  // 22: obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationRequest
-	(*RevokeDNSDelegationAPIKeyForOrganizationResponse)(nil), // 23: obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationResponse
-	(*ListDNSDelegationAPIKeysRequest)(nil),                  // 24: obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysRequest
-	(*DNSDelegationAPIKeyInfo)(nil),                          // 25: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo
-	(*ListDNSDelegationAPIKeysResponse)(nil),                 // 26: obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse
-	(*GetAbuseDetectionRequest)(nil),                         // 27: obiente.cloud.superadmin.v1.GetAbuseDetectionRequest
-	(*GetAbuseDetectionResponse)(nil),                        // 28: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse
-	(*SuspiciousOrganization)(nil),                           // 29: obiente.cloud.superadmin.v1.SuspiciousOrganization
-	(*SuspiciousActivity)(nil),                               // 30: obiente.cloud.superadmin.v1.SuspiciousActivity
-	(*AbuseMetrics)(nil),                                     // 31: obiente.cloud.superadmin.v1.AbuseMetrics
-	(*GetIncomeOverviewRequest)(nil),                         // 32: obiente.cloud.superadmin.v1.GetIncomeOverviewRequest
-	(*GetIncomeOverviewResponse)(nil),                        // 33: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse
-	(*IncomeSummary)(nil),                                    // 34: obiente.cloud.superadmin.v1.IncomeSummary
-	(*MonthlyIncome)(nil),                                    // 35: obiente.cloud.superadmin.v1.MonthlyIncome
-	(*TopCustomer)(nil),                                      // 36: obiente.cloud.superadmin.v1.TopCustomer
-	(*BillingTransaction)(nil),                               // 37: obiente.cloud.superadmin.v1.BillingTransaction
-	(*PaymentMetrics)(nil),                                   // 38: obiente.cloud.superadmin.v1.PaymentMetrics
-	(*ListAllInvoicesRequest)(nil),                           // 39: obiente.cloud.superadmin.v1.ListAllInvoicesRequest
-	(*ListAllInvoicesResponse)(nil),                          // 40: obiente.cloud.superadmin.v1.ListAllInvoicesResponse
-	(*InvoiceWithOrganization)(nil),                          // 41: obiente.cloud.superadmin.v1.InvoiceWithOrganization
-	(*SendInvoiceReminderRequest)(nil),                       // 42: obiente.cloud.superadmin.v1.SendInvoiceReminderRequest
-	(*SendInvoiceReminderResponse)(nil),                      // 43: obiente.cloud.superadmin.v1.SendInvoiceReminderResponse
-	nil,                                                      // 44: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
-	(*timestamppb.Timestamp)(nil),                            // 45: google.protobuf.Timestamp
-	(v1.Environment)(0),                                      // 46: obiente.cloud.deployments.v1.Environment
-	(v1.DeploymentStatus)(0),                                 // 47: obiente.cloud.deployments.v1.DeploymentStatus
-	(*v11.Invoice)(nil),                                      // 48: obiente.cloud.billing.v1.Invoice
+	(*ListDelegatedDNSRecordsRequest)(nil),                   // 16: obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsRequest
+	(*DelegatedDNSRecord)(nil),                               // 17: obiente.cloud.superadmin.v1.DelegatedDNSRecord
+	(*ListDelegatedDNSRecordsResponse)(nil),                  // 18: obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsResponse
+	(*HasDelegatedDNSRequest)(nil),                           // 19: obiente.cloud.superadmin.v1.HasDelegatedDNSRequest
+	(*HasDelegatedDNSResponse)(nil),                          // 20: obiente.cloud.superadmin.v1.HasDelegatedDNSResponse
+	(*GetPricingRequest)(nil),                                // 21: obiente.cloud.superadmin.v1.GetPricingRequest
+	(*GetPricingResponse)(nil),                               // 22: obiente.cloud.superadmin.v1.GetPricingResponse
+	(*CreateDNSDelegationAPIKeyRequest)(nil),                 // 23: obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyRequest
+	(*CreateDNSDelegationAPIKeyResponse)(nil),                // 24: obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyResponse
+	(*RevokeDNSDelegationAPIKeyRequest)(nil),                 // 25: obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyRequest
+	(*RevokeDNSDelegationAPIKeyResponse)(nil),                // 26: obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyResponse
+	(*RevokeDNSDelegationAPIKeyForOrganizationRequest)(nil),  // 27: obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationRequest
+	(*RevokeDNSDelegationAPIKeyForOrganizationResponse)(nil), // 28: obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationResponse
+	(*ListDNSDelegationAPIKeysRequest)(nil),                  // 29: obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysRequest
+	(*DNSDelegationAPIKeyInfo)(nil),                          // 30: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo
+	(*ListDNSDelegationAPIKeysResponse)(nil),                 // 31: obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse
+	(*GetAbuseDetectionRequest)(nil),                         // 32: obiente.cloud.superadmin.v1.GetAbuseDetectionRequest
+	(*GetAbuseDetectionResponse)(nil),                        // 33: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse
+	(*SuspiciousOrganization)(nil),                           // 34: obiente.cloud.superadmin.v1.SuspiciousOrganization
+	(*SuspiciousActivity)(nil),                               // 35: obiente.cloud.superadmin.v1.SuspiciousActivity
+	(*AbuseMetrics)(nil),                                     // 36: obiente.cloud.superadmin.v1.AbuseMetrics
+	(*GetIncomeOverviewRequest)(nil),                         // 37: obiente.cloud.superadmin.v1.GetIncomeOverviewRequest
+	(*GetIncomeOverviewResponse)(nil),                        // 38: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse
+	(*IncomeSummary)(nil),                                    // 39: obiente.cloud.superadmin.v1.IncomeSummary
+	(*MonthlyIncome)(nil),                                    // 40: obiente.cloud.superadmin.v1.MonthlyIncome
+	(*TopCustomer)(nil),                                      // 41: obiente.cloud.superadmin.v1.TopCustomer
+	(*BillingTransaction)(nil),                               // 42: obiente.cloud.superadmin.v1.BillingTransaction
+	(*PaymentMetrics)(nil),                                   // 43: obiente.cloud.superadmin.v1.PaymentMetrics
+	(*ListAllInvoicesRequest)(nil),                           // 44: obiente.cloud.superadmin.v1.ListAllInvoicesRequest
+	(*ListAllInvoicesResponse)(nil),                          // 45: obiente.cloud.superadmin.v1.ListAllInvoicesResponse
+	(*InvoiceWithOrganization)(nil),                          // 46: obiente.cloud.superadmin.v1.InvoiceWithOrganization
+	(*SendInvoiceReminderRequest)(nil),                       // 47: obiente.cloud.superadmin.v1.SendInvoiceReminderRequest
+	(*SendInvoiceReminderResponse)(nil),                      // 48: obiente.cloud.superadmin.v1.SendInvoiceReminderResponse
+	(*ListPlansRequest)(nil),                                 // 49: obiente.cloud.superadmin.v1.ListPlansRequest
+	(*ListPlansResponse)(nil),                                // 50: obiente.cloud.superadmin.v1.ListPlansResponse
+	(*CreatePlanRequest)(nil),                                // 51: obiente.cloud.superadmin.v1.CreatePlanRequest
+	(*CreatePlanResponse)(nil),                               // 52: obiente.cloud.superadmin.v1.CreatePlanResponse
+	(*UpdatePlanRequest)(nil),                                // 53: obiente.cloud.superadmin.v1.UpdatePlanRequest
+	(*UpdatePlanResponse)(nil),                               // 54: obiente.cloud.superadmin.v1.UpdatePlanResponse
+	(*DeletePlanRequest)(nil),                                // 55: obiente.cloud.superadmin.v1.DeletePlanRequest
+	(*DeletePlanResponse)(nil),                               // 56: obiente.cloud.superadmin.v1.DeletePlanResponse
+	(*Plan)(nil),                                             // 57: obiente.cloud.superadmin.v1.Plan
+	(*AssignPlanToOrganizationRequest)(nil),                  // 58: obiente.cloud.superadmin.v1.AssignPlanToOrganizationRequest
+	(*AssignPlanToOrganizationResponse)(nil),                 // 59: obiente.cloud.superadmin.v1.AssignPlanToOrganizationResponse
+	(*ListUsersRequest)(nil),                                 // 60: obiente.cloud.superadmin.v1.ListUsersRequest
+	(*ListUsersResponse)(nil),                                // 61: obiente.cloud.superadmin.v1.ListUsersResponse
+	(*GetUserRequest)(nil),                                   // 62: obiente.cloud.superadmin.v1.GetUserRequest
+	(*GetUserResponse)(nil),                                  // 63: obiente.cloud.superadmin.v1.GetUserResponse
+	(*UserInfo)(nil),                                         // 64: obiente.cloud.superadmin.v1.UserInfo
+	(*UserOrganization)(nil),                                 // 65: obiente.cloud.superadmin.v1.UserOrganization
+	(*SuperadminPagination)(nil),                             // 66: obiente.cloud.superadmin.v1.SuperadminPagination
+	nil,                                                      // 67: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
+	(*timestamppb.Timestamp)(nil),                            // 68: google.protobuf.Timestamp
+	(v1.Environment)(0),                                      // 69: obiente.cloud.deployments.v1.Environment
+	(v1.DeploymentStatus)(0),                                 // 70: obiente.cloud.deployments.v1.DeploymentStatus
+	(*v11.Invoice)(nil),                                      // 71: obiente.cloud.billing.v1.Invoice
 }
 var file_obiente_cloud_superadmin_v1_superadmin_service_proto_depIdxs = []int32{
 	2,  // 0: obiente.cloud.superadmin.v1.GetOverviewResponse.counts:type_name -> obiente.cloud.superadmin.v1.OverviewCounts
 	3,  // 1: obiente.cloud.superadmin.v1.GetOverviewResponse.organizations:type_name -> obiente.cloud.superadmin.v1.OrganizationOverview
-	4,  // 2: obiente.cloud.superadmin.v1.GetOverviewResponse.pending_invites:type_name -> obiente.cloud.superadmin.v1.PendingInvite
+	4,  // 2: obiente.cloud.superadmin.v1.GetOverviewResponse.pending_invites:type_name -> obiente.cloud.superadmin.v1.SuperadminPendingInvite
 	5,  // 3: obiente.cloud.superadmin.v1.GetOverviewResponse.deployments:type_name -> obiente.cloud.superadmin.v1.DeploymentOverview
 	6,  // 4: obiente.cloud.superadmin.v1.GetOverviewResponse.usages:type_name -> obiente.cloud.superadmin.v1.OrganizationUsage
-	45, // 5: obiente.cloud.superadmin.v1.OrganizationOverview.created_at:type_name -> google.protobuf.Timestamp
-	45, // 6: obiente.cloud.superadmin.v1.PendingInvite.invited_at:type_name -> google.protobuf.Timestamp
-	46, // 7: obiente.cloud.superadmin.v1.DeploymentOverview.environment:type_name -> obiente.cloud.deployments.v1.Environment
-	47, // 8: obiente.cloud.superadmin.v1.DeploymentOverview.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
-	45, // 9: obiente.cloud.superadmin.v1.DeploymentOverview.created_at:type_name -> google.protobuf.Timestamp
-	45, // 10: obiente.cloud.superadmin.v1.DeploymentOverview.last_deployed_at:type_name -> google.protobuf.Timestamp
-	45, // 11: obiente.cloud.superadmin.v1.DNSRecord.last_resolved:type_name -> google.protobuf.Timestamp
+	68, // 5: obiente.cloud.superadmin.v1.OrganizationOverview.created_at:type_name -> google.protobuf.Timestamp
+	68, // 6: obiente.cloud.superadmin.v1.SuperadminPendingInvite.invited_at:type_name -> google.protobuf.Timestamp
+	69, // 7: obiente.cloud.superadmin.v1.DeploymentOverview.environment:type_name -> obiente.cloud.deployments.v1.Environment
+	70, // 8: obiente.cloud.superadmin.v1.DeploymentOverview.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
+	68, // 9: obiente.cloud.superadmin.v1.DeploymentOverview.created_at:type_name -> google.protobuf.Timestamp
+	68, // 10: obiente.cloud.superadmin.v1.DeploymentOverview.last_deployed_at:type_name -> google.protobuf.Timestamp
+	68, // 11: obiente.cloud.superadmin.v1.DNSRecord.last_resolved:type_name -> google.protobuf.Timestamp
 	10, // 12: obiente.cloud.superadmin.v1.ListDNSRecordsResponse.records:type_name -> obiente.cloud.superadmin.v1.DNSRecord
-	44, // 13: obiente.cloud.superadmin.v1.DNSConfig.traefik_ips_by_region:type_name -> obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
+	67, // 13: obiente.cloud.superadmin.v1.DNSConfig.traefik_ips_by_region:type_name -> obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
 	13, // 14: obiente.cloud.superadmin.v1.GetDNSConfigResponse.config:type_name -> obiente.cloud.superadmin.v1.DNSConfig
-	45, // 15: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.created_at:type_name -> google.protobuf.Timestamp
-	45, // 16: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.revoked_at:type_name -> google.protobuf.Timestamp
-	25, // 17: obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse.api_keys:type_name -> obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo
-	29, // 18: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.suspicious_organizations:type_name -> obiente.cloud.superadmin.v1.SuspiciousOrganization
-	30, // 19: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.suspicious_activities:type_name -> obiente.cloud.superadmin.v1.SuspiciousActivity
-	31, // 20: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.metrics:type_name -> obiente.cloud.superadmin.v1.AbuseMetrics
-	45, // 21: obiente.cloud.superadmin.v1.SuspiciousOrganization.created_at:type_name -> google.protobuf.Timestamp
-	45, // 22: obiente.cloud.superadmin.v1.SuspiciousOrganization.last_activity:type_name -> google.protobuf.Timestamp
-	45, // 23: obiente.cloud.superadmin.v1.SuspiciousActivity.occurred_at:type_name -> google.protobuf.Timestamp
-	34, // 24: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.summary:type_name -> obiente.cloud.superadmin.v1.IncomeSummary
-	35, // 25: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.monthly_income:type_name -> obiente.cloud.superadmin.v1.MonthlyIncome
-	36, // 26: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.top_customers:type_name -> obiente.cloud.superadmin.v1.TopCustomer
-	37, // 27: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.transactions:type_name -> obiente.cloud.superadmin.v1.BillingTransaction
-	38, // 28: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.payment_metrics:type_name -> obiente.cloud.superadmin.v1.PaymentMetrics
-	45, // 29: obiente.cloud.superadmin.v1.TopCustomer.first_payment:type_name -> google.protobuf.Timestamp
-	45, // 30: obiente.cloud.superadmin.v1.TopCustomer.last_payment:type_name -> google.protobuf.Timestamp
-	45, // 31: obiente.cloud.superadmin.v1.BillingTransaction.created_at:type_name -> google.protobuf.Timestamp
-	41, // 32: obiente.cloud.superadmin.v1.ListAllInvoicesResponse.invoices:type_name -> obiente.cloud.superadmin.v1.InvoiceWithOrganization
-	48, // 33: obiente.cloud.superadmin.v1.InvoiceWithOrganization.invoice:type_name -> obiente.cloud.billing.v1.Invoice
-	14, // 34: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry.value:type_name -> obiente.cloud.superadmin.v1.TraefikIPs
-	0,  // 35: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:input_type -> obiente.cloud.superadmin.v1.GetOverviewRequest
-	7,  // 36: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:input_type -> obiente.cloud.superadmin.v1.QueryDNSRequest
-	9,  // 37: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:input_type -> obiente.cloud.superadmin.v1.ListDNSRecordsRequest
-	12, // 38: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:input_type -> obiente.cloud.superadmin.v1.GetDNSConfigRequest
-	18, // 39: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyRequest
-	24, // 40: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:input_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysRequest
-	20, // 41: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyRequest
-	22, // 42: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationRequest
-	16, // 43: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:input_type -> obiente.cloud.superadmin.v1.GetPricingRequest
-	27, // 44: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:input_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionRequest
-	32, // 45: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:input_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewRequest
-	39, // 46: obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices:input_type -> obiente.cloud.superadmin.v1.ListAllInvoicesRequest
-	42, // 47: obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder:input_type -> obiente.cloud.superadmin.v1.SendInvoiceReminderRequest
-	1,  // 48: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:output_type -> obiente.cloud.superadmin.v1.GetOverviewResponse
-	8,  // 49: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:output_type -> obiente.cloud.superadmin.v1.QueryDNSResponse
-	11, // 50: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:output_type -> obiente.cloud.superadmin.v1.ListDNSRecordsResponse
-	15, // 51: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:output_type -> obiente.cloud.superadmin.v1.GetDNSConfigResponse
-	19, // 52: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyResponse
-	26, // 53: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:output_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse
-	21, // 54: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyResponse
-	23, // 55: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationResponse
-	17, // 56: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:output_type -> obiente.cloud.superadmin.v1.GetPricingResponse
-	28, // 57: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:output_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionResponse
-	33, // 58: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:output_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewResponse
-	40, // 59: obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices:output_type -> obiente.cloud.superadmin.v1.ListAllInvoicesResponse
-	43, // 60: obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder:output_type -> obiente.cloud.superadmin.v1.SendInvoiceReminderResponse
-	48, // [48:61] is the sub-list for method output_type
-	35, // [35:48] is the sub-list for method input_type
-	35, // [35:35] is the sub-list for extension type_name
-	35, // [35:35] is the sub-list for extension extendee
-	0,  // [0:35] is the sub-list for field type_name
+	68, // 15: obiente.cloud.superadmin.v1.DelegatedDNSRecord.expires_at:type_name -> google.protobuf.Timestamp
+	68, // 16: obiente.cloud.superadmin.v1.DelegatedDNSRecord.last_updated:type_name -> google.protobuf.Timestamp
+	68, // 17: obiente.cloud.superadmin.v1.DelegatedDNSRecord.created_at:type_name -> google.protobuf.Timestamp
+	17, // 18: obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsResponse.records:type_name -> obiente.cloud.superadmin.v1.DelegatedDNSRecord
+	68, // 19: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.created_at:type_name -> google.protobuf.Timestamp
+	68, // 20: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.revoked_at:type_name -> google.protobuf.Timestamp
+	30, // 21: obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse.api_keys:type_name -> obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo
+	34, // 22: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.suspicious_organizations:type_name -> obiente.cloud.superadmin.v1.SuspiciousOrganization
+	35, // 23: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.suspicious_activities:type_name -> obiente.cloud.superadmin.v1.SuspiciousActivity
+	36, // 24: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.metrics:type_name -> obiente.cloud.superadmin.v1.AbuseMetrics
+	68, // 25: obiente.cloud.superadmin.v1.SuspiciousOrganization.created_at:type_name -> google.protobuf.Timestamp
+	68, // 26: obiente.cloud.superadmin.v1.SuspiciousOrganization.last_activity:type_name -> google.protobuf.Timestamp
+	68, // 27: obiente.cloud.superadmin.v1.SuspiciousActivity.occurred_at:type_name -> google.protobuf.Timestamp
+	39, // 28: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.summary:type_name -> obiente.cloud.superadmin.v1.IncomeSummary
+	40, // 29: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.monthly_income:type_name -> obiente.cloud.superadmin.v1.MonthlyIncome
+	41, // 30: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.top_customers:type_name -> obiente.cloud.superadmin.v1.TopCustomer
+	42, // 31: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.transactions:type_name -> obiente.cloud.superadmin.v1.BillingTransaction
+	43, // 32: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.payment_metrics:type_name -> obiente.cloud.superadmin.v1.PaymentMetrics
+	68, // 33: obiente.cloud.superadmin.v1.TopCustomer.first_payment:type_name -> google.protobuf.Timestamp
+	68, // 34: obiente.cloud.superadmin.v1.TopCustomer.last_payment:type_name -> google.protobuf.Timestamp
+	68, // 35: obiente.cloud.superadmin.v1.BillingTransaction.created_at:type_name -> google.protobuf.Timestamp
+	46, // 36: obiente.cloud.superadmin.v1.ListAllInvoicesResponse.invoices:type_name -> obiente.cloud.superadmin.v1.InvoiceWithOrganization
+	71, // 37: obiente.cloud.superadmin.v1.InvoiceWithOrganization.invoice:type_name -> obiente.cloud.billing.v1.Invoice
+	57, // 38: obiente.cloud.superadmin.v1.ListPlansResponse.plans:type_name -> obiente.cloud.superadmin.v1.Plan
+	57, // 39: obiente.cloud.superadmin.v1.CreatePlanResponse.plan:type_name -> obiente.cloud.superadmin.v1.Plan
+	57, // 40: obiente.cloud.superadmin.v1.UpdatePlanResponse.plan:type_name -> obiente.cloud.superadmin.v1.Plan
+	64, // 41: obiente.cloud.superadmin.v1.ListUsersResponse.users:type_name -> obiente.cloud.superadmin.v1.UserInfo
+	66, // 42: obiente.cloud.superadmin.v1.ListUsersResponse.pagination:type_name -> obiente.cloud.superadmin.v1.SuperadminPagination
+	64, // 43: obiente.cloud.superadmin.v1.GetUserResponse.user:type_name -> obiente.cloud.superadmin.v1.UserInfo
+	65, // 44: obiente.cloud.superadmin.v1.GetUserResponse.organizations:type_name -> obiente.cloud.superadmin.v1.UserOrganization
+	68, // 45: obiente.cloud.superadmin.v1.UserInfo.created_at:type_name -> google.protobuf.Timestamp
+	68, // 46: obiente.cloud.superadmin.v1.UserInfo.updated_at:type_name -> google.protobuf.Timestamp
+	68, // 47: obiente.cloud.superadmin.v1.UserOrganization.joined_at:type_name -> google.protobuf.Timestamp
+	14, // 48: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry.value:type_name -> obiente.cloud.superadmin.v1.TraefikIPs
+	0,  // 49: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:input_type -> obiente.cloud.superadmin.v1.GetOverviewRequest
+	7,  // 50: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:input_type -> obiente.cloud.superadmin.v1.QueryDNSRequest
+	9,  // 51: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:input_type -> obiente.cloud.superadmin.v1.ListDNSRecordsRequest
+	12, // 52: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:input_type -> obiente.cloud.superadmin.v1.GetDNSConfigRequest
+	16, // 53: obiente.cloud.superadmin.v1.SuperadminService.ListDelegatedDNSRecords:input_type -> obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsRequest
+	19, // 54: obiente.cloud.superadmin.v1.SuperadminService.HasDelegatedDNS:input_type -> obiente.cloud.superadmin.v1.HasDelegatedDNSRequest
+	23, // 55: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyRequest
+	29, // 56: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:input_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysRequest
+	25, // 57: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyRequest
+	27, // 58: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationRequest
+	21, // 59: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:input_type -> obiente.cloud.superadmin.v1.GetPricingRequest
+	32, // 60: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:input_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionRequest
+	37, // 61: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:input_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewRequest
+	44, // 62: obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices:input_type -> obiente.cloud.superadmin.v1.ListAllInvoicesRequest
+	47, // 63: obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder:input_type -> obiente.cloud.superadmin.v1.SendInvoiceReminderRequest
+	49, // 64: obiente.cloud.superadmin.v1.SuperadminService.ListPlans:input_type -> obiente.cloud.superadmin.v1.ListPlansRequest
+	51, // 65: obiente.cloud.superadmin.v1.SuperadminService.CreatePlan:input_type -> obiente.cloud.superadmin.v1.CreatePlanRequest
+	53, // 66: obiente.cloud.superadmin.v1.SuperadminService.UpdatePlan:input_type -> obiente.cloud.superadmin.v1.UpdatePlanRequest
+	55, // 67: obiente.cloud.superadmin.v1.SuperadminService.DeletePlan:input_type -> obiente.cloud.superadmin.v1.DeletePlanRequest
+	58, // 68: obiente.cloud.superadmin.v1.SuperadminService.AssignPlanToOrganization:input_type -> obiente.cloud.superadmin.v1.AssignPlanToOrganizationRequest
+	60, // 69: obiente.cloud.superadmin.v1.SuperadminService.ListUsers:input_type -> obiente.cloud.superadmin.v1.ListUsersRequest
+	62, // 70: obiente.cloud.superadmin.v1.SuperadminService.GetUser:input_type -> obiente.cloud.superadmin.v1.GetUserRequest
+	1,  // 71: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:output_type -> obiente.cloud.superadmin.v1.GetOverviewResponse
+	8,  // 72: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:output_type -> obiente.cloud.superadmin.v1.QueryDNSResponse
+	11, // 73: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:output_type -> obiente.cloud.superadmin.v1.ListDNSRecordsResponse
+	15, // 74: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:output_type -> obiente.cloud.superadmin.v1.GetDNSConfigResponse
+	18, // 75: obiente.cloud.superadmin.v1.SuperadminService.ListDelegatedDNSRecords:output_type -> obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsResponse
+	20, // 76: obiente.cloud.superadmin.v1.SuperadminService.HasDelegatedDNS:output_type -> obiente.cloud.superadmin.v1.HasDelegatedDNSResponse
+	24, // 77: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyResponse
+	31, // 78: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:output_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse
+	26, // 79: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyResponse
+	28, // 80: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationResponse
+	22, // 81: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:output_type -> obiente.cloud.superadmin.v1.GetPricingResponse
+	33, // 82: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:output_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionResponse
+	38, // 83: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:output_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewResponse
+	45, // 84: obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices:output_type -> obiente.cloud.superadmin.v1.ListAllInvoicesResponse
+	48, // 85: obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder:output_type -> obiente.cloud.superadmin.v1.SendInvoiceReminderResponse
+	50, // 86: obiente.cloud.superadmin.v1.SuperadminService.ListPlans:output_type -> obiente.cloud.superadmin.v1.ListPlansResponse
+	52, // 87: obiente.cloud.superadmin.v1.SuperadminService.CreatePlan:output_type -> obiente.cloud.superadmin.v1.CreatePlanResponse
+	54, // 88: obiente.cloud.superadmin.v1.SuperadminService.UpdatePlan:output_type -> obiente.cloud.superadmin.v1.UpdatePlanResponse
+	56, // 89: obiente.cloud.superadmin.v1.SuperadminService.DeletePlan:output_type -> obiente.cloud.superadmin.v1.DeletePlanResponse
+	59, // 90: obiente.cloud.superadmin.v1.SuperadminService.AssignPlanToOrganization:output_type -> obiente.cloud.superadmin.v1.AssignPlanToOrganizationResponse
+	61, // 91: obiente.cloud.superadmin.v1.SuperadminService.ListUsers:output_type -> obiente.cloud.superadmin.v1.ListUsersResponse
+	63, // 92: obiente.cloud.superadmin.v1.SuperadminService.GetUser:output_type -> obiente.cloud.superadmin.v1.GetUserResponse
+	71, // [71:93] is the sub-list for method output_type
+	49, // [49:71] is the sub-list for method input_type
+	49, // [49:49] is the sub-list for extension type_name
+	49, // [49:49] is the sub-list for extension extendee
+	0,  // [0:49] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_superadmin_v1_superadmin_service_proto_init() }
@@ -3507,18 +5230,22 @@ func file_obiente_cloud_superadmin_v1_superadmin_service_proto_init() {
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[3].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[5].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[9].OneofWrappers = []any{}
-	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[18].OneofWrappers = []any{}
-	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[24].OneofWrappers = []any{}
-	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[32].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[16].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[23].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[29].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[37].OneofWrappers = []any{}
-	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[39].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[42].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[44].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[53].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[60].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[64].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc), len(file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   45,
+			NumMessages:   68,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
