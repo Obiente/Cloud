@@ -18,11 +18,11 @@ datasources:
     access: proxy
     url: ${GRAFANA_POSTGRES_HOST}:5432
     uid: postgresql
-    database: obiente
     user: ${POSTGRES_USER}
     secureJsonData:
       password: ${POSTGRES_PASSWORD}
     jsonData:
+      database: obiente
       sslmode: disable
       postgresVersion: 1600
       timescaledb: false
@@ -33,11 +33,11 @@ datasources:
     access: proxy
     url: ${GRAFANA_METRICS_DB_HOST}:5432
     uid: timescaledb-metrics
-    database: obiente_metrics
     user: ${METRICS_DB_USER}
     secureJsonData:
       password: ${METRICS_DB_PASSWORD}
     jsonData:
+      database: obiente_metrics
       sslmode: disable
       postgresVersion: 1600
       timescaledb: true

@@ -786,6 +786,8 @@ services:
       # Datasource host configuration (for HA, use pgpool service names)
       GRAFANA_POSTGRES_HOST: ${GRAFANA_POSTGRES_HOST:-pgpool}
       GRAFANA_METRICS_DB_HOST: ${GRAFANA_METRICS_DB_HOST:-metrics-pgpool}
+      # Alerting configuration
+      ALERT_EMAIL: ${ALERT_EMAIL:-admin@example.com}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:rw

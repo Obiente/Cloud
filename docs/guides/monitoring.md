@@ -104,7 +104,15 @@ scrape_configs:
 
 ### Grafana Dashboards
 
-Create dashboards to visualize:
+Grafana is automatically provisioned with datasources and dashboards when deployed with Docker Swarm or HA configurations.
+
+**Pre-configured Dashboards:**
+- **Prometheus Overview** - Prometheus status, API metrics, and scrape targets
+- **Obiente API** - Detailed API metrics including HTTP requests, latency, error rates, and circuit breaker state
+- **Database Performance** - PostgreSQL and TimescaleDB performance metrics
+- **Docker Swarm Overview** - Node and service metrics from Docker Swarm
+- **Game Server Metrics** - Game server deployment metrics
+- **Traefik Requests** - Traefik request metrics and routing statistics
 
 **Cluster Metrics:**
 - Node CPU and memory usage
@@ -123,6 +131,36 @@ Create dashboards to visualize:
 - Database query performance
 - Cache hit rates
 - Metrics collection health
+
+**Grafana Configuration:**
+
+Grafana datasources are automatically provisioned using environment variables:
+
+| Variable | Default (Swarm) | Default (HA) | Description |
+|----------|----------------|--------------|-------------|
+| `GRAFANA_POSTGRES_HOST` | `postgres` | `pgpool` | PostgreSQL service hostname for Grafana datasource |
+| `GRAFANA_METRICS_DB_HOST` | `timescaledb` | `metrics-pgpool` | TimescaleDB service hostname for Grafana datasource |
+| `ALERT_EMAIL` | `admin@example.com` | `admin@example.com` | Email address for Grafana alert notifications |
+
+**Accessing Grafana:**
+
+- **Swarm**: `https://grafana.${DOMAIN}`
+- **HA**: `https://grafana.${DOMAIN}`
+- Default credentials: `admin` / `${GRAFANA_PASSWORD:-admin}`
+
+**Alerting:**
+
+Grafana alerting is pre-configured with the following alert rules:
+- API health check failures
+- Metrics collection failures
+- Circuit breaker open state
+- Database connection pool exhaustion
+- High API error rates
+- Retry queue size warnings
+- Prometheus target availability
+- Container resource usage (CPU, memory)
+
+Alert notifications are sent to the email address configured via `ALERT_EMAIL`.
 
 ### Key Metrics to Monitor
 

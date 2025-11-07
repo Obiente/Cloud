@@ -415,6 +415,8 @@ services:
       # Datasource host configuration (for regular swarm, use direct service names)
       GRAFANA_POSTGRES_HOST: ${GRAFANA_POSTGRES_HOST:-postgres}
       GRAFANA_METRICS_DB_HOST: ${GRAFANA_METRICS_DB_HOST:-timescaledb}
+      # Alerting configuration
+      ALERT_EMAIL: ${ALERT_EMAIL:-admin@example.com}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:rw

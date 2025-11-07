@@ -478,9 +478,33 @@ NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 
 ### Monitoring
 
-| Variable           | Type   | Default | Required     |
-| ------------------ | ------ | ------- | ------------ |
-| `GRAFANA_PASSWORD` | string | -       | ❌ (HA only) |
+| Variable                 | Type   | Default                      | Required     | Description                                    |
+| ------------------------ | ------ | ---------------------------- | ------------ | ---------------------------------------------- |
+| `GRAFANA_PASSWORD`       | string | `admin`                      | ❌           | Grafana admin password                         |
+| `GRAFANA_POSTGRES_HOST`  | string | `postgres` (Swarm)<br>`pgpool` (HA) | ❌ | PostgreSQL service hostname for Grafana datasource |
+| `GRAFANA_METRICS_DB_HOST` | string | `timescaledb` (Swarm)<br>`metrics-pgpool` (HA) | ❌ | TimescaleDB service hostname for Grafana datasource |
+| `ALERT_EMAIL`            | string | `admin@example.com`          | ❌           | Email address for Grafana alert notifications  |
+
+**Grafana Configuration:**
+
+Grafana automatically provisions datasources using environment variables. The `GRAFANA_POSTGRES_HOST` and `GRAFANA_METRICS_DB_HOST` variables determine which database services Grafana connects to:
+
+- **Swarm deployments**: Use direct service names (`postgres`, `timescaledb`)
+- **HA deployments**: Use pgpool service names (`pgpool`, `metrics-pgpool`)
+
+**Example:**
+
+```bash
+# Swarm deployment
+GRAFANA_POSTGRES_HOST=postgres
+GRAFANA_METRICS_DB_HOST=timescaledb
+ALERT_EMAIL=alerts@obiente.cloud
+
+# HA deployment
+GRAFANA_POSTGRES_HOST=pgpool
+GRAFANA_METRICS_DB_HOST=metrics-pgpool
+ALERT_EMAIL=alerts@obiente.cloud
+```
 
 **Metrics Observability:**
 
@@ -544,6 +568,11 @@ NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 METRICS_COLLECTION_INTERVAL=5s
 METRICS_STORAGE_INTERVAL=60s
 METRICS_MAX_WORKERS=50
+# Grafana configuration
+GRAFANA_PASSWORD=<strong_random_password>
+GRAFANA_POSTGRES_HOST=postgres
+GRAFANA_METRICS_DB_HOST=timescaledb
+ALERT_EMAIL=alerts@obiente.cloud
 ```
 
 ## Loading Environment Variables
