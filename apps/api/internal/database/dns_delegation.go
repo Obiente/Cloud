@@ -17,16 +17,18 @@ import (
 // DelegatedDNSRecord stores DNS records pushed by remote APIs (dev/self-hosted)
 // These records expire if not refreshed within TTL
 type DelegatedDNSRecord struct {
-	ID          string    `gorm:"primaryKey" json:"id"`
-	Domain      string    `gorm:"uniqueIndex:idx_domain_type;not null" json:"domain"`      // e.g., "deploy-123.my.obiente.cloud"
-	RecordType  string    `gorm:"uniqueIndex:idx_domain_type;not null" json:"record_type"` // "A" or "SRV"
-	Records     string    `gorm:"type:jsonb;not null" json:"records"`                      // JSON array of record values
-	SourceAPI   string    `gorm:"index;not null" json:"source_api"`                        // URL of the API that pushed this record
-	TTL         int64     `gorm:"default:300" json:"ttl"`                                  // TTL in seconds (default: 5 minutes)
-	ExpiresAt   time.Time `gorm:"index;not null" json:"expires_at"`                        // When this record expires
-	LastUpdated time.Time `gorm:"not null" json:"last_updated"`                            // Last time this record was updated
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID             string    `gorm:"primaryKey" json:"id"`
+	Domain         string    `gorm:"uniqueIndex:idx_domain_type;not null" json:"domain"`      // e.g., "deploy-123.my.obiente.cloud"
+	RecordType     string    `gorm:"uniqueIndex:idx_domain_type;not null" json:"record_type"` // "A" or "SRV"
+	Records        string    `gorm:"type:jsonb;not null" json:"records"`                      // JSON array of record values
+	SourceAPI      string    `gorm:"index;not null" json:"source_api"`                        // URL of the API that pushed this record
+	APIKeyID       string    `gorm:"index" json:"api_key_id"`                                 // ID of the API key that delegated this record
+	OrganizationID string    `gorm:"index" json:"organization_id"`                            // Organization that owns the API key
+	TTL            int64     `gorm:"default:300" json:"ttl"`                                  // TTL in seconds (default: 5 minutes)
+	ExpiresAt      time.Time `gorm:"index;not null" json:"expires_at"`                        // When this record expires
+	LastUpdated    time.Time `gorm:"not null" json:"last_updated"`                            // Last time this record was updated
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 func (DelegatedDNSRecord) TableName() string {
@@ -75,29 +77,38 @@ func GetDelegatedDNSRecord(domain, recordType string) (*DelegatedDNSRecord, erro
 
 // UpsertDelegatedDNSRecord creates or updates a delegated DNS record
 func UpsertDelegatedDNSRecord(domain, recordType, recordsJSON, sourceAPI string, ttl int64) error {
+	return UpsertDelegatedDNSRecordWithAPIKey(domain, recordType, recordsJSON, sourceAPI, "", "", ttl)
+}
+
+// UpsertDelegatedDNSRecordWithAPIKey creates or updates a delegated DNS record with API key tracking
+func UpsertDelegatedDNSRecordWithAPIKey(domain, recordType, recordsJSON, sourceAPI, apiKeyID, organizationID string, ttl int64) error {
 	now := time.Now()
 	expiresAt := now.Add(time.Duration(ttl) * time.Second)
 
 	record := DelegatedDNSRecord{
-		ID:          uuid.New().String(),
-		Domain:      domain,
-		RecordType:  recordType,
-		Records:     recordsJSON,
-		SourceAPI:   sourceAPI,
-		TTL:         ttl,
-		ExpiresAt:   expiresAt,
-		LastUpdated: now,
+		ID:             uuid.New().String(),
+		Domain:         domain,
+		RecordType:     recordType,
+		Records:        recordsJSON,
+		SourceAPI:      sourceAPI,
+		APIKeyID:       apiKeyID,
+		OrganizationID: organizationID,
+		TTL:            ttl,
+		ExpiresAt:      expiresAt,
+		LastUpdated:    now,
 	}
 
 	// Use ON CONFLICT to upsert
 	return DB.Where("domain = ? AND record_type = ?", domain, recordType).
 		Assign(map[string]interface{}{
-			"records":      recordsJSON,
-			"source_api":   sourceAPI,
-			"ttl":          ttl,
-			"expires_at":   expiresAt,
-			"last_updated": now,
-			"updated_at":   now,
+			"records":         recordsJSON,
+			"source_api":      sourceAPI,
+			"api_key_id":      apiKeyID,
+			"organization_id": organizationID,
+			"ttl":             ttl,
+			"expires_at":      expiresAt,
+			"last_updated":    now,
+			"updated_at":      now,
 		}).
 		FirstOrCreate(&record).Error
 }
@@ -129,6 +140,12 @@ func (DNSDelegationAPIKey) TableName() string {
 
 // ValidateDNSDelegationAPIKey checks if an API key is valid
 func ValidateDNSDelegationAPIKey(apiKey string) (bool, error) {
+	_, err := GetDNSDelegationAPIKeyByHash(apiKey)
+	return err == nil, err
+}
+
+// GetDNSDelegationAPIKeyByHash retrieves an API key by its hash
+func GetDNSDelegationAPIKeyByHash(apiKey string) (*DNSDelegationAPIKey, error) {
 	// Hash the provided key
 	keyHash := hashAPIKey(apiKey)
 
@@ -136,7 +153,10 @@ func ValidateDNSDelegationAPIKey(apiKey string) (bool, error) {
 	result := DB.Where("key_hash = ? AND is_active = ? AND revoked_at IS NULL", keyHash, true).
 		First(&key)
 
-	return result.Error == nil, result.Error
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &key, nil
 }
 
 // hashAPIKey hashes an API key using SHA256
@@ -251,4 +271,28 @@ func ListDNSDelegationAPIKeys(organizationID string) ([]DNSDelegationAPIKey, err
 	}
 
 	return keys, nil
+}
+
+// ListDelegatedDNSRecords lists delegated DNS records with optional filters
+func ListDelegatedDNSRecords(organizationID, apiKeyID, recordType string) ([]DelegatedDNSRecord, error) {
+	var records []DelegatedDNSRecord
+	query := DB.Model(&DelegatedDNSRecord{}).Where("expires_at > ?", time.Now()).Order("created_at DESC")
+
+	if organizationID != "" {
+		query = query.Where("organization_id = ?", organizationID)
+	}
+
+	if apiKeyID != "" {
+		query = query.Where("api_key_id = ?", apiKeyID)
+	}
+
+	if recordType != "" {
+		query = query.Where("record_type = ?", recordType)
+	}
+
+	if err := query.Find(&records).Error; err != nil {
+		return nil, err
+	}
+
+	return records, nil
 }

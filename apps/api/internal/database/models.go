@@ -82,6 +82,9 @@ type OrganizationPlan struct {
 	DeploymentsMax     int    `json:"deployments_max"`
 	BandwidthBytesMonth int64 `json:"bandwidth_bytes_month"`
 	StorageBytes       int64  `json:"storage_bytes"`
+	MinimumPaymentCents int64 `gorm:"column:minimum_payment_cents;default:0" json:"minimum_payment_cents"` // Minimum payment in cents to automatically upgrade to this plan
+	MonthlyFreeCreditsCents int64 `gorm:"column:monthly_free_credits_cents;default:0" json:"monthly_free_credits_cents"` // Monthly free credits in cents granted to organizations on this plan
+	Description        string `gorm:"column:description;type:text" json:"description"` // Optional description of the plan
 }
 
 func (OrganizationPlan) TableName() string { return "organization_plans" }
@@ -98,6 +101,19 @@ type OrgQuota struct {
 }
 
 func (OrgQuota) TableName() string { return "org_quotas" }
+
+// MonthlyCreditGrant tracks monthly free credit grants for metrics and recovery
+type MonthlyCreditGrant struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	OrganizationID string    `gorm:"index;not null" json:"organization_id"`
+	PlanID         string    `gorm:"index;not null" json:"plan_id"`
+	GrantMonth     time.Time `gorm:"index;not null" json:"grant_month"` // First day of the month (YYYY-MM-01)
+	AmountCents    int64     `gorm:"not null" json:"amount_cents"`
+	GrantedAt      time.Time `gorm:"not null" json:"granted_at"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+func (MonthlyCreditGrant) TableName() string { return "monthly_credit_grants" }
 
 // OrgRole represents a reusable role definition within an organization (scoped permissions)
 type OrgRole struct {
@@ -155,6 +171,7 @@ type Organization struct {
     Status    string    `json:"status"`
     Domain    *string   `json:"domain"`
     Credits   int64     `gorm:"column:credits;default:0" json:"credits"` // Credits in cents ($0.01 units)
+    TotalPaidCents int64 `gorm:"column:total_paid_cents;default:0" json:"total_paid_cents"` // Total amount paid in cents (for safety check/auto-upgrade)
     CreatedAt time.Time `json:"created_at"`
 }
 
@@ -167,6 +184,7 @@ type OrganizationMember struct {
     Role           string    `json:"role"`
     Status         string    `json:"status"`
     JoinedAt       time.Time `json:"joined_at"`
+    LastInviteSentAt *time.Time `gorm:"column:last_invite_sent_at" json:"last_invite_sent_at"` // Tracks when invite email was last successfully sent (for rate limiting)
 }
 
 func (OrganizationMember) TableName() string { return "organization_members" }
@@ -185,6 +203,16 @@ type CreditTransaction struct {
 }
 
 func (CreditTransaction) TableName() string { return "credit_transactions" }
+
+// StripeWebhookEvent tracks processed Stripe webhook events for idempotency
+type StripeWebhookEvent struct {
+	ID        string    `gorm:"primaryKey" json:"id"` // Stripe event ID (evt_*)
+	EventType string    `gorm:"index;not null" json:"event_type"`
+	ProcessedAt time.Time `gorm:"not null" json:"processed_at"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (StripeWebhookEvent) TableName() string { return "stripe_webhook_events" }
 
 // BillingAccount stores Stripe customer and billing information for organizations
 type BillingAccount struct {
@@ -452,4 +480,26 @@ func (tc *TicketComment) BeforeCreate(tx *gorm.DB) error {
 func (tc *TicketComment) BeforeUpdate(tx *gorm.DB) error {
 	tc.UpdatedAt = time.Now()
 	return nil
+}
+
+// AuditLog represents an audit log entry for tracking all actions
+type AuditLog struct {
+	ID             string    `gorm:"primaryKey;column:id" json:"id"`
+	UserID         string    `gorm:"column:user_id;index;not null" json:"user_id"`         // User who performed the action
+	OrganizationID *string   `gorm:"column:organization_id;index" json:"organization_id"` // Organization context (nullable for system actions)
+	Action         string    `gorm:"column:action;index;not null" json:"action"`          // RPC method name (e.g., "CreateDeployment")
+	Service        string    `gorm:"column:service;index;not null" json:"service"`        // Service name (e.g., "DeploymentService")
+	ResourceType   *string   `gorm:"column:resource_type;index" json:"resource_type"`     // Type of resource affected (e.g., "deployment", "organization")
+	ResourceID     *string   `gorm:"column:resource_id;index" json:"resource_id"`          // ID of the affected resource
+	IPAddress      string    `gorm:"column:ip_address" json:"ip_address"`                 // Client IP address
+	UserAgent      string    `gorm:"column:user_agent" json:"user_agent"`                 // User agent string
+	RequestData    string    `gorm:"column:request_data;type:jsonb" json:"request_data"` // Request payload (sanitized)
+	ResponseStatus int32     `gorm:"column:response_status" json:"response_status"`       // HTTP/Connect status code
+	ErrorMessage   *string   `gorm:"column:error_message;type:text" json:"error_message"` // Error message if action failed
+	DurationMs     int64     `gorm:"column:duration_ms" json:"duration_ms"`              // Request duration in milliseconds
+	CreatedAt      time.Time `gorm:"column:created_at;index" json:"created_at"`
+}
+
+func (AuditLog) TableName() string {
+	return "audit_logs"
 }

@@ -117,6 +117,9 @@ func InitMetricsTables() error {
 	if !hypertableMap["build_logs"] {
 		tablesToMigrate = append(tablesToMigrate, &BuildLog{})
 	}
+	if !hypertableMap["audit_logs"] {
+		tablesToMigrate = append(tablesToMigrate, &AuditLog{})
+	}
 	
 	if len(tablesToMigrate) > 0 {
 		if err := MetricsDB.AutoMigrate(tablesToMigrate...); err != nil {
@@ -128,6 +131,12 @@ func InitMetricsTables() error {
 	// Initialize TimescaleDB hypertable for build_logs
 	if err := InitBuildLogsTimescaleDB(MetricsDB); err != nil {
 		logger.Warn("Failed to initialize TimescaleDB hypertable for build_logs: %v", err)
+		// Continue anyway - standard PostgreSQL will work fine
+	}
+
+	// Initialize TimescaleDB hypertable for audit_logs
+	if err := InitAuditLogsTimescaleDB(MetricsDB); err != nil {
+		logger.Warn("Failed to initialize TimescaleDB hypertable for audit_logs: %v", err)
 		// Continue anyway - standard PostgreSQL will work fine
 	}
 

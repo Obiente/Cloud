@@ -141,6 +141,9 @@ func InitDatabase() error {
 		&BuildHistory{},
 		&DelegatedDNSRecord{},
 		&DNSDelegationAPIKey{},
+		&OrganizationPlan{},
+		&OrgQuota{},
+		&MonthlyCreditGrant{},
 	); err != nil {
 		return fmt.Errorf("failed to auto-migrate: %w", err)
 	}
@@ -158,6 +161,100 @@ func InitDatabase() error {
 	if err := InitMetricsDatabase(); err != nil {
 		logger.Warn("Metrics database initialization failed: %v. Metrics may not work correctly.", err)
 		// Don't fail main initialization if metrics DB fails
+	}
+
+	return nil
+}
+
+// InitAuditLogsTimescaleDB converts audit_logs table to TimescaleDB hypertable if available
+// This provides better performance for time-series audit log data
+// Note: This should be called with MetricsDB (TimescaleDB connection), not the main DB
+func InitAuditLogsTimescaleDB(db *gorm.DB) error {
+	// Check if TimescaleDB extension is available
+	var extensionExists bool
+	if err := db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM pg_extension WHERE extname = 'timescaledb'
+		)
+	`).Scan(&extensionExists).Error; err != nil {
+		return fmt.Errorf("failed to check TimescaleDB extension: %w", err)
+	}
+
+	if !extensionExists {
+		// Try to create the extension
+		if err := db.Exec("CREATE EXTENSION IF NOT EXISTS timescaledb").Error; err != nil {
+			return fmt.Errorf("TimescaleDB extension not available: %w", err)
+		}
+		logger.Info("TimescaleDB extension enabled for audit_logs")
+	}
+
+	// Check if audit_logs table exists
+	if !db.Migrator().HasTable("audit_logs") {
+		logger.Debug("audit_logs table does not exist yet, skipping TimescaleDB conversion")
+		return nil
+	}
+
+	// Check if table is already a hypertable
+	var isHypertable bool
+	if err := db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM timescaledb_information.hypertables 
+			WHERE hypertable_name = 'audit_logs'
+		)
+	`).Scan(&isHypertable).Error; err != nil {
+		return fmt.Errorf("failed to check if audit_logs is hypertable: %w", err)
+	}
+
+	if isHypertable {
+		logger.Debug("audit_logs is already a TimescaleDB hypertable")
+		return nil
+	}
+
+	// Convert to hypertable with created_at as time column
+	// Use 1 day chunk interval for audit logs (audit logs are queried by time ranges)
+	if err := db.Exec(`
+		SELECT create_hypertable('audit_logs', 'created_at', 
+			chunk_time_interval => INTERVAL '1 day',
+			if_not_exists => TRUE)
+	`).Error; err != nil {
+		return fmt.Errorf("failed to create hypertable for audit_logs: %w", err)
+	}
+
+	logger.Info("✓ Converted audit_logs to TimescaleDB hypertable (optimized for time-series queries)")
+
+	// Create additional indexes for common query patterns
+	// Composite index for querying logs by organization and time range
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_audit_logs_org_created_at 
+		ON audit_logs (organization_id, created_at DESC)
+		WHERE organization_id IS NOT NULL
+	`).Error; err != nil {
+		logger.Warn("Failed to create organization index: %v", err)
+	}
+
+	// Composite index for querying logs by resource type and ID
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_audit_logs_resource_created_at 
+		ON audit_logs (resource_type, resource_id, created_at DESC)
+		WHERE resource_type IS NOT NULL AND resource_id IS NOT NULL
+	`).Error; err != nil {
+		logger.Warn("Failed to create resource index: %v", err)
+	}
+
+	// Index for querying by user
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_audit_logs_user_created_at 
+		ON audit_logs (user_id, created_at DESC)
+	`).Error; err != nil {
+		logger.Warn("Failed to create user index: %v", err)
+	}
+
+	// Index for querying by service and action
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_audit_logs_service_action_created_at 
+		ON audit_logs (service, action, created_at DESC)
+	`).Error; err != nil {
+		logger.Warn("Failed to create service/action index: %v", err)
 	}
 
 	return nil
