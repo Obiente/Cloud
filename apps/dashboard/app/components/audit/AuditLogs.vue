@@ -149,14 +149,13 @@
     </OuiCard>
 
     <!-- Pagination -->
-    <OuiFlex v-if="hasNextPage" justify="center" gap="md">
-      <OuiButton
-        variant="outline"
-        @click="loadMore"
-        :loading="isLoadingMore"
-      >
-        Load More
-      </OuiButton>
+    <OuiFlex v-if="auditLogs.length > 0" justify="center" align="center" gap="md" class="py-4">
+      <OuiPagination
+        :count="estimatedTotal"
+        :page="currentPage"
+        :page-size="pageSize"
+        @page-change="handlePageChange"
+      />
     </OuiFlex>
 
     <!-- Details Dialog -->
@@ -250,6 +249,7 @@ import { date } from "@obiente/proto/utils";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 import OuiCode from "~/components/oui/Code.vue";
 import OuiDuration from "~/components/oui/Duration.vue";
+import OuiPagination from "~/components/oui/Pagination.vue";
 
 interface Props {
   organizationId?: string;
@@ -264,10 +264,22 @@ const client = useConnectClient(AuditService);
 
 const auditLogs = ref<AuditLogEntry[]>([]);
 const isLoading = ref(false);
-const isLoadingMore = ref(false);
-const total = ref(0);
+const currentPage = ref(1);
+const pageSize = ref(50);
 const nextPageToken = ref<string | undefined>(undefined);
-const hasNextPage = computed(() => !!nextPageToken.value);
+const estimatedTotal = computed(() => {
+  // Estimate total based on current page and whether there's a next page
+  // If we're on page 1 and there's no next page, total is just current items
+  if (currentPage.value === 1 && !nextPageToken.value) {
+    return auditLogs.value.length;
+  }
+  // If there's a next page, estimate at least (currentPage * pageSize) + 1
+  if (nextPageToken.value) {
+    return currentPage.value * pageSize.value + 1;
+  }
+  // Otherwise, we're on the last page
+  return (currentPage.value - 1) * pageSize.value + auditLogs.value.length;
+});
 
 // Separate data for filter options (loaded without filters to show all available values)
 const filterOptionsData = ref<AuditLogEntry[]>([]);
@@ -424,18 +436,13 @@ const columns = [
 const detailsDialogOpen = ref(false);
 const selectedLog = ref<AuditLogEntry | null>(null);
 
-const loadAuditLogs = async (append = false) => {
-  if (isLoading.value || (isLoadingMore.value && append)) return;
-
-  if (append) {
-    isLoadingMore.value = true;
-  } else {
-    isLoading.value = true;
-  }
+const loadAuditLogs = async (page: number = currentPage.value) => {
+  if (isLoading.value) return;
+  isLoading.value = true;
 
   try {
     const request: any = {
-      pageSize: 50,
+      pageSize: pageSize.value,
     };
 
     if (props.organizationId) {
@@ -468,9 +475,11 @@ const loadAuditLogs = async (append = false) => {
       request.userId = filters.value.userId;
     }
 
-    // Only use pagination token when appending (loading more)
-    if (append && nextPageToken.value) {
-      request.pageToken = nextPageToken.value;
+    // Convert page number to offset for pageToken
+    // Page 1 = no token, Page 2 = offset:50, Page 3 = offset:100, etc.
+    if (page > 1) {
+      const offset = (page - 1) * pageSize.value;
+      request.pageToken = `offset:${offset}`;
     }
 
     const response = await client.listAuditLogs(request);
@@ -489,25 +498,24 @@ const loadAuditLogs = async (append = false) => {
       }
     }
     
-    if (append) {
-      auditLogs.value.push(...logs);
-    } else {
-      auditLogs.value = logs;
-      total.value = logs.length;
-    }
-
+    auditLogs.value = logs;
     nextPageToken.value = response.nextPageToken || undefined;
   } catch (error) {
     console.error("Failed to load audit logs:", error);
   } finally {
     isLoading.value = false;
-    isLoadingMore.value = false;
   }
 };
 
 const refresh = () => {
+  currentPage.value = 1;
   nextPageToken.value = undefined;
-  loadAuditLogs(false);
+  loadAuditLogs(1);
+};
+
+const handlePageChange = (page: number) => {
+  currentPage.value = page;
+  loadAuditLogs(page);
 };
 
 // Watch filters and reload when they change
@@ -520,14 +528,11 @@ watch(
   ],
   () => {
     // Reset pagination when filters change
+    currentPage.value = 1;
     nextPageToken.value = undefined;
-    loadAuditLogs(false);
+    loadAuditLogs(1);
   }
 );
-
-const loadMore = () => {
-  loadAuditLogs(true);
-};
 
 const showDetails = (log: AuditLogEntry) => {
   selectedLog.value = log;
@@ -563,19 +568,21 @@ const formatRequestData = (data: string): string => {
 };
 
 // Watch props and reload when they change
-watch(
-  () => [props.organizationId, props.resourceType, props.resourceId, props.userId],
-  () => {
-    // Reload filter options when resource context changes
-    loadFilterOptions();
-    refresh();
-  }
-);
+        watch(
+          () => [props.organizationId, props.resourceType, props.resourceId, props.userId],
+          () => {
+            // Reload filter options when resource context changes
+            loadFilterOptions();
+            currentPage.value = 1;
+            nextPageToken.value = undefined;
+            loadAuditLogs(1);
+          }
+        );
 
-onMounted(() => {
-  // Load filter options first, then load the actual filtered results
-  loadFilterOptions();
-  loadAuditLogs();
-});
+        onMounted(() => {
+          // Load filter options first, then load the actual filtered results
+          loadFilterOptions();
+          loadAuditLogs(1);
+        });
 </script>
 
