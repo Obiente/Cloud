@@ -106,6 +106,120 @@ var (
 			Help: "Whether metrics collection is healthy (1=healthy, 0=unhealthy)",
 		},
 	)
+
+	// Game server metrics
+	gameServerCPUUsage = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "obiente_game_server_cpu_usage",
+			Help: "Game server CPU usage (0-1, where 1 = 100%)",
+		},
+		[]string{"game_server_id"},
+	)
+
+	gameServerMemoryUsage = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "obiente_game_server_memory_usage_bytes",
+			Help: "Game server memory usage in bytes",
+		},
+		[]string{"game_server_id"},
+	)
+
+	gameServerNetworkRxBytes = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "obiente_game_server_network_rx_bytes_total",
+			Help: "Total network received bytes for game server",
+		},
+		[]string{"game_server_id"},
+	)
+
+	gameServerNetworkTxBytes = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "obiente_game_server_network_tx_bytes_total",
+			Help: "Total network transmitted bytes for game server",
+		},
+		[]string{"game_server_id"},
+	)
+
+	gameServerDiskReadBytes = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "obiente_game_server_disk_read_bytes_total",
+			Help: "Total disk read bytes for game server",
+		},
+		[]string{"game_server_id"},
+	)
+
+	gameServerDiskWriteBytes = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "obiente_game_server_disk_write_bytes_total",
+			Help: "Total disk write bytes for game server",
+		},
+		[]string{"game_server_id"},
+	)
+
+	// Deployment metrics
+	deploymentCPUUsage = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "obiente_deployment_cpu_usage",
+			Help: "Deployment CPU usage (0-1, where 1 = 100%)",
+		},
+		[]string{"deployment_id"},
+	)
+
+	deploymentMemoryUsage = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "obiente_deployment_memory_usage_bytes",
+			Help: "Deployment memory usage in bytes",
+		},
+		[]string{"deployment_id"},
+	)
+
+	deploymentNetworkRxBytes = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "obiente_deployment_network_rx_bytes_total",
+			Help: "Total network received bytes for deployment",
+		},
+		[]string{"deployment_id"},
+	)
+
+	deploymentNetworkTxBytes = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "obiente_deployment_network_tx_bytes_total",
+			Help: "Total network transmitted bytes for deployment",
+		},
+		[]string{"deployment_id"},
+	)
+
+	deploymentDiskReadBytes = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "obiente_deployment_disk_read_bytes_total",
+			Help: "Total disk read bytes for deployment",
+		},
+		[]string{"deployment_id"},
+	)
+
+	deploymentDiskWriteBytes = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "obiente_deployment_disk_write_bytes_total",
+			Help: "Total disk write bytes for deployment",
+		},
+		[]string{"deployment_id"},
+	)
+
+	deploymentRequestCount = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "obiente_deployment_requests_total",
+			Help: "Total request count for deployment",
+		},
+		[]string{"deployment_id"},
+	)
+
+	deploymentErrorCount = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "obiente_deployment_errors_total",
+			Help: "Total error count for deployment",
+		},
+		[]string{"deployment_id"},
+	)
 )
 
 // HTTPMetricsMiddleware wraps an HTTP handler to record Prometheus metrics
@@ -227,5 +341,27 @@ func UpdateMetricsFromStats(
 	} else {
 		metricsHealthy.Set(0)
 	}
+}
+
+// RecordGameServerMetrics records game server metrics in Prometheus
+func RecordGameServerMetrics(gameServerID string, cpuUsage float64, memoryUsage int64, networkRxBytes int64, networkTxBytes int64, diskReadBytes int64, diskWriteBytes int64) {
+	gameServerCPUUsage.WithLabelValues(gameServerID).Set(cpuUsage)
+	gameServerMemoryUsage.WithLabelValues(gameServerID).Set(float64(memoryUsage))
+	gameServerNetworkRxBytes.WithLabelValues(gameServerID).Add(float64(networkRxBytes))
+	gameServerNetworkTxBytes.WithLabelValues(gameServerID).Add(float64(networkTxBytes))
+	gameServerDiskReadBytes.WithLabelValues(gameServerID).Add(float64(diskReadBytes))
+	gameServerDiskWriteBytes.WithLabelValues(gameServerID).Add(float64(diskWriteBytes))
+}
+
+// RecordDeploymentMetrics records deployment metrics in Prometheus
+func RecordDeploymentMetrics(deploymentID string, cpuUsage float64, memoryUsage int64, networkRxBytes int64, networkTxBytes int64, diskReadBytes int64, diskWriteBytes int64, requestCount int64, errorCount int64) {
+	deploymentCPUUsage.WithLabelValues(deploymentID).Set(cpuUsage)
+	deploymentMemoryUsage.WithLabelValues(deploymentID).Set(float64(memoryUsage))
+	deploymentNetworkRxBytes.WithLabelValues(deploymentID).Add(float64(networkRxBytes))
+	deploymentNetworkTxBytes.WithLabelValues(deploymentID).Add(float64(networkTxBytes))
+	deploymentDiskReadBytes.WithLabelValues(deploymentID).Add(float64(diskReadBytes))
+	deploymentDiskWriteBytes.WithLabelValues(deploymentID).Add(float64(diskWriteBytes))
+	deploymentRequestCount.WithLabelValues(deploymentID).Add(float64(requestCount))
+	deploymentErrorCount.WithLabelValues(deploymentID).Add(float64(errorCount))
 }
 

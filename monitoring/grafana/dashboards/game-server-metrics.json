@@ -11,8 +11,8 @@
   "panels": [
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "timescaledb-metrics"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -74,14 +74,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "timescaledb-metrics"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp AS time,\n  game_server_id,\n  AVG(cpu_usage) * 100 as cpu_percent\nFROM game_server_metrics\nWHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo()\nGROUP BY time, game_server_id\nORDER BY time",
-          "refId": "A"
+          "expr": "obiente_game_server_cpu_usage * 100",
+          "refId": "A",
+          "legendFormat": "{{game_server_id}}"
         }
       ],
       "title": "Game Server CPU Usage",
@@ -89,8 +87,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "timescaledb-metrics"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -152,14 +150,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "timescaledb-metrics"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp AS time,\n  game_server_id,\n  AVG(memory_usage) as memory_bytes\nFROM game_server_metrics\nWHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo()\nGROUP BY time, game_server_id\nORDER BY time",
-          "refId": "A"
+          "expr": "obiente_game_server_memory_usage_bytes",
+          "refId": "A",
+          "legendFormat": "{{game_server_id}}"
         }
       ],
       "title": "Game Server Memory Usage",
@@ -167,8 +163,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "timescaledb-metrics"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -230,14 +226,21 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "timescaledb-metrics"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp AS time,\n  game_server_id,\n  AVG(network_rx_bytes) as rx_bytes,\n  AVG(network_tx_bytes) as tx_bytes\nFROM game_server_metrics\nWHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo()\nGROUP BY time, game_server_id\nORDER BY time",
-          "refId": "A"
+          "expr": "rate(obiente_game_server_network_rx_bytes_total[5m])",
+          "refId": "A",
+          "legendFormat": "{{game_server_id}} RX"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(obiente_game_server_network_tx_bytes_total[5m])",
+          "refId": "B",
+          "legendFormat": "{{game_server_id}} TX"
         }
       ],
       "title": "Game Server Network I/O",
@@ -245,8 +248,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "timescaledb-metrics"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -291,23 +294,22 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "timescaledb-metrics"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "code",
+          "expr": "count by (game_server_id) (obiente_game_server_cpu_usage{game_server_id!=\"\"})",
+          "refId": "A",
           "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  game_server_id,\n  COUNT(*) as metric_count,\n  MAX(timestamp) as last_update\nFROM game_server_metrics\nWHERE timestamp >= NOW() - INTERVAL '1 hour'\nGROUP BY game_server_id\nORDER BY last_update DESC",
-          "refId": "A"
+          "instant": true
         }
       ],
-      "title": "Active Game Servers (Last Hour)",
+      "title": "Active Game Servers",
       "type": "stat"
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "timescaledb-metrics"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -369,23 +371,30 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "timescaledb-metrics"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  hour AS time,\n  game_server_id,\n  SUM(bandwidth_rx_bytes) as rx_bytes,\n  SUM(bandwidth_tx_bytes) as tx_bytes\nFROM game_server_usage_hourly\nWHERE hour >= $__timeFrom() AND hour <= $__timeTo()\nGROUP BY time, game_server_id\nORDER BY time",
-          "refId": "A"
+          "expr": "rate(obiente_game_server_network_rx_bytes_total[1h]) * 3600",
+          "refId": "A",
+          "legendFormat": "{{game_server_id}} RX"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(obiente_game_server_network_tx_bytes_total[1h]) * 3600",
+          "refId": "B",
+          "legendFormat": "{{game_server_id}} TX"
         }
       ],
-      "title": "Game Server Bandwidth (Hourly Aggregated)",
+      "title": "Game Server Bandwidth (Hourly Rate)",
       "type": "timeseries"
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "timescaledb-metrics"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -447,17 +456,24 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "timescaledb-metrics"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  hour AS time,\n  game_server_id,\n  SUM(disk_read_bytes) as read_bytes,\n  SUM(disk_write_bytes) as write_bytes\nFROM game_server_usage_hourly\nWHERE hour >= $__timeFrom() AND hour <= $__timeTo()\nGROUP BY time, game_server_id\nORDER BY time",
-          "refId": "A"
+          "expr": "rate(obiente_game_server_disk_read_bytes_total[1h]) * 3600",
+          "refId": "A",
+          "legendFormat": "{{game_server_id}} Read"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(obiente_game_server_disk_write_bytes_total[1h]) * 3600",
+          "refId": "B",
+          "legendFormat": "{{game_server_id}} Write"
         }
       ],
-      "title": "Game Server Disk I/O (Hourly Aggregated)",
+      "title": "Game Server Disk I/O (Hourly Rate)",
       "type": "timeseries"
     }
   ],

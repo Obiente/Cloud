@@ -11,8 +11,8 @@
   "panels": [
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -74,31 +74,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "timescaledb-metrics"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp AS time,\n  deployment_id,\n  AVG(cpu_usage) * 100 as cpu_percent\nFROM deployment_metrics\nWHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo()\nGROUP BY time, deployment_id\nORDER BY time",
+          "expr": "obiente_deployment_cpu_usage * 100",
           "refId": "A",
-          "sql": {
-            "columns": [
-              {
-                "parameters": [],
-                "type": "function"
-              }
-            ],
-            "groupBy": [
-              {
-                "property": {
-                  "type": "string"
-                },
-                "type": "groupBy"
-              }
-            ],
-            "hide": false
-          }
+          "legendFormat": "{{deployment_id}}"
         }
       ],
       "title": "Deployment CPU Usage",
@@ -106,8 +87,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -169,14 +150,12 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "timescaledb-metrics"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp AS time,\n  deployment_id,\n  AVG(memory_usage) as memory_bytes\nFROM deployment_metrics\nWHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo()\nGROUP BY time, deployment_id\nORDER BY time",
-          "refId": "A"
+          "expr": "obiente_deployment_memory_usage_bytes",
+          "refId": "A",
+          "legendFormat": "{{deployment_id}}"
         }
       ],
       "title": "Deployment Memory Usage",
@@ -184,8 +163,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -247,14 +226,21 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "timescaledb-metrics"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp AS time,\n  deployment_id,\n  AVG(network_rx_bytes) as rx_bytes,\n  AVG(network_tx_bytes) as tx_bytes\nFROM deployment_metrics\nWHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo()\nGROUP BY time, deployment_id\nORDER BY time",
-          "refId": "A"
+          "expr": "rate(obiente_deployment_network_rx_bytes_total[5m])",
+          "refId": "A",
+          "legendFormat": "{{deployment_id}} RX"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(obiente_deployment_network_tx_bytes_total[5m])",
+          "refId": "B",
+          "legendFormat": "{{deployment_id}} TX"
         }
       ],
       "title": "Deployment Network I/O",
@@ -262,8 +248,8 @@
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -308,23 +294,22 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "timescaledb-metrics"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "code",
+          "expr": "count by (deployment_id) (obiente_deployment_cpu_usage{deployment_id!=\"\"})",
+          "refId": "A",
           "format": "table",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  deployment_id,\n  COUNT(*) as metric_count,\n  MAX(timestamp) as last_update\nFROM deployment_metrics\nWHERE timestamp >= NOW() - INTERVAL '1 hour'\nGROUP BY deployment_id\nORDER BY last_update DESC",
-          "refId": "A"
+          "instant": true
         }
       ],
-      "title": "Active Deployments (Last Hour)",
+      "title": "Active Deployments",
       "type": "stat"
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -386,23 +371,21 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "timescaledb-metrics"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  hour AS time,\n  deployment_id,\n  COALESCE(SUM(request_count), 0) as requests\nFROM deployment_usage_hourly\nWHERE hour >= $__timeFrom() AND hour <= $__timeTo()\nGROUP BY time, deployment_id\nORDER BY time",
-          "refId": "A"
+          "expr": "rate(obiente_deployment_requests_total[1h]) * 3600",
+          "refId": "A",
+          "legendFormat": "{{deployment_id}}"
         }
       ],
-      "title": "Deployment Requests (Hourly Aggregated)",
+      "title": "Deployment Requests (Hourly Rate)",
       "type": "timeseries"
     },
     {
       "datasource": {
-        "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
@@ -464,17 +447,15 @@
       "targets": [
         {
           "datasource": {
-            "type": "postgres",
-            "uid": "timescaledb-metrics"
+            "type": "prometheus",
+            "uid": "prometheus"
           },
-          "editorMode": "code",
-          "format": "time_series",
-          "rawQuery": true,
-          "rawSql": "SELECT\n  hour AS time,\n  deployment_id,\n  COALESCE(SUM(error_count), 0) as errors\nFROM deployment_usage_hourly\nWHERE hour >= $__timeFrom() AND hour <= $__timeTo()\nGROUP BY time, deployment_id\nORDER BY time",
-          "refId": "A"
+          "expr": "rate(obiente_deployment_errors_total[1h]) * 3600",
+          "refId": "A",
+          "legendFormat": "{{deployment_id}}"
         }
       ],
-      "title": "Deployment Errors (Hourly Aggregated)",
+      "title": "Deployment Errors (Hourly Rate)",
       "type": "timeseries"
     }
   ],

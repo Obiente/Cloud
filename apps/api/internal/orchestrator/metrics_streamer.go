@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"api/internal/database"
+	"api/internal/metrics"
 	"api/internal/registry"
 )
 
@@ -735,6 +736,14 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 					latestTimestamp := metrics[len(metrics)-1].Timestamp
 
 					if resourceType == "deployment" {
+						// Aggregate request and error counts
+						var sumRequestCount int64
+						var sumErrorCount int64
+						for _, m := range metrics {
+							sumRequestCount += m.RequestCount
+							sumErrorCount += m.ErrorCount
+						}
+
 						deploymentMetricsToStore = append(deploymentMetricsToStore, database.DeploymentMetrics{
 							DeploymentID:   resourceID,
 							ContainerID:    containerID,
@@ -745,8 +754,23 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 							NetworkTxBytes: sumNetworkTx,
 							DiskReadBytes:  sumDiskRead,
 							DiskWriteBytes: sumDiskWrite,
+							RequestCount:   sumRequestCount,
+							ErrorCount:     sumErrorCount,
 							Timestamp:      latestTimestamp,
 						})
+
+						// Record Prometheus metrics for this deployment
+						metrics.RecordDeploymentMetrics(
+							resourceID,
+							avgCPU,
+							avgMemory,
+							sumNetworkRx,
+							sumNetworkTx,
+							sumDiskRead,
+							sumDiskWrite,
+							sumRequestCount,
+							sumErrorCount,
+						)
 
 						if len(deploymentMetricsToStore) >= ms.config.BatchSize {
 							targetDB := database.MetricsDB
@@ -776,6 +800,17 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 							Timestamp:      latestTimestamp,
 						})
 
+						// Record Prometheus metrics for this game server
+						metrics.RecordGameServerMetrics(
+							resourceID,
+							avgCPU,
+							avgMemory,
+							sumNetworkRx,
+							sumNetworkTx,
+							sumDiskRead,
+							sumDiskWrite,
+						)
+
 						if len(gameServerMetricsToStore) >= ms.config.BatchSize {
 							targetDB := database.MetricsDB
 							if targetDB == nil {
@@ -801,6 +836,21 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 			}
 
 			if len(deploymentMetricsToStore) > 0 {
+				// Record Prometheus metrics for remaining deployment metrics
+				for _, depMetric := range deploymentMetricsToStore {
+					metrics.RecordDeploymentMetrics(
+						depMetric.DeploymentID,
+						depMetric.CPUUsage,
+						depMetric.MemoryUsage,
+						depMetric.NetworkRxBytes,
+						depMetric.NetworkTxBytes,
+						depMetric.DiskReadBytes,
+						depMetric.DiskWriteBytes,
+						depMetric.RequestCount,
+						depMetric.ErrorCount,
+					)
+				}
+
 				if err := targetDB.CreateInBatches(deploymentMetricsToStore, ms.config.BatchSize).Error; err != nil {
 					log.Printf("[MetricsStreamer] Failed to store final deployment metrics batch (%d metrics): %v", len(deploymentMetricsToStore), err)
 					ms.stats.RecordStorage(false, len(deploymentMetricsToStore))
@@ -810,6 +860,19 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 			}
 
 			if len(gameServerMetricsToStore) > 0 {
+				// Record Prometheus metrics for remaining game server metrics
+				for _, gsMetric := range gameServerMetricsToStore {
+					metrics.RecordGameServerMetrics(
+						gsMetric.GameServerID,
+						gsMetric.CPUUsage,
+						gsMetric.MemoryUsage,
+						gsMetric.NetworkRxBytes,
+						gsMetric.NetworkTxBytes,
+						gsMetric.DiskReadBytes,
+						gsMetric.DiskWriteBytes,
+					)
+				}
+
 				if err := targetDB.CreateInBatches(gameServerMetricsToStore, ms.config.BatchSize).Error; err != nil {
 					log.Printf("[MetricsStreamer] Failed to store final game server metrics batch (%d metrics): %v", len(gameServerMetricsToStore), err)
 					ms.stats.RecordStorage(false, len(gameServerMetricsToStore))

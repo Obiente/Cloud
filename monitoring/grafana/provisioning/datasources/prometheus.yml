@@ -13,33 +13,7 @@ datasources:
       queryTimeout: 60s
       httpMethod: POST
 
-  - name: PostgreSQL
-    type: postgres
-    access: proxy
-    url: ${GRAFANA_POSTGRES_HOST}:5432
-    uid: postgresql
-    user: ${POSTGRES_USER}
-    secureJsonData:
-      password: ${POSTGRES_PASSWORD}
-    jsonData:
-      database: obiente
-      sslmode: disable
-      postgresVersion: 1600
-      timescaledb: false
-    editable: true
-
-  - name: TimescaleDB (Metrics)
-    type: postgres
-    access: proxy
-    url: ${GRAFANA_METRICS_DB_HOST}:5432
-    uid: timescaledb-metrics
-    user: ${METRICS_DB_USER}
-    secureJsonData:
-      password: ${METRICS_DB_PASSWORD}
-    jsonData:
-      database: obiente_metrics
-      sslmode: disable
-      postgresVersion: 1600
-      timescaledb: true
-    editable: true
+  # Database datasources removed - all metrics are now served via Prometheus
+  # The API properly connects to databases and exposes metrics through /metrics endpoint
+  # Dashboards that previously used database connections need to be converted to use Prometheus queries
 
