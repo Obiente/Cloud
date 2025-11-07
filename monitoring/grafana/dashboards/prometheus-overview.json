@@ -1132,7 +1132,11 @@
   "refresh": "30s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["prometheus", "overview", "obiente"],
+  "tags": [
+    "prometheus",
+    "overview",
+    "obiente"
+  ],
   "templating": {
     "list": []
   },
@@ -1147,4 +1151,3 @@
   "version": 1,
   "weekStart": ""
 }
-

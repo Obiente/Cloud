@@ -56,7 +56,8 @@
           "expr": "dockerswarm_node_info or vector(0)",
           "format": "table",
           "instant": true,
-          "refId": "A"
+          "refId": "A",
+          "legendFormat": "{{node_hostname}}"
         }
       ],
       "title": "Swarm Nodes",
@@ -190,12 +191,12 @@
       "targets": [
         {
           "expr": "dockerswarm_service_replicas_desired or vector(0)",
-          "legendFormat": "Desired - {{service_name}}",
+          "legendFormat": "Desired - {{service_name}} ({{node_hostname}})",
           "refId": "A"
         },
         {
           "expr": "dockerswarm_service_replicas_running or vector(0)",
-          "legendFormat": "Running - {{service_name}}",
+          "legendFormat": "Running - {{service_name}} ({{node_hostname}})",
           "refId": "B"
         }
       ],
