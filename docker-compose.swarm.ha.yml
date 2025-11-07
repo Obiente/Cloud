@@ -790,7 +790,8 @@ services:
       # Alerting configuration
       ALERT_EMAIL: ${ALERT_EMAIL:-admin@example.com}
       # SMTP configuration for Grafana email notifications
-      GF_SMTP_ENABLED: ${SMTP_HOST:+true}
+      # Note: Grafana will automatically disable SMTP if GF_SMTP_HOST is empty
+      GF_SMTP_ENABLED: "true"
       GF_SMTP_HOST: ${SMTP_HOST:-}
       GF_SMTP_PORT: ${SMTP_PORT:-587}
       GF_SMTP_USER: ${SMTP_USERNAME:-}
