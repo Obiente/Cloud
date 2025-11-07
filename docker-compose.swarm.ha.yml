@@ -887,25 +887,25 @@ services:
         limits:
           cpus: "1"
           memory: 512M
-        reservations:
-          cpus: "0.25"
-          memory: 256M
+      reservations:
+        cpus: "0.25"
+        memory: 256M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        # HTTP router for internal Docker access (registry protocol)
+        - "traefik.http.routers.registry.rule=Host(`registry.${DOMAIN:-obiente.cloud}`)"
+        - "traefik.http.routers.registry.entrypoints=web"
+        - "traefik.http.routers.registry.service=registry"
+        # HTTPS router for external access
+        - "traefik.http.routers.registry-secure.rule=Host(`registry.${DOMAIN:-obiente.cloud}`)"
+        - "traefik.http.routers.registry-secure.entrypoints=websecure"
+        - "traefik.http.routers.registry-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.registry-secure.service=registry"
+        # Service configuration
+        - "traefik.http.services.registry.loadbalancer.server.port=5000"
     networks:
       - obiente-network
-    labels:
-      - "cloud.obiente.traefik=true"
-      - "traefik.enable=true"
-      # HTTP router for internal Docker access (registry protocol)
-      - "traefik.http.routers.registry.rule=Host(`registry.${DOMAIN:-my.obiente.cloud}`)"
-      - "traefik.http.routers.registry.entrypoints=web"
-      - "traefik.http.routers.registry.service=registry"
-      # HTTPS router for external access
-      - "traefik.http.routers.registry-secure.rule=Host(`registry.${DOMAIN:-my.obiente.cloud}`)"
-      - "traefik.http.routers.registry-secure.entrypoints=websecure"
-      - "traefik.http.routers.registry-secure.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.registry-secure.service=registry"
-      # Service configuration
-      - "traefik.http.services.registry.loadbalancer.server.port=5000"
 
 # ============================================================================
 # VOLUMES
