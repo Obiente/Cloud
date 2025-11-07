@@ -37,20 +37,26 @@ else
 fi
 
 if [ -d /etc/grafana/provisioning ]; then
+  # Calculate fallback values for METRICS_DB_USER and METRICS_DB_PASSWORD before processing files
+  # This ensures proper variable expansion outside the loop
+  POSTGRES_USER_VAL="${POSTGRES_USER:-obiente-postgres}"
+  POSTGRES_PASSWORD_VAL="${POSTGRES_PASSWORD:-obiente-postgres}"
+  METRICS_USER="${METRICS_DB_USER:-${POSTGRES_USER_VAL}}"
+  METRICS_PASSWORD="${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD_VAL}}"
+  
+  echo "Using METRICS_USER=${METRICS_USER}"
+  echo "METRICS_PASSWORD is ${METRICS_PASSWORD:+SET}${METRICS_PASSWORD:-NOT SET}"
+  
   # Find all YAML files in provisioning directory (recursively)
   find /etc/grafana/provisioning -name "*.yml" -type f | while read file; do
     echo "Processing: $file"
     
     # Substitute environment variables using sed in-place
-    # Handle nested defaults for METRICS_DB_USER and METRICS_DB_PASSWORD
-    METRICS_USER="${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}"
-    METRICS_PASSWORD="${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}"
-    
     sed -i \
       -e "s|\${GRAFANA_POSTGRES_HOST}|${GRAFANA_POSTGRES_HOST:-postgres}|g" \
       -e "s|\${GRAFANA_METRICS_DB_HOST}|${GRAFANA_METRICS_DB_HOST:-timescaledb}|g" \
-      -e "s|\${POSTGRES_USER}|${POSTGRES_USER:-obiente-postgres}|g" \
-      -e "s|\${POSTGRES_PASSWORD}|${POSTGRES_PASSWORD:-obiente-postgres}|g" \
+      -e "s|\${POSTGRES_USER}|${POSTGRES_USER_VAL}|g" \
+      -e "s|\${POSTGRES_PASSWORD}|${POSTGRES_PASSWORD_VAL}|g" \
       -e "s|\${METRICS_DB_USER}|${METRICS_USER}|g" \
       -e "s|\${METRICS_DB_PASSWORD}|${METRICS_PASSWORD}|g" \
       -e "s|\${ALERT_EMAIL:-admin@example.com}|${ALERT_EMAIL:-admin@example.com}|g" \
