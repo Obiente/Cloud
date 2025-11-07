@@ -467,6 +467,8 @@ services:
       DISABLE_AUTH: ${DISABLE_AUTH:-false}
       SKIP_TLS_VERIFY: ${SKIP_TLS_VERIFY:-false}
       SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
+      BILLING_ENABLED: ${BILLING_ENABLED:-true}
+      SELF_HOSTED: ${SELF_HOSTED:-false}
       # Docker Swarm API
       DOCKER_HOST: unix:///var/run/docker.sock
       # Deployment tracking
@@ -486,6 +488,18 @@ services:
       APP_CONSOLE_URL: ${APP_CONSOLE_URL:-${CONSOLE_URL:-${DASHBOARD_URL:-https://app.obiente.cloud}}}
       # Support email (optional)
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      # SMTP configuration for email delivery
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Obiente Cloud}
+      SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
+      SMTP_USE_STARTTLS: ${SMTP_USE_STARTTLS:-true}
+      SMTP_SKIP_TLS_VERIFY: ${SMTP_SKIP_TLS_VERIFY:-false}
+      SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-10}
+      SMTP_LOCAL_NAME: ${SMTP_LOCAL_NAME:-api.obiente.local}
       # Swarm configuration - enable swarm features for HA swarm deployments
       ENABLE_SWARM: ${ENABLE_SWARM:-true} # Set to 'true' to enable Docker Swarm features (default: true for HA swarm)
     volumes:

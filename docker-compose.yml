@@ -50,6 +50,8 @@ services:
       DISABLE_AUTH: ${DISABLE_AUTH:-false}
       SKIP_TLS_VERIFY: ${SKIP_TLS_VERIFY:-false}
       SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
+      BILLING_ENABLED: ${BILLING_ENABLED:-true}
+      SELF_HOSTED: ${SELF_HOSTED:-false}
       TRAEFIK_IPS: ${TRAEFIK_IPS:-} # Format: "region1:ip1,ip2;region2:ip3,ip4" or simple "ip1,ip2"
       # DNS configuration - optional, for documentation/deployment purposes only
       # Set MAIN_DNS_IPS to production DNS IP addresses (e.g., export MAIN_DNS_IPS=10.0.9.10)
@@ -70,6 +72,18 @@ services:
       APP_CONSOLE_URL: ${APP_CONSOLE_URL:-${CONSOLE_URL:-${DASHBOARD_URL:-http://localhost:3000}}}
       # Support email (optional)
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      # SMTP configuration for email delivery
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Obiente Cloud}
+      SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
+      SMTP_USE_STARTTLS: ${SMTP_USE_STARTTLS:-true}
+      SMTP_SKIP_TLS_VERIFY: ${SMTP_SKIP_TLS_VERIFY:-false}
+      SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-10}
+      SMTP_LOCAL_NAME: ${SMTP_LOCAL_NAME:-api.obiente.local}
       # DNS Delegation Configuration (for dev/self-hosted APIs to push DNS records to production)
       # Set DNS_DELEGATION_PRODUCTION_API_URL to production API URL (e.g., "https://api.obiente.cloud")
       # Set DNS_DELEGATION_API_KEY to the API key received from production (see docs/deployment/dns-delegation.md)

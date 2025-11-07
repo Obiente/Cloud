@@ -22,6 +22,8 @@ services:
       NUXT_PUBLIC_GITHUB_CLIENT_ID: ${NUXT_PUBLIC_GITHUB_CLIENT_ID:-}
       NUXT_PUBLIC_DISABLE_AUTH: ${DISABLE_AUTH:-false}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+      # Note: BILLING_ENABLED and SELF_HOSTED are fetched from API via GetPublicConfig endpoint
+      # They are not needed here as the dashboard fetches them from the API
     networks:
       - obiente-network
     healthcheck:
