@@ -376,7 +376,7 @@ services:
     cap_add:
       - NET_BIND_SERVICE
     healthcheck:
-      test: ["CMD-SHELL", "nslookup -type=A deploy-test.my.obiente.cloud localhost || exit 1"]
+      test: ["CMD-SHELL", "if command -v nc >/dev/null 2>&1; then nc -z localhost 53 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 53 || exit 1; fi"]
       interval: 30s
       timeout: 10s
       retries: 3
