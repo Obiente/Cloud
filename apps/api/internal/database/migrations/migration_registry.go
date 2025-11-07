@@ -29,6 +29,7 @@ func RegisterMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_11_07_001", "Create deployment_metrics table", createDeploymentMetricsTable)
 	registry.Register("2025_11_07_002", "Create deployment_usage_hourly table", createDeploymentUsageHourlyTable)
 	registry.Register("2025_11_07_003", "Ensure idx_domain_type constraint exists on delegated_dns_records", ensureDelegatedDNSRecordsConstraint)
+	registry.Register("2025_11_07_004", "Create audit_logs table", createAuditLogsTable)
 
 	// Add new migrations here
 }
@@ -547,6 +548,67 @@ func ensureDelegatedDNSRecordsConstraint(db *gorm.DB) error {
 			return nil
 		}
 		return fmt.Errorf("failed to create idx_domain_type constraint: %w", err)
+	}
+
+	return nil
+}
+
+// createAuditLogsTable creates the audit_logs table for storing audit log entries
+// This only creates the table in the metrics database, never in the main database
+func createAuditLogsTable(db *gorm.DB) error {
+	// Initialize metrics database if not already initialized
+	if database.MetricsDB == nil {
+		if err := database.InitMetricsDatabase(); err != nil {
+			logger.Warn("Failed to initialize metrics database for migration: %v", err)
+			// If metrics DB is not available, skip this migration
+			// The tables will be created by InitMetricsTables() when the app starts
+			return nil
+		}
+	}
+
+	// Only create in metrics database
+	if database.MetricsDB == nil {
+		logger.Warn("Metrics database not available, skipping audit_logs table creation")
+		return nil
+	}
+
+	if database.MetricsDB.Migrator().HasTable("audit_logs") {
+		return nil
+	}
+
+	return createAuditLogsTableInDB(database.MetricsDB)
+}
+
+// createAuditLogsTableInDB creates the audit_logs table in a specific database
+func createAuditLogsTableInDB(db *gorm.DB) error {
+	// Create table with proper indexes
+	if err := db.Exec(`
+		CREATE TABLE audit_logs (
+			id VARCHAR(255) NOT NULL,
+			user_id VARCHAR(255) NOT NULL,
+			organization_id VARCHAR(255),
+			action VARCHAR(255) NOT NULL,
+			service VARCHAR(255) NOT NULL,
+			resource_type VARCHAR(255),
+			resource_id VARCHAR(255),
+			ip_address VARCHAR(255),
+			user_agent TEXT,
+			request_data JSONB,
+			response_status INTEGER,
+			error_message TEXT,
+			duration_ms BIGINT,
+			created_at TIMESTAMP NOT NULL,
+			PRIMARY KEY (id, created_at),
+			INDEX idx_user_id (user_id),
+			INDEX idx_organization_id (organization_id),
+			INDEX idx_action (action),
+			INDEX idx_service (service),
+			INDEX idx_resource_type (resource_type),
+			INDEX idx_resource_id (resource_id),
+			INDEX idx_created_at (created_at)
+		)
+	`).Error; err != nil {
+		return err
 	}
 
 	return nil
