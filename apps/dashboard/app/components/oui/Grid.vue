@@ -174,7 +174,7 @@ const props = withDefaults(defineProps<GridProps>(), {
 });
 
 const gridClasses = computed(() => {
-  const classes = ["oui-grid", "grid"];
+  const classes = ["oui-grid", "grid", "min-w-0", "w-full"];
 
   // Column classes
   if (props.cols) {

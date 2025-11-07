@@ -154,7 +154,7 @@ const props = withDefaults(defineProps<FlexProps>(), {
 });
 
 const flexClasses = computed(() => {
-  const classes = ["oui-flex", "flex"];
+  const classes = ["oui-flex", "flex", "min-w-0"];
 
   // Direction classes
   const directionMap = {
@@ -165,13 +165,19 @@ const flexClasses = computed(() => {
   };
   classes.push(directionMap[props.direction]);
 
-  // Wrap classes
+  // Wrap classes - default to wrap on mobile for row direction
   const wrapMap = {
     nowrap: "flex-nowrap",
     wrap: "flex-wrap",
     "wrap-reverse": "flex-wrap-reverse",
   };
-  classes.push(wrapMap[props.wrap]);
+  
+  // If row direction and nowrap, allow wrapping on mobile
+  if (props.direction === "row" && props.wrap === "nowrap") {
+    classes.push("flex-wrap", "md:flex-nowrap");
+  } else {
+    classes.push(wrapMap[props.wrap]);
+  }
 
   // Justify content classes
   const justify = justifyClass(props.justify, "justify");

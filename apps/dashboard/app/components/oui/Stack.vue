@@ -135,11 +135,15 @@ const props = withDefaults(defineProps<StackProps>(), {
 });
 
 const stackClasses = computed(() => {
-  const classes = ["oui-stack", "flex"];
+  const classes = ["oui-stack", "flex", "min-w-0"];
 
   // Direction classes
   if (props.direction === "horizontal") {
     classes.push("flex-row");
+    // Auto-wrap on mobile for horizontal stacks
+    if (!props.wrap) {
+      classes.push("flex-wrap", "md:flex-nowrap");
+    }
   } else {
     classes.push("flex-col");
   }

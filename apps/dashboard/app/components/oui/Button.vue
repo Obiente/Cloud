@@ -93,11 +93,11 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const BUTTON_SIZE_CLASS_MAP: Record<OUIButtonSize, readonly string[]> = {
-  xs: ["px-2", "py-1", "text-xs"],
-  sm: ["px-3", "py-1.5", "text-sm"],
-  md: ["px-4", "py-2", "text-sm"],
-  lg: ["px-6", "py-3", "text-base"],
-  xl: ["px-8", "py-4", "text-lg"],
+  xs: ["px-2", "py-1", "text-xs", "min-h-[2rem]"],
+  sm: ["px-3", "py-1.5", "text-sm", "min-h-[2.25rem]"],
+  md: ["px-4", "py-2", "text-sm", "min-h-[2.5rem]"],
+  lg: ["px-6", "py-3", "text-base", "min-h-[3rem]"],
+  xl: ["px-8", "py-4", "text-lg", "min-h-[3.5rem]"],
 };
 
 const BUTTON_TONE_CLASS_MAP: Record<

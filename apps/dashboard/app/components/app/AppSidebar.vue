@@ -1,31 +1,32 @@
 <template>
-  <nav class="flex flex-col h-full min-h-0 bg-surface-base" :class="$attrs.class">
+  <OuiBox as="nav" class="flex flex-col h-full min-h-0 bg-surface-base" :class="$attrs.class">
     <!-- Header - Fixed at top -->
-    <div class="shrink-0 p-6 border-b border-border-muted">
-      <OuiFlex align="center" justify="between" >
-        <OuiFlex align="start" gap="md">
-          <ObienteLogo size="md" class="mt-1" />
-          <OuiStack gap="none" class="leading-tight">
-            <OuiText size="xl" weight="bold" color="primary">Obiente</OuiText>
+    <OuiBox as="header" class="shrink-0 p-4 md:p-6 border-b border-border-muted">
+      <OuiFlex align="center" justify="between" gap="sm" wrap="wrap">
+        <OuiFlex align="start" gap="sm" class="flex-1 min-w-0 md:gap-4">
+          <ObienteLogo size="sm" class="mt-1 shrink-0 md:size-md" />
+          <OuiStack gap="none" class="leading-tight min-w-0 flex-1">
+            <OuiText size="lg" weight="bold" color="primary" class="truncate md:text-xl">Obiente</OuiText>
             <OuiText
               v-if="props.currentOrganization"
-              size="sm"
+              size="xs"
               color="secondary"
+              class="truncate md:text-sm"
             >
               {{ props.currentOrganization.name }}
             </OuiText>
           </OuiStack>
         </OuiFlex>
 
-        <div class="ml-2">
+        <OuiBox class="ml-2 shrink-0">
           <OrgSwitcher :collection="organization" :multiple="false" @change="(v:any)=>emit('organization-change', v)" @create="emit('new-organization')" />
-        </div>
+        </OuiBox>
       </OuiFlex>
-    </div>
+    </OuiBox>
 
     <!-- Navigation - Scrollable middle section -->
-    <div class="flex-1 min-h-0 overflow-y-auto sidebar-scrollable">
-      <nav class="px-6 pt-6 pb-20 space-y-2">
+    <OuiBox class="flex-1 min-h-0 overflow-y-auto sidebar-scrollable">
+      <nav class="px-4 md:px-6 pt-4 md:pt-6 pb-20 space-y-1 md:space-y-2">
         <AppNavigationLink
           to="/dashboard"
           label="Dashboard"
@@ -200,16 +201,16 @@
           />
         </template>
       </nav>
-    </div>
+    </OuiBox>
 
     <!-- Footer - Fixed at bottom -->
-    <div class="shrink-0 border-t border-border-muted bg-surface-subtle">
+    <OuiBox as="footer" class="shrink-0 border-t border-border-muted bg-surface-subtle">
       <!-- User section -->
-      <div class="px-4 py-4">
+      <OuiBox class="px-3 md:px-4 py-3 md:py-4">
         <AppUserProfile />
-      </div>
-    </div>
-  </nav>
+      </OuiBox>
+    </OuiBox>
+  </OuiBox>
 </template>
 
 <script setup lang="ts">

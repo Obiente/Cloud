@@ -1,8 +1,8 @@
 <template>
-  <OuiStack gap="md">
-    <OuiFlex justify="between" align="center">
-      <OuiFlex gap="sm" align="center">
-        <OuiBreadcrumbs>
+  <OuiStack gap="sm" class="md:gap-md">
+    <OuiStack gap="sm" class="md:flex-row md:justify-between md:items-center">
+      <OuiFlex gap="xs" align="center" class="min-w-0 flex-1 md:gap-sm">
+        <OuiBreadcrumbs class="min-w-0">
           <OuiBreadcrumbItem>
             <OuiBreadcrumbLink @click.prevent="handleBreadcrumbClick('/')"
               >Root</OuiBreadcrumbLink
@@ -14,6 +14,7 @@
               <OuiBreadcrumbLink
                 :aria-current="crumb.path === selectedPath ? 'page' : undefined"
                 @click.prevent="handleBreadcrumbClick(crumb.path)"
+                class="truncate"
               >
                 {{ crumb.name }}
               </OuiBreadcrumbLink>
@@ -22,24 +23,29 @@
         </OuiBreadcrumbs>
       </OuiFlex>
 
-      <OuiFlex gap="sm" align="center" wrap="wrap">
+      <OuiFlex gap="xs" align="center" wrap="wrap" class="md:gap-sm shrink-0">
         <OuiFlex
-          gap="sm"
+          gap="xs"
           align="center"
           v-if="source.type === 'container' && containers.length > 0"
+          class="w-full sm:w-auto md:gap-sm"
         >
-          <OuiText size="xs" color="muted">Container:</OuiText>
+          <OuiText size="xs" color="muted" class="hidden sm:inline">Container:</OuiText>
           <OuiSelect
             :model-value="selectedServiceName || selectedContainerId || ''"
             :items="containerOptions"
-            placeholder="Select container"
-            style="min-width: 180px"
+            placeholder="Container"
+            class="flex-1 sm:flex-initial"
+            style="min-width: 120px"
             @update:model-value="handleContainerChange"
           />
         </OuiFlex>
         <OuiMenu>
           <template #trigger>
-            <OuiButton variant="ghost" size="sm"> New </OuiButton>
+            <OuiButton variant="ghost" size="sm" class="flex-1 sm:flex-initial">
+              <span class="hidden sm:inline">New</span>
+              <span class="sm:hidden">+</span>
+            </OuiButton>
           </template>
           <template #default>
             <OuiMenuItem value="new-file" @select="() => handleCreate('file')">
@@ -64,29 +70,46 @@
           size="sm"
           :loading="isLoadingTree"
           @click="refreshRoot"
+          class="flex-1 sm:flex-initial"
+          title="Refresh"
         >
-          Refresh
+          <ArrowPathIcon class="h-4 w-4 sm:mr-1.5" :class="{ 'animate-spin': isLoadingTree }" />
+          <span class="hidden sm:inline">Refresh</span>
         </OuiButton>
-        <OuiButton variant="ghost" size="sm" @click="showUpload = !showUpload">
-          Upload
+        <OuiButton variant="ghost" size="sm" @click="showUpload = !showUpload" class="flex-1 sm:flex-initial">
+          <span class="hidden sm:inline">Upload</span>
+          <span class="sm:hidden">↑</span>
         </OuiButton>
       </OuiFlex>
-    </OuiFlex>
+    </OuiStack>
 
     <div
-      class="grid grid-cols-[260px_1fr] gap-4 h-[calc(100vh-220px)] min-h-[calc(100vh-220px)] max-h-[calc(100vh-220px)] overflow-hidden"
+      class="flex flex-col lg:grid lg:grid-cols-[260px_1fr] gap-3 md:gap-4 h-[calc(100vh-220px)] min-h-[400px] md:min-h-[calc(100vh-220px)] max-h-[calc(100vh-220px)] overflow-hidden"
     >
       <aside
-        class="flex flex-col border border-border-default rounded-[10px] bg-surface-base overflow-hidden"
+        class="flex flex-col border border-border-default rounded-lg md:rounded-[10px] bg-surface-base overflow-hidden order-2 lg:order-1"
         aria-label="File tree"
+        :class="showSidebarOnMobile ? 'h-64 md:h-auto' : 'hidden lg:flex'"
       >
-        <div class="p-3 border-b border-border-default">
-          <OuiText
-            size="xs"
-            weight="semibold"
-            class="uppercase tracking-[0.08em] text-[11px] mb-2"
-            >Sources</OuiText
-          >
+        <div class="p-2 md:p-3 border-b border-border-default">
+          <OuiFlex justify="between" align="center" class="mb-2">
+            <OuiText
+              size="xs"
+              weight="semibold"
+              class="uppercase tracking-[0.08em] text-[11px]"
+              >Sources</OuiText
+            >
+            <OuiButton
+              variant="ghost"
+              size="xs"
+              class="lg:hidden p-1"
+              @click="showSidebarOnMobile = !showSidebarOnMobile"
+              :aria-expanded="showSidebarOnMobile"
+            >
+              <XMarkIcon v-if="showSidebarOnMobile" class="h-4 w-4" />
+              <span v-else class="text-xs">Show</span>
+            </OuiButton>
+          </OuiFlex>
           <nav class="flex flex-col gap-1.5">
             <button
               class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[13px] text-left transition-colors duration-150 text-text-secondary border-none bg-transparent cursor-pointer hover:bg-surface-hover hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed"
@@ -201,16 +224,26 @@
       </aside>
 
       <section
-        class="flex flex-col border border-border-default rounded-[10px] bg-surface-base overflow-hidden min-h-0"
+        class="flex flex-col border border-border-default rounded-lg md:rounded-[10px] bg-surface-base overflow-hidden min-h-0 order-1 lg:order-2 flex-1"
       >
         <header
-          class="flex justify-between items-center gap-4 py-3 px-4 border-b border-border-default"
+          class="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 py-2 px-3 sm:py-3 sm:px-4 border-b border-border-default"
         >
-          <div class="flex flex-col gap-1.5">
-            <OuiText size="sm" weight="semibold">
+          <OuiButton
+            v-if="!showSidebarOnMobile"
+            variant="ghost"
+            size="sm"
+            class="lg:hidden absolute top-2 left-2 z-10"
+            @click="showSidebarOnMobile = true"
+            title="Show file tree"
+          >
+            <FolderIcon class="h-4 w-4" />
+          </OuiButton>
+          <div class="flex flex-col gap-1 min-w-0 flex-1 md:gap-1.5" :class="{ 'pl-10 lg:pl-0': !showSidebarOnMobile }">
+            <OuiText size="xs" weight="semibold" class="truncate md:text-sm">
               {{ currentNode?.name || "Preview" }}
             </OuiText>
-            <OuiFlex gap="sm" align="center" class="flex-wrap">
+            <OuiFlex gap="xs" align="center" class="flex-wrap md:gap-sm">
               <span
                 v-if="currentNode?.type === 'symlink'"
                 class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] rounded-xl bg-surface-subtle text-text-secondary"
@@ -315,13 +348,13 @@
               </Transition>
             </OuiFlex>
           </div>
-          <OuiFlex gap="sm" align="center">
+          <OuiFlex gap="xs" align="center" wrap="wrap" class="w-full sm:w-auto md:gap-sm">
             <OuiCombobox
               v-if="currentNode?.type === 'file'"
               v-model="fileLanguage"
               :options="languageOptions"
-              placeholder="Search language..."
-              class="min-w-[180px] max-w-[250px]"
+              placeholder="Language..."
+              class="w-full sm:w-auto min-w-[120px] sm:min-w-[180px] max-w-full sm:max-w-[250px]"
               size="sm"
             />
             <OuiButton
@@ -339,21 +372,25 @@
               size="sm"
               :disabled="isSaving"
               @click="handleSaveFile"
+              class="flex-1 sm:flex-initial"
             >
-              <DocumentArrowDownIcon class="h-4 w-4 mr-1.5" />
-              <span>{{ isSaving ? "Saving..." : "Save" }}</span>
+              <DocumentArrowDownIcon class="h-4 w-4 sm:mr-1.5" />
+              <span class="hidden sm:inline">{{ isSaving ? "Saving..." : "Save" }}</span>
             </OuiButton>
             <OuiButton
               variant="ghost"
               size="sm"
               :disabled="!currentNode || currentNode.type !== 'file'"
               @click="handleDownload"
+              class="flex-1 sm:flex-initial"
+              title="Download"
             >
-              Download
+              <span class="hidden sm:inline">Download</span>
+              <DocumentArrowDownIcon class="h-4 w-4 sm:hidden" />
             </OuiButton>
             <OuiMenu v-if="currentNode">
               <template #trigger>
-                <OuiButton variant="ghost" size="sm">More</OuiButton>
+                <OuiButton variant="ghost" size="sm" class="flex-1 sm:flex-initial">More</OuiButton>
               </template>
               <OuiMenuItem value="refresh" @select="handleRefreshSelection"
                 >Refresh</OuiMenuItem
@@ -574,6 +611,7 @@
     CheckCircleIcon,
     XCircleIcon,
     DocumentArrowDownIcon,
+    FolderIcon,
   } from "@heroicons/vue/24/outline";
   import { TreeView } from "@ark-ui/vue/tree-view";
   import {
@@ -603,6 +641,7 @@
   const router = useRouter();
 
   const showUpload = ref(false);
+  const showSidebarOnMobile = ref(false);
   const hasMounted = ref(false);
   const isInitializingFromQuery = ref(false); // Flag to prevent circular updates during query param initialization
   const isLoadingFile = ref(false); // Track if a file load is in progress

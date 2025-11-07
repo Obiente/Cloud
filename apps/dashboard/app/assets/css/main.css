@@ -4,7 +4,7 @@
 /* Layout Components */
 .sidebar-overlay-enter-active,
 .sidebar-overlay-leave-active {
-  @apply transition-opacity duration-300;
+  @apply transition-opacity duration-200 ease-out;
 }
 
 .sidebar-overlay-enter-from,
@@ -12,14 +12,22 @@
   @apply opacity-0;
 }
 
-.sidebar-panel-enter-active,
+.sidebar-panel-enter-active {
+  @apply transition-transform duration-300 ease-out;
+}
+
 .sidebar-panel-leave-active {
-  @apply transition-transform duration-300 ease-in-out;
+  @apply transition-transform duration-250 ease-in;
 }
 
 .sidebar-panel-enter-from,
 .sidebar-panel-leave-to {
   @apply -translate-x-full;
+}
+
+.sidebar-panel-enter-to,
+.sidebar-panel-leave-from {
+  @apply translate-x-0;
 }
 
 /* Main content styles moved to Tailwind classes directly in templates */

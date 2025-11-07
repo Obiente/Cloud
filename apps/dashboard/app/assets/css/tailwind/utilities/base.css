@@ -216,3 +216,29 @@
           calc(0.1 * var(--oui-elevation-base, 1))),
     0 8px 10px -6px rgb(0 0 0 / calc(0.1 * var(--oui-elevation-base, 1)));
 }
+
+/* Global overflow prevention for mobile */
+@layer base {
+  html,
+  body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  * {
+    /* Prevent horizontal overflow from fixed widths */
+    min-width: 0;
+  }
+
+  /* Ensure text wraps properly */
+  p, span, div, h1, h2, h3, h4, h5, h6 {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  /* Prevent images from overflowing */
+  img, video, svg {
+    max-width: 100%;
+    height: auto;
+  }
+}

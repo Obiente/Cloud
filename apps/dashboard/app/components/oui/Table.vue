@@ -1,10 +1,10 @@
 <template>
   <div 
-    class="oui-table-wrapper overflow-x-auto"
+    class="oui-table-wrapper overflow-x-auto -mx-4 md:mx-0"
     :class="wrapperClass"
   >
     <table 
-      class="min-w-full text-left text-sm"
+      class="min-w-full text-left text-xs md:text-sm"
       :class="tableClass"
       :style="tableStyles"
       role="table"
@@ -16,7 +16,7 @@
             v-for="(column, index) in columns"
             :key="column.key || index"
             :class="[
-              'px-6 py-3 font-medium relative',
+              'px-3 md:px-6 py-2 md:py-3 font-medium relative text-xs md:text-sm',
               headerClass,
               column.headerClass,
               { 'cursor-pointer select-none': sortable && column.sortable !== false }
@@ -90,7 +90,7 @@
             v-for="(column, colIndex) in columns"
             :key="column.key || colIndex"
             :class="[
-              'px-6 py-3',
+              'px-3 md:px-6 py-2 md:py-3',
               cellClass,
               column.cellClass
             ]"
@@ -110,7 +110,7 @@
         <tr v-if="!sortedRows.length">
           <td 
             :colspan="columns.length" 
-            :class="['px-6 py-8 text-center text-text-muted', emptyClass]"
+            :class="['px-3 md:px-6 py-4 md:py-8 text-center text-text-muted text-xs md:text-sm', emptyClass]"
             role="status"
             :aria-live="'polite'"
           >

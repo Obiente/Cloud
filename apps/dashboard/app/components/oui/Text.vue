@@ -27,6 +27,11 @@
     size?: OUISize;
 
     /**
+     * Mobile text size variant (overrides size on small screens)
+     */
+    sizeMobile?: OUISize;
+
+    /**
      * Text weight variant
      * @default 'normal'
      */
@@ -92,7 +97,7 @@
   });
 
   const textClasses = computed(() => {
-    const classes = ["oui-text"];
+    const classes = ["oui-text", "break-words"];
 
     // Size classes
     const sizeClasses: Record<OUISize, string> = {
@@ -108,7 +113,15 @@
       "6xl": "text-6xl",
       "7xl": "text-7xl",
     };
-    classes.push(sizeClasses[props.size]);
+    
+    // Mobile size (if provided, use it on mobile, otherwise use base size)
+    if (props.sizeMobile) {
+      classes.push(sizeClasses[props.sizeMobile]);
+      // Add responsive class for larger screens
+      classes.push(`md:${sizeClasses[props.size]}`);
+    } else {
+      classes.push(sizeClasses[props.size]);
+    }
 
     // Weight classes
     const weightClasses = {

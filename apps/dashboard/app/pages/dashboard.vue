@@ -1,36 +1,37 @@
 <template>
-  <OuiContainer size="full" py="xl">
-    <OuiStack gap="xl">
+  <OuiContainer size="full" py="sm" class="md:py-8">
+    <OuiStack gap="md" class="md:gap-8">
       <!-- Page Header -->
-      <OuiFlex justify="between" align="center" wrap="wrap" gap="lg">
-        <OuiStack gap="xs" class="flex-1">
-          <OuiText as="h1" size="3xl" weight="bold" color="primary"
+      <OuiFlex justify="between" align="center" wrap="wrap" gap="md" class="md:gap-6">
+        <OuiStack gap="xs" class="flex-1 min-w-0">
+          <OuiText as="h1" size="2xl" weight="bold" color="primary" class="md:text-3xl"
             >Dashboard</OuiText
           >
-          <OuiText color="secondary"
+          <OuiText size="sm" color="secondary" class="hidden sm:block md:text-base"
             >Comprehensive overview of your cloud infrastructure, usage metrics, and resource health.</OuiText
           >
         </OuiStack>
 
-        <OuiFlex gap="sm" align="center" wrap="wrap">
-          <OuiButton variant="ghost" size="sm" @click="retryLoad" class="gap-2">
+        <OuiFlex gap="xs" align="center" wrap="wrap" class="w-full sm:w-auto md:gap-2">
+          <OuiButton variant="ghost" size="sm" @click="retryLoad" class="gap-2 flex-1 sm:flex-initial">
             <ArrowPathIcon class="h-4 w-4" :class="{ 'animate-spin': isLoading }" />
-            Refresh
+            <span class="hidden sm:inline">Refresh</span>
           </OuiButton>
           <OuiButton
             color="primary"
             size="sm"
-            class="gap-2 shadow-md"
+            class="gap-2 shadow-md flex-1 sm:flex-initial"
             @click="navigateTo('/deployments')"
           >
             <RocketLaunchIcon class="h-4 w-4" />
-            New Deployment
+            <span class="hidden sm:inline">New Deployment</span>
+            <span class="sm:hidden">New</span>
           </OuiButton>
         </OuiFlex>
       </OuiFlex>
 
       <!-- Enhanced KPI Overview -->
-      <OuiGrid cols="1" cols-sm="2" cols-md="3" cols-lg="5" gap="md">
+      <OuiGrid cols="2" cols-sm="2" cols-md="3" cols-lg="5" gap="xs" class="sm:gap-2 md:gap-4">
         <OuiCard
           v-for="card in kpiCards"
           :key="card.label"
@@ -40,7 +41,7 @@
           @click="card.href && navigateTo(card.href)"
         >
           <OuiCardBody>
-            <OuiFlex align="center" justify="between" gap="md" class="relative">
+            <OuiFlex align="center" justify="between" gap="sm" class="relative md:gap-4">
               <OuiStack gap="xs" class="flex-1 min-w-0">
                 <OuiSkeleton
                   v-if="isLoading"
@@ -48,21 +49,22 @@
                   height="1.5rem"
                   variant="text"
                 />
-                <OuiFlex v-else align="baseline" gap="sm" wrap="wrap">
+                <OuiFlex v-else align="baseline" gap="xs" wrap="wrap" class="md:gap-2">
                   <OuiText
                     as="h3"
-                    size="2xl"
+                    size="lg"
+                    sizeMobile="md"
                     weight="bold"
                     color="primary"
-                    class="leading-tight"
+                    class="leading-tight md:text-xl lg:text-2xl"
                   >
                     {{ card.value }}
                   </OuiText>
                   <OuiText 
                     v-if="card.subtitle" 
-                    size="sm" 
+                    size="xs" 
                     color="secondary"
-                    class="leading-tight"
+                    class="leading-tight hidden sm:inline md:text-sm"
                   >
                     {{ card.subtitle }}
                   </OuiText>
@@ -72,14 +74,14 @@
                 </OuiText>
               </OuiStack>
               <OuiBox
-                p="md"
+                p="xs"
                 rounded="lg"
-                :class="card.iconBg"
-                class="flex items-center justify-center flex-shrink-0"
+                :class="[card.iconBg, 'sm:p-2 md:p-4']"
+                class="flex items-center justify-center shrink-0"
               >
                 <component
                   :is="card.icon"
-                  class="h-7 w-7"
+                  class="h-4 w-4 sm:h-5 sm:w-5 md:h-7 md:w-7"
                   :class="card.iconColor"
                 />
               </OuiBox>
@@ -91,16 +93,17 @@
       <!-- Usage Metrics Section -->
       <OuiCard>
         <OuiCardHeader>
-          <OuiFlex align="center" justify="between">
-            <OuiStack gap="xs">
+          <OuiFlex align="center" justify="between" wrap="wrap" gap="sm">
+            <OuiStack gap="xs" class="flex-1 min-w-0">
               <OuiText as="h2" class="oui-card-title">Resource Usage</OuiText>
-              <OuiText size="sm" color="secondary">
+              <OuiText size="xs" color="secondary" class="hidden sm:block md:text-sm">
                 Current month usage and estimated costs
               </OuiText>
             </OuiStack>
             <OuiButton
               variant="ghost"
               size="sm"
+              class="w-full sm:w-auto"
               @click="navigateTo('/organizations?tab=billing')"
             >
               View Details
@@ -215,18 +218,18 @@
       </OuiCard>
 
       <!-- Cost Breakdown & Health Row -->
-      <OuiGrid cols="1" cols-lg="2" gap="xl">
+      <OuiGrid cols="1" cols-lg="2" gap="lg" class="md:gap-8">
         <!-- Cost Breakdown -->
         <OuiCard>
           <OuiCardHeader>
-            <OuiFlex align="center" justify="between">
-              <OuiStack gap="xs">
-                <OuiText as="h2" class="oui-card-title">Cost Breakdown</OuiText>
-                <OuiText size="xs" color="secondary">
-                  Estimated monthly costs by resource
-                </OuiText>
-              </OuiStack>
-            </OuiFlex>
+          <OuiFlex align="center" justify="between">
+            <OuiStack gap="xs" class="flex-1 min-w-0">
+              <OuiText as="h2" class="oui-card-title">Cost Breakdown</OuiText>
+              <OuiText size="xs" color="secondary" class="hidden sm:block">
+                Estimated monthly costs by resource
+              </OuiText>
+            </OuiStack>
+          </OuiFlex>
           </OuiCardHeader>
           <OuiCardBody>
             <template v-if="isLoadingUsage">
@@ -292,17 +295,17 @@
         <!-- Enhanced Health & Alerts -->
         <OuiCard>
           <OuiCardHeader>
-            <OuiFlex align="center" justify="between">
-              <OuiStack gap="xs">
-                <OuiText as="h2" class="oui-card-title">Deployment Health</OuiText>
-                <OuiText size="xs" color="secondary">
-                  Status overview of all deployments
-                </OuiText>
-              </OuiStack>
-              <OuiBadge :variant="allHealthy ? 'success' : 'warning'">{{
-                allHealthy ? "All Healthy" : "Issues Detected"
-              }}</OuiBadge>
-            </OuiFlex>
+          <OuiFlex align="center" justify="between" wrap="wrap" gap="sm">
+            <OuiStack gap="xs" class="flex-1 min-w-0">
+              <OuiText as="h2" class="oui-card-title">Deployment Health</OuiText>
+              <OuiText size="xs" color="secondary" class="hidden sm:block">
+                Status overview of all deployments
+              </OuiText>
+            </OuiStack>
+            <OuiBadge :variant="allHealthy ? 'success' : 'warning'" class="shrink-0">{{
+              allHealthy ? "All Healthy" : "Issues Detected"
+            }}</OuiBadge>
+          </OuiFlex>
           </OuiCardHeader>
           <OuiCardBody>
             <template v-if="isLoading">
@@ -313,54 +316,54 @@
               </OuiStack>
             </template>
             <template v-else>
-              <OuiGrid cols="2" gap="sm" class="mb-4">
+              <OuiGrid cols="2" gap="xs" class="mb-4 md:gap-2">
                 <OuiBox
-                  p="md"
+                  p="sm"
                   rounded="lg"
-                  class="bg-success/10 ring-1 ring-success/20 cursor-pointer hover:bg-success/15 hover:ring-success/30 transition-all"
+                  class="bg-success/10 ring-1 ring-success/20 cursor-pointer hover:bg-success/15 hover:ring-success/30 transition-all md:p-4"
                   @click="navigateTo(runningDeploymentsUrl)"
                 >
                   <OuiStack align="center" gap="xs">
-                    <OuiText size="2xl" weight="bold" class="text-success">
+                    <OuiText size="xl" weight="bold" class="text-success md:text-2xl">
                       {{ runningCount }}
                     </OuiText>
                     <OuiText size="xs" color="secondary">Running</OuiText>
                   </OuiStack>
                 </OuiBox>
                 <OuiBox
-                  p="md"
+                  p="sm"
                   rounded="lg"
-                  class="bg-warning/10 ring-1 ring-warning/20 cursor-pointer hover:bg-warning/15 hover:ring-warning/30 transition-all"
+                  class="bg-warning/10 ring-1 ring-warning/20 cursor-pointer hover:bg-warning/15 hover:ring-warning/30 transition-all md:p-4"
                   @click="navigateTo(buildingDeploymentsUrl)"
                 >
                   <OuiStack align="center" gap="xs">
-                    <OuiText size="2xl" weight="bold" class="text-warning">
+                    <OuiText size="xl" weight="bold" class="text-warning md:text-2xl">
                       {{ buildingCount }}
                     </OuiText>
                     <OuiText size="xs" color="secondary">Building</OuiText>
                   </OuiStack>
                 </OuiBox>
                 <OuiBox
-                  p="md"
+                  p="sm"
                   rounded="lg"
-                  class="bg-secondary/10 ring-1 ring-secondary/20 cursor-pointer hover:bg-secondary/15 hover:ring-secondary/30 transition-all"
+                  class="bg-secondary/10 ring-1 ring-secondary/20 cursor-pointer hover:bg-secondary/15 hover:ring-secondary/30 transition-all md:p-4"
                   @click="navigateTo(stoppedDeploymentsUrl)"
                 >
                   <OuiStack align="center" gap="xs">
-                    <OuiText size="2xl" weight="bold" class="text-secondary">
+                    <OuiText size="xl" weight="bold" class="text-secondary md:text-2xl">
                       {{ stoppedCount }}
                     </OuiText>
                     <OuiText size="xs" color="secondary">Stopped</OuiText>
                   </OuiStack>
                 </OuiBox>
                 <OuiBox
-                  p="md"
+                  p="sm"
                   rounded="lg"
-                  class="bg-danger/10 ring-1 ring-danger/20 cursor-pointer hover:bg-danger/15 hover:ring-danger/30 transition-all"
+                  class="bg-danger/10 ring-1 ring-danger/20 cursor-pointer hover:bg-danger/15 hover:ring-danger/30 transition-all md:p-4"
                   @click="navigateTo(errorDeploymentsUrl)"
                 >
                   <OuiStack align="center" gap="xs">
-                    <OuiText size="2xl" weight="bold" class="text-danger">
+                    <OuiText size="xl" weight="bold" class="text-danger md:text-2xl">
                       {{ errorCount }}
                     </OuiText>
                     <OuiText size="xs" color="secondary">Errors</OuiText>
@@ -416,16 +419,17 @@
       <!-- Recent Deployments -->
       <OuiCard>
         <OuiCardHeader>
-          <OuiFlex align="center" justify="between">
-            <OuiStack gap="xs">
+          <OuiFlex align="center" justify="between" wrap="wrap" gap="sm">
+            <OuiStack gap="xs" class="flex-1 min-w-0">
               <OuiText as="h2" class="oui-card-title">Recent Deployments</OuiText>
-              <OuiText size="xs" color="secondary">
+              <OuiText size="xs" color="secondary" class="hidden sm:block">
                 Latest {{ recentDeployments.length }} deployments across your environments
               </OuiText>
             </OuiStack>
             <OuiButton
               variant="ghost"
               size="sm"
+              class="w-full sm:w-auto"
               @click="navigateTo('/deployments')"
             >
               View All →
@@ -480,11 +484,11 @@
             <OuiBox
               v-for="deployment in recentDeployments"
               :key="deployment.id"
-              p="md"
+              p="sm"
               rounded="lg"
               border="1"
               borderColor="muted"
-              class="cursor-pointer transition-all duration-150 hover:border-default hover:bg-surface-muted hover:shadow-sm"
+              class="cursor-pointer transition-all duration-150 hover:border-default hover:bg-surface-muted hover:shadow-sm md:p-4"
               @click="navigateTo(`/deployments/${deployment.id}`)"
             >
               <OuiFlex justify="between" align="start" gap="md">

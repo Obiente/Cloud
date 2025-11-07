@@ -15,7 +15,7 @@
 
   /* Card Parts - reusable layouts */
   .oui-card-header {
-    @apply p-6;
+    @apply p-3 md:p-4 lg:p-6;
     border-bottom: 1px solid var(--oui-border-muted);
   }
 
@@ -24,11 +24,11 @@
   }
 
   .oui-card-body {
-    @apply p-6;
+    @apply p-3 md:p-4 lg:p-6;
   }
 
   .oui-card-footer {
-    @apply p-6;
+    @apply p-3 md:p-4 lg:p-6;
     border-top: 1px solid var(--oui-border-muted);
   }
 
@@ -37,12 +37,12 @@
   }
 
   .oui-card-title {
-    @apply text-lg font-semibold m-0;
+    @apply text-sm md:text-base lg:text-lg font-semibold m-0;
     color: var(--oui-text-primary);
   }
 
   .oui-card-description {
-    @apply text-sm m-0;
+    @apply text-xs m-0;
     color: var(--oui-text-secondary);
   }
 

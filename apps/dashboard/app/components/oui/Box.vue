@@ -129,7 +129,7 @@ const props = withDefaults(defineProps<BoxProps>(), {
 });
 
 const boxClasses = computed(() => {
-  const classes = ["oui-box"];
+  const classes = ["oui-box", "min-w-0"];
 
   // Padding classes
   const padding = spacingClass(props.p, "p");

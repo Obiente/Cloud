@@ -1,24 +1,24 @@
 <template>
-  <OuiContainer as="header" class="bg-surface-base outline-border-muted px-6 py-4">
-    <OuiFlex align="center" justify="between">
+  <OuiContainer as="header" class="bg-surface-base outline-border-muted px-3 md:px-6 py-3 md:py-4 min-w-0 overflow-hidden">
+    <OuiFlex align="center" justify="between" wrap="wrap" gap="sm" class="min-w-0">
       <!-- Page title -->
-      <OuiFlex align="center" gap="md">
+      <OuiFlex align="center" gap="sm" class="flex-1 min-w-0 md:gap-4 overflow-hidden">
         <slot name="leading" />
 
-        <OuiStack gap="xs">
-          <OuiText as="h1" size="2xl" weight="bold" color="primary">
+        <OuiStack gap="xs" class="min-w-0 flex-1">
+          <OuiText as="h1" size="xl" weight="bold" color="primary" class="truncate md:text-2xl">
             <slot name="title">
               {{ title }}
             </slot>
           </OuiText>
-          <OuiText v-if="subtitle" size="sm" color="secondary">
+          <OuiText v-if="subtitle" size="xs" color="secondary" class="hidden sm:block md:text-sm">
             {{ subtitle }}
           </OuiText>
         </OuiStack>
       </OuiFlex>
 
       <!-- Actions -->
-      <OuiFlex align="center" gap="md">
+      <OuiFlex align="center" gap="sm" class="shrink-0 md:gap-4">
         <!-- Notifications -->
         <OuiButton
           ref="notificationButtonRef"

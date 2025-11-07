@@ -108,7 +108,7 @@ const props = withDefaults(defineProps<ContainerProps>(), {
 });
 
 const containerClasses = computed(() => {
-  const classes = ["oui-container"];
+  const classes = ["oui-container", "min-w-0", "w-full"];
 
   // Base container behavior
   if (props.fluid) {

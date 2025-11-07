@@ -2,25 +2,32 @@
   <div class="bg-surface-base min-h-screen overflow-hidden">
     <!-- Mobile Sidebar Overlay -->
     <Transition name="sidebar-overlay">
-      <div
+      <OuiBox
         v-if="isSidebarOpen && user.user && user.isAuthenticated"
-        class="fixed inset-0 z-40 flex lg:hidden"
+        as="div"
+        class="fixed inset-0 z-40 flex xl:hidden"
         role="dialog"
         aria-modal="true"
+        aria-label="Navigation menu"
       >
-        <div
+        <OuiBox
+          as="div"
           class="absolute inset-0 bg-background/80 backdrop-blur-sm"
           @click="closeSidebar"
+          aria-hidden="true"
         />
-      </div>
+      </OuiBox>
     </Transition>
 
     <!-- Mobile Sidebar Panel -->
     <Transition name="sidebar-panel" appear>
-      <div
+      <OuiBox
         v-if="isSidebarOpen"
+        as="aside"
         :id="mobileSidebarId"
-        class="fixed inset-y-0 left-0 z-50 flex h-full w-72 max-w-[80vw] flex-col lg:hidden"
+        class="fixed inset-y-0 left-0 z-50 flex h-full w-72 max-w-[80vw] flex-col xl:hidden"
+        role="navigation"
+        aria-label="Primary navigation"
       >
         <AppSidebar
           class="sidebar-drawer relative h-full border-r border-border-muted bg-surface-base shadow-2xl"
@@ -36,17 +43,18 @@
           size="sm"
           class="absolute right-3 top-3 z-50 p-2! text-text-secondary hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
           @click="closeSidebar"
-          aria-label="Close navigation"
+          aria-label="Close navigation menu"
+          title="Close menu"
         >
           <XMarkIcon class="h-5 w-5" />
         </OuiButton>
-      </div>
+      </OuiBox>
     </Transition>
 
     <!-- Authenticated View -->
     <div v-if="user.user && user.isAuthenticated" class="flex min-h-screen">
       <!-- Desktop Sidebar -->
-      <div class="hidden lg:block lg:w-64 lg:shrink-0">
+      <div class="hidden xl:block xl:w-64 xl:shrink-0">
         <div class="sticky top-0 h-screen bg-surface-base">
           <AppSidebar
             class="w-full h-full relative z-0"
@@ -61,11 +69,11 @@
       </div>
 
       <!-- Main Frame -->
-      <div class="flex-1 flex flex-col">
+      <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
         <!-- Header -->
-        <div class="sticky top-0 z-30">
+        <div class="sticky top-0 z-30 min-w-0">
           <AppHeader
-            class="w-full lg:shadow-sm"
+            class="w-full xl:shadow-sm min-w-0"
             :notification-count="unreadCount"
             @notifications-click="isNotificationsOpen = !isNotificationsOpen"
           >
@@ -73,7 +81,7 @@
               <OuiButton
                 variant="ghost"
                 size="sm"
-                class="lg:hidden p-2! text-text-secondary hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
+                class="xl:hidden p-2! text-text-secondary hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
                 @click="toggleSidebar"
                 :aria-expanded="isSidebarOpen"
                 :aria-controls="mobileSidebarId"
@@ -90,10 +98,10 @@
 
         <!-- Framed Main Content -->
         <main
-          class="flex-1 bg-background overflow-hidden m-2 ml-0 rounded-3xl border border-muted p-6 relative"
+          class="flex-1 bg-background overflow-hidden m-0 xl:m-2 xl:ml-0 rounded-none xl:rounded-3xl border-0 xl:border border-muted p-2 xl:p-6 relative min-w-0"
         >
-          <div class="absolute inset-0 overflow-hidden rounded-xl">
-            <div class="h-full w-full overflow-y-auto p-6">
+          <div class="absolute inset-0 overflow-hidden rounded-none xl:rounded-xl min-w-0">
+            <div class="h-full w-full overflow-y-auto overflow-x-hidden p-2 xl:p-6 min-w-0">
               <slot />
             </div>
           </div>
@@ -239,47 +247,17 @@
   // Toast notifications
   const { toaster } = useToast();
 
-  const isSidebarOpen = ref(false);
-  const mobileSidebarId = "mobile-primary-navigation";
-
-  const closeSidebar = () => {
-    isSidebarOpen.value = false;
-  };
-
-  const toggleSidebar = () => {
-    isSidebarOpen.value = !isSidebarOpen.value;
-  };
-
-  const handleKeydown = (event: KeyboardEvent) => {
-    if (event.key === "Escape") {
-      closeSidebar();
-    }
-  };
-
-  const handleBreakpointChange = () => {
-    if (
-      import.meta.client &&
-      window.matchMedia("(min-width: 1024px)").matches
-    ) {
-      isSidebarOpen.value = false;
-    }
-  };
-
-  // Register lifecycle hooks unconditionally (required by Vue)
-  onMounted(() => {
-    if (import.meta.client) {
-      handleBreakpointChange();
-      window.addEventListener("keydown", handleKeydown);
-      window.addEventListener("resize", handleBreakpointChange);
-    }
+  // Use robust sidebar composable with Tailwind breakpoint
+  const sidebar = useSidebar({
+    desktopBreakpoint: "xl", // Matches xl:hidden, xl:block classes
+    lockBodyScroll: true,
+    trapFocus: true,
   });
-
-  onBeforeUnmount(() => {
-    if (import.meta.client) {
-      window.removeEventListener("keydown", handleKeydown);
-      window.removeEventListener("resize", handleBreakpointChange);
-    }
-  });
+  
+  const isSidebarOpen = sidebar.isOpen;
+  const mobileSidebarId = sidebar.sidebarId;
+  const closeSidebar = sidebar.close;
+  const toggleSidebar = sidebar.toggle;
 
   // Organization switcher data and methods (Connect)
   import { useConnectClient } from "~/lib/connect-client";
