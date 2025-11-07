@@ -1365,11 +1365,6 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		args = append(args, "--env", e)
 	}
 
-	// Add start command if provided
-	if config.StartCommand != nil && *config.StartCommand != "" {
-		args = append(args, "--command", *config.StartCommand)
-	}
-
 	// Add health check if we have a port
 	if healthCheckPort > 0 {
 		healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, healthCheckPort, healthCheckPort)
@@ -1393,6 +1388,14 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 
 	// Add image
 	args = append(args, config.Image)
+
+	// Add start command if provided (must come after image)
+	// docker service create format: [OPTIONS] IMAGE [COMMAND] [ARG...]
+	if config.StartCommand != nil && *config.StartCommand != "" {
+		// Split the command into parts for proper argument handling
+		// Use sh -c to preserve working directory and handle relative paths
+		args = append(args, "sh", "-c", *config.StartCommand)
+	}
 
 	// Execute docker service create
 	cmd := exec.CommandContext(ctx, "docker", args...)
