@@ -645,8 +645,8 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 		metricsDB := database.GetMetricsDB()
 		metricsDB.Table("deployment_usage_hourly duh").
 			Select(`
-				COALESCE(SUM((duh.avg_cpu_usage / 100.0) * 3600), 0) as cpu_core_seconds,
-				COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds,
+				COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
+				COALESCE(CAST(SUM(duh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
 				COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
 				COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
 			`).
@@ -768,8 +768,8 @@ func (s *Service) GetDeploymentUsage(ctx context.Context, req *connect.Request[d
 		metricsDB := database.GetMetricsDB()
 		metricsDB.Table("deployment_usage_hourly duh").
 			Select(`
-				COALESCE(SUM((duh.avg_cpu_usage / 100.0) * 3600), 0) as cpu_core_seconds,
-				COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds,
+				COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
+				COALESCE(CAST(SUM(duh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
 				COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
 				COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
 			`).

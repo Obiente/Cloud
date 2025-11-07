@@ -13,6 +13,7 @@ import (
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/orchestrator"
 
 	"strings"
 	"time"
@@ -20,6 +21,175 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// attemptAutomaticRedeployment attempts to automatically start/redeploy a deployment
+// that should be running but has no containers
+func (s *Service) attemptAutomaticRedeployment(ctx context.Context, deploymentID string) error {
+	// Get deployment from database to check status
+	dbDep, err := s.repo.GetByID(ctx, deploymentID)
+	if err != nil {
+		return fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	// Only attempt redeployment if deployment should be running
+	status := deploymentsv1.DeploymentStatus(dbDep.Status)
+	if status != deploymentsv1.DeploymentStatus_RUNNING && status != deploymentsv1.DeploymentStatus_DEPLOYING {
+		return fmt.Errorf("deployment status is %s, not attempting redeployment", getStatusName(dbDep.Status))
+	}
+
+	log.Printf("[attemptAutomaticRedeployment] Deployment %s should be running but has no containers, attempting automatic redeployment", deploymentID)
+
+	// First, try to start existing containers (they might just be stopped)
+	if s.manager != nil {
+		if err := s.manager.StartDeployment(ctx, deploymentID); err == nil {
+			log.Printf("[attemptAutomaticRedeployment] Successfully started existing containers for deployment %s", deploymentID)
+			// Wait a bit for containers to start
+			time.Sleep(1 * time.Second)
+			return nil
+		}
+		log.Printf("[attemptAutomaticRedeployment] No existing containers to start for deployment %s, will create new ones", deploymentID)
+	}
+
+	// Check if this is a compose-based deployment
+	if dbDep.ComposeYaml != "" {
+		// Deploy using Docker Compose
+		if s.manager != nil {
+			if err := s.manager.DeployComposeFile(ctx, deploymentID, dbDep.ComposeYaml); err != nil {
+				log.Printf("[attemptAutomaticRedeployment] Failed to deploy compose file for deployment %s: %v", deploymentID, err)
+				return fmt.Errorf("failed to deploy compose file: %w", err)
+			}
+			log.Printf("[attemptAutomaticRedeployment] Successfully deployed compose file for deployment %s", deploymentID)
+		} else {
+			return fmt.Errorf("compose deployment requires orchestrator")
+		}
+	} else {
+		// Regular container-based deployment
+		if s.manager != nil {
+			// Get deployment config from database
+			image := ""
+			if dbDep.Image != nil {
+				image = *dbDep.Image
+			}
+			
+			// If no image is configured, check if deployment needs to be built
+			if image == "" {
+				// Check if deployment has a repository URL or build strategy that requires building
+				if dbDep.RepositoryURL != nil && *dbDep.RepositoryURL != "" {
+					log.Printf("[attemptAutomaticRedeployment] Deployment %s has no image but has repository URL - deployment needs to be built first", deploymentID)
+					return fmt.Errorf("deployment image not found - deployment needs to be built. Please trigger a deployment build first")
+				}
+				// If no repository URL, this might be a deployment that uses an external image
+				// In that case, we can't automatically redeploy
+				log.Printf("[attemptAutomaticRedeployment] Deployment %s has no image configured", deploymentID)
+				return fmt.Errorf("deployment has no image configured")
+			}
+			
+			// Get port from routing configuration if available, otherwise use deployment port
+			port := 8080
+			if dbDep.Port != nil {
+				port = int(*dbDep.Port)
+			}
+			
+			// Check routing configuration for target port (takes precedence)
+			routings, err := database.GetDeploymentRoutings(deploymentID)
+			if err == nil && len(routings) > 0 {
+				// Track if we found a routing rule
+				foundRouting := false
+				// Find routing rule for "default" service (or first one if no service name specified)
+				for _, routing := range routings {
+					if routing.ServiceName == "" || routing.ServiceName == "default" {
+						port = routing.TargetPort
+						log.Printf("[attemptAutomaticRedeployment] Using target port %d from routing configuration (default service) for deployment %s", port, deploymentID)
+						foundRouting = true
+						break
+					}
+				}
+				// If no default service routing found, use first routing's target port
+				if !foundRouting {
+					port = routings[0].TargetPort
+					log.Printf("[attemptAutomaticRedeployment] Using target port %d from first routing rule for deployment %s", port, deploymentID)
+				}
+			}
+			
+			memory := int64(512 * 1024 * 1024) // Default 512MB
+			if dbDep.MemoryBytes != nil {
+				memory = *dbDep.MemoryBytes
+			}
+			cpuShares := int64(1024) // Default
+			if dbDep.CPUShares != nil {
+				cpuShares = *dbDep.CPUShares
+			}
+			replicas := 1 // Default
+			if dbDep.Replicas != nil {
+				replicas = int(*dbDep.Replicas)
+			}
+
+			// Recreate containers using deployment config
+			cfg := &orchestrator.DeploymentConfig{
+				DeploymentID: deploymentID,
+				Image:        image,
+				Domain:       dbDep.Domain,
+				Port:         port,
+				EnvVars:      parseEnvVars(dbDep.EnvVars),
+				Labels:       map[string]string{},
+				Memory:       memory,
+				CPUShares:    cpuShares,
+				Replicas:     replicas,
+			}
+			if err := s.manager.CreateDeployment(ctx, cfg); err != nil {
+				log.Printf("[attemptAutomaticRedeployment] Failed to create containers for deployment %s: %v", deploymentID, err)
+				// Check if error is about missing image
+				if strings.Contains(err.Error(), "No such image") || strings.Contains(err.Error(), "image not found") {
+					// Check if there's a latest successful build - if so, trigger automatic rebuild
+					latestBuild, buildErr := s.buildHistoryRepo.GetLatestSuccessfulBuild(ctx, deploymentID)
+					if buildErr == nil && latestBuild != nil {
+						log.Printf("[attemptAutomaticRedeployment] Image %s not found but found successful build #%d, triggering automatic rebuild", image, latestBuild.BuildNumber)
+						
+						// Trigger rebuild asynchronously
+						go func() {
+							// Create a system context with admin user to bypass permission checks
+							systemCtx := s.createSystemContext()
+							
+							// Create a request with organization ID from deployment
+							req := connect.NewRequest(&deploymentsv1.TriggerDeploymentRequest{
+								DeploymentId:   deploymentID,
+								OrganizationId: dbDep.OrganizationID,
+							})
+							
+							// Trigger the deployment (this will handle the build asynchronously)
+							_, triggerErr := s.TriggerDeployment(systemCtx, req)
+							if triggerErr != nil {
+								log.Printf("[attemptAutomaticRedeployment] Failed to trigger automatic rebuild for deployment %s: %v", deploymentID, triggerErr)
+							} else {
+								log.Printf("[attemptAutomaticRedeployment] Successfully triggered automatic rebuild for deployment %s", deploymentID)
+							}
+						}()
+						
+						return fmt.Errorf("image %s not found - automatically triggered rebuild based on latest successful build #%d. Please wait for the build to complete", image, latestBuild.BuildNumber)
+					}
+					
+					// No successful build found
+					return fmt.Errorf("image %s not found - deployment needs to be built. Please trigger a deployment build first", image)
+				}
+				return fmt.Errorf("failed to create containers: %w", err)
+			}
+			log.Printf("[attemptAutomaticRedeployment] Successfully created containers for deployment %s", deploymentID)
+
+			// Start the containers
+			if err := s.manager.StartDeployment(ctx, deploymentID); err != nil {
+				log.Printf("[attemptAutomaticRedeployment] Failed to start containers for deployment %s: %v", deploymentID, err)
+				return fmt.Errorf("failed to start containers: %w", err)
+			}
+		} else {
+			return fmt.Errorf("deployment has no containers and orchestrator is not available")
+		}
+	}
+
+	// Wait a bit for containers to be created and started
+	time.Sleep(2 * time.Second)
+
+	return nil
+}
 
 // findContainerForDeployment finds a container by container_id or service_name
 // preferRunning: if true, prefer running containers when container_id/service_name not specified
@@ -39,8 +209,23 @@ func (s *Service) findContainerForDeployment(ctx context.Context, deploymentID, 
 		}
 	}
 
+	// If still no containers found, check if deployment should be running and attempt automatic redeployment
+	if len(locations) == 0 {
+		// Attempt automatic redeployment if deployment should be running
+		if err := s.attemptAutomaticRedeployment(ctx, deploymentID); err != nil {
+			log.Printf("[findContainerForDeployment] Automatic redeployment failed for deployment %s: %v", deploymentID, err)
+			// Continue to check again after redeployment attempt
+		}
+
+		// Try to get locations again after redeployment attempt
+		locations, err = database.ValidateAndRefreshLocations(deploymentID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to validate locations after redeployment: %w", err)
+	}
+
 	if len(locations) == 0 {
 		return nil, fmt.Errorf("no containers for deployment")
+		}
 	}
 
 	// If container_id is provided, find by ID

@@ -492,10 +492,33 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 				if dbDep.Image != nil {
 					image = *dbDep.Image
 				}
+				// Get port from routing configuration if available, otherwise use deployment port
 				port := 8080
 				if dbDep.Port != nil {
 					port = int(*dbDep.Port)
 				}
+				
+				// Check routing configuration for target port (takes precedence)
+				routings, err := database.GetDeploymentRoutings(deploymentID)
+				if err == nil && len(routings) > 0 {
+					// Track if we found a routing rule
+					foundRouting := false
+					// Find routing rule for "default" service (or first one if no service name specified)
+					for _, routing := range routings {
+						if routing.ServiceName == "" || routing.ServiceName == "default" {
+							port = routing.TargetPort
+							logger.Info("[StartDeployment] Using target port %d from routing configuration (default service) for deployment %s", port, deploymentID)
+							foundRouting = true
+							break
+						}
+					}
+					// If no default service routing found, use first routing's target port
+					if !foundRouting {
+						port = routings[0].TargetPort
+						logger.Info("[StartDeployment] Using target port %d from first routing rule for deployment %s", port, deploymentID)
+					}
+				}
+				
 				memory := int64(512 * 1024 * 1024) // Default 512MB
 				if dbDep.MemoryBytes != nil {
 					memory = *dbDep.MemoryBytes
@@ -614,7 +637,17 @@ func (s *Service) RestartDeployment(ctx context.Context, req *connect.Request[de
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart compose deployment: %w", err))
 		}
 	} else if s.manager != nil {
-		_ = s.manager.RestartDeployment(ctx, deploymentID)
+		if err := s.manager.RestartDeployment(ctx, deploymentID); err != nil {
+			logger.Warn("[RestartDeployment] Failed to restart deployment %s: %v", deploymentID, err)
+			// Don't return error immediately - try to start deployment if restart failed
+			// This handles the case where containers don't exist
+			if err := s.manager.StartDeployment(ctx, deploymentID); err != nil {
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart deployment: %w", err))
+			}
+			logger.Info("[RestartDeployment] Successfully started deployment %s after restart failure", deploymentID)
+		}
+	} else {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("deployment manager not available"))
 	}
 
 	res := connect.NewResponse(&deploymentsv1.RestartDeploymentResponse{Deployment: dbDeploymentToProto(dbDep)})

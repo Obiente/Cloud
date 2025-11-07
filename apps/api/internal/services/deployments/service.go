@@ -127,6 +127,12 @@ func (s *Service) shouldForwardToNode(location *database.DeploymentLocation) (bo
 // Routing operations (GetDeploymentRoutings, UpdateDeploymentRoutings, GetDeploymentServiceNames)
 // are now in routing.go
 
+// createSystemContext creates a context with a system user that has admin permissions
+// This is used for internal operations that need to bypass permission checks
+func (s *Service) createSystemContext() context.Context {
+	return auth.WithSystemUser(context.Background())
+}
+
 func getStatusName(status int32) string {
 	switch deploymentsv1.DeploymentStatus(status) {
 	case deploymentsv1.DeploymentStatus_CREATED:
