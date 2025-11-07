@@ -778,6 +778,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
       METRICS_DB_USER: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
       METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      # Datasource host configuration (for HA, use pgpool service names)
+      GRAFANA_POSTGRES_HOST: ${GRAFANA_POSTGRES_HOST:-pgpool}
+      GRAFANA_METRICS_DB_HOST: ${GRAFANA_METRICS_DB_HOST:-metrics-pgpool}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
