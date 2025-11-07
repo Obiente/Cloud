@@ -8,11 +8,7 @@
           <div class="flex h-16 items-center justify-between">
             <!-- Logo and Title -->
             <div class="flex items-center gap-4">
-              <OuiBox class="w-8 h-8 bg-primary rounded-xl">
-                <OuiFlex align="center" justify="center" class="h-full">
-                  <OuiText size="lg" weight="bold" color="primary">O</OuiText>
-                </OuiFlex>
-              </OuiBox>
+              <ObienteLogo size="md" />
               <OuiStack gap="none" class="leading-tight">
                 <OuiText size="lg" weight="bold" color="primary">Self-Hosted DNS</OuiText>
                 <OuiText size="xs" color="secondary">Obiente Cloud</OuiText>
@@ -134,6 +130,7 @@ import { createListCollection } from "@ark-ui/vue";
 import { useAuth } from "~/composables/useAuth";
 import { useOrganizationsStore } from "~/stores/organizations";
 import OrgSwitcher from "~/components/oui/OrgSwitcher.vue";
+import ObienteLogo from "~/components/app/ObienteLogo.vue";
 
 interface SelectItem {
   label: string;

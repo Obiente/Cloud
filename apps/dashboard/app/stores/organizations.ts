@@ -9,10 +9,19 @@ type OrgSummary = {
 
 const ORGS_CACHE_KEY = "obiente_orgs_cache";
 const SELECTED_ORG_KEY = "selectedOrgId";
+const SELECTED_ORG_COOKIE = "obiente_selected_org_id";
 
 export const useOrganizationsStore = defineStore("organizations", () => {
   const orgs = ref<OrgSummary[]>([]);
-  const currentOrgId = ref<string>("");
+  // Use cookie for SSR compatibility - available on both server and client
+  const orgIdCookie = useCookie<string>(SELECTED_ORG_COOKIE, {
+    default: () => "",
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: false, // Needs to be accessible from client-side JS
+    maxAge: 60 * 60 * 24 * 365, // 1 year
+  });
+  const currentOrgId = ref<string>(orgIdCookie.value || "");
   const hydrated = ref(false);
   const storageListenerRegistered = ref(false);
 
@@ -24,12 +33,22 @@ export const useOrganizationsStore = defineStore("organizations", () => {
   function setCurrentOrg(id: string | null) {
     if (!id) {
       currentOrgId.value = "";
+      orgIdCookie.value = "";
       return;
     }
     currentOrgId.value = id;
+    orgIdCookie.value = id;
   }
 
   function persist() {
+    // Always update cookie (works on both server and client)
+    if (currentOrgId.value) {
+      orgIdCookie.value = currentOrgId.value;
+    } else {
+      orgIdCookie.value = "";
+    }
+    
+    // Also persist to localStorage on client (if hydrated)
     if (!import.meta.client || !hydrated.value) return;
     try {
       localStorage.setItem(ORGS_CACHE_KEY, JSON.stringify(orgs.value));
@@ -54,8 +73,14 @@ export const useOrganizationsStore = defineStore("organizations", () => {
           orgs.value = parsed;
         }
       }
-      if (sel) {
+      // Prefer cookie over localStorage (cookie is source of truth for SSR)
+      const cookieOrgId = orgIdCookie.value;
+      if (cookieOrgId) {
+        currentOrgId.value = cookieOrgId;
+      } else if (sel) {
         currentOrgId.value = sel;
+        // Sync to cookie if we got it from localStorage
+        orgIdCookie.value = sel;
       }
     } catch {
       /* ignore */
@@ -95,6 +120,7 @@ export const useOrganizationsStore = defineStore("organizations", () => {
   function reset() {
     orgs.value = [];
     currentOrgId.value = "";
+    orgIdCookie.value = "";
     hydrated.value = false;
     if (import.meta.client) {
       localStorage.removeItem(ORGS_CACHE_KEY);

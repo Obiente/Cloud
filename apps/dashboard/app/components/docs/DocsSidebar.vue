@@ -68,6 +68,7 @@
         </div>
 
         <AppNavigationLink
+          v-if="billingEnabled"
           to="/docs/billing"
           label="Billing"
           :icon="CreditCardIcon"
@@ -122,6 +123,9 @@ import {
 const emit = defineEmits<{
   navigate: [];
 }>();
+
+const config = useConfig();
+const billingEnabled = computed(() => config.billingEnabled.value === true);
 
 const handleNavigate = () => {
   emit("navigate");

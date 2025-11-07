@@ -311,7 +311,8 @@ const connectTerminal = async () => {
   try {
     const config = useRuntimeConfig();
     const apiBase = config.public.apiHost || config.public.requestHost;
-    const disableAuth = Boolean(config.public.disableAuth);
+    const appConfig = useConfig();
+    const disableAuth = Boolean(appConfig.disableAuth.value);
     const wsUrlObject = new URL("/gameservers/terminal/ws", apiBase);
     wsUrlObject.protocol = wsUrlObject.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = wsUrlObject.toString();

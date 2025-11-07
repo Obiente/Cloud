@@ -4,13 +4,7 @@
     <div class="shrink-0 p-6 border-b border-border-muted">
       <OuiFlex align="center" justify="between" >
         <OuiFlex align="start" gap="md">
-          <OuiBox
-            class="w-8 h-8 bg-primary rounded-xl mt-1"
-          >
-            <OuiFlex align="center" justify="center" class="h-full">
-              <OuiText size="lg" weight="bold" color="primary">O</OuiText>
-            </OuiFlex>
-          </OuiBox>
+          <ObienteLogo size="md" class="mt-1" />
           <OuiStack gap="none" class="leading-tight">
             <OuiText size="xl" weight="bold" color="primary">Obiente</OuiText>
             <OuiText
@@ -68,6 +62,7 @@
         />
 
         <AppNavigationLink
+          v-if="billingEnabled"
           to="/billing"
           label="Billing"
           :icon="CreditCardIcon"
@@ -144,14 +139,20 @@
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            to="/superadmin/plans"
+            label="Plans"
+            :icon="CubeIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
             to="/superadmin/deployments"
             label="Deployments"
             :icon="RocketLaunchIcon"
             @navigate="handleNavigate"
           />
           <AppNavigationLink
-            to="/superadmin/invites"
-            label="Invites"
+            to="/superadmin/users"
+            label="Users"
             :icon="UsersIcon"
             @navigate="handleNavigate"
           />
@@ -221,6 +222,7 @@ import {
 import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
 import { createListCollection } from "@ark-ui/vue";
 import { computed } from 'vue';
+import ObienteLogo from "./ObienteLogo.vue";
 
 interface Organization {
   id: string;
@@ -247,6 +249,9 @@ const emit = defineEmits<{
   "organization-change": [organizationId: string | string[] | undefined];
   "new-organization": [];
 }>();
+
+const config = useConfig();
+const billingEnabled = computed(() => config.billingEnabled.value === true);
 
 const handleNavigate = () => {
   emit("navigate");

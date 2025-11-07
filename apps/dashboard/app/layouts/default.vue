@@ -199,6 +199,14 @@
   // Pinia user store
   const user = useAuth();
   const superAdmin = useSuperAdmin();
+  const config = useConfig();
+  
+  // Fetch config on mount (both server and client)
+  if (import.meta.server) {
+    await config.fetchConfig();
+  } else {
+    config.fetchConfig();
+  }
 
   // Reset superadmin state when user logs in or changes
   watch(() => user.isAuthenticated, (isAuthenticated) => {

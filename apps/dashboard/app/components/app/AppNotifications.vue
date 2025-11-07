@@ -39,8 +39,9 @@
           v-for="n in items"
           :key="n.id"
           variant="overlay"
-          class="ring-1 ring-border-muted hover:ring-border-default transition"
+          class="ring-1 ring-border-muted hover:ring-border-default transition cursor-pointer"
           :class="n.read ? 'opacity-75' : ''"
+          @click="handleNotificationClick(n)"
         >
           <OuiCardBody>
             <OuiFlex justify="between" align="start" gap="md">
@@ -66,14 +67,14 @@
                 <OuiButton
                   variant="ghost"
                   size="xs"
-                  @click="toggleRead(n.id)"
+                  @click.stop="toggleRead(n.id)"
                   >{{ n.read ? "Unread" : "Read" }}</OuiButton
                 >
                 <OuiButton
                   variant="ghost"
                   size="xs"
                   color="danger"
-                  @click="remove(n.id)"
+                  @click.stop="remove(n.id)"
                   >Dismiss</OuiButton
                 >
               </OuiFlex>
@@ -117,9 +118,19 @@ const open = computed({
   set: (v: boolean) => emit("update:modelValue", v),
 });
 
+const router = useRouter();
+
 const handleClose = () => {
   emit("update:modelValue", false);
   emit("close");
+};
+
+const handleNotificationClick = (notification: NotificationItem) => {
+  // If notification is about invites, navigate to invites page
+  if (notification.title?.toLowerCase().includes("invitation") || notification.message?.toLowerCase().includes("invited")) {
+    router.push("/invites");
+    handleClose();
+  }
 };
 
 // Calculate default position underneath the notification button

@@ -261,10 +261,10 @@ export default defineEventHandler(async (event) => {
         userAccessToken = "dev-dummy-token";
       } else {
         console.error("[GitHub OAuth] No user access token available - user must be logged in");
-        // Redirect to login with a helpful message
+        // Return error page that will trigger login popup on client side
         return sendRedirect(
           event,
-          `/auth/login?redirect=${encodeURIComponent("/settings?tab=integrations&provider=github&error=" + encodeURIComponent("Please log in to connect your GitHub account"))}`
+          `/settings?tab=integrations&provider=github&error=${encodeURIComponent("Please log in to connect your GitHub account")}`
         );
       }
     }
