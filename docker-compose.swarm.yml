@@ -321,34 +321,31 @@ services:
       DNS_IPS: ${DNS_IPS:-} # Comma-separated list of DNS server IPs
       DNS_PORT: ${DNS_PORT:-53} # DNS server port (default: 53)
     ports:
-      - "${DNS_PORT:-53}:${DNS_PORT:-53}/udp"
-      - "${DNS_PORT:-53}:${DNS_PORT:-53}/tcp"
+      # Use host mode publishing to expose port 53 directly on the host
+      # DNS only runs on nodes labeled with dns.enabled=true, so only those nodes will bind to port 53
+      # Other nodes will not run DNS at all (no binding attempt)
+      # Note: Long form doesn't support env vars, so we use hardcoded 53 (DNS_PORT env var is for internal use)
+      - target: 53
+        published: 53
+        protocol: udp
+        mode: host
+      - target: 53
+        published: 53
+        protocol: tcp
+        mode: host
     deploy:
-      # Use placement constraints to control which nodes run DNS
-      # By default, DNS runs on all nodes (global mode)
-      # To delegate DNS to specific nodes:
-      #   1. Set DNS_MODE=replicated in your .env file
-      #   2. Set DNS_REPLICAS to the number of DNS instances you want
-      #   3. Add node labels: docker node update --label-add dns.enabled=true <node-name>
-      #   4. Uncomment/modify the constraint below to restrict DNS to specific nodes
-      # Examples:
-      #   - node.labels.dns.enabled == true (only runs on nodes with dns.enabled=true)
-      #   - node.role == manager (only runs on manager nodes)
-      #   - node.labels.dns.enabled != false (runs on all nodes except those with dns.enabled=false)
-      # To disable DNS on specific nodes, label them: docker node update --label-add dns.enabled=false <node-name>
-      mode: ${DNS_MODE:-global} # Options: global (all nodes), replicated (specific nodes)
-      # replicas is only valid when mode is replicated
-      # When using replicated mode, set DNS_REPLICAS environment variable
-      # replicas: ${DNS_REPLICAS:-1} # Only used if mode is replicated
-      # Placement constraints - uncomment to restrict DNS to specific nodes
-      # placement:
-      #   constraints:
-      #     # Example: Run only on nodes with dns.enabled=true label
-      #     # - node.labels.dns.enabled == true
-      #     # Example: Run only on manager nodes
-      #     # - node.role == manager
-      #     # Example: Run on all nodes except those with dns.enabled=false
-      #     # - node.labels.dns.enabled != false
+      # DNS runs ONLY on nodes labeled with dns.enabled=true
+      # This prevents other nodes from even attempting to bind to port 53
+      # To configure:
+      #   1. Label the DNS IP node(s): docker node update --label-add dns.enabled=true <node-name>
+      #   2. Set DNS_REPLICAS to the number of DNS instances (default: 1)
+      #   3. DNS will only run on nodes with dns.enabled=true label
+      mode: replicated # Must be replicated to use placement constraints
+      replicas: ${DNS_REPLICAS:-1} # Number of DNS instances (typically 1 for single DNS IP node)
+      placement:
+        constraints:
+          # Only run DNS on nodes explicitly labeled with dns.enabled=true
+          - node.labels.dns.enabled == true
       update_config:
         parallelism: 1
         delay: 10s
