@@ -12,7 +12,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "uid": "timescaledb-metrics"
       },
       "fieldConfig": {
         "defaults": {
@@ -90,7 +90,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "uid": "timescaledb-metrics"
       },
       "fieldConfig": {
         "defaults": {
@@ -168,7 +168,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "uid": "timescaledb-metrics"
       },
       "fieldConfig": {
         "defaults": {
@@ -246,7 +246,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "uid": "timescaledb-metrics"
       },
       "fieldConfig": {
         "defaults": {
@@ -307,7 +307,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "uid": "timescaledb-metrics"
       },
       "fieldConfig": {
         "defaults": {
@@ -385,7 +385,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "uid": "timescaledb-metrics"
       },
       "fieldConfig": {
         "defaults": {
