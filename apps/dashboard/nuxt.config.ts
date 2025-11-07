@@ -172,6 +172,7 @@ export default defineNuxtConfig({
       output: {
         chunkFileNames: "chunks/[name]-[hash].js",
         entryFileNames: "entry-[hash].js",
+        manualChunks: undefined, // Let Nitro handle chunking
       },
     },
   },
