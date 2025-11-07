@@ -165,12 +165,5 @@ export default defineNuxtConfig({
     // Optimize Nitro build to reduce memory usage
     minify: true,
     sourceMap: false, // Disable source maps to reduce memory usage during build
-    rollupConfig: {
-      output: {
-        chunkFileNames: "chunks/[name]-[hash].js",
-        entryFileNames: "entry-[hash].js",
-        manualChunks: undefined, // Let Nitro handle chunking
-      },
-    },
   },
 });
