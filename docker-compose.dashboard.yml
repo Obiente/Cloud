@@ -33,7 +33,11 @@ services:
       start_period: 40s
     # Swarm deployment configuration for high availability
     deploy:
-      replicas: 5
+      # Configure replicas based on cluster size
+      # Formula: replicas = ceil(cluster_size * DASHBOARD_REPLICAS_PERCENT / 100)
+      # Example: 3 nodes * 50% = 1.5 → 2 replicas (minimum 2 for HA)
+      # Set DASHBOARD_REPLICAS to override (e.g., DASHBOARD_REPLICAS=3)
+      replicas: ${DASHBOARD_REPLICAS:-3}
       update_config:
         parallelism: 1  # Update one replica at a time to prevent mixed versions
         delay: 60s  # Wait longer between updates to ensure complete transition
@@ -60,7 +64,12 @@ services:
         # Spread across nodes - prefer manager nodes but allow workers if needed
         # Remove 'node.role == manager' constraint to allow deployment on worker nodes
         # This ensures multi-node deployment even with single manager node
-        max_replicas_per_node: 2
+        # Configure max replicas per node based on cluster size
+        # Formula: max_per_node = ceil(replicas / cluster_size) or use percentage
+        # Example: 5 replicas / 3 nodes = 1.67 → 2 per node
+        # Set DASHBOARD_MAX_REPLICAS_PER_NODE to override (e.g., DASHBOARD_MAX_REPLICAS_PER_NODE=2)
+        # For percentage-based: ceil(replicas * DASHBOARD_MAX_REPLICAS_PERCENT / 100 / cluster_size)
+        max_replicas_per_node: ${DASHBOARD_MAX_REPLICAS_PER_NODE:-2}
         # Optional: Uncomment below to restrict to manager nodes only
         # constraints:
         #   - node.role == manager

@@ -492,6 +492,50 @@ Grafana automatically provisions datasources using environment variables. The `G
 - **Swarm deployments**: Use direct service names (`postgres`, `timescaledb`)
 - **HA deployments**: Use pgpool service names (`pgpool`, `metrics-pgpool`)
 
+### Dashboard Replica Configuration
+
+| Variable                        | Type   | Default | Required | Description                                    |
+| ------------------------------- | ------ | ------- | -------- | ---------------------------------------------- |
+| `DASHBOARD_REPLICAS`            | number | `5`     | ❌       | Number of dashboard replicas to deploy         |
+| `DASHBOARD_MAX_REPLICAS_PER_NODE` | number | `2`   | ❌       | Maximum replicas allowed per node              |
+
+**Replica Configuration:**
+
+Docker Swarm doesn't natively support percentage-based replica configuration. Use these variables to configure replica counts based on your cluster size.
+
+**Calculating Values:**
+
+Use the helper script to calculate appropriate values:
+
+```bash
+# Run the calculation script
+./scripts/calculate-replicas.sh
+
+# Or manually calculate:
+# - Replicas: ceil(cluster_size * desired_percentage / 100)
+#   Example: 3 nodes * 50% = 1.5 → 2 replicas (minimum 2 for HA)
+# - Max per node: ceil(replicas / cluster_size)
+#   Example: 5 replicas / 3 nodes = 1.67 → 2 per node
+```
+
+**Example Configurations:**
+
+```bash
+# Small cluster (2-3 nodes)
+DASHBOARD_REPLICAS=2
+DASHBOARD_MAX_REPLICAS_PER_NODE=1
+
+# Medium cluster (4-6 nodes)
+DASHBOARD_REPLICAS=3
+DASHBOARD_MAX_REPLICAS_PER_NODE=1
+
+# Large cluster (7+ nodes)
+DASHBOARD_REPLICAS=5
+DASHBOARD_MAX_REPLICAS_PER_NODE=2
+```
+
+**Important:** Ensure `DASHBOARD_REPLICAS <= (cluster_size * DASHBOARD_MAX_REPLICAS_PER_NODE)` to avoid deployment errors.
+
 **Example:**
 
 ```bash

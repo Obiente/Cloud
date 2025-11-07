@@ -89,6 +89,13 @@ show_overview() {
     "./scripts/redeploy-dashboard.sh [domain]" \
     "Quick dashboard updates without full redeploy"
   
+  print_script \
+    "calculate-replicas.sh" \
+    "Configuration" \
+    "Calculate dashboard replica counts based on cluster size" \
+    "./scripts/calculate-replicas.sh" \
+    "When configuring dashboard replicas for your cluster size"
+  
   echo -e "${GREEN}🔧 Setup & Maintenance${NC}"
   echo ""
   print_script \
@@ -198,6 +205,11 @@ show_overview() {
   echo "  2. ./scripts/check-dashboard-traefik.sh"
   echo "  3. ./scripts/fix-dashboard-network.sh"
   echo ""
+  echo -e "${BLUE}Dashboard replica configuration:${NC}"
+  echo "  1. ./scripts/calculate-replicas.sh  # Calculate values for your cluster"
+  echo "  2. Add output to .env file"
+  echo "  3. Redeploy dashboard"
+  echo ""
   echo -e "${BLUE}Network conflicts:${NC}"
   echo "  1. ./scripts/fix-swarm-networks.sh"
   echo "  2. ./scripts/fix-swarm-networks.sh --fix"
@@ -216,6 +228,14 @@ show_overview() {
   echo "  DEPLOY_DASHBOARD    - Deploy dashboard stack (default: true)"
   echo "  API_IMAGE           - API image tag (default: ghcr.io/obiente/cloud-api:latest)"
   echo "  DASHBOARD_IMAGE     - Dashboard image tag (default: ghcr.io/obiente/cloud-dashboard:latest)"
+  echo ""
+  echo -e "${GREEN}📊 Dashboard Replica Configuration${NC}"
+  echo ""
+  echo "  DASHBOARD_REPLICAS            - Number of dashboard replicas (default: 5)"
+  echo "  DASHBOARD_MAX_REPLICAS_PER_NODE - Max replicas per node (default: 2)"
+  echo ""
+  echo "  Use ./scripts/calculate-replicas.sh to calculate values based on cluster size"
+  echo "  Ensure: DASHBOARD_REPLICAS <= (cluster_size * DASHBOARD_MAX_REPLICAS_PER_NODE)"
   echo ""
   
   echo -e "${YELLOW}💡 Tip:${NC} Run './scripts/help.sh <script-name>' for detailed info about a specific script"
@@ -300,6 +320,41 @@ show_script_details() {
       echo ""
       ;;
     
+    calculate-replicas.sh|replicas)
+      print_header
+      echo -e "${BLUE}calculate-replicas.sh${NC} - Calculate dashboard replica configuration"
+      echo ""
+      echo -e "${YELLOW}Description:${NC}"
+      echo "  Calculates appropriate dashboard replica counts and max_replicas_per_node"
+      echo "  based on your Docker Swarm cluster size. Helps avoid 'max replicas per"
+      echo "  node limit exceeded' errors."
+      echo ""
+      echo -e "${YELLOW}Usage:${NC}"
+      echo "  ./scripts/calculate-replicas.sh"
+      echo ""
+      echo -e "${YELLOW}How it works:${NC}"
+      echo "  1. Detects cluster size automatically (or prompts for manual input)"
+      echo "  2. Calculates replicas based on percentage of nodes (default: 50%)"
+      echo "  3. Calculates max_replicas_per_node for even distribution"
+      echo "  4. Ensures minimum 2 replicas for HA"
+      echo "  5. Outputs recommended .env configuration"
+      echo ""
+      echo -e "${YELLOW}Environment Variables:${NC}"
+      echo "  DASHBOARD_REPLICAS_PERCENT      - Percentage of nodes for replicas (default: 50)"
+      echo "  DASHBOARD_MAX_REPLICAS_PERCENT  - Max replicas per node percentage (default: 40)"
+      echo ""
+      echo -e "${YELLOW}Example Output:${NC}"
+      echo "  Detected cluster size: 3 nodes"
+      echo "  Recommended Configuration:"
+      echo "    DASHBOARD_REPLICAS=2"
+      echo "    DASHBOARD_MAX_REPLICAS_PER_NODE=1"
+      echo ""
+      echo -e "${YELLOW}Common Issues:${NC}"
+      echo "  Error: 'max replicas per node limit exceeded'"
+      echo "  Solution: Run this script and update your .env file with the recommended values"
+      echo ""
+      ;;
+    
     *)
       echo -e "${RED}❌ Unknown script: ${SCRIPT_NAME}${NC}"
       echo ""
@@ -307,6 +362,7 @@ show_script_details() {
       echo "  - deploy-swarm.sh"
       echo "  - cleanup-swarm-complete.sh"
       echo "  - diagnose-dashboard.sh"
+      echo "  - calculate-replicas.sh"
       echo ""
       echo "Run './scripts/help.sh' for full list"
       exit 1
