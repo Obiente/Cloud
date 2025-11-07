@@ -94,6 +94,9 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-api.outputs.tags }}
           labels: ${{ steps.meta-api.outputs.labels }}
+          build-args: |
+            API_COMMIT=${{ github.sha }}
+            DASHBOARD_COMMIT=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
@@ -148,6 +151,9 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta-dashboard.outputs.tags }}
           labels: ${{ steps.meta-dashboard.outputs.labels }}
+          build-args: |
+            DASHBOARD_COMMIT=${{ github.sha }}
+            BUILDKIT_INLINE_CACHE=1
           # Use GitHub Actions cache for Docker layer caching
           cache-from: |
             type=gha
@@ -156,7 +162,4 @@ jobs:
             type=gha,mode=max
             type=registry,ref=${{ env.REGISTRY }}/obiente/cloud-dashboard:buildcache,mode=max
           platforms: linux/amd64
-          # Build arguments for better cache utilization
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
 

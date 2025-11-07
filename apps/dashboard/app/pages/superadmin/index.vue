@@ -34,6 +34,31 @@
         </OuiCard>
       </OuiGrid>
 
+      <!-- Version Information -->
+      <OuiCard class="border border-border-muted rounded-xl">
+        <OuiCardHeader class="px-6 py-4 border-b border-border-muted">
+          <OuiText tag="h2" size="xl" weight="bold">Version Information</OuiText>
+        </OuiCardHeader>
+        <OuiCardBody class="p-6">
+          <OuiStack gap="md">
+            <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
+              <OuiStack gap="xs">
+                <OuiText size="sm" weight="medium" color="secondary">API Commit</OuiText>
+                <OuiText size="md" class="font-mono">
+                  {{ overview?.apiCommit || "—" }}
+                </OuiText>
+              </OuiStack>
+              <OuiStack gap="xs">
+                <OuiText size="sm" weight="medium" color="secondary">Dashboard Commit</OuiText>
+                <OuiText size="md" class="font-mono">
+                  {{ overview?.dashboardCommit || "—" }}
+                </OuiText>
+              </OuiStack>
+            </OuiFlex>
+          </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
+
       <OuiStack gap="lg">
         <OuiCard class="border border-border-muted rounded-xl overflow-hidden">
           <OuiCardHeader class="px-6 py-4 border-b border-border-muted">

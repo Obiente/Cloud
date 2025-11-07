@@ -57,6 +57,8 @@ message GetOverviewResponse {
   repeated SuperadminPendingInvite pending_invites = 3;
   repeated DeploymentOverview deployments = 4;
   repeated OrganizationUsage usages = 5;
+  optional string api_commit = 6; // Git commit hash of the running API
+  optional string dashboard_commit = 7; // Git commit hash of the running dashboard
 }
 
 message OverviewCounts {

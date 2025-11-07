@@ -89,6 +89,9 @@ RUN --mount=type=cache,id=nuxt-build,target=/app/apps/dashboard/.nuxt \
 FROM node:20-alpine AS runner
 WORKDIR /app
 
+# Accept build arguments for commit hash
+ARG DASHBOARD_COMMIT
+
 # Don't run as root
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nuxtjs
@@ -109,6 +112,8 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
+# Set commit hash from build arg (available at runtime via process.env)
+ENV DASHBOARD_COMMIT=${DASHBOARD_COMMIT}
 
 # Start the application
 WORKDIR /app/apps/dashboard

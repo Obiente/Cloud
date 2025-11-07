@@ -59,6 +59,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # Final stage
 FROM alpine:latest
 
+# Accept build arguments for commit hashes
+ARG API_COMMIT
+ARG DASHBOARD_COMMIT
+
 # Install CA certificates for HTTPS requests
 # Install docker CLI and docker-compose for deployment management
 # Install git and curl for repository cloning and downloading buildx
@@ -115,6 +119,10 @@ WORKDIR /app
 # Copy both binaries from Go builder
 COPY --from=go-builder /build/api .
 COPY --from=go-builder /build/dns-server .
+
+# Set environment variables for commit hashes (from build args)
+ENV API_COMMIT=${API_COMMIT}
+ENV DASHBOARD_COMMIT=${DASHBOARD_COMMIT}
 
 # Expose ports
 EXPOSE 3001 53/udp 53/tcp
