@@ -218,7 +218,7 @@ func NewAuthConfig() *AuthConfig {
 		UserInfoURL:    userInfoURL,
 		HTTPClient:     httpClient,
 		SkipPaths:      []string{"/health", "/metrics", "/.well-known"},
-		ExposeUserInfo: false,
+		ExposeUserInfo: true, // Enable to allow audit interceptor to extract user ID
 		SuperAdmins:    superAdmins,
 	}
 }

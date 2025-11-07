@@ -210,17 +210,66 @@ func InitAuditLogsTimescaleDB(db *gorm.DB) error {
 		return nil
 	}
 
-	// Convert to hypertable with created_at as time column
-	// Use 1 day chunk interval for audit logs (audit logs are queried by time ranges)
-	if err := db.Exec(`
-		SELECT create_hypertable('audit_logs', 'created_at', 
-			chunk_time_interval => INTERVAL '1 day',
-			if_not_exists => TRUE)
-	`).Error; err != nil {
-		return fmt.Errorf("failed to create hypertable for audit_logs: %w", err)
+	// Check if table has data
+	var rowCount int64
+	if err := db.Table("audit_logs").Count(&rowCount).Error; err != nil {
+		// Table might not exist yet, which is fine - it will be created by AutoMigrate
+		logger.Debug("Could not check audit_logs row count (table may not exist): %v", err)
+		rowCount = 0
 	}
 
-	logger.Info("✓ Converted audit_logs to TimescaleDB hypertable (optimized for time-series queries)")
+	// TimescaleDB requires that unique indexes include the partitioning column (created_at)
+	// We need to drop the primary key constraint and recreate it as a unique index with created_at
+	// First, check if there's a primary key constraint
+	var hasPK bool
+	if err := db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM pg_constraint 
+			WHERE conrelid = 'audit_logs'::regclass 
+			AND contype = 'p'
+		)
+	`).Scan(&hasPK).Error; err == nil && hasPK {
+		logger.Debug("Dropping primary key constraint on audit_logs to prepare for TimescaleDB conversion...")
+		// Drop the primary key constraint
+		if err := db.Exec("ALTER TABLE audit_logs DROP CONSTRAINT audit_logs_pkey").Error; err != nil {
+			logger.Warn("Failed to drop primary key constraint (may not exist): %v", err)
+		}
+		// Create a unique index that includes created_at (required for TimescaleDB)
+		if err := db.Exec(`
+			CREATE UNIQUE INDEX IF NOT EXISTS audit_logs_id_created_at_unique 
+			ON audit_logs (id, created_at)
+		`).Error; err != nil {
+			logger.Warn("Failed to create unique index with created_at: %v", err)
+		} else {
+			logger.Debug("Created unique index on (id, created_at) for TimescaleDB compatibility")
+		}
+	}
+
+	// Convert to hypertable with created_at as time column
+	// Use 1 day chunk interval for audit logs (audit logs are queried by time ranges)
+	// If table has data, use migrate_data => TRUE to convert it
+	if rowCount > 0 {
+		logger.Info("Converting existing audit_logs table (%d rows) to TimescaleDB hypertable...", rowCount)
+		if err := db.Exec(`
+			SELECT create_hypertable('audit_logs', 'created_at', 
+				chunk_time_interval => INTERVAL '1 day',
+				if_not_exists => TRUE,
+				migrate_data => TRUE)
+		`).Error; err != nil {
+			return fmt.Errorf("failed to create hypertable for audit_logs (with data migration): %w", err)
+		}
+		logger.Info("✓ Converted existing audit_logs table to TimescaleDB hypertable (migrated %d rows)", rowCount)
+	} else {
+		// Table is empty, can create hypertable normally
+		if err := db.Exec(`
+			SELECT create_hypertable('audit_logs', 'created_at', 
+				chunk_time_interval => INTERVAL '1 day',
+				if_not_exists => TRUE)
+		`).Error; err != nil {
+			return fmt.Errorf("failed to create hypertable for audit_logs: %w", err)
+		}
+		logger.Info("✓ Converted audit_logs to TimescaleDB hypertable (optimized for time-series queries)")
+	}
 
 	// Create additional indexes for common query patterns
 	// Composite index for querying logs by organization and time range

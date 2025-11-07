@@ -425,6 +425,13 @@
                 @delete="showDeleteDialog = true"
               />
             </template>
+            <template #audit-logs>
+              <AuditLogs
+                :organization-id="gameServer?.organizationId || ''"
+                resource-type="game_server"
+                :resource-id="gameServerId"
+              />
+            </template>
             </OuiTabs>
           </OuiCard>
         </OuiStack>
@@ -494,6 +501,7 @@ import {
   GlobeAltIcon,
   ClipboardIcon,
   FolderIcon,
+  ClipboardDocumentListIcon,
 } from "@heroicons/vue/24/outline";
 
 import type { TabItem } from "~/components/oui/Tabs.vue";
@@ -504,6 +512,7 @@ import GameServerMetrics from "~/components/gameserver/GameServerMetrics.vue";
 import GameServerLogs from "~/components/gameserver/GameServerLogs.vue";
 import GameServerFiles from "~/components/gameserver/GameServerFiles.vue";
 import GameServerSettings from "~/components/gameserver/GameServerSettings.vue";
+import AuditLogs from "~/components/audit/AuditLogs.vue";
 import { date } from "@obiente/proto/utils";
 import { useToast } from "~/composables/useToast";
 import { useConnectClient } from "~/lib/connect-client";
@@ -609,6 +618,7 @@ const tabs = computed<TabItem[]>(() => [
   { id: "metrics", label: "Metrics", icon: ChartBarIcon },
   { id: "files", label: "Files", icon: FolderIcon },
   { id: "settings", label: "Settings", icon: Cog6ToothIcon },
+  { id: "audit-logs", label: "Audit Logs", icon: ClipboardDocumentListIcon },
 ]);
 
 // Use composable for tab query parameter management

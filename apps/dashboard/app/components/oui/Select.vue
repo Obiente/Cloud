@@ -16,9 +16,21 @@
             :placeholder="placeholder || 'Select an option...'"
             class="truncate"
           />
-          <Select.Indicator class="ml-2 shrink-0">
-            <ChevronUpDownIcon class="h-4 w-4 text-secondary" />
-          </Select.Indicator>
+          <div class="ml-2 shrink-0 flex items-center gap-1">
+            <button
+              v-if="clearable && hasValue"
+              type="button"
+              @click.stop.prevent="handleClear"
+              class="text-text-secondary hover:text-primary transition-colors p-0.5 rounded"
+              aria-label="Clear selection"
+              tabindex="-1"
+            >
+              <XMarkIcon class="h-4 w-4" />
+            </button>
+            <Select.Indicator>
+              <ChevronUpDownIcon class="h-4 w-4 text-secondary" />
+            </Select.Indicator>
+          </div>
         </Select.Trigger>
       </Select.Control>
 
@@ -86,7 +98,7 @@
   import { computed, ref, watch, onMounted } from "vue";
   import { Select, createListCollection } from "@ark-ui/vue/select";
   import { Field } from "@ark-ui/vue/field";
-  import { CheckIcon, ChevronUpDownIcon } from "@heroicons/vue/24/outline";
+  import { CheckIcon, ChevronUpDownIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 
   interface Item {
     label: string;
@@ -102,6 +114,7 @@
     error?: string;
     required?: boolean;
     disabled?: boolean;
+    clearable?: boolean;
     size?: "sm" | "md" | "lg";
   }
 
@@ -109,6 +122,7 @@
     size: "md",
     required: false,
     disabled: false,
+    clearable: false,
   });
 
   const collection = computed(() => {
@@ -137,6 +151,12 @@
   // External v-model (single value or array for multi); internal always string[] for Ark UI
   const model = defineModel<any>();
   const inner = ref<string[]>([]);
+
+  // Computed to check if there's a value (for showing clear button)
+  const hasValue = computed(() => {
+    const val = model.value;
+    return val != null && val !== undefined && val !== "" && (!Array.isArray(val) || val.length > 0);
+  });
 
   // Sync external -> internal: Convert model value to string array for Ark UI
   watch(
@@ -187,6 +207,11 @@
     },
     { immediate: false }
   );
+
+  const handleClear = () => {
+    (model as any).value = null;
+    inner.value = [];
+  };
 
   defineOptions({ inheritAttrs: false });
 </script>

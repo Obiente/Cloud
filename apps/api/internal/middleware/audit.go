@@ -24,19 +24,20 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 			startTime := time.Now()
 			procedure := req.Spec().Procedure
 
+
 			// Skip audit logging for certain procedures
 			if shouldSkipAuditLog(procedure) {
 				return next(ctx, req)
 			}
 
-			// Extract user info from context
-			user, _ := auth.GetUserFromContext(ctx)
-			userID := "system"
-			if user != nil {
-				userID = user.Id
-			}
+			// Add panic recovery for the entire audit logging process
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Error("[Audit] Panic in audit logging for %s: %v", procedure, r)
+				}
+			}()
 
-			// Extract IP address and user agent
+			// Extract IP address and user agent (before calling next)
 			ipAddress := getClientIP(req)
 			userAgent := req.Header().Get("User-Agent")
 			if userAgent == "" {
@@ -46,14 +47,43 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 			// Parse service and action from procedure
 			service, action := parseProcedure(procedure)
 
-			// Extract resource information from request
+			// Extract resource information from request (before calling next)
 			resourceType, resourceID, orgID := extractResourceInfo(req, procedure)
 
 			// Sanitize request data (remove sensitive fields)
 			requestData := sanitizeRequestData(req)
 
-			// Execute the request
+			// Execute the request (auth interceptor will set user in context)
+			// Note: In Connect, with connect.WithInterceptors(auditInterceptor, authInterceptor),
+			// authInterceptor wraps the handler (innermost, runs first), then auditInterceptor
+			// wraps authInterceptor (outermost, runs second). This means when auditInterceptor
+			// calls next(), it runs authInterceptor which sets the user in context and calls the handler.
+			// However, context.WithValue creates a NEW context, so the original ctx in the outer
+			// interceptor won't have the user. We need to extract the user from the context chain.
+			// Actually, context.Value() searches up the chain, so if the inner interceptor set it,
+			// we should be able to access it. But to be safe, we'll also try to extract from the
+			// response headers if available.
+			var userID string = "system"
+			
 			resp, err := next(ctx, req)
+
+			// Try to extract user from context - the auth interceptor should have set it
+			// Note: In Connect, when we call next(ctx, req), the auth interceptor (inner) receives
+			// the context, sets the user via context.WithValue, and passes the new context to the handler.
+			// However, context.WithValue creates a NEW context, so the original ctx in the outer
+			// interceptor doesn't have the user. But context.Value() searches up the chain, so we
+			// should be able to access it. If that doesn't work, we'll try response headers.
+			user, _ := auth.GetUserFromContext(ctx)
+			if user != nil {
+				userID = user.Id
+			} else {
+				// Fallback: Try to extract from response headers (if auth interceptor exposes them)
+				if resp != nil {
+					if userIDHeader := resp.Header().Get("X-User-ID"); userIDHeader != "" {
+						userID = userIDHeader
+					}
+				}
+			}
 
 			// Calculate duration
 			duration := time.Since(startTime)
@@ -78,16 +108,24 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 			// Create audit log entry asynchronously (don't block the request)
 			// Use background context with timeout to avoid cancellation when request completes
 			go func() {
+				// Recover from any panics in the goroutine
+				defer func() {
+					if r := recover(); r != nil {
+						logger.Error("[Audit] Panic in audit log goroutine for %s/%s: %v", service, action, r)
+					}
+				}()
+				
 				// Use background context with timeout instead of request context to avoid cancellation
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
+				
 				// Log what we're saving for debugging
 				orgIDStr := "nil"
 				if orgID != nil {
 					orgIDStr = *orgID
 				}
-				logger.Debug("[Audit] Saving log: service=%s, action=%s, orgID=%s, resourceType=%v, resourceID=%v",
-					service, action, orgIDStr, resourceType, resourceID)
+				logger.Debug("[Audit] Saving log: service=%s, action=%s, userID=%s, orgID=%s, resourceType=%v, resourceID=%v",
+					service, action, userID, orgIDStr, resourceType, resourceID)
 
 				if err := createAuditLog(ctx, auditLogData{
 					UserID:         userID,
@@ -104,8 +142,6 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 					DurationMs:     duration.Milliseconds(),
 				}); err != nil {
 					logger.Error("[Audit] Failed to create audit log for %s/%s: %v", service, action, err)
-				} else {
-					logger.Debug("[Audit] Successfully logged %s/%s (orgID=%s)", service, action, orgIDStr)
 				}
 			}()
 
@@ -195,6 +231,7 @@ func shouldSkipAuditLog(procedure string) bool {
 		"Search",   // SearchDeployments, etc.
 		"Validate", // ValidateDeploymentCompose, etc. (read-only validation)
 		"Check",    // CheckDomain, CheckStatus, etc.
+		"Has",      // HasDelegatedDNS, HasPermission, etc. (read-only checks)
 		"Ping",     // Health checks
 		"Health",   // Health checks
 	}
@@ -240,26 +277,25 @@ func extractResourceInfo(req connect.AnyRequest, procedure string) (resourceType
 		jsonBytes, err := protojson.Marshal(protoMsg)
 		if err == nil {
 			var jsonData map[string]interface{}
-			if err := json.Unmarshal(jsonBytes, jsonData); err == nil {
+			if err := json.Unmarshal(jsonBytes, &jsonData); err == nil {
 				// Parse procedure once
 				_, action := parseProcedure(procedure)
 
 				// Try to extract organization_id from request
-				if orgIDVal, ok := jsonData["organizationId"].(string); ok && orgIDVal != "" {
-					orgID = &orgIDVal
-				} else if orgIDVal, ok := jsonData["organization_id"].(string); ok && orgIDVal != "" {
-					orgID = &orgIDVal
-				}
+			if orgIDVal, ok := jsonData["organizationId"].(string); ok && orgIDVal != "" {
+				orgID = &orgIDVal
+			} else if orgIDVal, ok := jsonData["organization_id"].(string); ok && orgIDVal != "" {
+				orgID = &orgIDVal
+			}
 
 				// Determine resource type and ID based on procedure
 				resourceType, resourceID = inferResourceFromAction(action, jsonData)
 
 				// If we have a deployment ID but no org ID, try to look it up from the deployment
 				if orgID == nil && resourceType != nil && *resourceType == "deployment" && resourceID != nil && *resourceID != "" {
-					if lookedUpOrgID := lookupDeploymentOrgID(*resourceID); lookedUpOrgID != nil {
-						orgID = lookedUpOrgID
-						logger.Debug("[Audit] Looked up orgID=%s from deployment %s", *lookedUpOrgID, *resourceID)
-					}
+				if lookedUpOrgID := lookupDeploymentOrgID(*resourceID); lookedUpOrgID != nil {
+					orgID = lookedUpOrgID
+				}
 				}
 			}
 		}
@@ -324,10 +360,41 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 	}
 
 	// Organization-related actions
-	if strings.Contains(actionLower, "organization") {
+	// Check for organization in action name OR organization member actions
+	organizationActions := []string{
+		"invite",      // InviteMember
+		"remove",      // RemoveMember
+		"decline",     // DeclineInvite
+		"accept",      // AcceptInvite
+		"leave",       // LeaveOrganization
+		"create",      // CreateOrganization
+		"update",      // UpdateOrganization
+		"delete",      // DeleteOrganization
+		"member",      // Any member-related action
+		"organization", // Direct organization actions
+	}
+	
+	isOrgAction := strings.Contains(actionLower, "organization")
+	if !isOrgAction {
+		for _, orgAction := range organizationActions {
+			if strings.Contains(actionLower, orgAction) {
+				// Check if request has organizationId - if so, it's an org action
+				if orgIDVal, ok := jsonData["organizationId"].(string); ok && orgIDVal != "" {
+					isOrgAction = true
+					break
+				} else if orgIDVal, ok := jsonData["organization_id"].(string); ok && orgIDVal != "" {
+					isOrgAction = true
+					break
+				}
+			}
+		}
+	}
+
+	if isOrgAction {
 		rt := "organization"
 		resourceType = &rt
 
+		// Extract organization ID as resource ID
 		if id, ok := jsonData["organizationId"].(string); ok && id != "" {
 			resourceID = &id
 		} else if id, ok := jsonData["organization_id"].(string); ok && id != "" {
@@ -357,11 +424,24 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 	if strings.Contains(actionLower, "billing") {
 		rt := "billing"
 		resourceType = &rt
+
+		// Try to extract billing account ID or organization ID
+		if id, ok := jsonData["billingAccountId"].(string); ok && id != "" {
+			resourceID = &id
+		} else if id, ok := jsonData["billing_account_id"].(string); ok && id != "" {
+			resourceID = &id
+		} else if id, ok := jsonData["organizationId"].(string); ok && id != "" {
+			resourceID = &id
+		} else if id, ok := jsonData["organization_id"].(string); ok && id != "" {
+			resourceID = &id
+		} else if id, ok := jsonData["id"].(string); ok && id != "" {
+			resourceID = &id
+		}
 		return
 	}
 
 	// Support ticket-related actions
-	if strings.Contains(actionLower, "ticket") {
+	if strings.Contains(actionLower, "ticket") || strings.Contains(actionLower, "comment") {
 		rt := "support_ticket"
 		resourceType = &rt
 
@@ -373,6 +453,37 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 			resourceID = &id
 		}
 		return
+	}
+
+	// Admin/Role-related actions
+	if strings.Contains(actionLower, "role") || strings.Contains(actionLower, "binding") {
+		rt := "role"
+		resourceType = &rt
+
+		if id, ok := jsonData["roleId"].(string); ok && id != "" {
+			resourceID = &id
+		} else if id, ok := jsonData["role_id"].(string); ok && id != "" {
+			resourceID = &id
+		} else if id, ok := jsonData["bindingId"].(string); ok && id != "" {
+			resourceID = &id
+		} else if id, ok := jsonData["binding_id"].(string); ok && id != "" {
+			resourceID = &id
+		} else if id, ok := jsonData["id"].(string); ok && id != "" {
+			resourceID = &id
+		}
+		return
+	}
+
+	// If we have an organizationId but no resource type yet, infer from context
+	// This catches actions that might be organization-scoped but don't have explicit resource types
+	if orgID, ok := jsonData["organizationId"].(string); ok && orgID != "" {
+		// If action contains "create", "update", "delete" and we have orgId, it's likely an org action
+		if strings.Contains(actionLower, "create") || strings.Contains(actionLower, "update") || strings.Contains(actionLower, "delete") {
+			rt := "organization"
+			resourceType = &rt
+			resourceID = &orgID
+			return
+		}
 	}
 
 	return nil, nil

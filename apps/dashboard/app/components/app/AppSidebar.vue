@@ -102,6 +102,12 @@
           <OuiText size="xs" transform="uppercase" class="tracking-wide px-2" color="secondary">Admin</OuiText>
         </div>
         <AppNavigationLink
+          to="/audit-logs"
+          label="Audit Logs"
+          :icon="ClipboardDocumentListIcon"
+          @navigate="handleNavigate"
+        />
+        <AppNavigationLink
           to="/admin/quotas"
           label="Quotas"
           :icon="Cog6ToothIcon"
@@ -218,6 +224,7 @@ import {
   BookOpenIcon,
   CurrencyDollarIcon,
   DocumentTextIcon,
+  ClipboardDocumentListIcon,
 } from "@heroicons/vue/24/outline";
 import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
 import { createListCollection } from "@ark-ui/vue";

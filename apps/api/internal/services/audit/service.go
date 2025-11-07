@@ -8,6 +8,7 @@ import (
 	auditv1connect "api/gen/proto/obiente/cloud/audit/v1/auditv1connect"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/logger"
 	"api/internal/services/organizations"
 
 	"errors"
@@ -60,6 +61,18 @@ func (s *Service) ListAuditLogs(ctx context.Context, req *connect.Request[auditv
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("metrics database (TimescaleDB) not initialized - audit logs require TimescaleDB"))
 	}
 
+	// Determine page size first
+	pageSize := defaultPageSize
+	if req.Msg.PageSize != nil {
+		pageSize = int(*req.Msg.PageSize)
+		if pageSize > maxPageSize {
+			pageSize = maxPageSize
+		}
+		if pageSize < 1 {
+			pageSize = defaultPageSize
+		}
+	}
+
 	// Build query
 	query := database.MetricsDB.Model(&database.AuditLog{})
 
@@ -96,18 +109,6 @@ func (s *Service) ListAuditLogs(ctx context.Context, req *connect.Request[auditv
 		query = query.Where("created_at <= ?", req.Msg.EndTime.AsTime())
 	}
 
-	// Determine page size
-	pageSize := defaultPageSize
-	if req.Msg.PageSize != nil {
-		pageSize = int(*req.Msg.PageSize)
-		if pageSize > maxPageSize {
-			pageSize = maxPageSize
-		}
-		if pageSize < 1 {
-			pageSize = defaultPageSize
-		}
-	}
-
 	// Handle pagination
 	if req.Msg.PageToken != nil && *req.Msg.PageToken != "" {
 		// Parse page token (simple offset-based for now)
@@ -126,6 +127,7 @@ func (s *Service) ListAuditLogs(ctx context.Context, req *connect.Request[auditv
 	// Execute query
 	var auditLogs []database.AuditLog
 	if err := query.Find(&auditLogs).Error; err != nil {
+		logger.Error("[AuditService] Failed to query audit logs: %v", err)
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to query audit logs: %w", err))
 	}
 

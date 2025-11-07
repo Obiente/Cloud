@@ -281,7 +281,9 @@ func registerServices(mux *http.ServeMux) *deploymentsvc.Service {
 
 	// Configure services
 	// Note: Login RPC does not require authentication (public endpoint)
-	// Chain interceptors: audit first, then auth
+	// Chain interceptors: In Connect, interceptors wrap from inside to outside.
+	// With (auditInterceptor, authInterceptor), auth runs first (innermost), audit runs second (outermost).
+	// This allows audit to see the user context set by auth.
 	authPath, authHandler := authv1connect.NewAuthServiceHandler(
 		authsvc.NewService(),
 		// Login doesn't need auth interceptor, but other methods do
