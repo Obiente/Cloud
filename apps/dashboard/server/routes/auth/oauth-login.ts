@@ -15,11 +15,10 @@ export default eventHandler(async (event) => {
   const { AUTH_COOKIE_NAME } = await import("../../utils/auth");
   const sessionCookie = getCookie(event, AUTH_COOKIE_NAME);
   // If no session cookie exists, try silent auth (check if user is logged into Zitadel)
-  // If session cookie exists, force login prompt
+  // If session cookie exists, don't use prompt (let Zitadel use existing session)
   const isSilent = !sessionCookie;
 
   const params = new URLSearchParams({
-    prompt: isSilent ? "none" : "login",
     client_id: OIDC.clientId,
     redirect_uri: config.public.requestHost + OIDC.redirectPath,
     response_type: OIDC.responseType,
@@ -27,6 +26,12 @@ export default eventHandler(async (event) => {
     code_challenge: code_challenge!,
     code_challenge_method: code_challenge_method!,
   });
+
+  // Use silent auth if no local session, otherwise let Zitadel handle it naturally
+  // NOT using prompt: "login" because that prevents session persistence
+  if (isSilent) {
+    params.set("prompt", "none");
+  }
 
   sendRedirect(event, `${OIDC.authority}/authorize?${params.toString()}`);
 });

@@ -40,14 +40,15 @@ export default defineEventHandler(async (event) => {
       }
     );
 
-    // Update session with new tokens
+    // Update session with new tokens (including id_token if present)
     await setUserSession(event, {
       secure: {
         scope: tokenResponse.scope,
         token_type: tokenResponse.token_type,
         expires_in: tokenResponse.expires_in,
-        refresh_token: tokenResponse.refresh_token,
+        refresh_token: tokenResponse.refresh_token, // Zitadel uses rotating refresh tokens
         access_token: tokenResponse.access_token,
+        id_token: tokenResponse.id_token, // Store id_token for logout
       },
     });
 
@@ -63,6 +64,23 @@ export default defineEventHandler(async (event) => {
         message: "Invalid token received from authentication provider",
       });
     }
+
+    // Update the auth cookie with new access token
+    // Always use long expiry to remember the user (unless they explicitly logout)
+    const { AUTH_COOKIE_NAME } = await import("../../utils/auth");
+    const expirySeconds = tokenResponse.expires_in || 3600;
+    // Use refresh token expiry (typically 30 days) or 7 days, whichever is longer
+    // This ensures the user stays logged in unless they explicitly logout
+    const maxAge = Math.max(expirySeconds * 7, 7 * 24 * 60 * 60); // At least 7 days
+
+    setCookie(event, AUTH_COOKIE_NAME, tokenResponse.access_token, {
+      httpOnly: false,
+      path: "/",
+      maxAge,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      domain: undefined,
+    });
 
     // Return the new access token
     return {

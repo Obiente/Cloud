@@ -9,12 +9,56 @@ export default defineNuxtPlugin({
   enforce: "pre", // Run early
   setup(nuxtApp) {
     const config = useRuntimeConfig();
+    
+    // Cache for disableAuth to avoid fetching on every request
+    let cachedDisableAuth: boolean | null = null;
+    let disableAuthFetchPromise: Promise<boolean> | null = null;
+
+    // Function to fetch disableAuth from API (public endpoint, no auth needed)
+    const fetchDisableAuth = async (): Promise<boolean> => {
+      if (cachedDisableAuth !== null) {
+        return cachedDisableAuth;
+      }
+      
+      if (disableAuthFetchPromise) {
+        const result = await disableAuthFetchPromise;
+        return result ?? false;
+      }
+      
+      disableAuthFetchPromise = (async (): Promise<boolean> => {
+        try {
+          // Create a transport without auth for the public config endpoint
+          const publicTransport = createConnectTransport({
+            baseUrl: config.public.apiHost,
+            httpVersion: "1.1",
+            useBinaryFormat: false,
+          });
+          
+          const { AuthService } = await import("@obiente/proto");
+          const { createClient } = await import("@connectrpc/connect");
+          const client = createClient(AuthService, publicTransport);
+          
+          const publicConfig = await client.getPublicConfig({});
+          const result = publicConfig.disableAuth ?? false;
+          cachedDisableAuth = result;
+          return result;
+        } catch (err) {
+          console.warn("[Server Transport] Failed to fetch public config, defaulting to auth required:", err);
+          cachedDisableAuth = false;
+          return false;
+        } finally {
+          disableAuthFetchPromise = null;
+        }
+      })();
+      
+      return await disableAuthFetchPromise;
+    };
 
     // Function to get the authentication token from the session
     // Using a function so it's evaluated on each request to get the latest token
     const getToken = async (): Promise<string | undefined> => {
       // Check if auth is disabled (development mode)
-      const disableAuth = config.public.disableAuth === true;
+      const disableAuth = await fetchDisableAuth();
 
       if (disableAuth) {
         // Return dummy token when auth is disabled - API will ignore it and use mock user

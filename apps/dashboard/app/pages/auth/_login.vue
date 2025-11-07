@@ -3,9 +3,7 @@
     <div class="w-full max-w-md">
       <!-- Logo and Header -->
       <OuiStack gap="lg" align="center" class="mb-8">
-        <OuiBox class="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center shadow-lg">
-          <OuiText size="2xl" weight="bold" color="primary">O</OuiText>
-        </OuiBox>
+        <ObienteLogo size="lg" class="shadow-lg" />
         <OuiStack gap="xs" align="center">
           <OuiText size="3xl" weight="bold" color="primary">Welcome Back</OuiText>
           <OuiText size="md" color="secondary">Sign in to your account to continue</OuiText>
@@ -122,12 +120,12 @@
               <OuiText size="sm" color="secondary">
                 Don't have an account?
               </OuiText>
-              <NuxtLink
-                to="/auth/signup"
-                class="text-sm font-medium text-primary hover:text-accent-primary transition-colors"
+              <button
+                @click="auth.popupSignup()"
+                class="text-sm font-medium text-primary hover:text-accent-primary transition-colors cursor-pointer"
               >
                 Create an account
-              </NuxtLink>
+              </button>
             </OuiStack>
           </OuiStack>
         </OuiCardBody>
@@ -154,6 +152,7 @@ import {
   ExclamationCircleIcon,
 } from "@heroicons/vue/24/outline";
 import { useAuth } from "~/composables/useAuth";
+import ObienteLogo from "~/components/app/ObienteLogo.vue";
 
 // Page meta
 definePageMeta({

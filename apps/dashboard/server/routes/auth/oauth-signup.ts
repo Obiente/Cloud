@@ -12,13 +12,15 @@ export default eventHandler(async (event) => {
   const { code_challenge, code_challenge_method } = await handlePKCE(event);
 
   const params = new URLSearchParams({
-    prompt: "register", // Force registration prompt
+    prompt: "create", // Force signup/registration UI (Zitadel uses "create" not "register")
     client_id: OIDC.clientId,
     redirect_uri: config.public.requestHost + OIDC.redirectPath,
     response_type: OIDC.responseType,
     scope: OIDC.scope,
     code_challenge: code_challenge!,
     code_challenge_method: code_challenge_method!,
+    // Add state to identify this as a signup flow
+    state: "signup",
   });
 
   sendRedirect(event, `${OIDC.authority}/authorize?${params.toString()}`);

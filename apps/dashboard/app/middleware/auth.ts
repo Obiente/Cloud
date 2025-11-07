@@ -9,8 +9,9 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
       if (logoutTime) {
         const timeSinceLogout = Date.now() - parseInt(logoutTime, 10);
         // If we logged out recently (within 1 minute), skip silent auth
+        // Allow page to load normally - user can login when ready
         if (timeSinceLogout < 60000) {
-          return navigateTo("/auth/login");
+          return;
         }
         // Clear the flag after timeout
         sessionStorage.removeItem("obiente_logout_time");
@@ -18,10 +19,12 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     }
 
     // Try silent auth first (background iframe)
+    // If it fails, don't show popup - let user login normally on the page
     const silentAuthSuccess = await user.trySilentAuth();
     if (!silentAuthSuccess) {
-      // Silent auth failed, redirect to our custom login page
-      return navigateTo("/auth/login");
+      // Silent auth failed silently in iframe - allow page to load normally
+      // User can click login button to authenticate
+      return;
     }
   }
 });

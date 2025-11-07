@@ -3,9 +3,7 @@
     <div class="w-full max-w-md">
       <!-- Logo and Header -->
       <OuiStack gap="lg" align="center" class="mb-8">
-        <OuiBox class="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center shadow-lg">
-          <OuiText size="2xl" weight="bold" color="primary">O</OuiText>
-        </OuiBox>
+        <ObienteLogo size="lg" class="shadow-lg" />
         <OuiStack gap="xs" align="center">
           <OuiText size="3xl" weight="bold" color="primary">Create Account</OuiText>
           <OuiText size="md" color="secondary">Sign up to get started with Obiente Cloud</OuiText>
@@ -234,6 +232,7 @@ import {
   CheckCircleIcon,
 } from "@heroicons/vue/24/outline";
 import { useAuth } from "~/composables/useAuth";
+import ObienteLogo from "~/components/app/ObienteLogo.vue";
 
 // Page meta
 definePageMeta({

@@ -55,6 +55,9 @@ export const useAuth = () => {
       sessionStorage.setItem("obiente_logout_time", Date.now().toString());
     }
 
+    // Get id_token from session BEFORE clearing it (needed for logout)
+    const idToken = sessionState.value?.secure?.id_token;
+    
     await useRequestFetch()("/auth/session", {
       method: "DELETE",
       onResponse({ response: { headers } }) {
@@ -72,7 +75,54 @@ export const useAuth = () => {
     // Redirect to Zitadel logout endpoint to clear Zitadel session
     if (import.meta.client) {
       const config = useRuntimeConfig();
-      const logoutUrl = `${config.public.oidcBase}/oidc/v1/end_session?post_logout_redirect_uri=${encodeURIComponent(window.location.origin)}`;
+      // Redirect to homepage after logout using requestHost from config
+      // The post_logout_redirect_uri must be registered in Zitadel client configuration
+      // IMPORTANT: The URI must match EXACTLY (including protocol, domain, and path)
+      // Use requestHost from config to ensure consistency across environments
+      const homepageUrl = config.public.requestHost || window.location.origin;
+      
+      console.log("[Auth] Logging out - redirect URI:", homepageUrl);
+      
+      // Get the end_session endpoint
+      // Zitadel's end_session endpoint is at /oidc/v1/end_session
+      // According to OIDC spec: https://openid.net/specs/openid-connect-rpinitiated-1_0.html
+      const endSessionEndpoint = `${config.public.oidcBase}/oidc/v1/end_session`;
+      
+      // Build parameters according to OIDC RP-Initiated Logout spec
+      // See: https://zitadel.com/docs/guides/integrate/login/oidc/logout
+      // Reference: https://zitadel.com/docs/apis/openidoauth/endpoints
+      const params = new URLSearchParams();
+      
+      // post_logout_redirect_uri is REQUIRED and must be registered in Zitadel
+      // This must match EXACTLY one of the URIs in "Post Logout Redirect URIs" in Zitadel console
+      params.set("post_logout_redirect_uri", homepageUrl);
+      
+      // client_id is REQUIRED if id_token_hint is not provided
+      // Zitadel needs either id_token_hint OR client_id to identify the client and validate the redirect URI
+      // Always include client_id to ensure Zitadel can identify the client
+      params.set("client_id", config.public.oidcClientId);
+      
+      // id_token_hint helps Zitadel identify which session to terminate
+      // This is recommended but optional - client_id can be used instead
+      if (idToken) {
+        params.set("id_token_hint", idToken);
+        console.log("[Auth] Using id_token_hint for logout");
+      } else {
+        console.log("[Auth] No id_token available, using client_id for logout");
+      }
+      
+      // Optional: state parameter for CSRF protection
+      const state = crypto.randomUUID();
+      params.set("state", state);
+      // Store state to verify on redirect (optional, for security)
+      sessionStorage.setItem("logout_state", state);
+      
+      const logoutUrl = `${endSessionEndpoint}?${params.toString()}`;
+      console.log("[Auth] Redirecting to Zitadel logout:", logoutUrl);
+      
+      // Redirect to Zitadel's end_session endpoint
+      // Zitadel will clear the session and redirect back to post_logout_redirect_uri
+      // If the redirect URI is not registered, Zitadel will show its UI logout page instead
       window.location.href = logoutUrl;
     }
   };
@@ -153,18 +203,26 @@ export const useAuth = () => {
     }
   };
 
-  // Message listener for OAuth errors from popup
+  // Message listener for OAuth errors and signup success from popup (not used for silent auth iframe)
   const messageListener = (e: MessageEvent) => {
     if (e.origin !== window.location.origin) return;
     
     if (e.data?.type === "oauth-error") {
       console.log("[Auth] OAuth error from popup:", e.data.error);
-      // If silent auth failed (no session), open regular login page
+      // Only handle popup errors, not silent auth iframe errors
+      // Silent auth errors are handled in trySilentAuth message handler
       if (e.data.error === "login_required" || e.data.error === "interaction_required" || e.data.error === "no_session") {
         window.removeEventListener("message", messageListener);
-        // Open regular login page (not OAuth, so user can enter credentials)
-        popupLogin("/auth/login");
+        // Open Zitadel login popup (only for explicit popup auth, not silent auth)
+        popupLogin("/auth/oauth-login");
       }
+    } else if (e.data?.type === "signup-success") {
+      console.log("[Auth] Signup successful:", e.data.message);
+      // Signup completed - user needs to login manually
+      // Refresh the page to show login options
+      window.removeEventListener("message", messageListener);
+      // Optionally show a notification or refresh auth state
+      fetch();
     }
   };
 
@@ -195,7 +253,7 @@ export const useAuth = () => {
   };
 
   const popupSignup = (
-    route: string = "/auth/signup",
+    route: string = "/auth/oauth-signup",
     size: { width?: number; height?: number } = {}
   ) => {
     const width = size.width ?? 500;
@@ -209,11 +267,23 @@ export const useAuth = () => {
       (window.top?.screenX ?? 0) -
       width / 2;
 
-    window.open(
+    // Add message listener when opening popup (same as popupLogin)
+    window.addEventListener("message", messageListener);
+
+    console.log("[Auth] Opening signup popup to:", route);
+    const popup = window.open(
       route,
-      "_blank",
+      "zitadel-signup",
       `width=${width}, height=${height}, top=${top}, left=${left}, toolbar=no, location=no, directories=no, status=no, menubar=no, scrollbars=no, resizable=no, copyhistory=no`
     );
+    
+    if (!popup || popup.closed || typeof popup.closed === "undefined") {
+      console.error("[Auth] Popup blocked or failed to open - please allow popups for this site");
+      alert("Please allow popups for this site to sign up. The popup was blocked by your browser.");
+      return;
+    }
+    
+    console.log("[Auth] Signup popup opened successfully");
     window.addEventListener("storage", popupListener);
   };
 
