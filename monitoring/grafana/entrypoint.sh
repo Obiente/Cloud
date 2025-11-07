@@ -13,6 +13,29 @@ echo "METRICS_DB_USER=${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}"
 echo "METRICS_DB_PASSWORD is ${METRICS_DB_PASSWORD:+SET}${METRICS_DB_PASSWORD:-NOT SET}"
 echo "ALERT_EMAIL=${ALERT_EMAIL:-admin@example.com}"
 
+# Configure Grafana SMTP only if SMTP_HOST is set
+if [ -n "${SMTP_HOST}" ]; then
+  echo "SMTP_HOST is configured, enabling Grafana SMTP..."
+  export GF_SMTP_ENABLED="true"
+  export GF_SMTP_HOST="${SMTP_HOST}"
+  export GF_SMTP_PORT="${SMTP_PORT:-587}"
+  export GF_SMTP_USER="${SMTP_USERNAME:-}"
+  export GF_SMTP_PASSWORD="${SMTP_PASSWORD:-}"
+  export GF_SMTP_FROM_ADDRESS="${SMTP_FROM_ADDRESS:-${ALERT_EMAIL:-admin@example.com}}"
+  export GF_SMTP_FROM_NAME="${SMTP_FROM_NAME:-Grafana}"
+  export GF_SMTP_SKIP_VERIFY="${SMTP_SKIP_TLS_VERIFY:-false}"
+  
+  # Map SMTP_USE_STARTTLS boolean to Grafana's STARTTLS policy
+  if [ "${SMTP_USE_STARTTLS}" = "false" ] || [ "${SMTP_USE_STARTTLS}" = "0" ]; then
+    export GF_SMTP_STARTTLS_POLICY="NoStartTLS"
+  else
+    export GF_SMTP_STARTTLS_POLICY="${GF_SMTP_STARTTLS_POLICY:-OpportunisticStartTLS}"
+  fi
+else
+  echo "SMTP_HOST is not configured, SMTP will be disabled"
+  # Don't set any GF_SMTP_* variables - Grafana will disable SMTP automatically
+fi
+
 if [ -d /etc/grafana/provisioning ]; then
   # Find all YAML files in provisioning directory (recursively)
   find /etc/grafana/provisioning -name "*.yml" -type f | while read file; do
