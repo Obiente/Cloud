@@ -404,7 +404,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
       GF_SERVER_ROOT_URL: https://grafana.${DOMAIN:-localhost}
       # Disable strict provisioning validation to avoid conflicts
-      GF_PROVISIONING_DATASOURCES_ALLOW_DELETION: true
+      GF_PROVISIONING_DATASOURCES_ALLOW_DELETION: "true"
       # Pass database credentials as environment variables for datasource provisioning
       POSTGRES_USER: ${POSTGRES_USER:-obiente-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
