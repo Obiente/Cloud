@@ -7,8 +7,10 @@ import (
 
 	supportv1connect "api/gen/proto/obiente/cloud/support/v1/supportv1connect"
 	supportv1 "api/gen/proto/obiente/cloud/support/v1"
+	authv1 "api/gen/proto/obiente/cloud/auth/v1"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/services/organizations"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -308,6 +310,22 @@ func (s *Service) AddComment(ctx context.Context, req *connect.Request[supportv1
 	s.db.Model(&ticket).Update("updated_at", time.Now())
 
 	protoComment := dbCommentToProto(comment)
+	
+	// Resolve user information if resolver is available
+	resolver := organizations.GetUserProfileResolver()
+	if resolver != nil && resolver.IsConfigured() {
+		if userProfile, err := resolver.Resolve(ctx, comment.CreatedBy); err == nil && userProfile != nil {
+			if userProfile.Name != "" {
+				protoComment.CreatedByName = &userProfile.Name
+			}
+			if userProfile.Email != "" {
+				protoComment.CreatedByEmail = &userProfile.Email
+				// Check if user is superadmin based on email
+				testUser := &authv1.User{Email: userProfile.Email, Roles: []string{}}
+				protoComment.IsSuperadmin = auth.HasRole(testUser, auth.RoleSuperAdmin)
+			}
+		}
+	}
 
 	res := connect.NewResponse(&supportv1.AddCommentResponse{
 		Comment: protoComment,
@@ -354,10 +372,28 @@ func (s *Service) ListComments(ctx context.Context, req *connect.Request[support
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list comments: %w", err))
 	}
 
-	// Convert to proto
+	// Convert to proto with user information
 	protoComments := make([]*supportv1.TicketComment, len(comments))
+	resolver := organizations.GetUserProfileResolver()
 	for i, comment := range comments {
-		protoComments[i] = dbCommentToProto(&comment)
+		protoComment := dbCommentToProto(&comment)
+		
+		// Resolve user information if resolver is available
+		if resolver != nil && resolver.IsConfigured() {
+			if userProfile, err := resolver.Resolve(ctx, comment.CreatedBy); err == nil && userProfile != nil {
+				if userProfile.Name != "" {
+					protoComment.CreatedByName = &userProfile.Name
+				}
+				if userProfile.Email != "" {
+					protoComment.CreatedByEmail = &userProfile.Email
+					// Check if user is superadmin based on email
+					testUser := &authv1.User{Email: userProfile.Email, Roles: []string{}}
+					protoComment.IsSuperadmin = auth.HasRole(testUser, auth.RoleSuperAdmin)
+				}
+			}
+		}
+		
+		protoComments[i] = protoComment
 	}
 
 	res := connect.NewResponse(&supportv1.ListCommentsResponse{

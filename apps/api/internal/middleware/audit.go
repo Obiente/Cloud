@@ -552,12 +552,44 @@ func sanitizeMap(data map[string]interface{}, sensitiveFields []string) {
 }
 
 // getClientIP extracts the client IP address from the request
+// It checks multiple headers in order of preference to get the real client IP
+//
+// For Traefik: Traefik automatically sets X-Forwarded-For with the client IP.
+// If Traefik is behind another proxy (e.g., Cloudflare), configure Traefik's
+// forwardedHeaders middleware to trust the upstream proxy. If requests come from
+// an internal network (e.g., Docker Swarm), the IP will be internal, which is expected.
 func getClientIP(req connect.AnyRequest) string {
-	// Try to get from X-Forwarded-For header
+	// Try CF-Connecting-IP (Cloudflare)
+	if cfIP := req.Header().Get("CF-Connecting-IP"); cfIP != "" {
+		return strings.TrimSpace(cfIP)
+	}
+
+	// Try True-Client-IP (used by some proxies)
+	if trueClientIP := req.Header().Get("True-Client-IP"); trueClientIP != "" {
+		return strings.TrimSpace(trueClientIP)
+	}
+
+	// Try X-Forwarded-For header (Traefik sets this by default)
+	// Format: "client-ip, proxy1-ip, proxy2-ip, ..."
+	// The first IP is the original client IP
 	forwarded := req.Header().Get("X-Forwarded-For")
 	if forwarded != "" {
-		// X-Forwarded-For can contain multiple IPs, take the first one
 		ips := strings.Split(forwarded, ",")
+		// Process all IPs to find the best candidate
+		for _, candidateIP := range ips {
+			candidateIP = strings.TrimSpace(candidateIP)
+			if candidateIP == "" {
+				continue
+			}
+			
+			// If this is not an internal IP, use it (likely the real client)
+			if !isInternalIP(candidateIP) {
+				return candidateIP
+			}
+		}
+		
+		// If all IPs are internal, use the first one (might be from internal network)
+		// This handles cases where requests come from within Docker network
 		if len(ips) > 0 {
 			ip := strings.TrimSpace(ips[0])
 			if ip != "" {
@@ -566,14 +598,62 @@ func getClientIP(req connect.AnyRequest) string {
 		}
 	}
 
-	// Try X-Real-IP header
+	// Try X-Real-IP header (nginx and some proxies)
 	realIP := req.Header().Get("X-Real-IP")
 	if realIP != "" {
-		return realIP
+		ip := strings.TrimSpace(realIP)
+		if ip != "" {
+			return ip
+		}
 	}
 
-	// Fallback to remote address (if available in context)
-	// Note: Connect doesn't expose the underlying HTTP request directly,
-	// so we can't get the remote address easily. This is a limitation.
+	// Try X-Client-IP (some proxies)
+	if clientIP := req.Header().Get("X-Client-IP"); clientIP != "" {
+		ip := strings.TrimSpace(clientIP)
+		if ip != "" {
+			return ip
+		}
+	}
+
+	// Fallback: return "unknown" since Connect doesn't expose RemoteAddr directly
 	return "unknown"
+}
+
+// isInternalIP checks if an IP address is an internal/private IP
+func isInternalIP(ipStr string) bool {
+	// Remove port if present
+	if idx := strings.LastIndex(ipStr, ":"); idx != -1 {
+		ipStr = ipStr[:idx]
+	}
+
+	// Check for common internal IP patterns
+	// IPv4 private ranges: 10.x.x.x, 172.16-31.x.x, 192.168.x.x, 127.x.x.x
+	if strings.HasPrefix(ipStr, "10.") ||
+		strings.HasPrefix(ipStr, "172.16.") ||
+		strings.HasPrefix(ipStr, "172.17.") ||
+		strings.HasPrefix(ipStr, "172.18.") ||
+		strings.HasPrefix(ipStr, "172.19.") ||
+		strings.HasPrefix(ipStr, "172.20.") ||
+		strings.HasPrefix(ipStr, "172.21.") ||
+		strings.HasPrefix(ipStr, "172.22.") ||
+		strings.HasPrefix(ipStr, "172.23.") ||
+		strings.HasPrefix(ipStr, "172.24.") ||
+		strings.HasPrefix(ipStr, "172.25.") ||
+		strings.HasPrefix(ipStr, "172.26.") ||
+		strings.HasPrefix(ipStr, "172.27.") ||
+		strings.HasPrefix(ipStr, "172.28.") ||
+		strings.HasPrefix(ipStr, "172.29.") ||
+		strings.HasPrefix(ipStr, "172.30.") ||
+		strings.HasPrefix(ipStr, "172.31.") ||
+		strings.HasPrefix(ipStr, "192.168.") ||
+		strings.HasPrefix(ipStr, "127.") {
+		return true
+	}
+
+	// IPv6 loopback
+	if ipStr == "::1" || strings.HasPrefix(ipStr, "::ffff:") {
+		return true
+	}
+
+	return false
 }

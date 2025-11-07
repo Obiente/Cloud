@@ -146,5 +146,8 @@ message TicketComment {
   bool internal = 5; // Internal comment (not visible to user)
   google.protobuf.Timestamp created_at = 6;
   google.protobuf.Timestamp updated_at = 7;
+  optional string created_by_name = 8; // Name of the user who created the comment
+  optional string created_by_email = 9; // Email of the user who created the comment
+  bool is_superadmin = 10; // Whether the comment author is a superadmin
 }
 

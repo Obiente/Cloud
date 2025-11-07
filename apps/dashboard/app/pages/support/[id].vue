@@ -148,9 +148,17 @@
                         <OuiStack spacing="sm">
                           <OuiFlex justify="between" align="center" wrap="wrap" gap="sm">
                             <OuiFlex gap="sm" align="center" wrap="wrap">
-                              <OuiText size="xs" weight="medium" color="secondary">
-                                <OuiRelativeTime :value="comment.createdAt ? new Date(Number(comment.createdAt.seconds) * 1000) : undefined" />
+                              <OuiText size="xs" weight="medium" color="primary">
+                                {{ comment.createdByName || comment.createdByEmail || comment.createdBy || 'Unknown User' }}
                               </OuiText>
+                              <OuiBadge
+                                v-if="comment.isSuperadmin"
+                                variant="primary"
+                                tone="soft"
+                                size="xs"
+                              >
+                                Support Team
+                              </OuiBadge>
                               <OuiBadge
                                 v-if="comment.internal"
                                 variant="warning"
@@ -160,6 +168,9 @@
                                 <LockClosedIcon class="h-3 w-3 mr-1" />
                                 Internal
                               </OuiBadge>
+                              <OuiText size="xs" weight="medium" color="secondary">
+                                <OuiRelativeTime :value="comment.createdAt ? new Date(Number(comment.createdAt.seconds) * 1000) : undefined" />
+                              </OuiText>
                             </OuiFlex>
                           </OuiFlex>
                           <OuiText class="whitespace-pre-wrap">{{ comment.content }}</OuiText>
@@ -349,6 +360,7 @@ import {
 import { ConnectError, Code } from "@connectrpc/connect";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 import { useSuperAdmin } from "~/composables/useSuperAdmin";
+import { useDocumentVisibility } from "@vueuse/core";
 
 const route = useRoute();
 const router = useRouter();
@@ -557,5 +569,56 @@ async function addComment() {
     addingComment.value = false;
   }
 }
+
+// Auto-refresh comments and ticket periodically
+const visibility = useDocumentVisibility();
+const isVisible = computed(() => visibility.value === "visible");
+
+// Refresh interval: 15 seconds (reasonable for support tickets)
+const REFRESH_INTERVAL_MS = 15000;
+
+const refreshIntervalId = ref<ReturnType<typeof setInterval> | null>(null);
+
+// Function to setup/restart the interval
+const setupRefreshInterval = () => {
+  // Clear existing interval if any
+  if (refreshIntervalId.value) {
+    clearInterval(refreshIntervalId.value);
+    refreshIntervalId.value = null;
+  }
+
+  // Only setup if page is visible and we have a ticket loaded
+  if (isVisible.value && ticket.value && !error.value) {
+    refreshIntervalId.value = setInterval(async () => {
+      if (isVisible.value && ticket.value && !error.value) {
+        try {
+          // Refresh both comments and ticket to get latest updates
+          await refreshComments();
+          await refreshTicket();
+        } catch (err) {
+          console.error("Failed to auto-refresh support ticket:", err);
+        }
+      }
+    }, REFRESH_INTERVAL_MS);
+  }
+};
+
+// Watch for visibility changes
+watch([isVisible, ticket, error], () => {
+  setupRefreshInterval();
+});
+
+// Start refreshing when component is mounted
+onMounted(() => {
+  setupRefreshInterval();
+});
+
+// Cleanup on unmount
+onUnmounted(() => {
+  if (refreshIntervalId.value) {
+    clearInterval(refreshIntervalId.value);
+    refreshIntervalId.value = null;
+  }
+});
 </script>
 

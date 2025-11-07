@@ -991,16 +991,19 @@ func (x *SupportTicket) GetCommentCount() int32 {
 
 // TicketComment represents a comment/reply on a support ticket
 type TicketComment struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	TicketId      string                 `protobuf:"bytes,2,opt,name=ticket_id,json=ticketId,proto3" json:"ticket_id,omitempty"`
-	Content       string                 `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
-	CreatedBy     string                 `protobuf:"bytes,4,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"` // User ID who created the comment
-	Internal      bool                   `protobuf:"varint,5,opt,name=internal,proto3" json:"internal,omitempty"`                   // Internal comment (not visible to user)
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	TicketId       string                 `protobuf:"bytes,2,opt,name=ticket_id,json=ticketId,proto3" json:"ticket_id,omitempty"`
+	Content        string                 `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
+	CreatedBy      string                 `protobuf:"bytes,4,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"` // User ID who created the comment
+	Internal       bool                   `protobuf:"varint,5,opt,name=internal,proto3" json:"internal,omitempty"`                   // Internal comment (not visible to user)
+	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	CreatedByName  *string                `protobuf:"bytes,8,opt,name=created_by_name,json=createdByName,proto3,oneof" json:"created_by_name,omitempty"`    // Name of the user who created the comment
+	CreatedByEmail *string                `protobuf:"bytes,9,opt,name=created_by_email,json=createdByEmail,proto3,oneof" json:"created_by_email,omitempty"` // Email of the user who created the comment
+	IsSuperadmin   bool                   `protobuf:"varint,10,opt,name=is_superadmin,json=isSuperadmin,proto3" json:"is_superadmin,omitempty"`             // Whether the comment author is a superadmin
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *TicketComment) Reset() {
@@ -1080,6 +1083,27 @@ func (x *TicketComment) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *TicketComment) GetCreatedByName() string {
+	if x != nil && x.CreatedByName != nil {
+		return *x.CreatedByName
+	}
+	return ""
+}
+
+func (x *TicketComment) GetCreatedByEmail() string {
+	if x != nil && x.CreatedByEmail != nil {
+		return *x.CreatedByEmail
+	}
+	return ""
+}
+
+func (x *TicketComment) GetIsSuperadmin() bool {
+	if x != nil {
+		return x.IsSuperadmin
+	}
+	return false
 }
 
 var File_obiente_cloud_support_v1_support_service_proto protoreflect.FileDescriptor
@@ -1162,7 +1186,7 @@ const file_obiente_cloud_support_v1_support_service_proto_rawDesc = "" +
 	"resolvedAt\x12#\n" +
 	"\rcomment_count\x18\r \x01(\x05R\fcommentCountB\x0e\n" +
 	"\f_assigned_toB\x12\n" +
-	"\x10_organization_id\"\x87\x02\n" +
+	"\x10_organization_id\"\xb1\x03\n" +
 	"\rTicketComment\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\tticket_id\x18\x02 \x01(\tR\bticketId\x12\x18\n" +
@@ -1173,7 +1197,13 @@ const file_obiente_cloud_support_v1_support_service_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt*\x87\x01\n" +
+	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12+\n" +
+	"\x0fcreated_by_name\x18\b \x01(\tH\x00R\rcreatedByName\x88\x01\x01\x12-\n" +
+	"\x10created_by_email\x18\t \x01(\tH\x01R\x0ecreatedByEmail\x88\x01\x01\x12#\n" +
+	"\ris_superadmin\x18\n" +
+	" \x01(\bR\fisSuperadminB\x12\n" +
+	"\x10_created_by_nameB\x13\n" +
+	"\x11_created_by_email*\x87\x01\n" +
 	"\x13SupportTicketStatus\x12%\n" +
 	"!SUPPORT_TICKET_STATUS_UNSPECIFIED\x10\x00\x12\b\n" +
 	"\x04OPEN\x10\x01\x12\x0f\n" +
@@ -1294,6 +1324,7 @@ func file_obiente_cloud_support_v1_support_service_proto_init() {
 	file_obiente_cloud_support_v1_support_service_proto_msgTypes[6].OneofWrappers = []any{}
 	file_obiente_cloud_support_v1_support_service_proto_msgTypes[8].OneofWrappers = []any{}
 	file_obiente_cloud_support_v1_support_service_proto_msgTypes[12].OneofWrappers = []any{}
+	file_obiente_cloud_support_v1_support_service_proto_msgTypes[13].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

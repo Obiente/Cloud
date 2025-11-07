@@ -330,6 +330,7 @@ import {
 import { ConnectError, Code } from "@connectrpc/connect";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 import { useSuperAdmin } from "~/composables/useSuperAdmin";
+import { useDocumentVisibility } from "@vueuse/core";
 
 const client = useConnectClient(SupportService);
 const router = useRouter();
@@ -568,5 +569,54 @@ async function createTicket() {
     creating.value = false;
   }
 }
+
+// Auto-refresh tickets list periodically
+const visibility = useDocumentVisibility();
+const isVisible = computed(() => visibility.value === "visible");
+
+// Refresh interval: 30 seconds (less frequent than individual ticket page)
+const REFRESH_INTERVAL_MS = 30000;
+
+const refreshIntervalId = ref<ReturnType<typeof setInterval> | null>(null);
+
+// Function to setup/restart the interval
+const setupRefreshInterval = () => {
+  // Clear existing interval if any
+  if (refreshIntervalId.value) {
+    clearInterval(refreshIntervalId.value);
+    refreshIntervalId.value = null;
+  }
+
+  // Only setup if page is visible and no errors
+  if (isVisible.value && !error.value) {
+    refreshIntervalId.value = setInterval(async () => {
+      if (isVisible.value && !error.value) {
+        try {
+          await refreshTickets();
+        } catch (err) {
+          console.error("Failed to auto-refresh tickets list:", err);
+        }
+      }
+    }, REFRESH_INTERVAL_MS);
+  }
+};
+
+// Watch for visibility changes
+watch([isVisible, error], () => {
+  setupRefreshInterval();
+});
+
+// Start refreshing when component is mounted
+onMounted(() => {
+  setupRefreshInterval();
+});
+
+// Cleanup on unmount
+onUnmounted(() => {
+  if (refreshIntervalId.value) {
+    clearInterval(refreshIntervalId.value);
+    refreshIntervalId.value = null;
+  }
+});
 </script>
 
