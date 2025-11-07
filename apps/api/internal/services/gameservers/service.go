@@ -3,13 +3,12 @@ package gameservers
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	gameserversv1connect "api/gen/proto/obiente/cloud/gameservers/v1/gameserversv1connect"
 	"api/internal/auth"
 	"api/internal/database"
-	"api/internal/logger"
 	"api/internal/orchestrator"
+	"api/internal/services/common"
 
 	"connectrpc.com/connect"
 )
@@ -40,34 +39,10 @@ func (s *Service) getGameServerManager() (*orchestrator.GameServerManager, error
 	return manager, nil
 }
 
-// ensureAuthenticated ensures the user is authenticated for streaming RPCs
+// ensureAuthenticated ensures the user is authenticated for streaming RPCs.
+// This is needed because unary interceptors may not run for streaming RPCs.
 func (s *Service) ensureAuthenticated(ctx context.Context, req connect.AnyRequest) (context.Context, error) {
-	// Check if user is already in context (interceptor ran)
-	if userInfo, err := auth.GetUserFromContext(ctx); err == nil && userInfo != nil {
-		return ctx, nil
-	}
-
-	// Extract token from Authorization header
-	authHeader := req.Header().Get("Authorization")
-	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required"))
-	}
-
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-	if token == "" {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required"))
-	}
-
-	// Use AuthenticateAndSetContext helper which handles token validation and context setup
-	ctx, userInfo, err := auth.AuthenticateAndSetContext(ctx, authHeader)
-	if err != nil {
-		logger.Warn("[StreamAuth] Token validation failed for procedure %s: %v", req.Spec().Procedure, err)
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required"))
-	}
-
-	logger.Debug("[StreamAuth] Authenticated user: %s for procedure: %s", userInfo.Id, req.Spec().Procedure)
-
-	return ctx, nil
+	return common.EnsureAuthenticated(ctx, req)
 }
 
 // checkGameServerPermission verifies user permissions for a game server

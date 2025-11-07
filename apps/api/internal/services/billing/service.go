@@ -13,6 +13,7 @@ import (
 	billingv1connect "api/gen/proto/obiente/cloud/billing/v1/billingv1connect"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/services/common"
 	"api/internal/stripe"
 
 	"connectrpc.com/connect"
@@ -68,18 +69,8 @@ func (s *Service) CreateCheckoutSession(ctx context.Context, req *connect.Reques
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
-		var member database.OrganizationMember
-		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("organization not found or access denied"))
-			}
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
-		}
-		// Only owners and admins can create checkout sessions
-		if member.Role != "owner" && member.Role != "admin" {
-			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
-		}
+	if err := common.AuthorizeOrgAdmin(ctx, orgID, user); err != nil {
+		return nil, err
 	}
 
 	amountCents := req.Msg.GetAmountCents()
@@ -167,18 +158,8 @@ func (s *Service) CreatePaymentIntent(ctx context.Context, req *connect.Request[
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
-		var member database.OrganizationMember
-		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("organization not found or access denied"))
-			}
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
-		}
-		// Only owners and admins can create payment intents
-		if member.Role != "owner" && member.Role != "admin" {
-			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient permissions"))
-		}
+	if err := common.AuthorizeOrgAdmin(ctx, orgID, user); err != nil {
+		return nil, err
 	}
 
 	amountCents := req.Msg.GetAmountCents()
@@ -324,14 +305,8 @@ func (s *Service) GetBillingAccount(ctx context.Context, req *connect.Request[bi
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
-		var member database.OrganizationMember
-		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("organization not found or access denied"))
-			}
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
-		}
+	if err := common.VerifyOrgAccess(ctx, orgID, user); err != nil {
+		return nil, err
 	}
 
 	// Get billing account
@@ -578,14 +553,8 @@ func (s *Service) ListPaymentMethods(ctx context.Context, req *connect.Request[b
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
-		var member database.OrganizationMember
-		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("organization not found or access denied"))
-			}
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
-		}
+	if err := common.VerifyOrgAccess(ctx, orgID, user); err != nil {
+		return nil, err
 	}
 
 	// Get billing account
@@ -1038,26 +1007,9 @@ func (s *Service) ListInvoices(ctx context.Context, req *connect.Request[billing
 
 // Helper functions
 
+// getOrCreateBillingAccount is deprecated - use common.GetOrCreateBillingAccount instead
 func (s *Service) getOrCreateBillingAccount(orgID string) (*database.BillingAccount, error) {
-	var billingAccount database.BillingAccount
-	if err := database.DB.Where("organization_id = ?", orgID).First(&billingAccount).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Create new billing account
-			billingAccount = database.BillingAccount{
-				ID:             generateID("ba"),
-				OrganizationID: orgID,
-				Status:         "ACTIVE",
-				CreatedAt:      time.Now(),
-				UpdatedAt:      time.Now(),
-			}
-			if err := database.DB.Create(&billingAccount).Error; err != nil {
-				return nil, fmt.Errorf("create billing account: %w", err)
-			}
-		} else {
-			return nil, err
-		}
-	}
-	return &billingAccount, nil
+	return common.GetOrCreateBillingAccount(orgID)
 }
 
 func (s *Service) billingAccountToProto(ba *database.BillingAccount) *billingv1.BillingAccount {
@@ -1091,6 +1043,7 @@ func (s *Service) billingAccountToProto(ba *database.BillingAccount) *billingv1.
 	return proto
 }
 
+// generateID is deprecated - use common.generateID instead (but it's not exported, so keep this for now)
 func generateID(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
 }
@@ -1201,14 +1154,8 @@ func (s *Service) GetDNSDelegationSubscriptionStatus(ctx context.Context, req *c
 	}
 
 	// Verify user has access to this organization
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
-		var member database.OrganizationMember
-		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("organization not found or access denied"))
-			}
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
-		}
+	if err := common.VerifyOrgAccess(ctx, orgID, user); err != nil {
+		return nil, err
 	}
 
 	// Check subscription status - first try database (API key method), then check Stripe directly
@@ -1286,18 +1233,8 @@ func (s *Service) CancelDNSDelegationSubscription(ctx context.Context, req *conn
 	}
 
 	// Verify user has access to this organization and is owner/admin
-	if !auth.HasRole(user, auth.RoleSuperAdmin) {
-		var member database.OrganizationMember
-		if err := database.DB.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("organization not found or access denied"))
-			}
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check organization access: %w", err))
-		}
-		// Only owners and admins can cancel subscriptions
-		if member.Role != "owner" && member.Role != "admin" {
-			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("only organization owners and admins can cancel subscriptions"))
-		}
+	if err := common.AuthorizeOrgAdmin(ctx, orgID, user); err != nil {
+		return nil, err
 	}
 
 	// Get subscription ID

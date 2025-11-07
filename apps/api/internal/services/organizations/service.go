@@ -16,6 +16,7 @@ import (
 	"api/internal/email"
 	"api/internal/logger"
 	"api/internal/pricing"
+	"api/internal/services/common"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -177,7 +178,7 @@ func (s *Service) UpdateOrganization(ctx context.Context, req *connect.Request[o
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	if err := s.authorizeOrgRoles(ctx, req.Msg.GetOrganizationId(), user, "owner", "admin"); err != nil {
+	if err := common.AuthorizeOrgRoles(ctx, req.Msg.GetOrganizationId(), user, "owner", "admin"); err != nil {
 		return nil, err
 	}
 
@@ -207,7 +208,7 @@ func (s *Service) ListMembers(ctx context.Context, req *connect.Request[organiza
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
-	if err := s.authorizeOrgRoles(ctx, req.Msg.GetOrganizationId(), user); err != nil {
+	if err := common.AuthorizeOrgRoles(ctx, req.Msg.GetOrganizationId(), user); err != nil {
 		return nil, err
 	}
 
@@ -260,7 +261,7 @@ func (s *Service) InviteMember(ctx context.Context, req *connect.Request[organiz
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
 	}
 
-	if err := s.authorizeOrgRoles(ctx, org.ID, inviter, "owner", "admin"); err != nil {
+	if err := common.AuthorizeOrgRoles(ctx, org.ID, inviter, "owner", "admin"); err != nil {
 		return nil, err
 	}
 
@@ -360,7 +361,7 @@ func (s *Service) ResendInvite(ctx context.Context, req *connect.Request[organiz
 	}
 
 	// Authorize: user must be owner or admin of the organization, or superadmin
-	if err := s.authorizeOrgRoles(ctx, org.ID, inviter, "owner", "admin"); err != nil {
+	if err := common.AuthorizeOrgRoles(ctx, org.ID, inviter, "owner", "admin"); err != nil {
 		// Allow superadmins to resend invites for any organization
 		if !auth.HasRole(inviter, auth.RoleSuperAdmin) {
 			return nil, err
@@ -535,7 +536,7 @@ func (s *Service) UpdateMember(ctx context.Context, req *connect.Request[organiz
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	if err := s.authorizeOrgRoles(ctx, req.Msg.GetOrganizationId(), actor, "owner", "admin"); err != nil {
+	if err := common.AuthorizeOrgRoles(ctx, req.Msg.GetOrganizationId(), actor, "owner", "admin"); err != nil {
 		return nil, err
 	}
 
@@ -587,7 +588,7 @@ func (s *Service) RemoveMember(ctx context.Context, req *connect.Request[organiz
 		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
 	}
 
-	if err := s.authorizeOrgRoles(ctx, req.Msg.GetOrganizationId(), user, "owner", "admin"); err != nil {
+	if err := common.AuthorizeOrgRoles(ctx, req.Msg.GetOrganizationId(), user, "owner", "admin"); err != nil {
 		return nil, err
 	}
 
@@ -644,7 +645,7 @@ func (s *Service) TransferOwnership(ctx context.Context, req *connect.Request[or
 
 	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
 	if !isSuperAdmin {
-		if err := s.authorizeOrgRoles(ctx, orgID, user, "owner"); err != nil {
+		if err := common.AuthorizeOrgRoles(ctx, orgID, user, "owner"); err != nil {
 			return nil, err
 		}
 	}
@@ -728,9 +729,9 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 
 	isSuperAdmin := auth.HasRole(user, auth.RoleSuperAdmin)
 	if !isSuperAdmin {
-		if err := s.authorizeOrgRoles(ctx, orgID, user, "viewer", "member", "admin", "owner"); err != nil {
-			return nil, err
-		}
+	if err := common.AuthorizeOrgRoles(ctx, orgID, user, "viewer", "member", "admin", "owner"); err != nil {
+		return nil, err
+	}
 	}
 
 	// Determine month (default to current month)
@@ -1278,39 +1279,10 @@ func normalizeSlug(input string) string {
 	return slug
 }
 
+// authorizeOrgRoles is deprecated - use common.AuthorizeOrgRoles instead
+// Kept for backward compatibility during refactoring
 func (s *Service) authorizeOrgRoles(ctx context.Context, orgID string, user *authv1.User, allowedRoles ...string) error {
-	if user == nil {
-		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
-	}
-
-	if auth.HasRole(user, auth.RoleSuperAdmin) {
-		return nil
-	}
-
-	var member database.OrganizationMember
-	if err := database.DB.First(&member, "organization_id = ? AND user_id = ?", orgID, user.Id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("not a member of this organization"))
-		}
-		return connect.NewError(connect.CodeInternal, fmt.Errorf("membership lookup: %w", err))
-	}
-
-	if !strings.EqualFold(member.Status, "active") {
-		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("inactive members cannot perform this action"))
-	}
-
-	if len(allowedRoles) == 0 {
-		return nil
-	}
-
-	role := strings.ToLower(member.Role)
-	for _, allowed := range allowedRoles {
-		if role == strings.ToLower(allowed) {
-			return nil
-		}
-	}
-
-	return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("insufficient role to perform this action"))
+	return common.AuthorizeOrgRoles(ctx, orgID, user, allowedRoles...)
 }
 
 // plan limits are enforced via quotas; not needed here

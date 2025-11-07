@@ -10,6 +10,7 @@ import (
 	authv1connect "api/gen/proto/obiente/cloud/auth/v1/authv1connect"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/services/common"
 	"api/internal/services/organizations"
 	"api/internal/zitadel"
 	"strings"
@@ -423,34 +424,8 @@ func (s *Service) ListGitHubIntegrations(ctx context.Context, _ *connect.Request
 	}), nil
 }
 
-// verifyOrgAdminPermission verifies that the user is an admin or owner of the organization
+// verifyOrgAdminPermission verifies that the user is an admin or owner of the organization.
+// Deprecated: use common.AuthorizeOrgAdmin instead.
 func (s *Service) verifyOrgAdminPermission(ctx context.Context, orgID string, user *authv1.User) error {
-	if user == nil {
-		return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required"))
-	}
-
-	// Superadmins bypass permission checks
-	if auth.HasRole(user, auth.RoleSuperAdmin) {
-		return nil
-	}
-
-	// Check if user is a member with admin or owner role
-	var member database.OrganizationMember
-	if err := s.db.Where("organization_id = ? AND user_id = ?", orgID, user.Id).First(&member).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("not a member of this organization"))
-		}
-		return connect.NewError(connect.CodeInternal, fmt.Errorf("membership lookup: %w", err))
-	}
-
-	if !strings.EqualFold(member.Status, "active") {
-		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("inactive members cannot perform this action"))
-	}
-
-	role := strings.ToLower(member.Role)
-	if role != "owner" && role != "admin" {
-		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("only organization owners and admins can manage integrations"))
-	}
-
-	return nil
+	return common.AuthorizeOrgAdmin(ctx, orgID, user)
 }
