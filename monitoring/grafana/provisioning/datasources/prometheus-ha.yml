@@ -16,7 +16,7 @@ datasources:
   - name: PostgreSQL
     type: postgres
     access: proxy
-    url: postgres:5432
+    url: pgpool:5432
     uid: postgresql
     database: obiente
     user: ${POSTGRES_USER}
@@ -31,7 +31,7 @@ datasources:
   - name: TimescaleDB (Metrics)
     type: postgres
     access: proxy
-    url: timescaledb:5432
+    url: metrics-pgpool:5432
     uid: timescaledb-metrics
     database: obiente_metrics
     user: ${METRICS_DB_USER}

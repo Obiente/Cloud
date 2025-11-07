@@ -141,6 +141,7 @@ func HTTPMetricsMiddleware(next http.Handler) http.Handler {
 }
 
 // statusCodeWriter wraps http.ResponseWriter to capture status code
+// It also implements http.Flusher if the underlying ResponseWriter does
 type statusCodeWriter struct {
 	http.ResponseWriter
 	statusCode int
@@ -160,6 +161,13 @@ func (w *statusCodeWriter) Write(b []byte) (int, error) {
 		w.WriteHeader(http.StatusOK)
 	}
 	return w.ResponseWriter.Write(b)
+}
+
+// Flush implements http.Flusher if the underlying ResponseWriter does
+func (w *statusCodeWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }
 
 // sanitizeEndpoint removes IDs and sensitive data from endpoint paths

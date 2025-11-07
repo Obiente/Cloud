@@ -773,12 +773,19 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
       GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
+      # Pass database credentials as environment variables for datasource provisioning
+      POSTGRES_USER: ${POSTGRES_USER:-obiente-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      METRICS_DB_USER: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
+      METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
     depends_on:
       - prometheus
+      - pgpool
+      - metrics-pgpool
     deploy:
       replicas: 1
       placement:
