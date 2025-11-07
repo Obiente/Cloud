@@ -99,11 +99,11 @@ var categoryDefaults = map[Category]struct {
 	Accent string
 	Label  string
 }{
-	CategoryOnboarding:   {Accent: "#2563eb", Label: "Onboarding"},
-	CategoryInvite:       {Accent: "#0ea5e9", Label: "Invitation"},
-	CategoryNotification: {Accent: "#6366f1", Label: "Notification"},
-	CategoryBilling:      {Accent: "#f97316", Label: "Billing"},
-	CategorySystem:       {Accent: "#10b981", Label: "System"},
+	CategoryOnboarding:   {Accent: "#a855f7", Label: "Onboarding"},   // OUI primary purple
+	CategoryInvite:       {Accent: "#22d3ee", Label: "Invitation"},     // OUI secondary cyan
+	CategoryNotification: {Accent: "#60a5fa", Label: "Notification"},   // OUI info blue
+	CategoryBilling:      {Accent: "#f59e0b", Label: "Billing"},         // OUI warning amber
+	CategorySystem:       {Accent: "#22c55e", Label: "System"},          // OUI success green
 }
 
 // RenderHTML renders the base HTML email template using the provided data.
@@ -238,7 +238,7 @@ func buildViewModel(data TemplateData) viewModel {
 		accent = defaults.Accent
 	}
 	if accent == "" {
-		accent = "#2563eb"
+		accent = "#a855f7" // OUI primary purple
 	}
 
 	categoryLabel := defaults.Label

@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	authv1 "api/gen/proto/obiente/cloud/auth/v1"
@@ -28,6 +29,19 @@ func NewService() authv1connect.AuthServiceHandler {
 	return &Service{
 		db: database.DB,
 	}
+}
+
+func (s *Service) GetPublicConfig(ctx context.Context, _ *connect.Request[authv1.GetPublicConfigRequest]) (*connect.Response[authv1.GetPublicConfigResponse], error) {
+	// Read configuration from environment variables
+	billingEnabled := os.Getenv("BILLING_ENABLED") != "false" && os.Getenv("BILLING_ENABLED") != "0"
+	selfHosted := os.Getenv("SELF_HOSTED") == "true" || os.Getenv("SELF_HOSTED") == "1"
+	disableAuth := os.Getenv("DISABLE_AUTH") == "true" || os.Getenv("DISABLE_AUTH") == "1"
+
+	return connect.NewResponse(&authv1.GetPublicConfigResponse{
+		BillingEnabled: billingEnabled,
+		SelfHosted:     selfHosted,
+		DisableAuth:    disableAuth,
+	}), nil
 }
 
 func (s *Service) Login(ctx context.Context, req *connect.Request[authv1.LoginRequest]) (*connect.Response[authv1.LoginResponse], error) {

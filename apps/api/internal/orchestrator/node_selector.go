@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"api/internal/database"
 
@@ -283,8 +284,41 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 	}
 	deploymentCount := ns.getNodeDeploymentCount(ctx, nodeID)
 
-	// Register local node with availability='active' and status='ready'
-	metadata := &database.NodeMetadata{
+	// Check if a node with this hostname already exists (might have different ID)
+	var existingNode database.NodeMetadata
+	err := database.DB.Where("hostname = ?", name).First(&existingNode).Error
+	hostnameExists := err == nil
+	
+	var metadata *database.NodeMetadata
+	if hostnameExists && existingNode.ID != nodeID {
+		// Node with same hostname but different ID exists - update it to use our ID
+		log.Printf("[NodeSelector] Node with hostname %s exists with ID %s, updating to use ID %s", name, existingNode.ID, nodeID)
+		// Store old ID for deletion
+		oldID := existingNode.ID
+		// Update the existing node's ID and other fields
+		existingNode.ID = nodeID
+		existingNode.Role = "worker"
+		existingNode.Availability = "active"
+		existingNode.Status = "ready"
+		existingNode.TotalCPU = totalCPU
+		existingNode.TotalMemory = totalMemory
+		existingNode.DeploymentCount = deploymentCount
+		existingNode.MaxDeployments = ns.maxDeploymentsPerNode
+		existingNode.UsedCPU = 0.0
+		existingNode.UsedMemory = 0
+		existingNode.Labels = "{}"
+		existingNode.UpdatedAt = time.Now()
+		
+		// Delete old record and create new one with correct ID
+		// We need to delete first to avoid hostname constraint violation
+		if err := database.DB.Delete(&database.NodeMetadata{}, "id = ?", oldID).Error; err != nil {
+			log.Printf("[NodeSelector] WARNING: Failed to delete old node %s: %v", oldID, err)
+		}
+		// Now create the new one
+		metadata = &existingNode
+	} else if !hostnameExists {
+		// No existing node with this hostname, create new one
+		metadata = &database.NodeMetadata{
 		ID:              nodeID,
 		Hostname:        name,
 		Role:            "worker",
@@ -297,6 +331,21 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 		UsedCPU:         0.0,
 		UsedMemory:      0,
 		Labels:          "{}", // Empty JSON object for jsonb field
+		}
+	} else {
+		// Node exists with same hostname and ID - just update it
+		metadata = &existingNode
+		metadata.Role = "worker"
+		metadata.Availability = "active"
+		metadata.Status = "ready"
+		metadata.TotalCPU = totalCPU
+		metadata.TotalMemory = totalMemory
+		metadata.DeploymentCount = deploymentCount
+		metadata.MaxDeployments = ns.maxDeploymentsPerNode
+		metadata.UsedCPU = 0.0
+		metadata.UsedMemory = 0
+		metadata.Labels = "{}"
+		metadata.UpdatedAt = time.Now()
 	}
 
 	// Use Save which will create or update based on primary key (ID)

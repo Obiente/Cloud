@@ -317,22 +317,44 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 	}
 
 	// Create default deployment routing (for backward compatibility)
-	routing := &database.DeploymentRouting{
-		ID:              fmt.Sprintf("route-%s", config.DeploymentID),
-		DeploymentID:    config.DeploymentID,
-		Domain:          config.Domain,
-		ServiceName:     "default",
-		TargetPort:      config.Port,
-		Protocol:        "http",
-		SSLEnabled:      false, // Default to no SSL for HTTP protocol
-		SSLCertResolver: "letsencrypt",
-		Middleware:      "{}", // Empty JSON object for jsonb field
-		CreatedAt:       time.Now(),
-		UpdatedAt:       time.Now(),
-	}
+	// Only create if no routing rules exist - preserve user-configured routing
+	existingRoutings, _ := database.GetDeploymentRoutings(config.DeploymentID)
+	if len(existingRoutings) == 0 {
+		// Check if a default routing already exists (might have been created previously)
+		// This handles the case where GetDeploymentRoutings returns empty but a routing exists in DB
+		defaultRoutingID := fmt.Sprintf("route-%s", config.DeploymentID)
+		var existingDefaultRouting database.DeploymentRouting
+		dbErr := database.DB.Where("id = ?", defaultRoutingID).First(&existingDefaultRouting).Error
 
-	if err := database.UpsertDeploymentRouting(routing); err != nil {
-		logger.Warn("[DeploymentManager] Failed to create routing: %v", err)
+		// If a default routing exists, preserve all user settings (especially port)
+		if dbErr == nil {
+			// User has set routing rules - preserve them completely, don't overwrite
+			logger.Info("[DeploymentManager] Found existing default routing for deployment %s, preserving all user settings (port: %d)", config.DeploymentID, existingDefaultRouting.TargetPort)
+		} else {
+			// No existing routing found, create default routing
+			routing := &database.DeploymentRouting{
+				ID:              defaultRoutingID,
+				DeploymentID:    config.DeploymentID,
+				Domain:          config.Domain,
+				ServiceName:     "default",
+				TargetPort:      config.Port,
+				Protocol:        "http",
+				SSLEnabled:      false, // Default to no SSL for HTTP protocol
+				SSLCertResolver: "letsencrypt",
+				Middleware:      "{}", // Empty JSON object for jsonb field
+				CreatedAt:       time.Now(),
+				UpdatedAt:       time.Now(),
+			}
+
+			if err := database.UpsertDeploymentRouting(routing); err != nil {
+				logger.Warn("[DeploymentManager] Failed to create routing: %v", err)
+			} else {
+				logger.Info("[DeploymentManager] Created default routing for deployment %s (port: %d)", config.DeploymentID, config.Port)
+			}
+		}
+	} else {
+		// Routing rules already exist - preserve them, don't overwrite
+		logger.Info("[DeploymentManager] Deployment %s already has %d routing rule(s), preserving existing configuration", config.DeploymentID, len(existingRoutings))
 	}
 
 	logger.Info("[DeploymentManager] Deployment %s created successfully", config.DeploymentID)
@@ -767,10 +789,34 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 			if deployment.Image != nil {
 				image = *deployment.Image
 			}
+			
+			// Get port from routing configuration if available, otherwise use deployment port
 			port := 8080
 			if deployment.Port != nil {
 				port = int(*deployment.Port)
 			}
+			
+			// Check routing configuration for target port (takes precedence)
+			routings, routingErr := database.GetDeploymentRoutings(deploymentID)
+			if routingErr == nil && len(routings) > 0 {
+				// Track if we found a routing rule
+				foundRouting := false
+				// Find routing rule for "default" service (or first one if no service name specified)
+				for _, routing := range routings {
+					if routing.ServiceName == "" || routing.ServiceName == "default" {
+						port = routing.TargetPort
+						logger.Info("[StartDeployment] Using target port %d from routing configuration (default service) for deployment %s", port, deploymentID)
+						foundRouting = true
+						break
+					}
+				}
+				// If no default service routing found, use first routing's target port
+				if !foundRouting {
+					port = routings[0].TargetPort
+					logger.Info("[StartDeployment] Using target port %d from first routing rule for deployment %s", port, deploymentID)
+				}
+			}
+			
 			memory := int64(512 * 1024 * 1024) // Default 512MB
 			if deployment.MemoryBytes != nil {
 				memory = *deployment.MemoryBytes
@@ -850,10 +896,34 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				if deployment.Image != nil {
 					image = *deployment.Image
 				}
+				
+				// Get port from routing configuration if available, otherwise use deployment port
 				port := 8080
 				if deployment.Port != nil {
 					port = int(*deployment.Port)
 				}
+				
+				// Check routing configuration for target port (takes precedence)
+				routings, routingErr := database.GetDeploymentRoutings(deploymentID)
+				if routingErr == nil && len(routings) > 0 {
+					// Track if we found a routing rule
+					foundRouting := false
+					// Find routing rule for "default" service (or first one if no service name specified)
+					for _, routing := range routings {
+						if routing.ServiceName == "" || routing.ServiceName == "default" {
+							port = routing.TargetPort
+							logger.Info("[StartDeployment] Using target port %d from routing configuration (default service) for deployment %s (recreate)", port, deploymentID)
+							foundRouting = true
+							break
+						}
+					}
+					// If no default service routing found, use first routing's target port
+					if !foundRouting {
+						port = routings[0].TargetPort
+						logger.Info("[StartDeployment] Using target port %d from first routing rule for deployment %s (recreate)", port, deploymentID)
+					}
+				}
+				
 				memory := int64(512 * 1024 * 1024) // Default 512MB
 				if deployment.MemoryBytes != nil {
 					memory = *deployment.MemoryBytes
@@ -1020,10 +1090,23 @@ func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID 
 func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID string) error {
 	logger.Info("[DeploymentManager] Restarting deployment %s", deploymentID)
 
-	locations, err := dm.registry.GetDeploymentLocations(deploymentID)
+	// Get all locations (not just running ones) to handle stopped containers
+	locations, err := database.GetAllDeploymentLocations(deploymentID)
 	if err != nil {
 		return fmt.Errorf("failed to get deployment locations: %w", err)
 	}
+
+	// If no locations found, try to validate and refresh
+	if len(locations) == 0 {
+		locations, err = database.ValidateAndRefreshLocations(deploymentID)
+		if err != nil {
+			logger.Warn("[DeploymentManager] Failed to validate locations for deployment %s: %v", deploymentID, err)
+		}
+	}
+
+	// Track if we found any containers to restart
+	foundContainers := false
+	restartedCount := 0
 
 	for _, location := range locations {
 		// Only restart containers on this node
@@ -1031,9 +1114,19 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 			continue
 		}
 
+		foundContainers = true
+
+		// Check if container exists in Docker
+		_, err := dm.dockerClient.ContainerInspect(ctx, location.ContainerID)
+		if err != nil {
+			// Container doesn't exist - skip it (will be handled by StartDeployment if needed)
+			logger.Warn("[DeploymentManager] Container %s doesn't exist, skipping restart", location.ContainerID[:12])
+			continue
+		}
+
 		timeout := int(30)
 		if err := dm.dockerHelper.RestartContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second); err != nil {
-			logger.Info("[DeploymentManager] Failed to restart container %s: %v", location.ContainerID, err)
+			logger.Warn("[DeploymentManager] Failed to restart container %s: %v", location.ContainerID[:12], err)
 			continue
 		}
 
@@ -1045,7 +1138,17 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 				"updated_at": time.Now(),
 			})
 
+		restartedCount++
 		logger.Info("[DeploymentManager] Restarted container %s", location.ContainerID[:12])
+	}
+
+	// If no containers found, try to start the deployment (which will create/start containers)
+	if !foundContainers || restartedCount == 0 {
+		logger.Info("[DeploymentManager] No containers found for restart, attempting to start deployment %s", deploymentID)
+		if err := dm.StartDeployment(ctx, deploymentID); err != nil {
+			return fmt.Errorf("failed to start deployment (no containers to restart): %w", err)
+		}
+		logger.Info("[DeploymentManager] Successfully started deployment %s after restart attempt", deploymentID)
 	}
 
 	return nil

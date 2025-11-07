@@ -549,6 +549,25 @@ func AuthenticateAndSetContext(ctx context.Context, authHeader string) (context.
 	return ctx, userInfo, nil
 }
 
+// WithSystemUser creates a context with a system user that has admin permissions
+// This is used for internal operations that need to bypass permission checks
+func WithSystemUser(ctx context.Context) context.Context {
+	systemUser := &authv1.User{
+		Id:                "system",
+		Email:             "system@obiente.local",
+		Name:              "System",
+		GivenName:         "System",
+		FamilyName:        "User",
+		PreferredUsername: "system",
+		EmailVerified:     true,
+		Locale:            "en",
+		AvatarUrl:         "",
+		Roles:             []string{RoleAdmin, RoleSuperAdmin},
+		UpdatedAt:         timestamppb.Now(),
+	}
+	return context.WithValue(ctx, userInfoKey, systemUser)
+}
+
 // AuthenticateHTTPRequest authenticates an HTTP request outside of Connect RPC
 // This can be used for regular HTTP handlers that need authentication
 // When DISABLE_AUTH=true, returns a mock dev user

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	adminv1connect "api/gen/proto/obiente/cloud/admin/v1/adminv1connect"
+	auditv1connect "api/gen/proto/obiente/cloud/audit/v1/auditv1connect"
 	authv1connect "api/gen/proto/obiente/cloud/auth/v1/authv1connect"
 	billingv1connect "api/gen/proto/obiente/cloud/billing/v1/billingv1connect"
 	deploymentsv1connect "api/gen/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
@@ -25,6 +26,7 @@ import (
 	"api/internal/orchestrator"
 	"api/internal/quota"
 	adminsvc "api/internal/services/admin"
+	auditsvc "api/internal/services/audit"
 	authsvc "api/internal/services/auth"
 	billingsvc "api/internal/services/billing"
 	deploymentsvc "api/internal/services/deployments"
@@ -40,12 +42,19 @@ import (
 	"golang.org/x/net/http2/h2c"
 )
 
+// ServerInfo contains the HTTP handler and deployment service
+type ServerInfo struct {
+	Handler          http.Handler
+	DeploymentService *deploymentsvc.Service
+}
+
 // New constructs the primary Connect handler with all service registrations and reflection.
-func New() http.Handler {
+// It returns both the handler and the deployment service so it can be used for background tasks.
+func New() *ServerInfo {
 	log.Println("[Server] Registering routes...")
 	mux := http.NewServeMux()
 	registerRoot(mux)
-	registerServices(mux)
+	deploymentService := registerServices(mux)
 	registerReflection(mux)
 
 	log.Println("[Server] Wrapping with h2c for HTTP/2...")
@@ -61,7 +70,10 @@ func New() http.Handler {
 	handler = middleware.RequestLogger(handler)
 
 	log.Println("[Server] Handler chain complete")
-	return handler
+	return &ServerInfo{
+		Handler:          handler,
+		DeploymentService: deploymentService,
+	}
 }
 
 func registerRoot(mux *http.ServeMux) {
@@ -218,7 +230,7 @@ func registerRoot(mux *http.ServeMux) {
 	})
 }
 
-func registerServices(mux *http.ServeMux) {
+func registerServices(mux *http.ServeMux) *deploymentsvc.Service {
 	// Create auth configuration with JWKS from Zitadel
 	authConfig := auth.NewAuthConfig()
 
@@ -249,6 +261,7 @@ func registerServices(mux *http.ServeMux) {
 			&database.GameServerUsageHourly{},
 			&database.SupportTicket{},
 			&database.TicketComment{},
+			// Note: AuditLog is migrated in MetricsDB (TimescaleDB), not here
 		); err != nil {
 			log.Printf("[Server] AutoMigrate warning: %v", err)
 		}
@@ -263,13 +276,17 @@ func registerServices(mux *http.ServeMux) {
 	// Note: Unary interceptors work for both unary and streaming RPCs in Connect
 	authInterceptor := auth.MiddlewareInterceptor(authConfig)
 
+	// Create audit log interceptor
+	auditInterceptor := middleware.AuditLogInterceptor()
+
 	// Configure services
 	// Note: Login RPC does not require authentication (public endpoint)
+	// Chain interceptors: audit first, then auth
 	authPath, authHandler := authv1connect.NewAuthServiceHandler(
 		authsvc.NewService(),
 		// Login doesn't need auth interceptor, but other methods do
 		// We'll handle this in the service itself
-		connect.WithInterceptors(authInterceptor),
+		connect.WithInterceptors(auditInterceptor, authInterceptor),
 	)
 	mux.Handle(authPath, authHandler)
 
@@ -306,7 +323,7 @@ func registerServices(mux *http.ServeMux) {
 	deploymentService := deploymentsvc.NewService(deploymentRepo, manager, qc)
 	deploymentsPath, deploymentsHandler := deploymentsv1connect.NewDeploymentServiceHandler(
 		deploymentService,
-		connect.WithInterceptors(authInterceptor),
+		connect.WithInterceptors(auditInterceptor, authInterceptor),
 	)
 	mux.Handle(deploymentsPath, deploymentsHandler)
 
@@ -320,21 +337,21 @@ func registerServices(mux *http.ServeMux) {
 			ConsoleURL:   consoleURL,
 			SupportEmail: supportEmail,
 		}),
-		connect.WithInterceptors(authInterceptor),
+		connect.WithInterceptors(auditInterceptor, authInterceptor),
 	)
 	mux.Handle(organizationsPath, organizationsHandler)
 
 	// Superadmin service
 	superadminPath, superadminHandler := superadminv1connect.NewSuperadminServiceHandler(
 		superadminsvc.NewService(),
-		connect.WithInterceptors(authInterceptor),
+		connect.WithInterceptors(auditInterceptor, authInterceptor),
 	)
 	mux.Handle(superadminPath, superadminHandler)
 
 	// Admin Connect service
 	adminPath, adminHandler := adminv1connect.NewAdminServiceHandler(
 		adminsvc.NewService(),
-		connect.WithInterceptors(authInterceptor),
+		connect.WithInterceptors(auditInterceptor, authInterceptor),
 	)
 	mux.Handle(adminPath, adminHandler)
 
@@ -346,11 +363,12 @@ func registerServices(mux *http.ServeMux) {
 		stripeClient = nil
 	}
 
-	// Always register billing service (it will return appropriate errors if Stripe is not configured)
-	billingService := billingsvc.NewService(stripeClient, consoleURL)
+	// Always register billing service (it will return appropriate errors if Stripe is not configured or billing is disabled)
+	billingEnabled := os.Getenv("BILLING_ENABLED") != "false" && os.Getenv("BILLING_ENABLED") != "0"
+	billingService := billingsvc.NewService(stripeClient, consoleURL, billingEnabled)
 	billingPath, billingHandler := billingv1connect.NewBillingServiceHandler(
 		billingService,
-		connect.WithInterceptors(authInterceptor),
+		connect.WithInterceptors(auditInterceptor, authInterceptor),
 	)
 	mux.Handle(billingPath, billingHandler)
 
@@ -359,7 +377,7 @@ func registerServices(mux *http.ServeMux) {
 	gameServerService := gameserversvc.NewService(gameServerRepo)
 	gameServersPath, gameServersHandler := gameserversv1connect.NewGameServerServiceHandler(
 		gameServerService,
-		connect.WithInterceptors(authInterceptor),
+		connect.WithInterceptors(auditInterceptor, authInterceptor),
 	)
 	mux.Handle(gameServersPath, gameServersHandler)
 
@@ -370,9 +388,17 @@ func registerServices(mux *http.ServeMux) {
 	supportService := supportsvc.NewService(database.DB)
 	supportPath, supportHandler := supportv1connect.NewSupportServiceHandler(
 		supportService,
-		connect.WithInterceptors(authInterceptor),
+		connect.WithInterceptors(auditInterceptor, authInterceptor),
 	)
 	mux.Handle(supportPath, supportHandler)
+
+	// Audit service with auth
+	auditService := auditsvc.NewService(database.DB)
+	auditPath, auditHandler := auditv1connect.NewAuditServiceHandler(
+		auditService,
+		connect.WithInterceptors(auditInterceptor, authInterceptor),
+	)
+	mux.Handle(auditPath, auditHandler)
 
 	// Stripe webhook endpoint (no auth required, uses webhook signature verification)
 	// Only register webhook handler if Stripe is configured
@@ -389,6 +415,7 @@ func registerServices(mux *http.ServeMux) {
 	mux.HandleFunc("/dns/push/batch", dnsdelegation.HandlePushDNSRecords)
 	log.Println("[Server] ✓ DNS delegation push endpoints registered at /dns/push and /dns/push/batch")
 
+	return deploymentService
 }
 
 func firstNonEmpty(values ...string) string {

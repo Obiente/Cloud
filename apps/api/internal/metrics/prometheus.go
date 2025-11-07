@@ -220,6 +220,39 @@ var (
 		},
 		[]string{"deployment_id"},
 	)
+
+	// DNS Delegation metrics
+	dnsDelegationRecordsPushed = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "obiente_dns_delegation_records_pushed_total",
+			Help: "Total number of DNS records pushed via delegation",
+		},
+		[]string{"organization_id", "api_key_id", "record_type"},
+	)
+
+	dnsDelegationRecordsActive = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "obiente_dns_delegation_records_active",
+			Help: "Current number of active delegated DNS records",
+		},
+		[]string{"organization_id", "api_key_id", "record_type"},
+	)
+
+	dnsDelegationRecordsExpired = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "obiente_dns_delegation_records_expired_total",
+			Help: "Total number of delegated DNS records that expired",
+		},
+		[]string{"organization_id", "api_key_id", "record_type"},
+	)
+
+	dnsDelegationPushErrors = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "obiente_dns_delegation_push_errors_total",
+			Help: "Total number of errors when pushing DNS records",
+		},
+		[]string{"organization_id", "api_key_id", "error_type"},
+	)
 )
 
 // HTTPMetricsMiddleware wraps an HTTP handler to record Prometheus metrics
@@ -363,5 +396,73 @@ func RecordDeploymentMetrics(deploymentID string, cpuUsage float64, memoryUsage 
 	deploymentDiskWriteBytes.WithLabelValues(deploymentID).Add(float64(diskWriteBytes))
 	deploymentRequestCount.WithLabelValues(deploymentID).Add(float64(requestCount))
 	deploymentErrorCount.WithLabelValues(deploymentID).Add(float64(errorCount))
+}
+
+// RecordDNSDelegationPush records a DNS delegation record push
+func RecordDNSDelegationPush(organizationID, apiKeyID, recordType string) {
+	orgID := organizationID
+	if orgID == "" {
+		orgID = "unknown"
+	}
+	keyID := apiKeyID
+	if keyID == "" {
+		keyID = "unknown"
+	}
+	rt := recordType
+	if rt == "" {
+		rt = "unknown"
+	}
+	dnsDelegationRecordsPushed.WithLabelValues(orgID, keyID, rt).Inc()
+}
+
+// UpdateDNSDelegationActiveRecords updates the count of active delegated DNS records
+func UpdateDNSDelegationActiveRecords(organizationID, apiKeyID, recordType string, count int) {
+	orgID := organizationID
+	if orgID == "" {
+		orgID = "unknown"
+	}
+	keyID := apiKeyID
+	if keyID == "" {
+		keyID = "unknown"
+	}
+	rt := recordType
+	if rt == "" {
+		rt = "unknown"
+	}
+	dnsDelegationRecordsActive.WithLabelValues(orgID, keyID, rt).Set(float64(count))
+}
+
+// RecordDNSDelegationExpired records an expired delegated DNS record
+func RecordDNSDelegationExpired(organizationID, apiKeyID, recordType string) {
+	orgID := organizationID
+	if orgID == "" {
+		orgID = "unknown"
+	}
+	keyID := apiKeyID
+	if keyID == "" {
+		keyID = "unknown"
+	}
+	rt := recordType
+	if rt == "" {
+		rt = "unknown"
+	}
+	dnsDelegationRecordsExpired.WithLabelValues(orgID, keyID, rt).Inc()
+}
+
+// RecordDNSDelegationPushError records an error when pushing a DNS delegation record
+func RecordDNSDelegationPushError(organizationID, apiKeyID, errorType string) {
+	orgID := organizationID
+	if orgID == "" {
+		orgID = "unknown"
+	}
+	keyID := apiKeyID
+	if keyID == "" {
+		keyID = "unknown"
+	}
+	et := errorType
+	if et == "" {
+		et = "unknown"
+	}
+	dnsDelegationPushErrors.WithLabelValues(orgID, keyID, et).Inc()
 }
 

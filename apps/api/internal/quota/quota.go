@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"api/internal/database"
+	"api/internal/services/organizations"
 )
 
 type RequestedResources struct {
@@ -19,13 +20,32 @@ func NewChecker() *Checker { return &Checker{} }
 
 // CanAllocate validates if the organization can allocate requested resources on top of current running allocations.
 func (c *Checker) CanAllocate(ctx context.Context, organizationID string, req RequestedResources) error {
+	// Ensure organization has a plan assigned (defaults to Starter plan)
+	// This is called when resources are requested, so it's a good place to ensure plan assignment
+	_ = organizations.EnsurePlanAssigned(organizationID)
+	
 	quota, err := c.getQuota(organizationID)
 	if err != nil { return fmt.Errorf("quota: load: %w", err) }
 
-	// Effective limits come entirely from OrgQuota (custom per org)
+	// Get effective limits: use overrides if set, otherwise use plan limits
 	effDeployMax := valueOr(quota.DeploymentsMaxOverride, 0)
 	effMem := valueOr64(quota.MemoryBytesOverride, 0)
 	effCPU := valueOr(quota.CPUCoresOverride, 0)
+	
+	// If no overrides, get from plan
+	if effDeployMax == 0 && effMem == 0 && effCPU == 0 {
+		planDeployMax, planMem, planCPU := c.getPlanLimits(organizationID)
+		if effDeployMax == 0 {
+			effDeployMax = planDeployMax
+		}
+		if effMem == 0 {
+			effMem = planMem
+		}
+		if effCPU == 0 {
+			effCPU = planCPU
+		}
+	}
+	
 	// Zero means unlimited; allow if not set
 	curReplicas, curMemBytes, curCPUcores, err := c.currentAllocations(organizationID)
 	if err != nil { return fmt.Errorf("quota: current allocations: %w", err) }
@@ -34,10 +54,10 @@ func (c *Checker) CanAllocate(ctx context.Context, organizationID string, req Re
 		return fmt.Errorf("quota exceeded: replicas %d > max %d", curReplicas+req.Replicas, effDeployMax)
 	}
 	if effMem > 0 && curMemBytes+req.MemoryBytes*int64(req.Replicas) > effMem {
-		return fmt.Errorf("quota exceeded: memory")
+		return fmt.Errorf("quota exceeded: memory %d bytes > max %d bytes", curMemBytes+req.MemoryBytes*int64(req.Replicas), effMem)
 	}
 	if effCPU > 0 && curCPUcores+int(req.CPUshares) > effCPU {
-		return fmt.Errorf("quota exceeded: cpu")
+		return fmt.Errorf("quota exceeded: cpu %d cores > max %d cores", curCPUcores+int(req.CPUshares), effCPU)
 	}
 	return nil
 }
@@ -45,10 +65,29 @@ func (c *Checker) CanAllocate(ctx context.Context, organizationID string, req Re
 func (c *Checker) getQuota(orgID string) (*database.OrgQuota, error) {
 	var quota database.OrgQuota
 	if err := database.DB.Where("organization_id = ?", orgID).First(&quota).Error; err != nil {
-		// default unlimited if not configured
+		// No quota exists, create empty one
 		quota = database.OrgQuota{OrganizationID: orgID}
 	}
 	return &quota, nil
+}
+
+// getPlanLimits gets plan limits for an organization
+func (c *Checker) getPlanLimits(orgID string) (deploymentsMax int, memoryBytes int64, cpuCores int) {
+	var quota database.OrgQuota
+	if err := database.DB.Where("organization_id = ?", orgID).First(&quota).Error; err != nil {
+		return 0, 0, 0 // No plan
+	}
+	
+	if quota.PlanID == "" {
+		return 0, 0, 0 // No plan assigned
+	}
+	
+	var plan database.OrganizationPlan
+	if err := database.DB.First(&plan, "id = ?", quota.PlanID).Error; err != nil {
+		return 0, 0, 0 // Plan not found
+	}
+	
+	return plan.DeploymentsMax, plan.MemoryBytes, plan.CPUCores
 }
 
 func (c *Checker) currentAllocations(orgID string) (replicas int, memBytes int64, cpuCores int, err error) {

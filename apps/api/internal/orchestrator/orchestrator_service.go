@@ -549,7 +549,7 @@ func (os *OrchestratorService) aggregateUsage() {
 				if rawCutoff.After(monthStart) {
 					var hourlyMemorySum int64
 					metricsDB.Table("deployment_usage_hourly duh").
-						Select("COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds").
+						Select("COALESCE(CAST(SUM(duh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds").
 						Where("duh.deployment_id IN ? AND duh.hour >= ? AND duh.hour < ?", deploymentIDs, monthStart, rawCutoff).
 						Scan(&hourlyMemorySum)
 					orgMemoryByteSeconds += hourlyMemorySum

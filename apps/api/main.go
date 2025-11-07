@@ -12,9 +12,12 @@ import (
 
 	"api/internal/database"
 	"api/internal/dnsdelegation"
+	"api/internal/email"
 	"api/internal/logger"
 	"api/internal/orchestrator"
 	apisrv "api/internal/server"
+	"api/internal/services/billing"
+	orgsvc "api/internal/services/organizations"
 
 	_ "github.com/joho/godotenv/autoload"
 )
@@ -44,6 +47,13 @@ func main() {
 		logger.Fatalf("failed to initialize database: %v", err)
 	}
 	logger.Info("✓ Database initialized")
+
+	// Seed default plans if none exist
+	if err := billing.SeedDefaultPlans(); err != nil {
+		logger.Warn("Failed to seed default plans: %v", err)
+	} else {
+		logger.Info("✓ Default plans seeded (if needed)")
+	}
 
 	// Initialize Redis
 	if err := database.InitRedis(); err != nil {
@@ -95,9 +105,10 @@ func main() {
 	}
 
 	logger.Info("✓ Creating HTTP server with middleware...")
+	serverInfo := apisrv.New()
 	srv := &http.Server{
 		Addr:              ":" + port,
-		Handler:           apisrv.New(),
+		Handler:           serverInfo.Handler,
 		ReadHeaderTimeout: readHeaderTimeout,
 		WriteTimeout:      writeTimeout,
 		IdleTimeout:       idleTimeout,
@@ -106,6 +117,29 @@ func main() {
 	// Set up graceful shutdown
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Start monthly free credits grant service
+	go startMonthlyCreditsService(shutdownCtx)
+	logger.Info("✓ Monthly free credits service started")
+
+	// Start quota warning service (checks daily for organizations approaching limits)
+	go startQuotaWarningService(shutdownCtx)
+	logger.Info("✓ Quota warning service started")
+
+	// Start deployment health monitor (checks and redeploys deployments that should be running)
+	if serverInfo.DeploymentService != nil {
+		// Check interval: default 5 minutes, configurable via env var
+		checkInterval := 5 * time.Minute
+		if intervalStr := os.Getenv("DEPLOYMENT_HEALTH_CHECK_INTERVAL"); intervalStr != "" {
+			if parsed, err := time.ParseDuration(intervalStr); err == nil {
+				checkInterval = parsed
+			}
+		}
+		go serverInfo.DeploymentService.StartHealthMonitor(shutdownCtx, checkInterval)
+		logger.Info("✓ Deployment health monitor started (interval: %v)", checkInterval)
+	} else {
+		logger.Warn("⚠️  Deployment service not available, health monitor not started")
+	}
 
 	// Start server in a goroutine
 	serverErr := make(chan error, 1)
@@ -131,5 +165,84 @@ func main() {
 		} else {
 			logger.Info(gracefulShutdownMessage)
 		}
+	}
+}
+
+// startMonthlyCreditsService starts a background service that grants monthly free credits
+// It runs once per day and checks if credits need to be granted for the current month
+// Credits are granted based on the tracking table, allowing recovery and new plan assignments
+func startMonthlyCreditsService(ctx context.Context) {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	// Run immediately on startup to grant credits for any missing months
+	logger.Info("[Monthly Credits] Checking for pending monthly credit grants...")
+	if err := billing.GrantMonthlyFreeCredits(); err != nil {
+		logger.Error("[Monthly Credits] Failed to grant monthly free credits: %v", err)
+	}
+
+	// Then check daily
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("[Monthly Credits] Service shutting down")
+			return
+		case <-ticker.C:
+			logger.Debug("[Monthly Credits] Daily check for pending monthly credit grants...")
+			if err := billing.GrantMonthlyFreeCredits(); err != nil {
+				logger.Error("[Monthly Credits] Failed to grant monthly free credits: %v", err)
+			}
+		}
+	}
+}
+
+// startQuotaWarningService starts a background service that checks resource usage and sends email warnings
+// It runs once per day to check all organizations for quota warnings
+func startQuotaWarningService(ctx context.Context) {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	// Run immediately on startup
+	logger.Info("[Quota Warnings] Checking for organizations approaching resource limits...")
+	checkAllOrganizationsQuotas(ctx)
+
+	// Then check daily
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("[Quota Warnings] Service shutting down")
+			return
+		case <-ticker.C:
+			logger.Debug("[Quota Warnings] Daily check for quota warnings...")
+			checkAllOrganizationsQuotas(ctx)
+		}
+	}
+}
+
+func checkAllOrganizationsQuotas(ctx context.Context) {
+	// Get all organizations with assigned plans
+	var quotas []database.OrgQuota
+	if err := database.DB.Where("plan_id != '' AND plan_id IS NOT NULL").Find(&quotas).Error; err != nil {
+		logger.Error("[Quota Warnings] Failed to get quotas: %v", err)
+		return
+	}
+
+	// Create a service instance for quota checking with email sender
+	emailSender := email.NewSenderFromEnv()
+	orgService := orgsvc.NewService(orgsvc.Config{
+		EmailSender:  emailSender,
+		ConsoleURL:   os.Getenv("CONSOLE_URL"),
+		SupportEmail: os.Getenv("SUPPORT_EMAIL"),
+	})
+
+	// Type assert to access CheckAndNotifyQuotaWarnings
+	if svc, ok := orgService.(*orgsvc.Service); ok {
+		for _, quota := range quotas {
+			if err := svc.CheckAndNotifyQuotaWarnings(ctx, quota.OrganizationID); err != nil {
+				logger.Error("[Quota Warnings] Failed to check quota for org %s: %v", quota.OrganizationID, err)
+			}
+		}
+	} else {
+		logger.Warn("[Quota Warnings] Could not access service methods, skipping quota checks")
 	}
 }

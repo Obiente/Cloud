@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const defaultTimeout = 30 * time.Second
+
 // Client handles Zitadel API v2 interactions
 //
 // IMPORTANT: Organization Membership vs Project-Level Roles
@@ -39,8 +41,12 @@ import (
 // 3. Click "Grant" or "Edit" to assign organization-level permissions
 // 4. Grant "Org User Manager" permission (or "Org Owner" for full access) at the ORGANIZATION level
 // 5. Go to Projects → Select your project
-// 6. Generate Personal Access Token (scopes are automatically set based on the project)
-// 7. IMPORTANT: Regenerate the token AFTER adding the member - tokens capture permissions at creation time
+// 6. IMPORTANT: Ensure the project is GRANTED to the organization:
+//    - Go to Projects → Your Project → Settings → Granted Organizations
+//    - Add the organization where users exist
+//    - This allows the PAT (created in the project) to access that organization
+// 7. Generate Personal Access Token (scopes are automatically set based on the project)
+// 8. IMPORTANT: Regenerate the token AFTER adding the member and granting the project - tokens capture permissions at creation time
 //
 // NOTE: If you get "membership not found" error even though you have project-level roles,
 //       you need to add the user/service account as an organization member explicitly.
@@ -50,7 +56,7 @@ type Client struct {
 	baseURL         string
 	clientID        string
 	managementToken string
-	organizationID  string // REQUIRED: Organization ID for API requests (service users don't have default org)
+	organizationID  string // Organization ID for API requests (optional for direct OAuth)
 	httpClient      *http.Client
 }
 
@@ -67,24 +73,15 @@ func NewClient() *Client {
 	managementToken := strings.TrimSpace(os.Getenv("ZITADEL_MANAGEMENT_TOKEN"))
 	organizationID := strings.TrimSpace(os.Getenv("ZITADEL_ORGANIZATION_ID"))
 
+	// Note: Direct OAuth login (ROPC grant) doesn't require service account tokens
+	// The client_id is used for OAuth authentication, not service account auth
+
 	// Log configuration (without sensitive data)
-	if managementToken != "" {
-		tokenPreview := managementToken
-		if len(tokenPreview) > 10 {
-			tokenPreview = tokenPreview[:10] + "..."
-		}
-		fmt.Printf("[Zitadel Client] Initialized with:\n")
-		fmt.Printf("  ZITADEL_URL: %s\n", zitadelURL)
-		fmt.Printf("  ZITADEL_CLIENT_ID: %s\n", clientID)
-		fmt.Printf("  ZITADEL_MANAGEMENT_TOKEN: %s (configured)\n", tokenPreview)
-		if organizationID != "" {
-			fmt.Printf("  ZITADEL_ORGANIZATION_ID: %s\n", organizationID)
-		} else {
-			fmt.Printf("  ZITADEL_ORGANIZATION_ID: (not set - REQUIRED for service users)\n")
-			fmt.Printf("  WARNING: Service users don't have a default organization. ZITADEL_ORGANIZATION_ID must be set.\n")
-		}
-	} else {
-		fmt.Printf("[Zitadel Client] WARNING: ZITADEL_MANAGEMENT_TOKEN not configured\n")
+	fmt.Printf("[Zitadel Client] Initialized with:\n")
+	fmt.Printf("  ZITADEL_URL: %s\n", zitadelURL)
+	fmt.Printf("  ZITADEL_CLIENT_ID: %s\n", clientID)
+	if organizationID != "" {
+		fmt.Printf("  ZITADEL_ORGANIZATION_ID: %s\n", organizationID)
 	}
 
 	return &Client{
@@ -98,6 +95,15 @@ func NewClient() *Client {
 	}
 }
 
+// getAuthToken returns the management token if available
+// Note: Direct OAuth login (ROPC) doesn't require this - it's only for Management API calls
+func (c *Client) getAuthToken() (string, error) {
+	if c.managementToken == "" {
+		return "", fmt.Errorf("management token not configured (ZITADEL_MANAGEMENT_TOKEN)")
+	}
+	return c.managementToken, nil
+}
+
 // LoginResponse represents the response from a login operation
 type LoginResponse struct {
 	Success      bool
@@ -107,36 +113,10 @@ type LoginResponse struct {
 	Message      string
 }
 
-// Login authenticates a user with email and password using Zitadel Session API v2
-// Implements the recommended Session API flow per Zitadel documentation
-// See: https://zitadel.com/docs/guides/integrate/login-ui/username-password
-//
-// Note: Zitadel does NOT support ROPC grant (deprecated in OAuth 2.1).
-// The Session API flow is the recommended approach for custom login UIs.
+// Login authenticates a user with email and password using direct Zitadel OAuth2
+// Uses Resource Owner Password Credentials (ROPC) grant for direct authentication
 func (c *Client) Login(email, password string) (*LoginResponse, error) {
-	// Use Session API flow (Zitadel's recommended approach)
-	// This requires a service account with Org User Manager permission
-	if c.managementToken == "" {
-		return &LoginResponse{
-			Success: false,
-			Message: "Management token required for Session API authentication. Configure ZITADEL_MANAGEMENT_TOKEN.",
-		}, fmt.Errorf("management token not configured")
-	}
-
-	result, err := c.authenticateWithSessionAPI(email, password)
-	if err != nil {
-		// Ensure we return a LoginResponse with the error message even if authentication fails
-		if result == nil {
-			result = &LoginResponse{
-				Success: false,
-				Message: err.Error(),
-			}
-		} else if result.Message == "" {
-			result.Message = err.Error()
-		}
-		return result, err
-	}
-	return result, nil
+	return c.getOAuthTokensForUser(email, password)
 }
 
 // decodeTokenClaims decodes JWT token claims to inspect scopes and organization context
