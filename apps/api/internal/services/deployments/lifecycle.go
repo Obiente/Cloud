@@ -46,6 +46,15 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 
 	// Start async rebuild with log streaming
 	go func() {
+		// Recover from panics to ensure deployment status is always updated
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error("[TriggerDeployment] PANIC in build goroutine for deployment %s: %v", deploymentID, r)
+				// Ensure deployment status is updated even on panic
+				_ = s.repo.UpdateStatus(context.Background(), deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+			}
+		}()
+
 		buildCtx := context.Background()
 		buildStartTime := time.Now()
 
@@ -95,11 +104,15 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 
 		if err := s.buildHistoryRepo.CreateBuild(buildCtx, buildRecord); err != nil {
 			logger.Warn("[TriggerDeployment] Failed to create build record: %v", err)
+			// Still update deployment status to BUILDING even if build record creation fails
+			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_BUILDING))
 		} else {
 			// Set build ID on streamer so logs are saved to database
 			streamer.SetBuildID(buildID)
-			// Update status to BUILDING
+			// Update build history status to BUILDING
 			_ = s.buildHistoryRepo.UpdateBuildStatus(buildCtx, buildID, 2, 0, nil) // BUILD_BUILDING = 2
+			// Update deployment status to BUILDING when build actually starts
+			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_BUILDING))
 		}
 
 		// Get build strategy - handle UNSPECIFIED by auto-detecting
