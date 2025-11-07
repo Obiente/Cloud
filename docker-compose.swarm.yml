@@ -187,6 +187,9 @@ services:
       SMTP_LOCAL_NAME: ${SMTP_LOCAL_NAME:-api.obiente.local}
       # Swarm configuration - enable swarm features for swarm deployments
       ENABLE_SWARM: ${ENABLE_SWARM:-true} # Set to 'true' to enable Docker Swarm features (default: true for swarm)
+      # Docker Registry authentication (required for pushing/pulling images)
+      REGISTRY_USERNAME: ${REGISTRY_USERNAME:-obiente}
+      REGISTRY_PASSWORD: ${REGISTRY_PASSWORD:-}
     volumes:
       # Mount Docker socket to manage containers (read-write required)
       - /var/run/docker.sock:/var/run/docker.sock

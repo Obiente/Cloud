@@ -1,7 +1,7 @@
 <template>
-  <OuiStack gap="sm" class="md:gap-md">
-    <OuiStack gap="sm" class="md:flex-row md:justify-between md:items-center">
-      <OuiFlex gap="xs" align="center" class="min-w-0 flex-1 md:gap-sm">
+  <OuiStack gap="md">
+    <OuiFlex justify="between" align="center" wrap="wrap" class="flex-col sm:flex-row gap-2 sm:gap-0">
+      <OuiFlex gap="sm" align="center" class="min-w-0 flex-1">
         <OuiBreadcrumbs class="min-w-0">
           <OuiBreadcrumbItem>
             <OuiBreadcrumbLink @click.prevent="handleBreadcrumbClick('/')"
@@ -23,20 +23,20 @@
         </OuiBreadcrumbs>
       </OuiFlex>
 
-      <OuiFlex gap="xs" align="center" wrap="wrap" class="md:gap-sm shrink-0">
+      <OuiFlex gap="sm" align="center" wrap="wrap" class="shrink-0 w-full sm:w-auto">
         <OuiFlex
-          gap="xs"
+          gap="sm"
           align="center"
           v-if="source.type === 'container' && containers.length > 0"
-          class="w-full sm:w-auto md:gap-sm"
+          class="w-full sm:w-auto"
         >
           <OuiText size="xs" color="muted" class="hidden sm:inline">Container:</OuiText>
           <OuiSelect
             :model-value="selectedServiceName || selectedContainerId || ''"
             :items="containerOptions"
-            placeholder="Container"
+            placeholder="Select container"
             class="flex-1 sm:flex-initial"
-            style="min-width: 120px"
+            style="min-width: 180px"
             @update:model-value="handleContainerChange"
           />
         </OuiFlex>
@@ -71,7 +71,6 @@
           :loading="isLoadingTree"
           @click="refreshRoot"
           class="flex-1 sm:flex-initial"
-          title="Refresh"
         >
           <ArrowPathIcon class="h-4 w-4 sm:mr-1.5" :class="{ 'animate-spin': isLoadingTree }" />
           <span class="hidden sm:inline">Refresh</span>
@@ -81,17 +80,17 @@
           <span class="sm:hidden">↑</span>
         </OuiButton>
       </OuiFlex>
-    </OuiStack>
+    </OuiFlex>
 
     <div
-      class="flex flex-col lg:grid lg:grid-cols-[260px_1fr] gap-3 md:gap-4 h-[calc(100vh-220px)] min-h-[400px] md:min-h-[calc(100vh-220px)] max-h-[calc(100vh-220px)] overflow-hidden"
+      class="flex flex-col lg:grid lg:grid-cols-[260px_1fr] gap-3 lg:gap-4 h-[calc(100vh-220px)] min-h-[400px] lg:min-h-[calc(100vh-220px)] max-h-[calc(100vh-220px)] overflow-hidden"
     >
       <aside
-        class="flex flex-col border border-border-default rounded-lg md:rounded-[10px] bg-surface-base overflow-hidden order-2 lg:order-1"
+        class="flex flex-col border border-border-default rounded-[10px] bg-surface-base overflow-hidden order-2 lg:order-1"
         aria-label="File tree"
-        :class="showSidebarOnMobile ? 'h-64 md:h-auto' : 'hidden lg:flex'"
+        :class="showSidebarOnMobile ? 'h-64 lg:h-auto' : 'hidden lg:flex'"
       >
-        <div class="p-2 md:p-3 border-b border-border-default">
+        <div class="p-3 border-b border-border-default">
           <OuiFlex justify="between" align="center" class="mb-2">
             <OuiText
               size="xs"
@@ -224,10 +223,10 @@
       </aside>
 
       <section
-        class="flex flex-col border border-border-default rounded-lg md:rounded-[10px] bg-surface-base overflow-hidden min-h-0 order-1 lg:order-2 flex-1"
+        class="flex flex-col border border-border-default rounded-[10px] bg-surface-base overflow-hidden min-h-0 order-1 lg:order-2 flex-1"
       >
         <header
-          class="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 py-2 px-3 sm:py-3 sm:px-4 border-b border-border-default"
+          class="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 py-3 px-4 border-b border-border-default"
         >
           <OuiButton
             v-if="!showSidebarOnMobile"
@@ -239,11 +238,11 @@
           >
             <FolderIcon class="h-4 w-4" />
           </OuiButton>
-          <div class="flex flex-col gap-1 min-w-0 flex-1 md:gap-1.5" :class="{ 'pl-10 lg:pl-0': !showSidebarOnMobile }">
-            <OuiText size="xs" weight="semibold" class="truncate md:text-sm">
+          <div class="flex flex-col gap-1.5 min-w-0 flex-1" :class="{ 'pl-10 lg:pl-0': !showSidebarOnMobile }">
+            <OuiText size="sm" weight="semibold" class="truncate">
               {{ currentNode?.name || "Preview" }}
             </OuiText>
-            <OuiFlex gap="xs" align="center" class="flex-wrap md:gap-sm">
+            <OuiFlex gap="sm" align="center" class="flex-wrap">
               <span
                 v-if="currentNode?.type === 'symlink'"
                 class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[11px] rounded-xl bg-surface-subtle text-text-secondary"
@@ -348,13 +347,13 @@
               </Transition>
             </OuiFlex>
           </div>
-          <OuiFlex gap="xs" align="center" wrap="wrap" class="w-full sm:w-auto md:gap-sm">
+          <OuiFlex gap="sm" align="center" wrap="wrap" class="w-full sm:w-auto">
             <OuiCombobox
               v-if="currentNode?.type === 'file'"
               v-model="fileLanguage"
               :options="languageOptions"
-              placeholder="Language..."
-              class="w-full sm:w-auto min-w-[120px] sm:min-w-[180px] max-w-full sm:max-w-[250px]"
+              placeholder="Search language..."
+              class="w-full sm:w-auto min-w-[180px] max-w-[250px]"
               size="sm"
             />
             <OuiButton

@@ -38,7 +38,7 @@ func (c *Checker) CanAllocate(ctx context.Context, organizationID string, req Re
 		if overrideDeployMax > 0 {
 			// Cap override to plan limit (plan limit is the maximum)
 			if planDeployMax > 0 && overrideDeployMax > planDeployMax {
-				effDeployMax = planDeployMax
+			effDeployMax = planDeployMax
 			} else {
 				effDeployMax = overrideDeployMax
 			}
@@ -52,7 +52,7 @@ func (c *Checker) CanAllocate(ctx context.Context, organizationID string, req Re
 		if overrideMem > 0 {
 			// Cap override to plan limit (plan limit is the maximum)
 			if planMem > 0 && overrideMem > planMem {
-				effMem = planMem
+			effMem = planMem
 			} else {
 				effMem = overrideMem
 			}
@@ -66,7 +66,7 @@ func (c *Checker) CanAllocate(ctx context.Context, organizationID string, req Re
 		if overrideCPU > 0 {
 			// Cap override to plan limit (plan limit is the maximum)
 			if planCPU > 0 && overrideCPU > planCPU {
-				effCPU = planCPU
+			effCPU = planCPU
 			} else {
 				effCPU = overrideCPU
 			}

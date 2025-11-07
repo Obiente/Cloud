@@ -379,20 +379,20 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				}
 			} else {
 				// In non-Swarm mode, create plain containers
-				// Remove existing container with this name if it exists (for redeployments)
-				if err := dm.removeContainerByName(ctx, containerName); err != nil {
-					logger.Warn("[DeploymentManager] Failed to remove existing container %s: %v (will attempt to create anyway)", containerName, err)
-				}
+			// Remove existing container with this name if it exists (for redeployments)
+			if err := dm.removeContainerByName(ctx, containerName); err != nil {
+				logger.Warn("[DeploymentManager] Failed to remove existing container %s: %v (will attempt to create anyway)", containerName, err)
+			}
 
 				containerID, err = dm.createContainer(ctx, config, containerName, i, serviceName)
-				if err != nil {
-					return fmt.Errorf("failed to create container: %w", err)
-				}
+			if err != nil {
+				return fmt.Errorf("failed to create container: %w", err)
+			}
 
-				// Start container
-				if err := dm.dockerHelper.StartContainer(ctx, containerID); err != nil {
-					return fmt.Errorf("failed to start container: %w", err)
-				}
+			// Start container
+			if err := dm.dockerHelper.StartContainer(ctx, containerID); err != nil {
+				return fmt.Errorf("failed to start container: %w", err)
+			}
 			}
 
 			// Get container details (if containerID is valid, not a placeholder)
@@ -400,20 +400,20 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 			if !strings.HasPrefix(containerID, "swarm-service-") {
 				info, err := dm.dockerClient.ContainerInspect(ctx, containerID)
 				if err == nil {
-					// Determine the public port (find port for this service from routing)
+			// Determine the public port (find port for this service from routing)
 					publicPort = config.Port
-					for _, routing := range routings {
-						if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
-							publicPort = routing.TargetPort
-							break
-						}
-					}
+			for _, routing := range routings {
+				if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
+					publicPort = routing.TargetPort
+					break
+				}
+			}
 					if len(info.NetworkSettings.Ports) > 0 {
 						for _, bindings := range info.NetworkSettings.Ports {
-							if len(bindings) > 0 {
-								if port, err := strconv.Atoi(bindings[0].HostPort); err == nil {
-									publicPort = port
-								}
+					if len(bindings) > 0 {
+						if port, err := strconv.Atoi(bindings[0].HostPort); err == nil {
+							publicPort = port
+						}
 							}
 						}
 					}
@@ -471,8 +471,8 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 				logger.Info("[DeploymentManager] Successfully created Swarm service for deployment %s (service: %s, replica: %d, container: %s)",
 					config.DeploymentID, serviceName, i, shortID)
 			} else {
-				logger.Info("[DeploymentManager] Successfully created container %s for deployment %s (service: %s)",
-					containerID[:12], config.DeploymentID, serviceName)
+			logger.Info("[DeploymentManager] Successfully created container %s for deployment %s (service: %s)",
+				containerID[:12], config.DeploymentID, serviceName)
 			}
 		}
 	}
@@ -1080,58 +1080,58 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 						return labels
 					}
 					if existingLabels, ok := labelsValue.(map[string]interface{}); ok {
-						labels = existingLabels
+					labels = existingLabels
 					} else if existingLabelsList, ok := labelsValue.([]interface{}); ok {
-						// Convert list format to map format
-						for _, labelItem := range existingLabelsList {
-							if labelStr, ok := labelItem.(string); ok {
-								// Parse "key=value" or "key: value" format
-								if strings.Contains(labelStr, "=") {
-									parts := strings.SplitN(labelStr, "=", 2)
-									if len(parts) == 2 {
-										labels[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
-									}
+					// Convert list format to map format
+					for _, labelItem := range existingLabelsList {
+						if labelStr, ok := labelItem.(string); ok {
+							// Parse "key=value" or "key: value" format
+							if strings.Contains(labelStr, "=") {
+								parts := strings.SplitN(labelStr, "=", 2)
+								if len(parts) == 2 {
+									labels[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
 								}
 							}
 						}
+					}
 					}
 					return labels
 				}
 
 				// Remove old Traefik labels that might conflict
 				removeTraefikLabels := func(labels map[string]interface{}) {
-					traefikKeysToRemove := []string{}
-					for key := range labels {
-						if strings.HasPrefix(key, "traefik.http.routers.") ||
-							strings.HasPrefix(key, "traefik.http.services.") ||
+				traefikKeysToRemove := []string{}
+				for key := range labels {
+					if strings.HasPrefix(key, "traefik.http.routers.") ||
+						strings.HasPrefix(key, "traefik.http.services.") ||
 							key == "traefik.enable" ||
 							key == "cloud.obiente.traefik" {
-							traefikKeysToRemove = append(traefikKeysToRemove, key)
-						}
+						traefikKeysToRemove = append(traefikKeysToRemove, key)
 					}
-					for _, key := range traefikKeysToRemove {
-						delete(labels, key)
+				}
+				for _, key := range traefikKeysToRemove {
+					delete(labels, key)
 					}
 				}
 
 				// Add Traefik and management labels
 				addLabels := func(labels map[string]interface{}) {
-					// Merge new Traefik labels (Traefik labels take precedence)
-					for k, v := range traefikLabels {
-						labels[k] = v
-					}
+				// Merge new Traefik labels (Traefik labels take precedence)
+				for k, v := range traefikLabels {
+					labels[k] = v
+				}
 
-					// Add management labels
-					labels["cloud.obiente.managed"] = "true"
-					labels["cloud.obiente.deployment_id"] = deploymentID
-					labels["cloud.obiente.service_name"] = serviceName
-					// Only set cloud.obiente.traefik if Traefik labels were generated (i.e., routing rules exist)
-					if len(traefikLabels) > 0 {
-						labels["cloud.obiente.traefik"] = "true" // Required for Traefik discovery
-					}
-					if deploymentDomain != "" {
-						labels["cloud.obiente.domain"] = deploymentDomain
-					}
+				// Add management labels
+				labels["cloud.obiente.managed"] = "true"
+				labels["cloud.obiente.deployment_id"] = deploymentID
+				labels["cloud.obiente.service_name"] = serviceName
+				// Only set cloud.obiente.traefik if Traefik labels were generated (i.e., routing rules exist)
+				if len(traefikLabels) > 0 {
+					labels["cloud.obiente.traefik"] = "true" // Required for Traefik discovery
+				}
+				if deploymentDomain != "" {
+					labels["cloud.obiente.domain"] = deploymentDomain
+				}
 				}
 
 				if isSwarmMode {
@@ -1163,7 +1163,7 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 					addLabels(labels)
 
 					// Update top-level labels (required for non-Swarm mode Traefik discovery)
-					service["labels"] = labels
+				service["labels"] = labels
 					if len(traefikLabels) > 0 {
 						logger.Debug("[DeploymentManager] Added %d Traefik labels to top-level labels for service %s (non-Swarm mode)", len(traefikLabels), serviceName)
 					}
@@ -1422,17 +1422,17 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 
 	if containerPortNum > 0 {
 		containerPort := nat.Port(fmt.Sprintf("%d/tcp", containerPortNum))
-		exposedPorts[containerPort] = struct{}{}
+	exposedPorts[containerPort] = struct{}{}
 		
 		// Only bind to host if Traefik is NOT handling routing
 		// If Traefik labels exist, don't expose to host (Traefik will route internally)
 		if len(traefikLabels) == 0 {
 			// No Traefik routing - expose to host with random port for security
-			portBindings[containerPort] = []nat.PortBinding{
-				{
-					HostIP:   "0.0.0.0",
-					HostPort: "0", // SECURITY: Docker assigns random port - users cannot bind to specific host ports
-				},
+	portBindings[containerPort] = []nat.PortBinding{
+		{
+			HostIP:   "0.0.0.0",
+			HostPort: "0", // SECURITY: Docker assigns random port - users cannot bind to specific host ports
+		},
 			}
 			logger.Debug("[DeploymentManager] Exposing container port %d to host (random port) - no Traefik routing", containerPortNum)
 		} else {
@@ -1943,10 +1943,10 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				for _, routing := range routings {
 					if routing.ServiceName == "" || routing.ServiceName == "default" {
 						if routing.TargetPort > 0 {
-							port = routing.TargetPort
-							logger.Info("[StartDeployment] Using target port %d from routing configuration (default service) for deployment %s", port, deploymentID)
-							foundRouting = true
-							break
+						port = routing.TargetPort
+						logger.Info("[StartDeployment] Using target port %d from routing configuration (default service) for deployment %s", port, deploymentID)
+						foundRouting = true
+						break
 						}
 					}
 				}
@@ -2056,10 +2056,10 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 					for _, routing := range routings {
 						if routing.ServiceName == "" || routing.ServiceName == "default" {
 							if routing.TargetPort > 0 {
-								port = routing.TargetPort
-								logger.Info("[StartDeployment] Using target port %d from routing configuration (default service) for deployment %s (recreate)", port, deploymentID)
-								foundRouting = true
-								break
+							port = routing.TargetPort
+							logger.Info("[StartDeployment] Using target port %d from routing configuration (default service) for deployment %s (recreate)", port, deploymentID)
+							foundRouting = true
+							break
 							}
 						}
 					}
@@ -2305,7 +2305,7 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 
 	// Get all locations to stop and remove existing containers
 	locations, err := database.GetAllDeploymentLocations(deploymentID)
-	if err != nil {
+		if err != nil {
 		logger.Warn("[DeploymentManager] Failed to get deployment locations: %v, will proceed with recreation", err)
 		locations = []database.DeploymentLocation{}
 	}
@@ -2420,7 +2420,7 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 	// Recreate containers with updated config
 	if err := dm.CreateDeployment(ctx, config); err != nil {
 		return fmt.Errorf("failed to recreate deployment containers: %w", err)
-	}
+		}
 
 	logger.Info("[DeploymentManager] Successfully recreated containers for deployment %s with updated configs", deploymentID)
 	return nil
@@ -2576,26 +2576,26 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 
 			// Only create default routing if we found a port from compose file
 			if targetPort > 0 {
-				defaultRouting := &database.DeploymentRouting{
-					ID:              defaultRoutingID,
-					DeploymentID:    deploymentID,
-					Domain:          "", // Domain can be set later through routing UI
-					ServiceName:     "default",
-					TargetPort:      targetPort,
-					Protocol:        "http",
-					SSLEnabled:      false, // Default to no SSL for HTTP protocol
-					SSLCertResolver: "letsencrypt",
-					Middleware:      "{}",
-					CreatedAt:       time.Now(),
-					UpdatedAt:       time.Now(),
-				}
+			defaultRouting := &database.DeploymentRouting{
+				ID:              defaultRoutingID,
+				DeploymentID:    deploymentID,
+				Domain:          "", // Domain can be set later through routing UI
+				ServiceName:     "default",
+				TargetPort:      targetPort,
+				Protocol:        "http",
+				SSLEnabled:      false, // Default to no SSL for HTTP protocol
+				SSLCertResolver: "letsencrypt",
+				Middleware:      "{}",
+				CreatedAt:       time.Now(),
+				UpdatedAt:       time.Now(),
+			}
 
-				if upsertErr := database.UpsertDeploymentRouting(defaultRouting); upsertErr != nil {
-					logger.Warn("[DeploymentManager] Failed to create default routing: %v", upsertErr)
-				} else {
-					routings = []database.DeploymentRouting{*defaultRouting}
-					logger.Info("[DeploymentManager] Created default routing for compose deployment %s (port: %d)", deploymentID, targetPort)
-				}
+			if upsertErr := database.UpsertDeploymentRouting(defaultRouting); upsertErr != nil {
+				logger.Warn("[DeploymentManager] Failed to create default routing: %v", upsertErr)
+			} else {
+				routings = []database.DeploymentRouting{*defaultRouting}
+				logger.Info("[DeploymentManager] Created default routing for compose deployment %s (port: %d)", deploymentID, targetPort)
+			}
 			} else {
 				logger.Warn("[DeploymentManager] Could not detect port from compose file for deployment %s - routing must be configured manually", deploymentID)
 			}
@@ -2710,14 +2710,14 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 		
 		cmd := exec.CommandContext(ctx, "docker", args...)
 		cmd.Dir = deployDir
-		cmd.Stderr = &stderr
-		cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	cmd.Stdout = &stdout
 
-		if err := cmd.Run(); err != nil {
-			errorOutput := stderr.String()
-			stdOutput := stdout.String()
-			logger.Error("[DeploymentManager] Failed to deploy compose file for deployment %s: %v\nStderr: %s\nStdout: %s", deploymentID, err, errorOutput, stdOutput)
-			return fmt.Errorf("failed to deploy compose file: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
+	if err := cmd.Run(); err != nil {
+		errorOutput := stderr.String()
+		stdOutput := stdout.String()
+		logger.Error("[DeploymentManager] Failed to deploy compose file for deployment %s: %v\nStderr: %s\nStdout: %s", deploymentID, err, errorOutput, stdOutput)
+		return fmt.Errorf("failed to deploy compose file: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
 		}
 	}
 
@@ -2774,8 +2774,8 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 			}
 		}
 	} else {
-		logger.Info("[DeploymentManager] Docker compose up output for deployment %s:\n%s", deploymentID, stdOutput)
-		logger.Info("[DeploymentManager] Successfully deployed compose file for deployment %s (project: %s)", deploymentID, projectName)
+	logger.Info("[DeploymentManager] Docker compose up output for deployment %s:\n%s", deploymentID, stdOutput)
+	logger.Info("[DeploymentManager] Successfully deployed compose file for deployment %s (project: %s)", deploymentID, projectName)
 	}
 
 	// Wait a moment for containers to be fully created and started
@@ -2824,30 +2824,30 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 		}
 	} else {
 		// In non-Swarm mode, list containers with the compose project label
-		// Note: Docker Compose may normalize the project name (e.g., lowercase), so we try both
-		filterArgs := filters.NewArgs()
-		filterArgs.Add("label", fmt.Sprintf("com.docker.compose.project=%s", projectName))
+	// Note: Docker Compose may normalize the project name (e.g., lowercase), so we try both
+	filterArgs := filters.NewArgs()
+	filterArgs.Add("label", fmt.Sprintf("com.docker.compose.project=%s", projectName))
 
-		containers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+	containers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+		All:     true,
+		Filters: filterArgs,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list compose containers: %w", err)
+	}
+
+	// If no containers found with exact project name, try lowercase version (Docker Compose normalization)
+	if len(containers) == 0 {
+		logger.Info("[DeploymentManager] No containers found with project name %s, trying lowercase version", projectName)
+		filterArgsLower := filters.NewArgs()
+		filterArgsLower.Add("label", fmt.Sprintf("com.docker.compose.project=%s", strings.ToLower(projectName)))
+
+		containers, err = dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 			All:     true,
-			Filters: filterArgs,
+			Filters: filterArgsLower,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to list compose containers: %w", err)
-		}
-
-		// If no containers found with exact project name, try lowercase version (Docker Compose normalization)
-		if len(containers) == 0 {
-			logger.Info("[DeploymentManager] No containers found with project name %s, trying lowercase version", projectName)
-			filterArgsLower := filters.NewArgs()
-			filterArgsLower.Add("label", fmt.Sprintf("com.docker.compose.project=%s", strings.ToLower(projectName)))
-
-			containers, err = dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
-				All:     true,
-				Filters: filterArgsLower,
-			})
-			if err != nil {
-				logger.Info("[DeploymentManager] Failed to list containers with lowercase project name: %v", err)
+			logger.Info("[DeploymentManager] Failed to list containers with lowercase project name: %v", err)
 			}
 		}
 	}
@@ -2924,9 +2924,9 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 		for _, routing := range routings {
 			if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
 				if routing.TargetPort > 0 {
-					publicPort = routing.TargetPort
-					break
-				}
+				publicPort = routing.TargetPort
+				break
+			}
 			}
 		}
 		// If no exact match, use first routing's target port

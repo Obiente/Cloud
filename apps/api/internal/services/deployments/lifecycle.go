@@ -393,7 +393,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 					}
 				}
 			}
-
+			
 			streamer.Write([]byte("🚀 Deploying to orchestrator...\n"))
 
 			// Update build with build results
