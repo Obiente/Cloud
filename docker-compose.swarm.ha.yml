@@ -505,8 +505,7 @@ services:
       # Docker Registry authentication (required for pushing/pulling images)
       REGISTRY_USERNAME: ${REGISTRY_USERNAME:-obiente}
       REGISTRY_PASSWORD: ${REGISTRY_PASSWORD:-}
-      # Docker Registry URL (defaults to registry.{DOMAIN} or registry.obiente.cloud)
-      REGISTRY_URL: ${REGISTRY_URL:-registry.${DOMAIN:-obiente.cloud}}
+      REGISTRY_URL: ${REGISTRY_URL:-https://registry.${DOMAIN:-obiente.cloud}}
     volumes:
       # Mount Docker socket for managing deployments
       - /var/run/docker.sock:/var/run/docker.sock
@@ -893,16 +892,10 @@ services:
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
-        # HTTP router for internal Docker access (registry protocol)
         - "traefik.http.routers.registry.rule=Host(`registry.${DOMAIN:-obiente.cloud}`)"
-        - "traefik.http.routers.registry.entrypoints=web"
+        - "traefik.http.routers.registry.entrypoints=websecure"
+        - "traefik.http.routers.registry.tls.certresolver=letsencrypt"
         - "traefik.http.routers.registry.service=registry"
-        # HTTPS router for external access
-        - "traefik.http.routers.registry-secure.rule=Host(`registry.${DOMAIN:-obiente.cloud}`)"
-        - "traefik.http.routers.registry-secure.entrypoints=websecure"
-        - "traefik.http.routers.registry-secure.tls.certresolver=letsencrypt"
-        - "traefik.http.routers.registry-secure.service=registry"
-        # Service configuration
         - "traefik.http.services.registry.loadbalancer.server.port=5000"
     networks:
       - obiente-network

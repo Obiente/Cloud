@@ -1688,29 +1688,30 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	if err := imageCheckCmd.Run(); err != nil {
 		logger.Warn("[DeploymentManager] Image %s not found locally, attempting to pull...", config.Image)
 		
-		// For Docker operations, use internal service name (registry:5000) which is on the same network
-		// This avoids DNS resolution issues and works directly on the Swarm network
-		internalRegistryURL := "registry:5000"
+		registryURL := os.Getenv("REGISTRY_URL")
+		if registryURL == "" {
+			domain := os.Getenv("DOMAIN")
+			if domain == "" {
+				domain = "obiente.cloud"
+			}
+			registryURL = fmt.Sprintf("https://registry.%s", domain)
+		}
 		
-		// If image is from our internal registry, authenticate first
-		// Check for both internal service name and domain-based URLs
-		if strings.HasPrefix(config.Image, internalRegistryURL+"/") || 
+		if strings.HasPrefix(config.Image, registryURL+"/") || 
 		   strings.HasPrefix(config.Image, "registry.obiente.cloud/") ||
 		   strings.Contains(config.Image, "/obiente/deploy-") {
 			registryUsername := os.Getenv("REGISTRY_USERNAME")
 			registryPassword := os.Getenv("REGISTRY_PASSWORD")
 			if registryUsername == "" {
-				registryUsername = "obiente" // Default username
+				registryUsername = "obiente"
 			}
 			if registryPassword != "" {
 				logger.Info("[DeploymentManager] Authenticating with registry before pulling image...")
-				// Use internal service name for login (no http:// needed, Docker handles it)
-				loginCmd := exec.CommandContext(ctx, "docker", "login", internalRegistryURL, "-u", registryUsername, "-p", registryPassword)
+				loginCmd := exec.CommandContext(ctx, "docker", "login", registryURL, "-u", registryUsername, "-p", registryPassword)
 				var loginStderr bytes.Buffer
 				loginCmd.Stderr = &loginStderr
 				if loginErr := loginCmd.Run(); loginErr != nil {
 					logger.Warn("[DeploymentManager] Failed to authenticate with registry: %v (stderr: %s)", loginErr, loginStderr.String())
-					// Continue anyway - might work without auth or auth might be cached
 				} else {
 					logger.Debug("[DeploymentManager] Successfully authenticated with registry")
 				}

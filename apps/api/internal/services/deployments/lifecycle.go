@@ -341,31 +341,33 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				}
 				
 				if isSwarmMode {
-					// For Docker push/pull, use internal service name (registry:5000) which is guaranteed to work
-					// The internal service name works on the Swarm network without DNS resolution
-					// This avoids DNS resolution issues and works directly on the Swarm network
-					internalRegistryURL := "registry:5000"
+					registryURL := os.Getenv("REGISTRY_URL")
+					if registryURL == "" {
+						domain := os.Getenv("DOMAIN")
+						if domain == "" {
+							domain = "obiente.cloud"
+						}
+						registryURL = fmt.Sprintf("https://registry.%s", domain)
+					}
 					
-					// Push to local registry (using internal service name for reliability)
-					registryImageName := fmt.Sprintf("%s/%s", internalRegistryURL, result.ImageName)
+					registryImageName := fmt.Sprintf("%s/%s", registryURL, result.ImageName)
 					streamer.Write([]byte(fmt.Sprintf("📤 Pushing image to registry: %s\n", registryImageName)))
 					
-					// Authenticate with registry before pushing (use internal service name)
 					registryUsername := os.Getenv("REGISTRY_USERNAME")
 					registryPassword := os.Getenv("REGISTRY_PASSWORD")
 					if registryUsername == "" {
-						registryUsername = "obiente" // Default username
+						registryUsername = "obiente"
 					}
 					if registryPassword != "" {
 						streamer.Write([]byte("🔐 Authenticating with registry...\n"))
-						// Use internal service name for login (no http:// needed, Docker handles it)
-						loginCmd := exec.CommandContext(buildCtx, "docker", "login", internalRegistryURL, "-u", registryUsername, "-p", registryPassword)
+						loginCmd := exec.CommandContext(buildCtx, "docker", "login", registryURL, "-u", registryUsername, "-p", registryPassword)
 						var loginStderr bytes.Buffer
 						loginCmd.Stderr = &loginStderr
 						if err := loginCmd.Run(); err != nil {
 							logger.Warn("[TriggerDeployment] Failed to authenticate with registry: %v (stderr: %s)", err, loginStderr.String())
 							streamer.WriteStderr([]byte(fmt.Sprintf("⚠️  Warning: Failed to authenticate with registry: %v\n", err)))
-							streamer.WriteStderr([]byte(fmt.Sprintf("   Continuing without authentication (may fail if registry requires auth).\n")))
+							streamer.WriteStderr([]byte(fmt.Sprintf("   Error: %s\n", loginStderr.String())))
+							streamer.WriteStderr([]byte("   Continuing without authentication (may fail if registry requires auth).\n"))
 						} else {
 							streamer.Write([]byte("✅ Authenticated with registry\n"))
 						}
@@ -374,7 +376,6 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 						streamer.WriteStderr([]byte("⚠️  Warning: REGISTRY_PASSWORD not set - pushing without authentication\n"))
 					}
 					
-					// Tag the image
 					tagCmd := exec.CommandContext(buildCtx, "docker", "tag", result.ImageName, registryImageName)
 					if err := tagCmd.Run(); err != nil {
 						logger.Warn("[TriggerDeployment] Failed to tag image %s as %s: %v", result.ImageName, registryImageName, err)
@@ -389,10 +390,10 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 						if err := pushCmd.Run(); err != nil {
 							logger.Warn("[TriggerDeployment] Failed to push image %s to registry: %v (stderr: %s)", registryImageName, err, pushStderr.String())
 							streamer.WriteStderr([]byte(fmt.Sprintf("⚠️  Warning: Failed to push image to registry: %v\n", err)))
-							streamer.WriteStderr([]byte(fmt.Sprintf("   Registry may not be available or authentication failed. Continuing with local image.\n")))
+							streamer.WriteStderr([]byte("   Registry may not be available or authentication failed. Continuing with local image.\n"))
 						} else {
 							logger.Info("[TriggerDeployment] Successfully pushed image %s to registry", registryImageName)
-							streamer.Write([]byte(fmt.Sprintf("✅ Image pushed to registry successfully\n")))
+							streamer.Write([]byte("✅ Image pushed to registry successfully\n"))
 							// Update image name to use registry URL
 							result.ImageName = registryImageName
 						}

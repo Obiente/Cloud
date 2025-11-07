@@ -69,32 +69,44 @@ REGISTRY_PASSWORD=your-secure-password  # Required for pushing/pulling images
 
 ## Using the Registry
 
+The registry is accessible via HTTPS at `https://registry.yourdomain.com` (replace `yourdomain.com` with your `DOMAIN` environment variable).
+
 ### Login
 
 ```bash
 # Login to the registry
-docker login registry:5000 -u obiente -p your-password
+docker login https://registry.yourdomain.com -u obiente -p your-password
 
 # Or using environment variable
-echo $REGISTRY_PASSWORD | docker login registry:5000 -u $REGISTRY_USERNAME --password-stdin
+echo $REGISTRY_PASSWORD | docker login https://registry.yourdomain.com -u $REGISTRY_USERNAME --password-stdin
 ```
 
 ### Push Images
 
 ```bash
 # Tag your image
-docker tag myimage:latest registry:5000/myimage:latest
+docker tag myimage:latest registry.yourdomain.com/myimage:latest
 
 # Push to registry
-docker push registry:5000/myimage:latest
+docker push registry.yourdomain.com/myimage:latest
 ```
 
 ### Pull Images
 
 ```bash
 # Pull from registry
-docker pull registry:5000/myimage:latest
+docker pull registry.yourdomain.com/myimage:latest
 ```
+
+## Registry Security
+
+The registry is configured to use HTTPS via Traefik with Let's Encrypt certificates. This means:
+
+- **No insecure registry configuration needed**: Docker can connect securely without requiring `/etc/docker/daemon.json` changes
+- **Automatic certificate management**: Traefik handles Let's Encrypt certificate generation and renewal
+- **Secure by default**: All registry communication is encrypted
+
+The registry is accessible at `https://registry.yourdomain.com` (where `yourdomain.com` is your `DOMAIN` environment variable).
 
 ## Swarm Deployment
 
@@ -105,6 +117,7 @@ When deploying with Docker Swarm:
    ```bash
    REGISTRY_USERNAME=obiente
    REGISTRY_PASSWORD=your-password
+   DOMAIN=yourdomain.com  # Used to construct registry URL (https://registry.yourdomain.com)
    ```
 3. **Deploy the stack** - the registry service will automatically use the htpasswd file from the volume
 
@@ -117,8 +130,8 @@ The API service will automatically:
 
 1. **Password Storage**: Store `REGISTRY_PASSWORD` securely (e.g., in a secrets manager, not in version control)
 2. **File Permissions**: The htpasswd file should be readable only by root (600)
-3. **Network**: The registry is accessible internally at `registry:5000` and externally via Traefik at `registry.yourdomain.com`
-4. **HTTPS**: External access is secured via Traefik with Let's Encrypt certificates
+3. **HTTPS Only**: The registry is accessible only via HTTPS at `https://registry.yourdomain.com` with Let's Encrypt certificates
+4. **No Insecure Registry Required**: Docker can connect securely without requiring insecure registry configuration
 
 ## Troubleshooting
 
@@ -131,13 +144,31 @@ The API service will automatically:
 
 ### Cannot Push/Pull
 
-- Ensure you're logged in: `docker login registry:5000`
+- Ensure you're logged in: `docker login https://registry.yourdomain.com`
 - Check registry logs: `docker service logs obiente_registry`
 - Verify registry is running: `docker service ps obiente_registry`
+- Verify HTTPS endpoint is accessible: `curl -k https://registry.yourdomain.com/v2/`
 
 ### Swarm Services Can't Pull Images
 
 - Ensure `--with-registry-auth=true` is set (already configured in deployment code)
 - Verify credentials are available on all Swarm nodes
-- Check if registry is accessible from worker nodes: `docker exec -it <container> ping registry`
+- Check if registry is accessible: `docker exec -it <container> curl -k https://registry.yourdomain.com/v2/`
+- Verify `REGISTRY_URL` environment variable is set correctly in the API service
+
+### "dial tcp: lookup registry" Error
+
+This error indicates that Docker cannot resolve the registry hostname. Possible causes:
+
+1. **Registry service not running**: Check with `docker service ps obiente_registry`
+2. **DNS resolution issue**: Ensure `DOMAIN` environment variable is set correctly
+3. **Certificate issue**: Verify Let's Encrypt certificate was issued for `registry.yourdomain.com`
+
+### Certificate Issues
+
+If you see certificate errors:
+
+1. **Check Traefik logs**: `docker service logs obiente_traefik | grep -i certificate`
+2. **Verify domain is accessible**: Ensure `registry.yourdomain.com` resolves to your Traefik IP
+3. **Check Let's Encrypt rate limits**: If you've made many certificate requests, you may need to wait
 
