@@ -31,13 +31,34 @@ export default defineNuxtConfig({
       },
     },
     build: {
+      // Optimize build for memory usage
+      chunkSizeWarningLimit: 1000,
+      minify: "esbuild", // Use esbuild instead of terser for lower memory usage
       rollupOptions: {
         external: [
           "packages/proto",
 
           /^@obiente\/proto/, // or use exact paths like 'packages/proto/src/generated/...'
         ],
-
+        output: {
+          // Manual chunk splitting to reduce memory pressure
+          manualChunks: (id) => {
+            // Split large dependencies into separate chunks
+            if (id.includes("node_modules")) {
+              if (id.includes("monaco-editor")) {
+                return "monaco";
+              }
+              if (id.includes("echarts") || id.includes("vue-echarts")) {
+                return "charts";
+              }
+              if (id.includes("@ark-ui")) {
+                return "ark-ui";
+              }
+              // Group other large dependencies
+              return "vendor";
+            }
+          },
+        },
         watch: {
           // Exclude directories that shouldn't be watched
           // Note: Rollup watches all files in the dependency graph, so we can't completely avoid watching packages/node_modules

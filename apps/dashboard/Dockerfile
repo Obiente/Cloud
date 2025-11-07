@@ -44,8 +44,9 @@ ENV NODE_OPTIONS="--max-old-space-size=8192"
 
 # Build workspace dependencies if needed (this uses Nx to build dependencies)
 # Note: Proto files should already be built beforehand - they are not rebuilt here
+# Set NODE_OPTIONS directly in the command to ensure it's used
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    pnpm --filter "@obiente/dashboard" build-deps || true
+    NODE_OPTIONS="--max-old-space-size=8192" pnpm --filter "@obiente/dashboard" build-deps || true
 
 # Build stage
 FROM base AS builder
@@ -78,10 +79,11 @@ COPY --from=deps /app/tools ./tools
 # Run from workspace root - pnpm exec will find nx in root node_modules/.bin
 # First ensure nuxt prepare runs to generate .nuxt directory (needed for tsconfig files)
 # Skip type checking during Docker build for faster builds (can be done in CI)
+# Set NODE_OPTIONS directly in the commands to ensure it's used by all child processes
 RUN --mount=type=cache,id=nuxt-build,target=/app/apps/dashboard/.nuxt \
     --mount=type=cache,id=nuxt-nitro,target=/app/apps/dashboard/.nitro \
-    sh -c "cd apps/dashboard && pnpm exec nuxt prepare || true" && \
-    SKIP_TYPE_CHECK=true pnpm --filter "@obiente/dashboard" exec nx nuxt:build
+    sh -c "NODE_OPTIONS='--max-old-space-size=8192' cd apps/dashboard && pnpm exec nuxt prepare || true" && \
+    NODE_OPTIONS="--max-old-space-size=8192" SKIP_TYPE_CHECK=true pnpm --filter "@obiente/dashboard" exec nx nuxt:build
 
 # Production image
 FROM node:20-alpine AS runner
