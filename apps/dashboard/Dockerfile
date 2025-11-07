@@ -40,6 +40,8 @@ COPY nx.json tsconfig.base.json tsconfig.json ./
 # but we ensure they're up-to-date here for the build
 COPY apps/dashboard ./apps/dashboard
 
+ENV NODE_OPTIONS="--max-old-space-size=8192"
+
 # Build workspace dependencies if needed (this uses Nx to build dependencies)
 # Note: Proto files should already be built beforehand - they are not rebuilt here
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
@@ -48,6 +50,10 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
 # Build stage
 FROM base AS builder
 WORKDIR /app
+
+# Increase Node.js heap size to prevent out-of-memory errors during build
+# 8GB should be sufficient
+ENV NODE_OPTIONS="--max-old-space-size=8192"
 
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
