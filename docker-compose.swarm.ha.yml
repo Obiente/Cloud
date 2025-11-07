@@ -771,6 +771,8 @@ services:
   # Grafana - Visualization
   grafana:
     image: grafana/grafana:latest
+    entrypoint: ["/bin/sh", "/etc/grafana/entrypoint.sh"]
+    command: ["/run.sh"]
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
       GF_SERVER_ROOT_URL: https://grafana.${DOMAIN}
@@ -786,8 +788,9 @@ services:
       GRAFANA_METRICS_DB_HOST: ${GRAFANA_METRICS_DB_HOST:-metrics-pgpool}
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:rw
       - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - ./monitoring/grafana/entrypoint.sh:/etc/grafana/entrypoint.sh:ro
     depends_on:
       - prometheus
       - pgpool
