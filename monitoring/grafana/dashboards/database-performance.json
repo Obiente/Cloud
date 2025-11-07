@@ -12,7 +12,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "PostgreSQL"
+        "uid": "postgresql"
       },
       "fieldConfig": {
         "defaults": {
@@ -73,7 +73,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "uid": "timescaledb-metrics"
       },
       "fieldConfig": {
         "defaults": {
@@ -134,7 +134,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "uid": "timescaledb-metrics"
       },
       "fieldConfig": {
         "defaults": {
@@ -185,7 +185,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  (SELECT COUNT(*) FROM deployment_metrics) +\n  (SELECT COUNT(*) FROM game_server_metrics) as total_metrics",
+          "rawSql": "SELECT COALESCE((SELECT COUNT(*) FROM deployment_metrics), 0) + COALESCE((SELECT COUNT(*) FROM game_server_metrics), 0) as total_metrics",
           "refId": "A"
         }
       ],
@@ -195,7 +195,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "uid": "timescaledb-metrics"
       },
       "fieldConfig": {
         "defaults": {
@@ -256,7 +256,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "uid": "timescaledb-metrics"
       },
       "fieldConfig": {
         "defaults": {
@@ -324,7 +324,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  time_bucket('1 hour', timestamp) AS time,\n  COUNT(*) as metrics_per_hour\nFROM deployment_metrics\nWHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo()\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  time_bucket('1 hour', timestamp) AS time,\n  COUNT(*) as metrics_per_hour\nFROM deployment_metrics\nWHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo()\nGROUP BY time\nORDER BY time\nLIMIT 1000",
           "refId": "A"
         }
       ],
@@ -334,7 +334,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "TimescaleDB (Metrics)"
+        "uid": "timescaledb-metrics"
       },
       "fieldConfig": {
         "defaults": {
@@ -402,7 +402,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  time_bucket('1 hour', timestamp) AS time,\n  COUNT(*) as metrics_per_hour\nFROM game_server_metrics\nWHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo()\nGROUP BY time\nORDER BY time",
+          "rawSql": "SELECT\n  time_bucket('1 hour', timestamp) AS time,\n  COUNT(*) as metrics_per_hour\nFROM game_server_metrics\nWHERE timestamp >= $__timeFrom() AND timestamp <= $__timeTo()\nGROUP BY time\nORDER BY time\nLIMIT 1000",
           "refId": "A"
         }
       ],
@@ -412,7 +412,7 @@
     {
       "datasource": {
         "type": "postgres",
-        "uid": "PostgreSQL"
+        "uid": "postgresql"
       },
       "fieldConfig": {
         "defaults": {
