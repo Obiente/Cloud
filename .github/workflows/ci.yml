@@ -31,11 +31,49 @@ jobs:
       # Uncomment this line to enable task distribution
       - run: pnpm dlx nx start-ci-run --auto-apply-fixes="*format*,*lint*" --distribute-on="3 linux-medium-js" --stop-agents-after="build"
 
-      # Cache node_modules
+      # Cache pnpm store for faster dependency installation
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "pnpm"
+
+      # Cache Nx computation cache for faster task execution
+      - name: Cache Nx
+        uses: actions/cache@v4
+        with:
+          path: .nx/cache
+          key: nx-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'nx.json') }}
+          restore-keys: |
+            nx-${{ runner.os }}-
+
+      # Cache Nuxt build artifacts (.nuxt directory)
+      - name: Cache Nuxt build
+        uses: actions/cache@v4
+        with:
+          path: apps/dashboard/.nuxt
+          key: nuxt-${{ runner.os }}-${{ hashFiles('apps/dashboard/**/*.{ts,js,vue}', 'apps/dashboard/nuxt.config.ts', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            nuxt-${{ runner.os }}-
+
+      # Cache Nitro build artifacts (.nitro directory)
+      - name: Cache Nitro build
+        uses: actions/cache@v4
+        with:
+          path: apps/dashboard/.nitro
+          key: nitro-${{ runner.os }}-${{ hashFiles('apps/dashboard/**/*.{ts,js,vue}', 'apps/dashboard/nuxt.config.ts', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            nitro-${{ runner.os }}-
+
+      # Cache Vite build cache
+      - name: Cache Vite
+        uses: actions/cache@v4
+        with:
+          path: |
+            apps/dashboard/node_modules/.vite
+            node_modules/.vite
+          key: vite-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'apps/dashboard/nuxt.config.ts') }}
+          restore-keys: |
+            vite-${{ runner.os }}-
 
       - run: pnpm install --frozen-lockfile
 
