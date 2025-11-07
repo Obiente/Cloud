@@ -11,7 +11,7 @@ contactPoints:
       - uid: 'email-default'
         type: 'email'
         settings:
-          addresses: '${ALERT_EMAIL:-admin@example.com}'
+          addresses: ${ALERT_EMAIL:-admin@example.com}
           singleEmail: false
           # Additional email settings can be configured here
 

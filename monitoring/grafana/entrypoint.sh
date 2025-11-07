@@ -30,7 +30,7 @@ if [ -d /etc/grafana/provisioning ]; then
       -e "s|\${POSTGRES_PASSWORD}|${POSTGRES_PASSWORD:-obiente-postgres}|g" \
       -e "s|\${METRICS_DB_USER}|${METRICS_USER}|g" \
       -e "s|\${METRICS_DB_PASSWORD}|${METRICS_PASSWORD}|g" \
-      -e "s|\${ALERT_EMAIL}|${ALERT_EMAIL:-admin@example.com}|g" \
+      -e "s|\${ALERT_EMAIL:-admin@example.com}|${ALERT_EMAIL:-admin@example.com}|g" \
       "$file"
     
     if [ $? -eq 0 ]; then
