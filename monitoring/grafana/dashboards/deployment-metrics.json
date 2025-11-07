@@ -392,7 +392,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  hour AS time,\n  deployment_id,\n  SUM(request_count) as requests\nFROM deployment_usage_hourly\nWHERE hour >= $__timeFrom() AND hour <= $__timeTo()\nGROUP BY time, deployment_id\nORDER BY time",
+          "rawSql": "SELECT\n  hour AS time,\n  deployment_id,\n  COALESCE(SUM(request_count), 0) as requests\nFROM deployment_usage_hourly\nWHERE hour >= $__timeFrom() AND hour <= $__timeTo()\nGROUP BY time, deployment_id\nORDER BY time",
           "refId": "A"
         }
       ],
@@ -470,7 +470,7 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  hour AS time,\n  deployment_id,\n  SUM(error_count) as errors\nFROM deployment_usage_hourly\nWHERE hour >= $__timeFrom() AND hour <= $__timeTo()\nGROUP BY time, deployment_id\nORDER BY time",
+          "rawSql": "SELECT\n  hour AS time,\n  deployment_id,\n  COALESCE(SUM(error_count), 0) as errors\nFROM deployment_usage_hourly\nWHERE hour >= $__timeFrom() AND hour <= $__timeTo()\nGROUP BY time, deployment_id\nORDER BY time",
           "refId": "A"
         }
       ],
@@ -481,7 +481,10 @@
   "refresh": "30s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["deployments", "obiente"],
+  "tags": [
+    "deployments",
+    "obiente"
+  ],
   "templating": {
     "list": []
   },
@@ -496,4 +499,3 @@
   "version": 1,
   "weekStart": ""
 }
-

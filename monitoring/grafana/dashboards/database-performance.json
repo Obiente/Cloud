@@ -246,7 +246,7 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT pg_database_size('obiente_metrics') as db_size",
+          "rawSql": "SELECT COALESCE(pg_database_size('obiente_metrics') as db_size",
           "refId": "A"
         }
       ],
@@ -464,7 +464,12 @@
   "refresh": "30s",
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["database", "postgresql", "timescaledb", "obiente"],
+  "tags": [
+    "database",
+    "postgresql",
+    "timescaledb",
+    "obiente"
+  ],
   "templating": {
     "list": []
   },
@@ -479,4 +484,3 @@
   "version": 1,
   "weekStart": ""
 }
-
