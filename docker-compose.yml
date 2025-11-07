@@ -44,6 +44,7 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       ZITADEL_URL: ${ZITADEL_URL:-https://auth.obiente.cloud}
       ZITADEL_CLIENT_ID: ${ZITADEL_CLIENT_ID:-}
+      ZITADEL_CLIENT_SECRET: ${ZITADEL_CLIENT_SECRET:-}  # Optional: Use Client Credentials Grant instead of PAT
       ZITADEL_MANAGEMENT_TOKEN: ${ZITADEL_MANAGEMENT_TOKEN:-}
       ZITADEL_ORGANIZATION_ID: ${ZITADEL_ORGANIZATION_ID:-}  # REQUIRED: Service users don't have a default organization
       DISABLE_AUTH: ${DISABLE_AUTH:-false}

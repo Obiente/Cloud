@@ -737,6 +737,7 @@ services:
   # Prometheus - Metrics collection
   prometheus:
     image: prom/prometheus:latest
+    user: "0:0"  # Run as root to access Docker socket for Swarm service discovery
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
