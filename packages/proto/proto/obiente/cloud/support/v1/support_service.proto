@@ -135,6 +135,10 @@ message SupportTicket {
   google.protobuf.Timestamp updated_at = 11;
   google.protobuf.Timestamp resolved_at = 12;
   int32 comment_count = 13; // Number of comments on this ticket
+  optional string created_by_name = 14; // Name of the user who created the ticket
+  optional string created_by_email = 15; // Email of the user who created the ticket
+  optional string assigned_to_name = 16; // Name of the user assigned to the ticket
+  optional string assigned_to_email = 17; // Email of the user assigned to the ticket
 }
 
 // TicketComment represents a comment/reply on a support ticket

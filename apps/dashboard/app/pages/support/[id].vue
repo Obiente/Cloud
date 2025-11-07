@@ -278,6 +278,18 @@
                           <OuiRelativeTime :value="ticket.createdAt ? new Date(Number(ticket.createdAt.seconds) * 1000) : undefined" />
                         </OuiText>
                       </OuiFlex>
+                      <OuiFlex v-if="ticket.createdByName || ticket.createdByEmail" justify="between" align="center">
+                        <OuiText size="xs" color="secondary">Created by</OuiText>
+                        <OuiText size="xs" weight="medium">
+                          {{ ticket.createdByName || ticket.createdByEmail || ticket.createdBy || 'Unknown User' }}
+                        </OuiText>
+                      </OuiFlex>
+                      <OuiFlex v-if="ticket.assignedToName || ticket.assignedToEmail" justify="between" align="center">
+                        <OuiText size="xs" color="secondary">Assigned to</OuiText>
+                        <OuiText size="xs" weight="medium">
+                          {{ ticket.assignedToName || ticket.assignedToEmail || ticket.assignedTo || 'Unassigned' }}
+                        </OuiText>
+                      </OuiFlex>
                       <OuiFlex v-if="ticket.resolvedAt" justify="between" align="center">
                         <OuiText size="xs" color="secondary">Resolved</OuiText>
                         <OuiText size="xs" weight="medium">

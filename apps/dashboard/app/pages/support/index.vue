@@ -239,6 +239,11 @@
                         <OuiRelativeTime :value="ticket.createdAt ? new Date(Number(ticket.createdAt.seconds) * 1000) : undefined" />
                       </OuiText>
                     </OuiFlex>
+                    <OuiFlex v-if="ticket.createdByName || ticket.createdByEmail" gap="sm" align="center" class="text-muted">
+                      <OuiText size="xs">
+                        by {{ ticket.createdByName || ticket.createdByEmail || ticket.createdBy || 'Unknown User' }}
+                      </OuiText>
+                    </OuiFlex>
                     <OuiFlex v-if="ticket.commentCount > 0" gap="sm" align="center" class="text-muted">
                       <ChatBubbleLeftRightIcon class="h-4 w-4" />
                       <OuiText size="xs">

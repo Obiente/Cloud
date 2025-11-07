@@ -850,22 +850,26 @@ func (x *ListCommentsResponse) GetComments() []*TicketComment {
 
 // SupportTicket represents a support ticket
 type SupportTicket struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Subject        string                 `protobuf:"bytes,2,opt,name=subject,proto3" json:"subject,omitempty"`
-	Description    string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	Status         SupportTicketStatus    `protobuf:"varint,4,opt,name=status,proto3,enum=obiente.cloud.support.v1.SupportTicketStatus" json:"status,omitempty"`
-	Priority       SupportTicketPriority  `protobuf:"varint,5,opt,name=priority,proto3,enum=obiente.cloud.support.v1.SupportTicketPriority" json:"priority,omitempty"`
-	Category       SupportTicketCategory  `protobuf:"varint,6,opt,name=category,proto3,enum=obiente.cloud.support.v1.SupportTicketCategory" json:"category,omitempty"`
-	CreatedBy      string                 `protobuf:"bytes,7,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`          // User ID who created the ticket
-	AssignedTo     *string                `protobuf:"bytes,8,opt,name=assigned_to,json=assignedTo,proto3,oneof" json:"assigned_to,omitempty"` // User ID of assignee (superadmin)
-	OrganizationId *string                `protobuf:"bytes,9,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"`
-	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	ResolvedAt     *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=resolved_at,json=resolvedAt,proto3" json:"resolved_at,omitempty"`
-	CommentCount   int32                  `protobuf:"varint,13,opt,name=comment_count,json=commentCount,proto3" json:"comment_count,omitempty"` // Number of comments on this ticket
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Subject         string                 `protobuf:"bytes,2,opt,name=subject,proto3" json:"subject,omitempty"`
+	Description     string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	Status          SupportTicketStatus    `protobuf:"varint,4,opt,name=status,proto3,enum=obiente.cloud.support.v1.SupportTicketStatus" json:"status,omitempty"`
+	Priority        SupportTicketPriority  `protobuf:"varint,5,opt,name=priority,proto3,enum=obiente.cloud.support.v1.SupportTicketPriority" json:"priority,omitempty"`
+	Category        SupportTicketCategory  `protobuf:"varint,6,opt,name=category,proto3,enum=obiente.cloud.support.v1.SupportTicketCategory" json:"category,omitempty"`
+	CreatedBy       string                 `protobuf:"bytes,7,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`          // User ID who created the ticket
+	AssignedTo      *string                `protobuf:"bytes,8,opt,name=assigned_to,json=assignedTo,proto3,oneof" json:"assigned_to,omitempty"` // User ID of assignee (superadmin)
+	OrganizationId  *string                `protobuf:"bytes,9,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"`
+	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	ResolvedAt      *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=resolved_at,json=resolvedAt,proto3" json:"resolved_at,omitempty"`
+	CommentCount    int32                  `protobuf:"varint,13,opt,name=comment_count,json=commentCount,proto3" json:"comment_count,omitempty"`                 // Number of comments on this ticket
+	CreatedByName   *string                `protobuf:"bytes,14,opt,name=created_by_name,json=createdByName,proto3,oneof" json:"created_by_name,omitempty"`       // Name of the user who created the ticket
+	CreatedByEmail  *string                `protobuf:"bytes,15,opt,name=created_by_email,json=createdByEmail,proto3,oneof" json:"created_by_email,omitempty"`    // Email of the user who created the ticket
+	AssignedToName  *string                `protobuf:"bytes,16,opt,name=assigned_to_name,json=assignedToName,proto3,oneof" json:"assigned_to_name,omitempty"`    // Name of the user assigned to the ticket
+	AssignedToEmail *string                `protobuf:"bytes,17,opt,name=assigned_to_email,json=assignedToEmail,proto3,oneof" json:"assigned_to_email,omitempty"` // Email of the user assigned to the ticket
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *SupportTicket) Reset() {
@@ -987,6 +991,34 @@ func (x *SupportTicket) GetCommentCount() int32 {
 		return x.CommentCount
 	}
 	return 0
+}
+
+func (x *SupportTicket) GetCreatedByName() string {
+	if x != nil && x.CreatedByName != nil {
+		return *x.CreatedByName
+	}
+	return ""
+}
+
+func (x *SupportTicket) GetCreatedByEmail() string {
+	if x != nil && x.CreatedByEmail != nil {
+		return *x.CreatedByEmail
+	}
+	return ""
+}
+
+func (x *SupportTicket) GetAssignedToName() string {
+	if x != nil && x.AssignedToName != nil {
+		return *x.AssignedToName
+	}
+	return ""
+}
+
+func (x *SupportTicket) GetAssignedToEmail() string {
+	if x != nil && x.AssignedToEmail != nil {
+		return *x.AssignedToEmail
+	}
+	return ""
 }
 
 // TicketComment represents a comment/reply on a support ticket
@@ -1164,7 +1196,7 @@ const file_obiente_cloud_support_v1_support_service_proto_rawDesc = "" +
 	"\x13ListCommentsRequest\x12\x1b\n" +
 	"\tticket_id\x18\x01 \x01(\tR\bticketId\"[\n" +
 	"\x14ListCommentsResponse\x12C\n" +
-	"\bcomments\x18\x01 \x03(\v2'.obiente.cloud.support.v1.TicketCommentR\bcomments\"\xab\x05\n" +
+	"\bcomments\x18\x01 \x03(\v2'.obiente.cloud.support.v1.TicketCommentR\bcomments\"\xbb\a\n" +
 	"\rSupportTicket\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\asubject\x18\x02 \x01(\tR\asubject\x12 \n" +
@@ -1184,9 +1216,17 @@ const file_obiente_cloud_support_v1_support_service_proto_rawDesc = "" +
 	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12;\n" +
 	"\vresolved_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"resolvedAt\x12#\n" +
-	"\rcomment_count\x18\r \x01(\x05R\fcommentCountB\x0e\n" +
+	"\rcomment_count\x18\r \x01(\x05R\fcommentCount\x12+\n" +
+	"\x0fcreated_by_name\x18\x0e \x01(\tH\x02R\rcreatedByName\x88\x01\x01\x12-\n" +
+	"\x10created_by_email\x18\x0f \x01(\tH\x03R\x0ecreatedByEmail\x88\x01\x01\x12-\n" +
+	"\x10assigned_to_name\x18\x10 \x01(\tH\x04R\x0eassignedToName\x88\x01\x01\x12/\n" +
+	"\x11assigned_to_email\x18\x11 \x01(\tH\x05R\x0fassignedToEmail\x88\x01\x01B\x0e\n" +
 	"\f_assigned_toB\x12\n" +
-	"\x10_organization_id\"\xb1\x03\n" +
+	"\x10_organization_idB\x12\n" +
+	"\x10_created_by_nameB\x13\n" +
+	"\x11_created_by_emailB\x13\n" +
+	"\x11_assigned_to_nameB\x14\n" +
+	"\x12_assigned_to_email\"\xb1\x03\n" +
 	"\rTicketComment\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\tticket_id\x18\x02 \x01(\tR\bticketId\x12\x18\n" +

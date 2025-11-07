@@ -55,6 +55,7 @@ func (s *Service) CreateTicket(ctx context.Context, req *connect.Request[support
 	}
 
 	protoTicket := dbTicketToProto(ticket, 0)
+	resolveTicketProfiles(ctx, protoTicket)
 
 	res := connect.NewResponse(&supportv1.CreateTicketResponse{
 		Ticket: protoTicket,
@@ -144,6 +145,7 @@ func (s *Service) ListTickets(ctx context.Context, req *connect.Request[supportv
 	for i, ticket := range tickets {
 		count := commentCountMap[ticket.ID]
 		protoTickets[i] = dbTicketToProto(&ticket, count)
+		resolveTicketProfiles(ctx, protoTickets[i])
 	}
 
 	res := connect.NewResponse(&supportv1.ListTicketsResponse{
@@ -183,6 +185,7 @@ func (s *Service) GetTicket(ctx context.Context, req *connect.Request[supportv1.
 		Count(&commentCount)
 
 	protoTicket := dbTicketToProto(&ticket, int32(commentCount))
+	resolveTicketProfiles(ctx, protoTicket)
 
 	res := connect.NewResponse(&supportv1.GetTicketResponse{
 		Ticket: protoTicket,
@@ -251,6 +254,7 @@ func (s *Service) UpdateTicket(ctx context.Context, req *connect.Request[support
 		Count(&commentCount)
 
 	protoTicket := dbTicketToProto(&ticket, int32(commentCount))
+	resolveTicketProfiles(ctx, protoTicket)
 
 	res := connect.NewResponse(&supportv1.UpdateTicketResponse{
 		Ticket: protoTicket,
@@ -427,6 +431,38 @@ func dbTicketToProto(dbTicket *database.SupportTicket, commentCount int32) *supp
 	}
 
 	return ticket
+}
+
+// resolveTicketProfiles resolves user profile information for a ticket
+func resolveTicketProfiles(ctx context.Context, ticket *supportv1.SupportTicket) {
+	resolver := organizations.GetUserProfileResolver()
+	if resolver == nil || !resolver.IsConfigured() {
+		return
+	}
+
+	// Resolve created_by profile
+	if ticket.CreatedBy != "" {
+		if userProfile, err := resolver.Resolve(ctx, ticket.CreatedBy); err == nil && userProfile != nil {
+			if userProfile.Name != "" {
+				ticket.CreatedByName = &userProfile.Name
+			}
+			if userProfile.Email != "" {
+				ticket.CreatedByEmail = &userProfile.Email
+			}
+		}
+	}
+
+	// Resolve assigned_to profile
+	if ticket.AssignedTo != nil && *ticket.AssignedTo != "" {
+		if userProfile, err := resolver.Resolve(ctx, *ticket.AssignedTo); err == nil && userProfile != nil {
+			if userProfile.Name != "" {
+				ticket.AssignedToName = &userProfile.Name
+			}
+			if userProfile.Email != "" {
+				ticket.AssignedToEmail = &userProfile.Email
+			}
+		}
+	}
 }
 
 func dbCommentToProto(dbComment *database.TicketComment) *supportv1.TicketComment {
