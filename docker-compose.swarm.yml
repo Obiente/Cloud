@@ -418,6 +418,16 @@ services:
       GRAFANA_METRICS_DB_HOST: ${GRAFANA_METRICS_DB_HOST:-timescaledb}
       # Alerting configuration
       ALERT_EMAIL: ${ALERT_EMAIL:-admin@example.com}
+      # SMTP configuration for Grafana email notifications
+      GF_SMTP_ENABLED: ${SMTP_HOST:+true}
+      GF_SMTP_HOST: ${SMTP_HOST:-}
+      GF_SMTP_PORT: ${SMTP_PORT:-587}
+      GF_SMTP_USER: ${SMTP_USERNAME:-}
+      GF_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      GF_SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-${ALERT_EMAIL:-admin@example.com}}
+      GF_SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Grafana}
+      GF_SMTP_SKIP_VERIFY: ${SMTP_SKIP_TLS_VERIFY:-false}
+      GF_SMTP_STARTTLS_POLICY: ${GF_SMTP_STARTTLS_POLICY:-OpportunisticStartTLS}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:rw
