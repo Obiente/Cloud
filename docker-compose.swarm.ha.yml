@@ -771,6 +771,7 @@ services:
   # Grafana - Visualization
   grafana:
     image: grafana/grafana:latest
+    user: "0:0"  # Run as root for entrypoint script to write provisioning files
     entrypoint: ["/bin/sh", "/etc/grafana/entrypoint.sh"]
     command: ["/run.sh"]
     environment:
