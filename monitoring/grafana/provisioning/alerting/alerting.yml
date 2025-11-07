@@ -49,7 +49,6 @@ groups:
         format: time_series
         relativeTimeRange:
           from: 300
-          to: 0
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -98,7 +97,6 @@ groups:
         format: time_series
         relativeTimeRange:
           from: 600
-          to: 0
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -147,7 +145,6 @@ groups:
         format: time_series
         relativeTimeRange:
           from: 300
-          to: 0
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -197,7 +194,6 @@ groups:
         format: time_series
         relativeTimeRange:
           from: 600
-          to: 0
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -247,7 +243,6 @@ groups:
         format: time_series
         relativeTimeRange:
           from: 600
-          to: 0
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -296,7 +291,6 @@ groups:
         format: time_series
         relativeTimeRange:
           from: 600
-          to: 0
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -351,7 +345,6 @@ groups:
         format: time_series
         relativeTimeRange:
           from: 300
-          to: 0
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -400,7 +393,6 @@ groups:
         format: time_series
         relativeTimeRange:
           from: 600
-          to: 0
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -450,7 +442,6 @@ groups:
         format: time_series
         relativeTimeRange:
           from: 600
-          to: 0
     - refId: B
       queryType: ''
       datasourceUid: '-100'

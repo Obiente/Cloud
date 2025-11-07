@@ -58,6 +58,19 @@ if [ -d /etc/grafana/provisioning ]; then
     
     if [ $? -eq 0 ]; then
       echo "Successfully substituted variables in $file"
+      
+      # Validate alerting configuration: check for invalid relativeTimeRange in condition queries
+      if echo "$file" | grep -q "alerting"; then
+        # Check for condition queries (refId: B) with invalid relativeTimeRange (from: 0, to: 0)
+        if grep -A 10 "refId: B" "$file" | grep -A 5 "relativeTimeRange:" | grep -q "from: 0"; then
+          if grep -A 10 "refId: B" "$file" | grep -A 5 "relativeTimeRange:" | grep -q "to: 0"; then
+            echo "WARNING: Found invalid relativeTimeRange (from: 0, to: 0) in condition query in $file"
+            echo "  Condition queries (refId B) should not have relativeTimeRange"
+            echo "  This may cause Grafana alerting provisioning to fail"
+          fi
+        fi
+      fi
+      
       # Debug: Show first few lines to verify substitution
       echo "First 10 lines after substitution:"
       head -10 "$file" || true
