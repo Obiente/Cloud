@@ -7,6 +7,9 @@
     type OrganizationMember,
   } from "@obiente/proto";
   import { useConnectClient } from "~/lib/connect-client";
+  import { useOrganizationId } from "~/composables/useOrganizationId";
+  import { useToast } from "~/composables/useToast";
+  import AuditLogs from "~/components/audit/AuditLogs.vue";
   import {
     CheckIcon,
     PlusIcon,
@@ -14,6 +17,7 @@
     PencilIcon,
     ArrowDownTrayIcon,
     DocumentTextIcon,
+    ArrowPathIcon,
   } from "@heroicons/vue/24/outline";
 
   const name = ref("");
@@ -28,6 +32,7 @@
   const billingClient = useConnectClient(BillingService);
   const route = useRoute();
   const config = useRuntimeConfig();
+  const { toast } = useToast();
 
   // Store the target org from query params before any other logic
   const targetOrgId =
@@ -41,8 +46,12 @@
   }
 
   const organizations = computed(() => auth.organizations || []);
+  
+  // Get organizationId using SSR-compatible composable
+  const organizationId = useOrganizationId();
+  
   const selectedOrg = computed({
-    get: () => auth.currentOrganizationId,
+    get: () => organizationId.value || auth.currentOrganizationId || "",
     set: (id: string) => {
       if (id) auth.switchOrganization(id);
     },
@@ -69,13 +78,14 @@
 
   const { data: membersData, refresh: refreshMembers } = await useAsyncData(
     () =>
-      selectedOrg.value
-        ? `org-members-${selectedOrg.value}`
+      organizationId.value
+        ? `org-members-${organizationId.value}`
         : "org-members-none",
     async () => {
-      if (!selectedOrg.value) return [] as OrganizationMember[];
+      const orgId = organizationId.value;
+      if (!orgId) return [] as OrganizationMember[];
       const res = await orgClient.listMembers({
-        organizationId: selectedOrg.value,
+        organizationId: orgId,
       });
       return res.members || [];
     },
@@ -103,13 +113,14 @@
   const { data: roleCatalogData, refresh: refreshRoleCatalog } =
     await useAsyncData(
       () =>
-        selectedOrg.value
-          ? `org-role-catalog-${selectedOrg.value}`
+        organizationId.value
+          ? `org-role-catalog-${organizationId.value}`
           : "org-role-catalog-none",
       async () => {
-        if (!selectedOrg.value) return [] as { id: string; name: string }[];
+        const orgId = organizationId.value;
+        if (!orgId) return [] as { id: string; name: string }[];
         const res = await adminClient.listRoles({
-          organizationId: selectedOrg.value,
+          organizationId: orgId,
         });
         return (res.roles || []).map((r) => ({ id: r.id, name: r.name }));
       },
@@ -193,6 +204,13 @@
     { immediate: true }
   );
 
+  // Load invitations when invitations tab is active
+  watch(activeTab, (tab) => {
+    if (tab === "invitations") {
+      refreshInvitations();
+    }
+  }, { immediate: true });
+
   async function syncOrganizations() {
     if (!auth.isAuthenticated) return;
     const res = await orgClient.listOrganizations({});
@@ -220,15 +238,50 @@
     }
   }
 
+  const inviting = ref(false);
+  const resendingInvite = ref<string | null>(null);
+  
+  // My invitations (for invitations tab)
+  const myInvitations = ref<any[]>([]);
+  const loadingInvitations = ref(false);
+  const processingInvite = ref<string | null>(null);
+  const decliningInvite = ref(false);
+
   async function invite() {
-    if (!selectedOrg.value || !inviteEmail.value || !inviteRole.value) return;
-    await orgClient.inviteMember({
-      organizationId: selectedOrg.value,
-      email: inviteEmail.value,
-      role: inviteRole.value,
-    });
-    inviteEmail.value = "";
-    await refreshMembers();
+    if (!selectedOrg.value || !inviteEmail.value || !inviteRole.value || inviting.value) return;
+    inviting.value = true;
+    try {
+      await orgClient.inviteMember({
+        organizationId: selectedOrg.value,
+        email: inviteEmail.value,
+        role: inviteRole.value,
+      });
+      toast.success(`Invitation email sent to ${inviteEmail.value}`);
+      inviteEmail.value = "";
+      await refreshMembers();
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to send invitation email");
+    } finally {
+      inviting.value = false;
+    }
+  }
+
+  async function resendInvite(member: OrganizationMember) {
+    if (!selectedOrg.value || !member.id || resendingInvite.value === member.id) return;
+    resendingInvite.value = member.id;
+    try {
+      await orgClient.resendInvite({
+        organizationId: selectedOrg.value,
+        memberId: member.id,
+      });
+      const email = member.user?.email || "the user";
+      toast.success(`Invitation email resent to ${email}`);
+      await refreshMembers();
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to resend invitation email");
+    } finally {
+      resendingInvite.value = null;
+    }
   }
 
   async function setRole(memberId: string, role: string) {
@@ -244,6 +297,8 @@
   function roleLabel(role: string) {
     return roleDisplayMap.value.get(role) || role;
   }
+
+  const { getInitials, formatCurrency: formatCurrencyUtil } = useUtils();
 
   function openTransferDialog(member: OrganizationMember) {
     transferCandidate.value = member;
@@ -272,7 +327,85 @@
 
   async function refreshAll() {
     await syncOrganizations();
-    await Promise.all([refreshMembers(), refreshRoleCatalog()]);
+    await Promise.all([refreshMembers(), refreshRoleCatalog(), refreshInvitations()]);
+  }
+  
+  async function refreshInvitations() {
+    loadingInvitations.value = true;
+    try {
+      const res = await orgClient.listMyInvites({});
+      myInvitations.value = res.invites || [];
+    } catch (error: any) {
+      const { toast } = useToast();
+      toast.error(error?.message || "Failed to load invitations");
+    } finally {
+      loadingInvitations.value = false;
+    }
+  }
+  
+  async function acceptInvite(invite: any) {
+    if (processingInvite.value === invite.id) return;
+    processingInvite.value = invite.id;
+    decliningInvite.value = false;
+    
+    try {
+      const res = await orgClient.acceptInvite({
+        organizationId: invite.organizationId,
+        memberId: invite.id,
+      });
+      
+      const { toast } = useToast();
+      toast.success(`You've joined ${res.organization?.name || 'the organization'}!`);
+      
+      // Refresh user's organizations list
+      const orgRes = await orgClient.listOrganizations({ onlyMine: true });
+      auth.setOrganizations(orgRes.organizations || []);
+      auth.notifyOrganizationsUpdated();
+      
+      // Switch to the new organization
+      if (res.organization?.id) {
+        await auth.switchOrganization(res.organization.id);
+        selectedOrg.value = res.organization.id;
+      }
+      
+      // Remove from list
+      myInvitations.value = myInvitations.value.filter(i => i.id !== invite.id);
+      
+      // Refresh members if we switched to that org
+      if (res.organization?.id) {
+        await refreshMembers();
+      }
+    } catch (error: any) {
+      const { toast } = useToast();
+      toast.error(error?.message || "Failed to accept invitation");
+    } finally {
+      processingInvite.value = null;
+    }
+  }
+  
+  async function declineInvite(invite: any) {
+    if (processingInvite.value === invite.id) return;
+    processingInvite.value = invite.id;
+    decliningInvite.value = true;
+    
+    try {
+      await orgClient.declineInvite({
+        organizationId: invite.organizationId,
+        memberId: invite.id,
+      });
+      
+      const { toast } = useToast();
+      toast.success("Invitation declined");
+      
+      // Remove from list
+      myInvitations.value = myInvitations.value.filter(i => i.id !== invite.id);
+    } catch (error: any) {
+      const { toast } = useToast();
+      toast.error(error?.message || "Failed to decline invitation");
+    } finally {
+      processingInvite.value = null;
+      decliningInvite.value = false;
+    }
   }
   
   async function addCredits() {
@@ -323,7 +456,9 @@
 
   const tabs = [
     { id: "members", label: "Members" },
+    { id: "invitations", label: "Invitations" },
     { id: "roles", label: "Roles" },
+    { id: "audit-logs", label: "Audit Logs" },
   ];
 
   const inviteDisabled = computed(
@@ -884,11 +1019,7 @@
   };
 
   const formatCurrency = (cents: number | bigint) => {
-    const c = Number(cents);
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(c / 100);
+    return formatCurrencyUtil(cents);
   };
 
   const getUsagePercentage = (
@@ -1025,6 +1156,15 @@
                   Manage member roles and ownership.
                 </OuiText>
               </OuiStack>
+              <OuiButton
+                variant="ghost"
+                size="sm"
+                @click="refreshMembers"
+                :disabled="!selectedOrg"
+              >
+                <ArrowPathIcon class="h-4 w-4 mr-1" />
+                Refresh
+              </OuiButton>
             </OuiFlex>
 
             <div class="overflow-x-auto">
@@ -1050,7 +1190,8 @@
                           :name="
                             member.user?.name ||
                             member.user?.email ||
-                            member.user?.id
+                            member.user?.id ||
+                            ''
                           "
                           :src="member.user?.avatarUrl"
                         />
@@ -1108,6 +1249,15 @@
                           Transfer Ownership
                         </OuiButton>
                         <OuiButton
+                          v-if="member.status === 'invited' && (currentUserIsOwner || currentMemberRecord?.role === 'admin')"
+                          size="sm"
+                          variant="ghost"
+                          @click="resendInvite(member)"
+                          :disabled="resendingInvite === member.id"
+                        >
+                          {{ resendingInvite === member.id ? 'Sending...' : 'Resend' }}
+                        </OuiButton>
+                        <OuiButton
                           v-if="currentUserIsOwner && member.role !== 'owner'"
                           size="sm"
                           variant="ghost"
@@ -1145,11 +1295,79 @@
                   :items="roleItems"
                 />
                 <OuiFlex align="end">
-                  <OuiButton @click="invite" :disabled="inviteDisabled">
-                    Invite
+                  <OuiButton @click="invite" :disabled="inviteDisabled || inviting">
+                    {{ inviting ? 'Sending...' : 'Invite' }}
                   </OuiButton>
                 </OuiFlex>
               </OuiGrid>
+            </OuiStack>
+          </template>
+
+          <template #invitations>
+            <OuiStack gap="md">
+              <OuiFlex align="center" justify="between" class="mb-4">
+                <OuiStack gap="xs">
+                  <OuiText size="lg" weight="semibold">My Invitations</OuiText>
+                  <OuiText color="muted" size="sm">
+                    Accept or decline invitations to join organizations.
+                  </OuiText>
+                </OuiStack>
+                <OuiButton
+                  variant="ghost"
+                  size="sm"
+                  @click="refreshInvitations"
+                  :disabled="loadingInvitations"
+                >
+                  <ArrowPathIcon class="h-4 w-4 mr-1" :class="{ 'animate-spin': loadingInvitations }" />
+                  Refresh
+                </OuiButton>
+              </OuiFlex>
+
+              <div v-if="loadingInvitations" class="text-center py-8">
+                <OuiText color="muted">Loading invitations...</OuiText>
+              </div>
+
+              <div v-else-if="myInvitations.length === 0" class="text-center py-8">
+                <OuiText color="muted">You have no pending invitations.</OuiText>
+              </div>
+
+              <OuiStack v-else gap="md">
+                <OuiCard
+                  v-for="invite in myInvitations"
+                  :key="invite.id"
+                  class="border border-border-muted rounded-xl"
+                >
+                  <OuiCardBody>
+                    <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
+                      <OuiStack gap="xs" class="flex-1 min-w-0">
+                        <OuiText size="lg" weight="semibold">{{ invite.organizationName }}</OuiText>
+                        <OuiText color="muted" size="sm">
+                          You've been invited to join as <span class="uppercase font-medium">{{ invite.role }}</span>
+                        </OuiText>
+                        <OuiText color="muted" size="xs">
+                          Invited <OuiDate :value="invite.invitedAt" />
+                        </OuiText>
+                      </OuiStack>
+                      <OuiFlex gap="sm" wrap="wrap">
+                        <OuiButton
+                          variant="ghost"
+                          color="danger"
+                          @click="declineInvite(invite)"
+                          :disabled="processingInvite === invite.id"
+                        >
+                          {{ processingInvite === invite.id && decliningInvite ? 'Declining...' : 'Decline' }}
+                        </OuiButton>
+                        <OuiButton
+                          @click="acceptInvite(invite)"
+                          :disabled="processingInvite === invite.id"
+                        >
+                          {{ processingInvite === invite.id && !decliningInvite ? 'Accepting...' : 'Accept' }}
+                        </OuiButton>
+                      </OuiFlex>
+                    </OuiFlex>
+                  </OuiCardBody>
+                </OuiCard>
+              </OuiStack>
             </OuiStack>
           </template>
 
@@ -1181,6 +1399,13 @@
                 </OuiCard>
               </OuiGrid>
             </OuiStack>
+          </template>
+          <template #audit-logs>
+            <AuditLogs
+              :organization-id="selectedOrg"
+              resource-type="organization"
+              :resource-id="selectedOrg"
+            />
           </template>
         </OuiTabs>
       </OuiCardBody>

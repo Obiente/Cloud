@@ -365,6 +365,7 @@ import {
 import { useConnectClient } from "~/lib/connect-client";
 import ErrorAlert from "~/components/ErrorAlert.vue";
 import { useOrganizationsStore } from "~/stores/organizations";
+import { useOrganizationId } from "~/composables/useOrganizationId";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 import OuiByte from "~/components/oui/Byte.vue";
 import { date } from "@obiente/proto/utils";
@@ -390,17 +391,16 @@ if (route.query.organizationId && typeof route.query.organizationId === "string"
   orgsStore.switchOrganization(route.query.organizationId);
 }
 
-const effectiveOrgId = computed(() => {
-  return orgsStore.currentOrgId || "";
-});
+// Get organizationId using SSR-compatible composable
+const organizationId = useOrganizationId();
 
 // Fetch game servers via Nuxt's useAsyncData
 const { data: gameServersData, refresh: refreshGameServers } = await useAsyncData(
-  () => `game-servers-list-${effectiveOrgId.value}`,
+  () => `game-servers-list-${organizationId.value}`,
   async () => {
     try {
       const response = await client.listGameServers({
-        organizationId: effectiveOrgId.value || undefined,
+        organizationId: organizationId.value || undefined,
       });
       return response.gameServers || [];
     } catch (error) {
@@ -609,7 +609,7 @@ const handleRefresh = async (id: string) => {
 
 // Create game server
 const createGameServer = async () => {
-  if (!newGameServer.value.name || !effectiveOrgId.value) {
+  if (!newGameServer.value.name || !organizationId.value) {
     toast.error("Please fill in all required fields");
     return;
   }
@@ -622,7 +622,7 @@ const createGameServer = async () => {
     const cpuCores = parseFloat(newGameServer.value.cpuCoresStr) || 1;
 
     const request: any = {
-      organizationId: effectiveOrgId.value,
+      organizationId: organizationId.value,
       name: newGameServer.value.name,
       gameType: newGameServer.value.gameType,
       memoryBytes: BigInt(Math.floor(memoryGB * 1024 * 1024 * 1024)),
@@ -683,7 +683,7 @@ const createGameServer = async () => {
 
 // Watch for organization changes
 watch(
-  () => effectiveOrgId.value,
+  () => organizationId.value,
   () => {
     // Reload game servers when organization changes
     refreshGameServers();

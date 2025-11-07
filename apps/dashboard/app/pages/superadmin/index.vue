@@ -59,75 +59,45 @@
             </OuiFlex>
           </OuiCardHeader>
           <OuiCardBody class="p-0">
-            <div class="overflow-x-auto">
-              <table class="min-w-full text-left text-sm">
-                <thead
-                  class="bg-surface-subtle text-text-muted uppercase text-xs tracking-wide"
+            <OuiTable
+              :columns="orgColumns"
+              :rows="tableOrgs"
+              :empty-text="organizations.length === 0 ? 'No organizations available.' : 'No organizations match your search.'"
+            >
+              <template #cell-name="{ row }">
+                <div class="font-medium text-text-primary">
+                  {{ row.name || row.slug || "—" }}
+                </div>
+                <div class="text-xs text-text-muted">
+                  <span v-if="row.slug">{{ row.slug }}</span>
+                  <span v-else class="text-text-tertiary">No slug</span>
+                </div>
+                <div class="text-xs font-mono text-text-tertiary mt-0.5">
+                  {{ row.id }}
+                </div>
+                <div
+                  v-if="row.domain"
+                  class="text-xs text-text-muted mt-0.5"
                 >
-                  <tr>
-                    <th class="px-6 py-3">Name</th>
-                    <th class="px-6 py-3">Plan</th>
-                    <th class="px-6 py-3">Members</th>
-                    <th class="px-6 py-3">Invites</th>
-                    <th class="px-6 py-3">Deployments</th>
-                    <th class="px-6 py-3">Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="org in filteredOrganizations"
-                    :key="org.id"
-                    class="border-t border-border-muted/60"
-                  >
-                    <td class="px-6 py-3">
-                      <div class="font-medium text-text-primary">
-                        {{ org.name || org.slug || "—" }}
-                      </div>
-                      <div class="text-xs text-text-muted">
-                        <span v-if="org.slug">{{ org.slug }}</span>
-                        <span v-else class="text-text-tertiary">No slug</span>
-                      </div>
-                      <div class="text-xs font-mono text-text-tertiary mt-0.5">
-                        {{ org.id }}
-                      </div>
-                      <div
-                        v-if="org.domain"
-                        class="text-xs text-text-muted mt-0.5"
-                      >
-                        {{ org.domain }}
-                      </div>
-                    </td>
-                    <td class="px-6 py-3 text-text-secondary">
-                      {{ prettyPlan(org.plan) }}
-                    </td>
-                    <td class="px-6 py-3">
-                      {{ formatNumber(org.memberCount) }}
-                    </td>
-                    <td class="px-6 py-3">
-                      {{ formatNumber(org.inviteCount) }}
-                    </td>
-                    <td class="px-6 py-3">
-                      {{ formatNumber(org.deploymentCount) }}
-                    </td>
-                    <td class="px-6 py-3 text-text-secondary">
-                      {{ formatDate(org.createdAt) }}
-                    </td>
-                  </tr>
-                  <tr v-if="!filteredOrganizations.length">
-                    <td
-                      colspan="6"
-                      class="px-6 py-6 text-center text-text-muted"
-                    >
-                      {{
-                        organizations.length === 0
-                          ? "No organizations available."
-                          : "No organizations match your search."
-                      }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                  {{ row.domain }}
+                </div>
+              </template>
+              <template #cell-plan="{ row }">
+                {{ prettyPlan(row.plan) }}
+              </template>
+              <template #cell-members="{ value }">
+                {{ formatNumber(value) }}
+              </template>
+              <template #cell-invites="{ value }">
+                {{ formatNumber(value) }}
+              </template>
+              <template #cell-deployments="{ value }">
+                {{ formatNumber(value) }}
+              </template>
+              <template #cell-created="{ value }">
+                <OuiDate :value="value" />
+              </template>
+            </OuiTable>
           </OuiCardBody>
         </OuiCard>
 
@@ -158,61 +128,33 @@
               </OuiFlex>
             </OuiCardHeader>
             <OuiCardBody class="p-0">
-              <div class="overflow-x-auto">
-                <table class="min-w-full text-left text-sm">
-                  <thead
-                    class="bg-surface-subtle text-text-muted uppercase text-xs tracking-wide"
+              <OuiTable
+                :columns="inviteColumns"
+                :rows="tableInvites"
+                :empty-text="invites.length === 0 ? 'No pending invitations.' : 'No invites match your search.'"
+              >
+                <template #cell-email="{ row }">
+                  <div class="text-text-primary">{{ row.email }}</div>
+                  <div
+                    class="text-xs font-mono text-text-tertiary mt-0.5"
                   >
-                    <tr>
-                      <th class="px-6 py-3">Email</th>
-                      <th class="px-6 py-3">Organization</th>
-                      <th class="px-6 py-3">Role</th>
-                      <th class="px-6 py-3">Invited</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="invite in filteredInvites"
-                      :key="invite.id"
-                      class="border-t border-border-muted/60"
-                    >
-                      <td class="px-6 py-3">
-                        <div class="text-text-primary">{{ invite.email }}</div>
-                        <div
-                          class="text-xs font-mono text-text-tertiary mt-0.5"
-                        >
-                          {{ invite.id }}
-                        </div>
-                      </td>
-                      <td class="px-6 py-3">
-                        <div class="text-text-secondary font-mono text-sm">
-                          {{ invite.organizationId }}
-                        </div>
-                      </td>
-                      <td
-                        class="px-6 py-3 text-text-secondary uppercase tracking-wide text-xs"
-                      >
-                        {{ invite.role }}
-                      </td>
-                      <td class="px-6 py-3 text-text-secondary">
-                        {{ formatDate(invite.invitedAt) }}
-                      </td>
-                    </tr>
-                    <tr v-if="!filteredInvites.length">
-                      <td
-                        colspan="4"
-                        class="px-6 py-6 text-center text-text-muted"
-                      >
-                        {{
-                          invites.length === 0
-                            ? "No pending invitations."
-                            : "No invites match your search."
-                        }}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                    {{ row.id }}
+                  </div>
+                </template>
+                <template #cell-organization="{ value }">
+                  <div class="text-text-secondary font-mono text-sm">
+                    {{ value }}
+                  </div>
+                </template>
+                <template #cell-role="{ value }">
+                  <span class="text-text-secondary uppercase tracking-wide text-xs">
+                    {{ value }}
+                  </span>
+                </template>
+                <template #cell-invited="{ value }">
+                  <OuiDate :value="value" />
+                </template>
+              </OuiTable>
             </OuiCardBody>
           </OuiCard>
 
@@ -242,79 +184,46 @@
               </OuiFlex>
             </OuiCardHeader>
             <OuiCardBody class="p-0">
-              <div class="overflow-x-auto">
-                <table class="min-w-full text-left text-sm">
-                  <thead
-                    class="bg-surface-subtle text-text-muted uppercase text-xs tracking-wide"
+              <OuiTable
+                :columns="deploymentColumns"
+                :rows="tableDeployments"
+                :empty-text="deployments.length === 0 ? 'No deployments found.' : 'No deployments match your search.'"
+              >
+                <template #cell-deployment="{ row }">
+                  <div class="font-medium text-text-primary">
+                    {{ row.name }}
+                  </div>
+                  <div
+                    v-if="row.domain"
+                    class="text-xs text-text-muted"
                   >
-                    <tr>
-                      <th class="px-6 py-3">Deployment</th>
-                      <th class="px-6 py-3">Organization</th>
-                      <th class="px-6 py-3">Environment</th>
-                      <th class="px-6 py-3">Status</th>
-                      <th class="px-6 py-3">Last Deployed</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="deployment in filteredDeployments"
-                      :key="deployment.id"
-                      class="border-t border-border-muted/60"
-                    >
-                      <td class="px-6 py-3">
-                        <div class="font-medium text-text-primary">
-                          {{ deployment.name }}
-                        </div>
-                        <div
-                          v-if="deployment.domain"
-                          class="text-xs text-text-muted"
-                        >
-                          {{ deployment.domain }}
-                        </div>
-                        <div
-                          class="text-xs font-mono text-text-tertiary mt-0.5"
-                        >
-                          {{ deployment.id }}
-                        </div>
-                      </td>
-                      <td class="px-6 py-3">
-                        <div class="text-text-secondary font-mono text-sm">
-                          {{ deployment.organizationId }}
-                        </div>
-                      </td>
-                      <td
-                        class="px-6 py-3 text-text-secondary uppercase text-xs"
-                      >
-                        {{ formatEnvironment(deployment.environment) }}
-                      </td>
-                      <td
-                        class="px-6 py-3 text-text-secondary uppercase text-xs"
-                      >
-                        {{ formatStatus(deployment.status) }}
-                      </td>
-                      <td class="px-6 py-3 text-text-secondary">
-                        {{
-                          formatDate(
-                            deployment.lastDeployedAt || deployment.createdAt
-                          )
-                        }}
-                      </td>
-                    </tr>
-                    <tr v-if="!filteredDeployments.length">
-                      <td
-                        colspan="5"
-                        class="px-6 py-6 text-center text-text-muted"
-                      >
-                        {{
-                          deployments.length === 0
-                            ? "No deployments found."
-                            : "No deployments match your search."
-                        }}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                    {{ row.domain }}
+                  </div>
+                  <div
+                    class="text-xs font-mono text-text-tertiary mt-0.5"
+                  >
+                    {{ row.id }}
+                  </div>
+                </template>
+                <template #cell-organization="{ value }">
+                  <div class="text-text-secondary font-mono text-sm">
+                    {{ value }}
+                  </div>
+                </template>
+                <template #cell-environment="{ row }">
+                  <span class="text-text-secondary uppercase text-xs">
+                    {{ formatEnvironment(row.environment) }}
+                  </span>
+                </template>
+                <template #cell-status="{ row }">
+                  <span class="text-text-secondary uppercase text-xs">
+                    {{ formatStatus(row.status) }}
+                  </span>
+                </template>
+                <template #cell-lastDeployed="{ row }">
+                  <OuiDate :value="row.lastDeployedAt || row.createdAt" />
+                </template>
+              </OuiTable>
             </OuiCardBody>
           </OuiCard>
         </OuiGrid>
@@ -343,72 +252,41 @@
             </OuiFlex>
           </OuiCardHeader>
           <OuiCardBody class="p-0">
-            <div class="overflow-x-auto">
-              <table class="min-w-full text-left text-sm">
-                <thead
-                  class="bg-surface-subtle text-text-muted uppercase text-xs tracking-wide"
-                >
-                  <tr>
-                    <th class="px-6 py-3">Organization</th>
-                    <th class="px-6 py-3">CPU (core-s)</th>
-                    <th class="px-6 py-3">Memory (byte-s)</th>
-                    <th class="px-6 py-3">Bandwidth RX</th>
-                    <th class="px-6 py-3">Bandwidth TX</th>
-                    <th class="px-6 py-3">Storage</th>
-                    <th class="px-6 py-3">Peak Deployments</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="usage in filteredUsages"
-                    :key="`${usage.organizationId}-${usage.month}`"
-                    class="border-t border-border-muted/60"
-                  >
-                    <td class="px-6 py-3">
-                      <div class="font-medium text-text-primary">
-                        {{ usage.organizationName || "—" }}
-                      </div>
-                      <div class="text-xs font-mono text-text-tertiary mt-0.5">
-                        {{ usage.organizationId }}
-                      </div>
-                      <div class="text-xs text-text-muted mt-0.5">
-                        {{ usage.month }}
-                      </div>
-                    </td>
-                    <td class="px-6 py-3">
-                      {{ formatNumber(usage.cpuCoreSeconds) }}
-                    </td>
-                    <td class="px-6 py-3">
-                      {{ formatNumber(usage.memoryByteSeconds) }}
-                    </td>
-                    <td class="px-6 py-3">
-                      {{ formatBytes(usage.bandwidthRxBytes) }}
-                    </td>
-                    <td class="px-6 py-3">
-                      {{ formatBytes(usage.bandwidthTxBytes) }}
-                    </td>
-                    <td class="px-6 py-3">
-                      {{ formatBytes(usage.storageBytes) }}
-                    </td>
-                    <td class="px-6 py-3">
-                      {{ formatNumber(usage.deploymentsActivePeak) }}
-                    </td>
-                  </tr>
-                  <tr v-if="!filteredUsages.length">
-                    <td
-                      colspan="7"
-                      class="px-6 py-6 text-center text-text-muted"
-                    >
-                      {{
-                        usages.length === 0
-                          ? "No usage records for the current month."
-                          : "No usage records match your search."
-                      }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <OuiTable
+              :columns="usageColumns"
+              :rows="tableUsages"
+              :empty-text="usages.length === 0 ? 'No usage records for the current month.' : 'No usage records match your search.'"
+            >
+              <template #cell-organization="{ row }">
+                <div class="font-medium text-text-primary">
+                  {{ row.organizationName || "—" }}
+                </div>
+                <div class="text-xs font-mono text-text-tertiary mt-0.5">
+                  {{ row.organizationId }}
+                </div>
+                <div class="text-xs text-text-muted mt-0.5">
+                  {{ row.month }}
+                </div>
+              </template>
+              <template #cell-cpu="{ value }">
+                {{ formatNumber(value) }}
+              </template>
+              <template #cell-memory="{ value }">
+                {{ formatNumber(value) }}
+              </template>
+              <template #cell-bandwidthRx="{ value }">
+                {{ formatBytes(value) }}
+              </template>
+              <template #cell-bandwidthTx="{ value }">
+                {{ formatBytes(value) }}
+              </template>
+              <template #cell-storage="{ value }">
+                {{ formatBytes(value) }}
+              </template>
+              <template #cell-peakDeployments="{ value }">
+                {{ formatNumber(value) }}
+              </template>
+            </OuiTable>
           </OuiCardBody>
         </OuiCard>
       </OuiStack>
@@ -507,11 +385,51 @@
     });
   });
 
+  const { formatBytes: formatBytesUtil } = useUtils();
   const numberFormatter = new Intl.NumberFormat();
   const dateFormatter = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: undefined,
   });
+
+  const orgColumns = [
+    { key: "name", label: "Name", defaultWidth: 250, minWidth: 200 },
+    { key: "plan", label: "Plan", defaultWidth: 120, minWidth: 100 },
+    { key: "members", label: "Members", defaultWidth: 100, minWidth: 80 },
+    { key: "invites", label: "Invites", defaultWidth: 100, minWidth: 80 },
+    { key: "deployments", label: "Deployments", defaultWidth: 120, minWidth: 100 },
+    { key: "created", label: "Created", defaultWidth: 150, minWidth: 120 },
+  ];
+
+  const inviteColumns = [
+    { key: "email", label: "Email", defaultWidth: 200, minWidth: 150 },
+    { key: "organization", label: "Organization", defaultWidth: 200, minWidth: 150 },
+    { key: "role", label: "Role", defaultWidth: 120, minWidth: 100 },
+    { key: "invited", label: "Invited", defaultWidth: 150, minWidth: 120 },
+  ];
+
+  const deploymentColumns = [
+    { key: "deployment", label: "Deployment", defaultWidth: 250, minWidth: 200 },
+    { key: "organization", label: "Organization", defaultWidth: 200, minWidth: 150 },
+    { key: "environment", label: "Environment", defaultWidth: 120, minWidth: 100 },
+    { key: "status", label: "Status", defaultWidth: 120, minWidth: 100 },
+    { key: "lastDeployed", label: "Last Deployed", defaultWidth: 150, minWidth: 120 },
+  ];
+
+  const usageColumns = [
+    { key: "organization", label: "Organization", defaultWidth: 200, minWidth: 150 },
+    { key: "cpu", label: "CPU (core-s)", defaultWidth: 120, minWidth: 100 },
+    { key: "memory", label: "Memory (byte-s)", defaultWidth: 150, minWidth: 120 },
+    { key: "bandwidthRx", label: "Bandwidth RX", defaultWidth: 140, minWidth: 110 },
+    { key: "bandwidthTx", label: "Bandwidth TX", defaultWidth: 140, minWidth: 110 },
+    { key: "storage", label: "Storage", defaultWidth: 120, minWidth: 100 },
+    { key: "peakDeployments", label: "Peak Deployments", defaultWidth: 140, minWidth: 120 },
+  ];
+
+  const tableOrgs = computed(() => filteredOrganizations.value);
+  const tableInvites = computed(() => filteredInvites.value);
+  const tableDeployments = computed(() => filteredDeployments.value);
+  const tableUsages = computed(() => filteredUsages.value);
 
   const metrics = computed(() => {
     const counts = overview.value?.counts;
@@ -556,16 +474,7 @@
   }
 
   function formatBytes(value?: number | bigint | null) {
-    if (value === undefined || value === null) return "0 B";
-    let bytes = typeof value === "bigint" ? Number(value) : value;
-    if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-    const units = ["B", "KB", "MB", "GB", "TB", "PB"];
-    const idx = Math.min(
-      Math.floor(Math.log(bytes) / Math.log(1024)),
-      units.length - 1
-    );
-    const sized = bytes / Math.pow(1024, idx);
-    return `${sized.toFixed(idx === 0 ? 0 : 1)} ${units[idx]}`;
+    return formatBytesUtil(value);
   }
 
   function prettyPlan(plan?: string) {

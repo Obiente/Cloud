@@ -2,10 +2,17 @@
   <OuiStack gap="xl">
     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
       <OuiStack gap="xs">
-        <OuiText tag="h1" size="3xl" weight="extrabold">DNS Management</OuiText>
+        <OuiText tag="h1" size="3xl" weight="extrabold">
+          {{ hasDelegatedDNS ? "Delegated DNS Management" : "DNS Management" }}
+        </OuiText>
         <OuiText color="muted" size="sm">
-          Query DNS records and view DNS configuration for deployments and game
-          servers.
+          <span v-if="hasDelegatedDNS">
+            View and manage your delegated DNS records. Your organization is using DNS delegation to push DNS records to the production DNS server.
+          </span>
+          <span v-else>
+            Query DNS records and view DNS configuration for deployments and game
+            servers.
+          </span>
         </OuiText>
       </OuiStack>
       <OuiButton
@@ -24,6 +31,96 @@
       </OuiButton>
     </OuiFlex>
 
+    <!-- Delegated DNS View (for users with delegated DNS) -->
+    <template v-if="hasDelegatedDNS">
+      <OuiAlert variant="info" size="sm">
+        <OuiText size="xs">
+          <strong>Delegated DNS Active:</strong> Your organization ({{ delegatedDNSInfo?.organizationId }}) is using DNS delegation. 
+          You can view your delegated DNS records below.
+        </OuiText>
+      </OuiAlert>
+
+      <!-- Delegated DNS Records List (simplified view) -->
+      <OuiCard class="border border-border-muted rounded-xl overflow-hidden">
+        <OuiCardHeader class="px-6 py-4 border-b border-border-muted">
+          <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
+            <OuiStack gap="xs">
+              <OuiText tag="h2" size="xl" weight="bold">Your Delegated DNS Records</OuiText>
+              <OuiText color="muted" size="sm">
+                {{ filteredDelegatedRecords.length }} of {{ delegatedDNSRecords.length }} records
+              </OuiText>
+            </OuiStack>
+            <OuiFlex gap="sm" wrap="wrap">
+              <div class="w-72 max-w-full">
+                <OuiInput
+                  v-model="delegatedRecordsSearch"
+                  type="search"
+                  placeholder="Search by domain, record type..."
+                  clearable
+                  size="sm"
+                />
+              </div>
+              <div class="min-w-[160px]">
+                <OuiSelect
+                  v-model="delegatedRecordsRecordTypeFilter"
+                  :items="recordTypeFilterOptions"
+                  placeholder="Record Type"
+                  clearable
+                  size="sm"
+                />
+              </div>
+            </OuiFlex>
+          </OuiFlex>
+        </OuiCardHeader>
+        <OuiCardBody class="p-0">
+          <OuiTable
+            :columns="delegatedTableColumns"
+            :rows="delegatedTableRows"
+            :empty-text="
+              delegatedRecordsLoading
+                ? 'Loading delegated DNS records…'
+                : 'No delegated DNS records found.'
+            "
+          >
+            <template #cell-recordType="{ value }">
+              <OuiBadge
+                :variant="value === 'SRV' ? 'primary' : 'secondary'"
+                size="sm"
+              >
+                {{ value }}
+              </OuiBadge>
+            </template>
+            <template #cell-domain="{ value }">
+              <div class="font-mono text-sm">{{ value }}</div>
+            </template>
+            <template #cell-records="{ value }">
+              <div v-if="value && value.length > 0" class="flex flex-wrap gap-1">
+                <span
+                  v-for="record in value"
+                  :key="record"
+                  class="font-mono text-xs px-2 py-0.5 bg-surface-subtle rounded border border-border-muted"
+                >
+                  {{ record }}
+                </span>
+              </div>
+              <span v-else class="text-text-tertiary text-sm">—</span>
+            </template>
+            <template #cell-ttl="{ value }">
+              <OuiText size="sm">{{ value }}s</OuiText>
+            </template>
+            <template #cell-expiresAt="{ value }">
+              <OuiText size="xs" color="muted">{{ formatDate(value) }}</OuiText>
+            </template>
+            <template #cell-lastUpdated="{ value }">
+              <OuiText size="xs" color="muted">{{ formatDate(value) }}</OuiText>
+            </template>
+          </OuiTable>
+        </OuiCardBody>
+      </OuiCard>
+    </template>
+
+    <!-- Full DNS Management View (for superadmins or users without delegated DNS) -->
+    <template v-else>
     <!-- DNS Query Tool -->
     <OuiCard class="border border-border-muted rounded-xl">
       <OuiCardHeader class="px-6 py-4 border-b border-border-muted">
@@ -229,7 +326,7 @@
           <OuiText size="sm" color="muted">
             Create API keys for DNS delegation. These keys allow self-hosted
             Obiente Cloud instances to push DNS records to the production DNS
-            server. Superadmins can create keys for any organization without
+            server. The Obiente Cloud Team can create keys for any organization without
             requiring a subscription.
           </OuiText>
 
@@ -442,6 +539,109 @@
       </OuiCardBody>
     </OuiCard>
 
+    <!-- Delegated DNS Records List (only for superadmins without delegated DNS) -->
+    <OuiCard v-if="!hasDelegatedDNS" class="border border-border-muted rounded-xl overflow-hidden">
+      <OuiCardHeader class="px-6 py-4 border-b border-border-muted">
+        <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
+          <OuiStack gap="xs">
+            <OuiText tag="h2" size="xl" weight="bold">Delegated DNS Records</OuiText>
+            <OuiText color="muted" size="sm">
+              {{ filteredDelegatedRecords.length }} of {{ delegatedDNSRecords.length }} records
+            </OuiText>
+          </OuiStack>
+          <OuiFlex gap="sm" wrap="wrap">
+            <div class="w-72 max-w-full">
+              <OuiInput
+                v-model="delegatedRecordsSearch"
+                type="search"
+                placeholder="Search by domain, organization ID, API key ID..."
+                clearable
+                size="sm"
+              />
+            </div>
+            <div class="min-w-[160px]">
+              <OuiSelect
+                v-model="delegatedRecordsRecordTypeFilter"
+                :items="recordTypeFilterOptions"
+                placeholder="Record Type"
+                clearable
+                size="sm"
+              />
+            </div>
+            <div class="min-w-[160px]">
+              <OuiSelect
+                v-model="delegatedRecordsOrgFilter"
+                :items="delegatedOrgFilterOptions"
+                placeholder="Organization"
+                clearable
+                size="sm"
+              />
+            </div>
+            <div class="min-w-[160px]">
+              <OuiSelect
+                v-model="delegatedRecordsAPIKeyFilter"
+                :items="delegatedAPIKeyFilterOptions"
+                placeholder="API Key"
+                clearable
+                size="sm"
+              />
+            </div>
+          </OuiFlex>
+        </OuiFlex>
+      </OuiCardHeader>
+      <OuiCardBody class="p-0">
+        <OuiTable
+          :columns="delegatedTableColumns"
+          :rows="delegatedTableRows"
+          :empty-text="
+            delegatedRecordsLoading
+              ? 'Loading delegated DNS records…'
+              : 'No delegated DNS records match your filters.'
+          "
+        >
+          <template #cell-recordType="{ value }">
+            <OuiBadge
+              :variant="value === 'SRV' ? 'primary' : 'secondary'"
+              size="sm"
+            >
+              {{ value }}
+            </OuiBadge>
+          </template>
+          <template #cell-domain="{ value }">
+            <div class="font-mono text-sm">{{ value }}</div>
+          </template>
+          <template #cell-records="{ value }">
+            <div v-if="value && value.length > 0" class="flex flex-wrap gap-1">
+              <span
+                v-for="record in value"
+                :key="record"
+                class="font-mono text-xs px-2 py-0.5 bg-surface-subtle rounded border border-border-muted"
+              >
+                {{ record }}
+              </span>
+            </div>
+            <span v-else class="text-text-tertiary text-sm">—</span>
+          </template>
+          <template #cell-organizationId="{ value }">
+            <code class="text-xs">{{ value || '—' }}</code>
+          </template>
+          <template #cell-apiKeyId="{ value }">
+            <code class="text-xs">{{ value || '—' }}</code>
+          </template>
+          <template #cell-sourceApi="{ value }">
+            <code class="text-xs">{{ value || '—' }}</code>
+          </template>
+          <template #cell-expiresAt="{ value }">
+            <OuiText size="xs" color="muted">{{ formatDate(value) }}</OuiText>
+          </template>
+          <template #cell-lastUpdated="{ value }">
+            <OuiText size="xs" color="muted">{{ formatDate(value) }}</OuiText>
+          </template>
+        </OuiTable>
+      </OuiCardBody>
+    </OuiCard>
+    </template>
+
     <!-- Create API Key Dialog -->
     <OuiDialog
       v-model:open="createAPIKeyDialogOpen"
@@ -532,6 +732,9 @@
   import { useConnectClient } from "~/lib/connect-client";
   import { useToast } from "~/composables/useToast";
 
+  const config = useConfig();
+  const isSelfHosted = computed(() => config.selfHosted.value === true);
+
   const client = useConnectClient(SuperadminService);
   const { toast } = useToast();
 
@@ -551,6 +754,16 @@
 
   const dnsRecords = ref<any[]>([]);
   const dnsConfig = ref<any>(null);
+
+  // Delegated DNS Records
+  const delegatedRecordsLoading = ref(false);
+  const delegatedRecordsSearch = ref("");
+  const delegatedRecordsRecordTypeFilter = ref<string | null>(null);
+  const delegatedRecordsOrgFilter = ref<string | null>(null);
+  const delegatedRecordsAPIKeyFilter = ref<string | null>(null);
+  const delegatedDNSRecords = ref<any[]>([]);
+  const hasDelegatedDNS = ref(false);
+  const delegatedDNSInfo = ref<any>(null);
 
   // API Key management
   const createAPIKeyDialogOpen = ref(false);
@@ -601,6 +814,92 @@
     return Array.from(orgs)
       .sort()
       .map((org) => ({ label: org, value: org }));
+  });
+
+  const delegatedOrgFilterOptions = computed(() => {
+    const orgs = new Set<string>();
+    delegatedDNSRecords.value.forEach((record) => {
+      if (record.organizationId) orgs.add(record.organizationId);
+    });
+    return Array.from(orgs)
+      .sort()
+      .map((org) => ({ label: org, value: org }));
+  });
+
+  const delegatedAPIKeyFilterOptions = computed(() => {
+    const keys = new Set<string>();
+    delegatedDNSRecords.value.forEach((record) => {
+      if (record.apiKeyId) keys.add(record.apiKeyId);
+    });
+    return Array.from(keys)
+      .sort()
+      .map((key) => ({ label: key.substring(0, 8) + "...", value: key }));
+  });
+
+  const filteredDelegatedRecords = computed(() => {
+    const term = delegatedRecordsSearch.value.trim().toLowerCase();
+    const recordTypeFilter = delegatedRecordsRecordTypeFilter.value;
+    const orgFilter = delegatedRecordsOrgFilter.value;
+    const apiKeyFilter = delegatedRecordsAPIKeyFilter.value;
+
+    return delegatedDNSRecords.value.filter((record) => {
+      if (recordTypeFilter && record.recordType !== recordTypeFilter)
+        return false;
+      if (orgFilter && record.organizationId !== orgFilter) return false;
+      if (apiKeyFilter && record.apiKeyId !== apiKeyFilter) return false;
+
+      if (!term) return true;
+
+      const searchable = [
+        record.domain,
+        record.organizationId,
+        record.apiKeyId,
+        record.sourceApi,
+        record.recordType,
+        ...(record.records || []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchable.includes(term);
+    });
+  });
+
+  const delegatedTableColumns = computed(() => {
+    // Simplified columns for delegated DNS users
+    if (hasDelegatedDNS.value) {
+      return [
+        { key: "recordType", label: "Type", defaultWidth: 80, minWidth: 60 },
+        { key: "domain", label: "Domain", defaultWidth: 300, minWidth: 200 },
+        { key: "records", label: "Records", defaultWidth: 250, minWidth: 200 },
+        { key: "ttl", label: "TTL", defaultWidth: 80, minWidth: 60 },
+        { key: "expiresAt", label: "Expires At", defaultWidth: 180, minWidth: 150 },
+        { key: "lastUpdated", label: "Last Updated", defaultWidth: 180, minWidth: 150 },
+      ];
+    }
+    // Full columns for superadmins
+    return [
+      { key: "recordType", label: "Type", defaultWidth: 80, minWidth: 60 },
+      { key: "domain", label: "Domain", defaultWidth: 300, minWidth: 200 },
+      { key: "records", label: "Records", defaultWidth: 250, minWidth: 200 },
+      { key: "organizationId", label: "Organization", defaultWidth: 180, minWidth: 150 },
+      { key: "apiKeyId", label: "API Key ID", defaultWidth: 150, minWidth: 120 },
+      { key: "sourceApi", label: "Source API", defaultWidth: 200, minWidth: 150 },
+      { key: "ttl", label: "TTL", defaultWidth: 80, minWidth: 60 },
+      { key: "expiresAt", label: "Expires At", defaultWidth: 180, minWidth: 150 },
+      { key: "lastUpdated", label: "Last Updated", defaultWidth: 180, minWidth: 150 },
+    ];
+  });
+
+  const delegatedTableRows = computed(() => {
+    return filteredDelegatedRecords.value.map((record) => ({
+      ...record,
+      organizationId: record.organizationId || "—",
+      apiKeyId: record.apiKeyId || "—",
+      sourceApi: record.sourceApi || "—",
+      recordType: record.recordType || "A",
+    }));
   });
 
   const filteredRecords = computed(() => {
@@ -805,8 +1104,43 @@
     }
   }
 
+  async function checkHasDelegatedDNS() {
+    try {
+      const response = await client.hasDelegatedDNS({});
+      hasDelegatedDNS.value = response.hasDelegatedDns || false;
+      if (response.hasDelegatedDns) {
+        delegatedDNSInfo.value = {
+          organizationId: response.organizationId,
+          apiKeyId: response.apiKeyId,
+        };
+        // Auto-filter to user's organization
+        delegatedRecordsOrgFilter.value = response.organizationId;
+      }
+    } catch (err) {
+      console.error("Failed to check delegated DNS status:", err);
+      hasDelegatedDNS.value = false;
+    }
+  }
+
+  async function loadDelegatedDNSRecords() {
+    delegatedRecordsLoading.value = true;
+    try {
+      const response = await client.listDelegatedDNSRecords({
+        organizationId: delegatedRecordsOrgFilter.value || undefined,
+        apiKeyId: delegatedRecordsAPIKeyFilter.value || undefined,
+        recordType: delegatedRecordsRecordTypeFilter.value || undefined,
+      });
+      delegatedDNSRecords.value = response.records || [];
+    } catch (err) {
+      console.error("Failed to load delegated DNS records:", err);
+      delegatedDNSRecords.value = [];
+    } finally {
+      delegatedRecordsLoading.value = false;
+    }
+  }
+
   async function refresh() {
-    await Promise.all([loadDNSRecords(), loadDNSConfig()]);
+    await Promise.all([loadDNSRecords(), loadDNSConfig(), loadDelegatedDNSRecords()]);
   }
 
   async function loadAPIKeys() {
@@ -1015,13 +1349,29 @@
     toast.success("API key copied to clipboard");
   }
 
-  onMounted(() => {
+  onMounted(async () => {
+    await checkHasDelegatedDNS();
     refresh();
     loadAPIKeys();
+    if (hasDelegatedDNS.value) {
+      loadDelegatedDNSRecords();
+    }
   });
 
   // Watch for filter changes to reload records
   watch(recordsRecordTypeFilter, () => {
     loadDNSRecords();
   });
+
+  // Watch for delegated DNS records filter changes
+  watch(
+    [
+      delegatedRecordsRecordTypeFilter,
+      delegatedRecordsOrgFilter,
+      delegatedRecordsAPIKeyFilter,
+    ],
+    () => {
+      loadDelegatedDNSRecords();
+    }
+  );
 </script>

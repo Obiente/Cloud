@@ -317,7 +317,8 @@
                 <OuiBox
                   p="md"
                   rounded="lg"
-                  class="bg-success/10 ring-1 ring-success/20"
+                  class="bg-success/10 ring-1 ring-success/20 cursor-pointer hover:bg-success/15 hover:ring-success/30 transition-all"
+                  @click="navigateTo(runningDeploymentsUrl)"
                 >
                   <OuiStack align="center" gap="xs">
                     <OuiText size="2xl" weight="bold" class="text-success">
@@ -329,7 +330,8 @@
                 <OuiBox
                   p="md"
                   rounded="lg"
-                  class="bg-warning/10 ring-1 ring-warning/20"
+                  class="bg-warning/10 ring-1 ring-warning/20 cursor-pointer hover:bg-warning/15 hover:ring-warning/30 transition-all"
+                  @click="navigateTo(buildingDeploymentsUrl)"
                 >
                   <OuiStack align="center" gap="xs">
                     <OuiText size="2xl" weight="bold" class="text-warning">
@@ -341,7 +343,8 @@
                 <OuiBox
                   p="md"
                   rounded="lg"
-                  class="bg-secondary/10 ring-1 ring-secondary/20"
+                  class="bg-secondary/10 ring-1 ring-secondary/20 cursor-pointer hover:bg-secondary/15 hover:ring-secondary/30 transition-all"
+                  @click="navigateTo(stoppedDeploymentsUrl)"
                 >
                   <OuiStack align="center" gap="xs">
                     <OuiText size="2xl" weight="bold" class="text-secondary">
@@ -353,7 +356,8 @@
                 <OuiBox
                   p="md"
                   rounded="lg"
-                  class="bg-danger/10 ring-1 ring-danger/20"
+                  class="bg-danger/10 ring-1 ring-danger/20 cursor-pointer hover:bg-danger/15 hover:ring-danger/30 transition-all"
+                  @click="navigateTo(errorDeploymentsUrl)"
                 >
                   <OuiStack align="center" gap="xs">
                     <OuiText size="2xl" weight="bold" class="text-danger">
@@ -542,6 +546,9 @@ definePageMeta({
 // Live stats via ConnectRPC
 import { useConnectClient } from "~/lib/connect-client";
 import { useOrganizationsStore } from "~/stores/organizations";
+import { useAuth } from "~/composables/useAuth";
+import { useOrganizationId } from "~/composables/useOrganizationId";
+import type { UserSession } from "@obiente/types";
 import { 
   DeploymentService, 
   DeploymentStatus, 
@@ -550,6 +557,7 @@ import {
   OrganizationService,
 } from "@obiente/proto";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
+import { composeQueryUrl } from "~/utils/queryParams";
 
 type DashboardData = {
   stats: {
@@ -575,15 +583,20 @@ type DashboardData = {
 const deploymentClient = useConnectClient(DeploymentService);
 const orgClient = useConnectClient(OrganizationService);
 const orgsStore = useOrganizationsStore();
-const organizationId = computed(() => orgsStore.currentOrgId || "");
+const auth = useAuth();
 
 const toMs = (s: number | bigint | undefined | null) => Number(s ?? 0) * 1000;
 
+// Get organizationId using SSR-compatible composable
+const organizationId = useOrganizationId();
+
 const { data, status, refresh: refreshDashboard } = await useAsyncData<DashboardData>(
-  () => `dashboard-${organizationId.value}`,
+  () => `dashboard-data-${organizationId.value}`,
   async () => {
+    // Use organizationId from composable (SSR-compatible)
+    const orgId = organizationId.value;
     // Fetch deployments for selected org (server will resolve if empty)
-    const res = await deploymentClient.listDeployments({ organizationId: organizationId.value });
+    const res = await deploymentClient.listDeployments({ organizationId: orgId });
     const deployments = res.deployments ?? [];
 
     // Status breakdown
@@ -663,31 +676,34 @@ const { data, status, refresh: refreshDashboard } = await useAsyncData<Dashboard
     const activity: Array<{ id: string; message: string; timestamp: string }> = [];
 
     return { stats, recentDeployments, activity };
-  },
-  { watch: [organizationId] }
+  }
 );
 
 // Fetch organization usage data
 const { data: usageData, status: usageStatus, refresh: refreshUsage } = await useAsyncData(
-  () => `org-usage-${organizationId.value}`,
+  () => `org-usage-data-${organizationId.value}`,
   async () => {
-    if (!organizationId.value) return null;
+    // Use organizationId from composable (SSR-compatible)
+    const orgId = organizationId.value;
+    // Try to fetch even if orgId is empty (server will resolve if empty)
     try {
       const res = await orgClient.getUsage({
-        organizationId: organizationId.value,
+        organizationId: orgId || undefined,
       });
       return res;
     } catch (err) {
       console.error("Failed to fetch usage:", err);
       return null;
     }
-  },
-  { watch: [organizationId], server: false }
+  }
 );
 
-const isLoadingUsage = computed(() => usageStatus.value === "pending" || usageStatus.value === "idle");
+// Only show loading if data is not available and status is pending/idle
+const isLoadingUsage = computed(() => 
+  !usageData.value && (usageStatus.value === "pending" || usageStatus.value === "idle")
+);
 const isLoading = computed(
-  () => status.value === "pending" || status.value === "idle"
+  () => !data.value && (status.value === "pending" || status.value === "idle")
 );
 const stats = computed(
   () =>
@@ -891,6 +907,20 @@ const attentionDeployments = computed(() =>
   recentDeployments.value
     .filter((d) => ["ERROR", "STOPPED", "BUILDING"].includes(d.status))
     .slice(0, 4)
+);
+
+// Deployment URLs with status filters
+const runningDeploymentsUrl = computed(() =>
+  composeQueryUrl("/deployments", { status: String(DeploymentStatus.RUNNING) })
+);
+const buildingDeploymentsUrl = computed(() =>
+  composeQueryUrl("/deployments", { status: String(DeploymentStatus.BUILDING) })
+);
+const stoppedDeploymentsUrl = computed(() =>
+  composeQueryUrl("/deployments", { status: String(DeploymentStatus.STOPPED) })
+);
+const errorDeploymentsUrl = computed(() =>
+  composeQueryUrl("/deployments", { status: String(DeploymentStatus.FAILED) })
 );
 
 // Auto-refresh using useAsyncData refresh

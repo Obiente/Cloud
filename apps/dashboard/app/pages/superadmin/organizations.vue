@@ -65,7 +65,7 @@
             <span class="uppercase text-xs">{{ value || "—" }}</span>
           </template>
           <template #cell-credits="{ value, row }">
-            <span class="font-mono">{{ formatCurrency(value) }}</span>
+            <span class="font-mono"><OuiCurrency :value="value" /></span>
           </template>
           <template #cell-actions="{ row }">
             <div class="text-right">
@@ -94,7 +94,7 @@
       <OuiStack gap="lg">
         <OuiStack gap="xs">
           <OuiText size="sm" color="muted">
-            Current balance: {{ formatCurrency(manageCreditsCurrentBalance) }}
+            Current balance: <OuiCurrency :value="manageCreditsCurrentBalance" />
           </OuiText>
         </OuiStack>
         
@@ -306,33 +306,16 @@ function openDeployments(orgId: string) {
 }
 
 const numberFormatter = new Intl.NumberFormat();
-const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+const { formatDate, formatCurrency } = useUtils();
 
 function formatNumber(value?: number | bigint | null) {
   if (value === undefined || value === null) return "0";
   return numberFormatter.format(Number(value));
 }
 
-function formatDate(timestamp?: { seconds?: number | bigint; nanos?: number } | null) {
-  if (!timestamp || timestamp.seconds === undefined) return "—";
-  const seconds = typeof timestamp.seconds === "bigint" ? Number(timestamp.seconds) : timestamp.seconds;
-  const millis = seconds * 1000 + Math.floor((timestamp.nanos ?? 0) / 1_000_000);
-  const date = new Date(millis);
-  return Number.isNaN(date.getTime()) ? "—" : dateFormatter.format(date);
-}
-
 function prettyPlan(plan?: string | null) {
   if (!plan) return "—";
   return plan.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatCurrency(cents?: number | bigint | null) {
-  if (cents === undefined || cents === null) return "$0.00";
-  const dollars = Number(cents) / 100;
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(dollars);
 }
 
 async function manageCredits() {

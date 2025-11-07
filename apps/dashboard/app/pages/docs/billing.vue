@@ -67,6 +67,146 @@
 
     <OuiCard>
       <OuiCardHeader>
+        <OuiText as="h2" class="oui-card-title">Resource Limitations & Plans</OuiText>
+        <OuiText size="sm" color="secondary">
+          Understanding resource restrictions and automatic plan upgrades
+        </OuiText>
+      </OuiCardHeader>
+      <OuiCardBody>
+        <OuiStack gap="md">
+          <OuiText>
+            Organizations may have resource limitations based on their assigned plan. These limitations help ensure 
+            fair usage and prevent abuse. Your plan determines the maximum resources you can use:
+          </OuiText>
+
+          <OuiStack gap="sm">
+            <OuiText size="sm" weight="semibold">Resource Limits Include:</OuiText>
+            <OuiStack gap="xs" class="pl-4">
+              <OuiText size="sm" color="secondary">
+                • <strong>CPU Cores:</strong> Maximum number of CPU cores you can allocate across all deployments
+              </OuiText>
+              <OuiText size="sm" color="secondary">
+                • <strong>Memory:</strong> Maximum memory (RAM) you can allocate across all deployments
+              </OuiText>
+              <OuiText size="sm" color="secondary">
+                • <strong>Deployments:</strong> Maximum number of concurrent deployments
+              </OuiText>
+              <OuiText size="sm" color="secondary">
+                • <strong>Bandwidth:</strong> Maximum monthly bandwidth (inbound + outbound) in bytes
+              </OuiText>
+              <OuiText size="sm" color="secondary">
+                • <strong>Storage:</strong> Maximum storage capacity in bytes
+              </OuiText>
+            </OuiStack>
+          </OuiStack>
+
+          <OuiBox p="md" rounded="lg" class="bg-warning/10 border border-warning/20">
+            <OuiStack gap="sm">
+              <OuiText size="sm" weight="semibold" color="warning">
+                Why Do I Have Resource Restrictions?
+              </OuiText>
+              <OuiText size="sm" color="secondary">
+                Resource limitations are in place to:
+              </OuiText>
+              <OuiStack gap="xs" class="pl-4">
+                <OuiText size="sm" color="secondary">
+                  • Prevent abuse and ensure fair usage across all users
+                </OuiText>
+                <OuiText size="sm" color="secondary">
+                  • Provide a safety check for new accounts before granting unlimited resources
+                </OuiText>
+                <OuiText size="sm" color="secondary">
+                  • Allow automatic upgrades based on payment history
+                </OuiText>
+              </OuiStack>
+            </OuiStack>
+          </OuiBox>
+
+          <OuiBox p="md" rounded="lg" class="bg-primary/10 border border-primary/20">
+            <OuiStack gap="sm">
+              <OuiText size="sm" weight="semibold" color="primary">
+                How to Upgrade Your Plan
+              </OuiText>
+              <OuiText size="sm" color="secondary">
+                Plans are automatically upgraded when you meet certain criteria:
+              </OuiText>
+              <OuiStack gap="xs" class="pl-4">
+                <OuiText size="sm" color="secondary">
+                  • <strong>Adding Credits:</strong> When you add credits to your account, you may automatically 
+                  be upgraded to a higher tier plan if you meet the minimum payment threshold
+                </OuiText>
+                <OuiText size="sm" color="secondary">
+                  • <strong>Making Payments:</strong> When you pay for usage (either through credits or direct 
+                  billing), your total payment history is tracked. Once you reach a plan's minimum payment 
+                  threshold, you're automatically upgraded
+                </OuiText>
+                <OuiText size="sm" color="secondary">
+                  • <strong>Safety Check:</strong> The automatic upgrade system ensures that users who have 
+                  demonstrated they actually pay for usage (by reaching minimum payment thresholds) are granted 
+                  higher resource limits
+                </OuiText>
+              </OuiStack>
+            </OuiStack>
+          </OuiBox>
+
+          <OuiText size="sm" color="secondary">
+            <strong>Note:</strong> If you need immediate access to higher resource limits, contact support. 
+            {{ isSelfHosted ? 'Superadmins' : 'The Obiente Cloud Team' }} can also manually assign plans to organizations.
+          </OuiText>
+        </OuiStack>
+      </OuiCardBody>
+    </OuiCard>
+
+    <OuiCard>
+      <OuiCardHeader>
+        <OuiText as="h2" class="oui-card-title">Monthly Free Credits</OuiText>
+        <OuiText size="sm" color="secondary">
+          Some plans include monthly free credits automatically granted to your account
+        </OuiText>
+      </OuiCardHeader>
+      <OuiCardBody>
+        <OuiStack gap="md">
+          <OuiText>
+            Certain plans may include monthly free credits that are automatically added to your account 
+            balance on the first day of each month. These credits can be used just like purchased credits 
+            to pay for resource usage.
+          </OuiText>
+
+          <OuiBox p="md" rounded="lg" class="bg-primary/10 border border-primary/20">
+            <OuiStack gap="sm">
+              <OuiText size="sm" weight="semibold" color="primary">
+                How Monthly Free Credits Work
+              </OuiText>
+              <OuiStack gap="xs" class="pl-4">
+                <OuiText size="sm" color="secondary">
+                  • Free credits are automatically granted on the 1st of each month
+                </OuiText>
+                <OuiText size="sm" color="secondary">
+                  • The amount depends on your current plan (set by The Obiente Cloud Team)
+                </OuiText>
+                <OuiText size="sm" color="secondary">
+                  • Credits appear in your credit transaction history with a note indicating they're monthly free credits
+                </OuiText>
+                <OuiText size="sm" color="secondary">
+                  • Free credits are used first before purchased credits (FIFO)
+                </OuiText>
+                <OuiText size="sm" color="secondary">
+                  • If you upgrade or change plans, you'll receive the new plan's monthly free credits going forward
+                </OuiText>
+              </OuiStack>
+            </OuiStack>
+          </OuiBox>
+
+          <OuiText size="sm" color="secondary">
+            You can view your monthly free credit amount in your plan information on the Billing page. 
+            Check your credit transaction history to see when free credits were granted.
+          </OuiText>
+        </OuiStack>
+      </OuiCardBody>
+    </OuiCard>
+
+    <OuiCard>
+      <OuiCardHeader>
         <OuiText as="h2" class="oui-card-title">Resource Pricing</OuiText>
       </OuiCardHeader>
       <OuiCardBody>
@@ -214,16 +354,28 @@
 </template>
 
 <script setup lang="ts">
-import {
-  CreditCardIcon,
-  InformationCircleIcon,
-  ChartBarIcon,
-} from "@heroicons/vue/24/outline";
-import type { Component } from "vue";
-
-definePageMeta({
-  layout: "docs",
-});
+  import {
+    CreditCardIcon,
+    InformationCircleIcon,
+    ChartBarIcon,
+  } from "@heroicons/vue/24/outline";
+  import type { Component } from "vue";
+  
+  definePageMeta({
+    layout: "docs",
+  });
+  
+  // Redirect if billing is disabled
+  const config = useConfig();
+  await config.fetchConfig();
+  if (config.billingEnabled.value !== true) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: "Billing is disabled",
+    });
+  }
+  
+  const isSelfHosted = computed(() => config.selfHosted.value === true);
 
 const billingAccordionItems = [
   {

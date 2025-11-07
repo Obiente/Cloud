@@ -577,6 +577,7 @@
   import ErrorAlert from "~/components/ErrorAlert.vue";
   import GitHubRepoPicker from "~/components/deployment/GitHubRepoPicker.vue";
   import { useOrganizationsStore } from "~/stores/organizations";
+  import { useOrganizationId } from "~/composables/useOrganizationId";
   import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
   import OuiByte from "~/components/oui/Byte.vue";
   import { useDialog } from "~/composables/useDialog";
@@ -613,7 +614,10 @@
 
   // Filters
   const searchQuery = ref("");
-  const statusFilter = ref("");
+  // Initialize statusFilter from query params
+  const statusFilter = ref(
+    typeof route.query.status === "string" ? route.query.status : ""
+  );
   const environmentFilter = ref("");
   const groupFilter = ref("");
   const showCreateDialog = ref(false);
@@ -852,11 +856,17 @@
   const client = useConnectClient(DeploymentService);
   const deploymentActions = useDeploymentActions();
 
+  // Get organizationId using SSR-compatible composable
+  const organizationId = useOrganizationId();
+
   const { data: deployments, refresh: refreshDeployments } = await useAsyncData(
-    "deployments-list",
+    () => `deployments-list-${organizationId.value}`,
     async () => {
       try {
-        const response = await client.listDeployments({});
+        // Use organizationId from composable (SSR-compatible)
+        const response = await client.listDeployments({
+          organizationId: organizationId.value || undefined,
+        });
         return response.deployments;
       } catch (error) {
         console.error("Failed to list deployments:", error);
@@ -1008,6 +1018,33 @@
       });
     },
     { immediate: true, deep: true }
+  );
+
+  // Sync statusFilter with query params
+  const router = useRouter();
+  
+  // Update query param when statusFilter changes (user changes filter in UI)
+  watch(statusFilter, (newStatus) => {
+    const currentStatus = route.query.status;
+    if (newStatus !== currentStatus) {
+      router.replace({
+        query: {
+          ...route.query,
+          status: newStatus || undefined, // Remove query param if empty
+        },
+      });
+    }
+  });
+
+  // Update statusFilter when query param changes (browser navigation, shared links)
+  watch(
+    () => route.query.status,
+    (statusParam) => {
+      const newStatus = typeof statusParam === "string" ? statusParam : "";
+      if (newStatus !== statusFilter.value) {
+        statusFilter.value = newStatus;
+      }
+    }
   );
 
   // Watch deployments and enable/disable progress tracking based on status

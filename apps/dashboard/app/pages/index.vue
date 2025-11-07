@@ -15,11 +15,12 @@
       <!-- Navigation -->
 
       <OuiFlex align="center" gap="md">
-        <OuiBox class="flex items-center gap-2">
+        <OuiFlex align="center" gap="sm">
+          <ObienteLogo size="md" />
           <OuiText size="xl" weight="bold" color="primary"
             >Obiente Cloud</OuiText
           >
-        </OuiBox>
+        </OuiFlex>
       </OuiFlex>
 
       <OuiFlex align="center" gap="md" class="md:flex">
@@ -873,11 +874,22 @@ import {
   GlobeAltIcon,
 } from "@heroicons/vue/24/outline";
 import PricingCalculator from "~/components/pricing/PricingCalculator.vue";
+import ObienteLogo from "~/components/app/ObienteLogo.vue";
+import { useConfig } from "~/composables/useConfig";
 
 // Page meta - no auth required for homepage
 definePageMeta({
   layout: false, // Use custom layout for homepage
 });
+
+// Check if self-hosted and redirect to dashboard
+const config = useConfig();
+await config.fetchConfig();
+
+if (config.selfHosted.value === true) {
+  // Redirect to dashboard for self-hosted instances
+  await navigateTo("/dashboard");
+}
 
 // Scroll state for header effect using VueUse
 const { y: scrollY } = useWindowScroll();
@@ -890,9 +902,8 @@ const auth = useAuth();
 const handleSignUp = () => {
   if (import.meta.client) {
     auth.popupSignup();
-  } else {
-    navigateTo("/auth/signup");
   }
+  // Server-side: signup is handled via popup, no navigation needed
 };
 
 // SEO meta

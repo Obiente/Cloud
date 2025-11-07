@@ -61,10 +61,10 @@
                   size="xs"
                   variant="ghost"
                   color="danger"
-                  @click.stop="resendInvite(row as { organizationId: string; id: string })"
-                  :disabled="isLoading"
+                  @click.stop="resendInvite(row as { organizationId: string; id: string; email: string })"
+                  :disabled="isLoading || resendingInvite === row.id"
                 >
-                  Resend
+                  {{ resendingInvite === row.id ? "Sending..." : "Resend" }}
                 </OuiButton>
               </OuiFlex>
             </div>
@@ -79,6 +79,9 @@
 import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 import { computed, ref } from "vue";
 import { useOrganizationsStore } from "~/stores/organizations";
+import { OrganizationService } from "@obiente/proto";
+import { useConnectClient } from "~/lib/connect-client";
+import { useToast } from "~/composables/useToast";
 
 definePageMeta({
   middleware: ["auth", "superadmin"],
@@ -89,6 +92,8 @@ await superAdmin.fetchOverview(true);
 
 const router = useRouter();
 const organizationsStore = useOrganizationsStore();
+const orgClient = useConnectClient(OrganizationService);
+const { toast } = useToast();
 
 const overview = computed(() => superAdmin.overview.value);
 const invites = computed(() => overview.value?.pendingInvites ?? []);
@@ -96,6 +101,7 @@ const isLoading = computed(() => superAdmin.loading.value);
 
 const search = ref("");
 const roleFilter = ref<string>("all");
+const resendingInvite = ref<string | null>(null);
 
 const roleOptions = computed(() => {
   const roles = new Set<string>();
@@ -161,21 +167,25 @@ function switchToOrg(orgId: string) {
   });
 }
 
-function resendInvite(invite: { organizationId: string; id: string }) {
-  organizationsStore.switchOrganization(invite.organizationId);
-  router.push({
-    path: "/organizations",
-    query: { tab: "members", invite: invite.id, organizationId: invite.organizationId },
-  });
+async function resendInvite(invite: { organizationId: string; id: string; email: string }) {
+  if (resendingInvite.value === invite.id) return;
+  
+  resendingInvite.value = invite.id;
+  try {
+    await orgClient.resendInvite({
+      organizationId: invite.organizationId,
+      memberId: invite.id,
+    });
+    toast.success(`Invitation email sent to ${invite.email}`);
+    // Optionally refresh the overview to update timestamps
+    await superAdmin.fetchOverview(true);
+  } catch (error: any) {
+    toast.error(error?.message || "Failed to resend invitation email");
+  } finally {
+    resendingInvite.value = null;
+  }
 }
 
-const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
-function formatDate(timestamp?: { seconds?: number | bigint; nanos?: number } | null) {
-  if (!timestamp || timestamp.seconds === undefined) return "—";
-  const seconds = typeof timestamp.seconds === "bigint" ? Number(timestamp.seconds) : timestamp.seconds;
-  const millis = seconds * 1000 + Math.floor((timestamp.nanos ?? 0) / 1_000_000);
-  const date = new Date(millis);
-  return Number.isNaN(date.getTime()) ? "—" : dateFormatter.format(date);
-}
+const { formatDate } = useUtils();
 </script>
 

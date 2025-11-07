@@ -270,6 +270,13 @@
                 @save="handleEnvSave"
               />
             </template>
+            <template #audit-logs>
+              <AuditLogs
+                :organization-id="orgId"
+                resource-type="deployment"
+                :resource-id="id"
+              />
+            </template>
           </OuiTabs>
         </OuiCard>
       </OuiStack>
@@ -309,6 +316,7 @@
     ChartBarIcon,
     CubeIcon,
     ClockIcon,
+    ClipboardDocumentListIcon,
   } from "@heroicons/vue/24/outline";
   import {
     DeploymentService,
@@ -325,6 +333,7 @@
   import { useDialog } from "~/composables/useDialog";
   import { ConnectError, Code } from "@connectrpc/connect";
   import ErrorAlert from "~/components/ErrorAlert.vue";
+  import AuditLogs from "~/components/audit/AuditLogs.vue";
 
   definePageMeta({
     layout: "default",
@@ -467,6 +476,7 @@
     }
 
     baseTabs.push({ id: "env", label: "Environment", icon: VariableIcon });
+    baseTabs.push({ id: "audit-logs", label: "Audit Logs", icon: ClipboardDocumentListIcon });
 
     return baseTabs;
   });

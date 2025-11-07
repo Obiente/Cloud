@@ -1,8 +1,20 @@
 <script setup lang="ts">
   definePageMeta({ layout: "default", middleware: "auth" });
+  
+  // Redirect if billing is disabled
+  const appConfig = useConfig();
+  await appConfig.fetchConfig();
+  if (appConfig.billingEnabled.value !== true) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: "Billing is disabled",
+    });
+  }
+  
   import {
     OrganizationService,
     BillingService,
+    type Organization,
   } from "@obiente/proto";
   import { useConnectClient } from "~/lib/connect-client";
   import {
@@ -17,7 +29,7 @@
   const orgClient = useConnectClient(OrganizationService);
   const billingClient = useConnectClient(BillingService);
   const route = useRoute();
-  const config = useRuntimeConfig();
+  const config = useRuntimeConfig(); // For stripePublishableKey
 
   // Store the target org from query params before any other logic
   const targetOrgId =
@@ -49,8 +61,29 @@
 
   async function syncOrganizations() {
     if (!auth.isAuthenticated) return;
-    const res = await orgClient.listOrganizations({});
+    const res = await orgClient.listOrganizations({ onlyMine: true });
     auth.setOrganizations(res.organizations || []);
+  }
+
+  // Refresh current organization to get plan info
+  async function refreshCurrentOrganization() {
+    if (!selectedOrg.value) return;
+    try {
+      const res = await orgClient.getOrganization({ organizationId: selectedOrg.value });
+      if (res.organization) {
+        // Update the organization in the list
+        const orgs = organizations.value;
+        const index = orgs.findIndex((o) => o.id === selectedOrg.value);
+        if (index >= 0) {
+          orgs[index] = res.organization;
+          auth.setOrganizations([...orgs]);
+        } else {
+          auth.setOrganizations([...orgs, res.organization]);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to refresh organization:", err);
+    }
   }
 
   const currentUserIdentifiers = computed(() => {
@@ -151,17 +184,35 @@
   const billingHistory = computed(() => {
     const transactions = creditLogData.value?.transactions || [];
     return transactions
-      .filter((t) => t.type === "payment" && t.source === "stripe")
-      .map((t) => ({
-        id: t.id,
-        number: `#${t.id.substring(0, 8).toUpperCase()}`,
-        date: t.createdAt
-          ? new Date(Number(t.createdAt.seconds) * 1000).toLocaleDateString()
-          : "",
-        amount: formatCurrency(t.amountCents),
-        status: t.amountCents > 0 ? "Paid" : "Refunded",
-        transaction: t,
-      }));
+      .filter((t) => {
+        // Include all payment transactions (from Stripe or otherwise)
+        // This includes both credit purchases and other payments
+        return t.type === "payment";
+      })
+      .map((t) => {
+        let dateStr = "";
+        if (t.createdAt) {
+          if (typeof t.createdAt === 'object' && t.createdAt !== null && 'seconds' in t.createdAt) {
+            dateStr = new Date(Number((t.createdAt as any).seconds) * 1000).toLocaleDateString();
+          } else if (typeof t.createdAt === 'object' && t.createdAt !== null && 'toMillis' in t.createdAt) {
+            const timestamp = t.createdAt as any;
+            if (typeof timestamp.toMillis === 'function') {
+              dateStr = new Date(timestamp.toMillis()).toLocaleDateString();
+            }
+          }
+        }
+        const amountCents = typeof t.amountCents === 'bigint' ? Number(t.amountCents) : Number(t.amountCents || 0);
+        const balanceAfter = typeof t.balanceAfter === 'bigint' ? Number(t.balanceAfter) : Number(t.balanceAfter || 0);
+        return {
+          id: t.id,
+          number: `#${t.id.substring(0, 8).toUpperCase()}`,
+          date: dateStr,
+          amount: formatCurrency(Math.abs(amountCents)), // Show absolute value for display
+          status: amountCents > 0 ? "Paid" : "Refunded",
+          transaction: t,
+          balanceAfter,
+        };
+      });
   });
 
   // Fetch billing account
@@ -241,22 +292,38 @@
   // Access Stripe Customer Portal
   async function openCustomerPortal() {
     if (!selectedOrg.value) return;
+    if (!billingAccount.value?.stripeCustomerId) {
+      const { toast } = useToast();
+      toast.error("No billing account found. Please add credits first.");
+      return;
+    }
     try {
       const response = await billingClient.createPortalSession({
         organizationId: selectedOrg.value,
       });
       if (response.portalUrl) {
         window.location.href = response.portalUrl;
+      } else {
+        throw new Error("No portal URL received");
       }
     } catch (err: any) {
-      error.value = err.message || "Failed to open customer portal";
+      let errorMessage = err.message || "Failed to open customer portal";
+      
+      // Provide helpful message for portal configuration errors
+      if (errorMessage.includes("not configured") || errorMessage.includes("configuration")) {
+        errorMessage = "Stripe Customer Portal is not configured. Please contact support or configure it in your Stripe Dashboard.";
+      }
+      
+      error.value = errorMessage;
+      const { toast } = useToast();
+      toast.error(errorMessage);
     }
   }
   
   // Get current organization object to access credits
-  const currentOrganization = computed(() => {
+  const currentOrganization = computed((): (Organization & { planInfo?: Organization['planInfo'] }) | null => {
     if (!selectedOrg.value) return null;
-    return organizations.value.find((o) => o.id === selectedOrg.value) || null;
+    return organizations.value.find((o) => o.id === selectedOrg.value) as (Organization & { planInfo?: Organization['planInfo'] }) | null || null;
   });
   
   const creditsBalance = computed(() => {
@@ -268,8 +335,35 @@
   const addCreditsDialogOpen = ref(false);
   const addCreditsAmount = ref("");
   const addCreditsLoading = ref(false);
+  const removePaymentMethodDialogOpen = ref(false);
+  const paymentMethodToRemove = ref<string | null>(null);
 
   const addPaymentMethodDialogOpen = ref(false);
+  
+  // Billing information management
+  const editBillingInfoDialogOpen = ref(false);
+  const billingInfoLoading = ref(false);
+  const billingInfoForm = ref({
+    billingEmail: "",
+    companyName: "",
+    taxId: "",
+    address: {
+      line1: "",
+      line2: "",
+      city: "",
+      state: "",
+      postalCode: "",
+      country: "",
+    },
+  });
+
+  // Subscription management
+  const subscriptions = ref<any[]>([]);
+  const subscriptionsLoading = ref(false);
+  const cancelSubscriptionDialogOpen = ref(false);
+  const subscriptionToCancel = ref<string | null>(null);
+  const updateSubscriptionPaymentDialogOpen = ref(false);
+  const subscriptionToUpdate = ref<any | null>(null);
   const addPaymentMethodLoading = ref(false);
   const paymentElementLoading = ref(false);
   const stripe = ref<any>(null);
@@ -292,18 +386,93 @@
     addCreditsLoading.value = true;
     error.value = "";
     try {
-      const response = await billingClient.createCheckoutSession({
-        organizationId: selectedOrg.value,
-        amountCents: BigInt(Math.round(amount * 100)),
-      });
+      // Check if we have a default payment method
+      const defaultPaymentMethod = paymentMethods.value.find(pm => pm.isDefault);
       
-      if (response.checkoutUrl) {
-        window.location.href = response.checkoutUrl;
+      if (defaultPaymentMethod && billingAccount.value?.stripeCustomerId) {
+        // Use PaymentIntent with existing payment method
+        try {
+          const response = await billingClient.createPaymentIntent({
+            organizationId: selectedOrg.value,
+            amountCents: BigInt(Math.round(amount * 100)),
+            paymentMethodId: defaultPaymentMethod.id,
+          });
+          
+          if (response.clientSecret && stripe.value) {
+            // PaymentIntent is already confirmed on the backend, but we need to check status
+            // If 3D Secure is required, we'll need to handle it
+            const { error: retrieveError, paymentIntent } = await stripe.value.retrievePaymentIntent(response.clientSecret);
+            
+            if (retrieveError) {
+              throw new Error(retrieveError.message);
+            }
+            
+            // Check if payment requires action (3D Secure)
+            if (paymentIntent.status === 'requires_action' || paymentIntent.status === 'requires_payment_method') {
+              // Confirm with 3D Secure if needed
+              const { error: confirmError } = await stripe.value.confirmCardPayment(
+                response.clientSecret,
+                {
+                  payment_method: defaultPaymentMethod.id,
+                }
+              );
+              
+              if (confirmError) {
+                throw new Error(confirmError.message);
+              }
+            } else if (paymentIntent.status !== 'succeeded') {
+              throw new Error(`Payment status: ${paymentIntent.status}`);
+            }
+            
+            // Payment succeeded - refresh data
+            const { toast } = useToast();
+            toast.success("Payment successful! Credits are being added...");
+            
+            // Refresh data
+            await syncOrganizations();
+            await refreshCreditLog();
+            await refreshBillingAccount();
+            await refreshPaymentMethods();
+            await refreshInvoices();
+            
+            addCreditsDialogOpen.value = false;
+            addCreditsAmount.value = "";
+            addCreditsLoading.value = false;
+          } else {
+            throw new Error("No client secret received");
+          }
+        } catch (paymentIntentError: any) {
+          // If PaymentIntent fails, fall back to CheckoutSession
+          console.warn("PaymentIntent failed, falling back to CheckoutSession:", paymentIntentError);
+          error.value = paymentIntentError.message || "Failed to process payment with saved card. Redirecting to checkout...";
+          
+          // Fall back to checkout session
+          const response = await billingClient.createCheckoutSession({
+            organizationId: selectedOrg.value,
+            amountCents: BigInt(Math.round(amount * 100)),
+          });
+          
+          if (response.checkoutUrl) {
+            window.location.href = response.checkoutUrl;
+          } else {
+            throw new Error("No checkout URL received");
+          }
+        }
       } else {
-        throw new Error("No checkout URL received");
+        // No default payment method, use CheckoutSession
+        const response = await billingClient.createCheckoutSession({
+          organizationId: selectedOrg.value,
+          amountCents: BigInt(Math.round(amount * 100)),
+        });
+        
+        if (response.checkoutUrl) {
+          window.location.href = response.checkoutUrl;
+        } else {
+          throw new Error("No checkout URL received");
+        }
       }
     } catch (err: any) {
-      error.value = err.message || "Failed to create checkout session";
+      error.value = err.message || "Failed to process payment";
       addCreditsLoading.value = false;
     }
   }
@@ -453,24 +622,176 @@
     }
   }
 
-  async function removePaymentMethod(paymentMethodId: string) {
-    if (!selectedOrg.value) return;
-    if (!confirm("Are you sure you want to remove this payment method?")) {
-      return;
-    }
+  function openRemovePaymentMethodDialog(paymentMethodId: string) {
+    paymentMethodToRemove.value = paymentMethodId;
+    removePaymentMethodDialogOpen.value = true;
+  }
+
+  async function removePaymentMethod() {
+    if (!selectedOrg.value || !paymentMethodToRemove.value) return;
     try {
       await billingClient.detachPaymentMethod({
         organizationId: selectedOrg.value,
-        paymentMethodId,
+        paymentMethodId: paymentMethodToRemove.value,
       });
       await refreshPaymentMethods();
       await refreshBillingAccount();
       useToast().toast.success("Payment method removed");
+      removePaymentMethodDialogOpen.value = false;
+      paymentMethodToRemove.value = null;
     } catch (err: any) {
       error.value = err.message || "Failed to remove payment method";
       useToast().toast.error(error.value);
     }
   }
+
+  // Load billing information into form
+  function loadBillingInfo() {
+    if (!billingAccount.value) return;
+    billingInfoForm.value.billingEmail = billingAccount.value.billingEmail || "";
+    billingInfoForm.value.companyName = billingAccount.value.companyName || "";
+    billingInfoForm.value.taxId = billingAccount.value.taxId || "";
+    if (billingAccount.value.address) {
+      billingInfoForm.value.address = {
+        line1: billingAccount.value.address.line1 || "",
+        line2: billingAccount.value.address.line2 || "",
+        city: billingAccount.value.address.city || "",
+        state: billingAccount.value.address.state || "",
+        postalCode: billingAccount.value.address.postalCode || "",
+        country: billingAccount.value.address.country || "",
+      };
+    }
+  }
+
+  // Update billing information
+  async function updateBillingInfo() {
+    if (!selectedOrg.value) return;
+    billingInfoLoading.value = true;
+    error.value = "";
+    try {
+      await billingClient.updateBillingAccount({
+        organizationId: selectedOrg.value,
+        billingEmail: billingInfoForm.value.billingEmail || undefined,
+        companyName: billingInfoForm.value.companyName || undefined,
+        taxId: billingInfoForm.value.taxId || undefined,
+        address: {
+          line1: billingInfoForm.value.address.line1,
+          line2: billingInfoForm.value.address.line2 || undefined,
+          city: billingInfoForm.value.address.city,
+          state: billingInfoForm.value.address.state || undefined,
+          postalCode: billingInfoForm.value.address.postalCode,
+          country: billingInfoForm.value.address.country,
+        },
+      });
+      await refreshBillingAccount();
+      editBillingInfoDialogOpen.value = false;
+      useToast().toast.success("Billing information updated");
+    } catch (err: any) {
+      error.value = err.message || "Failed to update billing information";
+      useToast().toast.error(error.value);
+    } finally {
+      billingInfoLoading.value = false;
+    }
+  }
+
+  // Load subscriptions
+  async function loadSubscriptions() {
+    if (!selectedOrg.value) return;
+    subscriptionsLoading.value = true;
+    try {
+      const res = await (billingClient as any).listSubscriptions({
+        organizationId: selectedOrg.value,
+      });
+      subscriptions.value = res.subscriptions || [];
+    } catch (err: any) {
+      console.error("Failed to load subscriptions:", err);
+      subscriptions.value = [];
+    } finally {
+      subscriptionsLoading.value = false;
+    }
+  }
+
+  // Cancel subscription
+  function openCancelSubscriptionDialog(subscriptionId: string) {
+    subscriptionToCancel.value = subscriptionId;
+    cancelSubscriptionDialogOpen.value = true;
+  }
+
+  async function cancelSubscription() {
+    if (!selectedOrg.value || !subscriptionToCancel.value) return;
+    subscriptionsLoading.value = true;
+    try {
+      const res = await (billingClient as any).cancelSubscription({
+        organizationId: selectedOrg.value,
+        subscriptionId: subscriptionToCancel.value,
+      });
+      await loadSubscriptions();
+      cancelSubscriptionDialogOpen.value = false;
+      subscriptionToCancel.value = null;
+      useToast().toast.success(res.message || "Subscription will be canceled at the end of the billing period");
+    } catch (err: any) {
+      error.value = err.message || "Failed to cancel subscription";
+      useToast().toast.error(error.value);
+    } finally {
+      subscriptionsLoading.value = false;
+    }
+  }
+
+  // Update subscription payment method
+  function openUpdateSubscriptionPaymentDialog(subscription: any) {
+    subscriptionToUpdate.value = subscription;
+    updateSubscriptionPaymentDialogOpen.value = true;
+  }
+
+  async function updateSubscriptionPaymentMethod(paymentMethodId: string) {
+    if (!selectedOrg.value || !subscriptionToUpdate.value) return;
+    subscriptionsLoading.value = true;
+    try {
+      await (billingClient as any).updateSubscriptionPaymentMethod({
+        organizationId: selectedOrg.value,
+        subscriptionId: subscriptionToUpdate.value.id,
+        paymentMethodId,
+      });
+      await loadSubscriptions();
+      await refreshPaymentMethods();
+      updateSubscriptionPaymentDialogOpen.value = false;
+      subscriptionToUpdate.value = null;
+      useToast().toast.success("Subscription payment method updated");
+    } catch (err: any) {
+      error.value = err.message || "Failed to update subscription payment method";
+      useToast().toast.error(error.value);
+    } finally {
+      subscriptionsLoading.value = false;
+    }
+  }
+
+  // Watch for billing account changes to load form
+  watch(billingAccount, () => {
+    if (editBillingInfoDialogOpen.value) {
+      loadBillingInfo();
+    }
+  });
+
+  // Load subscriptions when org changes
+  watch(selectedOrg, () => {
+    if (selectedOrg.value) {
+      loadSubscriptions();
+    }
+  });
+
+  // Load subscriptions on mount
+  if (selectedOrg.value) {
+    loadSubscriptions();
+    refreshCurrentOrganization();
+  }
+
+  // Watch for org changes to refresh plan info
+  watch(selectedOrg, () => {
+    if (selectedOrg.value) {
+      refreshCurrentOrganization();
+      loadSubscriptions();
+    }
+  });
 
   function formatCardBrand(brand: string): string {
     const brands: Record<string, string> = {
@@ -502,7 +823,16 @@
 
   function formatInvoiceDate(date: any): string {
     if (!date) return "";
-    const seconds = typeof date === 'object' && 'seconds' ? Number(date.seconds) : typeof date === 'number' ? date : 0;
+    let seconds = 0;
+    if (typeof date === 'object' && date !== null) {
+      if ('seconds' in date) {
+        seconds = Number(date.seconds);
+      } else if ('toMillis' in date && typeof date.toMillis === 'function') {
+        return new Date(date.toMillis()).toLocaleDateString();
+      }
+    } else if (typeof date === 'number') {
+      seconds = date;
+    }
     if (seconds === 0) return "";
     return new Date(seconds * 1000).toLocaleDateString();
   }
@@ -618,10 +948,13 @@
     if (byteSeconds === null || byteSeconds === undefined) return "0.00";
     const bs = Number(byteSeconds);
     if (bs === 0 || !Number.isFinite(bs)) return "0.00";
+    // memoryByteSecondsMonthly is the total byte-seconds quota for the full month
+    // To convert to GB, we need to divide by the total seconds in the month
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const secondsInMonth = Math.max(1, Math.floor((now.getTime() - monthStart.getTime()) / 1000));
-    const avgBytes = bs / secondsInMonth;
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const secondsInFullMonth = Math.max(1, Math.floor((monthEnd.getTime() - monthStart.getTime()) / 1000));
+    const avgBytes = bs / secondsInFullMonth;
     return formatBytesToGB(avgBytes);
   };
 
@@ -711,6 +1044,73 @@
           </template>
 
           <template v-else>
+            <!-- Plan Information -->
+            <OuiCard v-if="currentOrganization?.planInfo" variant="outline">
+              <OuiCardHeader>
+                <OuiFlex align="center" justify="between">
+                  <OuiStack gap="xs">
+                    <OuiText size="lg" weight="semibold">Current Plan: {{ currentOrganization.planInfo.planName }}</OuiText>
+                    <OuiText size="sm" color="muted" v-if="currentOrganization.planInfo.description">
+                      {{ currentOrganization.planInfo.description }}
+                    </OuiText>
+                  </OuiStack>
+                </OuiFlex>
+              </OuiCardHeader>
+              <OuiCardBody>
+                <OuiStack gap="md">
+                  <OuiText size="sm" color="muted">
+                    Your organization has resource limits based on your plan. Adding credits or making payments may automatically upgrade your plan.
+                  </OuiText>
+                  <OuiGrid cols="1" cols-md="2" cols-lg="5" gap="md">
+                    <OuiStack gap="xs">
+                      <OuiText size="xs" color="muted">CPU Cores</OuiText>
+                      <OuiText size="sm" weight="medium">
+                        {{ currentOrganization.planInfo.cpuCores || 'Unlimited' }}
+                      </OuiText>
+                    </OuiStack>
+                    <OuiStack gap="xs">
+                      <OuiText size="xs" color="muted">Memory</OuiText>
+                      <OuiText size="sm" weight="medium">
+                        {{ formatBytes(Number(currentOrganization.planInfo.memoryBytes || 0)) || 'Unlimited' }}
+                      </OuiText>
+                    </OuiStack>
+                    <OuiStack gap="xs">
+                      <OuiText size="xs" color="muted">Max Deployments</OuiText>
+                      <OuiText size="sm" weight="medium">
+                        {{ currentOrganization.planInfo.deploymentsMax || 'Unlimited' }}
+                      </OuiText>
+                    </OuiStack>
+                    <OuiStack gap="xs">
+                      <OuiText size="xs" color="muted">Bandwidth/Month</OuiText>
+                      <OuiText size="sm" weight="medium">
+                        {{ formatBytes(Number(currentOrganization.planInfo.bandwidthBytesMonth || 0)) || 'Unlimited' }}
+                      </OuiText>
+                    </OuiStack>
+                    <OuiStack gap="xs">
+                      <OuiText size="xs" color="muted">Storage</OuiText>
+                      <OuiText size="sm" weight="medium">
+                        {{ formatBytes(Number(currentOrganization.planInfo.storageBytes || 0)) || 'Unlimited' }}
+                      </OuiText>
+                    </OuiStack>
+                  </OuiGrid>
+                  <OuiAlert v-if="currentOrganization.planInfo.minimumPaymentCents > 0" variant="info">
+                    <OuiText size="sm">
+                      <strong>Auto-Upgrade:</strong> Organizations that pay at least 
+                      {{ formatCurrency(Number(currentOrganization.planInfo.minimumPaymentCents)) }} 
+                      will automatically be upgraded to this plan.
+                    </OuiText>
+                  </OuiAlert>
+                  <OuiAlert v-if="currentOrganization.planInfo.monthlyFreeCreditsCents > 0" variant="success">
+                    <OuiText size="sm">
+                      <strong>Monthly Free Credits:</strong> This plan includes 
+                      {{ formatCurrency(Number(currentOrganization.planInfo.monthlyFreeCreditsCents)) }} 
+                      in free credits automatically added to your account on the 1st of each month.
+                    </OuiText>
+                  </OuiAlert>
+                </OuiStack>
+              </OuiCardBody>
+            </OuiCard>
+
             <!-- Current Usage -->
             <OuiStack gap="lg">
               <OuiText size="2xl" weight="bold">Current Usage</OuiText>
@@ -1095,15 +1495,6 @@
                     <PlusIcon class="h-4 w-4 mr-2" />
                     Add Payment Method
                   </OuiButton>
-                  <OuiButton 
-                    variant="solid" 
-                    size="sm"
-                    @click="openCustomerPortal"
-                    :disabled="!billingAccount?.stripeCustomerId"
-                  >
-                    <CreditCardIcon class="h-4 w-4 mr-2" />
-                    Manage Billing
-                  </OuiButton>
                 </OuiFlex>
               </OuiFlex>
 
@@ -1168,13 +1559,170 @@
                               <OuiButton
                                 variant="ghost"
                                 size="sm"
-                                @click="removePaymentMethod(pm.id)"
+                                @click="openRemovePaymentMethodDialog(pm.id)"
                                 :disabled="pm.isDefault && paymentMethods.length > 1"
                               >
                                 Remove
                               </OuiButton>
                             </OuiFlex>
                           </OuiFlex>
+                        </OuiBox>
+                      </OuiStack>
+                    </template>
+                  </OuiStack>
+                </OuiCardBody>
+              </OuiCard>
+            </OuiStack>
+
+            <!-- Billing Information -->
+            <OuiStack gap="lg" v-if="currentUserIsOwner">
+              <OuiFlex justify="between" align="center">
+                <OuiText size="2xl" weight="bold">Billing Information</OuiText>
+                <OuiButton 
+                  variant="outline" 
+                  size="sm"
+                  @click="loadBillingInfo(); editBillingInfoDialogOpen = true"
+                  :disabled="!billingAccount?.stripeCustomerId"
+                >
+                  Edit Billing Info
+                </OuiButton>
+              </OuiFlex>
+
+              <OuiCard>
+                <OuiCardBody>
+                  <OuiStack gap="md">
+                    <template v-if="!billingAccount?.stripeCustomerId">
+                      <OuiStack gap="sm" align="center">
+                        <OuiText size="sm" color="muted">
+                          Add credits to create a Stripe customer account and set billing information.
+                        </OuiText>
+                      </OuiStack>
+                    </template>
+                    <template v-else>
+                      <OuiStack gap="sm">
+                        <OuiFlex justify="between">
+                          <OuiText size="sm" color="muted">Billing Email</OuiText>
+                          <OuiText size="sm" weight="medium">{{ billingAccount.billingEmail || "Not set" }}</OuiText>
+                        </OuiFlex>
+                        <OuiFlex justify="between">
+                          <OuiText size="sm" color="muted">Company Name</OuiText>
+                          <OuiText size="sm" weight="medium">{{ billingAccount.companyName || "Not set" }}</OuiText>
+                        </OuiFlex>
+                        <OuiFlex justify="between">
+                          <OuiText size="sm" color="muted">Tax ID</OuiText>
+                          <OuiText size="sm" weight="medium">{{ billingAccount.taxId || "Not set" }}</OuiText>
+                        </OuiFlex>
+                        <OuiFlex justify="between" v-if="billingAccount.address">
+                          <OuiText size="sm" color="muted">Billing Address</OuiText>
+                          <OuiText size="sm" weight="medium">
+                            {{ billingAccount.address.line1 }}{{ billingAccount.address.line2 ? `, ${billingAccount.address.line2}` : "" }}<br/>
+                            {{ billingAccount.address.city }}{{ billingAccount.address.state ? `, ${billingAccount.address.state}` : "" }} {{ billingAccount.address.postalCode }}<br/>
+                            {{ billingAccount.address.country }}
+                          </OuiText>
+                        </OuiFlex>
+                        <OuiFlex justify="between" v-else>
+                          <OuiText size="sm" color="muted">Billing Address</OuiText>
+                          <OuiText size="sm" weight="medium">Not set</OuiText>
+                        </OuiFlex>
+                      </OuiStack>
+                    </template>
+                  </OuiStack>
+                </OuiCardBody>
+              </OuiCard>
+            </OuiStack>
+
+            <!-- Subscriptions -->
+            <OuiStack gap="lg" v-if="currentUserIsOwner">
+              <OuiFlex justify="between" align="center">
+                <OuiText size="2xl" weight="bold">Subscriptions</OuiText>
+                <OuiButton 
+                  variant="outline" 
+                  size="sm"
+                  @click="loadSubscriptions"
+                  :disabled="subscriptionsLoading || !billingAccount?.stripeCustomerId"
+                >
+                  Refresh
+                </OuiButton>
+              </OuiFlex>
+
+              <OuiCard>
+                <OuiCardBody>
+                  <OuiStack gap="md">
+                    <template v-if="!billingAccount?.stripeCustomerId">
+                      <OuiStack gap="sm" align="center">
+                        <OuiText size="sm" color="muted">
+                          Add credits to create a Stripe customer account and view subscriptions.
+                        </OuiText>
+                      </OuiStack>
+                    </template>
+                    <template v-else-if="subscriptionsLoading">
+                      <OuiStack gap="sm" align="center">
+                        <OuiText size="sm" color="muted">Loading subscriptions...</OuiText>
+                      </OuiStack>
+                    </template>
+                    <template v-else-if="subscriptions.length === 0">
+                      <OuiStack gap="sm" align="center">
+                        <OuiText size="sm" color="muted">No active subscriptions found.</OuiText>
+                      </OuiStack>
+                    </template>
+                    <template v-else>
+                      <OuiStack gap="sm">
+                        <OuiBox
+                          v-for="sub in subscriptions"
+                          :key="sub.id"
+                          p="md"
+                          border="1"
+                          borderColor="muted"
+                          rounded="md"
+                        >
+                          <OuiStack gap="sm">
+                            <OuiFlex justify="between" align="start">
+                              <OuiStack gap="xs">
+                                <OuiText size="sm" weight="semibold">{{ sub.description || "Subscription" }}</OuiText>
+                                <OuiText size="xs" color="muted">ID: {{ sub.id }}</OuiText>
+                              </OuiStack>
+                              <OuiBadge :variant="sub.status === 'active' ? 'success' : sub.status === 'canceled' ? 'danger' : 'warning'">
+                                {{ sub.status }}
+                              </OuiBadge>
+                            </OuiFlex>
+                            <OuiFlex justify="between">
+                              <OuiText size="sm" color="muted">Amount</OuiText>
+                              <OuiText size="sm" weight="medium">
+                                {{ formatCurrency(sub.amount || 0) }} {{ sub.currency?.toUpperCase() || 'USD' }}
+                                <span v-if="sub.interval">/ {{ sub.interval }}</span>
+                              </OuiText>
+                            </OuiFlex>
+                            <OuiFlex justify="between" v-if="sub.currentPeriodStart">
+                              <OuiText size="sm" color="muted">Current Period</OuiText>
+                              <OuiText size="sm">
+                                {{ new Date(sub.currentPeriodStart.seconds * 1000).toLocaleDateString() }} - 
+                                {{ sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd.seconds * 1000).toLocaleDateString() : 'N/A' }}
+                              </OuiText>
+                            </OuiFlex>
+                            <OuiFlex justify="between" v-if="sub.cancelAtPeriodEnd">
+                              <OuiText size="sm" color="muted">Status</OuiText>
+                              <OuiText size="sm" color="warning">Will cancel at period end</OuiText>
+                            </OuiFlex>
+                            <OuiFlex gap="sm" v-if="sub.status === 'active'">
+                              <OuiButton
+                                variant="ghost"
+                                size="sm"
+                                @click="openUpdateSubscriptionPaymentDialog(sub)"
+                                :disabled="paymentMethods.length === 0"
+                              >
+                                Update Payment Method
+                              </OuiButton>
+                              <OuiButton
+                                variant="ghost"
+                                size="sm"
+                                color="danger"
+                                @click="openCancelSubscriptionDialog(sub.id)"
+                                :disabled="sub.cancelAtPeriodEnd"
+                              >
+                                Cancel Subscription
+                              </OuiButton>
+                            </OuiFlex>
+                          </OuiStack>
                         </OuiBox>
                       </OuiStack>
                     </template>
@@ -1251,14 +1799,15 @@
                             {{ formatInvoiceDate(invoice.date) }}
                           </OuiText>
                           <OuiText size="sm" weight="medium">
-                            {{ formatCurrency(invoice.amountDue) }}
+                            {{ formatCurrency(invoice.amountDue ?? 0) }}
                             <span v-if="invoice.currency && invoice.currency.toLowerCase() !== 'usd'" class="text-xs text-muted">
                               {{ invoice.currency.toUpperCase() }}
                             </span>
                           </OuiText>
-                          <OuiBadge :variant="getInvoiceStatusVariant(invoice.status)">
+                          <OuiBadge v-if="invoice.status && invoice.status.trim()" :variant="getInvoiceStatusVariant(invoice.status)">
                             {{ invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1) }}
                           </OuiBadge>
+                          <OuiText v-else size="sm" color="muted">—</OuiText>
                           <OuiFlex gap="sm">
                             <OuiButton
                               v-if="invoice.hostedInvoiceUrl"
@@ -1288,11 +1837,6 @@
                         <OuiText size="sm" color="muted" align="center">
                           More invoices available. Visit the Stripe Customer Portal to view all invoices.
                         </OuiText>
-                        <OuiFlex justify="center" class="mt-2">
-                          <OuiButton variant="outline" size="sm" @click="openCustomerPortal">
-                            Open Customer Portal
-                          </OuiButton>
-                        </OuiFlex>
                       </OuiBox>
                     </OuiStack>
                   </OuiStack>
@@ -1342,7 +1886,7 @@
                           <OuiText size="sm" weight="medium">{{ transaction.amount }}</OuiText>
                           <OuiBadge variant="success">{{ transaction.status }}</OuiBadge>
                           <OuiText size="sm" color="muted">
-                            {{ formatCurrency(transaction.transaction.balanceAfter) }}
+                            {{ formatCurrency(transaction.balanceAfter ?? 0) }}
                           </OuiText>
                         </OuiGrid>
                       </OuiBox>
@@ -1395,12 +1939,42 @@
       </OuiStack>
     </OuiDialog>
 
+    <!-- Remove Payment Method Dialog -->
+    <OuiDialog v-model:open="removePaymentMethodDialogOpen" title="Remove Payment Method">
+      <OuiStack gap="lg">
+        <OuiStack gap="xs">
+          <OuiText size="sm" color="muted">
+            Are you sure you want to remove this payment method? This action cannot be undone.
+          </OuiText>
+          <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
+        </OuiStack>
+        
+        <OuiFlex justify="end" gap="sm">
+          <OuiButton variant="ghost" @click="removePaymentMethodDialogOpen = false">
+            Cancel
+          </OuiButton>
+          <OuiButton 
+            variant="solid" 
+            color="danger"
+            @click="removePaymentMethod"
+          >
+            Remove Payment Method
+          </OuiButton>
+        </OuiFlex>
+      </OuiStack>
+    </OuiDialog>
+
     <!-- Add Credits Dialog -->
     <OuiDialog v-model:open="addCreditsDialogOpen" title="Purchase Credits">
       <OuiStack gap="lg">
         <OuiStack gap="xs">
           <OuiText size="sm" color="muted">
-            Purchase credits for your organization. You will be redirected to Stripe Checkout to complete the payment.
+            <template v-if="paymentMethods.find(pm => pm.isDefault)">
+              Purchase credits using your default payment method. If 3D Secure authentication is required, you'll be prompted to complete it.
+            </template>
+            <template v-else>
+              Purchase credits for your organization. You will be redirected to Stripe Checkout to complete the payment.
+            </template>
           </OuiText>
           <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
         </OuiStack>
@@ -1432,6 +2006,185 @@
             :disabled="addCreditsLoading || !addCreditsAmount || parseFloat(addCreditsAmount) < 0.50 || isNaN(parseFloat(addCreditsAmount))"
           >
             {{ addCreditsLoading ? "Processing..." : "Continue to Payment" }}
+          </OuiButton>
+        </OuiFlex>
+      </OuiStack>
+    </OuiDialog>
+
+    <!-- Edit Billing Information Dialog -->
+    <OuiDialog v-model:open="editBillingInfoDialogOpen" title="Edit Billing Information">
+      <OuiStack gap="lg">
+        <OuiStack gap="xs">
+          <OuiText size="sm" color="muted">
+            Update your billing information. This will be synced to your Stripe customer account.
+          </OuiText>
+          <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
+        </OuiStack>
+
+        <OuiStack gap="md">
+          <OuiStack gap="xs">
+            <OuiText size="sm" weight="medium">Billing Email</OuiText>
+            <OuiInput
+              v-model="billingInfoForm.billingEmail"
+              type="email"
+              placeholder="billing@example.com"
+            />
+          </OuiStack>
+
+          <OuiStack gap="xs">
+            <OuiText size="sm" weight="medium">Company Name</OuiText>
+            <OuiInput
+              v-model="billingInfoForm.companyName"
+              placeholder="Company Name"
+            />
+          </OuiStack>
+
+          <OuiStack gap="xs">
+            <OuiText size="sm" weight="medium">Tax ID</OuiText>
+            <OuiInput
+              v-model="billingInfoForm.taxId"
+              placeholder="Tax ID (optional)"
+            />
+          </OuiStack>
+
+          <OuiStack gap="xs">
+            <OuiText size="sm" weight="medium">Address Line 1</OuiText>
+            <OuiInput
+              v-model="billingInfoForm.address.line1"
+              placeholder="Street address"
+            />
+          </OuiStack>
+
+          <OuiStack gap="xs">
+            <OuiText size="sm" weight="medium">Address Line 2</OuiText>
+            <OuiInput
+              v-model="billingInfoForm.address.line2"
+              placeholder="Apartment, suite, etc. (optional)"
+            />
+          </OuiStack>
+
+          <OuiGrid cols="2" gap="md">
+            <OuiStack gap="xs">
+              <OuiText size="sm" weight="medium">City</OuiText>
+              <OuiInput
+                v-model="billingInfoForm.address.city"
+                placeholder="City"
+              />
+            </OuiStack>
+
+            <OuiStack gap="xs">
+              <OuiText size="sm" weight="medium">State</OuiText>
+              <OuiInput
+                v-model="billingInfoForm.address.state"
+                placeholder="State (optional)"
+              />
+            </OuiStack>
+          </OuiGrid>
+
+          <OuiGrid cols="2" gap="md">
+            <OuiStack gap="xs">
+              <OuiText size="sm" weight="medium">Postal Code</OuiText>
+              <OuiInput
+                v-model="billingInfoForm.address.postalCode"
+                placeholder="Postal code"
+              />
+            </OuiStack>
+
+            <OuiStack gap="xs">
+              <OuiText size="sm" weight="medium">Country</OuiText>
+              <OuiInput
+                v-model="billingInfoForm.address.country"
+                placeholder="Country code (e.g., US)"
+              />
+            </OuiStack>
+          </OuiGrid>
+        </OuiStack>
+
+        <OuiFlex justify="end" gap="sm">
+          <OuiButton variant="ghost" @click="editBillingInfoDialogOpen = false">
+            Cancel
+          </OuiButton>
+          <OuiButton 
+            variant="solid" 
+            @click="updateBillingInfo"
+            :disabled="billingInfoLoading"
+          >
+            {{ billingInfoLoading ? "Saving..." : "Save Changes" }}
+          </OuiButton>
+        </OuiFlex>
+      </OuiStack>
+    </OuiDialog>
+
+    <!-- Cancel Subscription Dialog -->
+    <OuiDialog v-model:open="cancelSubscriptionDialogOpen" title="Cancel Subscription">
+      <OuiStack gap="lg">
+        <OuiStack gap="xs">
+          <OuiText size="sm" color="muted">
+            Are you sure you want to cancel this subscription? The subscription will remain active until the end of the current billing period, and you will continue to have access until then.
+          </OuiText>
+          <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
+        </OuiStack>
+
+        <OuiFlex justify="end" gap="sm">
+          <OuiButton variant="ghost" @click="cancelSubscriptionDialogOpen = false">
+            Keep Subscription
+          </OuiButton>
+          <OuiButton 
+            variant="solid" 
+            color="danger"
+            @click="cancelSubscription"
+            :disabled="subscriptionsLoading"
+          >
+            {{ subscriptionsLoading ? "Canceling..." : "Cancel Subscription" }}
+          </OuiButton>
+        </OuiFlex>
+      </OuiStack>
+    </OuiDialog>
+
+    <!-- Update Subscription Payment Method Dialog -->
+    <OuiDialog v-model:open="updateSubscriptionPaymentDialogOpen" title="Update Subscription Payment Method">
+      <OuiStack gap="lg">
+        <OuiStack gap="xs">
+          <OuiText size="sm" color="muted">
+            Select a payment method to use for this subscription.
+          </OuiText>
+          <OuiText v-if="error" size="sm" color="danger">{{ error }}</OuiText>
+        </OuiStack>
+
+        <OuiStack gap="sm">
+          <OuiBox
+            v-for="pm in paymentMethods"
+            :key="pm.id"
+            p="md"
+            border="1"
+            borderColor="muted"
+            rounded="md"
+            :class="{ 'ring-2 ring-primary': pm.isDefault }"
+            @click="updateSubscriptionPaymentMethod(pm.id)"
+            class="cursor-pointer hover:bg-muted/50 transition-colors"
+          >
+            <OuiFlex justify="between" align="center">
+              <OuiFlex gap="md" align="center">
+                <CreditCardIcon class="h-6 w-6 text-muted" />
+                <OuiStack gap="xs">
+                  <OuiText size="sm" weight="medium">
+                    {{ pm.card ? `${formatCardBrand(pm.card.brand)} •••• ${pm.card.last4}` : pm.type }}
+                  </OuiText>
+                  <OuiText size="xs" color="muted" v-if="pm.card">
+                    Expires {{ pm.card.expMonth }}/{{ pm.card.expYear }}
+                  </OuiText>
+                </OuiStack>
+              </OuiFlex>
+              <OuiBadge v-if="pm.isDefault" variant="success" size="xs">
+                Default
+              </OuiBadge>
+            </OuiFlex>
+          </OuiBox>
+        </OuiStack>
+
+        <OuiFlex justify="end" gap="sm">
+          <OuiButton variant="ghost" @click="updateSubscriptionPaymentDialogOpen = false">
+            Cancel
           </OuiButton>
         </OuiFlex>
       </OuiStack>

@@ -71,6 +71,7 @@
 import { computed, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useOrganizationsStore } from "~/stores/organizations";
+import { useOrganizationId } from "~/composables/useOrganizationId";
 import { OrganizationService, DeploymentService, AdminService } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 
@@ -126,8 +127,12 @@ const orgItems = computed(() =>
     value: o.id,
   }))
 );
+
+// Get organizationId using SSR-compatible composable
+const organizationId = useOrganizationId();
+
 const selectedOrg = computed({
-  get: () => currentOrgId.value || "",
+  get: () => organizationId.value || currentOrgId.value || "",
   set: (id: string) => {
     if (id) orgStore.switchOrganization(id);
   },
@@ -135,13 +140,14 @@ const selectedOrg = computed({
 
 const { data: bindingsData, refresh: refreshBindings } = await useAsyncData(
   () =>
-    selectedOrg.value
-      ? `admin-bindings-${selectedOrg.value}`
+    organizationId.value
+      ? `admin-bindings-${organizationId.value}`
       : "admin-bindings-none",
   async () => {
-    if (!selectedOrg.value) return [];
+    const orgId = organizationId.value;
+    if (!orgId) return [];
     const res = await adminClient.listRoleBindings({
-      organizationId: selectedOrg.value,
+      organizationId: orgId,
     });
     return res.bindings || [];
   },
@@ -151,13 +157,14 @@ const bindings = computed(() => bindingsData.value || []);
 
 const { data: roleOptionsData, refresh: refreshRoleOptions } = await useAsyncData(
   () =>
-    selectedOrg.value
-      ? `admin-binding-roles-${selectedOrg.value}`
+    organizationId.value
+      ? `admin-binding-roles-${organizationId.value}`
       : "admin-binding-roles-none",
   async () => {
-    if (!selectedOrg.value) return [];
+    const orgId = organizationId.value;
+    if (!orgId) return [];
     const res = await adminClient.listRoles({
-      organizationId: selectedOrg.value,
+      organizationId: orgId,
     });
     const roles = res.roles || [];
     if (!roleId.value && roles.length) {
@@ -178,13 +185,14 @@ const roleItems = computed(() =>
 
 const { data: memberOptionsData, refresh: refreshMemberOptions } = await useAsyncData(
   () =>
-    selectedOrg.value
-      ? `admin-binding-members-${selectedOrg.value}`
+    organizationId.value
+      ? `admin-binding-members-${organizationId.value}`
       : "admin-binding-members-none",
   async () => {
-    if (!selectedOrg.value) return [];
+    const orgId = organizationId.value;
+    if (!orgId) return [];
     const res = await orgClient.listMembers({
-      organizationId: selectedOrg.value,
+      organizationId: orgId,
     });
     const members = res.members || [];
     if (!userId.value && members.length) {
@@ -212,13 +220,14 @@ const memberItems = computed(() =>
 const { data: deploymentOptionsData, refresh: refreshDeploymentOptions } =
   await useAsyncData(
     () =>
-      selectedOrg.value
-        ? `admin-binding-deployments-${selectedOrg.value}`
+      organizationId.value
+        ? `admin-binding-deployments-${organizationId.value}`
         : "admin-binding-deployments-none",
     async () => {
-      if (!selectedOrg.value) return [];
+      const orgId = organizationId.value;
+      if (!orgId) return [];
       const res = await depClient.listDeployments({
-        organizationId: selectedOrg.value,
+        organizationId: orgId,
       });
       return (res.deployments || []).map((d) => ({
         id: d.id,
