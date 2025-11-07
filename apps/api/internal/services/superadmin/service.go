@@ -367,20 +367,50 @@ func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.Lis
 		// Get IPs for this deployment
 		var ips []string
 		var region string
+		
+		// First, try to get IPs from the region in the query result
 		if row.Region != nil && *row.Region != "" {
 			region = *row.Region
-			if regionIPs, ok := traefikIPMap[region]; ok {
+			if regionIPs, ok := traefikIPMap[region]; ok && len(regionIPs) > 0 {
 				ips = regionIPs
 			}
 		}
 
-		// Fallback: try to get IPs using the database function
+		// If no IPs from region, try to get IPs using the database function
+		// This handles cases where the region wasn't in the JOIN or the region name doesn't match
 		if len(ips) == 0 {
-			if resolvedIPs, err := database.GetDeploymentTraefikIP(row.DeploymentID, traefikIPMap); err == nil {
+			if resolvedIPs, err := database.GetDeploymentTraefikIP(row.DeploymentID, traefikIPMap); err == nil && len(resolvedIPs) > 0 {
 				ips = resolvedIPs
+				// Update region if we got it from the function
 				if region == "" {
 					if deploymentRegion, err := database.GetDeploymentRegion(row.DeploymentID); err == nil {
 						region = deploymentRegion
+					}
+				}
+			} else {
+				logger.Warn("[SuperAdmin] Failed to get Traefik IPs for deployment %s: %v", row.DeploymentID, err)
+			}
+		}
+
+		// Final fallback: if still no IPs, try to use any available Traefik IPs
+		// This handles cases where nodes don't have regions configured
+		if len(ips) == 0 {
+			// Try "default" region first
+			if defaultIPs, ok := traefikIPMap["default"]; ok && len(defaultIPs) > 0 {
+				ips = defaultIPs
+				if region == "" {
+					region = "default"
+				}
+			} else {
+				// Use the first available region's IPs as fallback
+				for reg, regIPs := range traefikIPMap {
+					if len(regIPs) > 0 {
+						ips = regIPs
+						if region == "" {
+							region = reg
+						}
+						logger.Debug("[SuperAdmin] Using fallback Traefik IPs from region %s for deployment %s", reg, row.DeploymentID)
+						break
 					}
 				}
 			}

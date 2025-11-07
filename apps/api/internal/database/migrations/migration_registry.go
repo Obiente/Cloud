@@ -1,6 +1,11 @@
 package migrations
 
 import (
+	"fmt"
+
+	"api/internal/database"
+	"api/internal/logger"
+
 	"gorm.io/gorm"
 )
 
@@ -21,6 +26,9 @@ func RegisterMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_01_03_001", "Add configurable build paths and nginx config to deployments", addBuildPathsAndNginxConfig)
 	registry.Register("2025_01_03_002", "Add region column to node_metadata table", addRegionToNodeMetadata)
 	registry.Register("2025_01_03_003", "Create support_tickets and ticket_comments tables", createSupportTicketsTables)
+	registry.Register("2025_11_07_001", "Create deployment_metrics table", createDeploymentMetricsTable)
+	registry.Register("2025_11_07_002", "Create deployment_usage_hourly table", createDeploymentUsageHourlyTable)
+	registry.Register("2025_11_07_003", "Ensure idx_domain_type constraint exists on delegated_dns_records", ensureDelegatedDNSRecordsConstraint)
 
 	// Add new migrations here
 }
@@ -284,6 +292,264 @@ func addRegionToNodeMetadata(db *gorm.DB) error {
 
 	// Add index for faster region lookups
 	return db.Exec("CREATE INDEX IF NOT EXISTS idx_node_metadata_region ON node_metadata(region)").Error
+}
+
+// createSupportTicketsTables creates the support_tickets and ticket_comments tables
+func createSupportTicketsTables(db *gorm.DB) error {
+	// Check if tables already exist
+	if db.Migrator().HasTable("support_tickets") && db.Migrator().HasTable("ticket_comments") {
+		return nil
+	}
+
+	// Create support_tickets table
+	if !db.Migrator().HasTable("support_tickets") {
+		if err := db.Exec(`
+			CREATE TABLE support_tickets (
+				id VARCHAR(255) PRIMARY KEY,
+				subject VARCHAR(500) NOT NULL,
+				description TEXT NOT NULL,
+				status INTEGER NOT NULL DEFAULT 1,
+				priority INTEGER NOT NULL DEFAULT 2,
+				category INTEGER NOT NULL DEFAULT 0,
+				created_by VARCHAR(255) NOT NULL,
+				assigned_to VARCHAR(255),
+				organization_id VARCHAR(255),
+				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				resolved_at TIMESTAMP,
+				INDEX idx_created_by (created_by),
+				INDEX idx_assigned_to (assigned_to),
+				INDEX idx_organization_id (organization_id),
+				INDEX idx_status (status),
+				INDEX idx_priority (priority),
+				INDEX idx_category (category),
+				INDEX idx_created_at (created_at)
+			)
+		`).Error; err != nil {
+			return err
+		}
+	}
+
+	// Create ticket_comments table
+	if !db.Migrator().HasTable("ticket_comments") {
+		if err := db.Exec(`
+			CREATE TABLE ticket_comments (
+				id VARCHAR(255) PRIMARY KEY,
+				ticket_id VARCHAR(255) NOT NULL,
+				content TEXT NOT NULL,
+				created_by VARCHAR(255) NOT NULL,
+				internal BOOLEAN NOT NULL DEFAULT false,
+				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				INDEX idx_ticket_id (ticket_id),
+				INDEX idx_created_by (created_by),
+				INDEX idx_created_at (created_at)
+			)
+		`).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// createDeploymentMetricsTable creates the deployment_metrics table for storing deployment metrics
+// This only creates the table in the metrics database, never in the main database
+func createDeploymentMetricsTable(db *gorm.DB) error {
+	// Initialize metrics database if not already initialized
+	if database.MetricsDB == nil {
+		if err := database.InitMetricsDatabase(); err != nil {
+			logger.Warn("Failed to initialize metrics database for migration: %v", err)
+			// If metrics DB is not available, skip this migration
+			// The tables will be created by InitMetricsTables() when the app starts
+			return nil
+		}
+	}
+
+	// Only create in metrics database
+	if database.MetricsDB == nil {
+		logger.Warn("Metrics database not available, skipping deployment_metrics table creation")
+		return nil
+	}
+
+	if database.MetricsDB.Migrator().HasTable("deployment_metrics") {
+		return nil
+	}
+
+	return createDeploymentMetricsTableInDB(database.MetricsDB)
+}
+
+// createDeploymentMetricsTableInDB creates the deployment_metrics table in a specific database
+func createDeploymentMetricsTableInDB(db *gorm.DB) error {
+	// Create table with proper indexes
+	if err := db.Exec(`
+		CREATE TABLE deployment_metrics (
+			id SERIAL PRIMARY KEY,
+			deployment_id VARCHAR(255) NOT NULL,
+			container_id VARCHAR(255),
+			node_id VARCHAR(255),
+			cpu_usage DOUBLE PRECISION,
+			memory_usage BIGINT,
+			network_rx_bytes BIGINT,
+			network_tx_bytes BIGINT,
+			disk_read_bytes BIGINT,
+			disk_write_bytes BIGINT,
+			request_count BIGINT,
+			error_count BIGINT,
+			timestamp TIMESTAMP NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			INDEX idx_deployment_id (deployment_id),
+			INDEX idx_container_id (container_id),
+			INDEX idx_node_id (node_id),
+			INDEX idx_timestamp (timestamp)
+		)
+	`).Error; err != nil {
+		return err
+	}
+
+	// Create composite indexes for better query performance
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_deployment_metrics_deployment_timestamp 
+		ON deployment_metrics(deployment_id, timestamp DESC)
+	`).Error; err != nil {
+		logger.Warn("Failed to create deployment_timestamp index: %v", err)
+	}
+
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_deployment_metrics_timestamp_deployment 
+		ON deployment_metrics(timestamp DESC, deployment_id)
+	`).Error; err != nil {
+		logger.Warn("Failed to create timestamp_deployment index: %v", err)
+	}
+
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_deployment_metrics_container_timestamp 
+		ON deployment_metrics(container_id, timestamp DESC)
+	`).Error; err != nil {
+		logger.Warn("Failed to create container_timestamp index: %v", err)
+	}
+
+	return nil
+}
+
+// createDeploymentUsageHourlyTable creates the deployment_usage_hourly table for storing hourly aggregated metrics
+// This only creates the table in the metrics database, never in the main database
+func createDeploymentUsageHourlyTable(db *gorm.DB) error {
+	// Initialize metrics database if not already initialized
+	if database.MetricsDB == nil {
+		if err := database.InitMetricsDatabase(); err != nil {
+			logger.Warn("Failed to initialize metrics database for migration: %v", err)
+			// If metrics DB is not available, skip this migration
+			// The tables will be created by InitMetricsTables() when the app starts
+			return nil
+		}
+	}
+
+	// Only create in metrics database
+	if database.MetricsDB == nil {
+		logger.Warn("Metrics database not available, skipping deployment_usage_hourly table creation")
+		return nil
+	}
+
+	if database.MetricsDB.Migrator().HasTable("deployment_usage_hourly") {
+		return nil
+	}
+
+	return createDeploymentUsageHourlyTableInDB(database.MetricsDB)
+}
+
+// createDeploymentUsageHourlyTableInDB creates the deployment_usage_hourly table in a specific database
+func createDeploymentUsageHourlyTableInDB(db *gorm.DB) error {
+	// Create table with proper indexes
+	if err := db.Exec(`
+		CREATE TABLE deployment_usage_hourly (
+			id SERIAL PRIMARY KEY,
+			deployment_id VARCHAR(255) NOT NULL,
+			organization_id VARCHAR(255) NOT NULL,
+			hour TIMESTAMP NOT NULL,
+			avg_cpu_usage DOUBLE PRECISION,
+			avg_memory_usage DOUBLE PRECISION,
+			bandwidth_rx_bytes BIGINT,
+			bandwidth_tx_bytes BIGINT,
+			disk_read_bytes BIGINT,
+			disk_write_bytes BIGINT,
+			request_count BIGINT,
+			error_count BIGINT,
+			sample_count BIGINT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			INDEX idx_deployment_id (deployment_id),
+			INDEX idx_organization_id (organization_id),
+			INDEX idx_hour (hour)
+		)
+	`).Error; err != nil {
+		return err
+	}
+
+	// Create composite index for better query performance
+	if err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_deployment_usage_hourly_deployment_hour 
+		ON deployment_usage_hourly(deployment_id, hour DESC)
+	`).Error; err != nil {
+		logger.Warn("Failed to create usage_hourly index: %v", err)
+	}
+
+	return nil
+}
+
+// ensureDelegatedDNSRecordsConstraint ensures the idx_domain_type unique constraint exists on delegated_dns_records
+func ensureDelegatedDNSRecordsConstraint(db *gorm.DB) error {
+	// Check if table exists
+	if !db.Migrator().HasTable("delegated_dns_records") {
+		// Table doesn't exist, nothing to do (will be created by AutoMigrate)
+		return nil
+	}
+
+	// Check if constraint already exists
+	var constraintExists bool
+	if err := db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM pg_constraint 
+			WHERE conname = 'idx_domain_type' 
+			AND conrelid = 'delegated_dns_records'::regclass
+		)
+	`).Scan(&constraintExists).Error; err != nil {
+		return fmt.Errorf("failed to check constraint existence: %w", err)
+	}
+
+	if constraintExists {
+		return nil
+	}
+
+	// Check if columns exist
+	if !db.Migrator().HasColumn("delegated_dns_records", "domain") || 
+	   !db.Migrator().HasColumn("delegated_dns_records", "record_type") {
+		// Columns don't exist yet, will be created by AutoMigrate
+		return nil
+	}
+
+	// Create the unique constraint
+	if err := db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_domain_type 
+		ON delegated_dns_records(domain, record_type)
+	`).Error; err != nil {
+		// If it fails, it might already exist with a different name, try to find it
+		var existingConstraint string
+		if err2 := db.Raw(`
+			SELECT conname FROM pg_constraint 
+			WHERE conrelid = 'delegated_dns_records'::regclass 
+			AND contype = 'u'
+			AND array_length(conkey, 1) = 2
+		`).Scan(&existingConstraint).Error; err2 == nil && existingConstraint != "" {
+			// Constraint exists with different name, that's fine
+			logger.Debug("Unique constraint already exists with name: %s", existingConstraint)
+			return nil
+		}
+		return fmt.Errorf("failed to create idx_domain_type constraint: %w", err)
+	}
+
+	return nil
 }
 
 // Template for creating a new migration:
