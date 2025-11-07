@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -81,36 +82,72 @@ func UpsertDelegatedDNSRecord(domain, recordType, recordsJSON, sourceAPI string,
 }
 
 // UpsertDelegatedDNSRecordWithAPIKey creates or updates a delegated DNS record with API key tracking
+// Uses a transaction to prevent race conditions and handle expired records correctly
 func UpsertDelegatedDNSRecordWithAPIKey(domain, recordType, recordsJSON, sourceAPI, apiKeyID, organizationID string, ttl int64) error {
 	now := time.Now()
 	expiresAt := now.Add(time.Duration(ttl) * time.Second)
 
-	record := DelegatedDNSRecord{
-		ID:             uuid.New().String(),
-		Domain:         domain,
-		RecordType:     recordType,
-		Records:        recordsJSON,
-		SourceAPI:      sourceAPI,
-		APIKeyID:       apiKeyID,
-		OrganizationID: organizationID,
-		TTL:            ttl,
-		ExpiresAt:      expiresAt,
-		LastUpdated:    now,
-	}
-
-	// Use ON CONFLICT to upsert
-	return DB.Where("domain = ? AND record_type = ?", domain, recordType).
-		Assign(map[string]interface{}{
-			"records":         recordsJSON,
-			"source_api":      sourceAPI,
-			"api_key_id":      apiKeyID,
-			"organization_id": organizationID,
-			"ttl":             ttl,
-			"expires_at":      expiresAt,
-			"last_updated":    now,
-			"updated_at":      now,
-		}).
-		FirstOrCreate(&record).Error
+	return DB.Transaction(func(tx *gorm.DB) error {
+		// First, try to find existing record (even if expired)
+		var existing DelegatedDNSRecord
+		result := tx.Where("domain = ? AND record_type = ?", domain, recordType).First(&existing)
+		
+		if result.Error == nil {
+			// Record exists - update it (this refreshes expiration even if it was expired)
+			updateData := map[string]interface{}{
+				"records":         recordsJSON,
+				"source_api":      sourceAPI,
+				"api_key_id":      apiKeyID,
+				"organization_id": organizationID,
+				"ttl":             ttl,
+				"expires_at":      expiresAt,
+				"last_updated":    now,
+				"updated_at":      now,
+			}
+			return tx.Model(&existing).Updates(updateData).Error
+		} else if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			// Record doesn't exist - create new one
+			record := DelegatedDNSRecord{
+				ID:             uuid.New().String(),
+				Domain:         domain,
+				RecordType:     recordType,
+				Records:        recordsJSON,
+				SourceAPI:      sourceAPI,
+				APIKeyID:       apiKeyID,
+				OrganizationID: organizationID,
+				TTL:            ttl,
+				ExpiresAt:      expiresAt,
+				LastUpdated:    now,
+			}
+			// If create fails due to unique constraint (race condition), try update instead
+			if err := tx.Create(&record).Error; err != nil {
+				// Check if it's a unique constraint violation
+				if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
+					// Race condition: record was created between our check and create
+					// Try to update it instead
+					var raceRecord DelegatedDNSRecord
+					if tx.Where("domain = ? AND record_type = ?", domain, recordType).First(&raceRecord).Error == nil {
+						updateData := map[string]interface{}{
+							"records":         recordsJSON,
+							"source_api":      sourceAPI,
+							"api_key_id":      apiKeyID,
+							"organization_id": organizationID,
+							"ttl":             ttl,
+							"expires_at":      expiresAt,
+							"last_updated":    now,
+							"updated_at":      now,
+						}
+						return tx.Model(&raceRecord).Updates(updateData).Error
+					}
+				}
+				return err
+			}
+			return nil
+		} else {
+			// Database error
+			return result.Error
+		}
+	})
 }
 
 // CleanupExpiredDelegatedRecords removes expired delegated DNS records
