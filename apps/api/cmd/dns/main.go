@@ -568,25 +568,27 @@ func main() {
 	dns.HandleFunc("my.obiente.cloud.", server.handleDNSRequest)
 
 	// Start UDP server
+	// Explicitly bind to 0.0.0.0 to listen on all interfaces (not just loopback)
 	go func() {
 		udpServer := &dns.Server{
-			Addr:    ":" + dnsPort,
+			Addr:    "0.0.0.0:" + dnsPort,
 			Net:     "udp",
 			Handler: dns.DefaultServeMux,
 		}
-		log.Printf("[DNS] Starting DNS server on UDP port %s", dnsPort)
+		log.Printf("[DNS] Starting DNS server on UDP port %s (0.0.0.0:%s)", dnsPort, dnsPort)
 		if err := udpServer.ListenAndServe(); err != nil {
 			log.Fatalf("[DNS] Failed to start UDP DNS server: %v", err)
 		}
 	}()
 
 	// Start TCP server
+	// Explicitly bind to 0.0.0.0 to listen on all interfaces (not just loopback)
 	tcpServer := &dns.Server{
-		Addr:    ":" + dnsPort,
+		Addr:    "0.0.0.0:" + dnsPort,
 		Net:     "tcp",
 		Handler: dns.DefaultServeMux,
 	}
-	log.Printf("[DNS] Starting DNS server on TCP port %s", dnsPort)
+	log.Printf("[DNS] Starting DNS server on TCP port %s (0.0.0.0:%s)", dnsPort, dnsPort)
 	if err := tcpServer.ListenAndServe(); err != nil {
 		log.Fatalf("[DNS] Failed to start TCP DNS server: %v", err)
 	}
