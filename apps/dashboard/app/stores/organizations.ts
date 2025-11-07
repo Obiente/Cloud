@@ -1,10 +1,12 @@
 import { defineStore } from "pinia";
+import type { PlanInfo } from "@obiente/proto";
 
 type OrgSummary = {
   id: string;
   name?: string | null;
   slug?: string | null;
   credits?: bigint | number;
+  planInfo?: PlanInfo | null;
 };
 
 const ORGS_CACHE_KEY = "obiente_orgs_cache";
@@ -95,6 +97,7 @@ export const useOrganizationsStore = defineStore("organizations", () => {
       name: org.name ?? null,
       slug: org.slug ?? null,
       credits: org.credits !== undefined ? (typeof org.credits === 'bigint' ? Number(org.credits) : org.credits) : undefined,
+      planInfo: org.planInfo ?? null,
     }));
     orgs.value = normalized;
     if (normalized.length && !normalized.find((o) => o.id === currentOrgId.value)) {

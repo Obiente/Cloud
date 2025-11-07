@@ -5,6 +5,7 @@
     AdminService,
     BillingService,
     type OrganizationMember,
+    type Organization,
   } from "@obiente/proto";
   import { useConnectClient } from "~/lib/connect-client";
   import { useOrganizationId } from "~/composables/useOrganizationId";
@@ -211,10 +212,38 @@
     }
   }, { immediate: true });
 
+  // Watch for org changes to refresh plan info
+  watch(selectedOrg, () => {
+    if (selectedOrg.value) {
+      refreshCurrentOrganization();
+    }
+  });
+
   async function syncOrganizations() {
     if (!auth.isAuthenticated) return;
     const res = await orgClient.listOrganizations({});
     auth.setOrganizations(res.organizations || []);
+  }
+
+  // Refresh current organization to get plan info
+  async function refreshCurrentOrganization() {
+    if (!selectedOrg.value) return;
+    try {
+      const res = await orgClient.getOrganization({ organizationId: selectedOrg.value });
+      if (res.organization) {
+        // Update the organization in the list
+        const orgs = organizations.value;
+        const index = orgs.findIndex((o) => o.id === selectedOrg.value);
+        if (index >= 0) {
+          orgs[index] = res.organization;
+          auth.setOrganizations([...orgs]);
+        } else {
+          auth.setOrganizations([...orgs, res.organization]);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to refresh organization:", err);
+    }
   }
 
   async function createOrg() {
@@ -632,10 +661,10 @@
     }
   }
   
-  // Get current organization object to access credits
-  const currentOrganization = computed(() => {
+  // Get current organization object to access credits and plan info
+  const currentOrganization = computed((): (Organization & { planInfo?: Organization['planInfo'] }) | null => {
     if (!selectedOrg.value) return null;
-    return organizations.value.find((o) => o.id === selectedOrg.value) || null;
+    return organizations.value.find((o) => o.id === selectedOrg.value) as (Organization & { planInfo?: Organization['planInfo'] }) | null || null;
   });
   
   const creditsBalance = computed(() => {
@@ -1084,6 +1113,74 @@
               </OuiStack>
             </OuiGrid>
             <div class="border border-border-muted/40 rounded-xl" />
+            
+            <!-- Plan Information -->
+            <OuiCard v-if="selectedOrg && currentOrganization?.planInfo" variant="outline">
+              <OuiCardHeader>
+                <OuiFlex align="center" justify="between">
+                  <OuiStack gap="xs">
+                    <OuiText size="lg" weight="semibold">Current Plan: {{ currentOrganization.planInfo.planName }}</OuiText>
+                    <OuiText size="sm" color="muted" v-if="currentOrganization.planInfo.description">
+                      {{ currentOrganization.planInfo.description }}
+                    </OuiText>
+                  </OuiStack>
+                </OuiFlex>
+              </OuiCardHeader>
+              <OuiCardBody>
+                <OuiStack gap="md">
+                  <OuiText size="sm" color="muted">
+                    Your organization has resource limits based on your plan. Adding credits or making payments may automatically upgrade your plan.
+                  </OuiText>
+                  <OuiGrid cols="1" cols-md="2" cols-lg="5" gap="md">
+                    <OuiStack gap="xs">
+                      <OuiText size="xs" color="muted">CPU Cores</OuiText>
+                      <OuiText size="sm" weight="medium">
+                        {{ currentOrganization.planInfo.cpuCores || 'Unlimited' }}
+                      </OuiText>
+                    </OuiStack>
+                    <OuiStack gap="xs">
+                      <OuiText size="xs" color="muted">Memory</OuiText>
+                      <OuiText size="sm" weight="medium">
+                        {{ formatBytes(Number(currentOrganization.planInfo.memoryBytes || 0)) || 'Unlimited' }}
+                      </OuiText>
+                    </OuiStack>
+                    <OuiStack gap="xs">
+                      <OuiText size="xs" color="muted">Max Deployments</OuiText>
+                      <OuiText size="sm" weight="medium">
+                        {{ currentOrganization.planInfo.deploymentsMax || 'Unlimited' }}
+                      </OuiText>
+                    </OuiStack>
+                    <OuiStack gap="xs">
+                      <OuiText size="xs" color="muted">Bandwidth/Month</OuiText>
+                      <OuiText size="sm" weight="medium">
+                        {{ formatBytes(Number(currentOrganization.planInfo.bandwidthBytesMonth || 0)) || 'Unlimited' }}
+                      </OuiText>
+                    </OuiStack>
+                    <OuiStack gap="xs">
+                      <OuiText size="xs" color="muted">Storage</OuiText>
+                      <OuiText size="sm" weight="medium">
+                        {{ formatBytes(Number(currentOrganization.planInfo.storageBytes || 0)) || 'Unlimited' }}
+                      </OuiText>
+                    </OuiStack>
+                  </OuiGrid>
+                  <OuiAlert v-if="currentOrganization.planInfo.minimumPaymentCents > 0" variant="info">
+                    <OuiText size="sm">
+                      <strong>Auto-Upgrade:</strong> Organizations that pay at least 
+                      {{ formatCurrency(Number(currentOrganization.planInfo.minimumPaymentCents)) }} 
+                      will automatically be upgraded to this plan.
+                    </OuiText>
+                  </OuiAlert>
+                  <OuiAlert v-if="currentOrganization.planInfo.monthlyFreeCreditsCents > 0" variant="success">
+                    <OuiText size="sm">
+                      <strong>Monthly Free Credits:</strong> This plan includes 
+                      {{ formatCurrency(Number(currentOrganization.planInfo.monthlyFreeCreditsCents)) }} 
+                      in free credits automatically added to your account on the 1st of each month.
+                    </OuiText>
+                  </OuiAlert>
+                </OuiStack>
+              </OuiCardBody>
+            </OuiCard>
+            
             <OuiStack gap="md" as="form" @submit.prevent="createOrg">
               <OuiText size="sm" weight="medium">Create Organization</OuiText>
               <OuiGrid cols="1" colsLg="2" gap="md">

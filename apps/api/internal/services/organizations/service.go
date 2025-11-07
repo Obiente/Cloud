@@ -94,7 +94,10 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 	for _, r := range rows {
 		// Ensure organization has a plan assigned (defaults to Starter plan)
 		// This ensures plan info is available when converting to proto
-		_ = EnsurePlanAssigned(r.Id)
+		if err := EnsurePlanAssigned(r.Id); err != nil {
+			log.Printf("[ListOrganizations] Warning: failed to ensure plan assigned for org %s: %v", r.Id, err)
+			// Continue anyway - plan info just won't be populated
+		}
 		
 		// Convert row to database.Organization for organizationToProto
 		org := &database.Organization{
@@ -108,7 +111,13 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 			TotalPaidCents: r.TotalPaidCents,
 			CreatedAt:     r.CreatedAt,
 		}
-		orgs = append(orgs, organizationToProto(org))
+		orgProto := organizationToProto(org)
+		if orgProto.PlanInfo == nil {
+			log.Printf("[ListOrganizations] Warning: PlanInfo is nil for org %s after EnsurePlanAssigned", r.Id)
+		} else {
+			log.Printf("[ListOrganizations] Successfully loaded plan info for org %s: plan=%s", r.Id, orgProto.PlanInfo.PlanName)
+		}
+		orgs = append(orgs, orgProto)
 	}
 
 	res := connect.NewResponse(&organizationsv1.ListOrganizationsResponse{
@@ -154,7 +163,11 @@ func (s *Service) GetOrganization(_ context.Context, req *connect.Request[organi
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
 	}
 	// Ensure organization has a plan assigned (defaults to Starter plan)
-	_ = EnsurePlanAssigned(r.ID)
+	if err := EnsurePlanAssigned(r.ID); err != nil {
+		log.Printf("[GetOrganization] Warning: failed to ensure plan assigned for org %s: %v", r.ID, err)
+		// Continue anyway - plan info just won't be populated
+	}
+	// Reload organization to get latest data (though organizationToProto will query quota separately)
 	return connect.NewResponse(&organizationsv1.GetOrganizationResponse{Organization: organizationToProto(&r)}), nil
 }
 
@@ -1196,21 +1209,41 @@ func organizationToProto(org *database.Organization) *organizationsv1.Organizati
 
 	// Load plan info if organization has a plan assigned
 	var quota database.OrgQuota
-	if err := database.DB.First(&quota, "organization_id = ?", org.ID).Error; err == nil && quota.PlanID != "" {
-		var plan database.OrganizationPlan
-		if err := database.DB.First(&plan, "id = ?", quota.PlanID).Error; err == nil {
-			po.PlanInfo = &organizationsv1.PlanInfo{
-				PlanId:                  plan.ID,
-				PlanName:                plan.Name,
-				Description:             plan.Description,
-				CpuCores:                int32(plan.CPUCores),
-				MemoryBytes:             plan.MemoryBytes,
-				DeploymentsMax:          int32(plan.DeploymentsMax),
-				BandwidthBytesMonth:     plan.BandwidthBytesMonth,
-				StorageBytes:            plan.StorageBytes,
-				MinimumPaymentCents:     plan.MinimumPaymentCents,
-				MonthlyFreeCreditsCents: plan.MonthlyFreeCreditsCents,
+	if err := database.DB.First(&quota, "organization_id = ?", org.ID).Error; err != nil {
+		// No quota found - this is expected if plan hasn't been assigned yet
+		// EnsurePlanAssigned should have been called before this, but if not, we'll just skip plan info
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("[organizationToProto] No quota found for org %s (this is expected if EnsurePlanAssigned wasn't called or failed)", org.ID)
+		} else {
+			log.Printf("[organizationToProto] Error loading quota for org %s: %v", org.ID, err)
+		}
+	} else {
+		log.Printf("[organizationToProto] Found quota for org %s: PlanID=%s", org.ID, quota.PlanID)
+		if quota.PlanID != "" {
+			var plan database.OrganizationPlan
+			if err := database.DB.First(&plan, "id = ?", quota.PlanID).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					log.Printf("[organizationToProto] Plan %s not found for org %s (quota references non-existent plan)", quota.PlanID, org.ID)
+				} else {
+					log.Printf("[organizationToProto] Error loading plan %s for org %s: %v", quota.PlanID, org.ID, err)
+				}
+			} else {
+				log.Printf("[organizationToProto] Successfully loaded plan %s (%s) for org %s", plan.ID, plan.Name, org.ID)
+				po.PlanInfo = &organizationsv1.PlanInfo{
+					PlanId:                  plan.ID,
+					PlanName:                plan.Name,
+					Description:             plan.Description,
+					CpuCores:                int32(plan.CPUCores),
+					MemoryBytes:             plan.MemoryBytes,
+					DeploymentsMax:          int32(plan.DeploymentsMax),
+					BandwidthBytesMonth:     plan.BandwidthBytesMonth,
+					StorageBytes:            plan.StorageBytes,
+					MinimumPaymentCents:     plan.MinimumPaymentCents,
+					MonthlyFreeCreditsCents: plan.MonthlyFreeCreditsCents,
+				}
 			}
+		} else {
+			log.Printf("[organizationToProto] Quota exists for org %s but PlanID is empty", org.ID)
 		}
 	}
 
