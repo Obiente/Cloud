@@ -1826,34 +1826,121 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 	enableSwarm := os.Getenv("ENABLE_SWARM")
 	isSwarmMode := enableSwarm == "true" || enableSwarm == "1"
 
-	// Run docker compose up -d with flags to ensure labels are updated
-	// In Swarm mode, we need to ensure services are updated with new labels
-	args := []string{"compose", "-p", projectName, "-f", composeFile, "up", "-d", "--force-recreate", "--remove-orphans"}
-	if isSwarmMode {
-		// In Swarm mode, also use --pull always to ensure we get latest images and force service updates
-		args = append(args, "--pull", "always")
-		logger.Info("[DeploymentManager] Deploying in Swarm mode (ENABLE_SWARM=true) - will force recreate services with updated labels")
-	} else {
-		logger.Info("[DeploymentManager] Deploying in non-Swarm mode (ENABLE_SWARM=false or not set) - will force recreate containers with updated labels")
-	}
-	
-	cmd := exec.CommandContext(ctx, "docker", args...)
-	cmd.Dir = deployDir
-	var stderr bytes.Buffer
 	var stdout bytes.Buffer
-	cmd.Stderr = &stderr
-	cmd.Stdout = &stdout
+	var stderr bytes.Buffer
 
-	if err := cmd.Run(); err != nil {
-		errorOutput := stderr.String()
-		stdOutput := stdout.String()
-		logger.Error("[DeploymentManager] Failed to deploy compose file for deployment %s: %v\nStderr: %s\nStdout: %s", deploymentID, err, errorOutput, stdOutput)
-		return fmt.Errorf("failed to deploy compose file: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
+	if isSwarmMode {
+		// In Swarm mode, docker compose up --force-recreate doesn't always update service labels properly
+		// We need to remove services first, then recreate them to ensure labels are updated
+		logger.Info("[DeploymentManager] Deploying in Swarm mode (ENABLE_SWARM=true) - removing existing services first to ensure labels are updated")
+		
+		// First, try to remove existing services (ignore errors if they don't exist)
+		downArgs := []string{"compose", "-p", projectName, "-f", composeFile, "down", "--remove-orphans"}
+		downCmd := exec.CommandContext(ctx, "docker", downArgs...)
+		downCmd.Dir = deployDir
+		downCmd.Run() // Ignore errors - services might not exist
+		
+		// Now create services fresh with updated labels
+		args := []string{"compose", "-p", projectName, "-f", composeFile, "up", "-d", "--pull", "always"}
+		logger.Info("[DeploymentManager] Creating services with updated labels in Swarm mode")
+		
+		cmd := exec.CommandContext(ctx, "docker", args...)
+		cmd.Dir = deployDir
+		cmd.Stderr = &stderr
+		cmd.Stdout = &stdout
+
+		if err := cmd.Run(); err != nil {
+			errorOutput := stderr.String()
+			stdOutput := stdout.String()
+			logger.Error("[DeploymentManager] Failed to deploy compose file for deployment %s: %v\nStderr: %s\nStdout: %s", deploymentID, err, errorOutput, stdOutput)
+			return fmt.Errorf("failed to deploy compose file: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
+		}
+	} else {
+		// In non-Swarm mode, force recreate works fine
+		args := []string{"compose", "-p", projectName, "-f", composeFile, "up", "-d", "--force-recreate", "--remove-orphans"}
+		logger.Info("[DeploymentManager] Deploying in non-Swarm mode (ENABLE_SWARM=false or not set) - will force recreate containers with updated labels")
+		
+		cmd := exec.CommandContext(ctx, "docker", args...)
+		cmd.Dir = deployDir
+		cmd.Stderr = &stderr
+		cmd.Stdout = &stdout
+
+		if err := cmd.Run(); err != nil {
+			errorOutput := stderr.String()
+			stdOutput := stdout.String()
+			logger.Error("[DeploymentManager] Failed to deploy compose file for deployment %s: %v\nStderr: %s\nStdout: %s", deploymentID, err, errorOutput, stdOutput)
+			return fmt.Errorf("failed to deploy compose file: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
+		}
 	}
 
 	stdOutput := stdout.String()
 	logger.Info("[DeploymentManager] Docker compose up output for deployment %s:\n%s", deploymentID, stdOutput)
 	logger.Info("[DeploymentManager] Successfully deployed compose file for deployment %s (project: %s)", deploymentID, projectName)
+
+	if isSwarmMode {
+		// In Swarm mode, verify that services have the correct labels
+		// Traefik reads from service labels, not container labels
+		logger.Info("[DeploymentManager] Verifying service labels in Swarm mode...")
+		// List services created by this compose project
+		listArgs := []string{"compose", "-p", projectName, "-f", composeFile, "ps", "--services"}
+		listCmd := exec.CommandContext(ctx, "docker", listArgs...)
+		listCmd.Dir = deployDir
+		var listStdout bytes.Buffer
+		listCmd.Stdout = &listStdout
+		if err := listCmd.Run(); err == nil {
+			services := strings.TrimSpace(listStdout.String())
+			if services != "" {
+				serviceList := strings.Split(services, "\n")
+				for _, serviceName := range serviceList {
+					serviceName = strings.TrimSpace(serviceName)
+					if serviceName == "" {
+						continue
+					}
+					// Check service labels using docker service inspect
+					// Docker Compose creates services with format: {project}_{service}
+					// Project name is normalized (lowercase, etc.), so we need to check both formats
+					possibleServiceNames := []string{
+						fmt.Sprintf("%s_%s", projectName, serviceName),
+						fmt.Sprintf("%s-%s", projectName, serviceName),
+						strings.ToLower(fmt.Sprintf("%s_%s", projectName, serviceName)),
+						strings.ToLower(fmt.Sprintf("%s-%s", projectName, serviceName)),
+					}
+					
+					for _, fullServiceName := range possibleServiceNames {
+						// Check service deploy labels (where Traefik reads from in Swarm mode)
+						inspectArgs := []string{"service", "inspect", fullServiceName, "--format", "{{json .Spec.TaskTemplate.ContainerSpec.Labels}}"}
+						inspectCmd := exec.CommandContext(ctx, "docker", inspectArgs...)
+						var inspectStdout bytes.Buffer
+						inspectCmd.Stdout = &inspectStdout
+						if err := inspectCmd.Run(); err == nil {
+							labelsJSON := strings.TrimSpace(inspectStdout.String())
+							logger.Debug("[DeploymentManager] Service %s container labels: %s", fullServiceName, labelsJSON)
+							
+							// Also check deploy labels (where we set them)
+							deployInspectArgs := []string{"service", "inspect", fullServiceName, "--format", "{{json .Spec.Labels}}"}
+							deployInspectCmd := exec.CommandContext(ctx, "docker", deployInspectArgs...)
+							var deployInspectStdout bytes.Buffer
+							deployInspectCmd.Stdout = &deployInspectStdout
+							if err := deployInspectCmd.Run(); err == nil {
+								deployLabelsJSON := strings.TrimSpace(deployInspectStdout.String())
+								logger.Debug("[DeploymentManager] Service %s deploy labels: %s", fullServiceName, deployLabelsJSON)
+								
+								// In Swarm mode, Traefik reads from deploy.labels (service labels)
+								// Check if cloud.obiente.traefik label exists in deploy labels
+								if strings.Contains(deployLabelsJSON, "cloud.obiente.traefik") || strings.Contains(labelsJSON, "cloud.obiente.traefik") {
+									logger.Info("[DeploymentManager] Service %s has Traefik labels - Traefik should discover it", fullServiceName)
+									break
+								} else {
+									logger.Warn("[DeploymentManager] Service %s is missing cloud.obiente.traefik label in deploy labels - Traefik may not discover it", fullServiceName)
+								}
+							}
+							break // Found the service, no need to try other names
+						}
+					}
+				}
+			}
+		}
+	}
 
 	// Wait a moment for containers to be fully created and started
 	time.Sleep(1 * time.Second)
