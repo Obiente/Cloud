@@ -14,24 +14,24 @@
     >
       <!-- Navigation -->
 
-      <OuiFlex align="center" gap="sm" class="flex-1 min-w-0 md:gap-4">
-        <OuiFlex align="center" gap="xs" class="min-w-0 md:gap-2">
-          <ObienteLogo size="sm" class="md:size-md" />
-          <OuiText size="lg" weight="bold" color="primary" class="truncate md:text-xl"
+      <OuiFlex align="center" gap="md" class="flex-1 min-w-0">
+        <OuiFlex align="center" gap="sm" class="min-w-0">
+          <ObienteLogo size="md" />
+          <OuiText size="xl" weight="bold" color="primary" class="truncate text-lg md:text-xl"
             >Obiente Cloud</OuiText
           >
         </OuiFlex>
       </OuiFlex>
 
-      <OuiFlex align="center" gap="xs" class="shrink-0 md:gap-4">
-        <OuiButton variant="ghost" size="sm" class="hidden sm:inline-flex">Features</OuiButton>
-        <OuiButton variant="ghost" size="sm" class="hidden md:inline-flex">Pricing</OuiButton>
-        <OuiButton variant="ghost" size="sm" class="hidden sm:inline-flex" @click="navigateTo('/docs')">Docs</OuiButton>
-        <OuiButton variant="outline" size="sm" class="hidden md:inline-flex" @click="handleSignUp">
+      <OuiFlex align="center" gap="md" class="shrink-0 hidden sm:flex">
+        <OuiButton variant="ghost" size="sm">Features</OuiButton>
+        <OuiButton variant="ghost" size="sm">Pricing</OuiButton>
+        <OuiButton variant="ghost" size="sm" @click="navigateTo('/docs')">Docs</OuiButton>
+        <OuiButton variant="outline" size="sm" @click="handleSignUp">
           Sign Up
         </OuiButton>
         <OuiButton variant="outline" size="sm" @click="navigateTo('/dashboard')"
-          ><span class="hidden sm:inline">Sign In</span><span class="sm:hidden">Sign In</span></OuiButton
+          >Sign In</OuiButton
         >
       </OuiFlex>
     </OuiContainer>
@@ -39,7 +39,7 @@
       <!-- Hero Content -->
       <OuiStack gap="xl" align="center" class="text-center py-16 md:py-32 lg:py-40 md:gap-16">
         <OuiStack gap="md" align="center" class="max-w-4xl md:gap-6">
-          <OuiText as="h1" size="3xl" weight="bold" color="primary" class="leading-tight md:text-5xl lg:text-6xl">
+          <OuiText as="h1" size="6xl" weight="bold" color="primary" class="text-3xl md:text-5xl lg:text-6xl leading-tight">
             Deploy, Scale, and Manage Your Cloud Infrastructure <br class="hidden md:block" />
             With
             <span
@@ -49,23 +49,23 @@
             </span>
           </OuiText>
 
-          <OuiText size="md" color="secondary" class="max-w-2xl px-2 md:px-0 md:text-xl">
+          <OuiText size="xl" color="secondary" class="max-w-2xl px-2 md:px-0 text-md md:text-xl">
             Deploy containers, game servers, and VPS instances. Pay only for what you use with transparent, resource-based pricing. No more overpaying for unused resources.
           </OuiText>
         </OuiStack>
 
         <OuiFlex gap="sm" wrap="wrap" justify="center" class="mt-6 md:mt-8 md:gap-4">
           <OuiButton
-            size="md"
+            size="lg"
             color="primary"
-            class="gap-2 shadow-lg shadow-accent-primary/25 w-full sm:w-auto md:text-base"
+            class="gap-2 shadow-lg shadow-accent-primary/25 w-full sm:w-auto text-sm md:text-base"
             @click="navigateTo('/dashboard')"
           >
-            <RocketLaunchIcon class="h-4 w-4 md:h-5 md:w-5" />
+            <RocketLaunchIcon class="h-5 w-5" />
             Get Started
           </OuiButton>
-          <OuiButton variant="outline" size="md" class="gap-2 w-full sm:w-auto md:text-base" @click="navigateTo('/docs')">
-            <ChatBubbleLeftRightIcon class="h-4 w-4 md:h-5 md:w-5" />
+          <OuiButton variant="outline" size="lg" class="gap-2 w-full sm:w-auto text-sm md:text-base" @click="navigateTo('/docs')">
+            <ChatBubbleLeftRightIcon class="h-5 w-5" />
             <span class="hidden sm:inline">View Documentation</span>
             <span class="sm:hidden">Docs</span>
           </OuiButton>
@@ -74,20 +74,20 @@
         <!-- Stats -->
         <OuiFlex gap="md" wrap="wrap" justify="center" class="mt-8 md:mt-16 opacity-75 md:gap-8">
           <OuiStack gap="xs" align="center">
-            <OuiText size="xl" weight="bold" color="primary" class="md:text-2xl">Fast</OuiText>
-            <OuiText size="xs" color="secondary" class="md:text-sm">Deployments</OuiText>
+            <OuiText size="2xl" weight="bold" color="primary" class="text-xl md:text-2xl">Fast</OuiText>
+            <OuiText size="sm" color="secondary" class="text-xs md:text-sm">Deployments</OuiText>
           </OuiStack>
           <OuiStack gap="xs" align="center">
-            <OuiText size="xl" weight="bold" color="primary" class="md:text-2xl">Reliable</OuiText>
-            <OuiText size="xs" color="secondary" class="md:text-sm">Infrastructure</OuiText>
+            <OuiText size="2xl" weight="bold" color="primary" class="text-xl md:text-2xl">Reliable</OuiText>
+            <OuiText size="sm" color="secondary" class="text-xs md:text-sm">Infrastructure</OuiText>
           </OuiStack>
           <OuiStack gap="xs" align="center">
-            <OuiText size="xl" weight="bold" color="primary" class="md:text-2xl">Quality</OuiText>
-            <OuiText size="xs" color="secondary" class="md:text-sm">Hardware</OuiText>
+            <OuiText size="2xl" weight="bold" color="primary" class="text-xl md:text-2xl">Quality</OuiText>
+            <OuiText size="sm" color="secondary" class="text-xs md:text-sm">Hardware</OuiText>
           </OuiStack>
           <OuiStack gap="xs" align="center">
-            <OuiText size="xl" weight="bold" color="primary" class="md:text-2xl">Personal</OuiText>
-            <OuiText size="xs" color="secondary" class="md:text-sm">Support</OuiText>
+            <OuiText size="2xl" weight="bold" color="primary" class="text-xl md:text-2xl">Personal</OuiText>
+            <OuiText size="sm" color="secondary" class="text-xs md:text-sm">Support</OuiText>
           </OuiStack>
         </OuiFlex>
       </OuiStack>
