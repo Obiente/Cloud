@@ -12,6 +12,7 @@ import (
 	organizationsv1 "api/gen/proto/obiente/cloud/organizations/v1"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/quota"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/proto"
@@ -115,6 +116,16 @@ func (s *Service) CreateDeployment(ctx context.Context, req *connect.Request[dep
 	// Permission: org-level
 	if err := s.permissionChecker.CheckScopedPermission(ctx, orgID, auth.ScopedPermission{Permission: "deployments.create"}); err != nil {
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	// Check quota: verify organization hasn't exceeded max deployments limit
+	// This checks if creating a new deployment (1 replica) would exceed the limit
+	if err := s.quotaChecker.CanAllocate(ctx, orgID, quota.RequestedResources{
+		Replicas:    1, // Creating a new deployment counts as 1 replica
+		MemoryBytes: 0, // Memory/CPU will be checked when deployment is actually started
+		CPUshares:   0,
+	}); err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("quota check failed: %w", err))
 	}
 
 	id := fmt.Sprintf("deploy-%d", time.Now().Unix())

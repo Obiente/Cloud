@@ -27,23 +27,51 @@ func (c *Checker) CanAllocate(ctx context.Context, organizationID string, req Re
 	quota, err := c.getQuota(organizationID)
 	if err != nil { return fmt.Errorf("quota: load: %w", err) }
 
-	// Get effective limits: use overrides if set, otherwise use plan limits
-	effDeployMax := valueOr(quota.DeploymentsMaxOverride, 0)
-	effMem := valueOr64(quota.MemoryBytesOverride, 0)
-	effCPU := valueOr(quota.CPUCoresOverride, 0)
+	// Get plan limits first (these are the maximum boundary)
+	planDeployMax, planMem, planCPU := c.getPlanLimits(organizationID)
 	
-	// If no overrides, get from plan
-	if effDeployMax == 0 && effMem == 0 && effCPU == 0 {
-		planDeployMax, planMem, planCPU := c.getPlanLimits(organizationID)
-		if effDeployMax == 0 {
-			effDeployMax = planDeployMax
+	// Get effective limits: use overrides if set, but cap them to plan limits
+	// Plan limits are the final boundary - org overrides cannot exceed them
+	effDeployMax := planDeployMax
+	if quota.DeploymentsMaxOverride != nil {
+		overrideDeployMax := *quota.DeploymentsMaxOverride
+		if overrideDeployMax > 0 {
+			// Cap override to plan limit (plan limit is the maximum)
+			if planDeployMax > 0 && overrideDeployMax > planDeployMax {
+				effDeployMax = planDeployMax
+			} else {
+				effDeployMax = overrideDeployMax
+			}
 		}
-		if effMem == 0 {
-			effMem = planMem
+		// If override is 0, keep plan limit (0 means use plan default, not unlimited)
+	}
+	
+	effMem := planMem
+	if quota.MemoryBytesOverride != nil {
+		overrideMem := *quota.MemoryBytesOverride
+		if overrideMem > 0 {
+			// Cap override to plan limit (plan limit is the maximum)
+			if planMem > 0 && overrideMem > planMem {
+				effMem = planMem
+			} else {
+				effMem = overrideMem
+			}
 		}
-		if effCPU == 0 {
-			effCPU = planCPU
+		// If override is 0, keep plan limit (0 means use plan default, not unlimited)
+	}
+	
+	effCPU := planCPU
+	if quota.CPUCoresOverride != nil {
+		overrideCPU := *quota.CPUCoresOverride
+		if overrideCPU > 0 {
+			// Cap override to plan limit (plan limit is the maximum)
+			if planCPU > 0 && overrideCPU > planCPU {
+				effCPU = planCPU
+			} else {
+				effCPU = overrideCPU
+			}
 		}
+		// If override is 0, keep plan limit (0 means use plan default, not unlimited)
 	}
 	
 	// Zero means unlimited; allow if not set
