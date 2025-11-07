@@ -10,6 +10,7 @@
   import { useConnectClient } from "~/lib/connect-client";
   import { useOrganizationId } from "~/composables/useOrganizationId";
   import { useToast } from "~/composables/useToast";
+  import { useOrganizationLabels } from "~/composables/useOrganizationLabels";
   import AuditLogs from "~/components/audit/AuditLogs.vue";
   import {
     CheckIcon,
@@ -47,6 +48,7 @@
   }
 
   const organizations = computed(() => auth.organizations || []);
+  const { organizationSelectItems } = useOrganizationLabels(organizations);
   
   // Get organizationId using SSR-compatible composable
   const organizationId = useOrganizationId();
@@ -1090,12 +1092,7 @@
                 <OuiSelect
                   v-model="selectedOrg"
                   placeholder="Choose organization"
-                  :items="
-                    organizations.map((o) => ({
-                      label: o.name ?? o.slug ?? o.id,
-                      value: o.id,
-                    }))
-                  "
+                  :items="organizationSelectItems"
                 />
               </OuiStack>
               <OuiStack gap="xs">

@@ -35,12 +35,7 @@
         <OuiSelect
           v-model="selectedOrg"
           placeholder="Choose organization"
-          :items="
-            organizations.map((o) => ({
-              label: o.name ?? o.slug ?? o.id,
-              value: o.id,
-            }))
-          "
+          :items="organizationSelectItems"
         />
       </OuiCardBody>
     </OuiCard>
@@ -482,6 +477,7 @@ import {
 } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { onMounted, watch, computed, ref } from "vue";
+import { useOrganizationLabels } from "~/composables/useOrganizationLabels";
 import {
   ServerIcon,
   CreditCardIcon,
@@ -500,6 +496,7 @@ const superadminClient = useConnectClient(SuperadminService);
 const { toast } = useToast();
 
 const organizations = computed(() => auth.organizations || []);
+const { organizationSelectItems } = useOrganizationLabels(organizations);
 const selectedOrg = computed({
   get: () => auth.currentOrganizationId,
   set: (id: string) => {

@@ -129,6 +129,7 @@ import { computed } from "vue";
 import { createListCollection } from "@ark-ui/vue";
 import { useAuth } from "~/composables/useAuth";
 import { useOrganizationsStore } from "~/stores/organizations";
+import { useOrganizationLabels } from "~/composables/useOrganizationLabels";
 import OrgSwitcher from "~/components/oui/OrgSwitcher.vue";
 import ObienteLogo from "~/components/app/ObienteLogo.vue";
 
@@ -142,14 +143,10 @@ const orgStore = useOrganizationsStore();
 orgStore.hydrate();
 
 const organizations = computed(() => orgStore.orgs || []);
+const { organizationSelectItems } = useOrganizationLabels(organizations);
 
 // Convert organizations to format expected by OrgSwitcher
-const organizationOptions = computed<SelectItem[]>(() =>
-  organizations.value.map((org) => ({
-    label: org.name ?? org.slug ?? org.id,
-    value: org.id,
-  }))
-);
+const organizationOptions = computed<SelectItem[]>(() => organizationSelectItems.value);
 
 // Create ListCollection for OrgSwitcher
 const organizationCollection = computed(() =>

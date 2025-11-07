@@ -17,6 +17,7 @@
     type Organization,
   } from "@obiente/proto";
   import { useConnectClient } from "~/lib/connect-client";
+  import { useOrganizationLabels } from "~/composables/useOrganizationLabels";
   import {
     PlusIcon,
     CreditCardIcon,
@@ -43,6 +44,7 @@
   }
 
   const organizations = computed(() => auth.organizations || []);
+  const { organizationSelectItems } = useOrganizationLabels(organizations);
   const selectedOrg = computed({
     get: () => auth.currentOrganizationId,
     set: (id: string) => {
@@ -1015,12 +1017,7 @@
               <OuiSelect
                 v-model="selectedOrg"
                 placeholder="Choose organization"
-                :items="
-                  organizations.map((o) => ({
-                    label: o.name ?? o.slug ?? o.id,
-                    value: o.id,
-                  }))
-                "
+                :items="organizationSelectItems"
               />
             </OuiStack>
             <OuiStack gap="xs" v-if="currentMemberRecord">

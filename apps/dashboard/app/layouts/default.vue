@@ -284,13 +284,11 @@
   // Organization switcher data and methods (Connect)
   import { useConnectClient } from "~/lib/connect-client";
   import { OrganizationService } from "@obiente/proto";
+  import { useOrganizationLabels } from "~/composables/useOrganizationLabels";
   const orgClient = useConnectClient(OrganizationService);
-  const organizationOptions = computed(() =>
-    (user.organizations || []).map((o: any) => ({
-      label: o.name || o.slug || o.id,
-      value: o.id,
-    }))
-  );
+  const organizations = computed(() => user.organizations || []);
+  const { organizationSelectItems } = useOrganizationLabels(organizations);
+  const organizationOptions = computed(() => organizationSelectItems.value);
   const currentOrganization = computed(() => user.currentOrganization || null);
   const selectedOrgId = computed({
     get: () => user.currentOrganizationId || undefined,
