@@ -146,6 +146,15 @@ services:
       TRAEFIK_IPS: ${TRAEFIK_IPS:-} # Format: "region1:ip1,ip2;region2:ip3,ip4" or simple "ip1,ip2"
       DNS_IPS: ${DNS_IPS:-} # Comma-separated list of DNS server IPs
       DNS_PORT: ${DNS_PORT:-53} # DNS server port (default: 53)
+      # DNS Delegation Configuration (for self-hosted instances to push DNS records to production)
+      # Set DNS_DELEGATION_PRODUCTION_API_URL to production API URL (e.g., "https://api.obiente.cloud")
+      # Set DNS_DELEGATION_API_KEY to the API key received from production (see docs/deployment/dns-delegation.md)
+      # Set DNS_DELEGATION_PUSH_INTERVAL to how often to push records (default: 2m)
+      # Set DNS_DELEGATION_TTL to TTL for pushed records (default: 300s)
+      DNS_DELEGATION_PRODUCTION_API_URL: ${DNS_DELEGATION_PRODUCTION_API_URL:-} # URL of production API
+      DNS_DELEGATION_API_KEY: ${DNS_DELEGATION_API_KEY:-} # API key from production (required for pushing DNS records)
+      DNS_DELEGATION_PUSH_INTERVAL: ${DNS_DELEGATION_PUSH_INTERVAL:-2m} # How often to push DNS records
+      DNS_DELEGATION_TTL: ${DNS_DELEGATION_TTL:-300s} # TTL for pushed DNS records
       DB_LOG_LEVEL: ${DB_LOG_LEVEL:-}
       # Orchestration settings
       DEPLOYMENT_STRATEGY: ${DEPLOYMENT_STRATEGY:-least-loaded}
