@@ -341,8 +341,18 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				}
 				
 				if isSwarmMode {
-					// Push to local registry (accessible at registry:5000 from Swarm network)
-					registryImageName := fmt.Sprintf("registry:5000/%s", result.ImageName)
+					// Get registry URL from environment or construct from DOMAIN
+					registryURL := os.Getenv("REGISTRY_URL")
+					if registryURL == "" {
+						domain := os.Getenv("DOMAIN")
+						if domain == "" {
+							domain = "obiente.cloud"
+						}
+						registryURL = fmt.Sprintf("registry.%s", domain)
+					}
+					
+					// Push to local registry (accessible via Traefik at registry.obiente.cloud)
+					registryImageName := fmt.Sprintf("%s/%s", registryURL, result.ImageName)
 					streamer.Write([]byte(fmt.Sprintf("📤 Pushing image to registry: %s\n", registryImageName)))
 					
 					// Authenticate with registry before pushing
@@ -353,7 +363,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 					}
 					if registryPassword != "" {
 						streamer.Write([]byte("🔐 Authenticating with registry...\n"))
-						loginCmd := exec.CommandContext(buildCtx, "docker", "login", "registry:5000", "-u", registryUsername, "-p", registryPassword)
+						loginCmd := exec.CommandContext(buildCtx, "docker", "login", registryURL, "-u", registryUsername, "-p", registryPassword)
 						var loginStderr bytes.Buffer
 						loginCmd.Stderr = &loginStderr
 						if err := loginCmd.Run(); err != nil {

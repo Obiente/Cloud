@@ -1688,8 +1688,18 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	if err := imageCheckCmd.Run(); err != nil {
 		logger.Warn("[DeploymentManager] Image %s not found locally, attempting to pull...", config.Image)
 		
+		// Get registry URL from environment or construct from DOMAIN
+		registryURL := os.Getenv("REGISTRY_URL")
+		if registryURL == "" {
+			domain := os.Getenv("DOMAIN")
+			if domain == "" {
+				domain = "obiente.cloud"
+			}
+			registryURL = fmt.Sprintf("registry.%s", domain)
+		}
+		
 		// If image is from our internal registry, authenticate first
-		if strings.HasPrefix(config.Image, "registry:5000/") {
+		if strings.HasPrefix(config.Image, registryURL+"/") || strings.HasPrefix(config.Image, "registry:5000/") {
 			registryUsername := os.Getenv("REGISTRY_USERNAME")
 			registryPassword := os.Getenv("REGISTRY_PASSWORD")
 			if registryUsername == "" {
@@ -1697,7 +1707,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 			}
 			if registryPassword != "" {
 				logger.Info("[DeploymentManager] Authenticating with registry before pulling image...")
-				loginCmd := exec.CommandContext(ctx, "docker", "login", "registry:5000", "-u", registryUsername, "-p", registryPassword)
+				loginCmd := exec.CommandContext(ctx, "docker", "login", registryURL, "-u", registryUsername, "-p", registryPassword)
 				var loginStderr bytes.Buffer
 				loginCmd.Stderr = &loginStderr
 				if loginErr := loginCmd.Run(); loginErr != nil {
