@@ -24,9 +24,10 @@ type cachedProfile struct {
 }
 
 type userProfileResolver struct {
-	httpClient *http.Client
-	baseURL    string
-	token      string
+	httpClient    *http.Client
+	baseURL       string
+	token         string
+	organizationID string
 
 	mu    sync.RWMutex
 	cache map[string]*cachedProfile
@@ -47,19 +48,26 @@ func GetUserProfileResolver() *userProfileResolver {
 	return getUserProfileResolver()
 }
 
+// IsConfigured returns true if the resolver is properly configured with baseURL and token
+func (r *userProfileResolver) IsConfigured() bool {
+	return r != nil && r.baseURL != "" && r.token != ""
+}
+
 func newUserProfileResolver() *userProfileResolver {
 	baseURL := strings.TrimSuffix(os.Getenv("ZITADEL_URL"), "/")
 	token := strings.TrimSpace(os.Getenv("ZITADEL_MANAGEMENT_TOKEN"))
+	organizationID := strings.TrimSpace(os.Getenv("ZITADEL_ORGANIZATION_ID"))
 	if baseURL == "" || token == "" {
 		return &userProfileResolver{cache: make(map[string]*cachedProfile)}
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	return &userProfileResolver{
-		httpClient: client,
-		baseURL:    baseURL,
-		token:      token,
-		cache:      make(map[string]*cachedProfile),
+		httpClient:     client,
+		baseURL:        baseURL,
+		token:          token,
+		organizationID: organizationID,
+		cache:          make(map[string]*cachedProfile),
 	}
 }
 
@@ -75,13 +83,21 @@ func (r *userProfileResolver) Resolve(ctx context.Context, userID string) (*auth
 	}
 	r.mu.RUnlock()
 
-	// Use Zitadel API v2 for user lookup
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/v2/users/%s", r.baseURL, userID), nil)
+	// Use Zitadel Management API v2 for user lookup
+	// The v2 API endpoint is /v2/users/{userId}
+	url := fmt.Sprintf("%s/v2/users/%s", r.baseURL, userID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+r.token)
 	req.Header.Set("Accept", "application/json")
+	
+	// Add organization context header if available
+	// This helps Zitadel route the request to the correct organization context
+	if r.organizationID != "" {
+		req.Header.Set("x-zitadel-orgid", r.organizationID)
+	}
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
@@ -89,13 +105,20 @@ func (r *userProfileResolver) Resolve(ctx context.Context, userID string) (*auth
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("profile request failed: %s", resp.Status)
+	// Read response body once
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("profile request failed: %s, body: %s", resp.Status, string(bodyBytes))
+	}
+
+	// Decode as direct user object (Zitadel v2 API format)
 	var raw managementUserResponse
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return nil, fmt.Errorf("decode profile: %w", err)
+	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
+		return nil, fmt.Errorf("decode profile: %w (response: %s)", err, string(bodyBytes))
 	}
 
 	user := raw.toAuthUser()
@@ -150,6 +173,9 @@ func (r *userProfileResolver) UpdateProfile(ctx context.Context, userID string, 
 	req.Header.Set("Authorization", "Bearer "+r.token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	if r.organizationID != "" {
+		req.Header.Set("x-zitadel-orgid", r.organizationID)
+	}
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
@@ -182,56 +208,83 @@ func cloneUser(in *authv1.User) *authv1.User {
 	return in
 }
 
+// managementUserResponse handles Zitadel v2 API GetUserByID response
+// The actual response structure wraps the user in a "user" field
+// Field names use camelCase: givenName/familyName (not firstName/lastName), isVerified (not isEmailVerified)
 type managementUserResponse struct {
+	Details struct {
+		Sequence      string `json:"sequence"`
+		ChangeDate    string `json:"changeDate"`
+		ResourceOwner string `json:"resourceOwner"`
+		CreationDate  string `json:"creationDate"`
+	} `json:"details"`
 	User struct {
-		Id                 string   `json:"id"`
-		PreferredLoginName string   `json:"preferredLoginName"`
+		UserID             string   `json:"userId"`
+		Details            struct {
+			Sequence      string `json:"sequence"`
+			ChangeDate    string `json:"changeDate"`
+			ResourceOwner string `json:"resourceOwner"`
+			CreationDate  string `json:"creationDate"`
+		} `json:"details"`
+		State              string   `json:"state"`
 		Username           string   `json:"username"`
 		LoginNames         []string `json:"loginNames"`
+		PreferredLoginName string   `json:"preferredLoginName"`
 		Human              struct {
 			Profile struct {
-				FirstName   string `json:"firstName"`
-				LastName    string `json:"lastName"`
-				DisplayName string `json:"displayName"`
-				NickName    string `json:"nickName"`
-				AvatarKey   string `json:"avatarKey"`
+				GivenName         string `json:"givenName"`         // Note: givenName, not firstName
+				FamilyName        string `json:"familyName"`         // Note: familyName, not lastName
+				DisplayName       string `json:"displayName"`
+				NickName          string `json:"nickName"`
+				PreferredLanguage string `json:"preferredLanguage"`
+				Gender            string `json:"gender"`
 			} `json:"profile"`
 			Email struct {
-				Email           string `json:"email"`
-				IsEmailVerified bool   `json:"isEmailVerified"`
+				Email      string `json:"email"`
+				IsVerified bool   `json:"isVerified"` // Note: isVerified, not isEmailVerified
 			} `json:"email"`
-			PreferredLanguage string `json:"preferredLanguage"`
+			Phone struct {
+			} `json:"phone"`
 		} `json:"human"`
 	} `json:"user"`
 }
 
 func (m managementUserResponse) toAuthUser() *authv1.User {
-	if m.User.Id == "" {
+	// The response is always wrapped in a "user" field
+	if m.User.UserID == "" {
 		return nil
 	}
-	user := &authv1.User{Id: m.User.Id}
+
+	userID := m.User.UserID
+	user := &authv1.User{Id: userID}
+	
+	// Extract email
 	email := m.User.Human.Email.Email
 	if email != "" {
 		user.Email = email
-		user.EmailVerified = m.User.Human.Email.IsEmailVerified
+		user.EmailVerified = m.User.Human.Email.IsVerified // Note: isVerified, not isEmailVerified
 	}
 
+	// Determine display name (prefer displayName, then nickName, then givenName + familyName)
 	switch {
 	case m.User.Human.Profile.DisplayName != "":
 		user.Name = m.User.Human.Profile.DisplayName
 	case m.User.Human.Profile.NickName != "":
 		user.Name = m.User.Human.Profile.NickName
 	default:
-		fullName := strings.TrimSpace(strings.Join([]string{m.User.Human.Profile.FirstName, m.User.Human.Profile.LastName}, " "))
+		// Use givenName and familyName (not firstName/lastName)
+		fullName := strings.TrimSpace(strings.Join([]string{m.User.Human.Profile.GivenName, m.User.Human.Profile.FamilyName}, " "))
 		if fullName != "" {
 			user.Name = fullName
 		}
 	}
 
+	// Fallback to email-derived name if no name found
 	if user.Name == "" && email != "" {
 		user.Name = deriveNameFromEmail(email)
 	}
 
+	// Set preferred username
 	if m.User.PreferredLoginName != "" {
 		user.PreferredUsername = m.User.PreferredLoginName
 	} else if m.User.Username != "" {
@@ -240,13 +293,9 @@ func (m managementUserResponse) toAuthUser() *authv1.User {
 		user.PreferredUsername = m.User.LoginNames[0]
 	}
 
-	if lang := m.User.Human.PreferredLanguage; lang != "" {
+	// Set locale
+	if lang := m.User.Human.Profile.PreferredLanguage; lang != "" {
 		user.Locale = lang
-	}
-
-	if key := m.User.Human.Profile.AvatarKey; key != "" {
-		// Zitadel avatar keys need to be resolved via CDN; for now just store key.
-		user.AvatarUrl = key
 	}
 
 	return user

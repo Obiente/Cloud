@@ -59,6 +59,7 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 		Id, Name, Slug, Plan, Status string
 		Domain                       *string
 		Credits                      int64
+		TotalPaidCents               int64
 		CreatedAt                    time.Time
 	}
 
@@ -70,7 +71,7 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 	if onlyMine || !isSuperAdmin {
 		ensurePersonalOrg(user.Id)
 		if err := database.DB.Raw(`
-			SELECT o.id, o.name, o.slug, o.plan, o.status, o.domain, o.credits, o.created_at
+			SELECT o.id, o.name, o.slug, o.plan, o.status, o.domain, o.credits, o.total_paid_cents, o.created_at
 			FROM organizations o
 			JOIN organization_members m ON m.organization_id = o.id
 			WHERE m.user_id = ?
@@ -81,7 +82,7 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 	} else {
 		// Superadmin gets all organizations (when onlyMine is false/unset)
 		if err := database.DB.Raw(`
-			SELECT o.id, o.name, o.slug, o.plan, o.status, o.domain, o.credits, o.created_at
+			SELECT o.id, o.name, o.slug, o.plan, o.status, o.domain, o.credits, o.total_paid_cents, o.created_at
 			FROM organizations o
 			ORDER BY o.created_at DESC
 		`).Scan(&rows).Error; err != nil {
@@ -91,14 +92,23 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 
 	orgs := make([]*organizationsv1.Organization, 0, len(rows))
 	for _, r := range rows {
-		po := &organizationsv1.Organization{
-			Id: r.Id, Name: r.Name, Slug: r.Slug, Plan: strings.ToLower(r.Plan), Status: r.Status,
-			Credits: r.Credits, CreatedAt: timestamppb.New(r.CreatedAt),
+		// Ensure organization has a plan assigned (defaults to Starter plan)
+		// This ensures plan info is available when converting to proto
+		_ = EnsurePlanAssigned(r.Id)
+		
+		// Convert row to database.Organization for organizationToProto
+		org := &database.Organization{
+			ID:            r.Id,
+			Name:          r.Name,
+			Slug:          r.Slug,
+			Plan:          r.Plan,
+			Status:        r.Status,
+			Domain:         r.Domain,
+			Credits:       r.Credits,
+			TotalPaidCents: r.TotalPaidCents,
+			CreatedAt:     r.CreatedAt,
 		}
-		if r.Domain != nil {
-			po.Domain = r.Domain
-		}
-		orgs = append(orgs, po)
+		orgs = append(orgs, organizationToProto(org))
 	}
 
 	res := connect.NewResponse(&organizationsv1.ListOrganizationsResponse{
@@ -133,8 +143,9 @@ func (s *Service) CreateOrganization(ctx context.Context, req *connect.Request[o
 	// add creator as owner
 	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: user.Id, Role: "owner", Status: "active", JoinedAt: now}
 	_ = database.DB.Create(m).Error
-	po := &organizationsv1.Organization{Id: org.ID, Name: org.Name, Slug: org.Slug, Plan: strings.ToLower(org.Plan), Status: org.Status, Credits: org.Credits, CreatedAt: timestamppb.New(org.CreatedAt)}
-	return connect.NewResponse(&organizationsv1.CreateOrganizationResponse{Organization: po}), nil
+	// Ensure organization has a plan assigned (defaults to Starter plan)
+	_ = EnsurePlanAssigned(org.ID)
+	return connect.NewResponse(&organizationsv1.CreateOrganizationResponse{Organization: organizationToProto(org)}), nil
 }
 
 func (s *Service) GetOrganization(_ context.Context, req *connect.Request[organizationsv1.GetOrganizationRequest]) (*connect.Response[organizationsv1.GetOrganizationResponse], error) {
@@ -142,11 +153,9 @@ func (s *Service) GetOrganization(_ context.Context, req *connect.Request[organi
 	if err := database.DB.First(&r, "id = ?", req.Msg.GetOrganizationId()).Error; err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
 	}
-	po := &organizationsv1.Organization{Id: r.ID, Name: r.Name, Slug: r.Slug, Plan: strings.ToLower(r.Plan), Status: r.Status, Credits: r.Credits, CreatedAt: timestamppb.New(r.CreatedAt)}
-	if r.Domain != nil {
-		po.Domain = r.Domain
-	}
-	return connect.NewResponse(&organizationsv1.GetOrganizationResponse{Organization: po}), nil
+	// Ensure organization has a plan assigned (defaults to Starter plan)
+	_ = EnsurePlanAssigned(r.ID)
+	return connect.NewResponse(&organizationsv1.GetOrganizationResponse{Organization: organizationToProto(&r)}), nil
 }
 
 func (s *Service) UpdateOrganization(ctx context.Context, req *connect.Request[organizationsv1.UpdateOrganizationRequest]) (*connect.Response[organizationsv1.UpdateOrganizationResponse], error) {
@@ -177,11 +186,7 @@ func (s *Service) UpdateOrganization(ctx context.Context, req *connect.Request[o
 	if err := database.DB.Save(&org).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update org: %w", err))
 	}
-	po := &organizationsv1.Organization{Id: org.ID, Name: org.Name, Slug: org.Slug, Plan: strings.ToLower(org.Plan), Status: org.Status, Credits: org.Credits, CreatedAt: timestamppb.New(org.CreatedAt)}
-	if org.Domain != nil {
-		po.Domain = org.Domain
-	}
-	return connect.NewResponse(&organizationsv1.UpdateOrganizationResponse{Organization: po}), nil
+	return connect.NewResponse(&organizationsv1.UpdateOrganizationResponse{Organization: organizationToProto(&org)}), nil
 }
 
 func (s *Service) ListMembers(ctx context.Context, req *connect.Request[organizationsv1.ListMembersRequest]) (*connect.Response[organizationsv1.ListMembersResponse], error) {
@@ -234,6 +239,8 @@ func (s *Service) InviteMember(ctx context.Context, req *connect.Request[organiz
 	if emailAddr == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("member email is required"))
 	}
+	// Normalize email to lowercase for consistency
+	emailAddr = strings.ToLower(emailAddr)
 
 	var org database.Organization
 	if err := database.DB.First(&org, "id = ?", req.Msg.GetOrganizationId()).Error; err != nil {
@@ -252,15 +259,261 @@ func (s *Service) InviteMember(ctx context.Context, req *connect.Request[organiz
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("owner role cannot be invited; transfer flow pending"))
 	}
 
-	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: "pending:" + emailAddr, Role: strings.ToLower(role), Status: "invited", JoinedAt: time.Now()}
-	if err := database.DB.Create(m).Error; err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invite member: %w", err))
-	}
+	// Check if user is already invited to this organization (case-insensitive email matching)
+	var existingMember database.OrganizationMember
+	emailLower := strings.ToLower(emailAddr)
+	pendingUserID := "pending:" + emailLower
+	err = database.DB.Where("organization_id = ? AND LOWER(user_id) = ? AND status = ?", org.ID, strings.ToLower(pendingUserID), "invited").First(&existingMember).Error
+	
+	var m *database.OrganizationMember
+	if err == nil {
+		// User is already invited - update role and resend invite
+		existingMember.Role = strings.ToLower(role)
+		existingMember.JoinedAt = time.Now() // Update invite timestamp
+		if err := database.DB.Save(&existingMember).Error; err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update existing invite: %w", err))
+		}
+		m = &existingMember
+		
+		// Resend invite email with rate limiting
+		// Check rate limit first
+		const rateLimitWindow = 5 * time.Minute
+		if m.LastInviteSentAt != nil {
+			timeSinceLastSend := time.Since(*m.LastInviteSentAt)
+			if timeSinceLastSend < rateLimitWindow {
+				remainingTime := rateLimitWindow - timeSinceLastSend
+				return nil, connect.NewError(
+					connect.CodeResourceExhausted,
+					fmt.Errorf("invitation was recently sent. please wait %v before resending", remainingTime.Round(time.Second)),
+				)
+			}
+		}
+		
+		// Send invite email (errors are logged but don't fail the invite update)
+		if err := s.dispatchInviteEmail(ctx, &org, m, inviter, emailAddr); err != nil {
+			log.Printf("[Organizations] failed to resend invite email for existing member %s: %v", m.ID, err)
+			// Continue - member is updated even if email fails
+		}
+	} else if errors.Is(err, gorm.ErrRecordNotFound) {
+		// New invite - create member
+		m = &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: pendingUserID, Role: strings.ToLower(role), Status: "invited", JoinedAt: time.Now()}
+		if err := database.DB.Create(m).Error; err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invite member: %w", err))
+		}
 
-	s.dispatchInviteEmail(ctx, &org, m, inviter, emailAddr)
+		// Send invite email (errors are logged but don't fail the invite creation)
+		if err := s.dispatchInviteEmail(ctx, &org, m, inviter, emailAddr); err != nil {
+			log.Printf("[Organizations] failed to send invite email for new member %s: %v", m.ID, err)
+			// Continue - member is created even if email fails
+		}
+	} else {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check existing invite: %w", err))
+	}
 
 	om := &organizationsv1.OrganizationMember{Id: m.ID, Role: m.Role, Status: m.Status, JoinedAt: timestamppb.New(m.JoinedAt), User: &authv1.User{Id: m.UserID, Email: emailAddr, Name: deriveNameFromEmail(emailAddr)}}
 	return connect.NewResponse(&organizationsv1.InviteMemberResponse{Member: om}), nil
+}
+
+func (s *Service) ResendInvite(ctx context.Context, req *connect.Request[organizationsv1.ResendInviteRequest]) (*connect.Response[organizationsv1.ResendInviteResponse], error) {
+	inviter, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	var member database.OrganizationMember
+	if err := database.DB.Where("id = ? AND organization_id = ?", req.Msg.GetMemberId(), req.Msg.GetOrganizationId()).First(&member).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("member not found"))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("resend invite: %w", err))
+	}
+
+	// Only allow resending invites for pending members
+	if member.Status != "invited" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("member is not in invited status"))
+	}
+
+	// Verify the member is a pending invite (has "pending:" prefix)
+	if !strings.HasPrefix(member.UserID, "pending:") {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("member is not a pending invite"))
+	}
+
+	// Extract email from UserID
+	emailAddr := strings.TrimPrefix(member.UserID, "pending:")
+
+	var org database.Organization
+	if err := database.DB.First(&org, "id = ?", req.Msg.GetOrganizationId()).Error; err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
+	}
+
+	// Authorize: user must be owner or admin of the organization, or superadmin
+	if err := s.authorizeOrgRoles(ctx, org.ID, inviter, "owner", "admin"); err != nil {
+		// Allow superadmins to resend invites for any organization
+		if !auth.HasRole(inviter, auth.RoleSuperAdmin) {
+			return nil, err
+		}
+	}
+
+	// Rate limiting: only apply if last invite was successfully sent
+	// If email failed previously, allow resending immediately
+	const rateLimitWindow = 5 * time.Minute // 5 minutes between resends
+	if member.LastInviteSentAt != nil {
+		timeSinceLastSend := time.Since(*member.LastInviteSentAt)
+		if timeSinceLastSend < rateLimitWindow {
+			remainingTime := rateLimitWindow - timeSinceLastSend
+			return nil, connect.NewError(
+				connect.CodeResourceExhausted,
+				fmt.Errorf("please wait %v before resending the invitation", remainingTime.Round(time.Second)),
+			)
+		}
+	}
+
+	// Resend the invite email
+	if err := s.dispatchInviteEmail(ctx, &org, &member, inviter, emailAddr); err != nil {
+		// If email fails, don't update LastInviteSentAt, so rate limit won't apply
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to send invite email: %w", err))
+	}
+
+	return connect.NewResponse(&organizationsv1.ResendInviteResponse{Success: true}), nil
+}
+
+func (s *Service) ListMyInvites(ctx context.Context, req *connect.Request[organizationsv1.ListMyInvitesRequest]) (*connect.Response[organizationsv1.ListMyInvitesResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	if user.Email == "" {
+		return connect.NewResponse(&organizationsv1.ListMyInvitesResponse{
+			Invites:    []*organizationsv1.PendingInvite{},
+			Pagination: &organizationsv1.Pagination{Page: 1, PerPage: 0, Total: 0, TotalPages: 0},
+		}), nil
+	}
+
+	// Find all pending invites for this user's email (case-insensitive)
+	pendingUserID := "pending:" + strings.ToLower(user.Email)
+	var members []database.OrganizationMember
+	if err := database.DB.Where("LOWER(user_id) = ? AND status = ?", strings.ToLower(pendingUserID), "invited").Find(&members).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list invites: %w", err))
+	}
+
+	// Get organization details for each invite
+	invites := make([]*organizationsv1.PendingInvite, 0, len(members))
+	for _, member := range members {
+		var org database.Organization
+		if err := database.DB.First(&org, "id = ?", member.OrganizationID).Error; err != nil {
+			log.Printf("[Organizations] failed to load organization %s for invite: %v", member.OrganizationID, err)
+			continue
+		}
+
+		invites = append(invites, &organizationsv1.PendingInvite{
+			Id:             member.ID,
+			OrganizationId: org.ID,
+			OrganizationName: org.Name,
+			Role:           member.Role,
+			InvitedAt:      timestamppb.New(member.JoinedAt),
+			InviterEmail:   "", // TODO: Track inviter in future enhancement
+		})
+	}
+
+	return connect.NewResponse(&organizationsv1.ListMyInvitesResponse{
+		Invites: invites,
+		Pagination: &organizationsv1.Pagination{
+			Page:       1,
+			PerPage:    int32(len(invites)),
+			Total:      int32(len(invites)),
+			TotalPages: 1,
+		},
+	}), nil
+}
+
+func (s *Service) AcceptInvite(ctx context.Context, req *connect.Request[organizationsv1.AcceptInviteRequest]) (*connect.Response[organizationsv1.AcceptInviteResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	if user.Email == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("user email is required to accept invite"))
+	}
+
+	// Find the pending invite
+	var member database.OrganizationMember
+	if err := database.DB.Where("id = ? AND organization_id = ? AND status = ?", req.Msg.GetMemberId(), req.Msg.GetOrganizationId(), "invited").First(&member).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("invite not found"))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("accept invite: %w", err))
+	}
+
+	// Verify the invite is for this user's email (case-insensitive)
+	pendingUserID := "pending:" + strings.ToLower(user.Email)
+	if !strings.EqualFold(member.UserID, pendingUserID) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("this invite is not for your email address"))
+	}
+
+	// Get organization
+	var org database.Organization
+	if err := database.DB.First(&org, "id = ?", req.Msg.GetOrganizationId()).Error; err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
+	}
+
+	// Update member to active status and set user ID
+	member.UserID = user.Id
+	member.Status = "active"
+	member.JoinedAt = time.Now()
+	if err := database.DB.Save(&member).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("accept invite: %w", err))
+	}
+
+	// Build response
+	om := &organizationsv1.OrganizationMember{
+		Id:       member.ID,
+		Role:     member.Role,
+		Status:   member.Status,
+		JoinedAt: timestamppb.New(member.JoinedAt),
+		User:     user,
+	}
+
+	orgProto := organizationToProto(&org)
+
+	return connect.NewResponse(&organizationsv1.AcceptInviteResponse{
+		Member:       om,
+		Organization: orgProto,
+	}), nil
+}
+
+func (s *Service) DeclineInvite(ctx context.Context, req *connect.Request[organizationsv1.DeclineInviteRequest]) (*connect.Response[organizationsv1.DeclineInviteResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	if user.Email == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("user email is required to decline invite"))
+	}
+
+	// Find the pending invite
+	var member database.OrganizationMember
+	if err := database.DB.Where("id = ? AND organization_id = ? AND status = ?", req.Msg.GetMemberId(), req.Msg.GetOrganizationId(), "invited").First(&member).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("invite not found"))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("decline invite: %w", err))
+	}
+
+	// Verify the invite is for this user's email (case-insensitive)
+	pendingUserID := "pending:" + strings.ToLower(user.Email)
+	if !strings.EqualFold(member.UserID, pendingUserID) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("this invite is not for your email address"))
+	}
+
+	// Delete the invite (declining removes it)
+	if err := database.DB.Delete(&member).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("decline invite: %w", err))
+	}
+
+	return connect.NewResponse(&organizationsv1.DeclineInviteResponse{Success: true}), nil
 }
 
 func (s *Service) UpdateMember(ctx context.Context, req *connect.Request[organizationsv1.UpdateMemberRequest]) (*connect.Response[organizationsv1.UpdateMemberResponse], error) {
@@ -533,7 +786,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		metricsDB.Table("deployment_usage_hourly duh").
 			Select(`
 				COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
-				COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds,
+				COALESCE(CAST(SUM(duh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
 				COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
 				COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
 			`).
@@ -691,8 +944,8 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		}
 		metricsDB.Table("deployment_usage_hourly duh").
 			Select(`
-				COALESCE(SUM((duh.avg_cpu_usage / 100.0) * 3600), 0) as cpu_core_seconds,
-				COALESCE(SUM(duh.avg_memory_usage * 3600), 0) as memory_byte_seconds,
+				COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
+				COALESCE(CAST(SUM(duh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
 				COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
 				COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
 			`).
@@ -919,9 +1172,50 @@ func ensurePersonalOrg(userID string) {
 	}
 	m := &database.OrganizationMember{ID: generateID("mem"), OrganizationID: org.ID, UserID: userID, Role: "owner", Status: "active", JoinedAt: now}
 	_ = database.DB.Create(m).Error
+	// Ensure organization has a plan assigned (defaults to Starter plan)
+	_ = EnsurePlanAssigned(org.ID)
 }
 
 func generateID(prefix string) string { return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano()) }
+
+// organizationToProto converts a database Organization to a proto Organization, including plan info
+func organizationToProto(org *database.Organization) *organizationsv1.Organization {
+	po := &organizationsv1.Organization{
+		Id:            org.ID,
+		Name:          org.Name,
+		Slug:          org.Slug,
+		Plan:          strings.ToLower(org.Plan),
+		Status:        org.Status,
+		Credits:       org.Credits,
+		TotalPaidCents: org.TotalPaidCents,
+		CreatedAt:     timestamppb.New(org.CreatedAt),
+	}
+	if org.Domain != nil {
+		po.Domain = org.Domain
+	}
+
+	// Load plan info if organization has a plan assigned
+	var quota database.OrgQuota
+	if err := database.DB.First(&quota, "organization_id = ?", org.ID).Error; err == nil && quota.PlanID != "" {
+		var plan database.OrganizationPlan
+		if err := database.DB.First(&plan, "id = ?", quota.PlanID).Error; err == nil {
+			po.PlanInfo = &organizationsv1.PlanInfo{
+				PlanId:                  plan.ID,
+				PlanName:                plan.Name,
+				Description:             plan.Description,
+				CpuCores:                int32(plan.CPUCores),
+				MemoryBytes:             plan.MemoryBytes,
+				DeploymentsMax:          int32(plan.DeploymentsMax),
+				BandwidthBytesMonth:     plan.BandwidthBytesMonth,
+				StorageBytes:            plan.StorageBytes,
+				MinimumPaymentCents:     plan.MinimumPaymentCents,
+				MonthlyFreeCreditsCents: plan.MonthlyFreeCreditsCents,
+			}
+		}
+	}
+
+	return po
+}
 
 func normalizeSlug(input string) string {
 	lowered := strings.ToLower(strings.TrimSpace(input))
@@ -1010,9 +1304,11 @@ func deriveNameFromEmail(email string) string {
 	return name
 }
 
-func (s *Service) dispatchInviteEmail(ctx context.Context, org *database.Organization, member *database.OrganizationMember, inviter *authv1.User, inviteeEmail string) {
+// dispatchInviteEmail sends an invite email and returns an error if sending fails.
+// If email sending succeeds, it updates the member's LastInviteSentAt timestamp.
+func (s *Service) dispatchInviteEmail(ctx context.Context, org *database.Organization, member *database.OrganizationMember, inviter *authv1.User, inviteeEmail string) error {
 	if s.mailer == nil || !s.mailer.Enabled() {
-		return
+		return nil // Not an error if email is disabled
 	}
 
 	consoleURL := s.consoleURL
@@ -1080,7 +1376,18 @@ func (s *Service) dispatchInviteEmail(ctx context.Context, org *database.Organiz
 
 	if err := s.mailer.Send(ctx, message); err != nil {
 		log.Printf("[Organizations] failed to send invite email for member %s: %v", member.ID, err)
+		return err
 	}
+
+	// Only update LastInviteSentAt if email was successfully sent
+	now := time.Now()
+	member.LastInviteSentAt = &now
+	if err := database.DB.Model(member).Update("last_invite_sent_at", now).Error; err != nil {
+		log.Printf("[Organizations] failed to update LastInviteSentAt for member %s: %v", member.ID, err)
+		// Don't fail the whole operation if timestamp update fails
+	}
+
+	return nil
 }
 
 func capitalize(input string) string {
@@ -1112,6 +1419,11 @@ func buildUserProfile(ctx context.Context, resolver *userProfileResolver, member
 		} else if err != nil {
 			log.Printf("[Organizations] failed to resolve profile for %s: %v", member.UserID, err)
 		}
+	}
+
+	// Fallback: if we couldn't resolve, at least set a name from the ID
+	if userProto.Name == "" {
+		userProto.Name = member.UserID
 	}
 
 	return userProto
@@ -1184,16 +1496,11 @@ func (s *Service) AdminAddCredits(ctx context.Context, req *connect.Request[orga
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("admin add credits: %w", err))
 	}
 
-	po := &organizationsv1.Organization{
-		Id: org.ID, Name: org.Name, Slug: org.Slug, Plan: strings.ToLower(org.Plan),
-		Status: org.Status, Credits: org.Credits, CreatedAt: timestamppb.New(org.CreatedAt),
-	}
-	if org.Domain != nil {
-		po.Domain = org.Domain
-	}
+	// Ensure organization has a plan assigned (defaults to Starter plan)
+	_ = EnsurePlanAssigned(orgID)
 
 	return connect.NewResponse(&organizationsv1.AdminAddCreditsResponse{
-		Organization:      po,
+		Organization:      organizationToProto(&org),
 		NewBalanceCents:   org.Credits,
 		AmountAddedCents: amountCents,
 	}), nil
@@ -1264,16 +1571,8 @@ func (s *Service) AdminRemoveCredits(ctx context.Context, req *connect.Request[o
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("admin remove credits: %w", err))
 	}
 
-	po := &organizationsv1.Organization{
-		Id: org.ID, Name: org.Name, Slug: org.Slug, Plan: strings.ToLower(org.Plan),
-		Status: org.Status, Credits: org.Credits, CreatedAt: timestamppb.New(org.CreatedAt),
-	}
-	if org.Domain != nil {
-		po.Domain = org.Domain
-	}
-
 	return connect.NewResponse(&organizationsv1.AdminRemoveCreditsResponse{
-		Organization:        po,
+		Organization:        organizationToProto(&org),
 		NewBalanceCents:     org.Credits,
 		AmountRemovedCents: actualRemoved,
 	}), nil
