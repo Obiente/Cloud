@@ -83,6 +83,13 @@ show_overview() {
     "After config changes or when services aren't updating"
   
   print_script \
+    "rollback-swarm.sh" \
+    "Deployment" \
+    "Rollback services to their previous version" \
+    "./scripts/rollback-swarm.sh [stack-name] [service-name]" \
+    "When a deployment causes issues and you need to revert"
+  
+  print_script \
     "redeploy-dashboard.sh" \
     "Deployment" \
     "Quick dashboard-only redeployment" \
@@ -200,6 +207,10 @@ show_overview() {
   echo "  1. ./scripts/deploy-swarm.sh     # Normal update"
   echo "  2. ./scripts/force-deploy.sh     # If updates aren't applying"
   echo ""
+  echo -e "${BLUE}Rollback deployment:${NC}"
+  echo "  1. ./scripts/rollback-swarm.sh                    # Rollback all services"
+  echo "  2. ./scripts/rollback-swarm.sh obiente api        # Rollback specific service"
+  echo ""
   echo -e "${BLUE}Dashboard issues:${NC}"
   echo "  1. ./scripts/diagnose-dashboard.sh"
   echo "  2. ./scripts/check-dashboard-traefik.sh"
@@ -270,6 +281,42 @@ show_script_details() {
       echo "  ./scripts/deploy-swarm.sh"
       echo "  BUILD_LOCAL=true ./scripts/deploy-swarm.sh"
       echo "  DEPLOY_DASHBOARD=false ./scripts/deploy-swarm.sh"
+      ;;
+    
+    rollback-swarm.sh|rollback)
+      print_header
+      echo -e "${BLUE}rollback-swarm.sh${NC} - Rollback services to previous version"
+      echo ""
+      echo -e "${YELLOW}Description:${NC}"
+      echo "  Rolls back Docker Swarm services to their previous version. Can rollback"
+      echo "  all services in a stack or a specific service. Uses Docker Swarm's built-in"
+      echo "  rollback functionality to revert to the previous service configuration."
+      echo ""
+      echo -e "${YELLOW}Usage:${NC}"
+      echo "  ./scripts/rollback-swarm.sh [stack-name] [service-name]"
+      echo ""
+      echo -e "${YELLOW}Options:${NC}"
+      echo "  stack-name      - Stack name (default: obiente)"
+      echo "  service-name    - Optional: specific service to rollback (e.g., api, postgres)"
+      echo "                    If omitted, rolls back all services in the stack"
+      echo ""
+      echo -e "${YELLOW}How it works:${NC}"
+      echo "  1. Lists all services in the specified stack"
+      echo "  2. For each service, uses 'docker service rollback' to revert to previous version"
+      echo "  3. Shows service status after rollback"
+      echo ""
+      echo -e "${YELLOW}Examples:${NC}"
+      echo "  ./scripts/rollback-swarm.sh                    # Rollback all services in 'obiente' stack"
+      echo "  ./scripts/rollback-swarm.sh obiente            # Rollback all services in 'obiente' stack"
+      echo "  ./scripts/rollback-swarm.sh obiente api        # Rollback only the 'api' service"
+      echo "  ./scripts/rollback-swarm.sh obiente postgres   # Rollback only the 'postgres' service"
+      echo ""
+      echo -e "${YELLOW}Notes:${NC}"
+      echo "  - Rollback only works if services have a previous version"
+      echo "  - Services are rolled back one at a time"
+      echo "  - Rollback is confirmed before execution (unless service-name is specified)"
+      echo "  - Use 'docker service ps <service>' to check rollback status"
+      echo ""
       ;;
     
     cleanup-swarm-complete.sh|cleanup-complete)
@@ -360,6 +407,7 @@ show_script_details() {
       echo ""
       echo "Available scripts:"
       echo "  - deploy-swarm.sh"
+      echo "  - rollback-swarm.sh"
       echo "  - cleanup-swarm-complete.sh"
       echo "  - diagnose-dashboard.sh"
       echo "  - calculate-replicas.sh"
