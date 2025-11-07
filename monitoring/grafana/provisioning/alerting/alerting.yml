@@ -42,13 +42,14 @@ groups:
     - refId: A
       queryType: ''
       datasourceUid: prometheus
+      relativeTimeRange:
+        from: 300
+        to: 0
       model:
         expr: up{job="api"} == 0
         intervalMs: 15000
         maxDataPoints: 43200
         format: time_series
-        relativeTimeRange:
-          from: 300
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -90,13 +91,14 @@ groups:
     - refId: A
       queryType: ''
       datasourceUid: prometheus
+      relativeTimeRange:
+        from: 600
+        to: 0
       model:
         expr: obiente_metrics_collection_failures_total > 0
         intervalMs: 15000
         maxDataPoints: 43200
         format: time_series
-        relativeTimeRange:
-          from: 600
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -138,13 +140,14 @@ groups:
     - refId: A
       queryType: ''
       datasourceUid: prometheus
+      relativeTimeRange:
+        from: 300
+        to: 0
       model:
         expr: obiente_circuit_breaker_state == 1
         intervalMs: 15000
         maxDataPoints: 43200
         format: time_series
-        relativeTimeRange:
-          from: 300
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -186,14 +189,15 @@ groups:
     - refId: A
       queryType: ''
       datasourceUid: prometheus
+      relativeTimeRange:
+        from: 600
+        to: 0
       model:
         expr: obiente_db_pool_active_connections / obiente_db_pool_max_connections
           > 0.9
         intervalMs: 15000
         maxDataPoints: 43200
         format: time_series
-        relativeTimeRange:
-          from: 600
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -235,14 +239,15 @@ groups:
     - refId: A
       queryType: ''
       datasourceUid: prometheus
+      relativeTimeRange:
+        from: 600
+        to: 0
       model:
         expr: rate(obiente_http_requests_total{status=~"5.."}[5m]) / rate(obiente_http_requests_total[5m])
           > 0.05
         intervalMs: 15000
         maxDataPoints: 43200
         format: time_series
-        relativeTimeRange:
-          from: 600
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -284,13 +289,14 @@ groups:
     - refId: A
       queryType: ''
       datasourceUid: prometheus
+      relativeTimeRange:
+        from: 600
+        to: 0
       model:
         expr: obiente_retry_queue_size > 100
         intervalMs: 15000
         maxDataPoints: 43200
         format: time_series
-        relativeTimeRange:
-          from: 600
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -338,13 +344,14 @@ groups:
     - refId: A
       queryType: ''
       datasourceUid: prometheus
+      relativeTimeRange:
+        from: 300
+        to: 0
       model:
         expr: up == 0
         intervalMs: 15000
         maxDataPoints: 43200
         format: time_series
-        relativeTimeRange:
-          from: 300
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -386,13 +393,14 @@ groups:
     - refId: A
       queryType: ''
       datasourceUid: prometheus
+      relativeTimeRange:
+        from: 600
+        to: 0
       model:
         expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.9
         intervalMs: 15000
         maxDataPoints: 43200
         format: time_series
-        relativeTimeRange:
-          from: 600
     - refId: B
       queryType: ''
       datasourceUid: '-100'
@@ -435,13 +443,14 @@ groups:
     - refId: A
       queryType: ''
       datasourceUid: prometheus
+      relativeTimeRange:
+        from: 600
+        to: 0
       model:
         expr: rate(container_cpu_usage_seconds_total[5m]) > 0.9
         intervalMs: 15000
         maxDataPoints: 43200
         format: time_series
-        relativeTimeRange:
-          from: 600
     - refId: B
       queryType: ''
       datasourceUid: '-100'

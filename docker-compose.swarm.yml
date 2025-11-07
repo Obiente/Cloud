@@ -408,6 +408,8 @@ services:
       GF_SERVER_ROOT_URL: https://grafana.${DOMAIN:-localhost}
       # Disable strict provisioning validation to avoid conflicts
       GF_PROVISIONING_DATASOURCES_ALLOW_DELETION: "true"
+      # Allow unsigned plugins (for lokiexplore-app and other community plugins)
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: "grafana-lokiexplore-app"
       # Pass database credentials as environment variables for datasource provisioning
       POSTGRES_USER: ${POSTGRES_USER:-obiente-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
