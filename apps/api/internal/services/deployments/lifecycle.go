@@ -1,8 +1,13 @@
 package deployments
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"strconv"
+	"strings"
 	"time"
 
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
@@ -320,6 +325,75 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				logger.Debug("[TriggerDeployment] No port detected from logs, using build result port: %d", result.Port)
 			}
 			
+			// If in Swarm mode, push image to local registry
+			if result.ImageName != "" {
+				// Check if we're in Swarm mode
+				enableSwarm := os.Getenv("ENABLE_SWARM")
+				isSwarmMode := false
+				if enableSwarm != "" {
+					enabled, err := strconv.ParseBool(strings.ToLower(enableSwarm))
+					if err == nil {
+						isSwarmMode = enabled
+					} else {
+						lower := strings.ToLower(strings.TrimSpace(enableSwarm))
+						isSwarmMode = lower == "true" || lower == "1" || lower == "yes" || lower == "on"
+					}
+				}
+				
+				if isSwarmMode {
+					// Push to local registry (accessible at registry:5000 from Swarm network)
+					registryImageName := fmt.Sprintf("registry:5000/%s", result.ImageName)
+					streamer.Write([]byte(fmt.Sprintf("📤 Pushing image to registry: %s\n", registryImageName)))
+					
+					// Authenticate with registry before pushing
+					registryUsername := os.Getenv("REGISTRY_USERNAME")
+					registryPassword := os.Getenv("REGISTRY_PASSWORD")
+					if registryUsername == "" {
+						registryUsername = "obiente" // Default username
+					}
+					if registryPassword != "" {
+						streamer.Write([]byte("🔐 Authenticating with registry...\n"))
+						loginCmd := exec.CommandContext(buildCtx, "docker", "login", "registry:5000", "-u", registryUsername, "-p", registryPassword)
+						var loginStderr bytes.Buffer
+						loginCmd.Stderr = &loginStderr
+						if err := loginCmd.Run(); err != nil {
+							logger.Warn("[TriggerDeployment] Failed to authenticate with registry: %v (stderr: %s)", err, loginStderr.String())
+							streamer.WriteStderr([]byte(fmt.Sprintf("⚠️  Warning: Failed to authenticate with registry: %v\n", err)))
+							streamer.WriteStderr([]byte(fmt.Sprintf("   Continuing without authentication (may fail if registry requires auth).\n")))
+						} else {
+							streamer.Write([]byte("✅ Authenticated with registry\n"))
+						}
+					} else {
+						logger.Warn("[TriggerDeployment] REGISTRY_PASSWORD not set - pushing without authentication")
+						streamer.WriteStderr([]byte("⚠️  Warning: REGISTRY_PASSWORD not set - pushing without authentication\n"))
+					}
+					
+					// Tag the image
+					tagCmd := exec.CommandContext(buildCtx, "docker", "tag", result.ImageName, registryImageName)
+					if err := tagCmd.Run(); err != nil {
+						logger.Warn("[TriggerDeployment] Failed to tag image %s as %s: %v", result.ImageName, registryImageName, err)
+						streamer.WriteStderr([]byte(fmt.Sprintf("⚠️  Warning: Failed to tag image for registry: %v\n", err)))
+					} else {
+						// Push to registry
+						pushCmd := exec.CommandContext(buildCtx, "docker", "push", registryImageName)
+						var pushStdout bytes.Buffer
+						var pushStderr bytes.Buffer
+						pushCmd.Stdout = &pushStdout
+						pushCmd.Stderr = &pushStderr
+						if err := pushCmd.Run(); err != nil {
+							logger.Warn("[TriggerDeployment] Failed to push image %s to registry: %v (stderr: %s)", registryImageName, err, pushStderr.String())
+							streamer.WriteStderr([]byte(fmt.Sprintf("⚠️  Warning: Failed to push image to registry: %v\n", err)))
+							streamer.WriteStderr([]byte(fmt.Sprintf("   Registry may not be available or authentication failed. Continuing with local image.\n")))
+						} else {
+							logger.Info("[TriggerDeployment] Successfully pushed image %s to registry", registryImageName)
+							streamer.Write([]byte(fmt.Sprintf("✅ Image pushed to registry successfully\n")))
+							// Update image name to use registry URL
+							result.ImageName = registryImageName
+						}
+					}
+				}
+			}
+
 			streamer.Write([]byte("🚀 Deploying to orchestrator...\n"))
 
 			// Update build with build results

@@ -1639,6 +1639,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		"--name", swarmServiceName,
 		"--network", "obiente_obiente-network", // Use the Swarm network name
 		"--replicas", "1",
+		"--with-registry-auth=true", // Enable registry auth for private images
 	}
 
 	// Add labels
@@ -1678,6 +1679,52 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	// Use "any" to always restart (closest to "unless-stopped" behavior)
 	args = append(args, "--restart-condition", "any")
 
+	// Verify image exists locally before creating service
+	// In Swarm mode, the image must exist on the node where the task is scheduled
+	imageCheckArgs := []string{"image", "inspect", config.Image}
+	imageCheckCmd := exec.CommandContext(ctx, "docker", imageCheckArgs...)
+	var imageCheckStderr bytes.Buffer
+	imageCheckCmd.Stderr = &imageCheckStderr
+	if err := imageCheckCmd.Run(); err != nil {
+		logger.Warn("[DeploymentManager] Image %s not found locally, attempting to pull...", config.Image)
+		
+		// If image is from our internal registry, authenticate first
+		if strings.HasPrefix(config.Image, "registry:5000/") {
+			registryUsername := os.Getenv("REGISTRY_USERNAME")
+			registryPassword := os.Getenv("REGISTRY_PASSWORD")
+			if registryUsername == "" {
+				registryUsername = "obiente" // Default username
+			}
+			if registryPassword != "" {
+				logger.Info("[DeploymentManager] Authenticating with registry before pulling image...")
+				loginCmd := exec.CommandContext(ctx, "docker", "login", "registry:5000", "-u", registryUsername, "-p", registryPassword)
+				var loginStderr bytes.Buffer
+				loginCmd.Stderr = &loginStderr
+				if loginErr := loginCmd.Run(); loginErr != nil {
+					logger.Warn("[DeploymentManager] Failed to authenticate with registry: %v (stderr: %s)", loginErr, loginStderr.String())
+					// Continue anyway - might work without auth or auth might be cached
+				} else {
+					logger.Debug("[DeploymentManager] Successfully authenticated with registry")
+				}
+			} else {
+				logger.Warn("[DeploymentManager] REGISTRY_PASSWORD not set - pulling without authentication")
+			}
+		}
+		
+		// Try to pull the image (in case it's in a registry)
+		pullArgs := []string{"image", "pull", config.Image}
+		pullCmd := exec.CommandContext(ctx, "docker", pullArgs...)
+		var pullStderr bytes.Buffer
+		pullCmd.Stderr = &pullStderr
+		if pullErr := pullCmd.Run(); pullErr != nil {
+			logger.Error("[DeploymentManager] Failed to pull image %s: %v (stderr: %s)", config.Image, pullErr, pullStderr.String())
+			return "", "", fmt.Errorf("image %s not found locally and could not be pulled: %w (stderr: %s)", config.Image, pullErr, pullStderr.String())
+		}
+		logger.Info("[DeploymentManager] Successfully pulled image %s", config.Image)
+	} else {
+		logger.Debug("[DeploymentManager] Image %s exists locally", config.Image)
+	}
+
 	// Add image
 	args = append(args, config.Image)
 
@@ -1705,9 +1752,32 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 
 	serviceID := strings.TrimSpace(stdout.String())
 	logger.Info("[DeploymentManager] Created Swarm service %s (ID: %s)", swarmServiceName, serviceID)
+	logger.Info("[DeploymentManager] Service image: %s, start command: %v", config.Image, config.StartCommand)
 
 	// Wait a moment for the service to create a task
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
+
+	// Check task status and log any errors
+	taskStatusArgs := []string{"service", "ps", swarmServiceName, "--format", "{{.ID}}\t{{.Name}}\t{{.CurrentState}}\t{{.Error}}", "--no-trunc"}
+	taskStatusCmd := exec.CommandContext(ctx, "docker", taskStatusArgs...)
+	var taskStatusStdout bytes.Buffer
+	var taskStatusStderr bytes.Buffer
+	taskStatusCmd.Stdout = &taskStatusStdout
+	taskStatusCmd.Stderr = &taskStatusStderr
+	if err := taskStatusCmd.Run(); err == nil {
+		taskStatus := strings.TrimSpace(taskStatusStdout.String())
+		if taskStatus != "" {
+			logger.Info("[DeploymentManager] Service %s task status:\n%s", swarmServiceName, taskStatus)
+			// Check if there are any errors
+			if strings.Contains(taskStatus, "Error") || strings.Contains(taskStatus, "Failed") {
+				logger.Warn("[DeploymentManager] Service %s has task errors - check task status above", swarmServiceName)
+			}
+		} else {
+			logger.Warn("[DeploymentManager] Service %s has no tasks yet - this may indicate the service is still starting or there's an issue", swarmServiceName)
+		}
+	} else {
+		logger.Warn("[DeploymentManager] Failed to check task status for service %s: %v (stderr: %s)", swarmServiceName, err, taskStatusStderr.String())
+	}
 
 	// Get container ID from service tasks
 	// In Swarm, we need to inspect the service and get the task's container ID
@@ -1733,7 +1803,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 				// Get container ID from the first task
 				taskID := strings.TrimSpace(taskIDList[0])
 				if taskID != "" {
-					// Inspect the task to get container ID
+					// Inspect the task to get container ID and check for errors
 					taskInspectArgs := []string{"inspect", taskID, "--format", "{{.Status.ContainerStatus.ContainerID}}"}
 					taskInspectCmd := exec.CommandContext(ctx, "docker", taskInspectArgs...)
 					var taskInspectStdout bytes.Buffer
@@ -1741,8 +1811,70 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 					if err := taskInspectCmd.Run(); err == nil {
 						containerID = strings.TrimSpace(taskInspectStdout.String())
 					}
+					
+					// Also check task error message and state
+					taskErrorArgs := []string{"inspect", taskID, "--format", "{{.Status.Err}}"}
+					taskErrorCmd := exec.CommandContext(ctx, "docker", taskErrorArgs...)
+					var taskErrorStdout bytes.Buffer
+					taskErrorCmd.Stdout = &taskErrorStdout
+					if err := taskErrorCmd.Run(); err == nil {
+						taskError := strings.TrimSpace(taskErrorStdout.String())
+						if taskError != "" && taskError != "<no value>" {
+							logger.Error("[DeploymentManager] Task %s for service %s has error: %s", taskID[:12], swarmServiceName, taskError)
+						}
+					}
+					
+					// Check task state and exit code
+					taskStateArgs := []string{"inspect", taskID, "--format", "{{.Status.State}}\t{{.Status.ContainerStatus.ExitCode}}"}
+					taskStateCmd := exec.CommandContext(ctx, "docker", taskStateArgs...)
+					var taskStateStdout bytes.Buffer
+					taskStateCmd.Stdout = &taskStateStdout
+					if err := taskStateCmd.Run(); err == nil {
+						taskState := strings.TrimSpace(taskStateStdout.String())
+						if taskState != "" {
+							logger.Info("[DeploymentManager] Task %s state: %s", taskID[:12], taskState)
+							// If task exited, try to get service logs (Swarm services log differently)
+							if strings.Contains(taskState, "complete") || strings.Contains(taskState, "shutdown") {
+								// Try to get service logs (Swarm aggregates logs from all tasks)
+								logsArgs := []string{"service", "logs", "--tail", "50", "--raw", swarmServiceName}
+								logsCmd := exec.CommandContext(ctx, "docker", logsArgs...)
+								var logsStdout bytes.Buffer
+								var logsStderr bytes.Buffer
+								logsCmd.Stdout = &logsStdout
+								logsCmd.Stderr = &logsStderr
+								if err := logsCmd.Run(); err == nil {
+									logs := strings.TrimSpace(logsStdout.String())
+									if logs != "" {
+										logger.Error("[DeploymentManager] Service %s logs (last 50 lines):\n%s", swarmServiceName, logs)
+									}
+								} else {
+									// Fallback: try container logs if we have container ID
+									if containerID != "" {
+										containerLogsArgs := []string{"logs", "--tail", "50", containerID}
+										containerLogsCmd := exec.CommandContext(ctx, "docker", containerLogsArgs...)
+										var containerLogsStdout bytes.Buffer
+										var containerLogsStderr bytes.Buffer
+										containerLogsCmd.Stdout = &containerLogsStdout
+										containerLogsCmd.Stderr = &containerLogsStderr
+										if err := containerLogsCmd.Run(); err == nil {
+											logs := strings.TrimSpace(containerLogsStdout.String())
+											if logs != "" {
+												logger.Error("[DeploymentManager] Container %s logs (last 50 lines):\n%s", containerID[:12], logs)
+											}
+											errLogs := strings.TrimSpace(containerLogsStderr.String())
+											if errLogs != "" {
+												logger.Error("[DeploymentManager] Container %s stderr (last 50 lines):\n%s", containerID[:12], errLogs)
+											}
+										}
+									}
+								}
+							}
+						}
+					}
 				}
 			}
+		} else {
+			logger.Warn("[DeploymentManager] Service %s has no tasks - service may be failing to start. Check: docker service ps %s", swarmServiceName, swarmServiceName)
 		}
 	}
 
@@ -2556,7 +2688,8 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 		time.Sleep(2 * time.Second)
 		
 		// Deploy as a Swarm stack - this creates Swarm services that Traefik can discover
-		args := []string{"stack", "deploy", "-c", composeFile, "--with-registry-auth", projectName}
+		// Use --with-registry-auth=true to pass registry credentials to Swarm
+		args := []string{"stack", "deploy", "-c", composeFile, "--with-registry-auth=true", projectName}
 		logger.Info("[DeploymentManager] Deploying stack %s with docker stack deploy (creates Swarm services)", projectName)
 		
 		cmd := exec.CommandContext(ctx, "docker", args...)

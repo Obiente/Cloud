@@ -30,6 +30,7 @@ REQUIRED_DIRS=(
   "/var/lib/obiente"
   "/tmp/obiente-volumes"
   "/tmp/obiente-deployments"
+  "/var/lib/obiente/registry-auth"
 )
 
 MISSING_DIRS=()
@@ -48,6 +49,14 @@ if [ ${#MISSING_DIRS[@]} -gt 0 ]; then
   echo "📋 Creating directories on this node..."
   mkdir -p "${MISSING_DIRS[@]}"
   chmod 755 "${MISSING_DIRS[@]}"
+  
+  # Special handling for registry-auth directory
+  if [[ " ${MISSING_DIRS[@]} " =~ " /var/lib/obiente/registry-auth " ]]; then
+    echo ""
+    echo "🔐 Registry auth directory created. Setting up authentication..."
+    echo "   Run: ./scripts/setup-registry-auth.sh"
+    echo "   Or manually create htpasswd file in /var/lib/obiente/registry-auth/"
+  fi
   echo "✅ Directories created!"
   echo ""
   echo "⚠️  IMPORTANT: The API service runs on ALL nodes (mode: global)."
@@ -133,6 +142,25 @@ if ! docker network inspect "$NETWORK_NAME" &>/dev/null; then
   echo "💡 Note: Overlay networks can only be created on Swarm manager nodes"
   echo ""
   exit 1
+fi
+
+# Check if registry auth is configured
+if [ ! -f "/var/lib/obiente/registry-auth/htpasswd" ]; then
+  echo "⚠️  Warning: Registry authentication not configured!"
+  echo ""
+  echo "📋 Setup registry authentication:"
+  echo "   ./scripts/setup-registry-auth.sh"
+  echo ""
+  echo "   Or set custom credentials:"
+  echo "   REGISTRY_USERNAME=myuser REGISTRY_PASSWORD=mypassword ./scripts/setup-registry-auth.sh"
+  echo ""
+  read -p "Continue without registry auth? (y/N) " -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Deployment cancelled. Please setup registry authentication first."
+    exit 1
+  fi
+  echo "⚠️  Continuing without registry authentication (registry will reject push/pull requests)"
 fi
 
 # Deploy the main stack with environment variables loaded from .env

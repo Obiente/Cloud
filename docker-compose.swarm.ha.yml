@@ -851,6 +851,50 @@ services:
     networks:
       - obiente-network
 
+  # Docker Registry - Host images for Swarm deployments
+  registry:
+    image: registry:2
+    environment:
+      REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /var/lib/registry
+      REGISTRY_HTTP_ADDR: 0.0.0.0:5000
+      # Allow deletion of images (useful for cleanup)
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+      # Enable basic auth for private repositories
+      REGISTRY_AUTH: htpasswd
+      REGISTRY_AUTH_HTPASSWD_PATH: /auth/htpasswd
+      REGISTRY_AUTH_HTPASSWD_REALM: "Obiente Cloud Registry"
+    volumes:
+      - registry_data:/var/lib/registry
+      # Use bind mount for auth directory to allow easy setup from host
+      - /var/lib/obiente/registry-auth:/auth:ro
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 5000 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 5000 || exit 1; fi'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    networks:
+      - obiente-network
+    labels:
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.registry.rule=Host(`registry.${DOMAIN:-my.obiente.cloud}`)"
+      - "traefik.http.routers.registry.entrypoints=websecure"
+      - "traefik.http.routers.registry.tls.certresolver=letsencrypt"
+      - "traefik.http.services.registry.loadbalancer.server.port=5000"
+
 # ============================================================================
 # VOLUMES
 # ============================================================================
@@ -892,6 +936,10 @@ volumes:
   prometheus_data:
     driver: local
   grafana_data:
+    driver: local
+
+  # Docker Registry
+  registry_data:
     driver: local
 
 # ============================================================================
