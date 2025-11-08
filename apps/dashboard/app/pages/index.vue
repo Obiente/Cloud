@@ -1,17 +1,17 @@
 <template>
   <div class="min-h-screen bg-background">
     <!-- Hero Section -->
-
-    <OuiContainer
-      as="nav"
-      :size="isScrolled ? '5xl' : '7xl'"
-      class="flex items-center rounded-xl justify-between w-full mx-auto transform-gpu transition-all duration-500 ease-out border sticky top-2 md:top-10 z-30 will-change-transform"
-      :class="
-        isScrolled
-          ? 'py-1.5 px-2 md:py-2 md:px-2 bg-background/80 backdrop-blur-md shadow-sm border-border-muted'
-          : 'p-0 bg-background border-transparent'
-      "
-    >
+    <div class="fixed top-0 left-0 right-0 z-30 pt-2 md:pt-5 px-3 md:px-4">
+      <OuiContainer
+        as="nav"
+        :size="isScrolled ? '5xl' : '7xl'"
+        class="flex items-center rounded-xl justify-between w-full mx-auto transform-gpu transition-all duration-500 ease-out border will-change-transform"
+        :class="
+          isScrolled
+            ? 'py-1.5 px-2 md:py-2 md:px-2 bg-background/80 backdrop-blur-md shadow-sm border-border-muted'
+            : 'p-0 bg-background border-transparent'
+        "
+      >
       <!-- Navigation -->
 
       <OuiFlex align="center" gap="md" class="flex-1 min-w-0">
@@ -40,8 +40,9 @@
           >Sign In</OuiButton
         >
       </OuiFlex>
-    </OuiContainer>
-    <OuiContainer size="7xl" class="relative px-3 md:px-4">
+      </OuiContainer>
+    </div>
+    <OuiContainer size="7xl" class="relative px-3 md:px-4 pt-20 md:pt-32">
       <!-- Hero Content -->
       <OuiStack
         gap="xl"
