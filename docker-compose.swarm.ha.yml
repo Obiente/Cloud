@@ -546,7 +546,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "wget --no-verbose --tries=1 --spider http://localhost:${GO_API_PORT:-3001}/health || exit 1",
+          "curl -f http://localhost:${GO_API_PORT:-3001}/health || exit 1",
         ]
       interval: 30s
       timeout: 10s
