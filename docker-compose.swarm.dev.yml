@@ -144,9 +144,8 @@ services:
       PRICING_STORAGE_COST_PER_BYTE_MONTH: ${PRICING_STORAGE_COST_PER_BYTE_MONTH:-0.000000000186264}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      CONSOLE_URL: ${CONSOLE_URL:-${DASHBOARD_URL:-${APP_CONSOLE_URL:-http://localhost:3000}}}
-      DASHBOARD_URL: ${DASHBOARD_URL:-${CONSOLE_URL:-${APP_CONSOLE_URL:-http://localhost:3000}}}
-      APP_CONSOLE_URL: ${APP_CONSOLE_URL:-${CONSOLE_URL:-${DASHBOARD_URL:-http://localhost:3000}}}
+      # Dashboard URL for redirects (used by billing service and email notifications)
+      DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3000}
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
       # SMTP configuration for email delivery
       SMTP_HOST: ${SMTP_HOST:-}

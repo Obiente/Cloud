@@ -482,10 +482,8 @@ services:
       # Stripe Payment Processing
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      # Console/Dashboard URL for redirects (used by billing service)
-      CONSOLE_URL: ${CONSOLE_URL:-${DASHBOARD_URL:-${APP_CONSOLE_URL:-https://app.obiente.cloud}}}
-      DASHBOARD_URL: ${DASHBOARD_URL:-${CONSOLE_URL:-${APP_CONSOLE_URL:-https://app.obiente.cloud}}}
-      APP_CONSOLE_URL: ${APP_CONSOLE_URL:-${CONSOLE_URL:-${DASHBOARD_URL:-https://app.obiente.cloud}}}
+      # Dashboard URL for redirects (used by billing service and email notifications)
+      DASHBOARD_URL: ${DASHBOARD_URL:-https://obiente.cloud}
       # Support email (optional)
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
       # SMTP configuration for email delivery
