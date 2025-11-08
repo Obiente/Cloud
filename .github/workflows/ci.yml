@@ -38,6 +38,7 @@ jobs:
           cache: "pnpm"
 
       # Cache Nx computation cache for faster task execution
+      # Nx Cloud also provides distributed caching, but local cache helps too
       - name: Cache Nx
         uses: actions/cache@v4
         with:
@@ -46,12 +47,26 @@ jobs:
           restore-keys: |
             nx-${{ runner.os }}-
 
+      # Cache TypeScript build info for faster type checking
+      - name: Cache TypeScript build info
+        uses: actions/cache@v4
+        with:
+          path: |
+            apps/dashboard/tsconfig.tsbuildinfo
+            packages/*/tsconfig.tsbuildinfo
+            **/tsconfig.tsbuildinfo
+          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('**/tsconfig*.json', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            tsbuildinfo-${{ runner.os }}-
+
       # Cache Nuxt build artifacts (.nuxt directory)
+      # Use more specific hash to avoid unnecessary cache invalidation
+      # Only hash config files and lockfile, not all source files (Nx handles source changes)
       - name: Cache Nuxt build
         uses: actions/cache@v4
         with:
           path: apps/dashboard/.nuxt
-          key: nuxt-${{ runner.os }}-${{ hashFiles('apps/dashboard/**/*.{ts,js,vue}', 'apps/dashboard/nuxt.config.ts', 'pnpm-lock.yaml') }}
+          key: nuxt-${{ runner.os }}-${{ hashFiles('apps/dashboard/nuxt.config.ts', 'pnpm-lock.yaml', 'package.json') }}
           restore-keys: |
             nuxt-${{ runner.os }}-
 
@@ -60,22 +75,38 @@ jobs:
         uses: actions/cache@v4
         with:
           path: apps/dashboard/.nitro
-          key: nitro-${{ runner.os }}-${{ hashFiles('apps/dashboard/**/*.{ts,js,vue}', 'apps/dashboard/nuxt.config.ts', 'pnpm-lock.yaml') }}
+          key: nitro-${{ runner.os }}-${{ hashFiles('apps/dashboard/nuxt.config.ts', 'pnpm-lock.yaml', 'package.json') }}
           restore-keys: |
             nitro-${{ runner.os }}-
 
-      # Cache Vite build cache
+      # Cache Vite build cache (Dependency pre-bundling cache)
       - name: Cache Vite
         uses: actions/cache@v4
         with:
           path: |
             apps/dashboard/node_modules/.vite
             node_modules/.vite
-          key: vite-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'apps/dashboard/nuxt.config.ts') }}
+          key: vite-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'apps/dashboard/nuxt.config.ts', 'package.json') }}
           restore-keys: |
             vite-${{ runner.os }}-
 
-      - run: pnpm install --frozen-lockfile
+      # Cache node_modules for faster installs (complements pnpm store cache)
+      # This is especially useful on self-hosted runners where disk I/O might be slower
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            apps/dashboard/node_modules
+            packages/*/node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            node-modules-${{ runner.os }}-
+
+      # Install dependencies
+      # Use --prefer-offline to use cached packages when available
+      # This works well with the pnpm store cache from setup-node
+      - run: pnpm install --frozen-lockfile --prefer-offline
 
       # Prepend any command with "nx-cloud record --" to record its logs to Nx Cloud
       # - run: pnpm exec nx-cloud record -- echo Hello World

@@ -93,6 +93,14 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Get commit message
+        id: commit-msg
+        run: |
+          COMMIT_MSG=$(git log -1 --format=%s ${{ github.sha }})
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMIT_MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Build and push API Docker image
         uses: docker/build-push-action@v5
         with:
@@ -104,6 +112,8 @@ jobs:
           build-args: |
             API_COMMIT=${{ github.sha }}
             DASHBOARD_COMMIT=${{ github.sha }}
+            API_COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
+            DASHBOARD_COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
@@ -157,6 +167,14 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Get commit message
+        id: commit-msg
+        run: |
+          COMMIT_MSG=$(git log -1 --format=%s ${{ github.sha }})
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMIT_MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Build and push Dashboard Docker image
         uses: docker/build-push-action@v5
         with:
@@ -167,6 +185,7 @@ jobs:
           labels: ${{ steps.meta-dashboard.outputs.labels }}
           build-args: |
             DASHBOARD_COMMIT=${{ github.sha }}
+            DASHBOARD_COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
             BUILDKIT_INLINE_CACHE=1
           # Use GitHub Actions cache for Docker layer caching
           cache-from: |
