@@ -144,6 +144,7 @@ func InitDatabase() error {
 		&OrganizationPlan{},
 		&OrgQuota{},
 		&MonthlyCreditGrant{},
+		&StrayContainer{},
 	); err != nil {
 		return fmt.Errorf("failed to auto-migrate: %w", err)
 	}

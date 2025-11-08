@@ -1874,7 +1874,12 @@ func (os *OrchestratorService) runStrayContainerCleanup() {
 	sevenDaysAgo := now.Add(-7 * 24 * time.Hour)
 	var oldStrayContainers []database.StrayContainer
 	if err := database.DB.Where("stopped_at < ? AND volumes_deleted_at IS NULL", sevenDaysAgo).Find(&oldStrayContainers).Error; err != nil {
-		logger.Warn("[Orchestrator] Failed to query old stray containers: %v", err)
+		// Check if error is due to missing table (table might not exist yet)
+		if database.DB.Migrator().HasTable(&database.StrayContainer{}) {
+			logger.Warn("[Orchestrator] Failed to query old stray containers: %v", err)
+		} else {
+			logger.Debug("[Orchestrator] stray_containers table does not exist yet, skipping volume cleanup")
+		}
 		return
 	}
 
