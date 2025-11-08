@@ -40,11 +40,11 @@ services:
     image: bitnami/pgpool:4
     environment:
       PGPOOL_BACKEND_NODES: 0:patroni-1:5432,1:patroni-2:5432,2:patroni-3:5432
-      PGPOOL_SR_CHECK_USER: ${POSTGRES_USER:-obiente-postgres}
-      PGPOOL_SR_CHECK_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      PGPOOL_SR_CHECK_USER: ${POSTGRES_USER:-obiente_postgres}
+      PGPOOL_SR_CHECK_PASSWORD: ${POSTGRES_PASSWORD:-obiente_postgres}
       PGPOOL_ENABLE_LDAP: "no"
-      PGPOOL_POSTGRES_USERNAME: ${POSTGRES_USER:-obiente-postgres}
-      PGPOOL_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      PGPOOL_POSTGRES_USERNAME: ${POSTGRES_USER:-obiente_postgres}
+      PGPOOL_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-obiente_postgres}
       PGPOOL_ADMIN_USERNAME: admin
       PGPOOL_ADMIN_PASSWORD: ${PGPOOL_ADMIN_PASSWORD:-adminpassword}
       PGPOOL_ENABLE_LOAD_BALANCING: "yes"
@@ -80,8 +80,8 @@ services:
       PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
       PATRONI_POSTGRESQL_DATA_DIR: /var/lib/postgresql/data
       PATRONI_POSTGRESQL_PGPASS: /tmp/pgpass
-      PATRONI_SUPERUSER_USERNAME: ${POSTGRES_USER:-obiente-postgres}
-      PATRONI_SUPERUSER_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      PATRONI_SUPERUSER_USERNAME: ${POSTGRES_USER:-obiente_postgres}
+      PATRONI_SUPERUSER_PASSWORD: ${POSTGRES_PASSWORD:-obiente_postgres}
       PATRONI_REPLICATION_USERNAME: replicator
       PATRONI_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator-password}
       PATRONI_admin_PASSWORD: ${PATRONI_ADMIN_PASSWORD:-admin}
@@ -117,8 +117,8 @@ services:
       PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
       PATRONI_POSTGRESQL_DATA_DIR: /var/lib/postgresql/data
       PATRONI_POSTGRESQL_PGPASS: /tmp/pgpass
-      PATRONI_SUPERUSER_USERNAME: ${POSTGRES_USER:-obiente-postgres}
-      PATRONI_SUPERUSER_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      PATRONI_SUPERUSER_USERNAME: ${POSTGRES_USER:-obiente_postgres}
+      PATRONI_SUPERUSER_PASSWORD: ${POSTGRES_PASSWORD:-obiente_postgres}
       PATRONI_REPLICATION_USERNAME: replicator
       PATRONI_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator-password}
       PATRONI_admin_PASSWORD: ${PATRONI_ADMIN_PASSWORD:-admin}
@@ -154,8 +154,8 @@ services:
       PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
       PATRONI_POSTGRESQL_DATA_DIR: /var/lib/postgresql/data
       PATRONI_POSTGRESQL_PGPASS: /tmp/pgpass
-      PATRONI_SUPERUSER_USERNAME: ${POSTGRES_USER:-obiente-postgres}
-      PATRONI_SUPERUSER_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      PATRONI_SUPERUSER_USERNAME: ${POSTGRES_USER:-obiente_postgres}
+      PATRONI_SUPERUSER_PASSWORD: ${POSTGRES_PASSWORD:-obiente_postgres}
       PATRONI_REPLICATION_USERNAME: replicator
       PATRONI_REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator-password}
       PATRONI_admin_PASSWORD: ${PATRONI_ADMIN_PASSWORD:-admin}
@@ -186,11 +186,11 @@ services:
     image: bitnami/pgpool:4
     environment:
       PGPOOL_BACKEND_NODES: 0:metrics-patroni-1:5432,1:metrics-patroni-2:5432,2:metrics-patroni-3:5432
-      PGPOOL_SR_CHECK_USER: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
-      PGPOOL_SR_CHECK_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      PGPOOL_SR_CHECK_USER: ${METRICS_DB_USER:-obiente_postgres}
+      PGPOOL_SR_CHECK_PASSWORD: ${METRICS_DB_PASSWORD:-obiente_postgres}
       PGPOOL_ENABLE_LDAP: "no"
-      PGPOOL_POSTGRES_USERNAME: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
-      PGPOOL_POSTGRES_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      PGPOOL_POSTGRES_USERNAME: ${METRICS_DB_USER:-obiente_postgres}
+      PGPOOL_POSTGRES_PASSWORD: ${METRICS_DB_PASSWORD:-obiente_postgres}
       PGPOOL_ADMIN_USERNAME: admin
       PGPOOL_ADMIN_PASSWORD: ${METRICS_PGPOOL_ADMIN_PASSWORD:-${PGPOOL_ADMIN_PASSWORD:-adminpassword}}
       PGPOOL_ENABLE_LOAD_BALANCING: "yes"
@@ -226,8 +226,8 @@ services:
       PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
       PATRONI_POSTGRESQL_DATA_DIR: /var/lib/postgresql/data
       PATRONI_POSTGRESQL_PGPASS: /tmp/pgpass
-      PATRONI_SUPERUSER_USERNAME: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
-      PATRONI_SUPERUSER_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      PATRONI_SUPERUSER_USERNAME: ${METRICS_DB_USER:-obiente_postgres}
+      PATRONI_SUPERUSER_PASSWORD: ${METRICS_DB_PASSWORD:-obiente_postgres}
       PATRONI_REPLICATION_USERNAME: metrics-replicator
       PATRONI_REPLICATION_PASSWORD: ${METRICS_REPLICATION_PASSWORD:-${REPLICATION_PASSWORD:-metrics-replicator-password}}
       PATRONI_admin_PASSWORD: ${METRICS_PATRONI_ADMIN_PASSWORD:-${PATRONI_ADMIN_PASSWORD:-admin}}
@@ -263,8 +263,8 @@ services:
       PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
       PATRONI_POSTGRESQL_DATA_DIR: /var/lib/postgresql/data
       PATRONI_POSTGRESQL_PGPASS: /tmp/pgpass
-      PATRONI_SUPERUSER_USERNAME: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
-      PATRONI_SUPERUSER_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      PATRONI_SUPERUSER_USERNAME: ${METRICS_DB_USER:-obiente_postgres}
+      PATRONI_SUPERUSER_PASSWORD: ${METRICS_DB_PASSWORD:-obiente_postgres}
       PATRONI_REPLICATION_USERNAME: metrics-replicator
       PATRONI_REPLICATION_PASSWORD: ${METRICS_REPLICATION_PASSWORD:-${REPLICATION_PASSWORD:-metrics-replicator-password}}
       PATRONI_admin_PASSWORD: ${METRICS_PATRONI_ADMIN_PASSWORD:-${PATRONI_ADMIN_PASSWORD:-admin}}
@@ -300,8 +300,8 @@ services:
       PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
       PATRONI_POSTGRESQL_DATA_DIR: /var/lib/postgresql/data
       PATRONI_POSTGRESQL_PGPASS: /tmp/pgpass
-      PATRONI_SUPERUSER_USERNAME: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
-      PATRONI_SUPERUSER_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      PATRONI_SUPERUSER_USERNAME: ${METRICS_DB_USER:-obiente_postgres}
+      PATRONI_SUPERUSER_PASSWORD: ${METRICS_DB_PASSWORD:-obiente_postgres}
       PATRONI_REPLICATION_USERNAME: metrics-replicator
       PATRONI_REPLICATION_PASSWORD: ${METRICS_REPLICATION_PASSWORD:-${REPLICATION_PASSWORD:-metrics-replicator-password}}
       PATRONI_admin_PASSWORD: ${METRICS_PATRONI_ADMIN_PASSWORD:-${PATRONI_ADMIN_PASSWORD:-admin}}
@@ -422,14 +422,14 @@ services:
       # Connect to PostgreSQL via PgPool
       DB_HOST: pgpool
       DB_PORT: 5432
-      DB_USER: ${POSTGRES_USER:-obiente-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      DB_USER: ${POSTGRES_USER:-obiente_postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-obiente_postgres}
       DB_NAME: ${POSTGRES_DB:-obiente}
       # Metrics database (TimescaleDB via PgPool)
       METRICS_DB_HOST: metrics-pgpool
       METRICS_DB_PORT: 5432
-      METRICS_DB_USER: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
-      METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      METRICS_DB_USER: ${METRICS_DB_USER:-obiente_postgres}
+      METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-obiente_postgres}
       METRICS_DB_NAME: ${METRICS_DB_NAME:-obiente_metrics}
       METRICS_COLLECTION_INTERVAL: ${METRICS_COLLECTION_INTERVAL:-5s}
       METRICS_STORAGE_INTERVAL: ${METRICS_STORAGE_INTERVAL:-60s}
@@ -651,8 +651,8 @@ services:
     environment:
       DB_HOST: pgpool
       DB_PORT: 5432
-      DB_USER: ${POSTGRES_USER:-obiente-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
+      DB_USER: ${POSTGRES_USER:-obiente_postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-obiente_postgres}
       DB_NAME: ${POSTGRES_DB:-obiente}
       TRAEFIK_IPS: ${TRAEFIK_IPS:-} # Format: "region1:ip1,ip2;region2:ip3,ip4"
       DNS_IPS: ${DNS_IPS:-} # Comma-separated list of DNS server IPs
@@ -762,10 +762,10 @@ services:
       # Allow unsigned plugins (for lokiexplore-app and other community plugins)
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: "grafana-lokiexplore-app"
       # Pass database credentials as environment variables for datasource provisioning
-      POSTGRES_USER: ${POSTGRES_USER:-obiente-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-obiente-postgres}
-      METRICS_DB_USER: ${METRICS_DB_USER:-${POSTGRES_USER:-obiente-postgres}}
-      METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-${POSTGRES_PASSWORD:-obiente-postgres}}
+      POSTGRES_USER: ${POSTGRES_USER:-obiente_postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-obiente_postgres}
+      METRICS_DB_USER: ${METRICS_DB_USER:-obiente_postgres}
+      METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-obiente_postgres}
       # Datasource host configuration (for HA, use pgpool service names)
       GRAFANA_POSTGRES_HOST: ${GRAFANA_POSTGRES_HOST:-pgpool}
       GRAFANA_METRICS_DB_HOST: ${GRAFANA_METRICS_DB_HOST:-metrics-pgpool}
