@@ -2,7 +2,7 @@
 # Create Docker Swarm network for Obiente Cloud
 # Creates the overlay network that connects all Obiente services
 # Run on a Docker Swarm manager node
-# Usage: ./scripts/create-swarm-network.sh [--subnet <subnet>]
+# Usage: ./scripts/create-swarm-network.sh [--stack-name <name>] [--subnet <subnet>]
 
 set -e
 
@@ -20,13 +20,18 @@ NC='\033[0m'
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
+    --stack-name)
+      STACK_NAME="$2"
+      NETWORK_NAME="${STACK_NAME}_obiente-network"
+      shift 2
+      ;;
     --subnet)
       SUBNET="$2"
       shift 2
       ;;
     *)
       echo -e "${RED}❌ Unknown option: $1${NC}"
-      echo "Usage: ./scripts/create-swarm-network.sh [--subnet <subnet>]"
+      echo "Usage: ./scripts/create-swarm-network.sh [--stack-name <name>] [--subnet <subnet>]"
       exit 1
       ;;
   esac
@@ -77,7 +82,7 @@ fi
 # Create the network
 echo -e "${BLUE}📦 Creating overlay network...${NC}"
 
-NETWORK_CREATE_CMD="docker network create --driver overlay"
+NETWORK_CREATE_CMD="docker network create --driver overlay --attachable"
 if [ -n "$SUBNET" ]; then
   echo -e "${BLUE}  Using custom subnet: ${SUBNET}${NC}"
   NETWORK_CREATE_CMD="$NETWORK_CREATE_CMD --subnet $SUBNET"
