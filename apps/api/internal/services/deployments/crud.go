@@ -215,27 +215,35 @@ func (s *Service) GetDeployment(ctx context.Context, req *connect.Request[deploy
 			deployment.ContainersTotal = proto.Int32(total)
 			
 			// Sync deployment status with actual container status
-			// If deployment has containers but none are running, it should be STOPPED
-			// If some containers are running, it should be RUNNING
-			if total > 0 {
-				if running == 0 {
-					// All containers stopped - update status to STOPPED
-					deployment.Status = deploymentsv1.DeploymentStatus_STOPPED
-					// Optionally update DB to keep it in sync (async to not block response)
-					go func() {
-						if err := s.repo.UpdateStatus(context.Background(), deploymentID, int32(deploymentsv1.DeploymentStatus_STOPPED)); err != nil {
-							log.Printf("[GetDeployment] Failed to sync deployment status to STOPPED: %v", err)
-						}
-					}()
-				} else if running > 0 && dbDeployment.Status == int32(deploymentsv1.DeploymentStatus_STOPPED) {
-					// Some containers running but DB says STOPPED - update to RUNNING
-					deployment.Status = deploymentsv1.DeploymentStatus_RUNNING
-					// Optionally update DB to keep it in sync (async to not block response)
-					go func() {
-						if err := s.repo.UpdateStatus(context.Background(), deploymentID, int32(deploymentsv1.DeploymentStatus_RUNNING)); err != nil {
-							log.Printf("[GetDeployment] Failed to sync deployment status to RUNNING: %v", err)
-						}
-					}()
+			// IMPORTANT: Don't sync status if deployment is currently BUILDING or DEPLOYING
+			// During builds, containers might not exist yet or be in transitional states
+			currentStatus := deploymentsv1.DeploymentStatus(dbDeployment.Status)
+			isBuildingOrDeploying := currentStatus == deploymentsv1.DeploymentStatus_BUILDING || 
+			                          currentStatus == deploymentsv1.DeploymentStatus_DEPLOYING
+			
+			if !isBuildingOrDeploying {
+				// If deployment has containers but none are running, it should be STOPPED
+				// If some containers are running, it should be RUNNING
+				if total > 0 {
+					if running == 0 {
+						// All containers stopped - update status to STOPPED
+						deployment.Status = deploymentsv1.DeploymentStatus_STOPPED
+						// Optionally update DB to keep it in sync (async to not block response)
+						go func() {
+							if err := s.repo.UpdateStatus(context.Background(), deploymentID, int32(deploymentsv1.DeploymentStatus_STOPPED)); err != nil {
+								log.Printf("[GetDeployment] Failed to sync deployment status to STOPPED: %v", err)
+							}
+						}()
+					} else if running > 0 && dbDeployment.Status == int32(deploymentsv1.DeploymentStatus_STOPPED) {
+						// Some containers running but DB says STOPPED - update to RUNNING
+						deployment.Status = deploymentsv1.DeploymentStatus_RUNNING
+						// Optionally update DB to keep it in sync (async to not block response)
+						go func() {
+							if err := s.repo.UpdateStatus(context.Background(), deploymentID, int32(deploymentsv1.DeploymentStatus_RUNNING)); err != nil {
+								log.Printf("[GetDeployment] Failed to sync deployment status to RUNNING: %v", err)
+							}
+						}()
+					}
 				}
 			}
 		}
