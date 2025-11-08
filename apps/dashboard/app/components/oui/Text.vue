@@ -1,10 +1,5 @@
 <template>
-  <component
-    :is="as"
-    :class="textClasses"
-    :style="textStyles"
-    v-bind="$attrs"
-  >
+  <component :is="as" :class="textClasses" :style="textStyles" v-bind="$attrs">
     <slot />
   </component>
 </template>
@@ -80,7 +75,14 @@
      * Line height variant (preset) or numeric value
      * @default undefined
      */
-    leading?: "none" | "tight" | "snug" | "normal" | "relaxed" | "loose" | number;
+    leading?:
+      | "none"
+      | "tight"
+      | "snug"
+      | "normal"
+      | "relaxed"
+      | "loose"
+      | number;
 
     /**
      * Whether text should wrap or not
@@ -113,7 +115,7 @@
       "6xl": "text-6xl",
       "7xl": "text-7xl",
     };
-    
+
     // Mobile size (if provided, use it on mobile, otherwise use base size)
     if (props.sizeMobile) {
       classes.push(sizeClasses[props.sizeMobile]);
@@ -221,11 +223,11 @@
   // Handle custom numeric line height values via inline styles
   const textStyles = computed(() => {
     const styles: Record<string, string> = {};
-    
+
     if (props.leading && typeof props.leading === "number") {
       styles.lineHeight = String(props.leading);
     }
-    
+
     return Object.keys(styles).length > 0 ? styles : undefined;
   });
 </script>

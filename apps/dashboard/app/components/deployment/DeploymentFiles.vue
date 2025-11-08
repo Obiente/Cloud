@@ -1,6 +1,11 @@
 <template>
   <OuiStack gap="md">
-    <OuiFlex justify="between" align="center" wrap="wrap" class="flex-col sm:flex-row gap-2 sm:gap-0">
+    <OuiFlex
+      justify="between"
+      align="center"
+      wrap="wrap"
+      class="flex-col sm:flex-row gap-2 sm:gap-0"
+    >
       <OuiFlex gap="sm" align="center" class="min-w-0 flex-1">
         <OuiBreadcrumbs class="min-w-0">
           <OuiBreadcrumbItem>
@@ -23,14 +28,21 @@
         </OuiBreadcrumbs>
       </OuiFlex>
 
-      <OuiFlex gap="sm" align="center" wrap="wrap" class="shrink-0 w-full sm:w-auto">
+      <OuiFlex
+        gap="sm"
+        align="center"
+        wrap="wrap"
+        class="shrink-0 w-full sm:w-auto"
+      >
         <OuiFlex
           gap="sm"
           align="center"
           v-if="source.type === 'container' && containers.length > 0"
           class="w-full sm:w-auto"
         >
-          <OuiText size="xs" color="muted" class="hidden sm:inline">Container:</OuiText>
+          <OuiText size="xs" color="muted" class="hidden sm:inline"
+            >Container:</OuiText
+          >
           <OuiSelect
             :model-value="selectedServiceName || selectedContainerId || ''"
             :items="containerOptions"
@@ -72,10 +84,18 @@
           @click="refreshRoot"
           class="flex-1 sm:flex-initial"
         >
-          <ArrowPathIcon class="h-4 w-4 sm:mr-1.5" :class="{ 'animate-spin': isLoadingTree }" />
+          <ArrowPathIcon
+            class="h-4 w-4 sm:mr-1.5"
+            :class="{ 'animate-spin': isLoadingTree }"
+          />
           <span class="hidden sm:inline">Refresh</span>
         </OuiButton>
-        <OuiButton variant="ghost" size="sm" @click="showUpload = !showUpload" class="flex-1 sm:flex-initial">
+        <OuiButton
+          variant="ghost"
+          size="sm"
+          @click="showUpload = !showUpload"
+          class="flex-1 sm:flex-initial"
+        >
           <span class="hidden sm:inline">Upload</span>
           <span class="sm:hidden">↑</span>
         </OuiButton>
@@ -238,7 +258,10 @@
           >
             <FolderIcon class="h-4 w-4" />
           </OuiButton>
-          <div class="flex flex-col gap-1.5 min-w-0 flex-1" :class="{ 'pl-10 lg:pl-0': !showSidebarOnMobile }">
+          <div
+            class="flex flex-col gap-1.5 min-w-0 flex-1"
+            :class="{ 'pl-10 lg:pl-0': !showSidebarOnMobile }"
+          >
             <OuiText size="sm" weight="semibold" class="truncate">
               {{ currentNode?.name || "Preview" }}
             </OuiText>
@@ -374,7 +397,9 @@
               class="flex-1 sm:flex-initial"
             >
               <DocumentArrowDownIcon class="h-4 w-4 sm:mr-1.5" />
-              <span class="hidden sm:inline">{{ isSaving ? "Saving..." : "Save" }}</span>
+              <span class="hidden sm:inline">{{
+                isSaving ? "Saving..." : "Save"
+              }}</span>
             </OuiButton>
             <OuiButton
               variant="ghost"
@@ -389,7 +414,12 @@
             </OuiButton>
             <OuiMenu v-if="currentNode">
               <template #trigger>
-                <OuiButton variant="ghost" size="sm" class="flex-1 sm:flex-initial">More</OuiButton>
+                <OuiButton
+                  variant="ghost"
+                  size="sm"
+                  class="flex-1 sm:flex-initial"
+                  >More</OuiButton
+                >
               </template>
               <OuiMenuItem value="refresh" @select="handleRefreshSelection"
                 >Refresh</OuiMenuItem

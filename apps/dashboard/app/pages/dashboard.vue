@@ -2,19 +2,47 @@
   <OuiContainer size="full" py="sm" class="md:py-8">
     <OuiStack gap="md" class="md:gap-8">
       <!-- Page Header -->
-      <OuiFlex justify="between" align="center" wrap="wrap" gap="md" class="md:gap-6">
+      <OuiFlex
+        justify="between"
+        align="center"
+        wrap="wrap"
+        gap="md"
+        class="md:gap-6"
+      >
         <OuiStack gap="xs" class="flex-1 min-w-0">
-          <OuiText as="h1" size="2xl" weight="bold" color="primary" class="md:text-3xl"
+          <OuiText
+            as="h1"
+            size="2xl"
+            weight="bold"
+            color="primary"
+            class="md:text-3xl"
             >Dashboard</OuiText
           >
-          <OuiText size="sm" color="secondary" class="hidden sm:block md:text-base"
-            >Comprehensive overview of your cloud infrastructure, usage metrics, and resource health.</OuiText
+          <OuiText
+            size="sm"
+            color="secondary"
+            class="hidden sm:block md:text-base"
+            >Comprehensive overview of your cloud infrastructure, usage metrics,
+            and resource health.</OuiText
           >
         </OuiStack>
 
-        <OuiFlex gap="xs" align="center" wrap="wrap" class="w-full sm:w-auto md:gap-2">
-          <OuiButton variant="ghost" size="sm" @click="retryLoad" class="gap-2 flex-1 sm:flex-initial">
-            <ArrowPathIcon class="h-4 w-4" :class="{ 'animate-spin': isLoading }" />
+        <OuiFlex
+          gap="xs"
+          align="center"
+          wrap="wrap"
+          class="w-full sm:w-auto md:gap-2"
+        >
+          <OuiButton
+            variant="ghost"
+            size="sm"
+            @click="retryLoad"
+            class="gap-2 flex-1 sm:flex-initial"
+          >
+            <ArrowPathIcon
+              class="h-4 w-4"
+              :class="{ 'animate-spin': isLoading }"
+            />
             <span class="hidden sm:inline">Refresh</span>
           </OuiButton>
           <OuiButton
@@ -31,7 +59,14 @@
       </OuiFlex>
 
       <!-- Enhanced KPI Overview -->
-      <OuiGrid cols="2" cols-sm="2" cols-md="3" cols-lg="5" gap="xs" class="sm:gap-2 md:gap-4">
+      <OuiGrid
+        cols="2"
+        cols-sm="2"
+        cols-md="3"
+        cols-lg="5"
+        gap="xs"
+        class="sm:gap-2 md:gap-4"
+      >
         <OuiCard
           v-for="card in kpiCards"
           :key="card.label"
@@ -41,7 +76,12 @@
           @click="card.href && navigateTo(card.href)"
         >
           <OuiCardBody>
-            <OuiFlex align="center" justify="between" gap="sm" class="relative md:gap-4">
+            <OuiFlex
+              align="center"
+              justify="between"
+              gap="sm"
+              class="relative md:gap-4"
+            >
               <OuiStack gap="xs" class="flex-1 min-w-0">
                 <OuiSkeleton
                   v-if="isLoading"
@@ -49,7 +89,13 @@
                   height="1.5rem"
                   variant="text"
                 />
-                <OuiFlex v-else align="baseline" gap="xs" wrap="wrap" class="md:gap-2">
+                <OuiFlex
+                  v-else
+                  align="baseline"
+                  gap="xs"
+                  wrap="wrap"
+                  class="md:gap-2"
+                >
                   <OuiText
                     as="h3"
                     size="lg"
@@ -60,16 +106,21 @@
                   >
                     {{ card.value }}
                   </OuiText>
-                  <OuiText 
-                    v-if="card.subtitle" 
-                    size="xs" 
+                  <OuiText
+                    v-if="card.subtitle"
+                    size="xs"
                     color="secondary"
                     class="leading-tight hidden sm:inline md:text-sm"
                   >
                     {{ card.subtitle }}
                   </OuiText>
                 </OuiFlex>
-                <OuiText size="xs" weight="medium" color="secondary" class="line-clamp-1">
+                <OuiText
+                  size="xs"
+                  weight="medium"
+                  color="secondary"
+                  class="line-clamp-1"
+                >
                   {{ card.label }}
                 </OuiText>
               </OuiStack>
@@ -96,7 +147,11 @@
           <OuiFlex align="center" justify="between" wrap="wrap" gap="sm">
             <OuiStack gap="xs" class="flex-1 min-w-0">
               <OuiText as="h2" class="oui-card-title">Resource Usage</OuiText>
-              <OuiText size="xs" color="secondary" class="hidden sm:block md:text-sm">
+              <OuiText
+                size="xs"
+                color="secondary"
+                class="hidden sm:block md:text-sm"
+              >
                 Current month usage and estimated costs
               </OuiText>
             </OuiStack>
@@ -115,19 +170,30 @@
             <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="lg">
               <OuiStack v-for="i in 4" :key="i" gap="sm">
                 <OuiSkeleton width="6rem" height="1rem" variant="text" />
-                <OuiSkeleton width="100%" height="0.5rem" variant="rectangle" rounded />
+                <OuiSkeleton
+                  width="100%"
+                  height="0.5rem"
+                  variant="rectangle"
+                  rounded
+                />
                 <OuiSkeleton width="4rem" height="0.75rem" variant="text" />
               </OuiStack>
             </OuiGrid>
           </template>
-          <template v-else-if="usageData && usageData.current && usageData.quota">
+          <template
+            v-else-if="usageData && usageData.current && usageData.quota"
+          >
             <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="lg">
               <!-- CPU Usage -->
               <OuiStack gap="sm">
                 <OuiFlex align="center" justify="between">
-                  <OuiText size="sm" weight="medium" color="primary">CPU</OuiText>
+                  <OuiText size="sm" weight="medium" color="primary"
+                    >CPU</OuiText
+                  >
                   <OuiText size="xs" color="secondary">
-                    {{ formatCPUUsage(Number(usageData.current.cpuCoreSeconds)) }}
+                    {{
+                      formatCPUUsage(Number(usageData.current.cpuCoreSeconds))
+                    }}
                   </OuiText>
                 </OuiFlex>
                 <OuiBox
@@ -140,16 +206,27 @@
                   />
                 </OuiBox>
                 <OuiText size="xs" color="secondary">
-                  {{ formatQuota(Number(usageData.current.cpuCoreSeconds), Number(usageData.quota.cpuCoreSecondsMonthly)) }}
+                  {{
+                    formatQuota(
+                      Number(usageData.current.cpuCoreSeconds),
+                      Number(usageData.quota.cpuCoreSecondsMonthly)
+                    )
+                  }}
                 </OuiText>
               </OuiStack>
 
               <!-- Memory Usage -->
               <OuiStack gap="sm">
                 <OuiFlex align="center" justify="between">
-                  <OuiText size="sm" weight="medium" color="primary">Memory</OuiText>
+                  <OuiText size="sm" weight="medium" color="primary"
+                    >Memory</OuiText
+                  >
                   <OuiText size="xs" color="secondary">
-                    {{ formatBytes(Number(usageData.current.memoryByteSeconds) / 3600) }}/hr avg
+                    {{
+                      formatBytes(
+                        Number(usageData.current.memoryByteSeconds) / 3600
+                      )
+                    }}/hr avg
                   </OuiText>
                 </OuiFlex>
                 <OuiBox
@@ -162,16 +239,28 @@
                   />
                 </OuiBox>
                 <OuiText size="xs" color="secondary">
-                  {{ formatQuota(Number(usageData.current.memoryByteSeconds), Number(usageData.quota.memoryByteSecondsMonthly)) }}
+                  {{
+                    formatQuota(
+                      Number(usageData.current.memoryByteSeconds),
+                      Number(usageData.quota.memoryByteSecondsMonthly)
+                    )
+                  }}
                 </OuiText>
               </OuiStack>
 
               <!-- Bandwidth Usage -->
               <OuiStack gap="sm">
                 <OuiFlex align="center" justify="between">
-                  <OuiText size="sm" weight="medium" color="primary">Bandwidth</OuiText>
+                  <OuiText size="sm" weight="medium" color="primary"
+                    >Bandwidth</OuiText
+                  >
                   <OuiText size="xs" color="secondary">
-                    {{ formatBytes(Number(usageData.current.bandwidthRxBytes) + Number(usageData.current.bandwidthTxBytes)) }}
+                    {{
+                      formatBytes(
+                        Number(usageData.current.bandwidthRxBytes) +
+                          Number(usageData.current.bandwidthTxBytes)
+                      )
+                    }}
                   </OuiText>
                 </OuiFlex>
                 <OuiBox
@@ -184,14 +273,22 @@
                   />
                 </OuiBox>
                 <OuiText size="xs" color="secondary">
-                  {{ formatQuota(Number(usageData.current.bandwidthRxBytes) + Number(usageData.current.bandwidthTxBytes), Number(usageData.quota.bandwidthBytesMonthly)) }}
+                  {{
+                    formatQuota(
+                      Number(usageData.current.bandwidthRxBytes) +
+                        Number(usageData.current.bandwidthTxBytes),
+                      Number(usageData.quota.bandwidthBytesMonthly)
+                    )
+                  }}
                 </OuiText>
               </OuiStack>
 
               <!-- Storage Usage -->
               <OuiStack gap="sm">
                 <OuiFlex align="center" justify="between">
-                  <OuiText size="sm" weight="medium" color="primary">Storage</OuiText>
+                  <OuiText size="sm" weight="medium" color="primary"
+                    >Storage</OuiText
+                  >
                   <OuiText size="xs" color="secondary">
                     {{ formatBytes(Number(usageData.current.storageBytes)) }}
                   </OuiText>
@@ -206,7 +303,12 @@
                   />
                 </OuiBox>
                 <OuiText size="xs" color="secondary">
-                  {{ formatQuota(Number(usageData.current.storageBytes), Number(usageData.quota.storageBytes)) }}
+                  {{
+                    formatQuota(
+                      Number(usageData.current.storageBytes),
+                      Number(usageData.quota.storageBytes)
+                    )
+                  }}
                 </OuiText>
               </OuiStack>
             </OuiGrid>
@@ -222,30 +324,57 @@
         <!-- Cost Breakdown -->
         <OuiCard>
           <OuiCardHeader>
-          <OuiFlex align="center" justify="between">
-            <OuiStack gap="xs" class="flex-1 min-w-0">
-              <OuiText as="h2" class="oui-card-title">Cost Breakdown</OuiText>
-              <OuiText size="xs" color="secondary" class="hidden sm:block">
-                Estimated monthly costs by resource
-              </OuiText>
-            </OuiStack>
-          </OuiFlex>
+            <OuiFlex align="center" justify="between">
+              <OuiStack gap="xs" class="flex-1 min-w-0">
+                <OuiText as="h2" class="oui-card-title">Cost Breakdown</OuiText>
+                <OuiText size="xs" color="secondary" class="hidden sm:block">
+                  Estimated monthly costs by resource
+                </OuiText>
+              </OuiStack>
+            </OuiFlex>
           </OuiCardHeader>
           <OuiCardBody>
             <template v-if="isLoadingUsage">
               <OuiStack gap="md">
-                <OuiSkeleton width="100%" height="3rem" variant="rectangle" rounded />
-                <OuiSkeleton width="100%" height="3rem" variant="rectangle" rounded />
-                <OuiSkeleton width="100%" height="3rem" variant="rectangle" rounded />
+                <OuiSkeleton
+                  width="100%"
+                  height="3rem"
+                  variant="rectangle"
+                  rounded
+                />
+                <OuiSkeleton
+                  width="100%"
+                  height="3rem"
+                  variant="rectangle"
+                  rounded
+                />
+                <OuiSkeleton
+                  width="100%"
+                  height="3rem"
+                  variant="rectangle"
+                  rounded
+                />
               </OuiStack>
             </template>
             <template v-else-if="usageData && usageData.estimatedMonthly">
               <OuiStack gap="md">
-                <OuiFlex align="center" justify="between" class="pb-3 border-b border-border-muted">
+                <OuiFlex
+                  align="center"
+                  justify="between"
+                  class="pb-3 border-b border-border-muted"
+                >
                   <OuiStack gap="xs">
-                    <OuiText size="sm" color="secondary">Total Estimated</OuiText>
+                    <OuiText size="sm" color="secondary"
+                      >Total Estimated</OuiText
+                    >
                     <OuiText size="2xl" weight="bold" color="primary">
-                      {{ formatCurrency(Number(usageData.estimatedMonthly.estimatedCostCents) / 100) }}
+                      {{
+                        formatCurrency(
+                          Number(
+                            usageData.estimatedMonthly.estimatedCostCents
+                          ) / 100
+                        )
+                      }}
                     </OuiText>
                   </OuiStack>
                   <OuiBadge variant="secondary">
@@ -286,7 +415,12 @@
                 </OuiButton>
               </OuiStack>
             </template>
-            <OuiText v-else size="sm" color="secondary" class="text-center py-4">
+            <OuiText
+              v-else
+              size="sm"
+              color="secondary"
+              class="text-center py-4"
+            >
               Cost data unavailable
             </OuiText>
           </OuiCardBody>
@@ -295,17 +429,21 @@
         <!-- Enhanced Health & Alerts -->
         <OuiCard>
           <OuiCardHeader>
-          <OuiFlex align="center" justify="between" wrap="wrap" gap="sm">
-            <OuiStack gap="xs" class="flex-1 min-w-0">
-              <OuiText as="h2" class="oui-card-title">Deployment Health</OuiText>
-              <OuiText size="xs" color="secondary" class="hidden sm:block">
-                Status overview of all deployments
-              </OuiText>
-            </OuiStack>
-            <OuiBadge :variant="allHealthy ? 'success' : 'warning'" class="shrink-0">{{
-              allHealthy ? "All Healthy" : "Issues Detected"
-            }}</OuiBadge>
-          </OuiFlex>
+            <OuiFlex align="center" justify="between" wrap="wrap" gap="sm">
+              <OuiStack gap="xs" class="flex-1 min-w-0">
+                <OuiText as="h2" class="oui-card-title"
+                  >Deployment Health</OuiText
+                >
+                <OuiText size="xs" color="secondary" class="hidden sm:block">
+                  Status overview of all deployments
+                </OuiText>
+              </OuiStack>
+              <OuiBadge
+                :variant="allHealthy ? 'success' : 'warning'"
+                class="shrink-0"
+                >{{ allHealthy ? "All Healthy" : "Issues Detected" }}</OuiBadge
+              >
+            </OuiFlex>
           </OuiCardHeader>
           <OuiCardBody>
             <template v-if="isLoading">
@@ -324,7 +462,11 @@
                   @click="navigateTo(runningDeploymentsUrl)"
                 >
                   <OuiStack align="center" gap="xs">
-                    <OuiText size="xl" weight="bold" class="text-success md:text-2xl">
+                    <OuiText
+                      size="xl"
+                      weight="bold"
+                      class="text-success md:text-2xl"
+                    >
                       {{ runningCount }}
                     </OuiText>
                     <OuiText size="xs" color="secondary">Running</OuiText>
@@ -337,7 +479,11 @@
                   @click="navigateTo(buildingDeploymentsUrl)"
                 >
                   <OuiStack align="center" gap="xs">
-                    <OuiText size="xl" weight="bold" class="text-warning md:text-2xl">
+                    <OuiText
+                      size="xl"
+                      weight="bold"
+                      class="text-warning md:text-2xl"
+                    >
                       {{ buildingCount }}
                     </OuiText>
                     <OuiText size="xs" color="secondary">Building</OuiText>
@@ -350,7 +496,11 @@
                   @click="navigateTo(stoppedDeploymentsUrl)"
                 >
                   <OuiStack align="center" gap="xs">
-                    <OuiText size="xl" weight="bold" class="text-secondary md:text-2xl">
+                    <OuiText
+                      size="xl"
+                      weight="bold"
+                      class="text-secondary md:text-2xl"
+                    >
                       {{ stoppedCount }}
                     </OuiText>
                     <OuiText size="xs" color="secondary">Stopped</OuiText>
@@ -363,7 +513,11 @@
                   @click="navigateTo(errorDeploymentsUrl)"
                 >
                   <OuiStack align="center" gap="xs">
-                    <OuiText size="xl" weight="bold" class="text-danger md:text-2xl">
+                    <OuiText
+                      size="xl"
+                      weight="bold"
+                      class="text-danger md:text-2xl"
+                    >
                       {{ errorCount }}
                     </OuiText>
                     <OuiText size="xs" color="secondary">Errors</OuiText>
@@ -405,10 +559,17 @@
                   View all deployments →
                 </OuiButton>
               </OuiStack>
-              <OuiBox v-else p="md" rounded="lg" class="bg-success/5 border border-success/20">
+              <OuiBox
+                v-else
+                p="md"
+                rounded="lg"
+                class="bg-success/5 border border-success/20"
+              >
                 <OuiFlex align="center" gap="sm">
                   <CheckCircleIcon class="h-5 w-5 text-success" />
-                  <OuiText size="sm" color="secondary">All deployments are running smoothly</OuiText>
+                  <OuiText size="sm" color="secondary"
+                    >All deployments are running smoothly</OuiText
+                  >
                 </OuiFlex>
               </OuiBox>
             </template>
@@ -421,9 +582,12 @@
         <OuiCardHeader>
           <OuiFlex align="center" justify="between" wrap="wrap" gap="sm">
             <OuiStack gap="xs" class="flex-1 min-w-0">
-              <OuiText as="h2" class="oui-card-title">Recent Deployments</OuiText>
+              <OuiText as="h2" class="oui-card-title"
+                >Recent Deployments</OuiText
+              >
               <OuiText size="xs" color="secondary" class="hidden sm:block">
-                Latest {{ recentDeployments.length }} deployments across your environments
+                Latest {{ recentDeployments.length }} deployments across your
+                environments
               </OuiText>
             </OuiStack>
             <OuiButton
@@ -451,7 +615,12 @@
                   <OuiSkeleton width="8rem" height="1rem" variant="text" />
                   <OuiSkeleton width="12rem" height="0.75rem" variant="text" />
                 </OuiStack>
-                <OuiSkeleton width="4rem" height="1.5rem" variant="rectangle" rounded />
+                <OuiSkeleton
+                  width="4rem"
+                  height="1.5rem"
+                  variant="rectangle"
+                  rounded
+                />
               </OuiFlex>
             </OuiBox>
           </OuiStack>
@@ -510,11 +679,14 @@
                   }}</OuiText>
                   <OuiFlex align="center" gap="sm" wrap="wrap" class="mt-1">
                     <OuiText size="xs" color="secondary">
-                      <OuiRelativeTime :value="deployment.updatedAt" :style="'short'" />
+                      <OuiRelativeTime
+                        :value="deployment.updatedAt"
+                        :style="'short'"
+                      />
                     </OuiText>
                     <OuiText size="xs" color="secondary">•</OuiText>
                     <OuiText size="xs" color="secondary">
-                      {{ deployment.type || 'Unknown' }}
+                      {{ deployment.type || "Unknown" }}
                     </OuiText>
                   </OuiFlex>
                 </OuiStack>
@@ -531,348 +703,48 @@
 </template>
 
 <script setup lang="ts">
-import {
-  ArrowPathIcon,
-  CreditCardIcon,
-  RocketLaunchIcon,
-  ServerIcon,
-  CircleStackIcon,
-  CheckCircleIcon,
-  CubeIcon,
-} from "@heroicons/vue/24/outline";
+  import {
+    ArrowPathIcon,
+    CreditCardIcon,
+    RocketLaunchIcon,
+    ServerIcon,
+    CircleStackIcon,
+    CheckCircleIcon,
+    CubeIcon,
+  } from "@heroicons/vue/24/outline";
 
-// Page meta
-definePageMeta({
-  layout: "default",
-  middleware: "auth",
-});
+  // Page meta
+  definePageMeta({
+    layout: "default",
+    middleware: "auth",
+  });
 
-// Live stats via ConnectRPC
-import { useConnectClient } from "~/lib/connect-client";
-import { useOrganizationsStore } from "~/stores/organizations";
-import { useAuth } from "~/composables/useAuth";
-import { useOrganizationId } from "~/composables/useOrganizationId";
-import type { UserSession } from "@obiente/types";
-import { 
-  DeploymentService, 
-  DeploymentStatus, 
-  Environment as EnvEnum,
-  DeploymentType,
-  OrganizationService,
-} from "@obiente/proto";
-import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
-import { composeQueryUrl } from "~/utils/queryParams";
+  // Live stats via ConnectRPC
+  import { useConnectClient } from "~/lib/connect-client";
+  import { useOrganizationsStore } from "~/stores/organizations";
+  import { useAuth } from "~/composables/useAuth";
+  import { useOrganizationId } from "~/composables/useOrganizationId";
+  import type { UserSession } from "@obiente/types";
+  import {
+    DeploymentService,
+    DeploymentStatus,
+    Environment as EnvEnum,
+    DeploymentType,
+    OrganizationService,
+  } from "@obiente/proto";
+  import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
+  import { composeQueryUrl } from "~/utils/queryParams";
 
-type DashboardData = {
-  stats: {
-    deployments: number;
-    gameServers: number;
-    vpsInstances: number;
-    databases: number;
-    monthlySpend: number;
-    statuses: Array<{ status: string; count: number }>;
-  };
-  recentDeployments: Array<{
-    id: string;
-    name: string;
-    domain: string;
-    status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR";
-    updatedAt: string;
-    environment: string;
-    type: string;
-  }>;
-  activity: Array<{ id: string; message: string; timestamp: string }>;
-};
-
-const deploymentClient = useConnectClient(DeploymentService);
-const orgClient = useConnectClient(OrganizationService);
-const orgsStore = useOrganizationsStore();
-const auth = useAuth();
-
-const toMs = (s: number | bigint | undefined | null) => Number(s ?? 0) * 1000;
-
-// Get organizationId using SSR-compatible composable
-const organizationId = useOrganizationId();
-
-const { data, status, refresh: refreshDashboard } = await useAsyncData<DashboardData>(
-  () => `dashboard-data-${organizationId.value}`,
-  async () => {
-    // Use organizationId from composable (SSR-compatible)
-    const orgId = organizationId.value;
-    // Fetch deployments for selected org (server will resolve if empty)
-    const res = await deploymentClient.listDeployments({ organizationId: orgId });
-    const deployments = res.deployments ?? [];
-
-    // Status breakdown
-    const statusesMap: Record<string, number> = {};
-    for (const d of deployments) {
-      let s: string = "PENDING";
-      switch (d.status) {
-        case DeploymentStatus.RUNNING: s = "RUNNING"; break;
-        case DeploymentStatus.BUILDING: s = "BUILDING"; break;
-        case DeploymentStatus.STOPPED: s = "STOPPED"; break;
-        case DeploymentStatus.FAILED: s = "ERROR"; break;
-        default: s = "PENDING";
-      }
-      statusesMap[s] = (statusesMap[s] || 0) + 1;
-    }
-    const statuses = Object.entries(statusesMap).map(([status, count]) => ({ status, count }));
-
-    // Recent deployments
-    const recentDeployments = [...deployments]
-      .sort((a, b) => {
-        const at = toMs(a.lastDeployedAt?.seconds ?? a.createdAt?.seconds);
-        const bt = toMs(b.lastDeployedAt?.seconds ?? b.createdAt?.seconds);
-        return bt - at;
-      })
-      .slice(0, 5)
-      .map((d) => {
-        let env = "production";
-        switch (d.environment) {
-          case EnvEnum.STAGING: env = "staging"; break;
-          case EnvEnum.DEVELOPMENT: env = "development"; break;
-          default: env = "production";
-        }
-        const status = (() => {
-          switch (d.status) {
-            case DeploymentStatus.RUNNING: return "RUNNING" as const;
-            case DeploymentStatus.BUILDING: return "BUILDING" as const;
-            case DeploymentStatus.STOPPED: return "STOPPED" as const;
-            case DeploymentStatus.FAILED: return "ERROR" as const;
-            default: return "PENDING" as const;
-          }
-        })();
-        const type = (() => {
-          switch (d.type) {
-            case DeploymentType.DOCKER: return "Docker";
-            case DeploymentType.STATIC: return "Static";
-            case DeploymentType.NODE: return "Node.js";
-            case DeploymentType.GO: return "Go";
-            case DeploymentType.PYTHON: return "Python";
-            case DeploymentType.RUBY: return "Ruby";
-            case DeploymentType.RUST: return "Rust";
-            case DeploymentType.JAVA: return "Java";
-            case DeploymentType.PHP: return "PHP";
-            default: return "Generic";
-          }
-        })();
-
-        return {
-          id: d.id,
-          name: d.name,
-          domain: d.domain,
-          status,
-          environment: env,
-          type,
-          updatedAt: new Date(toMs(d.lastDeployedAt?.seconds ?? d.createdAt?.seconds)).toISOString(),
-        };
-      });
-
-    const stats = {
-      deployments: deployments.length,
-      gameServers: 0, // TODO: Fetch from game server API
-      vpsInstances: 0,
-      databases: 0,
-      monthlySpend: 0,
-      statuses,
+  type DashboardData = {
+    stats: {
+      deployments: number;
+      gameServers: number;
+      vpsInstances: number;
+      databases: number;
+      monthlySpend: number;
+      statuses: Array<{ status: string; count: number }>;
     };
-
-    const activity: Array<{ id: string; message: string; timestamp: string }> = [];
-
-    return { stats, recentDeployments, activity };
-  }
-);
-
-// Fetch organization usage data
-const { data: usageData, status: usageStatus, refresh: refreshUsage } = await useAsyncData(
-  () => `org-usage-data-${organizationId.value}`,
-  async () => {
-    // Use organizationId from composable (SSR-compatible)
-    const orgId = organizationId.value;
-    // Try to fetch even if orgId is empty (server will resolve if empty)
-    try {
-      const res = await orgClient.getUsage({
-        organizationId: orgId || undefined,
-      });
-      return res;
-    } catch (err) {
-      console.error("Failed to fetch usage:", err);
-      return null;
-    }
-  }
-);
-
-// Only show loading if data is not available and status is pending/idle
-const isLoadingUsage = computed(() => 
-  !usageData.value && (usageStatus.value === "pending" || usageStatus.value === "idle")
-);
-const isLoading = computed(
-  () => !data.value && (status.value === "pending" || status.value === "idle")
-);
-const stats = computed(
-  () =>
-    data.value?.stats ?? {
-      deployments: 0,
-      gameServers: 0,
-      vpsInstances: 0,
-      databases: 0,
-      monthlySpend: 0,
-    }
-);
-const statusBreakdown = computed(
-  () =>
-    (data.value?.stats?.statuses ?? []) as Array<{
-      status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR";
-      count: number;
-    }>
-);
-
-const formatNumber = (value: number) =>
-  new Intl.NumberFormat("en-US").format(value);
-
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
-
-const formatBytes = (bytes: number): string => {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-};
-
-const formatCPUUsage = (coreSeconds: number): string => {
-  const hours = coreSeconds / 3600;
-  if (hours < 1) {
-    return `${(coreSeconds / 60).toFixed(1)} min`;
-  }
-  return `${hours.toFixed(1)} core-hrs`;
-};
-
-const formatQuota = (used: number, limit: number): string => {
-  if (limit === 0) return "Unlimited";
-  const percent = (used / limit) * 100;
-  return `${percent.toFixed(1)}% of quota`;
-};
-
-// Usage percentages
-const cpuUsagePercent = computed(() => {
-  if (!usageData.value?.current || !usageData.value?.quota) return 0;
-  const limit = Number(usageData.value.quota.cpuCoreSecondsMonthly);
-  if (limit === 0) return 0;
-  const used = Number(usageData.value.current.cpuCoreSeconds);
-  return Math.min((used / limit) * 100, 100);
-});
-
-const memoryUsagePercent = computed(() => {
-  if (!usageData.value?.current || !usageData.value?.quota) return 0;
-  const limit = Number(usageData.value.quota.memoryByteSecondsMonthly);
-  if (limit === 0) return 0;
-  const used = Number(usageData.value.current.memoryByteSeconds);
-  return Math.min((used / limit) * 100, 100);
-});
-
-const bandwidthUsagePercent = computed(() => {
-  if (!usageData.value?.current || !usageData.value?.quota) return 0;
-  const limit = Number(usageData.value.quota.bandwidthBytesMonthly);
-  if (limit === 0) return 0;
-  const used = Number(usageData.value.current.bandwidthRxBytes) + Number(usageData.value.current.bandwidthTxBytes);
-  return Math.min((used / limit) * 100, 100);
-});
-
-const storageUsagePercent = computed(() => {
-  if (!usageData.value?.current || !usageData.value?.quota) return 0;
-  const limit = Number(usageData.value.quota.storageBytes);
-  if (limit === 0) return 0;
-  const used = Number(usageData.value.current.storageBytes);
-  return Math.min((used / limit) * 100, 100);
-});
-
-// Cost breakdown
-const costBreakdown = computed(() => {
-  if (!usageData.value?.estimatedMonthly) return [];
-  const estimated = usageData.value.estimatedMonthly;
-  const breakdown = [];
-  
-  const totalCents = Number(estimated.estimatedCostCents);
-  if (totalCents > 0) {
-    // Use actual per-resource costs if available, otherwise fall back to percentages
-    const cpuCents = estimated.cpuCostCents != null ? Number(estimated.cpuCostCents) : totalCents * 0.4;
-    const memoryCents = estimated.memoryCostCents != null ? Number(estimated.memoryCostCents) : totalCents * 0.3;
-    const bandwidthCents = estimated.bandwidthCostCents != null ? Number(estimated.bandwidthCostCents) : totalCents * 0.2;
-    const storageCents = estimated.storageCostCents != null ? Number(estimated.storageCostCents) : totalCents * 0.1;
-    
-    breakdown.push(
-      { label: "CPU", value: formatCurrency(cpuCents / 100), color: "bg-accent-primary" },
-      { label: "Memory", value: formatCurrency(memoryCents / 100), color: "bg-success" },
-      { label: "Bandwidth", value: formatCurrency(bandwidthCents / 100), color: "bg-accent-secondary" },
-      { label: "Storage", value: formatCurrency(storageCents / 100), color: "bg-warning" },
-    );
-  }
-  
-  return breakdown;
-});
-
-const kpiCards = computed(() => {
-  const monthlyCost = usageData.value?.estimatedMonthly
-    ? Number(usageData.value.estimatedMonthly.estimatedCostCents) / 100 
-    : stats.value.monthlySpend;
-  
-  return [
-    {
-      label: "Active Deployments",
-      value: formatNumber(stats.value.deployments),
-      subtitle: `${runningCount.value} running`,
-      icon: RocketLaunchIcon,
-      iconBg: "bg-primary/10",
-      iconColor: "text-accent-primary",
-      href: "/deployments",
-    },
-    {
-      label: "VPS Instances",
-      value: formatNumber(stats.value.vpsInstances),
-      icon: ServerIcon,
-      iconBg: "bg-success/10",
-      iconColor: "text-success",
-      href: "/vps",
-    },
-    {
-      label: "Game Servers",
-      value: formatNumber(stats.value.gameServers),
-      icon: CubeIcon,
-      iconBg: "bg-accent-success/10",
-      iconColor: "text-accent-success",
-      href: "/gameservers",
-    },
-    {
-      label: "Databases",
-      value: formatNumber(stats.value.databases),
-      icon: CircleStackIcon,
-      iconBg: "bg-accent-secondary/10",
-      iconColor: "text-accent-secondary",
-      href: "/databases",
-    },
-    {
-      label: "Estimated Monthly Cost",
-      value: formatCurrency(monthlyCost),
-      subtitle: usageData.value?.month || "This month",
-      icon: CreditCardIcon,
-      iconBg: "bg-warning/10",
-      iconColor: "text-warning",
-      href: "/organizations?tab=billing",
-    },
-  ];
-});
-
-// Recent deployments with loading state
-const recentDeployments = computed(
-  () =>
-    (data.value?.recentDeployments ?? []) as Array<{
+    recentDeployments: Array<{
       id: string;
       name: string;
       domain: string;
@@ -880,84 +752,469 @@ const recentDeployments = computed(
       updatedAt: string;
       environment: string;
       type: string;
-    }>
-);
+    }>;
+    activity: Array<{ id: string; message: string; timestamp: string }>;
+  };
 
-// Activity feed with loading state
-const activityFeed = computed(
-  () =>
-    (data.value?.activity ?? []) as Array<{
-      id: string;
-      message: string;
-      timestamp: string;
-    }>
-);
+  const deploymentClient = useConnectClient(DeploymentService);
+  const orgClient = useConnectClient(OrganizationService);
+  const orgsStore = useOrganizationsStore();
+  const auth = useAuth();
 
-// Health metrics
-const runningCount = computed(
-  () => statusBreakdown.value.find((s) => s.status === "RUNNING")?.count ?? 0
-);
-const buildingCount = computed(
-  () => statusBreakdown.value.find((s) => s.status === "BUILDING")?.count ?? 0
-);
-const stoppedCount = computed(
-  () => statusBreakdown.value.find((s) => s.status === "STOPPED")?.count ?? 0
-);
-const errorCount = computed(
-  () => statusBreakdown.value.find((s) => s.status === "ERROR")?.count ?? 0
-);
-const allHealthy = computed(() => errorCount.value === 0);
-const attentionDeployments = computed(() =>
-  recentDeployments.value
-    .filter((d) => ["ERROR", "STOPPED", "BUILDING"].includes(d.status))
-    .slice(0, 4)
-);
+  const toMs = (s: number | bigint | undefined | null) => Number(s ?? 0) * 1000;
 
-// Deployment URLs with status filters
-const runningDeploymentsUrl = computed(() =>
-  composeQueryUrl("/deployments", { status: String(DeploymentStatus.RUNNING) })
-);
-const buildingDeploymentsUrl = computed(() =>
-  composeQueryUrl("/deployments", { status: String(DeploymentStatus.BUILDING) })
-);
-const stoppedDeploymentsUrl = computed(() =>
-  composeQueryUrl("/deployments", { status: String(DeploymentStatus.STOPPED) })
-);
-const errorDeploymentsUrl = computed(() =>
-  composeQueryUrl("/deployments", { status: String(DeploymentStatus.FAILED) })
-);
+  // Get organizationId using SSR-compatible composable
+  const organizationId = useOrganizationId();
 
-// Auto-refresh using useAsyncData refresh
-const refreshInterval = ref<ReturnType<typeof setInterval> | null>(null);
-onMounted(() => {
-  refreshInterval.value = setInterval(() => {
+  const {
+    data,
+    status,
+    refresh: refreshDashboard,
+  } = await useAsyncData<DashboardData>(
+    () => `dashboard-data-${organizationId.value}`,
+    async () => {
+      // Use organizationId from composable (SSR-compatible)
+      const orgId = organizationId.value;
+      // Fetch deployments for selected org (server will resolve if empty)
+      const res = await deploymentClient.listDeployments({
+        organizationId: orgId,
+      });
+      const deployments = res.deployments ?? [];
+
+      // Status breakdown
+      const statusesMap: Record<string, number> = {};
+      for (const d of deployments) {
+        let s: string = "PENDING";
+        switch (d.status) {
+          case DeploymentStatus.RUNNING:
+            s = "RUNNING";
+            break;
+          case DeploymentStatus.BUILDING:
+            s = "BUILDING";
+            break;
+          case DeploymentStatus.STOPPED:
+            s = "STOPPED";
+            break;
+          case DeploymentStatus.FAILED:
+            s = "ERROR";
+            break;
+          default:
+            s = "PENDING";
+        }
+        statusesMap[s] = (statusesMap[s] || 0) + 1;
+      }
+      const statuses = Object.entries(statusesMap).map(([status, count]) => ({
+        status,
+        count,
+      }));
+
+      // Recent deployments
+      const recentDeployments = [...deployments]
+        .sort((a, b) => {
+          const at = toMs(a.lastDeployedAt?.seconds ?? a.createdAt?.seconds);
+          const bt = toMs(b.lastDeployedAt?.seconds ?? b.createdAt?.seconds);
+          return bt - at;
+        })
+        .slice(0, 5)
+        .map((d) => {
+          let env = "production";
+          switch (d.environment) {
+            case EnvEnum.STAGING:
+              env = "staging";
+              break;
+            case EnvEnum.DEVELOPMENT:
+              env = "development";
+              break;
+            default:
+              env = "production";
+          }
+          const status = (() => {
+            switch (d.status) {
+              case DeploymentStatus.RUNNING:
+                return "RUNNING" as const;
+              case DeploymentStatus.BUILDING:
+                return "BUILDING" as const;
+              case DeploymentStatus.STOPPED:
+                return "STOPPED" as const;
+              case DeploymentStatus.FAILED:
+                return "ERROR" as const;
+              default:
+                return "PENDING" as const;
+            }
+          })();
+          const type = (() => {
+            switch (d.type) {
+              case DeploymentType.DOCKER:
+                return "Docker";
+              case DeploymentType.STATIC:
+                return "Static";
+              case DeploymentType.NODE:
+                return "Node.js";
+              case DeploymentType.GO:
+                return "Go";
+              case DeploymentType.PYTHON:
+                return "Python";
+              case DeploymentType.RUBY:
+                return "Ruby";
+              case DeploymentType.RUST:
+                return "Rust";
+              case DeploymentType.JAVA:
+                return "Java";
+              case DeploymentType.PHP:
+                return "PHP";
+              default:
+                return "Generic";
+            }
+          })();
+
+          return {
+            id: d.id,
+            name: d.name,
+            domain: d.domain,
+            status,
+            environment: env,
+            type,
+            updatedAt: new Date(
+              toMs(d.lastDeployedAt?.seconds ?? d.createdAt?.seconds)
+            ).toISOString(),
+          };
+        });
+
+      const stats = {
+        deployments: deployments.length,
+        gameServers: 0, // TODO: Fetch from game server API
+        vpsInstances: 0,
+        databases: 0,
+        monthlySpend: 0,
+        statuses,
+      };
+
+      const activity: Array<{
+        id: string;
+        message: string;
+        timestamp: string;
+      }> = [];
+
+      return { stats, recentDeployments, activity };
+    }
+  );
+
+  // Fetch organization usage data
+  const {
+    data: usageData,
+    status: usageStatus,
+    refresh: refreshUsage,
+  } = await useAsyncData(
+    () => `org-usage-data-${organizationId.value}`,
+    async () => {
+      // Use organizationId from composable (SSR-compatible)
+      const orgId = organizationId.value;
+      // Try to fetch even if orgId is empty (server will resolve if empty)
+      try {
+        const res = await orgClient.getUsage({
+          organizationId: orgId || undefined,
+        });
+        return res;
+      } catch (err) {
+        console.error("Failed to fetch usage:", err);
+        return null;
+      }
+    }
+  );
+
+  // Only show loading if data is not available and status is pending/idle
+  const isLoadingUsage = computed(
+    () =>
+      !usageData.value &&
+      (usageStatus.value === "pending" || usageStatus.value === "idle")
+  );
+  const isLoading = computed(
+    () => !data.value && (status.value === "pending" || status.value === "idle")
+  );
+  const stats = computed(
+    () =>
+      data.value?.stats ?? {
+        deployments: 0,
+        gameServers: 0,
+        vpsInstances: 0,
+        databases: 0,
+        monthlySpend: 0,
+      }
+  );
+  const statusBreakdown = computed(
+    () =>
+      (data.value?.stats?.statuses ?? []) as Array<{
+        status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR";
+        count: number;
+      }>
+  );
+
+  const formatNumber = (value: number) =>
+    new Intl.NumberFormat("en-US").format(value);
+
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  };
+
+  const formatCPUUsage = (coreSeconds: number): string => {
+    const hours = coreSeconds / 3600;
+    if (hours < 1) {
+      return `${(coreSeconds / 60).toFixed(1)} min`;
+    }
+    return `${hours.toFixed(1)} core-hrs`;
+  };
+
+  const formatQuota = (used: number, limit: number): string => {
+    if (limit === 0) return "Unlimited";
+    const percent = (used / limit) * 100;
+    return `${percent.toFixed(1)}% of quota`;
+  };
+
+  // Usage percentages
+  const cpuUsagePercent = computed(() => {
+    if (!usageData.value?.current || !usageData.value?.quota) return 0;
+    const limit = Number(usageData.value.quota.cpuCoreSecondsMonthly);
+    if (limit === 0) return 0;
+    const used = Number(usageData.value.current.cpuCoreSeconds);
+    return Math.min((used / limit) * 100, 100);
+  });
+
+  const memoryUsagePercent = computed(() => {
+    if (!usageData.value?.current || !usageData.value?.quota) return 0;
+    const limit = Number(usageData.value.quota.memoryByteSecondsMonthly);
+    if (limit === 0) return 0;
+    const used = Number(usageData.value.current.memoryByteSeconds);
+    return Math.min((used / limit) * 100, 100);
+  });
+
+  const bandwidthUsagePercent = computed(() => {
+    if (!usageData.value?.current || !usageData.value?.quota) return 0;
+    const limit = Number(usageData.value.quota.bandwidthBytesMonthly);
+    if (limit === 0) return 0;
+    const used =
+      Number(usageData.value.current.bandwidthRxBytes) +
+      Number(usageData.value.current.bandwidthTxBytes);
+    return Math.min((used / limit) * 100, 100);
+  });
+
+  const storageUsagePercent = computed(() => {
+    if (!usageData.value?.current || !usageData.value?.quota) return 0;
+    const limit = Number(usageData.value.quota.storageBytes);
+    if (limit === 0) return 0;
+    const used = Number(usageData.value.current.storageBytes);
+    return Math.min((used / limit) * 100, 100);
+  });
+
+  // Cost breakdown
+  const costBreakdown = computed(() => {
+    if (!usageData.value?.estimatedMonthly) return [];
+    const estimated = usageData.value.estimatedMonthly;
+    const breakdown = [];
+
+    const totalCents = Number(estimated.estimatedCostCents);
+    if (totalCents > 0) {
+      // Use actual per-resource costs if available, otherwise fall back to percentages
+      const cpuCents =
+        estimated.cpuCostCents != null
+          ? Number(estimated.cpuCostCents)
+          : totalCents * 0.4;
+      const memoryCents =
+        estimated.memoryCostCents != null
+          ? Number(estimated.memoryCostCents)
+          : totalCents * 0.3;
+      const bandwidthCents =
+        estimated.bandwidthCostCents != null
+          ? Number(estimated.bandwidthCostCents)
+          : totalCents * 0.2;
+      const storageCents =
+        estimated.storageCostCents != null
+          ? Number(estimated.storageCostCents)
+          : totalCents * 0.1;
+
+      breakdown.push(
+        {
+          label: "CPU",
+          value: formatCurrency(cpuCents / 100),
+          color: "bg-accent-primary",
+        },
+        {
+          label: "Memory",
+          value: formatCurrency(memoryCents / 100),
+          color: "bg-success",
+        },
+        {
+          label: "Bandwidth",
+          value: formatCurrency(bandwidthCents / 100),
+          color: "bg-accent-secondary",
+        },
+        {
+          label: "Storage",
+          value: formatCurrency(storageCents / 100),
+          color: "bg-warning",
+        }
+      );
+    }
+
+    return breakdown;
+  });
+
+  const kpiCards = computed(() => {
+    const monthlyCost = usageData.value?.estimatedMonthly
+      ? Number(usageData.value.estimatedMonthly.estimatedCostCents) / 100
+      : stats.value.monthlySpend;
+
+    return [
+      {
+        label: "Active Deployments",
+        value: formatNumber(stats.value.deployments),
+        subtitle: `${runningCount.value} running`,
+        icon: RocketLaunchIcon,
+        iconBg: "bg-primary/10",
+        iconColor: "text-accent-primary",
+        href: "/deployments",
+      },
+      {
+        label: "VPS Instances",
+        value: formatNumber(stats.value.vpsInstances),
+        icon: ServerIcon,
+        iconBg: "bg-success/10",
+        iconColor: "text-success",
+        href: "/vps",
+      },
+      {
+        label: "Game Servers",
+        value: formatNumber(stats.value.gameServers),
+        icon: CubeIcon,
+        iconBg: "bg-accent-success/10",
+        iconColor: "text-accent-success",
+        href: "/gameservers",
+      },
+      {
+        label: "Databases",
+        value: formatNumber(stats.value.databases),
+        icon: CircleStackIcon,
+        iconBg: "bg-accent-secondary/10",
+        iconColor: "text-accent-secondary",
+        href: "/databases",
+      },
+      {
+        label: "Estimated Monthly Cost",
+        value: formatCurrency(monthlyCost),
+        subtitle: usageData.value?.month || "This month",
+        icon: CreditCardIcon,
+        iconBg: "bg-warning/10",
+        iconColor: "text-warning",
+        href: "/organizations?tab=billing",
+      },
+    ];
+  });
+
+  // Recent deployments with loading state
+  const recentDeployments = computed(
+    () =>
+      (data.value?.recentDeployments ?? []) as Array<{
+        id: string;
+        name: string;
+        domain: string;
+        status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR";
+        updatedAt: string;
+        environment: string;
+        type: string;
+      }>
+  );
+
+  // Activity feed with loading state
+  const activityFeed = computed(
+    () =>
+      (data.value?.activity ?? []) as Array<{
+        id: string;
+        message: string;
+        timestamp: string;
+      }>
+  );
+
+  // Health metrics
+  const runningCount = computed(
+    () => statusBreakdown.value.find((s) => s.status === "RUNNING")?.count ?? 0
+  );
+  const buildingCount = computed(
+    () => statusBreakdown.value.find((s) => s.status === "BUILDING")?.count ?? 0
+  );
+  const stoppedCount = computed(
+    () => statusBreakdown.value.find((s) => s.status === "STOPPED")?.count ?? 0
+  );
+  const errorCount = computed(
+    () => statusBreakdown.value.find((s) => s.status === "ERROR")?.count ?? 0
+  );
+  const allHealthy = computed(() => errorCount.value === 0);
+  const attentionDeployments = computed(() =>
+    recentDeployments.value
+      .filter((d) => ["ERROR", "STOPPED", "BUILDING"].includes(d.status))
+      .slice(0, 4)
+  );
+
+  // Deployment URLs with status filters
+  const runningDeploymentsUrl = computed(() =>
+    composeQueryUrl("/deployments", {
+      status: String(DeploymentStatus.RUNNING),
+    })
+  );
+  const buildingDeploymentsUrl = computed(() =>
+    composeQueryUrl("/deployments", {
+      status: String(DeploymentStatus.BUILDING),
+    })
+  );
+  const stoppedDeploymentsUrl = computed(() =>
+    composeQueryUrl("/deployments", {
+      status: String(DeploymentStatus.STOPPED),
+    })
+  );
+  const errorDeploymentsUrl = computed(() =>
+    composeQueryUrl("/deployments", { status: String(DeploymentStatus.FAILED) })
+  );
+
+  // Auto-refresh using useAsyncData refresh
+  const refreshInterval = ref<ReturnType<typeof setInterval> | null>(null);
+  onMounted(() => {
+    refreshInterval.value = setInterval(() => {
+      refreshDashboard();
+      refreshUsage();
+    }, 30000);
+  });
+  onUnmounted(() => {
+    if (refreshInterval.value) clearInterval(refreshInterval.value);
+  });
+
+  const statusVariant = (
+    status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR"
+  ) => {
+    switch (status) {
+      case "RUNNING":
+        return "success";
+      case "BUILDING":
+        return "warning";
+      case "ERROR":
+        return "danger";
+      default:
+        return "secondary";
+    }
+  };
+
+  // Retry function for error states
+  const retryLoad = () => {
     refreshDashboard();
     refreshUsage();
-  }, 30000);
-});
-onUnmounted(() => {
-  if (refreshInterval.value) clearInterval(refreshInterval.value);
-});
-
-
-const statusVariant = (
-  status: "RUNNING" | "BUILDING" | "STOPPED" | "PENDING" | "ERROR"
-) => {
-  switch (status) {
-    case "RUNNING":
-      return "success";
-    case "BUILDING":
-      return "warning";
-    case "ERROR":
-      return "danger";
-    default:
-      return "secondary";
-  }
-};
-
-// Retry function for error states
-const retryLoad = () => {
-  refreshDashboard();
-  refreshUsage();
-};
+  };
 </script>

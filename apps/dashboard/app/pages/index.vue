@@ -5,7 +5,7 @@
     <OuiContainer
       as="nav"
       :size="isScrolled ? '5xl' : '7xl'"
-      class="flex items-center rounded-xl justify-between w-full mx-auto transform-gpu transition-all duration-500 ease-out border relative sticky top-2 md:top-5 z-30 will-change-transform"
+      class="flex items-center rounded-xl justify-between w-full mx-auto transform-gpu transition-all duration-500 ease-out border sticky top-2 md:top-10 z-30 will-change-transform"
       :class="
         isScrolled
           ? 'py-1.5 px-2 md:py-2 md:px-2 bg-background/80 backdrop-blur-md shadow-sm border-border-muted'
@@ -17,7 +17,11 @@
       <OuiFlex align="center" gap="md" class="flex-1 min-w-0">
         <OuiFlex align="center" gap="sm" class="min-w-0">
           <ObienteLogo size="md" />
-          <OuiText size="xl" weight="bold" color="primary" class="truncate text-lg md:text-xl"
+          <OuiText
+            size="xl"
+            weight="bold"
+            color="primary"
+            class="truncate text-lg md:text-xl"
             >Obiente Cloud</OuiText
           >
         </OuiFlex>
@@ -26,7 +30,9 @@
       <OuiFlex align="center" gap="md" class="shrink-0 hidden sm:flex">
         <OuiButton variant="ghost" size="sm">Features</OuiButton>
         <OuiButton variant="ghost" size="sm">Pricing</OuiButton>
-        <OuiButton variant="ghost" size="sm" @click="navigateTo('/docs')">Docs</OuiButton>
+        <OuiButton variant="ghost" size="sm" @click="navigateTo('/docs')"
+          >Docs</OuiButton
+        >
         <OuiButton variant="outline" size="sm" @click="handleSignUp">
           Sign Up
         </OuiButton>
@@ -37,10 +43,21 @@
     </OuiContainer>
     <OuiContainer size="7xl" class="relative px-3 md:px-4">
       <!-- Hero Content -->
-      <OuiStack gap="xl" align="center" class="text-center py-16 md:py-32 lg:py-40 md:gap-16">
+      <OuiStack
+        gap="xl"
+        align="center"
+        class="text-center py-16 md:py-32 lg:py-40 md:gap-16"
+      >
         <OuiStack gap="md" align="center" class="max-w-4xl md:gap-6">
-          <OuiText as="h1" size="6xl" weight="bold" color="primary" class="text-3xl md:text-5xl lg:text-6xl leading-tight">
-            Deploy, Scale, and Manage Your Cloud Infrastructure <br class="hidden md:block" />
+          <OuiText
+            as="h1"
+            size="6xl"
+            weight="bold"
+            color="primary"
+            class="text-3xl md:text-5xl lg:text-6xl leading-tight"
+          >
+            Deploy, Scale, and Manage Your Cloud Infrastructure
+            <br class="hidden md:block" />
             With
             <span
               class="bg-clip-text text-transparent bg-linear-to-r from-accent-primary to-accent-primary"
@@ -49,12 +66,23 @@
             </span>
           </OuiText>
 
-          <OuiText size="xl" color="secondary" class="max-w-2xl px-2 md:px-0 text-md md:text-xl">
-            Deploy containers, game servers, and VPS instances. Pay only for what you use with transparent, resource-based pricing. No more overpaying for unused resources.
+          <OuiText
+            size="xl"
+            color="secondary"
+            class="max-w-2xl px-2 md:px-0 text-md md:text-xl"
+          >
+            Deploy containers, game servers, and VPS instances. Pay only for
+            what you use with transparent, resource-based pricing. No more
+            overpaying for unused resources.
           </OuiText>
         </OuiStack>
 
-        <OuiFlex gap="sm" wrap="wrap" justify="center" class="mt-6 md:mt-8 md:gap-4">
+        <OuiFlex
+          gap="sm"
+          wrap="wrap"
+          justify="center"
+          class="mt-6 md:mt-8 md:gap-4"
+        >
           <OuiButton
             size="lg"
             color="primary"
@@ -64,7 +92,12 @@
             <RocketLaunchIcon class="h-5 w-5" />
             Get Started
           </OuiButton>
-          <OuiButton variant="outline" size="lg" class="gap-2 w-full sm:w-auto text-sm md:text-base" @click="navigateTo('/docs')">
+          <OuiButton
+            variant="outline"
+            size="lg"
+            class="gap-2 w-full sm:w-auto text-sm md:text-base"
+            @click="navigateTo('/docs')"
+          >
             <ChatBubbleLeftRightIcon class="h-5 w-5" />
             <span class="hidden sm:inline">View Documentation</span>
             <span class="sm:hidden">Docs</span>
@@ -72,22 +105,59 @@
         </OuiFlex>
 
         <!-- Stats -->
-        <OuiFlex gap="md" wrap="wrap" justify="center" class="mt-8 md:mt-16 opacity-75 md:gap-8">
+        <OuiFlex
+          gap="md"
+          wrap="wrap"
+          justify="center"
+          class="mt-8 md:mt-16 opacity-75 md:gap-8"
+        >
           <OuiStack gap="xs" align="center">
-            <OuiText size="2xl" weight="bold" color="primary" class="text-xl md:text-2xl">Fast</OuiText>
-            <OuiText size="sm" color="secondary" class="text-xs md:text-sm">Deployments</OuiText>
+            <OuiText
+              size="2xl"
+              weight="bold"
+              color="primary"
+              class="text-xl md:text-2xl"
+              >Fast</OuiText
+            >
+            <OuiText size="sm" color="secondary" class="text-xs md:text-sm"
+              >Deployments</OuiText
+            >
           </OuiStack>
           <OuiStack gap="xs" align="center">
-            <OuiText size="2xl" weight="bold" color="primary" class="text-xl md:text-2xl">Reliable</OuiText>
-            <OuiText size="sm" color="secondary" class="text-xs md:text-sm">Infrastructure</OuiText>
+            <OuiText
+              size="2xl"
+              weight="bold"
+              color="primary"
+              class="text-xl md:text-2xl"
+              >Reliable</OuiText
+            >
+            <OuiText size="sm" color="secondary" class="text-xs md:text-sm"
+              >Infrastructure</OuiText
+            >
           </OuiStack>
           <OuiStack gap="xs" align="center">
-            <OuiText size="2xl" weight="bold" color="primary" class="text-xl md:text-2xl">Quality</OuiText>
-            <OuiText size="sm" color="secondary" class="text-xs md:text-sm">Hardware</OuiText>
+            <OuiText
+              size="2xl"
+              weight="bold"
+              color="primary"
+              class="text-xl md:text-2xl"
+              >Quality</OuiText
+            >
+            <OuiText size="sm" color="secondary" class="text-xs md:text-sm"
+              >Hardware</OuiText
+            >
           </OuiStack>
           <OuiStack gap="xs" align="center">
-            <OuiText size="2xl" weight="bold" color="primary" class="text-xl md:text-2xl">Personal</OuiText>
-            <OuiText size="sm" color="secondary" class="text-xs md:text-sm">Support</OuiText>
+            <OuiText
+              size="2xl"
+              weight="bold"
+              color="primary"
+              class="text-xl md:text-2xl"
+              >Personal</OuiText
+            >
+            <OuiText size="sm" color="secondary" class="text-xs md:text-sm"
+              >Support</OuiText
+            >
           </OuiStack>
         </OuiFlex>
       </OuiStack>
@@ -107,7 +177,8 @@
             Everything you need to deploy
           </OuiText>
           <OuiText size="lg" color="secondary" class="md:text-xl">
-            Deploy containers, game servers, and VPS instances. Pay-as-you-go pricing means you only pay for actual resource usage, not idle time.
+            Deploy containers, game servers, and VPS instances. Pay-as-you-go
+            pricing means you only pay for actual resource usage, not idle time.
           </OuiText>
         </OuiStack>
 
@@ -120,7 +191,9 @@
           >
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-primary/20 rounded-lg flex items-center justify-center">
+                <OuiBox
+                  class="w-12 h-12 bg-accent-primary/20 rounded-lg flex items-center justify-center"
+                >
                   <RocketLaunchIcon class="h-6 w-6 text-accent-primary" />
                 </OuiBox>
                 <OuiStack gap="sm">
@@ -128,7 +201,8 @@
                     GitHub Integration
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Deploy directly from GitHub repositories. Automatic builds on push with support for Docker and Docker Compose.
+                    Deploy directly from GitHub repositories. Automatic builds
+                    on push with support for Docker and Docker Compose.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -143,7 +217,9 @@
           >
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-success/20 rounded-lg flex items-center justify-center">
+                <OuiBox
+                  class="w-12 h-12 bg-accent-success/20 rounded-lg flex items-center justify-center"
+                >
                   <ShieldCheckIcon class="h-6 w-6 text-accent-success" />
                 </OuiBox>
                 <OuiStack gap="sm">
@@ -151,7 +227,8 @@
                     Custom Domains
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Configure custom domains with automatic SSL certificates. Set up routing rules for multiple paths and domains.
+                    Configure custom domains with automatic SSL certificates.
+                    Set up routing rules for multiple paths and domains.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -166,7 +243,9 @@
           >
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-secondary/20 rounded-lg flex items-center justify-center">
+                <OuiBox
+                  class="w-12 h-12 bg-accent-secondary/20 rounded-lg flex items-center justify-center"
+                >
                   <ServerIcon class="h-6 w-6 text-accent-secondary" />
                 </OuiBox>
                 <OuiStack gap="sm">
@@ -174,7 +253,9 @@
                     Container Deployments
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Deploy single containers or multi-container applications with Docker Compose. Full control over your application stack.
+                    Deploy single containers or multi-container applications
+                    with Docker Compose. Full control over your application
+                    stack.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -189,7 +270,9 @@
           >
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-info/20 rounded-lg flex items-center justify-center">
+                <OuiBox
+                  class="w-12 h-12 bg-accent-info/20 rounded-lg flex items-center justify-center"
+                >
                   <CircleStackIcon class="h-6 w-6 text-accent-info" />
                 </OuiBox>
                 <OuiStack gap="sm">
@@ -197,7 +280,8 @@
                     Environment Variables
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Manage environment variables per deployment. Secure secrets management with easy configuration through the dashboard.
+                    Manage environment variables per deployment. Secure secrets
+                    management with easy configuration through the dashboard.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -212,7 +296,9 @@
           >
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-warning/20 rounded-lg flex items-center justify-center">
+                <OuiBox
+                  class="w-12 h-12 bg-accent-warning/20 rounded-lg flex items-center justify-center"
+                >
                   <ChartBarIcon class="h-6 w-6 text-accent-warning" />
                 </OuiBox>
                 <OuiStack gap="sm">
@@ -220,7 +306,9 @@
                     Real-Time Monitoring
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Track vCPU, memory, bandwidth, and storage usage in real-time. View build logs, application logs, and performance metrics.
+                    Track vCPU, memory, bandwidth, and storage usage in
+                    real-time. View build logs, application logs, and
+                    performance metrics.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -235,7 +323,9 @@
           >
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-danger/20 rounded-lg flex items-center justify-center">
+                <OuiBox
+                  class="w-12 h-12 bg-accent-danger/20 rounded-lg flex items-center justify-center"
+                >
                   <FolderIcon class="h-6 w-6 text-accent-danger" />
                 </OuiBox>
                 <OuiStack gap="sm">
@@ -243,7 +333,9 @@
                     File Management
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Upload, edit, and manage files directly through the dashboard. Terminal access for advanced configuration and debugging.
+                    Upload, edit, and manage files directly through the
+                    dashboard. Terminal access for advanced configuration and
+                    debugging.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -258,7 +350,9 @@
           >
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-success/20 rounded-lg flex items-center justify-center">
+                <OuiBox
+                  class="w-12 h-12 bg-accent-success/20 rounded-lg flex items-center justify-center"
+                >
                   <CircleStackIcon class="h-6 w-6 text-accent-success" />
                 </OuiBox>
                 <OuiStack gap="sm">
@@ -266,7 +360,9 @@
                     Pay-as-You-Go Pricing
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Only pay for resources you actually use. Perfect for game servers and VPSs where you often overpay for idle time. Stop wasting money on unused capacity.
+                    Only pay for resources you actually use. Perfect for game
+                    servers and VPSs where you often overpay for idle time. Stop
+                    wasting money on unused capacity.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -281,7 +377,9 @@
           >
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-primary/20 rounded-lg flex items-center justify-center">
+                <OuiBox
+                  class="w-12 h-12 bg-accent-primary/20 rounded-lg flex items-center justify-center"
+                >
                   <ServerIcon class="h-6 w-6 text-accent-primary" />
                 </OuiBox>
                 <OuiStack gap="sm">
@@ -289,7 +387,9 @@
                     Game Server Hosting
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Deploy dedicated game servers with Docker support. Pay only when your server is running - perfect for Minecraft, game servers, and multiplayer applications.
+                    Deploy dedicated game servers with Docker support. Pay only
+                    when your server is running - perfect for Minecraft, game
+                    servers, and multiplayer applications.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -304,7 +404,9 @@
           >
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-info/20 rounded-lg flex items-center justify-center">
+                <OuiBox
+                  class="w-12 h-12 bg-accent-info/20 rounded-lg flex items-center justify-center"
+                >
                   <ServerIcon class="h-6 w-6 text-accent-info" />
                 </OuiBox>
                 <OuiStack gap="sm">
@@ -312,7 +414,10 @@
                     VPS Instances
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Get full root access VPS instances with complete control. Pay only for actual CPU and memory usage - perfect for development, hosting, and personal projects where you need full flexibility.
+                    Get full root access VPS instances with complete control.
+                    Pay only for actual CPU and memory usage - perfect for
+                    development, hosting, and personal projects where you need
+                    full flexibility.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -323,7 +428,12 @@
     </OuiContainer>
 
     <!-- Infrastructure Section -->
-    <OuiContainer as="section" py="3xl" size="7xl" class="px-3 md:px-4 md:py-24">
+    <OuiContainer
+      as="section"
+      py="3xl"
+      size="7xl"
+      class="px-3 md:px-4 md:py-24"
+    >
       <OuiStack gap="2xl" align="center">
         <OuiStack gap="lg" align="center" class="text-center max-w-3xl">
           <OuiText
@@ -336,7 +446,8 @@
             Enterprise-Grade Infrastructure
           </OuiText>
           <OuiText size="lg" color="secondary" class="md:text-xl">
-            Built on premium hardware with redundancy and reliability at its core.
+            Built on premium hardware with redundancy and reliability at its
+            core.
           </OuiText>
         </OuiStack>
 
@@ -345,7 +456,9 @@
           <OuiCard variant="default" class="h-full">
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-primary/20 rounded-lg flex items-center justify-center">
+                <OuiBox
+                  class="w-12 h-12 bg-accent-primary/20 rounded-lg flex items-center justify-center"
+                >
                   <ServerIcon class="h-6 w-6 text-accent-primary" />
                 </OuiBox>
                 <OuiStack gap="sm">
@@ -353,7 +466,8 @@
                     Premium Hardware
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Powered by AMD Ryzen 7 7900X processors with DDR5 RAM and NVMe SSDs for exceptional performance.
+                    Powered by AMD Ryzen 7 7900X processors with DDR5 RAM and
+                    NVMe SSDs for exceptional performance.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -364,7 +478,9 @@
           <OuiCard variant="default" class="h-full">
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-success/20 rounded-lg flex items-center justify-center">
+                <OuiBox
+                  class="w-12 h-12 bg-accent-success/20 rounded-lg flex items-center justify-center"
+                >
                   <ShieldCheckIcon class="h-6 w-6 text-accent-success" />
                 </OuiBox>
                 <OuiStack gap="sm">
@@ -372,7 +488,8 @@
                     High Availability
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Automatic failover to our fallback node ensures your services stay online even during main node outages.
+                    Automatic failover to our fallback node ensures your
+                    services stay online even during main node outages.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -383,15 +500,20 @@
           <OuiCard variant="default" class="h-full">
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-secondary/20 rounded-lg flex items-center justify-center">
-                  <ChatBubbleLeftRightIcon class="h-6 w-6 text-accent-secondary" />
+                <OuiBox
+                  class="w-12 h-12 bg-accent-secondary/20 rounded-lg flex items-center justify-center"
+                >
+                  <ChatBubbleLeftRightIcon
+                    class="h-6 w-6 text-accent-secondary"
+                  />
                 </OuiBox>
                 <OuiStack gap="sm">
                   <OuiText as="h3" size="lg" weight="semibold" color="primary">
                     Free Support
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Get help when you need it. Our support team is available to assist with deployment, configuration, and troubleshooting.
+                    Get help when you need it. Our support team is available to
+                    assist with deployment, configuration, and troubleshooting.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -402,7 +524,9 @@
           <OuiCard variant="default" class="h-full">
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-danger/20 rounded-lg flex items-center justify-center">
+                <OuiBox
+                  class="w-12 h-12 bg-accent-danger/20 rounded-lg flex items-center justify-center"
+                >
                   <ShieldCheckIcon class="h-6 w-6 text-accent-danger" />
                 </OuiBox>
                 <OuiStack gap="sm">
@@ -410,7 +534,8 @@
                     Security
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    SSL certificates, automated backups, and comprehensive audit logs to keep your data secure.
+                    SSL certificates, automated backups, and comprehensive audit
+                    logs to keep your data secure.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -421,7 +546,9 @@
           <OuiCard variant="default" class="h-full">
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-info/20 rounded-lg flex items-center justify-center">
+                <OuiBox
+                  class="w-12 h-12 bg-accent-info/20 rounded-lg flex items-center justify-center"
+                >
                   <GlobeAltIcon class="h-6 w-6 text-accent-info" />
                 </OuiBox>
                 <OuiStack gap="sm">
@@ -429,7 +556,9 @@
                     DNS Management
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Custom domain support with automatic DNS configuration. Verify domains and set up routing rules for your deployments.
+                    Custom domain support with automatic DNS configuration.
+                    Verify domains and set up routing rules for your
+                    deployments.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -440,7 +569,9 @@
           <OuiCard variant="default" class="h-full">
             <OuiCardBody>
               <OuiStack gap="md">
-                <OuiBox class="w-12 h-12 bg-accent-warning/20 rounded-lg flex items-center justify-center">
+                <OuiBox
+                  class="w-12 h-12 bg-accent-warning/20 rounded-lg flex items-center justify-center"
+                >
                   <ChartBarIcon class="h-6 w-6 text-accent-warning" />
                 </OuiBox>
                 <OuiStack gap="sm">
@@ -448,7 +579,9 @@
                     Real-Time Monitoring
                   </OuiText>
                   <OuiText size="sm" color="secondary">
-                    Track vCPU, memory, bandwidth, and storage usage in real-time. View build logs, application logs, and performance metrics.
+                    Track vCPU, memory, bandwidth, and storage usage in
+                    real-time. View build logs, application logs, and
+                    performance metrics.
                   </OuiText>
                 </OuiStack>
               </OuiStack>
@@ -459,7 +592,12 @@
     </OuiContainer>
 
     <!-- Pricing Section -->
-    <OuiContainer as="section" py="3xl" size="7xl" class="px-3 md:px-4 md:py-24">
+    <OuiContainer
+      as="section"
+      py="3xl"
+      size="7xl"
+      class="px-3 md:px-4 md:py-24"
+    >
       <OuiStack gap="2xl" align="center">
         <OuiStack gap="lg" align="center" class="text-center max-w-3xl">
           <OuiText
@@ -472,14 +610,22 @@
             Simple, transparent pricing
           </OuiText>
           <OuiText size="lg" color="secondary">
-            Pay only for what you use. No fixed plans, no hidden fees. Free support included. Stop overpaying for unused resources.
+            Pay only for what you use. No fixed plans, no hidden fees. Free
+            support included. Stop overpaying for unused resources.
           </OuiText>
           <OuiText size="sm" color="secondary" class="opacity-60 italic">
-            Students, open-source projects, non-profits, and early-stage startups may qualify for reduced pricing. Contact us to discuss.
+            Students, open-source projects, non-profits, and early-stage
+            startups may qualify for reduced pricing. Contact us to discuss.
           </OuiText>
         </OuiStack>
 
-        <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="xl" class="w-full max-w-6xl">
+        <OuiGrid
+          cols="1"
+          cols-md="2"
+          cols-lg="4"
+          gap="xl"
+          class="w-full max-w-6xl"
+        >
           <!-- Small App Example -->
           <OuiCard
             variant="default"
@@ -498,7 +644,9 @@
                 </OuiStack>
 
                 <OuiStack gap="xs" align="center">
-                  <OuiText size="3xl" weight="bold" color="primary">~$5</OuiText>
+                  <OuiText size="3xl" weight="bold" color="primary"
+                    >~$5</OuiText
+                  >
                   <OuiText size="sm" color="secondary">per month</OuiText>
                 </OuiStack>
 
@@ -531,7 +679,9 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Automatic failover to fallback node</OuiText>
+                    <OuiText size="sm" color="secondary"
+                      >Automatic failover to fallback node</OuiText
+                    >
                   </OuiFlex>
                 </OuiStack>
               </OuiStack>
@@ -563,7 +713,11 @@
                     >~$15</OuiText
                   >
                   <OuiText size="sm" color="secondary">per month</OuiText>
-                  <OuiText size="xs" color="secondary" class="opacity-75 italic line-through">
+                  <OuiText
+                    size="xs"
+                    color="secondary"
+                    class="opacity-75 italic line-through"
+                  >
                     Traditional hosting: $20-30/month
                   </OuiText>
                 </OuiStack>
@@ -589,7 +743,9 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">~20 GB storage</OuiText>
+                    <OuiText size="sm" color="secondary"
+                      >~20 GB storage</OuiText
+                    >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
@@ -624,9 +780,15 @@
                 </OuiStack>
 
                 <OuiStack gap="xs" align="center">
-                  <OuiText size="3xl" weight="bold" color="primary">~$8</OuiText>
+                  <OuiText size="3xl" weight="bold" color="primary"
+                    >~$8</OuiText
+                  >
                   <OuiText size="sm" color="secondary">per month</OuiText>
-                  <OuiText size="xs" color="secondary" class="opacity-75 italic">
+                  <OuiText
+                    size="xs"
+                    color="secondary"
+                    class="opacity-75 italic"
+                  >
                     Traditional VPS: $10-12/month
                   </OuiText>
                 </OuiStack>
@@ -652,7 +814,9 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">~10 GB storage</OuiText>
+                    <OuiText size="sm" color="secondary"
+                      >~10 GB storage</OuiText
+                    >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
@@ -717,7 +881,9 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">~25 GB storage</OuiText>
+                    <OuiText size="sm" color="secondary"
+                      >~25 GB storage</OuiText
+                    >
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
@@ -731,14 +897,16 @@
                   </OuiFlex>
                   <OuiFlex align="center" gap="sm">
                     <CheckIcon class="h-4 w-4 text-accent-success shrink-0" />
-                    <OuiText size="sm" color="secondary">Automatic failover to fallback node</OuiText>
+                    <OuiText size="sm" color="secondary"
+                      >Automatic failover to fallback node</OuiText
+                    >
                   </OuiFlex>
                 </OuiStack>
               </OuiStack>
             </OuiCardBody>
           </OuiCard>
         </OuiGrid>
-        
+
         <OuiFlex gap="md" wrap="wrap" justify="center" class="mt-8">
           <OuiButton
             size="lg"
@@ -750,59 +918,82 @@
             Get Started
           </OuiButton>
         </OuiFlex>
-        
-        <OuiText size="sm" color="secondary" class="opacity-75 text-center max-w-2xl">
-          * Example costs based on 24/7 usage. You only pay for actual runtime - if your app runs part-time, you'll pay less. Use the calculator below to estimate your exact costs.
+
+        <OuiText
+          size="sm"
+          color="secondary"
+          class="opacity-75 text-center max-w-2xl"
+        >
+          * Example costs based on 24/7 usage. You only pay for actual runtime -
+          if your app runs part-time, you'll pay less. Use the calculator below
+          to estimate your exact costs.
         </OuiText>
-        
+
         <OuiCard variant="default" class="w-full max-w-4xl mt-4">
           <OuiCardBody>
             <OuiStack gap="md">
-              <OuiText size="lg" weight="semibold" color="primary" class="text-center">
+              <OuiText
+                size="lg"
+                weight="semibold"
+                color="primary"
+                class="text-center"
+              >
                 Why Pay-as-You-Go Matters
               </OuiText>
               <OuiGrid cols="1" cols-md="2" gap="md">
                 <OuiFlex gap="sm" align="start">
-                  <ServerIcon class="h-5 w-5 text-accent-success shrink-0 mt-0.5" />
+                  <ServerIcon
+                    class="h-5 w-5 text-accent-success shrink-0 mt-0.5"
+                  />
                   <OuiStack gap="xs">
                     <OuiText size="sm" weight="semibold" color="primary">
                       Game Servers
                     </OuiText>
                     <OuiText size="sm" color="secondary">
-                      Low costs when idle or offline. Traditional hosting charges $20-40/month even when your server is empty.
+                      Low costs when idle or offline. Traditional hosting
+                      charges $20-40/month even when your server is empty.
                     </OuiText>
                   </OuiStack>
                 </OuiFlex>
                 <OuiFlex gap="sm" align="start">
-                  <ServerIcon class="h-5 w-5 text-accent-primary shrink-0 mt-0.5" />
+                  <ServerIcon
+                    class="h-5 w-5 text-accent-primary shrink-0 mt-0.5"
+                  />
                   <OuiStack gap="xs">
                     <OuiText size="sm" weight="semibold" color="primary">
                       VPS Instances
                     </OuiText>
                     <OuiText size="sm" color="secondary">
-                      Pay for actual CPU and memory usage, not idle time. Most VPS providers charge full price regardless of utilization.
+                      Pay for actual CPU and memory usage, not idle time. Most
+                      VPS providers charge full price regardless of utilization.
                     </OuiText>
                   </OuiStack>
                 </OuiFlex>
                 <OuiFlex gap="sm" align="start">
-                  <RocketLaunchIcon class="h-5 w-5 text-accent-secondary shrink-0 mt-0.5" />
+                  <RocketLaunchIcon
+                    class="h-5 w-5 text-accent-secondary shrink-0 mt-0.5"
+                  />
                   <OuiStack gap="xs">
                     <OuiText size="sm" weight="semibold" color="primary">
                       Development Environments
                     </OuiText>
                     <OuiText size="sm" color="secondary">
-                      Stop paying for resources that sit idle overnight or on weekends.
+                      Stop paying for resources that sit idle overnight or on
+                      weekends.
                     </OuiText>
                   </OuiStack>
                 </OuiFlex>
                 <OuiFlex gap="sm" align="start">
-                  <ChartBarIcon class="h-5 w-5 text-accent-warning shrink-0 mt-0.5" />
+                  <ChartBarIcon
+                    class="h-5 w-5 text-accent-warning shrink-0 mt-0.5"
+                  />
                   <OuiStack gap="xs">
                     <OuiText size="sm" weight="semibold" color="primary">
                       Variable Workloads
                     </OuiText>
                     <OuiText size="sm" color="secondary">
-                      Scale costs automatically with demand - no over-provisioning required.
+                      Scale costs automatically with demand - no
+                      over-provisioning required.
                     </OuiText>
                   </OuiStack>
                 </OuiFlex>
@@ -817,7 +1008,12 @@
     <PricingCalculator />
 
     <!-- CTA Section -->
-    <OuiContainer as="section" size="7xl" py="3xl" class="px-3 md:px-4 md:py-24">
+    <OuiContainer
+      as="section"
+      size="7xl"
+      py="3xl"
+      class="px-3 md:px-4 md:py-24"
+    >
       <OuiStack gap="xl" align="center" class="text-center">
         <OuiStack gap="lg" align="center" class="max-w-3xl">
           <OuiText
@@ -830,7 +1026,8 @@
             Ready to get started?
           </OuiText>
           <OuiText size="lg" color="secondary" class="md:text-xl">
-            Join our growing community of developers building and deploying containerized applications.
+            Join our growing community of developers building and deploying
+            containerized applications.
           </OuiText>
         </OuiStack>
         <OuiFlex gap="md" wrap="wrap" justify="center">
@@ -861,85 +1058,85 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
-import { useWindowScroll } from "@vueuse/core";
-import {
-  RocketLaunchIcon,
-  ServerIcon,
-  CircleStackIcon,
-  ChartBarIcon,
-  ShieldCheckIcon,
-  CheckIcon,
-  ChatBubbleLeftRightIcon,
-  FolderIcon,
-  GlobeAltIcon,
-} from "@heroicons/vue/24/outline";
-import PricingCalculator from "~/components/pricing/PricingCalculator.vue";
-import ObienteLogo from "~/components/app/ObienteLogo.vue";
-import { useConfig } from "~/composables/useConfig";
+  import { computed } from "vue";
+  import { useWindowScroll } from "@vueuse/core";
+  import {
+    RocketLaunchIcon,
+    ServerIcon,
+    CircleStackIcon,
+    ChartBarIcon,
+    ShieldCheckIcon,
+    CheckIcon,
+    ChatBubbleLeftRightIcon,
+    FolderIcon,
+    GlobeAltIcon,
+  } from "@heroicons/vue/24/outline";
+  import PricingCalculator from "~/components/pricing/PricingCalculator.vue";
+  import ObienteLogo from "~/components/app/ObienteLogo.vue";
+  import { useConfig } from "~/composables/useConfig";
 
-// Page meta - no auth required for homepage
-definePageMeta({
-  layout: false, // Use custom layout for homepage
-});
+  // Page meta - no auth required for homepage
+  definePageMeta({
+    layout: false, // Use custom layout for homepage
+  });
 
-// Check if self-hosted and redirect to dashboard
-const config = useConfig();
-await config.fetchConfig();
+  // Check if self-hosted and redirect to dashboard
+  const config = useConfig();
+  await config.fetchConfig();
 
-if (config.selfHosted.value === true) {
-  // Redirect to dashboard for self-hosted instances
-  await navigateTo("/dashboard");
-}
-
-// Scroll state for header effect using VueUse
-const { y: scrollY } = useWindowScroll();
-const isScrolled = computed(() => scrollY.value > 10);
-
-// Auth composable for sign-up
-const auth = useAuth();
-
-// Handle sign-up click
-const handleSignUp = () => {
-  if (import.meta.client) {
-    auth.popupSignup();
+  if (config.selfHosted.value === true) {
+    // Redirect to dashboard for self-hosted instances
+    await navigateTo("/dashboard");
   }
-  // Server-side: signup is handled via popup, no navigation needed
-};
 
-// SEO meta
-useHead({
-  title: "Obiente Cloud - Container, Game Server & VPS Hosting",
-  meta: [
-    {
-      name: "description",
-      content:
-        "Deploy containers, game servers, and VPS instances with pay-as-you-go pricing. Only pay for actual usage - no more overpaying for unused resources. Competitive with VPS providers.",
-    },
-    {
-      name: "keywords",
-      content:
-        "container hosting, docker deployment, game server hosting, vps hosting, pay as you go, cloud platform, minecraft hosting, competitive pricing",
-    },
-    {
-      property: "og:title",
-      content: "Obiente Cloud - Container, Game Server & VPS Hosting",
-    },
-    {
-      property: "og:description",
-      content:
-        "Deploy containers, game servers, and VPS instances with pay-as-you-go pricing. Only pay for actual usage - no more overpaying for unused resources.",
-    },
-    { property: "og:type", content: "website" },
-    { name: "twitter:card", content: "summary_large_image" },
-  ],
-});
+  // Scroll state for header effect using VueUse
+  const { y: scrollY } = useWindowScroll();
+  const isScrolled = computed(() => scrollY.value > 10);
+
+  // Auth composable for sign-up
+  const auth = useAuth();
+
+  // Handle sign-up click
+  const handleSignUp = () => {
+    if (import.meta.client) {
+      auth.popupSignup();
+    }
+    // Server-side: signup is handled via popup, no navigation needed
+  };
+
+  // SEO meta
+  useHead({
+    title: "Obiente Cloud - Container, Game Server & VPS Hosting",
+    meta: [
+      {
+        name: "description",
+        content:
+          "Deploy containers, game servers, and VPS instances with pay-as-you-go pricing. Only pay for actual usage - no more overpaying for unused resources. Competitive with VPS providers.",
+      },
+      {
+        name: "keywords",
+        content:
+          "container hosting, docker deployment, game server hosting, vps hosting, pay as you go, cloud platform, minecraft hosting, competitive pricing",
+      },
+      {
+        property: "og:title",
+        content: "Obiente Cloud - Container, Game Server & VPS Hosting",
+      },
+      {
+        property: "og:description",
+        content:
+          "Deploy containers, game servers, and VPS instances with pay-as-you-go pricing. Only pay for actual usage - no more overpaying for unused resources.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  });
 </script>
 
 <style>
-/* Ensure full page background coverage for homepage */
-html,
-body {
-  background-color: var(--oui-background) !important;
-}
+  /* Ensure full page background coverage for homepage */
+  html,
+  body {
+    background-color: var(--oui-background) !important;
+  }
 </style>
