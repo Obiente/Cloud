@@ -373,6 +373,33 @@ func InitBuildLogsTimescaleDB(db *gorm.DB) error {
 		return nil
 	}
 
+	// TimescaleDB requires that unique indexes include the partitioning column (timestamp)
+	// We need to drop the primary key constraint and recreate it as a unique index with timestamp
+	// First, check if there's a primary key constraint
+	var hasPK bool
+	if err := db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM pg_constraint 
+			WHERE conrelid = 'build_logs'::regclass 
+			AND contype = 'p'
+		)
+	`).Scan(&hasPK).Error; err == nil && hasPK {
+		logger.Debug("Dropping primary key constraint on build_logs to prepare for TimescaleDB conversion...")
+		// Drop the primary key constraint
+		if err := db.Exec("ALTER TABLE build_logs DROP CONSTRAINT build_logs_pkey").Error; err != nil {
+			logger.Warn("Failed to drop primary key constraint (may not exist): %v", err)
+		}
+		// Create a unique index that includes timestamp (required for TimescaleDB)
+		if err := db.Exec(`
+			CREATE UNIQUE INDEX IF NOT EXISTS build_logs_id_timestamp_unique 
+			ON build_logs (id, timestamp)
+		`).Error; err != nil {
+			logger.Warn("Failed to create unique index with timestamp: %v", err)
+		} else {
+			logger.Debug("Created unique index on (id, timestamp) for TimescaleDB compatibility")
+		}
+	}
+
 	// Convert to hypertable with timestamp as time column and build_id as partition dimension
 	// This allows efficient querying by both time and build_id
 	// Use 1 hour chunk interval for build logs (builds typically last minutes to hours)
