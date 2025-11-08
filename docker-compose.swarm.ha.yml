@@ -525,6 +525,12 @@ services:
         parallelism: 1
         delay: 10s
         order: start-first
+        failure_action: rollback
+        monitor: 60s
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -549,47 +555,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    networks:
-      - obiente-network
-
-  # ============================================================================
-  # DEPLOYMENT ORCHESTRATOR
-  # ============================================================================
-
-  # Deployment orchestrator - manages user deployments across nodes
-  deployment-orchestrator:
-    image: obiente/deployment-orchestrator:latest
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-obiente-postgres}:${POSTGRES_PASSWORD:-obiente-postgres}@pgpool:5432/${POSTGRES_DB:-obiente}
-      REDIS_CLUSTER_NODES: redis-1:6379,redis-2:6379,redis-3:6379
-      DOCKER_HOST: unix:///var/run/docker.sock
-      # Scheduling strategy
-      DEPLOYMENT_STRATEGY: ${DEPLOYMENT_STRATEGY:-least-loaded}
-      MAX_DEPLOYMENTS_PER_NODE: ${MAX_DEPLOYMENTS_PER_NODE:-50}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      - pgpool
-      - redis-1
-      - api
-    deploy:
-      replicas: 2
-      placement:
-        constraints:
-          - node.role == manager
-      update_config:
-        parallelism: 1
-        order: start-first
-      resources:
-        limits:
-          cpus: "1"
-          memory: 512M
-        reservations:
-          cpus: "0.5"
-          memory: 256M
-      labels:
-        - "cloud.obiente.service=orchestrator"
-        - "cloud.obiente.role=control-plane"
     networks:
       - obiente-network
 

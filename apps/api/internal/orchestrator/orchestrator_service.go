@@ -26,6 +26,7 @@ type OrchestratorService struct {
 	serviceRegistry   *registry.ServiceRegistry
 	healthChecker     *registry.HealthChecker
 	metricsStreamer   *MetricsStreamer
+	rollbackMonitor   *RollbackMonitor
 	syncInterval      time.Duration
 	ctx               context.Context
 	cancel            context.CancelFunc
@@ -53,6 +54,13 @@ func NewOrchestratorService(strategy string, maxDeploymentsPerNode int, syncInte
 	healthChecker := registry.NewHealthChecker(serviceRegistry, 1*time.Minute)
 	metricsStreamer := NewMetricsStreamer(serviceRegistry)
 
+	// Create rollback monitor (may fail if Docker is not available, but that's OK)
+	rollbackMonitor, err := NewRollbackMonitor()
+	if err != nil {
+		logger.Warn("[Orchestrator] Failed to create rollback monitor: %v (rollback notifications will be disabled)", err)
+		rollbackMonitor = nil
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	
 	// Register global metrics streamer for access from other services
@@ -64,6 +72,7 @@ func NewOrchestratorService(strategy string, maxDeploymentsPerNode int, syncInte
 		serviceRegistry:   serviceRegistry,
 		healthChecker:     healthChecker,
 		metricsStreamer:   metricsStreamer,
+		rollbackMonitor:   rollbackMonitor,
 		syncInterval:      syncInterval,
 		ctx:               ctx,
 		cancel:            cancel,
@@ -115,6 +124,12 @@ func (os *OrchestratorService) Start() {
 	go os.cleanupStrayContainers()
 	logger.Debug("[Orchestrator] Started stray container cleanup")
 
+	// Start rollback monitor (if available)
+	if os.rollbackMonitor != nil {
+		os.rollbackMonitor.Start()
+		logger.Debug("[Orchestrator] Started rollback monitor")
+	}
+
 	logger.Info("[Orchestrator] Orchestration service started successfully")
 }
 
@@ -132,6 +147,11 @@ func (os *OrchestratorService) Stop() {
 	
 	os.metricsStreamer.Stop()
 	logger.Debug("[Orchestrator] Stopped metrics streamer")
+
+	if os.rollbackMonitor != nil {
+		os.rollbackMonitor.Stop()
+		logger.Debug("[Orchestrator] Stopped rollback monitor")
+	}
 
 	logger.Info("[Orchestrator] Orchestration service stopped")
 }

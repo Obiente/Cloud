@@ -1679,6 +1679,24 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	// Use "any" to always restart (closest to "unless-stopped" behavior)
 	args = append(args, "--restart-condition", "any")
 
+	// Add update config with auto-rollback on failure
+	// This ensures that if a deployment update fails, Swarm automatically rolls back
+	args = append(args,
+		"--update-failure-action", "rollback",
+		"--update-monitor", "60s",
+		"--update-parallelism", "1",
+		"--update-delay", "10s",
+		"--update-order", "start-first",
+	)
+
+	// Add rollback config
+	// Controls how rollback is performed when triggered
+	args = append(args,
+		"--rollback-parallelism", "1",
+		"--rollback-delay", "10s",
+		"--rollback-order", "start-first",
+	)
+
 	// Verify image exists locally before creating service
 	// In Swarm mode, the image must exist on the node where the task is scheduled
 	imageCheckArgs := []string{"image", "inspect", config.Image}
