@@ -87,10 +87,7 @@ func PushDNSRecord(config PusherConfig, domain, recordType string, records []str
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", config.APIKey))
 	
 	// Include source API URL for tracking
-	sourceAPI := os.Getenv("CONSOLE_URL")
-	if sourceAPI == "" {
-		sourceAPI = os.Getenv("DASHBOARD_URL")
-	}
+	sourceAPI := os.Getenv("DASHBOARD_URL")
 	if sourceAPI != "" {
 		req.Header.Set("X-Source-API", sourceAPI)
 	}
@@ -242,10 +239,7 @@ func PushAllDNSRecords(config PusherConfig) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", config.APIKey))
 	
-	sourceAPI := os.Getenv("CONSOLE_URL")
-	if sourceAPI == "" {
-		sourceAPI = os.Getenv("DASHBOARD_URL")
-	}
+	sourceAPI := os.Getenv("DASHBOARD_URL")
 	if sourceAPI != "" {
 		req.Header.Set("X-Source-API", sourceAPI)
 	}

@@ -14,7 +14,7 @@ Complete reference for all Obiente Cloud environment variables.
 | `CORS_ORIGIN`                        | `*`                          | ❌            | Allowed CORS origins                                                                                                |
 | `SMTP_HOST`                          | -                            | ❌            | SMTP server host (required to enable email)                                                                         |
 | `SMTP_FROM_ADDRESS`                  | -                            | ❌            | From address used for outbound email                                                                                |
-| `CONSOLE_URL`                        | `https://app.obiente.cloud`  | ❌            | Dashboard URL used in invitation call-to-action                                                                     |
+| `DASHBOARD_URL`                      | `https://obiente.cloud`      | ❌            | Dashboard URL used in invitation call-to-action and billing redirects                                               |
 | `SUPPORT_EMAIL`                      | -                            | ❌            | Support contact displayed in email footers                                                                          |
 | `SUPERADMIN_EMAILS`                  | -                            | ❌            | Comma-separated list of emails with global access (superadmins for self-hosted, The Obiente Cloud Team for managed) |
 | `SELF_HOSTED`                        | `false`                      | ❌            | Set to `true` if this is a self-hosted deployment (affects terminology in UI/docs)                                  |
@@ -155,19 +155,17 @@ SMTP_FROM_NAME="Obiente Cloud"
 SMTP_REPLY_TO=support@obiente.cloud
 ```
 
-### Console & Support
+### Dashboard & Support
 
-| Variable            | Type   | Default                     | Required |
-| ------------------- | ------ | --------------------------- | -------- |
-| `CONSOLE_URL`       | string | `https://app.obiente.cloud` | ❌       |
-| `DASHBOARD_URL`     | string | -                           | ❌       |
-| `APP_CONSOLE_URL`   | string | -                           | ❌       |
-| `SUPPORT_EMAIL`     | string | -                           | ❌       |
-| `SUPERADMIN_EMAILS` | string | -                           | ❌       |
-| `SELF_HOSTED`       | bool   | `false`                     | ❌       |
-| `BILLING_ENABLED`   | bool   | `true`                      | ❌       |
+| Variable            | Type   | Default                 | Required |
+| ------------------- | ------ | ----------------------- | -------- |
+| `DASHBOARD_URL`     | string | `https://obiente.cloud` | ❌       |
+| `SUPPORT_EMAIL`     | string | -                       | ❌       |
+| `SUPERADMIN_EMAILS` | string | -                       | ❌       |
+| `SELF_HOSTED`       | bool   | `false`                 | ❌       |
+| `BILLING_ENABLED`   | bool   | `true`                  | ❌       |
 
-The API resolves the first non-empty value from `CONSOLE_URL`, `DASHBOARD_URL`, and `APP_CONSOLE_URL` to build links in transactional emails. Configure `SUPPORT_EMAIL` to surface a contact address in email footers. `SUPERADMIN_EMAILS` grants system-wide access to the Superadmin API and dashboard (provide a comma-separated list of email addresses matching your identity provider). For self-hosted deployments, these are superadmins. For Obiente Cloud managed deployments, this refers to The Obiente Cloud Team. Set `SELF_HOSTED=true` to indicate this is a self-hosted deployment. Set `BILLING_ENABLED=false` to disable all billing functionality (hides billing pages, disables payment processing, and ignores webhooks).
+The API uses `DASHBOARD_URL` to build links in transactional emails and billing redirects. Configure `SUPPORT_EMAIL` to surface a contact address in email footers. `SUPERADMIN_EMAILS` grants system-wide access to the Superadmin API and dashboard (provide a comma-separated list of email addresses matching your identity provider). For self-hosted deployments, these are superadmins. For Obiente Cloud managed deployments, this refers to The Obiente Cloud Team. Set `SELF_HOSTED=true` to indicate this is a self-hosted deployment. Set `BILLING_ENABLED=false` to disable all billing functionality (hides billing pages, disables payment processing, and ignores webhooks).
 
 ### Orchestration
 

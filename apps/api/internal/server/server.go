@@ -265,11 +265,10 @@ func registerServices(mux *http.ServeMux) *deploymentsvc.Service {
 
 	// Configure email sender and shared links
 	mailer := email.NewSenderFromEnv()
-	consoleURL := firstNonEmpty(
-		os.Getenv("CONSOLE_URL"),
-		os.Getenv("DASHBOARD_URL"),
-		os.Getenv("APP_CONSOLE_URL"),
-	)
+	consoleURL := os.Getenv("DASHBOARD_URL")
+	if consoleURL == "" {
+		consoleURL = "https://obiente.cloud"
+	}
 	supportEmail := os.Getenv("SUPPORT_EMAIL")
 
 	// AutoMigrate new schemas (best-effort)

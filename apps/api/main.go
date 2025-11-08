@@ -231,7 +231,7 @@ func checkAllOrganizationsQuotas(ctx context.Context) {
 	emailSender := email.NewSenderFromEnv()
 	orgService := orgsvc.NewService(orgsvc.Config{
 		EmailSender:  emailSender,
-		ConsoleURL:   os.Getenv("CONSOLE_URL"),
+		ConsoleURL:   os.Getenv("DASHBOARD_URL"),
 		SupportEmail: os.Getenv("SUPPORT_EMAIL"),
 	})
 

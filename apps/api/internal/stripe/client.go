@@ -43,11 +43,19 @@ func NewClient() (*Client, error) {
 func (c *Client) CreateCheckoutSession(ctx context.Context, params *CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 	successURL := params.SuccessURL
 	if successURL == "" {
-		successURL = os.Getenv("CONSOLE_URL") + "/organizations?tab=billing&payment=success"
+		dashboardURL := os.Getenv("DASHBOARD_URL")
+		if dashboardURL == "" {
+			dashboardURL = "https://obiente.cloud"
+		}
+		successURL = dashboardURL + "/organizations?tab=billing&payment=success"
 	}
 	cancelURL := params.CancelURL
 	if cancelURL == "" {
-		cancelURL = os.Getenv("CONSOLE_URL") + "/organizations?tab=billing&payment=canceled"
+		dashboardURL := os.Getenv("DASHBOARD_URL")
+		if dashboardURL == "" {
+			dashboardURL = "https://obiente.cloud"
+		}
+		cancelURL = dashboardURL + "/organizations?tab=billing&payment=canceled"
 	}
 
 	// Get or create Stripe customer
@@ -101,7 +109,11 @@ func (c *Client) CreateCheckoutSession(ctx context.Context, params *CheckoutSess
 // CreatePortalSession creates a Stripe Customer Portal session
 func (c *Client) CreatePortalSession(ctx context.Context, customerID, returnURL string) (*stripe.BillingPortalSession, error) {
 	if returnURL == "" {
-		returnURL = os.Getenv("CONSOLE_URL") + "/organizations?tab=billing"
+		dashboardURL := os.Getenv("DASHBOARD_URL")
+		if dashboardURL == "" {
+			dashboardURL = "https://obiente.cloud"
+		}
+		returnURL = dashboardURL + "/organizations?tab=billing"
 	}
 
 	params := &stripe.BillingPortalSessionParams{
@@ -331,11 +343,19 @@ func formatAmount(cents int64) string {
 func (c *Client) CreateSubscriptionCheckoutSession(ctx context.Context, params *SubscriptionCheckoutSessionParams) (*stripe.CheckoutSession, error) {
 	successURL := params.SuccessURL
 	if successURL == "" {
-		successURL = os.Getenv("CONSOLE_URL") + "/organizations?tab=billing&payment=success"
+		dashboardURL := os.Getenv("DASHBOARD_URL")
+		if dashboardURL == "" {
+			dashboardURL = "https://obiente.cloud"
+		}
+		successURL = dashboardURL + "/organizations?tab=billing&payment=success"
 	}
 	cancelURL := params.CancelURL
 	if cancelURL == "" {
-		cancelURL = os.Getenv("CONSOLE_URL") + "/organizations?tab=billing&payment=canceled"
+		dashboardURL := os.Getenv("DASHBOARD_URL")
+		if dashboardURL == "" {
+			dashboardURL = "https://obiente.cloud"
+		}
+		cancelURL = dashboardURL + "/organizations?tab=billing&payment=canceled"
 	}
 
 	// Get or create Stripe customer

@@ -70,7 +70,7 @@ DNS_PORT=53
 
 ```bash
 # Allow specific origins
-CORS_ORIGIN=https://app.obiente.cloud,https://dashboard.obiente.cloud
+CORS_ORIGIN=https://obiente.cloud
 
 # Development only
 CORS_ORIGIN=*

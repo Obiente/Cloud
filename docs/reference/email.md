@@ -5,7 +5,7 @@ Transactional emails in Obiente Cloud share a single responsive template and are
 ## SMTP Configuration Overview
 
 - Configure the SMTP connection with the `SMTP_*` variables documented in [Environment Variables](environment-variables.md#email-delivery).
-- Set `CONSOLE_URL` (or `DASHBOARD_URL` / `APP_CONSOLE_URL`) so links inside emails point to the correct dashboard.
+- Set `DASHBOARD_URL` so links inside emails point to the correct dashboard.
 - Optionally set `SUPPORT_EMAIL` to surface a help contact in the footer.
 
 When `SMTP_HOST` or `SMTP_FROM_ADDRESS` are missing, the API falls back to a no-op sender and logs a single reminder that email delivery is disabled.
@@ -79,7 +79,7 @@ To customise invite wording further, adjust `dispatchInviteEmail` in `internal/s
 
 1. **No emails arrive** – confirm `SMTP_HOST` and `SMTP_FROM_ADDRESS` are set and the API logs “SMTP enabled”.
 2. **TLS errors** – verify the SMTP host supports STARTTLS on the configured port; use `SMTP_SKIP_TLS_VERIFY=true` only in controlled environments.
-3. **Broken links** – set `CONSOLE_URL` so the CTA points to the correct dashboard host.
+3. **Broken links** – set `DASHBOARD_URL` so the CTA points to the correct dashboard host.
 
 ---
 

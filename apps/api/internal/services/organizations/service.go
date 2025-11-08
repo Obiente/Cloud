@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	defaultConsoleURL        = "https://app.obiente.cloud"
+	defaultConsoleURL        = "https://obiente.cloud"
 	defaultOwnerFallbackRole = "admin"
 )
 
