@@ -30,13 +30,6 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 				return next(ctx, req)
 			}
 
-			// Add panic recovery for the entire audit logging process
-			defer func() {
-				if r := recover(); r != nil {
-					logger.Error("[Audit] Panic in audit logging for %s: %v", procedure, r)
-				}
-			}()
-
 			// Extract IP address and user agent (before calling next)
 			ipAddress := getClientIP(req)
 			userAgent := req.Header().Get("User-Agent")
@@ -48,10 +41,29 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 			service, action := parseProcedure(procedure)
 
 			// Extract resource information from request (before calling next)
-			resourceType, resourceID, orgID := extractResourceInfo(req, procedure)
+			// Use panic recovery for resource extraction to prevent panics from breaking the request
+			var resourceType, resourceID, orgID *string
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logger.Error("[Audit] Panic extracting resource info for %s: %v", procedure, r)
+					}
+				}()
+				resourceType, resourceID, orgID = extractResourceInfo(req, procedure)
+			}()
 
 			// Sanitize request data (remove sensitive fields)
-			requestData := sanitizeRequestData(req)
+			// Use panic recovery for sanitization to prevent panics from breaking the request
+			var requestData string
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						logger.Error("[Audit] Panic sanitizing request data for %s: %v", procedure, r)
+						requestData = "{}"
+					}
+				}()
+				requestData = sanitizeRequestData(req)
+			}()
 
 			// Execute the request (auth interceptor will set user in context)
 			// Note: In Connect, with connect.WithInterceptors(auditInterceptor, authInterceptor),
@@ -273,6 +285,9 @@ func parseProcedure(procedure string) (service, action string) {
 func extractResourceInfo(req connect.AnyRequest, procedure string) (resourceType *string, resourceID *string, orgID *string) {
 	// Try to extract from request message
 	msg := req.Any()
+	if msg == nil {
+		return nil, nil, nil
+	}
 
 	// Use reflection to extract common fields
 	if protoMsg, ok := msg.(proto.Message); ok {
@@ -495,6 +510,9 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 // sanitizeRequestData sanitizes request data by removing sensitive fields
 func sanitizeRequestData(req connect.AnyRequest) string {
 	msg := req.Any()
+	if msg == nil {
+		return "{}"
+	}
 
 	if protoMsg, ok := msg.(proto.Message); ok {
 		// Convert to JSON
