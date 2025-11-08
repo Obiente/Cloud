@@ -230,10 +230,16 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 			procedure := req.Spec().Procedure
 
-			// Skip authentication for Login method (public endpoint)
-			if procedure == "/obiente.cloud.auth.v1.AuthService/Login" {
-				logger.Debug("[Auth] Skipping authentication for Login procedure")
-				return next(ctx, req)
+			// Skip authentication for public endpoints
+			publicProcedures := []string{
+				"/obiente.cloud.auth.v1.AuthService/Login",
+				"/obiente.cloud.auth.v1.AuthService/GetPublicConfig",
+			}
+			for _, publicProc := range publicProcedures {
+				if procedure == publicProc {
+					logger.Debug("[Auth] Skipping authentication for public procedure: %s", procedure)
+					return next(ctx, req)
+				}
 			}
 
 			// If auth is disabled (development only), inject mock user and continue
