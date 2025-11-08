@@ -348,9 +348,22 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 							domain = "obiente.cloud"
 						}
 						registryURL = fmt.Sprintf("https://registry.%s", domain)
+					} else {
+						// Handle unexpanded docker-compose variables (e.g., "https://registry.${DOMAIN:-obiente.cloud}")
+						if strings.Contains(registryURL, "${DOMAIN") {
+							domain := os.Getenv("DOMAIN")
+							if domain == "" {
+								domain = "obiente.cloud"
+							}
+							registryURL = strings.ReplaceAll(registryURL, "${DOMAIN:-obiente.cloud}", domain)
+							registryURL = strings.ReplaceAll(registryURL, "${DOMAIN}", domain)
+						}
 					}
 					
-					registryImageName := fmt.Sprintf("%s/%s", registryURL, result.ImageName)
+					// Strip protocol from registry URL for image name (Docker doesn't use protocols in image names)
+					registryHost := strings.TrimPrefix(registryURL, "https://")
+					registryHost = strings.TrimPrefix(registryHost, "http://")
+					registryImageName := fmt.Sprintf("%s/%s", registryHost, result.ImageName)
 					streamer.Write([]byte(fmt.Sprintf("📤 Pushing image to registry: %s\n", registryImageName)))
 					
 					registryUsername := os.Getenv("REGISTRY_USERNAME")

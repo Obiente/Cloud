@@ -1713,9 +1713,23 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 				domain = "obiente.cloud"
 			}
 			registryURL = fmt.Sprintf("https://registry.%s", domain)
+		} else {
+			// Handle unexpanded docker-compose variables (e.g., "https://registry.${DOMAIN:-obiente.cloud}")
+			if strings.Contains(registryURL, "${DOMAIN") {
+				domain := os.Getenv("DOMAIN")
+				if domain == "" {
+					domain = "obiente.cloud"
+				}
+				registryURL = strings.ReplaceAll(registryURL, "${DOMAIN:-obiente.cloud}", domain)
+				registryURL = strings.ReplaceAll(registryURL, "${DOMAIN}", domain)
+			}
 		}
 		
-		if strings.HasPrefix(config.Image, registryURL+"/") || 
+		// Strip protocol from registry URL for comparison (Docker image names don't include protocols)
+		registryHost := strings.TrimPrefix(registryURL, "https://")
+		registryHost = strings.TrimPrefix(registryHost, "http://")
+		
+		if strings.HasPrefix(config.Image, registryHost+"/") || 
 		   strings.HasPrefix(config.Image, "registry.obiente.cloud/") ||
 		   strings.Contains(config.Image, "/obiente/deploy-") {
 			registryUsername := os.Getenv("REGISTRY_USERNAME")

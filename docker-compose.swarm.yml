@@ -187,7 +187,6 @@ services:
       ENABLE_SWARM: ${ENABLE_SWARM:-true} # Set to 'true' to enable Docker Swarm features (default: true for swarm)
       REGISTRY_USERNAME: ${REGISTRY_USERNAME:-obiente}
       REGISTRY_PASSWORD: ${REGISTRY_PASSWORD:-}
-      REGISTRY_URL: ${REGISTRY_URL:-https://registry.${DOMAIN:-obiente.cloud}}
     volumes:
       # Mount Docker socket to manage containers (read-write required)
       - /var/run/docker.sock:/var/run/docker.sock

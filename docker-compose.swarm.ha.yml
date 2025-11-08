@@ -503,7 +503,6 @@ services:
       # Docker Registry authentication (required for pushing/pulling images)
       REGISTRY_USERNAME: ${REGISTRY_USERNAME:-obiente}
       REGISTRY_PASSWORD: ${REGISTRY_PASSWORD:-}
-      REGISTRY_URL: ${REGISTRY_URL:-https://registry.${DOMAIN:-obiente.cloud}}
     volumes:
       # Mount Docker socket for managing deployments
       - /var/run/docker.sock:/var/run/docker.sock
