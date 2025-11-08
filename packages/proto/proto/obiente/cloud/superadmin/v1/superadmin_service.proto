@@ -59,6 +59,8 @@ message GetOverviewResponse {
   repeated OrganizationUsage usages = 5;
   optional string api_commit = 6; // Git commit hash of the running API
   optional string dashboard_commit = 7; // Git commit hash of the running dashboard
+  optional string api_commit_message = 8; // Git commit message of the running API
+  optional string dashboard_commit_message = 9; // Git commit message of the running dashboard
 }
 
 message OverviewCounts {

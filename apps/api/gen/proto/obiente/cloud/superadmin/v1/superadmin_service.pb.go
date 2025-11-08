@@ -61,16 +61,18 @@ func (*GetOverviewRequest) Descriptor() ([]byte, []int) {
 }
 
 type GetOverviewResponse struct {
-	state           protoimpl.MessageState     `protogen:"open.v1"`
-	Counts          *OverviewCounts            `protobuf:"bytes,1,opt,name=counts,proto3" json:"counts,omitempty"`
-	Organizations   []*OrganizationOverview    `protobuf:"bytes,2,rep,name=organizations,proto3" json:"organizations,omitempty"`
-	PendingInvites  []*SuperadminPendingInvite `protobuf:"bytes,3,rep,name=pending_invites,json=pendingInvites,proto3" json:"pending_invites,omitempty"`
-	Deployments     []*DeploymentOverview      `protobuf:"bytes,4,rep,name=deployments,proto3" json:"deployments,omitempty"`
-	Usages          []*OrganizationUsage       `protobuf:"bytes,5,rep,name=usages,proto3" json:"usages,omitempty"`
-	ApiCommit       *string                    `protobuf:"bytes,6,opt,name=api_commit,json=apiCommit,proto3,oneof" json:"api_commit,omitempty"`                   // Git commit hash of the running API
-	DashboardCommit *string                    `protobuf:"bytes,7,opt,name=dashboard_commit,json=dashboardCommit,proto3,oneof" json:"dashboard_commit,omitempty"` // Git commit hash of the running dashboard
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state                  protoimpl.MessageState     `protogen:"open.v1"`
+	Counts                 *OverviewCounts            `protobuf:"bytes,1,opt,name=counts,proto3" json:"counts,omitempty"`
+	Organizations          []*OrganizationOverview    `protobuf:"bytes,2,rep,name=organizations,proto3" json:"organizations,omitempty"`
+	PendingInvites         []*SuperadminPendingInvite `protobuf:"bytes,3,rep,name=pending_invites,json=pendingInvites,proto3" json:"pending_invites,omitempty"`
+	Deployments            []*DeploymentOverview      `protobuf:"bytes,4,rep,name=deployments,proto3" json:"deployments,omitempty"`
+	Usages                 []*OrganizationUsage       `protobuf:"bytes,5,rep,name=usages,proto3" json:"usages,omitempty"`
+	ApiCommit              *string                    `protobuf:"bytes,6,opt,name=api_commit,json=apiCommit,proto3,oneof" json:"api_commit,omitempty"`                                          // Git commit hash of the running API
+	DashboardCommit        *string                    `protobuf:"bytes,7,opt,name=dashboard_commit,json=dashboardCommit,proto3,oneof" json:"dashboard_commit,omitempty"`                        // Git commit hash of the running dashboard
+	ApiCommitMessage       *string                    `protobuf:"bytes,8,opt,name=api_commit_message,json=apiCommitMessage,proto3,oneof" json:"api_commit_message,omitempty"`                   // Git commit message of the running API
+	DashboardCommitMessage *string                    `protobuf:"bytes,9,opt,name=dashboard_commit_message,json=dashboardCommitMessage,proto3,oneof" json:"dashboard_commit_message,omitempty"` // Git commit message of the running dashboard
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *GetOverviewResponse) Reset() {
@@ -148,6 +150,20 @@ func (x *GetOverviewResponse) GetApiCommit() string {
 func (x *GetOverviewResponse) GetDashboardCommit() string {
 	if x != nil && x.DashboardCommit != nil {
 		return *x.DashboardCommit
+	}
+	return ""
+}
+
+func (x *GetOverviewResponse) GetApiCommitMessage() string {
+	if x != nil && x.ApiCommitMessage != nil {
+		return *x.ApiCommitMessage
+	}
+	return ""
+}
+
+func (x *GetOverviewResponse) GetDashboardCommitMessage() string {
+	if x != nil && x.DashboardCommitMessage != nil {
+		return *x.DashboardCommitMessage
 	}
 	return ""
 }
@@ -4612,7 +4628,7 @@ var File_obiente_cloud_superadmin_v1_superadmin_service_proto protoreflect.FileD
 const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\n" +
 	"4obiente/cloud/superadmin/v1/superadmin_service.proto\x12\x1bobiente.cloud.superadmin.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a5obiente/cloud/deployments/v1/deployment_service.proto\x1a.obiente/cloud/billing/v1/billing_service.proto\"\x14\n" +
-	"\x12GetOverviewRequest\"\xa5\x04\n" +
+	"\x12GetOverviewRequest\"\xcb\x05\n" +
 	"\x13GetOverviewResponse\x12C\n" +
 	"\x06counts\x18\x01 \x01(\v2+.obiente.cloud.superadmin.v1.OverviewCountsR\x06counts\x12W\n" +
 	"\rorganizations\x18\x02 \x03(\v21.obiente.cloud.superadmin.v1.OrganizationOverviewR\rorganizations\x12]\n" +
@@ -4621,9 +4637,13 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\x06usages\x18\x05 \x03(\v2..obiente.cloud.superadmin.v1.OrganizationUsageR\x06usages\x12\"\n" +
 	"\n" +
 	"api_commit\x18\x06 \x01(\tH\x00R\tapiCommit\x88\x01\x01\x12.\n" +
-	"\x10dashboard_commit\x18\a \x01(\tH\x01R\x0fdashboardCommit\x88\x01\x01B\r\n" +
+	"\x10dashboard_commit\x18\a \x01(\tH\x01R\x0fdashboardCommit\x88\x01\x01\x121\n" +
+	"\x12api_commit_message\x18\b \x01(\tH\x02R\x10apiCommitMessage\x88\x01\x01\x12=\n" +
+	"\x18dashboard_commit_message\x18\t \x01(\tH\x03R\x16dashboardCommitMessage\x88\x01\x01B\r\n" +
 	"\v_api_commitB\x13\n" +
-	"\x11_dashboard_commit\"\xbe\x01\n" +
+	"\x11_dashboard_commitB\x15\n" +
+	"\x13_api_commit_messageB\x1b\n" +
+	"\x19_dashboard_commit_message\"\xbe\x01\n" +
 	"\x0eOverviewCounts\x12/\n" +
 	"\x13total_organizations\x18\x01 \x01(\x03R\x12totalOrganizations\x12%\n" +
 	"\x0eactive_members\x18\x02 \x01(\x03R\ractiveMembers\x12'\n" +

@@ -91,9 +91,11 @@ func (s *Service) GetOverview(ctx context.Context, _ *connect.Request[superadmin
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load usage: %w", err))
 	}
 
-	// Get commit hashes from environment variables (set at build time)
+	// Get commit hashes and messages from environment variables (set at build time)
 	apiCommit := os.Getenv("API_COMMIT")
 	dashboardCommit := os.Getenv("DASHBOARD_COMMIT")
+	apiCommitMessage := os.Getenv("API_COMMIT_MESSAGE")
+	dashboardCommitMessage := os.Getenv("DASHBOARD_COMMIT_MESSAGE")
 
 	resp := &superadminv1.GetOverviewResponse{
 		Counts:         counts,
@@ -107,6 +109,12 @@ func (s *Service) GetOverview(ctx context.Context, _ *connect.Request[superadmin
 	}
 	if dashboardCommit != "" {
 		resp.DashboardCommit = proto.String(dashboardCommit)
+	}
+	if apiCommitMessage != "" {
+		resp.ApiCommitMessage = proto.String(apiCommitMessage)
+	}
+	if dashboardCommitMessage != "" {
+		resp.DashboardCommitMessage = proto.String(dashboardCommitMessage)
 	}
 
 	logger.Debug("[SuperAdmin] Overview loaded successfully")

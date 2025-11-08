@@ -44,12 +44,18 @@
             <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
               <OuiStack gap="xs">
                 <OuiText size="sm" weight="medium" color="secondary">API Commit</OuiText>
+                <OuiText v-if="overview?.apiCommitMessage" size="sm" color="muted" class="max-w-md">
+                  {{ overview.apiCommitMessage }}
+                </OuiText>
                 <OuiText size="md" class="font-mono">
                   {{ overview?.apiCommit || "—" }}
                 </OuiText>
               </OuiStack>
               <OuiStack gap="xs">
                 <OuiText size="sm" weight="medium" color="secondary">Dashboard Commit</OuiText>
+                <OuiText v-if="overview?.dashboardCommitMessage" size="sm" color="muted" class="max-w-md">
+                  {{ overview.dashboardCommitMessage }}
+                </OuiText>
                 <OuiText size="md" class="font-mono">
                   {{ overview?.dashboardCommit || "—" }}
                 </OuiText>
