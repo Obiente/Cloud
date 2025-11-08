@@ -106,12 +106,12 @@ func InitDeploymentTracking() error {
 }
 
 // createMetricsIndexes creates composite indexes for metrics queries
-// Uses MetricsDB if available, otherwise falls back to main DB
+// Requires MetricsDB (TimescaleDB) - will fail if not available
 func createMetricsIndexes() error {
-	db := MetricsDB
-	if db == nil {
-		db = DB // Fallback to main database
+	if MetricsDB == nil {
+		return fmt.Errorf("metrics database (TimescaleDB) not initialized - cannot create metrics indexes")
 	}
+	db := MetricsDB
 
 	// Composite index for deployment_id + timestamp (most common query pattern)
 	if err := db.Exec(`

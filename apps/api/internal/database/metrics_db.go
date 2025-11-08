@@ -58,10 +58,7 @@ func InitMetricsDatabase() error {
 		Logger: getGormLogger(),
 	})
 	if err != nil {
-		logger.Warn("Failed to connect to metrics database: %v. Falling back to main database.", err)
-		// Fallback to main database if metrics DB is unavailable
-		MetricsDB = DB
-		return nil
+		return fmt.Errorf("failed to connect to metrics database (TimescaleDB required): %w", err)
 	}
 
 	MetricsDB = db
@@ -93,15 +90,15 @@ func InitMetricsTables() error {
 		FROM timescaledb_information.hypertables 
 		WHERE hypertable_schema = 'public'
 	`).Scan(&hypertableNames)
-	
+
 	for _, name := range hypertableNames {
 		hypertableMap[name] = true
 	}
-	
+
 	// Auto-migrate metrics tables, but skip tables that are already hypertables
 	// GORM AutoMigrate will fail if it tries to modify hypertable partitioning columns
 	tablesToMigrate := []interface{}{}
-	
+
 	if !hypertableMap["deployment_metrics"] {
 		tablesToMigrate = append(tablesToMigrate, &DeploymentMetrics{})
 	}
@@ -120,7 +117,7 @@ func InitMetricsTables() error {
 	if !hypertableMap["audit_logs"] {
 		tablesToMigrate = append(tablesToMigrate, &AuditLog{})
 	}
-	
+
 	if len(tablesToMigrate) > 0 {
 		if err := MetricsDB.AutoMigrate(tablesToMigrate...); err != nil {
 			logger.Warn("Failed to auto-migrate some metrics tables (may already be hypertables): %v", err)
@@ -165,12 +162,12 @@ func InitMetricsTables() error {
 				AND a.attname = 'timestamp'
 			)
 		`).Scan(&pkIncludesTimestamp)
-		
+
 		if !pkIncludesTimestamp {
 			// Only try to modify primary key if table is empty, otherwise skip hypertable creation
 			var rowCount int64
 			MetricsDB.Raw(`SELECT COUNT(*) FROM deployment_metrics`).Scan(&rowCount)
-			
+
 			if rowCount > 0 {
 				// Table has data - check for duplicates before modifying primary key
 				var duplicateCount int64
@@ -182,7 +179,7 @@ func InitMetricsTables() error {
 						HAVING COUNT(*) > 1
 					) duplicates
 				`).Scan(&duplicateCount)
-				
+
 				if duplicateCount > 0 {
 					logger.Warn("deployment_metrics has duplicate (id, timestamp) pairs - skipping hypertable creation to preserve functionality")
 					isHypertable = true
@@ -220,24 +217,24 @@ func InitMetricsTables() error {
 				}
 			}
 		}
-		
+
 		if !isHypertable {
-		// Convert to hypertable with 1 hour chunk interval
-		if err := MetricsDB.Exec(`
+			// Convert to hypertable with 1 hour chunk interval
+			if err := MetricsDB.Exec(`
 			SELECT create_hypertable('deployment_metrics', 'timestamp', 
 				chunk_time_interval => INTERVAL '1 hour',
 					if_not_exists => TRUE,
 					migrate_data => TRUE)
 		`).Error; err != nil {
-			logger.Warn("Failed to create hypertable for deployment_metrics: %v", err)
+				logger.Warn("Failed to create hypertable for deployment_metrics: %v", err)
 				// Restore original primary key if hypertable creation failed and we changed it
 				if !pkIncludesTimestamp {
 					if err := MetricsDB.Exec(`ALTER TABLE deployment_metrics DROP CONSTRAINT IF EXISTS deployment_metrics_pkey`).Error; err == nil {
 						_ = MetricsDB.Exec(`ALTER TABLE deployment_metrics ADD PRIMARY KEY (id)`).Error
 					}
 				}
-		} else {
-			logger.Info("Created TimescaleDB hypertable for deployment_metrics")
+			} else {
+				logger.Info("Created TimescaleDB hypertable for deployment_metrics")
 			}
 		}
 	}
@@ -260,11 +257,11 @@ func InitMetricsTables() error {
 				AND a.attname = 'timestamp'
 			)
 		`).Scan(&pkIncludesTimestamp)
-		
+
 		if !pkIncludesTimestamp {
 			var rowCount int64
 			MetricsDB.Raw(`SELECT COUNT(*) FROM game_server_metrics`).Scan(&rowCount)
-			
+
 			if rowCount > 0 {
 				var duplicateCount int64
 				MetricsDB.Raw(`
@@ -275,7 +272,7 @@ func InitMetricsTables() error {
 						HAVING COUNT(*) > 1
 					) duplicates
 				`).Scan(&duplicateCount)
-				
+
 				if duplicateCount > 0 {
 					logger.Warn("game_server_metrics has duplicate (id, timestamp) pairs - skipping hypertable creation")
 					isHypertable = true
@@ -310,7 +307,7 @@ func InitMetricsTables() error {
 				}
 			}
 		}
-		
+
 		if !isHypertable {
 			if err := MetricsDB.Exec(`
 				SELECT create_hypertable('game_server_metrics', 'timestamp', 
@@ -349,11 +346,11 @@ func InitMetricsTables() error {
 				AND a.attname = 'hour'
 			)
 		`).Scan(&pkIncludesHour)
-		
+
 		if !pkIncludesHour {
 			var rowCount int64
 			MetricsDB.Raw(`SELECT COUNT(*) FROM deployment_usage_hourly`).Scan(&rowCount)
-			
+
 			if rowCount > 0 {
 				var duplicateCount int64
 				MetricsDB.Raw(`
@@ -364,7 +361,7 @@ func InitMetricsTables() error {
 						HAVING COUNT(*) > 1
 					) duplicates
 				`).Scan(&duplicateCount)
-				
+
 				if duplicateCount > 0 {
 					logger.Warn("deployment_usage_hourly has duplicate (id, hour) pairs - skipping hypertable creation to preserve functionality")
 					isHypertable = true
@@ -399,23 +396,23 @@ func InitMetricsTables() error {
 				}
 			}
 		}
-		
+
 		if !isHypertable {
-		if err := MetricsDB.Exec(`
+			if err := MetricsDB.Exec(`
 			SELECT create_hypertable('deployment_usage_hourly', 'hour', 
 				chunk_time_interval => INTERVAL '7 days',
 					if_not_exists => TRUE,
 					migrate_data => TRUE)
 		`).Error; err != nil {
-			logger.Warn("Failed to create hypertable for deployment_usage_hourly: %v", err)
+				logger.Warn("Failed to create hypertable for deployment_usage_hourly: %v", err)
 				// Restore original primary key if hypertable creation failed and we changed it
 				if !pkIncludesHour {
 					if err := MetricsDB.Exec(`ALTER TABLE deployment_usage_hourly DROP CONSTRAINT IF EXISTS deployment_usage_hourly_pkey`).Error; err == nil {
 						_ = MetricsDB.Exec(`ALTER TABLE deployment_usage_hourly ADD PRIMARY KEY (id)`).Error
 					}
 				}
-		} else {
-			logger.Info("Created TimescaleDB hypertable for deployment_usage_hourly")
+			} else {
+				logger.Info("Created TimescaleDB hypertable for deployment_usage_hourly")
 			}
 		}
 	}
@@ -438,11 +435,11 @@ func InitMetricsTables() error {
 				AND a.attname = 'hour'
 			)
 		`).Scan(&pkIncludesHour)
-		
+
 		if !pkIncludesHour {
 			var rowCount int64
 			MetricsDB.Raw(`SELECT COUNT(*) FROM game_server_usage_hourly`).Scan(&rowCount)
-			
+
 			if rowCount > 0 {
 				var duplicateCount int64
 				MetricsDB.Raw(`
@@ -453,7 +450,7 @@ func InitMetricsTables() error {
 						HAVING COUNT(*) > 1
 					) duplicates
 				`).Scan(&duplicateCount)
-				
+
 				if duplicateCount > 0 {
 					logger.Warn("game_server_usage_hourly has duplicate (id, hour) pairs - skipping hypertable creation")
 					isHypertable = true
@@ -488,7 +485,7 @@ func InitMetricsTables() error {
 				}
 			}
 		}
-		
+
 		if !isHypertable {
 			if err := MetricsDB.Exec(`
 				SELECT create_hypertable('game_server_usage_hourly', 'hour', 

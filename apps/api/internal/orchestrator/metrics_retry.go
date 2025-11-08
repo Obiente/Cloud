@@ -95,11 +95,13 @@ func (mq *MetricsRetryQueue) ProcessRetries(db *gorm.DB) {
 		batch.RetryCount++
 		batch.FailedAt = time.Now()
 
-		// Use metrics DB if available, otherwise fallback to main DB
-		targetDB := database.MetricsDB
-		if targetDB == nil {
-			targetDB = db
+		// Require MetricsDB (TimescaleDB) - do not fallback to main DB
+		if database.MetricsDB == nil {
+			batch.Error = "metrics database (TimescaleDB) not initialized"
+			remainingBatches = append(remainingBatches, batch)
+			continue
 		}
+		targetDB := database.MetricsDB
 
 		if err := targetDB.CreateInBatches(batch.Metrics, len(batch.Metrics)).Error; err != nil {
 			batch.Error = err.Error()
