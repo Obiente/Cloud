@@ -1034,7 +1034,11 @@ func startBuildkitContainer(ctx context.Context) {
 	buildkitCacheDir := "/var/lib/obiente/volumes/buildkit-cache"
 	// Fallback to temp directory if obiente volume path doesn't exist
 	if _, err := os.Stat("/var/lib/obiente/volumes"); os.IsNotExist(err) {
-		buildkitCacheDir = "/tmp/obiente-volumes/buildkit-cache"
+		buildkitCacheDir = "/var/obiente/tmp/obiente-volumes/buildkit-cache"
+		// Final fallback to /tmp if /var/obiente/tmp doesn't exist
+		if _, err := os.Stat("/var/obiente/tmp"); os.IsNotExist(err) {
+			buildkitCacheDir = "/tmp/obiente-volumes/buildkit-cache"
+		}
 	}
 
 	// Ensure cache directory exists

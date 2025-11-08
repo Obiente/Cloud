@@ -91,9 +91,9 @@ ssh worker-node-1 "bash /tmp/setup-swarm-nodes.sh"
 
 # Or manually create directories
 mkdir -p /var/lib/obiente/volumes
-mkdir -p /tmp/obiente-volumes
-mkdir -p /tmp/obiente-deployments
-chmod 755 /var/lib/obiente /tmp/obiente-volumes /tmp/obiente-deployments
+mkdir -p /var/obiente/tmp/obiente-volumes
+mkdir -p /var/obiente/tmp/obiente-deployments
+chmod 755 /var/lib/obiente /var/obiente /var/obiente/tmp /var/obiente/tmp/obiente-volumes /var/obiente/tmp/obiente-deployments
 ```
 
 **Alternative: Run on all nodes via SSH:**
@@ -101,7 +101,7 @@ chmod 755 /var/lib/obiente /tmp/obiente-volumes /tmp/obiente-deployments
 # If you have SSH access to all nodes
 for node in manager-1 worker-1 worker-2; do
   echo "Setting up $node..."
-  ssh $node "mkdir -p /var/lib/obiente/volumes /tmp/obiente-volumes /tmp/obiente-deployments && chmod 755 /var/lib/obiente /tmp/obiente-volumes /tmp/obiente-deployments"
+  ssh $node "mkdir -p /var/lib/obiente/volumes /var/obiente/tmp/obiente-volumes /var/obiente/tmp/obiente-deployments && chmod 755 /var/lib/obiente /var/obiente /var/obiente/tmp /var/obiente/tmp/obiente-volumes /var/obiente/tmp/obiente-deployments"
 done
 ```
 

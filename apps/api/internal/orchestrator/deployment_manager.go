@@ -1232,6 +1232,7 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 }
 
 // removeContainerByName removes a container by name if it exists
+// SECURITY: Only removes containers that were created by our API (have cloud.obiente.managed=true label)
 func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containerName string) error {
 	// Try to inspect container directly by name (most efficient)
 	// Docker API accepts both with and without leading "/"
@@ -1242,7 +1243,12 @@ func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containe
 	for _, nameToTry := range []string{containerNameWithSlash, containerNameWithoutSlash} {
 		containerInfo, err := dm.dockerClient.ContainerInspect(ctx, nameToTry)
 		if err == nil {
-			// Container exists, remove it
+			// SECURITY: Verify container was created by our API
+			if containerInfo.Config.Labels["cloud.obiente.managed"] != "true" {
+				return fmt.Errorf("refusing to delete container %s: not managed by Obiente Cloud (missing cloud.obiente.managed=true label)", containerName)
+			}
+
+			// Container exists and is managed by us, remove it
 			logger.Info("[DeploymentManager] Removing existing container %s (ID: %s) for redeployment", containerName, containerInfo.ID[:12])
 
 			// Stop container first
@@ -1279,6 +1285,11 @@ func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containe
 			// Docker names start with "/", so check both
 			nTrimmed := strings.TrimPrefix(n, "/")
 			if nTrimmed == containerNameWithoutSlash || n == containerNameWithSlash {
+				// SECURITY: Verify container was created by our API
+				if cnt.Labels["cloud.obiente.managed"] != "true" {
+					return fmt.Errorf("refusing to delete container %s: not managed by Obiente Cloud (missing cloud.obiente.managed=true label)", containerName)
+				}
+
 				logger.Info("[DeploymentManager] Removing existing container %s (ID: %s) for redeployment", containerName, cnt.ID[:12])
 
 				// Stop container first
@@ -2299,6 +2310,19 @@ func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID 
 			continue
 		}
 
+		// SECURITY: Verify container was created by our API before deletion
+		containerInfo, err := dm.dockerClient.ContainerInspect(ctx, location.ContainerID)
+		if err != nil {
+			logger.Warn("[DeploymentManager] Container %s not found (may already be deleted): %v", location.ContainerID[:12], err)
+			continue
+		}
+
+		// Verify container has our management label
+		if containerInfo.Config.Labels["cloud.obiente.managed"] != "true" {
+			logger.Error("[DeploymentManager] SECURITY: Refusing to delete container %s: not managed by Obiente Cloud (missing cloud.obiente.managed=true label)", location.ContainerID[:12])
+			continue
+		}
+
 		// Stop container first
 		timeout := int(10)
 		_ = dm.dockerHelper.StopContainer(ctx, location.ContainerID, time.Duration(timeout)*time.Second)
@@ -2679,6 +2703,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 	var deployDir string
 	possibleDirs := []string{
 		"/var/lib/obiente/deployments",
+		"/var/obiente/tmp/obiente-deployments",
 		"/tmp/obiente-deployments",
 		os.TempDir(),
 	}
@@ -3051,6 +3076,7 @@ func (dm *DeploymentManager) StopComposeDeployment(ctx context.Context, deployme
 	var deployDir string
 	possibleDirs := []string{
 		"/var/lib/obiente/deployments",
+		"/var/obiente/tmp/obiente-deployments",
 		"/tmp/obiente-deployments",
 		os.TempDir(),
 	}
@@ -3147,6 +3173,12 @@ func (dm *DeploymentManager) RemoveComposeDeployment(ctx context.Context, deploy
 	}
 
 	for _, cnt := range containers {
+		// SECURITY: Verify container was created by our API
+		if cnt.Labels["cloud.obiente.managed"] != "true" {
+			logger.Error("[DeploymentManager] SECURITY: Refusing to delete compose container %s: not managed by Obiente Cloud (missing cloud.obiente.managed=true label)", cnt.ID[:12])
+			continue
+		}
+
 		// Stop first
 		timeout := 10 * time.Second
 		_ = dm.dockerHelper.StopContainer(ctx, cnt.ID, timeout)
@@ -3180,6 +3212,8 @@ func (dm *DeploymentManager) cleanupDeploymentData(deploymentID string) {
 		// Build directory
 		filepath.Join("/var/lib/obiente/builds", deploymentID),
 		// Fallback temp directories
+		filepath.Join("/var/obiente/tmp/obiente-volumes", deploymentID),
+		filepath.Join("/var/obiente/tmp/obiente-deployments", deploymentID),
 		filepath.Join("/tmp/obiente-volumes", deploymentID),
 		filepath.Join("/tmp/obiente-deployments", deploymentID),
 	}

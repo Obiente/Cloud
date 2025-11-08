@@ -23,6 +23,7 @@ func NewComposeSanitizer(deploymentID string) *ComposeSanitizer {
 	var safeBaseDir string
 	possibleDirs := []string{
 		"/var/lib/obiente/volumes",
+		"/var/obiente/tmp/obiente-volumes",
 		"/tmp/obiente-volumes",
 	}
 

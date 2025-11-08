@@ -9,20 +9,22 @@ echo "🔧 Setting up Obiente Cloud directories on $(hostname)..."
 
 # Create required directories
 mkdir -p /var/lib/obiente/volumes
-mkdir -p /tmp/obiente-volumes
-mkdir -p /tmp/obiente-deployments
+mkdir -p /var/obiente/tmp/obiente-volumes
+mkdir -p /var/obiente/tmp/obiente-deployments
 
 # Set permissions (ensure Docker can access)
 chmod 755 /var/lib/obiente
-chmod 755 /tmp/obiente-volumes
-chmod 755 /tmp/obiente-deployments
+chmod 755 /var/obiente
+chmod 755 /var/obiente/tmp
+chmod 755 /var/obiente/tmp/obiente-volumes
+chmod 755 /var/obiente/tmp/obiente-deployments
 
 echo "✅ Directories created successfully!"
 echo ""
 echo "Created directories:"
 echo "  - /var/lib/obiente/volumes"
-echo "  - /tmp/obiente-volumes"
-echo "  - /tmp/obiente-deployments"
+echo "  - /var/obiente/tmp/obiente-volumes"
+echo "  - /var/obiente/tmp/obiente-deployments"
 echo ""
 echo "This node is ready for deployment."
 

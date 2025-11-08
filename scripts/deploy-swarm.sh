@@ -28,8 +28,8 @@ fi
 # Check if required directories exist on this node
 REQUIRED_DIRS=(
   "/var/lib/obiente"
-  "/tmp/obiente-volumes"
-  "/tmp/obiente-deployments"
+  "/var/obiente/tmp/obiente-volumes"
+  "/var/obiente/tmp/obiente-deployments"
   "/var/lib/obiente/registry-auth"
 )
 
@@ -67,8 +67,8 @@ if [ ${#MISSING_DIRS[@]} -gt 0 ]; then
   echo ""
   echo "   Or manually:"
   echo "   mkdir -p /var/lib/obiente/volumes"
-  echo "   mkdir -p /tmp/obiente-volumes"
-  echo "   mkdir -p /tmp/obiente-deployments"
+  echo "   mkdir -p /var/obiente/tmp/obiente-volumes"
+  echo "   mkdir -p /var/obiente/tmp/obiente-deployments"
   echo ""
   read -p "Continue with deployment? (y/N) " -n 1 -r
   echo
