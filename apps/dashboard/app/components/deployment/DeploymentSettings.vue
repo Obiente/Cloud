@@ -54,7 +54,7 @@
             >
             <OuiButton
               @click="saveConfig"
-              :disabled="!isConfigDirty || isSaving || !!repositoryUrlError"
+              :disabled="!isConfigDirty || isSaving || !!repositoryUrlError || !!githubRepoError"
               size="sm"
               variant="solid"
             >
@@ -179,7 +179,11 @@
                     @compose-loaded="handleComposeFromGitHub"
                   />
 
-                  <OuiText v-else size="xs" color="secondary">
+                  <OuiText v-if="githubRepoError" size="xs" color="danger">
+                    {{ githubRepoError }}
+                  </OuiText>
+
+                  <OuiText v-if="!isGitHubConnected" size="xs" color="secondary">
                     Connect your GitHub account to select repositories directly.
                   </OuiText>
                 </OuiStack>
@@ -439,6 +443,7 @@
   const githubIntegrationId = ref<string>("");
   const isGitHubConnected = ref(false);
   const repositoryUrlError = ref("");
+  const githubRepoError = ref("");
   const buildStrategy = ref<BuildStrategy>(
     BuildStrategy.BUILD_STRATEGY_UNSPECIFIED
   );
@@ -508,6 +513,85 @@
   // Track the saved repository URL from deployment
   const savedRepositoryUrl = ref<string>("");
 
+  // Validate repository URL
+  const validateRepositoryUrl = (url: string): string => {
+    if (!url || url.trim() === "") {
+      return ""; // Empty is valid (optional field)
+    }
+    
+    try {
+      const urlObj = new URL(url);
+      // Check if it's a valid http/https URL
+      if (!["http:", "https:"].includes(urlObj.protocol)) {
+        return "Repository URL must use http:// or https://";
+      }
+      
+      // Check if it's a valid Git hosting service (GitHub, GitLab, Bitbucket, etc.)
+      const hostname = urlObj.hostname.toLowerCase();
+      const validHosts = [
+        "github.com",
+        "gitlab.com",
+        "bitbucket.org",
+        "dev.azure.com",
+        "sourceforge.net",
+      ];
+      
+      // Allow any domain for flexibility, but validate URL structure
+      // A valid Git URL should have at least: protocol://domain/org/repo
+      // The pathname should have at least two segments (org/repo)
+      if (!urlObj.pathname || urlObj.pathname === "/") {
+        return "Repository URL must include a repository path (e.g., /org/repo)";
+      }
+      
+      // Remove leading slash and split path segments
+      const pathSegments = urlObj.pathname.replace(/^\/+/, "").split("/").filter(Boolean);
+      
+      // A valid repository URL must have at least org/repo (2 segments)
+      // Single segment paths like /aaa are user profiles, not repositories
+      if (pathSegments.length < 2) {
+        return "Repository URL must include both organization and repository name (e.g., /org/repo)";
+      }
+      
+      return ""; // Valid URL
+    } catch (e) {
+      return "Please enter a valid URL (e.g., https://github.com/org/repo)";
+    }
+  };
+
+  // Validate GitHub repository format (org/repo)
+  const validateGitHubRepo = (repo: string): string => {
+    if (!repo || repo.trim() === "") {
+      return ""; // Empty is valid (optional field)
+    }
+    
+    const trimmed = repo.trim();
+    // Must be in format: org/repo
+    // Should contain exactly one slash, and both parts should be non-empty
+    const parts = trimmed.split("/");
+    if (parts.length !== 2) {
+      return "Repository must be in format: org/repo";
+    }
+    
+    const [org, repoName] = parts;
+    if (!org || org.trim() === "") {
+      return "Organization name is required";
+    }
+    if (!repoName || repoName.trim() === "") {
+      return "Repository name is required";
+    }
+    
+    // Validate characters (alphanumeric, hyphens, underscores, dots)
+    const validCharPattern = /^[a-zA-Z0-9._-]+$/;
+    if (!validCharPattern.test(org)) {
+      return "Organization name contains invalid characters";
+    }
+    if (!validCharPattern.test(repoName)) {
+      return "Repository name contains invalid characters";
+    }
+    
+    return ""; // Valid format
+  };
+
   // Initialize from deployment
   watchEffect(() => {
     if (props.deployment && !isClearingRepository.value) {
@@ -533,15 +617,23 @@
       const deploymentRepoUrl = repoUrl.trim();
       
       // Update saved repository URL whenever deployment changes
+      const wasSavedRepoUrlEmpty = savedRepositoryUrl.value === "";
       savedRepositoryUrl.value = deploymentRepoUrl;
       
-      // Only overwrite if:
-      // 1. We're not clearing the repository AND
-      // 2. User hasn't explicitly cleared it AND
+      // Initialize repository URL from deployment:
+      // 1. On initial load (when savedRepositoryUrl was empty) - always set it
+      // 2. When not clearing and user hasn't explicitly cleared it
       // 3. Either current value is empty OR it matches deployment value (don't overwrite user's manual input)
-      if (!isClearingRepository.value && !userClearedRepository.value && 
-          (currentRepoUrl === "" || currentRepoUrl === deploymentRepoUrl)) {
+      const shouldSetRepoUrl = 
+        !isClearingRepository.value && 
+        !userClearedRepository.value && 
+        (wasSavedRepoUrlEmpty || currentRepoUrl === "" || currentRepoUrl === deploymentRepoUrl);
+      
+      if (shouldSetRepoUrl && deploymentRepoUrl !== "") {
         config.repositoryUrl = repoUrl;
+      } else if (shouldSetRepoUrl && deploymentRepoUrl === "" && currentRepoUrl === "") {
+        // Ensure empty state is set if deployment has no repo URL
+        config.repositoryUrl = "";
       }
       // Only reset config values if config is not dirty (user hasn't changed anything)
       // This prevents watchEffect from overwriting user's input
@@ -623,35 +715,28 @@
       error.value = "";
       configError.value = "";
 
-      // Determine repository source - only if not clearing and user hasn't explicitly cleared
+      // Determine repository source based on saved deployment data
+      // Only use "Connect from GitHub" if the deployment was saved with a GitHub integration ID
+      // Otherwise, always use "Enter URL manually" (even for GitHub URLs)
       if (!isClearingRepository.value && !userClearedRepository.value) {
-        if (
-          config.repositoryUrl &&
-          config.repositoryUrl.includes("github.com")
-        ) {
+        const deploymentIntegrationId = props.deployment.githubIntegrationId ?? "";
+        if (deploymentIntegrationId && deploymentIntegrationId.trim() !== "") {
+          // Deployment was saved with GitHub integration - show "Connect from GitHub" mode
           repositorySource.value = "github";
-          const match = config.repositoryUrl.match(
-            /github\.com\/([^\/]+\/[^\/]+)/
-          );
-          if (match && match[1]) {
-            selectedGitHubRepo.value = match[1].replace(/\.git$/, "");
-          }
-          // If we have a GitHub repo but no integration ID, we need to wait for the picker to load
-          // and select the appropriate integration. The picker will emit the integration ID when ready.
-          if (
-            !githubIntegrationId.value ||
-            githubIntegrationId.value.trim() === ""
-          ) {
-            console.log(
-              "[DeploymentSettings] GitHub repo detected but no integration ID. Waiting for picker to initialize..."
+          // Extract repo name from URL if available
+          if (config.repositoryUrl) {
+            const githubRepoMatch = config.repositoryUrl.match(
+              /github\.com\/([^\/]+\/[^\/]+)/
             );
+            if (githubRepoMatch && githubRepoMatch[1]) {
+              selectedGitHubRepo.value = githubRepoMatch[1].replace(/\.git$/, "");
+            }
           }
-        } else if (config.repositoryUrl) {
+        } else {
+          // No GitHub integration ID - use manual mode (even if URL is a GitHub URL)
           repositorySource.value = "manual";
-          // Clear integration ID for manual URLs
-          githubIntegrationId.value = "";
           // Validate manual URL on initialization
-          if (repositorySource.value === "manual") {
+          if (config.repositoryUrl) {
             repositoryUrlError.value = validateRepositoryUrl(config.repositoryUrl);
           }
         }
@@ -730,41 +815,6 @@
     }
   };
 
-  // Validate repository URL
-  const validateRepositoryUrl = (url: string): string => {
-    if (!url || url.trim() === "") {
-      return ""; // Empty is valid (optional field)
-    }
-    
-    try {
-      const urlObj = new URL(url);
-      // Check if it's a valid http/https URL
-      if (!["http:", "https:"].includes(urlObj.protocol)) {
-        return "Repository URL must use http:// or https://";
-      }
-      
-      // Check if it's a valid Git hosting service (GitHub, GitLab, Bitbucket, etc.)
-      const hostname = urlObj.hostname.toLowerCase();
-      const validHosts = [
-        "github.com",
-        "gitlab.com",
-        "bitbucket.org",
-        "dev.azure.com",
-        "sourceforge.net",
-      ];
-      
-      // Allow any domain for flexibility, but validate URL structure
-      // A valid Git URL should have at least: protocol://domain/path
-      if (!urlObj.pathname || urlObj.pathname === "/") {
-        return "Repository URL must include a repository path (e.g., /org/repo)";
-      }
-      
-      return ""; // Valid URL
-    } catch (e) {
-      return "Please enter a valid URL (e.g., https://github.com/org/repo)";
-    }
-  };
-
   const handleManualUrlChange = () => {
     // User typed a URL manually, clear the "user cleared" flag
     if (config.repositoryUrl && config.repositoryUrl.trim()) {
@@ -789,37 +839,58 @@
   };
 
   const handleChangeRepository = () => {
-    // Set flags to prevent watchEffect from resetting values
-    isClearingRepository.value = true;
-    userClearedRepository.value = true;
-    isChangingRepository.value = true; // User clicked "Change", show selection UI
-
-    // Clear the repository URL and selected repo to show the source selection
-    config.repositoryUrl = "";
-    selectedGitHubRepo.value = "";
-    githubIntegrationId.value = "";
-    repositorySource.value = "manual"; // Reset to manual, user can choose again
-    repositoryUrlError.value = ""; // Clear validation error
+    // User clicked "Change" - show the selection UI with current values
+    isChangingRepository.value = true;
+    
+    // Don't clear the repository URL - show current saved value so user can edit it
+    // The repository source should be determined by whether there's a saved GitHub integration ID
+    const deploymentIntegrationId = props.deployment.githubIntegrationId ?? "";
+    if (deploymentIntegrationId && deploymentIntegrationId.trim() !== "") {
+      // Deployment was saved with GitHub integration - show "Connect from GitHub" mode
+      repositorySource.value = "github";
+      // Extract repo name from URL if available
+      if (config.repositoryUrl) {
+        const githubRepoMatch = config.repositoryUrl.match(
+          /github\.com\/([^\/]+\/[^\/]+)/
+        );
+        if (githubRepoMatch && githubRepoMatch[1]) {
+          selectedGitHubRepo.value = githubRepoMatch[1].replace(/\.git$/, "");
+        }
+      }
+    } else {
+      // No GitHub integration ID - use manual mode
+      repositorySource.value = "manual";
+      // Validate the URL if it exists
+      if (config.repositoryUrl) {
+        repositoryUrlError.value = validateRepositoryUrl(config.repositoryUrl);
+      } else {
+        repositoryUrlError.value = "";
+      }
+    }
+    
     markConfigDirty();
 
-    // Reset the clearing flag after a tick to allow normal watchEffect behavior for other fields
-    // But keep userClearedRepository true until user saves or selects a new repo
-    setTimeout(() => {
-      isClearingRepository.value = false;
-    }, 100);
-
-    console.log("[DeploymentSettings] Changed repository - clearing values:", {
+    console.log("[DeploymentSettings] Changed repository - showing current values:", {
       repositoryUrl: config.repositoryUrl,
       selectedGitHubRepo: selectedGitHubRepo.value,
       repositorySource: repositorySource.value,
+      branch: config.branch,
     });
   };
 
   watch(selectedGitHubRepo, (repo) => {
-    if (repo && repositorySource.value === "github") {
-      config.repositoryUrl = `https://github.com/${repo}`;
-      // Clear validation error for GitHub URLs
-      repositoryUrlError.value = "";
+    if (repositorySource.value === "github") {
+      // Validate the repo format
+      githubRepoError.value = validateGitHubRepo(repo || "");
+      
+      if (repo && !githubRepoError.value) {
+        config.repositoryUrl = `https://github.com/${repo}`;
+        // Clear validation error for GitHub URLs
+        repositoryUrlError.value = "";
+      } else if (!repo) {
+        config.repositoryUrl = "";
+        githubRepoError.value = "";
+      }
       markConfigDirty();
     }
   });
@@ -829,6 +900,10 @@
     () => {
       if (repositorySource.value === "manual") {
         selectedGitHubRepo.value = "";
+        // Clear GitHub integration ID when switching to manual
+        githubIntegrationId.value = "";
+        // Clear GitHub repo error when switching to manual
+        githubRepoError.value = "";
         // Validate URL when switching to manual if there's a URL
         if (config.repositoryUrl) {
           repositoryUrlError.value = validateRepositoryUrl(config.repositoryUrl);
@@ -838,14 +913,15 @@
       } else if (repositorySource.value === "github") {
         // Clear validation error when switching to GitHub (GitHub URLs are always valid)
         repositoryUrlError.value = "";
-        if (config.repositoryUrl) {
-          const match = config.repositoryUrl.match(
-            /github\.com\/([^\/]+\/[^\/]+)/
-          );
-          if (match && match[1]) {
-            selectedGitHubRepo.value = match[1].replace(/\.git$/, "");
-          }
+        // Validate GitHub repo if one is selected
+        if (selectedGitHubRepo.value) {
+          githubRepoError.value = validateGitHubRepo(selectedGitHubRepo.value);
+        } else {
+          githubRepoError.value = "";
         }
+        // Don't auto-extract repo from URL - user must select from picker
+        // Only show repo if it was already selected (from saved deployment)
+        // The watchEffect above handles loading saved repos
       }
       markConfigDirty();
     }
@@ -1087,6 +1163,16 @@
       repositoryUrlError.value = validateRepositoryUrl(config.repositoryUrl);
       if (repositoryUrlError.value) {
         configError.value = "Please fix the repository URL validation error before saving.";
+        isSaving.value = false;
+        return;
+      }
+    }
+
+    // Validate GitHub repo format if using GitHub integration
+    if (repositorySource.value === "github" && selectedGitHubRepo.value) {
+      githubRepoError.value = validateGitHubRepo(selectedGitHubRepo.value);
+      if (githubRepoError.value) {
+        configError.value = `Please fix the repository format: ${githubRepoError.value}`;
         isSaving.value = false;
         return;
       }
