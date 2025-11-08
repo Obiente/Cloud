@@ -74,13 +74,16 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 			// interceptor doesn't have the user. But context.Value() searches up the chain, so we
 			// should be able to access it. If that doesn't work, we'll try response headers.
 			user, _ := auth.GetUserFromContext(ctx)
-			if user != nil {
+			if user != nil && user.Id != "" {
 				userID = user.Id
 			} else {
 				// Fallback: Try to extract from response headers (if auth interceptor exposes them)
 				if resp != nil {
-					if userIDHeader := resp.Header().Get("X-User-ID"); userIDHeader != "" {
-						userID = userIDHeader
+					// Defensively check that Header() doesn't return nil
+					if headers := resp.Header(); headers != nil {
+						if userIDHeader := headers.Get("X-User-ID"); userIDHeader != "" {
+							userID = userIDHeader
+						}
 					}
 				}
 			}
