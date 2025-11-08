@@ -37,19 +37,15 @@ export default defineNuxtConfig({
       cssMinify: "esbuild", // Use esbuild for CSS minification (faster than default)
       rollupOptions: {
         output: {
-          // Manual chunk splitting to reduce memory pressure and improve caching
+          // Only split out very large, independent dependencies
+          // Let Nuxt/Vite handle the rest automatically to avoid circular dependencies
           manualChunks: (id) => {
-            // Split large dependencies into separate chunks
-            if (id.includes("node_modules")) {
-              if (id.includes("monaco-editor")) {
-                return "monaco";
-              }
-              if (id.includes("echarts") || id.includes("vue-echarts")) {
-                return "charts";
-              }
-
-              return "vendor";
+            // Only split monaco-editor as it's very large and independent
+            if (id.includes("node_modules") && id.includes("monaco-editor")) {
+              return "monaco";
             }
+            // Let Nuxt handle all other chunk splitting automatically
+            // This prevents circular dependency issues
           },
         },
         watch: {
@@ -72,17 +68,9 @@ export default defineNuxtConfig({
         },
       },
     },
-    // Optimize dependency pre-bundling for faster builds
+
+    // Only configure if you have specific issues with certain dependencies
     optimizeDeps: {
-      // Include dependencies that should be pre-bundled
-      include: [
-        "vue",
-        "vue-router",
-        "pinia",
-        "@pinia/nuxt",
-        "@vueuse/core",
-        "@vueuse/nuxt",
-      ],
       // Exclude large dependencies that don't benefit from pre-bundling
       exclude: ["monaco-editor"],
     },
@@ -142,21 +130,13 @@ export default defineNuxtConfig({
     },
   },
 
-  // SSR configuration
   ssr: true,
 
-  // // Auto-import configuration
-  // imports: {
-  //   dirs: ['composables/**', 'stores/**', 'utils/**'],
-  // },
-
-  // Development server
   devServer: {
     port: 3000,
     host: "0.0.0.0",
   },
 
-  // App configuration
   app: {
     head: {
       title: "Obiente Cloud",
@@ -172,14 +152,12 @@ export default defineNuxtConfig({
     },
   },
 
-  // Nitro configuration (for server-side)
   nitro: {
     experimental: {
       wasm: true,
       websocket: true,
     },
-    // Optimize Nitro build to reduce memory usage
     minify: true,
-    sourceMap: false, // Disable source maps to reduce memory usage during build
+    sourceMap: false,
   },
 });
