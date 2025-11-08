@@ -47,10 +47,7 @@ export default defineNuxtConfig({
               if (id.includes("echarts") || id.includes("vue-echarts")) {
                 return "charts";
               }
-              // Split Vue ecosystem into separate chunk for better caching
-              if (id.includes("vue") || id.includes("pinia") || id.includes("vue-router")) {
-                return "vue-vendor";
-              }
+
               return "vendor";
             }
           },
@@ -181,14 +178,8 @@ export default defineNuxtConfig({
       wasm: true,
       websocket: true,
     },
-    // Optimize Nitro build to reduce memory usage and improve build speed
+    // Optimize Nitro build to reduce memory usage
     minify: true,
     sourceMap: false, // Disable source maps to reduce memory usage during build
-    // Enable build optimizations
-    compressPublicAssets: true, // Compress public assets
-    // Prerender optimization - only prerender if needed
-    prerender: {
-      crawlLinks: false, // Disable link crawling for faster builds (enable if you need static generation)
-    },
   },
 });
