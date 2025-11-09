@@ -60,6 +60,12 @@ service BillingService {
 
   // Cancel a subscription by ID
   rpc CancelSubscription(CancelSubscriptionRequest) returns (CancelSubscriptionResponse);
+
+  // Pay a monthly bill prematurely (before due date)
+  rpc PayBill(PayBillRequest) returns (PayBillResponse);
+
+  // List monthly bills for an organization
+  rpc ListBills(ListBillsRequest) returns (ListBillsResponse);
 }
 
 message CreateCheckoutSessionRequest {
@@ -119,6 +125,7 @@ message UpdateBillingAccountRequest {
   optional string company_name = 3;
   optional string tax_id = 4;
   optional Address address = 5;
+  optional int32 billing_date = 6; // Day of month (1-31) when billing occurs
 }
 
 message UpdateBillingAccountResponse {
@@ -229,8 +236,9 @@ message BillingAccount {
   optional string company_name = 6;
   optional string tax_id = 7;
   optional Address address = 8;
-  google.protobuf.Timestamp created_at = 9;
-  google.protobuf.Timestamp updated_at = 10;
+  optional int32 billing_date = 9; // Day of month (1-31) when billing occurs
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
 }
 
 message PaymentMethod {
@@ -341,6 +349,45 @@ message CancelSubscriptionResponse {
   bool success = 1;
   string message = 2; // Status message
   Subscription subscription = 3;
+}
+
+message PayBillRequest {
+  string organization_id = 1;
+  string bill_id = 2;
+}
+
+message PayBillResponse {
+  bool success = 1;
+  string message = 2; // Status message
+  MonthlyBill bill = 3;
+}
+
+message ListBillsRequest {
+  string organization_id = 1;
+  // Optional: limit the number of bills returned (default: 10, max: 100)
+  optional int32 limit = 2;
+}
+
+message ListBillsResponse {
+  repeated MonthlyBill bills = 1;
+  // Whether there are more bills available
+  bool has_more = 2;
+}
+
+message MonthlyBill {
+  string id = 1;
+  string organization_id = 2;
+  google.protobuf.Timestamp billing_period_start = 3;
+  google.protobuf.Timestamp billing_period_end = 4;
+  int64 amount_cents = 5;
+  string status = 6; // "PENDING", "PAID", "FAILED", "CANCELLED"
+  optional google.protobuf.Timestamp paid_at = 7;
+  google.protobuf.Timestamp due_date = 8;
+  // Usage breakdown (JSON string with cost breakdown)
+  optional string usage_breakdown = 9;
+  optional string note = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
 }
 
 

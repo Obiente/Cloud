@@ -15,11 +15,19 @@ func GetOrCreateBillingAccount(orgID string) (*database.BillingAccount, error) {
 	var billingAccount database.BillingAccount
 	if err := database.DB.Where("organization_id = ?", orgID).First(&billingAccount).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// Create new billing account
+			// Get organization to set billing date to creation day
+			var org database.Organization
+			if err := database.DB.First(&org, "id = ?", orgID).Error; err != nil {
+				return nil, fmt.Errorf("organization not found: %w", err)
+			}
+			
+			// Set billing date to the day the org was created (1-31)
+			billingDay := org.CreatedAt.Day()
 			billingAccount = database.BillingAccount{
 				ID:             GenerateID("ba"),
 				OrganizationID: orgID,
 				Status:         "ACTIVE",
+				BillingDate:    &billingDay,
 				CreatedAt:      time.Now(),
 				UpdatedAt:      time.Now(),
 			}
@@ -28,6 +36,16 @@ func GetOrCreateBillingAccount(orgID string) (*database.BillingAccount, error) {
 			}
 		} else {
 			return nil, err
+		}
+	} else {
+		// If billing account exists but billing_date is not set, set it to org creation day
+		if billingAccount.BillingDate == nil {
+			var org database.Organization
+			if err := database.DB.First(&org, "id = ?", orgID).Error; err == nil {
+				billingDay := org.CreatedAt.Day()
+				billingAccount.BillingDate = &billingDay
+				database.DB.Save(&billingAccount)
+			}
 		}
 	}
 	return &billingAccount, nil

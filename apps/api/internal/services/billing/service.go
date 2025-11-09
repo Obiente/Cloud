@@ -388,6 +388,13 @@ func (s *Service) UpdateBillingAccount(ctx context.Context, req *connect.Request
 		addressStr := string(addressJSON)
 		billingAccount.Address = &addressStr
 	}
+	if req.Msg.BillingDate != nil {
+		billingDate := int(*req.Msg.BillingDate)
+		if billingDate < 1 || billingDate > 31 {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("billing_date must be between 1 and 31"))
+		}
+		billingAccount.BillingDate = &billingDate
+	}
 
 	billingAccount.UpdatedAt = time.Now()
 
@@ -1033,6 +1040,10 @@ func (s *Service) billingAccountToProto(ba *database.BillingAccount) *billingv1.
 	if ba.TaxID != nil {
 		proto.TaxId = ba.TaxID
 	}
+	if ba.BillingDate != nil {
+		billingDate := int32(*ba.BillingDate)
+		proto.BillingDate = &billingDate
+	}
 	if ba.Address != nil && *ba.Address != "" {
 		var address billingv1.Address
 		if err := json.Unmarshal([]byte(*ba.Address), &address); err == nil {
@@ -1658,4 +1669,124 @@ func (s *Service) CancelSubscription(ctx context.Context, req *connect.Request[b
 		Message:     message,
 		Subscription: protoSub,
 	}), nil
+}
+
+func (s *Service) PayBill(ctx context.Context, req *connect.Request[billingv1.PayBillRequest]) (*connect.Response[billingv1.PayBillResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	billID := strings.TrimSpace(req.Msg.GetBillId())
+	if billID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("bill_id is required"))
+	}
+
+	// Verify user has access to this organization
+	if err := common.AuthorizeOrgAdmin(ctx, orgID, user); err != nil {
+		return nil, err
+	}
+
+	// Pay the bill
+	if err := PayBillPrematurely(billID, orgID); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("pay bill: %w", err))
+	}
+
+	// Get the updated bill
+	var bill database.MonthlyBill
+	if err := database.DB.Where("id = ? AND organization_id = ?", billID, orgID).First(&bill).Error; err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("bill not found: %w", err))
+	}
+
+	protoBill := monthlyBillToProto(&bill)
+
+	return connect.NewResponse(&billingv1.PayBillResponse{
+		Success: true,
+		Message: "Bill paid successfully",
+		Bill:    protoBill,
+	}), nil
+}
+
+func (s *Service) ListBills(ctx context.Context, req *connect.Request[billingv1.ListBillsRequest]) (*connect.Response[billingv1.ListBillsResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	// Verify user has access to this organization
+	if err := common.VerifyOrgAccess(ctx, orgID, user); err != nil {
+		return nil, err
+	}
+
+	limit := int(req.Msg.GetLimit())
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	// Get bills for this organization
+	var bills []database.MonthlyBill
+	if err := database.DB.Where("organization_id = ?", orgID).
+		Order("billing_period_end DESC, created_at DESC").
+		Limit(limit + 1). // Get one extra to check if there are more
+		Find(&bills).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list bills: %w", err))
+	}
+
+	hasMore := len(bills) > limit
+	if hasMore {
+		bills = bills[:limit]
+	}
+
+	protoBills := make([]*billingv1.MonthlyBill, 0, len(bills))
+	for _, bill := range bills {
+		protoBills = append(protoBills, monthlyBillToProto(&bill))
+	}
+
+	return connect.NewResponse(&billingv1.ListBillsResponse{
+		Bills:    protoBills,
+		HasMore:  hasMore,
+	}), nil
+}
+
+func monthlyBillToProto(bill *database.MonthlyBill) *billingv1.MonthlyBill {
+	proto := &billingv1.MonthlyBill{
+		Id:                bill.ID,
+		OrganizationId:    bill.OrganizationID,
+		BillingPeriodStart: timestamppb.New(bill.BillingPeriodStart),
+		BillingPeriodEnd:   timestamppb.New(bill.BillingPeriodEnd),
+		AmountCents:        bill.AmountCents,
+		Status:             bill.Status,
+		DueDate:            timestamppb.New(bill.DueDate),
+		UsageBreakdown:     &bill.UsageBreakdown,
+		Note:               bill.Note,
+		CreatedAt:          timestamppb.New(bill.CreatedAt),
+		UpdatedAt:          timestamppb.New(bill.UpdatedAt),
+	}
+
+	if bill.PaidAt != nil {
+		proto.PaidAt = timestamppb.New(*bill.PaidAt)
+	}
+
+	return proto
 }

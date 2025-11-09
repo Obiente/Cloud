@@ -87,6 +87,11 @@ const (
 	// BillingServiceCancelSubscriptionProcedure is the fully-qualified name of the BillingService's
 	// CancelSubscription RPC.
 	BillingServiceCancelSubscriptionProcedure = "/obiente.cloud.billing.v1.BillingService/CancelSubscription"
+	// BillingServicePayBillProcedure is the fully-qualified name of the BillingService's PayBill RPC.
+	BillingServicePayBillProcedure = "/obiente.cloud.billing.v1.BillingService/PayBill"
+	// BillingServiceListBillsProcedure is the fully-qualified name of the BillingService's ListBills
+	// RPC.
+	BillingServiceListBillsProcedure = "/obiente.cloud.billing.v1.BillingService/ListBills"
 )
 
 // BillingServiceClient is a client for the obiente.cloud.billing.v1.BillingService service.
@@ -127,6 +132,10 @@ type BillingServiceClient interface {
 	UpdateSubscriptionPaymentMethod(context.Context, *connect.Request[v1.UpdateSubscriptionPaymentMethodRequest]) (*connect.Response[v1.UpdateSubscriptionPaymentMethodResponse], error)
 	// Cancel a subscription by ID
 	CancelSubscription(context.Context, *connect.Request[v1.CancelSubscriptionRequest]) (*connect.Response[v1.CancelSubscriptionResponse], error)
+	// Pay a monthly bill prematurely (before due date)
+	PayBill(context.Context, *connect.Request[v1.PayBillRequest]) (*connect.Response[v1.PayBillResponse], error)
+	// List monthly bills for an organization
+	ListBills(context.Context, *connect.Request[v1.ListBillsRequest]) (*connect.Response[v1.ListBillsResponse], error)
 }
 
 // NewBillingServiceClient constructs a client for the obiente.cloud.billing.v1.BillingService
@@ -248,6 +257,18 @@ func NewBillingServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(billingServiceMethods.ByName("CancelSubscription")),
 			connect.WithClientOptions(opts...),
 		),
+		payBill: connect.NewClient[v1.PayBillRequest, v1.PayBillResponse](
+			httpClient,
+			baseURL+BillingServicePayBillProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("PayBill")),
+			connect.WithClientOptions(opts...),
+		),
+		listBills: connect.NewClient[v1.ListBillsRequest, v1.ListBillsResponse](
+			httpClient,
+			baseURL+BillingServiceListBillsProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("ListBills")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -271,6 +292,8 @@ type billingServiceClient struct {
 	listSubscriptions                       *connect.Client[v1.ListSubscriptionsRequest, v1.ListSubscriptionsResponse]
 	updateSubscriptionPaymentMethod         *connect.Client[v1.UpdateSubscriptionPaymentMethodRequest, v1.UpdateSubscriptionPaymentMethodResponse]
 	cancelSubscription                      *connect.Client[v1.CancelSubscriptionRequest, v1.CancelSubscriptionResponse]
+	payBill                                 *connect.Client[v1.PayBillRequest, v1.PayBillResponse]
+	listBills                               *connect.Client[v1.ListBillsRequest, v1.ListBillsResponse]
 }
 
 // CreateCheckoutSession calls obiente.cloud.billing.v1.BillingService.CreateCheckoutSession.
@@ -367,6 +390,16 @@ func (c *billingServiceClient) CancelSubscription(ctx context.Context, req *conn
 	return c.cancelSubscription.CallUnary(ctx, req)
 }
 
+// PayBill calls obiente.cloud.billing.v1.BillingService.PayBill.
+func (c *billingServiceClient) PayBill(ctx context.Context, req *connect.Request[v1.PayBillRequest]) (*connect.Response[v1.PayBillResponse], error) {
+	return c.payBill.CallUnary(ctx, req)
+}
+
+// ListBills calls obiente.cloud.billing.v1.BillingService.ListBills.
+func (c *billingServiceClient) ListBills(ctx context.Context, req *connect.Request[v1.ListBillsRequest]) (*connect.Response[v1.ListBillsResponse], error) {
+	return c.listBills.CallUnary(ctx, req)
+}
+
 // BillingServiceHandler is an implementation of the obiente.cloud.billing.v1.BillingService
 // service.
 type BillingServiceHandler interface {
@@ -406,6 +439,10 @@ type BillingServiceHandler interface {
 	UpdateSubscriptionPaymentMethod(context.Context, *connect.Request[v1.UpdateSubscriptionPaymentMethodRequest]) (*connect.Response[v1.UpdateSubscriptionPaymentMethodResponse], error)
 	// Cancel a subscription by ID
 	CancelSubscription(context.Context, *connect.Request[v1.CancelSubscriptionRequest]) (*connect.Response[v1.CancelSubscriptionResponse], error)
+	// Pay a monthly bill prematurely (before due date)
+	PayBill(context.Context, *connect.Request[v1.PayBillRequest]) (*connect.Response[v1.PayBillResponse], error)
+	// List monthly bills for an organization
+	ListBills(context.Context, *connect.Request[v1.ListBillsRequest]) (*connect.Response[v1.ListBillsResponse], error)
 }
 
 // NewBillingServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -523,6 +560,18 @@ func NewBillingServiceHandler(svc BillingServiceHandler, opts ...connect.Handler
 		connect.WithSchema(billingServiceMethods.ByName("CancelSubscription")),
 		connect.WithHandlerOptions(opts...),
 	)
+	billingServicePayBillHandler := connect.NewUnaryHandler(
+		BillingServicePayBillProcedure,
+		svc.PayBill,
+		connect.WithSchema(billingServiceMethods.ByName("PayBill")),
+		connect.WithHandlerOptions(opts...),
+	)
+	billingServiceListBillsHandler := connect.NewUnaryHandler(
+		BillingServiceListBillsProcedure,
+		svc.ListBills,
+		connect.WithSchema(billingServiceMethods.ByName("ListBills")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.billing.v1.BillingService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case BillingServiceCreateCheckoutSessionProcedure:
@@ -561,6 +610,10 @@ func NewBillingServiceHandler(svc BillingServiceHandler, opts ...connect.Handler
 			billingServiceUpdateSubscriptionPaymentMethodHandler.ServeHTTP(w, r)
 		case BillingServiceCancelSubscriptionProcedure:
 			billingServiceCancelSubscriptionHandler.ServeHTTP(w, r)
+		case BillingServicePayBillProcedure:
+			billingServicePayBillHandler.ServeHTTP(w, r)
+		case BillingServiceListBillsProcedure:
+			billingServiceListBillsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -640,4 +693,12 @@ func (UnimplementedBillingServiceHandler) UpdateSubscriptionPaymentMethod(contex
 
 func (UnimplementedBillingServiceHandler) CancelSubscription(context.Context, *connect.Request[v1.CancelSubscriptionRequest]) (*connect.Response[v1.CancelSubscriptionResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.billing.v1.BillingService.CancelSubscription is not implemented"))
+}
+
+func (UnimplementedBillingServiceHandler) PayBill(context.Context, *connect.Request[v1.PayBillRequest]) (*connect.Response[v1.PayBillResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.billing.v1.BillingService.PayBill is not implemented"))
+}
+
+func (UnimplementedBillingServiceHandler) ListBills(context.Context, *connect.Request[v1.ListBillsRequest]) (*connect.Response[v1.ListBillsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.billing.v1.BillingService.ListBills is not implemented"))
 }

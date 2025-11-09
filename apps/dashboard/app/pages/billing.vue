@@ -349,6 +349,7 @@
     billingEmail: "",
     companyName: "",
     taxId: "",
+    billingDate: "" as string,
     address: {
       line1: "",
       line2: "",
@@ -373,6 +374,11 @@
   const paymentElement = ref<any>(null);
   const setupIntentClientSecret = ref<string>("");
   const paymentElementContainer = ref<HTMLElement | null>(null);
+
+  // Monthly bills
+  const bills = ref<any[]>([]);
+  const billsLoading = ref(false);
+  const payBillLoading = ref(false);
 
   async function addCredits() {
     if (!selectedOrg.value || !addCreditsAmount.value) return;
@@ -653,6 +659,7 @@
     billingInfoForm.value.billingEmail = billingAccount.value.billingEmail || "";
     billingInfoForm.value.companyName = billingAccount.value.companyName || "";
     billingInfoForm.value.taxId = billingAccount.value.taxId || "";
+    billingInfoForm.value.billingDate = billingAccount.value.billingDate ? String(billingAccount.value.billingDate) : "";
     if (billingAccount.value.address) {
       billingInfoForm.value.address = {
         line1: billingAccount.value.address.line1 || "",
@@ -671,7 +678,7 @@
     billingInfoLoading.value = true;
     error.value = "";
     try {
-      await billingClient.updateBillingAccount({
+      const updateData: any = {
         organizationId: selectedOrg.value,
         billingEmail: billingInfoForm.value.billingEmail || undefined,
         companyName: billingInfoForm.value.companyName || undefined,
@@ -684,7 +691,17 @@
           postalCode: billingInfoForm.value.address.postalCode,
           country: billingInfoForm.value.address.country,
         },
-      });
+      };
+      
+      // Add billingDate if provided (convert string to number)
+      if (billingInfoForm.value.billingDate && billingInfoForm.value.billingDate.trim() !== "") {
+        const billingDateNum = parseInt(billingInfoForm.value.billingDate, 10);
+        if (!isNaN(billingDateNum) && billingDateNum >= 1 && billingDateNum <= 31) {
+          updateData.billingDate = billingDateNum;
+        }
+      }
+      
+      await billingClient.updateBillingAccount(updateData);
       await refreshBillingAccount();
       editBillingInfoDialogOpen.value = false;
       useToast().toast.success("Billing information updated");
@@ -774,16 +791,18 @@
     }
   });
 
-  // Load subscriptions when org changes
+  // Load subscriptions and bills when org changes
   watch(selectedOrg, () => {
     if (selectedOrg.value) {
       loadSubscriptions();
+      loadBills();
     }
   });
 
-  // Load subscriptions on mount
+  // Load subscriptions and bills on mount
   if (selectedOrg.value) {
     loadSubscriptions();
+    loadBills();
     refreshCurrentOrganization();
   }
 
@@ -837,6 +856,68 @@
     }
     if (seconds === 0) return "";
     return new Date(seconds * 1000).toLocaleDateString();
+  }
+
+  function formatBillDate(date: any): string {
+    if (!date) return "";
+    let seconds = 0;
+    if (typeof date === 'object' && date !== null) {
+      if ('seconds' in date) {
+        seconds = Number(date.seconds);
+      } else if ('toMillis' in date && typeof date.toMillis === 'function') {
+        return new Date(date.toMillis()).toLocaleDateString();
+      }
+    } else if (typeof date === 'number') {
+      seconds = date;
+    }
+    if (seconds === 0) return "";
+    return new Date(seconds * 1000).toLocaleDateString();
+  }
+
+  async function loadBills() {
+    if (!selectedOrg.value) return;
+    billsLoading.value = true;
+    try {
+      const res = await (billingClient as any).listBills({
+        organizationId: selectedOrg.value,
+        limit: 20,
+      });
+      bills.value = res.bills || [];
+    } catch (err: any) {
+      console.error("Failed to load bills:", err);
+      bills.value = [];
+    } finally {
+      billsLoading.value = false;
+    }
+  }
+
+  async function refreshBills() {
+    await loadBills();
+  }
+
+  async function payBill(billId: string) {
+    if (!selectedOrg.value) return;
+    payBillLoading.value = true;
+    error.value = "";
+    try {
+      const res = await (billingClient as any).payBill({
+        organizationId: selectedOrg.value,
+        billId: billId,
+      });
+      if (res.success) {
+        useToast().toast.success(res.message || "Bill paid successfully");
+        await loadBills();
+        await syncOrganizations();
+        await refreshCreditLog();
+      } else {
+        throw new Error(res.message || "Failed to pay bill");
+      }
+    } catch (err: any) {
+      error.value = err.message || "Failed to pay bill";
+      useToast().toast.error(error.value);
+    } finally {
+      payBillLoading.value = false;
+    }
   }
 
   function openInvoiceUrl(url: string) {
@@ -1621,8 +1702,103 @@
                           <OuiText size="sm" color="muted">Billing Address</OuiText>
                           <OuiText size="sm" weight="medium">Not set</OuiText>
                         </OuiFlex>
+                        <OuiFlex justify="between">
+                          <OuiText size="sm" color="muted">Billing Date</OuiText>
+                          <OuiText size="sm" weight="medium">
+                            {{ billingAccount.billingDate ? `Day ${billingAccount.billingDate} of each month` : "Not set (defaults to org creation day)" }}
+                          </OuiText>
+                        </OuiFlex>
                       </OuiStack>
                     </template>
+                  </OuiStack>
+                </OuiCardBody>
+              </OuiCard>
+            </OuiStack>
+
+            <!-- Monthly Bills -->
+            <OuiStack gap="lg" v-if="currentUserIsOwner">
+              <OuiFlex justify="between" align="center">
+                <OuiText size="2xl" weight="bold">Monthly Bills</OuiText>
+                <OuiButton 
+                  variant="outline" 
+                  size="sm"
+                  @click="refreshBills"
+                >
+                  Refresh
+                </OuiButton>
+              </OuiFlex>
+
+              <OuiCard>
+                <OuiCardBody class="p-0">
+                  <OuiStack>
+                    <!-- Table Header -->
+                    <OuiBox p="md" borderBottom="1" borderColor="muted">
+                      <OuiGrid cols="6" gap="md">
+                        <OuiText size="sm" weight="medium" color="muted">Bill ID</OuiText>
+                        <OuiText size="sm" weight="medium" color="muted">Period</OuiText>
+                        <OuiText size="sm" weight="medium" color="muted">Amount</OuiText>
+                        <OuiText size="sm" weight="medium" color="muted">Due Date</OuiText>
+                        <OuiText size="sm" weight="medium" color="muted">Status</OuiText>
+                        <OuiText size="sm" weight="medium" color="muted">Actions</OuiText>
+                      </OuiGrid>
+                    </OuiBox>
+
+                    <!-- Table Rows -->
+                    <OuiStack>
+                      <template v-if="billsLoading">
+                        <OuiBox p="md">
+                          <OuiText size="sm" color="muted" align="center">Loading bills...</OuiText>
+                        </OuiBox>
+                      </template>
+                      <template v-else-if="bills.length === 0">
+                        <OuiBox p="md">
+                          <OuiStack gap="sm" align="center">
+                            <DocumentTextIcon class="h-8 w-8 text-muted" />
+                            <OuiText size="sm" color="muted" align="center">
+                              No monthly bills yet. Bills will appear here after your first billing cycle.
+                            </OuiText>
+                          </OuiStack>
+                        </OuiBox>
+                      </template>
+                      <OuiBox
+                        v-for="bill in bills"
+                        :key="bill.id"
+                        p="md"
+                        borderBottom="1"
+                        borderColor="muted"
+                        :class="{ 'last:border-b-0': bill === bills[bills.length - 1] }"
+                      >
+                        <OuiGrid cols="6" gap="md" align="center">
+                          <OuiText size="sm" weight="medium">{{ bill.id.substring(0, 12) }}...</OuiText>
+                          <OuiText size="sm" color="muted">
+                            {{ formatBillDate(bill.billingPeriodStart) }} - {{ formatBillDate(bill.billingPeriodEnd) }}
+                          </OuiText>
+                          <OuiText size="sm" weight="medium">
+                            {{ formatCurrency(bill.amountCents ?? 0) }}
+                          </OuiText>
+                          <OuiText size="sm" color="muted">
+                            {{ formatBillDate(bill.dueDate) }}
+                          </OuiText>
+                          <OuiBadge :variant="bill.status === 'PAID' ? 'success' : bill.status === 'PENDING' ? 'warning' : 'danger'">
+                            {{ bill.status }}
+                          </OuiBadge>
+                          <OuiFlex gap="sm">
+                            <OuiButton
+                              v-if="bill.status === 'PENDING'"
+                              variant="ghost"
+                              size="sm"
+                              @click="payBill(bill.id)"
+                              :disabled="payBillLoading || creditsBalance < (bill.amountCents ?? 0)"
+                            >
+                              {{ payBillLoading ? "Processing..." : "Pay Now" }}
+                            </OuiButton>
+                            <OuiText v-else size="xs" color="muted">
+                              {{ bill.status === 'PAID' ? 'Paid' : '—' }}
+                            </OuiText>
+                          </OuiFlex>
+                        </OuiGrid>
+                      </OuiBox>
+                    </OuiStack>
                   </OuiStack>
                 </OuiCardBody>
               </OuiCard>
@@ -2042,6 +2218,20 @@
               v-model="billingInfoForm.taxId"
               placeholder="Tax ID (optional)"
             />
+          </OuiStack>
+
+          <OuiStack gap="xs">
+            <OuiText size="sm" weight="medium">Billing Date (Day of Month)</OuiText>
+            <OuiInput
+              v-model="billingInfoForm.billingDate"
+              type="number"
+              min="1"
+              max="31"
+              placeholder="1-31 (defaults to org creation day)"
+            />
+            <OuiText size="xs" color="muted">
+              The day of each month when your organization will be billed. Defaults to the day your organization was created.
+            </OuiText>
           </OuiStack>
 
           <OuiStack gap="xs">
