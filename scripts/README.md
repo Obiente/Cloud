@@ -1,152 +1,133 @@
-# Obiente Cloud - Scripts Analysis and Recommendations
+# Proxmox Setup Scripts
 
-## Script Inventory
+This directory contains setup scripts for configuring Proxmox infrastructure for Obiente Cloud.
 
-### ✅ Essential Scripts (Keep)
+## Available Scripts
 
-1. **deploy-swarm.sh** - Main deployment script
-   - Status: ✅ Essential
-   - Purpose: Core deployment functionality
-   - Notes: Fixed reference to `setup-all-nodes.sh`
+### `setup-proxmox-templates.sh`
 
-2. **setup-all-nodes.sh** - Node setup
-   - Status: ✅ Essential
-   - Purpose: Create required directories on each node
-   - Notes: Must run on each worker node before deployment
+Automated script to create or update all VM templates required for VPS provisioning.
 
-3. **cleanup-swarm.sh** - Regular maintenance
-   - Status: ✅ Useful
-   - Purpose: Clean up old containers, tasks, unused resources
-   - Notes: Safe cleanup with dry-run option
+**Features:**
+- Auto-detects available storage pools
+- Detects storage type (Directory, LVM, ZFS)
+- Creates or updates all required templates
+- Handles disk path formatting automatically
+- Verifies disk attachment before template conversion
 
-4. **cleanup-swarm-complete.sh** - Complete reset
-   - Status: ✅ Useful
-   - Purpose: Full cleanup for fresh start
-   - Notes: Destructive - removes all data
+**Usage:**
 
-### 🤔 Scripts to Consider Consolidating
+**Option 1: Direct execution from GitHub (Recommended)**
 
-#### Diagnostic Scripts (Overlap)
-All these scripts check dashboard deployment but focus on different aspects:
+Run the script directly from GitHub without cloning the repository:
 
-1. **diagnose-dashboard.sh** - General diagnostics
-   - Status: ✅ Keep (comprehensive)
-   - Purpose: All-in-one diagnostics
-   - Recommendation: **PRIMARY** diagnostic tool
+```bash
+curl -fsSL https://raw.githubusercontent.com/obiente/cloud/main/scripts/setup-proxmox-templates.sh | bash
+```
 
-2. **check-dashboard-deployment.sh** - Deployment status
-   - Status: ⚠️ Consider consolidating
-   - Purpose: Check deployment across nodes
-   - Recommendation: Could be merged into `diagnose-dashboard.sh`
+**Option 2: Clone and run locally**
 
-3. **check-dashboard-nodes.sh** - Node distribution
-   - Status: ⚠️ Consider consolidating
-   - Purpose: Check why replicas aren't on multiple nodes
-   - Recommendation: Partially overlaps with `check-dashboard-deployment.sh`
+```bash
+# Clone the repository
+git clone https://github.com/obiente/cloud.git
+cd cloud
 
-4. **check-dashboard-traefik.sh** - Traefik discovery
-   - Status: ✅ Keep (specific use case)
-   - Purpose: Traefik-specific checks
-   - Recommendation: Useful for Traefik-specific issues
+# Run the script
+./scripts/setup-proxmox-templates.sh
+```
 
-5. **check-dashboard-routing.sh** - Routing configuration
-   - Status: ⚠️ Consider consolidating
-   - Purpose: Check routing configuration
-   - Recommendation: Could be merged into `check-dashboard-traefik.sh`
+**Prerequisites:**
+- Must be run on a Proxmox node (has access to `qm` command)
+- `wget` must be installed
+- Storage pools must be configured in Proxmox
 
-#### Troubleshooting Scripts (Related)
+**What it does:**
 
-1. **fix-swarm-networks.sh** - Network conflicts
-   - Status: ✅ Keep
-   - Purpose: Diagnose and fix network IP pool conflicts
-   - Notes: Good standalone tool
+1. Checks prerequisites (`qm` command, `wget`)
+2. Detects available storage pools that support VM images
+3. Prompts you to select a storage pool (with auto-detection)
+4. Shows storage type for each pool (Directory, LVM, ZFS)
+5. Creates or updates the following templates:
+   - `ubuntu-22.04-standard` (VMID 9000)
+   - `ubuntu-24.04-standard` (VMID 9001)
+   - `debian-12-standard` (VMID 9002)
+   - `debian-13-standard` (VMID 9003)
+   - `rockylinux-9-standard` (VMID 9004)
+   - `almalinux-9-standard` (VMID 9005)
 
-2. **fix-dashboard-network.sh** - Dashboard network
-   - Status: ✅ Keep
-   - Purpose: Fix dashboard service network configuration
-   - Notes: Specific to dashboard network issues
+**Example Session:**
 
-### 📝 Deployment Scripts
+```bash
+$ ./scripts/setup-proxmox-templates.sh
+==========================================
+  Proxmox VM Template Setup Script
+==========================================
 
-1. **build-swarm.sh** - Build images
-   - Status: ✅ Keep
-   - Purpose: Build images locally
-   - Notes: Useful for local development
+[INFO] Checking prerequisites...
+[SUCCESS] All prerequisites met
+[INFO] Using node: main
+[INFO] Detecting available storage pools on node: main
+[INFO] Available storage pools:
 
-2. **force-deploy.sh** - Force update
-   - Status: ✅ Keep
-   - Purpose: Force update all services
-   - Notes: Useful when normal updates don't work
+  [1] local (Directory (files))
+  [2] local-lvm (LVM (block device))
+  [3] local-zfs (ZFS (block device))
 
-3. **redeploy-dashboard.sh** - Quick dashboard redeploy
-   - Status: ✅ Keep
-   - Purpose: Quick dashboard-only redeploy
-   - Notes: Convenient shortcut
+[INFO] Auto-detected storage: local-lvm (type: lvm)
+Use detected storage? [Y/n]: Y
 
-## Recommendations
+[INFO] Selected storage: local-lvm (type: lvm)
 
-### 🔧 Consolidation Opportunities
+This will create/update the following templates:
+  - ubuntu-22.04-standard
+  - ubuntu-24.04-standard
+  - debian-12-standard
+  - debian-13-standard
+  - rockylinux-9-standard
+  - almalinux-9-standard
 
-1. **Merge diagnostic scripts:**
-   - Keep `diagnose-dashboard.sh` as the primary tool
-   - Merge `check-dashboard-deployment.sh` and `check-dashboard-nodes.sh` into it
-   - Keep `check-dashboard-traefik.sh` separate (specific use case)
-   - Merge `check-dashboard-routing.sh` into `check-dashboard-traefik.sh`
+Continue? [Y/n]: Y
 
-2. **Create a master diagnostic script:**
-   - Could create `diagnose-all.sh` that runs all checks
-   - Or improve `diagnose-dashboard.sh` to include all checks
+[INFO] Processing template: ubuntu-22.04-standard (VMID: 9000)
+[INFO] Downloading cloud image...
+[SUCCESS] Downloaded image: ubuntu-22.04-server-cloudimg-amd64.img
+[INFO] Creating VM 9000...
+[INFO] Importing disk to storage: local-lvm...
+[INFO] Configuring VM...
+[INFO] Verifying disk attachment...
+[SUCCESS] Disk attached: scsi0: local-lvm:vm-9000-disk-0,size=2362232012
+[INFO] Converting VM to template...
+[SUCCESS] Template 'ubuntu-22.04-standard' created successfully!
 
-### ✅ Scripts Are Well-Organized
+...
 
-- Clear naming conventions
-- Good separation of concerns
-- Appropriate categories (deployment, diagnostic, troubleshooting, maintenance)
+==========================================
+[SUCCESS] Completed: 6 templates created/updated
+==========================================
+```
 
-### 📋 Script Categories
+**Updating Existing Templates:**
 
-1. **Deployment** (4 scripts)
-   - deploy-swarm.sh
-   - build-swarm.sh
-   - force-deploy.sh
-   - redeploy-dashboard.sh
+If templates already exist, the script will:
+1. Detect the existing template
+2. Prompt you to update it
+3. Delete the old template (with purge)
+4. Create a new template with the latest cloud image
 
-2. **Setup** (1 script)
-   - setup-all-nodes.sh
+**Storage Type Handling:**
 
-3. **Maintenance** (2 scripts)
-   - cleanup-swarm.sh
-   - cleanup-swarm-complete.sh
+The script automatically handles different storage types:
+- **Directory storage (`local`)**: Uses path format `local:9000/vm-9000-disk-0.qcow2`
+- **LVM/ZFS storage**: Uses path format `storage:vm-9000-disk-0`
 
-4. **Diagnostic** (5 scripts)
-   - diagnose-dashboard.sh
-   - check-dashboard-deployment.sh
-   - check-dashboard-nodes.sh
-   - check-dashboard-traefik.sh
-   - check-dashboard-routing.sh
+**Troubleshooting:**
 
-5. **Troubleshooting** (2 scripts)
-   - fix-swarm-networks.sh
-   - fix-dashboard-network.sh
+- **"qm command not found"**: This script must be run on a Proxmox node, not from a remote machine
+- **"No storage pools found"**: Ensure storage pools are configured in Proxmox (Datacenter → Storage)
+- **"Failed to import disk"**: Check storage pool has sufficient space and supports VM images
+- **"Disk not attached correctly"**: This usually indicates a storage type mismatch - the script should handle this automatically, but verify your storage configuration
 
-## Usage Helper
+**See Also:**
 
-Created `scripts/help.sh` with:
-- Complete overview of all scripts
-- Categorized by purpose
-- Usage examples
-- Common workflows
-- Environment variables documentation
-
-Run: `./scripts/help.sh` or `./scripts/help.sh <script-name>`
-
-## Summary
-
-- **Total scripts**: 14
-- **Essential**: 10 (should keep)
-- **Consider consolidating**: 4 (diagnostic scripts)
-- **Removed**: 0
-- **Fixed**: 1 (naming inconsistency in deploy-swarm.sh)
-
-All scripts are useful and serve a purpose. The main opportunity is consolidating diagnostic scripts to reduce overlap, but current organization is acceptable.
-
+- [VPS Provisioning Guide](../docs/guides/vps-provisioning.md) - Complete guide on VPS provisioning
+- [VPS Configuration Guide](../docs/guides/vps-configuration.md) - Advanced configuration options

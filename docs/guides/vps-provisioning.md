@@ -230,25 +230,82 @@ Repeat this process for all the ISO files listed above.
 - `rockylinux-9-standard`
 - `almalinux-9-standard`
 
-**Before You Start - Find Your Storage Pool:**
+#### Quick Setup (Recommended)
 
-First, identify which storage pools are available on your Proxmox node:
+**Automated Template Setup Script:**
+
+The easiest way to set up all templates is using the provided setup script. This script will:
+- Auto-detect available storage pools
+- Detect storage type (directory vs LVM/ZFS)
+- Create or update all templates
+- Handle disk path formatting automatically
+
+**Prerequisites:**
+- Access to Proxmox node (SSH or direct console)
+- `wget` installed
+- Storage pool configured in Proxmox
+
+**Usage:**
+
+**Option 1: Direct execution from GitHub (Recommended)**
+
+Run the script directly from GitHub without cloning the repository:
 
 ```bash
-# List all storage pools
-pvesm status
-
-# Or via Proxmox web UI: Datacenter → Storage
+curl -fsSL https://raw.githubusercontent.com/obiente/cloud/main/scripts/setup-proxmox-templates.sh | bash
 ```
 
-Common storage pool names:
+This is the recommended method as it:
+- Works from any machine with internet access
+- Always uses the latest version
+- No need to clone the entire repository
 
-- `local-lvm` - LVM thin provisioning (common default)
-- `local` - Directory storage
-- `local-zfs` - ZFS storage
-- Custom storage pools you've created
+**Option 2: Clone and run locally**
 
-**Replace `local-lvm` in all commands below with your actual storage pool name.**
+If you prefer to clone the repository first:
+
+```bash
+git clone https://github.com/obiente/cloud.git
+cd cloud
+./scripts/setup-proxmox-templates.sh
+```
+
+**After running the script:**
+
+1. **Follow the prompts**:
+   - The script will auto-detect available storage pools
+   - It will suggest a storage pool based on common defaults
+   - You can accept the suggestion or choose a different one
+   - The script will show storage types (Directory, LVM, ZFS) for each option
+
+2. **Wait for completion**:
+   - The script downloads cloud images (this may take a while)
+   - Creates/updates each template
+   - Verifies disk attachment before converting to template
+
+**Example Output:**
+```
+==========================================
+  Proxmox VM Template Setup Script
+==========================================
+
+[INFO] Checking prerequisites...
+[SUCCESS] All prerequisites met
+[INFO] Using node: main
+[INFO] Detecting available storage pools on node: main
+[INFO] Available storage pools:
+
+  [1] local (Directory (files))
+  [2] local-lvm (LVM (block device))
+  [3] local-zfs (ZFS (block device))
+
+[INFO] Auto-detected storage: local-lvm (type: lvm)
+Use detected storage? [Y/n]: Y
+```
+
+**Manual Setup (Alternative)**
+
+If you prefer to set up templates manually, see the sections below for step-by-step instructions for each operating system.
 
 #### Ubuntu 22.04 LTS Template
 
@@ -488,6 +545,15 @@ rm AlmaLinux-9-GenericCloud-Base-latest.x86_64.qcow2
 - Custom storage pools
 
 **VM IDs:** The examples use VM IDs 9000-9005. You can use any available VM IDs, but ensure they don't conflict with your `PROXMOX_VM_ID_START` range.
+
+**Storage Type Detection:**
+
+The setup script automatically detects storage type, but if setting up manually, note the differences:
+
+- **Directory storage (`local`)**: Disk path format is `local:9000/vm-9000-disk-0.qcow2` (includes vmID subdirectory and `.qcow2` extension)
+- **LVM/ZFS storage (`local-lvm`, `local-zfs`)**: Disk path format is `storage:vm-9000-disk-0` (no vmID subdirectory, no extension)
+
+The manual setup scripts below handle this automatically based on the `$STORAGE` variable.
 
 **Verification:** After creating templates, verify they appear in Proxmox:
 
