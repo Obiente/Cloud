@@ -85,13 +85,21 @@ get_available_storages() {
     print_info "Detecting available storage pools on node: $node_name" >&2
     
     # Get storage pools that support images
-    # pvesm status format: name type status content avail used
-    # Filter for storages where content column contains "images"
-    local storages=$(pvesm status 2>/dev/null | awk 'NR>1 && ($4 ~ /images/ || $5 ~ /images/) {print $1}' | sed 's/^[ \t]*//;s/[ \t]*$//' | awk 'NF > 0' || echo "")
+    # pvesm status format varies, but typically: name type status content avail used
+    # Try to find storages where any column contains "images"
+    local storages=$(pvesm status 2>/dev/null | awk 'NR>1 {
+        for(i=1; i<=NF; i++) {
+            if ($i ~ /images/) {
+                print $1
+                next
+            }
+        }
+    }' | sed 's/^[ \t]*//;s/[ \t]*$//' | awk 'NF > 0' || echo "")
     
     if [ -z "$storages" ]; then
-        print_warning "Could not find storages with images support. Listing all storages..." >&2
-        # Get all storages (skip header line)
+        # Fallback: Get all storages (skip header line)
+        # Most storages support images by default, so list all
+        print_info "Listing all available storage pools (most support images by default)..." >&2
         storages=$(pvesm status 2>/dev/null | awk 'NR>1 {print $1}' | sed 's/^[ \t]*//;s/[ \t]*$//' | awk 'NF > 0' || echo "")
     fi
     
@@ -203,7 +211,15 @@ prompt_storage() {
     if [ -n "$detected_storage" ]; then
         print_info "Auto-detected storage: $detected_storage (type: $detected_type)" >&2
         echo -n "Use detected storage? [Y/n]: " >&2
-        read -r use_detected
+        # Read from terminal if available, otherwise stdin
+        if [ -t 0 ]; then
+            read -r use_detected
+        elif [ -c /dev/tty ]; then
+            read -r use_detected < /dev/tty
+        else
+            # Fallback: try stdin anyway (might work in some environments)
+            read -r use_detected || use_detected="Y"
+        fi
         use_detected=${use_detected:-Y}
         
         if [[ "$use_detected" =~ ^[Yy]$ ]]; then
@@ -214,7 +230,15 @@ prompt_storage() {
     fi
     
     echo -n "Select storage pool [1-$((index-1))]: " >&2
-    read -r selection
+    # Read from terminal if available, otherwise stdin
+    if [ -t 0 ]; then
+        read -r selection
+    elif [ -c /dev/tty ]; then
+        read -r selection < /dev/tty
+    else
+        # Fallback: try stdin anyway (might work in some environments)
+        read -r selection || selection=""
+    fi
     
     if ! [[ "$selection" =~ ^[0-9]+$ ]] || [ "$selection" -lt 1 ] || [ "$selection" -gt $((index-1)) ]; then
         print_error "Invalid selection" >&2
@@ -268,7 +292,15 @@ create_or_update_template() {
             exists=true
             print_warning "Template '$template_name' already exists (VMID: $existing_vmid)"
             echo -n "Update existing template? [Y/n]: "
-            read -r update
+            # Read from terminal if available, otherwise stdin
+            if [ -t 0 ]; then
+                read -r update
+            elif [ -c /dev/tty ]; then
+                read -r update < /dev/tty
+            else
+                # Fallback: try stdin anyway (might work in some environments)
+                read -r update || update="Y"
+            fi
             update=${update:-Y}
             
             if [[ ! "$update" =~ ^[Yy]$ ]]; then
@@ -387,7 +419,15 @@ main() {
     done
     echo ""
     echo -n "Continue? [Y/n]: "
-    read -r confirm
+    # Read from terminal if available, otherwise stdin
+    if [ -t 0 ]; then
+        read -r confirm
+    elif [ -c /dev/tty ]; then
+        read -r confirm < /dev/tty
+    else
+        # Fallback: try stdin anyway (might work in some environments)
+        read -r confirm || confirm="Y"
+    fi
     confirm=${confirm:-Y}
     
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
