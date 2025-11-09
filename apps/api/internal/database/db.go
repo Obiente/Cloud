@@ -145,8 +145,17 @@ func InitDatabase() error {
 		&OrgQuota{},
 		&MonthlyCreditGrant{},
 		&StrayContainer{},
+		&VPSInstance{},
+		&VPSSizeCatalog{},
+		&VPSRegionCatalog{},
 	); err != nil {
 		return fmt.Errorf("failed to auto-migrate: %w", err)
+	}
+
+	// Initialize VPS catalog with default sizes and regions
+	if err := InitVPSCatalog(); err != nil {
+		logger.Warn("Failed to initialize VPS catalog: %v", err)
+		// Non-fatal - catalog can be initialized later
 	}
 
 	logger.Info("Database schema migrated")

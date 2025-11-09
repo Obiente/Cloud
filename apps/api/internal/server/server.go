@@ -17,6 +17,7 @@ import (
 	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
 	superadminv1connect "api/gen/proto/obiente/cloud/superadmin/v1/superadminv1connect"
 	supportv1connect "api/gen/proto/obiente/cloud/support/v1/supportv1connect"
+	vpsv1connect "api/gen/proto/obiente/cloud/vps/v1/vpsv1connect"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/dnsdelegation"
@@ -34,6 +35,7 @@ import (
 	orgsvc "api/internal/services/organizations"
 	superadminsvc "api/internal/services/superadmin"
 	supportsvc "api/internal/services/support"
+	vpssvc "api/internal/services/vps"
 	"api/internal/stripe"
 
 	"connectrpc.com/connect"
@@ -413,6 +415,32 @@ func registerServices(mux *http.ServeMux) *deploymentsvc.Service {
 
 	// WebSocket terminal endpoint for game servers (bypasses Connect RPC for direct access)
 	mux.HandleFunc("/gameservers/terminal/ws", gameServerService.HandleTerminalWebSocket)
+
+	// VPS service with auth
+	vpsManager, err := orchestrator.NewVPSManager()
+	if err != nil {
+		log.Printf("[Server] ⚠️  Warning: Failed to create VPS manager: %v", err)
+		log.Printf("[Server] ⚠️  VPS features will not work until Proxmox is configured")
+		vpsManager = nil
+	}
+	qcVPS := quota.NewChecker()
+	vpsService := vpssvc.NewService(vpsManager, qcVPS)
+	vpsPath, vpsHandler := vpsv1connect.NewVPSServiceHandler(
+		vpsService,
+		connect.WithInterceptors(auditInterceptor, authInterceptor),
+	)
+	mux.Handle(vpsPath, vpsHandler)
+
+	// WebSocket terminal endpoint for VPS (bypasses Connect RPC for direct access)
+	// Route pattern: /vps/{vps_id}/terminal/ws
+	mux.HandleFunc("/vps/", func(w http.ResponseWriter, r *http.Request) {
+		// Check if this is a terminal WebSocket request
+		if strings.HasSuffix(r.URL.Path, "/terminal/ws") {
+			vpsService.HandleVPSTerminalWebSocket(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
 
 	// Support service with auth
 	supportService := supportsvc.NewService(database.DB)

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	commonv1 "api/gen/proto/obiente/cloud/common/v1"
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
-	organizationsv1 "api/gen/proto/obiente/cloud/organizations/v1"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/quota"
@@ -90,7 +90,7 @@ func (s *Service) ListDeployments(ctx context.Context, req *connect.Request[depl
 	// Create response with pagination
 	res := connect.NewResponse(&deploymentsv1.ListDeploymentsResponse{
 		Deployments: items,
-		Pagination: &organizationsv1.Pagination{
+		Pagination: &commonv1.Pagination{
 			Page:       1,
 			PerPage:    int32(len(items)),
 			Total:      int32(total),

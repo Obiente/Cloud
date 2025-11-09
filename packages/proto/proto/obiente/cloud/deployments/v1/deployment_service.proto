@@ -235,7 +235,7 @@ message ListDeploymentsRequest {
 
 message ListDeploymentsResponse {
   repeated Deployment deployments = 1;
-  obiente.cloud.organizations.v1.Pagination pagination = 2;
+  obiente.cloud.common.v1.Pagination pagination = 2;
 }
 
 message CreateDeploymentRequest {

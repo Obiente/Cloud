@@ -7,8 +7,8 @@
 package deploymentsv1
 
 import (
-	v11 "api/gen/proto/obiente/cloud/common/v1"
-	v1 "api/gen/proto/obiente/cloud/organizations/v1"
+	v1 "api/gen/proto/obiente/cloud/common/v1"
+	_ "api/gen/proto/obiente/cloud/organizations/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -1435,7 +1435,7 @@ type DeploymentLogLine struct {
 	Line          string                 `protobuf:"bytes,2,opt,name=line,proto3" json:"line,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Stderr        bool                   `protobuf:"varint,4,opt,name=stderr,proto3" json:"stderr,omitempty"`                                                           // Deprecated: Use log_level instead. Kept for backward compatibility.
-	LogLevel      v11.LogLevel           `protobuf:"varint,5,opt,name=log_level,json=logLevel,proto3,enum=obiente.cloud.common.v1.LogLevel" json:"log_level,omitempty"` // Log level (INFO, WARN, ERROR, DEBUG, TRACE)
+	LogLevel      v1.LogLevel            `protobuf:"varint,5,opt,name=log_level,json=logLevel,proto3,enum=obiente.cloud.common.v1.LogLevel" json:"log_level,omitempty"` // Log level (INFO, WARN, ERROR, DEBUG, TRACE)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1498,11 +1498,11 @@ func (x *DeploymentLogLine) GetStderr() bool {
 	return false
 }
 
-func (x *DeploymentLogLine) GetLogLevel() v11.LogLevel {
+func (x *DeploymentLogLine) GetLogLevel() v1.LogLevel {
 	if x != nil {
 		return x.LogLevel
 	}
-	return v11.LogLevel(0)
+	return v1.LogLevel(0)
 }
 
 type StartDeploymentRequest struct {
@@ -8209,11 +8209,11 @@ const file_obiente_cloud_deployments_v1_deployment_service_proto_rawDesc = "" +
 	"\x06status\x18\x02 \x01(\x0e2..obiente.cloud.deployments.v1.DeploymentStatusH\x00R\x06status\x88\x01\x01\x12\x12\n" +
 	"\x04page\x18\x03 \x01(\x05R\x04page\x12\x19\n" +
 	"\bper_page\x18\x04 \x01(\x05R\aperPageB\t\n" +
-	"\a_status\"\xb1\x01\n" +
+	"\a_status\"\xaa\x01\n" +
 	"\x17ListDeploymentsResponse\x12J\n" +
-	"\vdeployments\x18\x01 \x03(\v2(.obiente.cloud.deployments.v1.DeploymentR\vdeployments\x12J\n" +
+	"\vdeployments\x18\x01 \x03(\v2(.obiente.cloud.deployments.v1.DeploymentR\vdeployments\x12C\n" +
 	"\n" +
-	"pagination\x18\x02 \x01(\v2*.obiente.cloud.organizations.v1.PaginationR\n" +
+	"pagination\x18\x02 \x01(\v2#.obiente.cloud.common.v1.PaginationR\n" +
 	"pagination\"\xbb\x01\n" +
 	"\x17CreateDeploymentRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x12\n" +
@@ -9236,14 +9236,14 @@ var file_obiente_cloud_deployments_v1_deployment_service_proto_goTypes = []any{
 	(*DeleteBuildResponse)(nil),                     // 117: obiente.cloud.deployments.v1.DeleteBuildResponse
 	(*Build)(nil),                                   // 118: obiente.cloud.deployments.v1.Build
 	nil,                                             // 119: obiente.cloud.deployments.v1.Deployment.EnvVarsEntry
-	(*v1.Pagination)(nil),                           // 120: obiente.cloud.organizations.v1.Pagination
+	(*v1.Pagination)(nil),                           // 120: obiente.cloud.common.v1.Pagination
 	(*timestamppb.Timestamp)(nil),                   // 121: google.protobuf.Timestamp
-	(v11.LogLevel)(0),                               // 122: obiente.cloud.common.v1.LogLevel
+	(v1.LogLevel)(0),                                // 122: obiente.cloud.common.v1.LogLevel
 }
 var file_obiente_cloud_deployments_v1_deployment_service_proto_depIdxs = []int32{
 	3,   // 0: obiente.cloud.deployments.v1.ListDeploymentsRequest.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
 	97,  // 1: obiente.cloud.deployments.v1.ListDeploymentsResponse.deployments:type_name -> obiente.cloud.deployments.v1.Deployment
-	120, // 2: obiente.cloud.deployments.v1.ListDeploymentsResponse.pagination:type_name -> obiente.cloud.organizations.v1.Pagination
+	120, // 2: obiente.cloud.deployments.v1.ListDeploymentsResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
 	2,   // 3: obiente.cloud.deployments.v1.CreateDeploymentRequest.environment:type_name -> obiente.cloud.deployments.v1.Environment
 	97,  // 4: obiente.cloud.deployments.v1.CreateDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment
 	97,  // 5: obiente.cloud.deployments.v1.GetDeploymentResponse.deployment:type_name -> obiente.cloud.deployments.v1.Deployment

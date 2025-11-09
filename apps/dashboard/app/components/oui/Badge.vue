@@ -237,7 +237,12 @@ const variantStyleMap: Record<BadgeVariant, Record<string, string>> = {
 };
 
 const variantStyles = computed(() => {
-  return variantStyleMap[normalizedVariant.value] ?? variantStyleMap.secondary;
+  const styles = variantStyleMap[normalizedVariant.value] ?? variantStyleMap.secondary;
+  // Add transition to CSS variables for smooth color changes
+  return {
+    ...styles,
+    transition: 'background-color 0.3s ease-in-out, border-color 0.3s ease-in-out, color 0.3s ease-in-out',
+  };
 });
 
 defineOptions({

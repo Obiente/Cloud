@@ -9,6 +9,7 @@ import (
 	"time"
 
 	authv1 "api/gen/proto/obiente/cloud/auth/v1"
+	commonv1 "api/gen/proto/obiente/cloud/common/v1"
 	organizationsv1 "api/gen/proto/obiente/cloud/organizations/v1"
 	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
 	"api/internal/auth"
@@ -123,7 +124,7 @@ func (s *Service) ListOrganizations(ctx context.Context, req *connect.Request[or
 
 	res := connect.NewResponse(&organizationsv1.ListOrganizationsResponse{
 		Organizations: orgs,
-		Pagination:    &organizationsv1.Pagination{Page: 1, PerPage: int32(len(orgs)), Total: int32(len(orgs)), TotalPages: 1},
+		Pagination:    &commonv1.Pagination{Page: 1, PerPage: int32(len(orgs)), Total: int32(len(orgs)), TotalPages: 1},
 	})
 	return res, nil
 }
@@ -233,7 +234,7 @@ func (s *Service) ListMembers(ctx context.Context, req *connect.Request[organiza
 
 	res := connect.NewResponse(&organizationsv1.ListMembersResponse{
 		Members: list,
-		Pagination: &organizationsv1.Pagination{
+		Pagination: &commonv1.Pagination{
 			Page:       1,
 			PerPage:    int32(len(list)),
 			Total:      int32(len(list)),
@@ -400,7 +401,7 @@ func (s *Service) ListMyInvites(ctx context.Context, req *connect.Request[organi
 	if user.Email == "" {
 		return connect.NewResponse(&organizationsv1.ListMyInvitesResponse{
 			Invites:    []*organizationsv1.PendingInvite{},
-			Pagination: &organizationsv1.Pagination{Page: 1, PerPage: 0, Total: 0, TotalPages: 0},
+			Pagination: &commonv1.Pagination{Page: 1, PerPage: 0, Total: 0, TotalPages: 0},
 		}), nil
 	}
 
@@ -432,7 +433,7 @@ func (s *Service) ListMyInvites(ctx context.Context, req *connect.Request[organi
 
 	return connect.NewResponse(&organizationsv1.ListMyInvitesResponse{
 		Invites: invites,
-		Pagination: &organizationsv1.Pagination{
+		Pagination: &commonv1.Pagination{
 			Page:       1,
 			PerPage:    int32(len(invites)),
 			Total:      int32(len(invites)),
@@ -1707,7 +1708,7 @@ func (s *Service) GetCreditLog(ctx context.Context, req *connect.Request[organiz
 
 	return connect.NewResponse(&organizationsv1.GetCreditLogResponse{
 		Transactions: protoTransactions,
-		Pagination: &organizationsv1.Pagination{
+		Pagination: &commonv1.Pagination{
 			Page:       int32(page),
 			PerPage:    int32(perPage),
 			Total:      int32(total),

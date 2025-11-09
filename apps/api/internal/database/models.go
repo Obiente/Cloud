@@ -80,6 +80,7 @@ type OrganizationPlan struct {
 	CPUCores           int    `json:"cpu_cores"`
 	MemoryBytes        int64  `json:"memory_bytes"`
 	DeploymentsMax     int    `json:"deployments_max"`
+	MaxVpsInstances    int    `gorm:"column:max_vps_instances;default:0" json:"max_vps_instances"` // Maximum VPS instances (0 = unlimited)
 	BandwidthBytesMonth int64 `json:"bandwidth_bytes_month"`
 	StorageBytes       int64  `json:"storage_bytes"`
 	MinimumPaymentCents int64 `gorm:"column:minimum_payment_cents;default:0" json:"minimum_payment_cents"` // Minimum payment in cents to automatically upgrade to this plan
@@ -96,6 +97,7 @@ type OrgQuota struct {
 	CPUCoresOverride   *int   `json:"cpu_cores_override"`
 	MemoryBytesOverride *int64 `json:"memory_bytes_override"`
 	DeploymentsMaxOverride *int `json:"deployments_max_override"`
+	MaxVpsInstancesOverride *int `gorm:"column:max_vps_instances_override" json:"max_vps_instances_override"` // Override for max VPS instances (0 = unlimited)
 	BandwidthBytesMonthOverride *int64 `json:"bandwidth_bytes_month_override"`
 	StorageBytesOverride *int64 `json:"storage_bytes_override"`
 }
@@ -172,6 +174,7 @@ type Organization struct {
     Domain    *string   `json:"domain"`
     Credits   int64     `gorm:"column:credits;default:0" json:"credits"` // Credits in cents ($0.01 units)
     TotalPaidCents int64 `gorm:"column:total_paid_cents;default:0" json:"total_paid_cents"` // Total amount paid in cents (for safety check/auto-upgrade)
+    AllowInterVMCommunication bool `gorm:"column:allow_inter_vm_communication;default:false" json:"allow_inter_vm_communication"` // Allow VMs in this organization to communicate with each other
     CreatedAt time.Time `json:"created_at"`
 }
 
@@ -393,6 +396,109 @@ type GameServerUsageHourly struct {
 }
 
 func (GameServerUsageHourly) TableName() string { return "game_server_usage_hourly" }
+
+// VPSInstance represents a VPS (Virtual Private Server) instance in the database
+type VPSInstance struct {
+	ID             string    `gorm:"primaryKey;column:id" json:"id"`
+	Name           string    `gorm:"column:name" json:"name"`
+	Description    *string   `gorm:"column:description" json:"description"`
+	Status         int32     `gorm:"column:status;default:0" json:"status"` // VPSStatus enum
+	Region         string    `gorm:"column:region" json:"region"`
+	Image          int32     `gorm:"column:image" json:"image"` // VPSImage enum
+	ImageID        *string   `gorm:"column:image_id" json:"image_id"` // Custom image ID
+	Size           string    `gorm:"column:size" json:"size"` // Provider size ID (e.g., "cx11", "s-1vcpu-1gb")
+	
+	// Resource specifications
+	CPUCores       int32     `gorm:"column:cpu_cores" json:"cpu_cores"`
+	MemoryBytes    int64     `gorm:"column:memory_bytes" json:"memory_bytes"`
+	DiskBytes      int64     `gorm:"column:disk_bytes" json:"disk_bytes"`
+	
+	// Network information (stored as JSON arrays)
+	IPv4Addresses  string    `gorm:"column:ipv4_addresses;type:jsonb" json:"ipv4_addresses"`
+	IPv6Addresses  string    `gorm:"column:ipv6_addresses;type:jsonb" json:"ipv6_addresses"`
+	
+	// Infrastructure information
+	InstanceID *string `gorm:"column:instance_id;index" json:"instance_id"` // Internal instance ID
+	NodeID     *string `gorm:"column:node_id;index" json:"node_id"`          // Docker Swarm node ID where VPS is running
+	
+	// SSH access
+	SSHKeyID       *string   `gorm:"column:ssh_key_id" json:"ssh_key_id"`
+	
+	// Metadata (stored as JSON object)
+	Metadata       string    `gorm:"column:metadata;type:jsonb" json:"metadata"`
+	
+	// Timestamps
+	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt      time.Time `gorm:"column:updated_at" json:"updated_at"`
+	LastStartedAt  *time.Time `gorm:"column:last_started_at" json:"last_started_at"`
+	DeletedAt      *time.Time `gorm:"column:deleted_at;index" json:"deleted_at"` // Soft delete
+	
+	// Organization and ownership
+	OrganizationID string    `gorm:"column:organization_id;index" json:"organization_id"`
+	CreatedBy      string    `gorm:"column:created_by;index" json:"created_by"`
+}
+
+func (VPSInstance) TableName() string {
+	return "vps_instances"
+}
+
+// BeforeCreate hook to set timestamps
+func (vps *VPSInstance) BeforeCreate(tx *gorm.DB) error {
+	now := time.Now()
+	if vps.CreatedAt.IsZero() {
+		vps.CreatedAt = now
+	}
+	if vps.UpdatedAt.IsZero() {
+		vps.UpdatedAt = now
+	}
+	return nil
+}
+
+// BeforeUpdate hook to set updated timestamp
+func (vps *VPSInstance) BeforeUpdate(tx *gorm.DB) error {
+	vps.UpdatedAt = time.Now()
+	return nil
+}
+
+// VPSUsageHourly stores hourly aggregated metrics for VPS instances
+type VPSUsageHourly struct {
+	ID                  uint      `gorm:"primaryKey" json:"id"`
+	VPSInstanceID       string    `gorm:"index;not null" json:"vps_instance_id"`
+	OrganizationID      string    `gorm:"index;not null" json:"organization_id"` // Denormalized for easier querying
+	Hour                time.Time `gorm:"index" json:"hour"`                      // Truncated to hour
+	AvgCPUUsage         float64   `json:"avg_cpu_usage"`                          // Average CPU usage percentage
+	AvgMemoryUsage      float64   `json:"avg_memory_usage"`                       // Average memory bytes per second for the hour (byte-seconds / 3600)
+	BandwidthRxBytes    int64     `json:"bandwidth_rx_bytes"`                    // Sum of incremental values
+	BandwidthTxBytes    int64     `json:"bandwidth_tx_bytes"`                    // Sum of incremental values
+	DiskReadBytes       int64     `json:"disk_read_bytes"`                       // Sum of incremental values
+	DiskWriteBytes      int64     `json:"disk_write_bytes"`                       // Sum of incremental values
+	UptimeSeconds       int64     `json:"uptime_seconds"`                         // Total uptime in seconds for the hour
+	SampleCount         int64     `json:"sample_count"`                           // Number of raw metrics aggregated
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+}
+
+func (VPSUsageHourly) TableName() string { return "vps_usage_hourly" }
+
+// VPSMetrics stores historical metrics for VPS instances
+type VPSMetrics struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	VPSInstanceID string    `gorm:"index;not null" json:"vps_instance_id"`
+	InstanceID    string    `gorm:"index" json:"instance_id"` // Internal instance ID
+	NodeID        string    `gorm:"index" json:"node_id"`      // Docker Swarm node ID
+	CPUUsage      float64   `json:"cpu_usage"`              // CPU usage percentage (0-100)
+	MemoryUsed    int64     `json:"memory_used"`            // Memory used in bytes
+	MemoryTotal   int64     `json:"memory_total"`           // Total memory in bytes
+	DiskUsed      int64     `json:"disk_used"`              // Disk used in bytes
+	DiskTotal     int64     `json:"disk_total"`              // Total disk in bytes
+	NetworkRxBytes int64    `json:"network_rx_bytes"`       // Network received bytes
+	NetworkTxBytes int64    `json:"network_tx_bytes"`       // Network transmitted bytes
+	DiskReadIOPS  float64   `json:"disk_read_iops"`        // Disk read IOPS
+	DiskWriteIOPS float64   `json:"disk_write_iops"`        // Disk write IOPS
+	Timestamp      time.Time `gorm:"index" json:"timestamp"`
+}
+
+func (VPSMetrics) TableName() string { return "vps_metrics" }
 
 // GameServerMetrics stores historical metrics for game servers
 type GameServerMetrics struct {

@@ -2,14 +2,154 @@
 // @generated from file obiente/cloud/common/v1/common.proto (package obiente.cloud.common.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenEnum, GenFile } from "@bufbuild/protobuf/codegenv2";
-import { enumDesc, fileDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
+import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file obiente/cloud/common/v1/common.proto.
  */
 export const file_obiente_cloud_common_v1_common: GenFile = /*@__PURE__*/
-  fileDesc("CiRvYmllbnRlL2Nsb3VkL2NvbW1vbi92MS9jb21tb24ucHJvdG8SF29iaWVudGUuY2xvdWQuY29tbW9uLnYxKowBCghMb2dMZXZlbBIZChVMT0dfTEVWRUxfVU5TUEVDSUZJRUQQABITCg9MT0dfTEVWRUxfVFJBQ0UQARITCg9MT0dfTEVWRUxfREVCVUcQAhISCg5MT0dfTEVWRUxfSU5GTxADEhIKDkxPR19MRVZFTF9XQVJOEAQSEwoPTE9HX0xFVkVMX0VSUk9SEAVCMFouYXBpL2dlbi9wcm90by9vYmllbnRlL2Nsb3VkL2NvbW1vbi92MTtjb21tb252MWIGcHJvdG8z");
+  fileDesc("CiRvYmllbnRlL2Nsb3VkL2NvbW1vbi92MS9jb21tb24ucHJvdG8SF29iaWVudGUuY2xvdWQuY29tbW9uLnYxIlAKClBhZ2luYXRpb24SDAoEcGFnZRgBIAEoBRIQCghwZXJfcGFnZRgCIAEoBRINCgV0b3RhbBgDIAEoBRITCgt0b3RhbF9wYWdlcxgEIAEoBSLzAgoHVlBTU2l6ZRIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEhgKC2Rlc2NyaXB0aW9uGAMgASgJSACIAQESEQoJY3B1X2NvcmVzGAQgASgFEhQKDG1lbW9yeV9ieXRlcxgFIAEoAxISCgpkaXNrX2J5dGVzGAYgASgDEh0KFWJhbmR3aWR0aF9ieXRlc19tb250aBgHIAEoAxIdChVwcmljZV9jZW50c19wZXJfbW9udGgYCCABKAMSEQoJYXZhaWxhYmxlGAkgASgIEg4KBnJlZ2lvbhgKIAEoCRIzCgpjcmVhdGVkX2F0GAsgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgBiAEBEjMKCnVwZGF0ZWRfYXQYDCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAKIAQFCDgoMX2Rlc2NyaXB0aW9uQg0KC19jcmVhdGVkX2F0Qg0KC191cGRhdGVkX2F0KowBCghMb2dMZXZlbBIZChVMT0dfTEVWRUxfVU5TUEVDSUZJRUQQABITCg9MT0dfTEVWRUxfVFJBQ0UQARITCg9MT0dfTEVWRUxfREVCVUcQAhISCg5MT0dfTEVWRUxfSU5GTxADEhIKDkxPR19MRVZFTF9XQVJOEAQSEwoPTE9HX0xFVkVMX0VSUk9SEAVCMFouYXBpL2dlbi9wcm90by9vYmllbnRlL2Nsb3VkL2NvbW1vbi92MTtjb21tb252MWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+
+/**
+ * Pagination represents pagination information for list responses
+ *
+ * @generated from message obiente.cloud.common.v1.Pagination
+ */
+export type Pagination = Message<"obiente.cloud.common.v1.Pagination"> & {
+  /**
+   * Current page number (1-indexed)
+   *
+   * @generated from field: int32 page = 1;
+   */
+  page: number;
+
+  /**
+   * Number of items per page
+   *
+   * @generated from field: int32 per_page = 2;
+   */
+  perPage: number;
+
+  /**
+   * Total number of items
+   *
+   * @generated from field: int32 total = 3;
+   */
+  total: number;
+
+  /**
+   * Total number of pages
+   *
+   * @generated from field: int32 total_pages = 4;
+   */
+  totalPages: number;
+};
+
+/**
+ * Describes the message obiente.cloud.common.v1.Pagination.
+ * Use `create(PaginationSchema)` to create a new message.
+ */
+export const PaginationSchema: GenMessage<Pagination> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_common_v1_common, 0);
+
+/**
+ * VPSSize represents a VPS instance size configuration
+ * This is a shared type used across multiple services
+ *
+ * @generated from message obiente.cloud.common.v1.VPSSize
+ */
+export type VPSSize = Message<"obiente.cloud.common.v1.VPSSize"> & {
+  /**
+   * Size ID (e.g., "small", "medium", "cx11")
+   *
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * Human-readable name
+   *
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * Optional description
+   *
+   * @generated from field: optional string description = 3;
+   */
+  description?: string;
+
+  /**
+   * Number of CPU cores
+   *
+   * @generated from field: int32 cpu_cores = 4;
+   */
+  cpuCores: number;
+
+  /**
+   * Memory in bytes
+   *
+   * @generated from field: int64 memory_bytes = 5;
+   */
+  memoryBytes: bigint;
+
+  /**
+   * Disk space in bytes
+   *
+   * @generated from field: int64 disk_bytes = 6;
+   */
+  diskBytes: bigint;
+
+  /**
+   * Monthly bandwidth limit (0 = unlimited)
+   *
+   * @generated from field: int64 bandwidth_bytes_month = 7;
+   */
+  bandwidthBytesMonth: bigint;
+
+  /**
+   * Monthly price in cents
+   *
+   * @generated from field: int64 price_cents_per_month = 8;
+   */
+  priceCentsPerMonth: bigint;
+
+  /**
+   * Whether this size is available
+   *
+   * @generated from field: bool available = 9;
+   */
+  available: boolean;
+
+  /**
+   * Region (empty = all regions)
+   *
+   * @generated from field: string region = 10;
+   */
+  region: string;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp created_at = 11;
+   */
+  createdAt?: Timestamp;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp updated_at = 12;
+   */
+  updatedAt?: Timestamp;
+};
+
+/**
+ * Describes the message obiente.cloud.common.v1.VPSSize.
+ * Use `create(VPSSizeSchema)` to create a new message.
+ */
+export const VPSSizeSchema: GenMessage<VPSSize> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_common_v1_common, 1);
 
 /**
  * LogLevel represents the severity/type of a log line

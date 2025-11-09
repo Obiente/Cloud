@@ -4,6 +4,8 @@ package obiente.cloud.common.v1;
 
 option go_package = "api/gen/proto/obiente/cloud/common/v1;commonv1";
 
+import "google/protobuf/timestamp.proto";
+
 // LogLevel represents the severity/type of a log line
 enum LogLevel {
   LOG_LEVEL_UNSPECIFIED = 0;
@@ -12,5 +14,30 @@ enum LogLevel {
   LOG_LEVEL_INFO = 3;     // Informational messages (default)
   LOG_LEVEL_WARN = 4;     // Warning messages
   LOG_LEVEL_ERROR = 5;    // Error messages
+}
+
+// Pagination represents pagination information for list responses
+message Pagination {
+  int32 page = 1;         // Current page number (1-indexed)
+  int32 per_page = 2;     // Number of items per page
+  int32 total = 3;        // Total number of items
+  int32 total_pages = 4;  // Total number of pages
+}
+
+// VPSSize represents a VPS instance size configuration
+// This is a shared type used across multiple services
+message VPSSize {
+  string id = 1;                    // Size ID (e.g., "small", "medium", "cx11")
+  string name = 2;                  // Human-readable name
+  optional string description = 3;  // Optional description
+  int32 cpu_cores = 4;              // Number of CPU cores
+  int64 memory_bytes = 5;           // Memory in bytes
+  int64 disk_bytes = 6;             // Disk space in bytes
+  int64 bandwidth_bytes_month = 7;  // Monthly bandwidth limit (0 = unlimited)
+  int64 price_cents_per_month = 8;  // Monthly price in cents
+  bool available = 9;               // Whether this size is available
+  string region = 10;               // Region (empty = all regions)
+  optional google.protobuf.Timestamp created_at = 11;
+  optional google.protobuf.Timestamp updated_at = 12;
 }
 

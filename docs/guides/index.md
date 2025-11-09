@@ -18,6 +18,11 @@ Step-by-step guides for common tasks with Obiente Cloud.
 
 - [Troubleshooting Guide](troubleshooting.md) - Common issues and solutions
 
+## VPS Provisioning
+
+- [VPS Provisioning Guide](vps-provisioning.md) - Provision and manage VPS instances
+- [VPS Configuration](vps-configuration.md) - Advanced VPS configuration options
+
 ## Additional Guides
 
 More guides coming soon:

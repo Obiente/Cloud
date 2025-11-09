@@ -13,9 +13,11 @@ import (
 
 	authv1 "api/gen/proto/obiente/cloud/auth/v1"
 	billingv1 "api/gen/proto/obiente/cloud/billing/v1"
+	commonv1 "api/gen/proto/obiente/cloud/common/v1"
 	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	superadminv1 "api/gen/proto/obiente/cloud/superadmin/v1"
 	superadminv1connect "api/gen/proto/obiente/cloud/superadmin/v1/superadminv1connect"
+	vpsv1 "api/gen/proto/obiente/cloud/vps/v1"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/logger"
@@ -2482,7 +2484,7 @@ func (s *Service) ListUsers(ctx context.Context, req *connect.Request[superadmin
 
 	return connect.NewResponse(&superadminv1.ListUsersResponse{
 		Users: users,
-		Pagination: &superadminv1.SuperadminPagination{
+		Pagination: &commonv1.Pagination{
 			Page:       int32(page),
 			PerPage:    int32(perPage),
 			Total:      int32(total),
@@ -2570,5 +2572,417 @@ func (s *Service) GetUser(ctx context.Context, req *connect.Request[superadminv1
 	return connect.NewResponse(&superadminv1.GetUserResponse{
 		User:          userInfo,
 		Organizations: orgs,
+	}), nil
+}
+
+// ListAllVPS lists all VPS instances across all organizations (superadmin only)
+func (s *Service) ListAllVPS(ctx context.Context, req *connect.Request[superadminv1.ListAllVPSRequest]) (*connect.Response[superadminv1.ListAllVPSResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	// Parse pagination
+	page := int(req.Msg.GetPage())
+	if page < 1 {
+		page = 1
+	}
+	perPage := int(req.Msg.GetPerPage())
+	if perPage < 1 {
+		perPage = 50
+	}
+	if perPage > 100 {
+		perPage = 100
+	}
+	offset := (page - 1) * perPage
+
+	// Build query
+	query := database.DB.Table("vps_instances v").
+		Select(`
+			v.*,
+			o.name as organization_name
+		`).
+		Joins("LEFT JOIN organizations o ON o.id = v.organization_id").
+		Where("v.deleted_at IS NULL")
+
+	// Apply filters
+	if orgID := req.Msg.GetOrganizationId(); orgID != "" {
+		query = query.Where("v.organization_id = ?", orgID)
+	}
+
+	if req.Msg.Status != nil {
+		status := req.Msg.GetStatus()
+		if status != vpsv1.VPSStatus_VPS_STATUS_UNSPECIFIED {
+			query = query.Where("v.status = ?", int32(status))
+		}
+	}
+
+	// Apply search filter
+	if search := strings.TrimSpace(req.Msg.GetSearch()); search != "" {
+		searchTerm := "%" + search + "%"
+		query = query.Where(
+			"v.name ILIKE ? OR v.id ILIKE ? OR v.organization_id ILIKE ? OR v.region ILIKE ? OR v.size ILIKE ? OR o.name ILIKE ?",
+			searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm,
+		)
+	}
+
+	// Get total count
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		logger.Error("[SuperAdmin] Failed to count VPS instances: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to count VPS instances: %w", err))
+	}
+
+	// Apply pagination and ordering
+	var vpsRows []struct {
+		database.VPSInstance
+		OrganizationName string `gorm:"column:organization_name"`
+	}
+
+	if err := query.Order("v.created_at DESC").Limit(perPage).Offset(offset).Find(&vpsRows).Error; err != nil {
+		logger.Error("[SuperAdmin] Failed to list VPS instances: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list VPS instances: %w", err))
+	}
+
+	// Convert to proto
+	vpsOverviews := make([]*superadminv1.VPSOverview, 0, len(vpsRows))
+	for _, row := range vpsRows {
+		// Convert database model to proto
+		vpsProto := convertVPSInstanceToProto(&row.VPSInstance)
+		vpsOverviews = append(vpsOverviews, &superadminv1.VPSOverview{
+			Vps:              vpsProto,
+			OrganizationName: row.OrganizationName,
+		})
+	}
+
+	// Calculate pagination
+	totalPages := int(math.Ceil(float64(totalCount) / float64(perPage)))
+
+	return connect.NewResponse(&superadminv1.ListAllVPSResponse{
+		VpsInstances: vpsOverviews,
+		Pagination: &commonv1.Pagination{
+			Page:       int32(page),
+			PerPage:    int32(perPage),
+			Total:      int32(totalCount),
+			TotalPages: int32(totalPages),
+		},
+	}), nil
+}
+
+// convertVPSInstanceToProto converts a database.VPSInstance to vpsv1.VPSInstance
+func convertVPSInstanceToProto(vps *database.VPSInstance) *vpsv1.VPSInstance {
+	protoVPS := &vpsv1.VPSInstance{
+		Id:             vps.ID,
+		Name:           vps.Name,
+		Description:    vps.Description,
+		Status:         vpsv1.VPSStatus(vps.Status),
+		Region:         vps.Region,
+		Image:          vpsv1.VPSImage(vps.Image),
+		ImageId:        vps.ImageID,
+		Size:           vps.Size,
+		CpuCores:       vps.CPUCores,
+		MemoryBytes:    vps.MemoryBytes,
+		DiskBytes:      vps.DiskBytes,
+		InstanceId:     vps.InstanceID,
+		NodeId:         vps.NodeID,
+		SshKeyId:       vps.SSHKeyID,
+		CreatedAt:      timestamppb.New(vps.CreatedAt),
+		UpdatedAt:      timestamppb.New(vps.UpdatedAt),
+		OrganizationId: vps.OrganizationID,
+		CreatedBy:      vps.CreatedBy,
+	}
+
+	if vps.LastStartedAt != nil {
+		protoVPS.LastStartedAt = timestamppb.New(*vps.LastStartedAt)
+	}
+	if vps.DeletedAt != nil {
+		protoVPS.DeletedAt = timestamppb.New(*vps.DeletedAt)
+	}
+
+	// Unmarshal JSON fields
+	if vps.IPv4Addresses != "" {
+		var ipv4s []string
+		if err := json.Unmarshal([]byte(vps.IPv4Addresses), &ipv4s); err == nil {
+			protoVPS.Ipv4Addresses = ipv4s
+		}
+	}
+	if vps.IPv6Addresses != "" {
+		var ipv6s []string
+		if err := json.Unmarshal([]byte(vps.IPv6Addresses), &ipv6s); err == nil {
+			protoVPS.Ipv6Addresses = ipv6s
+		}
+	}
+	if vps.Metadata != "" {
+		var metadata map[string]string
+		if err := json.Unmarshal([]byte(vps.Metadata), &metadata); err == nil {
+			protoVPS.Metadata = metadata
+		}
+	}
+
+	return protoVPS
+}
+
+// ListVPSSizes lists all VPS sizes in the catalog (superadmin only)
+func (s *Service) ListVPSSizes(ctx context.Context, req *connect.Request[superadminv1.ListVPSSizesRequest]) (*connect.Response[superadminv1.ListVPSSizesResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	region := req.Msg.GetRegion()
+	includeUnavailable := req.Msg.GetIncludeUnavailable()
+
+	sizes, err := database.ListAllVPSSizeCatalog(region, includeUnavailable)
+	if err != nil {
+		logger.Error("[SuperAdmin] Failed to list VPS sizes: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list VPS sizes: %w", err))
+	}
+
+	protoSizes := make([]*commonv1.VPSSize, 0, len(sizes))
+	for _, size := range sizes {
+		sizeProto := &commonv1.VPSSize{
+			Id:                  size.ID,
+			Name:                size.Name,
+			CpuCores:            size.CPUCores,
+			MemoryBytes:         size.MemoryBytes,
+			DiskBytes:           size.DiskBytes,
+			BandwidthBytesMonth: size.BandwidthBytesMonth,
+			PriceCentsPerMonth:  size.PriceCentsPerMonth,
+			Available:           size.Available,
+			Region:              size.Region,
+			CreatedAt:           timestamppb.New(size.CreatedAt),
+			UpdatedAt:           timestamppb.New(size.UpdatedAt),
+		}
+		if size.Description != "" {
+			sizeProto.Description = &size.Description
+		}
+		protoSizes = append(protoSizes, sizeProto)
+	}
+
+	return connect.NewResponse(&superadminv1.ListVPSSizesResponse{
+		Sizes: protoSizes,
+	}), nil
+}
+
+// CreateVPSSize creates a new VPS size in the catalog (superadmin only)
+func (s *Service) CreateVPSSize(ctx context.Context, req *connect.Request[superadminv1.CreateVPSSizeRequest]) (*connect.Response[superadminv1.CreateVPSSizeResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	// Validate required fields
+	if req.Msg.GetId() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("id is required"))
+	}
+	if req.Msg.GetName() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("name is required"))
+	}
+	if req.Msg.GetCpuCores() <= 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("cpu_cores must be greater than 0"))
+	}
+	if req.Msg.GetMemoryBytes() <= 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("memory_bytes must be greater than 0"))
+	}
+	if req.Msg.GetDiskBytes() <= 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("disk_bytes must be greater than 0"))
+	}
+
+	// Check if size already exists
+	var existing database.VPSSizeCatalog
+	if err := database.DB.Where("id = ?", req.Msg.GetId()).First(&existing).Error; err == nil {
+		return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("VPS size with id %s already exists", req.Msg.GetId()))
+	} else if err != gorm.ErrRecordNotFound {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to check existing size: %w", err))
+	}
+
+	// Create new size
+	size := &database.VPSSizeCatalog{
+		ID:                  req.Msg.GetId(),
+		Name:                req.Msg.GetName(),
+		Description:         req.Msg.GetDescription(),
+		CPUCores:            req.Msg.GetCpuCores(),
+		MemoryBytes:         req.Msg.GetMemoryBytes(),
+		DiskBytes:           req.Msg.GetDiskBytes(),
+		BandwidthBytesMonth: req.Msg.GetBandwidthBytesMonth(),
+		PriceCentsPerMonth:  req.Msg.GetPriceCentsPerMonth(),
+		Available:           req.Msg.GetAvailable(),
+		Region:              req.Msg.GetRegion(),
+	}
+
+	if err := database.CreateVPSSizeCatalog(size); err != nil {
+		logger.Error("[SuperAdmin] Failed to create VPS size: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS size: %w", err))
+	}
+
+	sizeProto := &commonv1.VPSSize{
+		Id:                  size.ID,
+		Name:                size.Name,
+		CpuCores:            size.CPUCores,
+		MemoryBytes:         size.MemoryBytes,
+		DiskBytes:           size.DiskBytes,
+		BandwidthBytesMonth: size.BandwidthBytesMonth,
+		PriceCentsPerMonth:  size.PriceCentsPerMonth,
+		Available:           size.Available,
+		Region:              size.Region,
+		CreatedAt:           timestamppb.New(size.CreatedAt),
+		UpdatedAt:           timestamppb.New(size.UpdatedAt),
+	}
+	if size.Description != "" {
+		sizeProto.Description = &size.Description
+	}
+	return connect.NewResponse(&superadminv1.CreateVPSSizeResponse{
+		Size: sizeProto,
+	}), nil
+}
+
+// UpdateVPSSize updates an existing VPS size in the catalog (superadmin only)
+func (s *Service) UpdateVPSSize(ctx context.Context, req *connect.Request[superadminv1.UpdateVPSSizeRequest]) (*connect.Response[superadminv1.UpdateVPSSizeResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	if req.Msg.GetId() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("id is required"))
+	}
+
+	// Check if size exists
+	var existing database.VPSSizeCatalog
+	if err := database.DB.Where("id = ?", req.Msg.GetId()).First(&existing).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS size with id %s not found", req.Msg.GetId()))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to find VPS size: %w", err))
+	}
+
+	// Build update map
+	updates := make(map[string]interface{})
+	if req.Msg.Name != nil {
+		updates["name"] = req.Msg.GetName()
+	}
+	if req.Msg.Description != nil {
+		updates["description"] = req.Msg.GetDescription()
+	}
+	if req.Msg.CpuCores != nil {
+		if req.Msg.GetCpuCores() <= 0 {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("cpu_cores must be greater than 0"))
+		}
+		updates["cpu_cores"] = req.Msg.GetCpuCores()
+	}
+	if req.Msg.MemoryBytes != nil {
+		if req.Msg.GetMemoryBytes() <= 0 {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("memory_bytes must be greater than 0"))
+		}
+		updates["memory_bytes"] = req.Msg.GetMemoryBytes()
+	}
+	if req.Msg.DiskBytes != nil {
+		if req.Msg.GetDiskBytes() <= 0 {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("disk_bytes must be greater than 0"))
+		}
+		updates["disk_bytes"] = req.Msg.GetDiskBytes()
+	}
+	if req.Msg.BandwidthBytesMonth != nil {
+		updates["bandwidth_bytes_month"] = req.Msg.GetBandwidthBytesMonth()
+	}
+	if req.Msg.PriceCentsPerMonth != nil {
+		updates["price_cents_per_month"] = req.Msg.GetPriceCentsPerMonth()
+	}
+	if req.Msg.Available != nil {
+		updates["available"] = req.Msg.GetAvailable()
+	}
+	if req.Msg.Region != nil {
+		updates["region"] = req.Msg.GetRegion()
+	}
+
+	if len(updates) == 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("no fields to update"))
+	}
+
+	// Update size
+	if err := database.UpdateVPSSizeCatalog(req.Msg.GetId(), updates); err != nil {
+		logger.Error("[SuperAdmin] Failed to update VPS size: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update VPS size: %w", err))
+	}
+
+	// Fetch updated size
+	var updated database.VPSSizeCatalog
+	if err := database.DB.Where("id = ?", req.Msg.GetId()).First(&updated).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to fetch updated size: %w", err))
+	}
+
+	sizeProto := &commonv1.VPSSize{
+		Id:                  updated.ID,
+		Name:                updated.Name,
+		CpuCores:            updated.CPUCores,
+		MemoryBytes:         updated.MemoryBytes,
+		DiskBytes:           updated.DiskBytes,
+		BandwidthBytesMonth: updated.BandwidthBytesMonth,
+		PriceCentsPerMonth:  updated.PriceCentsPerMonth,
+		Available:           updated.Available,
+		Region:              updated.Region,
+		CreatedAt:           timestamppb.New(updated.CreatedAt),
+		UpdatedAt:           timestamppb.New(updated.UpdatedAt),
+	}
+	if updated.Description != "" {
+		sizeProto.Description = &updated.Description
+	}
+	return connect.NewResponse(&superadminv1.UpdateVPSSizeResponse{
+		Size: sizeProto,
+	}), nil
+}
+
+// DeleteVPSSize deletes a VPS size from the catalog (superadmin only)
+func (s *Service) DeleteVPSSize(ctx context.Context, req *connect.Request[superadminv1.DeleteVPSSizeRequest]) (*connect.Response[superadminv1.DeleteVPSSizeResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	if req.Msg.GetId() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("id is required"))
+	}
+
+	// Check if size exists
+	var existing database.VPSSizeCatalog
+	if err := database.DB.Where("id = ?", req.Msg.GetId()).First(&existing).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS size with id %s not found", req.Msg.GetId()))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to find VPS size: %w", err))
+	}
+
+	// Check if any VPS instances are using this size
+	var count int64
+	if err := database.DB.Table("vps_instances").Where("size = ? AND deleted_at IS NULL", req.Msg.GetId()).Count(&count).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to check VPS instances: %w", err))
+	}
+	if count > 0 {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("cannot delete VPS size: %d VPS instances are using this size", count))
+	}
+
+	// Delete size
+	if err := database.DeleteVPSSizeCatalog(req.Msg.GetId()); err != nil {
+		logger.Error("[SuperAdmin] Failed to delete VPS size: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete VPS size: %w", err))
+	}
+
+	return connect.NewResponse(&superadminv1.DeleteVPSSizeResponse{
+		Success: true,
 	}), nil
 }

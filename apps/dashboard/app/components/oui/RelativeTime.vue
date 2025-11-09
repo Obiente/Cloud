@@ -8,7 +8,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 
 type RelativeTimeStyle = 'long' | 'short' | 'narrow'
 type RelativeTimeNumeric = 'always' | 'auto'
@@ -31,6 +31,25 @@ const dateValue = computed<Date>(() => {
   if (props.value instanceof Date) return props.value
   if (typeof props.value === 'number') return new Date(props.value)
   return new Date(props.value)
+})
+
+// Reactive timestamp that updates every second to trigger recalculation
+const now = ref(Date.now())
+
+let intervalId: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  // Update every second to keep relative time current
+  intervalId = setInterval(() => {
+    now.value = Date.now()
+  }, 1000)
+})
+
+onUnmounted(() => {
+  if (intervalId) {
+    clearInterval(intervalId)
+    intervalId = null
+  }
 })
 
 // Fallback text for SSR - use a simple format that matches Intl.RelativeTimeFormat short style (without period)
@@ -60,8 +79,8 @@ const fallbackText = computed(() => {
 })
 
 const formattedRelativeTime = computed(() => {
-  const now = Date.now()
-  const diffMilliseconds = dateValue.value.getTime() - now
+  const currentTime = now.value
+  const diffMilliseconds = dateValue.value.getTime() - currentTime
 
   if (!Number.isFinite(diffMilliseconds)) {
     return ''

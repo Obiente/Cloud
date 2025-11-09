@@ -106,157 +106,13 @@
         </OuiButton>
       </OuiStack>
 
-      <OuiGrid v-else cols="1" cols-md="2" :cols-2xl="3" gap="lg">
-        <OuiCard
+      <OuiGrid v-else cols="1" cols-md="2" cols-lg="3" gap="lg">
+        <GameServerCard
           v-for="gameServer in filteredGameServers"
           :key="gameServer.id"
-          variant="default"
-          hoverable
-          :data-status="gameServer.status"
-          :class="[
-            'group relative overflow-hidden transition-all duration-300 hover:shadow-2xl',
-            getStatusMeta(gameServer.status).cardClass,
-            getStatusMeta(gameServer.status).beforeGradient,
-          ]"
-        >
-          <div
-            class="absolute top-0 left-0 right-0 h-1"
-            :class="getStatusMeta(gameServer.status).barClass"
-          />
-
-          <OuiFlex direction="col" h="full" class="relative">
-            <OuiCardHeader>
-              <OuiFlex justify="between" align="center" gap="lg" wrap="wrap">
-                <OuiStack gap="xs" class="min-w-0">
-                  <OuiText
-                    as="h3"
-                    size="xl"
-                    weight="semibold"
-                    color="primary"
-                    truncate
-                    class="transition-colors group-hover:text-primary/90"
-                  >
-                    {{ gameServer.name }}
-                  </OuiText>
-                  <OuiFlex align="center" gap="xs">
-                    <OuiText size="sm" color="secondary">
-                      {{ getGameTypeLabel(gameServer.gameType) || "Unknown" }}
-                    </OuiText>
-                  </OuiFlex>
-                  <OuiFlex v-if="gameServer.port" align="center" gap="xs" class="mt-0.5">
-                    <ServerIcon class="h-3 w-3 text-secondary" />
-                    <OuiText size="xs" color="secondary"
-                      >Port: {{ gameServer.port }}</OuiText
-                    >
-                  </OuiFlex>
-                </OuiStack>
-                <OuiFlex gap="sm" justify="end" wrap="wrap">
-                  <OuiBadge :variant="getStatusMeta(gameServer.status).badge">
-                    <span
-                      class="inline-flex h-1.5 w-1.5 rounded-full"
-                      :class="[
-                        getStatusMeta(gameServer.status).dotClass,
-                        getStatusMeta(gameServer.status).pulseDot
-                          ? 'animate-pulse'
-                          : '',
-                      ]"
-                    />
-                    <OuiText
-                      as="span"
-                      size="xs"
-                      weight="semibold"
-                      transform="uppercase"
-                      class="text-[11px]"
-                    >
-                      {{ getStatusMeta(gameServer.status).label }}
-                    </OuiText>
-                  </OuiBadge>
-                </OuiFlex>
-              </OuiFlex>
-            </OuiCardHeader>
-
-            <OuiCardBody class="flex-1">
-              <OuiStack gap="md">
-                <!-- Resource Usage -->
-                <OuiStack gap="sm">
-                  <OuiText size="sm" weight="semibold" color="primary">
-                    Resources
-                  </OuiText>
-                  <OuiGrid cols="2" gap="sm">
-                    <OuiStack gap="xs">
-                      <OuiFlex align="center" gap="xs">
-                        <CpuChipIcon class="h-3.5 w-3.5 text-secondary" />
-                        <OuiText size="xs" color="secondary">vCPU</OuiText>
-                      </OuiFlex>
-                      <OuiText size="sm" weight="semibold" color="primary">
-                        {{ gameServer.cpuCores || "N/A" }}
-                      </OuiText>
-                    </OuiStack>
-                    <OuiStack gap="xs">
-                      <OuiFlex align="center" gap="xs">
-                        <CircleStackIcon class="h-3.5 w-3.5 text-secondary" />
-                        <OuiText size="xs" color="secondary">Memory</OuiText>
-                      </OuiFlex>
-                      <OuiText size="sm" weight="semibold" color="primary">
-                        <OuiByte :value="gameServer.memoryBytes || 0" />
-                      </OuiText>
-                    </OuiStack>
-                  </OuiGrid>
-                </OuiStack>
-
-                <!-- Status Info -->
-                <OuiFlex align="center" justify="between" class="pt-2 border-t border-border-muted">
-                  <OuiText size="xs" color="secondary">
-                    Updated
-                    <OuiRelativeTime :value="gameServer.updatedAt ? new Date(gameServer.updatedAt) : undefined" />
-                  </OuiText>
-                </OuiFlex>
-              </OuiStack>
-            </OuiCardBody>
-
-            <OuiCardFooter class="border-t border-border-muted">
-              <OuiFlex justify="between" align="center" gap="sm" class="w-full">
-                <OuiButton
-                  variant="ghost"
-                  size="sm"
-                  class="gap-2"
-                  @click="navigateTo(`/gameservers/${gameServer.id}`)"
-                >
-                  <EyeIcon class="h-4 w-4" />
-                  View Details
-                </OuiButton>
-                <OuiFlex gap="xs">
-                  <OuiButton
-                    v-if="gameServer.status === 'RUNNING'"
-                    variant="ghost"
-                    size="sm"
-                    class="gap-2"
-                    @click.stop="handleStop(gameServer.id)"
-                  >
-                    <StopIcon class="h-4 w-4" />
-                  </OuiButton>
-                  <OuiButton
-                    v-if="gameServer.status === 'STOPPED'"
-                    variant="ghost"
-                    size="sm"
-                    class="gap-2"
-                    @click.stop="handleStart(gameServer.id)"
-                  >
-                    <PlayIcon class="h-4 w-4" />
-                  </OuiButton>
-                  <OuiButton
-                    variant="ghost"
-                    size="sm"
-                    class="gap-2"
-                    @click.stop="handleRefresh(gameServer.id)"
-                  >
-                    <ArrowPathIcon class="h-4 w-4" />
-                  </OuiButton>
-                </OuiFlex>
-              </OuiFlex>
-            </OuiCardFooter>
-          </OuiFlex>
-        </OuiCard>
+          :game-server="gameServer"
+          @refresh="refreshGameServers"
+        />
       </OuiGrid>
     </OuiStack>
 
@@ -364,6 +220,7 @@ import {
 
 import { useConnectClient } from "~/lib/connect-client";
 import ErrorAlert from "~/components/ErrorAlert.vue";
+import GameServerCard from "~/components/gameserver/GameServerCard.vue";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { useOrganizationId } from "~/composables/useOrganizationId";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";

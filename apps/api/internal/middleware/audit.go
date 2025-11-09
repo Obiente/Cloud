@@ -70,33 +70,40 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 			// authInterceptor wraps the handler (innermost, runs first), then auditInterceptor
 			// wraps authInterceptor (outermost, runs second). This means when auditInterceptor
 			// calls next(), it runs authInterceptor which sets the user in context and calls the handler.
-			// However, context.WithValue creates a NEW context, so the original ctx in the outer
-			// interceptor won't have the user. We need to extract the user from the context chain.
-			// Actually, context.Value() searches up the chain, so if the inner interceptor set it,
-			// we should be able to access it. But to be safe, we'll also try to extract from the
-			// response headers if available.
+			// The context chain should allow us to access the user via context.Value().
 			var userID string = "system"
 			
 			resp, err := next(ctx, req)
 
 			// Try to extract user from context - the auth interceptor should have set it
-			// Note: In Connect, when we call next(ctx, req), the auth interceptor (inner) receives
-			// the context, sets the user via context.WithValue, and passes the new context to the handler.
-			// However, context.WithValue creates a NEW context, so the original ctx in the outer
-			// interceptor doesn't have the user. But context.Value() searches up the chain, so we
-			// should be able to access it. If that doesn't work, we'll try response headers.
-			user, _ := auth.GetUserFromContext(ctx)
+			// context.Value() searches up the chain, so if the inner interceptor set it,
+			// we should be able to access it. If that fails, try response headers.
+			user, userErr := auth.GetUserFromContext(ctx)
 			if user != nil && user.Id != "" {
 				userID = user.Id
+				logger.Debug("[Audit] Extracted user ID from context: %s", userID)
 			} else {
 				// Fallback: Try to extract from response headers (if auth interceptor exposes them)
+				// Use panic recovery since resp might be a typed nil that passes != nil check
 				if resp != nil {
-					// Defensively check that Header() doesn't return nil
-					if headers := resp.Header(); headers != nil {
-						if userIDHeader := headers.Get("X-User-ID"); userIDHeader != "" {
-							userID = userIDHeader
+					func() {
+						defer func() {
+							if r := recover(); r != nil {
+								// resp is a typed nil - ignore header extraction
+							}
+						}()
+						// Defensively check that Header() doesn't return nil
+						if headers := resp.Header(); headers != nil {
+							if userIDHeader := headers.Get("X-User-ID"); userIDHeader != "" {
+								userID = userIDHeader
+								logger.Debug("[Audit] Extracted user ID from response header: %s", userID)
+							}
 						}
-					}
+					}()
+				}
+				// If we still don't have a user ID and there was an error getting it, log it
+				if userID == "system" && userErr != nil {
+					logger.Debug("[Audit] Could not extract user from context for %s: %v", procedure, userErr)
 				}
 			}
 
@@ -311,9 +318,16 @@ func extractResourceInfo(req connect.AnyRequest, procedure string) (resourceType
 
 				// If we have a deployment ID but no org ID, try to look it up from the deployment
 				if orgID == nil && resourceType != nil && *resourceType == "deployment" && resourceID != nil && *resourceID != "" {
-				if lookedUpOrgID := lookupDeploymentOrgID(*resourceID); lookedUpOrgID != nil {
-					orgID = lookedUpOrgID
+					if lookedUpOrgID := lookupDeploymentOrgID(*resourceID); lookedUpOrgID != nil {
+						orgID = lookedUpOrgID
+					}
 				}
+
+				// If we have a VPS ID but no org ID, try to look it up from the VPS
+				if orgID == nil && resourceType != nil && *resourceType == "vps" && resourceID != nil && *resourceID != "" {
+					if lookedUpOrgID := lookupVPSOrgID(*resourceID); lookedUpOrgID != nil {
+						orgID = lookedUpOrgID
+					}
 				}
 			}
 		}
@@ -332,6 +346,27 @@ func lookupDeploymentOrgID(deploymentID string) *string {
 	if err := database.DB.Table("deployments").
 		Select("organization_id").
 		Where("id = ?", deploymentID).
+		Pluck("organization_id", &orgID).Error; err != nil {
+		return nil
+	}
+
+	if orgID == "" {
+		return nil
+	}
+
+	return &orgID
+}
+
+// lookupVPSOrgID looks up the organization ID for a VPS from the database
+func lookupVPSOrgID(vpsID string) *string {
+	if database.DB == nil {
+		return nil
+	}
+
+	var orgID string
+	if err := database.DB.Table("vps_instances").
+		Select("organization_id").
+		Where("id = ? AND deleted_at IS NULL", vpsID).
 		Pluck("organization_id", &orgID).Error; err != nil {
 		return nil
 	}
@@ -431,6 +466,21 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 		if id, ok := jsonData["gameServerId"].(string); ok && id != "" {
 			resourceID = &id
 		} else if id, ok := jsonData["game_server_id"].(string); ok && id != "" {
+			resourceID = &id
+		} else if id, ok := jsonData["id"].(string); ok && id != "" {
+			resourceID = &id
+		}
+		return
+	}
+
+	// VPS-related actions
+	if strings.Contains(actionLower, "vps") {
+		rt := "vps"
+		resourceType = &rt
+
+		if id, ok := jsonData["vpsId"].(string); ok && id != "" {
+			resourceID = &id
+		} else if id, ok := jsonData["vps_id"].(string); ok && id != "" {
 			resourceID = &id
 		} else if id, ok := jsonData["id"].(string); ok && id != "" {
 			resourceID = &id

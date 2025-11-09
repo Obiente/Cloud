@@ -3,17 +3,22 @@
     :open="modelValue"
     :disabled="disabled"
     @update:open="handleOpenChange"
-    class="w-full"
+    class="w-full border border-border-muted rounded-lg overflow-hidden"
   >
-    <Collapsible.Trigger class="flex items-center justify-between w-full px-4 py-3 text-left font-medium text-primary hover:bg-background-muted transition-colors rounded-lg border border-border-muted">
+    <Collapsible.Trigger class="flex items-center justify-between w-full px-4 py-3 text-left font-medium text-primary hover:bg-background-muted transition-colors">
       <slot name="trigger">
         {{ label }}
       </slot>
       <Collapsible.Indicator class="shrink-0 ml-2">
-        <ChevronDownIcon class="h-4 w-4 transition-transform data-[open]:rotate-180" />
+        <ChevronDownIcon 
+          :class="[
+            'h-4 w-4 transition-transform duration-200',
+            modelValue ? 'rotate-180' : ''
+          ]" 
+        />
       </Collapsible.Indicator>
     </Collapsible.Trigger>
-    <Collapsible.Content class="px-4 py-3 text-secondary border-x border-b border-border-muted rounded-b-lg">
+    <Collapsible.Content class="px-4 pb-3 text-secondary">
       <slot />
     </Collapsible.Content>
   </Collapsible.Root>

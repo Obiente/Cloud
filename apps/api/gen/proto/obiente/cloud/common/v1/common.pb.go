@@ -9,6 +9,7 @@ package commonv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -80,11 +81,241 @@ func (LogLevel) EnumDescriptor() ([]byte, []int) {
 	return file_obiente_cloud_common_v1_common_proto_rawDescGZIP(), []int{0}
 }
 
+// Pagination represents pagination information for list responses
+type Pagination struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`                               // Current page number (1-indexed)
+	PerPage       int32                  `protobuf:"varint,2,opt,name=per_page,json=perPage,proto3" json:"per_page,omitempty"`          // Number of items per page
+	Total         int32                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`                             // Total number of items
+	TotalPages    int32                  `protobuf:"varint,4,opt,name=total_pages,json=totalPages,proto3" json:"total_pages,omitempty"` // Total number of pages
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Pagination) Reset() {
+	*x = Pagination{}
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Pagination) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Pagination) ProtoMessage() {}
+
+func (x *Pagination) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Pagination.ProtoReflect.Descriptor instead.
+func (*Pagination) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_common_v1_common_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *Pagination) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *Pagination) GetPerPage() int32 {
+	if x != nil {
+		return x.PerPage
+	}
+	return 0
+}
+
+func (x *Pagination) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *Pagination) GetTotalPages() int32 {
+	if x != nil {
+		return x.TotalPages
+	}
+	return 0
+}
+
+// VPSSize represents a VPS instance size configuration
+// This is a shared type used across multiple services
+type VPSSize struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Id                  string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                                                                 // Size ID (e.g., "small", "medium", "cx11")
+	Name                string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`                                                             // Human-readable name
+	Description         *string                `protobuf:"bytes,3,opt,name=description,proto3,oneof" json:"description,omitempty"`                                         // Optional description
+	CpuCores            int32                  `protobuf:"varint,4,opt,name=cpu_cores,json=cpuCores,proto3" json:"cpu_cores,omitempty"`                                    // Number of CPU cores
+	MemoryBytes         int64                  `protobuf:"varint,5,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`                           // Memory in bytes
+	DiskBytes           int64                  `protobuf:"varint,6,opt,name=disk_bytes,json=diskBytes,proto3" json:"disk_bytes,omitempty"`                                 // Disk space in bytes
+	BandwidthBytesMonth int64                  `protobuf:"varint,7,opt,name=bandwidth_bytes_month,json=bandwidthBytesMonth,proto3" json:"bandwidth_bytes_month,omitempty"` // Monthly bandwidth limit (0 = unlimited)
+	PriceCentsPerMonth  int64                  `protobuf:"varint,8,opt,name=price_cents_per_month,json=priceCentsPerMonth,proto3" json:"price_cents_per_month,omitempty"`  // Monthly price in cents
+	Available           bool                   `protobuf:"varint,9,opt,name=available,proto3" json:"available,omitempty"`                                                  // Whether this size is available
+	Region              string                 `protobuf:"bytes,10,opt,name=region,proto3" json:"region,omitempty"`                                                        // Region (empty = all regions)
+	CreatedAt           *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3,oneof" json:"created_at,omitempty"`
+	UpdatedAt           *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3,oneof" json:"updated_at,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *VPSSize) Reset() {
+	*x = VPSSize{}
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VPSSize) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VPSSize) ProtoMessage() {}
+
+func (x *VPSSize) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VPSSize.ProtoReflect.Descriptor instead.
+func (*VPSSize) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_common_v1_common_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *VPSSize) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *VPSSize) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *VPSSize) GetDescription() string {
+	if x != nil && x.Description != nil {
+		return *x.Description
+	}
+	return ""
+}
+
+func (x *VPSSize) GetCpuCores() int32 {
+	if x != nil {
+		return x.CpuCores
+	}
+	return 0
+}
+
+func (x *VPSSize) GetMemoryBytes() int64 {
+	if x != nil {
+		return x.MemoryBytes
+	}
+	return 0
+}
+
+func (x *VPSSize) GetDiskBytes() int64 {
+	if x != nil {
+		return x.DiskBytes
+	}
+	return 0
+}
+
+func (x *VPSSize) GetBandwidthBytesMonth() int64 {
+	if x != nil {
+		return x.BandwidthBytesMonth
+	}
+	return 0
+}
+
+func (x *VPSSize) GetPriceCentsPerMonth() int64 {
+	if x != nil {
+		return x.PriceCentsPerMonth
+	}
+	return 0
+}
+
+func (x *VPSSize) GetAvailable() bool {
+	if x != nil {
+		return x.Available
+	}
+	return false
+}
+
+func (x *VPSSize) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *VPSSize) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *VPSSize) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
 var File_obiente_cloud_common_v1_common_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_common_v1_common_proto_rawDesc = "" +
 	"\n" +
-	"$obiente/cloud/common/v1/common.proto\x12\x17obiente.cloud.common.v1*\x8c\x01\n" +
+	"$obiente/cloud/common/v1/common.proto\x12\x17obiente.cloud.common.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"r\n" +
+	"\n" +
+	"Pagination\x12\x12\n" +
+	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x19\n" +
+	"\bper_page\x18\x02 \x01(\x05R\aperPage\x12\x14\n" +
+	"\x05total\x18\x03 \x01(\x05R\x05total\x12\x1f\n" +
+	"\vtotal_pages\x18\x04 \x01(\x05R\n" +
+	"totalPages\"\xfe\x03\n" +
+	"\aVPSSize\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12%\n" +
+	"\vdescription\x18\x03 \x01(\tH\x00R\vdescription\x88\x01\x01\x12\x1b\n" +
+	"\tcpu_cores\x18\x04 \x01(\x05R\bcpuCores\x12!\n" +
+	"\fmemory_bytes\x18\x05 \x01(\x03R\vmemoryBytes\x12\x1d\n" +
+	"\n" +
+	"disk_bytes\x18\x06 \x01(\x03R\tdiskBytes\x122\n" +
+	"\x15bandwidth_bytes_month\x18\a \x01(\x03R\x13bandwidthBytesMonth\x121\n" +
+	"\x15price_cents_per_month\x18\b \x01(\x03R\x12priceCentsPerMonth\x12\x1c\n" +
+	"\tavailable\x18\t \x01(\bR\tavailable\x12\x16\n" +
+	"\x06region\x18\n" +
+	" \x01(\tR\x06region\x12>\n" +
+	"\n" +
+	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampH\x01R\tcreatedAt\x88\x01\x01\x12>\n" +
+	"\n" +
+	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampH\x02R\tupdatedAt\x88\x01\x01B\x0e\n" +
+	"\f_descriptionB\r\n" +
+	"\v_created_atB\r\n" +
+	"\v_updated_at*\x8c\x01\n" +
 	"\bLogLevel\x12\x19\n" +
 	"\x15LOG_LEVEL_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fLOG_LEVEL_TRACE\x10\x01\x12\x13\n" +
@@ -106,15 +337,21 @@ func file_obiente_cloud_common_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_obiente_cloud_common_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_obiente_cloud_common_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_obiente_cloud_common_v1_common_proto_goTypes = []any{
-	(LogLevel)(0), // 0: obiente.cloud.common.v1.LogLevel
+	(LogLevel)(0),                 // 0: obiente.cloud.common.v1.LogLevel
+	(*Pagination)(nil),            // 1: obiente.cloud.common.v1.Pagination
+	(*VPSSize)(nil),               // 2: obiente.cloud.common.v1.VPSSize
+	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
 }
 var file_obiente_cloud_common_v1_common_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	3, // 0: obiente.cloud.common.v1.VPSSize.created_at:type_name -> google.protobuf.Timestamp
+	3, // 1: obiente.cloud.common.v1.VPSSize.updated_at:type_name -> google.protobuf.Timestamp
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_common_v1_common_proto_init() }
@@ -122,19 +359,21 @@ func file_obiente_cloud_common_v1_common_proto_init() {
 	if File_obiente_cloud_common_v1_common_proto != nil {
 		return
 	}
+	file_obiente_cloud_common_v1_common_proto_msgTypes[1].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_common_v1_common_proto_rawDesc), len(file_obiente_cloud_common_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   0,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_obiente_cloud_common_v1_common_proto_goTypes,
 		DependencyIndexes: file_obiente_cloud_common_v1_common_proto_depIdxs,
 		EnumInfos:         file_obiente_cloud_common_v1_common_proto_enumTypes,
+		MessageInfos:      file_obiente_cloud_common_v1_common_proto_msgTypes,
 	}.Build()
 	File_obiente_cloud_common_v1_common_proto = out.File
 	file_obiente_cloud_common_v1_common_proto_goTypes = nil

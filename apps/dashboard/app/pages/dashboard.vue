@@ -731,6 +731,7 @@
     Environment as EnvEnum,
     DeploymentType,
     OrganizationService,
+    VPSService,
   } from "@obiente/proto";
   import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
   import { composeQueryUrl } from "~/utils/queryParams";
@@ -758,6 +759,7 @@
 
   const deploymentClient = useConnectClient(DeploymentService);
   const orgClient = useConnectClient(OrganizationService);
+  const vpsClient = useConnectClient(VPSService);
   const orgsStore = useOrganizationsStore();
   const auth = useAuth();
 
@@ -880,10 +882,23 @@
           };
         });
 
+      // Fetch VPS count
+      let vpsCount = 0;
+      try {
+        const vpsResponse = await vpsClient.listVPS({
+          organizationId: orgId || undefined,
+          page: 1,
+          perPage: 1,
+        });
+        vpsCount = vpsResponse.pagination?.total || 0;
+      } catch (error) {
+        console.error("Failed to fetch VPS count:", error);
+      }
+
       const stats = {
         deployments: deployments.length,
         gameServers: 0, // TODO: Fetch from game server API
-        vpsInstances: 0,
+        vpsInstances: vpsCount,
         databases: 0,
         monthlySpend: 0,
         statuses,

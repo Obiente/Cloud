@@ -53,6 +53,17 @@ services:
       BILLING_ENABLED: ${BILLING_ENABLED:-true}
       SELF_HOSTED: ${SELF_HOSTED:-false}
       TRAEFIK_IPS: ${TRAEFIK_IPS:-} # Format: "region1:ip1,ip2;region2:ip3,ip4" or simple "ip1,ip2"
+      # VPS Configuration
+      VPS_REGIONS: ${VPS_REGIONS:-} # Format: "region1:Name 1;region2:Name 2" or simple "region1"
+      PROXMOX_API_URL: ${PROXMOX_API_URL:-}
+      PROXMOX_USERNAME: ${PROXMOX_USERNAME:-root@pam}
+      PROXMOX_PASSWORD: ${PROXMOX_PASSWORD:-}
+      PROXMOX_TOKEN_ID: ${PROXMOX_TOKEN_ID:-}
+      PROXMOX_TOKEN_SECRET: ${PROXMOX_TOKEN_SECRET:-}
+      PROXMOX_STORAGE_POOL: ${PROXMOX_STORAGE_POOL:-local-lvm}
+      PROXMOX_VM_ID_START: ${PROXMOX_VM_ID_START:-} # Starting VM ID range (e.g., 300)
+      PROXMOX_VLAN_ID: ${PROXMOX_VLAN_ID:-} # Optional VLAN tag for VM network isolation (e.g., 100)
+      SSH_PROXY_PORT: ${SSH_PROXY_PORT:-2222}
       # DNS configuration - optional, for documentation/deployment purposes only
       # Set MAIN_DNS_IPS to production DNS IP addresses (e.g., export MAIN_DNS_IPS=10.0.9.10)
       # Note: DNS_IPS must contain IP addresses, not container names or hostnames

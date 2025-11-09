@@ -31,7 +31,7 @@
               clearable
             />
           </OuiStack>
-          <OuiStack v-if="serviceOptions.length > 1" gap="xs">
+          <OuiStack v-if="serviceOptions.length > 1 && props.resourceType !== 'vps'" gap="xs">
             <OuiText size="sm" weight="medium">Service</OuiText>
             <OuiSelect
               v-model="filters.service"
@@ -314,20 +314,17 @@ const loadFilterOptions = async () => {
     };
 
     // Apply organization filter for filter options (if provided as prop or filter)
+    // This ensures filter options are scoped to the correct organization
     if (props.organizationId) {
       request.organizationId = props.organizationId;
     } else if (filters.value.organizationId != null && filters.value.organizationId !== "") {
       request.organizationId = filters.value.organizationId;
     }
 
-    // If resourceType/resourceId are provided, filter options to that resource
-    // This ensures filter options only show values relevant to the current resource
-    if (props.resourceType) {
-      request.resourceType = props.resourceType;
-    }
-    if (props.resourceId) {
-      request.resourceId = props.resourceId;
-    }
+    // NOTE: Do NOT apply resourceType/resourceId filters when loading filter options
+    // This allows all available filter values to be shown in the dropdowns
+    // The actual audit log list will still be filtered by resourceType/resourceId
+    // but the filter dropdowns will show all available options for better filtering
 
     const response = await client.listAuditLogs(request);
     filterOptionsData.value = response.auditLogs || [];

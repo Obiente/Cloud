@@ -1,5 +1,5 @@
 import { AuthService } from "@obiente/proto";
-import { useConnectClient } from "~/lib/connect-client";
+import { createClient } from "@connectrpc/connect";
 
 export const useConfig = () => {
   const configState = useState<{
@@ -16,8 +16,6 @@ export const useConfig = () => {
     error: null,
   }));
 
-  const client = useConnectClient(AuthService);
-
   const fetchConfig = async () => {
     if (configState.value.loading) {
       return; // Already fetching
@@ -27,7 +25,28 @@ export const useConfig = () => {
       configState.value.loading = true;
       configState.value.error = null;
 
-      const response = await client.getPublicConfig({});
+      // Create a public client without auth for the public config endpoint
+      const config = useRuntimeConfig();
+      let publicTransport;
+      
+      // Use different transports for client vs server
+      if (import.meta.server) {
+        const { createConnectTransport } = await import("@connectrpc/connect-node");
+        publicTransport = createConnectTransport({
+          baseUrl: config.public.apiHost,
+          httpVersion: "1.1",
+          useBinaryFormat: false,
+        });
+      } else {
+        const { createConnectTransport } = await import("@connectrpc/connect-web");
+        publicTransport = createConnectTransport({
+          baseUrl: config.public.apiHost,
+          useBinaryFormat: false,
+        });
+      }
+      
+      const publicClient = createClient(AuthService, publicTransport);
+      const response = await publicClient.getPublicConfig({});
       
       configState.value.billingEnabled = response.billingEnabled ?? true;
       configState.value.selfHosted = response.selfHosted ?? false;

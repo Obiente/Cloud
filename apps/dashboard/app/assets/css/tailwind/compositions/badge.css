@@ -24,7 +24,8 @@
     );
     --oui-badge-on-solid: var(--oui-background);
 
-    @apply inline-flex select-none items-center justify-center whitespace-nowrap font-medium leading-tight transition-colors duration-200;
+    @apply inline-flex select-none items-center justify-center whitespace-nowrap font-medium leading-tight;
+    transition: background-color 0.3s ease-in-out, border-color 0.3s ease-in-out, color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
   }
 
   .oui-badge-size-xs {

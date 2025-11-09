@@ -6,6 +6,7 @@ option go_package = "api/gen/proto/obiente/cloud/organizations/v1;organizationsv
 
 import "google/protobuf/timestamp.proto";
 import "obiente/cloud/auth/v1/auth_service.proto";
+import "obiente/cloud/common/v1/common.proto";
 
 service OrganizationService {
   // List user's organizations
@@ -112,7 +113,7 @@ message ListOrganizationsRequest {
 
 message ListOrganizationsResponse {
   repeated Organization organizations = 1;
-  Pagination pagination = 2;
+  obiente.cloud.common.v1.Pagination pagination = 2;
 }
 
 message CreateOrganizationRequest {
@@ -151,7 +152,7 @@ message ListMembersRequest {
 
 message ListMembersResponse {
   repeated OrganizationMember members = 1;
-  Pagination pagination = 2;
+  obiente.cloud.common.v1.Pagination pagination = 2;
 }
 
 message InviteMemberRequest {
@@ -181,7 +182,7 @@ message ListMyInvitesRequest {
 
 message ListMyInvitesResponse {
   repeated PendingInvite invites = 1;
-  Pagination pagination = 2;
+  obiente.cloud.common.v1.Pagination pagination = 2;
 }
 
 message PendingInvite {
@@ -288,12 +289,6 @@ message OrganizationMember {
   google.protobuf.Timestamp joined_at = 5;
 }
 
-message Pagination {
-  int32 page = 1;
-  int32 per_page = 2;
-  int32 total = 3;
-  int32 total_pages = 4;
-}
 
 message AddCreditsRequest {
   string organization_id = 1;
@@ -352,7 +347,7 @@ message GetCreditLogRequest {
 
 message GetCreditLogResponse {
   repeated CreditTransaction transactions = 1;
-  Pagination pagination = 2;
+  obiente.cloud.common.v1.Pagination pagination = 2;
 }
 
 message CreditTransaction {

@@ -407,12 +407,23 @@ func (gsm *GameServerManager) DeleteGameServer(ctx context.Context, gameServerID
 		return nil
 	}
 
-	// Stop container first
+	// SECURITY: Verify container was created by our API before deletion
 	containerInfo, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
-	if err == nil && containerInfo.State.Running {
-		timeout := 30 * time.Second
-		if err := gsm.dockerHelper.StopContainer(ctx, *gameServer.ContainerID, timeout); err != nil {
-			logger.Warn("[GameServerManager] Failed to stop container before deletion: %v", err)
+	if err != nil {
+		logger.Warn("[GameServerManager] Container %s not found (may already be deleted): %v", (*gameServer.ContainerID)[:12], err)
+	} else {
+		// Verify container has our management label
+		if containerInfo.Config.Labels["cloud.obiente.managed"] != "true" {
+			logger.Error("[GameServerManager] SECURITY: Refusing to delete container %s: not managed by Obiente Cloud (missing cloud.obiente.managed=true label)", (*gameServer.ContainerID)[:12])
+			return fmt.Errorf("refusing to delete container: not managed by Obiente Cloud")
+		}
+
+		// Stop container first if it's running
+		if containerInfo.State.Running {
+			timeout := 30 * time.Second
+			if err := gsm.dockerHelper.StopContainer(ctx, *gameServer.ContainerID, timeout); err != nil {
+				logger.Warn("[GameServerManager] Failed to stop container before deletion: %v", err)
+			}
 		}
 	}
 
@@ -619,6 +630,7 @@ func (gsm *GameServerManager) ensureNetwork(ctx context.Context) error {
 }
 
 // removeContainerByName removes a container by name if it exists
+// SECURITY: Only removes containers that were created by our API (have cloud.obiente.managed=true label)
 func (gsm *GameServerManager) removeContainerByName(ctx context.Context, containerName string) error {
 	// Try to inspect container directly by name
 	containerNameWithSlash := "/" + containerName
@@ -627,6 +639,11 @@ func (gsm *GameServerManager) removeContainerByName(ctx context.Context, contain
 	for _, nameToTry := range []string{containerNameWithSlash, containerNameWithoutSlash} {
 		containerInfo, err := gsm.dockerClient.ContainerInspect(ctx, nameToTry)
 		if err == nil {
+			// SECURITY: Verify container was created by our API
+			if containerInfo.Config.Labels["cloud.obiente.managed"] != "true" {
+				return fmt.Errorf("refusing to delete container %s: not managed by Obiente Cloud (missing cloud.obiente.managed=true label)", containerName)
+			}
+
 			logger.Info("[GameServerManager] Removing existing container %s (ID: %s)", containerName, containerInfo.ID[:12])
 
 			// Stop container first

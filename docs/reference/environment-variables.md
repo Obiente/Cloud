@@ -349,6 +349,21 @@ ACME_EMAIL=admin@obiente.cloud
 | `DNS_IPS`     | string | -       | ❌       | DNS server IPs (comma-separated) for nameserver configuration                              |
 | `DNS_PORT`    | number | `53`    | ❌       | DNS server port (use different port if 53 is in use)                                       |
 
+### VPS Configuration
+
+| Variable       | Type   | Default | Required | Description                                                                                |
+| -------------- | ------ | ------- | -------- | ------------------------------------------------------------------------------------------ |
+| `VPS_REGIONS`  | string | -       | ✅       | VPS regions configuration (format: `"region1:Name 1;region2:Name 2"` or simple `"region1"`) |
+| `PROXMOX_API_URL` | string | -       | ✅       | Proxmox API URL (e.g., `https://proxmox.example.com:8006`)                                |
+| `PROXMOX_USERNAME` | string | `root@pam` | ❌    | Proxmox username (default: `root@pam`)                                                    |
+| `PROXMOX_PASSWORD` | string | -       | ✅*      | Proxmox password (required if not using token)                                            |
+| `PROXMOX_TOKEN_ID` | string | -       | ✅*      | Proxmox API token ID (required if not using password)                                     |
+| `PROXMOX_TOKEN_SECRET` | string | -       | ✅*      | Proxmox API token secret (required if not using password)                                |
+| `PROXMOX_STORAGE_POOL` | string | `local-lvm` | ❌  | Proxmox storage pool for VM disks                                                         |
+| `PROXMOX_VM_ID_START` | number | - | ❌       | Starting VM ID range (e.g., `300`). If set, VMs will be created starting from this ID. If not set, Proxmox auto-generates the next available ID. |
+| `PROXMOX_VLAN_ID` | number | - | ❌       | Optional VLAN tag for VM network isolation (e.g., `100`). If set, all VMs will be placed on this VLAN. This provides Layer 2 isolation and helps prevent IP spoofing and network attacks. |
+| `SSH_PROXY_PORT` | number | `2222` | ❌       | SSH proxy port for VPS access                                                               |
+
 **TRAEFIK_IPS Format:**
 
 Two formats are supported:
@@ -404,6 +419,85 @@ Default DNS port is 53. If port 53 is already in use (e.g., systemd-resolved), c
 # Use port 5353 instead
 DNS_PORT=5353
 ```
+
+**VPS_REGIONS Format:**
+
+Two formats are supported:
+
+**Simple format** (single region ID or comma-separated region IDs):
+
+```
+us-illinois
+```
+
+```
+us-illinois,us-east-1
+```
+
+**Multi-region format with names**:
+
+```
+region1:Name 1;region2:Name 2
+```
+
+**Examples:**
+
+```bash
+# Single region (ID only - name auto-generated)
+VPS_REGIONS="us-illinois"
+
+# Multiple regions (IDs only)
+VPS_REGIONS="us-illinois,us-east-1"
+
+# Single region with custom name
+VPS_REGIONS="us-illinois:US Illinois"
+
+# Multiple regions with custom names
+VPS_REGIONS="us-illinois:US Illinois;us-east-1:US East (N. Virginia)"
+```
+
+**Proxmox Configuration:**
+
+VPS provisioning requires Proxmox VE to be configured. You can use either password or API token authentication:
+
+```bash
+# Password authentication
+PROXMOX_API_URL=https://proxmox.example.com:8006
+PROXMOX_USERNAME=root@pam
+PROXMOX_PASSWORD=your-secure-password
+
+# Or API token authentication (recommended)
+PROXMOX_API_URL=https://proxmox.example.com:8006
+PROXMOX_USERNAME=root@pam
+PROXMOX_TOKEN_ID=obiente-cloud
+PROXMOX_TOKEN_SECRET=your-token-secret
+
+# Optional: Custom storage pool (must exist in Proxmox)
+PROXMOX_STORAGE_POOL=local-zfs
+
+# Optional: VLAN tag for network isolation (recommended for security)
+PROXMOX_VLAN_ID=100
+```
+
+**Note:** The storage pool specified in `PROXMOX_STORAGE_POOL` must exist in your Proxmox installation and support VM disk images. Common values are `local-lvm` (default), `local`, `local-zfs`, or custom storage pools. If the storage pool doesn't exist, VPS creation will fail with a clear error message listing available storage pools. See the [VPS Configuration Guide](../guides/vps-configuration.md#storage-configuration) for details on checking available storage pools.
+
+**Required Proxmox API Token Permissions:**
+
+The API token must have the following permissions to create and manage VMs:
+
+- `VM.Allocate` - Create new VMs
+- `VM.Clone` - Clone VM templates (if using templates)
+- `VM.Config.Disk` - Configure VM disk storage
+- `VM.Config.Network` - Configure VM network settings
+- `VM.Config.Options` - Configure VM options (cloud-init, etc.)
+- `VM.Config.CPU` - Configure VM CPU settings
+- `VM.Config.Memory` - Configure VM memory settings
+- `VM.PowerMgmt` - Start, stop, reboot VMs
+- `VM.Monitor` - Monitor VM status and metrics
+- `Datastore.Allocate` - Allocate storage for VMs
+- `Datastore.AllocateSpace` - Allocate disk space
+
+See the [VPS Provisioning Guide](../guides/vps-provisioning.md#3-configure-api-token-permissions) for detailed permission setup instructions.
 
 **Note:** See [DNS Configuration](../deployment/dns.md) for detailed setup instructions.
 

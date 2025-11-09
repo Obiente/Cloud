@@ -19,7 +19,12 @@
           {{ item.label }}
         </slot>
         <Accordion.ItemIndicator class="shrink-0 ml-2">
-          <ChevronDownIcon class="h-4 w-4 transition-transform" />
+          <ChevronDownIcon 
+            :class="[
+              'h-4 w-4 transition-transform duration-200',
+              isItemOpen(item.value) ? 'rotate-180' : ''
+            ]" 
+          />
         </Accordion.ItemIndicator>
       </Accordion.ItemTrigger>
       <Accordion.ItemContent class="px-4 pb-3 text-secondary">
@@ -32,6 +37,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, watch } from "vue";
 import { Accordion } from "@ark-ui/vue/accordion";
 import { ChevronDownIcon } from "@heroicons/vue/24/outline";
 import type { Component } from "vue";
@@ -54,7 +60,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   multiple: false,
-  collapsible: false,
+  collapsible: true,
   disabled: false,
 });
 
@@ -62,8 +68,19 @@ const emit = defineEmits<{
   "update:modelValue": [value: string[]];
 }>();
 
+const openValues = ref<string[]>(props.modelValue || []);
+
+watch(() => props.modelValue, (newValue) => {
+  openValues.value = newValue || [];
+}, { immediate: true });
+
 const handleValueChange = (value: string[]) => {
+  openValues.value = value;
   emit("update:modelValue", value);
+};
+
+const isItemOpen = (itemValue: string) => {
+  return openValues.value.includes(itemValue);
 };
 </script>
 

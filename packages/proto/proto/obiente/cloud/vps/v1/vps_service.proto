@@ -1,0 +1,463 @@
+syntax = "proto3";
+
+package obiente.cloud.vps.v1;
+
+option go_package = "api/gen/proto/obiente/cloud/vps/v1;vpsv1";
+
+import "google/protobuf/timestamp.proto";
+import "obiente/cloud/organizations/v1/organization_service.proto";
+import "obiente/cloud/common/v1/common.proto";
+
+// VPSStatus represents the current status of a VPS instance
+enum VPSStatus {
+  VPS_STATUS_UNSPECIFIED = 0;
+  CREATING = 1;       // VPS is being provisioned
+  STARTING = 2;       // VPS is starting up
+  RUNNING = 3;        // VPS is running
+  STOPPING = 4;       // VPS is stopping
+  STOPPED = 5;        // VPS is stopped
+  REBOOTING = 6;     // VPS is rebooting
+  FAILED = 7;        // VPS provisioning or operation failed
+  DELETING = 8;      // VPS is being deleted
+  DELETED = 9;       // VPS has been deleted (soft delete)
+}
+
+// VPSImage represents the OS image for the VPS
+enum VPSImage {
+  VPS_IMAGE_UNSPECIFIED = 0;
+  UBUNTU_22_04 = 1;   // Ubuntu 22.04 LTS
+  UBUNTU_24_04 = 2;  // Ubuntu 24.04 LTS
+  DEBIAN_12 = 3;     // Debian 12
+  DEBIAN_13 = 4;     // Debian 13
+  ROCKY_LINUX_9 = 5; // Rocky Linux 9
+  ALMA_LINUX_9 = 6;  // AlmaLinux 9
+  CUSTOM = 99;       // Custom image (specified via image_id)
+}
+
+service VPSService {
+  // List organization VPS instances
+  rpc ListVPS(ListVPSRequest) returns (ListVPSResponse);
+  
+  // Create new VPS instance
+  rpc CreateVPS(CreateVPSRequest) returns (CreateVPSResponse);
+  
+  // Get VPS instance details
+  rpc GetVPS(GetVPSRequest) returns (GetVPSResponse);
+  
+  // Update VPS instance configuration
+  rpc UpdateVPS(UpdateVPSRequest) returns (UpdateVPSResponse);
+  
+  // Delete VPS instance
+  rpc DeleteVPS(DeleteVPSRequest) returns (DeleteVPSResponse);
+  
+  // Start a stopped VPS instance
+  rpc StartVPS(StartVPSRequest) returns (StartVPSResponse);
+  
+  // Stop a running VPS instance
+  rpc StopVPS(StopVPSRequest) returns (StopVPSResponse);
+  
+  // Reboot a VPS instance
+  rpc RebootVPS(RebootVPSRequest) returns (RebootVPSResponse);
+  
+  // Stream VPS status updates
+  rpc StreamVPSStatus(StreamVPSStatusRequest) returns (stream VPSStatusUpdate);
+  
+  // Get VPS instance metrics (real-time or historical)
+  rpc GetVPSMetrics(GetVPSMetricsRequest) returns (GetVPSMetricsResponse);
+  
+  // Stream real-time VPS metrics
+  rpc StreamVPSMetrics(StreamVPSMetricsRequest) returns (stream VPSMetric);
+  
+  // Get aggregated usage for a VPS instance
+  rpc GetVPSUsage(GetVPSUsageRequest) returns (GetVPSUsageResponse);
+  
+  // Get available VPS sizes/pricing
+  rpc ListVPSSizes(ListAvailableVPSSizesRequest) returns (ListAvailableVPSSizesResponse);
+  
+  // Get available VPS regions/locations
+  rpc ListVPSRegions(ListVPSRegionsRequest) returns (ListVPSRegionsResponse);
+  
+  // Get VPS proxy connection info (for accessing VPS without dedicated IP)
+  rpc GetVPSProxyInfo(GetVPSProxyInfoRequest) returns (GetVPSProxyInfoResponse);
+  
+  // Firewall management
+  rpc ListFirewallRules(ListFirewallRulesRequest) returns (ListFirewallRulesResponse);
+  rpc GetFirewallRule(GetFirewallRuleRequest) returns (GetFirewallRuleResponse);
+  rpc CreateFirewallRule(CreateFirewallRuleRequest) returns (CreateFirewallRuleResponse);
+  rpc UpdateFirewallRule(UpdateFirewallRuleRequest) returns (UpdateFirewallRuleResponse);
+  rpc DeleteFirewallRule(DeleteFirewallRuleRequest) returns (DeleteFirewallRuleResponse);
+  rpc GetFirewallOptions(GetFirewallOptionsRequest) returns (GetFirewallOptionsResponse);
+  rpc UpdateFirewallOptions(UpdateFirewallOptionsRequest) returns (UpdateFirewallOptionsResponse);
+}
+
+message ListVPSRequest {
+  string organization_id = 1;
+  int32 page = 2;
+  int32 per_page = 3;
+  // Optional: filter by status
+  optional VPSStatus status = 4;
+}
+
+message ListVPSResponse {
+  repeated VPSInstance vps_instances = 1;
+  obiente.cloud.common.v1.Pagination pagination = 2;
+}
+
+message CreateVPSRequest {
+  string organization_id = 1;
+  string name = 2;
+  optional string description = 3;
+  string region = 4;              // Obiente Cloud region (e.g., "us-east-1", "eu-west-1")
+  VPSImage image = 5;            // OS image
+  optional string image_id = 6;   // Custom image ID (if image is CUSTOM)
+  string size = 7;               // VPS size/spec (e.g., "small", "medium", "large", or specific like "2cpu-4gb")
+  optional string ssh_key_id = 8; // SSH key ID for initial access
+  map<string, string> metadata = 9; // Additional metadata/tags
+}
+
+message CreateVPSResponse {
+  VPSInstance vps = 1;
+}
+
+message GetVPSRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+message GetVPSResponse {
+  VPSInstance vps = 1;
+}
+
+message UpdateVPSRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  optional string name = 3;
+  optional string description = 4;
+  map<string, string> metadata = 5; // Update metadata/tags
+}
+
+message UpdateVPSResponse {
+  VPSInstance vps = 1;
+}
+
+message DeleteVPSRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  bool force = 3; // If true, force delete even if VPS is running
+}
+
+message DeleteVPSResponse {
+  bool success = 1;
+}
+
+message StartVPSRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+message StartVPSResponse {
+  VPSInstance vps = 1;
+}
+
+message StopVPSRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+message StopVPSResponse {
+  VPSInstance vps = 1;
+}
+
+message RebootVPSRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+message RebootVPSResponse {
+  VPSInstance vps = 1;
+}
+
+message StreamVPSStatusRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+message VPSStatusUpdate {
+  string vps_id = 1;
+  VPSStatus status = 2;
+  optional string message = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message GetVPSMetricsRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+  // Optional: aggregation interval (e.g., "1m", "5m", "1h")
+  optional string interval = 5;
+}
+
+message GetVPSMetricsResponse {
+  repeated VPSMetric metrics = 1;
+}
+
+message StreamVPSMetricsRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+message VPSMetric {
+  string vps_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  double cpu_usage_percent = 3;      // CPU usage percentage (0-100)
+  int64 memory_used_bytes = 4;       // Memory used in bytes
+  int64 memory_total_bytes = 5;      // Total memory in bytes
+  int64 disk_used_bytes = 6;         // Disk used in bytes
+  int64 disk_total_bytes = 7;        // Total disk in bytes
+  int64 network_rx_bytes = 8;        // Network received bytes
+  int64 network_tx_bytes = 9;         // Network transmitted bytes
+  double disk_read_iops = 10;         // Disk read IOPS
+  double disk_write_iops = 11;        // Disk write IOPS
+}
+
+message GetVPSUsageRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  // Optional: specify a month (YYYY-MM format). Defaults to current month.
+  optional string month = 3;
+}
+
+message GetVPSUsageResponse {
+  string vps_id = 1;
+  string month = 2; // YYYY-MM format
+  VPSUsageMetrics current = 3;
+  VPSUsageMetrics estimated_monthly = 4;
+  // Estimated cost in cents (e.g., 2347 = $23.47)
+  int64 estimated_cost_cents = 5;
+}
+
+message VPSUsageMetrics {
+  int64 cpu_core_seconds = 1;
+  int64 memory_byte_seconds = 2;
+  int64 bandwidth_rx_bytes = 3;
+  int64 bandwidth_tx_bytes = 4;
+  int64 disk_bytes = 5;
+  int64 uptime_seconds = 6; // Total uptime in seconds for the period
+}
+
+message ListAvailableVPSSizesRequest {
+  optional string region = 1; // Optional: filter by region
+}
+
+message ListAvailableVPSSizesResponse {
+  repeated obiente.cloud.common.v1.VPSSize sizes = 1;
+}
+
+message ListVPSRegionsRequest {
+  // Empty - returns all available Obiente Cloud regions
+}
+
+message ListVPSRegionsResponse {
+  repeated VPSRegion regions = 1;
+}
+
+message GetVPSProxyInfoRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+message GetVPSProxyInfoResponse {
+  string vps_id = 1;
+  // WebSocket URL for terminal access (e.g., wss://obiente.cloud/vps/{vps_id}/terminal)
+  string terminal_ws_url = 2;
+  // SSH proxy connection string (e.g., ssh -J proxy@obiente.cloud -p 2222 user@vps-{vps_id})
+  string ssh_proxy_command = 3;
+  // SSH port for direct connection (if available)
+  optional int32 ssh_port = 4;
+  // Instructions for connecting via proxy
+  string connection_instructions = 5;
+}
+
+message VPSRegion {
+  string id = 1;                    // Region ID (e.g., "nbg1", "nyc1")
+  string name = 2;                  // Human-readable name
+  string country = 3;               // Country code (e.g., "DE", "US")
+  string city = 4;                  // City name
+  bool available = 5;              // Whether this region is available
+}
+
+message VPSInstance {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  VPSStatus status = 4;
+  string region = 5;
+  VPSImage image = 6;
+  optional string image_id = 7;
+  string size = 8;
+  
+  // Resource specifications
+  int32 cpu_cores = 9;
+  int64 memory_bytes = 10;
+  int64 disk_bytes = 11;
+  
+  // Network information
+  repeated string ipv4_addresses = 12;
+  repeated string ipv6_addresses = 13;
+  
+  // Infrastructure information
+  optional string instance_id = 14; // Internal instance ID
+  optional string node_id = 15;     // Docker Swarm node ID where VPS is running
+  
+  // SSH access
+  optional string ssh_key_id = 16;
+  optional string root_password = 17; // Only returned on creation, never stored
+  
+  // Metadata and tags
+  map<string, string> metadata = 18;
+  
+  // Timestamps
+  google.protobuf.Timestamp created_at = 19;
+  google.protobuf.Timestamp updated_at = 20;
+  optional google.protobuf.Timestamp last_started_at = 21;
+  optional google.protobuf.Timestamp deleted_at = 22; // Soft delete
+  
+  // Organization and ownership
+  string organization_id = 23;
+  string created_by = 24;
+  
+  // Current resource usage (if available)
+  optional VPSMetric current_metrics = 25;
+}
+
+// Firewall rule management messages
+message ListFirewallRulesRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+message ListFirewallRulesResponse {
+  repeated FirewallRule rules = 1;
+}
+
+message GetFirewallRuleRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  int32 rule_pos = 3; // Rule position (0-based index)
+}
+
+message GetFirewallRuleResponse {
+  FirewallRule rule = 1;
+}
+
+message CreateFirewallRuleRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  FirewallRule rule = 3;
+  optional int32 pos = 4; // Optional position to insert rule (defaults to end)
+}
+
+message CreateFirewallRuleResponse {
+  FirewallRule rule = 1;
+}
+
+message UpdateFirewallRuleRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  int32 rule_pos = 3; // Rule position to update
+  FirewallRule rule = 4;
+}
+
+message UpdateFirewallRuleResponse {
+  FirewallRule rule = 1;
+}
+
+message DeleteFirewallRuleRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  int32 rule_pos = 3; // Rule position to delete
+}
+
+message DeleteFirewallRuleResponse {
+  bool success = 1;
+}
+
+message GetFirewallOptionsRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+message GetFirewallOptionsResponse {
+  FirewallOptions options = 1;
+}
+
+message UpdateFirewallOptionsRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  FirewallOptions options = 3;
+}
+
+message UpdateFirewallOptionsResponse {
+  FirewallOptions options = 1;
+}
+
+message FirewallRule {
+  int32 pos = 1; // Rule position (0-based index)
+  bool enable = 2; // Whether rule is enabled
+  FirewallAction action = 3; // ACCEPT, REJECT, DROP
+  FirewallDirection type = 4; // in, out
+  optional string comment = 5; // Rule comment/description
+  
+  // Source/Destination
+  optional string source = 6; // Source IP/CIDR (e.g., "192.168.1.0/24")
+  optional string dest = 7; // Destination IP/CIDR
+  optional string iface = 8; // Network interface (e.g., "vmbr0")
+  optional string mac_source = 9; // Source MAC address
+  
+  // Protocol and ports
+  optional FirewallProtocol protocol = 10; // tcp, udp, icmp, etc.
+  optional string dport = 11; // Destination port(s) (e.g., "80", "80,443", "1000:2000")
+  optional string sport = 12; // Source port(s)
+  optional int32 icmp_type = 13; // ICMP type (for ICMP protocol)
+  
+  // Logging
+  optional bool log = 14; // Enable logging for this rule
+}
+
+enum FirewallAction {
+  FIREWALL_ACTION_UNSPECIFIED = 0;
+  ACCEPT = 1;
+  REJECT = 2;
+  DROP = 3;
+}
+
+enum FirewallDirection {
+  FIREWALL_DIRECTION_UNSPECIFIED = 0;
+  IN = 1;  // Incoming traffic
+  OUT = 2; // Outgoing traffic
+}
+
+enum FirewallProtocol {
+  FIREWALL_PROTOCOL_UNSPECIFIED = 0;
+  TCP = 1;
+  UDP = 2;
+  ICMP = 3;
+  ICMPV6 = 4;
+  ALL = 5; // All protocols
+}
+
+message FirewallOptions {
+  bool enable = 1; // Enable firewall
+  optional string policy_in = 2; // Default policy for incoming traffic (ACCEPT, DROP, REJECT)
+  optional string policy_out = 3; // Default policy for outgoing traffic (ACCEPT, DROP, REJECT)
+  optional bool log_level_in = 4; // Log incoming traffic
+  optional bool log_level_out = 5; // Log outgoing traffic
+  optional bool nf_log = 6; // Enable netfilter logging
+  optional bool dhcp = 7; // Allow DHCP
+  optional bool ndp = 8; // Allow NDP (Neighbor Discovery Protocol)
+  optional bool radv = 9; // Allow Router Advertisement
+  optional bool ipfilter = 10; // Enable IP filter
+  optional bool ipfilter_rules = 11; // Enable IP filter rules
+}
+

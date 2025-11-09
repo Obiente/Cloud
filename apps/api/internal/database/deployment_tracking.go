@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -206,6 +207,49 @@ func GetAvailableNodes() ([]NodeMetadata, error) {
 		Order("deployment_count ASC, used_cpu ASC, used_memory ASC").
 		Find(&nodes)
 	return nodes, result.Error
+}
+
+// GetProxmoxNodes returns nodes with Proxmox capability
+func GetProxmoxNodes() ([]NodeMetadata, error) {
+	var allNodes []NodeMetadata
+	result := DB.Where("availability = ? AND status = ?", "active", "ready").
+		Find(&allNodes)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	// Filter nodes with Proxmox capability
+	var proxmoxNodes []NodeMetadata
+	for _, node := range allNodes {
+		if HasProxmoxCapability(node) {
+			proxmoxNodes = append(proxmoxNodes, node)
+		}
+	}
+
+	return proxmoxNodes, nil
+}
+
+// HasProxmoxCapability checks if a node has Proxmox capability based on labels
+// Exported so it can be used by other packages
+func HasProxmoxCapability(node NodeMetadata) bool {
+	if node.Labels == "" {
+		return false
+	}
+
+	var labels map[string]interface{}
+	if err := json.Unmarshal([]byte(node.Labels), &labels); err != nil {
+		return false
+	}
+
+	// Check if node has proxmox label set to true
+	if proxmox, ok := labels["proxmox"].(string); ok && proxmox == "true" {
+		return true
+	}
+	if proxmox, ok := labels["proxmox"].(bool); ok && proxmox {
+		return true
+	}
+
+	return false
 }
 
 // UpdateNodeMetrics updates resource usage for a node

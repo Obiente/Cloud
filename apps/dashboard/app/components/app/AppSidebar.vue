@@ -163,6 +163,12 @@
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            to="/superadmin/vps"
+            label="VPS Instances"
+            :icon="ServerIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
             to="/superadmin/users"
             label="Users"
             :icon="UsersIcon"

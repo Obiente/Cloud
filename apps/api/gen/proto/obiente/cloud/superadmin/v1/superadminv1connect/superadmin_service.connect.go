@@ -99,6 +99,21 @@ const (
 	// SuperadminServiceGetUserProcedure is the fully-qualified name of the SuperadminService's GetUser
 	// RPC.
 	SuperadminServiceGetUserProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetUser"
+	// SuperadminServiceListAllVPSProcedure is the fully-qualified name of the SuperadminService's
+	// ListAllVPS RPC.
+	SuperadminServiceListAllVPSProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListAllVPS"
+	// SuperadminServiceListVPSSizesProcedure is the fully-qualified name of the SuperadminService's
+	// ListVPSSizes RPC.
+	SuperadminServiceListVPSSizesProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListVPSSizes"
+	// SuperadminServiceCreateVPSSizeProcedure is the fully-qualified name of the SuperadminService's
+	// CreateVPSSize RPC.
+	SuperadminServiceCreateVPSSizeProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/CreateVPSSize"
+	// SuperadminServiceUpdateVPSSizeProcedure is the fully-qualified name of the SuperadminService's
+	// UpdateVPSSize RPC.
+	SuperadminServiceUpdateVPSSizeProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/UpdateVPSSize"
+	// SuperadminServiceDeleteVPSSizeProcedure is the fully-qualified name of the SuperadminService's
+	// DeleteVPSSize RPC.
+	SuperadminServiceDeleteVPSSizeProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/DeleteVPSSize"
 )
 
 // SuperadminServiceClient is a client for the obiente.cloud.superadmin.v1.SuperadminService
@@ -135,6 +150,13 @@ type SuperadminServiceClient interface {
 	// User management endpoints
 	ListUsers(context.Context, *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error)
 	GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error)
+	// VPS management endpoints
+	ListAllVPS(context.Context, *connect.Request[v1.ListAllVPSRequest]) (*connect.Response[v1.ListAllVPSResponse], error)
+	// VPS size catalog management endpoints
+	ListVPSSizes(context.Context, *connect.Request[v1.ListVPSSizesRequest]) (*connect.Response[v1.ListVPSSizesResponse], error)
+	CreateVPSSize(context.Context, *connect.Request[v1.CreateVPSSizeRequest]) (*connect.Response[v1.CreateVPSSizeResponse], error)
+	UpdateVPSSize(context.Context, *connect.Request[v1.UpdateVPSSizeRequest]) (*connect.Response[v1.UpdateVPSSizeResponse], error)
+	DeleteVPSSize(context.Context, *connect.Request[v1.DeleteVPSSizeRequest]) (*connect.Response[v1.DeleteVPSSizeResponse], error)
 }
 
 // NewSuperadminServiceClient constructs a client for the
@@ -281,6 +303,36 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("GetUser")),
 			connect.WithClientOptions(opts...),
 		),
+		listAllVPS: connect.NewClient[v1.ListAllVPSRequest, v1.ListAllVPSResponse](
+			httpClient,
+			baseURL+SuperadminServiceListAllVPSProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListAllVPS")),
+			connect.WithClientOptions(opts...),
+		),
+		listVPSSizes: connect.NewClient[v1.ListVPSSizesRequest, v1.ListVPSSizesResponse](
+			httpClient,
+			baseURL+SuperadminServiceListVPSSizesProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListVPSSizes")),
+			connect.WithClientOptions(opts...),
+		),
+		createVPSSize: connect.NewClient[v1.CreateVPSSizeRequest, v1.CreateVPSSizeResponse](
+			httpClient,
+			baseURL+SuperadminServiceCreateVPSSizeProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("CreateVPSSize")),
+			connect.WithClientOptions(opts...),
+		),
+		updateVPSSize: connect.NewClient[v1.UpdateVPSSizeRequest, v1.UpdateVPSSizeResponse](
+			httpClient,
+			baseURL+SuperadminServiceUpdateVPSSizeProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("UpdateVPSSize")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteVPSSize: connect.NewClient[v1.DeleteVPSSizeRequest, v1.DeleteVPSSizeResponse](
+			httpClient,
+			baseURL+SuperadminServiceDeleteVPSSizeProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("DeleteVPSSize")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -308,6 +360,11 @@ type superadminServiceClient struct {
 	assignPlanToOrganization                 *connect.Client[v1.AssignPlanToOrganizationRequest, v1.AssignPlanToOrganizationResponse]
 	listUsers                                *connect.Client[v1.ListUsersRequest, v1.ListUsersResponse]
 	getUser                                  *connect.Client[v1.GetUserRequest, v1.GetUserResponse]
+	listAllVPS                               *connect.Client[v1.ListAllVPSRequest, v1.ListAllVPSResponse]
+	listVPSSizes                             *connect.Client[v1.ListVPSSizesRequest, v1.ListVPSSizesResponse]
+	createVPSSize                            *connect.Client[v1.CreateVPSSizeRequest, v1.CreateVPSSizeResponse]
+	updateVPSSize                            *connect.Client[v1.UpdateVPSSizeRequest, v1.UpdateVPSSizeResponse]
+	deleteVPSSize                            *connect.Client[v1.DeleteVPSSizeRequest, v1.DeleteVPSSizeResponse]
 }
 
 // GetOverview calls obiente.cloud.superadmin.v1.SuperadminService.GetOverview.
@@ -426,6 +483,31 @@ func (c *superadminServiceClient) GetUser(ctx context.Context, req *connect.Requ
 	return c.getUser.CallUnary(ctx, req)
 }
 
+// ListAllVPS calls obiente.cloud.superadmin.v1.SuperadminService.ListAllVPS.
+func (c *superadminServiceClient) ListAllVPS(ctx context.Context, req *connect.Request[v1.ListAllVPSRequest]) (*connect.Response[v1.ListAllVPSResponse], error) {
+	return c.listAllVPS.CallUnary(ctx, req)
+}
+
+// ListVPSSizes calls obiente.cloud.superadmin.v1.SuperadminService.ListVPSSizes.
+func (c *superadminServiceClient) ListVPSSizes(ctx context.Context, req *connect.Request[v1.ListVPSSizesRequest]) (*connect.Response[v1.ListVPSSizesResponse], error) {
+	return c.listVPSSizes.CallUnary(ctx, req)
+}
+
+// CreateVPSSize calls obiente.cloud.superadmin.v1.SuperadminService.CreateVPSSize.
+func (c *superadminServiceClient) CreateVPSSize(ctx context.Context, req *connect.Request[v1.CreateVPSSizeRequest]) (*connect.Response[v1.CreateVPSSizeResponse], error) {
+	return c.createVPSSize.CallUnary(ctx, req)
+}
+
+// UpdateVPSSize calls obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSSize.
+func (c *superadminServiceClient) UpdateVPSSize(ctx context.Context, req *connect.Request[v1.UpdateVPSSizeRequest]) (*connect.Response[v1.UpdateVPSSizeResponse], error) {
+	return c.updateVPSSize.CallUnary(ctx, req)
+}
+
+// DeleteVPSSize calls obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSSize.
+func (c *superadminServiceClient) DeleteVPSSize(ctx context.Context, req *connect.Request[v1.DeleteVPSSizeRequest]) (*connect.Response[v1.DeleteVPSSizeResponse], error) {
+	return c.deleteVPSSize.CallUnary(ctx, req)
+}
+
 // SuperadminServiceHandler is an implementation of the
 // obiente.cloud.superadmin.v1.SuperadminService service.
 type SuperadminServiceHandler interface {
@@ -460,6 +542,13 @@ type SuperadminServiceHandler interface {
 	// User management endpoints
 	ListUsers(context.Context, *connect.Request[v1.ListUsersRequest]) (*connect.Response[v1.ListUsersResponse], error)
 	GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error)
+	// VPS management endpoints
+	ListAllVPS(context.Context, *connect.Request[v1.ListAllVPSRequest]) (*connect.Response[v1.ListAllVPSResponse], error)
+	// VPS size catalog management endpoints
+	ListVPSSizes(context.Context, *connect.Request[v1.ListVPSSizesRequest]) (*connect.Response[v1.ListVPSSizesResponse], error)
+	CreateVPSSize(context.Context, *connect.Request[v1.CreateVPSSizeRequest]) (*connect.Response[v1.CreateVPSSizeResponse], error)
+	UpdateVPSSize(context.Context, *connect.Request[v1.UpdateVPSSizeRequest]) (*connect.Response[v1.UpdateVPSSizeResponse], error)
+	DeleteVPSSize(context.Context, *connect.Request[v1.DeleteVPSSizeRequest]) (*connect.Response[v1.DeleteVPSSizeResponse], error)
 }
 
 // NewSuperadminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -601,6 +690,36 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		connect.WithSchema(superadminServiceMethods.ByName("GetUser")),
 		connect.WithHandlerOptions(opts...),
 	)
+	superadminServiceListAllVPSHandler := connect.NewUnaryHandler(
+		SuperadminServiceListAllVPSProcedure,
+		svc.ListAllVPS,
+		connect.WithSchema(superadminServiceMethods.ByName("ListAllVPS")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceListVPSSizesHandler := connect.NewUnaryHandler(
+		SuperadminServiceListVPSSizesProcedure,
+		svc.ListVPSSizes,
+		connect.WithSchema(superadminServiceMethods.ByName("ListVPSSizes")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceCreateVPSSizeHandler := connect.NewUnaryHandler(
+		SuperadminServiceCreateVPSSizeProcedure,
+		svc.CreateVPSSize,
+		connect.WithSchema(superadminServiceMethods.ByName("CreateVPSSize")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceUpdateVPSSizeHandler := connect.NewUnaryHandler(
+		SuperadminServiceUpdateVPSSizeProcedure,
+		svc.UpdateVPSSize,
+		connect.WithSchema(superadminServiceMethods.ByName("UpdateVPSSize")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceDeleteVPSSizeHandler := connect.NewUnaryHandler(
+		SuperadminServiceDeleteVPSSizeProcedure,
+		svc.DeleteVPSSize,
+		connect.WithSchema(superadminServiceMethods.ByName("DeleteVPSSize")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.superadmin.v1.SuperadminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SuperadminServiceGetOverviewProcedure:
@@ -647,6 +766,16 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceListUsersHandler.ServeHTTP(w, r)
 		case SuperadminServiceGetUserProcedure:
 			superadminServiceGetUserHandler.ServeHTTP(w, r)
+		case SuperadminServiceListAllVPSProcedure:
+			superadminServiceListAllVPSHandler.ServeHTTP(w, r)
+		case SuperadminServiceListVPSSizesProcedure:
+			superadminServiceListVPSSizesHandler.ServeHTTP(w, r)
+		case SuperadminServiceCreateVPSSizeProcedure:
+			superadminServiceCreateVPSSizeHandler.ServeHTTP(w, r)
+		case SuperadminServiceUpdateVPSSizeProcedure:
+			superadminServiceUpdateVPSSizeHandler.ServeHTTP(w, r)
+		case SuperadminServiceDeleteVPSSizeProcedure:
+			superadminServiceDeleteVPSSizeHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -742,4 +871,24 @@ func (UnimplementedSuperadminServiceHandler) ListUsers(context.Context, *connect
 
 func (UnimplementedSuperadminServiceHandler) GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetUser is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListAllVPS(context.Context, *connect.Request[v1.ListAllVPSRequest]) (*connect.Response[v1.ListAllVPSResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListAllVPS is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListVPSSizes(context.Context, *connect.Request[v1.ListVPSSizesRequest]) (*connect.Response[v1.ListVPSSizesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListVPSSizes is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) CreateVPSSize(context.Context, *connect.Request[v1.CreateVPSSizeRequest]) (*connect.Response[v1.CreateVPSSizeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.CreateVPSSize is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) UpdateVPSSize(context.Context, *connect.Request[v1.UpdateVPSSizeRequest]) (*connect.Response[v1.UpdateVPSSizeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSSize is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) DeleteVPSSize(context.Context, *connect.Request[v1.DeleteVPSSizeRequest]) (*connect.Response[v1.DeleteVPSSizeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSSize is not implemented"))
 }
