@@ -212,10 +212,11 @@ prompt_storage() {
         print_info "Auto-detected storage: $detected_storage (type: $detected_type)" >&2
         echo -n "Use detected storage? [Y/n]: " >&2
         # Read from terminal if available, otherwise stdin
+        # Use || true to prevent read failure from exiting script (set -e)
         if [ -t 0 ]; then
-            read -r use_detected
+            read -r use_detected || use_detected="Y"
         elif [ -c /dev/tty ]; then
-            read -r use_detected < /dev/tty
+            read -r use_detected < /dev/tty || use_detected="Y"
         else
             # Fallback: try stdin anyway (might work in some environments)
             read -r use_detected || use_detected="Y"
@@ -231,10 +232,11 @@ prompt_storage() {
     
     echo -n "Select storage pool [1-$((index-1))]: " >&2
     # Read from terminal if available, otherwise stdin
+    # Use || true to prevent read failure from exiting script (set -e)
     if [ -t 0 ]; then
-        read -r selection
+        read -r selection || selection=""
     elif [ -c /dev/tty ]; then
-        read -r selection < /dev/tty
+        read -r selection < /dev/tty || selection=""
     else
         # Fallback: try stdin anyway (might work in some environments)
         read -r selection || selection=""
@@ -293,10 +295,11 @@ create_or_update_template() {
             print_warning "Template '$template_name' already exists (VMID: $existing_vmid)"
             echo -n "Update existing template? [Y/n]: "
             # Read from terminal if available, otherwise stdin
+            # Use || true to prevent read failure from exiting script (set -e)
             if [ -t 0 ]; then
-                read -r update
+                read -r update || update="Y"
             elif [ -c /dev/tty ]; then
-                read -r update < /dev/tty
+                read -r update < /dev/tty || update="Y"
             else
                 # Fallback: try stdin anyway (might work in some environments)
                 read -r update || update="Y"
@@ -305,7 +308,7 @@ create_or_update_template() {
             
             if [[ ! "$update" =~ ^[Yy]$ ]]; then
                 print_info "Skipping template: $template_name"
-                return
+                return 0
             fi
             
             # Delete existing template
@@ -347,8 +350,53 @@ create_or_update_template() {
         return 1
     fi
     
-    # Get disk path
-    local disk_path=$(get_disk_path "$storage" "$storage_type" "$vmid")
+    # Get the actual imported disk path
+    # qm importdisk creates an unused disk (unused0) that we need to find
+    print_info "Detecting imported disk..."
+    local disk_path=""
+    
+    # Get the unused disk from VM config (qm importdisk creates unused0)
+    local unused_disk=$(qm config "$vmid" 2>/dev/null | grep "^unused0:" | sed 's/unused0:[[:space:]]*//' | sed 's/[[:space:]]*$//' || echo "")
+    
+    if [ -n "$unused_disk" ]; then
+        # Use the actual imported disk path
+        disk_path="$unused_disk"
+        print_info "Found imported disk: $disk_path"
+    else
+        # Fallback: construct path based on storage type
+        if [ "$storage_type" = "dir" ]; then
+            # For directory storage, check both .raw and .qcow2
+            # Try .raw first (common for Debian images)
+            local raw_path="$storage:$vmid/vm-$vmid-disk-0.raw"
+            local qcow2_path="$storage:$vmid/vm-$vmid-disk-0.qcow2"
+            
+            # Check which file actually exists on disk
+            local storage_path=$(pvesm path "$raw_path" 2>/dev/null || echo "")
+            if [ -n "$storage_path" ] && [ -f "$storage_path" ]; then
+                disk_path="$raw_path"
+            else
+                storage_path=$(pvesm path "$qcow2_path" 2>/dev/null || echo "")
+                if [ -n "$storage_path" ] && [ -f "$storage_path" ]; then
+                    disk_path="$qcow2_path"
+                else
+                    # Last resort: try raw (most common for cloud images)
+                    disk_path="$raw_path"
+                fi
+            fi
+        else
+            # For LVM/ZFS, format is storage:vm-vmid-disk-0
+            disk_path="$storage:vm-$vmid-disk-0"
+        fi
+        print_warning "Could not find unused0 in config, using constructed path: $disk_path"
+    fi
+    
+    if [ -z "$disk_path" ]; then
+        print_error "Could not detect imported disk path"
+        qm destroy "$vmid" --purge 2>/dev/null || true
+        return 1
+    fi
+    
+    print_info "Using disk: $disk_path"
     
     # Configure VM
     print_info "Configuring VM..."
@@ -378,6 +426,7 @@ create_or_update_template() {
     
     print_success "Template '$template_name' created successfully!"
     echo ""
+    return 0
 }
 
 # Main function
@@ -420,10 +469,11 @@ main() {
     echo ""
     echo -n "Continue? [Y/n]: "
     # Read from terminal if available, otherwise stdin
+    # Use || true to prevent read failure from exiting script (set -e)
     if [ -t 0 ]; then
-        read -r confirm
+        read -r confirm || confirm="Y"
     elif [ -c /dev/tty ]; then
-        read -r confirm < /dev/tty
+        read -r confirm < /dev/tty || confirm="Y"
     else
         # Fallback: try stdin anyway (might work in some environments)
         read -r confirm || confirm="Y"
@@ -441,18 +491,32 @@ main() {
     local success_count=0
     local fail_count=0
     
+    # Temporarily disable set -e for the loop to continue on errors
+    set +e
+    
     for template_name in "${!TEMPLATES[@]}"; do
         local template_info="${TEMPLATES[$template_name]}"
         local vmid=$(echo "$template_info" | cut -d'|' -f1)
         local image_url=$(echo "$template_info" | cut -d'|' -f2)
         local image_filename=$(echo "$template_info" | cut -d'|' -f3)
         
+        echo ""
+        print_info "=========================================="
+        print_info "Processing: $template_name"
+        print_info "=========================================="
+        echo ""
+        
         if create_or_update_template "$template_name" "$vmid" "$image_url" "$image_filename" "$storage" "$storage_type"; then
             ((success_count++))
+            print_success "Successfully processed: $template_name"
         else
             ((fail_count++))
+            print_error "Failed to process: $template_name"
         fi
     done
+    
+    # Re-enable set -e
+    set -e
     
     echo ""
     echo "=========================================="
