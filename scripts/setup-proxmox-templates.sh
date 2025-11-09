@@ -75,24 +75,24 @@ get_available_storages() {
     local node_name="$1"
     if [ -z "$node_name" ]; then
         # Try to get first node
-        node_name=$(pvecm nodes | grep -v "^$" | head -n1 | awk '{print $1}' 2>/dev/null || echo "")
+        node_name=$(pvecm nodes 2>/dev/null | awk 'NF > 0 {print $1; exit}' || echo "")
         if [ -z "$node_name" ]; then
             # Fallback: try to detect from hostname
             node_name=$(hostname -s 2>/dev/null || echo "localhost")
         fi
     fi
     
-    print_info "Detecting available storage pools on node: $node_name"
+    print_info "Detecting available storage pools on node: $node_name" >&2
     
     # Get storage pools that support images
     # pvesm status format: name type status content avail used
     # Filter for storages where content column contains "images"
-    local storages=$(pvesm status 2>/dev/null | awk 'NR>1 && ($4 ~ /images/ || $5 ~ /images/) {print $1}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' || echo "")
+    local storages=$(pvesm status 2>/dev/null | awk 'NR>1 && ($4 ~ /images/ || $5 ~ /images/) {print $1}' | sed 's/^[ \t]*//;s/[ \t]*$//' | awk 'NF > 0' || echo "")
     
     if [ -z "$storages" ]; then
-        print_warning "Could not find storages with images support. Listing all storages..."
+        print_warning "Could not find storages with images support. Listing all storages..." >&2
         # Get all storages (skip header line)
-        storages=$(pvesm status 2>/dev/null | awk 'NR>1 {print $1}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' || echo "")
+        storages=$(pvesm status 2>/dev/null | awk 'NR>1 {print $1}' | sed 's/^[ \t]*//;s/[ \t]*$//' | awk 'NF > 0' || echo "")
     fi
     
     echo "$storages"
@@ -112,8 +112,8 @@ detect_storage_type() {
     local storage_info=$(pvesm status 2>/dev/null | awk -v s="$storage" '$1 == s {print $2}' || echo "")
     
     if [ -z "$storage_info" ]; then
-        # Try alternative: check storage config
-        storage_info=$(pvesm status 2>/dev/null | grep -E "^${storage}[[:space:]]" | awk '{print $2}' || echo "")
+        # Try alternative: check storage config using awk for portability
+        storage_info=$(pvesm status 2>/dev/null | awk -v s="$storage" '$1 == s {print $2; exit}' || echo "")
     fi
     
     case "$storage_info" in
@@ -159,8 +159,8 @@ prompt_storage() {
     
     # Process storages line by line
     while IFS= read -r storage || [ -n "$storage" ]; do
-        # Trim whitespace
-        storage=$(echo "$storage" | tr -d '[:space:]' | xargs)
+        # Trim whitespace - use sed with simple patterns for portability
+        storage=$(echo "$storage" | sed 's/^[ \t]*//;s/[ \t]*$//')
         
         if [ -n "$storage" ] && [ "$storage" != "" ]; then
             storage_array+=("$storage")
