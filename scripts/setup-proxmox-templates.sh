@@ -85,11 +85,14 @@ get_available_storages() {
     print_info "Detecting available storage pools on node: $node_name"
     
     # Get storage pools that support images
-    local storages=$(pvesm status -content images 2>/dev/null | awk 'NR>1 {print $1}' | grep -v "^$" || echo "")
+    # pvesm status format: name type status content avail used
+    # Filter for storages where content column contains "images"
+    local storages=$(pvesm status 2>/dev/null | awk 'NR>1 && ($4 ~ /images/ || $5 ~ /images/) {print $1}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' || echo "")
     
     if [ -z "$storages" ]; then
-        print_warning "Could not auto-detect storage pools. Trying alternative method..."
-        storages=$(pvesm status 2>/dev/null | awk 'NR>1 {print $1}' | grep -v "^$" || echo "")
+        print_warning "Could not find storages with images support. Listing all storages..."
+        # Get all storages (skip header line)
+        storages=$(pvesm status 2>/dev/null | awk 'NR>1 {print $1}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' || echo "")
     fi
     
     echo "$storages"
@@ -104,12 +107,13 @@ detect_storage_type() {
         node_name=$(hostname -s 2>/dev/null || echo "localhost")
     fi
     
-    # Try to get storage info
-    local storage_info=$(pvesm status -storage "$storage" 2>/dev/null | grep "$storage" | awk '{print $2}' || echo "")
+    # Try to get storage info from pvesm status
+    # Format: storage_name type status content ...
+    local storage_info=$(pvesm status 2>/dev/null | awk -v s="$storage" '$1 == s {print $2}' || echo "")
     
     if [ -z "$storage_info" ]; then
-        # Try alternative method
-        storage_info=$(pvesm status 2>/dev/null | grep "^$storage" | awk '{print $2}' || echo "")
+        # Try alternative: check storage config
+        storage_info=$(pvesm status 2>/dev/null | grep -E "^${storage}[[:space:]]" | awk '{print $2}' || echo "")
     fi
     
     case "$storage_info" in
@@ -138,12 +142,14 @@ detect_storage_type() {
 }
 
 # Prompt for storage selection
+# Outputs result to stdout, prompts/info to stderr
 prompt_storage() {
     local storages="$1"
     local node_name="$2"
     
-    print_info "Available storage pools:"
-    echo ""
+    # All user-facing output goes to stderr
+    print_info "Available storage pools:" >&2
+    echo "" >&2
     
     # Create array of storages
     local storage_array=()
@@ -151,8 +157,12 @@ prompt_storage() {
     local detected_storage=""
     local detected_type=""
     
-    while IFS= read -r storage; do
-        if [ -n "$storage" ]; then
+    # Process storages line by line
+    while IFS= read -r storage || [ -n "$storage" ]; do
+        # Trim whitespace
+        storage=$(echo "$storage" | tr -d '[:space:]' | xargs)
+        
+        if [ -n "$storage" ] && [ "$storage" != "" ]; then
             storage_array+=("$storage")
             local storage_type=$(detect_storage_type "$storage" "$node_name")
             local type_display=""
@@ -183,36 +193,38 @@ prompt_storage() {
                 fi
             fi
             
-            echo "  [$index] $storage ($type_display)"
+            echo "  [$index] $storage ($type_display)" >&2
             ((index++))
         fi
     done <<< "$storages"
     
-    echo ""
+    echo "" >&2
     
     if [ -n "$detected_storage" ]; then
-        print_info "Auto-detected storage: $detected_storage (type: $detected_type)"
-        echo -n "Use detected storage? [Y/n]: "
+        print_info "Auto-detected storage: $detected_storage (type: $detected_type)" >&2
+        echo -n "Use detected storage? [Y/n]: " >&2
         read -r use_detected
         use_detected=${use_detected:-Y}
         
         if [[ "$use_detected" =~ ^[Yy]$ ]]; then
+            # Output result to stdout
             echo "$detected_storage|$detected_type"
             return
         fi
     fi
     
-    echo -n "Select storage pool [1-$((index-1))]: "
+    echo -n "Select storage pool [1-$((index-1))]: " >&2
     read -r selection
     
     if ! [[ "$selection" =~ ^[0-9]+$ ]] || [ "$selection" -lt 1 ] || [ "$selection" -gt $((index-1)) ]; then
-        print_error "Invalid selection"
+        print_error "Invalid selection" >&2
         exit 1
     fi
     
     local selected_storage="${storage_array[$((selection-1))]}"
     local selected_type=$(detect_storage_type "$selected_storage" "$node_name")
     
+    # Output result to stdout
     echo "$selected_storage|$selected_type"
 }
 
