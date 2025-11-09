@@ -504,12 +504,12 @@ rm Rocky-9-GenericCloud-Base.latest.x86_64.qcow2
 ```bash
 # Step 1: Download AlmaLinux 9 cloud image
 cd /tmp
-wget https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-Base-latest.x86_64.qcow2
+wget https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2
 
 # Step 2: Create VM and configure (replace 'local-lvm' with your storage pool)
 STORAGE="local-lvm"  # Change this to your storage pool
 qm create 9005 --name almalinux-9-standard --memory 2048 --net0 virtio,bridge=vmbr0
-qm importdisk 9005 AlmaLinux-9-GenericCloud-Base-latest.x86_64.qcow2 $STORAGE
+qm importdisk 9005 AlmaLinux-9-GenericCloud-latest.x86_64.qcow2 $STORAGE
 
 # Step 3: Determine the correct disk path based on storage type
 if [ "$STORAGE" = "local" ]; then
@@ -532,7 +532,7 @@ qm config 9005 | grep scsi0
 qm template 9005
 
 # Clean up
-rm AlmaLinux-9-GenericCloud-Base-latest.x86_64.qcow2
+rm AlmaLinux-9-GenericCloud-latest.x86_64.qcow2
 ```
 
 #### Template Setup Notes

@@ -28,7 +28,7 @@ declare -A TEMPLATES=(
     ["debian-12-standard"]="9002|https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2|debian-12-generic-amd64.qcow2"
     ["debian-13-standard"]="9003|https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2|debian-13-generic-amd64.qcow2"
     ["rockylinux-9-standard"]="9004|https://download.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2|Rocky-9-GenericCloud-Base.latest.x86_64.qcow2"
-    ["almalinux-9-standard"]="9005|https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-Base-latest.x86_64.qcow2|AlmaLinux-9-GenericCloud-Base-latest.x86_64.qcow2"
+    ["almalinux-9-standard"]="9005|https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2|AlmaLinux-9-GenericCloud-latest.x86_64.qcow2"
 )
 
 # Function to print colored output
