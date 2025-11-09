@@ -8,38 +8,41 @@
         class="flex items-center rounded-xl justify-between w-full mx-auto transform-gpu transition-all duration-500 ease-out border will-change-transform"
         :class="
           isScrolled
-            ? 'py-1.5 px-2 md:py-2 md:px-2 bg-background/80 backdrop-blur-md shadow-sm border-border-muted'
-            : 'p-0 bg-background border-transparent'
+            ? 'py-1.5 px-2 md:py-2 md:px-2 bg-background/70 backdrop-blur-sm shadow-sm border-border-muted'
+            : 'p-0 border-transparent'
         "
       >
-      <!-- Navigation -->
+        <!-- Navigation -->
 
-      <OuiFlex align="center" gap="md" class="flex-1 min-w-0">
-        <OuiFlex align="center" gap="sm" class="min-w-0">
-          <ObienteLogo size="md" />
-          <OuiText
-            size="xl"
-            weight="bold"
-            color="primary"
-            class="truncate text-lg md:text-xl"
-            >Obiente Cloud</OuiText
+        <OuiFlex align="center" gap="md" class="flex-1 min-w-0">
+          <OuiFlex align="center" gap="sm" class="min-w-0">
+            <ObienteLogo size="md" />
+            <OuiText
+              size="xl"
+              weight="bold"
+              color="primary"
+              class="truncate text-lg md:text-xl"
+              >Obiente Cloud</OuiText
+            >
+          </OuiFlex>
+        </OuiFlex>
+
+        <OuiFlex align="center" gap="md" class="shrink-0 hidden sm:flex">
+          <OuiButton variant="ghost" size="sm">Features</OuiButton>
+          <OuiButton variant="ghost" size="sm">Pricing</OuiButton>
+          <OuiButton variant="ghost" size="sm" @click="navigateTo('/docs')"
+            >Docs</OuiButton
+          >
+          <OuiButton variant="outline" size="sm" @click="handleSignUp">
+            Sign Up
+          </OuiButton>
+          <OuiButton
+            variant="outline"
+            size="sm"
+            @click="navigateTo('/dashboard')"
+            >Sign In</OuiButton
           >
         </OuiFlex>
-      </OuiFlex>
-
-      <OuiFlex align="center" gap="md" class="shrink-0 hidden sm:flex">
-        <OuiButton variant="ghost" size="sm">Features</OuiButton>
-        <OuiButton variant="ghost" size="sm">Pricing</OuiButton>
-        <OuiButton variant="ghost" size="sm" @click="navigateTo('/docs')"
-          >Docs</OuiButton
-        >
-        <OuiButton variant="outline" size="sm" @click="handleSignUp">
-          Sign Up
-        </OuiButton>
-        <OuiButton variant="outline" size="sm" @click="navigateTo('/dashboard')"
-          >Sign In</OuiButton
-        >
-      </OuiFlex>
       </OuiContainer>
     </div>
     <OuiContainer size="7xl" class="relative px-3 md:px-4 pt-20 md:pt-32">
@@ -47,7 +50,7 @@
       <OuiStack
         gap="xl"
         align="center"
-        class="text-center py-16 md:py-32 lg:py-40 md:gap-16"
+        class="text-center py-16 md:pb-32 lg:pb-32 md:pt-20 md:gap-16 relative z-10"
       >
         <OuiStack gap="md" align="center" class="max-w-4xl md:gap-6">
           <OuiText
@@ -55,26 +58,30 @@
             size="6xl"
             weight="bold"
             color="primary"
-            class="text-3xl md:text-5xl lg:text-6xl leading-tight"
+            class="text-3xl md:text-5xl lg:text-7xl leading-tight tracking-tight"
           >
-            Deploy, Scale, and Manage Your Cloud Infrastructure
+            Deploy, Scale, and Manage
             <br class="hidden md:block" />
-            With
+            Your Cloud Infrastructure
+            <br class="hidden md:block" />
             <span
-              class="bg-clip-text text-transparent bg-linear-to-r from-accent-primary to-accent-primary"
+              class="bg-clip-text text-transparent bg-gradient-to-r from-accent-primary to-accent-primary/70 bg-[length:150%_auto] animate-gradient-subtle"
             >
-              Obiente Cloud
+              With Obiente Cloud
             </span>
           </OuiText>
 
           <OuiText
             size="xl"
             color="secondary"
-            class="max-w-2xl px-2 md:px-0 text-md md:text-xl"
+            class="max-w-2xl px-2 md:px-0 text-md md:text-xl lg:text-2xl leading-relaxed"
           >
-            Deploy containers, game servers, and VPS instances. Pay only for
-            what you use with transparent, resource-based pricing. No more
-            overpaying for unused resources.
+            Deploy containers, game servers, and VPS instances.
+            <span class="text-primary font-semibold"
+              >Pay only for what you use</span
+            >
+            with transparent, resource-based pricing. No more overpaying for
+            unused resources.
           </OuiText>
         </OuiStack>
 
@@ -82,7 +89,7 @@
           gap="sm"
           wrap="wrap"
           justify="center"
-          class="mt-6 md:mt-8 md:gap-4"
+          class="mt-6 md:mt-8 md:gap-4 animate-slide-up-delay"
         >
           <OuiButton
             size="lg"
@@ -96,10 +103,10 @@
           <OuiButton
             variant="outline"
             size="lg"
-            class="gap-2 w-full sm:w-auto text-sm md:text-base"
+            class="gap-2 w-full sm:w-auto text-sm md:text-base px-8 py-4 border-2 hover:bg-accent-primary/10 transform hover:scale-105 transition-all duration-200 hover:-translate-y-1"
             @click="navigateTo('/docs')"
           >
-            <ChatBubbleLeftRightIcon class="h-5 w-5" />
+            <ChatBubbleLeftRightIcon class="h-5 w-5 md:h-6 md:w-6" />
             <span class="hidden sm:inline">View Documentation</span>
             <span class="sm:hidden">Docs</span>
           </OuiButton>
@@ -129,7 +136,7 @@
               size="2xl"
               weight="bold"
               color="primary"
-              class="text-xl md:text-2xl"
+              class="text-xl md:text-2xl lg:text-3xl"
               >Reliable</OuiText
             >
             <OuiText size="sm" color="secondary" class="text-xs md:text-sm"
@@ -141,7 +148,7 @@
               size="2xl"
               weight="bold"
               color="primary"
-              class="text-xl md:text-2xl"
+              class="text-xl md:text-2xl lg:text-3xl"
               >Quality</OuiText
             >
             <OuiText size="sm" color="secondary" class="text-xs md:text-sm"
@@ -153,7 +160,7 @@
               size="2xl"
               weight="bold"
               color="primary"
-              class="text-xl md:text-2xl"
+              class="text-xl md:text-2xl lg:text-3xl"
               >Personal</OuiText
             >
             <OuiText size="sm" color="secondary" class="text-xs md:text-sm"
@@ -188,7 +195,7 @@
           <OuiCard
             variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl border-accent-primary/10 hover:border-accent-primary/30"
           >
             <OuiCardBody>
               <OuiStack gap="md">
@@ -214,7 +221,7 @@
           <OuiCard
             variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl border-accent-success/10 hover:border-accent-success/30"
           >
             <OuiCardBody>
               <OuiStack gap="md">
@@ -240,7 +247,7 @@
           <OuiCard
             variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl border-accent-secondary/10 hover:border-accent-secondary/30"
           >
             <OuiCardBody>
               <OuiStack gap="md">
@@ -267,7 +274,7 @@
           <OuiCard
             variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl border-accent-info/10 hover:border-accent-info/30"
           >
             <OuiCardBody>
               <OuiStack gap="md">
@@ -293,7 +300,7 @@
           <OuiCard
             variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl border-accent-warning/10 hover:border-accent-warning/30"
           >
             <OuiCardBody>
               <OuiStack gap="md">
@@ -320,7 +327,7 @@
           <OuiCard
             variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl border-accent-danger/10 hover:border-accent-danger/30"
           >
             <OuiCardBody>
               <OuiStack gap="md">
@@ -347,7 +354,7 @@
           <OuiCard
             variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl border-accent-success/10 hover:border-accent-success/30"
           >
             <OuiCardBody>
               <OuiStack gap="md">
@@ -374,7 +381,7 @@
           <OuiCard
             variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl border-accent-primary/10 hover:border-accent-primary/30"
           >
             <OuiCardBody>
               <OuiStack gap="md">
@@ -401,7 +408,7 @@
           <OuiCard
             variant="default"
             hoverable
-            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+            class="group cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-xl border-accent-info/10 hover:border-accent-info/30"
           >
             <OuiCardBody>
               <OuiStack gap="md">
@@ -454,7 +461,7 @@
 
         <OuiGrid cols="1" cols-md="2" cols-lg="3" gap="xl" class="w-full">
           <!-- Premium Hardware -->
-          <OuiCard variant="default" class="h-full">
+          <OuiCard variant="default" class="h-full border-accent-primary/10 hover:border-accent-primary/20 transition-colors">
             <OuiCardBody>
               <OuiStack gap="md">
                 <OuiBox
@@ -476,7 +483,7 @@
           </OuiCard>
 
           <!-- High Availability -->
-          <OuiCard variant="default" class="h-full">
+          <OuiCard variant="default" class="h-full border-accent-success/10 hover:border-accent-success/20 transition-colors">
             <OuiCardBody>
               <OuiStack gap="md">
                 <OuiBox
@@ -498,7 +505,7 @@
           </OuiCard>
 
           <!-- Free Support -->
-          <OuiCard variant="default" class="h-full">
+          <OuiCard variant="default" class="h-full border-accent-secondary/10 hover:border-accent-secondary/20 transition-colors">
             <OuiCardBody>
               <OuiStack gap="md">
                 <OuiBox
@@ -522,7 +529,7 @@
           </OuiCard>
 
           <!-- Security -->
-          <OuiCard variant="default" class="h-full">
+          <OuiCard variant="default" class="h-full border-accent-danger/10 hover:border-accent-danger/20 transition-colors">
             <OuiCardBody>
               <OuiStack gap="md">
                 <OuiBox
@@ -544,7 +551,7 @@
           </OuiCard>
 
           <!-- DNS Management -->
-          <OuiCard variant="default" class="h-full">
+          <OuiCard variant="default" class="h-full border-accent-info/10 hover:border-accent-info/20 transition-colors">
             <OuiCardBody>
               <OuiStack gap="md">
                 <OuiBox
@@ -567,7 +574,7 @@
           </OuiCard>
 
           <!-- Real-Time Monitoring -->
-          <OuiCard variant="default" class="h-full">
+          <OuiCard variant="default" class="h-full border-accent-warning/10 hover:border-accent-warning/20 transition-colors">
             <OuiCardBody>
               <OuiStack gap="md">
                 <OuiBox
@@ -631,7 +638,7 @@
           <OuiCard
             variant="default"
             hoverable
-            class="text-center group hover:-translate-y-1 transition-all duration-200 h-full flex flex-col"
+            class="text-center group hover:-translate-y-1 transition-all duration-200 h-full flex flex-col border-accent-secondary/10 hover:border-accent-secondary/30"
           >
             <OuiCardBody class="flex flex-col h-full">
               <OuiStack gap="lg" class="flex-1">
@@ -767,7 +774,7 @@
           <OuiCard
             variant="default"
             hoverable
-            class="text-center group hover:-translate-y-1 transition-all duration-200 h-full flex flex-col"
+            class="text-center group hover:-translate-y-1 transition-all duration-200 h-full flex flex-col border-accent-info/10 hover:border-accent-info/30"
           >
             <OuiCardBody class="flex flex-col h-full">
               <OuiStack gap="lg" class="flex-1">
@@ -1071,6 +1078,7 @@
     ChatBubbleLeftRightIcon,
     FolderIcon,
     GlobeAltIcon,
+    BoltIcon,
   } from "@heroicons/vue/24/outline";
   import PricingCalculator from "~/components/pricing/PricingCalculator.vue";
   import ObienteLogo from "~/components/app/ObienteLogo.vue";
@@ -1139,5 +1147,78 @@
   html,
   body {
     background-color: var(--oui-background) !important;
+  }
+
+  /* Landing page animations */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes gradient {
+    0%,
+    100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  @keyframes gradient-subtle {
+    0%,
+    100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.6s ease-out forwards;
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.8s ease-out forwards;
+    animation-delay: 0.2s;
+    opacity: 0;
+  }
+
+  .animate-slide-up-delay {
+    animation: slide-up 0.8s ease-out forwards;
+    animation-delay: 0.4s;
+    opacity: 0;
+  }
+
+  .animate-fade-in-delay {
+    animation: fade-in 0.8s ease-out forwards;
+    animation-delay: 0.6s;
+    opacity: 0;
+  }
+
+  .animate-gradient {
+    animation: gradient 3s ease infinite;
+  }
+
+  .animate-gradient-subtle {
+    animation: gradient-subtle 8s ease-in-out infinite;
   }
 </style>
