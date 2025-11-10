@@ -66,9 +66,20 @@ func (p *Proxy) ProxyConnection(ctx context.Context, connectionID, target string
 		targetIP = target
 	} else {
 		// Target is a hostname - resolve using gateway's dnsmasq
-		logger.Debug("Resolving hostname %s using gateway's dnsmasq", target)
+		logger.Info("Resolving hostname %s using gateway's dnsmasq (127.0.0.1:53)", target)
+		
+		// First, verify dnsmasq is listening on 127.0.0.1:53
+		testConn, err := net.DialTimeout("udp", "127.0.0.1:53", 1*time.Second)
+		if err != nil {
+			logger.Warn("dnsmasq not reachable on 127.0.0.1:53: %v. DNS resolution may fail. Please check dnsmasq is running and configured to listen on 127.0.0.1", err)
+		} else {
+			testConn.Close()
+			logger.Debug("dnsmasq is reachable on 127.0.0.1:53")
+		}
+		
 		ips, err := localDNSResolver.LookupIPAddr(ctx, target)
 		if err != nil {
+			logger.Debug("First resolution attempt failed for %s: %v", target, err)
 			// Try with domain suffix if resolution fails
 			domain := os.Getenv("GATEWAY_DHCP_DOMAIN")
 			if domain == "" {
@@ -78,6 +89,7 @@ func (p *Proxy) ProxyConnection(ctx context.Context, connectionID, target string
 			logger.Debug("Trying FQDN: %s", fqdn)
 			ips, err = localDNSResolver.LookupIPAddr(ctx, fqdn)
 			if err != nil {
+				logger.Error("DNS resolution failed for %s and %s: %v", target, fqdn, err)
 				return fmt.Errorf("failed to resolve hostname %s (tried %s and %s): %w", target, target, fqdn, err)
 			}
 		}
@@ -85,7 +97,7 @@ func (p *Proxy) ProxyConnection(ctx context.Context, connectionID, target string
 			return fmt.Errorf("no IP addresses found for hostname %s", target)
 		}
 		targetIP = ips[0].IP.String()
-		logger.Debug("Resolved %s to %s", target, targetIP)
+		logger.Info("Resolved %s to %s", target, targetIP)
 	}
 
 	targetAddr := fmt.Sprintf("%s:%d", targetIP, port)
