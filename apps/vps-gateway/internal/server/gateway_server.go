@@ -42,12 +42,19 @@ func NewGatewayServer(dhcpManager *dhcp.Manager, sshProxy *sshproxy.Proxy, port 
 		connect.WithInterceptors(authInterceptor),
 	)
 
-	// Create HTTP mux
+	// Create HTTP mux with request logging
 	mux := http.NewServeMux()
-	mux.Handle(path, handler)
+	
+	// Wrap handler with logging middleware
+	loggingHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger.Info("[GatewayServer] Incoming request: %s %s from %s (HTTP/%s)", r.Method, r.URL.Path, r.RemoteAddr, r.Proto)
+		handler.ServeHTTP(w, r)
+	})
+	mux.Handle(path, loggingHandler)
 
 	// Wrap with h2c for HTTP/2 support (cleartext HTTP/2)
 	// This allows Connect RPC clients to use HTTP/2, which is more efficient for streaming
+	// h2c handler is backward compatible with HTTP/1.1
 	h2cHandler := h2c.NewHandler(mux, &http2.Server{})
 
 	// Create HTTP server with h2c handler

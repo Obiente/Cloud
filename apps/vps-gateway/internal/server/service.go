@@ -153,6 +153,8 @@ func (s *GatewayService) ProxySSH(
 	var connectionID string
 	startTime := time.Now()
 
+	logger.Info("[GatewayService] ProxySSH stream opened")
+
 	defer func() {
 		if currentConn != nil {
 			duration := time.Since(startTime).Seconds()
