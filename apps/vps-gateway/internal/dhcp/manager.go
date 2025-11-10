@@ -2,6 +2,7 @@ package dhcp
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -428,15 +429,56 @@ func (m *Manager) startDNSMasq() error {
 	cmd = exec.Command("dnsmasq",
 		"--no-daemon",
 		"--conf-file="+configFile,
+		"--log-facility=-", // Log to stderr
 	)
+
+	// Capture stderr to see startup errors
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 
 	// Start in background
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start dnsmasq: %w", err)
 	}
 
+	// Wait a moment for dnsmasq to start
+	time.Sleep(500 * time.Millisecond)
+	
+	// Check if process is still running by checking if it exists
+	// Use pgrep to verify the process is running
+	checkCmd := exec.Command("pgrep", "-f", fmt.Sprintf("dnsmasq.*%s", configFile))
+	if err := checkCmd.Run(); err != nil {
+		// Process not found - it exited
+		stderrOutput := stderr.String()
+		return fmt.Errorf("dnsmasq exited immediately: %s", stderrOutput)
+	}
+
+	// Verify dnsmasq is actually listening on port 53
+	// Try connecting to 127.0.0.1:53
+	maxRetries := 5
+	for i := 0; i < maxRetries; i++ {
+		conn, err := net.DialTimeout("udp", "127.0.0.1:53", 500*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			logger.Info("Started dnsmasq and verified it's listening on 127.0.0.1:53")
+			m.dhcpRunning = true
+			return nil
+		}
+		if i < maxRetries-1 {
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+
+	// Check if process is still running
+	checkCmd = exec.Command("pgrep", "-f", fmt.Sprintf("dnsmasq.*%s", configFile))
+	if err := checkCmd.Run(); err != nil {
+		stderrOutput := stderr.String()
+		return fmt.Errorf("dnsmasq failed to start or exited: %s", stderrOutput)
+	}
+
+	// Process is running but not listening - log warning but continue
+	logger.Warn("dnsmasq process started but not listening on 127.0.0.1:53. Stderr: %s", stderr.String())
 	m.dhcpRunning = true
-	logger.Info("Started dnsmasq")
 	return nil
 }
 
