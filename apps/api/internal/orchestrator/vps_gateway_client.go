@@ -39,9 +39,16 @@ func NewVPSGatewayClient(gatewayURL string) (*VPSGatewayClient, error) {
 		return nil, fmt.Errorf("VPS_GATEWAY_API_SECRET environment variable is required")
 	}
 
-	// Create HTTP client with timeout
+	// Create HTTP client with timeout and HTTP/1.1 only (gateway doesn't support HTTP/2)
+	// For plain HTTP connections, HTTP/2 requires h2c which is not enabled on the gateway
+	// Use default transport which will use HTTP/1.1 for plain HTTP
+	transport := &http.Transport{
+		// Disable HTTP/2 by not setting any HTTP/2-related options
+		// For plain HTTP, default transport uses HTTP/1.1
+	}
 	httpClient := &http.Client{
-		Timeout: 30 * time.Second,
+		Transport: transport,
+		Timeout:   30 * time.Second,
 	}
 
 	// Create Connect client

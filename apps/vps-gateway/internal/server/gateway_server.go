@@ -13,6 +13,8 @@ import (
 	vpsgatewayv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1/vpsgatewayv1connect"
 
 	"connectrpc.com/connect"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 )
 
 // GatewayServer wraps the GatewayService and manages the HTTP server
@@ -44,10 +46,14 @@ func NewGatewayServer(dhcpManager *dhcp.Manager, sshProxy *sshproxy.Proxy, port 
 	mux := http.NewServeMux()
 	mux.Handle(path, handler)
 
-	// Create HTTP server
+	// Wrap with h2c for HTTP/2 support (cleartext HTTP/2)
+	// This allows Connect RPC clients to use HTTP/2, which is more efficient for streaming
+	h2cHandler := h2c.NewHandler(mux, &http2.Server{})
+
+	// Create HTTP server with h2c handler
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
-		Handler: mux,
+		Handler: h2cHandler,
 	}
 
 	return &GatewayServer{
