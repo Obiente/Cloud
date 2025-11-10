@@ -88,6 +88,12 @@ service VPSService {
   rpc DeleteFirewallRule(DeleteFirewallRuleRequest) returns (DeleteFirewallRuleResponse);
   rpc GetFirewallOptions(GetFirewallOptionsRequest) returns (GetFirewallOptionsResponse);
   rpc UpdateFirewallOptions(UpdateFirewallOptionsRequest) returns (UpdateFirewallOptionsResponse);
+  
+  // SSH key management
+  rpc ListSSHKeys(ListSSHKeysRequest) returns (ListSSHKeysResponse);
+  rpc AddSSHKey(AddSSHKeyRequest) returns (AddSSHKeyResponse);
+  rpc UpdateSSHKey(UpdateSSHKeyRequest) returns (UpdateSSHKeyResponse);
+  rpc RemoveSSHKey(RemoveSSHKeyRequest) returns (RemoveSSHKeyResponse);
 }
 
 message ListVPSRequest {
@@ -459,5 +465,58 @@ message FirewallOptions {
   optional bool radv = 9; // Allow Router Advertisement
   optional bool ipfilter = 10; // Enable IP filter
   optional bool ipfilter_rules = 11; // Enable IP filter rules
+}
+
+// SSH key management messages
+message SSHKey {
+  string id = 1;
+  string name = 2;
+  string public_key = 3; // SSH public key (e.g., "ssh-rsa AAAAB3NzaC1yc2E...")
+  string fingerprint = 4; // SSH key fingerprint (MD5 or SHA256)
+  optional string vps_id = 5; // If set, key is VPS-specific; if null, key is organization-wide
+  optional google.protobuf.Timestamp created_at = 6;
+  optional google.protobuf.Timestamp updated_at = 7;
+}
+
+message ListSSHKeysRequest {
+  string organization_id = 1;
+  optional string vps_id = 2; // If provided, list keys for this VPS (includes org-wide keys); if null, list org-wide keys only
+}
+
+message ListSSHKeysResponse {
+  repeated SSHKey keys = 1;
+}
+
+message AddSSHKeyRequest {
+  string organization_id = 1;
+  string name = 2; // User-friendly name for the key
+  string public_key = 3; // SSH public key content
+  optional string vps_id = 4; // If set, add key to this VPS; if null, add as organization-wide key
+}
+
+message AddSSHKeyResponse {
+  SSHKey key = 1;
+}
+
+message UpdateSSHKeyRequest {
+  string organization_id = 1;
+  string key_id = 2;
+  string name = 3; // New name for the key
+}
+
+message UpdateSSHKeyResponse {
+  SSHKey key = 1;
+}
+
+message RemoveSSHKeyRequest {
+  string organization_id = 1;
+  string key_id = 2;
+}
+
+message RemoveSSHKeyResponse {
+  // List of VPS instances that will be affected by removing this org-wide key
+  // Only populated for org-wide keys (vps_id is null)
+  repeated string affected_vps_ids = 1;
+  repeated string affected_vps_names = 2; // Corresponding VPS names for the IDs
 }
 
