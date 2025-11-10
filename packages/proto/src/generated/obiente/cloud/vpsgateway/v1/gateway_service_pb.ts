@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/vpsgateway/v1/gateway_service.proto.
  */
 export const file_obiente_cloud_vpsgateway_v1_gateway_service: GenFile = /*@__PURE__*/
-  fileDesc("CjFvYmllbnRlL2Nsb3VkL3Zwc2dhdGV3YXkvdjEvZ2F0ZXdheV9zZXJ2aWNlLnByb3RvEhtvYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEiZwoRQWxsb2NhdGVJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCRIUCgxwcmVmZXJyZWRfaXAYBCABKAkilgEKEkFsbG9jYXRlSVBSZXNwb25zZRISCgppcF9hZGRyZXNzGAEgASgJEhMKC3N1Ym5ldF9tYXNrGAIgASgJEg8KB2dhdGV3YXkYAyABKAkSEwoLZG5zX3NlcnZlcnMYBCADKAkSMQoNbGVhc2VfZXhwaXJlcxgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiNgoQUmVsZWFzZUlQUmVxdWVzdBIOCgZ2cHNfaWQYASABKAkSEgoKaXBfYWRkcmVzcxgCIAEoCSI1ChFSZWxlYXNlSVBSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg8KB21lc3NhZ2UYAiABKAkiOQoOTGlzdElQc1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSLFAQoMSVBBbGxvY2F0aW9uEg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEgoKaXBfYWRkcmVzcxgDIAEoCRITCgttYWNfYWRkcmVzcxgEIAEoCRIwCgxhbGxvY2F0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjEKDWxlYXNlX2V4cGlyZXMYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlEKD0xpc3RJUHNSZXNwb25zZRI+CgthbGxvY2F0aW9ucxgBIAMoCzIpLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5JUEFsbG9jYXRpb24iYgoPUHJveHlTU0hSZXF1ZXN0EhUKDWNvbm5lY3Rpb25faWQYASABKAkSDAoEdHlwZRgCIAEoCRIOCgZ0YXJnZXQYAyABKAkSDAoEcG9ydBgEIAEoBRIMCgRkYXRhGAUgASgMIlQKEFByb3h5U1NIUmVzcG9uc2USFQoNY29ubmVjdGlvbl9pZBgBIAEoCRIMCgR0eXBlGAIgASgJEgwKBGRhdGEYAyABKAwSDQoFZXJyb3IYBCABKAkiFwoVR2V0R2F0ZXdheUluZm9SZXF1ZXN0IvABChZHZXRHYXRld2F5SW5mb1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFwoPZGhjcF9wb29sX3N0YXJ0GAIgASgJEhUKDWRoY3BfcG9vbF9lbmQYAyABKAkSEwoLc3VibmV0X21hc2sYBCABKAkSEgoKZ2F0ZXdheV9pcBgFIAEoCRITCgtkbnNfc2VydmVycxgGIAMoCRIRCgl0b3RhbF9pcHMYByABKAUSFQoNYWxsb2NhdGVkX2lwcxgIIAEoBRITCgtkaGNwX3N0YXR1cxgJIAEoCRIYChBzc2hfcHJveHlfc3RhdHVzGAogASgJMrwEChFWUFNHYXRld2F5U2VydmljZRJtCgpBbGxvY2F0ZUlQEi4ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkFsbG9jYXRlSVBSZXF1ZXN0Gi8ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkFsbG9jYXRlSVBSZXNwb25zZRJqCglSZWxlYXNlSVASLS5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUmVsZWFzZUlQUmVxdWVzdBouLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5SZWxlYXNlSVBSZXNwb25zZRJkCgdMaXN0SVBzEisub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkxpc3RJUHNSZXF1ZXN0Giwub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkxpc3RJUHNSZXNwb25zZRJrCghQcm94eVNTSBIsLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5Qcm94eVNTSFJlcXVlc3QaLS5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUHJveHlTU0hSZXNwb25zZSgBMAESeQoOR2V0R2F0ZXdheUluZm8SMi5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuR2V0R2F0ZXdheUluZm9SZXF1ZXN0GjMub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdldEdhdGV3YXlJbmZvUmVzcG9uc2VCOFo2YXBpL2dlbi9wcm90by9vYmllbnRlL2Nsb3VkL3Zwc2dhdGV3YXkvdjE7dnBzZ2F0ZXdheXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("CjFvYmllbnRlL2Nsb3VkL3Zwc2dhdGV3YXkvdjEvZ2F0ZXdheV9zZXJ2aWNlLnByb3RvEhtvYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEiZwoRQWxsb2NhdGVJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCRIUCgxwcmVmZXJyZWRfaXAYBCABKAkilgEKEkFsbG9jYXRlSVBSZXNwb25zZRISCgppcF9hZGRyZXNzGAEgASgJEhMKC3N1Ym5ldF9tYXNrGAIgASgJEg8KB2dhdGV3YXkYAyABKAkSEwoLZG5zX3NlcnZlcnMYBCADKAkSMQoNbGVhc2VfZXhwaXJlcxgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiNgoQUmVsZWFzZUlQUmVxdWVzdBIOCgZ2cHNfaWQYASABKAkSEgoKaXBfYWRkcmVzcxgCIAEoCSI1ChFSZWxlYXNlSVBSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg8KB21lc3NhZ2UYAiABKAkiOQoOTGlzdElQc1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSLFAQoMSVBBbGxvY2F0aW9uEg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEgoKaXBfYWRkcmVzcxgDIAEoCRITCgttYWNfYWRkcmVzcxgEIAEoCRIwCgxhbGxvY2F0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjEKDWxlYXNlX2V4cGlyZXMYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlEKD0xpc3RJUHNSZXNwb25zZRI+CgthbGxvY2F0aW9ucxgBIAMoCzIpLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5JUEFsbG9jYXRpb24iYgoPUHJveHlTU0hSZXF1ZXN0EhUKDWNvbm5lY3Rpb25faWQYASABKAkSDAoEdHlwZRgCIAEoCRIOCgZ0YXJnZXQYAyABKAkSDAoEcG9ydBgEIAEoBRIMCgRkYXRhGAUgASgMIlQKEFByb3h5U1NIUmVzcG9uc2USFQoNY29ubmVjdGlvbl9pZBgBIAEoCRIMCgR0eXBlGAIgASgJEgwKBGRhdGEYAyABKAwSDQoFZXJyb3IYBCABKAkiFwoVR2V0R2F0ZXdheUluZm9SZXF1ZXN0IvABChZHZXRHYXRld2F5SW5mb1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFwoPZGhjcF9wb29sX3N0YXJ0GAIgASgJEhUKDWRoY3BfcG9vbF9lbmQYAyABKAkSEwoLc3VibmV0X21hc2sYBCABKAkSEgoKZ2F0ZXdheV9pcBgFIAEoCRITCgtkbnNfc2VydmVycxgGIAMoCRIRCgl0b3RhbF9pcHMYByABKAUSFQoNYWxsb2NhdGVkX2lwcxgIIAEoBRITCgtkaGNwX3N0YXR1cxgJIAEoCRIYChBzc2hfcHJveHlfc3RhdHVzGAogASgJIqQCCg5HYXRld2F5TWVzc2FnZRIMCgR0eXBlGAEgASgJEkYKDHJlZ2lzdHJhdGlvbhgCIAEoCzIwLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVnaXN0cmF0aW9uEg8KB21ldHJpY3MYAyABKAkSPAoHcmVxdWVzdBgEIAEoCzIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVxdWVzdBI+CghyZXNwb25zZRgFIAEoCzIsLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVzcG9uc2USLQoJaGVhcnRiZWF0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCKsAQoTR2F0ZXdheVJlZ2lzdHJhdGlvbhISCgpnYXRld2F5X2lkGAEgASgJEg8KB3ZlcnNpb24YAiABKAkSEgoKZ2F0ZXdheV9pcBgDIAEoCRIXCg9kaGNwX3Bvb2xfc3RhcnQYBCABKAkSFQoNZGhjcF9wb29sX2VuZBgFIAEoCRITCgtzdWJuZXRfbWFzaxgGIAEoCRIXCg9nYXRld2F5X2lwX2RoY3AYByABKAkiRQoOR2F0ZXdheVJlcXVlc3QSEgoKcmVxdWVzdF9pZBgBIAEoCRIOCgZtZXRob2QYAiABKAkSDwoHcGF5bG9hZBgDIAEoDCJWCg9HYXRld2F5UmVzcG9uc2USEgoKcmVxdWVzdF9pZBgBIAEoCRIPCgdzdWNjZXNzGAIgASgIEg8KB3BheWxvYWQYAyABKAwSDQoFZXJyb3IYBCABKAkyrQUKEVZQU0dhdGV3YXlTZXJ2aWNlEm8KD1JlZ2lzdGVyR2F0ZXdheRIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5TWVzc2FnZRorLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5TWVzc2FnZSgBMAESbQoKQWxsb2NhdGVJUBIuLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZUlQUmVxdWVzdBovLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZUlQUmVzcG9uc2USagoJUmVsZWFzZUlQEi0ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlJlbGVhc2VJUFJlcXVlc3QaLi5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUmVsZWFzZUlQUmVzcG9uc2USZAoHTGlzdElQcxIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5MaXN0SVBzUmVxdWVzdBosLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5MaXN0SVBzUmVzcG9uc2USawoIUHJveHlTU0gSLC5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUHJveHlTU0hSZXF1ZXN0Gi0ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlByb3h5U1NIUmVzcG9uc2UoATABEnkKDkdldEdhdGV3YXlJbmZvEjIub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdldEdhdGV3YXlJbmZvUmVxdWVzdBozLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HZXRHYXRld2F5SW5mb1Jlc3BvbnNlQlVaU2dpdGh1Yi5jb20vb2JpZW50ZS9jbG91ZC9hcHBzL3NoYXJlZC9wcm90by9vYmllbnRlL2Nsb3VkL3Zwc2dhdGV3YXkvdjE7dnBzZ2F0ZXdheXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * AllocateIPRequest requests IP allocation for a VPS
@@ -459,11 +459,214 @@ export const GetGatewayInfoResponseSchema: GenMessage<GetGatewayInfoResponse> = 
   messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 10);
 
 /**
+ * GatewayMessage is used in the RegisterGateway bidirectional stream
+ * It wraps different message types for gateway-API communication
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.GatewayMessage
+ */
+export type GatewayMessage = Message<"obiente.cloud.vpsgateway.v1.GatewayMessage"> & {
+  /**
+   * Message type: "register", "metrics", "request", "response", "heartbeat"
+   *
+   * @generated from field: string type = 1;
+   */
+  type: string;
+
+  /**
+   * For "register": gateway registration information
+   *
+   * @generated from field: obiente.cloud.vpsgateway.v1.GatewayRegistration registration = 2;
+   */
+  registration?: GatewayRegistration;
+
+  /**
+   * For "metrics": Prometheus metrics in text format
+   *
+   * @generated from field: string metrics = 3;
+   */
+  metrics: string;
+
+  /**
+   * For "request": wrapped RPC request (AllocateIP, ReleaseIP, etc.)
+   *
+   * @generated from field: obiente.cloud.vpsgateway.v1.GatewayRequest request = 4;
+   */
+  request?: GatewayRequest;
+
+  /**
+   * For "response": wrapped RPC response
+   *
+   * @generated from field: obiente.cloud.vpsgateway.v1.GatewayResponse response = 5;
+   */
+  response?: GatewayResponse;
+
+  /**
+   * For "heartbeat": keepalive message
+   *
+   * @generated from field: google.protobuf.Timestamp heartbeat = 6;
+   */
+  heartbeat?: Timestamp;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.GatewayMessage.
+ * Use `create(GatewayMessageSchema)` to create a new message.
+ */
+export const GatewayMessageSchema: GenMessage<GatewayMessage> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 11);
+
+/**
+ * GatewayRegistration contains gateway registration information
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.GatewayRegistration
+ */
+export type GatewayRegistration = Message<"obiente.cloud.vpsgateway.v1.GatewayRegistration"> & {
+  /**
+   * Gateway ID (unique identifier, e.g., hostname or UUID)
+   *
+   * @generated from field: string gateway_id = 1;
+   */
+  gatewayId: string;
+
+  /**
+   * Gateway version
+   *
+   * @generated from field: string version = 2;
+   */
+  version: string;
+
+  /**
+   * Gateway IP address (for reference)
+   *
+   * @generated from field: string gateway_ip = 3;
+   */
+  gatewayIp: string;
+
+  /**
+   * DHCP configuration
+   *
+   * @generated from field: string dhcp_pool_start = 4;
+   */
+  dhcpPoolStart: string;
+
+  /**
+   * @generated from field: string dhcp_pool_end = 5;
+   */
+  dhcpPoolEnd: string;
+
+  /**
+   * @generated from field: string subnet_mask = 6;
+   */
+  subnetMask: string;
+
+  /**
+   * @generated from field: string gateway_ip_dhcp = 7;
+   */
+  gatewayIpDhcp: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.GatewayRegistration.
+ * Use `create(GatewayRegistrationSchema)` to create a new message.
+ */
+export const GatewayRegistrationSchema: GenMessage<GatewayRegistration> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 12);
+
+/**
+ * GatewayRequest wraps an RPC request from API to Gateway
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.GatewayRequest
+ */
+export type GatewayRequest = Message<"obiente.cloud.vpsgateway.v1.GatewayRequest"> & {
+  /**
+   * Request ID (for matching with response)
+   *
+   * @generated from field: string request_id = 1;
+   */
+  requestId: string;
+
+  /**
+   * RPC method name (e.g., "AllocateIP", "ReleaseIP", "ProxySSH")
+   *
+   * @generated from field: string method = 2;
+   */
+  method: string;
+
+  /**
+   * Serialized request message (protobuf Any or JSON)
+   *
+   * @generated from field: bytes payload = 3;
+   */
+  payload: Uint8Array;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.GatewayRequest.
+ * Use `create(GatewayRequestSchema)` to create a new message.
+ */
+export const GatewayRequestSchema: GenMessage<GatewayRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 13);
+
+/**
+ * GatewayResponse wraps an RPC response from Gateway to API
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.GatewayResponse
+ */
+export type GatewayResponse = Message<"obiente.cloud.vpsgateway.v1.GatewayResponse"> & {
+  /**
+   * Request ID (matches the request)
+   *
+   * @generated from field: string request_id = 1;
+   */
+  requestId: string;
+
+  /**
+   * Success status
+   *
+   * @generated from field: bool success = 2;
+   */
+  success: boolean;
+
+  /**
+   * Serialized response message (protobuf Any or JSON)
+   *
+   * @generated from field: bytes payload = 3;
+   */
+  payload: Uint8Array;
+
+  /**
+   * Error message (if success is false)
+   *
+   * @generated from field: string error = 4;
+   */
+  error: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.GatewayResponse.
+ * Use `create(GatewayResponseSchema)` to create a new message.
+ */
+export const GatewayResponseSchema: GenMessage<GatewayResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 14);
+
+/**
  * VPSGatewayService provides DHCP management and SSH proxying for VPS instances
  *
  * @generated from service obiente.cloud.vpsgateway.v1.VPSGatewayService
  */
 export const VPSGatewayService: GenService<{
+  /**
+   * RegisterGateway registers a gateway with the API (reverse connection pattern)
+   * Gateway initiates this connection and maintains a bidirectional stream
+   * The stream is used for both gateway->API and API->Gateway communication
+   *
+   * @generated from rpc obiente.cloud.vpsgateway.v1.VPSGatewayService.RegisterGateway
+   */
+  registerGateway: {
+    methodKind: "bidi_streaming";
+    input: typeof GatewayMessageSchema;
+    output: typeof GatewayMessageSchema;
+  },
   /**
    * AllocateIP allocates a DHCP IP address for a VPS instance
    *

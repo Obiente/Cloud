@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package obiente.cloud.gameservers.v1;
 
-option go_package = "api/gen/proto/obiente/cloud/gameservers/v1;gameserversv1";
+option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1;gameserversv1";
 
 import "google/protobuf/timestamp.proto";
 import "obiente/cloud/organizations/v1/organization_service.proto";

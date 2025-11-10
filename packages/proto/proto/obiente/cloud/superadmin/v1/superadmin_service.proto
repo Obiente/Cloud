@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package obiente.cloud.superadmin.v1;
 
-option go_package = "api/gen/proto/obiente/cloud/superadmin/v1;superadminv1";
+option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/superadmin/v1;superadminv1";
 
 import "google/protobuf/timestamp.proto";
 import "obiente/cloud/deployments/v1/deployment_service.proto";
@@ -468,6 +468,7 @@ message CreatePlanRequest {
   int32 cpu_cores = 2;
   int64 memory_bytes = 3;
   int32 deployments_max = 4;
+  int32 max_vps_instances = 10; // Maximum VPS instances (0 = unlimited)
   int64 bandwidth_bytes_month = 5;
   int64 storage_bytes = 6;
   int64 minimum_payment_cents = 7; // Minimum payment in cents to automatically upgrade to this plan
@@ -487,6 +488,7 @@ message UpdatePlanRequest {
   optional int32 cpu_cores = 3;
   optional int64 memory_bytes = 4;
   optional int32 deployments_max = 5;
+  optional int32 max_vps_instances = 11; // Maximum VPS instances (0 = unlimited)
   optional int64 bandwidth_bytes_month = 6;
   optional int64 storage_bytes = 7;
   optional int64 minimum_payment_cents = 8;
@@ -516,6 +518,7 @@ message Plan {
   int32 cpu_cores = 3;
   int64 memory_bytes = 4;
   int32 deployments_max = 5;
+  int32 max_vps_instances = 11; // Maximum VPS instances (0 = unlimited)
   int64 bandwidth_bytes_month = 6;
   int64 storage_bytes = 7;
   int64 minimum_payment_cents = 8; // Minimum payment in cents to automatically upgrade to this plan
@@ -629,7 +632,7 @@ message CreateVPSSizeRequest {
   int64 memory_bytes = 5; // Memory in bytes
   int64 disk_bytes = 6; // Disk space in bytes
   int64 bandwidth_bytes_month = 7; // Monthly bandwidth limit (0 = unlimited)
-  int64 price_cents_per_month = 8; // Monthly price in cents
+  int64 minimum_payment_cents = 8; // Minimum payment in cents required to create this VPS size (0 = no requirement)
   bool available = 9; // Whether this size is available
   string region = 10; // Region (empty = all regions)
 }
@@ -648,7 +651,7 @@ message UpdateVPSSizeRequest {
   optional int64 memory_bytes = 5;
   optional int64 disk_bytes = 6;
   optional int64 bandwidth_bytes_month = 7;
-  optional int64 price_cents_per_month = 8;
+  optional int64 minimum_payment_cents = 8; // Minimum payment in cents required to create this VPS size (0 = no requirement)
   optional bool available = 9;
   optional string region = 10;
 }

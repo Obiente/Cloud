@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package obiente.cloud.common.v1;
 
-option go_package = "api/gen/proto/obiente/cloud/common/v1;commonv1";
+option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1;commonv1";
 
 import "google/protobuf/timestamp.proto";
 
@@ -34,7 +34,7 @@ message VPSSize {
   int64 memory_bytes = 5;           // Memory in bytes
   int64 disk_bytes = 6;             // Disk space in bytes
   int64 bandwidth_bytes_month = 7;  // Monthly bandwidth limit (0 = unlimited)
-  int64 price_cents_per_month = 8;  // Monthly price in cents
+  int64 minimum_payment_cents = 8;  // Minimum payment in cents required to create this VPS size (0 = no requirement)
   bool available = 9;               // Whether this size is available
   string region = 10;               // Region (empty = all regions)
   optional google.protobuf.Timestamp created_at = 11;

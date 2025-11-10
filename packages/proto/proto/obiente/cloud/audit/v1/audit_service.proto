@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package obiente.cloud.audit.v1;
 
-option go_package = "api/gen/proto/obiente/cloud/audit/v1;auditv1";
+option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/audit/v1;auditv1";
 
 import "google/protobuf/timestamp.proto";
 

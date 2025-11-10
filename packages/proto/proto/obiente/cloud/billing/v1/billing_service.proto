@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package obiente.cloud.billing.v1;
 
-option go_package = "api/gen/proto/obiente/cloud/billing/v1;billingv1";
+option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/billing/v1;billingv1";
 
 import "google/protobuf/timestamp.proto";
 

@@ -2,12 +2,17 @@ syntax = "proto3";
 
 package obiente.cloud.vpsgateway.v1;
 
-option go_package = "vps-gateway/gen/proto/obiente/cloud/vpsgateway/v1;vpsgatewayv1";
+option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1;vpsgatewayv1";
 
 import "google/protobuf/timestamp.proto";
 
 // VPSGatewayService provides DHCP management and SSH proxying for VPS instances
 service VPSGatewayService {
+  // RegisterGateway registers a gateway with the API (reverse connection pattern)
+  // Gateway initiates this connection and maintains a bidirectional stream
+  // The stream is used for both gateway->API and API->Gateway communication
+  rpc RegisterGateway(stream GatewayMessage) returns (stream GatewayMessage);
+  
   // AllocateIP allocates a DHCP IP address for a VPS instance
   rpc AllocateIP(AllocateIPRequest) returns (AllocateIPResponse);
   
@@ -180,5 +185,72 @@ message GetGatewayInfoResponse {
   
   // SSH proxy status ("running", "stopped", "error")
   string ssh_proxy_status = 10;
+}
+
+// GatewayMessage is used in the RegisterGateway bidirectional stream
+// It wraps different message types for gateway-API communication
+message GatewayMessage {
+  // Message type: "register", "metrics", "request", "response", "heartbeat"
+  string type = 1;
+  
+  // For "register": gateway registration information
+  GatewayRegistration registration = 2;
+  
+  // For "metrics": Prometheus metrics in text format
+  string metrics = 3;
+  
+  // For "request": wrapped RPC request (AllocateIP, ReleaseIP, etc.)
+  GatewayRequest request = 4;
+  
+  // For "response": wrapped RPC response
+  GatewayResponse response = 5;
+  
+  // For "heartbeat": keepalive message
+  google.protobuf.Timestamp heartbeat = 6;
+}
+
+// GatewayRegistration contains gateway registration information
+message GatewayRegistration {
+  // Gateway ID (unique identifier, e.g., hostname or UUID)
+  string gateway_id = 1;
+  
+  // Gateway version
+  string version = 2;
+  
+  // Gateway IP address (for reference)
+  string gateway_ip = 3;
+  
+  // DHCP configuration
+  string dhcp_pool_start = 4;
+  string dhcp_pool_end = 5;
+  string subnet_mask = 6;
+  string gateway_ip_dhcp = 7;
+}
+
+// GatewayRequest wraps an RPC request from API to Gateway
+message GatewayRequest {
+  // Request ID (for matching with response)
+  string request_id = 1;
+  
+  // RPC method name (e.g., "AllocateIP", "ReleaseIP", "ProxySSH")
+  string method = 2;
+  
+  // Serialized request message (protobuf Any or JSON)
+  bytes payload = 3;
+}
+
+// GatewayResponse wraps an RPC response from Gateway to API
+message GatewayResponse {
+  // Request ID (matches the request)
+  string request_id = 1;
+  
+  // Success status
+  bool success = 2;
+  
+  // Serialized response message (protobuf Any or JSON)
+  bytes payload = 3;
+  
+  // Error message (if success is false)
+  string error = 4;
 }
 

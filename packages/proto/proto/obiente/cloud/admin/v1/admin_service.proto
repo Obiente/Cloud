@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package obiente.cloud.admin.v1;
 
-option go_package = "api/gen/proto/obiente/cloud/admin/v1;adminv1";
+option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/admin/v1;adminv1";
 
 message UpsertOrgQuotaRequest {
   string organization_id = 1;

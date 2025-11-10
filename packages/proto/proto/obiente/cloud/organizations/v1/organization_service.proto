@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package obiente.cloud.organizations.v1;
 
-option go_package = "api/gen/proto/obiente/cloud/organizations/v1;organizationsv1";
+option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/organizations/v1;organizationsv1";
 
 import "google/protobuf/timestamp.proto";
 import "obiente/cloud/auth/v1/auth_service.proto";
@@ -273,6 +273,7 @@ message PlanInfo {
   int32 cpu_cores = 4;
   int64 memory_bytes = 5;
   int32 deployments_max = 6;
+  int32 max_vps_instances = 11; // Maximum VPS instances (0 = unlimited)
   int64 bandwidth_bytes_month = 7;
   int64 storage_bytes = 8;
   // Minimum payment required to qualify for this plan (in cents)
