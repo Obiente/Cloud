@@ -10,16 +10,6 @@ import (
 	"strings"
 	"time"
 
-	adminv1connect "api/gen/proto/obiente/cloud/admin/v1/adminv1connect"
-	auditv1connect "api/gen/proto/obiente/cloud/audit/v1/auditv1connect"
-	authv1connect "api/gen/proto/obiente/cloud/auth/v1/authv1connect"
-	billingv1connect "api/gen/proto/obiente/cloud/billing/v1/billingv1connect"
-	deploymentsv1connect "api/gen/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
-	gameserversv1connect "api/gen/proto/obiente/cloud/gameservers/v1/gameserversv1connect"
-	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
-	superadminv1connect "api/gen/proto/obiente/cloud/superadmin/v1/superadminv1connect"
-	supportv1connect "api/gen/proto/obiente/cloud/support/v1/supportv1connect"
-	vpsv1connect "api/gen/proto/obiente/cloud/vps/v1/vpsv1connect"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/dnsdelegation"
@@ -34,11 +24,24 @@ import (
 	billingsvc "api/internal/services/billing"
 	deploymentsvc "api/internal/services/deployments"
 	gameserversvc "api/internal/services/gameservers"
+	gatewaysvc "api/internal/services/gateway"
 	orgsvc "api/internal/services/organizations"
 	superadminsvc "api/internal/services/superadmin"
 	supportsvc "api/internal/services/support"
 	vpssvc "api/internal/services/vps"
 	"api/internal/stripe"
+
+	adminv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/admin/v1/adminv1connect"
+	auditv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/audit/v1/auditv1connect"
+	authv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1/authv1connect"
+	billingv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/billing/v1/billingv1connect"
+	deploymentsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
+	gameserversv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1/gameserversv1connect"
+	organizationsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/organizations/v1/organizationsv1connect"
+	superadminv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/superadmin/v1/superadminv1connect"
+	supportv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/support/v1/supportv1connect"
+	vpsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1/vpsv1connect"
+	vpsgatewayv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1/vpsgatewayv1connect"
 
 	"connectrpc.com/connect"
 	"connectrpc.com/grpcreflect"
@@ -258,8 +261,19 @@ func registerRoot(mux *http.ServeMux) {
 			)
 		}
 
+		// Get gateway metrics and append them
+		gatewayRegistry := orchestrator.GetGlobalGatewayRegistry()
+		gatewayMetricsText := gatewayRegistry.GetGatewayMetrics()
+
 		// Serve Prometheus metrics
+		// First serve the main API metrics
 		metrics.Handler().ServeHTTP(w, r)
+
+		// Then append gateway metrics if any
+		if gatewayMetricsText != "" {
+			w.Write([]byte("\n# Gateway Metrics\n"))
+			w.Write([]byte(gatewayMetricsText))
+		}
 	})
 }
 
@@ -483,6 +497,17 @@ func registerServices(mux *http.ServeMux) *deploymentsvc.Service {
 		connect.WithInterceptors(auditInterceptor, authInterceptor),
 	)
 	mux.Handle(auditPath, auditHandler)
+
+	// Gateway service (for reverse connection from vps-gateway)
+	// This service accepts connections from gateways and proxies RPCs
+	gatewayRegistry := orchestrator.GetGlobalGatewayRegistry()
+	gatewayService := gatewaysvc.NewGatewayService(gatewayRegistry)
+	gatewayPath, gatewayHandler := vpsgatewayv1connect.NewVPSGatewayServiceHandler(
+		gatewayService,
+		connect.WithInterceptors(authInterceptor), // Use API auth, not gateway secret
+	)
+	mux.Handle(gatewayPath, gatewayHandler)
+	log.Println("[Server] ✓ Gateway service registered (reverse connection pattern)")
 
 	// Stripe webhook endpoint (no auth required, uses webhook signature verification)
 	// Only register webhook handler if Stripe is configured

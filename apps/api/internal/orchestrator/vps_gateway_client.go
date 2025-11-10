@@ -9,17 +9,18 @@ import (
 
 	"api/internal/logger"
 
-	vpsgatewayv1 "api/gen/proto/obiente/cloud/vpsgateway/v1"
-	vpsgatewayv1connect "api/gen/proto/obiente/cloud/vpsgateway/v1/vpsgatewayv1connect"
+	vpsgatewayv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
+	vpsgatewayv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1/vpsgatewayv1connect"
 
 	"connectrpc.com/connect"
 )
 
 // VPSGatewayClient handles communication with the vps-gateway service
 type VPSGatewayClient struct {
-	client    vpsgatewayv1connect.VPSGatewayServiceClient
+	client    vpsgatewayv1connect.VPSGatewayServiceClient // nil if using registry
 	apiSecret string
 	baseURL   string
+	registry  *GatewayRegistry // Used for reverse connection pattern
 }
 
 // NewVPSGatewayClient creates a new vps-gateway client
@@ -93,6 +94,30 @@ func (i *gatewayAuthInterceptor) WrapStreamingClient(next connect.StreamingClien
 
 // AllocateIP allocates a DHCP IP address for a VPS instance
 func (c *VPSGatewayClient) AllocateIP(ctx context.Context, vpsID, organizationID, macAddress string) (*vpsgatewayv1.AllocateIPResponse, error) {
+	// Use registry if available (reverse connection)
+	if c.registry != nil {
+		gatewayConn, ok := c.registry.GetAnyGateway()
+		if !ok {
+			return nil, fmt.Errorf("no gateway connected")
+		}
+
+		req := &vpsgatewayv1.AllocateIPRequest{
+			VpsId:          vpsID,
+			OrganizationId: organizationID,
+			MacAddress:     macAddress,
+		}
+
+		resp, err := gatewayConn.SendRequest(ctx, "AllocateIP", req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to allocate IP from gateway: %w", err)
+		}
+
+		allocResp := resp.(*vpsgatewayv1.AllocateIPResponse)
+		logger.Info("[VPSGateway] Allocated IP %s for VPS %s (org: %s)", allocResp.IpAddress, vpsID, organizationID)
+		return allocResp, nil
+	}
+
+	// Legacy direct connection
 	req := connect.NewRequest(&vpsgatewayv1.AllocateIPRequest{
 		VpsId:          vpsID,
 		OrganizationId: organizationID,

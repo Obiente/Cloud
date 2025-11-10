@@ -439,14 +439,14 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 	}
 
 	// Configure network interface
-	// If VPS_GATEWAY_URL is set, use the gateway bridge (typically vmbr1 or custom bridge)
+	// If gateway is configured, use the SDN bridge (OCvpsnet by default)
 	// Otherwise, use the default bridge (vmbr0)
 	bridge := "vmbr0"
-	if os.Getenv("VPS_GATEWAY_URL") != "" {
-		// Gateway manages DHCP on a separate bridge
+	if os.Getenv("VPS_GATEWAY_URL") != "" || os.Getenv("VPS_GATEWAY_API_SECRET") != "" {
+		// Gateway manages DHCP on SDN bridge
 		gatewayBridge := os.Getenv("VPS_GATEWAY_BRIDGE")
 		if gatewayBridge == "" {
-			gatewayBridge = "vmbr1" // Default gateway bridge
+			gatewayBridge = "OCvpsnet" // Default SDN bridge name
 		}
 		bridge = gatewayBridge
 		logger.Info("[ProxmoxClient] Using gateway bridge %s for VM network (gateway manages DHCP)", bridge)

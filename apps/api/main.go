@@ -122,6 +122,10 @@ func main() {
 	go startMonthlyCreditsService(shutdownCtx)
 	logger.Info("✓ Monthly free credits service started")
 
+	// Start monthly billing service
+	go startMonthlyBillingService(shutdownCtx)
+	logger.Info("✓ Monthly billing service started")
+
 	// Start quota warning service (checks daily for organizations approaching limits)
 	go startQuotaWarningService(shutdownCtx)
 	logger.Info("✓ Quota warning service started")
@@ -215,6 +219,33 @@ func startQuotaWarningService(ctx context.Context) {
 		case <-ticker.C:
 			logger.Debug("[Quota Warnings] Daily check for quota warnings...")
 			checkAllOrganizationsQuotas(ctx)
+		}
+	}
+}
+
+// startMonthlyBillingService starts a background service that processes monthly billing
+// It runs once per day and checks if any organizations need to be billed on their billing date
+func startMonthlyBillingService(ctx context.Context) {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+
+	// Run immediately on startup to process any pending bills
+	logger.Info("[Monthly Billing] Checking for organizations to bill...")
+	if err := billing.ProcessMonthlyBilling(); err != nil {
+		logger.Error("[Monthly Billing] Failed to process monthly billing: %v", err)
+	}
+
+	// Then check daily
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("[Monthly Billing] Service shutting down")
+			return
+		case <-ticker.C:
+			logger.Debug("[Monthly Billing] Daily check for organizations to bill...")
+			if err := billing.ProcessMonthlyBilling(); err != nil {
+				logger.Error("[Monthly Billing] Failed to process monthly billing: %v", err)
+			}
 		}
 	}
 }
