@@ -33,10 +33,6 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /build/vps-gateway .
 
-# Copy test scripts from build context
-COPY test.sh test-docker.sh ./
-RUN chmod +x test.sh test-docker.sh || true
-
 # Install grpcurl for testing
 RUN go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest && \
     echo 'export PATH=$PATH:/root/go/bin' >> /root/.profile && \
