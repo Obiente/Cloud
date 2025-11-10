@@ -656,9 +656,10 @@ export const GatewayResponseSchema: GenMessage<GatewayResponse> = /*@__PURE__*/
  */
 export const VPSGatewayService: GenService<{
   /**
-   * RegisterGateway registers a gateway with the API (reverse connection pattern)
-   * Gateway initiates this connection and maintains a bidirectional stream
-   * The stream is used for both gateway->API and API->Gateway communication
+   * RegisterGateway handles API instance registration (forward connection pattern)
+   * API instances connect to the gateway's gRPC server (port 1537 = OCG)
+   * Gateway is the server, API is the client
+   * The stream is used for API->Gateway communication and heartbeats
    *
    * @generated from rpc obiente.cloud.vpsgateway.v1.VPSGatewayService.RegisterGateway
    */

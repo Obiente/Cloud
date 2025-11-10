@@ -56,9 +56,10 @@ const (
 // VPSGatewayServiceClient is a client for the obiente.cloud.vpsgateway.v1.VPSGatewayService
 // service.
 type VPSGatewayServiceClient interface {
-	// RegisterGateway registers a gateway with the API (reverse connection pattern)
-	// Gateway initiates this connection and maintains a bidirectional stream
-	// The stream is used for both gateway->API and API->Gateway communication
+	// RegisterGateway handles API instance registration (forward connection pattern)
+	// API instances connect to the gateway's gRPC server (port 1537 = OCG)
+	// Gateway is the server, API is the client
+	// The stream is used for API->Gateway communication and heartbeats
 	RegisterGateway(context.Context) *connect.BidiStreamForClient[v1.GatewayMessage, v1.GatewayMessage]
 	// AllocateIP allocates a DHCP IP address for a VPS instance
 	AllocateIP(context.Context, *connect.Request[v1.AllocateIPRequest]) (*connect.Response[v1.AllocateIPResponse], error)
@@ -166,9 +167,10 @@ func (c *vPSGatewayServiceClient) GetGatewayInfo(ctx context.Context, req *conne
 // VPSGatewayServiceHandler is an implementation of the
 // obiente.cloud.vpsgateway.v1.VPSGatewayService service.
 type VPSGatewayServiceHandler interface {
-	// RegisterGateway registers a gateway with the API (reverse connection pattern)
-	// Gateway initiates this connection and maintains a bidirectional stream
-	// The stream is used for both gateway->API and API->Gateway communication
+	// RegisterGateway handles API instance registration (forward connection pattern)
+	// API instances connect to the gateway's gRPC server (port 1537 = OCG)
+	// Gateway is the server, API is the client
+	// The stream is used for API->Gateway communication and heartbeats
 	RegisterGateway(context.Context, *connect.BidiStream[v1.GatewayMessage, v1.GatewayMessage]) error
 	// AllocateIP allocates a DHCP IP address for a VPS instance
 	AllocateIP(context.Context, *connect.Request[v1.AllocateIPRequest]) (*connect.Response[v1.AllocateIPResponse], error)
