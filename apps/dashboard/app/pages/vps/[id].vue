@@ -296,11 +296,48 @@
                       </OuiBox>
                       <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
                         <OuiStack gap="sm">
-                          <OuiText size="sm" weight="semibold" color="primary">SSH Proxy</OuiText>
+                          <OuiText size="sm" weight="semibold" color="primary">SSH Access</OuiText>
                           <OuiText size="sm" color="secondary">
-                            Connect via SSH through a jump host proxy. Connection instructions will be available
-                            once the VPS is fully provisioned.
+                            Connect to your VPS via SSH using the SSH proxy.
                           </OuiText>
+                          <div v-if="sshInfo" class="mt-2">
+                            <OuiText size="xs" weight="semibold" class="mb-1">SSH Command:</OuiText>
+                            <OuiBox p="sm" rounded="md" class="bg-surface-muted font-mono text-xs overflow-x-auto">
+                              <code>{{ sshInfo.sshProxyCommand }}</code>
+                            </OuiBox>
+                            <OuiButton
+                              variant="ghost"
+                              size="xs"
+                              @click="copySSHCommand"
+                              class="mt-2"
+                            >
+                              <ClipboardDocumentListIcon class="h-3 w-3 mr-1" />
+                              Copy Command
+                            </OuiButton>
+                            <div v-if="sshInfo.connectionInstructions" class="mt-4">
+                              <OuiText size="xs" weight="semibold" class="mb-2">Full Connection Instructions:</OuiText>
+                              <OuiBox p="sm" rounded="md" class="bg-surface-muted font-mono text-xs whitespace-pre-wrap overflow-x-auto">
+                                <code>{{ sshInfo.connectionInstructions }}</code>
+                              </OuiBox>
+                              <OuiButton
+                                variant="ghost"
+                                size="xs"
+                                @click="copyConnectionInstructions"
+                                class="mt-2"
+                              >
+                                <ClipboardDocumentListIcon class="h-3 w-3 mr-1" />
+                                Copy Instructions
+                              </OuiButton>
+                            </div>
+                          </div>
+                          <div v-else-if="sshInfoLoading" class="mt-2">
+                            <OuiText size="xs" color="secondary">Loading SSH connection info...</OuiText>
+                          </div>
+                          <div v-else-if="sshInfoError" class="mt-2">
+                            <OuiText size="xs" color="danger">
+                              Failed to load SSH connection info. {{ sshInfoError }}
+                            </OuiText>
+                          </div>
                         </OuiStack>
                       </OuiBox>
                     </OuiStack>
@@ -320,6 +357,195 @@
                   :organization-id="orgId"
                 />
               </template>
+              <template #ssh-settings>
+                <!-- SSH Keys Management -->
+                <OuiStack gap="md">
+                  <OuiCard>
+                    <OuiCardHeader>
+                      <OuiStack gap="xs">
+                        <OuiText as="h2" class="oui-card-title">SSH Keys</OuiText>
+                        <OuiText color="secondary" size="sm">
+                          Manage SSH public keys for accessing your VPS instances. These keys are automatically added to new VPS instances via cloud-init.
+                        </OuiText>
+                      </OuiStack>
+                    </OuiCardHeader>
+                    <OuiCardBody>
+                      <OuiStack gap="md">
+                        <!-- Add SSH Key Button -->
+                        <OuiFlex justify="end">
+                          <OuiButton
+                            variant="solid"
+                            size="sm"
+                            @click="openAddSSHKeyDialog"
+                          >
+                            <KeyIcon class="h-4 w-4 mr-2" />
+                            Add SSH Key
+                          </OuiButton>
+                        </OuiFlex>
+
+                        <!-- SSH Keys List -->
+                        <div v-if="sshKeysLoading" class="py-8">
+                          <OuiText color="secondary" class="text-center">Loading SSH keys...</OuiText>
+                        </div>
+                        <div v-else-if="sshKeysError" class="py-8">
+                          <OuiText color="danger" class="text-center">
+                            Failed to load SSH keys: {{ sshKeysError }}
+                          </OuiText>
+                        </div>
+                        <div v-else-if="sshKeys.length === 0" class="py-8">
+                          <OuiText color="secondary" class="text-center">
+                            No SSH keys found. Add your first SSH key to get started.
+                          </OuiText>
+                        </div>
+                        <div v-else class="space-y-3">
+                          <OuiBox
+                            v-for="key in sshKeys"
+                            :key="key.id"
+                            p="md"
+                            rounded="lg"
+                            class="bg-surface-muted/40 ring-1 ring-border-muted"
+                          >
+                            <OuiStack gap="sm">
+                              <OuiFlex justify="between" align="start">
+                                <OuiStack gap="xs">
+                                  <OuiFlex align="center" gap="sm">
+                                    <OuiText size="sm" weight="semibold">{{ key.name }}</OuiText>
+                                    <OuiButton
+                                      variant="ghost"
+                                      size="xs"
+                                      @click="openEditSSHKeyDialog(key)"
+                                      :disabled="editingSSHKey === key.id"
+                                    >
+                                      <PencilIcon class="h-3 w-3" />
+                                    </OuiButton>
+                                    <OuiBadge v-if="!key.vpsId" variant="primary" size="sm">Organization-wide</OuiBadge>
+                                  </OuiFlex>
+                                  <OuiText size="xs" color="secondary" class="font-mono">
+                                    {{ key.fingerprint }}
+                                  </OuiText>
+                                  <OuiText size="xs" color="muted">
+                                    Added {{ formatSSHKeyDate(key.createdAt) }}
+                                  </OuiText>
+                                </OuiStack>
+                                <OuiButton
+                                  variant="ghost"
+                                  color="danger"
+                                  size="xs"
+                                  @click="removeSSHKey(key.id)"
+                                  :disabled="removingSSHKey === key.id"
+                                >
+                                  <TrashIcon class="h-3 w-3 mr-1" />
+                                  Remove
+                                </OuiButton>
+                              </OuiFlex>
+                              <OuiBox p="sm" rounded="md" class="bg-surface-muted font-mono text-xs overflow-x-auto">
+                                <code>{{ key.publicKey }}</code>
+                              </OuiBox>
+                            </OuiStack>
+                          </OuiBox>
+                        </div>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+                </OuiStack>
+
+                <!-- Edit SSH Key Dialog -->
+                <OuiDialog
+                  v-model:open="editSSHKeyDialogOpen"
+                  title="Edit SSH Key Name"
+                  size="md"
+                >
+                  <OuiStack gap="md">
+                    <OuiText color="muted" size="sm">
+                      Update the name for this SSH key. The name will be synced to Proxmox.
+                    </OuiText>
+
+                    <OuiStack gap="xs">
+                      <OuiText size="sm" weight="medium">Name</OuiText>
+                      <OuiInput
+                        v-model="editingSSHKeyName"
+                        placeholder="My SSH Key"
+                        :disabled="editingSSHKey !== null"
+                      />
+                    </OuiStack>
+
+                    <OuiBox v-if="editingSSHKeyError" variant="danger" p="sm" rounded="md">
+                      <OuiText size="sm" color="danger">{{ editingSSHKeyError }}</OuiText>
+                    </OuiBox>
+
+                    <OuiFlex justify="end" gap="sm">
+                      <OuiButton
+                        variant="ghost"
+                        @click="editSSHKeyDialogOpen = false"
+                        :disabled="editingSSHKey !== null"
+                      >
+                        Cancel
+                      </OuiButton>
+                      <OuiButton
+                        color="primary"
+                        @click="updateSSHKey"
+                        :disabled="!editingSSHKeyName.trim() || editingSSHKey !== null"
+                      >
+                        <span v-if="editingSSHKey">Updating...</span>
+                        <span v-else>Update</span>
+                      </OuiButton>
+                    </OuiFlex>
+                  </OuiStack>
+                </OuiDialog>
+
+                <!-- Add SSH Key Dialog -->
+                <OuiDialog
+                  v-model:open="addSSHKeyDialogOpen"
+                  title="Add SSH Key"
+                  size="md"
+                >
+                  <OuiStack gap="md">
+                    <OuiText color="secondary" size="sm">
+                      Paste your SSH public key below. This key will be added to all VPS instances in your organization.
+                    </OuiText>
+                    <OuiFormField label="Key Name" required>
+                      <OuiInput
+                        v-model="newSSHKeyName"
+                        placeholder="e.g., My Laptop, Work Computer"
+                        :disabled="addingSSHKey"
+                      />
+                    </OuiFormField>
+                    <OuiFormField label="Public Key" required>
+                      <OuiTextarea
+                        v-model="newSSHKeyValue"
+                        placeholder="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ..."
+                        :rows="4"
+                        :disabled="addingSSHKey"
+                      />
+                      <OuiText size="xs" color="secondary" class="mt-1">
+                        Paste your SSH public key (usually from ~/.ssh/id_rsa.pub or ~/.ssh/id_ed25519.pub)
+                      </OuiText>
+                    </OuiFormField>
+                    <div v-if="addSSHKeyError" class="mt-2">
+                      <OuiText size="sm" color="danger">{{ addSSHKeyError }}</OuiText>
+                    </div>
+                  </OuiStack>
+                  <template #footer>
+                    <OuiFlex justify="end" gap="sm">
+                      <OuiButton
+                        variant="ghost"
+                        @click="addSSHKeyDialogOpen = false"
+                        :disabled="addingSSHKey"
+                      >
+                        Cancel
+                      </OuiButton>
+                      <OuiButton
+                        variant="solid"
+                        @click="addSSHKey"
+                        :disabled="addingSSHKey || !newSSHKeyName || !newSSHKeyValue"
+                      >
+                        <span v-if="addingSSHKey">Adding...</span>
+                        <span v-else>Add Key</span>
+                      </OuiButton>
+                    </OuiFlex>
+                  </template>
+                </OuiDialog>
+              </template>
               <template #audit-logs>
                 <AuditLogs
                   :organization-id="orgId"
@@ -337,7 +563,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   ArrowLeftIcon,
@@ -350,6 +576,8 @@ import {
   TrashIcon,
   InformationCircleIcon,
   ClipboardDocumentListIcon,
+  KeyIcon,
+  PencilIcon,
 } from "@heroicons/vue/24/outline";
 import { VPSService, VPSStatus, VPSImage, type VPSInstance } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
@@ -366,6 +594,7 @@ import AuditLogs from "~/components/audit/AuditLogs.vue";
 import type { TabItem } from "~/components/oui/Tabs.vue";
 import { useTabQuery } from "~/composables/useTabQuery";
 import { date } from "@obiente/proto/utils";
+import { formatDate } from "~/utils/common";
 
 definePageMeta({
   layout: "default",
@@ -417,6 +646,289 @@ const {
 );
 
 const vps = computed(() => vpsData.value);
+
+// Fetch SSH connection info
+const sshInfo = ref<{ sshProxyCommand: string; connectionInstructions: string } | null>(null);
+const sshInfoLoading = ref(false);
+const sshInfoError = ref<string | null>(null);
+
+const fetchSSHInfo = async () => {
+  if (!vps.value || vps.value.status !== VPSStatus.RUNNING) {
+    sshInfo.value = null;
+    return;
+  }
+
+  sshInfoLoading.value = true;
+  sshInfoError.value = null;
+  try {
+    const res = await client.getVPSProxyInfo({
+      vpsId: vpsId.value,
+    });
+    sshInfo.value = {
+      sshProxyCommand: res.sshProxyCommand || "",
+      connectionInstructions: res.connectionInstructions || "",
+    };
+  } catch (err: unknown) {
+    sshInfoError.value = err instanceof Error ? err.message : "Unknown error";
+    sshInfo.value = null;
+  } finally {
+    sshInfoLoading.value = false;
+  }
+};
+
+// Fetch SSH info when VPS is running
+watch(
+  () => vps.value?.status,
+  (status) => {
+    if (status === VPSStatus.RUNNING) {
+      fetchSSHInfo();
+    } else {
+      sshInfo.value = null;
+    }
+  },
+  { immediate: true }
+);
+
+// SSH Keys Management
+const sshKeys = ref<Array<{
+  id: string;
+  name: string;
+  publicKey: string;
+  fingerprint: string;
+  vpsId?: string;
+  createdAt: { seconds: number | bigint; nanos: number } | undefined;
+}>>([]);
+const sshKeysLoading = ref(false);
+const sshKeysError = ref<string | null>(null);
+const addSSHKeyDialogOpen = ref(false);
+const newSSHKeyName = ref("");
+const newSSHKeyValue = ref("");
+const addingSSHKey = ref(false);
+const addSSHKeyError = ref("");
+const removingSSHKey = ref<string | null>(null);
+const editSSHKeyDialogOpen = ref(false);
+const editingSSHKey = ref<string | null>(null);
+const editingSSHKeyName = ref("");
+const editingSSHKeyId = ref<string | null>(null);
+const editingSSHKeyError = ref("");
+
+const fetchSSHKeys = async () => {
+  if (!orgId.value) {
+    sshKeys.value = [];
+    return;
+  }
+
+  sshKeysLoading.value = true;
+  sshKeysError.value = null;
+  try {
+    const res = await client.listSSHKeys({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+    sshKeys.value = (res.keys || []).map((key) => ({
+      id: key.id || "",
+      name: key.name || "",
+      publicKey: key.publicKey || "",
+      fingerprint: key.fingerprint || "",
+      vpsId: key.vpsId,
+      createdAt: key.createdAt as { seconds: number | bigint; nanos: number } | undefined,
+    }));
+  } catch (err: unknown) {
+    sshKeysError.value = err instanceof Error ? err.message : "Unknown error";
+    sshKeys.value = [];
+  } finally {
+    sshKeysLoading.value = false;
+  }
+};
+
+const openAddSSHKeyDialog = () => {
+  addSSHKeyDialogOpen.value = true;
+  newSSHKeyName.value = "";
+  newSSHKeyValue.value = "";
+  addSSHKeyError.value = "";
+};
+
+const addSSHKey = async () => {
+  if (!orgId.value || !newSSHKeyName.value || !newSSHKeyValue.value) {
+    return;
+  }
+
+  addingSSHKey.value = true;
+  addSSHKeyError.value = "";
+  try {
+    // Clean the SSH key: remove all newlines and carriage returns
+    // SSH keys should be a single continuous line
+    const cleanedKey = newSSHKeyValue.value
+      .trim()
+      .replace(/\r\n/g, "")
+      .replace(/\n/g, "")
+      .replace(/\r/g, "")
+      .trim();
+    
+    await client.addSSHKey({
+      organizationId: orgId.value,
+      name: newSSHKeyName.value.trim(),
+      publicKey: cleanedKey,
+      vpsId: vpsId.value,
+    });
+    toast.success("SSH key added successfully");
+    addSSHKeyDialogOpen.value = false;
+    await fetchSSHKeys();
+  } catch (err: unknown) {
+    if (err instanceof ConnectError) {
+      addSSHKeyError.value = err.message || "Failed to add SSH key";
+    } else {
+      addSSHKeyError.value = err instanceof Error ? err.message : "Unknown error";
+    }
+    toast.error("Failed to add SSH key", addSSHKeyError.value);
+  } finally {
+    addingSSHKey.value = false;
+  }
+};
+
+const openEditSSHKeyDialog = (key: { id: string; name: string }) => {
+  editingSSHKeyId.value = key.id;
+  editingSSHKeyName.value = key.name;
+  editingSSHKeyError.value = "";
+  editSSHKeyDialogOpen.value = true;
+};
+
+const updateSSHKey = async () => {
+  if (!orgId.value || !editingSSHKeyId.value || !editingSSHKeyName.value.trim()) {
+    return;
+  }
+
+  editingSSHKey.value = editingSSHKeyId.value;
+  editingSSHKeyError.value = "";
+  try {
+    await client.updateSSHKey({
+      organizationId: orgId.value,
+      keyId: editingSSHKeyId.value,
+      name: editingSSHKeyName.value.trim(),
+    });
+    toast.success("SSH key name updated successfully");
+    editSSHKeyDialogOpen.value = false;
+    await fetchSSHKeys();
+  } catch (err: unknown) {
+    if (err instanceof ConnectError) {
+      editingSSHKeyError.value = err.message || "Failed to update SSH key";
+    } else {
+      editingSSHKeyError.value = err instanceof Error ? err.message : "Unknown error";
+    }
+    toast.error("Failed to update SSH key", editingSSHKeyError.value);
+  } finally {
+    editingSSHKey.value = null;
+  }
+};
+
+const removeSSHKey = async (keyId: string) => {
+  if (!orgId.value) {
+    return;
+  }
+
+  // Find the key to check if it's org-wide
+  const key = sshKeys.value.find((k) => k.id === keyId);
+  const isOrgWide = key && !key.vpsId;
+
+  let message = "Are you sure you want to remove this SSH key?";
+  if (isOrgWide) {
+    // For org-wide keys, fetch the list of VPS instances that will be affected
+    try {
+      const vpsRes = await client.listVPS({
+        organizationId: orgId.value,
+        page: 1,
+        perPage: 100, // Get up to 100 VPS instances
+      });
+      
+      // Filter to only VPS instances that are provisioned (have instance_id)
+      const affectedVPSList = (vpsRes.vpsInstances || [])
+        .filter((vps) => vps.instanceId) // Only VPS instances that are provisioned
+        .map((vps) => vps.name || vps.id)
+        .slice(0, 20); // Limit to 20 for display
+      
+      if (affectedVPSList.length > 0) {
+        const vpsCount = vpsRes.pagination?.total || affectedVPSList.length;
+        let vpsListText = affectedVPSList.map((name) => `  • ${name}`).join("\n");
+        if (vpsCount > affectedVPSList.length) {
+          vpsListText += `\n  ... and ${vpsCount - affectedVPSList.length} more`;
+        }
+        message = `Are you sure you want to remove this organization-wide SSH key?\n\nThis will remove the key from ${vpsCount} VPS instance(s) in this organization:\n\n${vpsListText}`;
+      } else {
+        message = "Are you sure you want to remove this organization-wide SSH key? It will be removed from all VPS instances in this organization.";
+      }
+    } catch (err) {
+      // If we can't fetch VPS list, show generic message
+      message = "Are you sure you want to remove this organization-wide SSH key? It will be removed from all VPS instances in this organization.";
+    }
+  } else {
+    message = "Are you sure you want to remove this SSH key? You will no longer be able to use it to access this VPS instance.";
+  }
+
+  const confirmed = await showConfirm({
+    title: "Remove SSH Key",
+    message: message,
+    confirmLabel: "Remove",
+    cancelLabel: "Cancel",
+    variant: "danger",
+  });
+
+  if (!confirmed) {
+    return;
+  }
+
+  removingSSHKey.value = keyId;
+  try {
+    const res = await client.removeSSHKey({
+      organizationId: orgId.value,
+      keyId: keyId,
+    });
+    
+    // Show success message with affected VPS count
+    if (isOrgWide && res.affectedVpsIds && res.affectedVpsIds.length > 0) {
+      toast.success(
+        `SSH key removed successfully from ${res.affectedVpsIds.length} VPS instance(s)`
+      );
+    } else {
+      toast.success("SSH key removed successfully");
+    }
+    await fetchSSHKeys();
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    toast.error("Failed to remove SSH key", message);
+  } finally {
+    removingSSHKey.value = null;
+  }
+};
+
+const formatSSHKeyDate = (timestamp: { seconds: number | bigint; nanos: number } | undefined) => {
+  if (!timestamp) return "Unknown";
+  return formatDate(timestamp);
+};
+
+// Fetch SSH keys when organization changes
+watch(orgId, () => {
+  fetchSSHKeys();
+}, { immediate: true });
+
+const copySSHCommand = async () => {
+  if (!sshInfo.value?.sshProxyCommand) return;
+  try {
+    await navigator.clipboard.writeText(sshInfo.value.sshProxyCommand);
+    toast.success("SSH command copied to clipboard");
+  } catch (err) {
+    toast.error("Failed to copy SSH command");
+  }
+};
+
+const copyConnectionInstructions = async () => {
+  if (!sshInfo.value?.connectionInstructions) return;
+  try {
+    await navigator.clipboard.writeText(sshInfo.value.connectionInstructions);
+    toast.success("Connection instructions copied to clipboard");
+  } catch (err) {
+    toast.error("Failed to copy connection instructions");
+  }
+};
 
 // Status helpers
 const statusLabel = computed(() => {
@@ -633,6 +1145,7 @@ async function handleDelete() {
 const tabs = computed<TabItem[]>(() => [
   { id: "overview", label: "Overview", icon: InformationCircleIcon },
   { id: "terminal", label: "Terminal", icon: CommandLineIcon },
+  { id: "ssh-settings", label: "SSH Settings", icon: KeyIcon },
   { id: "audit-logs", label: "Audit Logs", icon: ClipboardDocumentListIcon },
 ]);
 
