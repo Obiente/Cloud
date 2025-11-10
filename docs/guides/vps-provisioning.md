@@ -7,7 +7,7 @@ This guide explains how to provision and manage Virtual Private Server (VPS) ins
 VPS instances provide dedicated virtual machines with full root access and complete control over the operating system. VPS instances are provisioned via Proxmox and can be accessed through:
 
 - **Web Terminal**: Browser-based terminal access via WebSocket
-- **SSH Proxy**: SSH access through a jump host (no dedicated IP required)
+- **SSH Proxy**: SSH access through gateway (no dedicated IP required)
 
 ## Prerequisites
 
@@ -113,171 +113,35 @@ For production with minimal permissions, grant only the required permissions at 
 
 **Note:** If you're using a non-root user, you may need to grant permissions on specific paths (nodes, storage pools) instead of the entire datacenter.
 
-### 4. Configure SSH Proxy and Jump Host (Required for SSH Proxy)
+### 4. Configure VPS Gateway (Required for SSH Proxy)
 
-The SSH proxy allows users to connect to VPS instances even without public IP addresses. It uses a jump host (bastion) to route SSH connections to VPS instances.
-
-**Architecture Options:**
-
-1. **Dedicated SSH Proxy VM (Recommended for Security)**: Use a separate VM as the jump host. This isolates the Proxmox node from direct SSH access, reducing the attack surface if SSH keys are compromised.
-
-2. **Proxmox Node as Jump Host (Fallback)**: Use the Proxmox node directly as the jump host. This is simpler but exposes the Proxmox node to SSH access.
+The SSH proxy allows users to connect to VPS instances even without public IP addresses. The gateway handles SSH proxying, eliminating the need for jump hosts.
 
 **Why This Is Needed:**
 
 - The SSH proxy allows users to connect to VPS instances even without public IP addresses
-- It uses a jump host (bastion) to route SSH connections
-- SSH key authentication is required because password authentication may not work or is not secure
-- A dedicated SSH proxy VM provides better security isolation
+- The gateway handles routing and proxying of SSH connections
+- No SSH keys or jump host configuration is required - the gateway manages connections automatically
+- The gateway provides better security and isolation than jump hosts
 
 **Setup Steps:**
 
-#### Option A: Dedicated SSH Proxy VM (Recommended)
+1. **Set up the VPS Gateway**:
 
-This is the most secure option. Create a separate VM that acts as the SSH proxy/jump host:
+   Follow the [VPS Gateway Setup Guide](./vps-gateway-setup.md) to configure the gateway service.
 
-1. **Create a Dedicated SSH Proxy VM**:
-
-   - Create a small VM (1 CPU, 512MB RAM, 2GB disk) on Proxmox
-   - Install a minimal Linux distribution (Ubuntu Server, Debian, etc.)
-   - Configure the VM to be on the same network as your VPS instances (see "Network Configuration" section below)
-   - Ensure the VM can reach both the API server and all VPS instances
-
-2. **Generate SSH Key Pair** (if you don't have one):
-
-   ```bash
-   ssh-keygen -t ed25519 -f ~/.ssh/ssh_proxy_jump_host -N ""
-   ```
-
-3. **Copy Public Key to SSH Proxy VM**:
-
-   Replace `your-ssh-proxy-vm` with your SSH proxy VM hostname or IP address:
-
-   ```bash
-   ssh-copy-id -i ~/.ssh/ssh_proxy_jump_host.pub root@your-ssh-proxy-vm
-   ```
-
-   Or manually:
-
-   ```bash
-   cat ~/.ssh/ssh_proxy_jump_host.pub | ssh root@your-ssh-proxy-vm "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
-   ```
-
-4. **Configure Environment Variables**:
+2. **Configure Gateway Environment Variables**:
 
    Add to your `docker-compose.yml` or environment:
 
    ```bash
-   SSH_PROXY_JUMP_HOST=your-ssh-proxy-vm
-   SSH_PROXY_JUMP_USER=root  # Optional, defaults to root
+   VPS_GATEWAY_URL=http://gateway-public-ip:1537  # Gateway gRPC server URL
+   VPS_GATEWAY_API_SECRET=your-shared-secret       # Must match GATEWAY_API_SECRET in gateway
    ```
 
-5. **Configure SSH Agent** (see "SSH Agent Setup" section below)
+3. **Verify Gateway Connection**:
 
-#### Option B: Proxmox Node as Jump Host (Fallback)
-
-If you don't want to set up a dedicated VM, you can use the Proxmox node directly (less secure):
-
-1. **Generate SSH Key Pair** (if you don't have one):
-
-   ```bash
-   ssh-keygen -t ed25519 -f ~/.ssh/proxmox_jump_host -N ""
-   ```
-
-2. **Copy Public Key to Proxmox Node**:
-
-   Replace `your-proxmox-host` with your actual Proxmox hostname or IP address:
-
-   ```bash
-   ssh-copy-id -i ~/.ssh/proxmox_jump_host.pub root@your-proxmox-host
-   ```
-
-   Or manually:
-
-   ```bash
-   cat ~/.ssh/proxmox_jump_host.pub | ssh root@your-proxmox-host "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
-   ```
-
-3. **No environment variables needed** - the system will automatically use the Proxmox API URL hostname as the jump host
-
-4. **Configure SSH Agent** (see "SSH Agent Setup" section below)
-
-#### SSH Agent Setup (Required for Both Options)
-
-This method uses an SSH agent to provide keys to the API container:
-
-1. **Start SSH Agent and Add Key** (on the host running the API container):
-
-   For dedicated SSH proxy VM:
-   ```bash
-   eval $(ssh-agent)
-   ssh-add ~/.ssh/ssh_proxy_jump_host
-   ```
-
-   For Proxmox node:
-   ```bash
-   eval $(ssh-agent)
-   ssh-add ~/.ssh/proxmox_jump_host
-   ```
-
-4. **Mount SSH Agent Socket in Docker Container**:
-
-   Add to your `docker-compose.yml`:
-
-   ```yaml
-   services:
-     api:
-       environment:
-         - SSH_AUTH_SOCK=/ssh-agent
-       volumes:
-         - ${SSH_AUTH_SOCK}:/ssh-agent:ro
-   ```
-
-   Or for Docker Swarm, add to your service definition:
-
-   ```yaml
-   services:
-     api:
-       environment:
-         - SSH_AUTH_SOCK=/ssh-agent
-       volumes:
-         - type: bind
-           source: ${SSH_AUTH_SOCK}
-           target: /ssh-agent
-           read_only: true
-   ```
-
-5. **Set SSH_AUTH_SOCK Environment Variable**:
-
-   ```bash
-   export SSH_AUTH_SOCK=$(ssh-agent -s | grep SSH_AUTH_SOCK | cut -d= -f2 | tr -d ';')
-   ```
-
-#### Option 2: Using SSH Key File (Alternative - Not Currently Supported)
-
-**Note:** This method requires code modifications to read from a key file instead of SSH agent. Currently, only SSH agent authentication is supported.
-
-If SSH agent is not available, you can mount the private key directly:
-
-1. **Generate and Copy SSH Key** (same as Option 1, steps 1-2)
-
-2. **Mount Private Key in Container**:
-
-   ```yaml
-   services:
-     api:
-       volumes:
-         - ~/.ssh/proxmox_jump_host:/root/.ssh/proxmox_jump_host:ro
-         - ~/.ssh/proxmox_jump_host.pub:/root/.ssh/proxmox_jump_host.pub:ro
-       environment:
-         - SSH_KEY_PATH=/root/.ssh/proxmox_jump_host
-   ```
-
-   **Note:** This method requires modifying the code to read from the key file instead of SSH agent.
-
-#### Option 3: Using Proxmox Root Password (Not Recommended)
-
-The code will attempt to use the Proxmox root password as a fallback, but this is not recommended for security reasons and may not work if the Proxmox node password differs from the VPS root password.
+   The API will automatically use the gateway for SSH proxying when `VPS_GATEWAY_URL` is configured. No additional SSH key setup is required.
 
 **Verification:**
 
@@ -866,15 +730,11 @@ curl -X POST https://your-instance/api/v1/vps \
 
 ### SSH Access
 
-VPS instances can be accessed via SSH without requiring a dedicated IP address. The SSH proxy routes connections through either:
-
-1. **vps-gateway Service** (if configured): Uses gRPC to proxy SSH connections
-2. **Jump Host** (fallback): Uses SSH jump host (Proxmox node or dedicated VM)
+VPS instances can be accessed via SSH without requiring a dedicated IP address. The SSH proxy routes connections through the vps-gateway service, which uses gRPC to proxy SSH connections.
 
 **Prerequisites:**
 
-- **With Gateway**: Gateway service must be running and accessible
-- **Without Gateway**: SSH keys must be configured between the API server and jump host (see "Configure SSH Proxy and Jump Host" section above)
+- **With Gateway**: Gateway service must be running and accessible (see "Configure VPS Gateway" section above)
 - The VPS instance must be running
 - Network must be configured on the VPS (even if no public IP is available)
 
@@ -916,20 +776,14 @@ VPS instances can be accessed via SSH without requiring a dedicated IP address. 
 5. Gateway routes connection to VPS instance
 6. User gets interactive SSH session on the VPS
 
-**Without vps-gateway (fallback):**
-1. User connects to API server on port 2222 (SSH proxy)
-2. API server authenticates user (SSH key or API token)
-3. API server connects to jump host via SSH (using configured SSH keys)
-4. Jump host routes connection to VPS instance (by IP or hostname)
-5. User gets interactive SSH session on the VPS
 
 **Troubleshooting SSH Proxy:**
 
 - **"VPS IP address not available"**: 
-  - With gateway: Check gateway service is running and VPS has allocated IP
-  - Without gateway: VPS may not have network configured or guest agent not ready. The proxy will attempt to connect using hostname via jump host.
+  - Check gateway service is running and VPS has allocated IP
+  - VPS may not have network configured or guest agent not ready. The proxy will attempt to connect using hostname directly.
 - **"failed to connect to gateway"**: Check `VPS_GATEWAY_API_SECRET` matches `GATEWAY_API_SECRET` in gateway service. Ensure gateway can reach API at `GATEWAY_API_URL`.
-- **"failed to connect to jump host"**: SSH keys not configured for jump host (see "Configure SSH Proxy and Jump Host" section above)
+- **"failed to connect via gateway"**: Gateway not configured or unreachable (see "Configure VPS Gateway" section above)
 - **"Connection reset"**: Check if SSH proxy service is running and port 2222 is accessible
 
 ## Managing VPS Instances

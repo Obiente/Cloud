@@ -10,7 +10,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +20,8 @@ import (
 	"api/internal/database"
 	"api/internal/logger"
 	"api/internal/orchestrator"
+
+	vpsgatewayv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -368,12 +369,12 @@ func (s *SSHProxyServer) handleChannel(ctx context.Context, channel ssh.Channel,
 		}
 	}
 
-	// If no IP found, try to connect via Proxmox jump host using VM hostname
+	// If no IP found, try to use VM hostname (gateway can resolve hostnames)
 	// This allows connection even when guest agent isn't ready
 	if vpsIP == "" {
-		logger.Warn("[SSHProxy] VPS %s has no IP address from guest agent. Instance ID: %v, Status: %s. Will attempt connection via Proxmox jump host using hostname.", vpsID, vps.InstanceID, vps.Status)
+		logger.Warn("[SSHProxy] VPS %s has no IP address from guest agent. Instance ID: %v, Status: %s. Will attempt connection using hostname.", vpsID, vps.InstanceID, vps.Status)
 		
-		// We need the VM ID to construct a hostname or use Proxmox jump host
+		// We need the VM ID to construct a hostname
 		if vps.InstanceID == nil {
 			logger.Error("[SSHProxy] Cannot connect: VPS has no instance ID")
 			if _, writeErr := channel.Write([]byte("VPS is not provisioned yet. Please wait for provisioning to complete.\r\n")); writeErr != nil {
@@ -384,16 +385,15 @@ func (s *SSHProxyServer) handleChannel(ctx context.Context, channel ssh.Channel,
 		
 		// Try to use the VM's hostname (typically the VPS ID or VM name)
 		// VMs on Proxmox often have hostnames based on their name or ID
-		// We'll use the VPS ID as hostname and connect via Proxmox jump host
-		// The jump host should be able to resolve the hostname or route to the VM
+		// Gateway can resolve hostnames and route to the VM
 		vmIDInt := 0
 		fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
 		if vmIDInt > 0 {
 			// Use the VPS ID as hostname (cloud-init typically sets this)
 			// Fallback to vm-{id} pattern if VPS ID doesn't work
 			vpsHostname := vpsID
-			logger.Info("[SSHProxy] Attempting connection via jump host using hostname: %s", vpsHostname)
-			// We'll set vpsIP to the hostname and let forwardToVPS handle the jump host connection
+			logger.Info("[SSHProxy] Attempting connection using hostname: %s (gateway will resolve)", vpsHostname)
+			// We'll set vpsIP to the hostname and let forwardToVPS handle the connection via gateway
 			vpsIP = vpsHostname
 		} else {
 			logger.Error("[SSHProxy] Cannot connect: Invalid VM ID")
@@ -470,7 +470,8 @@ func (s *SSHProxyServer) handleChannel(ctx context.Context, channel ssh.Channel,
 	}
 }
 
-// forwardToVPS forwards SSH connection to the actual VPS using connectSSH
+// forwardToVPS forwards SSH connection to the actual VPS
+// Uses gateway ProxySSH if available, otherwise falls back to direct SSH connection
 // vpsIP can be either an IP address or a hostname (when IP is not available)
 func (s *SSHProxyServer) forwardToVPS(ctx context.Context, channel ssh.Channel, vpsIP, rootPassword string, cols, rows int) error {
 	if s.vpsService == nil {
@@ -478,61 +479,15 @@ func (s *SSHProxyServer) forwardToVPS(ctx context.Context, channel ssh.Channel, 
 		return fmt.Errorf("VPS service not available")
 	}
 
-	// Get jump host (dedicated SSH proxy VM or Proxmox node as fallback)
-	// Prefer dedicated SSH proxy VM for security (doesn't expose Proxmox node)
-	jumpHost := ""
-	jumpUser := "root"
-	
-	// Check for dedicated SSH proxy VM first (recommended for security)
-	sshProxyHost := os.Getenv("SSH_PROXY_JUMP_HOST")
-	if sshProxyHost != "" {
-		jumpHost = sshProxyHost
-		sshProxyUser := os.Getenv("SSH_PROXY_JUMP_USER")
-		if sshProxyUser != "" {
-			jumpUser = sshProxyUser
-		}
-		logger.Info("[SSHProxy] Using dedicated SSH proxy jump host: %s (user: %s)", jumpHost, jumpUser)
-	} else {
-		// Fallback to Proxmox node (less secure, exposes Proxmox)
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err == nil && proxmoxConfig.APIURL != "" {
-		if u, err := url.Parse(proxmoxConfig.APIURL); err == nil {
-				jumpHost = u.Hostname()
-				logger.Info("[SSHProxy] Using Proxmox node as jump host: %s (consider using SSH_PROXY_JUMP_HOST for better security)", jumpHost)
-			} else {
-				logger.Warn("[SSHProxy] Failed to parse Proxmox API URL: %v", err)
-			}
-		} else if err != nil {
-			logger.Warn("[SSHProxy] Failed to get Proxmox config: %v", err)
-		}
+	// Prefer gateway ProxySSH if available
+	if s.gatewayClient != nil {
+		logger.Info("[SSHProxy] Using gateway ProxySSH for VPS at %s", vpsIP)
+		return s.forwardToVPSViaGateway(ctx, channel, vpsIP, rootPassword, cols, rows)
 	}
 
-	// Determine if vpsIP is a hostname (not an IP address)
-	// Try to parse as IP to determine if it's a hostname
-	var useJumpHost bool
-	if net.ParseIP(vpsIP) != nil {
-		// It's an IP address
-		useJumpHost = false // Can connect directly, but may still use jump host for internal IPs
-		logger.Info("[SSHProxy] VPS target is IP address: %s", vpsIP)
-	} else {
-		// It's a hostname, we need jump host
-		useJumpHost = true
-		logger.Info("[SSHProxy] VPS target is hostname: %s (will use jump host)", vpsIP)
-	}
-
-	// If we have a hostname and no jump host, we can't connect
-	if useJumpHost && jumpHost == "" {
-		logger.Error("[SSHProxy] Cannot connect: VPS hostname %s requires jump host but none available", vpsIP)
-		return fmt.Errorf("cannot connect to hostname %s without jump host (set SSH_PROXY_JUMP_HOST or ensure Proxmox API URL is configured)", vpsIP)
-	}
-	
-	if jumpHost != "" {
-		logger.Info("[SSHProxy] Connecting to VPS at %s via jump host %s", vpsIP, jumpHost)
-	} else {
-		logger.Info("[SSHProxy] Connecting to VPS at %s (direct connection)", vpsIP)
-	}
-	
-	sshConn, err := s.vpsService.connectSSH(ctx, vpsIP, rootPassword, cols, rows, jumpHost, jumpUser)
+	// Fallback to direct SSH connection (no jump host)
+	logger.Info("[SSHProxy] Gateway not available, using direct SSH connection to VPS at %s", vpsIP)
+	sshConn, err := s.vpsService.connectSSH(ctx, vpsIP, rootPassword, cols, rows, "", "")
 	if err != nil {
 		logger.Error("[SSHProxy] Failed to establish SSH connection to VPS at %s: %v", vpsIP, err)
 		return fmt.Errorf("failed to connect to VPS: %w", err)
@@ -587,6 +542,99 @@ func (s *SSHProxyServer) forwardToVPS(ctx context.Context, channel ssh.Channel, 
 		return err
 	case <-ctx.Done():
 		logger.Info("[SSHProxy] Connection to VPS at %s closed due to context cancellation", vpsIP)
+		return ctx.Err()
+	}
+}
+
+// forwardToVPSViaGateway forwards SSH connection through gateway ProxySSH
+func (s *SSHProxyServer) forwardToVPSViaGateway(ctx context.Context, channel ssh.Channel, vpsIP, rootPassword string, cols, rows int) error {
+	// Generate connection ID
+	connectionID := fmt.Sprintf("ssh-%d", time.Now().UnixNano())
+
+	// Create gateway ProxySSH stream
+	stream, err := s.gatewayClient.ProxySSH(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create gateway ProxySSH stream: %w", err)
+	}
+
+	// Send connect request
+	if err := stream.Send(&vpsgatewayv1.ProxySSHRequest{
+		ConnectionId: connectionID,
+		Type:         "connect",
+		Target:       vpsIP,
+		Port:         22,
+	}); err != nil {
+		return fmt.Errorf("failed to send connect request: %w", err)
+	}
+
+	errChan := make(chan error, 2)
+
+	// Handle responses from gateway
+	go func() {
+		for {
+			resp, err := stream.Receive()
+			if err == io.EOF {
+				return
+			}
+			if err != nil {
+				errChan <- fmt.Errorf("gateway stream error: %w", err)
+				return
+			}
+
+			switch resp.Type {
+			case "connected":
+				logger.Info("[SSHProxy] Gateway connected to VPS at %s", vpsIP)
+			case "data":
+				// Forward data from gateway to channel
+				if _, err := channel.Write(resp.Data); err != nil {
+					errChan <- fmt.Errorf("failed to write to channel: %w", err)
+					return
+				}
+			case "error":
+				errChan <- fmt.Errorf("gateway error: %s", resp.Error)
+				return
+			case "closed":
+				logger.Info("[SSHProxy] Gateway closed connection to VPS at %s", vpsIP)
+				return
+			}
+		}
+	}()
+
+	// Forward data from channel to gateway
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := channel.Read(buf)
+			if n > 0 {
+				if sendErr := stream.Send(&vpsgatewayv1.ProxySSHRequest{
+					ConnectionId: connectionID,
+					Type:         "data",
+					Data:         buf[:n],
+				}); sendErr != nil {
+					errChan <- fmt.Errorf("failed to send data to gateway: %w", sendErr)
+					return
+				}
+			}
+			if err == io.EOF {
+				// Send close request
+				stream.Send(&vpsgatewayv1.ProxySSHRequest{
+					ConnectionId: connectionID,
+					Type:         "close",
+				})
+				return
+			}
+			if err != nil {
+				errChan <- fmt.Errorf("failed to read from channel: %w", err)
+				return
+			}
+		}
+	}()
+
+	// Wait for connection or error
+	select {
+	case err := <-errChan:
+		return err
+	case <-ctx.Done():
 		return ctx.Err()
 	}
 }

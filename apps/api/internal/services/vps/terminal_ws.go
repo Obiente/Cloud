@@ -22,7 +22,6 @@ import (
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
 )
@@ -56,7 +55,7 @@ type SSHConnection struct {
 }
 
 // HandleVPSTerminalWebSocket handles WebSocket connections for VPS terminal access
-// Uses SSH for terminal access (with jump host support for VPSes without public IPs)
+// Uses SSH for terminal access (gateway handles routing for VPSes without public IPs)
 func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -252,7 +251,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Use SSH only for terminal access (with jump host support for VPSes without public IPs)
+	// Use SSH only for terminal access (gateway handles routing for VPSes without public IPs)
 	log.Printf("[VPS Terminal WS] Using SSH for terminal access")
 
 	var sshConn *SSHConnection
@@ -267,53 +266,23 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 				// Try direct SSH first
 				sshConn, err = s.connectSSH(ctx, vpsIP, rootPassword, cols, rows, "", "")
 				if err != nil {
-					log.Printf("[VPS Terminal WS] Direct SSH connection failed: %v, trying jump host", err)
-					// If direct SSH fails, try via Proxmox node as jump host
-					// Extract Proxmox host from API URL
-					proxmoxHost := ""
-					if proxmoxConfig.APIURL != "" {
-						if u, err := url.Parse(proxmoxConfig.APIURL); err == nil {
-							proxmoxHost = u.Hostname()
-						}
-					}
-					if proxmoxHost != "" {
-						log.Printf("[VPS Terminal WS] Attempting SSH via jump host: %s", proxmoxHost)
-						sshConn, err = s.connectSSH(ctx, vpsIP, rootPassword, cols, rows, proxmoxHost, "root")
-						if err != nil {
-							log.Printf("[VPS Terminal WS] SSH via jump host failed: %v", err)
-							sshConn = nil
-						}
-					}
+					log.Printf("[VPS Terminal WS] Direct SSH connection failed: %v", err)
+					// Connection failed - will try to get internal IP if available
 				}
 			}
 		} else {
-			// No public IP, try jump host directly
-			log.Printf("[VPS Terminal WS] No public IP found, attempting SSH via jump host")
-			jumpHost := os.Getenv("SSH_PROXY_JUMP_HOST")
-			jumpUser := os.Getenv("SSH_PROXY_JUMP_USER")
-			if jumpUser == "" {
-				jumpUser = "root"
-			}
-			if jumpHost == "" {
-				// Fallback to Proxmox node
-				if proxmoxConfig.APIURL != "" {
-					if u, err := url.Parse(proxmoxConfig.APIURL); err == nil {
-						jumpHost = u.Hostname()
-					}
-				}
-			}
-			if jumpHost != "" {
-				// Get internal IP from Proxmox (VM might have private IP only)
-				ipv4, _, err := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
-				if err == nil && len(ipv4) > 0 {
-					vpsIP := ipv4[0]
-					rootPassword, err := s.getVPSRootPassword(ctx, initMsg.VPSID)
-					if err == nil && rootPassword != "" {
-						sshConn, err = s.connectSSH(ctx, vpsIP, rootPassword, cols, rows, jumpHost, jumpUser)
-						if err != nil {
-							log.Printf("[VPS Terminal WS] SSH via jump host failed: %v", err)
-							sshConn = nil
-						}
+			// No public IP, try to get internal IP from Proxmox
+			log.Printf("[VPS Terminal WS] No public IP found, attempting to get internal IP from Proxmox")
+			ipv4, _, err := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
+			if err == nil && len(ipv4) > 0 {
+				vpsIP := ipv4[0]
+				rootPassword, err := s.getVPSRootPassword(ctx, initMsg.VPSID)
+				if err == nil && rootPassword != "" {
+					// Use direct connection (gateway will handle routing if configured)
+					sshConn, err = s.connectSSH(ctx, vpsIP, rootPassword, cols, rows, "", "")
+					if err != nil {
+						log.Printf("[VPS Terminal WS] SSH connection failed: %v", err)
+						sshConn = nil
 					}
 				}
 			}
@@ -994,7 +963,8 @@ func (s *Service) handleProxmoxSerialConsole(
 }
 
 // connectSSH establishes an SSH connection to the VPS
-// If jumpHost and jumpUser are provided, connects via SSH jump host (bastion)
+// Connects directly to VPS via SSH (gateway handles routing if configured)
+// jumpHost and jumpUser parameters are deprecated and ignored (gateway is used instead)
 func (s *Service) connectSSH(ctx context.Context, vpsIP, rootPassword string, cols, rows int, jumpHost, jumpUser string) (*SSHConnection, error) {
 	sshConfig := &ssh.ClientConfig{
 		User:            "root",
@@ -1005,69 +975,11 @@ func (s *Service) connectSSH(ctx context.Context, vpsIP, rootPassword string, co
 		},
 	}
 
-	var client *ssh.Client
-	var err error
-
-	// If jump host is specified, connect via jump host
-	if jumpHost != "" {
-		// First, connect to jump host (Proxmox node)
-		// Note: SSH jump host requires either:
-		// 1. SSH keys configured between API server and Proxmox node (recommended)
-		// 2. Proxmox node SSH password (not available in current config)
-		// We'll try key-based auth first (using default SSH agent), then password
-		jumpConfig := &ssh.ClientConfig{
-			User:            jumpUser,
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-			Timeout:         10 * time.Second,
-		}
-		
-		// Try SSH agent first (for key-based auth)
-		// Check if SSH_AUTH_SOCK is set (SSH agent available)
-		if sshAuthSock := os.Getenv("SSH_AUTH_SOCK"); sshAuthSock != "" {
-			conn, err := net.Dial("unix", sshAuthSock)
-			if err == nil {
-				sshAgent := agent.NewClient(conn)
-				jumpConfig.Auth = []ssh.AuthMethod{ssh.PublicKeysCallback(sshAgent.Signers)}
-			} else {
-				// SSH agent not available, try password
-				jumpConfig.Auth = []ssh.AuthMethod{
-					ssh.Password(rootPassword),
-				}
-			}
-		} else {
-			// No SSH agent, try password auth (may not work if Proxmox node password differs)
-			jumpConfig.Auth = []ssh.AuthMethod{
-				ssh.Password(rootPassword),
-			}
-		}
-
-		jumpClient, err := ssh.Dial("tcp", net.JoinHostPort(jumpHost, "22"), jumpConfig)
-		if err != nil {
-			// If both fail, return error with helpful message
-			return nil, fmt.Errorf("failed to connect to jump host %s: %w (SSH keys may need to be configured between API server and Proxmox node)", jumpHost, err)
-		}
-		defer jumpClient.Close()
-
-		// Now connect to VPS through jump host
-		conn, err := jumpClient.Dial("tcp", net.JoinHostPort(vpsIP, "22"))
-		if err != nil {
-			return nil, fmt.Errorf("failed to dial VPS %s through jump host: %w", vpsIP, err)
-		}
-
-		// Create new connection to VPS via the forwarded connection
-		ncc, chans, reqs, err := ssh.NewClientConn(conn, vpsIP, sshConfig)
-		if err != nil {
-			conn.Close()
-			return nil, fmt.Errorf("failed to create SSH client connection via jump host: %w", err)
-		}
-
-		client = ssh.NewClient(ncc, chans, reqs)
-	} else {
-		// Direct connection
-		client, err = ssh.Dial("tcp", net.JoinHostPort(vpsIP, "22"), sshConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to connect to VPS via SSH: %w", err)
-		}
+	// Direct connection (gateway handles routing if configured)
+	// jumpHost and jumpUser parameters are ignored - gateway is used instead
+	client, err := ssh.Dial("tcp", net.JoinHostPort(vpsIP, "22"), sshConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to VPS via SSH: %w", err)
 	}
 
 	// Create session
