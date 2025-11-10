@@ -11,19 +11,21 @@ WORKDIR /build
 ENV GOCACHE=/root/.cache/go-build
 ENV GOMODCACHE=/root/go/pkg/mod
 
-# Copy go workspace files first (for better layer caching)
-COPY go.work go.work.sum ./
-
-# Copy go mod files for API (copy separately to improve cache hits)
+# Copy go mod files for API and shared (copy separately to improve cache hits)
 COPY apps/api/go.mod apps/api/go.sum ./apps/api/
+COPY apps/shared/go.mod apps/shared/go.sum ./apps/shared/
+
+# Copy shared proto source code (needed for imports)
+COPY apps/shared/proto ./apps/shared/proto/
 
 # Download dependencies (this layer will be cached unless go.mod/go.sum change)
+# We work outside the workspace context to avoid needing vps-gateway
 WORKDIR /build/apps/api
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go mod download
 
-# Copy only the API source code (proto files are already generated inside apps/api)
+# Copy the API source code
 WORKDIR /build
 COPY apps/api/ ./apps/api/
 

@@ -11,6 +11,7 @@ require (
 	github.com/miekg/dns v1.1.58
 	github.com/moby/moby/api v1.52.0-beta.1
 	github.com/moby/moby/client v0.1.0-beta.0
+	github.com/obiente/cloud/apps/shared v0.0.0
 	github.com/prometheus/client_golang v1.20.5
 	github.com/redis/go-redis/v9 v9.16.0
 	github.com/stripe/stripe-go/v83 v83.1.0
@@ -22,6 +23,8 @@ require (
 	gorm.io/gorm v1.31.0
 	nhooyr.io/websocket v1.8.10
 )
+
+replace github.com/obiente/cloud/apps/shared => ../shared
 
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
