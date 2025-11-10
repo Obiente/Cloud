@@ -37,6 +37,11 @@ PROXMOX_STORAGE_POOL=local-lvm
 # SSH Proxy Configuration (optional)
 SSH_PROXY_PORT=2222
 SSH_PROXY_HOST_KEY_PATH=/var/lib/obiente/ssh_proxy_host_key
+
+# VPS Gateway Configuration (optional, for DHCP and SSH proxying)
+# If set, enables centralized DHCP management and SSH proxying via dedicated gateway service
+VPS_GATEWAY_API_SECRET=your-shared-secret  # Must match GATEWAY_API_SECRET in vps-gateway
+VPS_GATEWAY_BRIDGE=OCvpsnet  # SDN bridge name for gateway network
 ```
 
 ## Setting Up Proxmox
@@ -108,7 +113,193 @@ For production with minimal permissions, grant only the required permissions at 
 
 **Note:** If you're using a non-root user, you may need to grant permissions on specific paths (nodes, storage pools) instead of the entire datacenter.
 
-### 4. Download ISO Images for VPS Provisioning
+### 4. Configure SSH Proxy and Jump Host (Required for SSH Proxy)
+
+The SSH proxy allows users to connect to VPS instances even without public IP addresses. It uses a jump host (bastion) to route SSH connections to VPS instances.
+
+**Architecture Options:**
+
+1. **Dedicated SSH Proxy VM (Recommended for Security)**: Use a separate VM as the jump host. This isolates the Proxmox node from direct SSH access, reducing the attack surface if SSH keys are compromised.
+
+2. **Proxmox Node as Jump Host (Fallback)**: Use the Proxmox node directly as the jump host. This is simpler but exposes the Proxmox node to SSH access.
+
+**Why This Is Needed:**
+
+- The SSH proxy allows users to connect to VPS instances even without public IP addresses
+- It uses a jump host (bastion) to route SSH connections
+- SSH key authentication is required because password authentication may not work or is not secure
+- A dedicated SSH proxy VM provides better security isolation
+
+**Setup Steps:**
+
+#### Option A: Dedicated SSH Proxy VM (Recommended)
+
+This is the most secure option. Create a separate VM that acts as the SSH proxy/jump host:
+
+1. **Create a Dedicated SSH Proxy VM**:
+
+   - Create a small VM (1 CPU, 512MB RAM, 2GB disk) on Proxmox
+   - Install a minimal Linux distribution (Ubuntu Server, Debian, etc.)
+   - Configure the VM to be on the same network as your VPS instances (see "Network Configuration" section below)
+   - Ensure the VM can reach both the API server and all VPS instances
+
+2. **Generate SSH Key Pair** (if you don't have one):
+
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/ssh_proxy_jump_host -N ""
+   ```
+
+3. **Copy Public Key to SSH Proxy VM**:
+
+   Replace `your-ssh-proxy-vm` with your SSH proxy VM hostname or IP address:
+
+   ```bash
+   ssh-copy-id -i ~/.ssh/ssh_proxy_jump_host.pub root@your-ssh-proxy-vm
+   ```
+
+   Or manually:
+
+   ```bash
+   cat ~/.ssh/ssh_proxy_jump_host.pub | ssh root@your-ssh-proxy-vm "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+   ```
+
+4. **Configure Environment Variables**:
+
+   Add to your `docker-compose.yml` or environment:
+
+   ```bash
+   SSH_PROXY_JUMP_HOST=your-ssh-proxy-vm
+   SSH_PROXY_JUMP_USER=root  # Optional, defaults to root
+   ```
+
+5. **Configure SSH Agent** (see "SSH Agent Setup" section below)
+
+#### Option B: Proxmox Node as Jump Host (Fallback)
+
+If you don't want to set up a dedicated VM, you can use the Proxmox node directly (less secure):
+
+1. **Generate SSH Key Pair** (if you don't have one):
+
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/proxmox_jump_host -N ""
+   ```
+
+2. **Copy Public Key to Proxmox Node**:
+
+   Replace `your-proxmox-host` with your actual Proxmox hostname or IP address:
+
+   ```bash
+   ssh-copy-id -i ~/.ssh/proxmox_jump_host.pub root@your-proxmox-host
+   ```
+
+   Or manually:
+
+   ```bash
+   cat ~/.ssh/proxmox_jump_host.pub | ssh root@your-proxmox-host "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+   ```
+
+3. **No environment variables needed** - the system will automatically use the Proxmox API URL hostname as the jump host
+
+4. **Configure SSH Agent** (see "SSH Agent Setup" section below)
+
+#### SSH Agent Setup (Required for Both Options)
+
+This method uses an SSH agent to provide keys to the API container:
+
+1. **Start SSH Agent and Add Key** (on the host running the API container):
+
+   For dedicated SSH proxy VM:
+   ```bash
+   eval $(ssh-agent)
+   ssh-add ~/.ssh/ssh_proxy_jump_host
+   ```
+
+   For Proxmox node:
+   ```bash
+   eval $(ssh-agent)
+   ssh-add ~/.ssh/proxmox_jump_host
+   ```
+
+4. **Mount SSH Agent Socket in Docker Container**:
+
+   Add to your `docker-compose.yml`:
+
+   ```yaml
+   services:
+     api:
+       environment:
+         - SSH_AUTH_SOCK=/ssh-agent
+       volumes:
+         - ${SSH_AUTH_SOCK}:/ssh-agent:ro
+   ```
+
+   Or for Docker Swarm, add to your service definition:
+
+   ```yaml
+   services:
+     api:
+       environment:
+         - SSH_AUTH_SOCK=/ssh-agent
+       volumes:
+         - type: bind
+           source: ${SSH_AUTH_SOCK}
+           target: /ssh-agent
+           read_only: true
+   ```
+
+5. **Set SSH_AUTH_SOCK Environment Variable**:
+
+   ```bash
+   export SSH_AUTH_SOCK=$(ssh-agent -s | grep SSH_AUTH_SOCK | cut -d= -f2 | tr -d ';')
+   ```
+
+#### Option 2: Using SSH Key File (Alternative - Not Currently Supported)
+
+**Note:** This method requires code modifications to read from a key file instead of SSH agent. Currently, only SSH agent authentication is supported.
+
+If SSH agent is not available, you can mount the private key directly:
+
+1. **Generate and Copy SSH Key** (same as Option 1, steps 1-2)
+
+2. **Mount Private Key in Container**:
+
+   ```yaml
+   services:
+     api:
+       volumes:
+         - ~/.ssh/proxmox_jump_host:/root/.ssh/proxmox_jump_host:ro
+         - ~/.ssh/proxmox_jump_host.pub:/root/.ssh/proxmox_jump_host.pub:ro
+       environment:
+         - SSH_KEY_PATH=/root/.ssh/proxmox_jump_host
+   ```
+
+   **Note:** This method requires modifying the code to read from the key file instead of SSH agent.
+
+#### Option 3: Using Proxmox Root Password (Not Recommended)
+
+The code will attempt to use the Proxmox root password as a fallback, but this is not recommended for security reasons and may not work if the Proxmox node password differs from the VPS root password.
+
+**Verification:**
+
+Test the SSH connection from the API container:
+
+Replace `your-proxmox-host` with your actual Proxmox hostname or IP address:
+
+```bash
+# If using SSH agent
+docker compose exec api ssh -o StrictHostKeyChecking=no root@your-proxmox-host "echo 'SSH connection successful'"
+
+# Or test from host
+ssh -o StrictHostKeyChecking=no root@your-proxmox-host "echo 'SSH connection successful'"
+```
+
+**Troubleshooting:**
+
+- **"unable to authenticate"**: SSH key is not properly configured or not accessible
+- **"Connection refused"**: Proxmox node SSH service is not running or firewall is blocking
+- **"Host key verification failed"**: Add Proxmox host to known_hosts or disable strict checking
+
+### 6. Download ISO Images for VPS Provisioning
 
 For VPS provisioning, you need to download ISO images to Proxmox's ISO storage. The system will use these ISO files when templates are not available.
 
@@ -198,7 +389,7 @@ The following ISO files are needed for VPS provisioning when templates are not a
 
 **Example: Download Ubuntu 22.04 ISO via Proxmox Web UI**
 
-1. Go to `https://main.obiente.cloud:8006` (or your Proxmox URL)
+1. Go to `https://your-proxmox-host:8006` (or your Proxmox URL)
 2. Navigate to **Datacenter** → **Storage** → `local` (or your ISO storage)
 3. Click **ISO Images** tab
 4. Click **Download from URL**
@@ -210,7 +401,7 @@ Repeat this process for all the ISO files listed above.
 
 ---
 
-### 5. Creating VM Templates (Optional - For Faster Provisioning)
+### 7. Creating VM Templates (Optional - For Faster Provisioning)
 
 **Note:** This section is optional. If you only download ISO files (section 4), VPS provisioning will work but will be slower. Templates allow VMs to be provisioned in seconds rather than minutes.
 
@@ -622,7 +813,7 @@ Obiente Cloud provides several pre-configured VPS sizes:
 | `large`  | 4         | 4 GB | 40 GB   |
 | `xlarge` | 8         | 8 GB | 80 GB   |
 
-Custom sizes can be configured in the database by administrators.
+Custom sizes can be configured in the dashboard by superadmins.
 
 ## Supported Operating Systems
 
@@ -673,9 +864,21 @@ curl -X POST https://your-instance/api/v1/vps \
 2. Click **Terminal** tab
 3. The terminal will connect automatically via WebSocket
 
-### SSH Access (via Jump Host)
+### SSH Access
 
-VPS instances can be accessed via SSH without requiring a dedicated IP address:
+VPS instances can be accessed via SSH without requiring a dedicated IP address. The SSH proxy routes connections through either:
+
+1. **vps-gateway Service** (if configured): Uses gRPC to proxy SSH connections
+2. **Jump Host** (fallback): Uses SSH jump host (Proxmox node or dedicated VM)
+
+**Prerequisites:**
+
+- **With Gateway**: Gateway service must be running and accessible
+- **Without Gateway**: SSH keys must be configured between the API server and jump host (see "Configure SSH Proxy and Jump Host" section above)
+- The VPS instance must be running
+- Network must be configured on the VPS (even if no public IP is available)
+
+**Connection Steps:**
 
 1. Get proxy connection info:
 
@@ -687,15 +890,47 @@ VPS instances can be accessed via SSH without requiring a dedicated IP address:
 2. Use the provided SSH proxy command:
 
    ```bash
-   ssh -J proxy@your-instance.com -p 2222 vps-{vps_id}@your-instance.com
+   ssh -p 2222 vps-{vps_id}@your-instance.com
    ```
+
+   When prompted for password, enter your API token (or use SSH key authentication).
 
 3. Or configure SSH config:
    ```ssh-config
    Host vps-{vps_id}
-     ProxyJump proxy@your-instance.com:2222
-     User root
+     HostName your-instance.com
+     Port 2222
+     User vps-{vps_id}
+     PreferredAuthentications publickey,password
+     PasswordAuthentication yes
+     StrictHostKeyChecking no
    ```
+
+**How It Works:**
+
+**With vps-gateway:**
+1. User connects to API server on port 2222 (SSH proxy)
+2. API server authenticates user (SSH key or API token)
+3. API server queries gateway for VPS IP address
+4. API server proxies SSH connection via gateway (gRPC)
+5. Gateway routes connection to VPS instance
+6. User gets interactive SSH session on the VPS
+
+**Without vps-gateway (fallback):**
+1. User connects to API server on port 2222 (SSH proxy)
+2. API server authenticates user (SSH key or API token)
+3. API server connects to jump host via SSH (using configured SSH keys)
+4. Jump host routes connection to VPS instance (by IP or hostname)
+5. User gets interactive SSH session on the VPS
+
+**Troubleshooting SSH Proxy:**
+
+- **"VPS IP address not available"**: 
+  - With gateway: Check gateway service is running and VPS has allocated IP
+  - Without gateway: VPS may not have network configured or guest agent not ready. The proxy will attempt to connect using hostname via jump host.
+- **"failed to connect to gateway"**: Check `VPS_GATEWAY_API_SECRET` matches `GATEWAY_API_SECRET` in gateway service. Ensure gateway can reach API at `GATEWAY_API_URL`.
+- **"failed to connect to jump host"**: SSH keys not configured for jump host (see "Configure SSH Proxy and Jump Host" section above)
+- **"Connection reset"**: Check if SSH proxy service is running and port 2222 is accessible
 
 ## Managing VPS Instances
 
@@ -818,11 +1053,61 @@ To use custom VM templates:
 
 ### Network Configuration
 
+#### Without VPS Gateway (Default)
+
 VPS instances are connected to the default bridge (`vmbr0`). For custom networking:
 
 1. Configure Proxmox network bridges
 2. Update VM configuration via Proxmox API
 3. Configure routing as needed
+
+#### With VPS Gateway (Recommended for DHCP Management)
+
+When using the vps-gateway service, VPS instances are connected to the SDN bridge (typically `OCvpsnet`) where the gateway manages DHCP. This provides:
+
+- **Centralized IP Management**: Gateway allocates and tracks IP addresses for all VPS instances
+- **DHCP Automation**: VPS instances automatically receive IP addresses via DHCP
+- **SSH Proxying**: Gateway can proxy SSH connections without requiring SSH keys on the Proxmox node
+- **Network Isolation**: Gateway network can be isolated from the main Proxmox network
+
+**Setup Steps:**
+
+1. **Create Network Bridge in Proxmox**:
+   - Configure SDN VNet (see [VPS Gateway Setup Guide](vps-gateway-setup.md))
+   - Connect it to your gateway network or create a dedicated network segment
+   - See the [VPS Gateway Setup Guide](vps-gateway-setup.md) for detailed instructions
+
+2. **Deploy vps-gateway Service**:
+   - See the [VPS Gateway Setup Guide](vps-gateway-setup.md) for detailed deployment instructions
+   - Configure DHCP pool, gateway IP, DNS servers
+   - Set `GATEWAY_API_SECRET` to match `VPS_GATEWAY_API_SECRET` in the API
+   - Set `GATEWAY_API_URL` to point to your API service (e.g., `http://api:3001`)
+
+3. **Configure API Environment Variables**:
+   ```bash
+   # API Secret (must match GATEWAY_API_SECRET in gateway service)
+   VPS_GATEWAY_API_SECRET=your-shared-secret
+   # SDN VNet bridge name
+   VPS_GATEWAY_BRIDGE=OCvpsnet
+   ```
+   
+   See the [VPS Gateway Setup Guide](vps-gateway-setup.md) for complete configuration details.
+
+4. **VPS Provisioning**:
+   - When creating VPS instances, the API will automatically:
+     - Allocate an IP address from the gateway
+     - Configure the VM to use the gateway bridge
+     - Store the allocated IP in the database
+
+**Network Configuration for VPS Instances**
+
+For detailed instructions on setting up the network bridge, gateway VM, and vps-gateway service, see the [VPS Gateway Setup Guide](vps-gateway-setup.md).
+
+Quick summary:
+1. **Configure SDN in Proxmox**: Set up SDN Zone and VNet (see [VPS Gateway Setup Guide](vps-gateway-setup.md) for details)
+2. **Create Gateway LXC**: Create an LXC container with access to the SDN VNet
+3. **Deploy vps-gateway Service**: Deploy the gateway service on the gateway VM
+4. **Configure API**: Set `VPS_GATEWAY_API_SECRET` and `VPS_GATEWAY_BRIDGE` in API environment variables. The gateway will automatically connect to the API.
 
 ### Storage Pools
 
@@ -836,6 +1121,7 @@ PROXMOX_STORAGE_POOL=ceph-pool  # Ceph storage
 
 ## Related Documentation
 
+- [VPS Gateway Setup Guide](vps-gateway-setup.md) - Detailed guide for setting up the vps-gateway service
 - [VPS Configuration](vps-configuration.md) - Advanced configuration options
 - [Troubleshooting Guide](troubleshooting.md) - Common issues and solutions
 - [Environment Variables](../reference/environment-variables.md) - Complete variable reference
