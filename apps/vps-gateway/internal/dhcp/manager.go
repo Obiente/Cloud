@@ -57,7 +57,7 @@ func NewManager() (*Manager, error) {
 	config := &Config{
 		PoolStart:  os.Getenv("GATEWAY_DHCP_POOL_START"),
 		PoolEnd:    os.Getenv("GATEWAY_DHCP_POOL_END"),
-		SubnetMask: os.Getenv("GATEWAY_DHCP_SUBNET"),
+		SubnetMask: os.Getenv("GATEWAY_DHCP_SUBNET_MASK"),
 		Gateway:    os.Getenv("GATEWAY_DHCP_GATEWAY"),
 		DNSServers: os.Getenv("GATEWAY_DHCP_DNS"),
 		Interface:  os.Getenv("GATEWAY_DHCP_INTERFACE"),
@@ -73,7 +73,7 @@ func NewManager() (*Manager, error) {
 		return nil, fmt.Errorf("GATEWAY_DHCP_POOL_START and GATEWAY_DHCP_POOL_END are required")
 	}
 	if config.SubnetMask == "" {
-		return nil, fmt.Errorf("GATEWAY_DHCP_SUBNET is required")
+		return nil, fmt.Errorf("GATEWAY_DHCP_SUBNET_MASK is required")
 	}
 	if config.Gateway == "" {
 		return nil, fmt.Errorf("GATEWAY_DHCP_GATEWAY is required")
@@ -85,7 +85,27 @@ func NewManager() (*Manager, error) {
 	poolStart := net.ParseIP(config.PoolStart)
 	poolEnd := net.ParseIP(config.PoolEnd)
 	gateway := net.ParseIP(config.Gateway)
-	subnetMask := net.IPMask(net.ParseIP(config.SubnetMask).To4())
+	
+	// Parse subnet mask - can be in CIDR notation (e.g., "24") or dotted decimal (e.g., "255.255.255.0")
+	var subnetMask net.IPMask
+	if strings.Contains(config.SubnetMask, ".") {
+		// Dotted decimal notation (e.g., "255.255.255.0")
+		maskIP := net.ParseIP(config.SubnetMask)
+		if maskIP == nil {
+			return nil, fmt.Errorf("invalid subnet mask format: %s (expected dotted decimal like 255.255.255.0)", config.SubnetMask)
+		}
+		subnetMask = net.IPMask(maskIP.To4())
+		if subnetMask == nil {
+			return nil, fmt.Errorf("invalid subnet mask: %s (not a valid IPv4 mask)", config.SubnetMask)
+		}
+	} else {
+		// CIDR notation (e.g., "24")
+		var cidr int
+		if _, err := fmt.Sscanf(config.SubnetMask, "%d", &cidr); err != nil || cidr < 0 || cidr > 32 {
+			return nil, fmt.Errorf("invalid subnet mask format: %s (expected CIDR like 24 or dotted decimal like 255.255.255.0)", config.SubnetMask)
+		}
+		subnetMask = net.CIDRMask(cidr, 32)
+	}
 
 	if poolStart == nil || poolEnd == nil {
 		return nil, fmt.Errorf("invalid IP addresses in pool configuration")
@@ -96,6 +116,13 @@ func NewManager() (*Manager, error) {
 	if subnetMask == nil {
 		return nil, fmt.Errorf("invalid subnet mask")
 	}
+	
+	// Validate subnet mask
+	ones, bits := subnetMask.Size()
+	if ones == 0 || bits == 0 {
+		return nil, fmt.Errorf("invalid subnet mask: %s (parsed as %d/%d)", config.SubnetMask, ones, bits)
+	}
+	logger.Info("Parsed subnet mask: %s -> /%d", config.SubnetMask, ones)
 
 	// Parse DNS servers
 	var dnsServers []net.IP
@@ -523,7 +550,33 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 	
 	// DHCP configuration
 	// Convert subnet mask to CIDR notation (e.g., 255.255.255.0 -> 24)
-	ones, _ := m.subnetMask.Size()
+	ones, bits := m.subnetMask.Size()
+	if ones == 0 || bits == 0 {
+		// Fallback: calculate CIDR from subnet mask manually
+		// Count leading ones in the mask
+		maskBytes := []byte(m.subnetMask)
+		ones = 0
+		for _, b := range maskBytes {
+			if b == 0xff {
+				ones += 8
+			} else {
+				// Count bits in this byte
+				for i := 7; i >= 0; i-- {
+					if (b>>uint(i))&1 == 1 {
+						ones++
+					} else {
+						break
+					}
+				}
+				break
+			}
+		}
+		if ones == 0 {
+			// Still 0, use default /24
+			logger.Warn("Invalid subnet mask, defaulting to /24")
+			ones = 24
+		}
+	}
 	writer.WriteString(fmt.Sprintf("dhcp-range=%s,%s,%d,12h\n", m.poolStart.String(), m.poolEnd.String(), ones))
 	writer.WriteString(fmt.Sprintf("dhcp-option=option:router,%s\n", m.gateway.String()))
 	
