@@ -538,13 +538,14 @@ func (vm *VPSManager) SyncVPSStatusFromProxmox(ctx context.Context, vpsID string
 		return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
 	}
 
-	nodes, err := proxmoxClient.ListNodes(ctx)
-	if err != nil || len(nodes) == 0 {
-		return fmt.Errorf("failed to find Proxmox node: %w", err)
+	// Find the node where the VM is running (for multi-node clusters)
+	nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+	if err != nil {
+		return fmt.Errorf("failed to find VM node: %w", err)
 	}
 
 	// Get actual status from Proxmox
-	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodes[0], vmIDInt)
+	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodeName, vmIDInt)
 	if err != nil {
 		return fmt.Errorf("failed to get VM status: %w", err)
 	}
@@ -557,6 +558,124 @@ func (vm *VPSManager) SyncVPSStatusFromProxmox(ctx context.Context, vpsID string
 	}
 
 	logger.Info("[VPSManager] Synced VPS %s status from Proxmox: %s -> %d", vpsID, proxmoxStatus, vps.Status)
+	return nil
+}
+
+// UpdateOrganizationVPSSSHKeys updates SSH keys in cloud-init for all VPS instances in an organization
+// This is called when SSH keys are added or removed
+func (vm *VPSManager) UpdateOrganizationVPSSSHKeys(ctx context.Context, organizationID string) error {
+	return vm.UpdateOrganizationVPSSSHKeysExcluding(ctx, organizationID, "")
+}
+
+// UpdateOrganizationVPSSSHKeysExcluding updates SSH keys for all VPS instances in an organization,
+// excluding a specific key ID (e.g., when deleting an org-wide key)
+func (vm *VPSManager) UpdateOrganizationVPSSSHKeysExcluding(ctx context.Context, organizationID string, excludeKeyID string) error {
+	// Get all VPS instances for this organization
+	var vpsInstances []database.VPSInstance
+	if err := database.DB.Where("organization_id = ? AND deleted_at IS NULL AND instance_id IS NOT NULL", organizationID).Find(&vpsInstances).Error; err != nil {
+		return fmt.Errorf("failed to get VPS instances: %w", err)
+	}
+
+	if len(vpsInstances) == 0 {
+		logger.Info("[VPSManager] No VPS instances found for organization %s, skipping SSH key update", organizationID)
+		return nil
+	}
+
+	// Get Proxmox configuration
+	proxmoxConfig, err := GetProxmoxConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get Proxmox config: %w", err)
+	}
+
+	// Create Proxmox client
+	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create Proxmox client: %w", err)
+	}
+
+	// Update SSH keys for each VPS instance
+	successCount := 0
+	for _, vps := range vpsInstances {
+		if vps.InstanceID == nil {
+			continue
+		}
+
+		vmIDInt := 0
+		fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+		if vmIDInt == 0 {
+			logger.Warn("[VPSManager] Invalid VM ID for VPS %s: %s", vps.ID, *vps.InstanceID)
+			continue
+		}
+
+		// Find the node where the VM is running
+		nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+		if err != nil {
+			logger.Warn("[VPSManager] Failed to find node for VM %d (VPS %s): %v", vmIDInt, vps.ID, err)
+			continue
+		}
+
+		// Update SSH keys (includes VPS-specific + org-wide), excluding the specified key if provided
+		if err := proxmoxClient.UpdateVMSSHKeys(ctx, nodeName, vmIDInt, organizationID, vps.ID, excludeKeyID); err != nil {
+			logger.Warn("[VPSManager] Failed to update SSH keys for VM %d (VPS %s): %v", vmIDInt, vps.ID, err)
+			continue
+		}
+
+		successCount++
+	}
+
+	logger.Info("[VPSManager] Updated SSH keys for %d/%d VPS instances in organization %s", successCount, len(vpsInstances), organizationID)
+	return nil
+}
+
+// UpdateVPSSSHKeys updates SSH keys in cloud-init for a specific VPS instance
+// This includes both VPS-specific keys and organization-wide keys
+func (vm *VPSManager) UpdateVPSSSHKeys(ctx context.Context, vpsID string) error {
+	return vm.UpdateVPSSSHKeysExcluding(ctx, vpsID, "")
+}
+
+// UpdateVPSSSHKeysExcluding updates SSH keys in cloud-init for a specific VPS instance,
+// excluding a specific key ID (e.g., when deleting a key)
+func (vm *VPSManager) UpdateVPSSSHKeysExcluding(ctx context.Context, vpsID string, excludeKeyID string) error {
+	// Get VPS instance
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		return fmt.Errorf("VPS not found: %w", err)
+	}
+
+	if vps.InstanceID == nil {
+		return fmt.Errorf("VPS has no instance ID")
+	}
+
+	// Get Proxmox configuration
+	proxmoxConfig, err := GetProxmoxConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get Proxmox config: %w", err)
+	}
+
+	// Create Proxmox client
+	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create Proxmox client: %w", err)
+	}
+
+	vmIDInt := 0
+	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+	if vmIDInt == 0 {
+		return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
+	}
+
+	// Find the node where the VM is running
+	nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+	if err != nil {
+		return fmt.Errorf("failed to find VM node: %w", err)
+	}
+
+	// Update SSH keys (includes VPS-specific and org-wide), excluding the specified key if provided
+	if err := proxmoxClient.UpdateVMSSHKeys(ctx, nodeName, vmIDInt, vps.OrganizationID, vpsID, excludeKeyID); err != nil {
+		return fmt.Errorf("failed to update SSH keys: %w", err)
+	}
+
+	logger.Info("[VPSManager] Updated SSH keys for VPS %s (VM %d)", vpsID, vmIDInt)
 	return nil
 }
 
