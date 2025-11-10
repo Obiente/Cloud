@@ -7,8 +7,8 @@ version: '3.8'
 services:
   vps-gateway:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../../
+      dockerfile: apps/vps-gateway/Dockerfile
     container_name: vps-gateway-test
     environment:
       # API Secret for authentication
@@ -17,7 +17,7 @@ services:
       # DHCP Configuration
       - GATEWAY_DHCP_POOL_START=192.168.100.10
       - GATEWAY_DHCP_POOL_END=192.168.100.254
-      - GATEWAY_DHCP_SUBNET=255.255.255.0
+      - GATEWAY_DHCP_SUBNET_MASK=255.255.255.0
       - GATEWAY_DHCP_GATEWAY=192.168.100.1
       - GATEWAY_DHCP_DNS=8.8.8.8,8.8.4.4
       - GATEWAY_DHCP_INTERFACE=eth0

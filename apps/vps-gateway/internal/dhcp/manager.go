@@ -549,43 +549,25 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 	writer.WriteString("\n")
 	
 	// DHCP configuration
-	// Convert subnet mask to CIDR notation (e.g., 255.255.255.0 -> 24)
-	ones, bits := m.subnetMask.Size()
-	if ones == 0 || bits == 0 {
-		// Fallback: calculate CIDR from subnet mask manually
-		// Count leading ones in the mask
-		maskBytes := []byte(m.subnetMask)
-		ones = 0
-		for _, b := range maskBytes {
-			if b == 0xff {
-				ones += 8
-			} else {
-				// Count bits in this byte
-				for i := 7; i >= 0; i-- {
-					if (b>>uint(i))&1 == 1 {
-						ones++
-					} else {
-						break
-					}
-				}
-				break
-			}
-		}
-		if ones == 0 {
-			// Still 0, use default /24
-			logger.Warn("Invalid subnet mask, defaulting to /24")
-			ones = 24
-		}
-	}
-	writer.WriteString(fmt.Sprintf("dhcp-range=%s,%s,%d,12h\n", m.poolStart.String(), m.poolEnd.String(), ones))
+	// dnsmasq dhcp-range format: start,end,netmask,lease-time
+	// The netmask should be in dotted decimal format (e.g., 255.255.255.0)
+	// Convert IPMask back to dotted decimal format
+	maskIP := net.IP(m.subnetMask)
+	netmaskStr := maskIP.String()
+	writer.WriteString(fmt.Sprintf("dhcp-range=%s,%s,%s,12h\n", m.poolStart.String(), m.poolEnd.String(), netmaskStr))
 	writer.WriteString(fmt.Sprintf("dhcp-option=option:router,%s\n", m.gateway.String()))
 	
 	// DNS servers (for upstream DNS resolution)
-	for _, dns := range m.dnsServers {
-		optionNum := 6 // DNS option
-		writer.WriteString(fmt.Sprintf("dhcp-option=option:%d,%s\n", optionNum, dns.String()))
-		// Also add as upstream DNS server for dnsmasq itself
-		writer.WriteString(fmt.Sprintf("server=%s\n", dns.String()))
+	// Combine all DNS servers into a single dhcp-option line (option 6 = DNS)
+	if len(m.dnsServers) > 0 {
+		dnsList := make([]string, len(m.dnsServers))
+		for i, dns := range m.dnsServers {
+			dnsList[i] = dns.String()
+			// Also add as upstream DNS server for dnsmasq itself
+			writer.WriteString(fmt.Sprintf("server=%s\n", dns.String()))
+		}
+		// Format: dhcp-option=6,1.1.1.1,1.0.0.1 (option number, comma-separated DNS servers)
+		writer.WriteString(fmt.Sprintf("dhcp-option=6,%s\n", strings.Join(dnsList, ",")))
 	}
 	
 	// File paths
