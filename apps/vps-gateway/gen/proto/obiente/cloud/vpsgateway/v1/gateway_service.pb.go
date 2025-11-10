@@ -873,7 +873,7 @@ const file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDesc = "" +
 	"\tReleaseIP\x12-.obiente.cloud.vpsgateway.v1.ReleaseIPRequest\x1a..obiente.cloud.vpsgateway.v1.ReleaseIPResponse\x12d\n" +
 	"\aListIPs\x12+.obiente.cloud.vpsgateway.v1.ListIPsRequest\x1a,.obiente.cloud.vpsgateway.v1.ListIPsResponse\x12k\n" +
 	"\bProxySSH\x12,.obiente.cloud.vpsgateway.v1.ProxySSHRequest\x1a-.obiente.cloud.vpsgateway.v1.ProxySSHResponse(\x010\x01\x12y\n" +
-	"\x0eGetGatewayInfo\x122.obiente.cloud.vpsgateway.v1.GetGatewayInfoRequest\x1a3.obiente.cloud.vpsgateway.v1.GetGatewayInfoResponseB8Z6api/gen/proto/obiente/cloud/vpsgateway/v1;vpsgatewayv1b\x06proto3"
+	"\x0eGetGatewayInfo\x122.obiente.cloud.vpsgateway.v1.GetGatewayInfoRequest\x1a3.obiente.cloud.vpsgateway.v1.GetGatewayInfoResponseB@Z>vps-gateway/gen/proto/obiente/cloud/vpsgateway/v1;vpsgatewayv1b\x06proto3"
 
 var (
 	file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDescOnce sync.Once

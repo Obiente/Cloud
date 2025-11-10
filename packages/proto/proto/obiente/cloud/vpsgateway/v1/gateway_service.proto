@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package obiente.cloud.vpsgateway.v1;
 
-option go_package = "api/gen/proto/obiente/cloud/vpsgateway/v1;vpsgatewayv1";
+option go_package = "vps-gateway/gen/proto/obiente/cloud/vpsgateway/v1;vpsgatewayv1";
 
 import "google/protobuf/timestamp.proto";
 

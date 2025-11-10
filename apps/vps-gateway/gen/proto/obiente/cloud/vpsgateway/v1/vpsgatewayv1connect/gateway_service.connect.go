@@ -5,12 +5,12 @@
 package vpsgatewayv1connect
 
 import (
-	v1 "api/gen/proto/obiente/cloud/vpsgateway/v1"
 	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
 	http "net/http"
 	strings "strings"
+	v1 "vps-gateway/gen/proto/obiente/cloud/vpsgateway/v1"
 )
 
 // This is a compile-time assertion to ensure that this generated file and the connect package are
