@@ -11,6 +11,7 @@ import (
 	vpsv1 "api/gen/proto/obiente/cloud/vps/v1"
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/logger"
 	"api/internal/orchestrator"
 
 	"connectrpc.com/connect"
@@ -130,6 +131,25 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid VPS size: %w", err))
 	}
 
+	// Check minimum payment requirement
+	if sizeCatalog.MinimumPaymentCents > 0 {
+		var org database.Organization
+		if err := database.DB.First(&org, "id = ?", orgID).Error; err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get organization: %w", err))
+		}
+
+		if org.TotalPaidCents < sizeCatalog.MinimumPaymentCents {
+			return nil, connect.NewError(
+				connect.CodePermissionDenied,
+				fmt.Errorf(
+					"insufficient payment history: this VPS size requires a minimum payment of $%.2f, but your organization has only paid $%.2f. Please make additional payments to unlock this VPS size",
+					float64(sizeCatalog.MinimumPaymentCents)/100.0,
+					float64(org.TotalPaidCents)/100.0,
+				),
+			)
+		}
+	}
+
 	config.CPUCores = sizeCatalog.CPUCores
 	config.MemoryBytes = sizeCatalog.MemoryBytes
 	config.DiskBytes = sizeCatalog.DiskBytes
@@ -163,6 +183,17 @@ func (s *Service) GetVPS(ctx context.Context, req *connect.Request[vpsv1.GetVPSR
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
 		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+	}
+
+	// Sync status from Proxmox to ensure we show current status
+	// This prevents showing stale status like REBOOTING when VPS has actually finished rebooting
+	if vps.InstanceID != nil {
+		s.syncVPSStatusFromProxmox(ctx, vpsID)
+		// Refresh VPS after sync to get updated status
+		if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+			// If refresh fails, continue with original vps - sync is best-effort
+			logger.Warn("[VPS Service] Failed to refresh VPS after status sync: %v", err)
+		}
 	}
 
 	// If VPS has an instance ID, try to fetch latest disk size and IP addresses from Proxmox
