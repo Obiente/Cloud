@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	adminv1 "api/gen/proto/obiente/cloud/admin/v1"
-	adminv1connect "api/gen/proto/obiente/cloud/admin/v1/adminv1connect"
 	"api/internal/auth"
 	"api/internal/database"
+
+	adminv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/admin/v1"
+	adminv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/admin/v1/adminv1connect"
 
 	"connectrpc.com/connect"
 )

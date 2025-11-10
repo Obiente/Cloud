@@ -11,19 +11,20 @@ import (
 	"strings"
 	"time"
 
-	authv1 "api/gen/proto/obiente/cloud/auth/v1"
-	billingv1 "api/gen/proto/obiente/cloud/billing/v1"
-	commonv1 "api/gen/proto/obiente/cloud/common/v1"
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
-	superadminv1 "api/gen/proto/obiente/cloud/superadmin/v1"
-	superadminv1connect "api/gen/proto/obiente/cloud/superadmin/v1/superadminv1connect"
-	vpsv1 "api/gen/proto/obiente/cloud/vps/v1"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/logger"
 	"api/internal/pricing"
 	"api/internal/services/organizations"
 	"api/internal/stripe"
+
+	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
+	billingv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/billing/v1"
+	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
+	superadminv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/superadmin/v1"
+	superadminv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/superadmin/v1/superadminv1connect"
+	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 
 	"errors"
 
@@ -2187,6 +2188,7 @@ func (s *Service) ListPlans(ctx context.Context, _ *connect.Request[superadminv1
 			CpuCores:                int32(plan.CPUCores),
 			MemoryBytes:             plan.MemoryBytes,
 			DeploymentsMax:          int32(plan.DeploymentsMax),
+			MaxVpsInstances:         int32(plan.MaxVpsInstances),
 			BandwidthBytesMonth:     plan.BandwidthBytesMonth,
 			StorageBytes:            plan.StorageBytes,
 			MinimumPaymentCents:     plan.MinimumPaymentCents,
@@ -2215,6 +2217,7 @@ func (s *Service) CreatePlan(ctx context.Context, req *connect.Request[superadmi
 		CPUCores:                int(req.Msg.GetCpuCores()),
 		MemoryBytes:             req.Msg.GetMemoryBytes(),
 		DeploymentsMax:          int(req.Msg.GetDeploymentsMax()),
+		MaxVpsInstances:         int(req.Msg.GetMaxVpsInstances()),
 		BandwidthBytesMonth:     req.Msg.GetBandwidthBytesMonth(),
 		StorageBytes:            req.Msg.GetStorageBytes(),
 		MinimumPaymentCents:     req.Msg.GetMinimumPaymentCents(),
@@ -2232,6 +2235,7 @@ func (s *Service) CreatePlan(ctx context.Context, req *connect.Request[superadmi
 		CpuCores:                int32(plan.CPUCores),
 		MemoryBytes:             plan.MemoryBytes,
 		DeploymentsMax:          int32(plan.DeploymentsMax),
+		MaxVpsInstances:         int32(plan.MaxVpsInstances),
 		BandwidthBytesMonth:     plan.BandwidthBytesMonth,
 		StorageBytes:            plan.StorageBytes,
 		MinimumPaymentCents:     plan.MinimumPaymentCents,
@@ -2270,6 +2274,9 @@ func (s *Service) UpdatePlan(ctx context.Context, req *connect.Request[superadmi
 	if req.Msg.DeploymentsMax != nil {
 		plan.DeploymentsMax = int(*req.Msg.DeploymentsMax)
 	}
+	if req.Msg.MaxVpsInstances != nil {
+		plan.MaxVpsInstances = int(*req.Msg.MaxVpsInstances)
+	}
 	if req.Msg.BandwidthBytesMonth != nil {
 		plan.BandwidthBytesMonth = *req.Msg.BandwidthBytesMonth
 	}
@@ -2296,6 +2303,7 @@ func (s *Service) UpdatePlan(ctx context.Context, req *connect.Request[superadmi
 		CpuCores:                int32(plan.CPUCores),
 		MemoryBytes:             plan.MemoryBytes,
 		DeploymentsMax:          int32(plan.DeploymentsMax),
+		MaxVpsInstances:         int32(plan.MaxVpsInstances),
 		BandwidthBytesMonth:     plan.BandwidthBytesMonth,
 		StorageBytes:            plan.StorageBytes,
 		MinimumPaymentCents:     plan.MinimumPaymentCents,
@@ -2753,7 +2761,7 @@ func (s *Service) ListVPSSizes(ctx context.Context, req *connect.Request[superad
 			MemoryBytes:         size.MemoryBytes,
 			DiskBytes:           size.DiskBytes,
 			BandwidthBytesMonth: size.BandwidthBytesMonth,
-			PriceCentsPerMonth:  size.PriceCentsPerMonth,
+			MinimumPaymentCents: size.MinimumPaymentCents,
 			Available:           size.Available,
 			Region:              size.Region,
 			CreatedAt:           timestamppb.New(size.CreatedAt),
@@ -2814,7 +2822,7 @@ func (s *Service) CreateVPSSize(ctx context.Context, req *connect.Request[supera
 		MemoryBytes:         req.Msg.GetMemoryBytes(),
 		DiskBytes:           req.Msg.GetDiskBytes(),
 		BandwidthBytesMonth: req.Msg.GetBandwidthBytesMonth(),
-		PriceCentsPerMonth:  req.Msg.GetPriceCentsPerMonth(),
+		MinimumPaymentCents: req.Msg.GetMinimumPaymentCents(),
 		Available:           req.Msg.GetAvailable(),
 		Region:              req.Msg.GetRegion(),
 	}
@@ -2831,7 +2839,7 @@ func (s *Service) CreateVPSSize(ctx context.Context, req *connect.Request[supera
 		MemoryBytes:         size.MemoryBytes,
 		DiskBytes:           size.DiskBytes,
 		BandwidthBytesMonth: size.BandwidthBytesMonth,
-		PriceCentsPerMonth:  size.PriceCentsPerMonth,
+			MinimumPaymentCents: size.MinimumPaymentCents,
 		Available:           size.Available,
 		Region:              size.Region,
 		CreatedAt:           timestamppb.New(size.CreatedAt),
@@ -2897,8 +2905,8 @@ func (s *Service) UpdateVPSSize(ctx context.Context, req *connect.Request[supera
 	if req.Msg.BandwidthBytesMonth != nil {
 		updates["bandwidth_bytes_month"] = req.Msg.GetBandwidthBytesMonth()
 	}
-	if req.Msg.PriceCentsPerMonth != nil {
-		updates["price_cents_per_month"] = req.Msg.GetPriceCentsPerMonth()
+	if req.Msg.MinimumPaymentCents != nil {
+		updates["minimum_payment_cents"] = req.Msg.GetMinimumPaymentCents()
 	}
 	if req.Msg.Available != nil {
 		updates["available"] = req.Msg.GetAvailable()
@@ -2930,7 +2938,7 @@ func (s *Service) UpdateVPSSize(ctx context.Context, req *connect.Request[supera
 		MemoryBytes:         updated.MemoryBytes,
 		DiskBytes:           updated.DiskBytes,
 		BandwidthBytesMonth: updated.BandwidthBytesMonth,
-		PriceCentsPerMonth:  updated.PriceCentsPerMonth,
+			MinimumPaymentCents: updated.MinimumPaymentCents,
 		Available:           updated.Available,
 		Region:              updated.Region,
 		CreatedAt:           timestamppb.New(updated.CreatedAt),

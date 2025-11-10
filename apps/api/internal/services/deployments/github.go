@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/auth"
 	"api/internal/database"
 	githubclient "api/internal/services/github"
+
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
 	"connectrpc.com/connect"
 	"gorm.io/gorm"

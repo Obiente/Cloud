@@ -1,9 +1,10 @@
 package auth
 
 import (
-	authv1 "api/gen/proto/obiente/cloud/auth/v1"
 	"context"
 	"errors"
+
+	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 )
 
 // Standard role definitions

@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"log"
 
-	commonv1 "api/gen/proto/obiente/cloud/common/v1"
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/logger"
+
+	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"

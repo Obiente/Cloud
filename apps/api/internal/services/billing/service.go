@@ -9,12 +9,13 @@ import (
 	"strings"
 	"time"
 
-	billingv1 "api/gen/proto/obiente/cloud/billing/v1"
-	billingv1connect "api/gen/proto/obiente/cloud/billing/v1/billingv1connect"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/services/common"
 	"api/internal/stripe"
+
+	billingv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/billing/v1"
+	billingv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/billing/v1/billingv1connect"
 
 	"connectrpc.com/connect"
 	stripego "github.com/stripe/stripe-go/v83"

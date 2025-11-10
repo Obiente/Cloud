@@ -13,8 +13,9 @@ import (
 	"sync"
 	"time"
 
-	authv1 "api/gen/proto/obiente/cloud/auth/v1"
 	"api/internal/logger"
+
+	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"

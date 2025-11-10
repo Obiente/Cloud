@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 )
 
 // ProtoField represents a field in a protobuf message that corresponds to a GORM model field

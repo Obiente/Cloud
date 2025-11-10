@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
-	organizationsv1 "api/gen/proto/obiente/cloud/organizations/v1"
 	"api/internal/database"
 	"api/internal/email"
+
+	organizationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/organizations/v1"
 
 	"connectrpc.com/connect"
 )

@@ -5,12 +5,13 @@ import (
 	"errors"
 	"fmt"
 
-	vpsv1connect "api/gen/proto/obiente/cloud/vps/v1/vpsv1connect"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/orchestrator"
 	"api/internal/quota"
 	"api/internal/services/common"
+
+	vpsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1/vpsv1connect"
 
 	"connectrpc.com/connect"
 	"gorm.io/gorm"

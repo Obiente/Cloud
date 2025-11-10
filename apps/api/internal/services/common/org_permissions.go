@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	authv1 "api/gen/proto/obiente/cloud/auth/v1"
 	"api/internal/auth"
 	"api/internal/database"
+
+	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 
 	"connectrpc.com/connect"
 	"gorm.io/gorm"

@@ -3,7 +3,7 @@ package gameservers
 import (
 	"context"
 
-	gameserversv1 "api/gen/proto/obiente/cloud/gameservers/v1"
+	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 
 	"connectrpc.com/connect"
 )

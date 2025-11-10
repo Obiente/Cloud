@@ -3,8 +3,9 @@ package deployments
 import (
 	"encoding/json"
 
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/database"
+
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"

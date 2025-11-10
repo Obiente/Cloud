@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
 	"github.com/moby/moby/client"
 	"google.golang.org/protobuf/types/known/timestamppb"

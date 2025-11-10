@@ -5,8 +5,9 @@ import (
 	"log"
 	"time"
 
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/database"
+
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 )
 
 // checkAndRedeployDeployments checks all deployments that should be running

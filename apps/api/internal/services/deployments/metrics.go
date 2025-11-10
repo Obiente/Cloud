@@ -9,11 +9,12 @@ import (
 	"time"
 
 	"api/docker"
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/orchestrator"
 	"api/internal/pricing"
+
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"

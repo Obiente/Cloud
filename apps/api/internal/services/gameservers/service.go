@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	gameserversv1connect "api/gen/proto/obiente/cloud/gameservers/v1/gameserversv1connect"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/orchestrator"
 	"api/internal/services/common"
+
+	gameserversv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1/gameserversv1connect"
 
 	"connectrpc.com/connect"
 )

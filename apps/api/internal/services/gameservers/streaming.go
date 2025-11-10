@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	v1 "api/gen/proto/obiente/cloud/common/v1" // Import with v1 alias to match generated code
-	gameserversv1 "api/gen/proto/obiente/cloud/gameservers/v1"
+	v1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1" // Import with v1 alias to match generated code
+	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"

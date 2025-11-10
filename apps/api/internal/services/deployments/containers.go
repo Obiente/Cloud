@@ -10,10 +10,11 @@ import (
 	"net/http"
 
 	"api/docker"
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/orchestrator"
+
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
 	"strings"
 	"time"

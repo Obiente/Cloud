@@ -8,16 +8,17 @@ import (
 	"strings"
 	"time"
 
-	authv1 "api/gen/proto/obiente/cloud/auth/v1"
-	commonv1 "api/gen/proto/obiente/cloud/common/v1"
-	organizationsv1 "api/gen/proto/obiente/cloud/organizations/v1"
-	organizationsv1connect "api/gen/proto/obiente/cloud/organizations/v1/organizationsv1connect"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/email"
 	"api/internal/logger"
 	"api/internal/pricing"
 	"api/internal/services/common"
+
+	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
+	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
+	organizationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/organizations/v1"
+	organizationsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/organizations/v1/organizationsv1connect"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -274,6 +275,17 @@ func (s *Service) InviteMember(ctx context.Context, req *connect.Request[organiz
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("owner role cannot be invited; transfer flow pending"))
 	}
 
+	// Prevent self-invitation: check if inviter is trying to invite themselves
+	if inviter.Email != "" && strings.EqualFold(inviter.Email, emailAddr) {
+		// Check if the inviter is already an active member of this organization
+		var existingActiveMember database.OrganizationMember
+		if err := database.DB.Where("organization_id = ? AND user_id = ? AND status = ?", org.ID, inviter.Id, "active").First(&existingActiveMember).Error; err == nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("you are already a member of this organization"))
+		}
+		// Prevent self-invitation even if not currently a member
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("you cannot invite yourself to an organization"))
+	}
+
 	// Check if user is already invited to this organization (case-insensitive email matching)
 	var existingMember database.OrganizationMember
 	emailLower := strings.ToLower(emailAddr)
@@ -471,6 +483,12 @@ func (s *Service) AcceptInvite(ctx context.Context, req *connect.Request[organiz
 	var org database.Organization
 	if err := database.DB.First(&org, "id = ?", req.Msg.GetOrganizationId()).Error; err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("organization not found"))
+	}
+
+	// Check if user is already an active member of this organization
+	var existingActiveMember database.OrganizationMember
+	if err := database.DB.Where("organization_id = ? AND user_id = ? AND status = ?", org.ID, user.Id, "active").First(&existingActiveMember).Error; err == nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("you are already a member of this organization"))
 	}
 
 	// Update member to active status and set user ID
@@ -1285,6 +1303,7 @@ func organizationToProto(org *database.Organization) *organizationsv1.Organizati
 					CpuCores:                int32(plan.CPUCores),
 					MemoryBytes:             plan.MemoryBytes,
 					DeploymentsMax:          int32(plan.DeploymentsMax),
+					MaxVpsInstances:         int32(plan.MaxVpsInstances),
 					BandwidthBytesMonth:     plan.BandwidthBytesMonth,
 					StorageBytes:            plan.StorageBytes,
 					MinimumPaymentCents:     plan.MinimumPaymentCents,

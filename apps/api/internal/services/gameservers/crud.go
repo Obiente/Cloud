@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	gameserversv1 "api/gen/proto/obiente/cloud/gameservers/v1"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/logger"
 	"api/internal/orchestrator"
+
+	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"

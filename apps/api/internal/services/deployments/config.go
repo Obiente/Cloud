@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/auth"
+
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
 	"connectrpc.com/connect"
 )

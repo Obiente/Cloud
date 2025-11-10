@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	auditv1 "api/gen/proto/obiente/cloud/audit/v1"
-	auditv1connect "api/gen/proto/obiente/cloud/audit/v1/auditv1connect"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/logger"
 	"api/internal/services/organizations"
+
+	auditv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/audit/v1"
+	auditv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/audit/v1/auditv1connect"
 
 	"errors"
 

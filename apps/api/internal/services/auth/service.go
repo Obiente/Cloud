@@ -6,14 +6,15 @@ import (
 	"os"
 	"time"
 
-	authv1 "api/gen/proto/obiente/cloud/auth/v1"
-	authv1connect "api/gen/proto/obiente/cloud/auth/v1/authv1connect"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/services/common"
 	"api/internal/services/organizations"
 	"api/internal/zitadel"
 	"strings"
+
+	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
+	authv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1/authv1connect"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"

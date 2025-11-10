@@ -11,9 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/database"
 	"api/internal/orchestrator"
+
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 )
 
 // BuildStrategy defines the interface for different deployment build strategies

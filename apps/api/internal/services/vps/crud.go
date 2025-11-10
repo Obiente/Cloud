@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"time"
 
-	commonv1 "api/gen/proto/obiente/cloud/common/v1"
-	vpsv1 "api/gen/proto/obiente/cloud/vps/v1"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/logger"
 	"api/internal/orchestrator"
+
+	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
+	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"

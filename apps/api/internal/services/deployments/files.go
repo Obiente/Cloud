@@ -16,9 +16,10 @@ import (
 	"unicode/utf8"
 
 	"api/docker"
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/auth"
 	"api/internal/database"
+
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/proto"

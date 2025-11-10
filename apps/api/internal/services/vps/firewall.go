@@ -7,9 +7,10 @@ import (
 	"net/url"
 	"strconv"
 
-	vpsv1 "api/gen/proto/obiente/cloud/vps/v1"
 	"api/internal/database"
 	"api/internal/orchestrator"
+
+	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 
 	"connectrpc.com/connect"
 	"gorm.io/gorm"

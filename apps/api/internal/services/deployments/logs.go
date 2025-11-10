@@ -13,10 +13,11 @@ import (
 	"time"
 
 	"api/docker"
-	commonv1 "api/gen/proto/obiente/cloud/common/v1"
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/auth"
 	"api/internal/database"
+
+	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 
 	"connectrpc.com/connect"
 	"github.com/moby/moby/api/types/events"

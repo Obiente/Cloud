@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
-	deploymentsv1connect "api/gen/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/orchestrator"
 	"api/internal/quota"
 	"api/internal/services/common"
+
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
+	deploymentsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
 
 	"connectrpc.com/connect"
 )

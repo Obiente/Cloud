@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	authv1 "api/gen/proto/obiente/cloud/auth/v1"
+	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 
 	"google.golang.org/protobuf/proto"
 )

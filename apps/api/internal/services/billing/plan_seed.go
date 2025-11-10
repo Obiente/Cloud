@@ -30,6 +30,7 @@ func SeedDefaultPlans() error {
 			CPUCores:                2,
 			MemoryBytes:             2 * 1024 * 1024 * 1024, // 2 GB
 			DeploymentsMax:          3,
+			MaxVpsInstances:         2,                      // 2 VPS instances for starter plan
 			BandwidthBytesMonth:     50 * 1024 * 1024 * 1024, // 50 GB/month
 			StorageBytes:            10 * 1024 * 1024 * 1024, // 10 GB
 			MinimumPaymentCents:     0,                       // Free tier, no minimum payment
@@ -42,6 +43,7 @@ func SeedDefaultPlans() error {
 			CPUCores:                8,
 			MemoryBytes:             16 * 1024 * 1024 * 1024, // 16 GB
 			DeploymentsMax:          20,
+			MaxVpsInstances:         10,                     // 10 VPS instances for pro plan
 			BandwidthBytesMonth:     500 * 1024 * 1024 * 1024, // 500 GB/month
 			StorageBytes:            100 * 1024 * 1024 * 1024, // 100 GB
 			MinimumPaymentCents:     10000,                    // $100 minimum payment to auto-upgrade
@@ -54,6 +56,7 @@ func SeedDefaultPlans() error {
 			CPUCores:                32,
 			MemoryBytes:             64 * 1024 * 1024 * 1024, // 64 GB
 			DeploymentsMax:          100,
+			MaxVpsInstances:         50,                      // 50 VPS instances for enterprise plan
 			BandwidthBytesMonth:     5 * 1024 * 1024 * 1024 * 1024, // 5 TB/month
 			StorageBytes:            1 * 1024 * 1024 * 1024 * 1024, // 1 TB
 			MinimumPaymentCents:     50000,                         // $500 minimum payment to auto-upgrade

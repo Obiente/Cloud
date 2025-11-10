@@ -5,8 +5,9 @@ import (
 	"reflect"
 	"strings"
 
-	deploymentsv1 "api/gen/proto/obiente/cloud/deployments/v1"
 	"api/internal/database"
+
+	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 )
 
 // ValidationError represents a validation error between GORM model and proto definition

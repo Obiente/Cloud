@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	supportv1connect "api/gen/proto/obiente/cloud/support/v1/supportv1connect"
-	supportv1 "api/gen/proto/obiente/cloud/support/v1"
-	authv1 "api/gen/proto/obiente/cloud/auth/v1"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/services/organizations"
+
+	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
+	supportv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/support/v1"
+	supportv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/support/v1/supportv1connect"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"

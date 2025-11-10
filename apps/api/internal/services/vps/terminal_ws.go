@@ -15,10 +15,11 @@ import (
 	"sync"
 	"time"
 
-	vpsv1 "api/gen/proto/obiente/cloud/vps/v1"
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/orchestrator"
+
+	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -287,21 +288,28 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 			}
 		} else {
 			// No public IP, try jump host directly
-			log.Printf("[VPS Terminal WS] No public IP found, attempting SSH via Proxmox jump host")
-			proxmoxHost := ""
-			if proxmoxConfig.APIURL != "" {
-				if u, err := url.Parse(proxmoxConfig.APIURL); err == nil {
-					proxmoxHost = u.Hostname()
+			log.Printf("[VPS Terminal WS] No public IP found, attempting SSH via jump host")
+			jumpHost := os.Getenv("SSH_PROXY_JUMP_HOST")
+			jumpUser := os.Getenv("SSH_PROXY_JUMP_USER")
+			if jumpUser == "" {
+				jumpUser = "root"
+			}
+			if jumpHost == "" {
+				// Fallback to Proxmox node
+				if proxmoxConfig.APIURL != "" {
+					if u, err := url.Parse(proxmoxConfig.APIURL); err == nil {
+						jumpHost = u.Hostname()
+					}
 				}
 			}
-			if proxmoxHost != "" {
+			if jumpHost != "" {
 				// Get internal IP from Proxmox (VM might have private IP only)
 				ipv4, _, err := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
 				if err == nil && len(ipv4) > 0 {
 					vpsIP := ipv4[0]
 					rootPassword, err := s.getVPSRootPassword(ctx, initMsg.VPSID)
 					if err == nil && rootPassword != "" {
-						sshConn, err = s.connectSSH(ctx, vpsIP, rootPassword, cols, rows, proxmoxHost, "root")
+						sshConn, err = s.connectSSH(ctx, vpsIP, rootPassword, cols, rows, jumpHost, jumpUser)
 						if err != nil {
 							log.Printf("[VPS Terminal WS] SSH via jump host failed: %v", err)
 							sshConn = nil
