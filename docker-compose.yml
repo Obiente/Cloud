@@ -64,6 +64,16 @@ services:
       PROXMOX_VM_ID_START: ${PROXMOX_VM_ID_START:-} # Starting VM ID range (e.g., 300)
       PROXMOX_VLAN_ID: ${PROXMOX_VLAN_ID:-} # Optional VLAN tag for VM network isolation (e.g., 100)
       SSH_PROXY_PORT: ${SSH_PROXY_PORT:-2222}
+      # SSH Proxy Jump Host Configuration (optional, recommended for security)
+      # If set, uses a dedicated SSH proxy VM instead of Proxmox node as jump host
+      SSH_PROXY_JUMP_HOST: ${SSH_PROXY_JUMP_HOST:-} # Hostname or IP of dedicated SSH proxy VM
+      SSH_PROXY_JUMP_USER: ${SSH_PROXY_JUMP_USER:-root} # SSH user for jump host (default: root)
+      # VPS Gateway Configuration (optional, for DHCP and SSH proxying)
+      VPS_GATEWAY_URL: ${VPS_GATEWAY_URL:-} # gRPC URL for vps-gateway service (e.g., http://vps-gateway:8080)
+      VPS_GATEWAY_API_SECRET: ${VPS_GATEWAY_API_SECRET:-} # Shared secret for authenticating with vps-gateway
+      # SSH Agent for jump host authentication (optional)
+      # Set this if using SSH agent for jump host SSH access:
+      # SSH_AUTH_SOCK: /ssh-agent
       # DNS configuration - optional, for documentation/deployment purposes only
       # Set MAIN_DNS_IPS to production DNS IP addresses (e.g., export MAIN_DNS_IPS=10.0.9.10)
       # Note: DNS_IPS must contain IP addresses, not container names or hostnames
@@ -115,6 +125,8 @@ services:
     # Docker's DNS (127.0.0.11) resolves service names, but we need to clear search domains
     # to prevent "postgres" from resolving to "postgres.my.obiente.cloud" (external IPs)
     dns_search: []  # Clear search domains - prevents appending .my.obiente.cloud to service names
+    ports:
+      - "${SSH_PROXY_PORT:-2222}:${SSH_PROXY_PORT:-2222}"  # SSH proxy port (exposed directly, bypassing Traefik)
     networks:
       - obiente-network
       # Option 2: Connect to production Swarm network (uncomment if both dev and prod are on same host)
@@ -127,6 +139,9 @@ services:
       - /var/lib/obiente:/var/lib/obiente
       - /tmp/obiente-volumes:/tmp/obiente-volumes
       - /tmp/obiente-deployments:/tmp/obiente-deployments
+      # Mount SSH agent socket for Proxmox jump host authentication (optional)
+      # Uncomment and set SSH_AUTH_SOCK if using SSH agent for Proxmox access:
+      # - ${SSH_AUTH_SOCK}:/ssh-agent:ro
     labels:
       - "cloud.obiente.traefik=true"
       - "traefik.enable=true"
@@ -137,7 +152,6 @@ services:
       - "traefik.http.routers.api-secure.entrypoints=websecure"
       - "traefik.http.routers.api-secure.service=api"
       - "traefik.http.routers.api-secure.tls=true"
-
   postgres:
     image: postgres:16-alpine
     container_name: obiente-postgres

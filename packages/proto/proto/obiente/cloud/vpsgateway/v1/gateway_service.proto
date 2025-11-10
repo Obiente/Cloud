@@ -1,0 +1,184 @@
+syntax = "proto3";
+
+package obiente.cloud.vpsgateway.v1;
+
+option go_package = "api/gen/proto/obiente/cloud/vpsgateway/v1;vpsgatewayv1";
+
+import "google/protobuf/timestamp.proto";
+
+// VPSGatewayService provides DHCP management and SSH proxying for VPS instances
+service VPSGatewayService {
+  // AllocateIP allocates a DHCP IP address for a VPS instance
+  rpc AllocateIP(AllocateIPRequest) returns (AllocateIPResponse);
+  
+  // ReleaseIP releases a DHCP IP address for a VPS instance
+  rpc ReleaseIP(ReleaseIPRequest) returns (ReleaseIPResponse);
+  
+  // ListIPs lists all allocated IP addresses
+  rpc ListIPs(ListIPsRequest) returns (ListIPsResponse);
+  
+  // ProxySSH proxies SSH connections to VPS instances via bidirectional stream
+  rpc ProxySSH(stream ProxySSHRequest) returns (stream ProxySSHResponse);
+  
+  // GetGatewayInfo returns gateway status and configuration
+  rpc GetGatewayInfo(GetGatewayInfoRequest) returns (GetGatewayInfoResponse);
+}
+
+// AllocateIPRequest requests IP allocation for a VPS
+message AllocateIPRequest {
+  // VPS ID (e.g., "vps-123456789")
+  string vps_id = 1;
+  
+  // Organization ID (e.g., "org-123456789")
+  string organization_id = 2;
+  
+  // MAC address of the VPS network interface (optional, for static assignment)
+  string mac_address = 3;
+  
+  // Preferred IP address (optional, if available)
+  string preferred_ip = 4;
+}
+
+// AllocateIPResponse returns the allocated IP address
+message AllocateIPResponse {
+  // Allocated IP address
+  string ip_address = 1;
+  
+  // Subnet mask
+  string subnet_mask = 2;
+  
+  // Gateway IP address
+  string gateway = 3;
+  
+  // DNS servers (comma-separated)
+  repeated string dns_servers = 4;
+  
+  // Lease expiration time
+  google.protobuf.Timestamp lease_expires = 5;
+}
+
+// ReleaseIPRequest requests IP release for a VPS
+message ReleaseIPRequest {
+  // VPS ID
+  string vps_id = 1;
+  
+  // IP address to release (optional, if not provided, releases all IPs for VPS)
+  string ip_address = 2;
+}
+
+// ReleaseIPResponse confirms IP release
+message ReleaseIPResponse {
+  // Success status
+  bool success = 1;
+  
+  // Message (optional)
+  string message = 2;
+}
+
+// ListIPsRequest requests list of allocated IPs
+message ListIPsRequest {
+  // Filter by organization ID (optional)
+  string organization_id = 1;
+  
+  // Filter by VPS ID (optional)
+  string vps_id = 2;
+}
+
+// IPAllocation represents an allocated IP address
+message IPAllocation {
+  // VPS ID
+  string vps_id = 1;
+  
+  // Organization ID
+  string organization_id = 2;
+  
+  // Allocated IP address
+  string ip_address = 3;
+  
+  // MAC address (if known)
+  string mac_address = 4;
+  
+  // Allocation time
+  google.protobuf.Timestamp allocated_at = 5;
+  
+  // Lease expiration time
+  google.protobuf.Timestamp lease_expires = 6;
+}
+
+// ListIPsResponse returns list of allocated IPs
+message ListIPsResponse {
+  // Allocated IPs
+  repeated IPAllocation allocations = 1;
+}
+
+// ProxySSHRequest is a message in the SSH proxy stream
+message ProxySSHRequest {
+  // Connection ID (unique identifier for this SSH connection)
+  string connection_id = 1;
+  
+  // One of: "connect", "data", "close"
+  string type = 2;
+  
+  // For "connect": target VPS IP or hostname
+  string target = 3;
+  
+  // For "connect": target port (default: 22)
+  int32 port = 4;
+  
+  // For "data": SSH data to forward
+  bytes data = 5;
+}
+
+// ProxySSHResponse is a response in the SSH proxy stream
+message ProxySSHResponse {
+  // Connection ID
+  string connection_id = 1;
+  
+  // One of: "connected", "data", "error", "closed"
+  string type = 2;
+  
+  // For "data": SSH data from VPS
+  bytes data = 3;
+  
+  // For "error": error message
+  string error = 4;
+}
+
+// GetGatewayInfoRequest requests gateway information
+message GetGatewayInfoRequest {
+  // No parameters needed
+}
+
+// GetGatewayInfoResponse returns gateway status and configuration
+message GetGatewayInfoResponse {
+  // Gateway version
+  string version = 1;
+  
+  // DHCP pool start IP
+  string dhcp_pool_start = 2;
+  
+  // DHCP pool end IP
+  string dhcp_pool_end = 3;
+  
+  // Subnet mask
+  string subnet_mask = 4;
+  
+  // Gateway IP
+  string gateway_ip = 5;
+  
+  // DNS servers
+  repeated string dns_servers = 6;
+  
+  // Total available IPs in pool
+  int32 total_ips = 7;
+  
+  // Allocated IPs count
+  int32 allocated_ips = 8;
+  
+  // DHCP server status ("running", "stopped", "error")
+  string dhcp_status = 9;
+  
+  // SSH proxy status ("running", "stopped", "error")
+  string ssh_proxy_status = 10;
+}
+

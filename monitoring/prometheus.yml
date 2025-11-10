@@ -90,6 +90,36 @@ scrape_configs:
     static_configs:
       - targets: [] # Add redis_exporter endpoints
 
+  # VPS Gateway - DHCP and SSH proxy metrics
+  - job_name: "vps-gateway"
+    dockerswarm_sd_configs:
+      - host: unix:///var/run/docker.sock
+        role: tasks
+        filters:
+          - name: label
+            values: ["com.docker.swarm.service.name=vps-gateway"]
+    metrics_path: /metrics
+    scrape_interval: 15s
+    relabel_configs:
+      # Use node hostname as instance label
+      - source_labels: [__meta_dockerswarm_node_hostname]
+        target_label: instance
+      - source_labels: [__meta_dockerswarm_node_hostname]
+        target_label: node_name
+      # Keep service name for reference
+      - source_labels: [__meta_dockerswarm_service_name]
+        target_label: service
+      # Only scrape tasks that are running
+      - source_labels: [__meta_dockerswarm_task_desired_state]
+        regex: running
+        action: keep
+      # Set the metrics port to 9091 (default metrics port for vps-gateway)
+      # Docker Swarm service discovery provides IP:port, we need to replace the port
+      - source_labels: [__address__]
+        regex: "(.+):\\d+"
+        target_label: __address__
+        replacement: "${1}:9091"
+
   # etcd cluster
   - job_name: "etcd"
     dns_sd_configs:

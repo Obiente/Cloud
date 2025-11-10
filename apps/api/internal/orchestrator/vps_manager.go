@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,7 +17,8 @@ import (
 
 // VPSManager manages the lifecycle of VPS instances via Proxmox
 type VPSManager struct {
-	dockerClient client.APIClient
+	dockerClient   client.APIClient
+	gatewayClient *VPSGatewayClient
 }
 
 // GetProxmoxConfig gets Proxmox configuration from environment variables
@@ -72,8 +74,16 @@ func NewVPSManager() (*VPSManager, error) {
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
 
+	// Initialize gateway client (optional - will be nil if gateway is not configured)
+	gatewayClient, err := NewVPSGatewayClient()
+	if err != nil {
+		logger.Warn("[VPSManager] Failed to initialize VPS gateway client (gateway may not be configured): %v", err)
+		gatewayClient = nil // Continue without gateway - IP allocation will be skipped
+	}
+
 	return &VPSManager{
-		dockerClient: cli,
+		dockerClient:   cli,
+		gatewayClient: gatewayClient,
 	}, nil
 }
 
@@ -99,9 +109,34 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 		return nil, fmt.Errorf("failed to create Proxmox client: %w", err)
 	}
 
+	// Allocate IP address from gateway if available
+	var allocatedIP string
+	var macAddress string
+	if vm.gatewayClient != nil {
+		// Generate MAC address for the VM (Proxmox will assign one, but we need it for DHCP)
+		// Format: 00:16:3e:XX:XX:XX (QEMU/KVM standard prefix)
+		macAddress = generateMACAddress()
+		
+		// Request IP allocation from gateway
+		allocResp, err := vm.gatewayClient.AllocateIP(ctx, config.VPSID, config.OrganizationID, macAddress)
+		if err != nil {
+			logger.Warn("[VPSManager] Failed to allocate IP from gateway for VPS %s: %v (continuing without gateway IP)", config.VPSID, err)
+			// Continue without gateway IP - VM will use DHCP or static IP from Proxmox
+		} else {
+			allocatedIP = allocResp.IpAddress
+			logger.Info("[VPSManager] Allocated IP %s for VPS %s from gateway", allocatedIP, config.VPSID)
+		}
+	}
+
 	// Provision VM via Proxmox API
 	vmID, err := proxmoxClient.CreateVM(ctx, config, org.AllowInterVMCommunication)
 	if err != nil {
+		// If VM creation fails, release the allocated IP
+		if vm.gatewayClient != nil && allocatedIP != "" {
+			if releaseErr := vm.gatewayClient.ReleaseIP(ctx, config.VPSID); releaseErr != nil {
+				logger.Warn("[VPSManager] Failed to release IP %s after VM creation failure: %v", allocatedIP, releaseErr)
+			}
+		}
 		return nil, fmt.Errorf("failed to provision VM via Proxmox: %w", err)
 	}
 
@@ -168,8 +203,14 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 	}
 
 	// Store IP addresses as JSON arrays (must be valid JSON or NULL for JSONB columns)
-	if len(config.IPv4Addresses) > 0 {
-		ipv4JSON, err := json.Marshal(config.IPv4Addresses)
+	// Include gateway-allocated IP if available
+	ipv4Addresses := config.IPv4Addresses
+	if allocatedIP != "" {
+		// Add gateway-allocated IP to the list (prepend it)
+		ipv4Addresses = append([]string{allocatedIP}, ipv4Addresses...)
+	}
+	if len(ipv4Addresses) > 0 {
+		ipv4JSON, err := json.Marshal(ipv4Addresses)
 		if err == nil {
 			vpsInstance.IPv4Addresses = string(ipv4JSON)
 		} else {
@@ -497,6 +538,16 @@ func (vm *VPSManager) DeleteVPS(ctx context.Context, vpsID string) error {
 		return fmt.Errorf("failed to find Proxmox node: %w", err)
 	}
 
+	// Release IP address from gateway if available
+	if vm.gatewayClient != nil {
+		if err := vm.gatewayClient.ReleaseIP(ctx, vpsID); err != nil {
+			logger.Warn("[VPSManager] Failed to release IP from gateway for VPS %s: %v (continuing with VM deletion)", vpsID, err)
+			// Continue with VM deletion even if IP release fails
+		} else {
+			logger.Info("[VPSManager] Released IP from gateway for VPS %s", vpsID)
+		}
+	}
+
 	// DeleteVM will validate that the VM was created by our API by checking VM name matches VPS ID
 	if err := proxmoxClient.DeleteVM(ctx, nodes[0], vmIDInt, vpsID); err != nil {
 		return fmt.Errorf("failed to delete VM: %w", err)
@@ -677,6 +728,15 @@ func (vm *VPSManager) UpdateVPSSSHKeysExcluding(ctx context.Context, vpsID strin
 
 	logger.Info("[VPSManager] Updated SSH keys for VPS %s (VM %d)", vpsID, vmIDInt)
 	return nil
+}
+
+// generateMACAddress generates a random MAC address for a VM
+// Format: 00:16:3e:XX:XX:XX (QEMU/KVM standard prefix)
+func generateMACAddress() string {
+	// Generate random bytes for the last 3 octets
+	randBytes := make([]byte, 3)
+	rand.Read(randBytes)
+	return fmt.Sprintf("00:16:3e:%02x:%02x:%02x", randBytes[0], randBytes[1], randBytes[2])
 }
 
 // mapProxmoxStatusToVPSStatus maps Proxmox VM status strings to VPSStatus enum values

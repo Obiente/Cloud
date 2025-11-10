@@ -1,0 +1,46 @@
+version: '3.8'
+
+# Test compose file for vps-gateway service
+# Ports are NOT bound to host to avoid conflicts
+# Test by attaching to the container: docker exec -it vps-gateway-test /bin/sh
+
+services:
+  vps-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vps-gateway-test
+    environment:
+      # API Secret for authentication
+      - GATEWAY_API_SECRET=test-secret-key-change-in-production
+      
+      # DHCP Configuration
+      - GATEWAY_DHCP_POOL_START=192.168.100.10
+      - GATEWAY_DHCP_POOL_END=192.168.100.254
+      - GATEWAY_DHCP_SUBNET=255.255.255.0
+      - GATEWAY_DHCP_GATEWAY=192.168.100.1
+      - GATEWAY_DHCP_DNS=8.8.8.8,8.8.4.4
+      - GATEWAY_DHCP_INTERFACE=eth0
+      - GATEWAY_DHCP_LEASES_DIR=/var/lib/vps-gateway
+      
+      # Logging
+      - LOG_LEVEL=debug
+      # Use standard ports inside container
+      - GATEWAY_GRPC_PORT=8080
+      - GATEWAY_METRICS_PORT=9091
+    # Ports are NOT exposed to host - all testing done by attaching to container
+    # Use 'docker exec -it vps-gateway-test /bin/sh' to test
+    volumes:
+      - vps-gateway-data:/var/lib/vps-gateway
+    # Note: dnsmasq may not work fully in containerized mode without host network
+    # This is acceptable for testing the gRPC API and service functionality
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    # Keep container running for testing
+    stdin_open: true
+    tty: true
+
+volumes:
+  vps-gateway-data:
+

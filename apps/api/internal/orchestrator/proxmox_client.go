@@ -438,13 +438,27 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		"description": fmt.Sprintf("Managed by Obiente Cloud - VPS ID: %s, Display Name: %s", config.VPSID, config.Name),
 	}
 
+	// Configure network interface
+	// If VPS_GATEWAY_URL is set, use the gateway bridge (typically vmbr1 or custom bridge)
+	// Otherwise, use the default bridge (vmbr0)
+	bridge := "vmbr0"
+	if os.Getenv("VPS_GATEWAY_URL") != "" {
+		// Gateway manages DHCP on a separate bridge
+		gatewayBridge := os.Getenv("VPS_GATEWAY_BRIDGE")
+		if gatewayBridge == "" {
+			gatewayBridge = "vmbr1" // Default gateway bridge
+		}
+		bridge = gatewayBridge
+		logger.Info("[ProxmoxClient] Using gateway bridge %s for VM network (gateway manages DHCP)", bridge)
+	}
+	
 	// Configure network interface with optional VLAN support
 	// SECURITY: Use VLAN tags for network isolation when configured
-	netConfig := "virtio,bridge=vmbr0,firewall=1"
+	netConfig := fmt.Sprintf("virtio,bridge=%s,firewall=1", bridge)
 	if vlanID := os.Getenv("PROXMOX_VLAN_ID"); vlanID != "" {
 		// Add VLAN tag for network isolation
-		netConfig = fmt.Sprintf("virtio,bridge=vmbr0,tag=%s,firewall=1", vlanID)
-		logger.Info("[ProxmoxClient] Configuring VM network with VLAN tag: %s", vlanID)
+		netConfig = fmt.Sprintf("virtio,bridge=%s,tag=%s,firewall=1", bridge, vlanID)
+		logger.Info("[ProxmoxClient] Configuring VM network with VLAN tag: %s on bridge: %s", vlanID, bridge)
 	}
 	vmConfig["net0"] = netConfig
 

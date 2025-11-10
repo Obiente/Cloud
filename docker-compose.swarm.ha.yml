@@ -532,6 +532,11 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
+      ports:
+        - target: 2222
+          published: ${SSH_PROXY_PORT:-2222}
+          protocol: tcp
+          mode: ingress  # SSH proxy port (exposed directly, bypassing Traefik)
       resources:
         limits:
           cpus: "2"
@@ -542,6 +547,7 @@ services:
       labels:
         - "cloud.obiente.service=api"
         - "cloud.obiente.role=control-plane"
+        - "cloud.obiente.traefik=true"
     healthcheck:
       test:
         [
@@ -668,6 +674,10 @@ services:
       PROXMOX_VM_ID_START: ${PROXMOX_VM_ID_START:-} # Starting VM ID range (e.g., 300)
       PROXMOX_VLAN_ID: ${PROXMOX_VLAN_ID:-} # Optional VLAN tag for VM network isolation (e.g., 100)
       SSH_PROXY_PORT: ${SSH_PROXY_PORT:-2222}
+      # VPS Gateway Configuration (optional, for DHCP and SSH proxying)
+      VPS_GATEWAY_URL: ${VPS_GATEWAY_URL:-} # gRPC URL for vps-gateway service (e.g., http://vps-gateway:8080)
+      VPS_GATEWAY_API_SECRET: ${VPS_GATEWAY_API_SECRET:-} # Shared secret for authenticating with vps-gateway
+      VPS_GATEWAY_BRIDGE: ${VPS_GATEWAY_BRIDGE:-vmbr1} # Bridge name for gateway network (defaults to vmbr1)
     ports:
       - "${DNS_PORT:-53}:${DNS_PORT:-53}/udp"
       - "${DNS_PORT:-53}:${DNS_PORT:-53}/tcp"
@@ -873,6 +883,75 @@ services:
     networks:
       - obiente-network
 
+  # VPS Gateway - DHCP management and SSH proxying for VPS instances
+  vps-gateway:
+    image: ${VPS_GATEWAY_IMAGE:-ghcr.io/obiente/cloud-vps-gateway:latest}
+    # Build section removed - using image from GitHub Container Registry
+    # To build locally, set VPS_GATEWAY_IMAGE=obiente/cloud-vps-gateway:latest and uncomment build section below
+    # build:
+    #   context: .
+    #   dockerfile: apps/vps-gateway/Dockerfile
+    environment:
+      GATEWAY_API_SECRET: ${VPS_GATEWAY_API_SECRET:-} # Must match VPS_GATEWAY_API_SECRET in API service
+      GATEWAY_GRPC_PORT: ${GATEWAY_GRPC_PORT:-8080}
+      GATEWAY_METRICS_PORT: ${GATEWAY_METRICS_PORT:-9091}
+      # DHCP Configuration
+      GATEWAY_DHCP_POOL_START: ${GATEWAY_DHCP_POOL_START:-192.168.100.10}
+      GATEWAY_DHCP_POOL_END: ${GATEWAY_DHCP_POOL_END:-192.168.100.254}
+      GATEWAY_DHCP_SUBNET: ${GATEWAY_DHCP_SUBNET:-192.168.100.0}
+      GATEWAY_DHCP_SUBNET_MASK: ${GATEWAY_DHCP_SUBNET_MASK:-255.255.255.0}
+      GATEWAY_DHCP_GATEWAY: ${GATEWAY_DHCP_GATEWAY:-192.168.100.1}
+      GATEWAY_DHCP_DNS: ${GATEWAY_DHCP_DNS:-8.8.8.8,8.8.4.4}
+      GATEWAY_DHCP_INTERFACE: ${GATEWAY_DHCP_INTERFACE:-eth0} # Interface name on the gateway VM/container
+      GATEWAY_DHCP_LEASES_DIR: ${GATEWAY_DHCP_LEASES_DIR:-/var/lib/vps-gateway}
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - vps_gateway_data:/var/lib/vps-gateway
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+      labels:
+        - "cloud.obiente.service=vps-gateway"
+        - "cloud.obiente.role=infrastructure"
+        - "cloud.obiente.prometheus=true"
+        - "prometheus.scrape=true"
+        - "prometheus.port=9091"
+        - "prometheus.path=/metrics"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://localhost:${GATEWAY_METRICS_PORT:-9091}/metrics || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - obiente-network
+    # Note: This service requires network_mode: host or privileged access to manage DHCP
+    # For production, deploy this on a dedicated VM with network access to the gateway bridge
+    # The service can also run in a container with network_mode: host if the host has access to the bridge
+
 # ============================================================================
 # VOLUMES
 # ============================================================================
@@ -918,6 +997,10 @@ volumes:
 
   # Docker Registry
   registry_data:
+    driver: local
+
+  # VPS Gateway
+  vps_gateway_data:
     driver: local
 
 # ============================================================================
