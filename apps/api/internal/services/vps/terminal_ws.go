@@ -21,6 +21,7 @@ import (
 	"api/internal/orchestrator"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
 )
@@ -33,7 +34,7 @@ type vpsTerminalWSMessage struct {
 	Input          []int  `json:"input,omitempty"`
 	Cols           int    `json:"cols,omitempty"`
 	Rows           int    `json:"rows,omitempty"`
-	Command        string `json:"command,omitempty"` // For special commands like "start"
+	Command        string `json:"command,omitempty"`
 }
 
 type vpsTerminalWSOutput struct {
@@ -54,10 +55,11 @@ type SSHConnection struct {
 }
 
 // HandleVPSTerminalWebSocket handles WebSocket connections for VPS terminal access
+// Uses SSH for terminal access (with jump host support for VPSes without public IPs)
 func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Extract VPS ID from URL path (e.g., /vps/{vps_id}/terminal/ws)
+	// Extract VPS ID from URL path
 	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	var vpsID string
 	for i, part := range pathParts {
@@ -74,6 +76,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		InsecureSkipVerify: true,
+		CompressionMode:    websocket.CompressionDisabled, // Disable compression for better performance with binary data
 	})
 	if err != nil {
 		log.Printf("[VPS Terminal WS] Failed to accept websocket connection: %v", err)
@@ -87,6 +90,14 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		writeMu.Lock()
 		defer writeMu.Unlock()
 		return wsjson.Write(ctxWrite, conn, msg)
+	}
+
+	writeBinary := func(data []byte) error {
+		ctxWrite, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		return conn.Write(ctxWrite, websocket.MessageBinary, data)
 	}
 
 	sendError := func(message string) {
@@ -103,7 +114,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		}
 	}()
 
-	// Read the initial message which should contain authentication and sizing info
+	// Read the initial message
 	var initMsg vpsTerminalWSMessage
 	if err := wsjson.Read(ctx, conn, &initMsg); err != nil {
 		log.Printf("[VPS Terminal WS] Failed to read init message: %v", err)
@@ -129,7 +140,6 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	// Use VPS ID from URL if not provided in message
 	if initMsg.VPSID == "" {
 		initMsg.VPSID = vpsID
 	}
@@ -155,7 +165,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Get VPS instance to check status
+	// Get VPS instance
 	var vps database.VPSInstance
 	if err := database.DB.Where("id = ? AND deleted_at IS NULL", initMsg.VPSID).First(&vps).Error; err != nil {
 		sendError(fmt.Sprintf("VPS instance %s not found", initMsg.VPSID))
@@ -163,18 +173,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Check if VPS status allows terminal access
-	// Serial console works even when VM is booting/rebooting, so allow access for:
-	// - CREATING (1): Can see boot output
-	// - STARTING (2): Can see boot output
-	// - RUNNING (3): Normal operation
-	// - REBOOTING (6): Can see reboot output
-	// - STOPPED (5): Serial console might still work
-	// Block only for:
-	// - STOPPING (4): VM is shutting down
-	// - FAILED (7): VM might not exist
-	// - DELETING (8): VM is being deleted
-	// - DELETED (9): VM is deleted
+	// Check VPS status
 	blockedStatuses := []int32{
 		int32(vpsv1.VPSStatus_STOPPING),
 		int32(vpsv1.VPSStatus_FAILED),
@@ -197,33 +196,14 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		}
 		_ = writeJSON(vpsTerminalWSOutput{Type: "output", Data: data})
 		_ = writeJSON(vpsTerminalWSOutput{Type: "connected"})
-		// Don't close - allow user to see the message, but don't try to connect
-		// Listen for messages but only handle "start" command
+		// Keep connection open to display status message, but don't attempt terminal connection
 		for {
 			var msg vpsTerminalWSMessage
 			if err := wsjson.Read(ctx, conn, &msg); err != nil {
 				if websocket.CloseStatus(err) == websocket.StatusNormalClosure || websocket.CloseStatus(err) == websocket.StatusGoingAway {
 					return
 				}
-				log.Printf("[VPS Terminal WS] Read error: %v", err)
 				return
-			}
-			// Just echo input or ignore
-			if strings.ToLower(msg.Type) == "input" && len(msg.Input) > 0 {
-				inputBytes := make([]byte, len(msg.Input))
-				for i, v := range msg.Input {
-					inputBytes[i] = byte(v)
-				}
-				inputStr := strings.TrimSpace(string(inputBytes))
-				if strings.ToLower(inputStr) == "start" {
-					startMsg := "Starting VPS... Please reconnect after it's running.\r\n"
-					startData := make([]int, len(startMsg))
-					for i, b := range []byte(startMsg) {
-						startData[i] = int(b)
-					}
-					_ = writeJSON(vpsTerminalWSOutput{Type: "output", Data: startData})
-					// TODO: Actually start the VPS
-				}
 			}
 		}
 	}
@@ -238,7 +218,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		rows = 24
 	}
 
-	// Get Proxmox client for terminal access
+	// Get Proxmox client
 	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 	if err != nil {
 		sendError("Failed to get Proxmox config")
@@ -263,42 +243,17 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	nodes, err := proxmoxClient.ListNodes(ctx)
-	if err != nil || len(nodes) == 0 {
-		sendError("Failed to find Proxmox node")
-		conn.Close(websocket.StatusInternalError, "No Proxmox node found")
+	// Find which node the VM is running on
+	nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+	if err != nil {
+		sendError(fmt.Sprintf("Failed to find Proxmox node for VM: %v", err))
+		conn.Close(websocket.StatusInternalError, "VM node not found")
 		return
 	}
 
-	nodeName := nodes[0]
+	// Use SSH only for terminal access (with jump host support for VPSes without public IPs)
+	log.Printf("[VPS Terminal WS] Using SSH for terminal access")
 
-	// Priority order:
-	// 1. Serial Console WebSocket (text terminal including boot output, works even when VM is booting)
-	// 2. SSH (best experience when IP is available and VM is fully booted)
-	// 3. Guest agent (fallback when no IP)
-
-	// Try Serial Console WebSocket first (provides text terminal including boot output)
-	// Note: Serial console may not be supported by all Proxmox setups, so we try it but fall back gracefully
-	serialWSURL, err := proxmoxClient.GetSerialConsoleWebSocketURL(ctx, nodeName, vmIDInt)
-	if err == nil && serialWSURL != "" {
-		log.Printf("[VPS Terminal WS] Attempting Serial Console WebSocket (will fall back to SSH/guest agent if it fails)")
-		// Try serial console, but if it fails, we'll continue to SSH/guest agent below
-		// We can't easily detect failure here, so we'll let it try and if it fails, the error will be shown
-		// but the connection will remain open for fallback
-		// Actually, since handleSerialConsoleWebSocketTerminal returns on error, we need a different approach
-		// For now, let's skip serial console if we're not sure it will work, or make it a background attempt
-		// Let's just try it and if it fails immediately, continue to SSH
-		// We'll modify the handler to not return on first error, or we'll catch the error here
-		// Actually, the simplest is to just skip serial console for now until we can get it working
-		// Or we can try it in a goroutine and fall back if it doesn't connect quickly
-		// For now, let's comment it out and use SSH/guest agent which we know works
-		// TODO: Fix serial console WebSocket authentication/endpoint
-		// s.handleSerialConsoleWebSocketTerminal(ctx, conn, serialWSURL, proxmoxClient, nodeName, vmIDInt, &vps, writeJSON, initMsg, cols, rows)
-		// return
-	}
-	log.Printf("[VPS Terminal WS] Serial Console WebSocket skipped (not yet fully supported), trying SSH/guest agent")
-
-	// Try SSH connection (preferred when IP is available)
 	var sshConn *SSHConnection
 	vpsManager, err := orchestrator.NewVPSManager()
 	if err == nil {
@@ -308,60 +263,145 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 			vpsIP := ipv4[0]
 			rootPassword, err := s.getVPSRootPassword(ctx, initMsg.VPSID)
 			if err == nil && rootPassword != "" {
-				// Try to connect via SSH
-				sshConn, err = s.connectSSH(ctx, vpsIP, rootPassword, cols, rows)
+				// Try direct SSH first
+				sshConn, err = s.connectSSH(ctx, vpsIP, rootPassword, cols, rows, "", "")
 				if err != nil {
-					log.Printf("[VPS Terminal WS] Failed to connect via SSH: %v", err)
-					sshConn = nil
+					log.Printf("[VPS Terminal WS] Direct SSH connection failed: %v, trying jump host", err)
+					// If direct SSH fails, try via Proxmox node as jump host
+					// Extract Proxmox host from API URL
+					proxmoxHost := ""
+					if proxmoxConfig.APIURL != "" {
+						if u, err := url.Parse(proxmoxConfig.APIURL); err == nil {
+							proxmoxHost = u.Hostname()
+						}
+					}
+					if proxmoxHost != "" {
+						log.Printf("[VPS Terminal WS] Attempting SSH via jump host: %s", proxmoxHost)
+						sshConn, err = s.connectSSH(ctx, vpsIP, rootPassword, cols, rows, proxmoxHost, "root")
+						if err != nil {
+							log.Printf("[VPS Terminal WS] SSH via jump host failed: %v", err)
+							sshConn = nil
+						}
+					}
+				}
+			}
+		} else {
+			// No public IP, try jump host directly
+			log.Printf("[VPS Terminal WS] No public IP found, attempting SSH via Proxmox jump host")
+			proxmoxHost := ""
+			if proxmoxConfig.APIURL != "" {
+				if u, err := url.Parse(proxmoxConfig.APIURL); err == nil {
+					proxmoxHost = u.Hostname()
+				}
+			}
+			if proxmoxHost != "" {
+				// Get internal IP from Proxmox (VM might have private IP only)
+				ipv4, _, err := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
+				if err == nil && len(ipv4) > 0 {
+					vpsIP := ipv4[0]
+					rootPassword, err := s.getVPSRootPassword(ctx, initMsg.VPSID)
+					if err == nil && rootPassword != "" {
+						sshConn, err = s.connectSSH(ctx, vpsIP, rootPassword, cols, rows, proxmoxHost, "root")
+						if err != nil {
+							log.Printf("[VPS Terminal WS] SSH via jump host failed: %v", err)
+							sshConn = nil
+						}
+					}
 				}
 			}
 		}
 	}
 
-	// If SSH connection failed, fall back to guest agent
-	if sshConn == nil {
-		log.Printf("[VPS Terminal WS] SSH not available, using guest agent terminal")
-		// Use Proxmox guest agent for terminal access (no IP needed)
-		s.handleProxmoxGuestAgentTerminal(ctx, conn, proxmoxClient, nodeName, vmIDInt, &vps, writeJSON, initMsg)
-		return
-	}
+	// If SSH connection succeeded, use it
+	if sshConn != nil {
+		log.Printf("[VPS Terminal WS] Using SSH connection")
+		defer func() {
+			if sshConn != nil {
+				if sshConn.session != nil {
+					sshConn.session.Close()
+				}
+				if sshConn.conn != nil {
+					sshConn.conn.Close()
+				}
+			}
+		}()
 
-	// SSH connection established - handle terminal session
-	defer func() {
-		if sshConn != nil {
-			if sshConn.session != nil {
-				sshConn.session.Close()
-			}
-			if sshConn.conn != nil {
-				sshConn.conn.Close()
-			}
+		// Send connected message
+		if err := writeJSON(map[string]string{"type": "connected"}); err != nil {
+			log.Printf("[VPS Terminal WS] Failed to send connected message: %v", err)
+			return
 		}
-	}()
 
-	// Send initial newline
-	if _, err := sshConn.stdin.Write([]byte("\r\n")); err != nil {
-		log.Printf("[VPS Terminal WS] Failed to write initial newline: %v", err)
-	}
-
-	// Send connected message
-	if err := writeJSON(map[string]string{"type": "connected"}); err != nil {
-		log.Printf("[VPS Terminal WS] Failed to send connected message: %v", err)
-		conn.Close(websocket.StatusInternalError, "failed to send connected")
-		return
-	}
-
-	outputCtx, outputCancel := context.WithCancel(ctx)
-	outputDone := make(chan struct{})
-
-	// Forward SSH output to websocket client
-	var outputDoneWg sync.WaitGroup
-	outputDoneWg.Add(1)
-	go func() {
-		defer outputDoneWg.Done()
-		defer close(outputDone)
+		outputCtx, outputCancel := context.WithCancel(ctx)
 		defer outputCancel()
 
-		buf := make([]byte, 4096)
+		// Forward SSH output to websocket (as binary for better performance)
+		var outputWg sync.WaitGroup
+		outputWg.Add(2)
+
+		// Forward stdout
+		go func() {
+			defer outputWg.Done()
+			buf := make([]byte, 4096)
+			for {
+				select {
+				case <-outputCtx.Done():
+					return
+				default:
+				}
+
+				n, err := sshConn.stdout.Read(buf)
+				if n > 0 {
+					// Send as binary for better performance with xterm
+					if err := writeBinary(buf[:n]); err != nil {
+						log.Printf("[VPS Terminal WS] Failed to forward output: %v", err)
+						return
+					}
+				}
+
+				if err != nil {
+					if err == io.EOF {
+						_ = writeJSON(vpsTerminalWSOutput{Type: "closed", Reason: "Terminal session ended", Exit: true})
+						conn.Close(websocket.StatusNormalClosure, "terminal closed")
+						closed = true
+					} else {
+						log.Printf("[VPS Terminal WS] SSH read error: %v", err)
+						_ = writeJSON(vpsTerminalWSOutput{Type: "error", Message: "Terminal stream error"})
+					}
+					return
+				}
+			}
+		}()
+
+		// Forward stderr
+		go func() {
+			defer outputWg.Done()
+			buf := make([]byte, 4096)
+			for {
+				select {
+				case <-outputCtx.Done():
+					return
+				default:
+				}
+
+				n, err := sshConn.stderr.Read(buf)
+				if n > 0 {
+					if err := writeBinary(buf[:n]); err != nil {
+						log.Printf("[VPS Terminal WS] Failed to forward stderr: %v", err)
+						return
+					}
+				}
+
+				if err != nil {
+					if err != io.EOF {
+						log.Printf("[VPS Terminal WS] SSH stderr read error: %v", err)
+					}
+					return
+				}
+			}
+		}()
+
+		// Handle input and resize
 		for {
 			select {
 			case <-outputCtx.Done():
@@ -369,127 +409,585 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 			default:
 			}
 
-			n, err := sshConn.stdout.Read(buf)
-			if n > 0 {
-				data := make([]int, n)
-				for i := 0; i < n; i++ {
-					data[i] = int(buf[i])
-				}
-				if err := writeJSON(vpsTerminalWSOutput{Type: "output", Data: data}); err != nil {
-					log.Printf("[VPS Terminal WS] Failed to forward output: %v", err)
+			var msg vpsTerminalWSMessage
+			if err := wsjson.Read(ctx, conn, &msg); err != nil {
+				if websocket.CloseStatus(err) == websocket.StatusNormalClosure || websocket.CloseStatus(err) == websocket.StatusGoingAway {
 					return
 				}
+				log.Printf("[VPS Terminal WS] Read error: %v", err)
+				return
 			}
 
-			if err != nil {
-				if err == io.EOF {
-					_ = writeJSON(vpsTerminalWSOutput{Type: "closed", Reason: "Terminal session ended", Exit: true})
-					conn.Close(websocket.StatusNormalClosure, "terminal closed")
-					closed = true
-				} else {
-					log.Printf("[VPS Terminal WS] SSH read error: %v", err)
-					_ = writeJSON(vpsTerminalWSOutput{Type: "error", Message: "Terminal stream error"})
-					conn.Close(websocket.StatusInternalError, "terminal error")
-					closed = true
+			switch strings.ToLower(msg.Type) {
+			case "input":
+				if len(msg.Input) == 0 {
+					continue
 				}
-				return
-			}
-		}
-	}()
 
-	// Forward stderr in a separate goroutine
-	outputDoneWg.Add(1)
-	go func() {
-		defer outputDoneWg.Done()
+				inputBytes := make([]byte, len(msg.Input))
+				for i, v := range msg.Input {
+					inputBytes[i] = byte(v)
+				}
+				if _, err := sshConn.stdin.Write(inputBytes); err != nil {
+					log.Printf("[VPS Terminal WS] Failed to write input: %v", err)
+					return
+				}
 
-		buf := make([]byte, 4096)
-		for {
-			select {
-			case <-outputCtx.Done():
-				return
+			case "resize":
+				if sshConn.session != nil && msg.Cols > 0 && msg.Rows > 0 {
+					cols = msg.Cols
+					rows = msg.Rows
+					if err := sshConn.session.WindowChange(rows, cols); err != nil {
+						log.Printf("[VPS Terminal WS] Failed to resize terminal: %v", err)
+					}
+				}
+
+			case "ping":
+				_ = writeJSON(map[string]string{"type": "pong"})
+
 			default:
-			}
-
-			n, err := sshConn.stderr.Read(buf)
-			if n > 0 {
-				data := make([]int, n)
-				for i := 0; i < n; i++ {
-					data[i] = int(buf[i])
-				}
-				if err := writeJSON(vpsTerminalWSOutput{Type: "output", Data: data}); err != nil {
-					log.Printf("[VPS Terminal WS] Failed to forward stderr: %v", err)
-					return
-				}
-			}
-
-			if err != nil {
-				if err != io.EOF {
-					log.Printf("[VPS Terminal WS] SSH stderr read error: %v", err)
-				}
-				return
+				log.Printf("[VPS Terminal WS] Unknown message type: %s", msg.Type)
 			}
 		}
-	}()
+	}
 
-	// Listen for client input messages
-	for {
+	// SSH connection failed - send error to client
+	sendError("Failed to establish SSH connection to VPS. Please ensure the VPS is running and SSH is accessible.")
+	conn.Close(websocket.StatusInternalError, "SSH connection failed")
+	return
+}
+
+// handleProxmoxTermProxy handles terminal access via Proxmox termproxy WebSocket
+// termproxy is designed for text terminals and is compatible with xterm.js
+// It requires sending an authentication message after WebSocket connection: "username:ticket\n"
+func (s *Service) handleProxmoxTermProxy(
+	ctx context.Context,
+	clientConn *websocket.Conn,
+	termProxyInfo *orchestrator.TermProxyInfo,
+	proxmoxClient *orchestrator.ProxmoxClient,
+	proxmoxConfig *orchestrator.ProxmoxConfig,
+	nodeName string,
+	vmID int,
+	vps *database.VPSInstance,
+	writeJSON func(interface{}) error,
+	writeBinary func([]byte) error,
+	cols, rows int,
+) {
+	// Parse the WebSocket URL to extract the base URL for cookie domain
+	wsURL, err := url.Parse(termProxyInfo.WebSocketURL)
+	if err != nil {
+		log.Printf("[VPS Terminal WS] Failed to parse termproxy URL: %v", err)
+		sendError := func(msg string) { _ = writeJSON(vpsTerminalWSOutput{Type: "error", Message: msg}) }
+		sendError(fmt.Sprintf("Invalid termproxy URL: %v", err))
+		return
+	}
+
+	// Reuse the ProxmoxClient's HTTP client to preserve authentication state
+	baseHTTPClient := proxmoxClient.GetHTTPClient()
+	
+	// Create a new HTTP client with the same transport but our own cookie jar
+	jar := &cookieJar{
+		cookies: make(map[string]*http.Cookie),
+	}
+	
+	// Copy the transport from the base client
+	var tr *http.Transport
+	if baseHTTPClient.Transport != nil {
+		if baseTr, ok := baseHTTPClient.Transport.(*http.Transport); ok {
+			tr = baseTr
+		}
+	}
+	if tr == nil {
+		// Fallback: create new transport with same config
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+	}
+	
+	httpClient := &http.Client{
+		Transport: tr,
+		Timeout:   baseHTTPClient.Timeout,
+		Jar:       jar,
+	}
+	
+	// Proxmox WebSocket authentication per API documentation:
+	// The vncwebsocket endpoint (used by termproxy) requires:
+	// 1. A valid vncticket in the URL (from termproxy call)
+	// 2. Authentication for the WebSocket upgrade request itself
+	headers := make(http.Header)
+	
+	if proxmoxConfig.TokenID != "" && proxmoxConfig.Secret != "" {
+		// API token authentication - use Authorization header for WebSocket upgrade
+		authHeader := proxmoxClient.GetAuthHeader()
+		if authHeader != "" {
+			headers.Set("Authorization", authHeader)
+			log.Printf("[VPS Terminal WS] Using API token authentication (Authorization header + vncticket)")
+		}
+	} else {
+		// Password-based auth - use PVEAuthCookie cookie for WebSocket upgrade
+		authCookie, err := proxmoxClient.GetOrCreateTicketForWebSocket(ctx)
+		if err != nil {
+			log.Printf("[VPS Terminal WS] Failed to get ticket for WebSocket: %v", err)
+		} else if authCookie != "" {
+			cookie := &http.Cookie{
+				Name:  "PVEAuthCookie",
+				Value: authCookie,
+				Path:  "/",
+			}
+			jar.SetCookies(wsURL, []*http.Cookie{cookie})
+			log.Printf("[VPS Terminal WS] Using password-based auth (PVEAuthCookie cookie + vncticket)")
+		}
+	}
+
+	// Connect to Proxmox termproxy WebSocket
+	dialOptions := &websocket.DialOptions{
+		HTTPClient: httpClient,
+	}
+	if len(headers) > 0 {
+		dialOptions.HTTPHeader = headers
+	}
+
+	log.Printf("[VPS Terminal WS] Connecting to termproxy WebSocket: %s", termProxyInfo.WebSocketURL)
+
+	proxmoxConn, _, err := websocket.Dial(ctx, termProxyInfo.WebSocketURL, dialOptions)
+	if err != nil {
+		log.Printf("[VPS Terminal WS] Failed to connect to Proxmox termproxy: %v (URL: %s)", err, termProxyInfo.WebSocketURL)
+		sendError := func(msg string) { _ = writeJSON(vpsTerminalWSOutput{Type: "error", Message: msg}) }
+		sendError(fmt.Sprintf("Failed to connect to termproxy: %v. Falling back to SSH.", err))
+		return
+	}
+	defer proxmoxConn.Close(websocket.StatusInternalError, "")
+
+	log.Printf("[VPS Terminal WS] Connected to Proxmox termproxy WebSocket for VM %d", vmID)
+
+	// Send termproxy authentication message: "username:ticket\n"
+	// Per Proxmox documentation and source code, the username should be WITHOUT token ID
+	// Format: username@realm:ticket\n (both for password auth and API tokens)
+	// The token ID is not included in the termproxy authentication message
+	// Reference: Proxmox termproxy source code expects username@realm format
+	authUser := termProxyInfo.User
+	// Remove token ID if present (termproxy auth doesn't use token ID in username)
+	if idx := strings.Index(authUser, "!"); idx != -1 {
+		authUser = authUser[:idx]
+		log.Printf("[VPS Terminal WS] Removed token ID from username for termproxy auth: %s -> %s", termProxyInfo.User, authUser)
+	}
+	
+	authMsg := fmt.Sprintf("%s:%s\n", authUser, termProxyInfo.Ticket)
+	ticketPreview := termProxyInfo.Ticket
+	if len(ticketPreview) > 20 {
+		ticketPreview = ticketPreview[:20]
+	}
+	log.Printf("[VPS Terminal WS] Sending termproxy authentication: %s:%s...", authUser, ticketPreview)
+	if err := proxmoxConn.Write(ctx, websocket.MessageText, []byte(authMsg)); err != nil {
+		log.Printf("[VPS Terminal WS] Failed to send termproxy authentication: %v", err)
+		sendError := func(msg string) { _ = writeJSON(vpsTerminalWSOutput{Type: "error", Message: msg}) }
+		sendError(fmt.Sprintf("Failed to authenticate termproxy: %v", err))
+		return
+	}
+	
+	// Wait briefly for authentication response
+	// Proxmox may send an initial response or start sending terminal data immediately
+	time.Sleep(100 * time.Millisecond)
+
+	// Send connected message to client
+	if err := writeJSON(vpsTerminalWSOutput{Type: "connected"}); err != nil {
+		log.Printf("[VPS Terminal WS] Failed to send connected message: %v", err)
+		return
+	}
+
+	// Proxy messages bidirectionally using binary for better performance
+	errChan := make(chan error, 2)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Helper to safely send errors
+	sendError := func(err error) {
 		select {
-		case <-outputCtx.Done():
-			return
+		case errChan <- err:
+		case <-ctx.Done():
 		default:
+			// Channel might be full or closed, ignore
 		}
+	}
 
-		var msg vpsTerminalWSMessage
-		if err := wsjson.Read(ctx, conn, &msg); err != nil {
-			if websocket.CloseStatus(err) == websocket.StatusNormalClosure || websocket.CloseStatus(err) == websocket.StatusGoingAway {
-				return
-			}
-			log.Printf("[VPS Terminal WS] Read error: %v", err)
-			sendError("Failed to read message")
-			conn.Close(websocket.StatusProtocolError, "read error")
-			return
-		}
-
-		switch strings.ToLower(msg.Type) {
-		case "input":
-			if len(msg.Input) == 0 {
-				continue
-			}
-
-			inputBytes := make([]byte, len(msg.Input))
-			for i, v := range msg.Input {
-				inputBytes[i] = byte(v)
-			}
-			if _, err := sshConn.stdin.Write(inputBytes); err != nil {
-				log.Printf("[VPS Terminal WS] Failed to write input: %v", err)
-				sendError("Failed to send input")
-				conn.Close(websocket.StatusInternalError, "write error")
-				return
-			}
-
-		case "resize":
-			// Resize SSH terminal
-			if sshConn.session != nil && msg.Cols > 0 && msg.Rows > 0 {
-				cols = msg.Cols
-				rows = msg.Rows
-				if err := sshConn.session.WindowChange(rows, cols); err != nil {
-					log.Printf("[VPS Terminal WS] Failed to resize terminal: %v", err)
+	// Forward binary data from Proxmox termproxy to client (as binary)
+	go func() {
+		defer func() {
+			cancel() // Signal other goroutine to stop
+		}()
+		// Small delay to allow connection to stabilize
+		time.Sleep(50 * time.Millisecond)
+		
+		for {
+			messageType, data, err := proxmoxConn.Read(ctx)
+			if err != nil {
+				// Check if connection was closed
+				if websocket.CloseStatus(err) != -1 {
+					closeStatus := websocket.CloseStatus(err)
+					log.Printf("[VPS Terminal WS] Proxmox termproxy connection closed with status %d: %v", closeStatus, err)
+					sendError(nil)
+					return
+				}
+				// EOF or other read error
+				if err == io.EOF {
+					log.Printf("[VPS Terminal WS] Proxmox termproxy connection closed (EOF)")
 				} else {
-					log.Printf("[VPS Terminal WS] Resized terminal to %dx%d", msg.Cols, msg.Rows)
+					log.Printf("[VPS Terminal WS] Error reading from Proxmox termproxy: %v", err)
+				}
+				sendError(fmt.Errorf("failed to read from Proxmox termproxy: %w", err))
+				return
+			}
+
+			// Log message type for debugging
+			if messageType != websocket.MessageBinary && messageType != websocket.MessageText {
+				log.Printf("[VPS Terminal WS] Received unexpected message type: %d", messageType)
+			}
+
+			// Send data directly to client (xterm handles binary efficiently)
+			if err := writeBinary(data); err != nil {
+				log.Printf("[VPS Terminal WS] Failed to write to client: %v", err)
+				sendError(fmt.Errorf("failed to write to client: %w", err))
+				return
+			}
+		}
+	}()
+
+	// Forward input from client to Proxmox termproxy
+	go func() {
+		defer func() {
+			cancel() // Signal other goroutine to stop
+		}()
+		for {
+			var msg vpsTerminalWSMessage
+			if err := wsjson.Read(ctx, clientConn, &msg); err != nil {
+				if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
+					sendError(nil)
+					return
+				}
+				sendError(fmt.Errorf("failed to read from client: %w", err))
+				return
+			}
+
+			switch strings.ToLower(msg.Type) {
+			case "input":
+				// Convert input array to bytes
+				if len(msg.Input) > 0 {
+					inputBytes := make([]byte, len(msg.Input))
+					for i, v := range msg.Input {
+						inputBytes[i] = byte(v)
+					}
+					// Write binary data to Proxmox termproxy WebSocket
+					if err := proxmoxConn.Write(ctx, websocket.MessageBinary, inputBytes); err != nil {
+						sendError(fmt.Errorf("failed to write to Proxmox termproxy: %w", err))
+						return
+					}
+				}
+
+			case "resize":
+				// Terminal resize is handled automatically by Proxmox
+				_ = msg.Cols
+				_ = msg.Rows
+
+			case "ping":
+				_ = writeJSON(map[string]string{"type": "pong"})
+
+			default:
+				log.Printf("[VPS Terminal WS] Unknown message type from client: %s", msg.Type)
+			}
+		}
+	}()
+
+	// Wait for an error or context cancellation
+	select {
+	case <-ctx.Done():
+		log.Printf("[VPS Terminal WS] Context cancelled for termproxy WebSocket")
+	case err := <-errChan:
+		if err != nil {
+			log.Printf("[VPS Terminal WS] termproxy WebSocket proxy error: %v", err)
+			_ = writeJSON(vpsTerminalWSOutput{
+				Type:    "error",
+				Message: fmt.Sprintf("termproxy error: %v", err),
+			})
+		}
+	}
+}
+
+// handleProxmoxSerialConsole handles terminal access via Proxmox Serial Console WebSocket
+// This is the preferred method as it provides boot output and works even when VM is booting
+func (s *Service) handleProxmoxSerialConsole(
+	ctx context.Context,
+	clientConn *websocket.Conn,
+	serialWSURL string,
+	proxmoxClient *orchestrator.ProxmoxClient,
+	proxmoxConfig *orchestrator.ProxmoxConfig,
+	nodeName string,
+	vmID int,
+	vps *database.VPSInstance,
+	writeJSON func(interface{}) error,
+	writeBinary func([]byte) error,
+	cols, rows int,
+) {
+	// Parse the WebSocket URL to extract the base URL for cookie domain
+	wsURL, err := url.Parse(serialWSURL)
+	if err != nil {
+		log.Printf("[VPS Terminal WS] Failed to parse serial console URL: %v", err)
+		sendError := func(msg string) { _ = writeJSON(vpsTerminalWSOutput{Type: "error", Message: msg}) }
+		sendError(fmt.Sprintf("Invalid serial console URL: %v", err))
+		return
+	}
+
+	// Reuse the ProxmoxClient's HTTP client to preserve authentication state
+	// This ensures cookies and transport settings are consistent
+	baseHTTPClient := proxmoxClient.GetHTTPClient()
+	
+	// Create a new HTTP client with the same transport but our own cookie jar
+	// We need to add cookies for password-based auth if needed
+	jar := &cookieJar{
+		cookies: make(map[string]*http.Cookie),
+	}
+	
+	// Copy the transport from the base client
+	var tr *http.Transport
+	if baseHTTPClient.Transport != nil {
+		if baseTr, ok := baseHTTPClient.Transport.(*http.Transport); ok {
+			tr = baseTr
+		}
+	}
+	if tr == nil {
+		// Fallback: create new transport with same config
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+	}
+	
+	httpClient := &http.Client{
+		Transport: tr,
+		Timeout:   baseHTTPClient.Timeout,
+		Jar:       jar,
+	}
+	
+	// Proxmox WebSocket authentication per API documentation:
+	// The vncwebsocket endpoint requires:
+	// 1. A valid vncticket in the URL (from vncproxy call)
+	// 2. Authentication for the WebSocket upgrade request itself
+	// Reference: https://pve.proxmox.com/pve-docs-8/api-viewer/index.html#/nodes/{node}/qemu/{vmid}/vncwebsocket
+	// 
+	// For API tokens: Use Authorization header for WebSocket upgrade
+	// For password auth: Use PVEAuthCookie cookie for WebSocket upgrade
+	headers := make(http.Header)
+	
+	if proxmoxConfig.TokenID != "" && proxmoxConfig.Secret != "" {
+		// API token authentication - use Authorization header for WebSocket upgrade
+		authHeader := proxmoxClient.GetAuthHeader()
+		if authHeader != "" {
+			headers.Set("Authorization", authHeader)
+			log.Printf("[VPS Terminal WS] Using API token authentication (Authorization header + vncticket)")
+		}
+	} else {
+		// Password-based auth - use PVEAuthCookie cookie for WebSocket upgrade
+		authCookie, err := proxmoxClient.GetOrCreateTicketForWebSocket(ctx)
+		if err != nil {
+			log.Printf("[VPS Terminal WS] Failed to get ticket for WebSocket: %v", err)
+		} else if authCookie != "" {
+			cookie := &http.Cookie{
+				Name:  "PVEAuthCookie",
+				Value: authCookie,
+				Path:  "/",
+			}
+			jar.SetCookies(wsURL, []*http.Cookie{cookie})
+			log.Printf("[VPS Terminal WS] Using password-based auth (PVEAuthCookie cookie + vncticket)")
+		}
+	}
+
+	// Connect to Proxmox Serial Console WebSocket
+	dialOptions := &websocket.DialOptions{
+		HTTPClient: httpClient,
+	}
+	if len(headers) > 0 {
+		dialOptions.HTTPHeader = headers
+	}
+
+	log.Printf("[VPS Terminal WS] Connecting to serial console WebSocket: %s (auth: %s)", 
+		serialWSURL, 
+		func() string {
+			if proxmoxConfig.TokenID != "" {
+				return "API token"
+			}
+			if authCookie := proxmoxClient.GetAuthCookie(); authCookie != "" {
+				return "password (cookie)"
+			}
+			return "vncticket only"
+		}())
+
+	proxmoxConn, _, err := websocket.Dial(ctx, serialWSURL, dialOptions)
+	if err != nil {
+		log.Printf("[VPS Terminal WS] Failed to connect to Proxmox Serial Console: %v (URL: %s)", err, serialWSURL)
+		sendError := func(msg string) { _ = writeJSON(vpsTerminalWSOutput{Type: "error", Message: msg}) }
+		sendError(fmt.Sprintf("Failed to connect to serial console: %v. Falling back to SSH or guest agent.", err))
+		return
+	}
+	defer proxmoxConn.Close(websocket.StatusInternalError, "")
+
+	log.Printf("[VPS Terminal WS] Connected to Proxmox Serial Console WebSocket for VM %d", vmID)
+	// No authentication message needed - vncticket in URL is sufficient per Proxmox API docs
+
+	// Send connected message to client
+	if err := writeJSON(vpsTerminalWSOutput{Type: "connected"}); err != nil {
+		log.Printf("[VPS Terminal WS] Failed to send connected message: %v", err)
+		return
+	}
+
+	// Proxy messages bidirectionally using binary for better performance
+	errChan := make(chan error, 2)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Helper to safely send errors
+	sendError := func(err error) {
+		select {
+		case errChan <- err:
+		case <-ctx.Done():
+		default:
+			// Channel might be full or closed, ignore
+		}
+	}
+
+	// Forward binary data from Proxmox Serial Console to client (as binary)
+	// Note: When using vncwebsocket with websocket=1, we may initially receive RFB protocol
+	// handshake data ("RFB 003.008") which needs to be filtered out before serial console data
+	go func() {
+		defer func() {
+			cancel() // Signal other goroutine to stop
+		}()
+		// Small delay to allow connection to stabilize
+		time.Sleep(50 * time.Millisecond)
+		
+		// Track if we've seen the RFB handshake
+		seenRFBHandshake := false
+		buffer := make([]byte, 0, 4096)
+		
+		for {
+			messageType, data, err := proxmoxConn.Read(ctx)
+			if err != nil {
+				// Check if connection was closed
+				if websocket.CloseStatus(err) != -1 {
+					closeStatus := websocket.CloseStatus(err)
+					log.Printf("[VPS Terminal WS] Proxmox connection closed with status %d: %v", closeStatus, err)
+					sendError(nil)
+					return
+				}
+				// EOF or other read error
+				if err == io.EOF {
+					log.Printf("[VPS Terminal WS] Proxmox connection closed (EOF) - connection may have been rejected or closed by server")
+				} else {
+					log.Printf("[VPS Terminal WS] Error reading from Proxmox: %v", err)
+				}
+				sendError(fmt.Errorf("failed to read from Proxmox Serial Console: %w", err))
+				return
+			}
+
+			// Log message type for debugging
+			if messageType != websocket.MessageBinary && messageType != websocket.MessageText {
+				log.Printf("[VPS Terminal WS] Received unexpected message type: %d", messageType)
+			}
+
+			// Accumulate data in buffer
+			buffer = append(buffer, data...)
+			
+			// Check for RFB protocol handshake at the start
+			if !seenRFBHandshake && len(buffer) >= 12 {
+				// RFB handshake is "RFB 003.008\n" (12 bytes)
+				if string(buffer[:12]) == "RFB 003.008\n" {
+					log.Printf("[VPS Terminal WS] Detected RFB protocol handshake, filtering it out")
+					buffer = buffer[12:]
+					seenRFBHandshake = true
+				} else if len(buffer) > 100 {
+					// If we have more than 100 bytes and no RFB handshake, assume it's serial data
+					seenRFBHandshake = true
 				}
 			}
+			
+			// Once we've processed the RFB handshake (or determined there isn't one),
+			// send all accumulated data to the client
+			if seenRFBHandshake && len(buffer) > 0 {
+				if err := writeBinary(buffer); err != nil {
+					log.Printf("[VPS Terminal WS] Failed to write to client: %v", err)
+					sendError(fmt.Errorf("failed to write to client: %w", err))
+					return
+				}
+				buffer = buffer[:0] // Clear buffer
+			}
+		}
+	}()
 
-		case "ping":
-			_ = writeJSON(map[string]string{"type": "pong"})
+	// Forward input from client to Proxmox Serial Console
+	go func() {
+		defer func() {
+			cancel() // Signal other goroutine to stop
+		}()
+		for {
+			var msg vpsTerminalWSMessage
+			if err := wsjson.Read(ctx, clientConn, &msg); err != nil {
+				if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
+					sendError(nil)
+					return
+				}
+				sendError(fmt.Errorf("failed to read from client: %w", err))
+				return
+			}
 
-		default:
-			log.Printf("[VPS Terminal WS] Unknown message type: %s", msg.Type)
+			switch strings.ToLower(msg.Type) {
+			case "input":
+				// Convert input array to bytes
+				if len(msg.Input) > 0 {
+					inputBytes := make([]byte, len(msg.Input))
+					for i, v := range msg.Input {
+						inputBytes[i] = byte(v)
+					}
+					// Write binary data to Proxmox Serial Console WebSocket
+					if err := proxmoxConn.Write(ctx, websocket.MessageBinary, inputBytes); err != nil {
+						sendError(fmt.Errorf("failed to write to Proxmox Serial Console: %w", err))
+						return
+					}
+				}
+
+			case "resize":
+				// Serial console resize is handled automatically by Proxmox
+				// Terminal dimensions are stored for reference
+				_ = msg.Cols
+				_ = msg.Rows
+
+			case "ping":
+				_ = writeJSON(map[string]string{"type": "pong"})
+
+			default:
+				log.Printf("[VPS Terminal WS] Unknown message type from client: %s", msg.Type)
+			}
+		}
+	}()
+
+	// Wait for an error or context cancellation
+	select {
+	case <-ctx.Done():
+		log.Printf("[VPS Terminal WS] Context cancelled for Serial Console WebSocket")
+	case err := <-errChan:
+		if err != nil {
+			log.Printf("[VPS Terminal WS] Serial Console WebSocket proxy error: %v", err)
+			_ = writeJSON(vpsTerminalWSOutput{
+				Type:    "error",
+				Message: fmt.Sprintf("Serial Console error: %v", err),
+			})
 		}
 	}
 }
 
 // connectSSH establishes an SSH connection to the VPS
-func (s *Service) connectSSH(ctx context.Context, vpsIP, rootPassword string, cols, rows int) (*SSHConnection, error) {
+// If jumpHost and jumpUser are provided, connects via SSH jump host (bastion)
+func (s *Service) connectSSH(ctx context.Context, vpsIP, rootPassword string, cols, rows int, jumpHost, jumpUser string) (*SSHConnection, error) {
 	sshConfig := &ssh.ClientConfig{
 		User:            "root",
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
@@ -499,10 +997,69 @@ func (s *Service) connectSSH(ctx context.Context, vpsIP, rootPassword string, co
 		},
 	}
 
-	// Connect to SSH
-	client, err := ssh.Dial("tcp", net.JoinHostPort(vpsIP, "22"), sshConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to VPS via SSH: %w", err)
+	var client *ssh.Client
+	var err error
+
+	// If jump host is specified, connect via jump host
+	if jumpHost != "" {
+		// First, connect to jump host (Proxmox node)
+		// Note: SSH jump host requires either:
+		// 1. SSH keys configured between API server and Proxmox node (recommended)
+		// 2. Proxmox node SSH password (not available in current config)
+		// We'll try key-based auth first (using default SSH agent), then password
+		jumpConfig := &ssh.ClientConfig{
+			User:            jumpUser,
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			Timeout:         10 * time.Second,
+		}
+		
+		// Try SSH agent first (for key-based auth)
+		// Check if SSH_AUTH_SOCK is set (SSH agent available)
+		if sshAuthSock := os.Getenv("SSH_AUTH_SOCK"); sshAuthSock != "" {
+			conn, err := net.Dial("unix", sshAuthSock)
+			if err == nil {
+				sshAgent := agent.NewClient(conn)
+				jumpConfig.Auth = []ssh.AuthMethod{ssh.PublicKeysCallback(sshAgent.Signers)}
+			} else {
+				// SSH agent not available, try password
+				jumpConfig.Auth = []ssh.AuthMethod{
+					ssh.Password(rootPassword),
+				}
+			}
+		} else {
+			// No SSH agent, try password auth (may not work if Proxmox node password differs)
+			jumpConfig.Auth = []ssh.AuthMethod{
+				ssh.Password(rootPassword),
+			}
+		}
+
+		jumpClient, err := ssh.Dial("tcp", net.JoinHostPort(jumpHost, "22"), jumpConfig)
+		if err != nil {
+			// If both fail, return error with helpful message
+			return nil, fmt.Errorf("failed to connect to jump host %s: %w (SSH keys may need to be configured between API server and Proxmox node)", jumpHost, err)
+		}
+		defer jumpClient.Close()
+
+		// Now connect to VPS through jump host
+		conn, err := jumpClient.Dial("tcp", net.JoinHostPort(vpsIP, "22"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to dial VPS %s through jump host: %w", vpsIP, err)
+		}
+
+		// Create new connection to VPS via the forwarded connection
+		ncc, chans, reqs, err := ssh.NewClientConn(conn, vpsIP, sshConfig)
+		if err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("failed to create SSH client connection via jump host: %w", err)
+		}
+
+		client = ssh.NewClient(ncc, chans, reqs)
+	} else {
+		// Direct connection
+		client, err = ssh.Dial("tcp", net.JoinHostPort(vpsIP, "22"), sshConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to VPS via SSH: %w", err)
+		}
 	}
 
 	// Create session
@@ -512,11 +1069,14 @@ func (s *Service) connectSSH(ctx context.Context, vpsIP, rootPassword string, co
 		return nil, fmt.Errorf("failed to create SSH session: %w", err)
 	}
 
-	// Request PTY
+	// Request PTY with xterm-256color for better compatibility
 	if err := session.RequestPty("xterm-256color", rows, cols, ssh.TerminalModes{
 		ssh.ECHO:          1,
 		ssh.TTY_OP_ISPEED: 14400,
 		ssh.TTY_OP_OSPEED: 14400,
+		ssh.IGNCR:         0,
+		ssh.ICRNL:         1,
+		ssh.ONLCR:         1,
 	}); err != nil {
 		session.Close()
 		client.Close()
@@ -634,7 +1194,7 @@ func (s *Service) handleProxmoxGuestAgentTerminal(
 						command := strings.TrimSpace(string(commandBuffer))
 						commandBuffer = commandBuffer[:0]
 
-						// Echo newline (command is already echoed by frontend terminal via local echo)
+						// Echo newline
 						echoData := []int{13, 10} // \r\n
 						_ = writeJSON(vpsTerminalWSOutput{Type: "output", Data: echoData})
 
@@ -712,17 +1272,13 @@ func (s *Service) handleProxmoxGuestAgentTerminal(
 						_ = writeJSON(vpsTerminalWSOutput{Type: "output", Data: bsData})
 					}
 				} else if b >= 32 && b <= 126 {
-					// Printable ASCII characters (space through ~)
-					// Add to command buffer
-					// Frontend terminal handles local echo, so we don't need to echo here
+					// Printable ASCII characters
 					commandBuffer = append(commandBuffer, b)
 				}
-				// Ignore other control characters
 			}
 
 		case "resize":
-			// Terminal resize (not fully supported via guest agent, but acknowledge)
-			// Note: Guest agent doesn't support dynamic terminal resizing
+			// Terminal resize (not fully supported via guest agent)
 			_ = msg.Cols
 			_ = msg.Rows
 
@@ -737,8 +1293,6 @@ func (s *Service) handleProxmoxGuestAgentTerminal(
 
 // executeGuestAgentCommand executes a command via Proxmox guest agent
 func (s *Service) executeGuestAgentCommand(ctx context.Context, proxmoxClient *orchestrator.ProxmoxClient, nodeName string, vmID int, command string, workingDir string) (string, error) {
-	// Use guest agent to execute command
-	// Format: /nodes/{node}/qemu/{vmid}/agent/exec
 	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/agent/exec", nodeName, vmID)
 
 	// Prepare command with working directory
@@ -780,7 +1334,6 @@ func (s *Service) executeGuestAgentCommand(ctx context.Context, proxmoxClient *o
 	}
 
 	// Wait for command to complete and get output
-	// Poll for command status
 	statusEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/agent/exec-status", nodeName, vmID)
 	statusBody := map[string]interface{}{
 		"pid": execResp.Data.Pid,
@@ -870,335 +1423,26 @@ func (s *Service) getVPSRootPassword(ctx context.Context, vpsID string) (string,
 	return "", fmt.Errorf("root password not found in VM config")
 }
 
-// handleVNCWebSocketTerminal handles terminal access via Proxmox VNC WebSocket
-// This provides full terminal access including boot output, similar to Proxmox web UI
-func (s *Service) handleVNCWebSocketTerminal(
-	ctx context.Context,
-	clientConn *websocket.Conn,
-	vncWSURL string,
-	proxmoxClient *orchestrator.ProxmoxClient,
-	nodeName string,
-	vmID int,
-	vps *database.VPSInstance,
-	writeJSON func(interface{}) error,
-	initMsg vpsTerminalWSMessage,
-	cols, rows int,
-) {
-	// Parse VNC WebSocket URL
-	u, err := url.Parse(vncWSURL)
-	if err != nil {
-		log.Printf("[VPS Terminal WS] Invalid VNC WebSocket URL: %v", err)
-		sendError := func(msg string) { _ = writeJSON(vpsTerminalWSOutput{Type: "error", Message: msg}) }
-		sendError("Failed to parse VNC WebSocket URL")
-		return
-	}
-	_ = u // Suppress unused variable warning
+// cookieJar is a simple cookie jar implementation for WebSocket connections
+type cookieJar struct {
+	cookies map[string]*http.Cookie
+	mu      sync.Mutex
+}
 
-	// Get Proxmox config for authentication
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		log.Printf("[VPS Terminal WS] Failed to get Proxmox config: %v", err)
-		sendError := func(msg string) { _ = writeJSON(vpsTerminalWSOutput{Type: "error", Message: msg}) }
-		sendError("Failed to get Proxmox configuration")
-		return
-	}
-
-	// Prepare headers for Proxmox VNC WebSocket connection
-	headers := make(http.Header)
-	if proxmoxConfig.TokenID != "" && proxmoxConfig.Secret != "" {
-		// Use API token authentication
-		// Format: PVEAPIToken=USER@REALM!TOKENID=SECRET
-		authHeader := fmt.Sprintf("PVEAPIToken=%s!%s=%s", proxmoxConfig.Username, proxmoxConfig.TokenID, proxmoxConfig.Secret)
-		headers.Set("Authorization", authHeader)
-	} else {
-		// Password-based auth would need a ticket, but VNC WebSocket typically uses token
-		log.Printf("[VPS Terminal WS] Warning: VNC WebSocket requires API token authentication")
-		sendError := func(msg string) { _ = writeJSON(vpsTerminalWSOutput{Type: "error", Message: msg}) }
-		sendError("VNC WebSocket requires API token authentication")
-		return
-	}
-
-	// Connect to Proxmox VNC WebSocket
-	dialOptions := &websocket.DialOptions{
-		HTTPClient: &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true, // Proxmox often uses self-signed certs
-				},
-			},
-		},
-		HTTPHeader: headers,
-	}
-
-	proxmoxConn, _, err := websocket.Dial(ctx, vncWSURL, dialOptions)
-	if err != nil {
-		log.Printf("[VPS Terminal WS] Failed to connect to Proxmox VNC WebSocket: %v", err)
-		sendError := func(msg string) { _ = writeJSON(vpsTerminalWSOutput{Type: "error", Message: msg}) }
-		sendError(fmt.Sprintf("Failed to connect to Proxmox VNC: %v", err))
-		return
-	}
-	defer proxmoxConn.Close(websocket.StatusInternalError, "")
-
-	log.Printf("[VPS Terminal WS] Connected to Proxmox VNC WebSocket for VM %d", vmID)
-
-	// Send connected message to client
-	if err := writeJSON(vpsTerminalWSOutput{Type: "connected"}); err != nil {
-		log.Printf("[VPS Terminal WS] Failed to send connected message: %v", err)
-		return
-	}
-
-	// Proxy messages bidirectionally
-	errChan := make(chan error, 2)
-
-	// Forward binary data from Proxmox VNC to client (as JSON with data array)
-	go func() {
-		defer close(errChan)
-		for {
-			_, data, err := proxmoxConn.Read(ctx)
-			if err != nil {
-				if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
-					errChan <- nil
-					return
-				}
-				errChan <- fmt.Errorf("failed to read from Proxmox VNC: %w", err)
-				return
-			}
-
-			// Convert binary data to JSON format (array of ints)
-			dataInts := make([]int, len(data))
-			for i, b := range data {
-				dataInts[i] = int(b)
-			}
-
-			if err := writeJSON(vpsTerminalWSOutput{
-				Type: "output",
-				Data: dataInts,
-			}); err != nil {
-				errChan <- fmt.Errorf("failed to write to client: %w", err)
-				return
-			}
-		}
-	}()
-
-	// Forward input from client to Proxmox VNC
-	go func() {
-		for {
-			var msg vpsTerminalWSMessage
-			if err := wsjson.Read(ctx, clientConn, &msg); err != nil {
-				if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
-					errChan <- nil
-					return
-				}
-				errChan <- fmt.Errorf("failed to read from client: %w", err)
-				return
-			}
-
-			switch strings.ToLower(msg.Type) {
-			case "input":
-				// Convert input array to bytes
-				if len(msg.Input) > 0 {
-					inputBytes := make([]byte, len(msg.Input))
-					for i, v := range msg.Input {
-						inputBytes[i] = byte(v)
-					}
-					// Write binary data to Proxmox VNC WebSocket
-					if err := proxmoxConn.Write(ctx, websocket.MessageBinary, inputBytes); err != nil {
-						errChan <- fmt.Errorf("failed to write to Proxmox VNC: %w", err)
-						return
-					}
-				}
-
-			case "resize":
-				// VNC WebSocket handles resize automatically, but we can acknowledge it
-				// Note: VNC resize is typically handled by the VNC protocol itself
-
-			case "ping":
-				_ = writeJSON(map[string]string{"type": "pong"})
-
-			default:
-				log.Printf("[VPS Terminal WS] Unknown message type from client: %s", msg.Type)
-			}
-		}
-	}()
-
-	// Wait for an error or context cancellation
-	select {
-	case <-ctx.Done():
-		log.Printf("[VPS Terminal WS] Context cancelled for VNC WebSocket")
-	case err := <-errChan:
-		if err != nil {
-			log.Printf("[VPS Terminal WS] VNC WebSocket proxy error: %v", err)
-			_ = writeJSON(vpsTerminalWSOutput{
-				Type:    "error",
-				Message: fmt.Sprintf("VNC WebSocket error: %v", err),
-			})
-		}
+func (j *cookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	for _, cookie := range cookies {
+		j.cookies[cookie.Name] = cookie
 	}
 }
 
-// handleSerialConsoleWebSocketTerminal handles terminal access via Proxmox Serial Console WebSocket
-// This provides text-based terminal access including boot output, works even when VM is booting
-func (s *Service) handleSerialConsoleWebSocketTerminal(
-	ctx context.Context,
-	clientConn *websocket.Conn,
-	serialWSURL string,
-	proxmoxClient *orchestrator.ProxmoxClient,
-	nodeName string,
-	vmID int,
-	vps *database.VPSInstance,
-	writeJSON func(interface{}) error,
-	initMsg vpsTerminalWSMessage,
-	cols, rows int,
-) {
-	// Get Proxmox config for authentication
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		log.Printf("[VPS Terminal WS] Failed to get Proxmox config: %v", err)
-		sendError := func(msg string) { _ = writeJSON(vpsTerminalWSOutput{Type: "error", Message: msg}) }
-		sendError("Failed to get Proxmox configuration")
-		return
+func (j *cookieJar) Cookies(u *url.URL) []*http.Cookie {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	var result []*http.Cookie
+	for _, cookie := range j.cookies {
+		result = append(result, cookie)
 	}
-
-	// Prepare headers for Proxmox Serial Console WebSocket connection
-	// Proxmox serial console requires proper authentication for the WebSocket upgrade
-	// The vncticket in URL authenticates the VNC/Serial console itself,
-	// but we still need to authenticate the HTTP WebSocket upgrade request
-	headers := make(http.Header)
-
-	// Use API token authentication for WebSocket upgrade
-	// Format: PVEAPIToken=USER@REALM!TOKENID=SECRET
-	if proxmoxConfig.TokenID != "" && proxmoxConfig.Secret != "" {
-		authHeader := fmt.Sprintf("PVEAPIToken=%s!%s=%s", proxmoxConfig.Username, proxmoxConfig.TokenID, proxmoxConfig.Secret)
-		headers.Set("Authorization", authHeader)
-	} else {
-		// For password-based auth, try to use the proxmoxClient's ticket/cookie
-		// But we can't access it directly, so we'll need to create a new request to get cookies
-		// For now, try without additional headers - vncticket in URL might be enough
-		// If this fails, we'll fall back to SSH or guest agent
-		log.Printf("[VPS Terminal WS] Using password-based auth - serial console may require API token or cookies")
-	}
-
-	// Connect to Proxmox Serial Console WebSocket
-	// Note: vncticket in URL is the primary authentication for VNC/Serial console
-	// But we still need to authenticate the WebSocket upgrade request
-	dialOptions := &websocket.DialOptions{
-		HTTPClient: &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true, // Proxmox often uses self-signed certs
-				},
-			},
-		},
-		HTTPHeader: headers,
-	}
-
-	proxmoxConn, _, err := websocket.Dial(ctx, serialWSURL, dialOptions)
-	if err != nil {
-		log.Printf("[VPS Terminal WS] Failed to connect to Proxmox Serial Console WebSocket: %v", err)
-		// Serial console failed - this is expected if Proxmox doesn't support it or auth fails
-		// Send error to client but don't close - let them know we're falling back
-		sendError := func(msg string) { _ = writeJSON(vpsTerminalWSOutput{Type: "error", Message: msg}) }
-		sendError(fmt.Sprintf("Serial Console not available: %v. Falling back to SSH or guest agent.", err))
-		// Note: We return here, but the caller should handle fallback
-		// Actually, since we return, the caller won't get a chance to fall back
-		// Let's just return and let the normal flow handle SSH/guest agent
-		return
-	}
-	defer proxmoxConn.Close(websocket.StatusInternalError, "")
-
-	log.Printf("[VPS Terminal WS] Connected to Proxmox Serial Console WebSocket for VM %d", vmID)
-
-	// Send connected message to client
-	if err := writeJSON(vpsTerminalWSOutput{Type: "connected"}); err != nil {
-		log.Printf("[VPS Terminal WS] Failed to send connected message: %v", err)
-		return
-	}
-
-	// Proxy messages bidirectionally
-	errChan := make(chan error, 2)
-
-	// Forward binary data from Proxmox Serial Console to client (as JSON with data array)
-	go func() {
-		defer close(errChan)
-		for {
-			_, data, err := proxmoxConn.Read(ctx)
-			if err != nil {
-				if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
-					errChan <- nil
-					return
-				}
-				errChan <- fmt.Errorf("failed to read from Proxmox Serial Console: %w", err)
-				return
-			}
-
-			// Convert binary data to JSON format (array of ints)
-			dataInts := make([]int, len(data))
-			for i, b := range data {
-				dataInts[i] = int(b)
-			}
-
-			if err := writeJSON(vpsTerminalWSOutput{
-				Type: "output",
-				Data: dataInts,
-			}); err != nil {
-				errChan <- fmt.Errorf("failed to write to client: %w", err)
-				return
-			}
-		}
-	}()
-
-	// Forward input from client to Proxmox Serial Console
-	go func() {
-		for {
-			var msg vpsTerminalWSMessage
-			if err := wsjson.Read(ctx, clientConn, &msg); err != nil {
-				if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
-					errChan <- nil
-					return
-				}
-				errChan <- fmt.Errorf("failed to read from client: %w", err)
-				return
-			}
-
-			switch strings.ToLower(msg.Type) {
-			case "input":
-				// Convert input array to bytes
-				if len(msg.Input) > 0 {
-					inputBytes := make([]byte, len(msg.Input))
-					for i, v := range msg.Input {
-						inputBytes[i] = byte(v)
-					}
-					// Write binary data to Proxmox Serial Console WebSocket
-					if err := proxmoxConn.Write(ctx, websocket.MessageBinary, inputBytes); err != nil {
-						errChan <- fmt.Errorf("failed to write to Proxmox Serial Console: %w", err)
-						return
-					}
-				}
-
-			case "resize":
-				// Serial Console WebSocket handles resize automatically, but we can acknowledge it
-				// Note: Serial console resize is typically handled by the protocol itself
-
-			case "ping":
-				_ = writeJSON(map[string]string{"type": "pong"})
-
-			default:
-				log.Printf("[VPS Terminal WS] Unknown message type from client: %s", msg.Type)
-			}
-		}
-	}()
-
-	// Wait for an error or context cancellation
-	select {
-	case <-ctx.Done():
-		log.Printf("[VPS Terminal WS] Context cancelled for Serial Console WebSocket")
-	case err := <-errChan:
-		if err != nil {
-			log.Printf("[VPS Terminal WS] Serial Console WebSocket proxy error: %v", err)
-			_ = writeJSON(vpsTerminalWSOutput{
-				Type:    "error",
-				Message: fmt.Sprintf("Serial Console WebSocket error: %v", err),
-			})
-		}
-	}
+	return result
 }
