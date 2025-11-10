@@ -458,16 +458,35 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 	writer.WriteString(fmt.Sprintf("interface=%s\n", m.interfaceName))
 	writer.WriteString("bind-interfaces\n\n")
 	
+	// DNS server configuration
+	// Enable DNS server on port 53
+	writer.WriteString("port=53\n")
+	// Set domain for VPS network (optional, can be configured via env var)
+	domain := os.Getenv("GATEWAY_DHCP_DOMAIN")
+	if domain == "" {
+		domain = "vps.local" // Default domain
+	}
+	writer.WriteString(fmt.Sprintf("domain=%s\n", domain))
+	// Enable hostname expansion (allows hostname.domain resolution)
+	writer.WriteString("expand-hosts\n")
+	// Make dnsmasq authoritative for the local domain
+	writer.WriteString(fmt.Sprintf("local=/%s/\n", domain))
+	// Enable reading hostnames from hosts file
+	writer.WriteString(fmt.Sprintf("addn-hosts=%s\n", m.hostsFile))
+	writer.WriteString("\n")
+	
 	// DHCP configuration
 	// Convert subnet mask to CIDR notation (e.g., 255.255.255.0 -> 24)
 	ones, _ := m.subnetMask.Size()
 	writer.WriteString(fmt.Sprintf("dhcp-range=%s,%s,%d,12h\n", m.poolStart.String(), m.poolEnd.String(), ones))
 	writer.WriteString(fmt.Sprintf("dhcp-option=option:router,%s\n", m.gateway.String()))
 	
-	// DNS servers
+	// DNS servers (for upstream DNS resolution)
 	for _, dns := range m.dnsServers {
 		optionNum := 6 // DNS option
 		writer.WriteString(fmt.Sprintf("dhcp-option=option:%d,%s\n", optionNum, dns.String()))
+		// Also add as upstream DNS server for dnsmasq itself
+		writer.WriteString(fmt.Sprintf("server=%s\n", dns.String()))
 	}
 	
 	// File paths
