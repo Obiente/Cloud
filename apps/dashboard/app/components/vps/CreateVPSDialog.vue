@@ -65,6 +65,18 @@
           </OuiSelect>
         </OuiStack>
 
+        <!-- VPS Size Description -->
+        <OuiCard variant="outline" v-if="selectedSize && selectedSize.catalogDescription">
+          <OuiCardBody>
+            <OuiStack gap="xs">
+              <OuiText size="sm" weight="semibold">{{ selectedSize.label }}</OuiText>
+              <OuiText size="xs" color="secondary">
+                {{ selectedSize.catalogDescription }}
+              </OuiText>
+            </OuiStack>
+          </OuiCardBody>
+        </OuiCard>
+
         <!-- Summary -->
         <OuiCard variant="outline" v-if="selectedSize">
           <OuiCardBody>
@@ -142,6 +154,7 @@
     label: string;
     value: string;
     description: string;
+    catalogDescription?: string;
     minimumPaymentCents: bigint | number;
     cpuCores: number;
     memoryBytes: bigint | number;
@@ -244,6 +257,7 @@
           label: s.name,
           value: s.id,
           description: `${s.cpuCores} CPU • ${formatMemory(s.memoryBytes)} RAM • ${formatDisk(s.diskBytes)} Storage`,
+          catalogDescription: s.description || undefined,
           minimumPaymentCents: s.minimumPaymentCents || 0,
           cpuCores: s.cpuCores,
           memoryBytes: s.memoryBytes,

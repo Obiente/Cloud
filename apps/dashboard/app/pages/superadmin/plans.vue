@@ -39,6 +39,10 @@
                 <span class="font-mono ml-1">{{ row.deploymentsMax || 0 }} max</span>
               </div>
               <div class="text-sm">
+                <span class="text-text-secondary">VPS Instances:</span>
+                <span class="font-mono ml-1">{{ row.maxVpsInstances || 0 }} max</span>
+              </div>
+              <div class="text-sm">
                 <span class="text-text-secondary">Bandwidth:</span>
                 <span class="font-mono ml-1">{{ formatBytes(Number(row.bandwidthBytesMonth || 0)) }}/mo</span>
               </div>
@@ -131,6 +135,11 @@
             <OuiText size="xs" color="muted" class="mt-1">0 = unlimited</OuiText>
           </OuiField>
 
+          <OuiField label="Max VPS Instances" required>
+            <OuiInput v-model="planForm.maxVpsInstances" type="number" min="0" placeholder="0" />
+            <OuiText size="xs" color="muted" class="mt-1">0 = unlimited</OuiText>
+          </OuiField>
+
           <OuiField label="Bandwidth per Month (bytes)" required>
             <OuiInput v-model="planForm.bandwidthBytesMonth" type="number" min="0" placeholder="0" />
             <OuiText size="xs" color="muted" class="mt-1">0 = unlimited</OuiText>
@@ -204,6 +213,7 @@ const planForm = ref({
   cpuCores: "",
   memoryBytes: "",
   deploymentsMax: "",
+  maxVpsInstances: "",
   bandwidthBytesMonth: "",
   storageBytes: "",
   minimumPaymentCents: "",
@@ -242,6 +252,7 @@ const openCreateDialog = () => {
     cpuCores: "",
     memoryBytes: "",
     deploymentsMax: "",
+    maxVpsInstances: "",
     bandwidthBytesMonth: "",
     storageBytes: "",
     minimumPaymentCents: "",
@@ -258,6 +269,7 @@ const openEditDialog = (plan: any) => {
     cpuCores: plan.cpuCores != null ? String(plan.cpuCores) : "",
     memoryBytes: plan.memoryBytes != null ? String(plan.memoryBytes) : "",
     deploymentsMax: plan.deploymentsMax != null ? String(plan.deploymentsMax) : "",
+    maxVpsInstances: plan.maxVpsInstances != null ? String(plan.maxVpsInstances) : "",
     bandwidthBytesMonth: plan.bandwidthBytesMonth != null ? String(plan.bandwidthBytesMonth) : "",
     storageBytes: plan.storageBytes != null ? String(plan.storageBytes) : "",
     minimumPaymentCents: plan.minimumPaymentCents != null ? String(Number(plan.minimumPaymentCents) / 100) : "", // Convert to dollars for input
@@ -283,6 +295,7 @@ const savePlan = async () => {
     const cpuCores = Number(planForm.value.cpuCores) || 0;
     const memoryBytes = Number(planForm.value.memoryBytes) || 0;
     const deploymentsMax = Number(planForm.value.deploymentsMax) || 0;
+    const maxVpsInstances = Number(planForm.value.maxVpsInstances) || 0;
     const bandwidthBytesMonth = Number(planForm.value.bandwidthBytesMonth) || 0;
     const storageBytes = Number(planForm.value.storageBytes) || 0;
     const minimumPaymentCents = Math.round((Number(planForm.value.minimumPaymentCents) || 0) * 100);
@@ -297,6 +310,7 @@ const savePlan = async () => {
       if (cpuCores !== undefined) updateRequest.cpuCores = cpuCores;
       if (memoryBytes !== undefined) updateRequest.memoryBytes = BigInt(memoryBytes);
       if (deploymentsMax !== undefined) updateRequest.deploymentsMax = deploymentsMax;
+      if (maxVpsInstances !== undefined) updateRequest.maxVpsInstances = maxVpsInstances;
       if (bandwidthBytesMonth !== undefined) updateRequest.bandwidthBytesMonth = BigInt(bandwidthBytesMonth);
       if (storageBytes !== undefined) updateRequest.storageBytes = BigInt(storageBytes);
       if (minimumPaymentCents !== undefined) updateRequest.minimumPaymentCents = BigInt(minimumPaymentCents);
@@ -311,6 +325,7 @@ const savePlan = async () => {
         cpuCores: cpuCores,
         memoryBytes: BigInt(memoryBytes),
         deploymentsMax: deploymentsMax,
+        maxVpsInstances: maxVpsInstances,
         bandwidthBytesMonth: BigInt(bandwidthBytesMonth),
         storageBytes: BigInt(storageBytes),
         minimumPaymentCents: BigInt(minimumPaymentCents),

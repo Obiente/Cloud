@@ -167,6 +167,7 @@ export const billingAccounts = pgTable("billing_accounts", {
   companyName: varchar("company_name", { length: 255 }),
   taxId: varchar("tax_id", { length: 100 }),
   address: jsonb("address"),
+  billingDate: integer("billing_date"), // Day of month (1-31) when billing occurs
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

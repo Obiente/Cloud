@@ -3,7 +3,7 @@
     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
       <OuiStack gap="xs">
         <OuiText tag="h2" size="2xl" weight="extrabold">VPS Size Catalog</OuiText>
-        <OuiText color="muted">Manage VPS instance sizes and pricing.</OuiText>
+        <OuiText color="muted">Manage VPS instance sizes and minimum payment requirements.</OuiText>
       </OuiStack>
       <OuiButton @click="openCreateDialog">
         <PlusIcon class="h-4 w-4" />
@@ -46,11 +46,11 @@
               </div>
             </OuiStack>
           </template>
-          <template #cell-price="{ value }">
+          <template #cell-minimumPayment="{ value }">
             <span class="font-mono">
               <OuiCurrency :value="typeof value === 'bigint' ? Number(value) / 100 : (Number(value) || 0) / 100" />
             </span>
-            <span class="text-text-muted text-xs ml-1">/mo</span>
+            <span v-if="!value || value === 0n || value === 0" class="text-text-muted text-xs ml-1">(no requirement)</span>
           </template>
           <template #cell-status="{ row }">
             <OuiBadge :variant="row.available ? 'success' : 'secondary'">
@@ -146,18 +146,18 @@
         <OuiDivider />
 
         <OuiStack gap="md">
-          <OuiText size="sm" weight="medium">Pricing</OuiText>
+          <OuiText size="sm" weight="medium">Minimum Payment Requirement</OuiText>
           
-          <OuiField label="Monthly Price (USD)" required>
+          <OuiField label="Minimum Payment (USD)">
             <OuiInput
-              v-model="sizeForm.priceUSD"
+              v-model="sizeForm.minimumPaymentUSD"
               type="number"
               step="0.01"
               min="0"
-              placeholder="5.00"
+              placeholder="0.00"
             />
             <OuiText size="xs" color="muted" class="mt-1">
-              Monthly price in USD (will be converted to cents).
+              Minimum total payment (in USD) required for organizations to create VPS instances of this size. Set to 0 for no requirement. This helps ensure payment security before allowing larger VPS instances.
             </OuiText>
           </OuiField>
         </OuiStack>
@@ -222,7 +222,7 @@ const sizeForm = ref({
   memoryGB: "",
   diskGB: "",
   bandwidthGB: "",
-  priceUSD: "",
+  minimumPaymentUSD: "",
   available: true,
   region: "",
 });
@@ -230,13 +230,18 @@ const sizeForm = ref({
 const tableColumns = computed(() => [
   { key: "name", label: "Name", defaultWidth: 200, minWidth: 150 },
   { key: "specs", label: "Specifications", defaultWidth: 250, minWidth: 200 },
-  { key: "price", label: "Price", defaultWidth: 120, minWidth: 100 },
+  { key: "minimumPayment", label: "Min Payment", defaultWidth: 150, minWidth: 120 },
   { key: "status", label: "Status", defaultWidth: 120, minWidth: 100 },
   { key: "region", label: "Region", defaultWidth: 150, minWidth: 120 },
   { key: "actions", label: "Actions", defaultWidth: 150, minWidth: 120, resizable: false },
 ]);
 
-const tableRows = computed(() => sizes.value);
+const tableRows = computed(() => 
+  sizes.value.map(size => ({
+    ...size,
+    minimumPayment: size.minimumPaymentCents || 0,
+  }))
+);
 
 const { formatBytes } = useUtils();
 
@@ -262,7 +267,7 @@ const openCreateDialog = () => {
     memoryGB: "",
     diskGB: "",
     bandwidthGB: "",
-    priceUSD: "",
+    minimumPaymentUSD: "",
     available: true,
     region: "",
   };
@@ -281,7 +286,7 @@ const openEditDialog = (size: any) => {
     bandwidthGB: size.bandwidthBytesMonth != null && size.bandwidthBytesMonth !== 0n && size.bandwidthBytesMonth !== 0
       ? String(Number(size.bandwidthBytesMonth) / (1024 * 1024 * 1024))
       : "",
-    priceUSD: size.priceCentsPerMonth != null ? String(Number(size.priceCentsPerMonth) / 100) : "",
+    minimumPaymentUSD: size.minimumPaymentCents != null ? String(Number(size.minimumPaymentCents) / 100) : "",
     available: size.available ?? true,
     region: size.region || "",
   };
@@ -314,8 +319,8 @@ const saveSize = async () => {
     toast.error("Disk space must be greater than 0");
     return;
   }
-  if (!sizeForm.value.priceUSD || Number(sizeForm.value.priceUSD) < 0) {
-    toast.error("Price must be 0 or greater");
+  if (sizeForm.value.minimumPaymentUSD && Number(sizeForm.value.minimumPaymentUSD) < 0) {
+    toast.error("Minimum payment must be 0 or greater");
     return;
   }
 
@@ -328,7 +333,9 @@ const saveSize = async () => {
     const bandwidthBytesMonth = sizeForm.value.bandwidthGB && Number(sizeForm.value.bandwidthGB) > 0
       ? BigInt(Math.round(Number(sizeForm.value.bandwidthGB) * 1024 * 1024 * 1024))
       : BigInt(0);
-    const priceCentsPerMonth = BigInt(Math.round(Number(sizeForm.value.priceUSD) * 100));
+    const minimumPaymentCents = sizeForm.value.minimumPaymentUSD
+      ? BigInt(Math.round(Number(sizeForm.value.minimumPaymentUSD) * 100))
+      : BigInt(0);
 
     if (editingSize.value) {
       const updateRequest: any = {
@@ -340,7 +347,7 @@ const saveSize = async () => {
       if (memoryBytes > 0n) updateRequest.memoryBytes = memoryBytes;
       if (diskBytes > 0n) updateRequest.diskBytes = diskBytes;
       if (bandwidthBytesMonth !== undefined) updateRequest.bandwidthBytesMonth = bandwidthBytesMonth;
-      if (priceCentsPerMonth >= 0n) updateRequest.priceCentsPerMonth = priceCentsPerMonth;
+      if (minimumPaymentCents !== undefined) updateRequest.minimumPaymentCents = minimumPaymentCents;
       if (sizeForm.value.available !== undefined) updateRequest.available = sizeForm.value.available;
       if (sizeForm.value.region !== undefined) updateRequest.region = sizeForm.value.region;
 
@@ -355,7 +362,7 @@ const saveSize = async () => {
         memoryBytes: memoryBytes,
         diskBytes: diskBytes,
         bandwidthBytesMonth: bandwidthBytesMonth,
-        priceCentsPerMonth: priceCentsPerMonth,
+        minimumPaymentCents: minimumPaymentCents,
         available: sizeForm.value.available,
         region: sizeForm.value.region || "",
       });

@@ -1132,7 +1132,7 @@
                   <OuiText size="sm" color="muted">
                     Your organization has resource limits based on your plan. Adding credits or making payments may automatically upgrade your plan.
                   </OuiText>
-                  <OuiGrid cols="1" cols-md="2" cols-lg="5" gap="md">
+                  <OuiGrid cols="1" cols-md="2" cols-lg="6" gap="md">
                     <OuiStack gap="xs">
                       <OuiText size="xs" color="muted">CPU Cores</OuiText>
                       <OuiText size="sm" weight="medium">
@@ -1149,6 +1149,12 @@
                       <OuiText size="xs" color="muted">Max Deployments</OuiText>
                       <OuiText size="sm" weight="medium">
                         {{ currentOrganization.planInfo.deploymentsMax || 'Unlimited' }}
+                      </OuiText>
+                    </OuiStack>
+                    <OuiStack gap="xs">
+                      <OuiText size="xs" color="muted">Max VPS Instances</OuiText>
+                      <OuiText size="sm" weight="medium">
+                        {{ currentOrganization.planInfo.maxVpsInstances || 'Unlimited' }}
                       </OuiText>
                     </OuiStack>
                     <OuiStack gap="xs">
