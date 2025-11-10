@@ -5,14 +5,21 @@ WORKDIR /build
 # Install build dependencies
 RUN apk add --no-cache git make
 
-# Copy go mod files
-COPY go.mod go.sum* ./
-RUN go mod download
+# Copy go mod files (build context is repository root)
+COPY apps/vps-gateway/go.mod apps/vps-gateway/go.sum ./apps/vps-gateway/
+
+# Download dependencies (this layer will be cached unless go.mod/go.sum change)
+WORKDIR /build/apps/vps-gateway
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go mod download
 
 # Copy source code
-COPY . .
+WORKDIR /build
+COPY apps/vps-gateway/ ./apps/vps-gateway/
 
 # Build the application
+WORKDIR /build/apps/vps-gateway
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o vps-gateway ./main.go
 
 # Final stage
