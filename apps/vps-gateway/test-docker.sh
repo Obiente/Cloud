@@ -7,7 +7,7 @@ set -e
 
 CONTAINER_NAME="${CONTAINER_NAME:-vps-gateway-test}"
 API_SECRET="${GATEWAY_API_SECRET:-test-secret-key-change-in-production}"
-GATEWAY_URL="${GATEWAY_URL:-localhost:8080}"
+GATEWAY_URL="${GATEWAY_URL:-localhost:1537}"
 METRICS_URL="${METRICS_URL:-localhost:9091}"
 
 echo "=== Testing VPS Gateway Service (Docker) ==="

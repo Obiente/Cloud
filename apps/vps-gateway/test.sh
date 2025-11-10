@@ -5,7 +5,7 @@
 
 set -e
 
-GATEWAY_URL="localhost:8080"
+GATEWAY_URL="localhost:1537"
 METRICS_URL="localhost:9091"
 API_SECRET="${GATEWAY_API_SECRET:-test-secret-key-change-in-production}"
 

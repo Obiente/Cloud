@@ -33,9 +33,10 @@ The service is configured via environment variables:
 
 - `GATEWAY_GRPC_PORT`: gRPC server port (defaults to `1537` - OCG - Obiente Cloud Gateway)
 - `GATEWAY_DHCP_DNS`: Comma-separated list of DNS servers (defaults to gateway IP)
-- `GATEWAY_DHCP_LEASES_DIR`: Directory for storing DHCP lease files (defaults to `/var/lib/vps-gateway`)
 - `GATEWAY_PUBLIC_IP`: Public IP for DNAT configuration (optional, for documentation)
 - `LOG_LEVEL`: Logging level (`debug`, `info`, `warn`, `error`) - defaults to `info`
+
+**Note**: `GATEWAY_DHCP_LEASES_DIR` is not needed - the service uses `/var/lib/obiente/vps-gateway` by default, which matches the volume mount.
 
 ## Building
 

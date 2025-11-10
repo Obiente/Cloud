@@ -64,7 +64,7 @@ func NewManager() (*Manager, error) {
 	}
 
 	if config.LeasesDir == "" {
-		config.LeasesDir = "/var/lib/vps-gateway"
+		config.LeasesDir = "/var/lib/obiente/vps-gateway"
 	}
 
 	// Validate required config

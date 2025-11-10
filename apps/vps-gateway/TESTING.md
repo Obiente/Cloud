@@ -71,14 +71,14 @@ docker exec vps-gateway-test sh -c "apk add --no-cache go && go install github.c
 
 **List available services** (from inside container):
 ```bash
-docker exec vps-gateway-test /root/go/bin/grpcurl -plaintext localhost:18080 list
+docker exec vps-gateway-test /root/go/bin/grpcurl -plaintext localhost:1537 list
 ```
 
 **Get gateway info** (from inside container):
 ```bash
 docker exec vps-gateway-test /root/go/bin/grpcurl -plaintext \
   -H "x-api-secret: test-secret-key-change-in-production" \
-  localhost:18080 \
+  localhost:1537 \
   obiente.cloud.vpsgateway.v1.VPSGatewayService/GetGatewayInfo
 ```
 
@@ -180,7 +180,7 @@ tail -f /var/log/syslog | grep dnsmasq
 
 Verify hosts file was created:
 ```bash
-cat /var/lib/vps-gateway/dnsmasq.hosts
+cat /var/lib/obiente/vps-gateway/dnsmasq.hosts
 ```
 
 ### 6. Test Authentication
@@ -238,8 +238,8 @@ ip addr show eth0  # Replace eth0 with your interface
 
 ### gRPC connection refused
 
-1. **Check service is listening**: `netstat -tlnp | grep 8080`
-2. **Check firewall**: Ensure port 8080 is not blocked
+1. **Check service is listening**: `netstat -tlnp | grep 1537`
+2. **Check firewall**: Ensure port 1537 is not blocked
 3. **Check logs**: Look for startup errors
 
 ### Metrics not appearing

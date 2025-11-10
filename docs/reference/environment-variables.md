@@ -384,7 +384,6 @@ These environment variables are used by the `vps-gateway` service itself (not th
 | `GATEWAY_DHCP_GATEWAY` | string | - | ✅ | Gateway IP address (e.g., `10.15.3.1`) |
 | `GATEWAY_DHCP_DNS` | string | - | ✅ | Comma-separated DNS servers (e.g., `1.1.1.1,1.0.0.1`) |
 | `GATEWAY_DHCP_INTERFACE` | string | - | ✅ | Network interface name for DHCP (e.g., `eth0`, `eth1`) |
-| `GATEWAY_DHCP_LEASES_DIR` | string | `/var/lib/vps-gateway` | ❌ | Directory for storing DHCP leases and configuration files |
 | `LOG_LEVEL` | string | `info` | ❌ | Logging level (`debug`, `info`, `warn`, `error`) |
 
 **TRAEFIK_IPS Format:**

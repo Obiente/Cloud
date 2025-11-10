@@ -51,10 +51,10 @@ RUN go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest && \
     echo 'export PATH=$PATH:/root/go/bin' >> /etc/profile
 
 # Create directory for dnsmasq files
-RUN mkdir -p /var/lib/vps-gateway
+RUN mkdir -p /var/lib/obiente/vps-gateway
 
 # Expose ports
-EXPOSE 8080 9091
+EXPOSE 1537 9091
 
 # Run the service
 CMD ["./vps-gateway"]

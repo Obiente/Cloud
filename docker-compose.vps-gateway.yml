@@ -18,11 +18,10 @@ services:
       GATEWAY_DHCP_GATEWAY: ${GATEWAY_DHCP_GATEWAY:-10.15.3.1}
       GATEWAY_DHCP_DNS: ${GATEWAY_DHCP_DNS:-1.1.1.1,1.0.0.1}
       GATEWAY_DHCP_INTERFACE: ${GATEWAY_DHCP_INTERFACE:-eth0} # Interface on SDN VNet
-      GATEWAY_DHCP_LEASES_DIR: ${GATEWAY_DHCP_LEASES_DIR:-/var/lib/vps-gateway}
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
-      - /var/lib/obiente/vps-gateway:/var/lib/vps-gateway
+      - /var/lib/obiente/vps-gateway:/var/lib/obiente/vps-gateway
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f vps-gateway || exit 1"]
       interval: 30s

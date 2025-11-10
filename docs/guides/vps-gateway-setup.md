@@ -287,10 +287,9 @@ services:
       GATEWAY_DHCP_GATEWAY: 10.15.3.1
       GATEWAY_DHCP_DNS: 1.1.1.1,1.0.0.1
       GATEWAY_DHCP_INTERFACE: eth0 # Interface on SDN VNet
-      GATEWAY_DHCP_LEASES_DIR: /var/lib/vps-gateway
       LOG_LEVEL: info
     volumes:
-      - /var/lib/obiente/vps-gateway:/var/lib/vps-gateway
+      - /var/lib/obiente/vps-gateway:/var/lib/obiente/vps-gateway
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f vps-gateway || exit 1"]
       interval: 30s
@@ -397,7 +396,6 @@ Environment="GATEWAY_DHCP_SUBNET_MASK=255.255.255.0"
 Environment="GATEWAY_DHCP_GATEWAY=10.15.3.1"
 Environment="GATEWAY_DHCP_DNS=8.8.8.8,8.8.4.4"
 Environment="GATEWAY_DHCP_INTERFACE=eth1"
-Environment="GATEWAY_DHCP_LEASES_DIR=/var/lib/vps-gateway"
 Environment="LOG_LEVEL=info"
 
 [Install]
@@ -560,7 +558,7 @@ curl http://api:3001/metrics | grep -i "vps_gateway"
    # Should show dnsmasq process
 
    # Check dnsmasq config
-   cat /var/lib/vps-gateway/dnsmasq.conf
+   cat /var/lib/obiente/vps-gateway/dnsmasq.conf
    # Should show DHCP pool configuration
    ```
 
@@ -568,7 +566,7 @@ curl http://api:3001/metrics | grep -i "vps_gateway"
 
    ```bash
    # On gateway container
-   cat /var/lib/vps-gateway/dnsmasq.leases
+   cat /var/lib/obiente/vps-gateway/dnsmasq.leases
    # Should show allocated IPs (empty initially)
 
    # Or from the host (if using bind mount)
@@ -588,7 +586,7 @@ curl http://api:3001/metrics | grep -i "vps_gateway"
 # List allocated IPs via gRPC
 grpcurl -plaintext \
   -H "x-api-secret: your-secure-random-secret-here" \
-  10.15.3.10:8080 \
+  10.15.3.10:1537 \
   obiente.cloud.vpsgateway.v1.VPSGatewayService/ListIPs
 ```
 
@@ -657,7 +655,7 @@ sudo firewall-cmd --reload
 3. **Check dnsmasq Config**:
 
    ```bash
-   cat /var/lib/vps-gateway/dnsmasq.conf
+   cat /var/lib/obiente/vps-gateway/dnsmasq.conf
    # Verify DHCP pool settings
    ```
 
@@ -753,7 +751,7 @@ sudo firewall-cmd --reload
 
    ```bash
    # On gateway container
-   cat /var/lib/vps-gateway/dnsmasq.leases
+   cat /var/lib/obiente/vps-gateway/dnsmasq.leases
 
    # Or from the host (using bind mount)
    cat /var/lib/obiente/vps-gateway/dnsmasq.leases

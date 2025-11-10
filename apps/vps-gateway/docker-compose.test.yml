@@ -21,7 +21,6 @@ services:
       - GATEWAY_DHCP_GATEWAY=192.168.100.1
       - GATEWAY_DHCP_DNS=8.8.8.8,8.8.4.4
       - GATEWAY_DHCP_INTERFACE=eth0
-      - GATEWAY_DHCP_LEASES_DIR=/var/lib/vps-gateway
       
       # Logging
       - LOG_LEVEL=debug
@@ -31,7 +30,7 @@ services:
     # Ports are NOT exposed to host - all testing done by attaching to container
     # Use 'docker exec -it vps-gateway-test /bin/sh' to test
     volumes:
-      - vps-gateway-data:/var/lib/vps-gateway
+      - vps-gateway-data:/var/lib/obiente/vps-gateway
     # Note: dnsmasq may not work fully in containerized mode without host network
     # This is acceptable for testing the gRPC API and service functionality
     cap_add:
