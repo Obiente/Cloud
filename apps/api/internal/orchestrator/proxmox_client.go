@@ -1567,6 +1567,10 @@ func generateCloudInitUserData(config *VPSConfig) string {
 	userData += "  - curl\n"
 	userData += "  - wget\n"
 	userData += "  - htop\n"
+	userData += "  - qemu-guest-agent\n"
+	userData += "runcmd:\n"
+	userData += "  - systemctl start qemu-guest-agent\n"
+	userData += "  - systemctl enable qemu-guest-agent\n"
 	return userData
 }
 
