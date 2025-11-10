@@ -451,7 +451,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		bridge = gatewayBridge
 		logger.Info("[ProxmoxClient] Using gateway bridge %s for VM network (gateway manages DHCP)", bridge)
 	}
-	
+
 	// Configure network interface with optional VLAN support
 	// SECURITY: Use VLAN tags for network isolation when configured
 	netConfig := fmt.Sprintf("virtio,bridge=%s,firewall=1", bridge)
@@ -2413,7 +2413,7 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 	if err != nil {
 		return fmt.Errorf("failed to fetch SSH keys: %w", err)
 	}
-	
+
 	// Exclude the specified key ID if provided (e.g., when deleting a key)
 	originalKeyCount := len(sshKeys)
 	if len(excludeKeyID) > 0 && excludeKeyID[0] != "" {
@@ -2517,7 +2517,7 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 	}
 	// Final trim of any trailing whitespace
 	sshKeysValue = strings.TrimRight(sshKeysValue, " \t\n\r")
-	
+
 	// Update VM config with SSH keys
 	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
 	formData := url.Values{}

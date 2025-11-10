@@ -220,7 +220,7 @@ const removeSSHKey = async (keyId: string) => {
         `SSH key removed successfully from ${res.affectedVpsIds.length} VPS instance(s)`
       );
     } else {
-      toast.success("SSH key removed successfully");
+    toast.success("SSH key removed successfully");
     }
     await fetchSSHKeys();
   } catch (err: unknown) {

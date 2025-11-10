@@ -409,7 +409,7 @@
                               <OuiFlex justify="between" align="start">
                                 <OuiStack gap="xs">
                                   <OuiFlex align="center" gap="sm">
-                                    <OuiText size="sm" weight="semibold">{{ key.name }}</OuiText>
+                                  <OuiText size="sm" weight="semibold">{{ key.name }}</OuiText>
                                     <OuiButton
                                       variant="ghost"
                                       size="xs"
@@ -889,7 +889,7 @@ const removeSSHKey = async (keyId: string) => {
         `SSH key removed successfully from ${res.affectedVpsIds.length} VPS instance(s)`
       );
     } else {
-      toast.success("SSH key removed successfully");
+    toast.success("SSH key removed successfully");
     }
     await fetchSSHKeys();
   } catch (err: unknown) {

@@ -3,6 +3,8 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -17,7 +19,12 @@ func NewRedisCache() *RedisCache {
 }
 
 func (r *RedisCache) Connect() error {
-	opt, err := redis.ParseURL("redis://localhost:6379")
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		redisURL = "redis://localhost:6379"
+	}
+
+	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
 		return err
 	}
@@ -63,4 +70,12 @@ func (r *RedisCache) Exists(ctx context.Context, key string) bool {
 	}
 	exists, _ := r.client.Exists(ctx, key).Result()
 	return exists > 0
+}
+
+// Keys returns all keys matching a pattern
+func (r *RedisCache) Keys(ctx context.Context, pattern string) ([]string, error) {
+	if r.client == nil {
+		return nil, fmt.Errorf("Redis client not initialized")
+	}
+	return r.client.Keys(ctx, pattern).Result()
 }
