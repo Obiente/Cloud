@@ -148,6 +148,7 @@ func InitDatabase() error {
 		&VPSInstance{},
 		&VPSSizeCatalog{},
 		&VPSRegionCatalog{},
+		&SSHKey{},
 	); err != nil {
 		return fmt.Errorf("failed to auto-migrate: %w", err)
 	}
