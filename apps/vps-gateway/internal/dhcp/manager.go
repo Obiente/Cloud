@@ -454,11 +454,13 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 	writer.WriteString("# dnsmasq configuration - managed by vps-gateway\n")
 	writer.WriteString("# Do not edit manually - this file is auto-generated\n\n")
 	
-	// Network interface
+	// Network interface and listen addresses
+	// Use listen-address instead of bind-interfaces to have more control
+	// Listen on the gateway IP (for DHCP) and 127.0.0.1 (for local DNS queries)
 	writer.WriteString(fmt.Sprintf("interface=%s\n", m.interfaceName))
-	writer.WriteString("bind-interfaces\n")
-	// Also listen on localhost so the gateway can query its own dnsmasq for hostname resolution
-	writer.WriteString("listen-address=127.0.0.1\n\n")
+	writer.WriteString(fmt.Sprintf("listen-address=%s\n", m.gateway.String()))
+	writer.WriteString("listen-address=127.0.0.1\n")
+	writer.WriteString("\n")
 	
 	// DNS server configuration
 	// Enable DNS server on port 53
