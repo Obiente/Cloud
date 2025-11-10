@@ -33,7 +33,7 @@ func (s *Service) ListVPSSizes(ctx context.Context, req *connect.Request[vpsv1.L
 			MemoryBytes:         catalogSize.MemoryBytes,
 			DiskBytes:           catalogSize.DiskBytes,
 			BandwidthBytesMonth: catalogSize.BandwidthBytesMonth,
-			PriceCentsPerMonth:  catalogSize.PriceCentsPerMonth,
+			MinimumPaymentCents: catalogSize.MinimumPaymentCents,
 			Available:           catalogSize.Available,
 			Region:              catalogSize.Region,
 		}

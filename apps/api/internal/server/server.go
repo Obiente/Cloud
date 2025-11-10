@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -291,6 +293,7 @@ func registerServices(mux *http.ServeMux) *deploymentsvc.Service {
 			&database.GameServerUsageHourly{},
 			&database.SupportTicket{},
 			&database.TicketComment{},
+			&database.SSHKey{},
 			// Note: AuditLog is migrated in MetricsDB (TimescaleDB), not here
 		); err != nil {
 			log.Printf("[Server] AutoMigrate warning: %v", err)
@@ -441,6 +444,29 @@ func registerServices(mux *http.ServeMux) *deploymentsvc.Service {
 		}
 		http.NotFound(w, r)
 	})
+
+	// Start SSH proxy server for VPS access (users connect via SSH to API server)
+	// This allows users to access VPSes without needing direct access to Proxmox node
+	sshProxyPort := 2222
+	if portStr := os.Getenv("SSH_PROXY_PORT"); portStr != "" {
+		if port, err := strconv.Atoi(portStr); err == nil {
+			sshProxyPort = port
+		}
+	}
+	sshProxyServer, err := vpssvc.NewSSHProxyServer(sshProxyPort, vpsService)
+	if err == nil {
+		// Start SSH proxy in background (context will be managed by main.go)
+		go func() {
+			ctx := context.Background()
+			if err := sshProxyServer.Start(ctx); err != nil {
+				log.Printf("[Server] ⚠️  Failed to start SSH proxy server: %v", err)
+			} else {
+				log.Printf("[Server] ✓ SSH proxy server started on port %d", sshProxyPort)
+			}
+		}()
+	} else {
+		log.Printf("[Server] ⚠️  Failed to create SSH proxy server: %v", err)
+	}
 
 	// Support service with auth
 	supportService := supportsvc.NewService(database.DB)
