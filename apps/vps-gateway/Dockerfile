@@ -38,7 +38,7 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /build/vps-gateway .
+COPY --from=builder /build/apps/vps-gateway/vps-gateway .
 
 # Install grpcurl for testing
 RUN go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest && \
