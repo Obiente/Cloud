@@ -406,28 +406,28 @@ func (m *Manager) updateHostsFile() error {
 }
 
 func (m *Manager) startDNSMasq() error {
-	// Check if dnsmasq is already running
-	cmd := exec.Command("pgrep", "-f", "dnsmasq")
+	// Generate dnsmasq config file path
+	configFile := filepath.Join(filepath.Dir(m.hostsFile), "dnsmasq.conf")
+	
+	// Check if dnsmasq is already running (check for our specific config file)
+	// This ensures we only detect our own dnsmasq instance, not system dnsmasq
+	cmd := exec.Command("pgrep", "-f", fmt.Sprintf("dnsmasq.*%s", configFile))
 	if err := cmd.Run(); err == nil {
-		logger.Info("dnsmasq is already running")
+		logger.Info("dnsmasq is already running with our config")
 		m.dhcpRunning = true
 		return nil
 	}
 
 	// Generate dnsmasq config
-	configFile := filepath.Join(filepath.Dir(m.hostsFile), "dnsmasq.conf")
 	if err := m.generateDNSMasqConfig(configFile); err != nil {
 		return fmt.Errorf("failed to generate dnsmasq config: %w", err)
 	}
 
 	// Start dnsmasq
+	// All configuration is in the config file, we only need to specify the config file location
 	cmd = exec.Command("dnsmasq",
 		"--no-daemon",
 		"--conf-file="+configFile,
-		"--dhcp-hostsfile="+m.hostsFile,
-		"--dhcp-leasefile="+m.leasesFile,
-		"--interface="+m.interfaceName,
-		"--bind-interfaces",
 	)
 
 	// Start in background
@@ -452,21 +452,29 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 
 	// Write dnsmasq configuration
 	writer.WriteString("# dnsmasq configuration - managed by vps-gateway\n")
+	writer.WriteString("# Do not edit manually - this file is auto-generated\n\n")
+	
+	// Network interface
 	writer.WriteString(fmt.Sprintf("interface=%s\n", m.interfaceName))
+	writer.WriteString("bind-interfaces\n\n")
+	
+	// DHCP configuration
 	// Convert subnet mask to CIDR notation (e.g., 255.255.255.0 -> 24)
 	ones, _ := m.subnetMask.Size()
 	writer.WriteString(fmt.Sprintf("dhcp-range=%s,%s,%d,12h\n", m.poolStart.String(), m.poolEnd.String(), ones))
 	writer.WriteString(fmt.Sprintf("dhcp-option=option:router,%s\n", m.gateway.String()))
 	
-	for i, dns := range m.dnsServers {
+	// DNS servers
+	for _, dns := range m.dnsServers {
 		optionNum := 6 // DNS option
-		if i == 0 {
-			writer.WriteString(fmt.Sprintf("dhcp-option=option:%d,%s\n", optionNum, dns.String()))
-		} else {
-			writer.WriteString(fmt.Sprintf("dhcp-option=option:%d,%s\n", optionNum, dns.String()))
-		}
+		writer.WriteString(fmt.Sprintf("dhcp-option=option:%d,%s\n", optionNum, dns.String()))
 	}
-
+	
+	// File paths
+	writer.WriteString(fmt.Sprintf("dhcp-hostsfile=%s\n", m.hostsFile))
+	writer.WriteString(fmt.Sprintf("dhcp-leasefile=%s\n", m.leasesFile))
+	
+	// DHCP options
 	writer.WriteString("dhcp-authoritative\n")
 	writer.WriteString("log-dhcp\n")
 	writer.WriteString("log-queries\n")
