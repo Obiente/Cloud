@@ -229,6 +229,7 @@ async function initTerminal() {
       return;
     }
 
+    // Send input as JSON message (backend expects this format)
     const encoder = new TextEncoder();
     const input = encoder.encode(data);
     try {
@@ -318,9 +319,30 @@ const connectTerminal = async () => {
       websocket!.send(JSON.stringify(initMessage));
     };
 
-    websocket.onmessage = (event: MessageEvent) => {
+    websocket.onmessage = async (event: MessageEvent) => {
       try {
-        const message = JSON.parse(event.data);
+        // Handle binary messages (preferred for terminal output)
+        if (event.data instanceof ArrayBuffer) {
+          if (terminal) {
+            const data = new Uint8Array(event.data);
+            terminal.write(data);
+          }
+          return;
+        }
+
+        if (event.data instanceof Blob) {
+          if (terminal) {
+            const arrayBuffer = await event.data.arrayBuffer();
+            const data = new Uint8Array(arrayBuffer);
+            terminal.write(data);
+          }
+          return;
+        }
+
+        // Handle JSON messages (for control messages)
+        const message = typeof event.data === 'string' 
+          ? JSON.parse(event.data)
+          : event.data;
 
         if (message.type === "connected") {
           isConnected.value = true;
@@ -329,10 +351,10 @@ const connectTerminal = async () => {
           shouldAttemptReconnect.value = true;
           terminal?.focus();
         } else if (message.type === "output" && terminal) {
+          // Fallback: handle JSON output format (for guest agent)
           if (message.data && Array.isArray(message.data) && message.data.length > 0) {
             const output = new Uint8Array(message.data);
-            const text = new TextDecoder().decode(output);
-            terminal.write(text);
+            terminal.write(output);
           }
         } else if (message.type === "closed") {
           disconnectTerminal();

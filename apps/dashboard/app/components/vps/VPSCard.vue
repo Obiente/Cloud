@@ -3,77 +3,75 @@
     :title="vps.name"
     :subtitle="`${vps.region} • ${sizeLabel}`"
     :status-meta="statusMeta"
-    :icon="statusMeta.icon"
-    :icon-class="statusMeta.iconClass"
     :resources="resources"
     :created-at="createdAtDate"
     :detail-url="`/vps/${vps.id}`"
     :is-actioning="isActioning"
   >
     <template #actions>
-      <OuiButton
-        v-if="canStart"
-        variant="ghost"
-        size="sm"
-        icon-only
-        @click.stop="handleStart"
-        title="Start"
-      >
-        <PlayIcon class="h-4 w-4" />
-      </OuiButton>
-      <OuiButton
-        v-if="canStop"
-        variant="ghost"
-        size="sm"
-        icon-only
-        @click.stop="handleStop"
-        title="Stop"
-      >
-        <StopIcon class="h-4 w-4" />
-      </OuiButton>
-      <OuiButton
-        v-if="canReboot"
-        variant="ghost"
-        size="sm"
-        icon-only
-        @click.stop="handleReboot"
-        title="Reboot"
-      >
-        <ArrowPathIcon class="h-4 w-4" />
-      </OuiButton>
-      <OuiButton
-        variant="ghost"
-        size="sm"
-        icon-only
-        @click.stop="handleDelete"
-        title="Delete"
-      >
-        <TrashIcon class="h-4 w-4" />
-      </OuiButton>
+            <OuiButton
+              v-if="canStart"
+              variant="ghost"
+              size="sm"
+              icon-only
+              @click.stop="handleStart"
+              title="Start"
+            >
+              <PlayIcon class="h-4 w-4" />
+            </OuiButton>
+            <OuiButton
+              v-if="canStop"
+              variant="ghost"
+              size="sm"
+              icon-only
+              @click.stop="handleStop"
+              title="Stop"
+            >
+              <StopIcon class="h-4 w-4" />
+            </OuiButton>
+            <OuiButton
+              v-if="canReboot"
+              variant="ghost"
+              size="sm"
+              icon-only
+              @click.stop="handleReboot"
+              title="Reboot"
+            >
+              <ArrowPathIcon class="h-4 w-4" />
+            </OuiButton>
+            <OuiButton
+              variant="ghost"
+              size="sm"
+              icon-only
+              @click.stop="handleDelete"
+              title="Delete"
+            >
+              <TrashIcon class="h-4 w-4" />
+            </OuiButton>
     </template>
 
     <template #info>
-      <!-- IP Addresses -->
-      <OuiStack v-if="ipAddresses.length > 0" gap="xs">
-        <OuiText size="xs" weight="medium" color="secondary">IP Addresses</OuiText>
-        <OuiFlex gap="xs" wrap="wrap">
-          <OuiBadge
-            v-for="ip in ipAddresses.slice(0, 2)"
-            :key="ip"
-            variant="secondary"
-            size="xs"
-          >
-            {{ ip }}
-          </OuiBadge>
-          <OuiBadge
-            v-if="ipAddresses.length > 2"
-            variant="secondary"
-            size="xs"
-          >
-            +{{ ipAddresses.length - 2 }}
-          </OuiBadge>
-        </OuiFlex>
-      </OuiStack>
+        <!-- IP Addresses -->
+        <OuiStack v-if="ipAddresses.length > 0" gap="xs">
+          <OuiText size="xs" weight="medium" color="secondary">IP Addresses</OuiText>
+          <OuiFlex gap="xs" wrap="wrap">
+            <OuiBadge
+              v-for="ip in ipAddresses.slice(0, 2)"
+              :key="ip"
+              variant="secondary"
+              size="xs"
+            >
+              {{ ip }}
+            </OuiBadge>
+            <OuiBadge
+              v-if="ipAddresses.length > 2"
+              variant="secondary"
+              size="xs"
+            >
+              +{{ ipAddresses.length - 2 }}
+            </OuiBadge>
+          </OuiFlex>
+        </OuiStack>
     </template>
   </ResourceCard>
 </template>

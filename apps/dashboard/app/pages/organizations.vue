@@ -4,6 +4,7 @@
     OrganizationService,
     AdminService,
     BillingService,
+    VPSService,
     type OrganizationMember,
     type Organization,
   } from "@obiente/proto";
@@ -12,6 +13,7 @@
   import { useToast } from "~/composables/useToast";
   import { useOrganizationLabels } from "~/composables/useOrganizationLabels";
   import AuditLogs from "~/components/audit/AuditLogs.vue";
+  import OrganizationSSHKeys from "~/components/organizations/OrganizationSSHKeys.vue";
   import {
     CheckIcon,
     PlusIcon,
@@ -20,6 +22,7 @@
     ArrowDownTrayIcon,
     DocumentTextIcon,
     ArrowPathIcon,
+    KeyIcon,
   } from "@heroicons/vue/24/outline";
 
   const name = ref("");
@@ -489,6 +492,7 @@
     { id: "members", label: "Members" },
     { id: "invitations", label: "Invitations" },
     { id: "roles", label: "Roles" },
+    { id: "ssh-keys", label: "SSH Keys", icon: KeyIcon },
     { id: "audit-logs", label: "Audit Logs" },
   ];
 
@@ -1493,6 +1497,9 @@
                 </OuiCard>
               </OuiGrid>
             </OuiStack>
+          </template>
+          <template #ssh-keys>
+            <OrganizationSSHKeys :organization-id="selectedOrg" />
           </template>
           <template #audit-logs>
             <AuditLogs

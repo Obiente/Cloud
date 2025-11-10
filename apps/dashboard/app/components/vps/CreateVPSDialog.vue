@@ -142,11 +142,10 @@
     label: string;
     value: string;
     description: string;
-    price: bigint | number;
+    minimumPaymentCents: bigint | number;
     cpuCores: number;
     memoryBytes: bigint | number;
     diskBytes: bigint | number;
-    priceCentsPerMonth: bigint | number;
   }>>([]);
 
   const imageOptions = [
@@ -245,11 +244,10 @@
           label: s.name,
           value: s.id,
           description: `${s.cpuCores} CPU • ${formatMemory(s.memoryBytes)} RAM • ${formatDisk(s.diskBytes)} Storage`,
-          price: s.priceCentsPerMonth,
+          minimumPaymentCents: s.minimumPaymentCents || 0,
           cpuCores: s.cpuCores,
           memoryBytes: s.memoryBytes,
           diskBytes: s.diskBytes,
-          priceCentsPerMonth: s.priceCentsPerMonth,
         }));
     } catch (err) {
       console.error("Failed to load sizes:", err);
