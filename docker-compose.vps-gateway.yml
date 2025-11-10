@@ -1,0 +1,31 @@
+services:
+  vps-gateway:
+    image: ${VPS_GATEWAY_IMAGE:-ghcr.io/obiente/cloud-vps-gateway:latest}
+    container_name: vps-gateway
+    restart: unless-stopped
+    network_mode: host  # Required for DHCP and network access
+    privileged: true  # Required for dnsmasq and network management
+    environment:
+      # API Connection
+      GATEWAY_API_URL: ${GATEWAY_API_URL:-http://api:3001} # API URL for gateway to connect to
+      GATEWAY_API_SECRET: ${GATEWAY_API_SECRET:-} # Must match VPS_GATEWAY_API_SECRET in API service
+      # DHCP Configuration
+      GATEWAY_DHCP_POOL_START: ${GATEWAY_DHCP_POOL_START:-10.15.3.20}
+      GATEWAY_DHCP_POOL_END: ${GATEWAY_DHCP_POOL_END:-10.15.3.254}
+      GATEWAY_DHCP_SUBNET: ${GATEWAY_DHCP_SUBNET:-10.15.3.0}
+      GATEWAY_DHCP_SUBNET_MASK: ${GATEWAY_DHCP_SUBNET_MASK:-255.255.255.0}
+      GATEWAY_DHCP_GATEWAY: ${GATEWAY_DHCP_GATEWAY:-10.15.3.1}
+      GATEWAY_DHCP_DNS: ${GATEWAY_DHCP_DNS:-1.1.1.1,1.0.0.1}
+      GATEWAY_DHCP_INTERFACE: ${GATEWAY_DHCP_INTERFACE:-eth0} # Interface on SDN VNet
+      GATEWAY_DHCP_LEASES_DIR: ${GATEWAY_DHCP_LEASES_DIR:-/var/lib/vps-gateway}
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - /var/lib/obiente/vps-gateway:/var/lib/vps-gateway
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f vps-gateway || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
