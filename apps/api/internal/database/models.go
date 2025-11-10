@@ -227,11 +227,31 @@ type BillingAccount struct {
 	CompanyName      *string   `gorm:"column:company_name" json:"company_name"`
 	TaxID            *string   `gorm:"column:tax_id" json:"tax_id"`
 	Address          *string   `gorm:"column:address;type:jsonb" json:"address"` // JSON-encoded address (nullable)
+	BillingDate      *int      `gorm:"column:billing_date" json:"billing_date"` // Day of month (1-31) when billing occurs
 	CreatedAt        time.Time `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt        time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 func (BillingAccount) TableName() string { return "billing_accounts" }
+
+// MonthlyBill represents a monthly bill/invoice for an organization
+type MonthlyBill struct {
+	ID             string    `gorm:"primaryKey" json:"id"`
+	OrganizationID string    `gorm:"index;not null" json:"organization_id"`
+	BillingPeriodStart time.Time `gorm:"index;not null" json:"billing_period_start"` // Start of billing period
+	BillingPeriodEnd   time.Time `gorm:"index;not null" json:"billing_period_end"`   // End of billing period
+	AmountCents    int64     `gorm:"not null" json:"amount_cents"` // Total amount in cents
+	Status         string    `gorm:"index;default:PENDING" json:"status"` // "PENDING", "PAID", "FAILED", "CANCELLED"
+	PaidAt         *time.Time `gorm:"column:paid_at" json:"paid_at"` // When the bill was paid
+	DueDate        time.Time `gorm:"index;not null" json:"due_date"` // When payment is due
+	// Usage breakdown (stored as JSON for flexibility)
+	UsageBreakdown string    `gorm:"column:usage_breakdown;type:jsonb" json:"usage_breakdown"` // JSON with CPU, Memory, Bandwidth, Storage costs
+	Note           *string   `gorm:"column:note;type:text" json:"note"` // Optional note
+	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt      time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (MonthlyBill) TableName() string { return "monthly_bills" }
 
 // GitHubIntegration stores GitHub OAuth tokens for users and organizations
 type GitHubIntegration struct {
@@ -608,4 +628,22 @@ type AuditLog struct {
 
 func (AuditLog) TableName() string {
 	return "audit_logs"
+}
+
+// SSHKey represents an SSH public key for VPS access
+// If VPSID is null, the key is organization-wide and applies to all VPS instances in the organization
+// If VPSID is set, the key is specific to that VPS instance
+type SSHKey struct {
+	ID             string     `gorm:"primaryKey;column:id" json:"id"`
+	OrganizationID string     `gorm:"column:organization_id;index;not null" json:"organization_id"`
+	VPSID          *string    `gorm:"column:vps_id;index" json:"vps_id"` // If null, key is org-wide; if set, key is VPS-specific
+	Name           string     `gorm:"column:name;not null" json:"name"` // User-friendly name
+	PublicKey      string     `gorm:"column:public_key;type:text;not null" json:"public_key"` // SSH public key content
+	Fingerprint    string     `gorm:"column:fingerprint;index" json:"fingerprint"`            // SSH key fingerprint
+	CreatedAt      time.Time  `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt      time.Time  `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (SSHKey) TableName() string {
+	return "ssh_keys"
 }
