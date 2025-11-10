@@ -563,74 +563,8 @@ services:
     networks:
       - obiente-network
 
-  # VPS Gateway - DHCP management and SSH proxying for VPS instances
-  vps-gateway:
-    image: ${VPS_GATEWAY_IMAGE:-ghcr.io/obiente/cloud-vps-gateway:latest}
-    # Build section removed - using image from GitHub Container Registry
-    # To build locally, set VPS_GATEWAY_IMAGE=obiente/cloud-vps-gateway:latest and uncomment build section below
-    # build:
-    #   context: .
-    #   dockerfile: apps/vps-gateway/Dockerfile
-    environment:
-      GATEWAY_API_SECRET: ${VPS_GATEWAY_API_SECRET:-} # Must match VPS_GATEWAY_API_SECRET in API service
-      GATEWAY_GRPC_PORT: ${GATEWAY_GRPC_PORT:-8080}
-      GATEWAY_METRICS_PORT: ${GATEWAY_METRICS_PORT:-9091}
-      # DHCP Configuration
-      GATEWAY_DHCP_POOL_START: ${GATEWAY_DHCP_POOL_START:-192.168.100.10}
-      GATEWAY_DHCP_POOL_END: ${GATEWAY_DHCP_POOL_END:-192.168.100.254}
-      GATEWAY_DHCP_SUBNET: ${GATEWAY_DHCP_SUBNET:-192.168.100.0}
-      GATEWAY_DHCP_SUBNET_MASK: ${GATEWAY_DHCP_SUBNET_MASK:-255.255.255.0}
-      GATEWAY_DHCP_GATEWAY: ${GATEWAY_DHCP_GATEWAY:-192.168.100.1}
-      GATEWAY_DHCP_DNS: ${GATEWAY_DHCP_DNS:-8.8.8.8,8.8.4.4}
-      GATEWAY_DHCP_INTERFACE: ${GATEWAY_DHCP_INTERFACE:-eth0} # Interface name on the gateway VM/container
-      GATEWAY_DHCP_LEASES_DIR: ${GATEWAY_DHCP_LEASES_DIR:-/var/lib/vps-gateway}
-      # Logging
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-    volumes:
-      - vps_gateway_data:/var/lib/vps-gateway
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: start-first
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
-      resources:
-        limits:
-          cpus: "1"
-          memory: 512M
-        reservations:
-          cpus: "0.5"
-          memory: 256M
-      labels:
-        - "cloud.obiente.service=vps-gateway"
-        - "cloud.obiente.role=infrastructure"
-        - "cloud.obiente.prometheus=true"
-        - "prometheus.scrape=true"
-        - "prometheus.port=9091"
-        - "prometheus.path=/metrics"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -f http://localhost:${GATEWAY_METRICS_PORT:-9091}/metrics || exit 1",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - obiente-network
-    # Note: This service requires network_mode: host or privileged access to manage DHCP
-    # For production, deploy this on a dedicated VM with network access to the gateway bridge
-    # The service can also run in a container with network_mode: host if the host has access to the bridge
+  # Note: vps-gateway service is deployed separately using docker-compose.vps-gateway.yml
+  # It should be deployed on the gateway VM/container with network_mode: host
 
 volumes:
   postgres_data:
@@ -646,8 +580,6 @@ volumes:
   grafana_data:
     driver: local
   registry_data:
-    driver: local
-  vps_gateway_data:
     driver: local
 
 networks:
