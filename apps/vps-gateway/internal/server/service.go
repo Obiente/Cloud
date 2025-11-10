@@ -286,3 +286,116 @@ func (s *GatewayService) GetGatewayInfo(
 
 	return connect.NewResponse(resp), nil
 }
+
+// RegisterGateway handles API instance registration via bidirectional stream (forward connection pattern)
+// API instances connect to the gateway and register themselves
+func (s *GatewayService) RegisterGateway(
+	ctx context.Context,
+	stream *connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage],
+) error {
+	var apiInstanceID string
+	startTime := time.Now()
+
+	logger.Info("[GatewayService] New API connection attempt")
+
+	// Handle incoming messages from API
+	go func() {
+		for {
+			msg, err := stream.Receive()
+			if err == io.EOF {
+				logger.Info("[GatewayService] API instance %s disconnected", apiInstanceID)
+				return
+			}
+			if err != nil {
+				logger.Error("[GatewayService] Error receiving from API: %v", err)
+				return
+			}
+
+			switch msg.Type {
+			case "register":
+				if msg.Registration == nil {
+					logger.Error("[GatewayService] Registration message missing registration data")
+					continue
+				}
+				reg := msg.Registration
+				apiInstanceID = reg.GatewayId // Reusing GatewayId field for API instance ID
+
+				logger.Info("[GatewayService] API instance %s registered (version: %s)", apiInstanceID, reg.Version)
+
+				// Send registration confirmation
+				if err := stream.Send(&vpsgatewayv1.GatewayMessage{
+					Type: "registered",
+				}); err != nil {
+					logger.Error("[GatewayService] Failed to send registration confirmation: %v", err)
+					return
+				}
+
+			case "metrics":
+				// API can send metrics if needed
+				logger.Debug("[GatewayService] Received metrics from API instance %s", apiInstanceID)
+
+			case "request":
+				// Handle requests from API (forwarded RPCs)
+				if msg.Request != nil {
+					logger.Debug("[GatewayService] Received request %s from API instance %s", msg.Request.Method, apiInstanceID)
+					// Requests are handled directly via the RPC methods, not through the stream
+				}
+
+			case "heartbeat":
+				logger.Debug("[GatewayService] Received heartbeat from API instance %s", apiInstanceID)
+
+			default:
+				logger.Warn("[GatewayService] Unknown message type: %s", msg.Type)
+			}
+		}
+	}()
+
+	// Send periodic heartbeats to API
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := stream.Send(&vpsgatewayv1.GatewayMessage{
+					Type:      "heartbeat",
+					Heartbeat: timestamppb.Now(),
+				}); err != nil {
+					logger.Debug("[GatewayService] Failed to send heartbeat: %v", err)
+					return
+				}
+			}
+		}
+	}()
+
+	// Send gateway info periodically
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				// Get gateway info
+				_, _, _, _, _ = s.dhcpManager.GetConfig()
+				totalIPs, allocatedIPs, dhcpStatus := s.dhcpManager.GetStats()
+				_, sshProxyStatus := s.sshProxy.GetStats()
+
+				// Log gateway status (could be used for monitoring)
+				logger.Debug("[GatewayService] Gateway status: DHCP=%s, SSH=%s, IPs=%d/%d",
+					dhcpStatus, sshProxyStatus, allocatedIPs, totalIPs)
+			}
+		}
+	}()
+
+	// Keep connection alive until context is cancelled
+	<-ctx.Done()
+	duration := time.Since(startTime).Seconds()
+	logger.Info("[GatewayService] API instance %s connection closed (duration: %.2fs)", apiInstanceID, duration)
+	return nil
+}

@@ -75,7 +75,8 @@ func NewVPSManager() (*VPSManager, error) {
 	}
 
 	// Initialize gateway client (optional - will be nil if gateway is not configured)
-	gatewayClient, err := NewVPSGatewayClient()
+	// Uses VPS_GATEWAY_URL from environment or can be discovered from node metadata
+	gatewayClient, err := NewVPSGatewayClient("")
 	if err != nil {
 		logger.Warn("[VPSManager] Failed to initialize VPS gateway client (gateway may not be configured): %v", err)
 		gatewayClient = nil // Continue without gateway - IP allocation will be skipped

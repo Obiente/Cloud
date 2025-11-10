@@ -24,7 +24,6 @@ import (
 	billingsvc "api/internal/services/billing"
 	deploymentsvc "api/internal/services/deployments"
 	gameserversvc "api/internal/services/gameservers"
-	gatewaysvc "api/internal/services/gateway"
 	orgsvc "api/internal/services/organizations"
 	superadminsvc "api/internal/services/superadmin"
 	supportsvc "api/internal/services/support"
@@ -41,7 +40,6 @@ import (
 	superadminv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/superadmin/v1/superadminv1connect"
 	supportv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/support/v1/supportv1connect"
 	vpsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1/vpsv1connect"
-	vpsgatewayv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1/vpsgatewayv1connect"
 
 	"connectrpc.com/connect"
 	"connectrpc.com/grpcreflect"
@@ -498,16 +496,9 @@ func registerServices(mux *http.ServeMux) *deploymentsvc.Service {
 	)
 	mux.Handle(auditPath, auditHandler)
 
-	// Gateway service (for reverse connection from vps-gateway)
-	// This service accepts connections from gateways and proxies RPCs
-	gatewayRegistry := orchestrator.GetGlobalGatewayRegistry()
-	gatewayService := gatewaysvc.NewGatewayService(gatewayRegistry)
-	gatewayPath, gatewayHandler := vpsgatewayv1connect.NewVPSGatewayServiceHandler(
-		gatewayService,
-		connect.WithInterceptors(authInterceptor), // Use API auth, not gateway secret
-	)
-	mux.Handle(gatewayPath, gatewayHandler)
-	log.Println("[Server] ✓ Gateway service registered (reverse connection pattern)")
+	// Gateway service removed - gateway is now the server (forward connection pattern)
+	// API instances connect to gateway's gRPC server on port 1537 (OCG)
+	log.Println("[Server] Gateway service not registered (forward connection pattern - API connects to gateway)")
 
 	// Stripe webhook endpoint (no auth required, uses webhook signature verification)
 	// Only register webhook handler if Stripe is configured

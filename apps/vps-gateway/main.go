@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"vps-gateway/internal/client"
 	"vps-gateway/internal/dhcp"
 	"vps-gateway/internal/logger"
 	"vps-gateway/internal/metrics"
+	"vps-gateway/internal/server"
 	"vps-gateway/internal/sshproxy"
 
 	"strconv"
@@ -29,8 +29,8 @@ func getEnvInt(key string, defaultValue int) int {
 }
 
 func main() {
-	// Parse command line flags (kept for backward compatibility, but not used in reverse connection mode)
-	_ = flag.Int("grpc-port", getEnvInt("GATEWAY_GRPC_PORT", 8080), "gRPC server port")
+	// Parse command line flags
+	grpcPort := flag.Int("grpc-port", getEnvInt("GATEWAY_GRPC_PORT", 1537), "gRPC server port (default: 1537 = OCG)")
 	_ = flag.Int("metrics-port", getEnvInt("GATEWAY_METRICS_PORT", 9091), "Prometheus metrics port")
 	flag.Parse()
 
@@ -58,37 +58,38 @@ func main() {
 	// Initialize metrics
 	metrics.Init()
 
-	// Create API client for reverse connection
-	apiClient, err := client.NewAPIClient(dhcpManager)
+	// Create and start gateway server (forward connection pattern)
+	gatewayServer, err := server.NewGatewayServer(dhcpManager, sshProxy, *grpcPort)
 	if err != nil {
-		log.Fatalf("Failed to create API client: %v", err)
+		log.Fatalf("Failed to create gateway server: %v", err)
 	}
 
-	// Connect to API in background (will reconnect on failure)
+	// Start server in background
+	serverErrChan := make(chan error, 1)
 	go func() {
-		for {
-			ctx := context.Background()
-			if err := apiClient.Connect(ctx); err != nil {
-				logger.Error("API connection failed: %v, retrying in 5 seconds...", err)
-				time.Sleep(5 * time.Second)
-			} else {
-				logger.Info("API connection closed, reconnecting in 5 seconds...")
-				time.Sleep(5 * time.Second)
-			}
+		if err := gatewayServer.Start(); err != nil {
+			serverErrChan <- err
 		}
 	}()
 
-	// Wait for interrupt signal
+	// Wait for interrupt signal or server error
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	<-sigChan
 
-	logger.Info("Shutting down...")
+	select {
+	case sig := <-sigChan:
+		logger.Info("Received signal %v, shutting down...", sig)
+	case err := <-serverErrChan:
+		logger.Error("Server error: %v", err)
+	}
 
 	// Graceful shutdown
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_ = shutdownCtx // Will be used for cleanup if needed
+
+	if err := gatewayServer.Shutdown(shutdownCtx); err != nil {
+		logger.Error("Error shutting down gateway server: %v", err)
+	}
 
 	// Cleanup
 	if err := dhcpManager.Close(); err != nil {

@@ -39,7 +39,7 @@ sudo ./vps-gateway  # Requires root for dnsmasq
 ### 1. Check Service is Running
 
 The service exposes two ports (accessible from within the container):
-- **Port 8080**: gRPC server (configurable via `GATEWAY_GRPC_PORT`)
+- **Port 1537**: gRPC server (OCG - Obiente Cloud Gateway, configurable via `GATEWAY_GRPC_PORT`)
 - **Port 9091**: Prometheus metrics (configurable via `GATEWAY_METRICS_PORT`)
 
 **All testing is done by attaching to the container**:
@@ -86,7 +86,7 @@ docker exec vps-gateway-test /root/go/bin/grpcurl -plaintext \
 ```bash
 docker exec -it vps-gateway-test /bin/sh
 # Then inside the container:
-grpcurl -plaintext -H "x-api-secret: test-secret-key-change-in-production" localhost:8080 list
+grpcurl -plaintext -H "x-api-secret: test-secret-key-change-in-production" localhost:1537 list
 ```
 
 **Allocate an IP**:
@@ -98,7 +98,7 @@ grpcurl -plaintext \
     "organization_id": "org-test-001",
     "mac_address": "00:11:22:33:44:55"
   }' \
-  localhost:8080 \
+  localhost:1537 \
   obiente.cloud.vpsgateway.v1.VPSGatewayService/AllocateIP
 ```
 
@@ -117,7 +117,7 @@ Expected response:
 ```bash
 grpcurl -plaintext \
   -H "x-api-secret: test-secret-key-change-in-production" \
-  localhost:8080 \
+  localhost:1537 \
   obiente.cloud.vpsgateway.v1.VPSGatewayService/ListIPs
 ```
 
@@ -128,7 +128,7 @@ grpcurl -plaintext \
   -d '{
     "vps_id": "vps-test-001"
   }' \
-  localhost:8080 \
+  localhost:1537 \
   obiente.cloud.vpsgateway.v1.VPSGatewayService/ReleaseIP
 ```
 
@@ -189,7 +189,7 @@ Test with wrong secret (should fail):
 ```bash
 grpcurl -plaintext \
   -H "x-api-secret: wrong-secret" \
-  localhost:8080 \
+  localhost:1537 \
   obiente.cloud.vpsgateway.v1.VPSGatewayService/GetGatewayInfo
 ```
 
@@ -201,7 +201,7 @@ rpc error: code = Unauthenticated desc = invalid x-api-secret
 Test without secret (should fail):
 ```bash
 grpcurl -plaintext \
-  localhost:8080 \
+  localhost:1537 \
   obiente.cloud.vpsgateway.v1.VPSGatewayService/GetGatewayInfo
 ```
 

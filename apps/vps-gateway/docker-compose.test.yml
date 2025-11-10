@@ -25,8 +25,8 @@ services:
       
       # Logging
       - LOG_LEVEL=debug
-      # Use standard ports inside container
-      - GATEWAY_GRPC_PORT=8080
+      # Gateway server port (1537 = OCG - Obiente Cloud Gateway)
+      - GATEWAY_GRPC_PORT=1537
       - GATEWAY_METRICS_PORT=9091
     # Ports are NOT exposed to host - all testing done by attaching to container
     # Use 'docker exec -it vps-gateway-test /bin/sh' to test

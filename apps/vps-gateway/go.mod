@@ -7,6 +7,7 @@ require (
 	github.com/obiente/cloud/apps/shared v0.0.0
 	github.com/prometheus/client_golang v1.20.5
 	github.com/prometheus/common v0.55.0
+	github.com/redis/go-redis/v9 v9.7.0
 	google.golang.org/protobuf v1.36.9
 )
 

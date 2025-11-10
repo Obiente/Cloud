@@ -46,7 +46,8 @@ func NewSSHProxyServer(port int, vpsService *Service) (*SSHProxyServer, error) {
 	}
 
 	// Initialize gateway client (optional - will be nil if gateway is not configured)
-	gatewayClient, err := orchestrator.NewVPSGatewayClient()
+	// Uses VPS_GATEWAY_URL from environment or can be discovered from node metadata
+	gatewayClient, err := orchestrator.NewVPSGatewayClient("")
 	if err != nil {
 		logger.Warn("[SSHProxy] Failed to initialize VPS gateway client (gateway may not be configured): %v", err)
 		gatewayClient = nil // Continue without gateway - will use direct SSH connection
@@ -311,12 +312,12 @@ func (s *SSHProxyServer) handleChannel(ctx context.Context, channel ssh.Channel,
 	// Try to get IP from VPS manager (public IPs or Proxmox guest agent)
 	if vpsIP == "" {
 		logger.Info("[SSHProxy] Attempting to get IP address for VPS %s (Instance ID: %v, Status: %s)", vpsID, vps.InstanceID, vps.Status)
-		vpsManager, err := orchestrator.NewVPSManager()
-		if err == nil {
-			defer vpsManager.Close()
-			ipv4, _, err := vpsManager.GetVPSIPAddresses(ctx, vpsID)
-			if err == nil && len(ipv4) > 0 {
-				vpsIP = ipv4[0]
+	vpsManager, err := orchestrator.NewVPSManager()
+	if err == nil {
+		defer vpsManager.Close()
+		ipv4, _, err := vpsManager.GetVPSIPAddresses(ctx, vpsID)
+		if err == nil && len(ipv4) > 0 {
+			vpsIP = ipv4[0]
 				logger.Info("[SSHProxy] Got VPS IP from VPS manager: %s", vpsIP)
 			} else if err != nil {
 				logger.Warn("[SSHProxy] Failed to get IP from VPS manager for VPS %s: %v", vpsID, err)
@@ -378,7 +379,7 @@ func (s *SSHProxyServer) handleChannel(ctx context.Context, channel ssh.Channel,
 			if _, writeErr := channel.Write([]byte("VPS is not provisioned yet. Please wait for provisioning to complete.\r\n")); writeErr != nil {
 				logger.Warn("[SSHProxy] Failed to write error message to channel: %v", writeErr)
 			}
-			return
+		return
 		}
 		
 		// Try to use the VM's hostname (typically the VPS ID or VM name)
@@ -493,9 +494,9 @@ func (s *SSHProxyServer) forwardToVPS(ctx context.Context, channel ssh.Channel, 
 		logger.Info("[SSHProxy] Using dedicated SSH proxy jump host: %s (user: %s)", jumpHost, jumpUser)
 	} else {
 		// Fallback to Proxmox node (less secure, exposes Proxmox)
-		proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-		if err == nil && proxmoxConfig.APIURL != "" {
-			if u, err := url.Parse(proxmoxConfig.APIURL); err == nil {
+	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
+	if err == nil && proxmoxConfig.APIURL != "" {
+		if u, err := url.Parse(proxmoxConfig.APIURL); err == nil {
 				jumpHost = u.Hostname()
 				logger.Info("[SSHProxy] Using Proxmox node as jump host: %s (consider using SSH_PROXY_JUMP_HOST for better security)", jumpHost)
 			} else {

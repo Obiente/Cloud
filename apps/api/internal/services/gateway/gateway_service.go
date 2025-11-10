@@ -100,7 +100,8 @@ func (s *GatewayService) RegisterGateway(
 
 			case "heartbeat":
 				if gatewayConn != nil {
-					gatewayConn.UpdateHeartbeat()
+					// Update heartbeat and refresh Redis metadata
+					s.registry.UpdateHeartbeatWithRegistry(gatewayID)
 				}
 
 			default:
@@ -119,20 +120,14 @@ func (s *GatewayService) forwardMessagesToGateway(
 	stream *connect.BidiStream[vpsgatewayv1.GatewayMessage, vpsgatewayv1.GatewayMessage],
 	conn *orchestrator.GatewayConnection,
 ) {
-	for {
-		select {
-		case req := <-conn.RequestChan:
-			if req == nil {
-				return // Channel closed
-			}
-			msg := &vpsgatewayv1.GatewayMessage{
-				Type:    "request",
-				Request: req,
-			}
-			if err := stream.Send(msg); err != nil {
-				logger.Error("[GatewayService] Failed to send request to gateway: %v", err)
-				return
-			}
+	for req := range conn.RequestChan {
+		msg := &vpsgatewayv1.GatewayMessage{
+			Type:    "request",
+			Request: req,
+		}
+		if err := stream.Send(msg); err != nil {
+			logger.Error("[GatewayService] Failed to send request to gateway: %v", err)
+			return
 		}
 	}
 }

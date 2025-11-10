@@ -31,8 +31,10 @@ The service is configured via environment variables:
 
 ### Optional Variables
 
+- `GATEWAY_GRPC_PORT`: gRPC server port (defaults to `1537` - OCG - Obiente Cloud Gateway)
 - `GATEWAY_DHCP_DNS`: Comma-separated list of DNS servers (defaults to gateway IP)
 - `GATEWAY_DHCP_LEASES_DIR`: Directory for storing DHCP lease files (defaults to `/var/lib/vps-gateway`)
+- `GATEWAY_PUBLIC_IP`: Public IP for DNAT configuration (optional, for documentation)
 - `LOG_LEVEL`: Logging level (`debug`, `info`, `warn`, `error`) - defaults to `info`
 
 ## Building
@@ -88,14 +90,14 @@ go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
 
 List available services:
 ```bash
-grpcurl -plaintext localhost:8080 list
+grpcurl -plaintext localhost:1537 list
 ```
 
 Get gateway info:
 ```bash
 grpcurl -plaintext \
   -H "x-api-secret: test-secret-key-change-in-production" \
-  localhost:8080 \
+  localhost:1537 \
   obiente.cloud.vpsgateway.v1.VPSGatewayService/GetGatewayInfo
 ```
 
@@ -108,7 +110,7 @@ grpcurl -plaintext \
     "organization_id": "org-test-456",
     "mac_address": "00:11:22:33:44:55"
   }' \
-  localhost:8080 \
+  localhost:1537 \
   obiente.cloud.vpsgateway.v1.VPSGatewayService/AllocateIP
 ```
 
@@ -116,7 +118,7 @@ List allocated IPs:
 ```bash
 grpcurl -plaintext \
   -H "x-api-secret: test-secret-key-change-in-production" \
-  localhost:8080 \
+  localhost:1537 \
   obiente.cloud.vpsgateway.v1.VPSGatewayService/ListIPs
 ```
 
@@ -127,7 +129,7 @@ grpcurl -plaintext \
   -d '{
     "vps_id": "vps-test-123"
   }' \
-  localhost:8080 \
+  localhost:1537 \
   obiente.cloud.vpsgateway.v1.VPSGatewayService/ReleaseIP
 ```
 
@@ -167,11 +169,16 @@ go test ./...
 
 ## Architecture
 
+The service uses a **forward connection pattern** where:
+- Gateway exposes a gRPC server on port **1537** (OCG - Obiente Cloud Gateway)
+- API instances connect to the gateway's public IP (configured via DNAT)
+- Port **1537** maps to "O 15 C 3 G" = "OCG" (Obiente Cloud Gateway), similar to how `10.15.3` maps to "O 15 C 3"
+
 The service consists of:
 
 - **DHCP Manager** (`internal/dhcp/`): Manages IP allocations using dnsmasq
 - **SSH Proxy** (`internal/sshproxy/`): Handles SSH connection proxying
-- **gRPC Server** (`internal/server/`): Implements the VPSGatewayService API
+- **gRPC Server** (`internal/server/`): Implements the VPSGatewayService API (listens on port 1537)
 - **Authentication** (`internal/auth/`): Validates shared secret for API requests
 - **Metrics** (`internal/metrics/`): Exposes Prometheus metrics
 
@@ -191,8 +198,9 @@ The service consists of:
 
 ### gRPC connection refused
 
-- Verify the service is listening on port 8080: `netstat -tlnp | grep 8080`
-- Check firewall rules
+- Verify the service is listening on port 1537: `netstat -tlnp | grep 1537`
+- Check firewall rules (port 1537 should be accessible from API instances)
+- Ensure DNAT is configured if using public IP access
 - Ensure the `x-api-secret` header matches `GATEWAY_API_SECRET`
 
 ## Production Deployment

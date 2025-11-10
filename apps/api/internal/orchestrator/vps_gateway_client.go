@@ -16,18 +16,22 @@ import (
 )
 
 // VPSGatewayClient handles communication with the vps-gateway service
+// In forward connection pattern, API connects to gateway's gRPC server
 type VPSGatewayClient struct {
-	client    vpsgatewayv1connect.VPSGatewayServiceClient // nil if using registry
+	client    vpsgatewayv1connect.VPSGatewayServiceClient
 	apiSecret string
 	baseURL   string
-	registry  *GatewayRegistry // Used for reverse connection pattern
 }
 
 // NewVPSGatewayClient creates a new vps-gateway client
-func NewVPSGatewayClient() (*VPSGatewayClient, error) {
-	baseURL := os.Getenv("VPS_GATEWAY_URL")
-	if baseURL == "" {
-		return nil, fmt.Errorf("VPS_GATEWAY_URL environment variable is required")
+// gatewayURL should be the full URL to the gateway (e.g., "http://gateway-ip:1537")
+// If gatewayURL is empty, uses VPS_GATEWAY_URL from environment
+func NewVPSGatewayClient(gatewayURL string) (*VPSGatewayClient, error) {
+	if gatewayURL == "" {
+		gatewayURL = os.Getenv("VPS_GATEWAY_URL")
+		if gatewayURL == "" {
+			return nil, fmt.Errorf("gateway URL required (provide as parameter or set VPS_GATEWAY_URL)")
+		}
 	}
 
 	apiSecret := os.Getenv("VPS_GATEWAY_API_SECRET")
@@ -43,14 +47,14 @@ func NewVPSGatewayClient() (*VPSGatewayClient, error) {
 	// Create Connect client
 	client := vpsgatewayv1connect.NewVPSGatewayServiceClient(
 		httpClient,
-		baseURL,
+		gatewayURL,
 		connect.WithInterceptors(newGatewayAuthInterceptor(apiSecret)),
 	)
 
 	return &VPSGatewayClient{
 		client:    client,
 		apiSecret: apiSecret,
-		baseURL:   baseURL,
+		baseURL:   gatewayURL,
 	}, nil
 }
 
@@ -94,30 +98,6 @@ func (i *gatewayAuthInterceptor) WrapStreamingClient(next connect.StreamingClien
 
 // AllocateIP allocates a DHCP IP address for a VPS instance
 func (c *VPSGatewayClient) AllocateIP(ctx context.Context, vpsID, organizationID, macAddress string) (*vpsgatewayv1.AllocateIPResponse, error) {
-	// Use registry if available (reverse connection)
-	if c.registry != nil {
-		gatewayConn, ok := c.registry.GetAnyGateway()
-		if !ok {
-			return nil, fmt.Errorf("no gateway connected")
-		}
-
-		req := &vpsgatewayv1.AllocateIPRequest{
-			VpsId:          vpsID,
-			OrganizationId: organizationID,
-			MacAddress:     macAddress,
-		}
-
-		resp, err := gatewayConn.SendRequest(ctx, "AllocateIP", req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to allocate IP from gateway: %w", err)
-		}
-
-		allocResp := resp.(*vpsgatewayv1.AllocateIPResponse)
-		logger.Info("[VPSGateway] Allocated IP %s for VPS %s (org: %s)", allocResp.IpAddress, vpsID, organizationID)
-		return allocResp, nil
-	}
-
-	// Legacy direct connection
 	req := connect.NewRequest(&vpsgatewayv1.AllocateIPRequest{
 		VpsId:          vpsID,
 		OrganizationId: organizationID,
