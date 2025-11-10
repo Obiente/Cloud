@@ -378,6 +378,33 @@ func lookupVPSOrgID(vpsID string) *string {
 	return &orgID
 }
 
+// lookupSSHKeyVPSID looks up the VPS ID for an SSH key from the database
+// Returns nil if the key is organization-wide or not found
+func lookupSSHKeyVPSID(keyID string) *string {
+	if database.DB == nil {
+		return nil
+	}
+
+	// Use a struct to properly handle NULL values
+	var result struct {
+		VPSID *string `gorm:"column:vps_id"`
+	}
+	if err := database.DB.Table("ssh_keys").
+		Select("vps_id").
+		Where("id = ?", keyID).
+		First(&result).Error; err != nil {
+		// Key not found or error
+		return nil
+	}
+
+	// If vpsID is nil or empty, the key is organization-wide
+	if result.VPSID == nil || *result.VPSID == "" {
+		return nil
+	}
+
+	return result.VPSID
+}
+
 // inferResourceFromAction infers resource type and ID from action name and request data
 func inferResourceFromAction(action string, jsonData map[string]interface{}) (resourceType *string, resourceID *string) {
 	actionLower := strings.ToLower(action)
@@ -409,6 +436,66 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 		} else if id, ok := jsonData["id"].(string); ok && id != "" {
 			resourceID = &id
 		}
+		return
+	}
+
+	// SSH key actions - check if they're VPS-specific first
+	// Action names: AddSSHKey, RemoveSSHKey (lowercase: addsshkey, removesshkey)
+	if strings.Contains(actionLower, "ssh") && (strings.Contains(actionLower, "key") || strings.Contains(actionLower, "add") || strings.Contains(actionLower, "remove")) {
+		// For AddSSHKey, check if there's a vpsId in the request
+		if strings.Contains(actionLower, "add") {
+			// Check both camelCase and snake_case field names
+			var vpsID string
+			var hasVPSID bool
+			if vpsIDVal, ok := jsonData["vpsId"].(string); ok && vpsIDVal != "" {
+				vpsID = vpsIDVal
+				hasVPSID = true
+			} else if vpsIDVal, ok := jsonData["vps_id"].(string); ok && vpsIDVal != "" {
+				vpsID = vpsIDVal
+				hasVPSID = true
+			}
+			
+			if hasVPSID {
+				rt := "vps"
+				resourceType = &rt
+				resourceID = &vpsID
+				logger.Debug("[Audit] SSH key action %s is VPS-specific (vpsId: %s)", action, vpsID)
+				return
+			}
+		}
+		
+		// For RemoveSSHKey, we need to look up the key in the database to see if it's VPS-specific
+		if strings.Contains(actionLower, "remove") {
+			// Extract key_id from request
+			var keyID string
+			if keyIDVal, ok := jsonData["keyId"].(string); ok && keyIDVal != "" {
+				keyID = keyIDVal
+			} else if keyIDVal, ok := jsonData["key_id"].(string); ok && keyIDVal != "" {
+				keyID = keyIDVal
+			}
+			
+			if keyID != "" {
+				// Look up the key in database to see if it's VPS-specific
+				// This MUST happen before the key is deleted in the handler
+				if vpsID := lookupSSHKeyVPSID(keyID); vpsID != nil && *vpsID != "" {
+					rt := "vps"
+					resourceType = &rt
+					resourceID = vpsID
+					return
+				}
+			}
+		}
+		
+		// Otherwise, it's an organization-wide SSH key
+		rt := "organization"
+		resourceType = &rt
+		// Extract organization ID as resource ID
+		if id, ok := jsonData["organizationId"].(string); ok && id != "" {
+			resourceID = &id
+		} else if id, ok := jsonData["organization_id"].(string); ok && id != "" {
+			resourceID = &id
+		}
+		logger.Debug("[Audit] SSH key action %s is organization-wide (orgId: %v)", action, resourceID)
 		return
 	}
 
