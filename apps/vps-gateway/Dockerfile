@@ -5,10 +5,15 @@ WORKDIR /build
 # Install build dependencies
 RUN apk add --no-cache git make
 
-# Copy go mod files (build context is repository root)
+# Copy go mod files for vps-gateway and shared (copy separately to improve cache hits)
 COPY apps/vps-gateway/go.mod apps/vps-gateway/go.sum ./apps/vps-gateway/
+COPY apps/shared/go.mod apps/shared/go.sum ./apps/shared/
+
+# Copy shared proto source code (needed for imports)
+COPY apps/shared/proto ./apps/shared/proto/
 
 # Download dependencies (this layer will be cached unless go.mod/go.sum change)
+# The replace directive is already in go.mod
 WORKDIR /build/apps/vps-gateway
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \

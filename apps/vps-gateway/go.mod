@@ -4,11 +4,10 @@ go 1.25
 
 require (
 	connectrpc.com/connect v1.19.1
+	github.com/obiente/cloud/apps/shared v0.0.0
 	github.com/prometheus/client_golang v1.20.5
 	github.com/prometheus/common v0.55.0
 	google.golang.org/protobuf v1.36.9
-	github.com/obiente/cloud/apps/shared v0.0.0
-
 )
 
 replace github.com/obiente/cloud/apps/shared => ../shared
@@ -16,7 +15,6 @@ replace github.com/obiente/cloud/apps/shared => ../shared
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
