@@ -4847,7 +4847,7 @@ type CreateVPSSizeRequest struct {
 	MemoryBytes         int64                  `protobuf:"varint,5,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`                           // Memory in bytes
 	DiskBytes           int64                  `protobuf:"varint,6,opt,name=disk_bytes,json=diskBytes,proto3" json:"disk_bytes,omitempty"`                                 // Disk space in bytes
 	BandwidthBytesMonth int64                  `protobuf:"varint,7,opt,name=bandwidth_bytes_month,json=bandwidthBytesMonth,proto3" json:"bandwidth_bytes_month,omitempty"` // Monthly bandwidth limit (0 = unlimited)
-	PriceCentsPerMonth  int64                  `protobuf:"varint,8,opt,name=price_cents_per_month,json=priceCentsPerMonth,proto3" json:"price_cents_per_month,omitempty"`  // Monthly price in cents
+	MinimumPaymentCents int64                  `protobuf:"varint,8,opt,name=minimum_payment_cents,json=minimumPaymentCents,proto3" json:"minimum_payment_cents,omitempty"` // Minimum payment in cents required to create this VPS size (0 = no requirement)
 	Available           bool                   `protobuf:"varint,9,opt,name=available,proto3" json:"available,omitempty"`                                                  // Whether this size is available
 	Region              string                 `protobuf:"bytes,10,opt,name=region,proto3" json:"region,omitempty"`                                                        // Region (empty = all regions)
 	unknownFields       protoimpl.UnknownFields
@@ -4933,9 +4933,9 @@ func (x *CreateVPSSizeRequest) GetBandwidthBytesMonth() int64 {
 	return 0
 }
 
-func (x *CreateVPSSizeRequest) GetPriceCentsPerMonth() int64 {
+func (x *CreateVPSSizeRequest) GetMinimumPaymentCents() int64 {
 	if x != nil {
-		return x.PriceCentsPerMonth
+		return x.MinimumPaymentCents
 	}
 	return 0
 }
@@ -5009,7 +5009,7 @@ type UpdateVPSSizeRequest struct {
 	MemoryBytes         *int64                 `protobuf:"varint,5,opt,name=memory_bytes,json=memoryBytes,proto3,oneof" json:"memory_bytes,omitempty"`
 	DiskBytes           *int64                 `protobuf:"varint,6,opt,name=disk_bytes,json=diskBytes,proto3,oneof" json:"disk_bytes,omitempty"`
 	BandwidthBytesMonth *int64                 `protobuf:"varint,7,opt,name=bandwidth_bytes_month,json=bandwidthBytesMonth,proto3,oneof" json:"bandwidth_bytes_month,omitempty"`
-	PriceCentsPerMonth  *int64                 `protobuf:"varint,8,opt,name=price_cents_per_month,json=priceCentsPerMonth,proto3,oneof" json:"price_cents_per_month,omitempty"`
+	MinimumPaymentCents *int64                 `protobuf:"varint,8,opt,name=minimum_payment_cents,json=minimumPaymentCents,proto3,oneof" json:"minimum_payment_cents,omitempty"` // Minimum payment in cents required to create this VPS size (0 = no requirement)
 	Available           *bool                  `protobuf:"varint,9,opt,name=available,proto3,oneof" json:"available,omitempty"`
 	Region              *string                `protobuf:"bytes,10,opt,name=region,proto3,oneof" json:"region,omitempty"`
 	unknownFields       protoimpl.UnknownFields
@@ -5095,9 +5095,9 @@ func (x *UpdateVPSSizeRequest) GetBandwidthBytesMonth() int64 {
 	return 0
 }
 
-func (x *UpdateVPSSizeRequest) GetPriceCentsPerMonth() int64 {
-	if x != nil && x.PriceCentsPerMonth != nil {
-		return *x.PriceCentsPerMonth
+func (x *UpdateVPSSizeRequest) GetMinimumPaymentCents() int64 {
+	if x != nil && x.MinimumPaymentCents != nil {
+		return *x.MinimumPaymentCents
 	}
 	return 0
 }
@@ -5694,7 +5694,7 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\a_regionB\x16\n" +
 	"\x14_include_unavailable\"N\n" +
 	"\x14ListVPSSizesResponse\x126\n" +
-	"\x05sizes\x18\x01 \x03(\v2 .obiente.cloud.common.v1.VPSSizeR\x05sizes\"\xd8\x02\n" +
+	"\x05sizes\x18\x01 \x03(\v2 .obiente.cloud.common.v1.VPSSizeR\x05sizes\"\xd9\x02\n" +
 	"\x14CreateVPSSizeRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -5703,13 +5703,13 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\fmemory_bytes\x18\x05 \x01(\x03R\vmemoryBytes\x12\x1d\n" +
 	"\n" +
 	"disk_bytes\x18\x06 \x01(\x03R\tdiskBytes\x122\n" +
-	"\x15bandwidth_bytes_month\x18\a \x01(\x03R\x13bandwidthBytesMonth\x121\n" +
-	"\x15price_cents_per_month\x18\b \x01(\x03R\x12priceCentsPerMonth\x12\x1c\n" +
+	"\x15bandwidth_bytes_month\x18\a \x01(\x03R\x13bandwidthBytesMonth\x122\n" +
+	"\x15minimum_payment_cents\x18\b \x01(\x03R\x13minimumPaymentCents\x12\x1c\n" +
 	"\tavailable\x18\t \x01(\bR\tavailable\x12\x16\n" +
 	"\x06region\x18\n" +
 	" \x01(\tR\x06region\"M\n" +
 	"\x15CreateVPSSizeResponse\x124\n" +
-	"\x04size\x18\x01 \x01(\v2 .obiente.cloud.common.v1.VPSSizeR\x04size\"\x99\x04\n" +
+	"\x04size\x18\x01 \x01(\v2 .obiente.cloud.common.v1.VPSSizeR\x04size\"\x9a\x04\n" +
 	"\x14UpdateVPSSizeRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\x04name\x18\x02 \x01(\tH\x00R\x04name\x88\x01\x01\x12%\n" +
@@ -5718,8 +5718,8 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\fmemory_bytes\x18\x05 \x01(\x03H\x03R\vmemoryBytes\x88\x01\x01\x12\"\n" +
 	"\n" +
 	"disk_bytes\x18\x06 \x01(\x03H\x04R\tdiskBytes\x88\x01\x01\x127\n" +
-	"\x15bandwidth_bytes_month\x18\a \x01(\x03H\x05R\x13bandwidthBytesMonth\x88\x01\x01\x126\n" +
-	"\x15price_cents_per_month\x18\b \x01(\x03H\x06R\x12priceCentsPerMonth\x88\x01\x01\x12!\n" +
+	"\x15bandwidth_bytes_month\x18\a \x01(\x03H\x05R\x13bandwidthBytesMonth\x88\x01\x01\x127\n" +
+	"\x15minimum_payment_cents\x18\b \x01(\x03H\x06R\x13minimumPaymentCents\x88\x01\x01\x12!\n" +
 	"\tavailable\x18\t \x01(\bH\aR\tavailable\x88\x01\x01\x12\x1b\n" +
 	"\x06region\x18\n" +
 	" \x01(\tH\bR\x06region\x88\x01\x01B\a\n" +
@@ -5730,7 +5730,7 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\r_memory_bytesB\r\n" +
 	"\v_disk_bytesB\x18\n" +
 	"\x16_bandwidth_bytes_monthB\x18\n" +
-	"\x16_price_cents_per_monthB\f\n" +
+	"\x16_minimum_payment_centsB\f\n" +
 	"\n" +
 	"_availableB\t\n" +
 	"\a_region\"M\n" +

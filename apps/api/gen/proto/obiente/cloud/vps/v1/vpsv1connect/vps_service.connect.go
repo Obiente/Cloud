@@ -89,6 +89,14 @@ const (
 	// VPSServiceUpdateFirewallOptionsProcedure is the fully-qualified name of the VPSService's
 	// UpdateFirewallOptions RPC.
 	VPSServiceUpdateFirewallOptionsProcedure = "/obiente.cloud.vps.v1.VPSService/UpdateFirewallOptions"
+	// VPSServiceListSSHKeysProcedure is the fully-qualified name of the VPSService's ListSSHKeys RPC.
+	VPSServiceListSSHKeysProcedure = "/obiente.cloud.vps.v1.VPSService/ListSSHKeys"
+	// VPSServiceAddSSHKeyProcedure is the fully-qualified name of the VPSService's AddSSHKey RPC.
+	VPSServiceAddSSHKeyProcedure = "/obiente.cloud.vps.v1.VPSService/AddSSHKey"
+	// VPSServiceUpdateSSHKeyProcedure is the fully-qualified name of the VPSService's UpdateSSHKey RPC.
+	VPSServiceUpdateSSHKeyProcedure = "/obiente.cloud.vps.v1.VPSService/UpdateSSHKey"
+	// VPSServiceRemoveSSHKeyProcedure is the fully-qualified name of the VPSService's RemoveSSHKey RPC.
+	VPSServiceRemoveSSHKeyProcedure = "/obiente.cloud.vps.v1.VPSService/RemoveSSHKey"
 )
 
 // VPSServiceClient is a client for the obiente.cloud.vps.v1.VPSService service.
@@ -131,6 +139,11 @@ type VPSServiceClient interface {
 	DeleteFirewallRule(context.Context, *connect.Request[v1.DeleteFirewallRuleRequest]) (*connect.Response[v1.DeleteFirewallRuleResponse], error)
 	GetFirewallOptions(context.Context, *connect.Request[v1.GetFirewallOptionsRequest]) (*connect.Response[v1.GetFirewallOptionsResponse], error)
 	UpdateFirewallOptions(context.Context, *connect.Request[v1.UpdateFirewallOptionsRequest]) (*connect.Response[v1.UpdateFirewallOptionsResponse], error)
+	// SSH key management
+	ListSSHKeys(context.Context, *connect.Request[v1.ListSSHKeysRequest]) (*connect.Response[v1.ListSSHKeysResponse], error)
+	AddSSHKey(context.Context, *connect.Request[v1.AddSSHKeyRequest]) (*connect.Response[v1.AddSSHKeyResponse], error)
+	UpdateSSHKey(context.Context, *connect.Request[v1.UpdateSSHKeyRequest]) (*connect.Response[v1.UpdateSSHKeyResponse], error)
+	RemoveSSHKey(context.Context, *connect.Request[v1.RemoveSSHKeyRequest]) (*connect.Response[v1.RemoveSSHKeyResponse], error)
 }
 
 // NewVPSServiceClient constructs a client for the obiente.cloud.vps.v1.VPSService service. By
@@ -276,6 +289,30 @@ func NewVPSServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(vPSServiceMethods.ByName("UpdateFirewallOptions")),
 			connect.WithClientOptions(opts...),
 		),
+		listSSHKeys: connect.NewClient[v1.ListSSHKeysRequest, v1.ListSSHKeysResponse](
+			httpClient,
+			baseURL+VPSServiceListSSHKeysProcedure,
+			connect.WithSchema(vPSServiceMethods.ByName("ListSSHKeys")),
+			connect.WithClientOptions(opts...),
+		),
+		addSSHKey: connect.NewClient[v1.AddSSHKeyRequest, v1.AddSSHKeyResponse](
+			httpClient,
+			baseURL+VPSServiceAddSSHKeyProcedure,
+			connect.WithSchema(vPSServiceMethods.ByName("AddSSHKey")),
+			connect.WithClientOptions(opts...),
+		),
+		updateSSHKey: connect.NewClient[v1.UpdateSSHKeyRequest, v1.UpdateSSHKeyResponse](
+			httpClient,
+			baseURL+VPSServiceUpdateSSHKeyProcedure,
+			connect.WithSchema(vPSServiceMethods.ByName("UpdateSSHKey")),
+			connect.WithClientOptions(opts...),
+		),
+		removeSSHKey: connect.NewClient[v1.RemoveSSHKeyRequest, v1.RemoveSSHKeyResponse](
+			httpClient,
+			baseURL+VPSServiceRemoveSSHKeyProcedure,
+			connect.WithSchema(vPSServiceMethods.ByName("RemoveSSHKey")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -303,6 +340,10 @@ type vPSServiceClient struct {
 	deleteFirewallRule    *connect.Client[v1.DeleteFirewallRuleRequest, v1.DeleteFirewallRuleResponse]
 	getFirewallOptions    *connect.Client[v1.GetFirewallOptionsRequest, v1.GetFirewallOptionsResponse]
 	updateFirewallOptions *connect.Client[v1.UpdateFirewallOptionsRequest, v1.UpdateFirewallOptionsResponse]
+	listSSHKeys           *connect.Client[v1.ListSSHKeysRequest, v1.ListSSHKeysResponse]
+	addSSHKey             *connect.Client[v1.AddSSHKeyRequest, v1.AddSSHKeyResponse]
+	updateSSHKey          *connect.Client[v1.UpdateSSHKeyRequest, v1.UpdateSSHKeyResponse]
+	removeSSHKey          *connect.Client[v1.RemoveSSHKeyRequest, v1.RemoveSSHKeyResponse]
 }
 
 // ListVPS calls obiente.cloud.vps.v1.VPSService.ListVPS.
@@ -415,6 +456,26 @@ func (c *vPSServiceClient) UpdateFirewallOptions(ctx context.Context, req *conne
 	return c.updateFirewallOptions.CallUnary(ctx, req)
 }
 
+// ListSSHKeys calls obiente.cloud.vps.v1.VPSService.ListSSHKeys.
+func (c *vPSServiceClient) ListSSHKeys(ctx context.Context, req *connect.Request[v1.ListSSHKeysRequest]) (*connect.Response[v1.ListSSHKeysResponse], error) {
+	return c.listSSHKeys.CallUnary(ctx, req)
+}
+
+// AddSSHKey calls obiente.cloud.vps.v1.VPSService.AddSSHKey.
+func (c *vPSServiceClient) AddSSHKey(ctx context.Context, req *connect.Request[v1.AddSSHKeyRequest]) (*connect.Response[v1.AddSSHKeyResponse], error) {
+	return c.addSSHKey.CallUnary(ctx, req)
+}
+
+// UpdateSSHKey calls obiente.cloud.vps.v1.VPSService.UpdateSSHKey.
+func (c *vPSServiceClient) UpdateSSHKey(ctx context.Context, req *connect.Request[v1.UpdateSSHKeyRequest]) (*connect.Response[v1.UpdateSSHKeyResponse], error) {
+	return c.updateSSHKey.CallUnary(ctx, req)
+}
+
+// RemoveSSHKey calls obiente.cloud.vps.v1.VPSService.RemoveSSHKey.
+func (c *vPSServiceClient) RemoveSSHKey(ctx context.Context, req *connect.Request[v1.RemoveSSHKeyRequest]) (*connect.Response[v1.RemoveSSHKeyResponse], error) {
+	return c.removeSSHKey.CallUnary(ctx, req)
+}
+
 // VPSServiceHandler is an implementation of the obiente.cloud.vps.v1.VPSService service.
 type VPSServiceHandler interface {
 	// List organization VPS instances
@@ -455,6 +516,11 @@ type VPSServiceHandler interface {
 	DeleteFirewallRule(context.Context, *connect.Request[v1.DeleteFirewallRuleRequest]) (*connect.Response[v1.DeleteFirewallRuleResponse], error)
 	GetFirewallOptions(context.Context, *connect.Request[v1.GetFirewallOptionsRequest]) (*connect.Response[v1.GetFirewallOptionsResponse], error)
 	UpdateFirewallOptions(context.Context, *connect.Request[v1.UpdateFirewallOptionsRequest]) (*connect.Response[v1.UpdateFirewallOptionsResponse], error)
+	// SSH key management
+	ListSSHKeys(context.Context, *connect.Request[v1.ListSSHKeysRequest]) (*connect.Response[v1.ListSSHKeysResponse], error)
+	AddSSHKey(context.Context, *connect.Request[v1.AddSSHKeyRequest]) (*connect.Response[v1.AddSSHKeyResponse], error)
+	UpdateSSHKey(context.Context, *connect.Request[v1.UpdateSSHKeyRequest]) (*connect.Response[v1.UpdateSSHKeyResponse], error)
+	RemoveSSHKey(context.Context, *connect.Request[v1.RemoveSSHKeyRequest]) (*connect.Response[v1.RemoveSSHKeyResponse], error)
 }
 
 // NewVPSServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -596,6 +662,30 @@ func NewVPSServiceHandler(svc VPSServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(vPSServiceMethods.ByName("UpdateFirewallOptions")),
 		connect.WithHandlerOptions(opts...),
 	)
+	vPSServiceListSSHKeysHandler := connect.NewUnaryHandler(
+		VPSServiceListSSHKeysProcedure,
+		svc.ListSSHKeys,
+		connect.WithSchema(vPSServiceMethods.ByName("ListSSHKeys")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSServiceAddSSHKeyHandler := connect.NewUnaryHandler(
+		VPSServiceAddSSHKeyProcedure,
+		svc.AddSSHKey,
+		connect.WithSchema(vPSServiceMethods.ByName("AddSSHKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSServiceUpdateSSHKeyHandler := connect.NewUnaryHandler(
+		VPSServiceUpdateSSHKeyProcedure,
+		svc.UpdateSSHKey,
+		connect.WithSchema(vPSServiceMethods.ByName("UpdateSSHKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSServiceRemoveSSHKeyHandler := connect.NewUnaryHandler(
+		VPSServiceRemoveSSHKeyProcedure,
+		svc.RemoveSSHKey,
+		connect.WithSchema(vPSServiceMethods.ByName("RemoveSSHKey")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.vps.v1.VPSService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case VPSServiceListVPSProcedure:
@@ -642,6 +732,14 @@ func NewVPSServiceHandler(svc VPSServiceHandler, opts ...connect.HandlerOption) 
 			vPSServiceGetFirewallOptionsHandler.ServeHTTP(w, r)
 		case VPSServiceUpdateFirewallOptionsProcedure:
 			vPSServiceUpdateFirewallOptionsHandler.ServeHTTP(w, r)
+		case VPSServiceListSSHKeysProcedure:
+			vPSServiceListSSHKeysHandler.ServeHTTP(w, r)
+		case VPSServiceAddSSHKeyProcedure:
+			vPSServiceAddSSHKeyHandler.ServeHTTP(w, r)
+		case VPSServiceUpdateSSHKeyProcedure:
+			vPSServiceUpdateSSHKeyHandler.ServeHTTP(w, r)
+		case VPSServiceRemoveSSHKeyProcedure:
+			vPSServiceRemoveSSHKeyHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -737,4 +835,20 @@ func (UnimplementedVPSServiceHandler) GetFirewallOptions(context.Context, *conne
 
 func (UnimplementedVPSServiceHandler) UpdateFirewallOptions(context.Context, *connect.Request[v1.UpdateFirewallOptionsRequest]) (*connect.Response[v1.UpdateFirewallOptionsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.UpdateFirewallOptions is not implemented"))
+}
+
+func (UnimplementedVPSServiceHandler) ListSSHKeys(context.Context, *connect.Request[v1.ListSSHKeysRequest]) (*connect.Response[v1.ListSSHKeysResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.ListSSHKeys is not implemented"))
+}
+
+func (UnimplementedVPSServiceHandler) AddSSHKey(context.Context, *connect.Request[v1.AddSSHKeyRequest]) (*connect.Response[v1.AddSSHKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.AddSSHKey is not implemented"))
+}
+
+func (UnimplementedVPSServiceHandler) UpdateSSHKey(context.Context, *connect.Request[v1.UpdateSSHKeyRequest]) (*connect.Response[v1.UpdateSSHKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.UpdateSSHKey is not implemented"))
+}
+
+func (UnimplementedVPSServiceHandler) RemoveSSHKey(context.Context, *connect.Request[v1.RemoveSSHKeyRequest]) (*connect.Response[v1.RemoveSSHKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.RemoveSSHKey is not implemented"))
 }

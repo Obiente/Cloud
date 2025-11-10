@@ -161,7 +161,7 @@ type VPSSize struct {
 	MemoryBytes         int64                  `protobuf:"varint,5,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`                           // Memory in bytes
 	DiskBytes           int64                  `protobuf:"varint,6,opt,name=disk_bytes,json=diskBytes,proto3" json:"disk_bytes,omitempty"`                                 // Disk space in bytes
 	BandwidthBytesMonth int64                  `protobuf:"varint,7,opt,name=bandwidth_bytes_month,json=bandwidthBytesMonth,proto3" json:"bandwidth_bytes_month,omitempty"` // Monthly bandwidth limit (0 = unlimited)
-	PriceCentsPerMonth  int64                  `protobuf:"varint,8,opt,name=price_cents_per_month,json=priceCentsPerMonth,proto3" json:"price_cents_per_month,omitempty"`  // Monthly price in cents
+	MinimumPaymentCents int64                  `protobuf:"varint,8,opt,name=minimum_payment_cents,json=minimumPaymentCents,proto3" json:"minimum_payment_cents,omitempty"` // Minimum payment in cents required to create this VPS size (0 = no requirement)
 	Available           bool                   `protobuf:"varint,9,opt,name=available,proto3" json:"available,omitempty"`                                                  // Whether this size is available
 	Region              string                 `protobuf:"bytes,10,opt,name=region,proto3" json:"region,omitempty"`                                                        // Region (empty = all regions)
 	CreatedAt           *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3,oneof" json:"created_at,omitempty"`
@@ -249,9 +249,9 @@ func (x *VPSSize) GetBandwidthBytesMonth() int64 {
 	return 0
 }
 
-func (x *VPSSize) GetPriceCentsPerMonth() int64 {
+func (x *VPSSize) GetMinimumPaymentCents() int64 {
 	if x != nil {
-		return x.PriceCentsPerMonth
+		return x.MinimumPaymentCents
 	}
 	return 0
 }
@@ -295,7 +295,7 @@ const file_obiente_cloud_common_v1_common_proto_rawDesc = "" +
 	"\bper_page\x18\x02 \x01(\x05R\aperPage\x12\x14\n" +
 	"\x05total\x18\x03 \x01(\x05R\x05total\x12\x1f\n" +
 	"\vtotal_pages\x18\x04 \x01(\x05R\n" +
-	"totalPages\"\xfe\x03\n" +
+	"totalPages\"\xff\x03\n" +
 	"\aVPSSize\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12%\n" +
@@ -304,8 +304,8 @@ const file_obiente_cloud_common_v1_common_proto_rawDesc = "" +
 	"\fmemory_bytes\x18\x05 \x01(\x03R\vmemoryBytes\x12\x1d\n" +
 	"\n" +
 	"disk_bytes\x18\x06 \x01(\x03R\tdiskBytes\x122\n" +
-	"\x15bandwidth_bytes_month\x18\a \x01(\x03R\x13bandwidthBytesMonth\x121\n" +
-	"\x15price_cents_per_month\x18\b \x01(\x03R\x12priceCentsPerMonth\x12\x1c\n" +
+	"\x15bandwidth_bytes_month\x18\a \x01(\x03R\x13bandwidthBytesMonth\x122\n" +
+	"\x15minimum_payment_cents\x18\b \x01(\x03R\x13minimumPaymentCents\x12\x1c\n" +
 	"\tavailable\x18\t \x01(\bR\tavailable\x12\x16\n" +
 	"\x06region\x18\n" +
 	" \x01(\tR\x06region\x12>\n" +
