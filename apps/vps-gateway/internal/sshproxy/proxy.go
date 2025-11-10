@@ -5,12 +5,25 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"time"
 
 	"vps-gateway/internal/dhcp"
 	"vps-gateway/internal/logger"
 )
+
+// Custom DNS resolver that uses localhost (gateway's own dnsmasq)
+var localDNSResolver = &net.Resolver{
+	PreferGo: true,
+	Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+		d := net.Dialer{
+			Timeout: time.Millisecond * time.Duration(10000),
+		}
+		// Use localhost:53 to query gateway's own dnsmasq
+		return d.DialContext(ctx, network, "127.0.0.1:53")
+	},
+}
 
 // Proxy handles SSH TCP proxying
 type Proxy struct {
@@ -41,18 +54,47 @@ func NewProxy(dhcpManager *dhcp.Manager) (*Proxy, error) {
 // ProxyConnection proxies an SSH connection to a target VPS
 func (p *Proxy) ProxyConnection(ctx context.Context, connectionID, target string, port int, clientConn net.Conn) error {
 	// Resolve target (could be IP or hostname)
-	targetAddr := fmt.Sprintf("%s:%d", target, port)
 	if port == 0 {
-		targetAddr = fmt.Sprintf("%s:22", target)
 		port = 22
 	}
 
-	logger.Info("Proxying SSH connection %s to %s", connectionID, targetAddr)
+	// Resolve hostname to IP using gateway's own dnsmasq (localhost:53)
+	// This ensures VPS hostnames are resolved by the gateway's dnsmasq, not the host DNS
+	var targetIP string
+	if net.ParseIP(target) != nil {
+		// Target is already an IP address
+		targetIP = target
+	} else {
+		// Target is a hostname - resolve using gateway's dnsmasq
+		logger.Debug("Resolving hostname %s using gateway's dnsmasq", target)
+		ips, err := localDNSResolver.LookupIPAddr(ctx, target)
+		if err != nil {
+			// Try with domain suffix if resolution fails
+			domain := os.Getenv("GATEWAY_DHCP_DOMAIN")
+			if domain == "" {
+				domain = "vps.local"
+			}
+			fqdn := fmt.Sprintf("%s.%s", target, domain)
+			logger.Debug("Trying FQDN: %s", fqdn)
+			ips, err = localDNSResolver.LookupIPAddr(ctx, fqdn)
+			if err != nil {
+				return fmt.Errorf("failed to resolve hostname %s (tried %s and %s): %w", target, target, fqdn, err)
+			}
+		}
+		if len(ips) == 0 {
+			return fmt.Errorf("no IP addresses found for hostname %s", target)
+		}
+		targetIP = ips[0].IP.String()
+		logger.Debug("Resolved %s to %s", target, targetIP)
+	}
 
-	// Dial target
+	targetAddr := fmt.Sprintf("%s:%d", targetIP, port)
+	logger.Info("Proxying SSH connection %s to %s (%s)", connectionID, targetAddr, target)
+
+	// Dial target using resolved IP
 	targetConn, err := net.DialTimeout("tcp", targetAddr, 10*time.Second)
 	if err != nil {
-		return fmt.Errorf("failed to connect to target %s: %w", targetAddr, err)
+		return fmt.Errorf("failed to connect to target %s (%s): %w", targetAddr, target, err)
 	}
 
 	// Create connection record

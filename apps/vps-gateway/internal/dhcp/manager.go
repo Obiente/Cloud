@@ -456,7 +456,9 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 	
 	// Network interface
 	writer.WriteString(fmt.Sprintf("interface=%s\n", m.interfaceName))
-	writer.WriteString("bind-interfaces\n\n")
+	writer.WriteString("bind-interfaces\n")
+	// Also listen on localhost so the gateway can query its own dnsmasq for hostname resolution
+	writer.WriteString("listen-address=127.0.0.1\n\n")
 	
 	// DNS server configuration
 	// Enable DNS server on port 53
