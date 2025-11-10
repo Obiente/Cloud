@@ -1,10 +1,13 @@
 package metrics
 
 import (
+	"bytes"
+	"fmt"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/expfmt"
 )
 
 var (
@@ -175,5 +178,43 @@ func SetDHCPServerStatus(running bool) {
 		status = 1
 	}
 	dhcpServerStatus.Set(status)
+}
+
+// GetMetricsText returns Prometheus metrics in text format
+func GetMetricsText() (string, error) {
+	// Use prometheus registry to gather metrics
+	registry := prometheus.DefaultRegisterer.(*prometheus.Registry)
+	if registry == nil {
+		// Create a new registry if default is not available
+		registry = prometheus.NewRegistry()
+		registry.MustRegister(
+			dhcpAllocationsTotal,
+			dhcpReleasesTotal,
+			dhcpAllocationsActive,
+			dhcpPoolSize,
+			dhcpPoolAvailable,
+			sshProxyConnectionsTotal,
+			sshProxyConnectionsActive,
+			sshProxyConnectionDuration,
+			sshProxyBytesTransmitted,
+			gatewayUptime,
+			dhcpServerStatus,
+		)
+	}
+
+	// Gather metrics
+	gatherer := prometheus.Gatherer(registry)
+	metricFamilies, err := gatherer.Gather()
+	if err != nil {
+		return "", fmt.Errorf("failed to gather metrics: %w", err)
+	}
+
+	// Convert to text format
+	var buf bytes.Buffer
+	for _, mf := range metricFamilies {
+		expfmt.MetricFamilyToText(&buf, mf)
+	}
+
+	return buf.String(), nil
 }
 

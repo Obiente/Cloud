@@ -12,8 +12,8 @@ import (
 	"vps-gateway/internal/metrics"
 	"vps-gateway/internal/sshproxy"
 
-	vpsgatewayv1 "vps-gateway/gen/proto/obiente/cloud/vpsgateway/v1"
-	vpsgatewayv1connect "vps-gateway/gen/proto/obiente/cloud/vpsgateway/v1/vpsgatewayv1connect"
+	vpsgatewayv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
+	vpsgatewayv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1/vpsgatewayv1connect"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
