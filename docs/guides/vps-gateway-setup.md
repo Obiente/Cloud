@@ -11,6 +11,16 @@ The vps-gateway service provides:
 - **Network Isolation**: Gateway network can be isolated from the main Proxmox network
 - **Centralized Management**: Single service manages all VPS networking
 
+### Connection Architecture (Forward Connection Pattern)
+
+The vps-gateway uses a **forward connection pattern** where:
+- **Gateway exposes gRPC server** on port **1537** (OCG - Obiente Cloud Gateway)
+- **API instances connect to gateway** via the gateway's public IP (configured via DNAT)
+- Gateway is the server, API is the client
+- Port **1537** maps to "O 15 C 3 G" = "OCG" (Obiente Cloud Gateway), similar to how `10.15.3` maps to "O 15 C 3"
+
+When running multiple API instances (e.g., in Docker Swarm), each API instance connects to the gateway independently. The gateway can handle multiple concurrent connections from different API instances. For operations like IP allocation and SSH proxying, any API instance can communicate with the gateway directly.
+
 This guide uses **Proxmox SDN (Software-Defined Networking)** for network topology management, while the vps-gateway service handles DHCP allocation and SSH proxying. SDN is recommended for **all deployments** (both single-node and multi-node clusters) because it provides:
 
 - **Automatic SNAT**: Handles source NAT for internet access automatically
@@ -447,7 +457,40 @@ export VPS_GATEWAY_API_SECRET=your-secure-random-secret-here
 export VPS_GATEWAY_BRIDGE=OCvpsnet  # SDN bridge name for OCvps-vnet
 ```
 
-## Step 6: Verify Setup
+## Step 6: Understanding Multi-Instance Behavior (Docker Swarm)
+
+When running multiple API instances in Docker Swarm, it's important to understand how the gateway connects and how requests are handled:
+
+### How Gateway Connection Works (Forward Connection Pattern)
+
+1. **Gateway Exposes gRPC Server**: The gateway runs a gRPC server on port **1537** (OCG - Obiente Cloud Gateway):
+   - Port **1537** maps to "O 15 C 3 G" = "OCG" (Obiente Cloud Gateway)
+   - Gateway listens on all interfaces (0.0.0.0:1537) or specific interface
+   - Gateway is accessible via public IP configured with DNAT
+
+2. **API Instances Connect to Gateway**: Each API instance connects to the gateway independently:
+   - API instances use `VPS_GATEWAY_URL` environment variable (e.g., `http://gateway-public-ip:1537`)
+   - Each API instance maintains its own connection to the gateway
+   - Multiple API instances can connect to the same gateway concurrently
+
+3. **Request Handling**: 
+   - Operations like IP allocation and SSH proxying are handled directly via gRPC calls
+   - Each API instance communicates with the gateway independently
+   - No shared registry needed - gateway handles all requests directly
+
+4. **DNAT Configuration**: For public IP access:
+   - Configure DNAT on your router/firewall to forward port 1537 to the gateway's internal IP
+   - Gateway's public IP should be accessible from API instances
+   - Example: `iptables -t nat -A PREROUTING -p tcp --dport 1537 -j DNAT --to-destination <gateway-internal-ip>:1537`
+
+### Best Practices for Swarm Deployments
+
+- **Gateway Discovery**: API instances discover gateway via `VPS_GATEWAY_URL` environment variable or node metadata
+- **Multiple Gateways**: If you have multiple gateways (e.g., one per Proxmox node), configure each API instance to connect to the appropriate gateway based on which node hosts the VPS
+- **High Availability**: If a gateway goes down, API instances will fail requests to that gateway. Consider implementing gateway health checks and failover
+- **DNAT Setup**: Configure DNAT rules to expose each gateway's port 1537 on a public IP accessible to API instances
+
+## Step 7: Verify Setup
 
 ### Check Gateway Service
 
@@ -554,7 +597,7 @@ grpcurl -plaintext \
    - Verify the VPS can reach the gateway (10.15.3.1)
    - Verify the VPS can reach the internet (via gateway)
 
-## Step 7: Configure Firewall (Optional)
+## Step 8: Configure Firewall (Optional)
 
 If using a firewall on the gateway container, allow necessary ports:
 
@@ -627,6 +670,8 @@ sudo firewall-cmd --reload
 
 ### Gateway Can't Connect to API
 
+**Note**: In Swarm deployments, the gateway connects to the API service name (e.g., `http://api:3001`), which is load-balanced by Docker Swarm DNS. The gateway will connect to one API instance and maintain that connection.
+
 1. **Test Connectivity**:
 
    ```bash
@@ -639,39 +684,72 @@ sudo firewall-cmd --reload
 2. **Check API URL**:
 
    - Ensure `GATEWAY_API_URL` points to the correct API hostname/IP
+   - In Swarm, use the service name: `http://api:3001` (resolves via Swarm DNS)
    - Ensure API port (default: 3001) is accessible from gateway
-   - Check gateway logs: `docker compose logs vps-gateway`
+   - Check gateway logs: `docker compose logs vps-gateway` or `docker logs vps-gateway`
 
 3. **Check API Secret**:
    - Ensure `GATEWAY_API_SECRET` in gateway matches `VPS_GATEWAY_API_SECRET` in API service
    - Both must be identical
 
-4. **Check Gateway Registration**:
+4. **Check Gateway Registration** (Swarm):
+
+   In Swarm, check logs from all API instances:
+   
+   ```bash
+   # Check all API instances for gateway connection
+   docker service logs obiente_api | grep -i "gateway\|register"
+   
+   # Check specific API instance
+   docker service ps obiente_api --format "{{.Name}}" | head -1 | xargs docker service logs
+   ```
+   
+   For Docker Compose:
+   
+   ```bash
+   docker compose logs api | grep -i "gateway\|register"
+   ```
+   
    - Gateway should automatically register with API on startup
    - Check API logs for "Gateway registered" messages
-   - If gateway disconnects, it will automatically reconnect
+   - If gateway disconnects, it will automatically reconnect to another instance
 
 ### VPS Not Getting IP Address
 
-1. **Check Gateway Allocations via API**:
+1. **Check Gateway Connection** (Swarm):
+
+   In a Swarm deployment, verify which API instance the gateway is connected to:
+   
+   ```bash
+   # Check API logs for gateway registration
+   docker service logs obiente_api | grep -i "gateway.*registered"
+   
+   # Check which API instance has the gateway
+   docker service ps obiente_api --format "table {{.Name}}\t{{.Node}}\t{{.CurrentState}}"
+   ```
+
+2. **Check Gateway Allocations via API**:
 
    Check allocations through the API:
    
    ```bash
-   # Check API logs for IP allocation
+   # Docker Compose
    docker compose logs api | grep -i "allocated.*ip\|vps.*ip"
    
-   # Or use API endpoint (if available) to list gateway info
-   # Gateway info is available through the API's gateway registry
+   # Docker Swarm - check all API instances
+   docker service logs obiente_api | grep -i "allocated.*ip\|vps.*ip"
+   
+   # Note: In Swarm, the gateway may be connected to a different API instance
+   # than the one handling the request. Check logs from all API instances.
    ```
 
-2. **Check VPS Network Configuration**:
+3. **Check VPS Network Configuration**:
 
    - Verify VPS is connected to the SDN VNet bridge (check in Proxmox VM configuration)
    - Check VPS network interface is configured for DHCP
    - Verify VPS can reach gateway (10.15.3.1)
 
-3. **Check DHCP Leases**:
+4. **Check DHCP Leases**:
 
    ```bash
    # On gateway container
