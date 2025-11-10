@@ -16,7 +16,7 @@ type VPSSizeCatalog struct {
 	MemoryBytes         int64     `gorm:"column:memory_bytes" json:"memory_bytes"`
 	DiskBytes           int64     `gorm:"column:disk_bytes" json:"disk_bytes"`
 	BandwidthBytesMonth int64     `gorm:"column:bandwidth_bytes_month;default:0" json:"bandwidth_bytes_month"` // 0 = unlimited
-	PriceCentsPerMonth  int64     `gorm:"column:price_cents_per_month" json:"price_cents_per_month"`
+	MinimumPaymentCents int64     `gorm:"column:minimum_payment_cents;default:0" json:"minimum_payment_cents"` // Minimum payment in cents required to create this VPS size
 	Available           bool      `gorm:"column:available;default:true" json:"available"`
 	Region              string    `gorm:"column:region;index" json:"region"` // Empty = all regions
 	CreatedAt           time.Time `gorm:"column:created_at" json:"created_at"`
@@ -68,7 +68,7 @@ func ListVPSSizeCatalog(region string) ([]VPSSizeCatalog, error) {
 		query = query.Where("(region = ? OR region = '')", region)
 	}
 
-	if err := query.Order("price_cents_per_month ASC").Find(&sizes).Error; err != nil {
+	if err := query.Order("minimum_payment_cents ASC").Find(&sizes).Error; err != nil {
 		return nil, err
 	}
 	return sizes, nil
@@ -105,7 +105,7 @@ func ListAllVPSSizeCatalog(region string, includeUnavailable bool) ([]VPSSizeCat
 		query = query.Where("(region = ? OR region = '')", region)
 	}
 
-	if err := query.Order("price_cents_per_month ASC").Find(&sizes).Error; err != nil {
+	if err := query.Order("minimum_payment_cents ASC").Find(&sizes).Error; err != nil {
 		return nil, err
 	}
 	return sizes, nil
@@ -147,7 +147,7 @@ func InitVPSCatalog() error {
 			MemoryBytes:         1 * 1024 * 1024 * 1024,  // 1 GB
 			DiskBytes:           10 * 1024 * 1024 * 1024, // 10 GB
 			BandwidthBytesMonth: 0,                       // Unlimited
-			PriceCentsPerMonth:  500,                     // $5/month
+			MinimumPaymentCents: 0,                       // No minimum payment required
 			Available:           true,
 			Region:              "", // Available in all regions
 		},
@@ -159,7 +159,7 @@ func InitVPSCatalog() error {
 			MemoryBytes:         2 * 1024 * 1024 * 1024,  // 2 GB
 			DiskBytes:           20 * 1024 * 1024 * 1024, // 20 GB
 			BandwidthBytesMonth: 0,                       // Unlimited
-			PriceCentsPerMonth:  1000,                    // $10/month
+			MinimumPaymentCents: 1000,                    // $10 minimum payment required
 			Available:           true,
 			Region:              "",
 		},
@@ -171,7 +171,7 @@ func InitVPSCatalog() error {
 			MemoryBytes:         4 * 1024 * 1024 * 1024,  // 4 GB
 			DiskBytes:           40 * 1024 * 1024 * 1024, // 40 GB
 			BandwidthBytesMonth: 0,                       // Unlimited
-			PriceCentsPerMonth:  2000,                    // $20/month
+			MinimumPaymentCents: 5000,                    // $50 minimum payment required
 			Available:           true,
 			Region:              "",
 		},
@@ -183,7 +183,7 @@ func InitVPSCatalog() error {
 			MemoryBytes:         8 * 1024 * 1024 * 1024,  // 8 GB
 			DiskBytes:           80 * 1024 * 1024 * 1024, // 80 GB
 			BandwidthBytesMonth: 0,                       // Unlimited
-			PriceCentsPerMonth:  4000,                    // $40/month
+			MinimumPaymentCents: 10000,                   // $100 minimum payment required
 			Available:           true,
 			Region:              "",
 		},
