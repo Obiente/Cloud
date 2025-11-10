@@ -6,9 +6,10 @@ services:
     network_mode: host  # Required for DHCP and network access
     privileged: true  # Required for dnsmasq and network management
     environment:
-      # API Connection
-      GATEWAY_API_URL: ${GATEWAY_API_URL:-http://api:3001} # API URL for gateway to connect to
+      # Gateway Server Configuration (forward connection pattern)
+      GATEWAY_GRPC_PORT: ${GATEWAY_GRPC_PORT:-1537} # gRPC server port (1537 = OCG - Obiente Cloud Gateway)
       GATEWAY_API_SECRET: ${GATEWAY_API_SECRET:-} # Must match VPS_GATEWAY_API_SECRET in API service
+      GATEWAY_PUBLIC_IP: ${GATEWAY_PUBLIC_IP:-} # Public IP for DNAT configuration (optional)
       # DHCP Configuration
       GATEWAY_DHCP_POOL_START: ${GATEWAY_DHCP_POOL_START:-10.15.3.20}
       GATEWAY_DHCP_POOL_END: ${GATEWAY_DHCP_POOL_END:-10.15.3.254}
