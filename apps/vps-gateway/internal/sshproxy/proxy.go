@@ -14,14 +14,36 @@ import (
 )
 
 // Custom DNS resolver that uses localhost (gateway's own dnsmasq)
+// IMPORTANT: PreferGo must be true AND we must ignore the address parameter
+// The address parameter is the system DNS server, which we want to override
 var localDNSResolver = &net.Resolver{
 	PreferGo: true,
 	Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+		// CRITICAL: Ignore the 'address' parameter completely
+		// It contains the system DNS server (e.g., "10.10.10.10:53")
+		// We ALWAYS want to use localhost:53 (gateway's dnsmasq)
+		logger.Debug("DNS resolver Dial called: network=%s, address=%s (ignoring address, using 127.0.0.1:53)", network, address)
 		d := net.Dialer{
-			Timeout: time.Millisecond * time.Duration(10000),
+			Timeout: 5 * time.Second,
 		}
-		// Use localhost:53 to query gateway's own dnsmasq
-		return d.DialContext(ctx, network, "127.0.0.1:53")
+		// Force UDP for DNS queries (DNS typically uses UDP)
+		// Always connect to 127.0.0.1:53 regardless of what 'address' says
+		if network == "udp" || network == "udp4" || network == "" {
+			conn, err := d.DialContext(ctx, "udp", "127.0.0.1:53")
+			if err != nil {
+				logger.Error("DNS resolver failed to dial UDP 127.0.0.1:53: %v", err)
+			} else {
+				logger.Debug("DNS resolver successfully dialed UDP 127.0.0.1:53")
+			}
+			return conn, err
+		}
+		// Fallback to TCP if explicitly requested
+		logger.Debug("DNS resolver dialing TCP to 127.0.0.1:53")
+		conn, err := d.DialContext(ctx, "tcp", "127.0.0.1:53")
+		if err != nil {
+			logger.Error("DNS resolver failed to dial TCP 127.0.0.1:53: %v", err)
+		}
+		return conn, err
 	},
 }
 
@@ -67,7 +89,7 @@ func (p *Proxy) ProxyConnection(ctx context.Context, connectionID, target string
 	} else {
 		// Target is a hostname - resolve using gateway's dnsmasq
 		logger.Info("Resolving hostname %s using gateway's dnsmasq (127.0.0.1:53)", target)
-		
+
 		// First, verify dnsmasq is listening on 127.0.0.1:53
 		testConn, err := net.DialTimeout("udp", "127.0.0.1:53", 1*time.Second)
 		if err != nil {
@@ -76,8 +98,13 @@ func (p *Proxy) ProxyConnection(ctx context.Context, connectionID, target string
 			testConn.Close()
 			logger.Debug("dnsmasq is reachable on 127.0.0.1:53")
 		}
-		
-		ips, err := localDNSResolver.LookupIPAddr(ctx, target)
+
+		// Use custom resolver with explicit timeout
+		// Create a new context with a timeout to prevent hanging
+		resolveCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		ips, err := localDNSResolver.LookupIPAddr(resolveCtx, target)
 		if err != nil {
 			logger.Debug("First resolution attempt failed for %s: %v", target, err)
 			// Try with domain suffix if resolution fails
@@ -87,9 +114,13 @@ func (p *Proxy) ProxyConnection(ctx context.Context, connectionID, target string
 			}
 			fqdn := fmt.Sprintf("%s.%s", target, domain)
 			logger.Debug("Trying FQDN: %s", fqdn)
-			ips, err = localDNSResolver.LookupIPAddr(ctx, fqdn)
+
+			// Try FQDN with new context
+			resolveCtx2, cancel2 := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel2()
+			ips, err = localDNSResolver.LookupIPAddr(resolveCtx2, fqdn)
 			if err != nil {
-				logger.Error("DNS resolution failed for %s and %s: %v", target, fqdn, err)
+				logger.Error("DNS resolution failed for %s and %s: %v (check if dnsmasq is running on 127.0.0.1:53)", target, fqdn, err)
 				return fmt.Errorf("failed to resolve hostname %s (tried %s and %s): %w", target, target, fqdn, err)
 			}
 		}
@@ -221,4 +252,3 @@ func (p *Proxy) GetStats() (activeConnections int, status string) {
 
 	return activeConnections, status
 }
-
