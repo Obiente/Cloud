@@ -1,102 +1,115 @@
 <template>
-  <OuiDialog :open="modelValue" title="Create VPS Instance" description="Provision a new virtual private server with full root access." @update:open="updateOpen">
+  <OuiDialog
+    :open="modelValue"
+    title="Create VPS Instance"
+    description="Provision a new virtual private server with full root access."
+    @update:open="updateOpen"
+  >
     <OuiStack gap="lg">
-        <!-- Error Alert -->
-        <ErrorAlert
-          v-if="error"
-          :error="error"
-          title="Failed to create VPS"
+      <!-- Error Alert -->
+      <ErrorAlert v-if="error" :error="error" title="Failed to create VPS" />
+
+      <!-- Form -->
+      <OuiStack gap="md">
+        <OuiInput
+          v-model="form.name"
+          label="Name"
+          placeholder="my-vps"
+          required
+          :error="errors.name"
         />
 
-        <!-- Form -->
-        <OuiStack gap="md">
-          <OuiInput
-            v-model="form.name"
-            label="Name"
-            placeholder="my-vps"
-            required
-            :error="errors.name"
-          />
+        <OuiTextarea
+          v-model="form.description"
+          label="Description"
+          placeholder="Optional description"
+          :rows="2"
+        />
 
-          <OuiTextarea
-            v-model="form.description"
-            label="Description"
-            placeholder="Optional description"
-            :rows="2"
-          />
+        <OuiSelect
+          v-model="form.region"
+          label="Region"
+          :items="regionOptions"
+          required
+          :error="errors.region"
+          :loading="loadingRegions"
+        />
 
-          <OuiSelect
-            v-model="form.region"
-            label="Region"
-            :items="regionOptions"
-            required
-            :error="errors.region"
-            :loading="loadingRegions"
-          />
+        <OuiSelect
+          v-model="form.image"
+          label="Operating System"
+          :items="imageOptions"
+          required
+          :error="errors.image"
+        />
 
-          <OuiSelect
-            v-model="form.image"
-            label="Operating System"
-            :items="imageOptions"
-            required
-            :error="errors.image"
-          />
-
-          <OuiSelect
-            v-model="form.size"
-            label="Instance Size"
-            description="Select the resource limits for your VPS. You'll be charged based on actual usage."
-            :items="sizeOptions"
-            required
-            :error="errors.size"
-            :loading="loadingSizes"
-          >
-            <template #item="{ item }">
-              <OuiStack gap="xs">
-                <OuiText weight="medium">{{ item.label }}</OuiText>
-                <OuiText size="xs" color="secondary">
-                  {{ item.description }}
-                </OuiText>
-                <OuiText size="xs" color="secondary">
-                  {{ item.cpuCores }} CPU · {{ formatMemory(item.memoryBytes) }} RAM · {{ formatDisk(item.diskBytes) }} Storage
-                </OuiText>
-              </OuiStack>
-            </template>
-          </OuiSelect>
-        </OuiStack>
-
-        <!-- VPS Size Description -->
-        <OuiCard variant="outline" v-if="selectedSize && selectedSize.catalogDescription">
-          <OuiCardBody>
+        <OuiSelect
+          v-model="form.size"
+          label="Instance Size"
+          description="Select the resource limits for your VPS. You'll be charged based on actual usage."
+          :items="sizeOptions"
+          required
+          :error="errors.size"
+          :loading="loadingSizes"
+        >
+          <template #item="{ item }">
             <OuiStack gap="xs">
-              <OuiText size="sm" weight="semibold">{{ selectedSize.label }}</OuiText>
+              <OuiText weight="medium">{{ item.label }}</OuiText>
               <OuiText size="xs" color="secondary">
-                {{ selectedSize.catalogDescription }}
+                {{ item.description }}
+              </OuiText>
+              <OuiText size="xs" color="secondary">
+                {{ item.cpuCores }} CPU ·
+                {{ formatMemory(item.memoryBytes) }} RAM ·
+                {{ formatDisk(item.diskBytes) }} Storage
               </OuiText>
             </OuiStack>
-          </OuiCardBody>
-        </OuiCard>
-
-        <!-- Summary -->
-        <OuiCard variant="outline" v-if="selectedSize">
-          <OuiCardBody>
-            <OuiStack gap="sm">
-              <OuiText size="sm" weight="semibold">Resource Limits</OuiText>
-              <OuiText size="xs" color="secondary">
-                These limits define the maximum resources your VPS can use. You'll be charged based on actual usage (pay-as-you-go).
-              </OuiText>
-              <OuiGrid cols="2" gap="sm">
-                <OuiText size="xs" color="secondary">CPU Cores</OuiText>
-                <OuiText size="xs">{{ selectedSize.cpuCores }}</OuiText>
-                <OuiText size="xs" color="secondary">Memory</OuiText>
-                <OuiText size="xs">{{ formatMemory(selectedSize.memoryBytes) }}</OuiText>
-                <OuiText size="xs" color="secondary">Storage</OuiText>
-                <OuiText size="xs">{{ formatDisk(selectedSize.diskBytes) }}</OuiText>
-              </OuiGrid>
-            </OuiStack>
-          </OuiCardBody>
-        </OuiCard>
+          </template>
+        </OuiSelect>
       </OuiStack>
+
+      <!-- VPS Size Description -->
+      <OuiCard
+        variant="outline"
+        v-if="selectedSize && selectedSize.catalogDescription"
+      >
+        <OuiCardBody>
+          <OuiStack gap="xs">
+            <OuiText size="sm" weight="semibold">{{
+              selectedSize.label
+            }}</OuiText>
+            <OuiText size="xs" color="secondary">
+              {{ selectedSize.catalogDescription }}
+            </OuiText>
+          </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
+
+      <!-- Summary -->
+      <OuiCard variant="outline" v-if="selectedSize">
+        <OuiCardBody>
+          <OuiStack gap="sm">
+            <OuiText size="sm" weight="semibold">Resource Limits</OuiText>
+            <OuiText size="xs" color="secondary">
+              These limits define the maximum resources your VPS can use. You'll
+              be charged based on actual usage (pay-as-you-go).
+            </OuiText>
+            <OuiGrid cols="2" gap="sm">
+              <OuiText size="xs" color="secondary">CPU Cores</OuiText>
+              <OuiText size="xs">{{ selectedSize.cpuCores }}</OuiText>
+              <OuiText size="xs" color="secondary">Memory</OuiText>
+              <OuiText size="xs">{{
+                formatMemory(selectedSize.memoryBytes)
+              }}</OuiText>
+              <OuiText size="xs" color="secondary">Storage</OuiText>
+              <OuiText size="xs">{{
+                formatDisk(selectedSize.diskBytes)
+              }}</OuiText>
+            </OuiGrid>
+          </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
+    </OuiStack>
 
     <template #footer>
       <OuiFlex justify="end" gap="sm">
@@ -111,15 +124,89 @@
       </OuiFlex>
     </template>
   </OuiDialog>
+
+  <!-- Password Display Dialog (One-time only) -->
+  <OuiDialog
+    :open="showPasswordDialog"
+    title="VPS Created Successfully"
+    description="Your VPS instance has been created. Please note down the root password below - it will not be shown again."
+    @update:open="
+      (val) => {
+        if (!val) {
+          showPasswordDialog = false;
+          createdPassword = null;
+          emit('created');
+        }
+      }
+    "
+    size="md"
+  >
+    <OuiStack gap="md">
+      <OuiBox variant="warning" p="md" rounded="lg">
+        <OuiStack gap="xs">
+          <OuiText size="sm" weight="semibold" color="warning">
+            ⚠️ Important: Save This Password
+          </OuiText>
+          <OuiText size="xs" color="secondary">
+            This password will only be shown once. If you lose it, you can reset
+            it from the VPS settings, but you'll need to reboot the VPS for the
+            new password to take effect.
+          </OuiText>
+        </OuiStack>
+      </OuiBox>
+
+      <OuiStack gap="xs">
+        <OuiText size="sm" weight="medium">Root Password</OuiText>
+        <OuiBox p="md" rounded="md" class="bg-surface-muted font-mono text-sm">
+          <OuiFlex justify="between" align="center" gap="sm">
+            <OuiText class="select-all">{{ createdPassword || "" }}</OuiText>
+            <OuiButton
+              variant="ghost"
+              size="xs"
+              @click="copyPassword"
+              class="gap-1"
+            >
+              <ClipboardDocumentIcon class="h-4 w-4" />
+              Copy
+            </OuiButton>
+          </OuiFlex>
+        </OuiBox>
+        <OuiText size="xs" color="secondary">
+          Use this password to log in as root via SSH. We recommend using SSH
+          keys instead for better security.
+        </OuiText>
+      </OuiStack>
+    </OuiStack>
+
+    <template #footer>
+      <OuiFlex justify="end" gap="sm">
+        <OuiButton
+          color="primary"
+          @click="
+            () => {
+              showPasswordDialog = false;
+              createdPassword = null;
+              emit('created');
+              updateOpen(false);
+            }
+          "
+        >
+          I've Saved the Password
+        </OuiButton>
+      </OuiFlex>
+    </template>
+  </OuiDialog>
 </template>
 
 <script setup lang="ts">
-  import { ref, computed, watch } from "vue";
+  import { ref, computed, watch, nextTick } from "vue";
   import { VPSService, VPSImage } from "@obiente/proto";
   import { useConnectClient } from "~/lib/connect-client";
   import { useOrganizationId } from "~/composables/useOrganizationId";
   import { useDialog } from "~/composables/useDialog";
+  import { useToast } from "~/composables/useToast";
   import ErrorAlert from "~/components/ErrorAlert.vue";
+  import { ClipboardDocumentIcon } from "@heroicons/vue/24/outline";
 
   interface Props {
     modelValue: boolean;
@@ -134,6 +221,7 @@
   const client = useConnectClient(VPSService);
   const organizationId = useOrganizationId();
   const { showAlert } = useDialog();
+  const { toast } = useToast();
 
   const form = ref({
     name: "",
@@ -148,18 +236,22 @@
   const isCreating = ref(false);
   const loadingRegions = ref(false);
   const loadingSizes = ref(false);
+  const createdPassword = ref<string | null>(null);
+  const showPasswordDialog = ref(false);
 
   const regionOptions = ref<Array<{ label: string; value: string }>>([]);
-  const sizeOptions = ref<Array<{
-    label: string;
-    value: string;
-    description: string;
-    catalogDescription?: string;
-    minimumPaymentCents: bigint | number;
-    cpuCores: number;
-    memoryBytes: bigint | number;
-    diskBytes: bigint | number;
-  }>>([]);
+  const sizeOptions = ref<
+    Array<{
+      label: string;
+      value: string;
+      description: string;
+      catalogDescription?: string;
+      minimumPaymentCents: bigint | number;
+      cpuCores: number;
+      memoryBytes: bigint | number;
+      diskBytes: bigint | number;
+    }>
+  >([]);
 
   const imageOptions = [
     { label: "Ubuntu 24.04 LTS", value: String(VPSImage.UBUNTU_24_04) },
@@ -208,27 +300,41 @@
       };
       errors.value = {};
       error.value = null;
+      createdPassword.value = null;
+      showPasswordDialog.value = false;
     }
   };
 
   // Load regions and sizes when dialog opens
-  watch(() => props.modelValue, async (isOpen) => {
-    if (isOpen) {
-      await loadRegions();
-      await loadSizes();
+  watch(
+    () => props.modelValue,
+    async (isOpen) => {
+      if (isOpen) {
+        await loadRegions();
+        await loadSizes();
+      }
     }
-  });
+  );
 
   const loadRegions = async () => {
     loadingRegions.value = true;
     try {
       const response = await client.listVPSRegions({});
-      const availableRegions = (response.regions || []).filter((r) => r.available);
-      
+      const availableRegions = (response.regions || []).filter(
+        (r) => r.available
+      );
+
       if (availableRegions.length > 0) {
-        regionOptions.value = availableRegions.map((r) => ({ label: r.name, value: r.id }));
+        regionOptions.value = availableRegions.map((r) => ({
+          label: r.name,
+          value: r.id,
+        }));
         // Auto-select first region if none selected
-        if (!form.value.region && availableRegions.length === 1 && availableRegions[0]) {
+        if (
+          !form.value.region &&
+          availableRegions.length === 1 &&
+          availableRegions[0]
+        ) {
           form.value.region = availableRegions[0].id;
         }
       } else {
@@ -239,7 +345,12 @@
       console.error("Failed to load regions:", err);
       // Show error but don't default
       regionOptions.value = [];
-      error.value = err instanceof Error ? err : new Error("Failed to load VPS regions. Please ensure VPS_REGIONS environment variable is configured.");
+      error.value =
+        err instanceof Error
+          ? err
+          : new Error(
+              "Failed to load VPS regions. Please ensure VPS_REGIONS environment variable is configured."
+            );
     } finally {
       loadingRegions.value = false;
     }
@@ -256,7 +367,9 @@
         .map((s) => ({
           label: s.name,
           value: s.id,
-          description: `${s.cpuCores} CPU • ${formatMemory(s.memoryBytes)} RAM • ${formatDisk(s.diskBytes)} Storage`,
+          description: `${s.cpuCores} CPU • ${formatMemory(
+            s.memoryBytes
+          )} RAM • ${formatDisk(s.diskBytes)} Storage`,
           catalogDescription: s.description || undefined,
           minimumPaymentCents: s.minimumPaymentCents || 0,
           cpuCores: s.cpuCores,
@@ -271,12 +384,15 @@
   };
 
   // Reload sizes when region changes
-  watch(() => form.value.region, () => {
-    if (form.value.region) {
-      loadSizes();
-      form.value.size = ""; // Reset size selection
+  watch(
+    () => form.value.region,
+    () => {
+      if (form.value.region) {
+        loadSizes();
+        form.value.size = ""; // Reset size selection
+      }
     }
-  });
+  );
 
   const handleCreate = async () => {
     errors.value = {};
@@ -299,11 +415,12 @@
     isCreating.value = true;
     try {
       // Convert image string back to number (enum value)
-      const imageValue = typeof form.value.image === "string" 
-        ? Number(form.value.image) 
-        : form.value.image;
-      
-      await client.createVPS({
+      const imageValue =
+        typeof form.value.image === "string"
+          ? Number(form.value.image)
+          : form.value.image;
+
+      const response = await client.createVPS({
         organizationId: organizationId.value || "",
         name: form.value.name.trim(),
         description: form.value.description.trim() || undefined,
@@ -312,10 +429,20 @@
         size: form.value.size,
       });
 
-      emit("created");
-      updateOpen(false);
+      // Capture password if provided (one-time only)
+      if (response.vps?.rootPassword) {
+        createdPassword.value = response.vps.rootPassword;
+        updateOpen(false);
+        await nextTick();
+        showPasswordDialog.value = true;
+      } else {
+        // No password returned, proceed normally
+        emit("created");
+        updateOpen(false);
+      }
     } catch (err) {
-      error.value = err instanceof Error ? err : new Error("Failed to create VPS");
+      error.value =
+        err instanceof Error ? err : new Error("Failed to create VPS");
       await showAlert({
         title: "Failed to create VPS",
         message: error.value.message,
@@ -324,5 +451,14 @@
       isCreating.value = false;
     }
   };
-</script>
 
+  const copyPassword = async () => {
+    if (!createdPassword.value) return;
+    try {
+      await navigator.clipboard.writeText(createdPassword.value);
+      toast.success("Password copied to clipboard");
+    } catch (err) {
+      toast.error("Failed to copy password");
+    }
+  };
+</script>
