@@ -298,7 +298,7 @@
                         <OuiStack gap="sm">
                           <OuiText size="sm" weight="semibold" color="primary">SSH Access</OuiText>
                           <OuiText size="sm" color="secondary">
-                            Connect to your VPS via SSH using the SSH proxy.
+                            Connect to your VPS via SSH using the SSH proxy. SSH key authentication is tried first, then password authentication.
                           </OuiText>
                           <div v-if="sshInfo" class="mt-2">
                             <OuiText size="xs" weight="semibold" class="mb-1">SSH Command:</OuiText>
@@ -447,7 +447,140 @@
                       </OuiStack>
                     </OuiCardBody>
                   </OuiCard>
+
+                  <!-- Password Management -->
+                  <OuiCard>
+                    <OuiCardHeader>
+                      <OuiStack gap="xs">
+                        <OuiText as="h2" class="oui-card-title">Root Password</OuiText>
+                        <OuiText color="secondary" size="sm">
+                          Reset the root password for this VPS instance. The new password will be shown once and must be saved immediately.
+                        </OuiText>
+                      </OuiStack>
+                    </OuiCardHeader>
+                    <OuiCardBody>
+                      <OuiStack gap="md">
+                        <OuiBox variant="info" p="sm" rounded="md">
+                          <OuiStack gap="xs">
+                            <OuiText size="xs" weight="semibold">Security Note</OuiText>
+                            <OuiText size="xs" color="secondary">
+                              SSH key authentication is preferred and tried first. Passwords are only used as a fallback. For better security, use SSH keys instead of passwords.
+                            </OuiText>
+                          </OuiStack>
+                        </OuiBox>
+
+                        <OuiButton
+                          variant="outline"
+                          color="warning"
+                          @click="openResetPasswordDialog"
+                          :disabled="resettingPassword || !vps.instanceId"
+                          class="self-start gap-2"
+                        >
+                          <KeyIcon class="h-4 w-4" />
+                          {{ resettingPassword ? "Resetting..." : "Reset Root Password" }}
+                        </OuiButton>
+
+                        <OuiText size="xs" color="secondary">
+                          After resetting, you'll need to reboot the VPS for the new password to take effect. The password will only be shown once.
+                        </OuiText>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
                 </OuiStack>
+
+                <!-- Reset Password Dialog -->
+                <OuiDialog
+                  v-model:open="resetPasswordDialogOpen"
+                  title="Reset Root Password"
+                  description="A new root password will be generated and shown once. Please save it immediately."
+                  size="md"
+                >
+                  <OuiStack gap="md" v-if="!newPassword">
+                    <OuiBox variant="warning" p="md" rounded="lg">
+                      <OuiStack gap="xs">
+                        <OuiText size="sm" weight="semibold" color="warning">
+                          ⚠️ Important
+                        </OuiText>
+                        <OuiText size="xs" color="secondary">
+                          The new password will only be shown once. After closing this dialog, you won't be able to see it again. Make sure to save it securely.
+                        </OuiText>
+                        <OuiText size="xs" color="secondary">
+                          The password will take effect after the VPS is rebooted or cloud-init is re-run.
+                        </OuiText>
+                      </OuiStack>
+                    </OuiBox>
+
+                    <OuiText color="secondary" size="sm">
+                      Are you sure you want to reset the root password for this VPS instance?
+                    </OuiText>
+                  </OuiStack>
+
+                  <OuiStack gap="md" v-else>
+                    <OuiBox variant="warning" p="md" rounded="lg">
+                      <OuiStack gap="xs">
+                        <OuiText size="sm" weight="semibold" color="warning">
+                          ⚠️ Save This Password Now
+                        </OuiText>
+                        <OuiText size="xs" color="secondary">
+                          This password will only be shown once. If you lose it, you'll need to reset it again.
+                        </OuiText>
+                      </OuiStack>
+                    </OuiBox>
+
+                    <OuiStack gap="xs">
+                      <OuiText size="sm" weight="medium">New Root Password</OuiText>
+                      <OuiBox p="md" rounded="md" class="bg-surface-muted font-mono text-sm">
+                        <OuiFlex justify="between" align="center" gap="sm">
+                          <OuiText class="select-all">{{ newPassword }}</OuiText>
+                          <OuiButton
+                            variant="ghost"
+                            size="xs"
+                            @click="copyNewPassword"
+                            class="gap-1"
+                          >
+                            <ClipboardDocumentListIcon class="h-4 w-4" />
+                            Copy
+                          </OuiButton>
+                        </OuiFlex>
+                      </OuiBox>
+                      <OuiText size="xs" color="secondary">
+                        {{ resetPasswordMessage || "The password will take effect after the VPS is rebooted or cloud-init is re-run." }}
+                      </OuiText>
+                    </OuiStack>
+                  </OuiStack>
+
+                  <template #footer>
+                    <OuiFlex justify="end" gap="sm">
+                      <OuiButton
+                        v-if="!newPassword"
+                        variant="ghost"
+                        @click="resetPasswordDialogOpen = false"
+                        :disabled="resettingPassword"
+                      >
+                        Cancel
+                      </OuiButton>
+                      <OuiButton
+                        v-if="!newPassword"
+                        color="warning"
+                        @click="handleResetPassword"
+                        :disabled="resettingPassword || !vps.instanceId"
+                      >
+                        {{ resettingPassword ? "Resetting..." : "Reset Password" }}
+                      </OuiButton>
+                      <OuiButton
+                        v-else
+                        color="primary"
+                        @click="() => {
+                          resetPasswordDialogOpen = false;
+                          newPassword = null;
+                          resetPasswordMessage = null;
+                        }"
+                      >
+                        I've Saved the Password
+                      </OuiButton>
+                    </OuiFlex>
+                  </template>
+                </OuiDialog>
 
                 <!-- Edit SSH Key Dialog -->
                 <OuiDialog
@@ -712,6 +845,12 @@ const editingSSHKeyName = ref("");
 const editingSSHKeyId = ref<string | null>(null);
 const editingSSHKeyError = ref("");
 
+// Password Reset
+const resetPasswordDialogOpen = ref(false);
+const resettingPassword = ref(false);
+const newPassword = ref<string | null>(null);
+const resetPasswordMessage = ref<string | null>(null);
+
 const fetchSSHKeys = async () => {
   if (!orgId.value) {
     sshKeys.value = [];
@@ -903,6 +1042,44 @@ const removeSSHKey = async (keyId: string) => {
 const formatSSHKeyDate = (timestamp: { seconds: number | bigint; nanos: number } | undefined) => {
   if (!timestamp) return "Unknown";
   return formatDate(timestamp);
+};
+
+// Password Reset Functions
+const openResetPasswordDialog = () => {
+  resetPasswordDialogOpen.value = true;
+  newPassword.value = null;
+  resetPasswordMessage.value = null;
+};
+
+const handleResetPassword = async () => {
+  if (!vps.value || !orgId.value) return;
+
+  resettingPassword.value = true;
+  try {
+    const res = await client.resetVPSPassword({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+    newPassword.value = res.rootPassword || null;
+    resetPasswordMessage.value = res.message || null;
+    toast.success("Password reset successfully", "Please save the new password - it will not be shown again.");
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    toast.error("Failed to reset password", message);
+    resetPasswordDialogOpen.value = false;
+  } finally {
+    resettingPassword.value = false;
+  }
+};
+
+const copyNewPassword = async () => {
+  if (!newPassword.value) return;
+  try {
+    await navigator.clipboard.writeText(newPassword.value);
+    toast.success("Password copied to clipboard");
+  } catch (err) {
+    toast.error("Failed to copy password");
+  }
 };
 
 // Fetch SSH keys when organization changes
