@@ -94,6 +94,10 @@ service VPSService {
   rpc AddSSHKey(AddSSHKeyRequest) returns (AddSSHKeyResponse);
   rpc UpdateSSHKey(UpdateSSHKeyRequest) returns (UpdateSSHKeyResponse);
   rpc RemoveSSHKey(RemoveSSHKeyRequest) returns (RemoveSSHKeyResponse);
+  
+  // Reset root password for a VPS instance
+  // Password is generated and returned once, then discarded (never stored)
+  rpc ResetVPSPassword(ResetVPSPasswordRequest) returns (ResetVPSPasswordResponse);
 }
 
 message ListVPSRequest {
@@ -518,5 +522,18 @@ message RemoveSSHKeyResponse {
   // Only populated for org-wide keys (vps_id is null)
   repeated string affected_vps_ids = 1;
   repeated string affected_vps_names = 2; // Corresponding VPS names for the IDs
+}
+
+// Password reset messages
+message ResetVPSPasswordRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+message ResetVPSPasswordResponse {
+  string vps_id = 1;
+  string root_password = 2; // New root password (shown once, never stored)
+  // Note: Password will take effect after VM reboot or cloud-init re-run
+  string message = 3; // Instructions for applying the password change
 }
 
