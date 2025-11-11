@@ -491,7 +491,10 @@ type ProxySSHRequest struct {
 	// For "connect": target port (default: 22)
 	Port int32 `protobuf:"varint,4,opt,name=port,proto3" json:"port,omitempty"`
 	// For "data": SSH data to forward
-	Data          []byte `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`
+	Data []byte `protobuf:"bytes,5,opt,name=data,proto3" json:"data,omitempty"`
+	// For "connect": SSH public key (in authorized_keys format) for VPS authentication
+	// The gateway will use this key to authenticate with the VPS
+	SshPublicKey  string `protobuf:"bytes,6,opt,name=ssh_public_key,json=sshPublicKey,proto3" json:"ssh_public_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -559,6 +562,13 @@ func (x *ProxySSHRequest) GetData() []byte {
 		return x.Data
 	}
 	return nil
+}
+
+func (x *ProxySSHRequest) GetSshPublicKey() string {
+	if x != nil {
+		return x.SshPublicKey
+	}
+	return ""
 }
 
 // ProxySSHResponse is a response in the SSH proxy stream
@@ -1164,13 +1174,14 @@ const file_obiente_cloud_vpsgateway_v1_gateway_service_proto_rawDesc = "" +
 	"\fallocated_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\vallocatedAt\x12?\n" +
 	"\rlease_expires\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\fleaseExpires\"^\n" +
 	"\x0fListIPsResponse\x12K\n" +
-	"\vallocations\x18\x01 \x03(\v2).obiente.cloud.vpsgateway.v1.IPAllocationR\vallocations\"\x8a\x01\n" +
+	"\vallocations\x18\x01 \x03(\v2).obiente.cloud.vpsgateway.v1.IPAllocationR\vallocations\"\xb0\x01\n" +
 	"\x0fProxySSHRequest\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x16\n" +
 	"\x06target\x18\x03 \x01(\tR\x06target\x12\x12\n" +
 	"\x04port\x18\x04 \x01(\x05R\x04port\x12\x12\n" +
-	"\x04data\x18\x05 \x01(\fR\x04data\"u\n" +
+	"\x04data\x18\x05 \x01(\fR\x04data\x12$\n" +
+	"\x0essh_public_key\x18\x06 \x01(\tR\fsshPublicKey\"u\n" +
 	"\x10ProxySSHResponse\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x12\n" +

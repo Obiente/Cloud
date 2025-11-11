@@ -97,6 +97,9 @@ const (
 	VPSServiceUpdateSSHKeyProcedure = "/obiente.cloud.vps.v1.VPSService/UpdateSSHKey"
 	// VPSServiceRemoveSSHKeyProcedure is the fully-qualified name of the VPSService's RemoveSSHKey RPC.
 	VPSServiceRemoveSSHKeyProcedure = "/obiente.cloud.vps.v1.VPSService/RemoveSSHKey"
+	// VPSServiceResetVPSPasswordProcedure is the fully-qualified name of the VPSService's
+	// ResetVPSPassword RPC.
+	VPSServiceResetVPSPasswordProcedure = "/obiente.cloud.vps.v1.VPSService/ResetVPSPassword"
 )
 
 // VPSServiceClient is a client for the obiente.cloud.vps.v1.VPSService service.
@@ -144,6 +147,9 @@ type VPSServiceClient interface {
 	AddSSHKey(context.Context, *connect.Request[v1.AddSSHKeyRequest]) (*connect.Response[v1.AddSSHKeyResponse], error)
 	UpdateSSHKey(context.Context, *connect.Request[v1.UpdateSSHKeyRequest]) (*connect.Response[v1.UpdateSSHKeyResponse], error)
 	RemoveSSHKey(context.Context, *connect.Request[v1.RemoveSSHKeyRequest]) (*connect.Response[v1.RemoveSSHKeyResponse], error)
+	// Reset root password for a VPS instance
+	// Password is generated and returned once, then discarded (never stored)
+	ResetVPSPassword(context.Context, *connect.Request[v1.ResetVPSPasswordRequest]) (*connect.Response[v1.ResetVPSPasswordResponse], error)
 }
 
 // NewVPSServiceClient constructs a client for the obiente.cloud.vps.v1.VPSService service. By
@@ -313,6 +319,12 @@ func NewVPSServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(vPSServiceMethods.ByName("RemoveSSHKey")),
 			connect.WithClientOptions(opts...),
 		),
+		resetVPSPassword: connect.NewClient[v1.ResetVPSPasswordRequest, v1.ResetVPSPasswordResponse](
+			httpClient,
+			baseURL+VPSServiceResetVPSPasswordProcedure,
+			connect.WithSchema(vPSServiceMethods.ByName("ResetVPSPassword")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -344,6 +356,7 @@ type vPSServiceClient struct {
 	addSSHKey             *connect.Client[v1.AddSSHKeyRequest, v1.AddSSHKeyResponse]
 	updateSSHKey          *connect.Client[v1.UpdateSSHKeyRequest, v1.UpdateSSHKeyResponse]
 	removeSSHKey          *connect.Client[v1.RemoveSSHKeyRequest, v1.RemoveSSHKeyResponse]
+	resetVPSPassword      *connect.Client[v1.ResetVPSPasswordRequest, v1.ResetVPSPasswordResponse]
 }
 
 // ListVPS calls obiente.cloud.vps.v1.VPSService.ListVPS.
@@ -476,6 +489,11 @@ func (c *vPSServiceClient) RemoveSSHKey(ctx context.Context, req *connect.Reques
 	return c.removeSSHKey.CallUnary(ctx, req)
 }
 
+// ResetVPSPassword calls obiente.cloud.vps.v1.VPSService.ResetVPSPassword.
+func (c *vPSServiceClient) ResetVPSPassword(ctx context.Context, req *connect.Request[v1.ResetVPSPasswordRequest]) (*connect.Response[v1.ResetVPSPasswordResponse], error) {
+	return c.resetVPSPassword.CallUnary(ctx, req)
+}
+
 // VPSServiceHandler is an implementation of the obiente.cloud.vps.v1.VPSService service.
 type VPSServiceHandler interface {
 	// List organization VPS instances
@@ -521,6 +539,9 @@ type VPSServiceHandler interface {
 	AddSSHKey(context.Context, *connect.Request[v1.AddSSHKeyRequest]) (*connect.Response[v1.AddSSHKeyResponse], error)
 	UpdateSSHKey(context.Context, *connect.Request[v1.UpdateSSHKeyRequest]) (*connect.Response[v1.UpdateSSHKeyResponse], error)
 	RemoveSSHKey(context.Context, *connect.Request[v1.RemoveSSHKeyRequest]) (*connect.Response[v1.RemoveSSHKeyResponse], error)
+	// Reset root password for a VPS instance
+	// Password is generated and returned once, then discarded (never stored)
+	ResetVPSPassword(context.Context, *connect.Request[v1.ResetVPSPasswordRequest]) (*connect.Response[v1.ResetVPSPasswordResponse], error)
 }
 
 // NewVPSServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -686,6 +707,12 @@ func NewVPSServiceHandler(svc VPSServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(vPSServiceMethods.ByName("RemoveSSHKey")),
 		connect.WithHandlerOptions(opts...),
 	)
+	vPSServiceResetVPSPasswordHandler := connect.NewUnaryHandler(
+		VPSServiceResetVPSPasswordProcedure,
+		svc.ResetVPSPassword,
+		connect.WithSchema(vPSServiceMethods.ByName("ResetVPSPassword")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.vps.v1.VPSService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case VPSServiceListVPSProcedure:
@@ -740,6 +767,8 @@ func NewVPSServiceHandler(svc VPSServiceHandler, opts ...connect.HandlerOption) 
 			vPSServiceUpdateSSHKeyHandler.ServeHTTP(w, r)
 		case VPSServiceRemoveSSHKeyProcedure:
 			vPSServiceRemoveSSHKeyHandler.ServeHTTP(w, r)
+		case VPSServiceResetVPSPasswordProcedure:
+			vPSServiceResetVPSPasswordHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -851,4 +880,8 @@ func (UnimplementedVPSServiceHandler) UpdateSSHKey(context.Context, *connect.Req
 
 func (UnimplementedVPSServiceHandler) RemoveSSHKey(context.Context, *connect.Request[v1.RemoveSSHKeyRequest]) (*connect.Response[v1.RemoveSSHKeyResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.RemoveSSHKey is not implemented"))
+}
+
+func (UnimplementedVPSServiceHandler) ResetVPSPassword(context.Context, *connect.Request[v1.ResetVPSPasswordRequest]) (*connect.Response[v1.ResetVPSPasswordResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSService.ResetVPSPassword is not implemented"))
 }
