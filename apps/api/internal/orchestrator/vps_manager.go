@@ -89,25 +89,27 @@ func NewVPSManager() (*VPSManager, error) {
 }
 
 // CreateVPS provisions a new VPS instance via Proxmox
-func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*database.VPSInstance, error) {
+// CreateVPS creates a new VPS instance
+// Returns: VPS instance, root password (one-time only, not stored), error
+func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*database.VPSInstance, string, error) {
 	logger.Info("[VPSManager] Creating VPS instance %s", config.VPSID)
 
 	// Get organization settings to check if inter-VM communication is allowed
 	var org database.Organization
 	if err := database.DB.Where("id = ?", config.OrganizationID).First(&org).Error; err != nil {
-		return nil, fmt.Errorf("failed to get organization: %w", err)
+		return nil, "", fmt.Errorf("failed to get organization: %w", err)
 	}
 
 	// Get Proxmox configuration from environment variables
 	proxmoxConfig, err := GetProxmoxConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Proxmox config: %w", err)
+		return nil, "", fmt.Errorf("failed to get Proxmox config: %w", err)
 	}
 
 	// Create Proxmox client
 	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Proxmox client: %w", err)
+		return nil, "", fmt.Errorf("failed to create Proxmox client: %w", err)
 	}
 
 	// Allocate IP address from gateway if available
@@ -130,28 +132,31 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 	}
 
 	// Provision VM via Proxmox API
-	vmID, err := proxmoxClient.CreateVM(ctx, config, org.AllowInterVMCommunication)
-	if err != nil {
-		// If VM creation fails, release the allocated IP
-		if vm.gatewayClient != nil && allocatedIP != "" {
-			if releaseErr := vm.gatewayClient.ReleaseIP(ctx, config.VPSID); releaseErr != nil {
-				logger.Warn("[VPSManager] Failed to release IP %s after VM creation failure: %v", allocatedIP, releaseErr)
+	createResult, err := proxmoxClient.CreateVM(ctx, config, org.AllowInterVMCommunication)
+		if err != nil {
+			// If VM creation fails, release the allocated IP
+			if vm.gatewayClient != nil && allocatedIP != "" {
+				if releaseErr := vm.gatewayClient.ReleaseIP(ctx, config.VPSID); releaseErr != nil {
+					logger.Warn("[VPSManager] Failed to release IP %s after VM creation failure: %v", allocatedIP, releaseErr)
+				}
 			}
+			return nil, "", fmt.Errorf("failed to provision VM via Proxmox: %w", err)
 		}
-		return nil, fmt.Errorf("failed to provision VM via Proxmox: %w", err)
-	}
 
-	// Get actual VM status from Proxmox and map to our status enum
-	vmIDInt := 0
-	fmt.Sscanf(vmID, "%d", &vmIDInt)
-	if vmIDInt == 0 {
-		return nil, fmt.Errorf("invalid VM ID: %s", vmID)
-	}
+		vmID := createResult.VMID
+		rootPassword := createResult.Password
 
-	nodes, err := proxmoxClient.ListNodes(ctx)
-	if err != nil || len(nodes) == 0 {
-		return nil, fmt.Errorf("failed to find Proxmox node: %w", err)
-	}
+		// Get actual VM status from Proxmox and map to our status enum
+		vmIDInt := 0
+		fmt.Sscanf(vmID, "%d", &vmIDInt)
+		if vmIDInt == 0 {
+			return nil, "", fmt.Errorf("invalid VM ID: %s", vmID)
+		}
+
+		nodes, err := proxmoxClient.ListNodes(ctx)
+		if err != nil || len(nodes) == 0 {
+			return nil, "", fmt.Errorf("failed to find Proxmox node: %w", err)
+		}
 
 	// Verify VM actually exists before creating VPS record
 	// If GetVMStatus fails with "does not exist", the VM creation failed
@@ -160,10 +165,10 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 		errorMsg := err.Error()
 		// Check if the error indicates the VM config doesn't exist (VM creation failed)
 		if strings.Contains(errorMsg, "does not exist") || strings.Contains(errorMsg, "Configuration file") {
-			return nil, fmt.Errorf("VM creation failed: VM %d does not exist in Proxmox. The VM may not have been created properly: %w", vmIDInt, err)
+			return nil, "", fmt.Errorf("VM creation failed: VM %d does not exist in Proxmox. The VM may not have been created properly: %w", vmIDInt, err)
 		}
 		// For other errors, still fail - we need to verify the VM exists
-		return nil, fmt.Errorf("failed to verify VM exists after creation: %w", err)
+		return nil, "", fmt.Errorf("failed to verify VM exists after creation: %w", err)
 	}
 
 	// Map Proxmox status to our VPSStatus enum
@@ -190,6 +195,9 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
+	
+	// NOTE: Root password is NOT stored in database for security
+	// Password is only returned once in CreateVPS response, then discarded
 
 	// Store metadata as JSON (must be valid JSON or NULL for JSONB columns)
 	if len(config.Metadata) > 0 {
@@ -233,13 +241,15 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 
 	// Save to database
 	if err := database.DB.Create(vpsInstance).Error; err != nil {
-		return nil, fmt.Errorf("failed to create VPS instance record: %w", err)
+		return nil, "", fmt.Errorf("failed to create VPS instance record: %w", err)
 	}
 
 	logger.Info("[VPSManager] Created VPS instance %s (VM ID: %s)",
 		config.VPSID, vmID)
 
-	return vpsInstance, nil
+	// Return VPS instance and root password (password is NOT stored in database)
+	// Password is only returned once in CreateVPS response, then discarded
+	return vpsInstance, rootPassword, nil
 }
 
 // VPSConfig holds configuration for creating a VPS instance
@@ -728,6 +738,97 @@ func (vm *VPSManager) UpdateVPSSSHKeysExcluding(ctx context.Context, vpsID strin
 	}
 
 	logger.Info("[VPSManager] Updated SSH keys for VPS %s (VM %d)", vpsID, vmIDInt)
+	return nil
+}
+
+// EnableVPSGuestAgent enables QEMU guest agent for a specific VPS instance
+func (vm *VPSManager) EnableVPSGuestAgent(ctx context.Context, vpsID string) error {
+	// Get VPS instance
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		return fmt.Errorf("VPS not found: %w", err)
+	}
+
+	if vps.InstanceID == nil {
+		return fmt.Errorf("VPS has no instance ID")
+	}
+
+	// Get Proxmox configuration
+	proxmoxConfig, err := GetProxmoxConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get Proxmox config: %w", err)
+	}
+
+	// Create Proxmox client
+	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create Proxmox client: %w", err)
+	}
+
+	vmIDInt := 0
+	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+	if vmIDInt == 0 {
+		return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
+	}
+
+	// Find the node where the VM is running
+	nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+	if err != nil {
+		return fmt.Errorf("failed to find VM node: %w", err)
+	}
+
+	// Enable guest agent in VM config
+	if err := proxmoxClient.EnableVMGuestAgent(ctx, nodeName, vmIDInt); err != nil {
+		return fmt.Errorf("failed to enable guest agent: %w", err)
+	}
+
+	logger.Info("[VPSManager] Enabled guest agent for VPS %s (VM %d)", vpsID, vmIDInt)
+	return nil
+}
+
+// RecoverVPSGuestAgent recovers QEMU guest agent for a specific VPS instance
+// This updates both the VM config and cloud-init to ensure guest agent is properly configured
+func (vm *VPSManager) RecoverVPSGuestAgent(ctx context.Context, vpsID string) error {
+	// Get VPS instance
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		return fmt.Errorf("VPS not found: %w", err)
+	}
+
+	if vps.InstanceID == nil {
+		return fmt.Errorf("VPS has no instance ID")
+	}
+
+	// Get Proxmox configuration
+	proxmoxConfig, err := GetProxmoxConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get Proxmox config: %w", err)
+	}
+
+	// Create Proxmox client
+	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create Proxmox client: %w", err)
+	}
+
+	vmIDInt := 0
+	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+	if vmIDInt == 0 {
+		return fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
+	}
+
+	// Find the node where the VM is running
+	nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+	if err != nil {
+		return fmt.Errorf("failed to find VM node: %w", err)
+	}
+
+	// Recover guest agent (updates both VM config and cloud-init)
+	if err := proxmoxClient.RecoverVMGuestAgent(ctx, nodeName, vmIDInt, vps.OrganizationID, vpsID); err != nil {
+		return fmt.Errorf("failed to recover guest agent: %w", err)
+	}
+
+	logger.Info("[VPSManager] Recovered guest agent for VPS %s (VM %d). VM should be rebooted for changes to take effect.", vpsID, vmIDInt)
 	return nil
 }
 

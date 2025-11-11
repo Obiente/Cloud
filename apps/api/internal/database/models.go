@@ -444,6 +444,9 @@ type VPSInstance struct {
 	// SSH access
 	SSHKeyID       *string   `gorm:"column:ssh_key_id" json:"ssh_key_id"`
 	
+	// NOTE: Root password is NEVER stored in the database for security
+	// Password is only returned once in CreateVPS response, then discarded
+	
 	// Metadata (stored as JSON object)
 	Metadata       string    `gorm:"column:metadata;type:jsonb" json:"metadata"`
 	

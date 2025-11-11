@@ -156,13 +156,19 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 	config.DiskBytes = sizeCatalog.DiskBytes
 
 	// Create VPS via manager
-	vpsInstance, err := s.vpsManager.CreateVPS(ctx, config)
+	vpsInstance, rootPassword, err := s.vpsManager.CreateVPS(ctx, config)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS: %w", err))
 	}
 
+	// Convert to proto and include password (one-time only)
+	protoVPS := vpsToProto(vpsInstance)
+	if rootPassword != "" {
+		protoVPS.RootPassword = &rootPassword
+	}
+
 	return connect.NewResponse(&vpsv1.CreateVPSResponse{
-		Vps: vpsToProto(vpsInstance),
+		Vps: protoVPS,
 	}), nil
 }
 
@@ -381,6 +387,9 @@ func vpsToProto(vps *database.VPSInstance) *vpsv1.VPSInstance {
 			proto.Metadata = metadata
 		}
 	}
+
+	// NOTE: Root password is NEVER returned in GetVPS or ListVPS responses
+	// Password is only shown once during creation, then discarded for security
 
 	return proto
 }
