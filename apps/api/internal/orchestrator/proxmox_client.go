@@ -352,20 +352,26 @@ func (pc *ProxmoxClient) apiRequestForm(ctx context.Context, method, endpoint st
 
 // CreateVM creates a new VM in Proxmox with cloud-init support
 // allowInterVM: if true, allows VMs in the same organization to communicate with each other
-func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowInterVM bool) (string, error) {
+// CreateVMResult holds the result of VM creation
+type CreateVMResult struct {
+	VMID     string
+	Password string // Root password for the VM
+}
+
+func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowInterVM bool) (*CreateVMResult, error) {
 	// Get next available VM ID
 	vmID, err := pc.getNextVMID(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to get next VM ID: %w", err)
+		return nil, fmt.Errorf("failed to get next VM ID: %w", err)
 	}
 
 	// Select node (use first available for now)
 	nodes, err := pc.ListNodes(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to list Proxmox nodes: %w", err)
+		return nil, fmt.Errorf("failed to list Proxmox nodes: %w", err)
 	}
 	if len(nodes) == 0 {
-		return "", fmt.Errorf("no Proxmox nodes available")
+		return nil, fmt.Errorf("no Proxmox nodes available")
 	}
 	nodeName := nodes[0]
 
@@ -389,7 +395,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 			}
 		}
 		if !storageExists {
-			return "", fmt.Errorf("storage pool '%s' does not exist on node '%s'. Available storage pools: %v. Please set PROXMOX_STORAGE_POOL to one of the available pools or create the storage pool in Proxmox", storage, nodeName, availableStorages)
+			return nil, fmt.Errorf("storage pool '%s' does not exist on node '%s'. Available storage pools: %v. Please set PROXMOX_STORAGE_POOL to one of the available pools or create the storage pool in Proxmox", storage, nodeName, availableStorages)
 		}
 
 		// Get storage type to determine disk format
@@ -591,12 +597,12 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 
 							if templateDiskKey == "" {
 								logger.Error("[ProxmoxClient] CRITICAL: Template %s (VMID %d) does not have any disk configured! Template config keys: %v", imageTemplate, templateVMID, getMapKeys(templateConfig))
-								return "", fmt.Errorf("template %s (VMID %d) does not have a disk configured - cannot clone VM without disk. Please configure a disk for the template first", imageTemplate, templateVMID)
+								return nil, fmt.Errorf("template %s (VMID %d) does not have a disk configured - cannot clone VM without disk. Please configure a disk for the template first", imageTemplate, templateVMID)
 							}
 						}
 					} else {
 						logger.Error("[ProxmoxClient] Failed to get template config: %v", err)
-						return "", fmt.Errorf("failed to get template config: %w", err)
+						return nil, fmt.Errorf("failed to get template config: %w", err)
 					}
 
 					// Wait a bit longer for clone to fully complete
@@ -1039,51 +1045,31 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		// Specifying interface name can cause issues if the interface name doesn't match
 		vmConfig["ipconfig0"] = "ip=dhcp"
 		vmConfig["ciuser"] = "root"
-		vmConfig["cipassword"] = generateRandomPassword(16) // Generate random root password
+		rootPassword := GenerateRandomPassword(16) // Generate random root password
+		vmConfig["cipassword"] = rootPassword
 
-		// Add SSH keys from organization
-		// Proxmox's sshkeys parameter expects raw SSH public keys separated by newlines
-		// Proxmox will handle the encoding internally when processing the form data
+		// Add SSH keys for VPS (includes both VPS-specific and org-wide keys)
 		if config.OrganizationID != "" {
-			sshKeys, err := database.GetSSHKeysForOrganization(config.OrganizationID)
+			// Use GetSSHKeysForVPS to get both VPS-specific and org-wide keys
+			// This ensures all relevant keys are added during VPS creation
+			sshKeys, err := database.GetSSHKeysForVPS(config.OrganizationID, config.VPSID)
 			if err == nil && len(sshKeys) > 0 {
-				var sshKeysStr strings.Builder
-				keyCount := 0
-				for _, key := range sshKeys {
-					// Trim leading/trailing whitespace (SSH keys should be single-line)
-					trimmedKey := strings.TrimSpace(key.PublicKey)
-					// Remove any newlines/carriage returns from the key itself (keys should be single-line)
-					trimmedKey = strings.ReplaceAll(trimmedKey, "\n", "")
-					trimmedKey = strings.ReplaceAll(trimmedKey, "\r", "")
-					if trimmedKey == "" {
-						continue // Skip empty keys
+				// Format SSH keys using reusable function
+				sshKeysValue := formatSSHKeysForProxmox(sshKeys)
+				if sshKeysValue != "" {
+					// Store the formatted (but not encoded) value in vmConfig
+					// The encoding will be handled by apiRequestForm when creating the form data
+					// However, Proxmox v8.4 requires double-encoding, so we need to handle this specially
+					// For now, store the raw formatted value - we'll encode it when building form data
+					vmConfig["sshkeys"] = sshKeysValue
+					logger.Info("[ProxmoxClient] Adding %d SSH key(s) to cloud-init for VM %d (org: %s)", len(sshKeys), vmID, config.OrganizationID)
+					logger.Debug("[ProxmoxClient] SSH keys value length: %d, ends with newline: %v", len(sshKeysValue), strings.HasSuffix(sshKeysValue, "\n"))
+					sshKeysPreview := sshKeysValue
+					if len(sshKeysPreview) > 100 {
+						sshKeysPreview = sshKeysPreview[:100] + "..."
 					}
-					if keyCount > 0 {
-						sshKeysStr.WriteString("\n")
-					}
-					// Use raw SSH public key - Proxmox expects newline-separated raw keys
-					sshKeysStr.WriteString(trimmedKey)
-					keyCount++
+					logger.Debug("[ProxmoxClient] SSH keys content (preview): %s", sshKeysPreview)
 				}
-				// Get the final string and ensure no trailing newline
-				sshKeysValue := sshKeysStr.String()
-				// Remove any trailing newlines (there shouldn't be any, but be safe)
-				sshKeysValue = strings.TrimSuffix(sshKeysValue, "\r\n")
-				sshKeysValue = strings.TrimSuffix(sshKeysValue, "\n")
-				sshKeysValue = strings.TrimSuffix(sshKeysValue, "\r")
-				vmConfig["sshkeys"] = sshKeysValue
-				// Debug: check the last character
-				lastChar := ""
-				if len(sshKeysValue) > 0 {
-					lastChar = string(sshKeysValue[len(sshKeysValue)-1])
-				}
-				logger.Debug("[ProxmoxClient] SSH keys value length: %d, ends with newline: %v, last char: %q", len(sshKeysValue), strings.HasSuffix(sshKeysValue, "\n"), lastChar)
-				logger.Info("[ProxmoxClient] Adding %d SSH key(s) to cloud-init for VM %d (org: %s)", len(sshKeys), vmID, config.OrganizationID)
-				sshKeysPreview := sshKeysValue
-				if len(sshKeysPreview) > 100 {
-					sshKeysPreview = sshKeysPreview[:100] + "..."
-				}
-				logger.Debug("[ProxmoxClient] SSH keys content (preview): %s", sshKeysPreview)
 			} else if err != nil {
 				logger.Warn("[ProxmoxClient] Failed to fetch SSH keys for organization %s: %v", config.OrganizationID, err)
 			} else {
@@ -1153,16 +1139,13 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 				}
 				continue
 			}
-			// Special handling for sshkeys - ensure no trailing newlines
+			// Special handling for sshkeys - Proxmox v8.4 requires double-encoding
 			if key == "sshkeys" {
 				if strValue, ok := value.(string); ok && strValue != "" {
-					// Final check: remove any trailing newlines (shouldn't be any)
-					cleanValue := strings.TrimSuffix(strings.TrimSuffix(strValue, "\r\n"), "\n")
-					cleanValue = strings.TrimSuffix(cleanValue, "\r")
-					cleanValue = strings.TrimRight(cleanValue, " \t\n\r")
-					// Set raw value - let formData.Encode() handle encoding
-					formData.Set(key, cleanValue)
-					logger.Debug("[ProxmoxClient] Setting sshkeys parameter (length: %d, ends with newline: %v)", len(cleanValue), strings.HasSuffix(cleanValue, "\n"))
+					// Use the reusable encoding function for Proxmox v8.4 double-encoding
+					encodedValue := encodeSSHKeysForProxmox(strValue)
+					formData.Set(key, encodedValue)
+					logger.Debug("[ProxmoxClient] Setting sshkeys parameter (raw length: %d, encoded length: %d)", len(strValue), len(encodedValue))
 				}
 			} else {
 				formData.Set(key, fmt.Sprintf("%v", value))
@@ -1198,6 +1181,47 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
 			resp.Body.Close()
 			logger.Info("[ProxmoxClient] Updated VM %d configuration", vmID)
+
+			// Set cloud-init userData to ensure guest agent and packages are installed
+			// This uses the generateCloudInitUserData function which includes:
+			// - SSH keys (already set via sshkeys, but included for completeness)
+			// - Package installation (qemu-guest-agent)
+			// - Service enablement (systemctl enable --now qemu-guest-agent)
+			userData := generateCloudInitUserData(config)
+			if userData != "" {
+				ciEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit", nodeName, vmID)
+				ciFormData := url.Values{}
+				// Proxmox VE 8.4 uses 'userdata' field name for cloud-init user data
+				ciFormData.Set("userdata", userData)
+				
+				ciResp, ciErr := pc.apiRequestForm(ctx, "PUT", ciEndpoint, ciFormData)
+				if ciErr == nil && ciResp != nil {
+					defer ciResp.Body.Close()
+					if ciResp.StatusCode == http.StatusOK {
+						logger.Info("[ProxmoxClient] Set cloud-init userData for VM %d (includes guest agent setup)", vmID)
+						
+						// Regenerate cloud-init to apply the userData changes
+						// This ensures cloud-init processes the new configuration on next boot
+						regenEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit/regen", nodeName, vmID)
+						regenResp, regenErr := pc.apiRequest(ctx, "POST", regenEndpoint, nil)
+						if regenErr == nil && regenResp != nil {
+							defer regenResp.Body.Close()
+							if regenResp.StatusCode == http.StatusOK {
+								logger.Info("[ProxmoxClient] Regenerated cloud-init for VM %d to apply userData changes", vmID)
+							} else {
+								logger.Warn("[ProxmoxClient] Failed to regenerate cloud-init for VM %d: status %d", vmID, regenResp.StatusCode)
+							}
+						} else if regenErr != nil {
+							logger.Warn("[ProxmoxClient] Failed to regenerate cloud-init for VM %d: %v", vmID, regenErr)
+						}
+					} else {
+						body, _ := io.ReadAll(ciResp.Body)
+						logger.Warn("[ProxmoxClient] Failed to set cloud-init userData for VM %d: status %d, response: %s", vmID, ciResp.StatusCode, string(body))
+					}
+				} else if ciErr != nil {
+					logger.Warn("[ProxmoxClient] Failed to set cloud-init userData for VM %d: %v", vmID, ciErr)
+				}
+			}
 
 			// Verify that the disk (scsi0) exists in the VM config
 			// This is a safety check to ensure the cloned VM has a disk
@@ -1474,7 +1498,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 
 		resp, err := pc.apiRequestForm(ctx, "POST", endpoint, formData)
 		if err != nil {
-			return "", fmt.Errorf("failed to create VM: %w", err)
+			return nil, fmt.Errorf("failed to create VM: %w", err)
 		}
 		defer resp.Body.Close()
 
@@ -1482,16 +1506,16 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 			body, _ := io.ReadAll(resp.Body)
 			errorMsg := string(body)
 			if resp.StatusCode == 403 {
-				return "", fmt.Errorf("failed to create VM: permission denied (status: %d). The API token needs VM.Allocate, VM.Config.Disk, and Datastore.Allocate permissions. Error: %s", resp.StatusCode, errorMsg)
+				return nil, fmt.Errorf("failed to create VM: permission denied (status: %d). The API token needs VM.Allocate, VM.Config.Disk, and Datastore.Allocate permissions. Error: %s", resp.StatusCode, errorMsg)
 			}
 			if resp.StatusCode == 500 && strings.Contains(errorMsg, "storage") {
 				// Try to get available storages for better error message
 				availableStorages, listErr := pc.listStorages(ctx, nodeName)
 				if listErr == nil && len(availableStorages) > 0 {
-					return "", fmt.Errorf("failed to create VM: storage error (status: %d). Error: %s. Available storage pools on node '%s': %v", resp.StatusCode, errorMsg, nodeName, availableStorages)
+					return nil, fmt.Errorf("failed to create VM: storage error (status: %d). Error: %s. Available storage pools on node '%s': %v", resp.StatusCode, errorMsg, nodeName, availableStorages)
 				}
 			}
-			return "", fmt.Errorf("failed to create VM: %s (status: %d)", errorMsg, resp.StatusCode)
+			return nil, fmt.Errorf("failed to create VM: %s (status: %d)", errorMsg, resp.StatusCode)
 		}
 	}
 
@@ -1509,7 +1533,18 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		// Continue anyway - VM is created
 	}
 
-	return fmt.Sprintf("%d", vmID), nil
+	// Get the root password from vmConfig (if cloud-init was used)
+	var rootPassword string
+	if useCloudInit {
+		if pwd, ok := vmConfig["cipassword"].(string); ok {
+			rootPassword = pwd
+		}
+	}
+
+	return &CreateVMResult{
+		VMID:     fmt.Sprintf("%d", vmID),
+		Password: rootPassword,
+	}, nil
 }
 
 // findTemplate finds a template VM by name pattern
@@ -1542,16 +1577,153 @@ func (pc *ProxmoxClient) findTemplate(ctx context.Context, nodeName, templatePat
 	return 0, fmt.Errorf("template %s not found", templatePattern)
 }
 
+// formatSSHKeysForProxmox formats SSH keys for Proxmox (deduplicates, cleans, and formats)
+// Returns the formatted string with keys separated by newlines (no trailing newline)
+func formatSSHKeysForProxmox(sshKeys []database.SSHKey) string {
+	if len(sshKeys) == 0 {
+		return ""
+	}
+
+	// Deduplicate keys by fingerprint (prefer VPS-specific over org-wide)
+	seenFingerprints := make(map[string]bool)
+	deduplicatedKeys := make([]database.SSHKey, 0)
+	for _, key := range sshKeys {
+		if !seenFingerprints[key.Fingerprint] {
+			seenFingerprints[key.Fingerprint] = true
+			deduplicatedKeys = append(deduplicatedKeys, key)
+		} else {
+			// Duplicate fingerprint - prefer VPS-specific over org-wide
+			for i, existingKey := range deduplicatedKeys {
+				if existingKey.Fingerprint == key.Fingerprint {
+					// If the existing key is org-wide and the new one is VPS-specific, replace it
+					if existingKey.VPSID == nil && key.VPSID != nil {
+						deduplicatedKeys[i] = key
+						logger.Debug("[ProxmoxClient] Preferring VPS-specific key %s over org-wide key %s (fingerprint: %s) for Proxmox", key.ID, existingKey.ID, key.Fingerprint)
+					}
+					break
+				}
+			}
+		}
+	}
+
+	var sshKeysStr strings.Builder
+	keyCount := 0
+	for _, key := range deduplicatedKeys {
+		// Aggressively clean the key: remove ALL whitespace, newlines, carriage returns
+		trimmedKey := strings.TrimSpace(key.PublicKey)
+		// Remove ALL newlines and carriage returns (keys must be single-line)
+		trimmedKey = strings.ReplaceAll(trimmedKey, "\n", "")
+		trimmedKey = strings.ReplaceAll(trimmedKey, "\r", "")
+		trimmedKey = strings.ReplaceAll(trimmedKey, "\t", "")
+		// Remove any other control characters
+		trimmedKey = strings.TrimSpace(trimmedKey)
+		if trimmedKey == "" {
+			continue // Skip empty keys
+		}
+
+		// Check if key already has a comment (SSH keys can have format: "key-type key-data comment")
+		// If it doesn't have a comment, add the key name as a comment
+		keyParts := strings.Fields(trimmedKey)
+		if len(keyParts) >= 2 {
+			// Key has at least type and data, check if it has a comment
+			if len(keyParts) == 2 {
+				// No comment, add the key name as comment
+				// Clean the key name to remove any characters that might cause issues
+				cleanName := strings.TrimSpace(key.Name)
+				// Remove spaces and special characters that might break the key format
+				cleanName = strings.ReplaceAll(cleanName, " ", "-")
+				cleanName = strings.ReplaceAll(cleanName, "\n", "")
+				cleanName = strings.ReplaceAll(cleanName, "\r", "")
+				if cleanName != "" {
+					trimmedKey = fmt.Sprintf("%s %s", trimmedKey, cleanName)
+				}
+			}
+			// If key already has a comment (len > 2), keep it as-is
+		}
+
+		if keyCount > 0 {
+			// Only add newline BETWEEN keys, not after the last one
+			sshKeysStr.WriteString("\n")
+		}
+		// Use raw SSH public key with name as comment
+		sshKeysStr.WriteString(trimmedKey)
+		keyCount++
+	}
+
+	// Get the final string and AGGRESSIVELY ensure no trailing newline
+	sshKeysValue := sshKeysStr.String()
+	// Multiple passes to ensure absolutely no trailing newlines
+	for strings.HasSuffix(sshKeysValue, "\r\n") || strings.HasSuffix(sshKeysValue, "\n") || strings.HasSuffix(sshKeysValue, "\r") {
+		sshKeysValue = strings.TrimSuffix(sshKeysValue, "\r\n")
+		sshKeysValue = strings.TrimSuffix(sshKeysValue, "\n")
+		sshKeysValue = strings.TrimSuffix(sshKeysValue, "\r")
+	}
+	// Final trim of any trailing whitespace
+	sshKeysValue = strings.TrimRight(sshKeysValue, " \t\n\r")
+
+	return sshKeysValue
+}
+
+// encodeSSHKeysForProxmox double-encodes SSH keys for Proxmox v8.4 API
+// Proxmox v8.4 requires sshkeys to be DOUBLE URL-encoded
+func encodeSSHKeysForProxmox(sshKeysValue string) string {
+	if sshKeysValue == "" {
+		return ""
+	}
+
+	// Clean the value: split by newlines (for multiple keys), clean each, rejoin
+	// This preserves newlines BETWEEN keys but removes trailing ones
+	keyLines := strings.Split(sshKeysValue, "\n")
+	var cleanedLines []string
+	for _, line := range keyLines {
+		// Clean each line: remove carriage returns and trim
+		line = strings.ReplaceAll(line, "\r", "")
+		line = strings.TrimSpace(line)
+		if line != "" {
+			cleanedLines = append(cleanedLines, line)
+		}
+	}
+	// Rejoin with newlines (only between keys, NOT at the end)
+	cleanValue := strings.Join(cleanedLines, "\n")
+	// Remove trailing newline if present
+	cleanValue = strings.TrimRight(cleanValue, " \t\n\r")
+
+	// Proxmox v8.4 requires sshkeys to be DOUBLE URL-encoded
+	// First encode: spaces become %20, + becomes %2B, / becomes %2F
+	firstEncoded := url.QueryEscape(cleanValue)
+	firstEncoded = strings.ReplaceAll(firstEncoded, "+", "%20")
+	// Second encode: %20 becomes %2520, %2B becomes %252B, %2F becomes %252F
+	encodedValue := url.QueryEscape(firstEncoded)
+	// Replace + with %20 in the double-encoded value
+	encodedValue = strings.ReplaceAll(encodedValue, "+", "%20")
+
+	return encodedValue
+}
+
 // generateCloudInitUserData generates cloud-init user data
 func generateCloudInitUserData(config *VPSConfig) string {
 	userData := "#cloud-config\n"
+	
+	// Disable cloud-init network configuration - we use Proxmox's ipconfig0 instead
+	// This prevents conflicts and ensures Proxmox manages the network configuration
+	// Cloud-init will still configure users, packages, and runcmd
+	userData += "network:\n"
+	userData += "  config: disabled\n"
+	userData += "\n"
+	
+	// Disable network wait to prevent cloud-init from hanging on network initialization
+	// Setting network config to disabled means cloud-init won't try to configure network
+	// and won't wait for network to be available before proceeding
+	// Proxmox's ipconfig0 handles network configuration instead
+	
 	userData += "users:\n"
 	userData += "  - name: root\n"
 	userData += "    ssh_authorized_keys:\n"
 	
-	// Add SSH keys from organization
+	// Add SSH keys for VPS (includes both VPS-specific and org-wide keys)
 	if config.OrganizationID != "" {
-		sshKeys, err := database.GetSSHKeysForOrganization(config.OrganizationID)
+		// Use GetSSHKeysForVPS to get both VPS-specific and org-wide keys
+		sshKeys, err := database.GetSSHKeysForVPS(config.OrganizationID, config.VPSID)
 		if err == nil {
 			for _, key := range sshKeys {
 				// Add each SSH key (cloud-init expects one key per line with proper indentation)
@@ -1569,13 +1741,19 @@ func generateCloudInitUserData(config *VPSConfig) string {
 	userData += "  - htop\n"
 	userData += "  - qemu-guest-agent\n"
 	userData += "runcmd:\n"
-	userData += "  - systemctl start qemu-guest-agent\n"
-	userData += "  - systemctl enable qemu-guest-agent\n"
+	// Install and start guest agent in runcmd
+	// Use separate commands to ensure both installation and service start
+	userData += "  - apt-get update || yum update || dnf update || true\n"
+	userData += "  - apt-get install -y qemu-guest-agent || yum install -y qemu-guest-agent || dnf install -y qemu-guest-agent || true\n"
+	userData += "  - systemctl enable qemu-guest-agent || true\n"
+	userData += "  - systemctl start qemu-guest-agent || true\n"
+	userData += "  - systemctl status qemu-guest-agent || true\n"
 	return userData
 }
 
-// generateRandomPassword generates a random password
-func generateRandomPassword(length int) string {
+// GenerateRandomPassword generates a random password
+// Exported for use in password reset functionality
+func GenerateRandomPassword(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
 	b := make([]byte, length)
 	charsetLen := big.NewInt(int64(len(charset)))
@@ -2438,141 +2616,33 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 		logger.Info("[ProxmoxClient] Excluding key %s: %d keys before, %d keys after exclusion", excludeKeyID[0], originalKeyCount, len(sshKeys))
 	}
 
-	// Build SSH keys string (raw keys separated by newlines)
-	// Proxmox's sshkeys parameter expects raw SSH public keys separated by newlines
-	// BUT: For single key, it should be just the key with NO newlines
-	// IMPORTANT: If we have duplicate keys (same fingerprint) as both org-wide and VPS-specific,
-	// we should deduplicate them before sending to Proxmox (Proxmox can only store one instance)
-	// Prefer VPS-specific keys over org-wide keys when both exist
-	seenFingerprints := make(map[string]bool)
-	deduplicatedKeys := make([]database.SSHKey, 0)
-	for _, key := range sshKeys {
-		if !seenFingerprints[key.Fingerprint] {
-			seenFingerprints[key.Fingerprint] = true
-			deduplicatedKeys = append(deduplicatedKeys, key)
-		} else {
-			// Duplicate fingerprint - prefer VPS-specific over org-wide
-			for i, existingKey := range deduplicatedKeys {
-				if existingKey.Fingerprint == key.Fingerprint {
-					// If the existing key is org-wide and the new one is VPS-specific, replace it
-					if existingKey.VPSID == nil && key.VPSID != nil {
-						deduplicatedKeys[i] = key
-						logger.Debug("[ProxmoxClient] Preferring VPS-specific key %s over org-wide key %s (fingerprint: %s) for Proxmox", key.ID, existingKey.ID, key.Fingerprint)
-					}
-					break
-				}
-			}
-		}
-	}
-	sshKeys = deduplicatedKeys
-	
-	var sshKeysStr strings.Builder
-	keyCount := 0
-	if len(sshKeys) > 0 {
-		for _, key := range sshKeys {
-			// Aggressively clean the key: remove ALL whitespace, newlines, carriage returns
-			trimmedKey := strings.TrimSpace(key.PublicKey)
-			// Remove ALL newlines and carriage returns (keys must be single-line)
-			trimmedKey = strings.ReplaceAll(trimmedKey, "\n", "")
-			trimmedKey = strings.ReplaceAll(trimmedKey, "\r", "")
-			trimmedKey = strings.ReplaceAll(trimmedKey, "\t", "")
-			// Remove any other control characters
-			trimmedKey = strings.TrimSpace(trimmedKey)
-			if trimmedKey == "" {
-				continue // Skip empty keys
-			}
-			
-			// Check if key already has a comment (SSH keys can have format: "key-type key-data comment")
-			// If it doesn't have a comment, add the key name as a comment
-			keyParts := strings.Fields(trimmedKey)
-			if len(keyParts) >= 2 {
-				// Key has at least type and data, check if it has a comment
-				if len(keyParts) == 2 {
-					// No comment, add the key name as comment
-					// Clean the key name to remove any characters that might cause issues
-					cleanName := strings.TrimSpace(key.Name)
-					// Remove spaces and special characters that might break the key format
-					cleanName = strings.ReplaceAll(cleanName, " ", "-")
-					cleanName = strings.ReplaceAll(cleanName, "\n", "")
-					cleanName = strings.ReplaceAll(cleanName, "\r", "")
-					if cleanName != "" {
-						trimmedKey = fmt.Sprintf("%s %s", trimmedKey, cleanName)
-					}
-				}
-				// If key already has a comment (len > 2), keep it as-is
-			}
-			
-			if keyCount > 0 {
-				// Only add newline BETWEEN keys, not after the last one
-				sshKeysStr.WriteString("\n")
-			}
-			// Use raw SSH public key with name as comment
-			sshKeysStr.WriteString(trimmedKey)
-			keyCount++
-		}
-	}
-	// Get the final string and AGGRESSIVELY ensure no trailing newline
-	sshKeysValue := sshKeysStr.String()
-	// Multiple passes to ensure absolutely no trailing newlines
-	for strings.HasSuffix(sshKeysValue, "\r\n") || strings.HasSuffix(sshKeysValue, "\n") || strings.HasSuffix(sshKeysValue, "\r") {
-		sshKeysValue = strings.TrimSuffix(sshKeysValue, "\r\n")
-		sshKeysValue = strings.TrimSuffix(sshKeysValue, "\n")
-		sshKeysValue = strings.TrimSuffix(sshKeysValue, "\r")
-	}
-	// Final trim of any trailing whitespace
-	sshKeysValue = strings.TrimRight(sshKeysValue, " \t\n\r")
+	// Format SSH keys using reusable function
+	sshKeysValue := formatSSHKeysForProxmox(sshKeys)
 
 	// Update VM config with SSH keys
 	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
 	formData := url.Values{}
 	
 	if len(sshKeysValue) > 0 {
-		// Clean the value: split by newlines (for multiple keys), clean each, rejoin
-		// This preserves newlines BETWEEN keys but removes trailing ones
-		keyLines := strings.Split(sshKeysValue, "\n")
-		var cleanedLines []string
-		for _, line := range keyLines {
-			// Clean each line: remove carriage returns and trim
-			line = strings.ReplaceAll(line, "\r", "")
-			line = strings.TrimSpace(line)
-			if line != "" {
-				cleanedLines = append(cleanedLines, line)
-			}
-		}
-		// Rejoin with newlines (only between keys, NOT at the end)
-		cleanValue := strings.Join(cleanedLines, "\n")
-		// Remove trailing newline if present
-		cleanValue = strings.TrimRight(cleanValue, " \t\n\r")
+		// Encode SSH keys using reusable function (double-encoding for Proxmox v8.4)
+		encodedValue := encodeSSHKeysForProxmox(sshKeysValue)
 		
-		// Proxmox v8.4 requires sshkeys to be DOUBLE URL-encoded
-		// First encode: spaces become %20, + becomes %2B, / becomes %2F
-		firstEncoded := url.QueryEscape(cleanValue)
-		firstEncoded = strings.ReplaceAll(firstEncoded, "+", "%20")
-		// Second encode: %20 becomes %2520, %2B becomes %252B, %2F becomes %252F
-		encodedValue := url.QueryEscape(firstEncoded)
-		// Replace + with %20 in the double-encoded value
-		encodedValue = strings.ReplaceAll(encodedValue, "+", "%20")
-		
-		// Verify decoded value has no newlines
+		// Verify decoded value has no newlines (for debugging)
 		if decoded, err := url.QueryUnescape(encodedValue); err == nil {
-			if strings.Contains(decoded, "\n") || strings.Contains(decoded, "\r") {
-				logger.Error("[ProxmoxClient] ERROR: Decoded value contains newlines! Raw: %q, Decoded: %q", cleanValue, decoded)
+			// Double-decode to get back to original
+			if decoded2, err2 := url.QueryUnescape(decoded); err2 == nil {
+				if strings.Contains(decoded2, "\n") || strings.Contains(decoded2, "\r") {
+					logger.Error("[ProxmoxClient] ERROR: Decoded value contains newlines! Raw: %q, Decoded: %q", sshKeysValue, decoded2)
+				}
 			}
-			// Log byte representation of decoded value
-			decodedBytes := []byte(decoded)
-			startIdx := len(decodedBytes) - 5
-			if startIdx < 0 {
-				startIdx = 0
-			}
-			logger.Debug("[ProxmoxClient] Decoded value byte length: %d, last 5 bytes: %v", len(decodedBytes), decodedBytes[startIdx:])
 		}
 		
 		formData.Set("sshkeys", encodedValue)
 		logger.Info("[ProxmoxClient] Updating SSH keys for VM %d (org: %s) - %d key(s)", vmID, organizationID, len(sshKeys))
-		logger.Debug("[ProxmoxClient] SSH keys raw length: %d chars, encoded length: %d chars", len(cleanValue), len(encodedValue))
-		logger.Debug("[ProxmoxClient] SSH keys ends with newline: %v, contains newline: %v, contains carriage return: %v", strings.HasSuffix(cleanValue, "\n"), strings.Contains(cleanValue, "\n"), strings.Contains(cleanValue, "\r"))
+		logger.Debug("[ProxmoxClient] SSH keys raw length: %d chars, encoded length: %d chars", len(sshKeysValue), len(encodedValue))
+		logger.Debug("[ProxmoxClient] SSH keys ends with newline: %v, contains newline: %v, contains carriage return: %v", strings.HasSuffix(sshKeysValue, "\n"), strings.Contains(sshKeysValue, "\n"), strings.Contains(sshKeysValue, "\r"))
 		// Log a preview of the actual value (first 100 chars)
-		preview := cleanValue
+		preview := sshKeysValue
 		if len(preview) > 100 {
 			preview = preview[:100] + "..."
 		}
@@ -2773,6 +2843,214 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 	return nil
 }
 
+// EnableVMGuestAgent enables QEMU guest agent in the VM configuration
+// This sets agent=1 in the VM config, which allows Proxmox to communicate with the guest agent
+func (pc *ProxmoxClient) EnableVMGuestAgent(ctx context.Context, nodeName string, vmID int) error {
+	// Check current config to see if agent is already enabled
+	vmConfig, err := pc.GetVMConfig(ctx, nodeName, vmID)
+	if err != nil {
+		return fmt.Errorf("failed to get VM config: %w", err)
+	}
+
+	// Check if agent is already enabled
+	if agentVal, ok := vmConfig["agent"]; ok {
+		// Convert to string and check if it's "1" or "enabled"
+		agentStr := fmt.Sprintf("%v", agentVal)
+		if agentStr == "1" || agentStr == "enabled" {
+			logger.Info("[ProxmoxClient] Guest agent already enabled for VM %d", vmID)
+			return nil
+		}
+	}
+
+	// Enable guest agent in VM config
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
+	formData := url.Values{}
+	formData.Set("agent", "1")
+
+	logger.Info("[ProxmoxClient] Enabling guest agent for VM %d", vmID)
+	resp, err := pc.apiRequestForm(ctx, "PUT", endpoint, formData)
+	if err != nil {
+		return fmt.Errorf("failed to enable guest agent: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to enable guest agent: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	logger.Info("[ProxmoxClient] Successfully enabled guest agent for VM %d", vmID)
+	return nil
+}
+
+// RecoverVMGuestAgent recovers QEMU guest agent by updating cloud-init configuration
+// This updates the cloud-init userData to install and enable qemu-guest-agent
+// The VM will need to be rebooted or cloud-init needs to be re-run for changes to take effect
+func (pc *ProxmoxClient) RecoverVMGuestAgent(ctx context.Context, nodeName string, vmID int, organizationID string, vpsID string) error {
+	// First, ensure guest agent is enabled in VM config
+	if err := pc.EnableVMGuestAgent(ctx, nodeName, vmID); err != nil {
+		logger.Warn("[ProxmoxClient] Failed to enable guest agent in VM config: %v", err)
+		// Continue anyway - cloud-init update might still work
+	}
+
+	// Get current cloud-init config
+	ciEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit/dump", nodeName, vmID)
+	ciResp, err := pc.apiRequest(ctx, "GET", ciEndpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to get cloud-init config: %w", err)
+	}
+	defer ciResp.Body.Close()
+
+	if ciResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(ciResp.Body)
+		return fmt.Errorf("failed to get cloud-init config: %s (status: %d)", string(body), ciResp.StatusCode)
+	}
+
+	var ciData struct {
+		Data map[string]interface{} `json:"data"`
+	}
+	if err := json.NewDecoder(ciResp.Body).Decode(&ciData); err != nil {
+		return fmt.Errorf("failed to decode cloud-init config: %w", err)
+	}
+
+	// Get current userData
+	// Proxmox VE 8.4 uses 'userdata' field name
+	currentUserData, _ := ciData.Data["userdata"].(string)
+	// Fallback to 'user' for older Proxmox versions
+	if currentUserData == "" {
+		currentUserData, _ = ciData.Data["user"].(string)
+	}
+	
+	// Check if guest agent is already configured
+	if strings.Contains(currentUserData, "qemu-guest-agent") && 
+	   strings.Contains(currentUserData, "systemctl")  {
+		logger.Info("[ProxmoxClient] Guest agent already configured in cloud-init for VM %d", vmID)
+		// Still regenerate to ensure it's applied
+	} else {
+		logger.Info("[ProxmoxClient] Adding guest agent configuration to cloud-init for VM %d", vmID)
+		
+		// Build new userData with guest agent setup
+		// Start with cloud-config header if not present
+		newUserData := currentUserData
+		if !strings.Contains(newUserData, "#cloud-config") {
+			newUserData = "#cloud-config\n" + newUserData
+		}
+
+		// Ensure packages section exists
+		if !strings.Contains(newUserData, "packages:") {
+			// Add packages section before runcmd if it exists, otherwise at the end
+			if strings.Contains(newUserData, "runcmd:") {
+				newUserData = strings.Replace(newUserData, "runcmd:", "packages:\n  - qemu-guest-agent\nruncmd:", 1)
+			} else {
+				newUserData += "\npackages:\n  - qemu-guest-agent\n"
+			}
+		} else if !strings.Contains(newUserData, "qemu-guest-agent") {
+			// Add qemu-guest-agent to existing packages list
+			newUserData = strings.Replace(newUserData, "packages:", "packages:\n  - qemu-guest-agent", 1)
+		}
+
+		// Ensure runcmd section exists with guest agent commands
+		guestAgentCmds := "  - systemctl enable --now qemu-guest-agent"
+		if !strings.Contains(newUserData, "runcmd:") {
+			newUserData += "\nruncmd:\n" + guestAgentCmds + "\n"
+		} else if !strings.Contains(newUserData, "qemu-guest-agent") {
+			// Add guest agent commands to existing runcmd
+			if strings.HasSuffix(strings.TrimSpace(newUserData), "runcmd:") {
+				newUserData += "\n" + guestAgentCmds + "\n"
+			} else {
+				// Insert before the last line or append
+				lines := strings.Split(newUserData, "\n")
+				runcmdIdx := -1
+				for i, line := range lines {
+					if strings.TrimSpace(line) == "runcmd:" {
+						runcmdIdx = i
+						break
+					}
+				}
+				if runcmdIdx >= 0 && runcmdIdx < len(lines)-1 {
+					// Insert after runcmd:
+					newLines := append(lines[:runcmdIdx+1], guestAgentCmds)
+					newLines = append(newLines, lines[runcmdIdx+1:]...)
+					newUserData = strings.Join(newLines, "\n")
+				} else {
+					newUserData += "\n" + guestAgentCmds + "\n"
+				}
+			}
+		}
+
+		// Update cloud-init userData
+		updateEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit", nodeName, vmID)
+		formData := url.Values{}
+		// Proxmox VE 8.4 uses 'userdata' field name for cloud-init user data
+		formData.Set("userdata", newUserData)
+
+		updateResp, err := pc.apiRequestForm(ctx, "PUT", updateEndpoint, formData)
+		if err != nil {
+			return fmt.Errorf("failed to update cloud-init: %w", err)
+		}
+		defer updateResp.Body.Close()
+
+		if updateResp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(updateResp.Body)
+			return fmt.Errorf("failed to update cloud-init: %s (status: %d)", string(body), updateResp.StatusCode)
+		}
+	}
+
+	// Regenerate cloud-init to apply changes
+	regenEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit/regen", nodeName, vmID)
+	regenResp, err := pc.apiRequest(ctx, "POST", regenEndpoint, nil)
+	if err != nil {
+		logger.Warn("[ProxmoxClient] Failed to regenerate cloud-init for VM %d: %v", vmID, err)
+	} else {
+		defer regenResp.Body.Close()
+		if regenResp.StatusCode == http.StatusOK {
+			logger.Info("[ProxmoxClient] Successfully regenerated cloud-init for VM %d", vmID)
+		}
+	}
+
+	logger.Info("[ProxmoxClient] Successfully recovered guest agent configuration for VM %d. VM should be rebooted for changes to take effect.", vmID)
+	return nil
+}
+
+// UpdateVMCloudInitPassword updates the root password in Proxmox cloud-init configuration
+// The password will take effect after VM reboot or cloud-init re-run
+func (pc *ProxmoxClient) UpdateVMCloudInitPassword(ctx context.Context, nodeName string, vmID int, newPassword string) error {
+	// Update cipassword in VM config (cloud-init password)
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
+	formData := url.Values{}
+	formData.Set("cipassword", newPassword)
+
+	logger.Info("[ProxmoxClient] Updating root password for VM %d", vmID)
+	resp, err := pc.apiRequestForm(ctx, "PUT", endpoint, formData)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update password: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	// Regenerate cloud-init to apply the password change
+	regenEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit/regen", nodeName, vmID)
+	regenResp, err := pc.apiRequest(ctx, "POST", regenEndpoint, nil)
+	if err != nil {
+		logger.Warn("[ProxmoxClient] Failed to regenerate cloud-init for VM %d: %v", vmID, err)
+		// Continue anyway - password update succeeded
+	} else {
+		defer regenResp.Body.Close()
+		if regenResp.StatusCode == http.StatusOK {
+			logger.Info("[ProxmoxClient] Successfully regenerated cloud-init for VM %d to apply password change", vmID)
+		} else {
+			logger.Warn("[ProxmoxClient] Failed to regenerate cloud-init for VM %d: status %d", vmID, regenResp.StatusCode)
+		}
+	}
+
+	logger.Info("[ProxmoxClient] Successfully updated root password for VM %d. Password will take effect after VM reboot or cloud-init re-run.", vmID)
+	return nil
+}
+
 // createSeededKeyAuditLog creates an audit log entry for a seeded SSH key
 // This is called when keys are imported from Proxmox into the database
 func createSeededKeyAuditLog(organizationID string, vpsID string, keyID string, fingerprint string) {
@@ -2831,8 +3109,45 @@ func createSeededKeyAuditLog(organizationID string, vpsID string, keyID string, 
 	}
 }
 
+// CheckGuestAgentStatus checks if the QEMU guest agent is running and responsive
+// Returns true if the agent is available, false otherwise
+func (pc *ProxmoxClient) CheckGuestAgentStatus(ctx context.Context, nodeName string, vmID int) (bool, error) {
+	// Try to ping the guest agent - this is the simplest way to check if it's running
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/agent/ping", nodeName, vmID)
+	resp, err := pc.apiRequest(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to ping guest agent: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		return true, nil
+	}
+
+	// If ping fails, try a simple info command as fallback
+	infoEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/agent/info", nodeName, vmID)
+	infoResp, infoErr := pc.apiRequest(ctx, "GET", infoEndpoint, nil)
+	if infoErr == nil && infoResp != nil {
+		defer infoResp.Body.Close()
+		if infoResp.StatusCode == http.StatusOK {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // GetVMIPAddresses retrieves IP addresses of a VM via QEMU guest agent
 func (pc *ProxmoxClient) GetVMIPAddresses(ctx context.Context, nodeName string, vmID int) ([]string, []string, error) {
+	// First check if guest agent is available
+	agentAvailable, err := pc.CheckGuestAgentStatus(ctx, nodeName, vmID)
+	if err != nil {
+		logger.Warn("[ProxmoxClient] Failed to check guest agent status: %v", err)
+		// Continue anyway - might be a transient error
+	} else if !agentAvailable {
+		return nil, nil, fmt.Errorf("guest agent is not available (not installed or not running). VM may need to be rebooted or guest agent needs to be installed")
+	}
+
 	// Execute guest agent command to get network info
 	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/agent/network-get-interfaces", nodeName, vmID)
 	resp, err := pc.apiRequest(ctx, "GET", endpoint, nil)
@@ -2844,6 +3159,8 @@ func (pc *ProxmoxClient) GetVMIPAddresses(ctx context.Context, nodeName string, 
 
 	if resp.StatusCode != http.StatusOK {
 		// Guest agent not ready or VM not running
+		body, _ := io.ReadAll(resp.Body)
+		logger.Warn("[ProxmoxClient] Guest agent returned non-OK status %d: %s", resp.StatusCode, string(body))
 		return nil, nil, nil
 	}
 
