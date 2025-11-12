@@ -9,7 +9,7 @@
   .oui-btn-base {
     @apply inline-flex items-center justify-center rounded-md font-medium;
     @apply transition-colors disabled:pointer-events-none disabled:opacity-50;
-    @apply oui-text;
+    @apply cursor-pointer oui-text;
   }
 
   .oui-btn-base:focus-visible {
