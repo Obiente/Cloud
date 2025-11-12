@@ -301,6 +301,7 @@ func registerServices(mux *http.ServeMux) *deploymentsvc.Service {
 			&database.BuildLog{},
 			&database.BillingAccount{},
 			&database.CreditTransaction{},
+			&database.MonthlyBill{},
 			&database.GameServer{},
 			&database.GameServerUsageHourly{},
 			&database.SupportTicket{},

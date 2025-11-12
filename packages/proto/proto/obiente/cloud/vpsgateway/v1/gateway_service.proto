@@ -133,6 +133,10 @@ message ProxySSHRequest {
   
   // For "data": SSH data to forward
   bytes data = 5;
+  
+  // For "connect": SSH public key (in authorized_keys format) for VPS authentication
+  // The gateway will use this key to authenticate with the VPS
+  string ssh_public_key = 6;
 }
 
 // ProxySSHResponse is a response in the SSH proxy stream

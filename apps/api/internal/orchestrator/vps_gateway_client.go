@@ -2,9 +2,13 @@ package orchestrator
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"api/internal/logger"
@@ -13,6 +17,7 @@ import (
 	vpsgatewayv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1/vpsgatewayv1connect"
 
 	"connectrpc.com/connect"
+	"golang.org/x/net/http2"
 )
 
 // VPSGatewayClient handles communication with the vps-gateway service
@@ -39,12 +44,16 @@ func NewVPSGatewayClient(gatewayURL string) (*VPSGatewayClient, error) {
 		return nil, fmt.Errorf("VPS_GATEWAY_API_SECRET environment variable is required")
 	}
 
-	// Create HTTP client with timeout and HTTP/1.1 only (gateway doesn't support HTTP/2)
-	// For plain HTTP connections, HTTP/2 requires h2c which is not enabled on the gateway
-	// Use default transport which will use HTTP/1.1 for plain HTTP
-	transport := &http.Transport{
-		// Disable HTTP/2 by not setting any HTTP/2-related options
-		// For plain HTTP, default transport uses HTTP/1.1
+	// Create HTTP client with timeout and HTTP/2 (h2c) support
+	// The gateway server uses h2c.NewHandler which supports cleartext HTTP/2
+	// Connect RPC bidirectional streaming requires HTTP/2
+	// Use http2.Transport with AllowHTTP for cleartext HTTP/2 (h2c) connections
+	transport := &http2.Transport{
+		AllowHTTP: true,
+		DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
+			// For h2c, we dial without TLS (cleartext)
+			return net.Dial(network, addr)
+		},
 	}
 	httpClient := &http.Client{
 		Transport: transport,
@@ -171,4 +180,210 @@ func (c *VPSGatewayClient) GetGatewayInfo(ctx context.Context) (*vpsgatewayv1.Ge
 func (c *VPSGatewayClient) ProxySSH(ctx context.Context) (*connect.BidiStreamForClient[vpsgatewayv1.ProxySSHRequest, vpsgatewayv1.ProxySSHResponse], error) {
 	stream := c.client.ProxySSH(ctx)
 	return stream, nil
+}
+
+// CreateTCPConnection creates a raw TCP connection to a VPS via gateway
+// Returns a net.Conn that can be used for SSH handshake
+// The connection is backed by the gateway's ProxySSH stream
+func (c *VPSGatewayClient) CreateTCPConnection(ctx context.Context, target string, port int) (net.Conn, error) {
+	if port == 0 {
+		port = 22
+	}
+	
+	// Create ProxySSH stream
+	stream, err := c.ProxySSH(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ProxySSH stream: %w", err)
+	}
+	
+	// Generate connection ID
+	connectionID := fmt.Sprintf("tcp-%d", time.Now().UnixNano())
+	
+	// Send connect request
+	req := &vpsgatewayv1.ProxySSHRequest{
+		ConnectionId: connectionID,
+		Type:         "connect",
+		Target:       target,
+		Port:         int32(port),
+	}
+	
+	if err := stream.Send(req); err != nil {
+		return nil, fmt.Errorf("failed to send connect request: %w", err)
+	}
+	
+	// Wait for connected response
+	resp, err := stream.Receive()
+	if err != nil {
+		return nil, fmt.Errorf("failed to receive connect response: %w", err)
+	}
+	
+	if resp.Type != "connected" {
+		return nil, fmt.Errorf("unexpected response type: %s (expected connected)", resp.Type)
+	}
+	
+	// Create a connection wrapper that uses the stream
+	conn := &gatewayTCPConnection{
+		stream:       stream,
+		connectionID: connectionID,
+		target:       target,
+		port:         port,
+		readChan:     make(chan []byte, 100),
+		readErrChan:  make(chan error, 1),
+		ctx:          ctx,
+	}
+	
+	// Start goroutine to read from stream
+	go conn.readFromStream()
+	
+	return conn, nil
+}
+
+// gatewayTCPConnection wraps a ProxySSH stream as a net.Conn
+type gatewayTCPConnection struct {
+	stream       *connect.BidiStreamForClient[vpsgatewayv1.ProxySSHRequest, vpsgatewayv1.ProxySSHResponse]
+	connectionID string
+	target       string
+	port         int
+	readChan     chan []byte
+	readErrChan  chan error
+	readBuf      []byte
+	readBufPos   int
+	closed       bool
+	mu           sync.Mutex
+	ctx          context.Context
+}
+
+func (c *gatewayTCPConnection) Read(b []byte) (n int, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	
+	if c.closed {
+		return 0, io.EOF
+	}
+	
+	// If we have buffered data, use it
+	if len(c.readBuf) > c.readBufPos {
+		n = copy(b, c.readBuf[c.readBufPos:])
+		c.readBufPos += n
+		if c.readBufPos >= len(c.readBuf) {
+			c.readBuf = nil
+			c.readBufPos = 0
+		}
+		return n, nil
+	}
+	
+	// Wait for data from stream
+	select {
+	case data := <-c.readChan:
+		n = copy(b, data)
+		if n < len(data) {
+			// Buffer remaining data
+			c.readBuf = data[n:]
+			c.readBufPos = 0
+		}
+		return n, nil
+	case err := <-c.readErrChan:
+		return 0, err
+	case <-c.ctx.Done():
+		return 0, c.ctx.Err()
+	}
+}
+
+func (c *gatewayTCPConnection) Write(b []byte) (n int, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	
+	if c.closed {
+		return 0, io.EOF
+	}
+	
+	req := &vpsgatewayv1.ProxySSHRequest{
+		ConnectionId: c.connectionID,
+		Type:         "data",
+		Data:         b,
+	}
+	
+	if err := c.stream.Send(req); err != nil {
+		return 0, err
+	}
+	
+	return len(b), nil
+}
+
+func (c *gatewayTCPConnection) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	
+	if c.closed {
+		return nil
+	}
+	
+	c.closed = true
+	
+	// Send close request
+	req := &vpsgatewayv1.ProxySSHRequest{
+		ConnectionId: c.connectionID,
+		Type:         "close",
+	}
+	c.stream.Send(req)
+	
+	return nil
+}
+
+func (c *gatewayTCPConnection) LocalAddr() net.Addr {
+	return &net.TCPAddr{
+		IP:   net.IPv4zero,
+		Port: 0,
+	}
+}
+
+func (c *gatewayTCPConnection) RemoteAddr() net.Addr {
+	return &net.TCPAddr{
+		IP:   net.ParseIP(c.target),
+		Port: c.port,
+	}
+}
+
+func (c *gatewayTCPConnection) SetDeadline(t time.Time) error {
+	// Not implemented - stream doesn't support deadlines
+	return nil
+}
+
+func (c *gatewayTCPConnection) SetReadDeadline(t time.Time) error {
+	// Not implemented - stream doesn't support deadlines
+	return nil
+}
+
+func (c *gatewayTCPConnection) SetWriteDeadline(t time.Time) error {
+	// Not implemented - stream doesn't support deadlines
+	return nil
+}
+
+func (c *gatewayTCPConnection) readFromStream() {
+	for {
+		resp, err := c.stream.Receive()
+		if err != nil {
+			if err != io.EOF {
+				c.readErrChan <- err
+			} else {
+				c.readErrChan <- io.EOF
+			}
+			return
+		}
+		
+		switch resp.Type {
+		case "data":
+			select {
+			case c.readChan <- resp.Data:
+			case <-c.ctx.Done():
+				return
+			}
+		case "error":
+			c.readErrChan <- fmt.Errorf("gateway error: %s", resp.Error)
+			return
+		case "closed":
+			c.readErrChan <- io.EOF
+			return
+		}
+	}
 }

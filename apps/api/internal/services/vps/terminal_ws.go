@@ -273,16 +273,16 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		} else {
 			// No public IP, try to get internal IP from Proxmox
 			log.Printf("[VPS Terminal WS] No public IP found, attempting to get internal IP from Proxmox")
-			ipv4, _, err := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
-			if err == nil && len(ipv4) > 0 {
-				vpsIP := ipv4[0]
-				rootPassword, err := s.getVPSRootPassword(ctx, initMsg.VPSID)
-				if err == nil && rootPassword != "" {
+				ipv4, _, err := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
+				if err == nil && len(ipv4) > 0 {
+					vpsIP := ipv4[0]
+					rootPassword, err := s.getVPSRootPassword(ctx, initMsg.VPSID)
+					if err == nil && rootPassword != "" {
 					// Use direct connection (gateway will handle routing if configured)
 					sshConn, err = s.connectSSH(ctx, vpsIP, rootPassword, cols, rows, "", "")
-					if err != nil {
+						if err != nil {
 						log.Printf("[VPS Terminal WS] SSH connection failed: %v", err)
-						sshConn = nil
+							sshConn = nil
 					}
 				}
 			}
@@ -978,8 +978,8 @@ func (s *Service) connectSSH(ctx context.Context, vpsIP, rootPassword string, co
 	// Direct connection (gateway handles routing if configured)
 	// jumpHost and jumpUser parameters are ignored - gateway is used instead
 	client, err := ssh.Dial("tcp", net.JoinHostPort(vpsIP, "22"), sshConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to VPS via SSH: %w", err)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to VPS via SSH: %w", err)
 	}
 
 	// Create session

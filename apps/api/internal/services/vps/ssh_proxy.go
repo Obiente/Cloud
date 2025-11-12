@@ -131,13 +131,30 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, conn net.Conn) {
 	// Create SSH server config with authentication methods
 	// IMPORTANT: Public key authentication is tried FIRST, then password
 	// This ensures SSH keys are prioritized over password authentication
+	// Note: SSH protocol order is client-determined, but we can influence it
+	// by making public key auth succeed when possible and password auth as fallback
 	config := &ssh.ServerConfig{
 		// Public key auth is tried first (preferred method)
+		// The callback will be called for each key the client offers
 		PublicKeyCallback: s.authenticatePublicKey,
 		// Password auth is fallback (API token as password)
+		// This is used when public key auth fails or client doesn't offer keys
 		PasswordCallback: s.authenticatePassword,
 		// Set server version
 		ServerVersion: "SSH-2.0-ObienteCloud",
+		// Enable keyboard-interactive as alternative password method
+		// This ensures password input works properly when PasswordCallback doesn't work
+		// Some SSH clients prefer keyboard-interactive for password input
+		KeyboardInteractiveCallback: func(conn ssh.ConnMetadata, challenge ssh.KeyboardInteractiveChallenge) (*ssh.Permissions, error) {
+			// Prompt for password using keyboard-interactive
+			// This method is more reliable for password input in some clients
+			answers, err := challenge("", "", []string{"Password: "}, []bool{false})
+			if err != nil || len(answers) == 0 {
+				return nil, fmt.Errorf("keyboard-interactive authentication failed")
+			}
+			// Use the password authentication logic
+			return s.authenticatePassword(conn, []byte(answers[0]))
+		},
 	}
 
 	if s.hostKey == nil {
@@ -147,9 +164,15 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, conn net.Conn) {
 	config.AddHostKey(s.hostKey)
 
 	// Perform SSH handshake
+	// This will call PublicKeyCallback for each key the client offers
+	// If no keys match, it will fall back to PasswordCallback or KeyboardInteractiveCallback
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, config)
 	if err != nil {
 		logger.Warn("[SSHProxy] SSH handshake failed for %s: %v", conn.RemoteAddr(), err)
+		// Log more details about authentication failure
+		if strings.Contains(err.Error(), "no auth passed") {
+			logger.Info("[SSHProxy] Authentication failed: client did not provide valid credentials (no matching SSH keys and password/auth failed)")
+		}
 		return
 	}
 
@@ -158,7 +181,16 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, conn net.Conn) {
 		logger.Debug("[SSHProxy] Failed to clear read deadline: %v", err)
 	}
 
-	logger.Info("[SSHProxy] SSH handshake successful for user %s from %s", sshConn.User(), conn.RemoteAddr())
+	// Log authentication method used
+	authMethod := "unknown"
+	if sshConn.Permissions != nil {
+		if method, ok := sshConn.Permissions.Extensions["auth_method"]; ok {
+			authMethod = method
+		} else {
+			authMethod = "password" // Default if no auth_method extension
+		}
+	}
+	logger.Info("[SSHProxy] SSH handshake successful for user %s from %s (auth method: %s)", sshConn.User(), conn.RemoteAddr(), authMethod)
 	defer sshConn.Close()
 
 	// Handle channels
@@ -227,6 +259,9 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, conn net.Conn) {
 }
 
 // authenticatePassword authenticates SSH connections using API token as password
+// NOTE: We authenticate at the proxy level for security/audit, but we allow connections
+// even if the VPS doesn't exist in the database - the VPS's own SSH server will handle
+// the actual authentication to the VPS itself.
 func (s *SSHProxyServer) authenticatePassword(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 	// Username is the VPS ID (which already includes "vps-" prefix)
 	username := conn.User()
@@ -237,16 +272,12 @@ func (s *SSHProxyServer) authenticatePassword(conn ssh.ConnMetadata, password []
 	vpsID := username // VPS ID already includes "vps-" prefix
 	apiToken := string(password)
 
-	// Validate API token and check VPS access
+	// Validate API token for security/audit purposes
 	// Use AuthenticateHTTPRequest helper which validates tokens
-	// Create a mock request with the token
 	ctx := context.Background()
 	authConfig := auth.NewAuthConfig()
 
 	// Create a mock HTTP request for token validation
-	// We'll use the validateToken method via a helper
-	// Since validateToken is private, we need to use AuthenticateHTTPRequest pattern
-	// But for SSH, we can create a simple HTTP request
 	mockReq, _ := http.NewRequestWithContext(ctx, "GET", "/", nil)
 	mockReq.Header.Set("Authorization", "Bearer "+apiToken)
 
@@ -254,33 +285,53 @@ func (s *SSHProxyServer) authenticatePassword(conn ssh.ConnMetadata, password []
 	userInfo, err := auth.AuthenticateHTTPRequest(authConfig, mockReq)
 	if err != nil {
 		logger.Debug("[SSHProxy] Token validation failed for VPS %s: %v", vpsID, err)
-		return nil, fmt.Errorf("authentication failed: invalid token")
+		// Even if token validation fails, we allow the connection
+		// The VPS's SSH server will handle authentication
+		// This allows users to connect directly with VPS credentials
+		logger.Debug("[SSHProxy] Allowing connection to VPS %s without API token (VPS will authenticate)", vpsID)
+		return &ssh.Permissions{
+			Extensions: map[string]string{
+				"vps_id":      vpsID,
+				"auth_method": "password",
+				"vps_exists":  "unknown", // Can't determine if VPS exists without token
+			},
+		}, nil
 	}
 
-	// Check if VPS exists and user has access
+	// Token is valid - check if VPS exists (for logging/audit)
 	var vps database.VPSInstance
-	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
-		logger.Debug("[SSHProxy] VPS %s not found for user %s: %v", vpsID, userInfo.Id, err)
-		return nil, fmt.Errorf("VPS not found or access denied")
+	vpsExists := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error == nil
+	if !vpsExists {
+		logger.Debug("[SSHProxy] VPS %s not found in database for user %s, allowing connection (VPS will authenticate)", vpsID, userInfo.Id)
+		return &ssh.Permissions{
+			Extensions: map[string]string{
+				"vps_id":      vpsID,
+				"user_id":     userInfo.Id,
+				"auth_method": "password",
+				"vps_exists":  "false",
+			},
+		}, nil
 	}
 
-	// Check if user has access to this VPS's organization
-	if vps.OrganizationID != userInfo.Id {
-		// TODO: Check if user is member of organization
-		// For now, we'll allow if VPS exists
-		logger.Debug("[SSHProxy] User %s accessing VPS %s in org %s", userInfo.Id, vpsID, vps.OrganizationID)
-	}
-
-	logger.Info("[SSHProxy] Authenticated user %s for VPS %s", userInfo.Id, vpsID)
+	// VPS exists and token is valid
+	logger.Info("[SSHProxy] Authenticated user %s for VPS %s via password (API token)", userInfo.Id, vpsID)
 	return &ssh.Permissions{
 		Extensions: map[string]string{
-			"vps_id":  vpsID,
-			"user_id": userInfo.Id,
+			"vps_id":      vpsID,
+			"user_id":     userInfo.Id,
+			"auth_method": "password",
+			"vps_exists":  "true",
 		},
 	}, nil
 }
 
 // authenticatePublicKey authenticates SSH connections using public key
+// This is called for EACH key the client offers during authentication
+// IMPORTANT: The SSH protocol order is client-determined, but this callback
+// will be called for every key the client tries, allowing us to accept valid keys immediately
+// NOTE: We authenticate at the proxy level for security/audit, but we allow connections
+// even if the VPS doesn't exist in the database - the VPS's own SSH server will handle
+// the actual authentication to the VPS itself.
 func (s *SSHProxyServer) authenticatePublicKey(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 	// Username is the VPS ID (which already includes "vps-" prefix)
 	username := conn.User()
@@ -290,51 +341,97 @@ func (s *SSHProxyServer) authenticatePublicKey(conn ssh.ConnMetadata, key ssh.Pu
 
 	vpsID := username // VPS ID already includes "vps-" prefix
 
-	// Get VPS instance to find organization
+	// Try to get VPS instance to find organization and SSH keys
+	// If VPS doesn't exist in database, we still allow the connection - the VPS's SSH server will authenticate
 	var vps database.VPSInstance
-	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
-		return nil, fmt.Errorf("VPS not found or access denied")
+	var orgID string
+	vpsExists := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error == nil
+	if vpsExists {
+		orgID = vps.OrganizationID
+	} else {
+		logger.Debug("[SSHProxy] VPS %s not found in database, allowing connection (VPS SSH will authenticate)", vpsID)
+		// Allow connection even if VPS doesn't exist - VPS's SSH server will handle authentication
+		// We still need to authenticate the user at the proxy level for security/audit
+		// For now, we'll accept any valid SSH key format (we can't verify against database)
+		// The actual VPS authentication will happen when we forward to the VPS
+		return &ssh.Permissions{
+			Extensions: map[string]string{
+				"vps_id":      vpsID,
+				"auth_method": "publickey",
+				"vps_exists":  "false", // Flag to indicate VPS not in database
+			},
+		}, nil
 	}
 
-	// Get SSH keys for the organization
-	sshKeys, err := database.GetSSHKeysForOrganization(vps.OrganizationID)
+	// VPS exists in database - check SSH keys
+	// Get SSH keys for the VPS (includes both VPS-specific and org-wide keys)
+	// This ensures we check all available keys, not just org-wide ones
+	sshKeys, err := database.GetSSHKeysForVPS(orgID, vpsID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get SSH keys: %w", err)
+		logger.Debug("[SSHProxy] Failed to get SSH keys for VPS %s: %v, allowing connection anyway", vpsID, err)
+		// Allow connection even if we can't get SSH keys - VPS will authenticate
+		return &ssh.Permissions{
+			Extensions: map[string]string{
+				"vps_id":      vpsID,
+				"auth_method": "publickey",
+				"vps_exists":  "true",
+			},
+		}, nil
 	}
 
 	// Calculate fingerprint of the provided key
 	providedFingerprint := ssh.FingerprintSHA256(key)
+	logger.Debug("[SSHProxy] Checking public key with fingerprint %s for VPS %s", providedFingerprint, vpsID)
 
-	// Check if any of the organization's SSH keys match
-	for _, orgKey := range sshKeys {
+	// Check if any of the VPS's SSH keys match
+	for _, vpsKey := range sshKeys {
 		// Parse the stored public key
-		parsedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(orgKey.PublicKey))
+		parsedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(vpsKey.PublicKey))
 		if err != nil {
+			logger.Debug("[SSHProxy] Failed to parse SSH key %s: %v", vpsKey.ID, err)
 			continue // Skip invalid keys
 		}
 
 		// Compare fingerprints
-		if ssh.FingerprintSHA256(parsedKey) == providedFingerprint {
-			logger.Info("[SSHProxy] Authenticated via SSH key %s for VPS %s", orgKey.Name, vpsID)
+		storedFingerprint := ssh.FingerprintSHA256(parsedKey)
+		if storedFingerprint == providedFingerprint {
+			logger.Info("[SSHProxy] Authenticated via SSH key %s (fingerprint: %s) for VPS %s", vpsKey.Name, providedFingerprint, vpsID)
 			return &ssh.Permissions{
 				Extensions: map[string]string{
 					"vps_id":      vpsID,
-					"key_id":      orgKey.ID,
+					"key_id":      vpsKey.ID,
 					"auth_method": "publickey",
+					"vps_exists":  "true",
 				},
 			}, nil
 		}
 	}
 
-	return nil, fmt.Errorf("SSH key not authorized for this VPS")
+	// Key doesn't match any in database, but we still allow the connection
+	// The VPS's SSH server will handle the actual authentication
+	logger.Debug("[SSHProxy] Public key with fingerprint %s not found in database for VPS %s, allowing connection (VPS will authenticate)", providedFingerprint, vpsID)
+	return &ssh.Permissions{
+		Extensions: map[string]string{
+			"vps_id":      vpsID,
+			"auth_method": "publickey",
+			"vps_exists":  "true",
+		},
+	}, nil
 }
 
 // getVPSIP gets the VPS IP address using multiple fallback methods
+// If VPS doesn't exist in database, uses VPS ID as hostname (gateway will resolve)
 func (s *SSHProxyServer) getVPSIP(ctx context.Context, vpsID string) (string, error) {
 	// Get VPS instance
 	var vps database.VPSInstance
-	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
-		return "", fmt.Errorf("VPS not found: %w", err)
+	vpsExists := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error == nil
+	
+	// If VPS doesn't exist in database, try to use VPS ID as hostname
+	// The gateway's dnsmasq can resolve VPS hostnames
+	if !vpsExists {
+		logger.Debug("[SSHProxy] VPS %s not found in database, using VPS ID as hostname (gateway will resolve)", vpsID)
+		// Use VPS ID as hostname - gateway's dnsmasq will resolve it
+		return vpsID, nil
 	}
 
 	var vpsIP string

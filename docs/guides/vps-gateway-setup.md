@@ -243,6 +243,25 @@ sudo systemctl disable dnsmasq
 
 The vps-gateway service will manage dnsmasq automatically - you don't need to configure or start it manually.
 
+**Important DNS Configuration:**
+
+The gateway's dnsmasq acts as both a DHCP server and a DNS server. For SSH proxying to work with VPS hostnames (e.g., `vps-1762797183902442010`), the gateway must be able to resolve these hostnames. The gateway automatically:
+
+1. **Configures dnsmasq as a DNS server** on port 53
+2. **Sets up a local domain** (default: `vps.local`, configurable via `GATEWAY_DHCP_DOMAIN`)
+3. **Maps VPS hostnames to IP addresses** in the `dnsmasq.hosts` file
+4. **Resolves hostnames** like `vps-1762797183902442010` or `vps-1762797183902442010.vps.local`
+
+**DNS Domain Configuration:**
+
+- **Default domain**: `vps.local` (if `GATEWAY_DHCP_DOMAIN` is not set)
+- **Custom domain**: Set `GATEWAY_DHCP_DOMAIN` to your preferred domain (e.g., `vps.internal`, `vps.obiente.local`)
+- **Hostname resolution**: VPS hostnames can be resolved as:
+  - `vps-1762797183902442010` (short name, requires `expand-hosts`)
+  - `vps-1762797183902442010.vps.local` (FQDN)
+
+**Note**: The gateway itself uses the configured DNS servers (from `GATEWAY_DHCP_DNS`) for upstream DNS resolution, while also serving DNS for the local VPS network.
+
 ## Step 4: Deploy vps-gateway Service
 
 Prerequisites:
@@ -285,7 +304,8 @@ services:
       GATEWAY_DHCP_SUBNET: 10.15.3.0
       GATEWAY_DHCP_SUBNET_MASK: 255.255.255.0
       GATEWAY_DHCP_GATEWAY: 10.15.3.1
-      GATEWAY_DHCP_DNS: 1.1.1.1,1.0.0.1
+      GATEWAY_DHCP_DNS: 1.1.1.1,1.0.0.1  # Upstream DNS servers
+      GATEWAY_DHCP_DOMAIN: vps.local      # DNS domain for VPS hostname resolution (optional, defaults to vps.local)
       GATEWAY_DHCP_INTERFACE: eth0 # Interface on SDN VNet
       LOG_LEVEL: info
     volumes:
@@ -559,7 +579,7 @@ curl http://api:3001/metrics | grep -i "vps_gateway"
 
    # Check dnsmasq config
    cat /var/lib/obiente/vps-gateway/dnsmasq.conf
-   # Should show DHCP pool configuration
+   # Should show DHCP pool configuration and DNS server settings
    ```
 
 2. **Check DHCP Leases**:
@@ -571,6 +591,20 @@ curl http://api:3001/metrics | grep -i "vps_gateway"
 
    # Or from the host (if using bind mount)
    cat /var/lib/obiente/vps-gateway/dnsmasq.leases
+   ```
+
+3. **Check DNS Resolution**:
+
+   ```bash
+   # On gateway container, test DNS resolution
+   # The gateway's dnsmasq acts as a DNS server for VPS hostnames
+   nslookup vps-1762797183902442010.vps.local 127.0.0.1
+   # Or using the gateway IP (if configured as DNS server)
+   nslookup vps-1762797183902442010.vps.local 10.15.3.1
+   
+   # Check hosts file (used by dnsmasq for DNS resolution)
+   cat /var/lib/obiente/vps-gateway/dnsmasq.hosts
+   # Should show IP-to-hostname mappings for allocated VPSes
    ```
 
 ### Test VPS Creation
