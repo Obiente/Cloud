@@ -54,6 +54,32 @@ func GetProxmoxConfig() (*ProxmoxConfig, error) {
 		config.Password = "" // Clear password if using token
 	}
 
+	// SSH configuration for snippet writing (optional - only needed if using SSH method)
+	config.SSHHost = os.Getenv("PROXMOX_SSH_HOST")
+	config.SSHUser = os.Getenv("PROXMOX_SSH_USER")
+	if config.SSHUser == "" {
+		config.SSHUser = "obiente-cloud" // Default SSH user
+	}
+	config.SSHKeyPath = os.Getenv("PROXMOX_SSH_KEY_PATH")
+	config.SSHKeyData = os.Getenv("PROXMOX_SSH_KEY_DATA")
+	
+	// If SSH host is not set, try to extract from APIURL
+	if config.SSHHost == "" && config.APIURL != "" {
+		// Extract hostname from APIURL (e.g., "https://proxmox.example.com:8006" -> "proxmox.example.com")
+		if strings.HasPrefix(config.APIURL, "http://") || strings.HasPrefix(config.APIURL, "https://") {
+			// Remove protocol
+			hostPart := strings.TrimPrefix(strings.TrimPrefix(config.APIURL, "https://"), "http://")
+			// Remove port and path
+			if colonIdx := strings.Index(hostPart, ":"); colonIdx > 0 {
+				config.SSHHost = hostPart[:colonIdx]
+			} else if slashIdx := strings.Index(hostPart, "/"); slashIdx > 0 {
+				config.SSHHost = hostPart[:slashIdx]
+			} else {
+				config.SSHHost = hostPart
+			}
+		}
+	}
+
 	return config, nil
 }
 
@@ -65,6 +91,12 @@ type ProxmoxConfig struct {
 	Password string
 	TokenID  string // Alternative: use API token instead of password
 	Secret   string // Token secret
+	
+	// SSH configuration for writing snippet files directly to Proxmox storage
+	SSHHost     string // Proxmox node hostname/IP (defaults to APIURL host if not set)
+	SSHUser     string // SSH user for snippet writing (e.g., "obiente-cloud")
+	SSHKeyPath  string // Path to SSH private key file (e.g., "/path/to/id_rsa")
+	SSHKeyData  string // SSH private key content (alternative to SSHKeyPath)
 }
 
 // NewVPSManager creates a new VPS manager
@@ -111,6 +143,23 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create Proxmox client: %w", err)
 	}
+
+	// Generate web terminal SSH key pair for this VPS
+	terminalKey, err := database.CreateVPSTerminalKey(config.VPSID, config.OrganizationID)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create terminal SSH key: %w", err)
+	}
+	logger.Info("[VPSManager] Generated web terminal SSH key for VPS %s (fingerprint: %s)", config.VPSID, terminalKey.Fingerprint)
+	
+	// Track if we need to clean up terminal key on failure
+	cleanupTerminalKey := true
+	defer func() {
+		if cleanupTerminalKey {
+			if delErr := database.DeleteVPSTerminalKey(config.VPSID); delErr != nil {
+				logger.Warn("[VPSManager] Failed to delete terminal key after VPS creation failure: %v", delErr)
+			}
+		}
+	}()
 
 	// Allocate IP address from gateway if available
 	var allocatedIP string
@@ -212,14 +261,11 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 	}
 
 	// Store IP addresses as JSON arrays (must be valid JSON or NULL for JSONB columns)
-	// Include gateway-allocated IP if available
-	ipv4Addresses := config.IPv4Addresses
-	if allocatedIP != "" {
-		// Add gateway-allocated IP to the list (prepend it)
-		ipv4Addresses = append([]string{allocatedIP}, ipv4Addresses...)
-	}
-	if len(ipv4Addresses) > 0 {
-		ipv4JSON, err := json.Marshal(ipv4Addresses)
+	// Only store IPs from config (e.g., static IPs) - do not store gateway-allocated IP
+	// Gateway-allocated IPs will be verified via guest agent when available
+	// This ensures we only show IPs that we can verify from the actual VPS
+	if len(config.IPv4Addresses) > 0 {
+		ipv4JSON, err := json.Marshal(config.IPv4Addresses)
 		if err == nil {
 			vpsInstance.IPv4Addresses = string(ipv4JSON)
 		} else {
@@ -243,6 +289,9 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 	if err := database.DB.Create(vpsInstance).Error; err != nil {
 		return nil, "", fmt.Errorf("failed to create VPS instance record: %w", err)
 	}
+
+	// VPS created successfully, don't clean up terminal key
+	cleanupTerminalKey = false
 
 	logger.Info("[VPSManager] Created VPS instance %s (VM ID: %s)",
 		config.VPSID, vmID)
@@ -270,6 +319,48 @@ type VPSConfig struct {
 	IPv6Addresses  []string
 	OrganizationID string
 	CreatedBy      string
+	
+	// Cloud-init configuration
+	CloudInit      *CloudInitConfig
+	RootPassword   *string // Custom root password (optional, auto-generated if not provided)
+}
+
+// CloudInitConfig contains cloud-init configuration options
+type CloudInitConfig struct {
+	Users            []CloudInitUser
+	Hostname         *string
+	Timezone         *string
+	Locale           *string
+	Packages         []string
+	PackageUpdate    *bool
+	PackageUpgrade   *bool
+	Runcmd           []string
+	WriteFiles       []CloudInitWriteFile
+	SSHInstallServer *bool
+	SSHAllowPW       *bool
+}
+
+// CloudInitUser represents a user to be created via cloud-init
+type CloudInitUser struct {
+	Name              string
+	Password          *string
+	SSHAuthorizedKeys []string
+	Sudo              *bool
+	SudoNopasswd      *bool
+	Groups            []string
+	Shell             *string
+	LockPasswd        *bool
+	Gecos             *string
+}
+
+// CloudInitWriteFile represents a file to be written via cloud-init
+type CloudInitWriteFile struct {
+	Path        string
+	Content     string
+	Owner       *string
+	Permissions *string
+	Append      *bool
+	Defer       *bool
 }
 
 // StartVPS starts a VPS instance
@@ -559,6 +650,27 @@ func (vm *VPSManager) DeleteVPS(ctx context.Context, vpsID string) error {
 		}
 	}
 
+	// Delete snippet file if it exists
+	storage := os.Getenv("PROXMOX_STORAGE")
+	if storage == "" {
+		storage = "local"
+	}
+	snippetFilename := fmt.Sprintf("vm-%d-user-data", vmIDInt)
+	if err := proxmoxClient.deleteSnippetViaSSH(ctx, nodes[0], storage, snippetFilename); err != nil {
+		logger.Warn("[VPSManager] Failed to delete snippet file for VPS %s: %v (continuing with VM deletion)", vpsID, err)
+		// Continue with VM deletion even if snippet deletion fails
+	} else {
+		logger.Info("[VPSManager] Deleted snippet file for VPS %s", vpsID)
+	}
+
+	// Delete web terminal SSH key
+	if err := database.DeleteVPSTerminalKey(vpsID); err != nil {
+		logger.Warn("[VPSManager] Failed to delete terminal key for VPS %s: %v (continuing with VM deletion)", vpsID, err)
+		// Continue with VM deletion even if terminal key deletion fails
+	} else {
+		logger.Info("[VPSManager] Deleted terminal key for VPS %s", vpsID)
+	}
+
 	// DeleteVM will validate that the VM was created by our API by checking VM name matches VPS ID
 	if err := proxmoxClient.DeleteVM(ctx, nodes[0], vmIDInt, vpsID); err != nil {
 		return fmt.Errorf("failed to delete VM: %w", err)
@@ -566,6 +678,11 @@ func (vm *VPSManager) DeleteVPS(ctx context.Context, vpsID string) error {
 
 	logger.Info("[VPSManager] Successfully deleted VPS %s (VM ID: %d)", vpsID, vmIDInt)
 	return nil
+}
+
+// GetGatewayClient returns the gateway client (if available)
+func (vm *VPSManager) GetGatewayClient() *VPSGatewayClient {
+	return vm.gatewayClient
 }
 
 // Close closes the Docker client

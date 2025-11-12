@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1048,42 +1049,35 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		// Specifying interface name can cause issues if the interface name doesn't match
 		vmConfig["ipconfig0"] = "ip=dhcp"
 		vmConfig["ciuser"] = "root"
-		rootPassword = GenerateRandomPassword(16) // Generate random root password
-		vmConfig["cipassword"] = rootPassword
-		logger.Info("[ProxmoxClient] Generated root password for VM %d (length: %d)", vmID, len(rootPassword))
-
-		// Add SSH keys for VPS (includes both VPS-specific and org-wide keys)
-		if config.OrganizationID != "" {
-			// Use GetSSHKeysForVPS to get both VPS-specific and org-wide keys
-			// This ensures all relevant keys are added during VPS creation
-			sshKeys, err := database.GetSSHKeysForVPS(config.OrganizationID, config.VPSID)
-			if err == nil && len(sshKeys) > 0 {
-				// Format SSH keys using reusable function
-				sshKeysValue := formatSSHKeysForProxmox(sshKeys)
-				if sshKeysValue != "" {
-					// Store the formatted (but not encoded) value in vmConfig
-					// The encoding will be handled by apiRequestForm when creating the form data
-					// However, Proxmox v8.4 requires double-encoding, so we need to handle this specially
-					// For now, store the raw formatted value - we'll encode it when building form data
-					vmConfig["sshkeys"] = sshKeysValue
-					logger.Info("[ProxmoxClient] Adding %d SSH key(s) to cloud-init for VM %d (org: %s)", len(sshKeys), vmID, config.OrganizationID)
-					logger.Debug("[ProxmoxClient] SSH keys value length: %d, ends with newline: %v", len(sshKeysValue), strings.HasSuffix(sshKeysValue, "\n"))
-					sshKeysPreview := sshKeysValue
-					if len(sshKeysPreview) > 100 {
-						sshKeysPreview = sshKeysPreview[:100] + "..."
-					}
-					logger.Debug("[ProxmoxClient] SSH keys content (preview): %s", sshKeysPreview)
-				}
-			} else if err != nil {
-				logger.Warn("[ProxmoxClient] Failed to fetch SSH keys for organization %s: %v", config.OrganizationID, err)
-			} else {
-				logger.Info("[ProxmoxClient] No SSH keys found for organization %s", config.OrganizationID)
-			}
+		
+		// Root password: use custom if provided, otherwise generate
+		if config.RootPassword != nil && *config.RootPassword != "" {
+			rootPassword = *config.RootPassword
+			logger.Info("[ProxmoxClient] Using custom root password for VM %d (length: %d)", vmID, len(rootPassword))
+		} else {
+			rootPassword = GenerateRandomPassword(16) // Generate random root password
+			logger.Info("[ProxmoxClient] Generated root password for VM %d (length: %d)", vmID, len(rootPassword))
 		}
+		// Note: Root password is set in cloud-init userData snippet, not via cipassword
+		// The snippet contains the full cloud-init configuration including root password, SSH keys, guest agent, etc.
 
-		// Note: cicustom requires a volume reference (e.g., "user=local:snippets/user-data")
-		// not raw base64 data. For now, we use standard Proxmox cloud-init parameters.
-		// Package updates and installations can be handled post-provision if needed.
+		// Always generate cloud-init userData and create a snippet file
+		// This ensures guest agent, SSH server, and other essential services are properly configured
+		// The userData includes: SSH server installation, guest agent installation, root password, SSH keys, etc.
+		userData := GenerateCloudInitUserData(config)
+		if userData != "" {
+			// Create snippet file in Proxmox storage
+			snippetPath, err := pc.CreateCloudInitSnippet(ctx, nodeName, storage, vmID, userData)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create cloud-init snippet for VM %d: %w. Snippets are required to ensure guest agent and SSH are properly configured. Ensure SSH is configured (PROXMOX_SSH_USER, PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA) and the storage supports snippets. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for setup instructions", vmID, err)
+			}
+			// Use cicustom to reference the snippet
+			vmConfig["cicustom"] = snippetPath
+			logger.Info("[ProxmoxClient] Using cloud-init userData snippet for VM %d: %s", vmID, snippetPath)
+			// Don't set cipassword or sshkeys in vmConfig when using snippets (they're in the userData)
+		} else {
+			return nil, fmt.Errorf("failed to generate cloud-init userData for VM %d", vmID)
+		}
 	}
 
 	// Create or update VM
@@ -1181,51 +1175,11 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 			logger.Warn("[ProxmoxClient] Form data does NOT include sshkeys parameter")
 		}
 
-		resp, err := pc.apiRequestForm(ctx, "PUT", updateEndpoint, formData)
-		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
-			resp.Body.Close()
-			logger.Info("[ProxmoxClient] Updated VM %d configuration", vmID)
-
-			// Set cloud-init userData to ensure guest agent and packages are installed
-			// This uses the generateCloudInitUserData function which includes:
-			// - SSH keys (already set via sshkeys, but included for completeness)
-			// - Package installation (qemu-guest-agent)
-			// - Service enablement (systemctl enable --now qemu-guest-agent)
-			userData := generateCloudInitUserData(config)
-			if userData != "" {
-				ciEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit", nodeName, vmID)
-				ciFormData := url.Values{}
-				// Proxmox VE 8.4 uses 'userdata' field name for cloud-init user data
-				ciFormData.Set("userdata", userData)
-				
-				ciResp, ciErr := pc.apiRequestForm(ctx, "PUT", ciEndpoint, ciFormData)
-				if ciErr == nil && ciResp != nil {
-					defer ciResp.Body.Close()
-					if ciResp.StatusCode == http.StatusOK {
-						logger.Info("[ProxmoxClient] Set cloud-init userData for VM %d (includes guest agent setup)", vmID)
-						
-						// Regenerate cloud-init to apply the userData changes
-						// This ensures cloud-init processes the new configuration on next boot
-						regenEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit/regen", nodeName, vmID)
-						regenResp, regenErr := pc.apiRequest(ctx, "POST", regenEndpoint, nil)
-						if regenErr == nil && regenResp != nil {
-							defer regenResp.Body.Close()
-							if regenResp.StatusCode == http.StatusOK {
-								logger.Info("[ProxmoxClient] Regenerated cloud-init for VM %d to apply userData changes", vmID)
-							} else {
-								logger.Warn("[ProxmoxClient] Failed to regenerate cloud-init for VM %d: status %d", vmID, regenResp.StatusCode)
-							}
-						} else if regenErr != nil {
-							logger.Warn("[ProxmoxClient] Failed to regenerate cloud-init for VM %d: %v", vmID, regenErr)
-						}
-					} else {
-						body, _ := io.ReadAll(ciResp.Body)
-						logger.Warn("[ProxmoxClient] Failed to set cloud-init userData for VM %d: status %d, response: %s", vmID, ciResp.StatusCode, string(body))
-					}
-				} else if ciErr != nil {
-					logger.Warn("[ProxmoxClient] Failed to set cloud-init userData for VM %d: %v", vmID, ciErr)
-				}
-			}
+			resp, err := pc.apiRequestForm(ctx, "PUT", updateEndpoint, formData)
+			if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
+				resp.Body.Close()
+				logger.Info("[ProxmoxClient] Updated VM %d configuration", vmID)
+				logger.Info("[ProxmoxClient] VM %d configured with cloud-init snippet (guest agent and SSH will be installed on first boot)", vmID)
 
 			// Verify that the disk (scsi0) exists in the VM config
 			// This is a safety check to ensure the cloned VM has a disk
@@ -1708,62 +1662,565 @@ func encodeSSHKeysForProxmox(sshKeysValue string) string {
 	return encodedValue
 }
 
-// generateCloudInitUserData generates cloud-init user data
+// GenerateCloudInitUserData generates cloud-init user data with full configuration support
+// Exported for use in VPS config service
+func GenerateCloudInitUserData(config *VPSConfig) string {
+	return generateCloudInitUserData(config)
+}
+
+// generateCloudInitUserData generates cloud-init user data with full configuration support
 func generateCloudInitUserData(config *VPSConfig) string {
-	userData := "#cloud-config\n"
+	userData := "#cloud-config\n\n"
+	
+	// SSH configuration
+	sshInstallServer := true
+	sshAllowPW := true
+	if config.CloudInit != nil {
+		if config.CloudInit.SSHInstallServer != nil {
+			sshInstallServer = *config.CloudInit.SSHInstallServer
+		}
+		if config.CloudInit.SSHAllowPW != nil {
+			sshAllowPW = *config.CloudInit.SSHAllowPW
+		}
+	}
+	userData += "ssh:\n"
+	userData += fmt.Sprintf("  install-server: %v\n", sshInstallServer)
+	userData += fmt.Sprintf("  allow-pw: %v\n", sshAllowPW)
+	userData += "\n"
 	
 	// Disable cloud-init network configuration - we use Proxmox's ipconfig0 instead
-	// This prevents conflicts and ensures Proxmox manages the network configuration
-	// Cloud-init will still configure users, packages, and runcmd
 	userData += "network:\n"
 	userData += "  config: disabled\n"
 	userData += "\n"
 	
-	// Disable network wait to prevent cloud-init from hanging on network initialization
-	// Setting network config to disabled means cloud-init won't try to configure network
-	// and won't wait for network to be available before proceeding
-	// Proxmox's ipconfig0 handles network configuration instead
+	// Hostname
+	if config.CloudInit != nil && config.CloudInit.Hostname != nil && *config.CloudInit.Hostname != "" {
+		userData += fmt.Sprintf("hostname: %s\n", *config.CloudInit.Hostname)
+		userData += fmt.Sprintf("fqdn: %s\n", *config.CloudInit.Hostname)
+		userData += "\n"
+	}
 	
+	// Timezone
+	if config.CloudInit != nil && config.CloudInit.Timezone != nil && *config.CloudInit.Timezone != "" {
+		userData += fmt.Sprintf("timezone: %s\n\n", *config.CloudInit.Timezone)
+	}
+	
+	// Locale
+	if config.CloudInit != nil && config.CloudInit.Locale != nil && *config.CloudInit.Locale != "" {
+		userData += "locale: " + *config.CloudInit.Locale + "\n\n"
+	}
+	
+	// Users configuration
 	userData += "users:\n"
-	userData += "  - name: root\n"
-	userData += "    ssh_authorized_keys:\n"
 	
-	// Add SSH keys for VPS (includes both VPS-specific and org-wide keys)
+	// Add root user (always included)
+	userData += "  - name: root\n"
+	
+	// Root password (from config or auto-generated)
+	if config.RootPassword != nil && *config.RootPassword != "" {
+		userData += fmt.Sprintf("    passwd: %s\n", *config.RootPassword)
+	}
+	
+	// Add SSH keys for root (includes both VPS-specific and org-wide keys, plus web terminal key)
+	rootSSHKeys := []string{}
+	
+	// Add web terminal SSH key (always included for web terminal access)
+	if config.OrganizationID != "" && config.VPSID != "" {
+		terminalKey, err := database.GetVPSTerminalKey(config.VPSID)
+		if err == nil {
+			rootSSHKeys = append(rootSSHKeys, strings.TrimSpace(terminalKey.PublicKey))
+		} else {
+			logger.Warn("[ProxmoxClient] Failed to get terminal key for VPS %s: %v (web terminal may not work)", config.VPSID, err)
+		}
+	}
+	
+	// Add user-provided SSH keys (VPS-specific and org-wide)
 	if config.OrganizationID != "" {
-		// Use GetSSHKeysForVPS to get both VPS-specific and org-wide keys
 		sshKeys, err := database.GetSSHKeysForVPS(config.OrganizationID, config.VPSID)
 		if err == nil {
 			for _, key := range sshKeys {
-				// Add each SSH key (cloud-init expects one key per line with proper indentation)
-				userData += fmt.Sprintf("      - %s\n", strings.TrimSpace(key.PublicKey))
+				rootSSHKeys = append(rootSSHKeys, strings.TrimSpace(key.PublicKey))
 			}
 		}
 	}
 	
+	// Also check if root user is in custom users list and merge SSH keys
+	if config.CloudInit != nil {
+		for _, user := range config.CloudInit.Users {
+			if user.Name == "root" {
+				rootSSHKeys = append(rootSSHKeys, user.SSHAuthorizedKeys...)
+				break
+			}
+		}
+	}
+	
+	if len(rootSSHKeys) > 0 {
+		userData += "    ssh_authorized_keys:\n"
+		for _, key := range rootSSHKeys {
+			userData += fmt.Sprintf("      - %s\n", key)
+		}
+	}
+	
 	userData += "    sudo: ALL=(ALL) NOPASSWD:ALL\n"
-	userData += "package_update: true\n"
-	userData += "package_upgrade: true\n"
-	userData += "packages:\n"
-	userData += "  - curl\n"
-	userData += "  - wget\n"
-	userData += "  - htop\n"
-	userData += "  - openssh-server\n"
-	userData += "  - qemu-guest-agent\n"
+	
+	// Add custom users (excluding root if already added)
+	if config.CloudInit != nil {
+		for _, user := range config.CloudInit.Users {
+			if user.Name == "root" {
+				continue // Root already handled above
+			}
+			userData += fmt.Sprintf("  - name: %s\n", user.Name)
+			
+			if user.Password != nil && *user.Password != "" {
+				userData += fmt.Sprintf("    passwd: %s\n", *user.Password)
+			}
+			
+			if len(user.SSHAuthorizedKeys) > 0 {
+				userData += "    ssh_authorized_keys:\n"
+				for _, key := range user.SSHAuthorizedKeys {
+					userData += fmt.Sprintf("      - %s\n", strings.TrimSpace(key))
+				}
+			}
+			
+			if user.Sudo != nil && *user.Sudo {
+				if user.SudoNopasswd != nil && *user.SudoNopasswd {
+					userData += "    sudo: ALL=(ALL) NOPASSWD:ALL\n"
+				} else {
+					userData += "    sudo: ALL=(ALL) ALL\n"
+				}
+			}
+			
+			if len(user.Groups) > 0 {
+				userData += fmt.Sprintf("    groups: %s\n", strings.Join(user.Groups, ","))
+			}
+			
+			if user.Shell != nil && *user.Shell != "" {
+				userData += fmt.Sprintf("    shell: %s\n", *user.Shell)
+			}
+			
+			if user.LockPasswd != nil {
+				userData += fmt.Sprintf("    lock_passwd: %v\n", *user.LockPasswd)
+			}
+			
+			if user.Gecos != nil && *user.Gecos != "" {
+				userData += fmt.Sprintf("    gecos: %s\n", *user.Gecos)
+			}
+		}
+	}
+	
+	userData += "\n"
+	
+	// Package management
+	packageUpdate := true
+	packageUpgrade := false
+	if config.CloudInit != nil {
+		if config.CloudInit.PackageUpdate != nil {
+			packageUpdate = *config.CloudInit.PackageUpdate
+		}
+		if config.CloudInit.PackageUpgrade != nil {
+			packageUpgrade = *config.CloudInit.PackageUpgrade
+		}
+	}
+	
+	userData += fmt.Sprintf("package_update: %v\n", packageUpdate)
+	userData += fmt.Sprintf("package_upgrade: %v\n", packageUpgrade)
+	
+	// Packages
+	packages := []string{"curl", "wget", "htop", "openssh-server", "qemu-guest-agent"}
+	if config.CloudInit != nil && len(config.CloudInit.Packages) > 0 {
+		packages = append(packages, config.CloudInit.Packages...)
+	}
+	
+	if len(packages) > 0 {
+		userData += "packages:\n"
+		for _, pkg := range packages {
+			userData += fmt.Sprintf("  - %s\n", pkg)
+		}
+	}
+	userData += "\n"
+	
+	// Write files
+	if config.CloudInit != nil && len(config.CloudInit.WriteFiles) > 0 {
+		userData += "write_files:\n"
+		for _, file := range config.CloudInit.WriteFiles {
+			userData += fmt.Sprintf("  - path: %s\n", file.Path)
+			userData += "    content: |\n"
+			// Indent content by 6 spaces
+			lines := strings.Split(file.Content, "\n")
+			for _, line := range lines {
+				userData += fmt.Sprintf("      %s\n", line)
+			}
+			
+			if file.Owner != nil && *file.Owner != "" {
+				userData += fmt.Sprintf("    owner: %s\n", *file.Owner)
+			}
+			
+			if file.Permissions != nil && *file.Permissions != "" {
+				userData += fmt.Sprintf("    permissions: %s\n", *file.Permissions)
+			}
+			
+			if file.Append != nil && *file.Append {
+				userData += "    append: true\n"
+			}
+			
+			if file.Defer != nil && *file.Defer {
+				userData += "    defer: true\n"
+			}
+		}
+		userData += "\n"
+	}
+	
+	// Runcmd
 	userData += "runcmd:\n"
-	// Install and start guest agent in runcmd
-	// Use separate commands to ensure both installation and service start
+	
+	// Default commands (always include)
 	userData += "  - apt-get update || yum update || dnf update || true\n"
 	userData += "  - apt-get install -y openssh-server qemu-guest-agent || yum install -y openssh-server qemu-guest-agent || dnf install -y openssh-server qemu-guest-agent || true\n"
-	// Ensure SSH service is enabled and started
 	userData += "  - systemctl enable ssh || systemctl enable sshd || true\n"
 	userData += "  - systemctl start ssh || systemctl start sshd || true\n"
-	// Ensure SSH is listening on port 22
-	userData += "  - systemctl status ssh || systemctl status sshd || true\n"
-	// Install and start guest agent
 	userData += "  - systemctl enable qemu-guest-agent || true\n"
 	userData += "  - systemctl start qemu-guest-agent || true\n"
-	userData += "  - systemctl status qemu-guest-agent || true\n"
+	
+	// Custom runcmd commands
+	if config.CloudInit != nil && len(config.CloudInit.Runcmd) > 0 {
+		for _, cmd := range config.CloudInit.Runcmd {
+			userData += fmt.Sprintf("  - %s\n", cmd)
+		}
+	}
+	
 	return userData
+}
+
+// CreateCloudInitSnippet creates a cloud-init userData snippet file in Proxmox storage
+// Returns the snippet path that can be used with cicustom parameter (e.g., "user=local:snippets/vm-300-user-data")
+// Exported for use in VPS config service
+func (pc *ProxmoxClient) CreateCloudInitSnippet(ctx context.Context, nodeName string, storage string, vmID int, userData string) (string, error) {
+	return pc.createCloudInitSnippet(ctx, nodeName, storage, vmID, userData)
+}
+
+// createCloudInitSnippet creates a cloud-init userData snippet file in Proxmox storage
+// Returns the snippet path that can be used with cicustom parameter (e.g., "user=local:snippets/vm-300-user-data")
+func (pc *ProxmoxClient) createCloudInitSnippet(ctx context.Context, nodeName string, storage string, vmID int, userData string) (string, error) {
+	// Proxmox snippets are stored in: <storage>/snippets/
+	// Snippets require directory-type storage (dir, nfs, cifs, etc.), not block storage (lvm, zfs)
+	snippetFilename := fmt.Sprintf("vm-%d-user-data", vmID)
+	
+	// Check if storage supports snippets (must be directory-type storage with snippets content type)
+	storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
+	if err != nil {
+		logger.Warn("[ProxmoxClient] Failed to get storage info for '%s': %v, proceeding anyway", storage, err)
+	} else if storageInfo != nil {
+		storageType, ok := storageInfo["type"].(string)
+		if ok {
+			// Snippets are only supported on directory-type storage
+			// Block storage types (lvm, lvm-thin, zfs, zfspool) don't support snippets
+			supportsSnippets := storageType == "dir" || storageType == "directory" || 
+				storageType == "nfs" || storageType == "cifs" || storageType == "glusterfs"
+			
+			if !supportsSnippets {
+				return "", fmt.Errorf("storage '%s' (type: %s) does not support snippets. Snippets require directory-type storage (dir, nfs, cifs). Please set PROXMOX_STORAGE to a directory-type storage pool", storage, storageType)
+			}
+			
+			// Check if storage has "snippets" in its content types
+			// Proxmox storage must have "snippets" enabled in content types to accept snippet uploads
+			if contentVal, ok := storageInfo["content"].(string); ok && contentVal != "" {
+				// Content is a comma-separated list like "images,iso,vztmpl,snippets"
+				if !strings.Contains(contentVal, "snippets") {
+					return "", fmt.Errorf("storage '%s' does not have 'snippets' enabled in its content types. Current content types: %s. Please enable 'snippets' in the storage configuration (Datacenter → Storage → Edit storage → Content: check 'Snippets')", storage, contentVal)
+				}
+			} else {
+				// Content might be an array in some Proxmox versions
+				if contentArr, ok := storageInfo["content"].([]interface{}); ok {
+					hasSnippets := false
+					for _, ct := range contentArr {
+						if ctStr, ok := ct.(string); ok && ctStr == "snippets" {
+							hasSnippets = true
+							break
+						}
+					}
+					if !hasSnippets {
+						return "", fmt.Errorf("storage '%s' does not have 'snippets' enabled in its content types. Please enable 'snippets' in the storage configuration (Datacenter → Storage → Edit storage → Content: check 'Snippets')", storage)
+					}
+				}
+			}
+			
+			logger.Info("[ProxmoxClient] Storage '%s' (type: %s) supports snippets", storage, storageType)
+		}
+	}
+	
+	// SSH is required for snippet writing - no fallback to upload endpoint
+	if pc.config.SSHUser == "" {
+		return "", fmt.Errorf("SSH is required for snippet writing. Please configure PROXMOX_SSH_USER environment variable. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for setup instructions")
+	}
+	if pc.config.SSHKeyPath == "" && pc.config.SSHKeyData == "" {
+		return "", fmt.Errorf("SSH key is required for snippet writing. Please configure either PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA environment variable. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for setup instructions")
+	}
+	
+	// Write snippet via SSH (only method supported)
+	snippetPath, err := pc.writeSnippetViaSSH(ctx, nodeName, storage, snippetFilename, userData)
+	if err != nil {
+		return "", fmt.Errorf("failed to create snippet via SSH: %w. Ensure SSH is properly configured and the SSH user has write permissions to the snippets directory. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for troubleshooting", err)
+	}
+	
+	logger.Info("[ProxmoxClient] Successfully created snippet via SSH: %s", snippetPath)
+	return snippetPath, nil
+}
+
+// writeSnippetViaSSH writes a cloud-init snippet file directly to Proxmox storage via SSH
+// Returns the snippet path that can be used with cicustom parameter
+func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string, storage string, filename string, content string) (string, error) {
+	if pc.config.SSHHost == "" {
+		return "", fmt.Errorf("SSH host not configured (PROXMOX_SSH_HOST)")
+	}
+	if pc.config.SSHUser == "" {
+		return "", fmt.Errorf("SSH user not configured (PROXMOX_SSH_USER)")
+	}
+	
+	// Load SSH private key
+	var signer ssh.Signer
+	var err error
+	
+	if pc.config.SSHKeyData != "" {
+		// Use key data from environment variable
+		// Support both raw key data and base64-encoded key data
+		keyData := []byte(pc.config.SSHKeyData)
+		
+		// Try to decode as base64 first (if it fails, assume it's raw key data)
+		if decoded, err := base64.StdEncoding.DecodeString(pc.config.SSHKeyData); err == nil {
+			// Successfully decoded as base64 - check if it looks like a valid SSH key
+			if strings.Contains(string(decoded), "BEGIN") || strings.Contains(string(decoded), "PRIVATE KEY") {
+				keyData = decoded
+			}
+			// If base64 decode succeeded but doesn't look like a key, try raw anyway
+		}
+		
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse SSH key data: %w", err)
+		}
+	} else if pc.config.SSHKeyPath != "" {
+		// Read key from file
+		keyData, err := os.ReadFile(pc.config.SSHKeyPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read SSH key file: %w", err)
+		}
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse SSH key: %w", err)
+		}
+	} else {
+		return "", fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
+	}
+	
+	// Create SSH client config
+	sshConfig := &ssh.ClientConfig{
+		User:            pc.config.SSHUser,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Consider validating host keys for production
+		Timeout:         10 * time.Second,
+	}
+	
+	// Connect to Proxmox node via SSH
+	sshHost := pc.config.SSHHost
+	sshPort := "22"
+	if strings.Contains(sshHost, ":") {
+		// Port is included in host
+		parts := strings.Split(sshHost, ":")
+		sshHost = parts[0]
+		sshPort = parts[1]
+	}
+	
+	conn, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", sshHost, sshPort), sshConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to Proxmox node via SSH: %w", err)
+	}
+	defer conn.Close()
+	
+	// Determine snippets directory path
+	// Try to get storage path via API first, fallback to default
+	storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
+	var snippetsPath string
+	if err == nil && storageInfo != nil {
+		if pathVal, ok := storageInfo["path"].(string); ok && pathVal != "" {
+			snippetsPath = fmt.Sprintf("%s/snippets", pathVal)
+		}
+	}
+	
+	// Fallback to default path for local storage
+	if snippetsPath == "" {
+		snippetsPath = "/var/lib/vz/snippets"
+	}
+	
+	filePath := fmt.Sprintf("%s/%s", snippetsPath, filename)
+	logger.Debug("[ProxmoxClient] Writing snippet file to: %s", filePath)
+	
+	// Write file using dd via stdin
+	session, err := conn.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("failed to create SSH session: %w", err)
+	}
+	defer session.Close()
+	
+	var stderr bytes.Buffer
+	session.Stderr = &stderr
+	
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to get stdin pipe: %w", err)
+	}
+	
+	cmd := fmt.Sprintf("/bin/sh -c 'dd of=\"%s\" bs=8192 2>/dev/null'", filePath)
+	if err := session.Start(cmd); err != nil {
+		stdin.Close()
+		return "", fmt.Errorf("failed to start dd command: %w", err)
+	}
+	
+	// Write content to stdin
+	if _, err := stdin.Write([]byte(content)); err != nil {
+		stdin.Close()
+		session.Wait()
+		return "", fmt.Errorf("failed to write file content: %w", err)
+	}
+	stdin.Close()
+	
+	// Wait for command to complete
+	if err := session.Wait(); err != nil {
+		// Even if dd returns an error, verify if file was created
+		verifySession, _ := conn.NewSession()
+		verifyCmd := fmt.Sprintf("/bin/sh -c 'test -f \"%s\"'", filePath)
+		if verifySession.Run(verifyCmd) != nil {
+			verifySession.Close()
+			return "", fmt.Errorf("failed to write file to %s: %w (stderr: %s)", filePath, err, stderr.String())
+		}
+		verifySession.Close()
+	}
+	
+	// Verify file exists (dd may succeed but file might not be created)
+	verifySession, err := conn.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("failed to create verification session: %w", err)
+	}
+	verifyCmd := fmt.Sprintf("/bin/sh -c 'test -f \"%s\"'", filePath)
+	if err := verifySession.Run(verifyCmd); err != nil {
+		verifySession.Close()
+		return "", fmt.Errorf("file write completed but file %s does not exist", filePath)
+	}
+	verifySession.Close()
+	
+	// Set file permissions (non-critical)
+	chmodSession, _ := conn.NewSession()
+	chmodSession.Run(fmt.Sprintf("/bin/sh -c 'chmod 644 \"%s\"'", filePath))
+	chmodSession.Close()
+	
+	logger.Info("[ProxmoxClient] Successfully wrote snippet file via SSH: %s", filePath)
+	
+	// Return the cicustom path
+	snippetPath := fmt.Sprintf("user=%s:snippets/%s", storage, filename)
+	return snippetPath, nil
+}
+
+// deleteSnippetViaSSH deletes a cloud-init snippet file from Proxmox storage via SSH
+func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName string, storage string, filename string) error {
+	if pc.config.SSHHost == "" {
+		return fmt.Errorf("SSH host not configured (PROXMOX_SSH_HOST)")
+	}
+	if pc.config.SSHUser == "" {
+		return fmt.Errorf("SSH user not configured (PROXMOX_SSH_USER)")
+	}
+	if pc.config.SSHKeyPath == "" && pc.config.SSHKeyData == "" {
+		return fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
+	}
+	
+	// Load SSH private key
+	var signer ssh.Signer
+	var err error
+	
+	if pc.config.SSHKeyData != "" {
+		keyData := []byte(pc.config.SSHKeyData)
+		if decoded, err := base64.StdEncoding.DecodeString(pc.config.SSHKeyData); err == nil {
+			if strings.Contains(string(decoded), "BEGIN") || strings.Contains(string(decoded), "PRIVATE KEY") {
+				keyData = decoded
+			}
+		}
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return fmt.Errorf("failed to parse SSH key data: %w", err)
+		}
+	} else if pc.config.SSHKeyPath != "" {
+		keyData, err := os.ReadFile(pc.config.SSHKeyPath)
+		if err != nil {
+			return fmt.Errorf("failed to read SSH key file: %w", err)
+		}
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return fmt.Errorf("failed to parse SSH key: %w", err)
+		}
+	} else {
+		return fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
+	}
+	
+	// Create SSH client config
+	sshConfig := &ssh.ClientConfig{
+		User:            pc.config.SSHUser,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         10 * time.Second,
+	}
+	
+	// Connect to Proxmox node via SSH
+	sshHost := pc.config.SSHHost
+	sshPort := "22"
+	if strings.Contains(sshHost, ":") {
+		parts := strings.Split(sshHost, ":")
+		sshHost = parts[0]
+		sshPort = parts[1]
+	}
+	
+	conn, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", sshHost, sshPort), sshConfig)
+	if err != nil {
+		return fmt.Errorf("failed to connect to Proxmox node via SSH: %w", err)
+	}
+	defer conn.Close()
+	
+	// Determine snippets directory path
+	storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
+	var snippetsPath string
+	if err == nil && storageInfo != nil {
+		if pathVal, ok := storageInfo["path"].(string); ok && pathVal != "" {
+			snippetsPath = fmt.Sprintf("%s/snippets", pathVal)
+		}
+	}
+	
+	if snippetsPath == "" {
+		snippetsPath = "/var/lib/vz/snippets"
+	}
+	
+	filePath := fmt.Sprintf("%s/%s", snippetsPath, filename)
+	
+	// Delete the file
+	session, err := conn.NewSession()
+	if err != nil {
+		return fmt.Errorf("failed to create SSH session: %w", err)
+	}
+	defer session.Close()
+	
+	cmd := fmt.Sprintf("/bin/sh -c 'rm -f \"%s\"'", filePath)
+	if err := session.Run(cmd); err != nil {
+		// Check if file exists - if it doesn't, that's fine (already deleted)
+		verifySession, _ := conn.NewSession()
+		verifyCmd := fmt.Sprintf("/bin/sh -c 'test -f \"%s\"'", filePath)
+		if verifySession.Run(verifyCmd) == nil {
+			verifySession.Close()
+			return fmt.Errorf("failed to delete snippet file %s: %w", filePath, err)
+		}
+		verifySession.Close()
+		// File doesn't exist - already deleted, that's fine
+		logger.Debug("[ProxmoxClient] Snippet file %s does not exist (may have been already deleted)", filePath)
+		return nil
+	}
+	
+	logger.Info("[ProxmoxClient] Successfully deleted snippet file via SSH: %s", filePath)
+	return nil
 }
 
 // GenerateRandomPassword generates a random password
@@ -3063,6 +3520,29 @@ func (pc *ProxmoxClient) UpdateVMCloudInitPassword(ctx context.Context, nodeName
 	}
 
 	logger.Info("[ProxmoxClient] Successfully updated root password for VM %d. Password will take effect after VM reboot or cloud-init re-run.", vmID)
+	return nil
+}
+
+// UpdateVMCicustom updates the cicustom parameter for a VM
+// This is used to reference cloud-init snippet files
+func (pc *ProxmoxClient) UpdateVMCicustom(ctx context.Context, nodeName string, vmID int, cicustom string) error {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
+	formData := url.Values{}
+	formData.Set("cicustom", cicustom)
+
+	logger.Info("[ProxmoxClient] Updating cicustom for VM %d: %s", vmID, cicustom)
+	resp, err := pc.apiRequestForm(ctx, "PUT", endpoint, formData)
+	if err != nil {
+		return fmt.Errorf("failed to update cicustom: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update cicustom: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	logger.Info("[ProxmoxClient] Successfully updated cicustom for VM %d", vmID)
 	return nil
 }
 
