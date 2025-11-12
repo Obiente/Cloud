@@ -245,7 +245,8 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 
 	// Check for delegated DNS records FIRST - if a self-hosted instance is pushing records,
 	// those should take precedence over local database entries
-	delegatedRecord, delegationErr := database.GetDelegatedDNSRecord(domain, "SRV")
+	// Use domainNormalized (already normalized above) for database lookup
+	delegatedRecord, delegationErr := database.GetDelegatedDNSRecord(domainNormalized, "SRV")
 	if delegationErr == nil && delegatedRecord != nil {
 		// Parse JSON records (SRV format: "priority weight port target")
 		var srvRecords []string
@@ -258,7 +259,9 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 					port := portInt
 					// Get A record for the target hostname
 					targetDomain := parts[3]
-					aRecord, aErr := database.GetDelegatedDNSRecord(targetDomain, "A")
+					// Normalize target domain by removing trailing dot for database lookup
+					targetDomainNormalized := strings.TrimSuffix(targetDomain, ".")
+					aRecord, aErr := database.GetDelegatedDNSRecord(targetDomainNormalized, "A")
 					if aErr == nil && aRecord != nil {
 						var recordIPs []string
 						if err := json.Unmarshal([]byte(aRecord.Records), &recordIPs); err == nil && len(recordIPs) > 0 {
@@ -387,7 +390,9 @@ func (s *DNSServer) handleAQuery(msg *dns.Msg, domain string, q dns.Question) bo
 func (s *DNSServer) handleDeploymentAQuery(msg *dns.Msg, domain string, q dns.Question, deploymentID string) bool {
 	// Check for delegated DNS records FIRST - if a self-hosted instance is pushing records,
 	// those should take precedence over local database entries
-	delegatedRecord, delegationErr := database.GetDelegatedDNSRecord(domain, "A")
+	// Normalize domain by removing trailing dot for database lookup
+	domainNormalized := strings.TrimSuffix(domain, ".")
+	delegatedRecord, delegationErr := database.GetDelegatedDNSRecord(domainNormalized, "A")
 	if delegationErr == nil && delegatedRecord != nil {
 		// Parse JSON records
 		var recordIPs []string
@@ -477,7 +482,9 @@ func (s *DNSServer) handleDeploymentAQuery(msg *dns.Msg, domain string, q dns.Qu
 func (s *DNSServer) handleGameServerAQuery(msg *dns.Msg, domain string, q dns.Question, gameServerID string) bool {
 	// Check for delegated DNS records FIRST - if a self-hosted instance is pushing records,
 	// those should take precedence over local database entries
-	delegatedRecord, delegationErr := database.GetDelegatedDNSRecord(domain, "A")
+	// Normalize domain by removing trailing dot for database lookup
+	domainNormalized := strings.TrimSuffix(domain, ".")
+	delegatedRecord, delegationErr := database.GetDelegatedDNSRecord(domainNormalized, "A")
 	if delegationErr == nil && delegatedRecord != nil {
 		// Parse JSON records
 		var recordIPs []string
