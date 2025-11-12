@@ -67,8 +67,11 @@ func (d *DelegatedDNSRecord) IsExpired() bool {
 
 // GetDelegatedDNSRecord retrieves a delegated DNS record if it exists and is not expired
 func GetDelegatedDNSRecord(domain, recordType string) (*DelegatedDNSRecord, error) {
+	// Normalize domain by removing trailing dot - DNS queries often include trailing dots
+	// but database stores domains without them
+	domainNormalized := strings.TrimSuffix(domain, ".")
 	var record DelegatedDNSRecord
-	result := DB.Where("domain = ? AND record_type = ? AND expires_at > ?", domain, recordType, time.Now()).
+	result := DB.Where("domain = ? AND record_type = ? AND expires_at > ?", domainNormalized, recordType, time.Now()).
 		First(&record)
 	if result.Error != nil {
 		return nil, result.Error
@@ -84,13 +87,15 @@ func UpsertDelegatedDNSRecord(domain, recordType, recordsJSON, sourceAPI string,
 // UpsertDelegatedDNSRecordWithAPIKey creates or updates a delegated DNS record with API key tracking
 // Uses a transaction to prevent race conditions and handle expired records correctly
 func UpsertDelegatedDNSRecordWithAPIKey(domain, recordType, recordsJSON, sourceAPI, apiKeyID, organizationID string, ttl int64) error {
+	// Normalize domain by removing trailing dot - ensure consistent storage format
+	domainNormalized := strings.TrimSuffix(domain, ".")
 	now := time.Now()
 	expiresAt := now.Add(time.Duration(ttl) * time.Second)
 
 	return DB.Transaction(func(tx *gorm.DB) error {
 		// First, try to find existing record (even if expired)
 		var existing DelegatedDNSRecord
-		result := tx.Where("domain = ? AND record_type = ?", domain, recordType).First(&existing)
+		result := tx.Where("domain = ? AND record_type = ?", domainNormalized, recordType).First(&existing)
 		
 		if result.Error == nil {
 			// Record exists - update it (this refreshes expiration even if it was expired)
@@ -109,7 +114,7 @@ func UpsertDelegatedDNSRecordWithAPIKey(domain, recordType, recordsJSON, sourceA
 			// Record doesn't exist - create new one
 			record := DelegatedDNSRecord{
 				ID:             uuid.New().String(),
-				Domain:         domain,
+				Domain:         domainNormalized,
 				RecordType:     recordType,
 				Records:        recordsJSON,
 				SourceAPI:      sourceAPI,
@@ -126,7 +131,7 @@ func UpsertDelegatedDNSRecordWithAPIKey(domain, recordType, recordsJSON, sourceA
 					// Race condition: record was created between our check and create
 					// Try to update it instead
 					var raceRecord DelegatedDNSRecord
-					if tx.Where("domain = ? AND record_type = ?", domain, recordType).First(&raceRecord).Error == nil {
+					if tx.Where("domain = ? AND record_type = ?", domainNormalized, recordType).First(&raceRecord).Error == nil {
 						updateData := map[string]interface{}{
 							"records":         recordsJSON,
 							"source_api":      sourceAPI,
