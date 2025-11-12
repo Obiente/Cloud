@@ -36,8 +36,10 @@ const errorMessage = computed(() => {
 
   // Handle ConnectRPC errors
   if (props.error instanceof ConnectError) {
-    // Check for permission errors
     if (props.error.code === Code.PermissionDenied) {
+      if (props.error.message && props.error.message.trim() !== "") {
+        return props.error.message;
+      }
       return "You don't have permission to perform this action";
     }
 

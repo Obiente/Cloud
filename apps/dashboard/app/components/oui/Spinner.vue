@@ -11,17 +11,25 @@
     aria-live="polite"
   >
     <circle
-      class="opacity-25"
+      class="oui-spinner-track"
       cx="12"
       cy="12"
       r="10"
-      stroke="currentColor"
-      stroke-width="4"
+      :stroke="trackColor"
+      stroke-width="2"
+      fill="none"
     />
-    <path
-      class="opacity-75"
-      fill="currentColor"
-      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+    <circle
+      class="oui-spinner-arc"
+      cx="12"
+      cy="12"
+      r="10"
+      :stroke="arcColor"
+      stroke-width="2"
+      fill="none"
+      stroke-linecap="round"
+      :stroke-dasharray="circumference"
+      :stroke-dashoffset="circumference * 0.75"
     />
   </svg>
 </template>
@@ -62,36 +70,86 @@ const sizeValue = computed(() => {
   return sizeMap[props.size];
 });
 
+// Calculate circumference for stroke-dasharray (2 * π * radius)
+const circumference = computed(() => 2 * Math.PI * 10); // radius is 10
+
 const spinnerClasses = computed(() => {
-  const classes = ["oui-spinner", "animate-spin"];
+  return ["oui-spinner", `oui-spinner-${props.color}`];
+});
 
-  // Color classes
-  const colorClasses = {
-    primary: "text-primary",
-    secondary: "text-secondary",
-    muted: "text-muted",
-    success: "text-success",
-    warning: "text-warning",
-    danger: "text-danger",
+// Color mappings using CSS custom properties for better theme integration
+const trackColor = computed(() => {
+  const colorMap = {
+    primary: "var(--oui-accent-primary)",
+    secondary: "var(--oui-accent-secondary)",
+    muted: "var(--oui-text-tertiary)",
+    success: "var(--oui-accent-success)",
+    warning: "var(--oui-accent-warning)",
+    danger: "var(--oui-accent-danger)",
   };
-  classes.push(colorClasses[props.color]);
+  return colorMap[props.color];
+});
 
-  return classes.join(" ");
+const arcColor = computed(() => {
+  const colorMap = {
+    primary: "var(--oui-accent-primary)",
+    secondary: "var(--oui-accent-secondary)",
+    muted: "var(--oui-text-secondary)",
+    success: "var(--oui-accent-success)",
+    warning: "var(--oui-accent-warning)",
+    danger: "var(--oui-accent-danger)",
+  };
+  return colorMap[props.color];
 });
 </script>
 
 <style scoped>
 .oui-spinner {
-  animation: spin 1s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
 }
 
-@keyframes spin {
+.oui-spinner-track {
+  opacity: 0.2;
+}
+
+.oui-spinner-arc {
+  transform-origin: center;
+  animation: oui-spinner-rotate 0.8s linear infinite;
+}
+
+@keyframes oui-spinner-rotate {
   from {
     transform: rotate(0deg);
   }
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Color-specific opacity adjustments for better visibility */
+.oui-spinner-primary .oui-spinner-arc {
+  opacity: 1;
+}
+
+.oui-spinner-secondary .oui-spinner-arc {
+  opacity: 1;
+}
+
+.oui-spinner-muted .oui-spinner-arc {
+  opacity: 0.6;
+}
+
+.oui-spinner-success .oui-spinner-arc {
+  opacity: 1;
+}
+
+.oui-spinner-warning .oui-spinner-arc {
+  opacity: 1;
+}
+
+.oui-spinner-danger .oui-spinner-arc {
+  opacity: 1;
 }
 </style>
 

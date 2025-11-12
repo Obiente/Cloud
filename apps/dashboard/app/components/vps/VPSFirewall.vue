@@ -76,10 +76,10 @@
       </OuiCardHeader>
       <OuiCardBody>
         <!-- Loading State -->
-        <div v-if="loadingRules" class="text-center py-8">
+        <OuiStack v-if="loadingRules" align="center" gap="md" class="py-8">
           <OuiSpinner size="lg" />
-          <OuiText color="secondary" class="mt-4">Loading firewall rules...</OuiText>
-        </div>
+          <OuiText color="secondary">Loading firewall rules...</OuiText>
+        </OuiStack>
 
         <!-- Error State -->
         <div v-else-if="rulesError" class="text-center py-8">

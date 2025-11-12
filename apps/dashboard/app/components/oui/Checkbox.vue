@@ -8,13 +8,13 @@
       <div class="inline-flex items-center gap-2 select-none">
         <Checkbox.Control
           :class="[
-            'oui-input oui-input-sm inline-flex items-center justify-center rounded border',
+            'oui-input oui-input-sm inline-flex items-center justify-center rounded border p-0',
             error ? 'oui-input-error' : 'oui-input-base',
             disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
             'h-4 w-4'
           ]"
         >
-          <Checkbox.Indicator>
+          <Checkbox.Indicator class="flex items-center justify-center">
             <svg viewBox="0 0 24 24" class="h-3.5 w-3.5 text-primary">
               <path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" />
             </svg>

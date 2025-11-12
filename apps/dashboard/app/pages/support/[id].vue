@@ -15,10 +15,10 @@
       <!-- Loading State -->
       <OuiCard v-if="pending">
         <OuiCardBody>
-          <div class="text-center py-16">
+          <OuiStack align="center" gap="md" class="py-16">
             <OuiSpinner size="lg" />
-            <OuiText color="secondary" class="mt-4">Loading ticket...</OuiText>
-          </div>
+            <OuiText color="secondary">Loading ticket...</OuiText>
+          </OuiStack>
         </OuiCardBody>
       </OuiCard>
 

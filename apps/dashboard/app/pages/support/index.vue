@@ -136,10 +136,10 @@
         </OuiCardHeader>
         <OuiCardBody>
           <!-- Loading State -->
-          <div v-if="pending" class="text-center py-16">
+          <OuiStack v-if="pending" align="center" gap="md" class="py-16">
             <OuiSpinner size="lg" />
-            <OuiText color="secondary" class="mt-4">Loading tickets...</OuiText>
-          </div>
+            <OuiText color="secondary">Loading tickets...</OuiText>
+          </OuiStack>
 
           <!-- Error State -->
           <div v-else-if="error" class="text-center py-16">
