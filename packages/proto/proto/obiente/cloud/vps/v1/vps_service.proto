@@ -121,8 +121,63 @@ message CreateVPSRequest {
   VPSImage image = 5;            // OS image
   optional string image_id = 6;   // Custom image ID (if image is CUSTOM)
   string size = 7;               // VPS size/spec (e.g., "small", "medium", "large", or specific like "2cpu-4gb")
-  optional string ssh_key_id = 8; // SSH key ID for initial access
+  optional string ssh_key_id = 8; // SSH key ID for initial access (deprecated: use users instead)
   map<string, string> metadata = 9; // Additional metadata/tags
+  
+  // Cloud-init configuration
+  optional CloudInitConfig cloud_init = 10;
+  
+  // Root password configuration (if not set, password will be auto-generated)
+  optional string root_password = 11; // Custom root password (optional, auto-generated if not provided)
+}
+
+// CloudInitConfig contains cloud-init configuration options
+message CloudInitConfig {
+  // User configurations
+  repeated CloudInitUser users = 1;
+  
+  // System configuration
+  optional string hostname = 2;        // System hostname
+  optional string timezone = 3;         // Timezone (e.g., "America/New_York", "UTC")
+  optional string locale = 4;          // Locale (e.g., "en_US.UTF-8")
+  
+  // Package management
+  repeated string packages = 5;        // Additional packages to install
+  optional bool package_update = 6;    // Update package database (default: true)
+  optional bool package_upgrade = 7;   // Upgrade packages (default: false)
+  
+  // Custom commands to run on first boot
+  repeated string runcmd = 8;         // Commands to run (executed in order)
+  
+  // Write files
+  repeated CloudInitWriteFile write_files = 9;
+  
+  // SSH configuration
+  optional bool ssh_install_server = 10; // Install SSH server (default: true)
+  optional bool ssh_allow_pw = 11;       // Allow password authentication (default: true)
+}
+
+// CloudInitUser represents a user to be created via cloud-init
+message CloudInitUser {
+  string name = 1;                    // Username
+  optional string password = 2;        // Password (if not set, user can only login via SSH keys)
+  repeated string ssh_authorized_keys = 3; // SSH public keys for this user
+  optional bool sudo = 4;             // Grant sudo access (default: false)
+  optional bool sudo_nopasswd = 5;    // Sudo without password (default: false)
+  repeated string groups = 6;          // Additional groups to add user to
+  optional string shell = 7;           // Shell (default: /bin/bash)
+  optional bool lock_passwd = 8;       // Lock password (default: false)
+  optional string gecos = 9;          // Full name/comment
+}
+
+// CloudInitWriteFile represents a file to be written via cloud-init
+message CloudInitWriteFile {
+  string path = 1;                    // File path
+  string content = 2;                 // File content
+  optional string owner = 3;           // File owner (default: root:root)
+  optional string permissions = 4;     // File permissions (default: "0644")
+  optional bool append = 5;            // Append to existing file (default: false)
+  optional bool defer = 6;            // Defer writing until after package installation
 }
 
 message CreateVPSResponse {

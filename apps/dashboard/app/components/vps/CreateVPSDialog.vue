@@ -68,6 +68,201 @@
         </OuiSelect>
       </OuiStack>
 
+      <!-- Advanced Configuration (Cloud-Init) -->
+      <OuiCollapsible
+        v-model="showAdvancedConfig"
+        label="Advanced Configuration (Cloud-Init)"
+      >
+        <OuiStack gap="md" class="pt-2">
+          <!-- Custom Root Password -->
+          <OuiInput
+            v-model="form.rootPassword"
+            type="password"
+            label="Custom Root Password"
+            description="Optional: Set a custom root password. If not set, a random password will be generated."
+            placeholder="Leave empty for auto-generated password"
+          />
+
+          <!-- System Configuration -->
+          <OuiStack gap="sm">
+            <OuiText size="sm" weight="semibold">System Configuration</OuiText>
+            <OuiInput
+              v-model="form.cloudInit.hostname"
+              label="Hostname"
+              placeholder="my-vps"
+              description="System hostname (optional)"
+            />
+            <OuiInput
+              v-model="form.cloudInit.timezone"
+              label="Timezone"
+              placeholder="America/New_York"
+              description="Timezone (e.g., UTC, America/New_York, Europe/London)"
+            />
+            <OuiInput
+              v-model="form.cloudInit.locale"
+              label="Locale"
+              placeholder="en_US.UTF-8"
+              description="System locale (e.g., en_US.UTF-8)"
+            />
+          </OuiStack>
+
+          <!-- Users -->
+          <OuiStack gap="sm">
+            <OuiFlex justify="between" align="center">
+              <OuiText size="sm" weight="semibold">Users</OuiText>
+              <OuiButton
+                variant="outline"
+                size="xs"
+                @click="addUser"
+                class="gap-1"
+              >
+                <PlusIcon class="h-4 w-4" />
+                Add User
+              </OuiButton>
+            </OuiFlex>
+            <OuiText size="xs" color="secondary">
+              Create additional users with custom passwords and SSH keys
+            </OuiText>
+            <OuiStack gap="sm" v-if="form.cloudInit.users.length > 0">
+              <OuiCard
+                v-for="(user, index) in form.cloudInit.users"
+                :key="index"
+                variant="outline"
+              >
+                <OuiCardBody>
+                  <OuiStack gap="sm">
+                    <OuiFlex justify="between" align="center">
+                      <OuiText size="sm" weight="medium">User {{ index + 1 }}</OuiText>
+                      <OuiButton
+                        variant="ghost"
+                        size="xs"
+                        color="danger"
+                        @click="removeUser(index)"
+                      >
+                        Remove
+                      </OuiButton>
+                    </OuiFlex>
+                    <OuiInput
+                      v-model="user.name"
+                      label="Username"
+                      placeholder="username"
+                      required
+                    />
+                    <OuiInput
+                      v-model="user.password"
+                      type="password"
+                      label="Password"
+                      placeholder="Leave empty for SSH key only"
+                    />
+                    <!-- SSH Keys Selection -->
+                    <OuiStack gap="xs">
+                      <OuiText size="sm" weight="medium">SSH Keys</OuiText>
+                      <OuiText size="xs" color="secondary">
+                        Select SSH keys from your organization to assign to this user
+                      </OuiText>
+                      <OuiBox
+                        v-if="availableSSHKeys.length === 0"
+                        p="sm"
+                        rounded="md"
+                        class="bg-surface-muted/40 ring-1 ring-border-muted"
+                      >
+                        <OuiText size="xs" color="secondary">
+                          No SSH keys available. Add SSH keys in your organization settings.
+                        </OuiText>
+                      </OuiBox>
+                      <OuiStack
+                        v-else
+                        gap="xs"
+                        class="max-h-48 overflow-y-auto"
+                      >
+                        <OuiCheckbox
+                          v-for="key in availableSSHKeys"
+                          :key="key.id"
+                          :model-value="user.selectedSSHKeyIds?.includes(key.id) || false"
+                          @update:model-value="(checked) => toggleSSHKey(user, key.id, checked)"
+                        >
+                          <OuiFlex align="center" gap="xs">
+                            <KeyIcon class="h-4 w-4 text-secondary" />
+                            <OuiText size="sm">{{ key.name }}</OuiText>
+                            <OuiBadge
+                              v-if="!key.vpsId"
+                              variant="primary"
+                              size="xs"
+                            >
+                              Org-wide
+                            </OuiBadge>
+                          </OuiFlex>
+                        </OuiCheckbox>
+                      </OuiStack>
+                    </OuiStack>
+                    <OuiFlex gap="sm">
+                      <OuiCheckbox
+                        v-model="user.sudo"
+                        label="Grant sudo access"
+                      />
+                      <OuiCheckbox
+                        v-model="user.sudoNopasswd"
+                        label="Sudo without password"
+                        :disabled="!user.sudo"
+                      />
+                    </OuiFlex>
+                  </OuiStack>
+                </OuiCardBody>
+              </OuiCard>
+            </OuiStack>
+          </OuiStack>
+
+          <!-- Packages -->
+          <OuiStack gap="sm">
+            <OuiText size="sm" weight="semibold">Additional Packages</OuiText>
+            <OuiTextarea
+              v-model="form.cloudInit.packages"
+              label="Packages to Install"
+              placeholder="nginx&#10;docker.io&#10;git"
+              description="One package name per line"
+              :rows="3"
+            />
+            <OuiFlex gap="sm">
+              <OuiCheckbox
+                v-model="form.cloudInit.packageUpdate"
+                label="Update package database"
+              />
+              <OuiCheckbox
+                v-model="form.cloudInit.packageUpgrade"
+                label="Upgrade packages"
+              />
+            </OuiFlex>
+          </OuiStack>
+
+          <!-- Custom Commands -->
+          <OuiStack gap="sm">
+            <OuiText size="sm" weight="semibold">Custom Commands</OuiText>
+            <OuiTextarea
+              v-model="form.cloudInit.runcmd"
+              label="Commands to Run on First Boot"
+              placeholder="echo 'Hello World' > /tmp/hello.txt&#10;systemctl enable my-service"
+              description="One command per line. Commands run as root."
+              :rows="3"
+            />
+          </OuiStack>
+
+          <!-- SSH Configuration -->
+          <OuiStack gap="sm">
+            <OuiText size="sm" weight="semibold">SSH Configuration</OuiText>
+            <OuiFlex gap="sm">
+              <OuiCheckbox
+                v-model="form.cloudInit.sshInstallServer"
+                label="Install SSH server"
+              />
+              <OuiCheckbox
+                v-model="form.cloudInit.sshAllowPw"
+                label="Allow password authentication"
+              />
+            </OuiFlex>
+          </OuiStack>
+        </OuiStack>
+      </OuiCollapsible>
+
       <!-- VPS Size Description -->
       <OuiCard
         variant="outline"
@@ -206,7 +401,7 @@
   import { useDialog } from "~/composables/useDialog";
   import { useToast } from "~/composables/useToast";
   import ErrorAlert from "~/components/ErrorAlert.vue";
-  import { ClipboardDocumentIcon } from "@heroicons/vue/24/outline";
+  import { ClipboardDocumentIcon, PlusIcon, KeyIcon } from "@heroicons/vue/24/outline";
 
   interface Props {
     modelValue: boolean;
@@ -229,7 +424,28 @@
     region: "",
     image: VPSImage.UBUNTU_24_04,
     size: "",
+    rootPassword: "",
+    cloudInit: {
+      hostname: "",
+      timezone: "",
+      locale: "",
+      packages: "",
+      packageUpdate: true,
+      packageUpgrade: false,
+      runcmd: "",
+      sshInstallServer: true,
+      sshAllowPw: true,
+      users: [] as Array<{
+        name: string;
+        password: string;
+        selectedSSHKeyIds: string[];
+        sudo: boolean;
+        sudoNopasswd: boolean;
+      }>,
+    },
   });
+
+  const showAdvancedConfig = ref(false);
 
   const errors = ref<Record<string, string>>({});
   const error = ref<Error | null>(null);
@@ -287,6 +503,39 @@
     return `${gb.toFixed(0)} GB`;
   };
 
+  const addUser = () => {
+    form.value.cloudInit.users.push({
+      name: "",
+      password: "",
+      selectedSSHKeyIds: [],
+      sudo: false,
+      sudoNopasswd: false,
+    });
+  };
+
+  const toggleSSHKey = (
+    user: {
+      selectedSSHKeyIds: string[];
+    },
+    keyId: string,
+    checked: boolean
+  ) => {
+    if (checked) {
+      if (!user.selectedSSHKeyIds.includes(keyId)) {
+        user.selectedSSHKeyIds.push(keyId);
+      }
+    } else {
+      const index = user.selectedSSHKeyIds.indexOf(keyId);
+      if (index > -1) {
+        user.selectedSSHKeyIds.splice(index, 1);
+      }
+    }
+  };
+
+  const removeUser = (index: number) => {
+    form.value.cloudInit.users.splice(index, 1);
+  };
+
   const updateOpen = (value: boolean) => {
     emit("update:modelValue", value);
     if (!value) {
@@ -297,21 +546,77 @@
         region: "",
         image: VPSImage.UBUNTU_24_04,
         size: "",
+        rootPassword: "",
+        cloudInit: {
+          hostname: "",
+          timezone: "",
+          locale: "",
+          packages: "",
+          packageUpdate: true,
+          packageUpgrade: false,
+          runcmd: "",
+          sshInstallServer: true,
+          sshAllowPw: true,
+          users: [],
+        },
       };
       errors.value = {};
       error.value = null;
       createdPassword.value = null;
       showPasswordDialog.value = false;
+      showAdvancedConfig.value = false;
     }
   };
 
-  // Load regions and sizes when dialog opens
+  // SSH Keys Management
+  const availableSSHKeys = ref<Array<{
+    id: string;
+    name: string;
+    publicKey: string;
+    fingerprint: string;
+    vpsId?: string;
+  }>>([]);
+  const sshKeysLoading = ref(false);
+
+  const fetchSSHKeys = async () => {
+    if (!organizationId.value) {
+      availableSSHKeys.value = [];
+      return;
+    }
+
+    sshKeysLoading.value = true;
+    try {
+      // Fetch organization-wide SSH keys (no vpsId filter since VPS doesn't exist yet)
+      const res = await client.listSSHKeys({
+        organizationId: organizationId.value,
+      });
+      availableSSHKeys.value = (res.keys || [])
+        .filter((key) => !key.vpsId) // Only show org-wide keys for new VPS
+        .map((key) => ({
+          id: key.id || "",
+          name: key.name || "",
+          publicKey: key.publicKey || "",
+          fingerprint: key.fingerprint || "",
+          vpsId: key.vpsId,
+        }));
+    } catch (err: unknown) {
+      console.error("Failed to fetch SSH keys:", err);
+      availableSSHKeys.value = [];
+    } finally {
+      sshKeysLoading.value = false;
+    }
+  };
+
+  // Load data when dialog opens
   watch(
     () => props.modelValue,
     async (isOpen) => {
       if (isOpen) {
-        await loadRegions();
-        await loadSizes();
+        await Promise.all([
+          fetchSSHKeys(),
+          loadRegions(),
+          loadSizes(),
+        ]);
       }
     }
   );
@@ -420,6 +725,69 @@
           ? Number(form.value.image)
           : form.value.image;
 
+      // Build cloud-init config if advanced options are used
+      let cloudInitConfig = undefined;
+      const hasCloudInitConfig =
+        showAdvancedConfig.value &&
+        (form.value.cloudInit.hostname ||
+          form.value.cloudInit.timezone ||
+          form.value.cloudInit.locale ||
+          form.value.cloudInit.packages ||
+          form.value.cloudInit.runcmd ||
+          form.value.cloudInit.users.length > 0 ||
+          !form.value.cloudInit.packageUpdate ||
+          form.value.cloudInit.packageUpgrade ||
+          !form.value.cloudInit.sshInstallServer ||
+          !form.value.cloudInit.sshAllowPw);
+
+      if (hasCloudInitConfig) {
+        // Parse packages (one per line)
+        const packages = form.value.cloudInit.packages
+          .split("\n")
+          .map((p) => p.trim())
+          .filter((p) => p.length > 0);
+
+        // Parse runcmd (one per line)
+        const runcmd = form.value.cloudInit.runcmd
+          .split("\n")
+          .map((c) => c.trim())
+          .filter((c) => c.length > 0);
+
+        // Convert users
+        const users = form.value.cloudInit.users
+          .filter((u) => u.name.trim() !== "")
+          .map((u) => {
+            // Convert selected SSH key IDs to their public keys
+            const sshAuthorizedKeys = (u.selectedSSHKeyIds || [])
+              .map((keyId) => {
+                const key = availableSSHKeys.value.find((k) => k.id === keyId);
+                return key?.publicKey;
+              })
+              .filter((key): key is string => !!key); // Filter out undefined values
+
+            return {
+              name: u.name.trim(),
+              password: u.password.trim() || undefined,
+              sshAuthorizedKeys: sshAuthorizedKeys.length > 0 ? sshAuthorizedKeys : undefined,
+              sudo: u.sudo || undefined,
+              sudoNopasswd: u.sudoNopasswd || undefined,
+            };
+          });
+
+        cloudInitConfig = {
+          users: users,
+          hostname: form.value.cloudInit.hostname.trim() || undefined,
+          timezone: form.value.cloudInit.timezone.trim() || undefined,
+          locale: form.value.cloudInit.locale.trim() || undefined,
+          packages: packages.length > 0 ? packages : undefined,
+          packageUpdate: form.value.cloudInit.packageUpdate,
+          packageUpgrade: form.value.cloudInit.packageUpgrade,
+          runcmd: runcmd.length > 0 ? runcmd : undefined,
+          sshInstallServer: form.value.cloudInit.sshInstallServer,
+          sshAllowPw: form.value.cloudInit.sshAllowPw,
+        };
+      }
+
       const response = await client.createVPS({
         organizationId: organizationId.value || "",
         name: form.value.name.trim(),
@@ -427,16 +795,98 @@
         region: form.value.region,
         image: imageValue as VPSImage,
         size: form.value.size,
+        ...(form.value.rootPassword.trim() && {
+          rootPassword: form.value.rootPassword.trim(),
+        }),
+        ...(cloudInitConfig && { cloudInit: cloudInitConfig }),
       });
 
       // Capture password if provided (one-time only)
-      if (response.vps?.rootPassword) {
-        createdPassword.value = response.vps.rootPassword;
+      // Connect RPC returns the response message directly
+      const vps = response.vps;
+      
+      // Try multiple ways to access the password (defensive approach)
+      let password: string | undefined = undefined;
+      
+      // Method 1: Direct access (camelCase - TypeScript convention)
+      if (vps?.rootPassword !== undefined && vps?.rootPassword !== null) {
+        const pwd = vps.rootPassword;
+        if (typeof pwd === "string" && pwd.trim() !== "") {
+          password = pwd.trim();
+        } else if (pwd) {
+          password = String(pwd).trim();
+        }
+      }
+      
+      // Method 2: Check snake_case (protobuf field name)
+      if (!password && vps && (vps as any).root_password !== undefined && (vps as any).root_password !== null) {
+        const pwd = (vps as any).root_password;
+        if (typeof pwd === "string" && pwd.trim() !== "") {
+          password = pwd.trim();
+        } else if (pwd) {
+          password = String(pwd).trim();
+        }
+      }
+      
+      // Method 3: Check if it's a getter method (protobuf optional fields)
+      if (!password && vps && typeof (vps as any).getRootPassword === "function") {
+        try {
+          const getterResult = (vps as any).getRootPassword();
+          if (getterResult && typeof getterResult === "string" && getterResult.trim() !== "") {
+            password = getterResult.trim();
+          }
+        } catch (e) {
+          // Ignore getter errors
+        }
+      }
+      
+      // Use a replacer to handle BigInt values (convert to string) for JSON serialization
+      const bigIntReplacer = (key: string, value: any) => {
+        if (typeof value === 'bigint') {
+          return value.toString();
+        }
+        return value;
+      };
+      
+      // Method 4: Deep search in response (last resort)
+      if (!password) {
+        const responseStr = JSON.stringify(response, bigIntReplacer);
+        const passwordMatch = responseStr.match(/"root[_-]?password"\s*:\s*"([^"]+)"/i);
+        if (passwordMatch && passwordMatch[1]) {
+          password = passwordMatch[1].trim();
+        }
+      }
+      
+      // Log for debugging (always log to help diagnose)
+      console.log("[CreateVPSDialog] Password extraction:", {
+        hasVps: !!vps,
+        rootPassword: vps?.rootPassword,
+        rootPasswordType: typeof vps?.rootPassword,
+        rootPasswordValue: vps?.rootPassword,
+        passwordExtracted: password ? "***" : null,
+        passwordLength: password?.length,
+        responseKeys: Object.keys(response || {}),
+        vpsKeys: vps ? Object.keys(vps) : [],
+        rawResponse: JSON.stringify(response, bigIntReplacer, 2).substring(0, 500), // First 500 chars for debugging
+      });
+      
+      if (password && password.length > 0) {
+        createdPassword.value = password;
         updateOpen(false);
         await nextTick();
         showPasswordDialog.value = true;
       } else {
-        // No password returned, proceed normally
+        // No password returned - log for debugging
+        console.warn("[CreateVPSDialog] No root password found in CreateVPS response", {
+          response,
+          vps,
+          hasVps: !!vps,
+          rootPassword: vps?.rootPassword,
+          rootPasswordType: typeof vps?.rootPassword,
+          rootPasswordValue: vps?.rootPassword,
+          responseKeys: Object.keys(response || {}),
+          vpsKeys: vps ? Object.keys(vps) : [],
+        });
         emit("created");
         updateOpen(false);
       }
