@@ -152,21 +152,31 @@ func (s *GatewayService) ProxySSH(
 ) error {
 	// Map to track client pipes by connection ID
 	clientPipes := make(map[string]net.Conn)
+	// Map to track active data forwarding goroutines
+	dataForwardGoroutines := make(map[string]context.CancelFunc)
 	var mu sync.Mutex
-
+	
 	var connectionID string
 	startTime := time.Now()
 
 	logger.Info("[GatewayService] ProxySSH stream opened")
 
+	// Create a context that will be cancelled when the handler exits
+	handlerCtx, cancelHandler := context.WithCancel(ctx)
+	defer cancelHandler()
+
 	defer func() {
-		// Clean up all pipes
+		// Cancel all data forwarding goroutines
 		mu.Lock()
+		for _, cancel := range dataForwardGoroutines {
+			cancel()
+		}
+		// Clean up all pipes
 		for _, pipe := range clientPipes {
 			pipe.Close()
 		}
 		mu.Unlock()
-
+		
 		if connectionID != "" {
 			duration := time.Since(startTime).Seconds()
 			metrics.RecordSSHProxyConnectionDuration(connectionID, connectionID, duration)
@@ -202,17 +212,35 @@ func (s *GatewayService) ProxySSH(
 			clientPipes[connectionID] = clientPipe
 			mu.Unlock()
 
+			// Create context for this connection's data forwarding
+			forwardCtx, cancelForward := context.WithCancel(handlerCtx)
+			
 			// Start data forwarding goroutine BEFORE starting the proxy connection
 			// This ensures we're ready to receive data immediately when the VPS sends it
 			// Handle data forwarding from target to client (read from clientPipe, send to stream)
 			dataForwardReady := make(chan struct{})
-			go func(connID string, pipe net.Conn) {
+			go func(connID string, pipe net.Conn, fwdCtx context.Context) {
+				defer cancelForward() // Clean up when goroutine exits
 				close(dataForwardReady) // Signal that we're ready to read
 				logger.Debug("Data forwarding goroutine started for connection %s", connID)
 				buf := make([]byte, 4096)
+				
+				// Start a goroutine to close the pipe when context is cancelled
+				go func() {
+					<-fwdCtx.Done()
+					pipe.Close()
+				}()
+				
 				for {
 					n, err := pipe.Read(buf)
 					if err != nil {
+						// Check if error is due to context cancellation
+						select {
+						case <-fwdCtx.Done():
+							logger.Debug("Data forwarding goroutine cancelled for connection %s", connID)
+							return
+						default:
+						}
 						if err != io.EOF {
 							logger.Debug("Error reading from client pipe for connection %s: %v", connID, err)
 						}
@@ -221,43 +249,74 @@ func (s *GatewayService) ProxySSH(
 					if n > 0 {
 						logger.Debug("Forwarding %d bytes from VPS to client for connection %s", n, connID)
 						metrics.RecordSSHProxyBytes(connID, connID, "in", int64(n))
+						
+						// Check context before sending
+						select {
+						case <-fwdCtx.Done():
+							logger.Debug("Context cancelled, stopping data forwarding for connection %s", connID)
+							return
+						default:
+						}
+						
 						if sendErr := stream.Send(&vpsgatewayv1.ProxySSHResponse{
 							ConnectionId: connID,
 							Type:         "data",
 							Data:         buf[:n],
 						}); sendErr != nil {
-							logger.Error("Failed to send data to stream for connection %s: %v", connID, sendErr)
+							// Stream might be closed - this is expected when handler exits
+							logger.Debug("Failed to send data to stream for connection %s (stream may be closed): %v", connID, sendErr)
 							return
 						}
 					}
 				}
-			}(connectionID, clientPipe)
+			}(connectionID, clientPipe, forwardCtx)
+			
+			// Store cancel function for cleanup
+			mu.Lock()
+			dataForwardGoroutines[connectionID] = cancelForward
+			mu.Unlock()
 			
 			// Wait for data forwarding goroutine to be ready before starting proxy
 			<-dataForwardReady
 
 			// Start proxying in goroutine
 			go func() {
-				err := s.sshProxy.ProxyConnection(ctx, connectionID, target, port, serverPipe)
+				err := s.sshProxy.ProxyConnection(handlerCtx, connectionID, target, port, serverPipe)
 				if err != nil {
 					logger.Error("SSH proxy error for connection %s: %v", connectionID, err)
-					stream.Send(&vpsgatewayv1.ProxySSHResponse{
-						ConnectionId: connectionID,
-						Type:         "error",
-						Error:        err.Error(),
-					})
+					// Try to send error, but don't fail if stream is closed
+					select {
+					case <-handlerCtx.Done():
+						// Handler is closing, don't send
+					default:
+						stream.Send(&vpsgatewayv1.ProxySSHResponse{
+							ConnectionId: connectionID,
+							Type:         "error",
+							Error:        err.Error(),
+						})
+					}
 				} else {
-					stream.Send(&vpsgatewayv1.ProxySSHResponse{
-						ConnectionId: connectionID,
-						Type:         "closed",
-					})
+					// Try to send closed, but don't fail if stream is closed
+					select {
+					case <-handlerCtx.Done():
+						// Handler is closing, don't send
+					default:
+						stream.Send(&vpsgatewayv1.ProxySSHResponse{
+							ConnectionId: connectionID,
+							Type:         "closed",
+						})
+					}
 				}
-
+				
 				// Clean up pipe when connection closes
 				mu.Lock()
 				if pipe, exists := clientPipes[connectionID]; exists {
 					pipe.Close()
 					delete(clientPipes, connectionID)
+				}
+				if cancel, exists := dataForwardGoroutines[connectionID]; exists {
+					cancel()
+					delete(dataForwardGoroutines, connectionID)
 				}
 				mu.Unlock()
 			}()
@@ -323,6 +382,10 @@ func (s *GatewayService) ProxySSH(
 			if pipe, exists := clientPipes[connectionID]; exists {
 				pipe.Close()
 				delete(clientPipes, connectionID)
+			}
+			if cancel, exists := dataForwardGoroutines[connectionID]; exists {
+				cancel()
+				delete(dataForwardGoroutines, connectionID)
 			}
 			mu.Unlock()
 			return nil
