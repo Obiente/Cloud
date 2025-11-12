@@ -111,6 +111,9 @@ export default defineNuxtConfig({
   runtimeConfig: {
     // Private keys (only available on server-side)
     apiSecret: "",
+    // Server-side API host (for internal Docker service communication)
+    // Defaults to public API host if not set, but can be overridden for Docker internal networking
+    apiHostInternal: process.env.NUXT_API_HOST_INTERNAL || process.env.NUXT_PUBLIC_API_HOST || "http://localhost:3001",
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET || "", // Server-side only - never expose to client
     session: {
       password: "changeme_" + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters

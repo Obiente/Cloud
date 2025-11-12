@@ -144,6 +144,7 @@ func InitDatabase() error {
 		&OrganizationPlan{},
 		&OrgQuota{},
 		&MonthlyCreditGrant{},
+		&MonthlyBill{},
 		&StrayContainer{},
 		&VPSInstance{},
 		&VPSSizeCatalog{},

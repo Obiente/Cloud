@@ -32,8 +32,10 @@ export const useConfig = () => {
       // Use different transports for client vs server
       if (import.meta.server) {
         const { createConnectTransport } = await import("@connectrpc/connect-node");
+        // Use internal API host for server-side (Docker internal networking)
+        const apiHost = config.apiHostInternal || config.public.apiHost;
         publicTransport = createConnectTransport({
-          baseUrl: config.public.apiHost,
+          baseUrl: apiHost,
           httpVersion: "1.1",
           useBinaryFormat: false,
         });

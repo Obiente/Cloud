@@ -28,8 +28,10 @@ export default defineNuxtPlugin({
       disableAuthFetchPromise = (async (): Promise<boolean> => {
         try {
           // Create a transport without auth for the public config endpoint
+          // Use internal API host for server-side (Docker internal networking)
+          const apiHost = config.apiHostInternal || config.public.apiHost;
           const publicTransport = createConnectTransport({
-            baseUrl: config.public.apiHost,
+            baseUrl: apiHost,
             httpVersion: "1.1",
             useBinaryFormat: false,
           });
@@ -100,8 +102,10 @@ export default defineNuxtPlugin({
     };
 
     const authInterceptor = createAuthInterceptor(getToken);
+    // Use internal API host for server-side (Docker internal networking)
+    const apiHost = config.apiHostInternal || config.public.apiHost;
     const transport: Transport = createConnectTransport({
-      baseUrl: config.public.apiHost,
+      baseUrl: apiHost,
       httpVersion: "1.1", // Use HTTP/1.1 (h2c not supported by connect-node)
       useBinaryFormat: false, // Use Connect Protocol (JSON) instead of gRPC
       interceptors: [authInterceptor],
