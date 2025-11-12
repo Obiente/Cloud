@@ -1,0 +1,194 @@
+syntax = "proto3";
+
+package obiente.cloud.vps.v1;
+
+option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1;vpsv1";
+
+import "obiente/cloud/vps/v1/vps_service.proto";
+
+// VPSConfigService provides endpoints for managing VPS configuration
+// including cloud-init settings and user management
+service VPSConfigService {
+  // Get cloud-init configuration for a VPS instance
+  rpc GetCloudInitConfig(GetCloudInitConfigRequest) returns (GetCloudInitConfigResponse);
+  
+  // Update cloud-init configuration for a VPS instance
+  rpc UpdateCloudInitConfig(UpdateCloudInitConfigRequest) returns (UpdateCloudInitConfigResponse);
+  
+  // List users configured for a VPS instance
+  rpc ListVPSUsers(ListVPSUsersRequest) returns (ListVPSUsersResponse);
+  
+  // Create a new user on a VPS instance
+  rpc CreateVPSUser(CreateVPSUserRequest) returns (CreateVPSUserResponse);
+  
+  // Update an existing user on a VPS instance
+  rpc UpdateVPSUser(UpdateVPSUserRequest) returns (UpdateVPSUserResponse);
+  
+  // Delete a user from a VPS instance
+  rpc DeleteVPSUser(DeleteVPSUserRequest) returns (DeleteVPSUserResponse);
+  
+  // Set or reset password for a user
+  rpc SetUserPassword(SetUserPasswordRequest) returns (SetUserPasswordResponse);
+  
+  // Manage SSH keys for a specific user
+  rpc UpdateUserSSHKeys(UpdateUserSSHKeysRequest) returns (UpdateUserSSHKeysResponse);
+  
+  // Rotate the web terminal SSH key for a VPS instance
+  rpc RotateTerminalKey(RotateTerminalKeyRequest) returns (RotateTerminalKeyResponse);
+  
+  // Remove the web terminal SSH key for a VPS instance
+  rpc RemoveTerminalKey(RemoveTerminalKeyRequest) returns (RemoveTerminalKeyResponse);
+}
+
+// GetCloudInitConfigRequest requests the cloud-init configuration for a VPS
+message GetCloudInitConfigRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+// GetCloudInitConfigResponse returns the cloud-init configuration
+message GetCloudInitConfigResponse {
+  CloudInitConfig cloud_init = 1;
+}
+
+// UpdateCloudInitConfigRequest updates the cloud-init configuration
+message UpdateCloudInitConfigRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  CloudInitConfig cloud_init = 3;
+}
+
+// UpdateCloudInitConfigResponse confirms the update
+message UpdateCloudInitConfigResponse {
+  CloudInitConfig cloud_init = 1;
+  string message = 2; // Information message about when changes take effect
+}
+
+// ListVPSUsersRequest lists all users configured for a VPS
+message ListVPSUsersRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+// ListVPSUsersResponse returns the list of users
+message ListVPSUsersResponse {
+  repeated VPSUser users = 1;
+}
+
+// VPSUser represents a user configured on a VPS instance
+message VPSUser {
+  string name = 1;
+  bool has_password = 2; // Whether user has a password set (password itself is never returned)
+  repeated string ssh_authorized_keys = 3; // SSH public keys
+  bool sudo = 4;
+  bool sudo_nopasswd = 5;
+  repeated string groups = 6;
+  optional string shell = 7;
+  bool lock_passwd = 8;
+  optional string gecos = 9;
+}
+
+// CreateVPSUserRequest creates a new user
+message CreateVPSUserRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  string name = 3;
+  optional string password = 4;
+  repeated string ssh_authorized_keys = 5;
+  optional bool sudo = 6;
+  optional bool sudo_nopasswd = 7;
+  repeated string groups = 8;
+  optional string shell = 9;
+  optional bool lock_passwd = 10;
+  optional string gecos = 11;
+}
+
+// CreateVPSUserResponse confirms user creation
+message CreateVPSUserResponse {
+  VPSUser user = 1;
+  string message = 2; // Information about when user will be created
+}
+
+// UpdateVPSUserRequest updates an existing user
+message UpdateVPSUserRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  string name = 3; // User name to update
+  optional string new_name = 4; // New name (if renaming)
+  repeated string ssh_authorized_keys = 5;
+  optional bool sudo = 6;
+  optional bool sudo_nopasswd = 7;
+  repeated string groups = 8;
+  optional string shell = 9;
+  optional bool lock_passwd = 10;
+  optional string gecos = 11;
+}
+
+// UpdateVPSUserResponse confirms the update
+message UpdateVPSUserResponse {
+  VPSUser user = 1;
+  string message = 2;
+}
+
+// DeleteVPSUserRequest deletes a user
+message DeleteVPSUserRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  string name = 3; // User name to delete
+}
+
+// DeleteVPSUserResponse confirms deletion
+message DeleteVPSUserResponse {
+  string message = 1;
+}
+
+// SetUserPasswordRequest sets or resets a user's password
+message SetUserPasswordRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  string user_name = 3;
+  string password = 4; // New password (will be hashed and stored in cloud-init)
+}
+
+// SetUserPasswordResponse confirms password update
+message SetUserPasswordResponse {
+  string message = 1; // Information about when password will take effect
+}
+
+// UpdateUserSSHKeysRequest updates SSH keys for a user
+message UpdateUserSSHKeysRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  string user_name = 3;
+  repeated string ssh_key_ids = 4; // SSH key IDs from organization/VPS SSH keys
+}
+
+// UpdateUserSSHKeysResponse confirms the update
+message UpdateUserSSHKeysResponse {
+  VPSUser user = 1;
+  string message = 2;
+}
+
+// RotateTerminalKeyRequest rotates the web terminal SSH key
+message RotateTerminalKeyRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+// RotateTerminalKeyResponse confirms the key rotation
+message RotateTerminalKeyResponse {
+  string fingerprint = 1; // Fingerprint of the new key
+  string message = 2; // Information about when the new key will take effect
+}
+
+// RemoveTerminalKeyRequest removes the web terminal SSH key
+message RemoveTerminalKeyRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+// RemoveTerminalKeyResponse confirms the key removal
+message RemoveTerminalKeyResponse {
+  string message = 1; // Information about when the key will be removed
+}
+
