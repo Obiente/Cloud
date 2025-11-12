@@ -650,3 +650,21 @@ type SSHKey struct {
 func (SSHKey) TableName() string {
 	return "ssh_keys"
 }
+
+// VPSTerminalKey represents an SSH key pair for web terminal access to a VPS
+// The private key is stored encrypted (or should be in production)
+// The public key is added to the VPS via cloud-init
+type VPSTerminalKey struct {
+	ID             string    `gorm:"primaryKey;column:id" json:"id"`
+	VPSID          string    `gorm:"column:vps_id;index;not null;unique" json:"vps_id"` // One key per VPS
+	OrganizationID string    `gorm:"column:organization_id;index;not null" json:"organization_id"`
+	PublicKey      string    `gorm:"column:public_key;type:text;not null" json:"public_key"` // SSH public key
+	PrivateKey     string    `gorm:"column:private_key;type:text;not null" json:"-"`         // SSH private key (not returned in JSON)
+	Fingerprint    string    `gorm:"column:fingerprint;index" json:"fingerprint"`            // SSH key fingerprint
+	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt      time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (VPSTerminalKey) TableName() string {
+	return "vps_terminal_keys"
+}
