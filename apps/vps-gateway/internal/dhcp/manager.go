@@ -292,9 +292,16 @@ func (m *Manager) ReleaseIP(ctx context.Context, vpsID, ipAddress string) error 
 }
 
 // ListIPs lists all allocated IPs
+// This function syncs with actual DHCP leases to return the real IP addresses
 func (m *Manager) ListIPs(ctx context.Context, orgID, vpsID string) ([]*Allocation, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Sync allocations with actual DHCP leases
+	if err := m.syncWithLeases(); err != nil {
+		logger.Warn("Failed to sync with DHCP leases: %v", err)
+		// Continue with existing allocations if sync fails
+	}
 
 	var result []*Allocation
 	for _, alloc := range m.allocations {
@@ -660,5 +667,120 @@ func (m *Manager) loadAllocations() error {
 	}
 
 	return scanner.Err()
+}
+
+// syncWithLeases reads the actual dnsmasq leases file and updates allocations
+// to match the real IP addresses assigned by DHCP
+func (m *Manager) syncWithLeases() error {
+	file, err := os.Open(m.leasesFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // Leases file doesn't exist yet, that's okay
+		}
+		return fmt.Errorf("failed to open leases file: %w", err)
+	}
+	defer file.Close()
+
+	// Map of VPS ID -> actual lease info
+	leaseMap := make(map[string]struct {
+		ip       net.IP
+		mac      string
+		expires  int64
+	})
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		// dnsmasq leases format: <lease_expiry> <mac> <ip> <hostname> [client_id]
+		parts := strings.Fields(line)
+		if len(parts) < 4 {
+			continue
+		}
+
+		// Parse lease expiry (Unix timestamp)
+		var leaseExpiry int64
+		if _, err := fmt.Sscanf(parts[0], "%d", &leaseExpiry); err != nil {
+			continue
+		}
+
+		// Check if lease is expired
+		if leaseExpiry < time.Now().Unix() {
+			continue
+		}
+
+		mac := parts[1]
+		ip := net.ParseIP(parts[2])
+		if ip == nil {
+			continue
+		}
+
+		hostname := parts[3]
+		// Skip if hostname is "*" (unknown hostname)
+		if hostname == "*" {
+			continue
+		}
+
+		// Store lease info by hostname (VPS ID)
+		if existing, exists := leaseMap[hostname]; !exists || existing.expires < leaseExpiry {
+			leaseMap[hostname] = struct {
+				ip       net.IP
+				mac      string
+				expires  int64
+			}{
+				ip:      ip,
+				mac:     mac,
+				expires: leaseExpiry,
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("failed to read leases file: %w", err)
+	}
+
+	// Update allocations with actual lease information
+	updated := false
+	for vpsID, lease := range leaseMap {
+		alloc, exists := m.allocations[vpsID]
+		if !exists {
+			// New lease for a VPS we don't have in allocations
+			// This can happen if a VM was created outside our system
+			logger.Debug("Found lease for unknown VPS %s with IP %s", vpsID, lease.ip.String())
+			continue
+		}
+
+		// Update IP if it differs
+		if !alloc.IPAddress.Equal(lease.ip) {
+			logger.Info("Syncing allocation for VPS %s: updating IP from %s to %s (from DHCP lease)", vpsID, alloc.IPAddress.String(), lease.ip.String())
+			alloc.IPAddress = lease.ip
+			updated = true
+		}
+
+		// Update MAC if it differs
+		if alloc.MACAddress != lease.mac {
+			logger.Info("Syncing allocation for VPS %s: updating MAC from %s to %s (from DHCP lease)", vpsID, alloc.MACAddress, lease.mac)
+			alloc.MACAddress = lease.mac
+			updated = true
+		}
+
+		// Update lease expiry
+		alloc.LeaseExpires = time.Unix(lease.expires, 0)
+	}
+
+	// Update hosts file if allocations changed
+	if updated {
+		if err := m.updateHostsFile(); err != nil {
+			return fmt.Errorf("failed to update hosts file after sync: %w", err)
+		}
+		if err := m.reloadDNSMasq(); err != nil {
+			logger.Warn("Failed to reload dnsmasq after sync: %v", err)
+		}
+	}
+
+	return nil
 }
 
