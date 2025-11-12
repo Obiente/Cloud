@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"api/internal/database"
@@ -576,9 +577,62 @@ func deployResultToOrchestrator(ctx context.Context, manager *orchestrator.Deplo
 			startCmd = deployment.StartCommand
 		}
 		
+		// Ensure image name includes registry prefix for Swarm mode
+		imageName := result.ImageName
+		if imageName != "" {
+			// Check if we're in Swarm mode and image doesn't have registry prefix
+			// This ensures worker nodes can pull from the registry
+			enableSwarm := os.Getenv("ENABLE_SWARM")
+			isSwarmMode := false
+			if enableSwarm != "" {
+				// Parse as boolean (handles "true", "1", "yes", "on", etc.)
+				enabled, err := strconv.ParseBool(strings.ToLower(enableSwarm))
+				if err == nil {
+					isSwarmMode = enabled
+				} else {
+					// Fallback: check for common true values
+					lower := strings.ToLower(enableSwarm)
+					isSwarmMode = lower == "true" || lower == "1" || lower == "yes" || lower == "on"
+				}
+			}
+			
+			if isSwarmMode {
+				registryURL := os.Getenv("REGISTRY_URL")
+				if registryURL == "" {
+					domain := os.Getenv("DOMAIN")
+					if domain == "" {
+						domain = "obiente.cloud"
+					}
+					registryURL = fmt.Sprintf("https://registry.%s", domain)
+				} else {
+					// Handle unexpanded docker-compose variables
+					if strings.Contains(registryURL, "${DOMAIN") {
+						domain := os.Getenv("DOMAIN")
+						if domain == "" {
+							domain = "obiente.cloud"
+						}
+						registryURL = strings.ReplaceAll(registryURL, "${DOMAIN:-obiente.cloud}", domain)
+						registryURL = strings.ReplaceAll(registryURL, "${DOMAIN}", domain)
+					}
+				}
+				
+				registryHost := strings.TrimPrefix(registryURL, "https://")
+				registryHost = strings.TrimPrefix(registryHost, "http://")
+				
+				// If image doesn't have registry prefix and looks like our deployment image, add it
+				if !strings.Contains(imageName, registryHost) && 
+				   !strings.Contains(imageName, "ghcr.io/") && 
+				   !strings.Contains(imageName, "docker.io/") &&
+				   strings.Contains(imageName, "obiente/deploy-") {
+					imageName = fmt.Sprintf("%s/%s", registryHost, imageName)
+					log.Printf("[deployResultToOrchestrator] Added registry prefix to image name: %s", imageName)
+				}
+			}
+		}
+		
 		cfg := &orchestrator.DeploymentConfig{
 			DeploymentID: deployment.ID,
-			Image:        result.ImageName,
+			Image:        imageName,
 			Domain:       deployment.Domain,
 			Port:         port,
 			EnvVars:      envVars,
