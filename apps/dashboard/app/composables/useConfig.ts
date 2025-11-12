@@ -28,27 +28,53 @@ export const useConfig = () => {
       // Create a public client without auth for the public config endpoint
       const config = useRuntimeConfig();
       let publicTransport;
+      let apiHost: string = config.public.apiHost;
       
       // Use different transports for client vs server
       if (import.meta.server) {
         const { createConnectTransport } = await import("@connectrpc/connect-node");
         // Use internal API host for server-side (Docker internal networking)
-        const apiHost = config.apiHostInternal || config.public.apiHost;
+        // Try internal first, fallback to public if internal fails
+        apiHost = (config.apiHostInternal as string) || config.public.apiHost;
         publicTransport = createConnectTransport({
           baseUrl: apiHost,
           httpVersion: "1.1",
           useBinaryFormat: false,
+          // Add timeout to prevent hanging
+          defaultTimeoutMs: 5000, // 5 seconds
         });
       } else {
         const { createConnectTransport } = await import("@connectrpc/connect-web");
+        apiHost = config.public.apiHost;
         publicTransport = createConnectTransport({
-          baseUrl: config.public.apiHost,
+          baseUrl: apiHost,
           useBinaryFormat: false,
         });
       }
       
       const publicClient = createClient(AuthService, publicTransport);
-      const response = await publicClient.getPublicConfig({});
+      
+      // Try to fetch config with fallback for server-side
+      let response;
+      try {
+        response = await publicClient.getPublicConfig({});
+      } catch (err: any) {
+        // On server-side, if internal API fails, try public API as fallback
+        if (import.meta.server && config.apiHostInternal && apiHost === (config.apiHostInternal as string)) {
+          console.warn(`[Config] Internal API (${apiHost}) failed, trying public API as fallback:`, err?.code || err?.message);
+          const { createConnectTransport } = await import("@connectrpc/connect-node");
+          const fallbackTransport = createConnectTransport({
+            baseUrl: config.public.apiHost,
+            httpVersion: "1.1",
+            useBinaryFormat: false,
+            defaultTimeoutMs: 5000,
+          });
+          const fallbackClient = createClient(AuthService, fallbackTransport);
+          response = await fallbackClient.getPublicConfig({});
+        } else {
+          throw err;
+        }
+      }
       
       configState.value.billingEnabled = response.billingEnabled ?? true;
       configState.value.selfHosted = response.selfHosted ?? false;

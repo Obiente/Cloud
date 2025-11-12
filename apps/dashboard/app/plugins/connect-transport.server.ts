@@ -29,18 +29,39 @@ export default defineNuxtPlugin({
         try {
           // Create a transport without auth for the public config endpoint
           // Use internal API host for server-side (Docker internal networking)
-          const apiHost = config.apiHostInternal || config.public.apiHost;
-          const publicTransport = createConnectTransport({
+          let apiHost = (config.apiHostInternal as string) || config.public.apiHost;
+          let publicTransport = createConnectTransport({
             baseUrl: apiHost,
             httpVersion: "1.1",
             useBinaryFormat: false,
+            defaultTimeoutMs: 5000, // 5 seconds timeout
           });
           
           const { AuthService } = await import("@obiente/proto");
           const { createClient } = await import("@connectrpc/connect");
-          const client = createClient(AuthService, publicTransport);
+          let client = createClient(AuthService, publicTransport);
           
-          const publicConfig = await client.getPublicConfig({});
+          let publicConfig;
+          try {
+            publicConfig = await client.getPublicConfig({});
+          } catch (err: any) {
+            // If internal API fails and we have a fallback, try public API
+            if (config.apiHostInternal && apiHost === (config.apiHostInternal as string)) {
+              console.warn(`[Server Transport] Internal API (${apiHost}) failed (${err?.code || err?.message}), trying public API as fallback`);
+              apiHost = config.public.apiHost;
+              publicTransport = createConnectTransport({
+                baseUrl: apiHost,
+                httpVersion: "1.1",
+                useBinaryFormat: false,
+                defaultTimeoutMs: 5000,
+              });
+              client = createClient(AuthService, publicTransport);
+              publicConfig = await client.getPublicConfig({});
+            } else {
+              throw err;
+            }
+          }
+          
           const result = publicConfig.disableAuth ?? false;
           cachedDisableAuth = result;
           return result;
