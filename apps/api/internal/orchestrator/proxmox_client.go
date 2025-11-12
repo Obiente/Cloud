@@ -1739,12 +1739,19 @@ func generateCloudInitUserData(config *VPSConfig) string {
 	userData += "  - curl\n"
 	userData += "  - wget\n"
 	userData += "  - htop\n"
+	userData += "  - openssh-server\n"
 	userData += "  - qemu-guest-agent\n"
 	userData += "runcmd:\n"
 	// Install and start guest agent in runcmd
 	// Use separate commands to ensure both installation and service start
 	userData += "  - apt-get update || yum update || dnf update || true\n"
-	userData += "  - apt-get install -y qemu-guest-agent || yum install -y qemu-guest-agent || dnf install -y qemu-guest-agent || true\n"
+	userData += "  - apt-get install -y openssh-server qemu-guest-agent || yum install -y openssh-server qemu-guest-agent || dnf install -y openssh-server qemu-guest-agent || true\n"
+	// Ensure SSH service is enabled and started
+	userData += "  - systemctl enable ssh || systemctl enable sshd || true\n"
+	userData += "  - systemctl start ssh || systemctl start sshd || true\n"
+	// Ensure SSH is listening on port 22
+	userData += "  - systemctl status ssh || systemctl status sshd || true\n"
+	// Install and start guest agent
 	userData += "  - systemctl enable qemu-guest-agent || true\n"
 	userData += "  - systemctl start qemu-guest-agent || true\n"
 	userData += "  - systemctl status qemu-guest-agent || true\n"
