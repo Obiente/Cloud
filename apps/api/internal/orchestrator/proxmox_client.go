@@ -359,6 +359,9 @@ type CreateVMResult struct {
 }
 
 func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowInterVM bool) (*CreateVMResult, error) {
+	// Declare rootPassword at function scope so it can be returned
+	var rootPassword string
+
 	// Get next available VM ID
 	vmID, err := pc.getNextVMID(ctx)
 	if err != nil {
@@ -1045,8 +1048,9 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		// Specifying interface name can cause issues if the interface name doesn't match
 		vmConfig["ipconfig0"] = "ip=dhcp"
 		vmConfig["ciuser"] = "root"
-		rootPassword := GenerateRandomPassword(16) // Generate random root password
+		rootPassword = GenerateRandomPassword(16) // Generate random root password
 		vmConfig["cipassword"] = rootPassword
+		logger.Info("[ProxmoxClient] Generated root password for VM %d (length: %d)", vmID, len(rootPassword))
 
 		// Add SSH keys for VPS (includes both VPS-specific and org-wide keys)
 		if config.OrganizationID != "" {
@@ -1533,12 +1537,16 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		// Continue anyway - VM is created
 	}
 
-	// Get the root password from vmConfig (if cloud-init was used)
-	var rootPassword string
+	// rootPassword was already captured when it was generated (if cloud-init was used)
+	// No need to retrieve it again - it's already in the function-scoped variable
 	if useCloudInit {
-		if pwd, ok := vmConfig["cipassword"].(string); ok {
-			rootPassword = pwd
+		if rootPassword == "" {
+			logger.Warn("[ProxmoxClient] WARNING: rootPassword is empty for VM %d (cloud-init was used but password not captured)", vmID)
+		} else {
+			logger.Info("[ProxmoxClient] Returning root password for VM %d (length: %d)", vmID, len(rootPassword))
 		}
+	} else {
+		logger.Debug("[ProxmoxClient] No root password for VM %d (cloud-init not used)", vmID)
 	}
 
 	return &CreateVMResult{
@@ -3546,8 +3554,7 @@ func (pc *ProxmoxClient) configureVMFirewall(ctx context.Context, nodeName strin
 
 	if !allowInterVM {
 		// Block inter-VM communication by default
-		// Strategy: Add a firewall rule that blocks traffic from other VMs on the same bridge
-		// We'll block traffic from the bridge interface that originates from other VMs
+		// Strategy: Add firewall rules that allow gateway SSH access, then block inter-VM traffic
 		// Note: This is a simplified approach. In production, you might want to:
 		// 1. Use Proxmox firewall aliases to track VM IPs
 		// 2. Create rules that specifically block traffic from other VMs
@@ -3555,24 +3562,56 @@ func (pc *ProxmoxClient) configureVMFirewall(ctx context.Context, nodeName strin
 
 		// Get bridge name (default to vmbr0)
 		bridgeName := "vmbr0"
+		
+		// Get gateway IP from environment or use default subnet gateway
+		// Gateway IP is 10.15.3.10 for the 10.15.3.0/24 subnet (as per docs)
+		gatewayIP := os.Getenv("VPS_GATEWAY_IP")
+		if gatewayIP == "" {
+			// Default gateway IP for VPS subnet (10.15.3.0/24)
+			gatewayIP = "10.15.3.10"
+		}
+
+		// First, add a rule to ALLOW SSH from the gateway (before the blocking rule)
+		// This ensures the gateway can connect to VPS instances for SSH proxying
+		// Rules are processed in order, so we add this at position 0 to ensure it's processed first
+		ruleEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/firewall/rules?pos=0", nodeName, vmID)
+		allowRuleData := url.Values{}
+		allowRuleData.Set("enable", "1")
+		allowRuleData.Set("action", "ACCEPT")
+		allowRuleData.Set("type", "in")
+		allowRuleData.Set("source", gatewayIP)
+		allowRuleData.Set("dport", "22")
+		allowRuleData.Set("proto", "tcp")
+		allowRuleData.Set("comment", "Allow SSH from gateway")
+		
+		allowRuleResp, err := pc.apiRequestForm(ctx, "POST", ruleEndpoint, allowRuleData)
+		if err != nil {
+			logger.Warn("[ProxmoxClient] Failed to add firewall rule to allow SSH from gateway: %v", err)
+		} else if allowRuleResp != nil {
+			allowRuleResp.Body.Close()
+			if allowRuleResp.StatusCode == http.StatusOK {
+				logger.Info("[ProxmoxClient] Added firewall rule to allow SSH from gateway (%s) for VM %d", gatewayIP, vmID)
+			} else {
+				logger.Debug("[ProxmoxClient] Gateway SSH allow rule creation returned status %d", allowRuleResp.StatusCode)
+			}
+		}
 
 		// Add firewall rule to block inter-VM traffic
 		// Rule: Block incoming traffic from other VMs on the same bridge
 		// We'll use a rule that blocks traffic from the bridge interface
 		// This blocks traffic from other VMs while allowing gateway/internet traffic
-		ruleEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/firewall/rules", nodeName, vmID)
-		ruleData := url.Values{}
-		ruleData.Set("enable", "1")
-		ruleData.Set("action", "REJECT")
-		ruleData.Set("type", "in")
-		ruleData.Set("iface", bridgeName)
-		ruleData.Set("comment", "Block inter-VM communication (default security)")
+		blockRuleData := url.Values{}
+		blockRuleData.Set("enable", "1")
+		blockRuleData.Set("action", "REJECT")
+		blockRuleData.Set("type", "in")
+		blockRuleData.Set("iface", bridgeName)
+		blockRuleData.Set("comment", "Block inter-VM communication (default security)")
 		// Note: This is a basic rule. For production, you would:
 		// - Use firewall aliases to track VM IPs
 		// - Block specific source IPs or subnets
 		// - Allow established/related connections
 
-		ruleResp, err := pc.apiRequestForm(ctx, "POST", ruleEndpoint, ruleData)
+		ruleResp, err := pc.apiRequestForm(ctx, "POST", ruleEndpoint, blockRuleData)
 		if err != nil {
 			logger.Warn("[ProxmoxClient] Failed to add firewall rule to block inter-VM communication: %v", err)
 			logger.Info("[ProxmoxClient] Note: Firewall rules can be configured manually in Proxmox to block inter-VM communication")
