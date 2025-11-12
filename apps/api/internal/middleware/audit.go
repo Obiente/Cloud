@@ -560,11 +560,41 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 		return
 	}
 
-	// VPS-related actions
-	if strings.Contains(actionLower, "vps") {
+	// VPS-related actions (including VPSConfigService actions)
+	// Check for VPS-specific patterns:
+	// - "vps" in action name (general VPS actions)
+	// - "vpsuser" in action name (CreateVPSUser, UpdateVPSUser, DeleteVPSUser, ListVPSUsers)
+	// - "cloudinit" in action name (GetCloudInitConfig, UpdateCloudInitConfig)
+	// - "firewall" in action name (firewall-related actions)
+	// - "setuserpassword" or "updateusersshkeys" for VPS user password/SSH key management
+	isVPSAction := strings.Contains(actionLower, "vps") || 
+		strings.Contains(actionLower, "vpsuser") || 
+		strings.Contains(actionLower, "cloudinit") || 
+		strings.Contains(actionLower, "firewall") ||
+		strings.Contains(actionLower, "setuserpassword") ||
+		strings.Contains(actionLower, "updateusersshkeys")
+	
+	// Also check if this is a VPSConfigService action by checking if vpsId is present
+	// This catches SetUserPassword and UpdateUserSSHKeys which don't have "vps" in the name
+	// but are part of VPSConfigService (they have vpsId in the request)
+	if !isVPSAction {
+		if vpsIDVal, ok := jsonData["vpsId"].(string); ok && vpsIDVal != "" {
+			// If vpsId is present and this looks like a user/password/SSH key action, it's VPS-related
+			if strings.Contains(actionLower, "user") && (strings.Contains(actionLower, "password") || strings.Contains(actionLower, "ssh")) {
+				isVPSAction = true
+			}
+		} else if vpsIDVal, ok := jsonData["vps_id"].(string); ok && vpsIDVal != "" {
+			if strings.Contains(actionLower, "user") && (strings.Contains(actionLower, "password") || strings.Contains(actionLower, "ssh")) {
+				isVPSAction = true
+			}
+		}
+	}
+	
+	if isVPSAction {
 		rt := "vps"
 		resourceType = &rt
 
+		// Try vpsId first (most common)
 		if id, ok := jsonData["vpsId"].(string); ok && id != "" {
 			resourceID = &id
 		} else if id, ok := jsonData["vps_id"].(string); ok && id != "" {
