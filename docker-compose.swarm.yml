@@ -156,6 +156,10 @@ services:
       PROXMOX_STORAGE_POOL: ${PROXMOX_STORAGE_POOL:-local-lvm}
       PROXMOX_VM_ID_START: ${PROXMOX_VM_ID_START:-} # Starting VM ID range (e.g., 300)
       PROXMOX_VLAN_ID: ${PROXMOX_VLAN_ID:-} # Optional VLAN tag for VM network isolation (e.g., 100)
+      PROXMOX_SSH_HOST: ${PROXMOX_SSH_HOST:-} # SSH host for snippet writing (defaults to PROXMOX_API_URL host)
+      PROXMOX_SSH_USER: ${PROXMOX_SSH_USER:-obiente-cloud} # SSH user for snippet writing
+      PROXMOX_SSH_KEY_PATH: ${PROXMOX_SSH_KEY_PATH:-} # Path to SSH private key file
+      PROXMOX_SSH_KEY_DATA: ${PROXMOX_SSH_KEY_DATA:-} # SSH private key content (raw or base64-encoded)
       SSH_PROXY_PORT: ${SSH_PROXY_PORT:-2222}
       # VPS Gateway Configuration (optional, for DHCP and SSH proxying)
       VPS_GATEWAY_URL: ${VPS_GATEWAY_URL:-} # gRPC URL for vps-gateway service (e.g., http://vps-gateway:8080)
