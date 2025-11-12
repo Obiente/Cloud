@@ -447,6 +447,14 @@ func registerServices(mux *http.ServeMux) *deploymentsvc.Service {
 	)
 	mux.Handle(vpsPath, vpsHandler)
 
+	// VPS Config service (for cloud-init and user management)
+	vpsConfigService := vpssvc.NewConfigService(vpsManager)
+	vpsConfigPath, vpsConfigHandler := vpsv1connect.NewVPSConfigServiceHandler(
+		vpsConfigService,
+		connect.WithInterceptors(auditInterceptor, authInterceptor),
+	)
+	mux.Handle(vpsConfigPath, vpsConfigHandler)
+
 	// WebSocket terminal endpoint for VPS (bypasses Connect RPC for direct access)
 	// Route pattern: /vps/{vps_id}/terminal/ws
 	mux.HandleFunc("/vps/", func(w http.ResponseWriter, r *http.Request) {
