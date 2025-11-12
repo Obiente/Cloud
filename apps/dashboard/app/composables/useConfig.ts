@@ -40,8 +40,8 @@ export const useConfig = () => {
           baseUrl: apiHost,
           httpVersion: "1.1",
           useBinaryFormat: false,
-          // Add timeout to prevent hanging
-          defaultTimeoutMs: 5000, // 5 seconds
+          // Longer timeout for internal API connections (may need time to resolve service name)
+          defaultTimeoutMs: 10000, // 10 seconds
         });
       } else {
         const { createConnectTransport } = await import("@connectrpc/connect-web");
@@ -67,7 +67,7 @@ export const useConfig = () => {
             baseUrl: config.public.apiHost,
             httpVersion: "1.1",
             useBinaryFormat: false,
-            defaultTimeoutMs: 5000,
+            defaultTimeoutMs: 10000, // 10 seconds
           });
           const fallbackClient = createClient(AuthService, fallbackTransport);
           response = await fallbackClient.getPublicConfig({});
