@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	"vps-gateway/internal/dhcp"
@@ -149,14 +150,24 @@ func (s *GatewayService) ProxySSH(
 	ctx context.Context,
 	stream *connect.BidiStream[vpsgatewayv1.ProxySSHRequest, vpsgatewayv1.ProxySSHResponse],
 ) error {
-	var currentConn *sshproxy.Connection
+	// Map to track client pipes by connection ID
+	clientPipes := make(map[string]net.Conn)
+	var mu sync.Mutex
+	
 	var connectionID string
 	startTime := time.Now()
 
 	logger.Info("[GatewayService] ProxySSH stream opened")
 
 	defer func() {
-		if currentConn != nil {
+		// Clean up all pipes
+		mu.Lock()
+		for _, pipe := range clientPipes {
+			pipe.Close()
+		}
+		mu.Unlock()
+		
+		if connectionID != "" {
 			duration := time.Since(startTime).Seconds()
 			metrics.RecordSSHProxyConnectionDuration(connectionID, connectionID, duration)
 			metrics.SetSSHProxyConnectionsActive(-1)
@@ -186,6 +197,11 @@ func (s *GatewayService) ProxySSH(
 			// Create a pipe for bidirectional communication
 			clientPipe, serverPipe := net.Pipe()
 
+			// Store client pipe for this connection
+			mu.Lock()
+			clientPipes[connectionID] = clientPipe
+			mu.Unlock()
+
 			// Start proxying in goroutine
 			go func() {
 				err := s.sshProxy.ProxyConnection(ctx, connectionID, target, port, serverPipe)
@@ -202,6 +218,14 @@ func (s *GatewayService) ProxySSH(
 						Type:         "closed",
 					})
 				}
+				
+				// Clean up pipe when connection closes
+				mu.Lock()
+				if pipe, exists := clientPipes[connectionID]; exists {
+					pipe.Close()
+					delete(clientPipes, connectionID)
+				}
+				mu.Unlock()
 			}()
 
 			// Send connected response
@@ -216,45 +240,62 @@ func (s *GatewayService) ProxySSH(
 			metrics.RecordSSHProxyConnection(connectionID, connectionID)
 			metrics.SetSSHProxyConnectionsActive(1)
 
-			// Handle data forwarding
-			go func() {
+			// Handle data forwarding from target to client (read from clientPipe, send to stream)
+			go func(connID string, pipe net.Conn) {
 				buf := make([]byte, 4096)
 				for {
-					n, err := clientPipe.Read(buf)
+					n, err := pipe.Read(buf)
 					if err != nil {
 						if err != io.EOF {
-							logger.Error("Error reading from client pipe: %v", err)
+							logger.Debug("Error reading from client pipe for connection %s: %v", connID, err)
 						}
 						return
 					}
 					if n > 0 {
-						metrics.RecordSSHProxyBytes(connectionID, connectionID, "in", int64(n))
-						stream.Send(&vpsgatewayv1.ProxySSHResponse{
-							ConnectionId: connectionID,
+						metrics.RecordSSHProxyBytes(connID, connID, "in", int64(n))
+						if sendErr := stream.Send(&vpsgatewayv1.ProxySSHResponse{
+							ConnectionId: connID,
 							Type:         "data",
 							Data:         buf[:n],
-						})
+						}); sendErr != nil {
+							logger.Error("Failed to send data to stream for connection %s: %v", connID, sendErr)
+							return
+						}
 					}
 				}
-			}()
+			}(connectionID, clientPipe)
 
 		case "data":
-			// Forward data from client to target (via clientPipe)
-			// This is handled by the goroutine that reads from clientPipe
-			// We need to write to a connection that's associated with this connectionID
-			// For now, we'll use a map to track connections, but the pipe approach above should work
-			logger.Debug("Received data for connection %s: %d bytes", connectionID, len(req.Data))
-
-		case "close":
-			// Close connection
-			if currentConn != nil {
-				if currentConn.ClientConn != nil {
-					currentConn.ClientConn.Close()
-				}
-				if currentConn.TargetConn != nil {
-					currentConn.TargetConn.Close()
+			// Forward data from client to target (write to clientPipe)
+			mu.Lock()
+			clientPipe, exists := clientPipes[connectionID]
+			mu.Unlock()
+			
+			if !exists {
+				logger.Warn("Received data for unknown connection %s", connectionID)
+				continue
+			}
+			
+			if len(req.Data) > 0 {
+				metrics.RecordSSHProxyBytes(connectionID, connectionID, "out", int64(len(req.Data)))
+				if _, err := clientPipe.Write(req.Data); err != nil {
+					logger.Error("Failed to write data to client pipe for connection %s: %v", connectionID, err)
+					// Remove pipe from map on error
+					mu.Lock()
+					delete(clientPipes, connectionID)
+					mu.Unlock()
+					clientPipe.Close()
 				}
 			}
+
+		case "close":
+			// Close connection and clean up pipe
+			mu.Lock()
+			if pipe, exists := clientPipes[connectionID]; exists {
+				pipe.Close()
+				delete(clientPipes, connectionID)
+			}
+			mu.Unlock()
 			return nil
 		}
 	}
