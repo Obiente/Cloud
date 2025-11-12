@@ -435,16 +435,15 @@ func (s *SSHProxyServer) getVPSIP(ctx context.Context, vpsID string) (string, er
 	}
 
 	var vpsIP string
+	var gatewayIP string
 
 	// Try to get IP from gateway first (if available)
 	if s.gatewayClient != nil {
 		logger.Info("[SSHProxy] Attempting to get IP address from gateway for VPS %s", vpsID)
 		allocations, err := s.gatewayClient.ListIPs(ctx, vps.OrganizationID, vpsID)
 		if err == nil && len(allocations) > 0 {
-			// Gateway manages DHCP, so use the allocated IP
-			vpsIP = allocations[0].IpAddress
-			logger.Info("[SSHProxy] Got VPS IP from gateway: %s", vpsIP)
-			return vpsIP, nil
+			gatewayIP = allocations[0].IpAddress
+			logger.Info("[SSHProxy] Got VPS IP from gateway: %s", gatewayIP)
 		} else if err != nil {
 			logger.Warn("[SSHProxy] Failed to get IP from gateway for VPS %s: %v", vpsID, err)
 		} else {
@@ -452,30 +451,29 @@ func (s *SSHProxyServer) getVPSIP(ctx context.Context, vpsID string) (string, er
 		}
 	}
 
-	// Try to get IP from VPS manager (public IPs or Proxmox guest agent)
-	if vpsIP == "" {
-		logger.Info("[SSHProxy] Attempting to get IP address for VPS %s (Instance ID: %v, Status: %s)", vpsID, vps.InstanceID, vps.Status)
-		vpsManager, err := orchestrator.NewVPSManager()
-		if err == nil {
-			defer vpsManager.Close()
-			ipv4, _, err := vpsManager.GetVPSIPAddresses(ctx, vpsID)
-			if err == nil && len(ipv4) > 0 {
-				vpsIP = ipv4[0]
-				logger.Info("[SSHProxy] Got VPS IP from VPS manager: %s", vpsIP)
-				return vpsIP, nil
-			} else if err != nil {
-				logger.Warn("[SSHProxy] Failed to get IP from VPS manager for VPS %s: %v", vpsID, err)
-			} else {
-				logger.Info("[SSHProxy] VPS manager returned no IP addresses for VPS %s", vpsID)
-			}
+	// Try to get actual IP from VPS manager (public IPs or Proxmox guest agent)
+	// This is the authoritative source for what IP the VPS actually has
+	var actualVPSIP string
+	logger.Info("[SSHProxy] Attempting to get actual IP address for VPS %s (Instance ID: %v, Status: %s)", vpsID, vps.InstanceID, vps.Status)
+	vpsManager, err := orchestrator.NewVPSManager()
+	if err == nil {
+		defer vpsManager.Close()
+		ipv4, _, err := vpsManager.GetVPSIPAddresses(ctx, vpsID)
+		if err == nil && len(ipv4) > 0 {
+			actualVPSIP = ipv4[0]
+			logger.Info("[SSHProxy] Got actual VPS IP from VPS manager: %s", actualVPSIP)
+		} else if err != nil {
+			logger.Warn("[SSHProxy] Failed to get IP from VPS manager for VPS %s: %v", vpsID, err)
 		} else {
-			logger.Warn("[SSHProxy] Failed to create VPS manager: %v", err)
+			logger.Info("[SSHProxy] VPS manager returned no IP addresses for VPS %s", vpsID)
 		}
+	} else {
+		logger.Warn("[SSHProxy] Failed to create VPS manager: %v", err)
 	}
 
-	// If no public IP, get internal IP from Proxmox
-	if vpsIP == "" {
-		logger.Info("[SSHProxy] No public IP found, trying to get internal IP from Proxmox for VPS %s", vpsID)
+	// If no IP from VPS manager, try Proxmox directly
+	if actualVPSIP == "" {
+		logger.Info("[SSHProxy] No IP from VPS manager, trying to get internal IP from Proxmox for VPS %s", vpsID)
 		proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 		if err == nil {
 			proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
@@ -491,9 +489,8 @@ func (s *SSHProxyServer) getVPSIP(ctx context.Context, vpsID string) (string, er
 						logger.Info("[SSHProxy] Found VM on node %s, getting IP addresses", nodeName)
 						ipv4, _, err := proxmoxClient.GetVMIPAddresses(ctx, nodeName, vmIDInt)
 						if err == nil && len(ipv4) > 0 {
-							vpsIP = ipv4[0]
-							logger.Info("[SSHProxy] Got VPS IP from Proxmox: %s", vpsIP)
-							return vpsIP, nil
+							actualVPSIP = ipv4[0]
+							logger.Info("[SSHProxy] Got actual VPS IP from Proxmox: %s", actualVPSIP)
 						} else if err != nil {
 							logger.Warn("[SSHProxy] Failed to get IP from Proxmox for VM %d on node %s: %v", vmIDInt, nodeName, err)
 						} else {
@@ -511,6 +508,19 @@ func (s *SSHProxyServer) getVPSIP(ctx context.Context, vpsID string) (string, er
 		} else {
 			logger.Warn("[SSHProxy] Failed to get Proxmox config: %v", err)
 		}
+	}
+
+	// Prefer actual VPS IP over gateway allocation if they differ
+	// The actual VPS IP is authoritative - it's what the VPS actually has
+	if actualVPSIP != "" {
+		if gatewayIP != "" && gatewayIP != actualVPSIP {
+			logger.Warn("[SSHProxy] IP mismatch detected for VPS %s: gateway reports %s but VPS actually has %s. Using actual VPS IP.", vpsID, gatewayIP, actualVPSIP)
+		}
+		vpsIP = actualVPSIP
+	} else if gatewayIP != "" {
+		// Fall back to gateway IP if we can't get the actual IP
+		logger.Info("[SSHProxy] Using gateway IP %s (could not get actual VPS IP)", gatewayIP)
+		vpsIP = gatewayIP
 	}
 
 	// If no IP found, try to use VM hostname (gateway can resolve hostnames)
@@ -606,8 +616,9 @@ func (s *SSHProxyServer) handleSessionChannel(ctx context.Context, channel ssh.C
 						// Use persistent connection for shell/exec
 						if err := s.forwardSessionViaPool(ctx, channel, requests, vpsConn, req.Type, cols, rows); err != nil {
 							logger.Error("[SSHProxy] Failed to forward session via pool: %v", err)
-							// Fall back to gateway TCP forwarding
+							// Fall back to gateway TCP forwarding (transparent proxy)
 							if s.gatewayClient != nil {
+								// Gateway acts as transparent proxy - user authenticates directly with VPS
 								if err := s.forwardToVPSViaGateway(ctx, channel, vpsIP, "", cols, rows, sshPublicKey); err != nil {
 									logger.Error("[SSHProxy] Gateway ProxySSH also failed: %v", err)
 									return
@@ -621,9 +632,10 @@ func (s *SSHProxyServer) handleSessionChannel(ctx context.Context, channel ssh.C
 				}
 			}
 
-			// Fall back to gateway TCP forwarding (current approach)
+			// Fall back to gateway TCP forwarding (transparent proxy)
 			if s.gatewayClient != nil {
 				logger.Info("[SSHProxy] Gateway available, attempting connection via gateway ProxySSH for VPS at %s", vpsIP)
+				// Gateway acts as transparent proxy - user authenticates directly with VPS
 				if err := s.forwardToVPSViaGateway(ctx, channel, vpsIP, "", cols, rows, sshPublicKey); err != nil {
 					logger.Error("[SSHProxy] Gateway ProxySSH failed for VPS at %s: %v", vpsIP, err)
 					if _, writeErr := channel.Write([]byte(fmt.Sprintf("Connection via gateway failed: %v\r\n", err))); writeErr != nil {
@@ -718,67 +730,12 @@ func (s *SSHProxyServer) forwardToVPS(ctx context.Context, channel ssh.Channel, 
 	}
 
 	// Fallback to direct SSH connection (no jump host)
-	logger.Info("[SSHProxy] Gateway not available, using direct SSH connection to VPS at %s", vpsIP)
-	sshConn, err := s.vpsService.connectSSH(ctx, vpsIP, rootPassword, cols, rows, "", "")
-	if err != nil {
-		logger.Error("[SSHProxy] Failed to establish SSH connection to VPS at %s: %v", vpsIP, err)
-		return fmt.Errorf("failed to connect to VPS: %w", err)
-	}
-	logger.Info("[SSHProxy] Successfully connected to VPS at %s", vpsIP)
-	defer func() {
-		if sshConn.session != nil {
-			sshConn.session.Close()
-		}
-		if sshConn.conn != nil {
-			sshConn.conn.Close()
-		}
-	}()
-
-	// Forward data bidirectionally
-	errChan := make(chan error, 3)
-
-	// Forward stdin
-	go func() {
-		_, err := io.Copy(sshConn.stdin, channel)
-		if err != nil {
-			logger.Error("[SSHProxy] Error copying stdin to VPS at %s: %v", vpsIP, err)
-			errChan <- fmt.Errorf("stdin copy error: %w", err)
-		}
-		if closeErr := sshConn.stdin.Close(); closeErr != nil {
-			logger.Debug("[SSHProxy] Error closing stdin: %v", closeErr)
-		}
-	}()
-
-	// Forward stdout
-	go func() {
-		_, err := io.Copy(channel, sshConn.stdout)
-		if err != nil {
-			logger.Error("[SSHProxy] Error copying stdout from VPS at %s: %v", vpsIP, err)
-			errChan <- fmt.Errorf("stdout copy error: %w", err)
-		}
-	}()
-
-	// Forward stderr
-	go func() {
-		_, err := io.Copy(channel.Stderr(), sshConn.stderr)
-		if err != nil {
-			logger.Error("[SSHProxy] Error copying stderr from VPS at %s: %v", vpsIP, err)
-			errChan <- fmt.Errorf("stderr copy error: %w", err)
-		}
-	}()
-
-	// Wait for connection to close or error
-	select {
-	case err := <-errChan:
-		logger.Warn("[SSHProxy] Connection to VPS at %s closed with error: %v", vpsIP, err)
-		return err
-	case <-ctx.Done():
-		logger.Info("[SSHProxy] Connection to VPS at %s closed due to context cancellation", vpsIP)
-		return ctx.Err()
-	}
+	// Note: This path should not be used when gateway is available
+	return fmt.Errorf("direct SSH connection not supported - gateway required")
 }
 
 // forwardToVPSViaGateway forwards SSH connection through gateway ProxySSH
+// The gateway acts as a transparent TCP proxy - user authenticates directly with VPS
 func (s *SSHProxyServer) forwardToVPSViaGateway(ctx context.Context, channel ssh.Channel, vpsIP, rootPassword string, cols, rows int, sshPublicKey string) error {
 	// Generate connection ID
 	connectionID := fmt.Sprintf("ssh-%d", time.Now().UnixNano())
@@ -792,17 +749,12 @@ func (s *SSHProxyServer) forwardToVPSViaGateway(ctx context.Context, channel ssh
 	}
 	logger.Info("[SSHProxy] ProxySSH stream created successfully")
 
-	// Send connect request with SSH public key
-	// TODO: After regenerating proto files, uncomment SshPublicKey field
+	// Send connect request
 	req := &vpsgatewayv1.ProxySSHRequest{
 		ConnectionId: connectionID,
 		Type:         "connect",
 		Target:       vpsIP,
 		Port:         22,
-		// SshPublicKey: sshPublicKey, // TODO: Uncomment after proto regeneration
-	}
-	if sshPublicKey != "" {
-		logger.Info("[SSHProxy] Forwarding SSH connection with public key (key will be in SSH protocol stream)")
 	}
 	if err := stream.Send(req); err != nil {
 		return fmt.Errorf("failed to send connect request: %w", err)
@@ -826,12 +778,15 @@ func (s *SSHProxyServer) forwardToVPSViaGateway(ctx context.Context, channel ssh
 			case "connected":
 				logger.Info("[SSHProxy] Gateway connected to VPS at %s", vpsIP)
 			case "data":
-				// Forward data from gateway to channel
+				// Forward data from gateway to channel (VPS -> User)
+				logger.Debug("[SSHProxy] Forwarding %d bytes from VPS to user via gateway for connection %s", len(resp.Data), connectionID)
 				if _, err := channel.Write(resp.Data); err != nil {
+					logger.Error("[SSHProxy] Failed to write to channel: %v", err)
 					errChan <- fmt.Errorf("failed to write to channel: %w", err)
 					return
 				}
 			case "error":
+				logger.Error("[SSHProxy] Gateway error: %s", resp.Error)
 				errChan <- fmt.Errorf("gateway error: %s", resp.Error)
 				return
 			case "closed":
@@ -841,22 +796,28 @@ func (s *SSHProxyServer) forwardToVPSViaGateway(ctx context.Context, channel ssh
 		}
 	}()
 
-	// Forward data from channel to gateway
+	// Forward data from channel to gateway (User -> VPS)
 	go func() {
+		logger.Debug("[SSHProxy] Starting channel read goroutine for connection %s", connectionID)
 		buf := make([]byte, 4096)
 		for {
+			logger.Debug("[SSHProxy] Waiting to read from channel for connection %s", connectionID)
 			n, err := channel.Read(buf)
+			logger.Debug("[SSHProxy] Read %d bytes from channel for connection %s, err=%v", n, connectionID, err)
 			if n > 0 {
+				logger.Debug("[SSHProxy] Forwarding %d bytes from user to VPS via gateway for connection %s", n, connectionID)
 				if sendErr := stream.Send(&vpsgatewayv1.ProxySSHRequest{
 					ConnectionId: connectionID,
 					Type:         "data",
 					Data:         buf[:n],
 				}); sendErr != nil {
+					logger.Error("[SSHProxy] Failed to send data to gateway: %v", sendErr)
 					errChan <- fmt.Errorf("failed to send data to gateway: %w", sendErr)
 					return
 				}
 			}
 			if err == io.EOF {
+				logger.Debug("[SSHProxy] Channel EOF, closing connection %s", connectionID)
 				// Send close request
 				stream.Send(&vpsgatewayv1.ProxySSHRequest{
 					ConnectionId: connectionID,
@@ -865,6 +826,7 @@ func (s *SSHProxyServer) forwardToVPSViaGateway(ctx context.Context, channel ssh
 				return
 			}
 			if err != nil {
+				logger.Error("[SSHProxy] Error reading from channel: %v", err)
 				errChan <- fmt.Errorf("failed to read from channel: %w", err)
 				return
 			}
