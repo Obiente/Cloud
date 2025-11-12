@@ -179,6 +179,7 @@ func (s *SSHProxyServer) Stop() error {
 }
 
 // handleConnection handles an incoming SSH connection
+// For VPS connections via gateway, it captures raw bytes and forwards them transparently
 func (s *SSHProxyServer) handleConnection(ctx context.Context, conn net.Conn) {
 	defer func() {
 		if err := conn.Close(); err != nil {
@@ -188,36 +189,24 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, conn net.Conn) {
 
 	logger.Info("[SSHProxy] Handling connection from %s", conn.RemoteAddr())
 
+	// Wrap connection to capture raw bytes
+	rawConn := newRawForwardingConn(conn)
+
 	// Set a read deadline for the initial handshake
-	if err := conn.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
+	if err := rawConn.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
 		logger.Warn("[SSHProxy] Failed to set read deadline: %v", err)
 	}
 
 	// Create SSH server config with authentication methods
-	// IMPORTANT: Public key authentication is tried FIRST, then password
-	// This ensures SSH keys are prioritized over password authentication
-	// Note: SSH protocol order is client-determined, but we can influence it
-	// by making public key auth succeed when possible and password auth as fallback
 	config := &ssh.ServerConfig{
-		// Public key auth is tried first (preferred method)
-		// The callback will be called for each key the client offers
 		PublicKeyCallback: s.authenticatePublicKey,
-		// Password auth is fallback (API token as password)
-		// This is used when public key auth fails or client doesn't offer keys
-		PasswordCallback: s.authenticatePassword,
-		// Set server version
-		ServerVersion: "SSH-2.0-ObienteCloud",
-		// Enable keyboard-interactive as alternative password method
-		// This ensures password input works properly when PasswordCallback doesn't work
-		// Some SSH clients prefer keyboard-interactive for password input
+		PasswordCallback:  s.authenticatePassword,
+		ServerVersion:     "SSH-2.0-ObienteCloud",
 		KeyboardInteractiveCallback: func(conn ssh.ConnMetadata, challenge ssh.KeyboardInteractiveChallenge) (*ssh.Permissions, error) {
-			// Prompt for password using keyboard-interactive
-			// This method is more reliable for password input in some clients
 			answers, err := challenge("", "", []string{"Password: "}, []bool{false})
 			if err != nil || len(answers) == 0 {
 				return nil, fmt.Errorf("keyboard-interactive authentication failed")
 			}
-			// Use the password authentication logic
 			return s.authenticatePassword(conn, []byte(answers[0]))
 		},
 	}
@@ -228,10 +217,9 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, conn net.Conn) {
 	}
 	config.AddHostKey(s.hostKey)
 
-	// Perform SSH handshake
-	// This will call PublicKeyCallback for each key the client offers
-	// If no keys match, it will fall back to PasswordCallback or KeyboardInteractiveCallback
-	sshConn, chans, reqs, err := ssh.NewServerConn(conn, config)
+	// Perform SSH handshake to authenticate user
+	// This consumes the connection, but rawConn captures all bytes
+	sshConn, chans, reqs, err := ssh.NewServerConn(rawConn, config)
 	if err != nil {
 		logger.Warn("[SSHProxy] SSH handshake failed for %s: %v", conn.RemoteAddr(), err)
 		// Log more details about authentication failure
