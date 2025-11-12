@@ -21,6 +21,8 @@ The script will:
 - Generate a random password if `REGISTRY_PASSWORD` is not set
 - Set proper file permissions
 
+**Important**: After running the script, you **must** set the `REGISTRY_USERNAME` and `REGISTRY_PASSWORD` environment variables in your `.env` file or deployment configuration to match the credentials used in the htpasswd file. These environment variables are required for the API service to authenticate with the registry when pushing/pulling images.
+
 ### Option 2: Manual Setup
 
 ```bash
@@ -61,11 +63,37 @@ Set these environment variables in your `.env` file or deployment:
 
 ```bash
 # Registry authentication credentials
-REGISTRY_USERNAME=obiente          # Default: obiente
-REGISTRY_PASSWORD=your-secure-password  # Required for pushing/pulling images
+REGISTRY_USERNAME=obiente          # Default: obiente (must match htpasswd username)
+REGISTRY_PASSWORD=your-secure-password  # Required for pushing/pulling images (must match htpasswd password)
 ```
 
-**Important**: These credentials must match the username/password in the htpasswd file.
+**Important**: These credentials **must match** the username/password in the htpasswd file. If they don't match, the API service will fail to authenticate with the registry, and worker nodes will fail to pull images in multi-node Swarm deployments.
+
+### Setting Environment Variables
+
+After creating the htpasswd file, you need to set these environment variables:
+
+1. **If using the setup script with custom credentials:**
+   ```bash
+   # Use the same values you passed to the script
+   REGISTRY_USERNAME=myuser
+   REGISTRY_PASSWORD=mypassword
+   ```
+
+2. **If using the setup script with auto-generated password:**
+   ```bash
+   # Copy the generated password from the script output
+   REGISTRY_USERNAME=obiente
+   REGISTRY_PASSWORD=<paste-generated-password-here>
+   ```
+
+3. **Add to your `.env` file:**
+   ```bash
+   echo "REGISTRY_USERNAME=obiente" >> .env
+   echo "REGISTRY_PASSWORD=your-secure-password" >> .env
+   ```
+
+4. **Or set in your deployment environment** (Docker Compose, Kubernetes, etc.)
 
 ## Using the Registry
 
@@ -108,6 +136,28 @@ The registry is configured to use HTTPS via Traefik with Let's Encrypt certifica
 
 The registry is accessible at `https://registry.yourdomain.com` (where `yourdomain.com` is your `DOMAIN` environment variable).
 
+## Updating the Registry Password
+
+To update the registry password after initial setup:
+
+```bash
+# Update password using the --force flag
+REGISTRY_USERNAME=obiente REGISTRY_PASSWORD=new-password ./scripts/setup-registry-auth.sh --force
+```
+
+**Important**: After updating the password:
+1. **Update the `REGISTRY_PASSWORD` environment variable** in your `.env` file or deployment configuration
+2. **Restart the API service** to pick up the new password:
+   ```bash
+   docker service update --env-add REGISTRY_PASSWORD=new-password obiente_api
+   # Or redeploy the stack
+   docker stack deploy -c docker-compose.swarm.yml obiente
+   ```
+3. **Re-authenticate on all Swarm nodes** (if needed):
+   ```bash
+   docker login registry.yourdomain.com -u obiente -p new-password
+   ```
+
 ## Swarm Deployment
 
 When deploying with Docker Swarm:
@@ -125,6 +175,8 @@ The API service will automatically:
 - Authenticate before pushing images
 - Authenticate before pulling images
 - Pass credentials to Swarm services via `--with-registry-auth=true`
+
+**Critical for Multi-Node Deployments**: The `REGISTRY_USERNAME` and `REGISTRY_PASSWORD` environment variables must be set correctly on the manager node where the API service runs. These credentials are passed to worker nodes via `--with-registry-auth=true`, allowing worker nodes to pull images from the registry.
 
 ## Security Considerations
 
@@ -151,10 +203,26 @@ The API service will automatically:
 
 ### Swarm Services Can't Pull Images
 
+- **Verify `REGISTRY_USERNAME` and `REGISTRY_PASSWORD` are set** in the API service environment:
+  ```bash
+  docker service inspect obiente_api --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' | grep REGISTRY
+  ```
 - Ensure `--with-registry-auth=true` is set (already configured in deployment code)
-- Verify credentials are available on all Swarm nodes
+- Verify credentials match the htpasswd file:
+  ```bash
+  # Check htpasswd file
+  cat /var/lib/obiente/registry-auth/htpasswd
+  
+  # Verify password matches
+  htpasswd -v /var/lib/obiente/registry-auth/htpasswd obiente
+  # Enter the password from REGISTRY_PASSWORD when prompted
+  ```
 - Check if registry is accessible: `docker exec -it <container> curl -k https://registry.yourdomain.com/v2/`
 - Verify `REGISTRY_URL` environment variable is set correctly in the API service
+- **For multi-node deployments**: Ensure the manager node has authenticated with the registry:
+  ```bash
+  docker login registry.yourdomain.com -u $REGISTRY_USERNAME -p $REGISTRY_PASSWORD
+  ```
 
 ### "dial tcp: lookup registry" Error
 

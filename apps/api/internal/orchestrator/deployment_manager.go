@@ -1708,74 +1708,79 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		"--rollback-order", "start-first",
 	)
 
-	// Verify image exists locally before creating service
-	// In Swarm mode, the image must exist on the node where the task is scheduled
-	imageCheckArgs := []string{"image", "inspect", config.Image}
-	imageCheckCmd := exec.CommandContext(ctx, "docker", imageCheckArgs...)
-	var imageCheckStderr bytes.Buffer
-	imageCheckCmd.Stderr = &imageCheckStderr
-	if err := imageCheckCmd.Run(); err != nil {
-		logger.Warn("[DeploymentManager] Image %s not found locally, attempting to pull...", config.Image)
-		
-		registryURL := os.Getenv("REGISTRY_URL")
-		if registryURL == "" {
+	// For multi-node Swarm deployments, we need to ensure registry authentication
+	// is set up on the manager node so credentials can be passed to worker nodes
+	// via --with-registry-auth=true. Worker nodes will pull the image automatically.
+	registryURL := os.Getenv("REGISTRY_URL")
+	if registryURL == "" {
+		domain := os.Getenv("DOMAIN")
+		if domain == "" {
+			domain = "obiente.cloud"
+		}
+		registryURL = fmt.Sprintf("https://registry.%s", domain)
+	} else {
+		// Handle unexpanded docker-compose variables (e.g., "https://registry.${DOMAIN:-obiente.cloud}")
+		if strings.Contains(registryURL, "${DOMAIN") {
 			domain := os.Getenv("DOMAIN")
 			if domain == "" {
 				domain = "obiente.cloud"
 			}
-			registryURL = fmt.Sprintf("https://registry.%s", domain)
-		} else {
-			// Handle unexpanded docker-compose variables (e.g., "https://registry.${DOMAIN:-obiente.cloud}")
-			if strings.Contains(registryURL, "${DOMAIN") {
-				domain := os.Getenv("DOMAIN")
-				if domain == "" {
-					domain = "obiente.cloud"
-				}
-				registryURL = strings.ReplaceAll(registryURL, "${DOMAIN:-obiente.cloud}", domain)
-				registryURL = strings.ReplaceAll(registryURL, "${DOMAIN}", domain)
-			}
+			registryURL = strings.ReplaceAll(registryURL, "${DOMAIN:-obiente.cloud}", domain)
+			registryURL = strings.ReplaceAll(registryURL, "${DOMAIN}", domain)
 		}
-		
-		// Strip protocol from registry URL for comparison (Docker image names don't include protocols)
-		registryHost := strings.TrimPrefix(registryURL, "https://")
-		registryHost = strings.TrimPrefix(registryHost, "http://")
-		
-		if strings.HasPrefix(config.Image, registryHost+"/") || 
-		   strings.HasPrefix(config.Image, "registry.obiente.cloud/") ||
-		   strings.Contains(config.Image, "/obiente/deploy-") {
-			registryUsername := os.Getenv("REGISTRY_USERNAME")
-			registryPassword := os.Getenv("REGISTRY_PASSWORD")
-			if registryUsername == "" {
-				registryUsername = "obiente"
-			}
-			if registryPassword != "" {
-				logger.Info("[DeploymentManager] Authenticating with registry before pulling image...")
-				loginCmd := exec.CommandContext(ctx, "docker", "login", registryURL, "-u", registryUsername, "-p", registryPassword)
-				var loginStderr bytes.Buffer
-				loginCmd.Stderr = &loginStderr
-				if loginErr := loginCmd.Run(); loginErr != nil {
-					logger.Warn("[DeploymentManager] Failed to authenticate with registry: %v (stderr: %s)", loginErr, loginStderr.String())
-				} else {
-					logger.Debug("[DeploymentManager] Successfully authenticated with registry")
-				}
-			} else {
-				logger.Warn("[DeploymentManager] REGISTRY_PASSWORD not set - pulling without authentication")
-			}
-		}
-		
-		// Try to pull the image (in case it's in a registry)
-		pullArgs := []string{"image", "pull", config.Image}
-		pullCmd := exec.CommandContext(ctx, "docker", pullArgs...)
-		var pullStderr bytes.Buffer
-		pullCmd.Stderr = &pullStderr
-		if pullErr := pullCmd.Run(); pullErr != nil {
-			logger.Error("[DeploymentManager] Failed to pull image %s: %v (stderr: %s)", config.Image, pullErr, pullStderr.String())
-			return "", "", fmt.Errorf("image %s not found locally and could not be pulled: %w (stderr: %s)", config.Image, pullErr, pullStderr.String())
-		}
-		logger.Info("[DeploymentManager] Successfully pulled image %s", config.Image)
-	} else {
-		logger.Debug("[DeploymentManager] Image %s exists locally", config.Image)
 	}
+	
+	// Strip protocol from registry URL for comparison (Docker image names don't include protocols)
+	registryHost := strings.TrimPrefix(registryURL, "https://")
+	registryHost = strings.TrimPrefix(registryHost, "http://")
+	
+	// Check if this image is from our registry or a known registry
+	isRegistryImage := strings.HasPrefix(config.Image, registryHost+"/") || 
+	                   strings.HasPrefix(config.Image, "registry.obiente.cloud/") ||
+	                   strings.Contains(config.Image, "/obiente/deploy-") ||
+	                   strings.Contains(config.Image, "ghcr.io/") ||
+	                   strings.Contains(config.Image, "docker.io/")
+	
+	// Always authenticate with registry if this is a registry image
+	// This ensures credentials are available for --with-registry-auth=true
+	if isRegistryImage {
+		registryUsername := os.Getenv("REGISTRY_USERNAME")
+		registryPassword := os.Getenv("REGISTRY_PASSWORD")
+		if registryUsername == "" {
+			registryUsername = "obiente"
+		}
+		
+		// Determine which registry to authenticate with based on image name
+		// docker login needs just the hostname, not the full URL with protocol
+		imageRegistryHost := registryHost
+		if strings.Contains(config.Image, "ghcr.io/") {
+			imageRegistryHost = "ghcr.io"
+		} else if strings.Contains(config.Image, "docker.io/") || (!strings.Contains(config.Image, "/") && !strings.Contains(config.Image, ":")) {
+			// Docker Hub images (docker.io is implicit)
+			imageRegistryHost = "docker.io"
+		}
+		
+		if registryPassword != "" {
+			logger.Info("[DeploymentManager] Authenticating with registry %s to enable multi-node image pulls...", imageRegistryHost)
+			loginCmd := exec.CommandContext(ctx, "docker", "login", imageRegistryHost, "-u", registryUsername, "-p", registryPassword)
+			var loginStderr bytes.Buffer
+			loginCmd.Stderr = &loginStderr
+			if loginErr := loginCmd.Run(); loginErr != nil {
+				logger.Warn("[DeploymentManager] Failed to authenticate with registry %s: %v (stderr: %s). Worker nodes may fail to pull image.", imageRegistryHost, loginErr, loginStderr.String())
+				// Don't fail here - the service creation might still work if credentials are cached
+			} else {
+				logger.Info("[DeploymentManager] Successfully authenticated with registry %s. Credentials will be passed to worker nodes.", imageRegistryHost)
+			}
+		} else {
+			logger.Warn("[DeploymentManager] REGISTRY_PASSWORD not set - worker nodes may fail to pull private images")
+		}
+	}
+	
+	// Note: We don't pull the image locally here because:
+	// 1. In multi-node Swarm, worker nodes need to pull the image themselves
+	// 2. Docker Swarm will automatically pull the image on worker nodes when --with-registry-auth=true is set
+	// 3. The manager node doesn't need the image locally unless it's also running tasks
+	logger.Debug("[DeploymentManager] Service will use image %s. Swarm will pull on worker nodes automatically.", config.Image)
 
 	// Add image
 	args = append(args, config.Image)
@@ -2744,6 +2749,52 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 		// In Swarm mode, we MUST use docker stack deploy to create Swarm services
 		// docker compose creates plain containers, not Swarm services, which Traefik can't discover
 		logger.Info("[DeploymentManager] Deploying in Swarm mode (ENABLE_SWARM=true) - using docker stack deploy to create Swarm services")
+		
+		// Ensure registry authentication is set up for multi-node deployments
+		// This ensures credentials are available for --with-registry-auth=true
+		registryURL := os.Getenv("REGISTRY_URL")
+		if registryURL == "" {
+			domain := os.Getenv("DOMAIN")
+			if domain == "" {
+				domain = "obiente.cloud"
+			}
+			registryURL = fmt.Sprintf("https://registry.%s", domain)
+		} else {
+			// Handle unexpanded docker-compose variables
+			if strings.Contains(registryURL, "${DOMAIN") {
+				domain := os.Getenv("DOMAIN")
+				if domain == "" {
+					domain = "obiente.cloud"
+				}
+				registryURL = strings.ReplaceAll(registryURL, "${DOMAIN:-obiente.cloud}", domain)
+				registryURL = strings.ReplaceAll(registryURL, "${DOMAIN}", domain)
+			}
+		}
+		
+		registryUsername := os.Getenv("REGISTRY_USERNAME")
+		registryPassword := os.Getenv("REGISTRY_PASSWORD")
+		if registryUsername == "" {
+			registryUsername = "obiente"
+		}
+		
+		// docker login needs just the hostname, not the full URL with protocol
+		registryHost := strings.TrimPrefix(registryURL, "https://")
+		registryHost = strings.TrimPrefix(registryHost, "http://")
+		
+		if registryPassword != "" {
+			logger.Info("[DeploymentManager] Authenticating with registry %s to enable multi-node image pulls...", registryHost)
+			loginCmd := exec.CommandContext(ctx, "docker", "login", registryHost, "-u", registryUsername, "-p", registryPassword)
+			var loginStderr bytes.Buffer
+			loginCmd.Stderr = &loginStderr
+			if loginErr := loginCmd.Run(); loginErr != nil {
+				logger.Warn("[DeploymentManager] Failed to authenticate with registry %s: %v (stderr: %s). Worker nodes may fail to pull images.", registryHost, loginErr, loginStderr.String())
+				// Don't fail here - the stack deploy might still work if credentials are cached
+			} else {
+				logger.Info("[DeploymentManager] Successfully authenticated with registry %s. Credentials will be passed to worker nodes.", registryHost)
+			}
+		} else {
+			logger.Warn("[DeploymentManager] REGISTRY_PASSWORD not set - worker nodes may fail to pull private images")
+		}
 		
 		// First, try to remove existing stack (ignore errors if it doesn't exist)
 		rmArgs := []string{"stack", "rm", projectName}
