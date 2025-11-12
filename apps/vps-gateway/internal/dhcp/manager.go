@@ -162,11 +162,26 @@ func NewManager() (*Manager, error) {
 	// Load existing allocations from file
 	if err := manager.loadAllocations(); err != nil {
 		logger.Warn("Failed to load existing allocations: %v", err)
+	} else {
+		logger.Info("Loaded %d existing IP allocations from hosts file", len(manager.allocations))
+		for vpsID, alloc := range manager.allocations {
+			logger.Debug("Restored allocation: VPS %s -> IP %s", vpsID, alloc.IPAddress.String())
+		}
 	}
 
 	// Start dnsmasq
 	if err := manager.startDNSMasq(); err != nil {
 		return nil, fmt.Errorf("failed to start dnsmasq: %w", err)
+	}
+	
+	// Ensure dnsmasq has the latest hosts file (in case it was updated before dnsmasq started)
+	// This is a safety measure - dnsmasq should have read it during start, but reload to be sure
+	if len(manager.allocations) > 0 {
+		if err := manager.reloadDNSMasq(); err != nil {
+			logger.Warn("Failed to reload dnsmasq after loading allocations: %v", err)
+		} else {
+			logger.Debug("Reloaded dnsmasq to ensure hosts file is loaded")
+		}
 	}
 
 	return manager, nil
