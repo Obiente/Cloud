@@ -1,13 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"api/internal/database"
@@ -21,22 +21,14 @@ const (
 	cacheTTL = 60 * time.Second // Cache DNS responses for 60 seconds
 )
 
-type cacheEntry struct {
-	ips       []string
-	expiresAt time.Time
-}
-
 type DNSServer struct {
 	db           *gorm.DB
 	traefikIPMap map[string][]string
-	cache        map[string]cacheEntry
-	cacheMutex   sync.RWMutex
+	redisCache   *database.RedisCache
 }
 
 func NewDNSServer() (*DNSServer, error) {
-	s := &DNSServer{
-		cache: make(map[string]cacheEntry),
-	}
+	s := &DNSServer{}
 
 	// Parse Traefik IPs from environment
 	traefikIPsEnv := os.Getenv("TRAEFIK_IPS")
@@ -108,39 +100,51 @@ func NewDNSServer() (*DNSServer, error) {
 	// Initialize the global database.DB variable so database functions can use it
 	database.DB = s.db
 
+	// Initialize Redis cache
+	if err := database.InitRedis(); err != nil {
+		log.Printf("[DNS] Warning: Redis initialization failed: %v (will run without cache)", err)
+	} else {
+		log.Printf("[DNS] Redis cache initialized")
+	}
+	s.redisCache = database.RedisClient
+
 	return s, nil
 }
 
-func (s *DNSServer) getCached(deploymentID string) ([]string, bool) {
-	s.cacheMutex.RLock()
-	defer s.cacheMutex.RUnlock()
-
-	entry, ok := s.cache[deploymentID]
-	if !ok {
+func (s *DNSServer) getCached(ctx context.Context, deploymentID string) ([]string, bool) {
+	if s.redisCache == nil {
 		return nil, false
 	}
 
-	if time.Now().After(entry.expiresAt) {
+	cacheKey := fmt.Sprintf("dns:deployment:%s", deploymentID)
+	cachedData, err := s.redisCache.Get(ctx, cacheKey)
+	if err != nil || cachedData == "" {
 		return nil, false
 	}
 
-	return entry.ips, true
+	var ips []string
+	if err := json.Unmarshal([]byte(cachedData), &ips); err != nil {
+		return nil, false
+	}
+
+	return ips, true
 }
 
-func (s *DNSServer) setCache(deploymentID string, ips []string) {
-	s.cacheMutex.Lock()
-	defer s.cacheMutex.Unlock()
-
-	s.cache[deploymentID] = cacheEntry{
-		ips:       ips,
-		expiresAt: time.Now().Add(cacheTTL),
+func (s *DNSServer) setCache(ctx context.Context, deploymentID string, ips []string) {
+	if s.redisCache == nil {
+		return
 	}
+
+	cacheKey := fmt.Sprintf("dns:deployment:%s", deploymentID)
+	s.redisCache.Set(ctx, cacheKey, ips, cacheTTL)
 }
 
 func (s *DNSServer) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 	msg := new(dns.Msg)
 	msg.SetReply(r)
 	msg.Authoritative = true
+
+	ctx := context.Background()
 
 	for _, q := range r.Question {
 		domain := strings.ToLower(q.Name)
@@ -170,7 +174,7 @@ func (s *DNSServer) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 		// Format: deploy-123.my.obiente.cloud (deployments)
 		// Format: gameserver-123.my.obiente.cloud (game servers)
 		if q.Qtype == dns.TypeA {
-			if s.handleAQuery(msg, domain, q) {
+			if s.handleAQuery(ctx, msg, domain, q) {
 				w.WriteMsg(msg)
 				return
 			}
@@ -360,7 +364,7 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 // handleAQuery handles A record queries for deployments and game servers
 // Format: deploy-123.my.obiente.cloud -> deploy-123 (deployments)
 // Format: gameserver-123.my.obiente.cloud -> gameserver-123 (game servers)
-func (s *DNSServer) handleAQuery(msg *dns.Msg, domain string, q dns.Question) bool {
+func (s *DNSServer) handleAQuery(ctx context.Context, msg *dns.Msg, domain string, q dns.Question) bool {
 	// Normalize domain - remove trailing dot if present
 	domainNormalized := strings.TrimSuffix(domain, ".")
 	parts := strings.Split(domainNormalized, ".")
@@ -383,22 +387,23 @@ func (s *DNSServer) handleAQuery(msg *dns.Msg, domain string, q dns.Question) bo
 	}
 
 	// Otherwise, treat as deployment (deploy-123)
-	return s.handleDeploymentAQuery(msg, domain, q, resourceID)
+	return s.handleDeploymentAQuery(ctx, msg, domain, q, resourceID)
 }
 
 // handleDeploymentAQuery handles A record queries for deployments
-func (s *DNSServer) handleDeploymentAQuery(msg *dns.Msg, domain string, q dns.Question, deploymentID string) bool {
+func (s *DNSServer) handleDeploymentAQuery(ctx context.Context, msg *dns.Msg, domain string, q dns.Question, deploymentID string) bool {
 	// Check for delegated DNS records FIRST - if a self-hosted instance is pushing records,
 	// those should take precedence over local database entries
 	// Normalize domain by removing trailing dot for database lookup
 	domainNormalized := strings.TrimSuffix(domain, ".")
+	log.Printf("[DNS] Looking up delegated record for deployment %s: original domain=%q, normalized domain=%q", deploymentID, domain, domainNormalized)
 	delegatedRecord, delegationErr := database.GetDelegatedDNSRecord(domainNormalized, "A")
 	if delegationErr == nil && delegatedRecord != nil {
 		// Parse JSON records
 		var recordIPs []string
 		if err := json.Unmarshal([]byte(delegatedRecord.Records), &recordIPs); err == nil && len(recordIPs) > 0 {
 			// Use delegated records - cache and return them
-			s.setCache(deploymentID, recordIPs)
+			s.setCache(ctx, deploymentID, recordIPs)
 			for _, ip := range recordIPs {
 				rr := &dns.A{
 					Hdr: dns.RR_Header{
@@ -425,7 +430,7 @@ func (s *DNSServer) handleDeploymentAQuery(msg *dns.Msg, domain string, q dns.Qu
 	}
 
 	// Check cache for local records
-	if ips, ok := s.getCached(deploymentID); ok {
+	if ips, ok := s.getCached(ctx, deploymentID); ok {
 		for _, ip := range ips {
 			rr := &dns.A{
 				Hdr: dns.RR_Header{
@@ -455,7 +460,7 @@ func (s *DNSServer) handleDeploymentAQuery(msg *dns.Msg, domain string, q dns.Qu
 	}
 
 	// Cache the result
-	s.setCache(deploymentID, ips)
+	s.setCache(ctx, deploymentID, ips)
 
 	// Return A records for all Traefik IPs (for load balancing)
 	for _, ip := range ips {

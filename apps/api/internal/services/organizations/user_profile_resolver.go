@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"api/internal/database"
+
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 
 	"google.golang.org/protobuf/proto"
@@ -18,19 +20,12 @@ import (
 
 const userProfileCacheTTL = 5 * time.Minute
 
-type cachedProfile struct {
-	user      *authv1.User
-	expiresAt time.Time
-}
-
 type userProfileResolver struct {
-	httpClient    *http.Client
-	baseURL       string
-	token         string
+	httpClient     *http.Client
+	baseURL        string
+	token          string
 	organizationID string
-
-	mu    sync.RWMutex
-	cache map[string]*cachedProfile
+	redisCache     *database.RedisCache
 }
 
 var resolverOnce sync.Once
@@ -57,17 +52,14 @@ func newUserProfileResolver() *userProfileResolver {
 	baseURL := strings.TrimSuffix(os.Getenv("ZITADEL_URL"), "/")
 	token := strings.TrimSpace(os.Getenv("ZITADEL_MANAGEMENT_TOKEN"))
 	organizationID := strings.TrimSpace(os.Getenv("ZITADEL_ORGANIZATION_ID"))
-	if baseURL == "" || token == "" {
-		return &userProfileResolver{cache: make(map[string]*cachedProfile)}
-	}
-
+	
 	client := &http.Client{Timeout: 10 * time.Second}
 	return &userProfileResolver{
 		httpClient:     client,
 		baseURL:        baseURL,
 		token:          token,
 		organizationID: organizationID,
-		cache:          make(map[string]*cachedProfile),
+		redisCache:     database.RedisClient,
 	}
 }
 
@@ -76,12 +68,17 @@ func (r *userProfileResolver) Resolve(ctx context.Context, userID string) (*auth
 		return nil, fmt.Errorf("profile resolver not configured")
 	}
 
-	r.mu.RLock()
-	if cached, ok := r.cache[userID]; ok && time.Now().Before(cached.expiresAt) {
-		r.mu.RUnlock()
-		return cloneUser(cached.user), nil
+	// Try to get from Redis cache first
+	cacheKey := fmt.Sprintf("userprofile:%s", userID)
+	if r.redisCache != nil {
+		cachedData, err := r.redisCache.Get(ctx, cacheKey)
+		if err == nil && cachedData != "" {
+			var user authv1.User
+			if err := json.Unmarshal([]byte(cachedData), &user); err == nil {
+				return cloneUser(&user), nil
+			}
+		}
 	}
-	r.mu.RUnlock()
 
 	// Use Zitadel Management API v2 for user lookup
 	// The v2 API endpoint is /v2/users/{userId}
@@ -126,9 +123,10 @@ func (r *userProfileResolver) Resolve(ctx context.Context, userID string) (*auth
 		return nil, fmt.Errorf("profile decode produced empty user")
 	}
 
-	r.mu.Lock()
-	r.cache[userID] = &cachedProfile{user: user, expiresAt: time.Now().Add(userProfileCacheTTL)}
-	r.mu.Unlock()
+	// Cache the result in Redis
+	if r.redisCache != nil {
+		r.redisCache.Set(ctx, cacheKey, user, userProfileCacheTTL)
+	}
 
 	return cloneUser(user), nil
 }
@@ -188,10 +186,11 @@ func (r *userProfileResolver) UpdateProfile(ctx context.Context, userID string, 
 		return nil, fmt.Errorf("profile update failed: %s, body: %s", resp.Status, string(body))
 	}
 
-	// Invalidate cache
-	r.mu.Lock()
-	delete(r.cache, userID)
-	r.mu.Unlock()
+	// Invalidate cache in Redis
+	if r.redisCache != nil {
+		cacheKey := fmt.Sprintf("userprofile:%s", userID)
+		r.redisCache.Delete(ctx, cacheKey)
+	}
 
 	// Fetch updated profile
 	return r.Resolve(ctx, userID)

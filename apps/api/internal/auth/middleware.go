@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
+	"api/internal/database"
 	"api/internal/logger"
 
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
@@ -89,73 +89,48 @@ type contextKey int
 
 const userInfoKey contextKey = 0
 
-// UserInfoCache manages caching of validated tokens
+// UserInfoCache manages caching of validated tokens using Redis
 type UserInfoCache struct {
-	cache map[string]*CachedUserInfo
-	mutex sync.RWMutex
+	redisCache *database.RedisCache
 }
 
-// CachedUserInfo stores user info with expiration
-type CachedUserInfo struct {
-	User      *authv1.User
-	ExpiresAt time.Time
-}
-
-// NewUserInfoCache creates a new user info cache
+// NewUserInfoCache creates a new user info cache backed by Redis
 func NewUserInfoCache() *UserInfoCache {
-	cache := &UserInfoCache{
-		cache: make(map[string]*CachedUserInfo),
+	return &UserInfoCache{
+		redisCache: database.RedisClient,
 	}
-
-	// Start cleanup goroutine
-	go cache.cleanup()
-
-	return cache
 }
 
-// Get retrieves cached user info if valid
+// Get retrieves cached user info if valid from Redis
 func (c *UserInfoCache) Get(token string) (*authv1.User, bool) {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	cached, exists := c.cache[token]
-	if !exists {
+	if c.redisCache == nil {
 		return nil, false
 	}
 
-	if time.Now().After(cached.ExpiresAt) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("userinfo:%s", token)
+	cachedData, err := c.redisCache.Get(ctx, cacheKey)
+	if err != nil || cachedData == "" {
 		return nil, false
 	}
 
-	return cached.User, true
+	var user authv1.User
+	if err := json.Unmarshal([]byte(cachedData), &user); err != nil {
+		return nil, false
+	}
+
+	return &user, true
 }
 
-// Set stores user info in cache
+// Set stores user info in Redis cache
 func (c *UserInfoCache) Set(token string, user *authv1.User) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	c.cache[token] = &CachedUserInfo{
-		User:      user,
-		ExpiresAt: time.Now().Add(UserInfoCacheDuration),
+	if c.redisCache == nil {
+		return
 	}
-}
 
-// cleanup removes expired entries
-func (c *UserInfoCache) cleanup() {
-	ticker := time.NewTicker(1 * time.Minute)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		c.mutex.Lock()
-		now := time.Now()
-		for token, cached := range c.cache {
-			if now.After(cached.ExpiresAt) {
-				delete(c.cache, token)
-			}
-		}
-		c.mutex.Unlock()
-	}
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("userinfo:%s", token)
+	c.redisCache.Set(ctx, cacheKey, user, UserInfoCacheDuration)
 }
 
 // AuthConfig holds configuration for authentication
@@ -166,6 +141,7 @@ type AuthConfig struct {
 	SkipPaths      []string
 	ExposeUserInfo bool // Whether to expose user info in response headers
 	SuperAdmins    map[string]struct{}
+	redisCache     *database.RedisCache
 }
 
 // NewAuthConfig creates a new auth config with default values
@@ -221,6 +197,7 @@ func NewAuthConfig() *AuthConfig {
 		SkipPaths:      []string{"/health", "/metrics", "/.well-known"},
 		ExposeUserInfo: true, // Enable to allow audit interceptor to extract user ID
 		SuperAdmins:    superAdmins,
+		redisCache:     database.RedisClient,
 	}
 }
 
