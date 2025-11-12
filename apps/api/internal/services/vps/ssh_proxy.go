@@ -26,6 +26,71 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// rawForwardingConn wraps a net.Conn to capture and forward ALL raw bytes
+// It uses io.TeeReader/io.MultiWriter to capture bytes without consuming them
+// This allows SSH handshake to proceed while capturing raw protocol data
+type rawForwardingConn struct {
+	net.Conn
+	readChan    chan []byte // Channel to send captured read data
+	writeChan   chan []byte // Channel to send captured write data
+	readErr     error
+	writeErr    error
+	readErrOnce sync.Once
+	writeErrOnce sync.Once
+}
+
+func newRawForwardingConn(conn net.Conn) *rawForwardingConn {
+	return &rawForwardingConn{
+		Conn:      conn,
+		readChan:  make(chan []byte, 100),
+		writeChan: make(chan []byte, 100),
+	}
+}
+
+func (c *rawForwardingConn) Read(b []byte) (n int, err error) {
+	n, err = c.Conn.Read(b)
+	if n > 0 {
+		// Send copy of data to channel (non-blocking)
+		dataCopy := make([]byte, n)
+		copy(dataCopy, b[:n])
+		select {
+		case c.readChan <- dataCopy:
+		default:
+			// Channel full, drop data (shouldn't happen with buffer size 100)
+			logger.Debug("[SSHProxy] Read channel full, dropping data")
+		}
+	}
+	if err != nil {
+		c.readErrOnce.Do(func() {
+			c.readErr = err
+			close(c.readChan)
+		})
+	}
+	return n, err
+}
+
+func (c *rawForwardingConn) Write(b []byte) (n int, err error) {
+	n, err = c.Conn.Write(b)
+	if n > 0 {
+		// Send copy of data to channel (non-blocking)
+		dataCopy := make([]byte, n)
+		copy(dataCopy, b[:n])
+		select {
+		case c.writeChan <- dataCopy:
+		default:
+			// Channel full, drop data (shouldn't happen with buffer size 100)
+			logger.Debug("[SSHProxy] Write channel full, dropping data")
+		}
+	}
+	if err != nil {
+		c.writeErrOnce.Do(func() {
+			c.writeErr = err
+			close(c.writeChan)
+		})
+	}
+	return n, err
+}
+
 // SSHProxyServer handles SSH jump host functionality for VPS access
 // Users connect via SSH to the API server, which then proxies to the VPS
 type SSHProxyServer struct {
@@ -735,7 +800,10 @@ func (s *SSHProxyServer) forwardToVPS(ctx context.Context, channel ssh.Channel, 
 }
 
 // forwardToVPSViaGateway forwards SSH connection through gateway ProxySSH
-// The gateway acts as a transparent TCP proxy - user authenticates directly with VPS
+// The gateway acts as a transparent TCP proxy - forwards raw TCP data bidirectionally
+// NOTE: This function receives SSH channel data (application-level), but the gateway
+// expects raw TCP data. The VPS will receive channel data, not SSH protocol data.
+// This is a limitation - we can't access the raw SSH protocol stream after handshake.
 func (s *SSHProxyServer) forwardToVPSViaGateway(ctx context.Context, channel ssh.Channel, vpsIP, rootPassword string, cols, rows int, sshPublicKey string) error {
 	// Generate connection ID
 	connectionID := fmt.Sprintf("ssh-%d", time.Now().UnixNano())
@@ -762,7 +830,7 @@ func (s *SSHProxyServer) forwardToVPSViaGateway(ctx context.Context, channel ssh
 
 	errChan := make(chan error, 2)
 
-	// Handle responses from gateway
+	// Handle responses from gateway (VPS -> User)
 	go func() {
 		for {
 			resp, err := stream.Receive()
@@ -778,7 +846,7 @@ func (s *SSHProxyServer) forwardToVPSViaGateway(ctx context.Context, channel ssh
 			case "connected":
 				logger.Info("[SSHProxy] Gateway connected to VPS at %s", vpsIP)
 			case "data":
-				// Forward data from gateway to channel (VPS -> User)
+				// Forward raw TCP data from gateway to channel (VPS -> User)
 				logger.Debug("[SSHProxy] Forwarding %d bytes from VPS to user via gateway for connection %s", len(resp.Data), connectionID)
 				if _, err := channel.Write(resp.Data); err != nil {
 					logger.Error("[SSHProxy] Failed to write to channel: %v", err)
@@ -797,13 +865,12 @@ func (s *SSHProxyServer) forwardToVPSViaGateway(ctx context.Context, channel ssh
 	}()
 
 	// Forward data from channel to gateway (User -> VPS)
+	// NOTE: This is channel data (application-level), not raw SSH protocol data
 	go func() {
 		logger.Debug("[SSHProxy] Starting channel read goroutine for connection %s", connectionID)
 		buf := make([]byte, 4096)
 		for {
-			logger.Debug("[SSHProxy] Waiting to read from channel for connection %s", connectionID)
 			n, err := channel.Read(buf)
-			logger.Debug("[SSHProxy] Read %d bytes from channel for connection %s, err=%v", n, connectionID, err)
 			if n > 0 {
 				logger.Debug("[SSHProxy] Forwarding %d bytes from user to VPS via gateway for connection %s", n, connectionID)
 				if sendErr := stream.Send(&vpsgatewayv1.ProxySSHRequest{
@@ -818,7 +885,6 @@ func (s *SSHProxyServer) forwardToVPSViaGateway(ctx context.Context, channel ssh
 			}
 			if err == io.EOF {
 				logger.Debug("[SSHProxy] Channel EOF, closing connection %s", connectionID)
-				// Send close request
 				stream.Send(&vpsgatewayv1.ProxySSHRequest{
 					ConnectionId: connectionID,
 					Type:         "close",

@@ -125,6 +125,122 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 		CreatedBy:      userInfo.Id,
 		Metadata:       req.Msg.GetMetadata(),
 	}
+	
+	// Handle root password (custom or auto-generated)
+	if req.Msg.RootPassword != nil && req.Msg.GetRootPassword() != "" {
+		rootPass := req.Msg.GetRootPassword()
+		config.RootPassword = &rootPass
+	}
+	
+	// Convert cloud-init configuration from proto
+	if req.Msg.CloudInit != nil {
+		cloudInitProto := req.Msg.GetCloudInit()
+		cloudInit := &orchestrator.CloudInitConfig{
+			Users:            make([]orchestrator.CloudInitUser, 0, len(cloudInitProto.Users)),
+			Packages:         cloudInitProto.Packages,
+			Runcmd:           cloudInitProto.Runcmd,
+			WriteFiles:       make([]orchestrator.CloudInitWriteFile, 0, len(cloudInitProto.WriteFiles)),
+		}
+		
+		// Convert users
+		for _, userProto := range cloudInitProto.Users {
+			user := orchestrator.CloudInitUser{
+				Name:              userProto.GetName(),
+				SSHAuthorizedKeys: userProto.SshAuthorizedKeys,
+			}
+			
+			if userProto.Password != nil {
+				pass := userProto.GetPassword()
+				user.Password = &pass
+			}
+			if userProto.Sudo != nil {
+				sudo := userProto.GetSudo()
+				user.Sudo = &sudo
+			}
+			if userProto.SudoNopasswd != nil {
+				sudoNopasswd := userProto.GetSudoNopasswd()
+				user.SudoNopasswd = &sudoNopasswd
+			}
+			if userProto.Shell != nil {
+				shell := userProto.GetShell()
+				user.Shell = &shell
+			}
+			if userProto.LockPasswd != nil {
+				lockPasswd := userProto.GetLockPasswd()
+				user.LockPasswd = &lockPasswd
+			}
+			if userProto.Gecos != nil {
+				gecos := userProto.GetGecos()
+				user.Gecos = &gecos
+			}
+			user.Groups = userProto.Groups
+			
+			cloudInit.Users = append(cloudInit.Users, user)
+		}
+		
+		// Convert system configuration
+		if cloudInitProto.Hostname != nil {
+			hostname := cloudInitProto.GetHostname()
+			cloudInit.Hostname = &hostname
+		}
+		if cloudInitProto.Timezone != nil {
+			timezone := cloudInitProto.GetTimezone()
+			cloudInit.Timezone = &timezone
+		}
+		if cloudInitProto.Locale != nil {
+			locale := cloudInitProto.GetLocale()
+			cloudInit.Locale = &locale
+		}
+		
+		// Convert package management
+		if cloudInitProto.PackageUpdate != nil {
+			packageUpdate := cloudInitProto.GetPackageUpdate()
+			cloudInit.PackageUpdate = &packageUpdate
+		}
+		if cloudInitProto.PackageUpgrade != nil {
+			packageUpgrade := cloudInitProto.GetPackageUpgrade()
+			cloudInit.PackageUpgrade = &packageUpgrade
+		}
+		
+		// Convert SSH configuration
+		if cloudInitProto.SshInstallServer != nil {
+			sshInstallServer := cloudInitProto.GetSshInstallServer()
+			cloudInit.SSHInstallServer = &sshInstallServer
+		}
+		if cloudInitProto.SshAllowPw != nil {
+			sshAllowPW := cloudInitProto.GetSshAllowPw()
+			cloudInit.SSHAllowPW = &sshAllowPW
+		}
+		
+		// Convert write files
+		for _, fileProto := range cloudInitProto.WriteFiles {
+			file := orchestrator.CloudInitWriteFile{
+				Path:    fileProto.GetPath(),
+				Content: fileProto.GetContent(),
+			}
+			
+			if fileProto.Owner != nil {
+				owner := fileProto.GetOwner()
+				file.Owner = &owner
+			}
+			if fileProto.Permissions != nil {
+				permissions := fileProto.GetPermissions()
+				file.Permissions = &permissions
+			}
+			if fileProto.Append != nil {
+				append := fileProto.GetAppend()
+				file.Append = &append
+			}
+			if fileProto.Defer != nil {
+				deferVal := fileProto.GetDefer()
+				file.Defer = &deferVal
+			}
+			
+			cloudInit.WriteFiles = append(cloudInit.WriteFiles, file)
+		}
+		
+		config.CloudInit = cloudInit
+	}
 
 	// Get size from catalog
 	sizeCatalog, err := database.GetVPSSizeCatalog(req.Msg.GetSize(), req.Msg.GetRegion())
@@ -227,9 +343,10 @@ func (s *Service) GetVPS(ctx context.Context, req *connect.Request[vpsv1.GetVPSR
 						}
 
 						// Try to get IP addresses from Proxmox (requires guest agent)
+						// Only update IP addresses if guest agent is available and returns valid IPs
 						ipv4, ipv6, err := proxmoxClient.GetVMIPAddresses(ctx, nodes[0], vmIDInt)
 						if err == nil && (len(ipv4) > 0 || len(ipv6) > 0) {
-							// Update database with IP addresses
+							// Update database with IP addresses from guest agent
 							if len(ipv4) > 0 {
 								ipv4JSON, _ := json.Marshal(ipv4)
 								vps.IPv4Addresses = string(ipv4JSON)
@@ -244,6 +361,15 @@ func (s *Service) GetVPS(ctx context.Context, req *connect.Request[vpsv1.GetVPSR
 									"ipv6_addresses": vps.IPv6Addresses,
 								})
 							}
+						} else if err != nil {
+							// Guest agent not available - clear IP addresses to avoid showing stale/incorrect IPs
+							logger.Info("[VPS Service] Guest agent not available for VPS %s, clearing IP addresses", vpsID)
+							vps.IPv4Addresses = "[]"
+							vps.IPv6Addresses = "[]"
+							database.DB.Model(&vps).Updates(map[string]interface{}{
+								"ipv4_addresses": vps.IPv4Addresses,
+								"ipv6_addresses": vps.IPv6Addresses,
+							})
 						}
 					}
 				}

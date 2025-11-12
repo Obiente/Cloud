@@ -211,7 +211,8 @@ func (c *VPSGatewayClient) CreateTCPConnection(ctx context.Context, target strin
 		return nil, fmt.Errorf("failed to send connect request: %w", err)
 	}
 	
-	// Wait for connected response
+	// Wait for connected response FIRST (before starting read goroutine)
+	// This ensures we don't have a race where readFromStream consumes the "connected" message
 	resp, err := stream.Receive()
 	if err != nil {
 		return nil, fmt.Errorf("failed to receive connect response: %w", err)
@@ -232,7 +233,8 @@ func (c *VPSGatewayClient) CreateTCPConnection(ctx context.Context, target strin
 		ctx:          ctx,
 	}
 	
-	// Start goroutine to read from stream
+	// Start goroutine to read from stream AFTER receiving connected
+	// This ensures we've consumed the "connected" message before the goroutine starts
 	go conn.readFromStream()
 	
 	return conn, nil
@@ -254,10 +256,10 @@ type gatewayTCPConnection struct {
 }
 
 func (c *gatewayTCPConnection) Read(b []byte) (n int, err error) {
+	// Check for buffered data first (with lock)
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	
 	if c.closed {
+		c.mu.Unlock()
 		return 0, io.EOF
 	}
 	
@@ -269,18 +271,22 @@ func (c *gatewayTCPConnection) Read(b []byte) (n int, err error) {
 			c.readBuf = nil
 			c.readBufPos = 0
 		}
+		c.mu.Unlock()
 		return n, nil
 	}
+	c.mu.Unlock()
 	
-	// Wait for data from stream
+	// Wait for data from stream (without holding lock to allow readFromStream to send)
 	select {
 	case data := <-c.readChan:
+		c.mu.Lock()
 		n = copy(b, data)
 		if n < len(data) {
 			// Buffer remaining data
 			c.readBuf = data[n:]
 			c.readBufPos = 0
 		}
+		c.mu.Unlock()
 		return n, nil
 	case err := <-c.readErrChan:
 		return 0, err
@@ -364,25 +370,50 @@ func (c *gatewayTCPConnection) readFromStream() {
 		resp, err := c.stream.Receive()
 		if err != nil {
 			if err != io.EOF {
-				c.readErrChan <- err
+				select {
+				case c.readErrChan <- err:
+				case <-c.ctx.Done():
+					return
+				}
 			} else {
-				c.readErrChan <- io.EOF
+				select {
+				case c.readErrChan <- io.EOF:
+				case <-c.ctx.Done():
+					return
+				}
 			}
 			return
 		}
 		
 		switch resp.Type {
+		case "connected":
+			// Already handled in CreateTCPConnection, but ignore it here
+			// Data might arrive immediately after connected
+			continue
 		case "data":
+			// Non-blocking send with timeout to prevent deadlock if channel is full
 			select {
 			case c.readChan <- resp.Data:
 			case <-c.ctx.Done():
 				return
+			case <-time.After(5 * time.Second):
+				// Channel is full and no one is reading - this indicates a problem
+				c.readErrChan <- fmt.Errorf("read channel full, connection may be stuck")
+				return
 			}
 		case "error":
-			c.readErrChan <- fmt.Errorf("gateway error: %s", resp.Error)
+			select {
+			case c.readErrChan <- fmt.Errorf("gateway error: %s", resp.Error):
+			case <-c.ctx.Done():
+				return
+			}
 			return
 		case "closed":
-			c.readErrChan <- io.EOF
+			select {
+			case c.readErrChan <- io.EOF:
+			case <-c.ctx.Done():
+				return
+			}
 			return
 		}
 	}

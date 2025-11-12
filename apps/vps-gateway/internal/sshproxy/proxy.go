@@ -242,10 +242,13 @@ func (p *Proxy) ProxyConnection(ctx context.Context, connectionID, target string
 
 	// Resolve hostname to IP using gateway's own dnsmasq (localhost:53)
 	// This ensures VPS hostnames are resolved by the gateway's dnsmasq, not the host DNS
+	// IMPORTANT: If target is already an IP, use it directly - don't resolve
 	var targetIP string
-	if net.ParseIP(target) != nil {
-		// Target is already an IP address
+	parsedIP := net.ParseIP(target)
+	if parsedIP != nil {
+		// Target is already an IP address - use it directly
 		targetIP = target
+		logger.Debug("Using provided IP address directly: %s", targetIP)
 	} else {
 		// Target is a hostname - resolve using gateway's dnsmasq via direct DNS query
 		logger.Info("Resolving hostname %s using direct DNS query to 127.0.0.1:53", target)
