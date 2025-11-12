@@ -192,7 +192,7 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   TEMP_DASHBOARD_COMPOSE=$(mktemp)
   sed "s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
   # Use --resolve-image always to force pulling latest images
-  STACK_NAME="$STACK_NAME" DASHBOARD_IMAGE="$DASHBOARD_IMAGE" docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}"
+  docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}"
   rm -f "$TEMP_DASHBOARD_COMPOSE"
   
   echo ""
