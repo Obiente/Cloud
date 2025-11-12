@@ -165,6 +165,9 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 	protoVPS := vpsToProto(vpsInstance)
 	if rootPassword != "" {
 		protoVPS.RootPassword = &rootPassword
+		logger.Info("[VPS Service] Including root password in CreateVPS response for VPS %s (length: %d)", vpsInstance.ID, len(rootPassword))
+	} else {
+		logger.Warn("[VPS Service] WARNING: rootPassword is empty for VPS %s - password will not be returned", vpsInstance.ID)
 	}
 
 	return connect.NewResponse(&vpsv1.CreateVPSResponse{
