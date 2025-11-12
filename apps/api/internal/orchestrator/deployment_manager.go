@@ -1812,28 +1812,187 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	logger.Info("[DeploymentManager] Service image: %s, start command: %v", config.Image, config.StartCommand)
 
 	// Wait a moment for the service to create a task
-	time.Sleep(3 * time.Second)
+	time.Sleep(2 * time.Second)
+	
+	// Immediately try to get logs to see what's happening
+	logsArgs := []string{"service", "logs", "--tail", "50", "--raw", swarmServiceName}
+	logsCmd := exec.CommandContext(ctx, "docker", logsArgs...)
+	var initialLogsStdout bytes.Buffer
+	var initialLogsStderr bytes.Buffer
+	logsCmd.Stdout = &initialLogsStdout
+	logsCmd.Stderr = &initialLogsStderr
+	if err := logsCmd.Run(); err == nil {
+		initialLogs := strings.TrimSpace(initialLogsStdout.String())
+		if initialLogs != "" {
+			logger.Info("[DeploymentManager] Initial service logs for %s:\n%s", swarmServiceName, initialLogs)
+		}
+	}
 
-	// Check task status and log any errors
-	taskStatusArgs := []string{"service", "ps", swarmServiceName, "--format", "{{.ID}}\t{{.Name}}\t{{.CurrentState}}\t{{.Error}}", "--no-trunc"}
-	taskStatusCmd := exec.CommandContext(ctx, "docker", taskStatusArgs...)
-	var taskStatusStdout bytes.Buffer
-	var taskStatusStderr bytes.Buffer
-	taskStatusCmd.Stdout = &taskStatusStdout
-	taskStatusCmd.Stderr = &taskStatusStderr
-	if err := taskStatusCmd.Run(); err == nil {
-		taskStatus := strings.TrimSpace(taskStatusStdout.String())
-		if taskStatus != "" {
-			logger.Info("[DeploymentManager] Service %s task status:\n%s", swarmServiceName, taskStatus)
-			// Check if there are any errors
-			if strings.Contains(taskStatus, "Error") || strings.Contains(taskStatus, "Failed") {
-				logger.Warn("[DeploymentManager] Service %s has task errors - check task status above", swarmServiceName)
+	// Check task status and log any errors - do this multiple times to catch failures
+	maxChecks := 5
+	checkInterval := 2 * time.Second
+	var lastTaskStatus string
+	for i := 0; i < maxChecks; i++ {
+		taskStatusArgs := []string{"service", "ps", swarmServiceName, "--format", "{{.ID}}\t{{.Name}}\t{{.CurrentState}}\t{{.Error}}", "--no-trunc"}
+		taskStatusCmd := exec.CommandContext(ctx, "docker", taskStatusArgs...)
+		var taskStatusStdout bytes.Buffer
+		var taskStatusStderr bytes.Buffer
+		taskStatusCmd.Stdout = &taskStatusStdout
+		taskStatusCmd.Stderr = &taskStatusStderr
+		if err := taskStatusCmd.Run(); err == nil {
+			taskStatus := strings.TrimSpace(taskStatusStdout.String())
+			if taskStatus != "" {
+				lastTaskStatus = taskStatus
+				logger.Info("[DeploymentManager] Service %s task status (check %d/%d):\n%s", swarmServiceName, i+1, maxChecks, taskStatus)
+				
+				// Check if there are any errors
+				if strings.Contains(taskStatus, "Error") || strings.Contains(taskStatus, "Failed") || strings.Contains(taskStatus, "Rejected") {
+					logger.Error("[DeploymentManager] Service %s has task errors detected!", swarmServiceName)
+					// Extract and log the error message
+					lines := strings.Split(taskStatus, "\n")
+					for _, line := range lines {
+						if strings.Contains(line, "Error") || strings.Contains(line, "Failed") || strings.Contains(line, "Rejected") {
+							logger.Error("[DeploymentManager] Task error: %s", line)
+						}
+					}
+					// Try to get detailed task error - get the most recent task (first line)
+					taskIDArgs := []string{"service", "ps", swarmServiceName, "--format", "{{.ID}}", "--no-trunc"}
+					taskIDCmd := exec.CommandContext(ctx, "docker", taskIDArgs...)
+					var taskIDStdout bytes.Buffer
+					taskIDCmd.Stdout = &taskIDStdout
+					if taskIDCmd.Run() == nil {
+						taskIDLines := strings.Split(strings.TrimSpace(taskIDStdout.String()), "\n")
+						taskID := ""
+						if len(taskIDLines) > 0 {
+							taskID = strings.TrimSpace(taskIDLines[0])
+						}
+						if taskID != "" {
+							// Get detailed error from task
+							taskErrArgs := []string{"inspect", taskID, "--format", "{{.Status.Err}}"}
+							taskErrCmd := exec.CommandContext(ctx, "docker", taskErrArgs...)
+							var taskErrStdout bytes.Buffer
+							if taskErrCmd.Run() == nil {
+								taskErr := strings.TrimSpace(taskErrStdout.String())
+								if taskErr != "" && taskErr != "<no value>" {
+									logger.Error("[DeploymentManager] Detailed task error: %s", taskErr)
+								}
+							}
+							// Get container exit code if available
+							exitCodeArgs := []string{"inspect", taskID, "--format", "{{.Status.ContainerStatus.ExitCode}}"}
+							exitCodeCmd := exec.CommandContext(ctx, "docker", exitCodeArgs...)
+							var exitCodeStdout bytes.Buffer
+							exitCodeCmd.Stdout = &exitCodeStdout
+							if exitCodeCmd.Run() == nil {
+								exitCode := strings.TrimSpace(exitCodeStdout.String())
+								if exitCode != "" && exitCode != "<no value>" {
+									if exitCode == "0" {
+										logger.Error("[DeploymentManager] Container exited with code 0 (success) - command completed instead of running as a server. Start command may be incorrect: %v", config.StartCommand)
+									} else {
+										logger.Error("[DeploymentManager] Container exit code: %s", exitCode)
+									}
+								}
+							}
+						}
+					}
+					// Try to get service logs - get more lines and also try to get from all tasks
+					logsArgs := []string{"service", "logs", "--tail", "200", "--raw", swarmServiceName}
+					logsCmd := exec.CommandContext(ctx, "docker", logsArgs...)
+					var logsStdout bytes.Buffer
+					var logsStderr bytes.Buffer
+					logsCmd.Stdout = &logsStdout
+					logsCmd.Stderr = &logsStderr
+					if err := logsCmd.Run(); err == nil {
+						logs := strings.TrimSpace(logsStdout.String())
+						if logs != "" {
+							logger.Error("[DeploymentManager] Service %s logs (last 200 lines):\n%s", swarmServiceName, logs)
+						} else {
+							logger.Warn("[DeploymentManager] Service %s has no logs yet - container may have exited before producing output", swarmServiceName)
+						}
+					} else {
+						logger.Warn("[DeploymentManager] Failed to get service logs: %v (stderr: %s)", err, logsStderr.String())
+					}
+					
+					// Also try to get logs from the specific task/container if we can find it
+					// Get task ID again for container log retrieval
+					taskIDForLogsArgs := []string{"service", "ps", swarmServiceName, "--format", "{{.ID}}", "--no-trunc"}
+					taskIDForLogsCmd := exec.CommandContext(ctx, "docker", taskIDForLogsArgs...)
+					var taskIDForLogsStdout bytes.Buffer
+					if taskIDForLogsCmd.Run() == nil {
+						taskIDForLogsLines := strings.Split(strings.TrimSpace(taskIDForLogsStdout.String()), "\n")
+						if len(taskIDForLogsLines) > 0 {
+							taskIDForLogs := strings.TrimSpace(taskIDForLogsLines[0])
+							if taskIDForLogs != "" {
+								// Try to get container ID from task
+								containerIDArgs := []string{"inspect", taskIDForLogs, "--format", "{{.Status.ContainerStatus.ContainerID}}"}
+								containerIDCmd := exec.CommandContext(ctx, "docker", containerIDArgs...)
+								var containerIDStdout bytes.Buffer
+								containerIDCmd.Stdout = &containerIDStdout
+								if containerIDCmd.Run() == nil {
+									containerID := strings.TrimSpace(containerIDStdout.String())
+									if containerID != "" && containerID != "<no value>" {
+										// Try to get container logs directly
+										containerLogsArgs := []string{"logs", "--tail", "200", containerID}
+										containerLogsCmd := exec.CommandContext(ctx, "docker", containerLogsArgs...)
+										var containerLogsStdout bytes.Buffer
+										var containerLogsStderr bytes.Buffer
+										containerLogsCmd.Stdout = &containerLogsStdout
+										containerLogsCmd.Stderr = &containerLogsStderr
+										if err := containerLogsCmd.Run(); err == nil {
+											containerLogs := strings.TrimSpace(containerLogsStdout.String())
+											if containerLogs != "" {
+												logger.Error("[DeploymentManager] Container %s logs (last 200 lines):\n%s", containerID[:12], containerLogs)
+											}
+											containerErrLogs := strings.TrimSpace(containerLogsStderr.String())
+											if containerErrLogs != "" {
+												logger.Error("[DeploymentManager] Container %s stderr (last 200 lines):\n%s", containerID[:12], containerErrLogs)
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				} else if strings.Contains(taskStatus, "Running") || strings.Contains(taskStatus, "Starting") {
+					// Task is running or starting, that's good - we can break early
+					status := "starting"
+					if strings.Contains(taskStatus, "Running") {
+						status = "running"
+					}
+					logger.Info("[DeploymentManager] Service %s task is %s - deployment appears successful", swarmServiceName, status)
+					break
+				}
+			} else {
+				if i == 0 {
+					logger.Warn("[DeploymentManager] Service %s has no tasks yet - waiting...", swarmServiceName)
+				}
 			}
 		} else {
-			logger.Warn("[DeploymentManager] Service %s has no tasks yet - this may indicate the service is still starting or there's an issue", swarmServiceName)
+			logger.Warn("[DeploymentManager] Failed to check task status for service %s: %v (stderr: %s)", swarmServiceName, err, taskStatusStderr.String())
 		}
-	} else {
-		logger.Warn("[DeploymentManager] Failed to check task status for service %s: %v (stderr: %s)", swarmServiceName, err, taskStatusStderr.String())
+		
+		// Get logs on each check to see what's happening in real-time
+		if i > 0 { // Skip first check since we already got initial logs
+			logsArgs := []string{"service", "logs", "--tail", "20", "--raw", swarmServiceName}
+			logsCmd := exec.CommandContext(ctx, "docker", logsArgs...)
+			var checkLogsStdout bytes.Buffer
+			logsCmd.Stdout = &checkLogsStdout
+			if logsCmd.Run() == nil {
+				checkLogs := strings.TrimSpace(checkLogsStdout.String())
+				if checkLogs != "" {
+					logger.Info("[DeploymentManager] Service %s logs (check %d/%d, last 20 lines):\n%s", swarmServiceName, i+1, maxChecks, checkLogs)
+				}
+			}
+		}
+		
+		// Wait before next check (except on last iteration)
+		if i < maxChecks-1 {
+			time.Sleep(checkInterval)
+		}
+	}
+	
+	// Final status summary
+	if lastTaskStatus != "" {
+		logger.Info("[DeploymentManager] Final task status for service %s:\n%s", swarmServiceName, lastTaskStatus)
 	}
 
 	// Get container ID from service tasks
