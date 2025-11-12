@@ -362,6 +362,10 @@ ACME_EMAIL=admin@obiente.cloud
 | `PROXMOX_STORAGE_POOL`   | string | `local-lvm` | ❌       | Proxmox storage pool for VM disks                                                                                                                                                                                                                                                                                                                       |
 | `PROXMOX_VM_ID_START`    | number | -           | ❌       | Starting VM ID range (e.g., `300`). If set, VMs will be created starting from this ID. If not set, Proxmox auto-generates the next available ID.                                                                                                                                                                                                        |
 | `PROXMOX_VLAN_ID`        | number | -           | ❌       | Optional VLAN tag for VM network isolation (e.g., `100`). If set, all VMs will be placed on this VLAN. This provides Layer 2 isolation and helps prevent IP spoofing and network attacks.                                                                                                                                                               |
+| `PROXMOX_SSH_HOST`       | string | -           | ❌       | Proxmox node hostname/IP for SSH snippet writing (defaults to `PROXMOX_API_URL` host if not set). Required for cloud-init snippet writing via SSH. See [Proxmox SSH User Setup Guide](../guides/proxmox-ssh-user-setup.md) for details.                                                              |
+| `PROXMOX_SSH_USER`       | string | `obiente-cloud` | ❌       | SSH user for snippet writing. Defaults to `obiente-cloud` if not set. See [Proxmox SSH User Setup Guide](../guides/proxmox-ssh-user-setup.md) for setup instructions.                                                                                                                                                                                  |
+| `PROXMOX_SSH_KEY_PATH`   | string | -           | ❌       | Path to SSH private key file for snippet writing. Either this or `PROXMOX_SSH_KEY_DATA` must be set if using SSH method.                                                                                                                                                                                                                                  |
+| `PROXMOX_SSH_KEY_DATA`   | string | -           | ❌       | SSH private key content (alternative to `PROXMOX_SSH_KEY_PATH`). Supports both raw key data and base64-encoded keys. Useful when using secrets managers. Either this or `PROXMOX_SSH_KEY_PATH` must be set if using SSH method.                                                                                                                                                                              |
 | `SSH_PROXY_PORT`         | number | `2222`      | ❌       | SSH proxy port for VPS access                                                                                                                                                                                                                                                                                                                           |
 | `VPS_GATEWAY_API_SECRET` | string | -           | ❌       | Shared secret for authenticating with vps-gateway service. Must match `GATEWAY_API_SECRET` configured in vps-gateway. Required when using gateway service.                                                                                                                                                                                              |
 | `VPS_GATEWAY_URL`        | string | -           | ❌       | Gateway gRPC server URL (e.g., `http://gateway-public-ip:1537`). API instances connect to this URL to communicate with the gateway. Port 1537 = OCG (Obiente Cloud Gateway).                                                                                                                                                                            |
@@ -499,6 +503,14 @@ PROXMOX_STORAGE_POOL=local-zfs
 
 # Optional: VLAN tag for network isolation (recommended for security)
 PROXMOX_VLAN_ID=100
+
+# Optional: SSH configuration for cloud-init snippet writing
+# See docs/guides/proxmox-ssh-user-setup.md for detailed setup instructions
+PROXMOX_SSH_HOST=proxmox.example.com
+PROXMOX_SSH_USER=obiente-cloud
+PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
+# Or use key data from secrets manager:
+# PROXMOX_SSH_KEY_DATA="-----BEGIN OPENSSH PRIVATE KEY-----\n..."
 ```
 
 **Note:** The storage pool specified in `PROXMOX_STORAGE_POOL` must exist in your Proxmox installation and support VM disk images. Common values are `local-lvm` (default), `local`, `local-zfs`, or custom storage pools. If the storage pool doesn't exist, VPS creation will fail with a clear error message listing available storage pools. See the [VPS Configuration Guide](../guides/vps-configuration.md#storage-configuration) for details on checking available storage pools.
@@ -518,6 +530,7 @@ The API token must have the following permissions to create and manage VMs:
 - `VM.Monitor` - Monitor VM status and metrics
 - `Datastore.Allocate` - Allocate storage for VMs
 - `Datastore.AllocateSpace` - Allocate disk space
+- `Datastore.AllocateTemplate` - Upload cloud-init snippets and templates (required for user management and cloud-init configuration)
 
 See the [VPS Provisioning Guide](../guides/vps-provisioning.md#3-configure-api-token-permissions) for detailed permission setup instructions.
 

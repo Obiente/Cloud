@@ -36,6 +36,7 @@ PROXMOX_TOKEN_SECRET=your-token-secret
 - **VM.Monitor** - Monitor VM status and metrics
 - **Datastore.Allocate** - Allocate storage for VMs
 - **Datastore.AllocateSpace** - Allocate disk space
+- **Datastore.AllocateTemplate** - Upload cloud-init snippets and templates (required for user management and cloud-init configuration)
 
 See the [VPS Provisioning Guide](./vps-provisioning.md#3-configure-api-token-permissions) for detailed permission setup instructions.
 

@@ -85,6 +85,7 @@ The API token requires specific permissions to create and manage VMs. After crea
 - **VM.Monitor** - Monitor VM status and metrics
 - **Datastore.Allocate** - Allocate storage for VMs
 - **Datastore.AllocateSpace** - Allocate disk space
+- **Datastore.AllocateTemplate** - Upload cloud-init snippets and templates (required for user management and cloud-init configuration)
 - **Sys.Audit** - Read system information (optional, for node listing)
 
 **Quick Setup (Full Access):**
