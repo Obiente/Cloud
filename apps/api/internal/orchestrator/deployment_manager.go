@@ -1811,6 +1811,20 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	logger.Info("[DeploymentManager] Created Swarm service %s (ID: %s)", swarmServiceName, serviceID)
 	logger.Info("[DeploymentManager] Service image: %s, start command: %v", config.Image, config.StartCommand)
 
+	// Verify the service exists immediately (before rollback can remove it)
+	verifyArgs := []string{"service", "inspect", swarmServiceName, "--format", "{{.ID}}"}
+	verifyCmd := exec.CommandContext(ctx, "docker", verifyArgs...)
+	var verifyStderr bytes.Buffer
+	verifyCmd.Stderr = &verifyStderr
+	if err := verifyCmd.Run(); err != nil {
+		errorMsg := verifyStderr.String()
+		logger.Error("[DeploymentManager] Service %s was created (ID: %s) but cannot be found immediately - may have been rolled back", swarmServiceName, serviceID)
+		logger.Error("[DeploymentManager] Error details: %s", errorMsg)
+		logger.Error("[DeploymentManager] This usually means the task failed immediately and rollback removed the service")
+		logger.Error("[DeploymentManager] Check: Start command '%v', Health check port: %d", config.StartCommand, healthCheckPort)
+		return "", "", fmt.Errorf("service %s was created but immediately removed (likely rolled back due to immediate task failure). Start command: %v, Health check port: %d. Error: %s", swarmServiceName, config.StartCommand, healthCheckPort, errorMsg)
+	}
+
 	// Wait a moment for the service to create a task
 	time.Sleep(2 * time.Second)
 	
