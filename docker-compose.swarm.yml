@@ -215,6 +215,11 @@ services:
       - postgres
       - timescaledb
       - redis
+    ports:
+      - target: 2222
+        published: ${SSH_PROXY_PORT:-2222}
+        protocol: tcp
+        mode: ingress  # SSH proxy port (exposed directly, bypassing Traefik)
     deploy:
       mode: global # One instance per node for local Docker access
       update_config:
@@ -232,11 +237,6 @@ services:
         delay: 5s
         max_attempts: 3
         window: 120s
-      ports:
-        - target: 2222
-          published: ${SSH_PROXY_PORT:-2222}
-          protocol: tcp
-          mode: ingress  # SSH proxy port (exposed directly, bypassing Traefik)
       resources:
         limits:
           cpus: "2"
