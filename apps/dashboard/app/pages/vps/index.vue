@@ -143,6 +143,7 @@
   import ErrorAlert from "~/components/ErrorAlert.vue";
   import VPSCard from "~/components/vps/VPSCard.vue";
   import CreateVPSDialog from "~/components/vps/CreateVPSDialog.vue";
+  import OuiSpinner from "~/components/oui/Spinner.vue";
 
   definePageMeta({
     layout: "default",

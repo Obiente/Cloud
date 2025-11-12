@@ -682,24 +682,22 @@
                     <OuiText color="secondary" size="sm">
                       Paste your SSH public key below. This key will be added to all VPS instances in your organization.
                     </OuiText>
-                    <OuiFormField label="Key Name" required>
-                      <OuiInput
-                        v-model="newSSHKeyName"
-                        placeholder="e.g., My Laptop, Work Computer"
-                        :disabled="addingSSHKey"
-                      />
-                    </OuiFormField>
-                    <OuiFormField label="Public Key" required>
-                      <OuiTextarea
-                        v-model="newSSHKeyValue"
-                        placeholder="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ..."
-                        :rows="4"
-                        :disabled="addingSSHKey"
-                      />
-                      <OuiText size="xs" color="secondary" class="mt-1">
-                        Paste your SSH public key (usually from ~/.ssh/id_rsa.pub or ~/.ssh/id_ed25519.pub)
-                      </OuiText>
-                    </OuiFormField>
+                    <OuiInput
+                      v-model="newSSHKeyName"
+                      label="Key Name"
+                      required
+                      placeholder="e.g., My Laptop, Work Computer"
+                      :disabled="addingSSHKey"
+                    />
+                    <OuiTextarea
+                      v-model="newSSHKeyValue"
+                      label="Public Key"
+                      required
+                      placeholder="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ..."
+                      :rows="4"
+                      :disabled="addingSSHKey"
+                      helper-text="Paste your SSH public key (usually from ~/.ssh/id_rsa.pub or ~/.ssh/id_ed25519.pub)"
+                    />
                     <div v-if="addSSHKeyError" class="mt-2">
                       <OuiText size="sm" color="danger">{{ addSSHKeyError }}</OuiText>
                     </div>
@@ -774,8 +772,9 @@ import ResourceHeader from "~/components/resource/ResourceHeader.vue";
 import ResourceStatusBadge from "~/components/resource/ResourceStatusBadge.vue";
 import ResourceDetailsGrid from "~/components/resource/ResourceDetailsGrid.vue";
 import ResourceDetailCard from "~/components/resource/ResourceDetailCard.vue";
+import ResourceTabs from "~/components/resource/ResourceTabs.vue";
+import OuiSpinner from "~/components/oui/Spinner.vue";
 import type { TabItem } from "~/components/oui/Tabs.vue";
-import { useTabQuery } from "~/composables/useTabQuery";
 import { date } from "@obiente/proto/utils";
 import { formatDate } from "~/utils/common";
 

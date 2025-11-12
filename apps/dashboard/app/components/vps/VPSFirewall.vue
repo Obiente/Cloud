@@ -295,6 +295,7 @@ import { useConnectClient } from "~/lib/connect-client";
 import { useToast } from "~/composables/useToast";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { useDialog } from "~/composables/useDialog";
+import OuiSpinner from "~/components/oui/Spinner.vue";
 
 interface Props {
   vpsId: string;
