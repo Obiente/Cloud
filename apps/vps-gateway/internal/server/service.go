@@ -153,7 +153,7 @@ func (s *GatewayService) ProxySSH(
 	// Map to track client pipes by connection ID
 	clientPipes := make(map[string]net.Conn)
 	var mu sync.Mutex
-	
+
 	var connectionID string
 	startTime := time.Now()
 
@@ -166,7 +166,7 @@ func (s *GatewayService) ProxySSH(
 			pipe.Close()
 		}
 		mu.Unlock()
-		
+
 		if connectionID != "" {
 			duration := time.Since(startTime).Seconds()
 			metrics.RecordSSHProxyConnectionDuration(connectionID, connectionID, duration)
@@ -205,7 +205,10 @@ func (s *GatewayService) ProxySSH(
 			// Start data forwarding goroutine BEFORE starting the proxy connection
 			// This ensures we're ready to receive data immediately when the VPS sends it
 			// Handle data forwarding from target to client (read from clientPipe, send to stream)
+			dataForwardReady := make(chan struct{})
 			go func(connID string, pipe net.Conn) {
+				close(dataForwardReady) // Signal that we're ready to read
+				logger.Debug("Data forwarding goroutine started for connection %s", connID)
 				buf := make([]byte, 4096)
 				for {
 					n, err := pipe.Read(buf)
@@ -216,6 +219,7 @@ func (s *GatewayService) ProxySSH(
 						return
 					}
 					if n > 0 {
+						logger.Debug("Forwarding %d bytes from VPS to client for connection %s", n, connID)
 						metrics.RecordSSHProxyBytes(connID, connID, "in", int64(n))
 						if sendErr := stream.Send(&vpsgatewayv1.ProxySSHResponse{
 							ConnectionId: connID,
@@ -228,6 +232,9 @@ func (s *GatewayService) ProxySSH(
 					}
 				}
 			}(connectionID, clientPipe)
+			
+			// Wait for data forwarding goroutine to be ready before starting proxy
+			<-dataForwardReady
 
 			// Start proxying in goroutine
 			go func() {
@@ -245,7 +252,7 @@ func (s *GatewayService) ProxySSH(
 						Type:         "closed",
 					})
 				}
-				
+
 				// Clean up pipe when connection closes
 				mu.Lock()
 				if pipe, exists := clientPipes[connectionID]; exists {
@@ -286,6 +293,7 @@ func (s *GatewayService) ProxySSH(
 			}
 			
 			if len(req.Data) > 0 {
+				logger.Debug("Forwarding %d bytes from client to VPS for connection %s", len(req.Data), connectionID)
 				metrics.RecordSSHProxyBytes(connectionID, connectionID, "out", int64(len(req.Data)))
 				// Set write deadline to prevent indefinite blocking
 				if err := clientPipe.SetWriteDeadline(time.Now().Add(30 * time.Second)); err != nil {
