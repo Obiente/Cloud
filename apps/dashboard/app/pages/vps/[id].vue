@@ -24,10 +24,10 @@
       <!-- Loading State -->
       <OuiCard v-else-if="pending">
         <OuiCardBody>
-          <div class="text-center py-16">
+          <OuiStack align="center" gap="md" class="py-16">
             <OuiSpinner size="lg" />
-            <OuiText color="secondary" class="mt-4">Loading VPS instance...</OuiText>
-          </div>
+            <OuiText color="secondary">Loading VPS instance...</OuiText>
+          </OuiStack>
         </OuiCardBody>
       </OuiCard>
 
@@ -389,18 +389,43 @@
                     </OuiCardBody>
                   </OuiCard>
 
-                  <!-- Firewall Management -->
-                  <VPSFirewall
-                    v-if="vps.instanceId"
-                    :vps-id="vpsId"
-                    :organization-id="orgId"
-                  />
                 </OuiStack>
               </template>
               <template #terminal>
                 <VPSXTermTerminal
                   :vps-id="vpsId"
                   :organization-id="orgId"
+                />
+              </template>
+              <template #firewall>
+                <VPSFirewall
+                  v-if="vps.instanceId"
+                  :vps-id="vpsId"
+                  :organization-id="orgId"
+                />
+                <OuiCard v-else variant="outline">
+                  <OuiCardBody>
+                    <OuiStack gap="md" align="center" class="py-8">
+                      <ShieldExclamationIcon class="h-12 w-12 text-secondary" />
+                      <OuiText color="secondary" size="sm">
+                        Firewall settings are only available after the VPS is provisioned.
+                      </OuiText>
+                    </OuiStack>
+                  </OuiCardBody>
+                </OuiCard>
+              </template>
+              <template #users>
+                <VPSUsersManagement
+                  :vps-id="vpsId"
+                  :organization-id="orgId"
+                  :vps="vps"
+                />
+              </template>
+              <template #cloud-init>
+                <VPSCloudInitSettings
+                  :vps-id="vpsId"
+                  :organization-id="orgId"
+                  :vps="vps"
                 />
               </template>
               <template #ssh-settings>
@@ -532,7 +557,144 @@
                       </OuiStack>
                     </OuiCardBody>
                   </OuiCard>
+
+                  <!-- Web Terminal Access -->
+                  <OuiCard>
+                    <OuiCardHeader>
+                      <OuiStack gap="xs">
+                        <OuiText as="h2" class="oui-card-title">Web Terminal Access</OuiText>
+                        <OuiText color="secondary" size="sm">
+                          Manage the SSH key used for web terminal access. This key is automatically generated and allows secure terminal access without passwords.
+                        </OuiText>
+                      </OuiStack>
+                    </OuiCardHeader>
+                    <OuiCardBody>
+                      <OuiStack gap="md">
+                        <OuiBox variant="info" p="sm" rounded="md">
+                          <OuiStack gap="xs">
+                            <OuiText size="xs" weight="semibold">About Web Terminal Keys</OuiText>
+                            <OuiText size="xs" color="secondary">
+                              Each VPS has a dedicated SSH key pair for web terminal access. The public key is automatically added to the root user via cloud-init. You can rotate or remove this key at any time.
+                            </OuiText>
+                          </OuiStack>
+                        </OuiBox>
+
+                        <div v-if="terminalKeyLoading" class="py-4">
+                          <OuiText color="secondary" class="text-center">Loading terminal key status...</OuiText>
+                        </div>
+                        <div v-else-if="terminalKeyError" class="py-4">
+                          <OuiText color="danger" class="text-center">
+                            Failed to load terminal key status: {{ terminalKeyError }}
+                          </OuiText>
+                        </div>
+                        <div v-else-if="terminalKey" class="space-y-3">
+                          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+                            <OuiStack gap="sm">
+                              <OuiFlex justify="between" align="start">
+                                <OuiStack gap="xs">
+                                  <OuiText size="sm" weight="semibold">Terminal Key Active</OuiText>
+                                  <OuiText size="xs" color="secondary" class="font-mono">
+                                    {{ terminalKey.fingerprint }}
+                                  </OuiText>
+                                  <OuiText size="xs" color="muted">
+                                    Created {{ formatSSHKeyDate(terminalKey.createdAt) }}
+                                  </OuiText>
+                                </OuiStack>
+                                <OuiBadge variant="success" size="sm">Active</OuiBadge>
+                              </OuiFlex>
+                            </OuiStack>
+                          </OuiBox>
+
+                          <OuiFlex gap="sm">
+                            <OuiButton
+                              variant="outline"
+                              color="primary"
+                              @click="rotateTerminalKey"
+                              :disabled="rotatingTerminalKey || removingTerminalKey || !vps.instanceId"
+                              class="flex-1"
+                            >
+                              <ArrowPathIcon class="h-4 w-4 mr-2" />
+                              {{ rotatingTerminalKey ? "Rotating..." : "Rotate Key" }}
+                            </OuiButton>
+                            <OuiButton
+                              variant="outline"
+                              color="danger"
+                              @click="openRemoveTerminalKeyDialog"
+                              :disabled="rotatingTerminalKey || removingTerminalKey || !vps.instanceId"
+                              class="flex-1"
+                            >
+                              <TrashIcon class="h-4 w-4 mr-2" />
+                              {{ removingTerminalKey ? "Removing..." : "Remove Key" }}
+                            </OuiButton>
+                          </OuiFlex>
+
+                          <OuiText size="xs" color="secondary">
+                            Rotating the key generates a new key pair. Removing the key disables web terminal access until a new key is created (requires VPS reboot).
+                          </OuiText>
+                        </div>
+                        <div v-else class="py-4">
+                          <OuiStack gap="md">
+                            <OuiText color="secondary" class="text-center">
+                              No terminal key found. Web terminal access is not available.
+                            </OuiText>
+                            <OuiButton
+                              variant="outline"
+                              color="primary"
+                              @click="rotateTerminalKey"
+                              :disabled="rotatingTerminalKey || !vps.instanceId"
+                              class="self-center"
+                            >
+                              <KeyIcon class="h-4 w-4 mr-2" />
+                              {{ rotatingTerminalKey ? "Creating..." : "Create Terminal Key" }}
+                            </OuiButton>
+                          </OuiStack>
+                        </div>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
                 </OuiStack>
+
+                <!-- Remove Terminal Key Dialog -->
+                <OuiDialog
+                  v-model:open="removeTerminalKeyDialogOpen"
+                  title="Remove Terminal Key"
+                  description="This will disable web terminal access for this VPS. You can recreate the key later."
+                  size="md"
+                >
+                  <OuiStack gap="md">
+                    <OuiBox variant="warning" p="md" rounded="lg">
+                      <OuiStack gap="xs">
+                        <OuiText size="sm" weight="semibold" color="warning">
+                          ⚠️ Warning
+                        </OuiText>
+                        <OuiText size="xs" color="secondary">
+                          Removing the terminal key will disable web terminal access. The key will be removed from the VPS on the next reboot or when cloud-init is re-run.
+                        </OuiText>
+                        <OuiText size="xs" color="secondary">
+                          You can recreate the key at any time, but web terminal access will not work until the VPS is rebooted after recreating the key.
+                        </OuiText>
+                      </OuiStack>
+                    </OuiBox>
+
+                    <OuiFlex justify="end" gap="sm">
+                      <OuiButton
+                        variant="ghost"
+                        @click="removeTerminalKeyDialogOpen = false"
+                        :disabled="removingTerminalKey"
+                      >
+                        Cancel
+                      </OuiButton>
+                      <OuiButton
+                        variant="solid"
+                        color="danger"
+                        @click="removeTerminalKey"
+                        :disabled="removingTerminalKey"
+                      >
+                        {{ removingTerminalKey ? "Removing..." : "Remove Key" }}
+                      </OuiButton>
+                    </OuiFlex>
+                  </OuiStack>
+                </OuiDialog>
 
                 <!-- Reset Password Dialog -->
                 <OuiDialog
@@ -613,17 +775,30 @@
                       >
                         {{ resettingPassword ? "Resetting..." : "Reset Password" }}
                       </OuiButton>
-                      <OuiButton
-                        v-else
-                        color="primary"
-                        @click="() => {
-                          resetPasswordDialogOpen = false;
-                          newPassword = null;
-                          resetPasswordMessage = null;
-                        }"
-                      >
-                        I've Saved the Password
-                      </OuiButton>
+                      <template v-else>
+                        <OuiButton
+                          v-if="!passwordRebooted"
+                          variant="outline"
+                          color="primary"
+                          @click="handleRebootFromDialog"
+                          :disabled="isActioning || !vps.instanceId"
+                          class="gap-2"
+                        >
+                          <ArrowPathIcon class="h-4 w-4" />
+                          {{ isActioning ? "Rebooting..." : "Reboot VPS" }}
+                        </OuiButton>
+                        <OuiButton
+                          color="primary"
+                          @click="() => {
+                            resetPasswordDialogOpen = false;
+                            newPassword = null;
+                            resetPasswordMessage = null;
+                            passwordRebooted = false;
+                          }"
+                        >
+                          I've Saved the Password
+                        </OuiButton>
+                      </template>
                     </OuiFlex>
                   </template>
                 </OuiDialog>
@@ -754,8 +929,14 @@ import {
   CpuChipIcon,
   CircleStackIcon,
   CubeIcon,
+  ShieldExclamationIcon,
+  UserIcon,
+  CogIcon,
+  PlusIcon,
+  CheckIcon,
+  XMarkIcon,
 } from "@heroicons/vue/24/outline";
-import { VPSService, VPSStatus, VPSImage, type VPSInstance } from "@obiente/proto";
+import { VPSService, VPSConfigService, VPSStatus, VPSImage, type VPSInstance } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useToast } from "~/composables/useToast";
 import { useOrganizationsStore } from "~/stores/organizations";
@@ -766,6 +947,8 @@ import OuiDate from "~/components/oui/Date.vue";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 import VPSFirewall from "~/components/vps/VPSFirewall.vue";
 import VPSXTermTerminal from "~/components/vps/VPSXTermTerminal.vue";
+import VPSUsersManagement from "~/components/vps/VPSUsersManagement.vue";
+import VPSCloudInitSettings from "~/components/vps/VPSCloudInitSettings.vue";
 import AuditLogs from "~/components/audit/AuditLogs.vue";
 import ErrorAlert from "~/components/ErrorAlert.vue";
 import ResourceHeader from "~/components/resource/ResourceHeader.vue";
@@ -793,6 +976,7 @@ const vpsId = computed(() => String(route.params.id));
 const orgId = computed(() => orgsStore.currentOrgId || "");
 
 const client = useConnectClient(VPSService);
+const configClient = useConnectClient(VPSConfigService);
 const accessError = ref<Error | null>(null);
 const isActioning = ref(false);
 const isRefreshing = ref(false);
@@ -923,11 +1107,66 @@ const editingSSHKeyName = ref("");
 const editingSSHKeyId = ref<string | null>(null);
 const editingSSHKeyError = ref("");
 
+// Terminal key management
+const terminalKey = ref<{ fingerprint: string; createdAt: { seconds: number | bigint; nanos: number } } | null>(null);
+const terminalKeyLoading = ref(false);
+const terminalKeyError = ref<string | null>(null);
+const rotatingTerminalKey = ref(false);
+const removingTerminalKey = ref(false);
+const removeTerminalKeyDialogOpen = ref(false);
+
 // Password Reset
 const resetPasswordDialogOpen = ref(false);
 const resettingPassword = ref(false);
 const newPassword = ref<string | null>(null);
 const resetPasswordMessage = ref<string | null>(null);
+const passwordRebooted = ref(false);
+
+// Terminal key functions
+// Note: We don't have a GetTerminalKey endpoint yet, so we infer key existence
+// from VPS status. If VPS is provisioned, assume key might exist.
+// Users can try to rotate/remove, and we'll handle errors appropriately.
+const fetchTerminalKey = async () => {
+  if (!orgId.value || !vpsId.value || !vps.value?.instanceId) {
+    terminalKey.value = null;
+    terminalKeyLoading.value = false;
+    return;
+  }
+
+  terminalKeyLoading.value = true;
+  terminalKeyError.value = null;
+  try {
+    // For now, assume key exists if VPS is provisioned
+    // In the future, we can add a GetTerminalKey endpoint for accurate status
+    // For MVP, we'll show "unknown" state and let users interact
+    // The rotate/remove actions will provide feedback on actual key status
+    // For now, show placeholder - actual key info will be updated after rotate/remove actions
+    // Use VPS creation date as placeholder
+    const createdAt = vps.value.createdAt 
+      ? (typeof vps.value.createdAt === 'object' && 'seconds' in vps.value.createdAt
+          ? vps.value.createdAt
+          : date(vps.value.createdAt))
+      : { seconds: Math.floor(Date.now() / 1000), nanos: 0 };
+    
+    terminalKey.value = {
+      fingerprint: "Unknown",
+      createdAt: createdAt as { seconds: number | bigint; nanos: number },
+    };
+    terminalKeyLoading.value = false;
+  } catch (err: any) {
+    terminalKeyError.value = err.message || "Failed to load terminal key status";
+    terminalKeyLoading.value = false;
+  }
+};
+
+// Fetch terminal key when VPS is loaded
+watch(() => vps.value?.instanceId, async (instanceId) => {
+  if (instanceId) {
+    await fetchTerminalKey();
+  } else {
+    terminalKey.value = null;
+  }
+}, { immediate: true });
 
 const fetchSSHKeys = async () => {
   if (!orgId.value) {
@@ -1127,6 +1366,86 @@ const openResetPasswordDialog = () => {
   resetPasswordDialogOpen.value = true;
   newPassword.value = null;
   resetPasswordMessage.value = null;
+  passwordRebooted.value = false;
+};
+
+const rotateTerminalKey = async () => {
+  if (!orgId.value || !vpsId.value) {
+    return;
+  }
+
+  rotatingTerminalKey.value = true;
+  try {
+    const response = await configClient.rotateTerminalKey({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+    
+    toast.success("Terminal key rotated successfully. The new key will take effect after reboot.");
+    
+    // Update terminal key info
+    const now = Math.floor(Date.now() / 1000);
+    terminalKey.value = {
+      fingerprint: response.fingerprint,
+      createdAt: { seconds: now, nanos: 0 },
+    };
+    
+    // Refresh VPS to ensure UI is up to date
+    await refreshVPS();
+  } catch (err: any) {
+    if (err instanceof ConnectError) {
+      if (err.code === Code.NotFound) {
+        // Key doesn't exist - this shouldn't happen with rotate, but handle it
+        toast.error("Terminal key not found. The key may need to be created first.");
+        terminalKey.value = null;
+      } else {
+        toast.error(`Failed to rotate terminal key: ${err.message}`);
+      }
+    } else {
+      toast.error(`Failed to rotate terminal key: ${err.message || "Unknown error"}`);
+    }
+  } finally {
+    rotatingTerminalKey.value = false;
+  }
+};
+
+const openRemoveTerminalKeyDialog = () => {
+  removeTerminalKeyDialogOpen.value = true;
+};
+
+const removeTerminalKey = async () => {
+  if (!orgId.value || !vpsId.value) {
+    return;
+  }
+
+  removingTerminalKey.value = true;
+  try {
+    await configClient.removeTerminalKey({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+    
+    toast.success("Terminal key removed. Web terminal access will be disabled after reboot.");
+    
+    // Clear terminal key info
+    terminalKey.value = null;
+    removeTerminalKeyDialogOpen.value = false;
+    
+    // Refresh VPS to ensure UI is up to date
+    await refreshVPS();
+  } catch (err: any) {
+    if (err instanceof ConnectError) {
+      if (err.code === Code.NotFound) {
+        toast.error("Terminal key not found.");
+      } else {
+        toast.error(`Failed to remove terminal key: ${err.message}`);
+      }
+    } else {
+      toast.error(`Failed to remove terminal key: ${err.message || "Unknown error"}`);
+    }
+  } finally {
+    removingTerminalKey.value = false;
+  }
 };
 
 const handleResetPassword = async () => {
@@ -1345,13 +1664,32 @@ async function handleReboot() {
   });
   if (!confirmed) return;
 
+  await performReboot();
+}
+
+async function handleRebootFromDialog() {
+  // Reboot without confirmation (user already confirmed by resetting password)
+  // Don't close dialog or clear password - user needs to confirm they saved it
+  await performReboot();
+  // Mark as rebooted so we can hide the reboot button
+  passwordRebooted.value = true;
+}
+
+async function performReboot() {
+  if (!vps.value) return;
+
   isActioning.value = true;
   try {
     await client.rebootVPS({
       organizationId: orgId.value,
       vpsId: vpsId.value,
     });
-    toast.success("VPS instance rebooting", "The VPS instance is rebooting.");
+    // Only show password-related message if we're in the password reset flow
+    if (newPassword.value) {
+      toast.success("VPS instance rebooting", "The VPS instance is rebooting. The new password will be active after reboot.");
+    } else {
+      toast.success("VPS instance rebooting");
+    }
     await refreshVPS();
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
@@ -1380,7 +1718,8 @@ async function handleDelete() {
       force: false,
     });
     toast.success("VPS instance deleted", "The VPS instance has been deleted.");
-    router.push("/vps");
+    // Redirect immediately to prevent any refetch attempts
+    await router.push("/vps");
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     toast.error("Failed to delete VPS", message);
@@ -1392,6 +1731,9 @@ async function handleDelete() {
 const tabs = computed<TabItem[]>(() => [
   { id: "overview", label: "Overview", icon: InformationCircleIcon },
   { id: "terminal", label: "Terminal", icon: CommandLineIcon },
+  { id: "firewall", label: "Firewall", icon: ShieldExclamationIcon },
+  { id: "users", label: "Users", icon: UserIcon },
+  { id: "cloud-init", label: "Cloud-Init", icon: CogIcon },
   { id: "ssh-settings", label: "SSH Settings", icon: KeyIcon },
   { id: "audit-logs", label: "Audit Logs", icon: ClipboardDocumentListIcon },
 ]);
