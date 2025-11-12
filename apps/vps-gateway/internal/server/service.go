@@ -202,6 +202,33 @@ func (s *GatewayService) ProxySSH(
 			clientPipes[connectionID] = clientPipe
 			mu.Unlock()
 
+			// Start data forwarding goroutine BEFORE starting the proxy connection
+			// This ensures we're ready to receive data immediately when the VPS sends it
+			// Handle data forwarding from target to client (read from clientPipe, send to stream)
+			go func(connID string, pipe net.Conn) {
+				buf := make([]byte, 4096)
+				for {
+					n, err := pipe.Read(buf)
+					if err != nil {
+						if err != io.EOF {
+							logger.Debug("Error reading from client pipe for connection %s: %v", connID, err)
+						}
+						return
+					}
+					if n > 0 {
+						metrics.RecordSSHProxyBytes(connID, connID, "in", int64(n))
+						if sendErr := stream.Send(&vpsgatewayv1.ProxySSHResponse{
+							ConnectionId: connID,
+							Type:         "data",
+							Data:         buf[:n],
+						}); sendErr != nil {
+							logger.Error("Failed to send data to stream for connection %s: %v", connID, sendErr)
+							return
+						}
+					}
+				}
+			}(connectionID, clientPipe)
+
 			// Start proxying in goroutine
 			go func() {
 				err := s.sshProxy.ProxyConnection(ctx, connectionID, target, port, serverPipe)
@@ -228,7 +255,8 @@ func (s *GatewayService) ProxySSH(
 				mu.Unlock()
 			}()
 
-			// Send connected response
+			// Send connected response AFTER starting the data forwarding goroutine
+			// This ensures we're ready to receive data immediately
 			if err := stream.Send(&vpsgatewayv1.ProxySSHResponse{
 				ConnectionId: connectionID,
 				Type:         "connected",
@@ -240,31 +268,6 @@ func (s *GatewayService) ProxySSH(
 			metrics.RecordSSHProxyConnection(connectionID, connectionID)
 			metrics.SetSSHProxyConnectionsActive(1)
 
-			// Handle data forwarding from target to client (read from clientPipe, send to stream)
-			go func(connID string, pipe net.Conn) {
-				buf := make([]byte, 4096)
-				for {
-					n, err := pipe.Read(buf)
-					if err != nil {
-						if err != io.EOF {
-							logger.Debug("Error reading from client pipe for connection %s: %v", connID, err)
-						}
-						return
-					}
-					if n > 0 {
-						metrics.RecordSSHProxyBytes(connID, connID, "in", int64(n))
-						if sendErr := stream.Send(&vpsgatewayv1.ProxySSHResponse{
-							ConnectionId: connID,
-							Type:         "data",
-							Data:         buf[:n],
-						}); sendErr != nil {
-							logger.Error("Failed to send data to stream for connection %s: %v", connID, sendErr)
-							return
-						}
-					}
-				}
-			}(connectionID, clientPipe)
-
 		case "data":
 			// Forward data from client to target (write to clientPipe)
 			mu.Lock()
@@ -272,19 +275,37 @@ func (s *GatewayService) ProxySSH(
 			mu.Unlock()
 			
 			if !exists {
-				logger.Warn("Received data for unknown connection %s", connectionID)
+				logger.Warn("Received data for unknown connection %s (connection may have been closed)", connectionID)
+				// Send error response
+				stream.Send(&vpsgatewayv1.ProxySSHResponse{
+					ConnectionId: connectionID,
+					Type:         "error",
+					Error:        "connection not found",
+				})
 				continue
 			}
 			
 			if len(req.Data) > 0 {
 				metrics.RecordSSHProxyBytes(connectionID, connectionID, "out", int64(len(req.Data)))
+				// Set write deadline to prevent indefinite blocking
+				if err := clientPipe.SetWriteDeadline(time.Now().Add(30 * time.Second)); err != nil {
+					logger.Debug("Failed to set write deadline for connection %s: %v", connectionID, err)
+				}
 				if _, err := clientPipe.Write(req.Data); err != nil {
 					logger.Error("Failed to write data to client pipe for connection %s: %v", connectionID, err)
-					// Remove pipe from map on error
+					// Remove pipe from map on error and send error response
 					mu.Lock()
 					delete(clientPipes, connectionID)
 					mu.Unlock()
 					clientPipe.Close()
+					stream.Send(&vpsgatewayv1.ProxySSHResponse{
+						ConnectionId: connectionID,
+						Type:         "error",
+						Error:        fmt.Sprintf("failed to write data: %v", err),
+					})
+				} else {
+					// Clear write deadline on success
+					clientPipe.SetWriteDeadline(time.Time{})
 				}
 			}
 
