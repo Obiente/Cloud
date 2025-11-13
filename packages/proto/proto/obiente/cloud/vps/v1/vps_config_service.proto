@@ -5,6 +5,7 @@ package obiente.cloud.vps.v1;
 option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1;vpsv1";
 
 import "obiente/cloud/vps/v1/vps_service.proto";
+import "google/protobuf/timestamp.proto";
 
 // VPSConfigService provides endpoints for managing VPS configuration
 // including cloud-init settings and user management
@@ -38,6 +39,15 @@ service VPSConfigService {
   
   // Remove the web terminal SSH key for a VPS instance
   rpc RemoveTerminalKey(RemoveTerminalKeyRequest) returns (RemoveTerminalKeyResponse);
+  
+  // Get the web terminal SSH key status for a VPS instance
+  rpc GetTerminalKey(GetTerminalKeyRequest) returns (GetTerminalKeyResponse);
+  
+  // Rotate the bastion SSH key for a VPS instance
+  rpc RotateBastionKey(RotateBastionKeyRequest) returns (RotateBastionKeyResponse);
+  
+  // Get the bastion SSH key status for a VPS instance
+  rpc GetBastionKey(GetBastionKeyRequest) returns (GetBastionKeyResponse);
 }
 
 // GetCloudInitConfigRequest requests the cloud-init configuration for a VPS
@@ -190,5 +200,43 @@ message RemoveTerminalKeyRequest {
 // RemoveTerminalKeyResponse confirms the key removal
 message RemoveTerminalKeyResponse {
   string message = 1; // Information about when the key will be removed
+}
+
+// GetTerminalKeyRequest gets the web terminal SSH key status
+message GetTerminalKeyRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+// GetTerminalKeyResponse returns the terminal key status
+message GetTerminalKeyResponse {
+  string fingerprint = 1; // Fingerprint of the key
+  google.protobuf.Timestamp created_at = 2; // Timestamp when the key was created
+  google.protobuf.Timestamp updated_at = 3; // Timestamp when the key was last updated
+}
+
+// RotateBastionKeyRequest rotates the bastion SSH key
+message RotateBastionKeyRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+// RotateBastionKeyResponse confirms the key rotation
+message RotateBastionKeyResponse {
+  string fingerprint = 1; // Fingerprint of the new key
+  string message = 2; // Information about when the new key will take effect
+}
+
+// GetBastionKeyRequest gets the bastion SSH key status
+message GetBastionKeyRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+// GetBastionKeyResponse returns the bastion key status
+message GetBastionKeyResponse {
+  string fingerprint = 1; // Fingerprint of the key
+  google.protobuf.Timestamp created_at = 2; // Timestamp when the key was created
+  google.protobuf.Timestamp updated_at = 3; // Timestamp when the key was last updated
 }
 
