@@ -276,14 +276,26 @@
                               IPv4 Addresses
                             </OuiText>
                             <OuiStack gap="xs">
-                              <OuiText
+                              <OuiBox
                                 v-for="(ip, idx) in vps.ipv4Addresses"
                                 :key="idx"
-                                size="sm"
-                                class="font-mono"
+                                p="sm"
+                                rounded="md"
+                                class="bg-surface-muted/40 ring-1 ring-border-muted"
                               >
-                                {{ ip }}
-                              </OuiText>
+                                <OuiFlex justify="between" align="center" gap="sm">
+                                  <OuiText size="sm" class="font-mono">{{ ip }}</OuiText>
+                                  <OuiButton
+                                    variant="ghost"
+                                    size="xs"
+                                    icon-only
+                                    @click="copyToClipboard(ip)"
+                                    title="Copy IP address"
+                                  >
+                                    <ClipboardDocumentListIcon class="h-3 w-3" />
+                                  </OuiButton>
+                                </OuiFlex>
+                              </OuiBox>
                             </OuiStack>
                           </div>
                           <div v-else>
@@ -294,14 +306,26 @@
                               IPv6 Addresses
                             </OuiText>
                             <OuiStack gap="xs">
-                              <OuiText
+                              <OuiBox
                                 v-for="(ip, idx) in vps.ipv6Addresses"
                                 :key="idx"
-                                size="sm"
-                                class="font-mono"
+                                p="sm"
+                                rounded="md"
+                                class="bg-surface-muted/40 ring-1 ring-border-muted"
                               >
-                                {{ ip }}
-                              </OuiText>
+                                <OuiFlex justify="between" align="center" gap="sm">
+                                  <OuiText size="sm" class="font-mono">{{ ip }}</OuiText>
+                                  <OuiButton
+                                    variant="ghost"
+                                    size="xs"
+                                    icon-only
+                                    @click="copyToClipboard(ip)"
+                                    title="Copy IP address"
+                                  >
+                                    <ClipboardDocumentListIcon class="h-3 w-3" />
+                                  </OuiButton>
+                                </OuiFlex>
+                              </OuiBox>
                             </OuiStack>
                           </div>
                           <div v-else>
@@ -315,74 +339,91 @@
                   <!-- Connection Information -->
                   <OuiCard v-if="vps.status === VPSStatus.RUNNING" variant="default">
                     <OuiCardHeader>
-                      <OuiText as="h2" class="oui-card-title">Connection Information</OuiText>
+                      <OuiStack gap="xs">
+                        <OuiText as="h2" class="oui-card-title">Connection Information</OuiText>
+                        <OuiText color="secondary" size="sm">
+                          Access your VPS instance using SSH or the web terminal (available in the Terminal tab)
+                        </OuiText>
+                      </OuiStack>
                     </OuiCardHeader>
                     <OuiCardBody>
                       <OuiStack gap="md">
-                        <OuiText color="secondary" size="sm">
-                          Access your VPS instance using one of the following methods:
-                        </OuiText>
                         <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
                           <OuiStack gap="sm">
-                            <OuiText size="sm" weight="semibold" color="primary">Web Terminal</OuiText>
+                            <OuiFlex align="center" gap="sm">
+                              <CommandLineIcon class="h-5 w-5 text-primary" />
+                              <OuiText size="sm" weight="semibold" color="primary">SSH Access</OuiText>
+                            </OuiFlex>
                             <OuiText size="sm" color="secondary">
-                              Use the built-in web terminal to access your VPS directly from the browser.
+                              Connect to your VPS via SSH using the SSH proxy. SSH key authentication is tried first, then password authentication.
+                            </OuiText>
+                            <div v-if="sshInfo" class="mt-2">
+                              <OuiStack gap="sm">
+                                <div>
+                                  <OuiText size="xs" weight="semibold" class="mb-1">SSH Command:</OuiText>
+                                  <OuiBox p="sm" rounded="md" class="bg-surface-muted font-mono text-xs overflow-x-auto">
+                                    <code>{{ sshInfo.sshProxyCommand }}</code>
+                                  </OuiBox>
+                                  <OuiButton
+                                    variant="ghost"
+                                    size="xs"
+                                    @click="copySSHCommand"
+                                    class="mt-2"
+                                  >
+                                    <ClipboardDocumentListIcon class="h-3 w-3 mr-1" />
+                                    Copy Command
+                                  </OuiButton>
+                                </div>
+                                <div v-if="sshInfo.connectionInstructions">
+                                  <OuiText size="xs" weight="semibold" class="mb-2">Full Connection Instructions:</OuiText>
+                                  <OuiBox p="sm" rounded="md" class="bg-surface-muted font-mono text-xs whitespace-pre-wrap overflow-x-auto">
+                                    <code>{{ sshInfo.connectionInstructions }}</code>
+                                  </OuiBox>
+                                  <OuiButton
+                                    variant="ghost"
+                                    size="xs"
+                                    @click="copyConnectionInstructions"
+                                    class="mt-2"
+                                  >
+                                    <ClipboardDocumentListIcon class="h-3 w-3 mr-1" />
+                                    Copy Instructions
+                                  </OuiButton>
+                                </div>
+                              </OuiStack>
+                            </div>
+                            <div v-else-if="sshInfoLoading" class="mt-2">
+                              <OuiStack align="center" gap="sm">
+                                <OuiSpinner size="sm" />
+                                <OuiText size="xs" color="secondary">Loading SSH connection info...</OuiText>
+                              </OuiStack>
+                            </div>
+                            <div v-else-if="sshInfoError" class="mt-2">
+                              <OuiBox variant="danger" p="sm" rounded="md">
+                                <OuiText size="xs" color="danger">
+                                  Failed to load SSH connection info. {{ sshInfoError }}
+                                </OuiText>
+                              </OuiBox>
+                            </div>
+                          </OuiStack>
+                        </OuiBox>
+                        <OuiBox p="md" rounded="lg" class="bg-primary/5 ring-1 ring-primary/20">
+                          <OuiStack gap="xs">
+                            <OuiFlex align="center" gap="sm">
+                              <CommandLineIcon class="h-5 w-5 text-primary" />
+                              <OuiText size="sm" weight="semibold" color="primary">Web Terminal</OuiText>
+                            </OuiFlex>
+                            <OuiText size="sm" color="secondary">
+                              Access your VPS directly from the browser using the built-in web terminal. Navigate to the <strong>Terminal</strong> tab to get started.
                             </OuiText>
                             <OuiButton
                               variant="outline"
                               size="sm"
                               @click="openTerminal"
-                              class="self-start gap-2"
+                              class="self-start gap-2 mt-1"
                             >
                               <CommandLineIcon class="h-4 w-4" />
-                              Open Terminal
+                              Go to Terminal Tab
                             </OuiButton>
-                          </OuiStack>
-                        </OuiBox>
-                        <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
-                          <OuiStack gap="sm">
-                            <OuiText size="sm" weight="semibold" color="primary">SSH Access</OuiText>
-                            <OuiText size="sm" color="secondary">
-                              Connect to your VPS via SSH using the SSH proxy. SSH key authentication is tried first, then password authentication.
-                            </OuiText>
-                            <div v-if="sshInfo" class="mt-2">
-                              <OuiText size="xs" weight="semibold" class="mb-1">SSH Command:</OuiText>
-                              <OuiBox p="sm" rounded="md" class="bg-surface-muted font-mono text-xs overflow-x-auto">
-                                <code>{{ sshInfo.sshProxyCommand }}</code>
-                              </OuiBox>
-                              <OuiButton
-                                variant="ghost"
-                                size="xs"
-                                @click="copySSHCommand"
-                                class="mt-2"
-                              >
-                                <ClipboardDocumentListIcon class="h-3 w-3 mr-1" />
-                                Copy Command
-                              </OuiButton>
-                              <div v-if="sshInfo.connectionInstructions" class="mt-4">
-                                <OuiText size="xs" weight="semibold" class="mb-2">Full Connection Instructions:</OuiText>
-                                <OuiBox p="sm" rounded="md" class="bg-surface-muted font-mono text-xs whitespace-pre-wrap overflow-x-auto">
-                                  <code>{{ sshInfo.connectionInstructions }}</code>
-                                </OuiBox>
-                                <OuiButton
-                                  variant="ghost"
-                                  size="xs"
-                                  @click="copyConnectionInstructions"
-                                  class="mt-2"
-                                >
-                                  <ClipboardDocumentListIcon class="h-3 w-3 mr-1" />
-                                  Copy Instructions
-                                </OuiButton>
-                              </div>
-                            </div>
-                            <div v-else-if="sshInfoLoading" class="mt-2">
-                              <OuiText size="xs" color="secondary">Loading SSH connection info...</OuiText>
-                            </div>
-                            <div v-else-if="sshInfoError" class="mt-2">
-                              <OuiText size="xs" color="danger">
-                                Failed to load SSH connection info. {{ sshInfoError }}
-                              </OuiText>
-                            </div>
                           </OuiStack>
                         </OuiBox>
                       </OuiStack>
@@ -558,13 +599,100 @@
                     </OuiCardBody>
                   </OuiCard>
 
-                  <!-- Web Terminal Access -->
+                  <!-- SSH Bastion Key -->
                   <OuiCard>
                     <OuiCardHeader>
                       <OuiStack gap="xs">
-                        <OuiText as="h2" class="oui-card-title">Web Terminal Access</OuiText>
+                        <OuiText as="h2" class="oui-card-title">SSH Bastion Key</OuiText>
                         <OuiText color="secondary" size="sm">
-                          Manage the SSH key used for web terminal access. This key is automatically generated and allows secure terminal access without passwords.
+                          Manage the SSH key used for SSH bastion host connections. This key is required for SSH access through the bastion host and is automatically generated.
+                        </OuiText>
+                      </OuiStack>
+                    </OuiCardHeader>
+                    <OuiCardBody>
+                      <OuiStack gap="md">
+                        <OuiBox variant="info" p="sm" rounded="md">
+                          <OuiStack gap="xs">
+                            <OuiText size="xs" weight="semibold">About Bastion Keys</OuiText>
+                            <OuiText size="xs" color="secondary">
+                              The bastion key is required for SSH proxy connections through the bastion host. The public key is automatically added to the root user via cloud-init. This key is essential for SSH access, so it cannot be removed.
+                            </OuiText>
+                          </OuiStack>
+                        </OuiBox>
+
+                        <div v-if="bastionKeyLoading" class="py-4">
+                          <OuiStack align="center" gap="sm">
+                            <OuiSpinner size="sm" />
+                            <OuiText color="secondary" size="sm">Loading bastion key status...</OuiText>
+                          </OuiStack>
+                        </div>
+                        <div v-else-if="bastionKeyError" class="py-4">
+                          <OuiBox variant="danger" p="sm" rounded="md">
+                            <OuiText color="danger" size="sm" class="text-center">
+                              Failed to load bastion key status: {{ bastionKeyError }}
+                            </OuiText>
+                          </OuiBox>
+                        </div>
+                        <div v-else-if="bastionKey" class="space-y-3">
+                          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+                            <OuiStack gap="sm">
+                              <OuiFlex justify="between" align="start">
+                                <OuiStack gap="xs">
+                                  <OuiText size="sm" weight="semibold">Bastion Key Active</OuiText>
+                                  <OuiText size="xs" color="secondary" class="font-mono">
+                                    {{ bastionKey.fingerprint }}
+                                  </OuiText>
+                                  <OuiText size="xs" color="muted">
+                                    Created {{ formatSSHKeyDate(bastionKey.createdAt) }}
+                                  </OuiText>
+                                </OuiStack>
+                                <OuiBadge variant="success" size="sm">Active</OuiBadge>
+                              </OuiFlex>
+                            </OuiStack>
+                          </OuiBox>
+
+                          <OuiButton
+                            variant="outline"
+                            color="primary"
+                            @click="rotateBastionKey"
+                            :disabled="rotatingBastionKey || !vps.instanceId"
+                            class="w-full"
+                          >
+                            <ArrowPathIcon class="h-4 w-4 mr-2" />
+                            {{ rotatingBastionKey ? "Rotating..." : "Rotate Key" }}
+                          </OuiButton>
+
+                          <OuiText size="xs" color="secondary">
+                            Rotating the key generates a new key pair. The new key will take effect after the VPS is rebooted or cloud-init is re-run.
+                          </OuiText>
+                        </div>
+                        <div v-else class="py-4">
+                          <OuiStack gap="md" align="center">
+                            <OuiText color="secondary" class="text-center">
+                              No bastion key found. SSH bastion access requires this key.
+                            </OuiText>
+                            <OuiButton
+                              variant="outline"
+                              color="primary"
+                              @click="rotateBastionKey"
+                              :disabled="rotatingBastionKey || !vps.instanceId"
+                            >
+                              <KeyIcon class="h-4 w-4 mr-2" />
+                              {{ rotatingBastionKey ? "Creating..." : "Create Bastion Key" }}
+                            </OuiButton>
+                          </OuiStack>
+                        </div>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+
+                  <!-- Web Terminal Key -->
+                  <OuiCard>
+                    <OuiCardHeader>
+                      <OuiStack gap="xs">
+                        <OuiText as="h2" class="oui-card-title">Web Terminal Key</OuiText>
+                        <OuiText color="secondary" size="sm">
+                          Manage the SSH key used for web terminal access. This key is optional and can be removed to disable web terminal access while keeping SSH bastion working.
                         </OuiText>
                       </OuiStack>
                     </OuiCardHeader>
@@ -574,18 +702,23 @@
                           <OuiStack gap="xs">
                             <OuiText size="xs" weight="semibold">About Web Terminal Keys</OuiText>
                             <OuiText size="xs" color="secondary">
-                              Each VPS has a dedicated SSH key pair for web terminal access. The public key is automatically added to the root user via cloud-init. You can rotate or remove this key at any time.
+                              The web terminal key enables browser-based terminal access to your VPS. The public key is automatically added to the root user via cloud-init. You can remove this key to disable web terminal access while keeping SSH bastion access working.
                             </OuiText>
                           </OuiStack>
                         </OuiBox>
 
                         <div v-if="terminalKeyLoading" class="py-4">
-                          <OuiText color="secondary" class="text-center">Loading terminal key status...</OuiText>
+                          <OuiStack align="center" gap="sm">
+                            <OuiSpinner size="sm" />
+                            <OuiText color="secondary" size="sm">Loading terminal key status...</OuiText>
+                          </OuiStack>
                         </div>
                         <div v-else-if="terminalKeyError" class="py-4">
-                          <OuiText color="danger" class="text-center">
-                            Failed to load terminal key status: {{ terminalKeyError }}
-                          </OuiText>
+                          <OuiBox variant="danger" p="sm" rounded="md">
+                            <OuiText color="danger" size="sm" class="text-center">
+                              Failed to load terminal key status: {{ terminalKeyError }}
+                            </OuiText>
+                          </OuiBox>
                         </div>
                         <div v-else-if="terminalKey" class="space-y-3">
                           <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
@@ -629,20 +762,19 @@
                           </OuiFlex>
 
                           <OuiText size="xs" color="secondary">
-                            Rotating the key generates a new key pair. Removing the key disables web terminal access until a new key is created (requires VPS reboot).
+                            Rotating the key generates a new key pair. Removing the key disables web terminal access. The new key will take effect after the VPS is rebooted or cloud-init is re-run.
                           </OuiText>
                         </div>
                         <div v-else class="py-4">
-                          <OuiStack gap="md">
+                          <OuiStack gap="md" align="center">
                             <OuiText color="secondary" class="text-center">
-                              No terminal key found. Web terminal access is not available.
+                              No terminal key found. Web terminal access is disabled. Create a key to enable it.
                             </OuiText>
                             <OuiButton
                               variant="outline"
                               color="primary"
                               @click="rotateTerminalKey"
                               :disabled="rotatingTerminalKey || !vps.instanceId"
-                              class="self-center"
                             >
                               <KeyIcon class="h-4 w-4 mr-2" />
                               {{ rotatingTerminalKey ? "Creating..." : "Create Terminal Key" }}
@@ -658,7 +790,7 @@
                 <OuiDialog
                   v-model:open="removeTerminalKeyDialogOpen"
                   title="Remove Terminal Key"
-                  description="This will disable web terminal access for this VPS. You can recreate the key later."
+                  description="This will disable web terminal access for this VPS."
                   size="md"
                 >
                   <OuiStack gap="md">
@@ -668,10 +800,10 @@
                           ⚠️ Warning
                         </OuiText>
                         <OuiText size="xs" color="secondary">
-                          Removing the terminal key will disable web terminal access. The key will be removed from the VPS on the next reboot or when cloud-init is re-run.
+                          Removing the terminal key will disable web terminal access. SSH bastion access will continue to work using the separate bastion key.
                         </OuiText>
                         <OuiText size="xs" color="secondary">
-                          You can recreate the key at any time, but web terminal access will not work until the VPS is rebooted after recreating the key.
+                          The key will be removed from the VPS on the next reboot or when cloud-init is re-run. You can recreate the key at any time to re-enable web terminal access.
                         </OuiText>
                       </OuiStack>
                     </OuiBox>
@@ -1108,12 +1240,18 @@ const editingSSHKeyId = ref<string | null>(null);
 const editingSSHKeyError = ref("");
 
 // Terminal key management
-const terminalKey = ref<{ fingerprint: string; createdAt: { seconds: number | bigint; nanos: number } } | null>(null);
+const terminalKey = ref<{ fingerprint: string; createdAt: { seconds: number | bigint; nanos: number }; updatedAt: { seconds: number | bigint; nanos: number } } | null>(null);
 const terminalKeyLoading = ref(false);
 const terminalKeyError = ref<string | null>(null);
 const rotatingTerminalKey = ref(false);
 const removingTerminalKey = ref(false);
 const removeTerminalKeyDialogOpen = ref(false);
+
+// Bastion key management
+const bastionKey = ref<{ fingerprint: string; createdAt: { seconds: number | bigint; nanos: number }; updatedAt: { seconds: number | bigint; nanos: number } } | null>(null);
+const bastionKeyLoading = ref(false);
+const bastionKeyError = ref<string | null>(null);
+const rotatingBastionKey = ref(false);
 
 // Password Reset
 const resetPasswordDialogOpen = ref(false);
@@ -1123,9 +1261,6 @@ const resetPasswordMessage = ref<string | null>(null);
 const passwordRebooted = ref(false);
 
 // Terminal key functions
-// Note: We don't have a GetTerminalKey endpoint yet, so we infer key existence
-// from VPS status. If VPS is provisioned, assume key might exist.
-// Users can try to rotate/remove, and we'll handle errors appropriately.
 const fetchTerminalKey = async () => {
   if (!orgId.value || !vpsId.value || !vps.value?.instanceId) {
     terminalKey.value = null;
@@ -1136,35 +1271,68 @@ const fetchTerminalKey = async () => {
   terminalKeyLoading.value = true;
   terminalKeyError.value = null;
   try {
-    // For now, assume key exists if VPS is provisioned
-    // In the future, we can add a GetTerminalKey endpoint for accurate status
-    // For MVP, we'll show "unknown" state and let users interact
-    // The rotate/remove actions will provide feedback on actual key status
-    // For now, show placeholder - actual key info will be updated after rotate/remove actions
-    // Use VPS creation date as placeholder
-    const createdAt = vps.value.createdAt 
-      ? (typeof vps.value.createdAt === 'object' && 'seconds' in vps.value.createdAt
-          ? vps.value.createdAt
-          : date(vps.value.createdAt))
-      : { seconds: Math.floor(Date.now() / 1000), nanos: 0 };
+    const res = await configClient.getTerminalKey({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
     
     terminalKey.value = {
-      fingerprint: "Unknown",
-      createdAt: createdAt as { seconds: number | bigint; nanos: number },
+      fingerprint: res.fingerprint,
+      createdAt: res.createdAt as { seconds: number | bigint; nanos: number },
+      updatedAt: res.updatedAt as { seconds: number | bigint; nanos: number },
     };
     terminalKeyLoading.value = false;
   } catch (err: any) {
-    terminalKeyError.value = err.message || "Failed to load terminal key status";
+    if (err instanceof ConnectError && err.code === Code.NotFound) {
+      // Key doesn't exist - this is fine, just set to null
+      terminalKey.value = null;
+    } else {
+      terminalKeyError.value = err instanceof Error ? err.message : "Failed to load terminal key status";
+    }
     terminalKeyLoading.value = false;
   }
 };
 
-// Fetch terminal key when VPS is loaded
+// Bastion key functions
+const fetchBastionKey = async () => {
+  if (!orgId.value || !vpsId.value || !vps.value?.instanceId) {
+    bastionKey.value = null;
+    bastionKeyLoading.value = false;
+    return;
+  }
+
+  bastionKeyLoading.value = true;
+  bastionKeyError.value = null;
+  try {
+    const res = await configClient.getBastionKey({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+    
+    bastionKey.value = {
+      fingerprint: res.fingerprint,
+      createdAt: res.createdAt as { seconds: number | bigint; nanos: number },
+      updatedAt: res.updatedAt as { seconds: number | bigint; nanos: number },
+    };
+    bastionKeyLoading.value = false;
+  } catch (err: any) {
+    if (err instanceof ConnectError && err.code === Code.NotFound) {
+      // Key doesn't exist - this is fine, just set to null
+      bastionKey.value = null;
+    } else {
+      bastionKeyError.value = err instanceof Error ? err.message : "Failed to load bastion key status";
+    }
+    bastionKeyLoading.value = false;
+  }
+};
+
+// Fetch both keys when VPS is loaded
 watch(() => vps.value?.instanceId, async (instanceId) => {
   if (instanceId) {
-    await fetchTerminalKey();
+    await Promise.all([fetchTerminalKey(), fetchBastionKey()]);
   } else {
     terminalKey.value = null;
+    bastionKey.value = null;
   }
 }, { immediate: true });
 
@@ -1383,12 +1551,8 @@ const rotateTerminalKey = async () => {
     
     toast.success("Terminal key rotated successfully. The new key will take effect after reboot.");
     
-    // Update terminal key info
-    const now = Math.floor(Date.now() / 1000);
-    terminalKey.value = {
-      fingerprint: response.fingerprint,
-      createdAt: { seconds: now, nanos: 0 },
-    };
+    // Refresh terminal key info
+    await fetchTerminalKey();
     
     // Refresh VPS to ensure UI is up to date
     await refreshVPS();
@@ -1406,6 +1570,41 @@ const rotateTerminalKey = async () => {
     }
   } finally {
     rotatingTerminalKey.value = false;
+  }
+};
+
+const rotateBastionKey = async () => {
+  if (!orgId.value || !vpsId.value) {
+    return;
+  }
+
+  rotatingBastionKey.value = true;
+  try {
+    const response = await configClient.rotateBastionKey({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+    
+    toast.success("Bastion key rotated successfully. The new key will take effect after reboot.");
+    
+    // Refresh bastion key info
+    await fetchBastionKey();
+    
+    // Refresh VPS to ensure UI is up to date
+    await refreshVPS();
+  } catch (err: any) {
+    if (err instanceof ConnectError) {
+      if (err.code === Code.NotFound) {
+        toast.error("Bastion key not found. The key may need to be created first.");
+        bastionKey.value = null;
+      } else {
+        toast.error(`Failed to rotate bastion key: ${err.message}`);
+      }
+    } else {
+      toast.error(`Failed to rotate bastion key: ${err.message || "Unknown error"}`);
+    }
+  } finally {
+    rotatingBastionKey.value = false;
   }
 };
 
@@ -1427,9 +1626,10 @@ const removeTerminalKey = async () => {
     
     toast.success("Terminal key removed. Web terminal access will be disabled after reboot.");
     
-    // Clear terminal key info
+    // Clear terminal key info and refresh
     terminalKey.value = null;
     removeTerminalKeyDialogOpen.value = false;
+    await fetchTerminalKey(); // Refresh to confirm removal
     
     // Refresh VPS to ensure UI is up to date
     await refreshVPS();
@@ -1483,6 +1683,15 @@ const copyNewPassword = async () => {
 watch(orgId, () => {
   fetchSSHKeys();
 }, { immediate: true });
+
+const copyToClipboard = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard");
+  } catch (err) {
+    toast.error("Failed to copy to clipboard");
+  }
+};
 
 const copySSHCommand = async () => {
   if (!sshInfo.value?.sshProxyCommand) return;
