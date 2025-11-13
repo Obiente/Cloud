@@ -1050,34 +1050,37 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		vmConfig["ipconfig0"] = "ip=dhcp"
 		vmConfig["ciuser"] = "root"
 		
-		// Root password: use custom if provided, otherwise generate
-		if config.RootPassword != nil && *config.RootPassword != "" {
-			rootPassword = *config.RootPassword
-			logger.Info("[ProxmoxClient] Using custom root password for VM %d (length: %d)", vmID, len(rootPassword))
-		} else {
-			rootPassword = GenerateRandomPassword(16) // Generate random root password
-			logger.Info("[ProxmoxClient] Generated root password for VM %d (length: %d)", vmID, len(rootPassword))
-		}
-		// Note: Root password is set in cloud-init userData snippet, not via cipassword
-		// The snippet contains the full cloud-init configuration including root password, SSH keys, guest agent, etc.
+	// Root password: use custom if provided, otherwise auto-generate
+	if config.RootPassword != nil && *config.RootPassword != "" {
+		rootPassword = *config.RootPassword
+		logger.Info("[ProxmoxClient] Using custom root password for VM %d (length: %d)", vmID, len(rootPassword))
+	} else {
+		// Auto-generate root password
+		rootPassword = GenerateRandomPassword(32)
+		logger.Info("[ProxmoxClient] Auto-generated root password for VM %d (length: %d)", vmID, len(rootPassword))
+		// Set it in config so it's included in cloud-init userData
+		config.RootPassword = &rootPassword
+	}
+	// Note: Root password is set in cloud-init userData snippet, not via cipassword
+	// The snippet contains the full cloud-init configuration including root password, SSH keys, guest agent, etc.
 
-		// Always generate cloud-init userData and create a snippet file
-		// This ensures guest agent, SSH server, and other essential services are properly configured
-		// The userData includes: SSH server installation, guest agent installation, root password, SSH keys, etc.
-		userData := GenerateCloudInitUserData(config)
-		if userData != "" {
-			// Create snippet file in Proxmox storage
-			snippetPath, err := pc.CreateCloudInitSnippet(ctx, nodeName, storage, vmID, userData)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create cloud-init snippet for VM %d: %w. Snippets are required to ensure guest agent and SSH are properly configured. Ensure SSH is configured (PROXMOX_SSH_USER, PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA) and the storage supports snippets. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for setup instructions", vmID, err)
-			}
-			// Use cicustom to reference the snippet
-			vmConfig["cicustom"] = snippetPath
-			logger.Info("[ProxmoxClient] Using cloud-init userData snippet for VM %d: %s", vmID, snippetPath)
-			// Don't set cipassword or sshkeys in vmConfig when using snippets (they're in the userData)
-		} else {
-			return nil, fmt.Errorf("failed to generate cloud-init userData for VM %d", vmID)
+	// Always generate cloud-init userData and create a snippet file
+	// This ensures guest agent, SSH server, and other essential services are properly configured
+	// The userData includes: SSH server installation, guest agent installation, root password, SSH keys, etc.
+	userData := GenerateCloudInitUserData(config)
+	if userData != "" {
+		// Create snippet file in Proxmox storage
+		snippetPath, err := pc.CreateCloudInitSnippet(ctx, nodeName, storage, vmID, userData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cloud-init snippet for VM %d: %w. Snippets are required to ensure guest agent and SSH are properly configured. Ensure SSH is configured (PROXMOX_SSH_USER, PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA) and the storage supports snippets. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for setup instructions", vmID, err)
 		}
+		// Use cicustom to reference the snippet
+		vmConfig["cicustom"] = snippetPath
+		logger.Info("[ProxmoxClient] Using cloud-init userData snippet for VM %d: %s", vmID, snippetPath)
+		// Don't set cipassword or sshkeys in vmConfig when using snippets (they're in the userData)
+	} else {
+		return nil, fmt.Errorf("failed to generate cloud-init userData for VM %d", vmID)
+	}
 	}
 
 	// Create or update VM
@@ -1839,9 +1842,10 @@ func generateCloudInitUserData(config *VPSConfig) string {
 	}
 	userData += "\n"
 	
-	// Write files
+	// Write files (user's custom files)
 	if config.CloudInit != nil && len(config.CloudInit.WriteFiles) > 0 {
 		userData += "write_files:\n"
+		
 		for _, file := range config.CloudInit.WriteFiles {
 			userData += fmt.Sprintf("  - path: %s\n", file.Path)
 			userData += "    content: |\n"

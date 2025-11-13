@@ -310,7 +310,10 @@ func (c *gatewayTCPConnection) Write(b []byte) (n int, err error) {
 	}
 	
 	if err := c.stream.Send(req); err != nil {
-		return 0, err
+		logger.Debug("[VPSGatewayClient] Failed to send data to gateway stream for connection %s: %v", c.connectionID, err)
+		// Mark as closed if stream error
+		c.closed = true
+		return 0, fmt.Errorf("failed to send data to gateway: %w", err)
 	}
 	
 	return len(b), nil

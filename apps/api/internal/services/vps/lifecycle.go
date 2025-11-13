@@ -224,17 +224,20 @@ func (s *Service) GetVPSProxyInfo(ctx context.Context, req *connect.Request[vpsv
 
 	// Construct SSH connection instructions
 	// Users connect directly to API server on port 2222 (SSH proxy)
-	// Username format: {vps_id} (VPS ID already includes "vps-" prefix)
+	// Username format: root@{vps_id}@{host} (standard SSH user@host format)
 	// Authentication: SSH public key (recommended) or API token as password
-	sshCommand := fmt.Sprintf("ssh -p %s %s@%s", sshPort, vpsID, sshHost)
+	// Default user is "root", but users can specify different users like: user@vps-xxx@domain
+	defaultUser := "root"
+	sshCommand := fmt.Sprintf("ssh -p %s %s@%s@%s", sshPort, defaultUser, vpsID, sshHost)
 	sshConfig := fmt.Sprintf(`Host %s
   HostName %s
   Port %s
-  User %s
+  User %s@%s
   PreferredAuthentications publickey,password
   PasswordAuthentication yes
   StrictHostKeyChecking no
-  # Use SSH key (recommended) or API token as password`, vpsID, sshHost, sshPort, vpsID)
+  # Use SSH key (recommended) or API token as password
+  # To connect as a different user, use: ssh -p %s user@%s@%s`, vpsID, sshHost, sshPort, defaultUser, vpsID, sshPort, vpsID, sshHost)
 
 	instructions := fmt.Sprintf(`To access your VPS instance "%s":
 
@@ -243,12 +246,17 @@ func (s *Service) GetVPSProxyInfo(ctx context.Context, req *connect.Request[vpsv
    - Or connect via WebSocket: %s
 
 2. SSH Access (via SSH Proxy):
-   - Connect via SSH to %s:%s (which proxies to your VPS):
-   %s
+   - Connect via SSH using the standard format: user@vps-id@domain
+   - Default user is "root", but you can specify any user:
+     %s
+   
+   - Examples:
+     * Connect as root: ssh -p %s root@%s@%s
+     * Connect as a different user: ssh -p %s username@%s@%s
    
    - Authentication options:
      * SSH public key (recommended): Add your SSH key in account settings
-     * API token: When prompted for password, enter your API token
+     * Password: Use the VPS user's password (if password auth is enabled)
    
    - Or add this to your ~/.ssh/config:
 %s
@@ -256,7 +264,8 @@ func (s *Service) GetVPSProxyInfo(ctx context.Context, req *connect.Request[vpsv
 Note: 
 - The VPS must be running to access it
 - SSH keys are automatically added to new VPS instances via cloud-init
-- The SSH proxy handles the connection to your VPS securely`, vps.Name, wsURL, sshHost, sshPort, sshCommand, sshConfig)
+- The SSH proxy handles the connection to your VPS securely
+- Agent forwarding is supported: use -A flag (ssh -A -p %s root@%s@%s)`, vps.Name, wsURL, sshCommand, sshPort, vpsID, sshHost, sshPort, vpsID, sshHost, sshConfig, sshPort, vpsID, sshHost)
 
 	return connect.NewResponse(&vpsv1.GetVPSProxyInfoResponse{
 		VpsId:                  vpsID,
