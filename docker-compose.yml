@@ -206,8 +206,10 @@ services:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --providers.docker.constraints=Label(`cloud.obiente.traefik`,`true`)
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
+      - --entryPoints.web.address=:80
+      - --entryPoints.web.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - --entryPoints.websecure.address=:443
+      - --entryPoints.websecure.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
     labels:
       - "cloud.obiente.traefik=true"
       - "traefik.enable=true"

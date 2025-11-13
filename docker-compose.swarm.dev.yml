@@ -215,6 +215,9 @@ services:
         delay: 5s
         max_attempts: 3
         window: 120s
+      stop_grace_period: 1h  # Allow 1 hour for SSH connections to close gracefully
+      # Note: Health check will fail when draining starts, so Swarm stops routing
+      # new connections but keeps container running until connections close
       resources:
         limits:
           cpus: "2"
@@ -230,6 +233,8 @@ services:
         - "traefik.http.routers.api.rule=Host(`api.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.api.entrypoints=web"
         - "traefik.http.routers.api.service=api"
+        # Note: Forwarded headers are configured at entrypoint level in Traefik command
+        # This ensures real client IPs are forwarded from Docker network IPs
         - "traefik.http.services.api.loadbalancer.server.port=3001"
     healthcheck:
       test:
@@ -270,9 +275,12 @@ services:
       - --providers.swarm.network=obiente_obiente-network
       - --providers.swarm.watch=true  # Watch for service changes
       - --providers.swarm.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-      - --entrypoints.deployments.address=:8000
+      - --entryPoints.web.address=:80
+      - --entryPoints.web.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - --entryPoints.websecure.address=:443
+      - --entryPoints.websecure.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - --entryPoints.deployments.address=:8000
+      - --entryPoints.deployments.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       # Logging
       - --accesslog=true
       - --log.level=INFO
