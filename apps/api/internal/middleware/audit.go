@@ -759,11 +759,13 @@ func getClientIP(req connect.AnyRequest) string {
 
 	// Try X-Forwarded-For header (Traefik sets this by default)
 	// Format: "client-ip, proxy1-ip, proxy2-ip, ..."
-	// The first IP is the original client IP
+	// The first IP is the original client IP, but if it's internal (e.g., docker IP),
+	// we should look for the first non-internal IP in the chain
 	forwarded := req.Header().Get("X-Forwarded-For")
 	if forwarded != "" {
 		ips := strings.Split(forwarded, ",")
-		// Process all IPs to find the best candidate
+		
+		// Process all IPs to find the first non-internal IP (the real client)
 		for _, candidateIP := range ips {
 			candidateIP = strings.TrimSpace(candidateIP)
 			if candidateIP == "" {
@@ -772,13 +774,23 @@ func getClientIP(req connect.AnyRequest) string {
 			
 			// If this is not an internal IP, use it (likely the real client)
 			if !isInternalIP(candidateIP) {
+				// Return the first non-internal IP we find (this is the real client)
 				return candidateIP
 			}
 		}
 		
-		// If all IPs are internal, use the first one (might be from internal network)
-		// This handles cases where requests come from within Docker network
-		if len(ips) > 0 {
+		// If all IPs are internal, check if we have multiple IPs
+		// If there are multiple IPs, the real client is likely the first one
+		// (the chain is: client, proxy1, proxy2, ...)
+		// But if there's only one IP and it's internal, it might be a direct connection
+		if len(ips) > 1 {
+			// Multiple IPs in chain - use the first one (original client, even if internal)
+			ip := strings.TrimSpace(ips[0])
+			if ip != "" {
+				return ip
+			}
+		} else if len(ips) == 1 {
+			// Single IP - might be direct connection or proxy didn't add client IP
 			ip := strings.TrimSpace(ips[0])
 			if ip != "" {
 				return ip

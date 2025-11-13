@@ -30,6 +30,7 @@ func RegisterMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_11_07_002", "Create deployment_usage_hourly table", createDeploymentUsageHourlyTable)
 	registry.Register("2025_11_07_003", "Ensure idx_domain_type constraint exists on delegated_dns_records", ensureDelegatedDNSRecordsConstraint)
 	registry.Register("2025_11_07_004", "Create audit_logs table", createAuditLogsTable)
+	registry.Register("2025_11_13_001", "Create vps_bastion_keys table", createVPSBastionKeysTable)
 
 	// Add new migrations here
 }
@@ -612,6 +613,31 @@ func createAuditLogsTableInDB(db *gorm.DB) error {
 	}
 
 	return nil
+}
+
+// createVPSBastionKeysTable creates the vps_bastion_keys table for storing SSH keys used by the bastion host
+func createVPSBastionKeysTable(db *gorm.DB) error {
+	// Check if table already exists
+	if db.Migrator().HasTable("vps_bastion_keys") {
+		return nil
+	}
+
+	// Create table with proper indexes
+	return db.Exec(`
+		CREATE TABLE vps_bastion_keys (
+			id VARCHAR(255) PRIMARY KEY,
+			vps_id VARCHAR(255) NOT NULL UNIQUE,
+			organization_id VARCHAR(255) NOT NULL,
+			public_key TEXT NOT NULL,
+			private_key TEXT NOT NULL,
+			fingerprint VARCHAR(255),
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			INDEX idx_vps_id (vps_id),
+			INDEX idx_organization_id (organization_id),
+			INDEX idx_fingerprint (fingerprint)
+		)
+	`).Error
 }
 
 // Template for creating a new migration:

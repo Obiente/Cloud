@@ -668,3 +668,21 @@ type VPSTerminalKey struct {
 func (VPSTerminalKey) TableName() string {
 	return "vps_terminal_keys"
 }
+
+// VPSBastionKey represents an SSH key pair for SSH bastion host connections to a VPS
+// The private key is stored encrypted (or should be in production)
+// The public key is added to the VPS via cloud-init
+type VPSBastionKey struct {
+	ID             string    `gorm:"primaryKey;column:id" json:"id"`
+	VPSID          string    `gorm:"column:vps_id;index;not null;unique" json:"vps_id"` // One key per VPS
+	OrganizationID string    `gorm:"column:organization_id;index;not null" json:"organization_id"`
+	PublicKey      string    `gorm:"column:public_key;type:text;not null" json:"public_key"` // SSH public key
+	PrivateKey     string    `gorm:"column:private_key;type:text;not null" json:"-"`         // SSH private key (not returned in JSON)
+	Fingerprint    string    `gorm:"column:fingerprint;index" json:"fingerprint"`            // SSH key fingerprint
+	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt      time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (VPSBastionKey) TableName() string {
+	return "vps_bastion_keys"
+}
