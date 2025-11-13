@@ -32,6 +32,7 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 
 			// Extract IP address and user agent (before calling next)
 			ipAddress := getClientIP(req)
+			
 			userAgent := req.Header().Get("User-Agent")
 			if userAgent == "" {
 				userAgent = "unknown"
@@ -741,11 +742,7 @@ func sanitizeMap(data map[string]interface{}, sensitiveFields []string) {
 
 // getClientIP extracts the client IP address from the request
 // It checks multiple headers in order of preference to get the real client IP
-//
-// For Traefik: Traefik automatically sets X-Forwarded-For with the client IP.
-// If Traefik is behind another proxy (e.g., Cloudflare), configure Traefik's
-// forwardedHeaders middleware to trust the upstream proxy. If requests come from
-// an internal network (e.g., Docker Swarm), the IP will be internal, which is expected.
+// Traefik is configured with forwardedHeaders middleware to properly forward the real client IP
 func getClientIP(req connect.AnyRequest) string {
 	// Try CF-Connecting-IP (Cloudflare)
 	if cfIP := req.Header().Get("CF-Connecting-IP"); cfIP != "" {
@@ -757,40 +754,13 @@ func getClientIP(req connect.AnyRequest) string {
 		return strings.TrimSpace(trueClientIP)
 	}
 
-	// Try X-Forwarded-For header (Traefik sets this by default)
+	// Try X-Forwarded-For header (Traefik sets this with forwardedHeaders middleware)
 	// Format: "client-ip, proxy1-ip, proxy2-ip, ..."
-	// The first IP is the original client IP, but if it's internal (e.g., docker IP),
-	// we should look for the first non-internal IP in the chain
+	// The first IP is the original client IP
 	forwarded := req.Header().Get("X-Forwarded-For")
 	if forwarded != "" {
 		ips := strings.Split(forwarded, ",")
-		
-		// Process all IPs to find the first non-internal IP (the real client)
-		for _, candidateIP := range ips {
-			candidateIP = strings.TrimSpace(candidateIP)
-			if candidateIP == "" {
-				continue
-			}
-			
-			// If this is not an internal IP, use it (likely the real client)
-			if !isInternalIP(candidateIP) {
-				// Return the first non-internal IP we find (this is the real client)
-				return candidateIP
-			}
-		}
-		
-		// If all IPs are internal, check if we have multiple IPs
-		// If there are multiple IPs, the real client is likely the first one
-		// (the chain is: client, proxy1, proxy2, ...)
-		// But if there's only one IP and it's internal, it might be a direct connection
-		if len(ips) > 1 {
-			// Multiple IPs in chain - use the first one (original client, even if internal)
-			ip := strings.TrimSpace(ips[0])
-			if ip != "" {
-				return ip
-			}
-		} else if len(ips) == 1 {
-			// Single IP - might be direct connection or proxy didn't add client IP
+		if len(ips) > 0 {
 			ip := strings.TrimSpace(ips[0])
 			if ip != "" {
 				return ip
@@ -799,8 +769,7 @@ func getClientIP(req connect.AnyRequest) string {
 	}
 
 	// Try X-Real-IP header (nginx and some proxies)
-	realIP := req.Header().Get("X-Real-IP")
-	if realIP != "" {
+	if realIP := req.Header().Get("X-Real-IP"); realIP != "" {
 		ip := strings.TrimSpace(realIP)
 		if ip != "" {
 			return ip
@@ -817,43 +786,4 @@ func getClientIP(req connect.AnyRequest) string {
 
 	// Fallback: return "unknown" since Connect doesn't expose RemoteAddr directly
 	return "unknown"
-}
-
-// isInternalIP checks if an IP address is an internal/private IP
-func isInternalIP(ipStr string) bool {
-	// Remove port if present
-	if idx := strings.LastIndex(ipStr, ":"); idx != -1 {
-		ipStr = ipStr[:idx]
-	}
-
-	// Check for common internal IP patterns
-	// IPv4 private ranges: 10.x.x.x, 172.16-31.x.x, 192.168.x.x, 127.x.x.x
-	if strings.HasPrefix(ipStr, "10.") ||
-		strings.HasPrefix(ipStr, "172.16.") ||
-		strings.HasPrefix(ipStr, "172.17.") ||
-		strings.HasPrefix(ipStr, "172.18.") ||
-		strings.HasPrefix(ipStr, "172.19.") ||
-		strings.HasPrefix(ipStr, "172.20.") ||
-		strings.HasPrefix(ipStr, "172.21.") ||
-		strings.HasPrefix(ipStr, "172.22.") ||
-		strings.HasPrefix(ipStr, "172.23.") ||
-		strings.HasPrefix(ipStr, "172.24.") ||
-		strings.HasPrefix(ipStr, "172.25.") ||
-		strings.HasPrefix(ipStr, "172.26.") ||
-		strings.HasPrefix(ipStr, "172.27.") ||
-		strings.HasPrefix(ipStr, "172.28.") ||
-		strings.HasPrefix(ipStr, "172.29.") ||
-		strings.HasPrefix(ipStr, "172.30.") ||
-		strings.HasPrefix(ipStr, "172.31.") ||
-		strings.HasPrefix(ipStr, "192.168.") ||
-		strings.HasPrefix(ipStr, "127.") {
-		return true
-	}
-
-	// IPv6 loopback
-	if ipStr == "::1" || strings.HasPrefix(ipStr, "::ffff:") {
-		return true
-	}
-
-	return false
 }
