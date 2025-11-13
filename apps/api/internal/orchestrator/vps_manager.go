@@ -144,16 +144,29 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 		return nil, "", fmt.Errorf("failed to create Proxmox client: %w", err)
 	}
 
-	// Generate web terminal SSH key pair for this VPS
+	// Generate bastion SSH key pair for this VPS (required for SSH access)
+	bastionKey, err := database.CreateVPSBastionKey(config.VPSID, config.OrganizationID)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create bastion SSH key: %w", err)
+	}
+	logger.Info("[VPSManager] Generated bastion SSH key for VPS %s (fingerprint: %s)", config.VPSID, bastionKey.Fingerprint)
+	
+	// Generate web terminal SSH key pair for this VPS (optional, can be removed to disable web terminal)
 	terminalKey, err := database.CreateVPSTerminalKey(config.VPSID, config.OrganizationID)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create terminal SSH key: %w", err)
 	}
 	logger.Info("[VPSManager] Generated web terminal SSH key for VPS %s (fingerprint: %s)", config.VPSID, terminalKey.Fingerprint)
 	
-	// Track if we need to clean up terminal key on failure
+	// Track if we need to clean up keys on failure
+	cleanupBastionKey := true
 	cleanupTerminalKey := true
 	defer func() {
+		if cleanupBastionKey {
+			if delErr := database.DeleteVPSBastionKey(config.VPSID); delErr != nil {
+				logger.Warn("[VPSManager] Failed to delete bastion key after VPS creation failure: %v", delErr)
+			}
+		}
 		if cleanupTerminalKey {
 			if delErr := database.DeleteVPSTerminalKey(config.VPSID); delErr != nil {
 				logger.Warn("[VPSManager] Failed to delete terminal key after VPS creation failure: %v", delErr)
@@ -290,7 +303,8 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 		return nil, "", fmt.Errorf("failed to create VPS instance record: %w", err)
 	}
 
-	// VPS created successfully, don't clean up terminal key
+	// VPS created successfully, don't clean up keys
+	cleanupBastionKey = false
 	cleanupTerminalKey = false
 
 	logger.Info("[VPSManager] Created VPS instance %s (VM ID: %s)",

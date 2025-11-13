@@ -40,7 +40,6 @@ type ProxmoxTicket struct {
 	Expiry time.Time
 }
 
-
 // NewProxmoxClient creates a new Proxmox API client
 func NewProxmoxClient(config *ProxmoxConfig) (*ProxmoxClient, error) {
 	// Validate that either password or token is provided
@@ -103,7 +102,7 @@ func (pc *ProxmoxClient) GetOrCreateTicketForWebSocket(ctx context.Context) (str
 	if pc.ticket != nil && time.Now().Before(pc.ticket.Expiry.Add(-5*time.Minute)) {
 		return pc.ticket.Ticket, nil
 	}
-	
+
 	// For API tokens, we cannot get a ticket via /access/ticket endpoint
 	// The endpoint requires username/password in POST body, not API token in header
 	// According to Proxmox docs, API tokens don't use tickets for regular API calls
@@ -114,16 +113,16 @@ func (pc *ProxmoxClient) GetOrCreateTicketForWebSocket(ctx context.Context) (str
 		// WebSocket connection will use Authorization header instead
 		return "", nil
 	}
-	
+
 	// For password-based auth, ensure we're authenticated
 	if err := pc.ensureAuthenticated(ctx); err != nil {
 		return "", err
 	}
-	
+
 	if pc.ticket == nil {
 		return "", fmt.Errorf("no ticket available")
 	}
-	
+
 	return pc.ticket.Ticket, nil
 }
 
@@ -962,11 +961,11 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 						if err == nil {
 							if disk, ok := vmConfigAfter[actualDiskKey].(string); ok && disk != "" {
 								diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
-								
+
 								// Check if we just created the disk (if so, it should already be the right size)
 								// But we still verify and resize if needed, as the size might not match exactly
 								justCreated := strings.Contains(disk, "size=")
-								
+
 								if justCreated {
 									// Extract size from disk config to verify it matches
 									// Format: "storage:vmID/vm-XXX-disk-0.qcow2,size=XXG,format=qcow2"
@@ -987,7 +986,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 										}
 									}
 								}
-								
+
 								// Resize disk to match plan size
 								// For linked clones, this will create a new disk with the correct size
 								logger.Info("[ProxmoxClient] Resizing disk %s for VM %d to %dGB (plan size)", actualDiskKey, vmID, diskSizeGB)
@@ -1049,38 +1048,38 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		// Specifying interface name can cause issues if the interface name doesn't match
 		vmConfig["ipconfig0"] = "ip=dhcp"
 		vmConfig["ciuser"] = "root"
-		
-	// Root password: use custom if provided, otherwise auto-generate
-	if config.RootPassword != nil && *config.RootPassword != "" {
-		rootPassword = *config.RootPassword
-		logger.Info("[ProxmoxClient] Using custom root password for VM %d (length: %d)", vmID, len(rootPassword))
-	} else {
-		// Auto-generate root password
-		rootPassword = GenerateRandomPassword(32)
-		logger.Info("[ProxmoxClient] Auto-generated root password for VM %d (length: %d)", vmID, len(rootPassword))
-		// Set it in config so it's included in cloud-init userData
-		config.RootPassword = &rootPassword
-	}
-	// Note: Root password is set in cloud-init userData snippet, not via cipassword
-	// The snippet contains the full cloud-init configuration including root password, SSH keys, guest agent, etc.
 
-	// Always generate cloud-init userData and create a snippet file
-	// This ensures guest agent, SSH server, and other essential services are properly configured
-	// The userData includes: SSH server installation, guest agent installation, root password, SSH keys, etc.
-	userData := GenerateCloudInitUserData(config)
-	if userData != "" {
-		// Create snippet file in Proxmox storage
-		snippetPath, err := pc.CreateCloudInitSnippet(ctx, nodeName, storage, vmID, userData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create cloud-init snippet for VM %d: %w. Snippets are required to ensure guest agent and SSH are properly configured. Ensure SSH is configured (PROXMOX_SSH_USER, PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA) and the storage supports snippets. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for setup instructions", vmID, err)
+		// Root password: use custom if provided, otherwise auto-generate
+		if config.RootPassword != nil && *config.RootPassword != "" {
+			rootPassword = *config.RootPassword
+			logger.Info("[ProxmoxClient] Using custom root password for VM %d (length: %d)", vmID, len(rootPassword))
+		} else {
+			// Auto-generate root password
+			rootPassword = GenerateRandomPassword(32)
+			logger.Info("[ProxmoxClient] Auto-generated root password for VM %d (length: %d)", vmID, len(rootPassword))
+			// Set it in config so it's included in cloud-init userData
+			config.RootPassword = &rootPassword
 		}
-		// Use cicustom to reference the snippet
-		vmConfig["cicustom"] = snippetPath
-		logger.Info("[ProxmoxClient] Using cloud-init userData snippet for VM %d: %s", vmID, snippetPath)
-		// Don't set cipassword or sshkeys in vmConfig when using snippets (they're in the userData)
-	} else {
-		return nil, fmt.Errorf("failed to generate cloud-init userData for VM %d", vmID)
-	}
+		// Note: Root password is set in cloud-init userData snippet, not via cipassword
+		// The snippet contains the full cloud-init configuration including root password, SSH keys, guest agent, etc.
+
+		// Always generate cloud-init userData and create a snippet file
+		// This ensures guest agent, SSH server, and other essential services are properly configured
+		// The userData includes: SSH server installation, guest agent installation, root password, SSH keys, etc.
+		userData := GenerateCloudInitUserData(config)
+		if userData != "" {
+			// Create snippet file in Proxmox storage
+			snippetPath, err := pc.CreateCloudInitSnippet(ctx, nodeName, storage, vmID, userData)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create cloud-init snippet for VM %d: %w. Snippets are required to ensure guest agent and SSH are properly configured. Ensure SSH is configured (PROXMOX_SSH_USER, PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA) and the storage supports snippets. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for setup instructions", vmID, err)
+			}
+			// Use cicustom to reference the snippet
+			vmConfig["cicustom"] = snippetPath
+			logger.Info("[ProxmoxClient] Using cloud-init userData snippet for VM %d: %s", vmID, snippetPath)
+			// Don't set cipassword or sshkeys in vmConfig when using snippets (they're in the userData)
+		} else {
+			return nil, fmt.Errorf("failed to generate cloud-init userData for VM %d", vmID)
+		}
 	}
 
 	// Create or update VM
@@ -1178,11 +1177,11 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 			logger.Warn("[ProxmoxClient] Form data does NOT include sshkeys parameter")
 		}
 
-			resp, err := pc.apiRequestForm(ctx, "PUT", updateEndpoint, formData)
-			if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
-				resp.Body.Close()
-				logger.Info("[ProxmoxClient] Updated VM %d configuration", vmID)
-				logger.Info("[ProxmoxClient] VM %d configured with cloud-init snippet (guest agent and SSH will be installed on first boot)", vmID)
+		resp, err := pc.apiRequestForm(ctx, "PUT", updateEndpoint, formData)
+		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
+			resp.Body.Close()
+			logger.Info("[ProxmoxClient] Updated VM %d configuration", vmID)
+			logger.Info("[ProxmoxClient] VM %d configured with cloud-init snippet (guest agent and SSH will be installed on first boot)", vmID)
 
 			// Verify that the disk (scsi0) exists in the VM config
 			// This is a safety check to ensure the cloned VM has a disk
@@ -1674,7 +1673,7 @@ func GenerateCloudInitUserData(config *VPSConfig) string {
 // generateCloudInitUserData generates cloud-init user data with full configuration support
 func generateCloudInitUserData(config *VPSConfig) string {
 	userData := "#cloud-config\n\n"
-	
+
 	// SSH configuration
 	sshInstallServer := true
 	sshAllowPW := true
@@ -1690,53 +1689,63 @@ func generateCloudInitUserData(config *VPSConfig) string {
 	userData += fmt.Sprintf("  install-server: %v\n", sshInstallServer)
 	userData += fmt.Sprintf("  allow-pw: %v\n", sshAllowPW)
 	userData += "\n"
-	
+
 	// Disable cloud-init network configuration - we use Proxmox's ipconfig0 instead
 	userData += "network:\n"
 	userData += "  config: disabled\n"
 	userData += "\n"
-	
+
 	// Hostname
 	if config.CloudInit != nil && config.CloudInit.Hostname != nil && *config.CloudInit.Hostname != "" {
 		userData += fmt.Sprintf("hostname: %s\n", *config.CloudInit.Hostname)
 		userData += fmt.Sprintf("fqdn: %s\n", *config.CloudInit.Hostname)
 		userData += "\n"
 	}
-	
+
 	// Timezone
 	if config.CloudInit != nil && config.CloudInit.Timezone != nil && *config.CloudInit.Timezone != "" {
 		userData += fmt.Sprintf("timezone: %s\n\n", *config.CloudInit.Timezone)
 	}
-	
+
 	// Locale
 	if config.CloudInit != nil && config.CloudInit.Locale != nil && *config.CloudInit.Locale != "" {
 		userData += "locale: " + *config.CloudInit.Locale + "\n\n"
 	}
-	
+
 	// Users configuration
 	userData += "users:\n"
-	
+
 	// Add root user (always included)
 	userData += "  - name: root\n"
-	
+
 	// Root password (from config or auto-generated)
 	if config.RootPassword != nil && *config.RootPassword != "" {
 		userData += fmt.Sprintf("    passwd: %s\n", *config.RootPassword)
 	}
-	
-	// Add SSH keys for root (includes both VPS-specific and org-wide keys, plus web terminal key)
+
+	// Add SSH keys for root (includes both VPS-specific and org-wide keys, plus bastion and terminal keys)
 	rootSSHKeys := []string{}
-	
-	// Add web terminal SSH key (always included for web terminal access)
+
+	// Add bastion SSH key (required for SSH bastion host connections)
+	if config.OrganizationID != "" && config.VPSID != "" {
+		bastionKey, err := database.GetVPSBastionKey(config.VPSID)
+		if err == nil {
+			rootSSHKeys = append(rootSSHKeys, strings.TrimSpace(bastionKey.PublicKey))
+		} else {
+			logger.Warn("[ProxmoxClient] Failed to get bastion key for VPS %s: %v (SSH bastion may not work)", config.VPSID, err)
+		}
+	}
+
+	// Add web terminal SSH key (optional - only if it exists, allows disabling web terminal)
 	if config.OrganizationID != "" && config.VPSID != "" {
 		terminalKey, err := database.GetVPSTerminalKey(config.VPSID)
 		if err == nil {
 			rootSSHKeys = append(rootSSHKeys, strings.TrimSpace(terminalKey.PublicKey))
 		} else {
-			logger.Warn("[ProxmoxClient] Failed to get terminal key for VPS %s: %v (web terminal may not work)", config.VPSID, err)
+			logger.Debug("[ProxmoxClient] Terminal key not found for VPS %s: %v (web terminal disabled)", config.VPSID, err)
 		}
 	}
-	
+
 	// Add user-provided SSH keys (VPS-specific and org-wide)
 	if config.OrganizationID != "" {
 		sshKeys, err := database.GetSSHKeysForVPS(config.OrganizationID, config.VPSID)
@@ -1746,7 +1755,7 @@ func generateCloudInitUserData(config *VPSConfig) string {
 			}
 		}
 	}
-	
+
 	// Also check if root user is in custom users list and merge SSH keys
 	if config.CloudInit != nil {
 		for _, user := range config.CloudInit.Users {
@@ -1756,16 +1765,16 @@ func generateCloudInitUserData(config *VPSConfig) string {
 			}
 		}
 	}
-	
+
 	if len(rootSSHKeys) > 0 {
 		userData += "    ssh_authorized_keys:\n"
 		for _, key := range rootSSHKeys {
 			userData += fmt.Sprintf("      - %s\n", key)
 		}
 	}
-	
+
 	userData += "    sudo: ALL=(ALL) NOPASSWD:ALL\n"
-	
+
 	// Add custom users (excluding root if already added)
 	if config.CloudInit != nil {
 		for _, user := range config.CloudInit.Users {
@@ -1773,18 +1782,18 @@ func generateCloudInitUserData(config *VPSConfig) string {
 				continue // Root already handled above
 			}
 			userData += fmt.Sprintf("  - name: %s\n", user.Name)
-			
+
 			if user.Password != nil && *user.Password != "" {
 				userData += fmt.Sprintf("    passwd: %s\n", *user.Password)
 			}
-			
+
 			if len(user.SSHAuthorizedKeys) > 0 {
 				userData += "    ssh_authorized_keys:\n"
 				for _, key := range user.SSHAuthorizedKeys {
 					userData += fmt.Sprintf("      - %s\n", strings.TrimSpace(key))
 				}
 			}
-			
+
 			if user.Sudo != nil && *user.Sudo {
 				if user.SudoNopasswd != nil && *user.SudoNopasswd {
 					userData += "    sudo: ALL=(ALL) NOPASSWD:ALL\n"
@@ -1792,27 +1801,27 @@ func generateCloudInitUserData(config *VPSConfig) string {
 					userData += "    sudo: ALL=(ALL) ALL\n"
 				}
 			}
-			
+
 			if len(user.Groups) > 0 {
 				userData += fmt.Sprintf("    groups: %s\n", strings.Join(user.Groups, ","))
 			}
-			
+
 			if user.Shell != nil && *user.Shell != "" {
 				userData += fmt.Sprintf("    shell: %s\n", *user.Shell)
 			}
-			
+
 			if user.LockPasswd != nil {
 				userData += fmt.Sprintf("    lock_passwd: %v\n", *user.LockPasswd)
 			}
-			
+
 			if user.Gecos != nil && *user.Gecos != "" {
 				userData += fmt.Sprintf("    gecos: %s\n", *user.Gecos)
 			}
 		}
 	}
-	
+
 	userData += "\n"
-	
+
 	// Package management
 	packageUpdate := true
 	packageUpgrade := false
@@ -1824,16 +1833,16 @@ func generateCloudInitUserData(config *VPSConfig) string {
 			packageUpgrade = *config.CloudInit.PackageUpgrade
 		}
 	}
-	
+
 	userData += fmt.Sprintf("package_update: %v\n", packageUpdate)
 	userData += fmt.Sprintf("package_upgrade: %v\n", packageUpgrade)
-	
+
 	// Packages
 	packages := []string{"curl", "wget", "htop", "openssh-server", "qemu-guest-agent"}
 	if config.CloudInit != nil && len(config.CloudInit.Packages) > 0 {
 		packages = append(packages, config.CloudInit.Packages...)
 	}
-	
+
 	if len(packages) > 0 {
 		userData += "packages:\n"
 		for _, pkg := range packages {
@@ -1841,57 +1850,350 @@ func generateCloudInitUserData(config *VPSConfig) string {
 		}
 	}
 	userData += "\n"
-	
-	// Write files (user's custom files)
+
+	// Write files - merge Obiente Cloud configs with user configs
+	hasWriteFiles := false
 	if config.CloudInit != nil && len(config.CloudInit.WriteFiles) > 0 {
+		hasWriteFiles = true
+	}
+
+	// Obiente Cloud required file paths
+	sshConfigPath := "/etc/ssh/sshd_config.d/99-obiente-cloud.conf"
+	pamConfigPath := "/etc/pam.d/sshd"
+	lastlogScriptPath := "/usr/local/bin/obiente-update-lastlog.sh"
+
+	// Check which Obiente Cloud files user has provided
+	userSSHConfig := -1
+	userPAMConfig := -1
+	userLastlogScript := -1
+	if hasWriteFiles {
+		for i, file := range config.CloudInit.WriteFiles {
+			switch file.Path {
+			case sshConfigPath:
+				userSSHConfig = i
+			case pamConfigPath:
+				userPAMConfig = i
+			case lastlogScriptPath:
+				userLastlogScript = i
+			}
+		}
+	}
+
+	// Track if we need to restart SSH (if we added/modified SSH config)
+	needsSSHRestart := false
+
+	// Always include write_files section if we have Obiente Cloud files or user files
+	if hasWriteFiles || userSSHConfig == -1 || userPAMConfig == -1 || userLastlogScript == -1 {
 		userData += "write_files:\n"
-		
-		for _, file := range config.CloudInit.WriteFiles {
-			userData += fmt.Sprintf("  - path: %s\n", file.Path)
+
+		// SSH config: merge AcceptEnv if user provided their own, otherwise create new
+		if userSSHConfig != -1 {
+			// User provided SSH config - merge AcceptEnv into it
+			userSSHFile := config.CloudInit.WriteFiles[userSSHConfig]
+			userData += fmt.Sprintf("  - path: %s\n", sshConfigPath)
 			userData += "    content: |\n"
-			// Indent content by 6 spaces
-			lines := strings.Split(file.Content, "\n")
+
+			// Add user's content
+			lines := strings.Split(userSSHFile.Content, "\n")
 			for _, line := range lines {
 				userData += fmt.Sprintf("      %s\n", line)
 			}
-			
-			if file.Owner != nil && *file.Owner != "" {
-				userData += fmt.Sprintf("    owner: %s\n", *file.Owner)
+
+			// Check if AcceptEnv already exists
+			hasAcceptEnv := false
+			for _, line := range lines {
+				if strings.Contains(strings.ToLower(line), "acceptenv") && strings.Contains(line, "SSH_CLIENT") {
+					hasAcceptEnv = true
+					break
+				}
 			}
-			
-			if file.Permissions != nil && *file.Permissions != "" {
-				userData += fmt.Sprintf("    permissions: %s\n", *file.Permissions)
+
+			// Add our AcceptEnv if not present
+			if !hasAcceptEnv {
+				userData += "      # Obiente Cloud: Accept environment variables for real IP forwarding\n"
+				userData += "      AcceptEnv SSH_CLIENT SSH_CONNECTION SSH_CLIENT_REAL\n"
+				needsSSHRestart = true
 			}
-			
-			if file.Append != nil && *file.Append {
+
+			if userSSHFile.Owner != nil && *userSSHFile.Owner != "" {
+				userData += fmt.Sprintf("    owner: %s\n", *userSSHFile.Owner)
+			} else {
+				userData += "    owner: root:root\n"
+			}
+
+			if userSSHFile.Permissions != nil && *userSSHFile.Permissions != "" {
+				userData += fmt.Sprintf("    permissions: %s\n", *userSSHFile.Permissions)
+			} else {
+				userData += "    permissions: '0644'\n"
+			}
+
+			if userSSHFile.Append != nil && *userSSHFile.Append {
 				userData += "    append: true\n"
 			}
-			
-			if file.Defer != nil && *file.Defer {
+
+			if userSSHFile.Defer != nil && *userSSHFile.Defer {
 				userData += "    defer: true\n"
+			}
+		} else {
+			// Create new SSH config
+			userData += "  - path: /etc/ssh/sshd_config.d/99-obiente-cloud.conf\n"
+			userData += "    content: |\n"
+			userData += "      # Obiente Cloud: Accept environment variables for real IP forwarding\n"
+			userData += "      # This allows the SSH proxy to forward the client's real IP address\n"
+			userData += "      AcceptEnv SSH_CLIENT SSH_CONNECTION SSH_CLIENT_REAL\n"
+			userData += "    owner: root:root\n"
+			userData += "    permissions: '0644'\n"
+			needsSSHRestart = true
+		}
+
+		// PAM config: merge our lastlog script if user provided their own, otherwise create new
+		if userPAMConfig != -1 {
+			// User provided PAM config - merge our lastlog script into it
+			userPAMFile := config.CloudInit.WriteFiles[userPAMConfig]
+			userData += fmt.Sprintf("  - path: %s\n", pamConfigPath)
+			userData += "    content: |\n"
+
+			// Check if our lastlog script is already present
+			hasLastlogScript := false
+			hasPamLastlog := false
+			lines := strings.Split(userPAMFile.Content, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "obiente-update-lastlog.sh") {
+					hasLastlogScript = true
+				}
+				if strings.Contains(line, "pam_lastlog.so") {
+					hasPamLastlog = true
+				}
+			}
+
+			// Add user's content
+			for _, line := range lines {
+				userData += fmt.Sprintf("      %s\n", line)
+			}
+
+			// Add our lastlog script before pam_lastlog if not present
+			if !hasLastlogScript {
+				if hasPamLastlog {
+					// Insert before pam_lastlog
+					userData += "      # Obiente Cloud: Update lastlog with real client IP before standard lastlog\n"
+					userData += "      session    optional     pam_exec.so quiet /usr/local/bin/obiente-update-lastlog.sh\n"
+				} else {
+					// Add at the end of session section
+					userData += "      # Obiente Cloud: Update lastlog with real client IP\n"
+					userData += "      session    optional     pam_exec.so quiet /usr/local/bin/obiente-update-lastlog.sh\n"
+					userData += "      session    optional     pam_lastlog.so\n"
+				}
+			}
+
+			if userPAMFile.Owner != nil && *userPAMFile.Owner != "" {
+				userData += fmt.Sprintf("    owner: %s\n", *userPAMFile.Owner)
+			} else {
+				userData += "    owner: root:root\n"
+			}
+
+			if userPAMFile.Permissions != nil && *userPAMFile.Permissions != "" {
+				userData += fmt.Sprintf("    permissions: %s\n", *userPAMFile.Permissions)
+			} else {
+				userData += "    permissions: '0644'\n"
+			}
+
+			if userPAMFile.Append != nil && *userPAMFile.Append {
+				userData += "    append: true\n"
+			}
+
+			if userPAMFile.Defer != nil && *userPAMFile.Defer {
+				userData += "    defer: true\n"
+			}
+		} else {
+			// Create new PAM config
+			userData += "  - path: /etc/pam.d/sshd\n"
+			userData += "    content: |\n"
+			userData += "      # Obiente Cloud: PAM configuration for SSH with real IP forwarding\n"
+			userData += "      @include common-auth\n"
+			userData += "      account    required     pam_nologin.so\n"
+			userData += "      account    include      common-account\n"
+			userData += "      password   include      common-password\n"
+			userData += "      session    optional     pam_keyinit.so revoke\n"
+			userData += "      session    required     pam_limits.so\n"
+			userData += "      session    include      common-session\n"
+			userData += "      # Update lastlog with real client IP before standard lastlog\n"
+			userData += "      session    optional     pam_exec.so quiet /usr/local/bin/obiente-update-lastlog.sh\n"
+			userData += "      session    optional     pam_lastlog.so\n"
+			userData += "    owner: root:root\n"
+			userData += "    permissions: '0644'\n"
+		}
+
+		// Lastlog script: use user's if provided, otherwise create new
+		if userLastlogScript != -1 {
+			// User provided their own script - use it as-is
+			userScriptFile := config.CloudInit.WriteFiles[userLastlogScript]
+			userData += fmt.Sprintf("  - path: %s\n", lastlogScriptPath)
+			userData += "    content: |\n"
+			lines := strings.Split(userScriptFile.Content, "\n")
+			for _, line := range lines {
+				userData += fmt.Sprintf("      %s\n", line)
+			}
+
+			if userScriptFile.Owner != nil && *userScriptFile.Owner != "" {
+				userData += fmt.Sprintf("    owner: %s\n", *userScriptFile.Owner)
+			} else {
+				userData += "    owner: root:root\n"
+			}
+
+			if userScriptFile.Permissions != nil && *userScriptFile.Permissions != "" {
+				userData += fmt.Sprintf("    permissions: %s\n", *userScriptFile.Permissions)
+			} else {
+				userData += "    permissions: '0755'\n"
+			}
+
+			if userScriptFile.Append != nil && *userScriptFile.Append {
+				userData += "    append: true\n"
+			}
+
+			if userScriptFile.Defer != nil && *userScriptFile.Defer {
+				userData += "    defer: true\n"
+			}
+		} else {
+			// Create new lastlog script
+			userData += "  - path: /usr/local/bin/obiente-update-lastlog.sh\n"
+			userData += "    content: |\n"
+			userData += "      #!/bin/bash\n"
+			userData += "      # Obiente Cloud: Update lastlog with real client IP from SSH proxy\n"
+			userData += "      \n"
+			userData += "      if [ \"$PAM_TYPE\" != \"open_session\" ] || [ -z \"$PAM_USER\" ]; then\n"
+			userData += "        exit 0\n"
+			userData += "      fi\n"
+			userData += "      \n"
+			userData += "      # Get real client IP from environment and export for Python\n"
+			userData += "      if [ -n \"$SSH_CLIENT_REAL\" ]; then\n"
+			userData += "        export SSH_CLIENT_REAL=\"$SSH_CLIENT_REAL\"\n"
+			userData += "      elif [ -n \"$SSH_CLIENT\" ]; then\n"
+			userData += "        export SSH_CLIENT_REAL=$(echo \"$SSH_CLIENT\" | awk '{print $1}')\n"
+			userData += "      else\n"
+			userData += "        exit 0\n"
+			userData += "      fi\n"
+			userData += "      \n"
+			userData += "      # Update lastlog database with real client IP\n"
+			userData += "      python3 << 'PYTHON_SCRIPT'\n"
+			userData += "import struct\n"
+			userData += "import os\n"
+			userData += "import pwd\n"
+			userData += "import time\n"
+			userData += "import sys\n"
+			userData += "\n"
+			userData += "try:\n"
+			userData += "    user = os.environ.get('PAM_USER')\n"
+			userData += "    client_ip = os.environ.get('SSH_CLIENT_REAL') or (os.environ.get('SSH_CLIENT', '').split()[0] if os.environ.get('SSH_CLIENT') else '')\n"
+			userData += "    \n"
+			userData += "    if not user or not client_ip:\n"
+			userData += "        sys.exit(0)\n"
+			userData += "    \n"
+			userData += "    pw = pwd.getpwnam(user)\n"
+			userData += "    uid = pw.pw_uid\n"
+			userData += "    lastlog_path = '/var/log/lastlog'\n"
+			userData += "    \n"
+			userData += "    if not os.path.exists(lastlog_path) or not os.access(lastlog_path, os.W_OK):\n"
+			userData += "        sys.exit(0)\n"
+			userData += "    \n"
+			userData += "    # lastlog format: struct lastlog {\n"
+			userData += "    #     int32_t ll_time;      // 4 bytes (or 8 for 64-bit)\n"
+			userData += "    #     char ll_line[UT_LINESIZE];  // 32 bytes\n"
+			userData += "    #     char ll_host[UT_HOSTSIZE]; // 256 bytes\n"
+			userData += "    # };\n"
+			userData += "    # Total: 292 bytes (32-bit) or 296 bytes (64-bit)\n"
+			userData += "    \n"
+			userData += "    # Detect if time_t is 64-bit (check struct size)\n"
+			userData += "    import ctypes\n"
+			userData += "    time_t_size = ctypes.sizeof(ctypes.c_time_t) if hasattr(ctypes, 'c_time_t') else 8\n"
+			userData += "    record_size = 32 + 256 + time_t_size  # ll_line + ll_host + ll_time\n"
+			userData += "    \n"
+			userData += "    with open(lastlog_path, 'r+b') as f:\n"
+			userData += "        f.seek(uid * record_size)\n"
+			userData += "        \n"
+			userData += "        # Prepare data\n"
+			userData += "        current_time = int(time.time())\n"
+			userData += "        host_bytes = client_ip.encode('utf-8')[:255].ljust(256, b'\\0')\n"
+			userData += "        line_bytes = ('pts/0').encode('utf-8')[:31].ljust(32, b'\\0')\n"
+			userData += "        \n"
+			userData += "        # Write time_t (little-endian)\n"
+			userData += "        if time_t_size == 8:\n"
+			userData += "            f.write(struct.pack('<Q', current_time))  # 64-bit\n"
+			userData += "        else:\n"
+			userData += "            f.write(struct.pack('<I', current_time))  # 32-bit\n"
+			userData += "        \n"
+			userData += "        # Write line and host\n"
+			userData += "        f.write(line_bytes)\n"
+			userData += "        f.write(host_bytes)\n"
+			userData += "        \n"
+			userData += "except Exception:\n"
+			userData += "    pass\n"
+			userData += "PYTHON_SCRIPT\n"
+			userData += "      \n"
+			userData += "      exit 0\n"
+			userData += "    owner: root:root\n"
+			userData += "    permissions: '0755'\n"
+		}
+
+		// Add user's other write files (excluding Obiente Cloud files we already handled)
+		if hasWriteFiles {
+			for i, file := range config.CloudInit.WriteFiles {
+				// Skip Obiente Cloud files we already handled
+				if i == userSSHConfig || i == userPAMConfig || i == userLastlogScript {
+					continue
+				}
+
+				userData += fmt.Sprintf("  - path: %s\n", file.Path)
+				userData += "    content: |\n"
+				lines := strings.Split(file.Content, "\n")
+				for _, line := range lines {
+					userData += fmt.Sprintf("      %s\n", line)
+				}
+
+				if file.Owner != nil && *file.Owner != "" {
+					userData += fmt.Sprintf("    owner: %s\n", *file.Owner)
+				}
+
+				if file.Permissions != nil && *file.Permissions != "" {
+					userData += fmt.Sprintf("    permissions: %s\n", *file.Permissions)
+				}
+
+				if file.Append != nil && *file.Append {
+					userData += "    append: true\n"
+				}
+
+				if file.Defer != nil && *file.Defer {
+					userData += "    defer: true\n"
+				}
 			}
 		}
 		userData += "\n"
 	}
-	
+
 	// Runcmd
 	userData += "runcmd:\n"
-	
+
 	// Default commands (always include)
 	userData += "  - apt-get update || yum update || dnf update || true\n"
 	userData += "  - apt-get install -y openssh-server qemu-guest-agent || yum install -y openssh-server qemu-guest-agent || dnf install -y openssh-server qemu-guest-agent || true\n"
 	userData += "  - systemctl enable ssh || systemctl enable sshd || true\n"
 	userData += "  - systemctl start ssh || systemctl start sshd || true\n"
+
+	// Restart SSH to apply AcceptEnv configuration for real IP forwarding
+	// Only restart if we added/modified the SSH config
+	if needsSSHRestart {
+		userData += "  - systemctl restart sshd || systemctl restart ssh || service ssh restart || service sshd restart || true\n"
+	}
+
 	userData += "  - systemctl enable qemu-guest-agent || true\n"
 	userData += "  - systemctl start qemu-guest-agent || true\n"
-	
+
 	// Custom runcmd commands
 	if config.CloudInit != nil && len(config.CloudInit.Runcmd) > 0 {
 		for _, cmd := range config.CloudInit.Runcmd {
 			userData += fmt.Sprintf("  - %s\n", cmd)
 		}
 	}
-	
+
 	return userData
 }
 
@@ -1908,7 +2210,7 @@ func (pc *ProxmoxClient) createCloudInitSnippet(ctx context.Context, nodeName st
 	// Proxmox snippets are stored in: <storage>/snippets/
 	// Snippets require directory-type storage (dir, nfs, cifs, etc.), not block storage (lvm, zfs)
 	snippetFilename := fmt.Sprintf("vm-%d-user-data", vmID)
-	
+
 	// Check if storage supports snippets (must be directory-type storage with snippets content type)
 	storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
 	if err != nil {
@@ -1918,13 +2220,13 @@ func (pc *ProxmoxClient) createCloudInitSnippet(ctx context.Context, nodeName st
 		if ok {
 			// Snippets are only supported on directory-type storage
 			// Block storage types (lvm, lvm-thin, zfs, zfspool) don't support snippets
-			supportsSnippets := storageType == "dir" || storageType == "directory" || 
+			supportsSnippets := storageType == "dir" || storageType == "directory" ||
 				storageType == "nfs" || storageType == "cifs" || storageType == "glusterfs"
-			
+
 			if !supportsSnippets {
 				return "", fmt.Errorf("storage '%s' (type: %s) does not support snippets. Snippets require directory-type storage (dir, nfs, cifs). Please set PROXMOX_STORAGE to a directory-type storage pool", storage, storageType)
 			}
-			
+
 			// Check if storage has "snippets" in its content types
 			// Proxmox storage must have "snippets" enabled in content types to accept snippet uploads
 			if contentVal, ok := storageInfo["content"].(string); ok && contentVal != "" {
@@ -1947,11 +2249,11 @@ func (pc *ProxmoxClient) createCloudInitSnippet(ctx context.Context, nodeName st
 					}
 				}
 			}
-			
+
 			logger.Info("[ProxmoxClient] Storage '%s' (type: %s) supports snippets", storage, storageType)
 		}
 	}
-	
+
 	// SSH is required for snippet writing - no fallback to upload endpoint
 	if pc.config.SSHUser == "" {
 		return "", fmt.Errorf("SSH is required for snippet writing. Please configure PROXMOX_SSH_USER environment variable. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for setup instructions")
@@ -1959,13 +2261,13 @@ func (pc *ProxmoxClient) createCloudInitSnippet(ctx context.Context, nodeName st
 	if pc.config.SSHKeyPath == "" && pc.config.SSHKeyData == "" {
 		return "", fmt.Errorf("SSH key is required for snippet writing. Please configure either PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA environment variable. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for setup instructions")
 	}
-	
+
 	// Write snippet via SSH (only method supported)
 	snippetPath, err := pc.writeSnippetViaSSH(ctx, nodeName, storage, snippetFilename, userData)
 	if err != nil {
 		return "", fmt.Errorf("failed to create snippet via SSH: %w. Ensure SSH is properly configured and the SSH user has write permissions to the snippets directory. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for troubleshooting", err)
 	}
-	
+
 	logger.Info("[ProxmoxClient] Successfully created snippet via SSH: %s", snippetPath)
 	return snippetPath, nil
 }
@@ -1979,16 +2281,16 @@ func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string
 	if pc.config.SSHUser == "" {
 		return "", fmt.Errorf("SSH user not configured (PROXMOX_SSH_USER)")
 	}
-	
+
 	// Load SSH private key
 	var signer ssh.Signer
 	var err error
-	
+
 	if pc.config.SSHKeyData != "" {
 		// Use key data from environment variable
 		// Support both raw key data and base64-encoded key data
 		keyData := []byte(pc.config.SSHKeyData)
-		
+
 		// Try to decode as base64 first (if it fails, assume it's raw key data)
 		if decoded, err := base64.StdEncoding.DecodeString(pc.config.SSHKeyData); err == nil {
 			// Successfully decoded as base64 - check if it looks like a valid SSH key
@@ -1997,7 +2299,7 @@ func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string
 			}
 			// If base64 decode succeeded but doesn't look like a key, try raw anyway
 		}
-		
+
 		signer, err = ssh.ParsePrivateKey(keyData)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse SSH key data: %w", err)
@@ -2015,7 +2317,7 @@ func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string
 	} else {
 		return "", fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
 	}
-	
+
 	// Create SSH client config
 	sshConfig := &ssh.ClientConfig{
 		User:            pc.config.SSHUser,
@@ -2023,7 +2325,7 @@ func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Consider validating host keys for production
 		Timeout:         10 * time.Second,
 	}
-	
+
 	// Connect to Proxmox node via SSH
 	sshHost := pc.config.SSHHost
 	sshPort := "22"
@@ -2033,13 +2335,13 @@ func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string
 		sshHost = parts[0]
 		sshPort = parts[1]
 	}
-	
+
 	conn, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", sshHost, sshPort), sshConfig)
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to Proxmox node via SSH: %w", err)
 	}
 	defer conn.Close()
-	
+
 	// Determine snippets directory path
 	// Try to get storage path via API first, fallback to default
 	storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
@@ -2049,36 +2351,36 @@ func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string
 			snippetsPath = fmt.Sprintf("%s/snippets", pathVal)
 		}
 	}
-	
+
 	// Fallback to default path for local storage
 	if snippetsPath == "" {
 		snippetsPath = "/var/lib/vz/snippets"
 	}
-	
+
 	filePath := fmt.Sprintf("%s/%s", snippetsPath, filename)
 	logger.Debug("[ProxmoxClient] Writing snippet file to: %s", filePath)
-	
+
 	// Write file using dd via stdin
 	session, err := conn.NewSession()
 	if err != nil {
 		return "", fmt.Errorf("failed to create SSH session: %w", err)
 	}
 	defer session.Close()
-	
+
 	var stderr bytes.Buffer
 	session.Stderr = &stderr
-	
+
 	stdin, err := session.StdinPipe()
 	if err != nil {
 		return "", fmt.Errorf("failed to get stdin pipe: %w", err)
 	}
-	
+
 	cmd := fmt.Sprintf("/bin/sh -c 'dd of=\"%s\" bs=8192 2>/dev/null'", filePath)
 	if err := session.Start(cmd); err != nil {
 		stdin.Close()
 		return "", fmt.Errorf("failed to start dd command: %w", err)
 	}
-	
+
 	// Write content to stdin
 	if _, err := stdin.Write([]byte(content)); err != nil {
 		stdin.Close()
@@ -2086,7 +2388,7 @@ func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string
 		return "", fmt.Errorf("failed to write file content: %w", err)
 	}
 	stdin.Close()
-	
+
 	// Wait for command to complete
 	if err := session.Wait(); err != nil {
 		// Even if dd returns an error, verify if file was created
@@ -2098,7 +2400,7 @@ func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string
 		}
 		verifySession.Close()
 	}
-	
+
 	// Verify file exists (dd may succeed but file might not be created)
 	verifySession, err := conn.NewSession()
 	if err != nil {
@@ -2110,14 +2412,14 @@ func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string
 		return "", fmt.Errorf("file write completed but file %s does not exist", filePath)
 	}
 	verifySession.Close()
-	
+
 	// Set file permissions (non-critical)
 	chmodSession, _ := conn.NewSession()
 	chmodSession.Run(fmt.Sprintf("/bin/sh -c 'chmod 644 \"%s\"'", filePath))
 	chmodSession.Close()
-	
+
 	logger.Info("[ProxmoxClient] Successfully wrote snippet file via SSH: %s", filePath)
-	
+
 	// Return the cicustom path
 	snippetPath := fmt.Sprintf("user=%s:snippets/%s", storage, filename)
 	return snippetPath, nil
@@ -2134,11 +2436,11 @@ func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName strin
 	if pc.config.SSHKeyPath == "" && pc.config.SSHKeyData == "" {
 		return fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
 	}
-	
+
 	// Load SSH private key
 	var signer ssh.Signer
 	var err error
-	
+
 	if pc.config.SSHKeyData != "" {
 		keyData := []byte(pc.config.SSHKeyData)
 		if decoded, err := base64.StdEncoding.DecodeString(pc.config.SSHKeyData); err == nil {
@@ -2162,7 +2464,7 @@ func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName strin
 	} else {
 		return fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
 	}
-	
+
 	// Create SSH client config
 	sshConfig := &ssh.ClientConfig{
 		User:            pc.config.SSHUser,
@@ -2170,7 +2472,7 @@ func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName strin
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         10 * time.Second,
 	}
-	
+
 	// Connect to Proxmox node via SSH
 	sshHost := pc.config.SSHHost
 	sshPort := "22"
@@ -2179,13 +2481,13 @@ func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName strin
 		sshHost = parts[0]
 		sshPort = parts[1]
 	}
-	
+
 	conn, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", sshHost, sshPort), sshConfig)
 	if err != nil {
 		return fmt.Errorf("failed to connect to Proxmox node via SSH: %w", err)
 	}
 	defer conn.Close()
-	
+
 	// Determine snippets directory path
 	storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
 	var snippetsPath string
@@ -2194,20 +2496,20 @@ func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName strin
 			snippetsPath = fmt.Sprintf("%s/snippets", pathVal)
 		}
 	}
-	
+
 	if snippetsPath == "" {
 		snippetsPath = "/var/lib/vz/snippets"
 	}
-	
+
 	filePath := fmt.Sprintf("%s/%s", snippetsPath, filename)
-	
+
 	// Delete the file
 	session, err := conn.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create SSH session: %w", err)
 	}
 	defer session.Close()
-	
+
 	cmd := fmt.Sprintf("/bin/sh -c 'rm -f \"%s\"'", filePath)
 	if err := session.Run(cmd); err != nil {
 		// Check if file exists - if it doesn't, that's fine (already deleted)
@@ -2222,7 +2524,7 @@ func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName strin
 		logger.Debug("[ProxmoxClient] Snippet file %s does not exist (may have been already deleted)", filePath)
 		return nil
 	}
-	
+
 	logger.Info("[ProxmoxClient] Successfully deleted snippet file via SSH: %s", filePath)
 	return nil
 }
@@ -2852,11 +3154,11 @@ func (pc *ProxmoxClient) GetVMSSHKeys(ctx context.Context, nodeName string, vmID
 	if err != nil {
 		return "", fmt.Errorf("failed to get VM config: %w", err)
 	}
-	
+
 	if sshKeysRaw, ok := vmConfig["sshkeys"].(string); ok && sshKeysRaw != "" {
 		return sshKeysRaw, nil
 	}
-	
+
 	return "", nil // No SSH keys configured
 }
 
@@ -2867,7 +3169,7 @@ func (pc *ProxmoxClient) SeedSSHKeysFromProxmox(ctx context.Context, sshKeysRaw 
 	proxmoxFingerprints := make(map[string]bool)
 	seededCount := 0
 	deletedCount := 0
-	
+
 	// If Proxmox has keys, parse them
 	if sshKeysRaw != "" {
 		// URL-decode the value (Proxmox stores it URL-encoded)
@@ -2877,10 +3179,10 @@ func (pc *ProxmoxClient) SeedSSHKeysFromProxmox(ctx context.Context, sshKeysRaw 
 			decoded = sshKeysRaw
 			logger.Debug("[ProxmoxClient] Failed to URL-decode sshkeys, using as-is: %v", err)
 		}
-		
+
 		// Split by newlines to get individual keys
 		keyLines := strings.Split(decoded, "\n")
-		
+
 		for _, keyLine := range keyLines {
 			// Clean the key line
 			keyLine = strings.TrimSpace(keyLine)
@@ -2888,28 +3190,28 @@ func (pc *ProxmoxClient) SeedSSHKeysFromProxmox(ctx context.Context, sshKeysRaw 
 			if keyLine == "" {
 				continue
 			}
-			
+
 			// Parse the SSH key to validate it and get fingerprint
 			parsedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(keyLine))
 			if err != nil {
 				logger.Debug("[ProxmoxClient] Failed to parse SSH key from Proxmox (skipping): %v", err)
 				continue
 			}
-			
+
 			// Calculate fingerprint
 			fingerprint := ssh.FingerprintSHA256(parsedKey)
-			
+
 			// Track this fingerprint as existing in Proxmox
 			proxmoxFingerprints[fingerprint] = true
-			
+
 			// Extract comment from key if available (for name matching)
 			_, comment, _, _, _ := ssh.ParseAuthorizedKey([]byte(keyLine))
-			
+
 			// Check if key already exists in database - check both VPS-specific and org-wide
 			// We need to find the key that matches the scope we're seeding for
 			var existingKey database.SSHKey
 			var foundKey bool
-			
+
 			if vpsID != "" {
 				// Seeding for a specific VPS - first check for VPS-specific key
 				err = database.DB.Where("organization_id = ? AND fingerprint = ? AND vps_id = ?", organizationID, fingerprint, vpsID).First(&existingKey).Error
@@ -2932,7 +3234,7 @@ func (pc *ProxmoxClient) SeedSSHKeysFromProxmox(ctx context.Context, sshKeysRaw 
 					foundKey = true
 				}
 			}
-			
+
 			if foundKey {
 				// Key exists - update name only if it matches the scope
 				// Don't update org-wide key name when seeding from VPS-specific context
@@ -2942,12 +3244,12 @@ func (pc *ProxmoxClient) SeedSSHKeysFromProxmox(ctx context.Context, sshKeysRaw 
 					// Don't update the org-wide key's name - it should keep its own name
 					shouldUpdateName = false
 				}
-				
+
 				if shouldUpdateName && comment != "" {
 					// Proxmox has a comment - use it as the name (remove "Imported: " prefix if present)
 					oldName := existingKey.Name
 					needsUpdate := false
-					
+
 					if strings.HasPrefix(existingKey.Name, "Imported: ") {
 						// If current name starts with "Imported: ", compare without that prefix
 						currentNameWithoutPrefix := strings.TrimPrefix(existingKey.Name, "Imported: ")
@@ -2957,7 +3259,7 @@ func (pc *ProxmoxClient) SeedSSHKeysFromProxmox(ctx context.Context, sshKeysRaw 
 					} else if existingKey.Name != comment {
 						needsUpdate = true
 					}
-					
+
 					if needsUpdate {
 						// Name in Proxmox differs from DB - update DB to match Proxmox
 						existingKey.Name = comment
@@ -2975,22 +3277,22 @@ func (pc *ProxmoxClient) SeedSSHKeysFromProxmox(ctx context.Context, sshKeysRaw 
 				logger.Warn("[ProxmoxClient] Error checking for existing SSH key: %v", err)
 				continue
 			}
-			
+
 			// Key doesn't exist in database - seed it
 			// Comment was already extracted above
-			
+
 			// Generate a name for the key (use comment if available, otherwise use fingerprint)
 			seedName := "Imported from Proxmox"
 			if comment != "" {
 				seedName = fmt.Sprintf("Imported: %s", comment)
 			}
-			
+
 			keyID := fmt.Sprintf("ssh-%d", time.Now().UnixNano())
 			var vpsIDPtr *string
 			if vpsID != "" {
 				vpsIDPtr = &vpsID
 			}
-			
+
 			sshKey := database.SSHKey{
 				ID:             keyID,
 				OrganizationID: organizationID,
@@ -2999,24 +3301,24 @@ func (pc *ProxmoxClient) SeedSSHKeysFromProxmox(ctx context.Context, sshKeysRaw 
 				PublicKey:      keyLine,
 				Fingerprint:    fingerprint,
 			}
-			
+
 			if err := database.DB.Create(&sshKey).Error; err != nil {
 				logger.Warn("[ProxmoxClient] Failed to seed SSH key to database: %v", err)
 				continue
 			}
-			
+
 			// Create audit log entry for seeded key (system action)
 			go createSeededKeyAuditLog(organizationID, vpsID, keyID, fingerprint)
-			
+
 			seededCount++
 			logger.Info("[ProxmoxClient] Seeded SSH key %s from Proxmox to database (fingerprint: %s)", keyID, fingerprint)
 		}
-		
+
 		if seededCount > 0 {
 			logger.Info("[ProxmoxClient] Seeded %d SSH key(s) from Proxmox to database", seededCount)
 		}
 	}
-	
+
 	// Delete keys from database that are NOT in Proxmox (Proxmox is the source of truth)
 	// Get all keys for this organization/VPS from database
 	var dbKeys []database.SSHKey
@@ -3042,11 +3344,11 @@ func (pc *ProxmoxClient) SeedSSHKeysFromProxmox(ctx context.Context, sshKeysRaw 
 			}
 		}
 	}
-	
+
 	if deletedCount > 0 {
 		logger.Info("[ProxmoxClient] Deleted %d SSH key(s) from database that no longer exist in Proxmox", deletedCount)
 	}
-	
+
 	return nil
 }
 
@@ -3059,7 +3361,7 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 	// 1. If we seed before updating, deleted keys will be re-imported
 	// 2. If we seed after updating, we'd be seeding the keys we just set
 	// Seeding should be done separately, e.g., on VPS creation or explicit sync
-	
+
 	// Fetch SSH keys (VPS-specific + org-wide if vpsID provided, or just org-wide if empty)
 	var sshKeys []database.SSHKey
 	var err error
@@ -3098,11 +3400,11 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 	// Update VM config with SSH keys
 	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
 	formData := url.Values{}
-	
+
 	if len(sshKeysValue) > 0 {
 		// Encode SSH keys using reusable function (double-encoding for Proxmox v8.4)
 		encodedValue := encodeSSHKeysForProxmox(sshKeysValue)
-		
+
 		// Verify decoded value has no newlines (for debugging)
 		if decoded, err := url.QueryUnescape(encodedValue); err == nil {
 			// Double-decode to get back to original
@@ -3112,7 +3414,7 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 				}
 			}
 		}
-		
+
 		formData.Set("sshkeys", encodedValue)
 		logger.Info("[ProxmoxClient] Updating SSH keys for VM %d (org: %s) - %d key(s)", vmID, organizationID, len(sshKeys))
 		logger.Debug("[ProxmoxClient] SSH keys raw length: %d chars, encoded length: %d chars", len(sshKeysValue), len(encodedValue))
@@ -3129,7 +3431,7 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 		// Don't include sshkeys in the PUT request - Proxmox should keep existing values if parameter is omitted
 		// But we want to clear it, so we need to explicitly delete it
 		logger.Info("[ProxmoxClient] Clearing SSH keys for VM %d (org: %s) - no keys remain after exclusion", vmID, organizationID)
-		
+
 		// Use PUT with delete=sshkeys query parameter (this is how Proxmox web UI does it)
 		// PUT /nodes/{node}/qemu/{vmid}/config?delete=sshkeys
 		deleteEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config?delete=sshkeys", nodeName, vmID)
@@ -3161,7 +3463,7 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 				logger.Debug("[ProxmoxClient] PUT with delete=sshkeys failed: %v", deleteErr)
 			}
 		}
-		
+
 		// Fallback: send PUT with empty sshkeys value (in case delete=sshkeys doesn't work)
 		// Proxmox requires at least one parameter, so we must explicitly set sshkeys to empty string
 		formData = url.Values{}
@@ -3186,13 +3488,13 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 		body, _ := io.ReadAll(resp.Body)
 		errorBody := string(body)
 		logger.Error("[ProxmoxClient] Proxmox returned non-OK status %d: %s", resp.StatusCode, errorBody)
-		
+
 		// Check if this is the known Proxmox v8.4 sshkeys parsing bug
 		// Even though we send valid data, Proxmox may report a false newline error
 		if strings.Contains(errorBody, "invalid urlencoded string") && strings.Contains(errorBody, "sshkeys") {
 			logger.Warn("[ProxmoxClient] Proxmox v8.4 sshkeys parsing error (possible bug). Error: %s", errorBody)
 			logger.Warn("[ProxmoxClient] Attempting to work around by using cloudinit/regen to apply keys")
-			
+
 			// Try to work around by calling cloudinit/regen which might apply the keys anyway
 			// Even though the config update failed, the keys might be in the form data and regen might pick them up
 			regenEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit/regen", nodeName, vmID)
@@ -3205,11 +3507,11 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 					return nil
 				}
 			}
-			
+
 			// If regen didn't work, return the original error
 			return fmt.Errorf("failed to update SSH keys (Proxmox v8.4 sshkeys parsing issue): %s (status: %d)", errorBody, resp.StatusCode)
 		}
-		
+
 		return fmt.Errorf("failed to update SSH keys: %s (status: %d)", errorBody, resp.StatusCode)
 	}
 
@@ -3263,7 +3565,7 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 	}
 
 	logger.Info("[ProxmoxClient] Successfully updated SSH keys for VM %d (org: %s) - %d key(s) sent to Proxmox", vmID, organizationID, len(sshKeys))
-	
+
 	// Verify the update by fetching the keys back from Proxmox
 	// If Proxmox has keys that aren't in our database, we need to clear them
 	// This ensures Proxmox matches our database (the source of truth)
@@ -3289,13 +3591,13 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 					proxmoxKeyFingerprints[fingerprint] = true
 				}
 			}
-			
+
 			// Check which Proxmox keys exist in our database
 			expectedFingerprints := make(map[string]bool)
 			for _, key := range sshKeys {
 				expectedFingerprints[key.Fingerprint] = true
 			}
-			
+
 			// Find keys in Proxmox that aren't in our database
 			extraKeys := make([]string, 0)
 			for fp := range proxmoxKeyFingerprints {
@@ -3303,19 +3605,19 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 					extraKeys = append(extraKeys, fp)
 				}
 			}
-			
+
 			if len(extraKeys) > 0 {
 				// Proxmox still has keys that shouldn't be there - deletion failed
 				// Return an error so the caller knows the deletion didn't work
 				return fmt.Errorf("failed to clear SSH keys from Proxmox: Proxmox still has %d key(s) that should have been deleted (fingerprints: %v). This may be due to a Proxmox v8.4 bug where empty sshkeys parameter doesn't clear the keys", len(extraKeys), extraKeys)
 			}
-			
+
 			logger.Info("[ProxmoxClient] Verified: Proxmox SSH keys match our database (%d keys)", len(sshKeys))
 		}
 	} else {
 		logger.Warn("[ProxmoxClient] Failed to verify SSH keys in Proxmox after update: %v", err)
 	}
-	
+
 	return nil
 }
 
@@ -3396,15 +3698,15 @@ func (pc *ProxmoxClient) RecoverVMGuestAgent(ctx context.Context, nodeName strin
 	if currentUserData == "" {
 		currentUserData, _ = ciData.Data["user"].(string)
 	}
-	
+
 	// Check if guest agent is already configured
-	if strings.Contains(currentUserData, "qemu-guest-agent") && 
-	   strings.Contains(currentUserData, "systemctl")  {
+	if strings.Contains(currentUserData, "qemu-guest-agent") &&
+		strings.Contains(currentUserData, "systemctl") {
 		logger.Info("[ProxmoxClient] Guest agent already configured in cloud-init for VM %d", vmID)
 		// Still regenerate to ensure it's applied
 	} else {
 		logger.Info("[ProxmoxClient] Adding guest agent configuration to cloud-init for VM %d", vmID)
-		
+
 		// Build new userData with guest agent setup
 		// Start with cloud-config header if not present
 		newUserData := currentUserData
@@ -3559,17 +3861,17 @@ func createSeededKeyAuditLog(organizationID string, vpsID string, keyID string, 
 			logger.Error("[ProxmoxClient] Panic creating audit log for seeded key: %v", r)
 		}
 	}()
-	
+
 	// Use background context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	// Use MetricsDB (TimescaleDB) for audit logs
 	if database.MetricsDB == nil {
 		logger.Warn("[ProxmoxClient] Metrics database not available, skipping audit log for seeded key")
 		return
 	}
-	
+
 	// Determine resource type and ID
 	var resourceType *string
 	var resourceID *string
@@ -3582,7 +3884,7 @@ func createSeededKeyAuditLog(organizationID string, vpsID string, keyID string, 
 		resourceType = &rt
 		resourceID = &organizationID
 	}
-	
+
 	// Create audit log entry
 	auditLog := database.AuditLog{
 		ID:             fmt.Sprintf("audit-%d", time.Now().UnixNano()),
@@ -3600,7 +3902,7 @@ func createSeededKeyAuditLog(organizationID string, vpsID string, keyID string, 
 		DurationMs:     0,
 		CreatedAt:      time.Now(),
 	}
-	
+
 	if err := database.MetricsDB.WithContext(ctx).Create(&auditLog).Error; err != nil {
 		logger.Warn("[ProxmoxClient] Failed to create audit log for seeded key %s: %v", keyID, err)
 	} else {
@@ -3993,7 +4295,7 @@ func (pc *ProxmoxClient) GetSerialConsoleWebSocketURL(ctx context.Context, nodeN
 	params.Set("port", fmt.Sprintf("%d", port))
 	params.Set("vncticket", vncResp.Data.Ticket)
 	wsURL := fmt.Sprintf("%s/api2/json/nodes/%s/qemu/%d/vncwebsocket?%s", apiURL, nodeName, vmID, params.Encode())
-	
+
 	// Validate required parameters are present
 	if nodeName == "" {
 		return "", fmt.Errorf("node parameter is required")
@@ -4046,7 +4348,7 @@ func (pc *ProxmoxClient) configureVMFirewall(ctx context.Context, nodeName strin
 
 		// Get bridge name (default to vmbr0)
 		bridgeName := "vmbr0"
-		
+
 		// Get gateway IP from environment or use default subnet gateway
 		// Gateway IP is 10.15.3.10 for the 10.15.3.0/24 subnet (as per docs)
 		gatewayIP := os.Getenv("VPS_GATEWAY_IP")
@@ -4067,7 +4369,7 @@ func (pc *ProxmoxClient) configureVMFirewall(ctx context.Context, nodeName strin
 		allowRuleData.Set("dport", "22")
 		allowRuleData.Set("proto", "tcp")
 		allowRuleData.Set("comment", "Allow SSH from gateway")
-		
+
 		allowRuleResp, err := pc.apiRequestForm(ctx, "POST", ruleEndpoint, allowRuleData)
 		if err != nil {
 			logger.Warn("[ProxmoxClient] Failed to add firewall rule to allow SSH from gateway: %v", err)
