@@ -164,6 +164,21 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
+		// Stop SSH proxy server first (with longer timeout for active connections)
+		// When Stop() is called, it marks the server as draining, which causes
+		// the health check to fail. Docker Swarm will then stop routing new
+		// connections to this container but keep it running until connections close.
+		if serverInfo.SSHProxyServer != nil {
+			// Use a very long timeout (1 hour) to allow long-lived SSH sessions to complete.
+			// The health check will fail immediately when draining starts, so Swarm
+			// stops routing new connections, but the container keeps running for existing connections.
+			// This timeout is a safety net - ideally connections close naturally.
+			sshShutdownTimeout := 1 * time.Hour
+			if err := serverInfo.SSHProxyServer.Stop(sshShutdownTimeout); err != nil {
+				logger.Warn("Error during SSH proxy shutdown: %v", err)
+			}
+		}
+
 		if err := srv.Shutdown(ctx); err != nil {
 			logger.Warn("Error during server shutdown: %v", err)
 		} else {

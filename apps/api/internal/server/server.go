@@ -51,6 +51,7 @@ import (
 type ServerInfo struct {
 	Handler          http.Handler
 	DeploymentService *deploymentsvc.Service
+	SSHProxyServer   *vpssvc.SSHProxyServer
 }
 
 // New constructs the primary Connect handler with all service registrations and reflection.
@@ -58,8 +59,12 @@ type ServerInfo struct {
 func New() *ServerInfo {
 	log.Println("[Server] Registering routes...")
 	mux := http.NewServeMux()
-	registerRoot(mux)
-	deploymentService := registerServices(mux)
+	
+	// Create ServerInfo early so registerServices and registerRoot can access it
+	serverInfo := &ServerInfo{}
+	registerRoot(mux, serverInfo)
+	deploymentService := registerServices(mux, serverInfo)
+	serverInfo.DeploymentService = deploymentService
 	registerReflection(mux)
 
 	log.Println("[Server] Wrapping with h2c for HTTP/2...")
@@ -104,13 +109,11 @@ func New() *ServerInfo {
 	})
 
 	log.Println("[Server] Handler chain complete")
-	return &ServerInfo{
-		Handler:          handler,
-		DeploymentService: deploymentService,
-	}
+	serverInfo.Handler = handler
+	return serverInfo
 }
 
-func registerRoot(mux *http.ServeMux) {
+func registerRoot(mux *http.ServeMux, serverInfo *ServerInfo) {
 	// Root endpoint
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -126,9 +129,22 @@ func registerRoot(mux *http.ServeMux) {
 	})
 
 	// Health check endpoint (no auth required)
+	// This endpoint is used by Docker Swarm to determine container health.
+	// When the SSH proxy is draining (graceful shutdown), we return unhealthy
+	// so Swarm stops routing new connections but keeps the container running.
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Check if SSH proxy is draining (graceful shutdown in progress)
+		// When draining, return unhealthy so Docker Swarm stops routing new connections
+		// but keeps the container running until all connections close
+		if serverInfo.SSHProxyServer != nil && serverInfo.SSHProxyServer.IsDraining() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"unhealthy","message":"draining","reason":"SSH proxy is draining connections for graceful shutdown"}`))
 			return
 		}
 
@@ -275,7 +291,7 @@ func registerRoot(mux *http.ServeMux) {
 	})
 }
 
-func registerServices(mux *http.ServeMux) *deploymentsvc.Service {
+func registerServices(mux *http.ServeMux, serverInfo *ServerInfo) *deploymentsvc.Service {
 	// Create auth configuration with JWKS from Zitadel
 	authConfig := auth.NewAuthConfig()
 
@@ -477,6 +493,8 @@ func registerServices(mux *http.ServeMux) *deploymentsvc.Service {
 	sshProxyServer, err := vpssvc.NewSSHProxyServer(sshProxyPort, vpsService)
 	if err == nil {
 		// Start SSH proxy in background (context will be managed by main.go)
+		// Store reference for graceful shutdown
+		serverInfo.SSHProxyServer = sshProxyServer
 		go func() {
 			ctx := context.Background()
 			if err := sshProxyServer.Start(ctx); err != nil {
