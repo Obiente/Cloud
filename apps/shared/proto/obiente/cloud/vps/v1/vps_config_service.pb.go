@@ -9,6 +9,7 @@ package vpsv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -1342,11 +1343,345 @@ func (x *RemoveTerminalKeyResponse) GetMessage() string {
 	return ""
 }
 
+// GetTerminalKeyRequest gets the web terminal SSH key status
+type GetTerminalKeyRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	VpsId          string                 `protobuf:"bytes,2,opt,name=vps_id,json=vpsId,proto3" json:"vps_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetTerminalKeyRequest) Reset() {
+	*x = GetTerminalKeyRequest{}
+	mi := &file_obiente_cloud_vps_v1_vps_config_service_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTerminalKeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTerminalKeyRequest) ProtoMessage() {}
+
+func (x *GetTerminalKeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_config_service_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTerminalKeyRequest.ProtoReflect.Descriptor instead.
+func (*GetTerminalKeyRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_config_service_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *GetTerminalKeyRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *GetTerminalKeyRequest) GetVpsId() string {
+	if x != nil {
+		return x.VpsId
+	}
+	return ""
+}
+
+// GetTerminalKeyResponse returns the terminal key status
+type GetTerminalKeyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Fingerprint   string                 `protobuf:"bytes,1,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"`              // Fingerprint of the key
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // Timestamp when the key was created
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // Timestamp when the key was last updated
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTerminalKeyResponse) Reset() {
+	*x = GetTerminalKeyResponse{}
+	mi := &file_obiente_cloud_vps_v1_vps_config_service_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTerminalKeyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTerminalKeyResponse) ProtoMessage() {}
+
+func (x *GetTerminalKeyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_config_service_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTerminalKeyResponse.ProtoReflect.Descriptor instead.
+func (*GetTerminalKeyResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_config_service_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *GetTerminalKeyResponse) GetFingerprint() string {
+	if x != nil {
+		return x.Fingerprint
+	}
+	return ""
+}
+
+func (x *GetTerminalKeyResponse) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *GetTerminalKeyResponse) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+// RotateBastionKeyRequest rotates the bastion SSH key
+type RotateBastionKeyRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	VpsId          string                 `protobuf:"bytes,2,opt,name=vps_id,json=vpsId,proto3" json:"vps_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RotateBastionKeyRequest) Reset() {
+	*x = RotateBastionKeyRequest{}
+	mi := &file_obiente_cloud_vps_v1_vps_config_service_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RotateBastionKeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RotateBastionKeyRequest) ProtoMessage() {}
+
+func (x *RotateBastionKeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_config_service_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RotateBastionKeyRequest.ProtoReflect.Descriptor instead.
+func (*RotateBastionKeyRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_config_service_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *RotateBastionKeyRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *RotateBastionKeyRequest) GetVpsId() string {
+	if x != nil {
+		return x.VpsId
+	}
+	return ""
+}
+
+// RotateBastionKeyResponse confirms the key rotation
+type RotateBastionKeyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Fingerprint   string                 `protobuf:"bytes,1,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"` // Fingerprint of the new key
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`         // Information about when the new key will take effect
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RotateBastionKeyResponse) Reset() {
+	*x = RotateBastionKeyResponse{}
+	mi := &file_obiente_cloud_vps_v1_vps_config_service_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RotateBastionKeyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RotateBastionKeyResponse) ProtoMessage() {}
+
+func (x *RotateBastionKeyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_config_service_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RotateBastionKeyResponse.ProtoReflect.Descriptor instead.
+func (*RotateBastionKeyResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_config_service_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *RotateBastionKeyResponse) GetFingerprint() string {
+	if x != nil {
+		return x.Fingerprint
+	}
+	return ""
+}
+
+func (x *RotateBastionKeyResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+// GetBastionKeyRequest gets the bastion SSH key status
+type GetBastionKeyRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId string                 `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	VpsId          string                 `protobuf:"bytes,2,opt,name=vps_id,json=vpsId,proto3" json:"vps_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetBastionKeyRequest) Reset() {
+	*x = GetBastionKeyRequest{}
+	mi := &file_obiente_cloud_vps_v1_vps_config_service_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBastionKeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBastionKeyRequest) ProtoMessage() {}
+
+func (x *GetBastionKeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_config_service_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBastionKeyRequest.ProtoReflect.Descriptor instead.
+func (*GetBastionKeyRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_config_service_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *GetBastionKeyRequest) GetOrganizationId() string {
+	if x != nil {
+		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *GetBastionKeyRequest) GetVpsId() string {
+	if x != nil {
+		return x.VpsId
+	}
+	return ""
+}
+
+// GetBastionKeyResponse returns the bastion key status
+type GetBastionKeyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Fingerprint   string                 `protobuf:"bytes,1,opt,name=fingerprint,proto3" json:"fingerprint,omitempty"`              // Fingerprint of the key
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // Timestamp when the key was created
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // Timestamp when the key was last updated
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetBastionKeyResponse) Reset() {
+	*x = GetBastionKeyResponse{}
+	mi := &file_obiente_cloud_vps_v1_vps_config_service_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetBastionKeyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetBastionKeyResponse) ProtoMessage() {}
+
+func (x *GetBastionKeyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_vps_v1_vps_config_service_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetBastionKeyResponse.ProtoReflect.Descriptor instead.
+func (*GetBastionKeyResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_vps_v1_vps_config_service_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *GetBastionKeyResponse) GetFingerprint() string {
+	if x != nil {
+		return x.Fingerprint
+	}
+	return ""
+}
+
+func (x *GetBastionKeyResponse) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *GetBastionKeyResponse) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
 var File_obiente_cloud_vps_v1_vps_config_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_vps_v1_vps_config_service_proto_rawDesc = "" +
 	"\n" +
-	"-obiente/cloud/vps/v1/vps_config_service.proto\x12\x14obiente.cloud.vps.v1\x1a&obiente/cloud/vps/v1/vps_service.proto\"[\n" +
+	"-obiente/cloud/vps/v1/vps_config_service.proto\x12\x14obiente.cloud.vps.v1\x1a&obiente/cloud/vps/v1/vps_service.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"[\n" +
 	"\x19GetCloudInitConfigRequest\x12'\n" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x15\n" +
 	"\x06vps_id\x18\x02 \x01(\tR\x05vpsId\"b\n" +
@@ -1457,7 +1792,31 @@ const file_obiente_cloud_vps_v1_vps_config_service_proto_rawDesc = "" +
 	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x15\n" +
 	"\x06vps_id\x18\x02 \x01(\tR\x05vpsId\"5\n" +
 	"\x19RemoveTerminalKeyResponse\x12\x18\n" +
-	"\amessage\x18\x01 \x01(\tR\amessage2\x85\t\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\"W\n" +
+	"\x15GetTerminalKeyRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x15\n" +
+	"\x06vps_id\x18\x02 \x01(\tR\x05vpsId\"\xb0\x01\n" +
+	"\x16GetTerminalKeyResponse\x12 \n" +
+	"\vfingerprint\x18\x01 \x01(\tR\vfingerprint\x129\n" +
+	"\n" +
+	"created_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"Y\n" +
+	"\x17RotateBastionKeyRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x15\n" +
+	"\x06vps_id\x18\x02 \x01(\tR\x05vpsId\"V\n" +
+	"\x18RotateBastionKeyResponse\x12 \n" +
+	"\vfingerprint\x18\x01 \x01(\tR\vfingerprint\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"V\n" +
+	"\x14GetBastionKeyRequest\x12'\n" +
+	"\x0forganization_id\x18\x01 \x01(\tR\x0eorganizationId\x12\x15\n" +
+	"\x06vps_id\x18\x02 \x01(\tR\x05vpsId\"\xaf\x01\n" +
+	"\x15GetBastionKeyResponse\x12 \n" +
+	"\vfingerprint\x18\x01 \x01(\tR\vfingerprint\x129\n" +
+	"\n" +
+	"created_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt2\xcf\v\n" +
 	"\x10VPSConfigService\x12w\n" +
 	"\x12GetCloudInitConfig\x12/.obiente.cloud.vps.v1.GetCloudInitConfigRequest\x1a0.obiente.cloud.vps.v1.GetCloudInitConfigResponse\x12\x80\x01\n" +
 	"\x15UpdateCloudInitConfig\x122.obiente.cloud.vps.v1.UpdateCloudInitConfigRequest\x1a3.obiente.cloud.vps.v1.UpdateCloudInitConfigResponse\x12e\n" +
@@ -1468,7 +1827,10 @@ const file_obiente_cloud_vps_v1_vps_config_service_proto_rawDesc = "" +
 	"\x0fSetUserPassword\x12,.obiente.cloud.vps.v1.SetUserPasswordRequest\x1a-.obiente.cloud.vps.v1.SetUserPasswordResponse\x12t\n" +
 	"\x11UpdateUserSSHKeys\x12..obiente.cloud.vps.v1.UpdateUserSSHKeysRequest\x1a/.obiente.cloud.vps.v1.UpdateUserSSHKeysResponse\x12t\n" +
 	"\x11RotateTerminalKey\x12..obiente.cloud.vps.v1.RotateTerminalKeyRequest\x1a/.obiente.cloud.vps.v1.RotateTerminalKeyResponse\x12t\n" +
-	"\x11RemoveTerminalKey\x12..obiente.cloud.vps.v1.RemoveTerminalKeyRequest\x1a/.obiente.cloud.vps.v1.RemoveTerminalKeyResponseBGZEgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1;vpsv1b\x06proto3"
+	"\x11RemoveTerminalKey\x12..obiente.cloud.vps.v1.RemoveTerminalKeyRequest\x1a/.obiente.cloud.vps.v1.RemoveTerminalKeyResponse\x12k\n" +
+	"\x0eGetTerminalKey\x12+.obiente.cloud.vps.v1.GetTerminalKeyRequest\x1a,.obiente.cloud.vps.v1.GetTerminalKeyResponse\x12q\n" +
+	"\x10RotateBastionKey\x12-.obiente.cloud.vps.v1.RotateBastionKeyRequest\x1a..obiente.cloud.vps.v1.RotateBastionKeyResponse\x12h\n" +
+	"\rGetBastionKey\x12*.obiente.cloud.vps.v1.GetBastionKeyRequest\x1a+.obiente.cloud.vps.v1.GetBastionKeyResponseBGZEgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1;vpsv1b\x06proto3"
 
 var (
 	file_obiente_cloud_vps_v1_vps_config_service_proto_rawDescOnce sync.Once
@@ -1482,7 +1844,7 @@ func file_obiente_cloud_vps_v1_vps_config_service_proto_rawDescGZIP() []byte {
 	return file_obiente_cloud_vps_v1_vps_config_service_proto_rawDescData
 }
 
-var file_obiente_cloud_vps_v1_vps_config_service_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_obiente_cloud_vps_v1_vps_config_service_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_obiente_cloud_vps_v1_vps_config_service_proto_goTypes = []any{
 	(*GetCloudInitConfigRequest)(nil),     // 0: obiente.cloud.vps.v1.GetCloudInitConfigRequest
 	(*GetCloudInitConfigResponse)(nil),    // 1: obiente.cloud.vps.v1.GetCloudInitConfigResponse
@@ -1505,41 +1867,58 @@ var file_obiente_cloud_vps_v1_vps_config_service_proto_goTypes = []any{
 	(*RotateTerminalKeyResponse)(nil),     // 18: obiente.cloud.vps.v1.RotateTerminalKeyResponse
 	(*RemoveTerminalKeyRequest)(nil),      // 19: obiente.cloud.vps.v1.RemoveTerminalKeyRequest
 	(*RemoveTerminalKeyResponse)(nil),     // 20: obiente.cloud.vps.v1.RemoveTerminalKeyResponse
-	(*CloudInitConfig)(nil),               // 21: obiente.cloud.vps.v1.CloudInitConfig
+	(*GetTerminalKeyRequest)(nil),         // 21: obiente.cloud.vps.v1.GetTerminalKeyRequest
+	(*GetTerminalKeyResponse)(nil),        // 22: obiente.cloud.vps.v1.GetTerminalKeyResponse
+	(*RotateBastionKeyRequest)(nil),       // 23: obiente.cloud.vps.v1.RotateBastionKeyRequest
+	(*RotateBastionKeyResponse)(nil),      // 24: obiente.cloud.vps.v1.RotateBastionKeyResponse
+	(*GetBastionKeyRequest)(nil),          // 25: obiente.cloud.vps.v1.GetBastionKeyRequest
+	(*GetBastionKeyResponse)(nil),         // 26: obiente.cloud.vps.v1.GetBastionKeyResponse
+	(*CloudInitConfig)(nil),               // 27: obiente.cloud.vps.v1.CloudInitConfig
+	(*timestamppb.Timestamp)(nil),         // 28: google.protobuf.Timestamp
 }
 var file_obiente_cloud_vps_v1_vps_config_service_proto_depIdxs = []int32{
-	21, // 0: obiente.cloud.vps.v1.GetCloudInitConfigResponse.cloud_init:type_name -> obiente.cloud.vps.v1.CloudInitConfig
-	21, // 1: obiente.cloud.vps.v1.UpdateCloudInitConfigRequest.cloud_init:type_name -> obiente.cloud.vps.v1.CloudInitConfig
-	21, // 2: obiente.cloud.vps.v1.UpdateCloudInitConfigResponse.cloud_init:type_name -> obiente.cloud.vps.v1.CloudInitConfig
+	27, // 0: obiente.cloud.vps.v1.GetCloudInitConfigResponse.cloud_init:type_name -> obiente.cloud.vps.v1.CloudInitConfig
+	27, // 1: obiente.cloud.vps.v1.UpdateCloudInitConfigRequest.cloud_init:type_name -> obiente.cloud.vps.v1.CloudInitConfig
+	27, // 2: obiente.cloud.vps.v1.UpdateCloudInitConfigResponse.cloud_init:type_name -> obiente.cloud.vps.v1.CloudInitConfig
 	6,  // 3: obiente.cloud.vps.v1.ListVPSUsersResponse.users:type_name -> obiente.cloud.vps.v1.VPSUser
 	6,  // 4: obiente.cloud.vps.v1.CreateVPSUserResponse.user:type_name -> obiente.cloud.vps.v1.VPSUser
 	6,  // 5: obiente.cloud.vps.v1.UpdateVPSUserResponse.user:type_name -> obiente.cloud.vps.v1.VPSUser
 	6,  // 6: obiente.cloud.vps.v1.UpdateUserSSHKeysResponse.user:type_name -> obiente.cloud.vps.v1.VPSUser
-	0,  // 7: obiente.cloud.vps.v1.VPSConfigService.GetCloudInitConfig:input_type -> obiente.cloud.vps.v1.GetCloudInitConfigRequest
-	2,  // 8: obiente.cloud.vps.v1.VPSConfigService.UpdateCloudInitConfig:input_type -> obiente.cloud.vps.v1.UpdateCloudInitConfigRequest
-	4,  // 9: obiente.cloud.vps.v1.VPSConfigService.ListVPSUsers:input_type -> obiente.cloud.vps.v1.ListVPSUsersRequest
-	7,  // 10: obiente.cloud.vps.v1.VPSConfigService.CreateVPSUser:input_type -> obiente.cloud.vps.v1.CreateVPSUserRequest
-	9,  // 11: obiente.cloud.vps.v1.VPSConfigService.UpdateVPSUser:input_type -> obiente.cloud.vps.v1.UpdateVPSUserRequest
-	11, // 12: obiente.cloud.vps.v1.VPSConfigService.DeleteVPSUser:input_type -> obiente.cloud.vps.v1.DeleteVPSUserRequest
-	13, // 13: obiente.cloud.vps.v1.VPSConfigService.SetUserPassword:input_type -> obiente.cloud.vps.v1.SetUserPasswordRequest
-	15, // 14: obiente.cloud.vps.v1.VPSConfigService.UpdateUserSSHKeys:input_type -> obiente.cloud.vps.v1.UpdateUserSSHKeysRequest
-	17, // 15: obiente.cloud.vps.v1.VPSConfigService.RotateTerminalKey:input_type -> obiente.cloud.vps.v1.RotateTerminalKeyRequest
-	19, // 16: obiente.cloud.vps.v1.VPSConfigService.RemoveTerminalKey:input_type -> obiente.cloud.vps.v1.RemoveTerminalKeyRequest
-	1,  // 17: obiente.cloud.vps.v1.VPSConfigService.GetCloudInitConfig:output_type -> obiente.cloud.vps.v1.GetCloudInitConfigResponse
-	3,  // 18: obiente.cloud.vps.v1.VPSConfigService.UpdateCloudInitConfig:output_type -> obiente.cloud.vps.v1.UpdateCloudInitConfigResponse
-	5,  // 19: obiente.cloud.vps.v1.VPSConfigService.ListVPSUsers:output_type -> obiente.cloud.vps.v1.ListVPSUsersResponse
-	8,  // 20: obiente.cloud.vps.v1.VPSConfigService.CreateVPSUser:output_type -> obiente.cloud.vps.v1.CreateVPSUserResponse
-	10, // 21: obiente.cloud.vps.v1.VPSConfigService.UpdateVPSUser:output_type -> obiente.cloud.vps.v1.UpdateVPSUserResponse
-	12, // 22: obiente.cloud.vps.v1.VPSConfigService.DeleteVPSUser:output_type -> obiente.cloud.vps.v1.DeleteVPSUserResponse
-	14, // 23: obiente.cloud.vps.v1.VPSConfigService.SetUserPassword:output_type -> obiente.cloud.vps.v1.SetUserPasswordResponse
-	16, // 24: obiente.cloud.vps.v1.VPSConfigService.UpdateUserSSHKeys:output_type -> obiente.cloud.vps.v1.UpdateUserSSHKeysResponse
-	18, // 25: obiente.cloud.vps.v1.VPSConfigService.RotateTerminalKey:output_type -> obiente.cloud.vps.v1.RotateTerminalKeyResponse
-	20, // 26: obiente.cloud.vps.v1.VPSConfigService.RemoveTerminalKey:output_type -> obiente.cloud.vps.v1.RemoveTerminalKeyResponse
-	17, // [17:27] is the sub-list for method output_type
-	7,  // [7:17] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	28, // 7: obiente.cloud.vps.v1.GetTerminalKeyResponse.created_at:type_name -> google.protobuf.Timestamp
+	28, // 8: obiente.cloud.vps.v1.GetTerminalKeyResponse.updated_at:type_name -> google.protobuf.Timestamp
+	28, // 9: obiente.cloud.vps.v1.GetBastionKeyResponse.created_at:type_name -> google.protobuf.Timestamp
+	28, // 10: obiente.cloud.vps.v1.GetBastionKeyResponse.updated_at:type_name -> google.protobuf.Timestamp
+	0,  // 11: obiente.cloud.vps.v1.VPSConfigService.GetCloudInitConfig:input_type -> obiente.cloud.vps.v1.GetCloudInitConfigRequest
+	2,  // 12: obiente.cloud.vps.v1.VPSConfigService.UpdateCloudInitConfig:input_type -> obiente.cloud.vps.v1.UpdateCloudInitConfigRequest
+	4,  // 13: obiente.cloud.vps.v1.VPSConfigService.ListVPSUsers:input_type -> obiente.cloud.vps.v1.ListVPSUsersRequest
+	7,  // 14: obiente.cloud.vps.v1.VPSConfigService.CreateVPSUser:input_type -> obiente.cloud.vps.v1.CreateVPSUserRequest
+	9,  // 15: obiente.cloud.vps.v1.VPSConfigService.UpdateVPSUser:input_type -> obiente.cloud.vps.v1.UpdateVPSUserRequest
+	11, // 16: obiente.cloud.vps.v1.VPSConfigService.DeleteVPSUser:input_type -> obiente.cloud.vps.v1.DeleteVPSUserRequest
+	13, // 17: obiente.cloud.vps.v1.VPSConfigService.SetUserPassword:input_type -> obiente.cloud.vps.v1.SetUserPasswordRequest
+	15, // 18: obiente.cloud.vps.v1.VPSConfigService.UpdateUserSSHKeys:input_type -> obiente.cloud.vps.v1.UpdateUserSSHKeysRequest
+	17, // 19: obiente.cloud.vps.v1.VPSConfigService.RotateTerminalKey:input_type -> obiente.cloud.vps.v1.RotateTerminalKeyRequest
+	19, // 20: obiente.cloud.vps.v1.VPSConfigService.RemoveTerminalKey:input_type -> obiente.cloud.vps.v1.RemoveTerminalKeyRequest
+	21, // 21: obiente.cloud.vps.v1.VPSConfigService.GetTerminalKey:input_type -> obiente.cloud.vps.v1.GetTerminalKeyRequest
+	23, // 22: obiente.cloud.vps.v1.VPSConfigService.RotateBastionKey:input_type -> obiente.cloud.vps.v1.RotateBastionKeyRequest
+	25, // 23: obiente.cloud.vps.v1.VPSConfigService.GetBastionKey:input_type -> obiente.cloud.vps.v1.GetBastionKeyRequest
+	1,  // 24: obiente.cloud.vps.v1.VPSConfigService.GetCloudInitConfig:output_type -> obiente.cloud.vps.v1.GetCloudInitConfigResponse
+	3,  // 25: obiente.cloud.vps.v1.VPSConfigService.UpdateCloudInitConfig:output_type -> obiente.cloud.vps.v1.UpdateCloudInitConfigResponse
+	5,  // 26: obiente.cloud.vps.v1.VPSConfigService.ListVPSUsers:output_type -> obiente.cloud.vps.v1.ListVPSUsersResponse
+	8,  // 27: obiente.cloud.vps.v1.VPSConfigService.CreateVPSUser:output_type -> obiente.cloud.vps.v1.CreateVPSUserResponse
+	10, // 28: obiente.cloud.vps.v1.VPSConfigService.UpdateVPSUser:output_type -> obiente.cloud.vps.v1.UpdateVPSUserResponse
+	12, // 29: obiente.cloud.vps.v1.VPSConfigService.DeleteVPSUser:output_type -> obiente.cloud.vps.v1.DeleteVPSUserResponse
+	14, // 30: obiente.cloud.vps.v1.VPSConfigService.SetUserPassword:output_type -> obiente.cloud.vps.v1.SetUserPasswordResponse
+	16, // 31: obiente.cloud.vps.v1.VPSConfigService.UpdateUserSSHKeys:output_type -> obiente.cloud.vps.v1.UpdateUserSSHKeysResponse
+	18, // 32: obiente.cloud.vps.v1.VPSConfigService.RotateTerminalKey:output_type -> obiente.cloud.vps.v1.RotateTerminalKeyResponse
+	20, // 33: obiente.cloud.vps.v1.VPSConfigService.RemoveTerminalKey:output_type -> obiente.cloud.vps.v1.RemoveTerminalKeyResponse
+	22, // 34: obiente.cloud.vps.v1.VPSConfigService.GetTerminalKey:output_type -> obiente.cloud.vps.v1.GetTerminalKeyResponse
+	24, // 35: obiente.cloud.vps.v1.VPSConfigService.RotateBastionKey:output_type -> obiente.cloud.vps.v1.RotateBastionKeyResponse
+	26, // 36: obiente.cloud.vps.v1.VPSConfigService.GetBastionKey:output_type -> obiente.cloud.vps.v1.GetBastionKeyResponse
+	24, // [24:37] is the sub-list for method output_type
+	11, // [11:24] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_vps_v1_vps_config_service_proto_init() }
@@ -1557,7 +1936,7 @@ func file_obiente_cloud_vps_v1_vps_config_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_vps_v1_vps_config_service_proto_rawDesc), len(file_obiente_cloud_vps_v1_vps_config_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   21,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

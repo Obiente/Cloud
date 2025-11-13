@@ -63,6 +63,15 @@ const (
 	// VPSConfigServiceRemoveTerminalKeyProcedure is the fully-qualified name of the VPSConfigService's
 	// RemoveTerminalKey RPC.
 	VPSConfigServiceRemoveTerminalKeyProcedure = "/obiente.cloud.vps.v1.VPSConfigService/RemoveTerminalKey"
+	// VPSConfigServiceGetTerminalKeyProcedure is the fully-qualified name of the VPSConfigService's
+	// GetTerminalKey RPC.
+	VPSConfigServiceGetTerminalKeyProcedure = "/obiente.cloud.vps.v1.VPSConfigService/GetTerminalKey"
+	// VPSConfigServiceRotateBastionKeyProcedure is the fully-qualified name of the VPSConfigService's
+	// RotateBastionKey RPC.
+	VPSConfigServiceRotateBastionKeyProcedure = "/obiente.cloud.vps.v1.VPSConfigService/RotateBastionKey"
+	// VPSConfigServiceGetBastionKeyProcedure is the fully-qualified name of the VPSConfigService's
+	// GetBastionKey RPC.
+	VPSConfigServiceGetBastionKeyProcedure = "/obiente.cloud.vps.v1.VPSConfigService/GetBastionKey"
 )
 
 // VPSConfigServiceClient is a client for the obiente.cloud.vps.v1.VPSConfigService service.
@@ -87,6 +96,12 @@ type VPSConfigServiceClient interface {
 	RotateTerminalKey(context.Context, *connect.Request[v1.RotateTerminalKeyRequest]) (*connect.Response[v1.RotateTerminalKeyResponse], error)
 	// Remove the web terminal SSH key for a VPS instance
 	RemoveTerminalKey(context.Context, *connect.Request[v1.RemoveTerminalKeyRequest]) (*connect.Response[v1.RemoveTerminalKeyResponse], error)
+	// Get the web terminal SSH key status for a VPS instance
+	GetTerminalKey(context.Context, *connect.Request[v1.GetTerminalKeyRequest]) (*connect.Response[v1.GetTerminalKeyResponse], error)
+	// Rotate the bastion SSH key for a VPS instance
+	RotateBastionKey(context.Context, *connect.Request[v1.RotateBastionKeyRequest]) (*connect.Response[v1.RotateBastionKeyResponse], error)
+	// Get the bastion SSH key status for a VPS instance
+	GetBastionKey(context.Context, *connect.Request[v1.GetBastionKeyRequest]) (*connect.Response[v1.GetBastionKeyResponse], error)
 }
 
 // NewVPSConfigServiceClient constructs a client for the obiente.cloud.vps.v1.VPSConfigService
@@ -160,6 +175,24 @@ func NewVPSConfigServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(vPSConfigServiceMethods.ByName("RemoveTerminalKey")),
 			connect.WithClientOptions(opts...),
 		),
+		getTerminalKey: connect.NewClient[v1.GetTerminalKeyRequest, v1.GetTerminalKeyResponse](
+			httpClient,
+			baseURL+VPSConfigServiceGetTerminalKeyProcedure,
+			connect.WithSchema(vPSConfigServiceMethods.ByName("GetTerminalKey")),
+			connect.WithClientOptions(opts...),
+		),
+		rotateBastionKey: connect.NewClient[v1.RotateBastionKeyRequest, v1.RotateBastionKeyResponse](
+			httpClient,
+			baseURL+VPSConfigServiceRotateBastionKeyProcedure,
+			connect.WithSchema(vPSConfigServiceMethods.ByName("RotateBastionKey")),
+			connect.WithClientOptions(opts...),
+		),
+		getBastionKey: connect.NewClient[v1.GetBastionKeyRequest, v1.GetBastionKeyResponse](
+			httpClient,
+			baseURL+VPSConfigServiceGetBastionKeyProcedure,
+			connect.WithSchema(vPSConfigServiceMethods.ByName("GetBastionKey")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -175,6 +208,9 @@ type vPSConfigServiceClient struct {
 	updateUserSSHKeys     *connect.Client[v1.UpdateUserSSHKeysRequest, v1.UpdateUserSSHKeysResponse]
 	rotateTerminalKey     *connect.Client[v1.RotateTerminalKeyRequest, v1.RotateTerminalKeyResponse]
 	removeTerminalKey     *connect.Client[v1.RemoveTerminalKeyRequest, v1.RemoveTerminalKeyResponse]
+	getTerminalKey        *connect.Client[v1.GetTerminalKeyRequest, v1.GetTerminalKeyResponse]
+	rotateBastionKey      *connect.Client[v1.RotateBastionKeyRequest, v1.RotateBastionKeyResponse]
+	getBastionKey         *connect.Client[v1.GetBastionKeyRequest, v1.GetBastionKeyResponse]
 }
 
 // GetCloudInitConfig calls obiente.cloud.vps.v1.VPSConfigService.GetCloudInitConfig.
@@ -227,6 +263,21 @@ func (c *vPSConfigServiceClient) RemoveTerminalKey(ctx context.Context, req *con
 	return c.removeTerminalKey.CallUnary(ctx, req)
 }
 
+// GetTerminalKey calls obiente.cloud.vps.v1.VPSConfigService.GetTerminalKey.
+func (c *vPSConfigServiceClient) GetTerminalKey(ctx context.Context, req *connect.Request[v1.GetTerminalKeyRequest]) (*connect.Response[v1.GetTerminalKeyResponse], error) {
+	return c.getTerminalKey.CallUnary(ctx, req)
+}
+
+// RotateBastionKey calls obiente.cloud.vps.v1.VPSConfigService.RotateBastionKey.
+func (c *vPSConfigServiceClient) RotateBastionKey(ctx context.Context, req *connect.Request[v1.RotateBastionKeyRequest]) (*connect.Response[v1.RotateBastionKeyResponse], error) {
+	return c.rotateBastionKey.CallUnary(ctx, req)
+}
+
+// GetBastionKey calls obiente.cloud.vps.v1.VPSConfigService.GetBastionKey.
+func (c *vPSConfigServiceClient) GetBastionKey(ctx context.Context, req *connect.Request[v1.GetBastionKeyRequest]) (*connect.Response[v1.GetBastionKeyResponse], error) {
+	return c.getBastionKey.CallUnary(ctx, req)
+}
+
 // VPSConfigServiceHandler is an implementation of the obiente.cloud.vps.v1.VPSConfigService
 // service.
 type VPSConfigServiceHandler interface {
@@ -250,6 +301,12 @@ type VPSConfigServiceHandler interface {
 	RotateTerminalKey(context.Context, *connect.Request[v1.RotateTerminalKeyRequest]) (*connect.Response[v1.RotateTerminalKeyResponse], error)
 	// Remove the web terminal SSH key for a VPS instance
 	RemoveTerminalKey(context.Context, *connect.Request[v1.RemoveTerminalKeyRequest]) (*connect.Response[v1.RemoveTerminalKeyResponse], error)
+	// Get the web terminal SSH key status for a VPS instance
+	GetTerminalKey(context.Context, *connect.Request[v1.GetTerminalKeyRequest]) (*connect.Response[v1.GetTerminalKeyResponse], error)
+	// Rotate the bastion SSH key for a VPS instance
+	RotateBastionKey(context.Context, *connect.Request[v1.RotateBastionKeyRequest]) (*connect.Response[v1.RotateBastionKeyResponse], error)
+	// Get the bastion SSH key status for a VPS instance
+	GetBastionKey(context.Context, *connect.Request[v1.GetBastionKeyRequest]) (*connect.Response[v1.GetBastionKeyResponse], error)
 }
 
 // NewVPSConfigServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -319,6 +376,24 @@ func NewVPSConfigServiceHandler(svc VPSConfigServiceHandler, opts ...connect.Han
 		connect.WithSchema(vPSConfigServiceMethods.ByName("RemoveTerminalKey")),
 		connect.WithHandlerOptions(opts...),
 	)
+	vPSConfigServiceGetTerminalKeyHandler := connect.NewUnaryHandler(
+		VPSConfigServiceGetTerminalKeyProcedure,
+		svc.GetTerminalKey,
+		connect.WithSchema(vPSConfigServiceMethods.ByName("GetTerminalKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSConfigServiceRotateBastionKeyHandler := connect.NewUnaryHandler(
+		VPSConfigServiceRotateBastionKeyProcedure,
+		svc.RotateBastionKey,
+		connect.WithSchema(vPSConfigServiceMethods.ByName("RotateBastionKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSConfigServiceGetBastionKeyHandler := connect.NewUnaryHandler(
+		VPSConfigServiceGetBastionKeyProcedure,
+		svc.GetBastionKey,
+		connect.WithSchema(vPSConfigServiceMethods.ByName("GetBastionKey")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.vps.v1.VPSConfigService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case VPSConfigServiceGetCloudInitConfigProcedure:
@@ -341,6 +416,12 @@ func NewVPSConfigServiceHandler(svc VPSConfigServiceHandler, opts ...connect.Han
 			vPSConfigServiceRotateTerminalKeyHandler.ServeHTTP(w, r)
 		case VPSConfigServiceRemoveTerminalKeyProcedure:
 			vPSConfigServiceRemoveTerminalKeyHandler.ServeHTTP(w, r)
+		case VPSConfigServiceGetTerminalKeyProcedure:
+			vPSConfigServiceGetTerminalKeyHandler.ServeHTTP(w, r)
+		case VPSConfigServiceRotateBastionKeyProcedure:
+			vPSConfigServiceRotateBastionKeyHandler.ServeHTTP(w, r)
+		case VPSConfigServiceGetBastionKeyProcedure:
+			vPSConfigServiceGetBastionKeyHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -388,4 +469,16 @@ func (UnimplementedVPSConfigServiceHandler) RotateTerminalKey(context.Context, *
 
 func (UnimplementedVPSConfigServiceHandler) RemoveTerminalKey(context.Context, *connect.Request[v1.RemoveTerminalKeyRequest]) (*connect.Response[v1.RemoveTerminalKeyResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSConfigService.RemoveTerminalKey is not implemented"))
+}
+
+func (UnimplementedVPSConfigServiceHandler) GetTerminalKey(context.Context, *connect.Request[v1.GetTerminalKeyRequest]) (*connect.Response[v1.GetTerminalKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSConfigService.GetTerminalKey is not implemented"))
+}
+
+func (UnimplementedVPSConfigServiceHandler) RotateBastionKey(context.Context, *connect.Request[v1.RotateBastionKeyRequest]) (*connect.Response[v1.RotateBastionKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSConfigService.RotateBastionKey is not implemented"))
+}
+
+func (UnimplementedVPSConfigServiceHandler) GetBastionKey(context.Context, *connect.Request[v1.GetBastionKeyRequest]) (*connect.Response[v1.GetBastionKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSConfigService.GetBastionKey is not implemented"))
 }

@@ -6,13 +6,15 @@ import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegen
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { CloudInitConfig } from "./vps_service_pb.js";
 import { file_obiente_cloud_vps_v1_vps_service } from "./vps_service_pb.js";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file obiente/cloud/vps/v1/vps_config_service.proto.
  */
 export const file_obiente_cloud_vps_v1_vps_config_service: GenFile = /*@__PURE__*/
-  fileDesc("Ci1vYmllbnRlL2Nsb3VkL3Zwcy92MS92cHNfY29uZmlnX3NlcnZpY2UucHJvdG8SFG9iaWVudGUuY2xvdWQudnBzLnYxIkQKGUdldENsb3VkSW5pdENvbmZpZ1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSJXChpHZXRDbG91ZEluaXRDb25maWdSZXNwb25zZRI5CgpjbG91ZF9pbml0GAEgASgLMiUub2JpZW50ZS5jbG91ZC52cHMudjEuQ2xvdWRJbml0Q29uZmlnIoIBChxVcGRhdGVDbG91ZEluaXRDb25maWdSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkSOQoKY2xvdWRfaW5pdBgDIAEoCzIlLm9iaWVudGUuY2xvdWQudnBzLnYxLkNsb3VkSW5pdENvbmZpZyJrCh1VcGRhdGVDbG91ZEluaXRDb25maWdSZXNwb25zZRI5CgpjbG91ZF9pbml0GAEgASgLMiUub2JpZW50ZS5jbG91ZC52cHMudjEuQ2xvdWRJbml0Q29uZmlnEg8KB21lc3NhZ2UYAiABKAkiPgoTTGlzdFZQU1VzZXJzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJIkQKFExpc3RWUFNVc2Vyc1Jlc3BvbnNlEiwKBXVzZXJzGAEgAygLMh0ub2JpZW50ZS5jbG91ZC52cHMudjEuVlBTVXNlciLQAQoHVlBTVXNlchIMCgRuYW1lGAEgASgJEhQKDGhhc19wYXNzd29yZBgCIAEoCBIbChNzc2hfYXV0aG9yaXplZF9rZXlzGAMgAygJEgwKBHN1ZG8YBCABKAgSFQoNc3Vkb19ub3Bhc3N3ZBgFIAEoCBIOCgZncm91cHMYBiADKAkSEgoFc2hlbGwYByABKAlIAIgBARITCgtsb2NrX3Bhc3N3ZBgIIAEoCBISCgVnZWNvcxgJIAEoCUgBiAEBQggKBl9zaGVsbEIICgZfZ2Vjb3MizgIKFENyZWF0ZVZQU1VzZXJSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkSDAoEbmFtZRgDIAEoCRIVCghwYXNzd29yZBgEIAEoCUgAiAEBEhsKE3NzaF9hdXRob3JpemVkX2tleXMYBSADKAkSEQoEc3VkbxgGIAEoCEgBiAEBEhoKDXN1ZG9fbm9wYXNzd2QYByABKAhIAogBARIOCgZncm91cHMYCCADKAkSEgoFc2hlbGwYCSABKAlIA4gBARIYCgtsb2NrX3Bhc3N3ZBgKIAEoCEgEiAEBEhIKBWdlY29zGAsgASgJSAWIAQFCCwoJX3Bhc3N3b3JkQgcKBV9zdWRvQhAKDl9zdWRvX25vcGFzc3dkQggKBl9zaGVsbEIOCgxfbG9ja19wYXNzd2RCCAoGX2dlY29zIlUKFUNyZWF0ZVZQU1VzZXJSZXNwb25zZRIrCgR1c2VyGAEgASgLMh0ub2JpZW50ZS5jbG91ZC52cHMudjEuVlBTVXNlchIPCgdtZXNzYWdlGAIgASgJIs4CChRVcGRhdGVWUFNVc2VyUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEgwKBG5hbWUYAyABKAkSFQoIbmV3X25hbWUYBCABKAlIAIgBARIbChNzc2hfYXV0aG9yaXplZF9rZXlzGAUgAygJEhEKBHN1ZG8YBiABKAhIAYgBARIaCg1zdWRvX25vcGFzc3dkGAcgASgISAKIAQESDgoGZ3JvdXBzGAggAygJEhIKBXNoZWxsGAkgASgJSAOIAQESGAoLbG9ja19wYXNzd2QYCiABKAhIBIgBARISCgVnZWNvcxgLIAEoCUgFiAEBQgsKCV9uZXdfbmFtZUIHCgVfc3Vkb0IQCg5fc3Vkb19ub3Bhc3N3ZEIICgZfc2hlbGxCDgoMX2xvY2tfcGFzc3dkQggKBl9nZWNvcyJVChVVcGRhdGVWUFNVc2VyUmVzcG9uc2USKwoEdXNlchgBIAEoCzIdLm9iaWVudGUuY2xvdWQudnBzLnYxLlZQU1VzZXISDwoHbWVzc2FnZRgCIAEoCSJNChREZWxldGVWUFNVc2VyUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEgwKBG5hbWUYAyABKAkiKAoVRGVsZXRlVlBTVXNlclJlc3BvbnNlEg8KB21lc3NhZ2UYASABKAkiZgoWU2V0VXNlclBhc3N3b3JkUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEhEKCXVzZXJfbmFtZRgDIAEoCRIQCghwYXNzd29yZBgEIAEoCSIqChdTZXRVc2VyUGFzc3dvcmRSZXNwb25zZRIPCgdtZXNzYWdlGAEgASgJImsKGFVwZGF0ZVVzZXJTU0hLZXlzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEhEKCXVzZXJfbmFtZRgDIAEoCRITCgtzc2hfa2V5X2lkcxgEIAMoCSJZChlVcGRhdGVVc2VyU1NIS2V5c1Jlc3BvbnNlEisKBHVzZXIYASABKAsyHS5vYmllbnRlLmNsb3VkLnZwcy52MS5WUFNVc2VyEg8KB21lc3NhZ2UYAiABKAkiQwoYUm90YXRlVGVybWluYWxLZXlSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkiQQoZUm90YXRlVGVybWluYWxLZXlSZXNwb25zZRITCgtmaW5nZXJwcmludBgBIAEoCRIPCgdtZXNzYWdlGAIgASgJIkMKGFJlbW92ZVRlcm1pbmFsS2V5UmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJIiwKGVJlbW92ZVRlcm1pbmFsS2V5UmVzcG9uc2USDwoHbWVzc2FnZRgBIAEoCTKFCQoQVlBTQ29uZmlnU2VydmljZRJ3ChJHZXRDbG91ZEluaXRDb25maWcSLy5vYmllbnRlLmNsb3VkLnZwcy52MS5HZXRDbG91ZEluaXRDb25maWdSZXF1ZXN0GjAub2JpZW50ZS5jbG91ZC52cHMudjEuR2V0Q2xvdWRJbml0Q29uZmlnUmVzcG9uc2USgAEKFVVwZGF0ZUNsb3VkSW5pdENvbmZpZxIyLm9iaWVudGUuY2xvdWQudnBzLnYxLlVwZGF0ZUNsb3VkSW5pdENvbmZpZ1JlcXVlc3QaMy5vYmllbnRlLmNsb3VkLnZwcy52MS5VcGRhdGVDbG91ZEluaXRDb25maWdSZXNwb25zZRJlCgxMaXN0VlBTVXNlcnMSKS5vYmllbnRlLmNsb3VkLnZwcy52MS5MaXN0VlBTVXNlcnNSZXF1ZXN0Gioub2JpZW50ZS5jbG91ZC52cHMudjEuTGlzdFZQU1VzZXJzUmVzcG9uc2USaAoNQ3JlYXRlVlBTVXNlchIqLm9iaWVudGUuY2xvdWQudnBzLnYxLkNyZWF0ZVZQU1VzZXJSZXF1ZXN0Gisub2JpZW50ZS5jbG91ZC52cHMudjEuQ3JlYXRlVlBTVXNlclJlc3BvbnNlEmgKDVVwZGF0ZVZQU1VzZXISKi5vYmllbnRlLmNsb3VkLnZwcy52MS5VcGRhdGVWUFNVc2VyUmVxdWVzdBorLm9iaWVudGUuY2xvdWQudnBzLnYxLlVwZGF0ZVZQU1VzZXJSZXNwb25zZRJoCg1EZWxldGVWUFNVc2VyEioub2JpZW50ZS5jbG91ZC52cHMudjEuRGVsZXRlVlBTVXNlclJlcXVlc3QaKy5vYmllbnRlLmNsb3VkLnZwcy52MS5EZWxldGVWUFNVc2VyUmVzcG9uc2USbgoPU2V0VXNlclBhc3N3b3JkEiwub2JpZW50ZS5jbG91ZC52cHMudjEuU2V0VXNlclBhc3N3b3JkUmVxdWVzdBotLm9iaWVudGUuY2xvdWQudnBzLnYxLlNldFVzZXJQYXNzd29yZFJlc3BvbnNlEnQKEVVwZGF0ZVVzZXJTU0hLZXlzEi4ub2JpZW50ZS5jbG91ZC52cHMudjEuVXBkYXRlVXNlclNTSEtleXNSZXF1ZXN0Gi8ub2JpZW50ZS5jbG91ZC52cHMudjEuVXBkYXRlVXNlclNTSEtleXNSZXNwb25zZRJ0ChFSb3RhdGVUZXJtaW5hbEtleRIuLm9iaWVudGUuY2xvdWQudnBzLnYxLlJvdGF0ZVRlcm1pbmFsS2V5UmVxdWVzdBovLm9iaWVudGUuY2xvdWQudnBzLnYxLlJvdGF0ZVRlcm1pbmFsS2V5UmVzcG9uc2USdAoRUmVtb3ZlVGVybWluYWxLZXkSLi5vYmllbnRlLmNsb3VkLnZwcy52MS5SZW1vdmVUZXJtaW5hbEtleVJlcXVlc3QaLy5vYmllbnRlLmNsb3VkLnZwcy52MS5SZW1vdmVUZXJtaW5hbEtleVJlc3BvbnNlQkdaRWdpdGh1Yi5jb20vb2JpZW50ZS9jbG91ZC9hcHBzL3NoYXJlZC9wcm90by9vYmllbnRlL2Nsb3VkL3Zwcy92MTt2cHN2MWIGcHJvdG8z", [file_obiente_cloud_vps_v1_vps_service]);
+  fileDesc("Ci1vYmllbnRlL2Nsb3VkL3Zwcy92MS92cHNfY29uZmlnX3NlcnZpY2UucHJvdG8SFG9iaWVudGUuY2xvdWQudnBzLnYxIkQKGUdldENsb3VkSW5pdENvbmZpZ1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSJXChpHZXRDbG91ZEluaXRDb25maWdSZXNwb25zZRI5CgpjbG91ZF9pbml0GAEgASgLMiUub2JpZW50ZS5jbG91ZC52cHMudjEuQ2xvdWRJbml0Q29uZmlnIoIBChxVcGRhdGVDbG91ZEluaXRDb25maWdSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkSOQoKY2xvdWRfaW5pdBgDIAEoCzIlLm9iaWVudGUuY2xvdWQudnBzLnYxLkNsb3VkSW5pdENvbmZpZyJrCh1VcGRhdGVDbG91ZEluaXRDb25maWdSZXNwb25zZRI5CgpjbG91ZF9pbml0GAEgASgLMiUub2JpZW50ZS5jbG91ZC52cHMudjEuQ2xvdWRJbml0Q29uZmlnEg8KB21lc3NhZ2UYAiABKAkiPgoTTGlzdFZQU1VzZXJzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJIkQKFExpc3RWUFNVc2Vyc1Jlc3BvbnNlEiwKBXVzZXJzGAEgAygLMh0ub2JpZW50ZS5jbG91ZC52cHMudjEuVlBTVXNlciLQAQoHVlBTVXNlchIMCgRuYW1lGAEgASgJEhQKDGhhc19wYXNzd29yZBgCIAEoCBIbChNzc2hfYXV0aG9yaXplZF9rZXlzGAMgAygJEgwKBHN1ZG8YBCABKAgSFQoNc3Vkb19ub3Bhc3N3ZBgFIAEoCBIOCgZncm91cHMYBiADKAkSEgoFc2hlbGwYByABKAlIAIgBARITCgtsb2NrX3Bhc3N3ZBgIIAEoCBISCgVnZWNvcxgJIAEoCUgBiAEBQggKBl9zaGVsbEIICgZfZ2Vjb3MizgIKFENyZWF0ZVZQU1VzZXJSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkSDAoEbmFtZRgDIAEoCRIVCghwYXNzd29yZBgEIAEoCUgAiAEBEhsKE3NzaF9hdXRob3JpemVkX2tleXMYBSADKAkSEQoEc3VkbxgGIAEoCEgBiAEBEhoKDXN1ZG9fbm9wYXNzd2QYByABKAhIAogBARIOCgZncm91cHMYCCADKAkSEgoFc2hlbGwYCSABKAlIA4gBARIYCgtsb2NrX3Bhc3N3ZBgKIAEoCEgEiAEBEhIKBWdlY29zGAsgASgJSAWIAQFCCwoJX3Bhc3N3b3JkQgcKBV9zdWRvQhAKDl9zdWRvX25vcGFzc3dkQggKBl9zaGVsbEIOCgxfbG9ja19wYXNzd2RCCAoGX2dlY29zIlUKFUNyZWF0ZVZQU1VzZXJSZXNwb25zZRIrCgR1c2VyGAEgASgLMh0ub2JpZW50ZS5jbG91ZC52cHMudjEuVlBTVXNlchIPCgdtZXNzYWdlGAIgASgJIs4CChRVcGRhdGVWUFNVc2VyUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEgwKBG5hbWUYAyABKAkSFQoIbmV3X25hbWUYBCABKAlIAIgBARIbChNzc2hfYXV0aG9yaXplZF9rZXlzGAUgAygJEhEKBHN1ZG8YBiABKAhIAYgBARIaCg1zdWRvX25vcGFzc3dkGAcgASgISAKIAQESDgoGZ3JvdXBzGAggAygJEhIKBXNoZWxsGAkgASgJSAOIAQESGAoLbG9ja19wYXNzd2QYCiABKAhIBIgBARISCgVnZWNvcxgLIAEoCUgFiAEBQgsKCV9uZXdfbmFtZUIHCgVfc3Vkb0IQCg5fc3Vkb19ub3Bhc3N3ZEIICgZfc2hlbGxCDgoMX2xvY2tfcGFzc3dkQggKBl9nZWNvcyJVChVVcGRhdGVWUFNVc2VyUmVzcG9uc2USKwoEdXNlchgBIAEoCzIdLm9iaWVudGUuY2xvdWQudnBzLnYxLlZQU1VzZXISDwoHbWVzc2FnZRgCIAEoCSJNChREZWxldGVWUFNVc2VyUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEgwKBG5hbWUYAyABKAkiKAoVRGVsZXRlVlBTVXNlclJlc3BvbnNlEg8KB21lc3NhZ2UYASABKAkiZgoWU2V0VXNlclBhc3N3b3JkUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEhEKCXVzZXJfbmFtZRgDIAEoCRIQCghwYXNzd29yZBgEIAEoCSIqChdTZXRVc2VyUGFzc3dvcmRSZXNwb25zZRIPCgdtZXNzYWdlGAEgASgJImsKGFVwZGF0ZVVzZXJTU0hLZXlzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEhEKCXVzZXJfbmFtZRgDIAEoCRITCgtzc2hfa2V5X2lkcxgEIAMoCSJZChlVcGRhdGVVc2VyU1NIS2V5c1Jlc3BvbnNlEisKBHVzZXIYASABKAsyHS5vYmllbnRlLmNsb3VkLnZwcy52MS5WUFNVc2VyEg8KB21lc3NhZ2UYAiABKAkiQwoYUm90YXRlVGVybWluYWxLZXlSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkiQQoZUm90YXRlVGVybWluYWxLZXlSZXNwb25zZRITCgtmaW5nZXJwcmludBgBIAEoCRIPCgdtZXNzYWdlGAIgASgJIkMKGFJlbW92ZVRlcm1pbmFsS2V5UmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJIiwKGVJlbW92ZVRlcm1pbmFsS2V5UmVzcG9uc2USDwoHbWVzc2FnZRgBIAEoCSJAChVHZXRUZXJtaW5hbEtleVJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSKNAQoWR2V0VGVybWluYWxLZXlSZXNwb25zZRITCgtmaW5nZXJwcmludBgBIAEoCRIuCgpjcmVhdGVkX2F0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJCChdSb3RhdGVCYXN0aW9uS2V5UmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJIkAKGFJvdGF0ZUJhc3Rpb25LZXlSZXNwb25zZRITCgtmaW5nZXJwcmludBgBIAEoCRIPCgdtZXNzYWdlGAIgASgJIj8KFEdldEJhc3Rpb25LZXlSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkijAEKFUdldEJhc3Rpb25LZXlSZXNwb25zZRITCgtmaW5nZXJwcmludBgBIAEoCRIuCgpjcmVhdGVkX2F0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcDLPCwoQVlBTQ29uZmlnU2VydmljZRJ3ChJHZXRDbG91ZEluaXRDb25maWcSLy5vYmllbnRlLmNsb3VkLnZwcy52MS5HZXRDbG91ZEluaXRDb25maWdSZXF1ZXN0GjAub2JpZW50ZS5jbG91ZC52cHMudjEuR2V0Q2xvdWRJbml0Q29uZmlnUmVzcG9uc2USgAEKFVVwZGF0ZUNsb3VkSW5pdENvbmZpZxIyLm9iaWVudGUuY2xvdWQudnBzLnYxLlVwZGF0ZUNsb3VkSW5pdENvbmZpZ1JlcXVlc3QaMy5vYmllbnRlLmNsb3VkLnZwcy52MS5VcGRhdGVDbG91ZEluaXRDb25maWdSZXNwb25zZRJlCgxMaXN0VlBTVXNlcnMSKS5vYmllbnRlLmNsb3VkLnZwcy52MS5MaXN0VlBTVXNlcnNSZXF1ZXN0Gioub2JpZW50ZS5jbG91ZC52cHMudjEuTGlzdFZQU1VzZXJzUmVzcG9uc2USaAoNQ3JlYXRlVlBTVXNlchIqLm9iaWVudGUuY2xvdWQudnBzLnYxLkNyZWF0ZVZQU1VzZXJSZXF1ZXN0Gisub2JpZW50ZS5jbG91ZC52cHMudjEuQ3JlYXRlVlBTVXNlclJlc3BvbnNlEmgKDVVwZGF0ZVZQU1VzZXISKi5vYmllbnRlLmNsb3VkLnZwcy52MS5VcGRhdGVWUFNVc2VyUmVxdWVzdBorLm9iaWVudGUuY2xvdWQudnBzLnYxLlVwZGF0ZVZQU1VzZXJSZXNwb25zZRJoCg1EZWxldGVWUFNVc2VyEioub2JpZW50ZS5jbG91ZC52cHMudjEuRGVsZXRlVlBTVXNlclJlcXVlc3QaKy5vYmllbnRlLmNsb3VkLnZwcy52MS5EZWxldGVWUFNVc2VyUmVzcG9uc2USbgoPU2V0VXNlclBhc3N3b3JkEiwub2JpZW50ZS5jbG91ZC52cHMudjEuU2V0VXNlclBhc3N3b3JkUmVxdWVzdBotLm9iaWVudGUuY2xvdWQudnBzLnYxLlNldFVzZXJQYXNzd29yZFJlc3BvbnNlEnQKEVVwZGF0ZVVzZXJTU0hLZXlzEi4ub2JpZW50ZS5jbG91ZC52cHMudjEuVXBkYXRlVXNlclNTSEtleXNSZXF1ZXN0Gi8ub2JpZW50ZS5jbG91ZC52cHMudjEuVXBkYXRlVXNlclNTSEtleXNSZXNwb25zZRJ0ChFSb3RhdGVUZXJtaW5hbEtleRIuLm9iaWVudGUuY2xvdWQudnBzLnYxLlJvdGF0ZVRlcm1pbmFsS2V5UmVxdWVzdBovLm9iaWVudGUuY2xvdWQudnBzLnYxLlJvdGF0ZVRlcm1pbmFsS2V5UmVzcG9uc2USdAoRUmVtb3ZlVGVybWluYWxLZXkSLi5vYmllbnRlLmNsb3VkLnZwcy52MS5SZW1vdmVUZXJtaW5hbEtleVJlcXVlc3QaLy5vYmllbnRlLmNsb3VkLnZwcy52MS5SZW1vdmVUZXJtaW5hbEtleVJlc3BvbnNlEmsKDkdldFRlcm1pbmFsS2V5Eisub2JpZW50ZS5jbG91ZC52cHMudjEuR2V0VGVybWluYWxLZXlSZXF1ZXN0Giwub2JpZW50ZS5jbG91ZC52cHMudjEuR2V0VGVybWluYWxLZXlSZXNwb25zZRJxChBSb3RhdGVCYXN0aW9uS2V5Ei0ub2JpZW50ZS5jbG91ZC52cHMudjEuUm90YXRlQmFzdGlvbktleVJlcXVlc3QaLi5vYmllbnRlLmNsb3VkLnZwcy52MS5Sb3RhdGVCYXN0aW9uS2V5UmVzcG9uc2USaAoNR2V0QmFzdGlvbktleRIqLm9iaWVudGUuY2xvdWQudnBzLnYxLkdldEJhc3Rpb25LZXlSZXF1ZXN0Gisub2JpZW50ZS5jbG91ZC52cHMudjEuR2V0QmFzdGlvbktleVJlc3BvbnNlQkdaRWdpdGh1Yi5jb20vb2JpZW50ZS9jbG91ZC9hcHBzL3NoYXJlZC9wcm90by9vYmllbnRlL2Nsb3VkL3Zwcy92MTt2cHN2MWIGcHJvdG8z", [file_obiente_cloud_vps_v1_vps_service, file_google_protobuf_timestamp]);
 
 /**
  * GetCloudInitConfigRequest requests the cloud-init configuration for a VPS
@@ -675,6 +677,176 @@ export const RemoveTerminalKeyResponseSchema: GenMessage<RemoveTerminalKeyRespon
   messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 20);
 
 /**
+ * GetTerminalKeyRequest gets the web terminal SSH key status
+ *
+ * @generated from message obiente.cloud.vps.v1.GetTerminalKeyRequest
+ */
+export type GetTerminalKeyRequest = Message<"obiente.cloud.vps.v1.GetTerminalKeyRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string vps_id = 2;
+   */
+  vpsId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vps.v1.GetTerminalKeyRequest.
+ * Use `create(GetTerminalKeyRequestSchema)` to create a new message.
+ */
+export const GetTerminalKeyRequestSchema: GenMessage<GetTerminalKeyRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 21);
+
+/**
+ * GetTerminalKeyResponse returns the terminal key status
+ *
+ * @generated from message obiente.cloud.vps.v1.GetTerminalKeyResponse
+ */
+export type GetTerminalKeyResponse = Message<"obiente.cloud.vps.v1.GetTerminalKeyResponse"> & {
+  /**
+   * Fingerprint of the key
+   *
+   * @generated from field: string fingerprint = 1;
+   */
+  fingerprint: string;
+
+  /**
+   * Timestamp when the key was created
+   *
+   * @generated from field: google.protobuf.Timestamp created_at = 2;
+   */
+  createdAt?: Timestamp;
+
+  /**
+   * Timestamp when the key was last updated
+   *
+   * @generated from field: google.protobuf.Timestamp updated_at = 3;
+   */
+  updatedAt?: Timestamp;
+};
+
+/**
+ * Describes the message obiente.cloud.vps.v1.GetTerminalKeyResponse.
+ * Use `create(GetTerminalKeyResponseSchema)` to create a new message.
+ */
+export const GetTerminalKeyResponseSchema: GenMessage<GetTerminalKeyResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 22);
+
+/**
+ * RotateBastionKeyRequest rotates the bastion SSH key
+ *
+ * @generated from message obiente.cloud.vps.v1.RotateBastionKeyRequest
+ */
+export type RotateBastionKeyRequest = Message<"obiente.cloud.vps.v1.RotateBastionKeyRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string vps_id = 2;
+   */
+  vpsId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vps.v1.RotateBastionKeyRequest.
+ * Use `create(RotateBastionKeyRequestSchema)` to create a new message.
+ */
+export const RotateBastionKeyRequestSchema: GenMessage<RotateBastionKeyRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 23);
+
+/**
+ * RotateBastionKeyResponse confirms the key rotation
+ *
+ * @generated from message obiente.cloud.vps.v1.RotateBastionKeyResponse
+ */
+export type RotateBastionKeyResponse = Message<"obiente.cloud.vps.v1.RotateBastionKeyResponse"> & {
+  /**
+   * Fingerprint of the new key
+   *
+   * @generated from field: string fingerprint = 1;
+   */
+  fingerprint: string;
+
+  /**
+   * Information about when the new key will take effect
+   *
+   * @generated from field: string message = 2;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vps.v1.RotateBastionKeyResponse.
+ * Use `create(RotateBastionKeyResponseSchema)` to create a new message.
+ */
+export const RotateBastionKeyResponseSchema: GenMessage<RotateBastionKeyResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 24);
+
+/**
+ * GetBastionKeyRequest gets the bastion SSH key status
+ *
+ * @generated from message obiente.cloud.vps.v1.GetBastionKeyRequest
+ */
+export type GetBastionKeyRequest = Message<"obiente.cloud.vps.v1.GetBastionKeyRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string vps_id = 2;
+   */
+  vpsId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vps.v1.GetBastionKeyRequest.
+ * Use `create(GetBastionKeyRequestSchema)` to create a new message.
+ */
+export const GetBastionKeyRequestSchema: GenMessage<GetBastionKeyRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 25);
+
+/**
+ * GetBastionKeyResponse returns the bastion key status
+ *
+ * @generated from message obiente.cloud.vps.v1.GetBastionKeyResponse
+ */
+export type GetBastionKeyResponse = Message<"obiente.cloud.vps.v1.GetBastionKeyResponse"> & {
+  /**
+   * Fingerprint of the key
+   *
+   * @generated from field: string fingerprint = 1;
+   */
+  fingerprint: string;
+
+  /**
+   * Timestamp when the key was created
+   *
+   * @generated from field: google.protobuf.Timestamp created_at = 2;
+   */
+  createdAt?: Timestamp;
+
+  /**
+   * Timestamp when the key was last updated
+   *
+   * @generated from field: google.protobuf.Timestamp updated_at = 3;
+   */
+  updatedAt?: Timestamp;
+};
+
+/**
+ * Describes the message obiente.cloud.vps.v1.GetBastionKeyResponse.
+ * Use `create(GetBastionKeyResponseSchema)` to create a new message.
+ */
+export const GetBastionKeyResponseSchema: GenMessage<GetBastionKeyResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 26);
+
+/**
  * VPSConfigService provides endpoints for managing VPS configuration
  * including cloud-init settings and user management
  *
@@ -780,6 +952,36 @@ export const VPSConfigService: GenService<{
     methodKind: "unary";
     input: typeof RemoveTerminalKeyRequestSchema;
     output: typeof RemoveTerminalKeyResponseSchema;
+  },
+  /**
+   * Get the web terminal SSH key status for a VPS instance
+   *
+   * @generated from rpc obiente.cloud.vps.v1.VPSConfigService.GetTerminalKey
+   */
+  getTerminalKey: {
+    methodKind: "unary";
+    input: typeof GetTerminalKeyRequestSchema;
+    output: typeof GetTerminalKeyResponseSchema;
+  },
+  /**
+   * Rotate the bastion SSH key for a VPS instance
+   *
+   * @generated from rpc obiente.cloud.vps.v1.VPSConfigService.RotateBastionKey
+   */
+  rotateBastionKey: {
+    methodKind: "unary";
+    input: typeof RotateBastionKeyRequestSchema;
+    output: typeof RotateBastionKeyResponseSchema;
+  },
+  /**
+   * Get the bastion SSH key status for a VPS instance
+   *
+   * @generated from rpc obiente.cloud.vps.v1.VPSConfigService.GetBastionKey
+   */
+  getBastionKey: {
+    methodKind: "unary";
+    input: typeof GetBastionKeyRequestSchema;
+    output: typeof GetBastionKeyResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_obiente_cloud_vps_v1_vps_config_service, 0);
