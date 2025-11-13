@@ -16,6 +16,7 @@ import (
 	vpsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1/vpsv1connect"
 
 	"connectrpc.com/connect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"gorm.io/gorm"
 )
 
@@ -1110,5 +1111,111 @@ func (s *ConfigService) RemoveTerminalKey(ctx context.Context, req *connect.Requ
 
 	return connect.NewResponse(&vpsv1.RemoveTerminalKeyResponse{
 		Message: "Terminal key removed. The key will be removed on the next reboot or when cloud-init is re-run. Web terminal access will no longer work until a new key is generated.",
+	}), nil
+}
+
+// GetTerminalKey gets the web terminal SSH key status for a VPS
+func (s *ConfigService) GetTerminalKey(ctx context.Context, req *connect.Request[vpsv1.GetTerminalKeyRequest]) (*connect.Response[vpsv1.GetTerminalKeyResponse], error) {
+	ctx, err := s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+		return nil, err
+	}
+
+	// Get terminal key
+	terminalKey, err := database.GetVPSTerminalKey(vpsID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("terminal key not found"))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get terminal key: %w", err))
+	}
+
+	return connect.NewResponse(&vpsv1.GetTerminalKeyResponse{
+		Fingerprint: terminalKey.Fingerprint,
+		CreatedAt:   timestamppb.New(terminalKey.CreatedAt),
+		UpdatedAt:   timestamppb.New(terminalKey.UpdatedAt),
+	}), nil
+}
+
+// RotateBastionKey rotates the bastion SSH key for a VPS
+func (s *ConfigService) RotateBastionKey(ctx context.Context, req *connect.Request[vpsv1.RotateBastionKeyRequest]) (*connect.Response[vpsv1.RotateBastionKeyResponse], error) {
+	ctx, err := s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.update"); err != nil {
+		return nil, err
+	}
+
+	// Get VPS instance
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+	}
+
+	if vps.InstanceID == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no instance ID (not provisioned yet)"))
+	}
+
+	// Rotate the bastion key (generates new key pair, or creates if it doesn't exist)
+	bastionKey, err := database.RotateVPSBastionKey(vpsID, vps.OrganizationID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to rotate bastion key: %w", err))
+	}
+
+	// Get current cloud-init config to preserve existing settings
+	cloudInitConfig, err := s.loadCloudInitConfig(ctx, &vps)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load cloud-init config: %w", err))
+	}
+
+	// Regenerate cloud-init config (this will automatically include the new bastion key)
+	if err := s.saveCloudInitConfig(ctx, &vps, cloudInitConfig); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update cloud-init config: %w", err))
+	}
+
+	logger.Info("[ConfigService] Rotated bastion key for VPS %s (new fingerprint: %s)", vpsID, bastionKey.Fingerprint)
+
+	return connect.NewResponse(&vpsv1.RotateBastionKeyResponse{
+		Fingerprint: bastionKey.Fingerprint,
+		Message:     "Bastion key rotated. The new key will take effect on the next reboot or when cloud-init is re-run.",
+	}), nil
+}
+
+// GetBastionKey gets the bastion SSH key status for a VPS
+func (s *ConfigService) GetBastionKey(ctx context.Context, req *connect.Request[vpsv1.GetBastionKeyRequest]) (*connect.Response[vpsv1.GetBastionKeyResponse], error) {
+	ctx, err := s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+		return nil, err
+	}
+
+	// Get bastion key
+	bastionKey, err := database.GetVPSBastionKey(vpsID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("bastion key not found"))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get bastion key: %w", err))
+	}
+
+	return connect.NewResponse(&vpsv1.GetBastionKeyResponse{
+		Fingerprint: bastionKey.Fingerprint,
+		CreatedAt:   timestamppb.New(bastionKey.CreatedAt),
+		UpdatedAt:   timestamppb.New(bastionKey.UpdatedAt),
 	}), nil
 }
