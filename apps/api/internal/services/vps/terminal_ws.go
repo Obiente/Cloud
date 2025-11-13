@@ -16,15 +16,16 @@ import (
 
 	"api/internal/auth"
 	"api/internal/database"
+	"api/internal/logger"
 	"api/internal/orchestrator"
 
+	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/ssh"
 	"nhooyr.io/websocket"
 	"nhooyr.io/websocket/wsjson"
-
-	vpsgatewayv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
 )
 
 type vpsTerminalWSMessage struct {
@@ -151,7 +152,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	ctx, _, err = auth.AuthenticateAndSetContext(ctx, "Bearer "+strings.TrimSpace(initMsg.Token))
+	ctx, userInfo, err := auth.AuthenticateAndSetContext(ctx, "Bearer "+strings.TrimSpace(initMsg.Token))
 	if err != nil {
 		log.Printf("[VPS Terminal WS] Authentication failed: %v", err)
 		sendError("Authentication required")
@@ -173,6 +174,12 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		conn.Close(websocket.StatusInternalError, "VPS not found")
 		return
 	}
+
+	// Extract client IP from request
+	clientIP := getClientIPFromRequest(r)
+	
+	// Create audit log for web terminal connection
+	go createWebTerminalAuditLog(initMsg.VPSID, userInfo, vps.OrganizationID, clientIP, r.UserAgent())
 
 	// Check VPS status
 	blockedStatuses := []int32{
@@ -728,63 +735,89 @@ func (s *Service) handleProxmoxTermProxy(
 	}
 }
 
-// connectSSHViaGateway creates an SSH client connection via the gateway
-func (s *Service) connectSSHViaGateway(ctx context.Context, vpsID, vpsIP string, sshConfig *ssh.ClientConfig, gatewayClient *orchestrator.VPSGatewayClient) (*ssh.Client, error) {
-	// Create ProxySSH stream
-	stream, err := gatewayClient.ProxySSH(ctx)
+// createSSHClientViaGateway creates an SSH client connection to a VPS via the gateway
+func (s *Service) createSSHClientViaGateway(ctx context.Context, vpsID, vpsIP string, sshConfig *ssh.ClientConfig) (*ssh.Client, error) {
+	vpsManager, err := orchestrator.NewVPSManager()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create gateway stream: %w", err)
+		return nil, fmt.Errorf("failed to create VPS manager: %w", err)
+	}
+	defer vpsManager.Close()
+
+	gatewayClient := vpsManager.GetGatewayClient()
+	if gatewayClient == nil {
+		return nil, fmt.Errorf("gateway client not available")
 	}
 
-	// Create connection ID
-	connectionID := fmt.Sprintf("term-%d", time.Now().UnixNano())
-
-	// Send connect request - use VPS ID as target so gateway can resolve it
-	connectReq := &vpsgatewayv1.ProxySSHRequest{
-		ConnectionId: connectionID,
-		Type:         "connect",
-		Target:       vpsID, // Use VPS ID so gateway resolves it
-		Port:         22,
-	}
-
-	if err := stream.Send(connectReq); err != nil {
-		return nil, fmt.Errorf("failed to send connect request: %w", err)
-	}
-
-	// Wait for connected response
-	resp, err := stream.Receive()
+	// Create TCP connection via gateway
+	targetConn, err := gatewayClient.CreateTCPConnection(ctx, vpsIP, 22)
 	if err != nil {
-		return nil, fmt.Errorf("failed to receive connect response: %w", err)
+		return nil, fmt.Errorf("failed to create TCP connection via gateway: %w", err)
 	}
 
-	if resp.Type != "connected" {
-		return nil, fmt.Errorf("unexpected response type: %s", resp.Type)
-	}
-
-	// Create stream-based connection (streamConn is defined in ssh_connection_pool.go)
-	conn := &streamConn{
-		stream:       stream,
-		connectionID: connectionID,
-		readBuf:      make([]byte, 0),
-		readMu:       sync.Mutex{},
-		writeMu:      sync.Mutex{},
-		closeMu:      sync.Mutex{},
-		closed:       false,
-	}
-
-	// Create SSH connection over the stream
-	sshConn, chans, reqs, err := ssh.NewClientConn(conn, vpsID, sshConfig)
+	// Create SSH connection over the gateway TCP connection
+	clientConn, chans, reqs, err := ssh.NewClientConn(targetConn, vpsIP, sshConfig)
 	if err != nil {
-		conn.Close()
+		targetConn.Close()
 		return nil, fmt.Errorf("failed to create SSH client connection: %w", err)
 	}
 
-	client := ssh.NewClient(sshConn, chans, reqs)
+	client := ssh.NewClient(clientConn, chans, reqs)
 	return client, nil
 }
 
+// setupSSHSession sets up a PTY session with pipes for terminal access
+func setupSSHSession(client *ssh.Client, cols, rows int) (*ssh.Session, io.WriteCloser, io.Reader, io.Reader, error) {
+	session, err := client.NewSession()
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to create SSH session: %w", err)
+	}
+
+	// Request PTY
+	if err := session.RequestPty("xterm-256color", rows, cols, ssh.TerminalModes{
+		ssh.ECHO:          1,
+		ssh.TTY_OP_ISPEED: 14400,
+		ssh.TTY_OP_OSPEED: 14400,
+		ssh.IGNCR:         0,
+		ssh.ICRNL:         1,
+		ssh.ONLCR:         1,
+	}); err != nil {
+		session.Close()
+		return nil, nil, nil, nil, fmt.Errorf("failed to request PTY: %w", err)
+	}
+
+	// Set up pipes
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		session.Close()
+		return nil, nil, nil, nil, fmt.Errorf("failed to get stdin: %w", err)
+	}
+
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		stdin.Close()
+		session.Close()
+		return nil, nil, nil, nil, fmt.Errorf("failed to get stdout: %w", err)
+	}
+
+	stderr, err := session.StderrPipe()
+	if err != nil {
+		stdin.Close()
+		session.Close()
+		return nil, nil, nil, nil, fmt.Errorf("failed to get stderr: %w", err)
+	}
+
+	// Start shell
+	if err := session.Shell(); err != nil {
+		stdin.Close()
+		session.Close()
+		return nil, nil, nil, nil, fmt.Errorf("failed to start shell: %w", err)
+	}
+
+	return session, stdin, stdout, stderr, nil
+}
+
 // connectSSHWithKey establishes an SSH connection to the VPS using a private key
-// Uses gateway if available, otherwise falls back to direct connection
+// Always uses gateway for connection
 func (s *Service) connectSSHWithKey(ctx context.Context, vpsID, vpsIP, privateKeyPEM string, cols, rows int) (*SSHConnection, error) {
 	// Parse private key
 	signer, err := ssh.ParsePrivateKey([]byte(privateKeyPEM))
@@ -801,137 +834,17 @@ func (s *Service) connectSSHWithKey(ctx context.Context, vpsID, vpsIP, privateKe
 		},
 	}
 
-	// Try to use gateway if available
-	vpsManager, err := orchestrator.NewVPSManager()
-	if err == nil {
-		defer vpsManager.Close()
-		gatewayClient := vpsManager.GetGatewayClient()
-		if gatewayClient != nil {
-			// Use gateway to connect
-			client, err := s.connectSSHViaGateway(ctx, vpsID, vpsIP, sshConfig, gatewayClient)
-			if err == nil {
-				// Create session from gateway connection
-				session, err := client.NewSession()
-				if err != nil {
-					client.Close()
-					return nil, fmt.Errorf("failed to create SSH session: %w", err)
-				}
-
-				// Request PTY
-				if err := session.RequestPty("xterm-256color", rows, cols, ssh.TerminalModes{
-					ssh.ECHO:          1,
-					ssh.TTY_OP_ISPEED: 14400,
-					ssh.TTY_OP_OSPEED: 14400,
-					ssh.IGNCR:         0,
-					ssh.ICRNL:         1,
-					ssh.ONLCR:         1,
-				}); err != nil {
-					session.Close()
-					client.Close()
-					return nil, fmt.Errorf("failed to request PTY: %w", err)
-				}
-
-				// Set up pipes
-				stdin, err := session.StdinPipe()
-				if err != nil {
-					session.Close()
-					client.Close()
-					return nil, fmt.Errorf("failed to get stdin: %w", err)
-				}
-
-				stdout, err := session.StdoutPipe()
-				if err != nil {
-					stdin.Close()
-					session.Close()
-					client.Close()
-					return nil, fmt.Errorf("failed to get stdout: %w", err)
-				}
-
-				stderr, err := session.StderrPipe()
-				if err != nil {
-					stdin.Close()
-					session.Close()
-					client.Close()
-					return nil, fmt.Errorf("failed to get stderr: %w", err)
-				}
-
-				// Start shell
-				if err := session.Shell(); err != nil {
-					stdin.Close()
-					session.Close()
-					client.Close()
-					return nil, fmt.Errorf("failed to start shell: %w", err)
-				}
-
-				return &SSHConnection{
-					conn:    client,
-					session: session,
-					stdin:   stdin,
-					stdout:  stdout,
-					stderr:  stderr,
-				}, nil
-			}
-			log.Printf("[VPS Terminal WS] Gateway connection failed: %v, falling back to direct connection", err)
-		}
-	}
-
-	// Fallback to direct connection
-	client, err := ssh.Dial("tcp", net.JoinHostPort(vpsIP, "22"), sshConfig)
+	// Create SSH client via gateway
+	client, err := s.createSSHClientViaGateway(ctx, vpsID, vpsIP, sshConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to VPS via SSH: %w", err)
+		return nil, err
 	}
 
-	// Create session
-	session, err := client.NewSession()
+	// Set up session with PTY and pipes
+	session, stdin, stdout, stderr, err := setupSSHSession(client, cols, rows)
 	if err != nil {
 		client.Close()
-		return nil, fmt.Errorf("failed to create SSH session: %w", err)
-	}
-
-	// Request PTY with xterm-256color for better compatibility
-	if err := session.RequestPty("xterm-256color", rows, cols, ssh.TerminalModes{
-		ssh.ECHO:          1,
-		ssh.TTY_OP_ISPEED: 14400,
-		ssh.TTY_OP_OSPEED: 14400,
-		ssh.IGNCR:         0,
-		ssh.ICRNL:         1,
-		ssh.ONLCR:         1,
-	}); err != nil {
-		session.Close()
-		client.Close()
-		return nil, fmt.Errorf("failed to request PTY: %w", err)
-	}
-
-	// Set up pipes
-	stdin, err := session.StdinPipe()
-	if err != nil {
-		session.Close()
-		client.Close()
-		return nil, fmt.Errorf("failed to get stdin: %w", err)
-	}
-
-	stdout, err := session.StdoutPipe()
-	if err != nil {
-		stdin.Close()
-		session.Close()
-		client.Close()
-		return nil, fmt.Errorf("failed to get stdout: %w", err)
-	}
-
-	stderr, err := session.StderrPipe()
-	if err != nil {
-		stdin.Close()
-		session.Close()
-		client.Close()
-		return nil, fmt.Errorf("failed to get stderr: %w", err)
-	}
-
-	// Start shell
-	if err := session.Shell(); err != nil {
-		stdin.Close()
-		session.Close()
-		client.Close()
-		return nil, fmt.Errorf("failed to start shell: %w", err)
+		return nil, err
 	}
 
 	return &SSHConnection{
@@ -944,7 +857,7 @@ func (s *Service) connectSSHWithKey(ctx context.Context, vpsID, vpsIP, privateKe
 }
 
 // connectSSH establishes an SSH connection to the VPS using password authentication
-// Uses gateway if available, otherwise falls back to direct connection
+// Always uses gateway for connection
 func (s *Service) connectSSH(ctx context.Context, vpsID, vpsIP, rootPassword string, cols, rows int) (*SSHConnection, error) {
 	sshConfig := &ssh.ClientConfig{
 		User:            "root",
@@ -955,137 +868,17 @@ func (s *Service) connectSSH(ctx context.Context, vpsID, vpsIP, rootPassword str
 		},
 	}
 
-	// Try to use gateway if available
-	vpsManager, err := orchestrator.NewVPSManager()
-	if err == nil {
-		defer vpsManager.Close()
-		gatewayClient := vpsManager.GetGatewayClient()
-		if gatewayClient != nil {
-			// Use gateway to connect
-			client, err := s.connectSSHViaGateway(ctx, vpsID, vpsIP, sshConfig, gatewayClient)
-			if err == nil {
-				// Create session from gateway connection
-				session, err := client.NewSession()
-				if err != nil {
-					client.Close()
-					return nil, fmt.Errorf("failed to create SSH session: %w", err)
-				}
-
-				// Request PTY
-				if err := session.RequestPty("xterm-256color", rows, cols, ssh.TerminalModes{
-					ssh.ECHO:          1,
-					ssh.TTY_OP_ISPEED: 14400,
-					ssh.TTY_OP_OSPEED: 14400,
-					ssh.IGNCR:         0,
-					ssh.ICRNL:         1,
-					ssh.ONLCR:         1,
-				}); err != nil {
-					session.Close()
-					client.Close()
-					return nil, fmt.Errorf("failed to request PTY: %w", err)
-				}
-
-				// Set up pipes
-				stdin, err := session.StdinPipe()
-				if err != nil {
-					session.Close()
-					client.Close()
-					return nil, fmt.Errorf("failed to get stdin: %w", err)
-				}
-
-				stdout, err := session.StdoutPipe()
-				if err != nil {
-					stdin.Close()
-					session.Close()
-					client.Close()
-					return nil, fmt.Errorf("failed to get stdout: %w", err)
-				}
-
-				stderr, err := session.StderrPipe()
-				if err != nil {
-					stdin.Close()
-					session.Close()
-					client.Close()
-					return nil, fmt.Errorf("failed to get stderr: %w", err)
-				}
-
-				// Start shell
-				if err := session.Shell(); err != nil {
-					stdin.Close()
-					session.Close()
-					client.Close()
-					return nil, fmt.Errorf("failed to start shell: %w", err)
-				}
-
-				return &SSHConnection{
-					conn:    client,
-					session: session,
-					stdin:   stdin,
-					stdout:  stdout,
-					stderr:  stderr,
-				}, nil
-			}
-			log.Printf("[VPS Terminal WS] Gateway connection failed: %v, falling back to direct connection", err)
-		}
+	// Create SSH client via gateway
+	client, err := s.createSSHClientViaGateway(ctx, vpsID, vpsIP, sshConfig)
+	if err != nil {
+		return nil, err
 	}
 
-	// Fallback to direct connection
-	client, err := ssh.Dial("tcp", net.JoinHostPort(vpsIP, "22"), sshConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to connect to VPS via SSH: %w", err)
-	}
-
-	// Create session
-	session, err := client.NewSession()
+	// Set up session with PTY and pipes
+	session, stdin, stdout, stderr, err := setupSSHSession(client, cols, rows)
 	if err != nil {
 		client.Close()
-		return nil, fmt.Errorf("failed to create SSH session: %w", err)
-	}
-
-	// Request PTY with xterm-256color for better compatibility
-	if err := session.RequestPty("xterm-256color", rows, cols, ssh.TerminalModes{
-		ssh.ECHO:          1,
-		ssh.TTY_OP_ISPEED: 14400,
-		ssh.TTY_OP_OSPEED: 14400,
-		ssh.IGNCR:         0,
-		ssh.ICRNL:         1,
-		ssh.ONLCR:         1,
-	}); err != nil {
-		session.Close()
-		client.Close()
-		return nil, fmt.Errorf("failed to request PTY: %w", err)
-	}
-
-	// Set up pipes
-	stdin, err := session.StdinPipe()
-	if err != nil {
-		session.Close()
-		client.Close()
-		return nil, fmt.Errorf("failed to get stdin: %w", err)
-	}
-
-	stdout, err := session.StdoutPipe()
-	if err != nil {
-		stdin.Close()
-		session.Close()
-		client.Close()
-		return nil, fmt.Errorf("failed to get stdout: %w", err)
-	}
-
-	stderr, err := session.StderrPipe()
-	if err != nil {
-		stdin.Close()
-		session.Close()
-		client.Close()
-		return nil, fmt.Errorf("failed to get stderr: %w", err)
-	}
-
-	// Start shell
-	if err := session.Shell(); err != nil {
-		stdin.Close()
-		session.Close()
-		client.Close()
-		return nil, fmt.Errorf("failed to start shell: %w", err)
+		return nil, err
 	}
 
 	return &SSHConnection{
@@ -1166,4 +959,127 @@ func (j *cookieJar) Cookies(u *url.URL) []*http.Cookie {
 		result = append(result, cookie)
 	}
 	return result
+}
+
+// getClientIPFromRequest extracts the client IP address from an HTTP request
+// Traefik is configured with forwardedHeaders middleware to properly forward the real client IP
+func getClientIPFromRequest(r *http.Request) string {
+	// Try CF-Connecting-IP (Cloudflare)
+	if cfIP := r.Header.Get("CF-Connecting-IP"); cfIP != "" {
+		return strings.TrimSpace(cfIP)
+	}
+
+	// Try True-Client-IP (used by some proxies)
+	if trueClientIP := r.Header.Get("True-Client-IP"); trueClientIP != "" {
+		return strings.TrimSpace(trueClientIP)
+	}
+
+	// Try X-Forwarded-For header (Traefik sets this with forwardedHeaders middleware)
+	// Format: "client-ip, proxy1-ip, proxy2-ip, ..."
+	// The first IP is the original client IP
+	forwarded := r.Header.Get("X-Forwarded-For")
+	if forwarded != "" {
+		ips := strings.Split(forwarded, ",")
+		if len(ips) > 0 {
+			ip := strings.TrimSpace(ips[0])
+			if ip != "" {
+				return ip
+			}
+		}
+	}
+
+	// Try X-Real-IP header (nginx and some proxies)
+	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+		ip := strings.TrimSpace(realIP)
+		if ip != "" {
+			return ip
+		}
+	}
+
+	// Try X-Client-IP (some proxies)
+	if clientIP := r.Header.Get("X-Client-IP"); clientIP != "" {
+		ip := strings.TrimSpace(clientIP)
+		if ip != "" {
+			return ip
+		}
+	}
+
+	// Fallback: use RemoteAddr
+	if r.RemoteAddr != "" {
+		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			return host
+		}
+		return r.RemoteAddr
+	}
+
+	return "unknown"
+}
+
+// createWebTerminalAuditLog creates an audit log entry for a web terminal connection
+func createWebTerminalAuditLog(vpsID string, userInfo *authv1.User, organizationID string, clientIP, userAgent string) {
+	// Recover from any panics
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("[VPS Terminal WS] Panic creating audit log for web terminal connection: %v", r)
+		}
+	}()
+
+	// Use background context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Use MetricsDB (TimescaleDB) for audit logs
+	if database.MetricsDB == nil {
+		logger.Warn("[VPS Terminal WS] Metrics database not available, skipping audit log for web terminal connection")
+		return
+	}
+
+	// Determine user ID
+	userID := "system"
+	if userInfo != nil {
+		userID = userInfo.Id
+	}
+
+	// Determine organization ID
+	var orgID *string
+	if organizationID != "" {
+		orgID = &organizationID
+	}
+
+	// Create request data
+	requestData := fmt.Sprintf(`{"vps_id":"%s","connection_type":"web_terminal"}`, vpsID)
+
+	// Set user agent
+	if userAgent == "" {
+		userAgent = "unknown"
+	}
+
+	// Create audit log entry
+	auditLog := database.AuditLog{
+		ID:             uuid.New().String(),
+		UserID:         userID,
+		OrganizationID: orgID,
+		Action:         "WebTerminalConnect",
+		Service:        "VPSTerminalService",
+		ResourceType:   stringPtrForTerminal("vps"),
+		ResourceID:     &vpsID,
+		IPAddress:      clientIP,
+		UserAgent:      userAgent,
+		RequestData:    requestData,
+		ResponseStatus: 200,
+		ErrorMessage:   nil,
+		DurationMs:     0,
+		CreatedAt:      time.Now(),
+	}
+
+	if err := database.MetricsDB.WithContext(ctx).Create(&auditLog).Error; err != nil {
+		logger.Warn("[VPS Terminal WS] Failed to create audit log for web terminal connection: %v", err)
+	} else {
+		logger.Debug("[VPS Terminal WS] Created audit log for web terminal connection: user=%s, vps=%s, ip=%s", userID, vpsID, clientIP)
+	}
+}
+
+// stringPtrForTerminal returns a pointer to a string
+func stringPtrForTerminal(s string) *string {
+	return &s
 }
