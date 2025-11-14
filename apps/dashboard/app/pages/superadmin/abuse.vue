@@ -16,7 +16,7 @@
     </OuiFlex>
 
     <!-- Metrics Overview -->
-    <OuiGrid class="gap-4" cols="1" colsMd="2" colsXl="5">
+    <OuiGrid class="gap-4" cols="1" colsMd="2" colsXl="5" cols2xl="6">
       <OuiCard
         v-for="metric in metrics"
         :key="metric.label"
@@ -145,7 +145,16 @@ await fetchAbuseDetection();
 
 const metrics = computed(() => {
   const m = abuseData.value?.metrics;
+  const activities = suspiciousActivities.value;
   if (!m) return [];
+  
+  // Count activities by type
+  const activityCounts = activities.reduce((acc: Record<string, number>, act: any) => {
+    const type = act.activityType || "unknown";
+    acc[type] = (acc[type] || 0) + 1;
+    return acc;
+  }, {});
+
   return [
     {
       label: "Suspicious Orgs",
@@ -156,6 +165,11 @@ const metrics = computed(() => {
       label: "High Risk",
       value: m.highRiskOrgs?.toString() || "0",
       color: "danger" as const,
+    },
+    {
+      label: "Total Activities",
+      value: activities.length.toString(),
+      color: "primary" as const,
     },
     {
       label: "Rapid Creations (24h)",
@@ -170,6 +184,26 @@ const metrics = computed(() => {
     {
       label: "Usage Spikes (24h)",
       value: m.unusualUsageSpikes24h?.toString() || "0",
+      color: "warning" as const,
+    },
+    {
+      label: "SSH Brute Force",
+      value: (activityCounts["ssh_brute_force"] || 0).toString(),
+      color: "danger" as const,
+    },
+    {
+      label: "API Abuse",
+      value: (activityCounts["api_abuse"] || 0).toString(),
+      color: "warning" as const,
+    },
+    {
+      label: "Failed Auth",
+      value: (activityCounts["failed_authentication"] || 0).toString(),
+      color: "danger" as const,
+    },
+    {
+      label: "Multiple Accounts",
+      value: (activityCounts["multiple_accounts"] || 0).toString(),
       color: "warning" as const,
     },
   ];
@@ -197,6 +231,7 @@ const suspiciousActivities = computed(() => {
       id: act.id,
       organizationId: act.organizationId,
       activityType: act.activityType || "—",
+      activityTypeLabel: formatActivityType(act.activityType),
       description: act.description || "—",
       severity: act.severity || 0,
       occurredAt: formatDate(act.occurredAt),
@@ -216,8 +251,8 @@ const orgColumns = computed(() => [
 
 const activityColumns = computed(() => [
   { key: "organization", label: "Organization", defaultWidth: 150, minWidth: 120 },
-  { key: "activityType", label: "Type", defaultWidth: 150, minWidth: 120 },
-  { key: "description", label: "Description", defaultWidth: 300, minWidth: 200 },
+  { key: "activityTypeLabel", label: "Type", defaultWidth: 180, minWidth: 150 },
+  { key: "description", label: "Description", defaultWidth: 400, minWidth: 250 },
   { key: "severity", label: "Severity", defaultWidth: 120, minWidth: 100 },
   { key: "occurredAt", label: "Occurred", defaultWidth: 150, minWidth: 120 },
 ]);
@@ -246,6 +281,21 @@ function formatDate(timestamp?: { seconds?: number | bigint; nanos?: number } | 
   const millis = seconds * 1000 + Math.floor((timestamp.nanos ?? 0) / 1_000_000);
   const date = new Date(millis);
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function formatActivityType(type?: string): string {
+  if (!type) return "—";
+  const typeMap: Record<string, string> = {
+    rapid_creation: "Rapid Resource Creation",
+    failed_payments: "Failed Payment Attempts",
+    ssh_brute_force: "SSH Brute Force",
+    api_abuse: "API Abuse",
+    failed_authentication: "Failed Authentication",
+    multiple_accounts: "Multiple Account Creation",
+    dns_delegation_abuse: "DNS Delegation Abuse",
+    usage_spike: "Usage Spike",
+  };
+  return typeMap[type] || type.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }
 </script>
 
