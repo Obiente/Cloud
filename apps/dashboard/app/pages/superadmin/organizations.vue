@@ -1,93 +1,45 @@
 <template>
-  <OuiStack gap="xl">
-    <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
-      <OuiStack gap="xs">
-        <OuiText tag="h1" size="3xl" weight="extrabold">Organizations</OuiText>
-        <OuiText color="muted">Manage every tenant across the platform.</OuiText>
-      </OuiStack>
-      <OuiFlex gap="sm" wrap="wrap">
-        <div class="w-72 max-w-full">
-          <OuiInput
-            v-model="search"
-            type="search"
-            placeholder="Search by name, slug, ID, domain, plan, status…"
-            clearable
-            size="sm"
-          />
-        </div>
-        <div class="min-w-[140px]">
-          <OuiSelect
-            v-model="planFilter"
-            :items="planOptions"
-            placeholder="Plan"
-            size="sm"
-          />
-        </div>
-        <div class="min-w-[140px]">
-          <OuiSelect
-            v-model="statusFilter"
-            :items="statusOptions"
-            placeholder="Status"
-            size="sm"
-          />
-        </div>
-        <OuiButton variant="ghost" size="sm" @click="refresh" :disabled="isLoading">
-          <span class="flex items-center gap-2">
-            <ArrowPathIcon class="h-4 w-4" :class="{ 'animate-spin': isLoading }" />
-            Refresh
-          </span>
-        </OuiButton>
-      </OuiFlex>
-    </OuiFlex>
-
-    <OuiCard class="border border-border-muted rounded-xl overflow-hidden">
-      <OuiCardBody class="p-0">
-        <OuiTable
-          :columns="tableColumns"
-          :rows="tableRows"
-          :empty-text="isLoading ? 'Loading organizations…' : 'No organizations match your filters.'"
-        >
+  <SuperadminPageLayout
+    title="Organizations"
+    description="Manage every tenant across the platform."
+    :columns="tableColumns"
+    :rows="tableRows"
+    :filters="filterConfigs"
+    :search="search"
+    :empty-text="isLoading ? 'Loading organizations…' : 'No organizations match your filters.'"
+    :loading="isLoading"
+    search-placeholder="Search by name, slug, ID, domain, plan, status…"
+    @update:search="search = $event"
+    @filter-change="handleFilterChange"
+    @refresh="refresh"
+  >
           <template #cell-organization="{ value, row }">
-            <div>
-              <div class="font-medium text-text-primary">{{ row.name || row.slug || "—" }}</div>
-              <div class="text-xs text-text-muted">
-                <span v-if="row.slug">{{ row.slug }}</span>
-                <span v-else class="text-text-tertiary">No slug</span>
-              </div>
-              <div class="text-xs font-mono text-text-tertiary mt-0.5">{{ row.id }}</div>
-              <div v-if="row.domain" class="text-xs text-text-muted mt-0.5">{{ row.domain }}</div>
+            <SuperadminResourceCell
+              :name="row.name || row.slug"
+              :subtitle="row.slug ? undefined : 'No slug'"
+              :id="row.id"
+              :domain="row.domain"
+            />
+            <div v-if="row.ownerName" class="text-xs text-text-muted mt-0.5">
+              Owner: {{ row.ownerName }}
             </div>
           </template>
           <template #cell-plan="{ value }">
             <span class="text-text-secondary">{{ prettyPlan(value) }}</span>
           </template>
           <template #cell-status="{ value }">
-            <span class="uppercase text-xs">{{ value || "—" }}</span>
+            <SuperadminStatusBadge
+              :status="value?.toLowerCase()"
+              :status-map="orgStatusMap"
+            />
           </template>
           <template #cell-credits="{ value, row }">
             <span class="font-mono"><OuiCurrency :value="value" /></span>
           </template>
           <template #cell-actions="{ row }">
-            <div class="text-right">
-              <OuiFlex gap="sm" justify="end">
-                <OuiButton size="xs" variant="ghost" @click="openManageCredits(row.id, row.credits || 0)">
-                  Credits
-                </OuiButton>
-                <OuiButton size="xs" variant="ghost" @click="openMembers(row.id)">
-                  Members
-                </OuiButton>
-                <OuiButton size="xs" variant="ghost" @click="openDeployments(row.id)">
-                  Deployments
-                </OuiButton>
-                <OuiButton size="xs" @click="switchToOrg(row.id)">
-                  Manage
-                </OuiButton>
-              </OuiFlex>
-            </div>
+            <SuperadminActionsCell :actions="getOrgActions(row)" />
           </template>
-        </OuiTable>
-      </OuiCardBody>
-    </OuiCard>
+  </SuperadminPageLayout>
 
     <!-- Manage Credits Dialog -->
     <OuiDialog v-model:open="manageCreditsDialogOpen" :title="manageCreditsAction === 'add' ? 'Add Credits' : 'Remove Credits'">
@@ -156,7 +108,6 @@
         </OuiFlex>
       </OuiStack>
     </OuiDialog>
-  </OuiStack>
 </template>
 
 <script setup lang="ts">
@@ -164,11 +115,17 @@ definePageMeta({
   middleware: ["auth", "superadmin"],
 });
 
-import { ArrowPathIcon, PlusIcon, MinusIcon } from "@heroicons/vue/24/outline";
+import { PlusIcon, MinusIcon } from "@heroicons/vue/24/outline";
 import { computed, ref } from "vue";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { OrganizationService } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
+import SuperadminPageLayout from "~/components/superadmin/SuperadminPageLayout.vue";
+import SuperadminResourceCell from "~/components/superadmin/SuperadminResourceCell.vue";
+import SuperadminStatusBadge from "~/components/superadmin/SuperadminStatusBadge.vue";
+import SuperadminActionsCell, { type Action } from "~/components/superadmin/SuperadminActionsCell.vue";
+import type { FilterConfig } from "~/components/superadmin/SuperadminFilterBar.vue";
+import type { BadgeVariant } from "~/components/oui/Badge.vue";
 
 const superAdmin = useSuperAdmin();
 await superAdmin.fetchOverview(true);
@@ -179,27 +136,6 @@ const statusFilter = ref<string>("all");
 const router = useRouter();
 const organizationsStore = useOrganizationsStore();
 const orgClient = useConnectClient(OrganizationService);
-
-const manageCreditsDialogOpen = ref(false);
-const manageCreditsOrgId = ref<string | null>(null);
-const manageCreditsCurrentBalance = ref<number>(0);
-const manageCreditsAmount = ref("");
-const manageCreditsAction = ref<"add" | "remove">("add");
-const manageCreditsNote = ref("");
-const manageCreditsLoading = ref(false);
-
-const openManageCredits = (orgId: string, currentBalance: number | bigint) => {
-  manageCreditsOrgId.value = orgId;
-  manageCreditsCurrentBalance.value = Number(currentBalance);
-  manageCreditsAmount.value = "";
-  manageCreditsAction.value = "add";
-  manageCreditsNote.value = "";
-  manageCreditsDialogOpen.value = true;
-};
-
-const overview = computed(() => superAdmin.overview.value);
-const organizations = computed(() => overview.value?.organizations ?? []);
-const isLoading = computed(() => superAdmin.loading.value);
 
 const planOptions = computed(() => {
   const plans = new Set<string>();
@@ -224,6 +160,48 @@ const statusOptions = computed(() => {
     ...sortedStatuses.map((status) => ({ label: status.toUpperCase(), value: status })),
   ];
 });
+
+const filterConfigs = computed(() => [
+  {
+    key: "plan",
+    placeholder: "Plan",
+    items: planOptions.value,
+  },
+  {
+    key: "status",
+    placeholder: "Status",
+    items: statusOptions.value,
+  },
+] as FilterConfig[]);
+
+function handleFilterChange(key: string, value: string) {
+  if (key === "plan") {
+    planFilter.value = value;
+  } else if (key === "status") {
+    statusFilter.value = value;
+  }
+}
+
+const manageCreditsDialogOpen = ref(false);
+const manageCreditsOrgId = ref<string | null>(null);
+const manageCreditsCurrentBalance = ref<number>(0);
+const manageCreditsAmount = ref("");
+const manageCreditsAction = ref<"add" | "remove">("add");
+const manageCreditsNote = ref("");
+const manageCreditsLoading = ref(false);
+
+const openManageCredits = (orgId: string, currentBalance: number | bigint) => {
+  manageCreditsOrgId.value = orgId;
+  manageCreditsCurrentBalance.value = Number(currentBalance);
+  manageCreditsAmount.value = "";
+  manageCreditsAction.value = "add";
+  manageCreditsNote.value = "";
+  manageCreditsDialogOpen.value = true;
+};
+
+const overview = computed(() => superAdmin.overview.value);
+const organizations = computed(() => overview.value?.organizations ?? []);
+const isLoading = computed(() => superAdmin.loading.value);
 
 const filteredOrganizations = computed(() => {
   const term = search.value.trim().toLowerCase();
@@ -317,6 +295,38 @@ function prettyPlan(plan?: string | null) {
   if (!plan) return "—";
   return plan.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+const orgStatusMap: Record<string, { label: string; variant: BadgeVariant }> = {
+  active: { label: "ACTIVE", variant: "success" },
+  suspended: { label: "SUSPENDED", variant: "warning" },
+  cancelled: { label: "CANCELLED", variant: "danger" },
+};
+
+const getOrgActions = (row: any): Action[] => {
+  return [
+    {
+      key: "credits",
+      label: "Credits",
+      onClick: () => openManageCredits(row.id, row.credits || 0),
+    },
+    {
+      key: "members",
+      label: "Members",
+      onClick: () => openMembers(row.id),
+    },
+    {
+      key: "deployments",
+      label: "Deployments",
+      onClick: () => openDeployments(row.id),
+    },
+    {
+      key: "manage",
+      label: "Manage",
+      onClick: () => switchToOrg(row.id),
+      variant: "solid",
+    },
+  ];
+};
 
 async function manageCredits() {
   if (!manageCreditsOrgId.value || !manageCreditsAmount.value) return;
