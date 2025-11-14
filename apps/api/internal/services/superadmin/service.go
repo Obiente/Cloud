@@ -14,8 +14,10 @@ import (
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/logger"
+	"api/internal/orchestrator"
 	"api/internal/pricing"
 	"api/internal/services/organizations"
+	vpsservice "api/internal/services/vps"
 	"api/internal/stripe"
 
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
@@ -1109,6 +1111,8 @@ type organizationOverviewRow struct {
 	MemberCount     int64
 	InviteCount     int64
 	DeploymentCount int64
+	OwnerID         *string
+	OwnerName       *string
 }
 
 func loadOrganizationOverviews() ([]*superadminv1.OrganizationOverview, error) {
@@ -1117,16 +1121,21 @@ func loadOrganizationOverviews() ([]*superadminv1.OrganizationOverview, error) {
 		Select(`o.id, o.name, o.slug, o.plan, o.status, o.domain, o.created_at,
 			SUM(CASE WHEN m.status = 'active' THEN 1 ELSE 0 END) AS member_count,
 			SUM(CASE WHEN m.status = 'invited' THEN 1 ELSE 0 END) AS invite_count,
-			COUNT(d.id) AS deployment_count`).
+			COUNT(d.id) AS deployment_count,
+			owner_m.user_id AS owner_id,
+			NULL AS owner_name`).
 		Joins("LEFT JOIN organization_members m ON m.organization_id = o.id").
 		Joins("LEFT JOIN deployments d ON d.organization_id = o.id").
-		Group("o.id, o.name, o.slug, o.plan, o.status, o.domain, o.created_at").
+		Joins("LEFT JOIN organization_members owner_m ON owner_m.organization_id = o.id AND owner_m.role = 'owner' AND owner_m.status = 'active'").
+		Group("o.id, o.name, o.slug, o.plan, o.status, o.domain, o.created_at, owner_m.user_id").
 		Order("o.created_at DESC").
 		Limit(overviewLimit).
 		Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("load organizations: %w", err)
 	}
 
+	// Resolve owner names
+	resolver := organizations.GetUserProfileResolver()
 	items := make([]*superadminv1.OrganizationOverview, 0, len(rows))
 	for _, r := range rows {
 		item := &superadminv1.OrganizationOverview{
@@ -1142,6 +1151,21 @@ func loadOrganizationOverviews() ([]*superadminv1.OrganizationOverview, error) {
 		}
 		if r.Domain != nil {
 			item.Domain = r.Domain
+		}
+		if r.OwnerID != nil && *r.OwnerID != "" {
+			item.OwnerId = r.OwnerID
+			// Try to resolve owner name
+			if resolver != nil && resolver.IsConfigured() {
+				if profile, err := resolver.Resolve(context.Background(), *r.OwnerID); err == nil && profile != nil {
+					ownerName := profile.Name
+					if ownerName == "" {
+						ownerName = profile.Email
+					}
+					if ownerName != "" {
+						item.OwnerName = &ownerName
+					}
+				}
+			}
 		}
 		items = append(items, item)
 	}
@@ -1168,9 +1192,19 @@ func loadPendingInvites() ([]*superadminv1.SuperadminPendingInvite, error) {
 	return items, nil
 }
 
+type deploymentOverviewRow struct {
+	database.Deployment
+	OrganizationName *string
+}
+
 func loadDeploymentOverviews() ([]*superadminv1.DeploymentOverview, error) {
-	var rows []database.Deployment
-	if err := database.DB.Order("created_at DESC").Limit(overviewLimit).Find(&rows).Error; err != nil {
+	var rows []deploymentOverviewRow
+	if err := database.DB.Table("deployments d").
+		Select("d.*, o.name AS organization_name").
+		Joins("LEFT JOIN organizations o ON o.id = d.organization_id").
+		Order("d.created_at DESC").
+		Limit(overviewLimit).
+		Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("load deployments: %w", err)
 	}
 
@@ -1188,6 +1222,9 @@ func loadDeploymentOverviews() ([]*superadminv1.DeploymentOverview, error) {
 		if row.Domain != "" {
 			domain := row.Domain
 			item.Domain = &domain
+		}
+		if row.OrganizationName != nil && *row.OrganizationName != "" {
+			item.OrganizationName = row.OrganizationName
 		}
 		items = append(items, item)
 	}
@@ -1438,7 +1475,7 @@ func (s *Service) GetAbuseDetection(ctx context.Context, _ *connect.Request[supe
 			COALESCE(MAX(GREATEST(d.created_at, d.last_deployed_at, ct.created_at)), o.created_at) as last_activity
 		`).
 		Joins("LEFT JOIN deployments d ON d.organization_id = o.id AND d.created_at >= ?", twentyFourHoursAgo).
-		Joins("LEFT JOIN credit_transactions ct ON ct.organization_id = o.id").
+		Joins("LEFT JOIN credit_transactions ct ON ct.organization_id = o.id AND ct.created_at >= ?", twentyFourHoursAgo).
 		Group("o.id, o.name, o.created_at").
 		Having("COUNT(DISTINCT d.id) > 10 OR COALESCE(SUM(CASE WHEN d.status = 5 THEN 1 ELSE 0 END), 0) > 5").
 		Find(&activities).Error
@@ -1489,12 +1526,15 @@ func (s *Service) GetAbuseDetection(ctx context.Context, _ *connect.Request[supe
 		OrganizationID string
 		Count          int64
 	}
-	database.DB.Table("deployments").
+	err = database.DB.Table("deployments").
 		Select("organization_id, COUNT(*) as count").
 		Where("created_at >= ?", twentyFourHoursAgo).
 		Group("organization_id").
 		Having("COUNT(*) > 10").
-		Scan(&rapidCreations)
+		Scan(&rapidCreations).Error
+	if err != nil {
+		logger.Error("[SuperAdmin] Failed to query rapid creations: %v", err)
+	}
 
 	for _, rc := range rapidCreations {
 		var org database.Organization
@@ -1510,17 +1550,28 @@ func (s *Service) GetAbuseDetection(ctx context.Context, _ *connect.Request[supe
 		}
 	}
 
-	// Check for failed payment attempts (via credit transactions with negative amounts)
+	// Check for failed payment attempts
+	// NOTE: Currently, failed payments are not stored in credit_transactions.
+	// The webhook handler only logs payment_intent.payment_failed events.
+	// This detection method is incomplete and should be enhanced by either:
+	// 1. Storing failed payment events in a dedicated table with organization_id
+	// 2. Querying StripeWebhookEvent for payment_intent.payment_failed and linking via billing accounts
+	// For now, we check for organizations with payment attempts but no successful payments in 24h
 	var failedPayments []struct {
 		OrganizationID string
 		Count          int64
 	}
-	database.DB.Table("credit_transactions").
+	// This query won't find actual failed payments since they're not stored,
+	// but we can detect suspicious patterns (many payment attempts with no success)
+	err = database.DB.Table("credit_transactions").
 		Select("organization_id, COUNT(*) as count").
 		Where("created_at >= ? AND type = ? AND amount_cents < 0", twentyFourHoursAgo, "payment").
 		Group("organization_id").
 		Having("COUNT(*) > 2").
-		Scan(&failedPayments)
+		Scan(&failedPayments).Error
+	if err != nil {
+		logger.Error("[SuperAdmin] Failed to query failed payments: %v", err)
+	}
 
 	for _, fp := range failedPayments {
 		var org database.Organization
@@ -2993,4 +3044,674 @@ func (s *Service) DeleteVPSSize(ctx context.Context, req *connect.Request[supera
 	return connect.NewResponse(&superadminv1.DeleteVPSSizeResponse{
 		Success: true,
 	}), nil
+}
+
+// SuperadminGetVPS gets a VPS instance by ID (superadmin - bypasses organization checks)
+func (s *Service) SuperadminGetVPS(ctx context.Context, req *connect.Request[superadminv1.SuperadminGetVPSRequest]) (*connect.Response[superadminv1.SuperadminGetVPSResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if vpsID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("vps_id is required"))
+	}
+
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ?", vpsID).First(&vps).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+	}
+
+	// Get organization name
+	var org database.Organization
+	orgName := "Unknown"
+	if err := database.DB.Where("id = ?", vps.OrganizationID).First(&org).Error; err == nil {
+		orgName = org.Name
+	}
+
+	// Convert to proto
+	protoVPS := convertVPSInstanceToProto(&vps)
+
+	return connect.NewResponse(&superadminv1.SuperadminGetVPSResponse{
+		Vps:              protoVPS,
+		OrganizationName: orgName,
+	}), nil
+}
+
+// SuperadminResizeVPS resizes a VPS instance to a new size (superadmin only)
+func (s *Service) SuperadminResizeVPS(ctx context.Context, req *connect.Request[superadminv1.SuperadminResizeVPSRequest]) (*connect.Response[superadminv1.SuperadminResizeVPSResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	newSize := req.Msg.GetNewSize()
+	growDisk := req.Msg.GetGrowDisk()
+	applyCloudInit := req.Msg.GetApplyCloudinit()
+
+	if vpsID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("vps_id is required"))
+	}
+	if newSize == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("new_size is required"))
+	}
+
+	// Get VPS instance
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+	}
+
+	if vps.InstanceID == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no instance ID (not provisioned yet)"))
+	}
+
+	// Get new size from catalog
+	newSizeCatalog, err := database.GetVPSSizeCatalog(newSize, vps.Region)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid VPS size: %w", err))
+	}
+
+	// Check if resize is needed
+	if vps.Size == newSize && vps.CPUCores == newSizeCatalog.CPUCores && vps.MemoryBytes == newSizeCatalog.MemoryBytes && vps.DiskBytes == newSizeCatalog.DiskBytes {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("VPS is already at the requested size"))
+	}
+
+	// Get Proxmox configuration
+	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
+	}
+
+	// Create Proxmox client
+	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
+	}
+
+	vmIDInt := 0
+	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+	if vmIDInt == 0 {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("invalid VM ID: %s", *vps.InstanceID))
+	}
+
+	nodes, err := proxmoxClient.ListNodes(ctx)
+	if err != nil || len(nodes) == 0 {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to find Proxmox node: %w", err))
+	}
+	nodeName := nodes[0]
+
+	// Stop VM if running (required for resize)
+	status, err := proxmoxClient.GetVMStatus(ctx, nodeName, vmIDInt)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VM status: %w", err))
+	}
+
+	wasRunning := status == "running"
+	if wasRunning {
+		logger.Info("[SuperAdmin] Stopping VM %d for resize", vmIDInt)
+		if err := proxmoxClient.StopVM(ctx, nodeName, vmIDInt); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to stop VM: %w", err))
+		}
+		// Wait for VM to stop
+		for i := 0; i < 30; i++ {
+			time.Sleep(2 * time.Second)
+			status, _ := proxmoxClient.GetVMStatus(ctx, nodeName, vmIDInt)
+			if status == "stopped" {
+				break
+			}
+		}
+	}
+
+	// Update CPU and memory
+	vmConfig := make(map[string]interface{})
+	if vps.CPUCores != newSizeCatalog.CPUCores {
+		vmConfig["cores"] = newSizeCatalog.CPUCores
+		logger.Info("[SuperAdmin] Resizing CPU from %d to %d cores", vps.CPUCores, newSizeCatalog.CPUCores)
+	}
+	if vps.MemoryBytes != newSizeCatalog.MemoryBytes {
+		vmConfig["memory"] = int(newSizeCatalog.MemoryBytes / (1024 * 1024)) // Convert to MB
+		logger.Info("[SuperAdmin] Resizing memory from %d to %d bytes", vps.MemoryBytes, newSizeCatalog.MemoryBytes)
+	}
+
+	if len(vmConfig) > 0 {
+		// Update VM config via Proxmox API
+		if err := proxmoxClient.UpdateVMConfig(ctx, nodeName, vmIDInt, vmConfig); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update VM config: %w", err))
+		}
+		logger.Info("[SuperAdmin] Successfully updated VM config: %v", vmConfig)
+	}
+
+	// Resize disk if needed and requested
+	if growDisk && vps.DiskBytes != newSizeCatalog.DiskBytes {
+		// Find disk key
+		vmConfigAfter, err := proxmoxClient.GetVMConfig(ctx, nodeName, vmIDInt)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VM config: %w", err))
+		}
+
+		diskKeys := []string{"scsi0", "virtio0", "sata0", "ide0"}
+		var diskKey string
+		for _, key := range diskKeys {
+			if disk, ok := vmConfigAfter[key].(string); ok && disk != "" {
+				diskKey = key
+				break
+			}
+		}
+
+		if diskKey == "" {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("could not find disk to resize"))
+		}
+
+		newDiskSizeGB := newSizeCatalog.DiskBytes / (1024 * 1024 * 1024)
+		logger.Info("[SuperAdmin] Resizing disk %s from %dGB to %dGB", diskKey, vps.DiskBytes/(1024*1024*1024), newDiskSizeGB)
+
+		// Resize disk via Proxmox API
+		if err := proxmoxClient.ResizeDisk(ctx, nodeName, vmIDInt, diskKey, newDiskSizeGB); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to resize disk: %w", err))
+		}
+		logger.Info("[SuperAdmin] Successfully resized disk %s to %dGB", diskKey, newDiskSizeGB)
+
+		// If cloud-init should be applied, update it to grow the filesystem
+		if applyCloudInit {
+			// Use VPS config service to load existing config
+			// Create a minimal ConfigService instance (VPSManager not needed for these operations)
+			configService := vpsservice.NewConfigService(nil)
+			cloudInitConfig, err := configService.LoadCloudInitConfig(ctx, &vps)
+			if err != nil {
+				logger.Warn("[SuperAdmin] Failed to load cloud-init config: %v, using default", err)
+				cloudInitConfig = &orchestrator.CloudInitConfig{
+					PackageUpdate:    boolPtr(true),
+					PackageUpgrade:   boolPtr(false),
+					SSHInstallServer: boolPtr(true),
+					SSHAllowPW:       boolPtr(true),
+					Runcmd:           []string{},
+				}
+			}
+
+			// Add growpart and resize2fs commands to runcmd if not already present
+			growPartCmd := "growpart /dev/sda 1 || growpart /dev/vda 1 || true"
+			resizeFsCmd := "resize2fs /dev/sda1 || resize2fs /dev/vda1 || true"
+			
+			// Check if commands already exist
+			hasGrowPart := false
+			hasResizeFs := false
+			for _, cmd := range cloudInitConfig.Runcmd {
+				if strings.Contains(cmd, "growpart") {
+					hasGrowPart = true
+				}
+				if strings.Contains(cmd, "resize2fs") {
+					hasResizeFs = true
+				}
+			}
+
+			if !hasGrowPart {
+				cloudInitConfig.Runcmd = append([]string{growPartCmd}, cloudInitConfig.Runcmd...)
+			}
+			if !hasResizeFs {
+				cloudInitConfig.Runcmd = append([]string{resizeFsCmd}, cloudInitConfig.Runcmd...)
+			}
+
+			// Save cloud-init config using ConfigService
+			if err := configService.SaveCloudInitConfig(ctx, &vps, cloudInitConfig); err != nil {
+				logger.Warn("[SuperAdmin] Failed to update cloud-init config: %v", err)
+			} else {
+				logger.Info("[SuperAdmin] Updated cloud-init config with disk growth commands")
+			}
+		}
+	}
+
+	// Update database
+	vps.Size = newSize
+	vps.CPUCores = newSizeCatalog.CPUCores
+	vps.MemoryBytes = newSizeCatalog.MemoryBytes
+	if growDisk {
+		vps.DiskBytes = newSizeCatalog.DiskBytes
+	}
+	vps.UpdatedAt = time.Now()
+
+	if err := database.DB.Save(&vps).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update VPS in database: %w", err))
+	}
+
+	// Restart VM if it was running
+	if wasRunning {
+		logger.Info("[SuperAdmin] Starting VM %d after resize", vmIDInt)
+		if err := proxmoxClient.StartVM(ctx, nodeName, vmIDInt); err != nil {
+			logger.Warn("[SuperAdmin] Failed to start VM after resize: %v", err)
+		}
+	}
+
+	message := fmt.Sprintf("VPS resized successfully. CPU: %d cores, Memory: %s, Disk: %s", 
+		newSizeCatalog.CPUCores,
+		formatBytes(newSizeCatalog.MemoryBytes),
+		formatBytes(newSizeCatalog.DiskBytes))
+	if growDisk && applyCloudInit {
+		message += " Disk will be grown on next boot via cloud-init."
+	}
+
+	return connect.NewResponse(&superadminv1.SuperadminResizeVPSResponse{
+		Vps:     convertVPSInstanceToProto(&vps),
+		Message: message,
+	}), nil
+}
+
+// SuperadminSuspendVPS suspends a VPS instance (superadmin only)
+func (s *Service) SuperadminSuspendVPS(ctx context.Context, req *connect.Request[superadminv1.SuperadminSuspendVPSRequest]) (*connect.Response[superadminv1.SuperadminSuspendVPSResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if vpsID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("vps_id is required"))
+	}
+
+	// Get VPS instance
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+	}
+
+	if vps.InstanceID == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no instance ID (not provisioned yet)"))
+	}
+
+	// Update status to SUSPENDED
+	vps.Status = int32(vpsv1.VPSStatus_SUSPENDED)
+	vps.UpdatedAt = time.Now()
+
+	// Store suspension reason in metadata if provided
+	if reason := req.Msg.GetReason(); reason != "" {
+		var metadata map[string]string
+		if vps.Metadata != "" {
+			json.Unmarshal([]byte(vps.Metadata), &metadata)
+		}
+		if metadata == nil {
+			metadata = make(map[string]string)
+		}
+		metadata["suspended_reason"] = reason
+		metadata["suspended_at"] = time.Now().Format(time.RFC3339)
+		metadataJSON, _ := json.Marshal(metadata)
+		vps.Metadata = string(metadataJSON)
+	}
+
+	if err := database.DB.Save(&vps).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to suspend VPS: %w", err))
+	}
+
+	message := "VPS suspended successfully"
+	if reason := req.Msg.GetReason(); reason != "" {
+		message += fmt.Sprintf(" (reason: %s)", reason)
+	}
+
+	return connect.NewResponse(&superadminv1.SuperadminSuspendVPSResponse{
+		Vps:     convertVPSInstanceToProto(&vps),
+		Message: message,
+	}), nil
+}
+
+// SuperadminUnsuspendVPS unsuspends a VPS instance (superadmin only)
+func (s *Service) SuperadminUnsuspendVPS(ctx context.Context, req *connect.Request[superadminv1.SuperadminUnsuspendVPSRequest]) (*connect.Response[superadminv1.SuperadminUnsuspendVPSResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if vpsID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("vps_id is required"))
+	}
+
+	// Get VPS instance
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+	}
+
+	// Update status to STOPPED (was suspended)
+	vps.Status = int32(vpsv1.VPSStatus_STOPPED)
+	vps.UpdatedAt = time.Now()
+
+	// Remove suspension metadata
+	if vps.Metadata != "" {
+		var metadata map[string]string
+		if err := json.Unmarshal([]byte(vps.Metadata), &metadata); err == nil {
+			delete(metadata, "suspended_reason")
+			delete(metadata, "suspended_at")
+			metadataJSON, _ := json.Marshal(metadata)
+			vps.Metadata = string(metadataJSON)
+		}
+	}
+
+	if err := database.DB.Save(&vps).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to unsuspend VPS: %w", err))
+	}
+
+	return connect.NewResponse(&superadminv1.SuperadminUnsuspendVPSResponse{
+		Vps:     convertVPSInstanceToProto(&vps),
+		Message: "VPS unsuspended successfully",
+	}), nil
+}
+
+// SuperadminUpdateVPSCloudInit updates the cloud-init configuration for a VPS (superadmin only)
+func (s *Service) SuperadminUpdateVPSCloudInit(ctx context.Context, req *connect.Request[superadminv1.SuperadminUpdateVPSCloudInitRequest]) (*connect.Response[superadminv1.SuperadminUpdateVPSCloudInitResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if vpsID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("vps_id is required"))
+	}
+
+	// Get VPS instance
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+	}
+
+	if vps.InstanceID == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no instance ID (not provisioned yet)"))
+	}
+
+	// Convert proto cloud-init to orchestrator format
+	cloudInitProto := req.Msg.GetCloudInit()
+	if cloudInitProto == nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("cloud_init is required"))
+	}
+
+	// Convert proto to orchestrator format
+	cloudInitConfig := protoToCloudInitConfigForSuperadmin(cloudInitProto)
+
+	// Use VPS config service to save cloud-init config
+	// Create a minimal ConfigService instance (VPSManager not needed for these operations)
+	configService := vpsservice.NewConfigService(nil)
+	if err := configService.SaveCloudInitConfig(ctx, &vps, cloudInitConfig); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update cloud-init config: %w", err))
+	}
+	
+	logger.Info("[SuperAdmin] Successfully updated cloud-init config for VPS %s", vpsID)
+
+	message := "Cloud-init configuration updated. Changes will take effect on the next reboot or when cloud-init is re-run."
+	if req.Msg.GetGrowDiskIfNeeded() {
+		message += " Disk growth commands have been added if needed."
+	}
+
+	return connect.NewResponse(&superadminv1.SuperadminUpdateVPSCloudInitResponse{
+		Vps:     convertVPSInstanceToProto(&vps),
+		Message: message,
+	}), nil
+}
+
+// SuperadminForceStopVPS force stops a VPS instance (superadmin only)
+func (s *Service) SuperadminForceStopVPS(ctx context.Context, req *connect.Request[superadminv1.SuperadminForceStopVPSRequest]) (*connect.Response[superadminv1.SuperadminForceStopVPSResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if vpsID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("vps_id is required"))
+	}
+
+	// Get VPS instance
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+	}
+
+	if vps.InstanceID == nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no instance ID (not provisioned yet)"))
+	}
+
+	// Get VPS manager and force stop
+	vpsManager, err := orchestrator.NewVPSManager()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS manager: %w", err))
+	}
+
+	// Force stop (use force=true for forceful stop)
+	if err := vpsManager.StopVPS(ctx, vpsID, true); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to force stop VPS: %w", err))
+	}
+
+	// Refresh VPS status
+	if err := database.DB.Where("id = ?", vpsID).First(&vps).Error; err == nil {
+		vps.Status = int32(vpsv1.VPSStatus_STOPPED)
+		vps.UpdatedAt = time.Now()
+		database.DB.Save(&vps)
+	}
+
+	return connect.NewResponse(&superadminv1.SuperadminForceStopVPSResponse{
+		Vps:     convertVPSInstanceToProto(&vps),
+		Message: "VPS force stopped successfully",
+	}), nil
+}
+
+// SuperadminForceDeleteVPS force deletes a VPS instance (superadmin only)
+func (s *Service) SuperadminForceDeleteVPS(ctx context.Context, req *connect.Request[superadminv1.SuperadminForceDeleteVPSRequest]) (*connect.Response[superadminv1.SuperadminForceDeleteVPSResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	hardDelete := req.Msg.GetHardDelete()
+
+	if vpsID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("vps_id is required"))
+	}
+
+	// Get VPS instance
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ?", vpsID).First(&vps).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+	}
+
+	// Get VPS manager
+	vpsManager, err := orchestrator.NewVPSManager()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS manager: %w", err))
+	}
+
+	// Delete VPS (hard delete handled by setting deleted_at or actual deletion)
+	if err := vpsManager.DeleteVPS(ctx, vpsID); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete VPS: %w", err))
+	}
+	
+	// If hard delete, also remove from database permanently
+	if hardDelete {
+		if err := database.DB.Unscoped().Delete(&vps).Error; err != nil {
+			logger.Warn("[SuperAdmin] Failed to hard delete VPS from database: %v", err)
+		}
+	}
+
+	message := "VPS deleted successfully"
+	if hardDelete {
+		message = "VPS permanently deleted (hard delete)"
+	}
+
+	return connect.NewResponse(&superadminv1.SuperadminForceDeleteVPSResponse{
+		Success: true,
+		Message: message,
+	}), nil
+}
+
+// Helper functions
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// protoToCloudInitConfigForSuperadmin converts proto CloudInitConfig to orchestrator format
+func protoToCloudInitConfigForSuperadmin(proto *vpsv1.CloudInitConfig) *orchestrator.CloudInitConfig {
+	if proto == nil {
+		return nil
+	}
+
+	config := &orchestrator.CloudInitConfig{
+		Users:      make([]orchestrator.CloudInitUser, 0, len(proto.Users)),
+		Packages:   proto.Packages,
+		Runcmd:     proto.Runcmd,
+		WriteFiles: make([]orchestrator.CloudInitWriteFile, 0, len(proto.WriteFiles)),
+	}
+
+	// Convert users
+	for _, userProto := range proto.Users {
+		user := orchestrator.CloudInitUser{
+			Name:              userProto.GetName(),
+			SSHAuthorizedKeys: userProto.SshAuthorizedKeys,
+			Groups:            userProto.Groups,
+		}
+
+		if userProto.Password != nil {
+			pass := userProto.GetPassword()
+			user.Password = &pass
+		}
+		if userProto.Sudo != nil {
+			sudo := userProto.GetSudo()
+			user.Sudo = &sudo
+		}
+		if userProto.SudoNopasswd != nil {
+			sudoNopasswd := userProto.GetSudoNopasswd()
+			user.SudoNopasswd = &sudoNopasswd
+		}
+		if userProto.Shell != nil {
+			shell := userProto.GetShell()
+			user.Shell = &shell
+		}
+		if userProto.LockPasswd != nil {
+			lockPasswd := userProto.GetLockPasswd()
+			user.LockPasswd = &lockPasswd
+		}
+		if userProto.Gecos != nil {
+			gecos := userProto.GetGecos()
+			user.Gecos = &gecos
+		}
+
+		config.Users = append(config.Users, user)
+	}
+
+	// Convert system configuration
+	if proto.Hostname != nil {
+		hostname := proto.GetHostname()
+		config.Hostname = &hostname
+	}
+	if proto.Timezone != nil {
+		timezone := proto.GetTimezone()
+		config.Timezone = &timezone
+	}
+	if proto.Locale != nil {
+		locale := proto.GetLocale()
+		config.Locale = &locale
+	}
+
+	// Convert package management
+	if proto.PackageUpdate != nil {
+		packageUpdate := proto.GetPackageUpdate()
+		config.PackageUpdate = &packageUpdate
+	}
+	if proto.PackageUpgrade != nil {
+		packageUpgrade := proto.GetPackageUpgrade()
+		config.PackageUpgrade = &packageUpgrade
+	}
+
+	// Convert SSH configuration
+	if proto.SshInstallServer != nil {
+		sshInstallServer := proto.GetSshInstallServer()
+		config.SSHInstallServer = &sshInstallServer
+	}
+	if proto.SshAllowPw != nil {
+		sshAllowPW := proto.GetSshAllowPw()
+		config.SSHAllowPW = &sshAllowPW
+	}
+
+	// Convert write files
+	for _, fileProto := range proto.WriteFiles {
+		file := orchestrator.CloudInitWriteFile{
+			Path:    fileProto.GetPath(),
+			Content: fileProto.GetContent(),
+		}
+
+		if fileProto.Owner != nil {
+			owner := fileProto.GetOwner()
+			file.Owner = &owner
+		}
+		if fileProto.Permissions != nil {
+			permissions := fileProto.GetPermissions()
+			file.Permissions = &permissions
+		}
+		if fileProto.Append != nil {
+			append := fileProto.GetAppend()
+			file.Append = &append
+		}
+		if fileProto.Defer != nil {
+			deferVal := fileProto.GetDefer()
+			file.Defer = &deferVal
+		}
+
+		config.WriteFiles = append(config.WriteFiles, file)
+	}
+
+	return config
 }
