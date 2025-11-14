@@ -1486,7 +1486,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   ArrowPathIcon,
@@ -1509,11 +1509,12 @@ import {
   CheckIcon,
   XMarkIcon,
 } from "@heroicons/vue/24/outline";
-import { VPSService, VPSConfigService, VPSStatus, VPSImage, type VPSInstance } from "@obiente/proto";
+import { VPSService, VPSConfigService, SuperadminService, VPSStatus, VPSImage, type VPSInstance } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useToast } from "~/composables/useToast";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { useDialog } from "~/composables/useDialog";
+import { useSuperAdmin } from "~/composables/useSuperAdmin";
 import { ConnectError, Code } from "@connectrpc/connect";
 import OuiByte from "~/components/oui/Byte.vue";
 import OuiDate from "~/components/oui/Date.vue";
@@ -1544,11 +1545,14 @@ const router = useRouter();
 const { toast } = useToast();
 const { showAlert, showConfirm } = useDialog();
 const orgsStore = useOrganizationsStore();
+const superAdmin = useSuperAdmin();
 
 const vpsId = computed(() => String(route.params.id));
 const orgId = computed(() => orgsStore.currentOrgId || "");
+const isSuperAdmin = computed(() => superAdmin.allowed.value === true);
 
 const client = useConnectClient(VPSService);
+const superadminClient = useConnectClient(SuperadminService);
 const configClient = useConnectClient(VPSConfigService);
 const accessError = ref<Error | null>(null);
 const isActioning = ref(false);
@@ -1579,15 +1583,64 @@ const {
   refresh: refreshVPSData,
   execute: executeVPSData,
 } = await useAsyncData(
-  () => `vps-${vpsId.value}`,
+  () => `vps-${vpsId.value}-${orgId.value}-${isSuperAdmin.value}`,
   async () => {
     try {
-      const res = await client.getVPS({
-        organizationId: orgId.value,
-        vpsId: vpsId.value,
-      });
-      accessError.value = null;
-      return res.vps ?? null;
+      let res;
+      // Try regular endpoint first if we have an orgId, otherwise use superadmin endpoint
+      if (orgId.value && !isSuperAdmin.value) {
+        // Regular user - must use regular endpoint
+        res = await client.getVPS({
+          organizationId: orgId.value,
+          vpsId: vpsId.value,
+        });
+        accessError.value = null;
+        return res.vps ?? null;
+      } else if (isSuperAdmin.value) {
+        // Superadmin - try regular endpoint first if orgId is set, fallback to superadmin endpoint
+        if (orgId.value) {
+          try {
+            res = await client.getVPS({
+              organizationId: orgId.value,
+              vpsId: vpsId.value,
+            });
+            accessError.value = null;
+            return res.vps ?? null;
+          } catch (regularErr: unknown) {
+            // If regular endpoint fails, use superadmin endpoint
+            if (regularErr instanceof ConnectError && 
+                (regularErr.code === Code.NotFound || regularErr.code === Code.PermissionDenied)) {
+              res = await superadminClient.superadminGetVPS({
+                vpsId: vpsId.value,
+              });
+              accessError.value = null;
+              // Switch to the VPS's organization for proper context
+              if (res.vps?.organizationId && res.vps.organizationId !== orgId.value) {
+                // Use nextTick to avoid triggering watch during fetch
+                await nextTick();
+                orgsStore.switchOrganization(res.vps.organizationId);
+              }
+              return res.vps ?? null;
+            }
+            throw regularErr;
+          }
+        } else {
+          // No orgId - use superadmin endpoint
+          res = await superadminClient.superadminGetVPS({
+            vpsId: vpsId.value,
+          });
+          accessError.value = null;
+          // Switch to the VPS's organization for proper context
+          if (res.vps?.organizationId) {
+            await nextTick();
+            orgsStore.switchOrganization(res.vps.organizationId);
+          }
+          return res.vps ?? null;
+        }
+      } else {
+        // No orgId and not superadmin - error
+        throw new Error("No organization context available");
+      }
     } catch (err: unknown) {
       if (err instanceof ConnectError) {
         if (err.code === Code.NotFound || err.code === Code.PermissionDenied) {
