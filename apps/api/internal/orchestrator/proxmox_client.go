@@ -280,6 +280,12 @@ func (pc *ProxmoxClient) APIRequestRaw(ctx context.Context, method, endpoint str
 	return resp, nil
 }
 
+// APIRequestForm makes an authenticated request to Proxmox API with form-encoded data (public method)
+// Special handling for sshkeys parameter to avoid double encoding
+func (pc *ProxmoxClient) APIRequestForm(ctx context.Context, method, endpoint string, formData url.Values) (*http.Response, error) {
+	return pc.apiRequestForm(ctx, method, endpoint, formData)
+}
+
 // apiRequestForm makes an authenticated request to Proxmox API with form-encoded data
 // Special handling for sshkeys parameter to avoid double encoding
 func (pc *ProxmoxClient) apiRequestForm(ctx context.Context, method, endpoint string, formData url.Values) (*http.Response, error) {
@@ -2901,6 +2907,11 @@ func (pc *ProxmoxClient) listStorages(ctx context.Context, nodeName string) ([]s
 	return storages, nil
 }
 
+// StartVM starts a VM (public method)
+func (pc *ProxmoxClient) StartVM(ctx context.Context, nodeName string, vmID int) error {
+	return pc.startVM(ctx, nodeName, vmID)
+}
+
 // startVM starts a VM
 func (pc *ProxmoxClient) startVM(ctx context.Context, nodeName string, vmID int) error {
 	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/status/start", nodeName, vmID)
@@ -3218,6 +3229,12 @@ func (pc *ProxmoxClient) GetVMDiskSize(ctx context.Context, nodeName string, vmI
 	return 0, fmt.Errorf("disk size not found in VM config or storage")
 }
 
+// ResizeDisk resizes a VM disk to the specified size in GB (public method)
+// disk: disk identifier (e.g., "scsi0", "virtio0")
+func (pc *ProxmoxClient) ResizeDisk(ctx context.Context, nodeName string, vmID int, disk string, sizeGB int64) error {
+	return pc.resizeDisk(ctx, nodeName, vmID, disk, sizeGB)
+}
+
 // resizeDisk resizes a VM disk to the specified size in GB
 // disk: disk identifier (e.g., "scsi0", "virtio0")
 func (pc *ProxmoxClient) resizeDisk(ctx context.Context, nodeName string, vmID int, disk string, sizeGB int64) error {
@@ -3237,6 +3254,29 @@ func (pc *ProxmoxClient) resizeDisk(ctx context.Context, nodeName string, vmID i
 		return fmt.Errorf("failed to resize disk: %s (status: %d)", string(body), resp.StatusCode)
 	}
 
+	return nil
+}
+
+// UpdateVMConfig updates VM configuration parameters (public method)
+func (pc *ProxmoxClient) UpdateVMConfig(ctx context.Context, nodeName string, vmID int, config map[string]interface{}) error {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
+	formData := url.Values{}
+	
+	for k, v := range config {
+		formData.Set(k, fmt.Sprintf("%v", v))
+	}
+	
+	resp, err := pc.APIRequestForm(ctx, "PUT", endpoint, formData)
+	if err != nil {
+		return fmt.Errorf("failed to update VM config: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update VM config: %s (status: %d)", string(body), resp.StatusCode)
+	}
+	
 	return nil
 }
 

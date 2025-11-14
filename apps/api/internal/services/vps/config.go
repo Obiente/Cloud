@@ -646,6 +646,11 @@ func (s *ConfigService) saveCloudInitConfigForVPS(ctx context.Context, vpsID str
 	return s.saveCloudInitConfig(ctx, &vps, config)
 }
 
+// LoadCloudInitConfig loads cloud-init configuration for a VPS (public method for superadmin use)
+func (s *ConfigService) LoadCloudInitConfig(ctx context.Context, vps *database.VPSInstance) (*orchestrator.CloudInitConfig, error) {
+	return s.loadCloudInitConfig(ctx, vps)
+}
+
 func (s *ConfigService) loadCloudInitConfig(ctx context.Context, vps *database.VPSInstance) (*orchestrator.CloudInitConfig, error) {
 	// If VPS is not provisioned yet, return empty config
 	if vps.InstanceID == nil {
@@ -767,6 +772,11 @@ func (s *ConfigService) loadCloudInitConfig(ctx context.Context, vps *database.V
 
 	logger.Info("[VPSConfigService] Successfully parsed cloud-init config for VPS %s from snippet", vps.ID)
 	return config, nil
+}
+
+// SaveCloudInitConfig saves cloud-init configuration for a VPS (public method for superadmin use)
+func (s *ConfigService) SaveCloudInitConfig(ctx context.Context, vps *database.VPSInstance, config *orchestrator.CloudInitConfig) error {
+	return s.saveCloudInitConfig(ctx, vps, config)
 }
 
 func (s *ConfigService) saveCloudInitConfig(ctx context.Context, vps *database.VPSInstance, config *orchestrator.CloudInitConfig) error {
