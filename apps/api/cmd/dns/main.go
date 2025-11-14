@@ -214,8 +214,19 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 		return false
 	}
 
-	// Extract game server ID (gameserver-123)
-	if !strings.HasPrefix(gameServerID, "gameserver-") {
+	// Extract game server ID (gameserver-123 or gs-123)
+	// Normalize: if it's gameserver-gs-123, extract gs-123; if it's gameserver-123, convert to gs-123
+	if strings.HasPrefix(gameServerID, "gameserver-") {
+		// Extract actual game server ID
+		actualID := strings.TrimPrefix(gameServerID, "gameserver-")
+		if strings.HasPrefix(actualID, "gs-") {
+			gameServerID = actualID
+		} else {
+			// Legacy format: gameserver-123 -> gs-123
+			gameServerID = "gs-" + actualID
+		}
+	} else if !strings.HasPrefix(gameServerID, "gs-") {
+		// Not a valid game server ID format
 		return false
 	}
 
@@ -381,9 +392,20 @@ func (s *DNSServer) handleAQuery(ctx context.Context, msg *dns.Msg, domain strin
 		return false
 	}
 
-	// Check if this is a game server (gameserver-123)
+	// Check if this is a game server (gameserver-123 or gs-123)
+	var gameServerID string
 	if strings.HasPrefix(resourceID, "gameserver-") {
-		return s.handleGameServerAQuery(msg, domain, q, resourceID)
+		// Extract actual game server ID (gameserver-gs-123 -> gs-123)
+		gameServerID = strings.TrimPrefix(resourceID, "gameserver-")
+		// If it still has gs- prefix, use it as-is, otherwise prepend gs-
+		if !strings.HasPrefix(gameServerID, "gs-") {
+			gameServerID = "gs-" + gameServerID
+		}
+		return s.handleGameServerAQuery(msg, domain, q, gameServerID)
+	} else if strings.HasPrefix(resourceID, "gs-") {
+		// Direct gs-{id} format
+		gameServerID = resourceID
+		return s.handleGameServerAQuery(msg, domain, q, gameServerID)
 	}
 
 	// Otherwise, treat as deployment (deploy-123)

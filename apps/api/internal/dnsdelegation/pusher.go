@@ -171,29 +171,35 @@ func PushAllDNSRecords(config PusherConfig) error {
 		deploymentLocations.Close()
 	}
 
-	// Push game server A records
+	// Push game server A records and SRV records
 	gameServerLocations, err := database.DB.Table("game_server_locations").
 		Where("status = ?", "running").
-		Select("game_server_id, node_ip").
+		Select("game_server_id, node_ip, port").
 		Rows()
 	if err == nil {
 		for gameServerLocations.Next() {
 			var gameServerID, nodeIP string
-			if err := gameServerLocations.Scan(&gameServerID, &nodeIP); err != nil {
+			var port int32
+			if err := gameServerLocations.Scan(&gameServerID, &nodeIP, &port); err != nil {
 				continue
 			}
 
-			// Get organization ID from game server
-			var organizationID string
+			// Get organization ID and game type from game server
+			var gameServerInfo struct {
+				OrganizationID string
+				GameType       int32
+			}
 			if err := database.DB.Table("game_servers").
-				Select("organization_id").
+				Select("organization_id, game_type").
 				Where("id = ?", gameServerID).
-				Pluck("organization_id", &organizationID).Error; err != nil {
-				logger.Warn("[DNS Pusher] Failed to get organization ID for game server %s: %v", gameServerID, err)
+				First(&gameServerInfo).Error; err != nil {
+				logger.Warn("[DNS Pusher] Failed to get organization ID and game type for game server %s: %v", gameServerID, err)
 				// Continue anyway - we'll try to store without org ID
 			}
 
+			// Push A record for gs-{id}.my.obiente.cloud format
 			if nodeIP != "" {
+				// Game server IDs are in gs-{id} format, so use that directly
 				domain := gameServerID + ".my.obiente.cloud"
 				record := map[string]interface{}{
 					"domain":      domain,
@@ -201,10 +207,65 @@ func PushAllDNSRecords(config PusherConfig) error {
 					"records":     []string{nodeIP},
 					"ttl":         config.TTL,
 				}
-				if organizationID != "" {
-					record["organization_id"] = organizationID
+				if gameServerInfo.OrganizationID != "" {
+					record["organization_id"] = gameServerInfo.OrganizationID
 				}
 				records = append(records, record)
+			}
+
+			// Push SRV records based on game type
+			// GameType enum values:
+			// MINECRAFT = 1, MINECRAFT_JAVA = 2, MINECRAFT_BEDROCK = 3, RUST = 6
+			if port > 0 {
+				// Use gameserver-{id} format for SRV records to maintain compatibility
+				// The target hostname in SRV records should point to the A record
+				targetHostname := gameServerID + ".my.obiente.cloud"
+				srvRecordValue := fmt.Sprintf("0 0 %d %s", port, targetHostname)
+
+				// Minecraft Java Edition (TCP) - gameType 1 or 2
+				if gameServerInfo.GameType == 1 || gameServerInfo.GameType == 2 {
+					srvDomain := fmt.Sprintf("_minecraft._tcp.%s", targetHostname)
+					record := map[string]interface{}{
+						"domain":      srvDomain,
+						"record_type": "SRV",
+						"records":     []string{srvRecordValue},
+						"ttl":         config.TTL,
+					}
+					if gameServerInfo.OrganizationID != "" {
+						record["organization_id"] = gameServerInfo.OrganizationID
+					}
+					records = append(records, record)
+				}
+
+				// Minecraft Bedrock Edition (UDP) - gameType 1 or 3
+				if gameServerInfo.GameType == 1 || gameServerInfo.GameType == 3 {
+					srvDomain := fmt.Sprintf("_minecraft._udp.%s", targetHostname)
+					record := map[string]interface{}{
+						"domain":      srvDomain,
+						"record_type": "SRV",
+						"records":     []string{srvRecordValue},
+						"ttl":         config.TTL,
+					}
+					if gameServerInfo.OrganizationID != "" {
+						record["organization_id"] = gameServerInfo.OrganizationID
+					}
+					records = append(records, record)
+				}
+
+				// Rust (UDP) - gameType 6
+				if gameServerInfo.GameType == 6 {
+					srvDomain := fmt.Sprintf("_rust._udp.%s", targetHostname)
+					record := map[string]interface{}{
+						"domain":      srvDomain,
+						"record_type": "SRV",
+						"records":     []string{srvRecordValue},
+						"ttl":         config.TTL,
+					}
+					if gameServerInfo.OrganizationID != "" {
+						record["organization_id"] = gameServerInfo.OrganizationID
+					}
+					records = append(records, record)
+				}
 			}
 		}
 		gameServerLocations.Close()
