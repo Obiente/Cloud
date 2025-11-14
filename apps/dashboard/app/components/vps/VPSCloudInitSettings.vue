@@ -10,9 +10,47 @@
         </OuiStack>
       </OuiCardHeader>
       <OuiCardBody>
-        <OuiStack v-if="loading" align="center" gap="md" class="py-8">
-          <OuiSpinner size="lg" />
-          <OuiText color="secondary">Loading cloud-init configuration...</OuiText>
+        <OuiStack v-if="loading" gap="lg" class="py-4">
+          <!-- System Configuration Skeleton -->
+          <OuiStack gap="md">
+            <OuiText size="sm" weight="semibold">System Configuration</OuiText>
+            <OuiGrid cols="1" cols-md="2" gap="md">
+              <OuiSkeleton width="100%" height="3.5rem" variant="rectangle" rounded />
+              <OuiSkeleton width="100%" height="3.5rem" variant="rectangle" rounded />
+              <OuiSkeleton width="100%" height="3.5rem" variant="rectangle" rounded />
+            </OuiGrid>
+          </OuiStack>
+
+          <!-- Package Management Skeleton -->
+          <OuiStack gap="md">
+            <OuiText size="sm" weight="semibold">Package Management</OuiText>
+            <OuiSkeleton width="100%" height="6rem" variant="rectangle" rounded />
+            <OuiFlex gap="sm">
+              <OuiSkeleton width="8rem" height="1.5rem" variant="rectangle" rounded />
+              <OuiSkeleton width="8rem" height="1.5rem" variant="rectangle" rounded />
+            </OuiFlex>
+          </OuiStack>
+
+          <!-- Custom Commands Skeleton -->
+          <OuiStack gap="md">
+            <OuiText size="sm" weight="semibold">Custom Commands</OuiText>
+            <OuiSkeleton width="100%" height="6rem" variant="rectangle" rounded />
+          </OuiStack>
+
+          <!-- SSH Configuration Skeleton -->
+          <OuiStack gap="md">
+            <OuiText size="sm" weight="semibold">SSH Configuration</OuiText>
+            <OuiFlex gap="sm">
+              <OuiSkeleton width="8rem" height="1.5rem" variant="rectangle" rounded />
+              <OuiSkeleton width="12rem" height="1.5rem" variant="rectangle" rounded />
+            </OuiFlex>
+          </OuiStack>
+
+          <!-- Actions -->
+          <OuiFlex justify="end" gap="sm">
+            <OuiButton variant="outline" disabled>Reset</OuiButton>
+            <OuiButton variant="solid" disabled>Saving...</OuiButton>
+          </OuiFlex>
         </OuiStack>
         <div v-else-if="error" class="py-8 text-center">
           <OuiText color="danger">{{ error }}</OuiText>
@@ -99,15 +137,31 @@
           <!-- Raw YAML View -->
           <OuiStack gap="md">
             <OuiFlex justify="between" align="center">
-              <OuiText size="sm" weight="semibold">Raw Cloud-Init YAML</OuiText>
-              <OuiButton
-                variant="ghost"
-                size="xs"
-                @click="showRawYAML = !showRawYAML"
-                class="gap-1"
-              >
-                {{ showRawYAML ? "Hide" : "Show" }} YAML
-              </OuiButton>
+              <OuiStack gap="xs">
+                <OuiText size="sm" weight="semibold">Raw Cloud-Init YAML</OuiText>
+                <OuiText size="xs" color="secondary">
+                  {{ showActualUserData ? "Current cloud-init config" : "Preview (from config only)" }}
+                </OuiText>
+              </OuiStack>
+              <OuiFlex gap="xs">
+                <OuiButton
+                  variant="ghost"
+                  size="xs"
+                  @click="toggleUserDataView"
+                  :disabled="loadingUserData"
+                  class="gap-1"
+                >
+                  {{ showActualUserData ? "Show Preview" : "Show Current" }}
+                </OuiButton>
+                <OuiButton
+                  variant="ghost"
+                  size="xs"
+                  @click="showRawYAML = !showRawYAML"
+                  class="gap-1"
+                >
+                  {{ showRawYAML ? "Hide" : "Show" }} YAML
+                </OuiButton>
+              </OuiFlex>
             </OuiFlex>
             <OuiBox
               v-if="showRawYAML"
@@ -115,7 +169,21 @@
               rounded="md"
               class="bg-surface-muted font-mono text-xs overflow-x-auto"
             >
-              <pre>{{ rawYAML }}</pre>
+              <div v-if="loadingUserData && showActualUserData" class="py-4">
+                <OuiStack gap="sm">
+                  <OuiSkeleton width="100%" height="1rem" variant="text" />
+                  <OuiSkeleton width="100%" height="1rem" variant="text" />
+                  <OuiSkeleton width="90%" height="1rem" variant="text" />
+                  <OuiSkeleton width="100%" height="1rem" variant="text" />
+                  <OuiSkeleton width="85%" height="1rem" variant="text" />
+                </OuiStack>
+              </div>
+              <div v-else-if="userDataError && showActualUserData" class="py-4">
+                <OuiText color="danger" size="sm">
+                  Failed to load actual userData: {{ userDataError }}
+                </OuiText>
+              </div>
+              <pre v-else>{{ displayYAML }}</pre>
             </OuiBox>
           </OuiStack>
 
@@ -160,7 +228,7 @@ import { VPSConfigService, type VPSInstance, type CloudInitConfig, CloudInitConf
 import { create } from "@bufbuild/protobuf";
 import { useConnectClient } from "~/lib/connect-client";
 import { useToast } from "~/composables/useToast";
-import OuiSpinner from "~/components/oui/Spinner.vue";
+import OuiSkeleton from "~/components/oui/Skeleton.vue";
 
 interface Props {
   vpsId: string;
@@ -176,6 +244,10 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 const saving = ref(false);
 const showRawYAML = ref(false);
+const showActualUserData = ref(false);
+const actualUserData = ref<string | null>(null);
+const loadingUserData = ref(false);
+const userDataError = ref<string | null>(null);
 
 const config = ref({
   hostname: "",
@@ -241,6 +313,43 @@ const rawYAML = computed(() => {
   
   return yaml;
 });
+
+const displayYAML = computed(() => {
+  if (showActualUserData.value && actualUserData.value) {
+    return actualUserData.value;
+  }
+  return rawYAML.value;
+});
+
+const toggleUserDataView = async () => {
+  showActualUserData.value = !showActualUserData.value;
+  
+  // Fetch actual userData when switching to actual view
+  if (showActualUserData.value && !actualUserData.value) {
+    await fetchActualUserData();
+  }
+};
+
+const fetchActualUserData = async () => {
+  if (!props.vpsId || !props.organizationId) {
+    return;
+  }
+  
+  loadingUserData.value = true;
+  userDataError.value = null;
+  try {
+    const res = await client.getCloudInitUserData({
+      organizationId: props.organizationId,
+      vpsId: props.vpsId,
+    });
+    actualUserData.value = res.userData || "";
+  } catch (err: unknown) {
+    userDataError.value = err instanceof Error ? err.message : "Unknown error";
+    actualUserData.value = null;
+  } finally {
+    loadingUserData.value = false;
+  }
+};
 
 const loadConfig = async () => {
   loading.value = true;
@@ -340,8 +449,18 @@ const resetConfig = () => {
 watch(() => props.vpsId, () => {
   if (props.vpsId) {
     loadConfig();
+    // Reset userData view when VPS changes
+    showActualUserData.value = false;
+    actualUserData.value = null;
   }
 }, { immediate: true });
+
+watch(() => showActualUserData.value, (newValue) => {
+  // Fetch actual userData when switching to actual view
+  if (newValue && !actualUserData.value && props.vpsId) {
+    fetchActualUserData();
+  }
+});
 
 onMounted(() => {
   if (props.vpsId) {
