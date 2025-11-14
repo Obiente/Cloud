@@ -1,82 +1,56 @@
 <template>
-  <OuiStack gap="xl">
-    <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
-      <OuiStack gap="xs">
-        <OuiText tag="h1" size="3xl" weight="extrabold">Deployments</OuiText>
-        <OuiText color="muted">
-          View and audit all deployments across every organization.
-        </OuiText>
-      </OuiStack>
-      <OuiFlex gap="sm" wrap="wrap">
-        <div class="w-72 max-w-full">
-          <OuiInput
-            v-model="search"
-            type="search"
-            placeholder="Search by name, ID, domain, org ID, environment, status…"
-            clearable
-            size="sm"
-          />
-        </div>
-        <div class="min-w-[160px]">
-          <OuiSelect
-            v-model="environmentFilter"
-            :items="environmentOptions"
-            placeholder="Environment"
-            size="sm"
-          />
-        </div>
-        <div class="min-w-[160px]">
-          <OuiSelect
-            v-model="statusFilter"
-            :items="statusOptions"
-            placeholder="Status"
-            size="sm"
-          />
-        </div>
-        <OuiButton variant="ghost" size="sm" @click="refresh" :disabled="isLoading">
-          <span class="flex items-center gap-2">
-            <ArrowPathIcon class="h-4 w-4" :class="{ 'animate-spin': isLoading }" />
-            Refresh
-          </span>
-        </OuiButton>
-      </OuiFlex>
-    </OuiFlex>
-
-    <OuiCard class="border border-border-muted rounded-xl overflow-hidden">
-      <OuiCardBody class="p-0">
-        <OuiTable
-          :columns="tableColumns"
-          :rows="tableRows"
-          :empty-text="isLoading ? 'Loading deployments…' : 'No deployments match your filters.'"
-          row-class="hover:bg-surface-subtle/50 transition-colors cursor-pointer"
-          @row-click="openDeployment"
-        >
+  <SuperadminPageLayout
+    title="Deployments"
+    description="View and audit all deployments across every organization."
+    :columns="tableColumns"
+    :rows="tableRows"
+    :filters="filterConfigs"
+    :search="search"
+    :empty-text="isLoading ? 'Loading deployments…' : 'No deployments match your filters.'"
+    :loading="isLoading"
+    search-placeholder="Search by name, ID, domain, org ID, environment, status…"
+    @update:search="search = $event"
+    @filter-change="handleFilterChange"
+    @refresh="refresh"
+    @row-click="openDeployment"
+  >
           <template #cell-deployment="{ value, row }">
-            <div>
-              <div class="font-medium text-text-primary hover:text-primary transition-colors">{{ row.name }}</div>
-              <div v-if="row.domain" class="text-xs text-text-muted">{{ row.domain }}</div>
-              <div class="text-xs font-mono text-text-tertiary mt-0.5">{{ row.id }}</div>
-            </div>
+            <SuperadminResourceCell
+              :name="row.name"
+              :domain="row.domain"
+              :id="row.id"
+            />
           </template>
-          <template #cell-organization="{ value }">
-            <div class="text-text-secondary font-mono text-sm">{{ value }}</div>
+          <template #cell-organization="{ value, row }">
+            <SuperadminOrganizationCell
+              :organization-name="row.organizationName"
+              :organization-id="row.organizationId || value"
+            />
           </template>
           <template #cell-environment="{ value }">
-            <span class="text-text-secondary uppercase text-xs">{{ value }}</span>
+            <SuperadminStatusBadge
+              :status="value?.toLowerCase()"
+              :status-map="environmentStatusMap"
+            />
           </template>
           <template #cell-status="{ value }">
-            <span class="text-text-secondary uppercase text-xs">{{ value }}</span>
+            <SuperadminStatusBadge
+              :status="value?.toLowerCase()"
+              :status-map="deploymentStatusMap"
+            />
           </template>
-        </OuiTable>
-      </OuiCardBody>
-    </OuiCard>
-  </OuiStack>
+  </SuperadminPageLayout>
 </template>
 
 <script setup lang="ts">
-import { ArrowPathIcon } from "@heroicons/vue/24/outline";
 import { computed, ref } from "vue";
 import { useOrganizationsStore } from "~/stores/organizations";
+import SuperadminPageLayout from "~/components/superadmin/SuperadminPageLayout.vue";
+import SuperadminResourceCell from "~/components/superadmin/SuperadminResourceCell.vue";
+import SuperadminOrganizationCell from "~/components/superadmin/SuperadminOrganizationCell.vue";
+import SuperadminStatusBadge from "~/components/superadmin/SuperadminStatusBadge.vue";
+import type { FilterConfig } from "~/components/superadmin/SuperadminFilterBar.vue";
+import type { BadgeVariant } from "~/components/oui/Badge.vue";
 
 definePageMeta({
   middleware: ["auth", "superadmin"],
@@ -115,6 +89,27 @@ const statusOptions = computed(() => {
     ...sortedStatuses.map((status) => ({ label: status, value: status.toLowerCase() })),
   ];
 });
+
+const filterConfigs = computed(() => [
+  {
+    key: "environment",
+    placeholder: "Environment",
+    items: environmentOptions.value,
+  },
+  {
+    key: "status",
+    placeholder: "Status",
+    items: statusOptions.value,
+  },
+] as FilterConfig[]);
+
+const handleFilterChange = (key: string, value: string) => {
+  if (key === "environment") {
+    environmentFilter.value = value;
+  } else if (key === "status") {
+    statusFilter.value = value;
+  }
+};
 
 const filteredDeployments = computed(() => {
   const term = search.value.trim().toLowerCase();
@@ -164,6 +159,7 @@ const tableRows = computed(() => {
   return filteredDeployments.value.map((deployment) => ({
     ...deployment,
     organization: deployment.organizationId,
+    organizationName: deployment.organizationName,
     environment: formatEnvironment(deployment.environment),
     status: formatStatus(deployment.status),
     created: formatDate(deployment.createdAt),
@@ -223,5 +219,22 @@ function formatStatus(status?: number) {
       return "UNKNOWN";
   }
 }
+
+const environmentStatusMap: Record<string, { label: string; variant: BadgeVariant }> = {
+  production: { label: "PRODUCTION", variant: "success" },
+  staging: { label: "STAGING", variant: "warning" },
+  development: { label: "DEVELOPMENT", variant: "secondary" },
+  unspecified: { label: "UNSPECIFIED", variant: "secondary" },
+};
+
+const deploymentStatusMap: Record<string, { label: string; variant: BadgeVariant }> = {
+  created: { label: "CREATED", variant: "secondary" },
+  building: { label: "BUILDING", variant: "warning" },
+  running: { label: "RUNNING", variant: "success" },
+  stopped: { label: "STOPPED", variant: "secondary" },
+  failed: { label: "FAILED", variant: "danger" },
+  deploying: { label: "DEPLOYING", variant: "warning" },
+  unknown: { label: "UNKNOWN", variant: "secondary" },
+};
 </script>
 
