@@ -102,6 +102,27 @@ const (
 	// SuperadminServiceListAllVPSProcedure is the fully-qualified name of the SuperadminService's
 	// ListAllVPS RPC.
 	SuperadminServiceListAllVPSProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListAllVPS"
+	// SuperadminServiceSuperadminGetVPSProcedure is the fully-qualified name of the SuperadminService's
+	// SuperadminGetVPS RPC.
+	SuperadminServiceSuperadminGetVPSProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SuperadminGetVPS"
+	// SuperadminServiceSuperadminResizeVPSProcedure is the fully-qualified name of the
+	// SuperadminService's SuperadminResizeVPS RPC.
+	SuperadminServiceSuperadminResizeVPSProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SuperadminResizeVPS"
+	// SuperadminServiceSuperadminSuspendVPSProcedure is the fully-qualified name of the
+	// SuperadminService's SuperadminSuspendVPS RPC.
+	SuperadminServiceSuperadminSuspendVPSProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SuperadminSuspendVPS"
+	// SuperadminServiceSuperadminUnsuspendVPSProcedure is the fully-qualified name of the
+	// SuperadminService's SuperadminUnsuspendVPS RPC.
+	SuperadminServiceSuperadminUnsuspendVPSProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SuperadminUnsuspendVPS"
+	// SuperadminServiceSuperadminUpdateVPSCloudInitProcedure is the fully-qualified name of the
+	// SuperadminService's SuperadminUpdateVPSCloudInit RPC.
+	SuperadminServiceSuperadminUpdateVPSCloudInitProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SuperadminUpdateVPSCloudInit"
+	// SuperadminServiceSuperadminForceStopVPSProcedure is the fully-qualified name of the
+	// SuperadminService's SuperadminForceStopVPS RPC.
+	SuperadminServiceSuperadminForceStopVPSProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SuperadminForceStopVPS"
+	// SuperadminServiceSuperadminForceDeleteVPSProcedure is the fully-qualified name of the
+	// SuperadminService's SuperadminForceDeleteVPS RPC.
+	SuperadminServiceSuperadminForceDeleteVPSProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/SuperadminForceDeleteVPS"
 	// SuperadminServiceListVPSSizesProcedure is the fully-qualified name of the SuperadminService's
 	// ListVPSSizes RPC.
 	SuperadminServiceListVPSSizesProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListVPSSizes"
@@ -152,6 +173,13 @@ type SuperadminServiceClient interface {
 	GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error)
 	// VPS management endpoints
 	ListAllVPS(context.Context, *connect.Request[v1.ListAllVPSRequest]) (*connect.Response[v1.ListAllVPSResponse], error)
+	SuperadminGetVPS(context.Context, *connect.Request[v1.SuperadminGetVPSRequest]) (*connect.Response[v1.SuperadminGetVPSResponse], error)
+	SuperadminResizeVPS(context.Context, *connect.Request[v1.SuperadminResizeVPSRequest]) (*connect.Response[v1.SuperadminResizeVPSResponse], error)
+	SuperadminSuspendVPS(context.Context, *connect.Request[v1.SuperadminSuspendVPSRequest]) (*connect.Response[v1.SuperadminSuspendVPSResponse], error)
+	SuperadminUnsuspendVPS(context.Context, *connect.Request[v1.SuperadminUnsuspendVPSRequest]) (*connect.Response[v1.SuperadminUnsuspendVPSResponse], error)
+	SuperadminUpdateVPSCloudInit(context.Context, *connect.Request[v1.SuperadminUpdateVPSCloudInitRequest]) (*connect.Response[v1.SuperadminUpdateVPSCloudInitResponse], error)
+	SuperadminForceStopVPS(context.Context, *connect.Request[v1.SuperadminForceStopVPSRequest]) (*connect.Response[v1.SuperadminForceStopVPSResponse], error)
+	SuperadminForceDeleteVPS(context.Context, *connect.Request[v1.SuperadminForceDeleteVPSRequest]) (*connect.Response[v1.SuperadminForceDeleteVPSResponse], error)
 	// VPS size catalog management endpoints
 	ListVPSSizes(context.Context, *connect.Request[v1.ListVPSSizesRequest]) (*connect.Response[v1.ListVPSSizesResponse], error)
 	CreateVPSSize(context.Context, *connect.Request[v1.CreateVPSSizeRequest]) (*connect.Response[v1.CreateVPSSizeResponse], error)
@@ -309,6 +337,48 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("ListAllVPS")),
 			connect.WithClientOptions(opts...),
 		),
+		superadminGetVPS: connect.NewClient[v1.SuperadminGetVPSRequest, v1.SuperadminGetVPSResponse](
+			httpClient,
+			baseURL+SuperadminServiceSuperadminGetVPSProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SuperadminGetVPS")),
+			connect.WithClientOptions(opts...),
+		),
+		superadminResizeVPS: connect.NewClient[v1.SuperadminResizeVPSRequest, v1.SuperadminResizeVPSResponse](
+			httpClient,
+			baseURL+SuperadminServiceSuperadminResizeVPSProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SuperadminResizeVPS")),
+			connect.WithClientOptions(opts...),
+		),
+		superadminSuspendVPS: connect.NewClient[v1.SuperadminSuspendVPSRequest, v1.SuperadminSuspendVPSResponse](
+			httpClient,
+			baseURL+SuperadminServiceSuperadminSuspendVPSProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SuperadminSuspendVPS")),
+			connect.WithClientOptions(opts...),
+		),
+		superadminUnsuspendVPS: connect.NewClient[v1.SuperadminUnsuspendVPSRequest, v1.SuperadminUnsuspendVPSResponse](
+			httpClient,
+			baseURL+SuperadminServiceSuperadminUnsuspendVPSProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SuperadminUnsuspendVPS")),
+			connect.WithClientOptions(opts...),
+		),
+		superadminUpdateVPSCloudInit: connect.NewClient[v1.SuperadminUpdateVPSCloudInitRequest, v1.SuperadminUpdateVPSCloudInitResponse](
+			httpClient,
+			baseURL+SuperadminServiceSuperadminUpdateVPSCloudInitProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SuperadminUpdateVPSCloudInit")),
+			connect.WithClientOptions(opts...),
+		),
+		superadminForceStopVPS: connect.NewClient[v1.SuperadminForceStopVPSRequest, v1.SuperadminForceStopVPSResponse](
+			httpClient,
+			baseURL+SuperadminServiceSuperadminForceStopVPSProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SuperadminForceStopVPS")),
+			connect.WithClientOptions(opts...),
+		),
+		superadminForceDeleteVPS: connect.NewClient[v1.SuperadminForceDeleteVPSRequest, v1.SuperadminForceDeleteVPSResponse](
+			httpClient,
+			baseURL+SuperadminServiceSuperadminForceDeleteVPSProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("SuperadminForceDeleteVPS")),
+			connect.WithClientOptions(opts...),
+		),
 		listVPSSizes: connect.NewClient[v1.ListVPSSizesRequest, v1.ListVPSSizesResponse](
 			httpClient,
 			baseURL+SuperadminServiceListVPSSizesProcedure,
@@ -361,6 +431,13 @@ type superadminServiceClient struct {
 	listUsers                                *connect.Client[v1.ListUsersRequest, v1.ListUsersResponse]
 	getUser                                  *connect.Client[v1.GetUserRequest, v1.GetUserResponse]
 	listAllVPS                               *connect.Client[v1.ListAllVPSRequest, v1.ListAllVPSResponse]
+	superadminGetVPS                         *connect.Client[v1.SuperadminGetVPSRequest, v1.SuperadminGetVPSResponse]
+	superadminResizeVPS                      *connect.Client[v1.SuperadminResizeVPSRequest, v1.SuperadminResizeVPSResponse]
+	superadminSuspendVPS                     *connect.Client[v1.SuperadminSuspendVPSRequest, v1.SuperadminSuspendVPSResponse]
+	superadminUnsuspendVPS                   *connect.Client[v1.SuperadminUnsuspendVPSRequest, v1.SuperadminUnsuspendVPSResponse]
+	superadminUpdateVPSCloudInit             *connect.Client[v1.SuperadminUpdateVPSCloudInitRequest, v1.SuperadminUpdateVPSCloudInitResponse]
+	superadminForceStopVPS                   *connect.Client[v1.SuperadminForceStopVPSRequest, v1.SuperadminForceStopVPSResponse]
+	superadminForceDeleteVPS                 *connect.Client[v1.SuperadminForceDeleteVPSRequest, v1.SuperadminForceDeleteVPSResponse]
 	listVPSSizes                             *connect.Client[v1.ListVPSSizesRequest, v1.ListVPSSizesResponse]
 	createVPSSize                            *connect.Client[v1.CreateVPSSizeRequest, v1.CreateVPSSizeResponse]
 	updateVPSSize                            *connect.Client[v1.UpdateVPSSizeRequest, v1.UpdateVPSSizeResponse]
@@ -488,6 +565,45 @@ func (c *superadminServiceClient) ListAllVPS(ctx context.Context, req *connect.R
 	return c.listAllVPS.CallUnary(ctx, req)
 }
 
+// SuperadminGetVPS calls obiente.cloud.superadmin.v1.SuperadminService.SuperadminGetVPS.
+func (c *superadminServiceClient) SuperadminGetVPS(ctx context.Context, req *connect.Request[v1.SuperadminGetVPSRequest]) (*connect.Response[v1.SuperadminGetVPSResponse], error) {
+	return c.superadminGetVPS.CallUnary(ctx, req)
+}
+
+// SuperadminResizeVPS calls obiente.cloud.superadmin.v1.SuperadminService.SuperadminResizeVPS.
+func (c *superadminServiceClient) SuperadminResizeVPS(ctx context.Context, req *connect.Request[v1.SuperadminResizeVPSRequest]) (*connect.Response[v1.SuperadminResizeVPSResponse], error) {
+	return c.superadminResizeVPS.CallUnary(ctx, req)
+}
+
+// SuperadminSuspendVPS calls obiente.cloud.superadmin.v1.SuperadminService.SuperadminSuspendVPS.
+func (c *superadminServiceClient) SuperadminSuspendVPS(ctx context.Context, req *connect.Request[v1.SuperadminSuspendVPSRequest]) (*connect.Response[v1.SuperadminSuspendVPSResponse], error) {
+	return c.superadminSuspendVPS.CallUnary(ctx, req)
+}
+
+// SuperadminUnsuspendVPS calls
+// obiente.cloud.superadmin.v1.SuperadminService.SuperadminUnsuspendVPS.
+func (c *superadminServiceClient) SuperadminUnsuspendVPS(ctx context.Context, req *connect.Request[v1.SuperadminUnsuspendVPSRequest]) (*connect.Response[v1.SuperadminUnsuspendVPSResponse], error) {
+	return c.superadminUnsuspendVPS.CallUnary(ctx, req)
+}
+
+// SuperadminUpdateVPSCloudInit calls
+// obiente.cloud.superadmin.v1.SuperadminService.SuperadminUpdateVPSCloudInit.
+func (c *superadminServiceClient) SuperadminUpdateVPSCloudInit(ctx context.Context, req *connect.Request[v1.SuperadminUpdateVPSCloudInitRequest]) (*connect.Response[v1.SuperadminUpdateVPSCloudInitResponse], error) {
+	return c.superadminUpdateVPSCloudInit.CallUnary(ctx, req)
+}
+
+// SuperadminForceStopVPS calls
+// obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceStopVPS.
+func (c *superadminServiceClient) SuperadminForceStopVPS(ctx context.Context, req *connect.Request[v1.SuperadminForceStopVPSRequest]) (*connect.Response[v1.SuperadminForceStopVPSResponse], error) {
+	return c.superadminForceStopVPS.CallUnary(ctx, req)
+}
+
+// SuperadminForceDeleteVPS calls
+// obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceDeleteVPS.
+func (c *superadminServiceClient) SuperadminForceDeleteVPS(ctx context.Context, req *connect.Request[v1.SuperadminForceDeleteVPSRequest]) (*connect.Response[v1.SuperadminForceDeleteVPSResponse], error) {
+	return c.superadminForceDeleteVPS.CallUnary(ctx, req)
+}
+
 // ListVPSSizes calls obiente.cloud.superadmin.v1.SuperadminService.ListVPSSizes.
 func (c *superadminServiceClient) ListVPSSizes(ctx context.Context, req *connect.Request[v1.ListVPSSizesRequest]) (*connect.Response[v1.ListVPSSizesResponse], error) {
 	return c.listVPSSizes.CallUnary(ctx, req)
@@ -544,6 +660,13 @@ type SuperadminServiceHandler interface {
 	GetUser(context.Context, *connect.Request[v1.GetUserRequest]) (*connect.Response[v1.GetUserResponse], error)
 	// VPS management endpoints
 	ListAllVPS(context.Context, *connect.Request[v1.ListAllVPSRequest]) (*connect.Response[v1.ListAllVPSResponse], error)
+	SuperadminGetVPS(context.Context, *connect.Request[v1.SuperadminGetVPSRequest]) (*connect.Response[v1.SuperadminGetVPSResponse], error)
+	SuperadminResizeVPS(context.Context, *connect.Request[v1.SuperadminResizeVPSRequest]) (*connect.Response[v1.SuperadminResizeVPSResponse], error)
+	SuperadminSuspendVPS(context.Context, *connect.Request[v1.SuperadminSuspendVPSRequest]) (*connect.Response[v1.SuperadminSuspendVPSResponse], error)
+	SuperadminUnsuspendVPS(context.Context, *connect.Request[v1.SuperadminUnsuspendVPSRequest]) (*connect.Response[v1.SuperadminUnsuspendVPSResponse], error)
+	SuperadminUpdateVPSCloudInit(context.Context, *connect.Request[v1.SuperadminUpdateVPSCloudInitRequest]) (*connect.Response[v1.SuperadminUpdateVPSCloudInitResponse], error)
+	SuperadminForceStopVPS(context.Context, *connect.Request[v1.SuperadminForceStopVPSRequest]) (*connect.Response[v1.SuperadminForceStopVPSResponse], error)
+	SuperadminForceDeleteVPS(context.Context, *connect.Request[v1.SuperadminForceDeleteVPSRequest]) (*connect.Response[v1.SuperadminForceDeleteVPSResponse], error)
 	// VPS size catalog management endpoints
 	ListVPSSizes(context.Context, *connect.Request[v1.ListVPSSizesRequest]) (*connect.Response[v1.ListVPSSizesResponse], error)
 	CreateVPSSize(context.Context, *connect.Request[v1.CreateVPSSizeRequest]) (*connect.Response[v1.CreateVPSSizeResponse], error)
@@ -696,6 +819,48 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		connect.WithSchema(superadminServiceMethods.ByName("ListAllVPS")),
 		connect.WithHandlerOptions(opts...),
 	)
+	superadminServiceSuperadminGetVPSHandler := connect.NewUnaryHandler(
+		SuperadminServiceSuperadminGetVPSProcedure,
+		svc.SuperadminGetVPS,
+		connect.WithSchema(superadminServiceMethods.ByName("SuperadminGetVPS")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceSuperadminResizeVPSHandler := connect.NewUnaryHandler(
+		SuperadminServiceSuperadminResizeVPSProcedure,
+		svc.SuperadminResizeVPS,
+		connect.WithSchema(superadminServiceMethods.ByName("SuperadminResizeVPS")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceSuperadminSuspendVPSHandler := connect.NewUnaryHandler(
+		SuperadminServiceSuperadminSuspendVPSProcedure,
+		svc.SuperadminSuspendVPS,
+		connect.WithSchema(superadminServiceMethods.ByName("SuperadminSuspendVPS")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceSuperadminUnsuspendVPSHandler := connect.NewUnaryHandler(
+		SuperadminServiceSuperadminUnsuspendVPSProcedure,
+		svc.SuperadminUnsuspendVPS,
+		connect.WithSchema(superadminServiceMethods.ByName("SuperadminUnsuspendVPS")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceSuperadminUpdateVPSCloudInitHandler := connect.NewUnaryHandler(
+		SuperadminServiceSuperadminUpdateVPSCloudInitProcedure,
+		svc.SuperadminUpdateVPSCloudInit,
+		connect.WithSchema(superadminServiceMethods.ByName("SuperadminUpdateVPSCloudInit")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceSuperadminForceStopVPSHandler := connect.NewUnaryHandler(
+		SuperadminServiceSuperadminForceStopVPSProcedure,
+		svc.SuperadminForceStopVPS,
+		connect.WithSchema(superadminServiceMethods.ByName("SuperadminForceStopVPS")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceSuperadminForceDeleteVPSHandler := connect.NewUnaryHandler(
+		SuperadminServiceSuperadminForceDeleteVPSProcedure,
+		svc.SuperadminForceDeleteVPS,
+		connect.WithSchema(superadminServiceMethods.ByName("SuperadminForceDeleteVPS")),
+		connect.WithHandlerOptions(opts...),
+	)
 	superadminServiceListVPSSizesHandler := connect.NewUnaryHandler(
 		SuperadminServiceListVPSSizesProcedure,
 		svc.ListVPSSizes,
@@ -768,6 +933,20 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceGetUserHandler.ServeHTTP(w, r)
 		case SuperadminServiceListAllVPSProcedure:
 			superadminServiceListAllVPSHandler.ServeHTTP(w, r)
+		case SuperadminServiceSuperadminGetVPSProcedure:
+			superadminServiceSuperadminGetVPSHandler.ServeHTTP(w, r)
+		case SuperadminServiceSuperadminResizeVPSProcedure:
+			superadminServiceSuperadminResizeVPSHandler.ServeHTTP(w, r)
+		case SuperadminServiceSuperadminSuspendVPSProcedure:
+			superadminServiceSuperadminSuspendVPSHandler.ServeHTTP(w, r)
+		case SuperadminServiceSuperadminUnsuspendVPSProcedure:
+			superadminServiceSuperadminUnsuspendVPSHandler.ServeHTTP(w, r)
+		case SuperadminServiceSuperadminUpdateVPSCloudInitProcedure:
+			superadminServiceSuperadminUpdateVPSCloudInitHandler.ServeHTTP(w, r)
+		case SuperadminServiceSuperadminForceStopVPSProcedure:
+			superadminServiceSuperadminForceStopVPSHandler.ServeHTTP(w, r)
+		case SuperadminServiceSuperadminForceDeleteVPSProcedure:
+			superadminServiceSuperadminForceDeleteVPSHandler.ServeHTTP(w, r)
 		case SuperadminServiceListVPSSizesProcedure:
 			superadminServiceListVPSSizesHandler.ServeHTTP(w, r)
 		case SuperadminServiceCreateVPSSizeProcedure:
@@ -875,6 +1054,34 @@ func (UnimplementedSuperadminServiceHandler) GetUser(context.Context, *connect.R
 
 func (UnimplementedSuperadminServiceHandler) ListAllVPS(context.Context, *connect.Request[v1.ListAllVPSRequest]) (*connect.Response[v1.ListAllVPSResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListAllVPS is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) SuperadminGetVPS(context.Context, *connect.Request[v1.SuperadminGetVPSRequest]) (*connect.Response[v1.SuperadminGetVPSResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SuperadminGetVPS is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) SuperadminResizeVPS(context.Context, *connect.Request[v1.SuperadminResizeVPSRequest]) (*connect.Response[v1.SuperadminResizeVPSResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SuperadminResizeVPS is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) SuperadminSuspendVPS(context.Context, *connect.Request[v1.SuperadminSuspendVPSRequest]) (*connect.Response[v1.SuperadminSuspendVPSResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SuperadminSuspendVPS is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) SuperadminUnsuspendVPS(context.Context, *connect.Request[v1.SuperadminUnsuspendVPSRequest]) (*connect.Response[v1.SuperadminUnsuspendVPSResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SuperadminUnsuspendVPS is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) SuperadminUpdateVPSCloudInit(context.Context, *connect.Request[v1.SuperadminUpdateVPSCloudInitRequest]) (*connect.Response[v1.SuperadminUpdateVPSCloudInitResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SuperadminUpdateVPSCloudInit is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) SuperadminForceStopVPS(context.Context, *connect.Request[v1.SuperadminForceStopVPSRequest]) (*connect.Response[v1.SuperadminForceStopVPSResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceStopVPS is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) SuperadminForceDeleteVPS(context.Context, *connect.Request[v1.SuperadminForceDeleteVPSRequest]) (*connect.Response[v1.SuperadminForceDeleteVPSResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceDeleteVPS is not implemented"))
 }
 
 func (UnimplementedSuperadminServiceHandler) ListVPSSizes(context.Context, *connect.Request[v1.ListVPSSizesRequest]) (*connect.Response[v1.ListVPSSizesResponse], error) {

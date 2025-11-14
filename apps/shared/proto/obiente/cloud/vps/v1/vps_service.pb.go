@@ -29,30 +29,32 @@ type VPSStatus int32
 
 const (
 	VPSStatus_VPS_STATUS_UNSPECIFIED VPSStatus = 0
-	VPSStatus_CREATING               VPSStatus = 1 // VPS is being provisioned
-	VPSStatus_STARTING               VPSStatus = 2 // VPS is starting up
-	VPSStatus_RUNNING                VPSStatus = 3 // VPS is running
-	VPSStatus_STOPPING               VPSStatus = 4 // VPS is stopping
-	VPSStatus_STOPPED                VPSStatus = 5 // VPS is stopped
-	VPSStatus_REBOOTING              VPSStatus = 6 // VPS is rebooting
-	VPSStatus_FAILED                 VPSStatus = 7 // VPS provisioning or operation failed
-	VPSStatus_DELETING               VPSStatus = 8 // VPS is being deleted
-	VPSStatus_DELETED                VPSStatus = 9 // VPS has been deleted (soft delete)
+	VPSStatus_CREATING               VPSStatus = 1  // VPS is being provisioned
+	VPSStatus_STARTING               VPSStatus = 2  // VPS is starting up
+	VPSStatus_RUNNING                VPSStatus = 3  // VPS is running
+	VPSStatus_STOPPING               VPSStatus = 4  // VPS is stopping
+	VPSStatus_STOPPED                VPSStatus = 5  // VPS is stopped
+	VPSStatus_REBOOTING              VPSStatus = 6  // VPS is rebooting
+	VPSStatus_FAILED                 VPSStatus = 7  // VPS provisioning or operation failed
+	VPSStatus_DELETING               VPSStatus = 8  // VPS is being deleted
+	VPSStatus_DELETED                VPSStatus = 9  // VPS has been deleted (soft delete)
+	VPSStatus_SUSPENDED              VPSStatus = 10 // VPS is suspended (superadmin action, prevents normal operations)
 )
 
 // Enum value maps for VPSStatus.
 var (
 	VPSStatus_name = map[int32]string{
-		0: "VPS_STATUS_UNSPECIFIED",
-		1: "CREATING",
-		2: "STARTING",
-		3: "RUNNING",
-		4: "STOPPING",
-		5: "STOPPED",
-		6: "REBOOTING",
-		7: "FAILED",
-		8: "DELETING",
-		9: "DELETED",
+		0:  "VPS_STATUS_UNSPECIFIED",
+		1:  "CREATING",
+		2:  "STARTING",
+		3:  "RUNNING",
+		4:  "STOPPING",
+		5:  "STOPPED",
+		6:  "REBOOTING",
+		7:  "FAILED",
+		8:  "DELETING",
+		9:  "DELETED",
+		10: "SUSPENDED",
 	}
 	VPSStatus_value = map[string]int32{
 		"VPS_STATUS_UNSPECIFIED": 0,
@@ -65,6 +67,7 @@ var (
 		"FAILED":                 7,
 		"DELETING":               8,
 		"DELETED":                9,
+		"SUSPENDED":              10,
 	}
 )
 
@@ -4954,7 +4957,7 @@ const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
 	"\x03vps\x18\x01 \x01(\v2!.obiente.cloud.vps.v1.VPSInstanceR\x03vps\x12(\n" +
 	"\rroot_password\x18\x02 \x01(\tH\x00R\frootPassword\x88\x01\x01\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessageB\x10\n" +
-	"\x0e_root_password*\xa1\x01\n" +
+	"\x0e_root_password*\xb0\x01\n" +
 	"\tVPSStatus\x12\x1a\n" +
 	"\x16VPS_STATUS_UNSPECIFIED\x10\x00\x12\f\n" +
 	"\bCREATING\x10\x01\x12\f\n" +
@@ -4966,7 +4969,9 @@ const file_obiente_cloud_vps_v1_vps_service_proto_rawDesc = "" +
 	"\n" +
 	"\x06FAILED\x10\a\x12\f\n" +
 	"\bDELETING\x10\b\x12\v\n" +
-	"\aDELETED\x10\t*\x98\x01\n" +
+	"\aDELETED\x10\t\x12\r\n" +
+	"\tSUSPENDED\x10\n" +
+	"*\x98\x01\n" +
 	"\bVPSImage\x12\x19\n" +
 	"\x15VPS_IMAGE_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fUBUNTU_22_04\x10\x01\x12\x10\n" +
