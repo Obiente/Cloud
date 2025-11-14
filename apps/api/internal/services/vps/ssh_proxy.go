@@ -21,6 +21,7 @@ import (
 	"api/internal/orchestrator"
 
 	"github.com/google/uuid"
+	"github.com/jedib0t/go-pretty/v6/text"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -33,10 +34,132 @@ func extractIPFromAddr(addr net.Addr) string {
 	return addrStr
 }
 
+// isInternalIP checks if an IP address is an internal/private network IP
+func isInternalIP(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	
+	// Check for private/internal IP ranges
+	// 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, ::1
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
+}
+
+// extractRealClientIP attempts to extract the real client IP from a TCP connection
+// For raw TCP connections, we can only get the IP from RemoteAddr
+// If the connection is behind a proxy/NAT, this will be the proxy/NAT IP
+func extractRealClientIP(conn net.Conn) string {
+	clientIP := extractIPFromAddr(conn.RemoteAddr())
+	
+	// Check if we got an internal IP (likely Docker network or NAT)
+	if isInternalIP(clientIP) {
+		logger.Warn("[SSHProxy] Detected internal IP %s - real client IP may be obscured by proxy/NAT. Consider using PROXY protocol if behind Traefik.", clientIP)
+	}
+	
+	return clientIP
+}
+
+// createBox creates a formatted ASCII box with the given title and content lines.
+// The box automatically adjusts width based on content and uses proper box-drawing characters.
+// Maximum width is limited to 80 characters for terminal compatibility.
+func createBox(title string, contentLines []string) string {
+	const maxBoxWidth = 80 // Maximum box width for terminal compatibility
+	
+	// Calculate maximum width needed
+	maxWidth := text.StringWidth(title)
+	for _, line := range contentLines {
+		// Wrap each line first to get actual display width
+		wrapped := text.WrapHard(line, maxBoxWidth-4)
+		wrappedLines := strings.Split(wrapped, "\n")
+		for _, wrappedLine := range wrappedLines {
+			width := text.StringWidth(wrappedLine)
+			if width > maxWidth {
+				maxWidth = width
+			}
+		}
+	}
+	
+	// Add padding (2 chars on each side = 4 total)
+	boxWidth := maxWidth + 4
+	if boxWidth < text.StringWidth(title)+4 {
+		boxWidth = text.StringWidth(title) + 4
+	}
+	
+	// Cap at maximum width
+	if boxWidth > maxBoxWidth {
+		boxWidth = maxBoxWidth
+	}
+	
+	// Build the box
+	var result strings.Builder
+	result.WriteString("\r\n")
+	
+	// Top border
+	result.WriteString("╔")
+	result.WriteString(strings.Repeat("═", boxWidth-2))
+	result.WriteString("╗\r\n")
+	
+	// Title line (centered)
+	titlePadding := (boxWidth - 2 - text.StringWidth(title)) / 2
+	result.WriteString("║")
+	result.WriteString(strings.Repeat(" ", titlePadding))
+	result.WriteString(title)
+	result.WriteString(strings.Repeat(" ", boxWidth-2-titlePadding-text.StringWidth(title)))
+	result.WriteString("║\r\n")
+	
+	// Separator if there's content
+	if len(contentLines) > 0 {
+		result.WriteString("╠")
+		result.WriteString(strings.Repeat("═", boxWidth-2))
+		result.WriteString("╣\r\n")
+	}
+	
+	// Content lines
+	for _, line := range contentLines {
+		if line == "" {
+			// Empty line
+			result.WriteString("║")
+			result.WriteString(strings.Repeat(" ", boxWidth-2))
+			result.WriteString("║\r\n")
+		} else {
+			// Wrap long lines
+			wrapped := text.WrapHard(line, boxWidth-4)
+			wrappedLines := strings.Split(wrapped, "\n")
+			for _, wrappedLine := range wrappedLines {
+				result.WriteString("║")
+				result.WriteString(" ")
+				result.WriteString(wrappedLine)
+				// Pad to box width
+				padding := boxWidth - 2 - text.StringWidth(wrappedLine) - 1
+				if padding > 0 {
+					result.WriteString(strings.Repeat(" ", padding))
+				}
+				result.WriteString("║\r\n")
+			}
+		}
+	}
+	
+	// Bottom border
+	result.WriteString("╚")
+	result.WriteString(strings.Repeat("═", boxWidth-2))
+	result.WriteString("╝\r\n")
+	
+	return result.String()
+}
+
+// createErrorBox creates a formatted error box with title and content.
+func createErrorBox(title string, contentLines []string) string {
+	return createBox(title, contentLines)
+}
+
 // setClientIPEnv sets SSH environment variables to forward the client's real IP address.
 func setClientIPEnv(channel ssh.Channel, clientIP, serverIP string) {
 	sshClient := fmt.Sprintf("%s 0 22", clientIP)
 	sshConnection := fmt.Sprintf("%s 0 %s 22", clientIP, serverIP)
+	
+	var envSetCount int
+	var envRejectedCount int
 	
 	setEnv := func(name, value string) {
 		payload := make([]byte, 0, 4+len(name)+4+len(value))
@@ -47,10 +170,12 @@ func setClientIPEnv(channel ssh.Channel, clientIP, serverIP string) {
 		
 		ok, err := channel.SendRequest("env", false, payload)
 		if err != nil {
-			logger.Debug("[SSHProxy] Failed to set env %s: %v", name, err)
+			logger.Warn("[SSHProxy] Failed to set env %s: %v", name, err)
 		} else if !ok {
-			logger.Debug("[SSHProxy] VPS rejected env %s (may need AcceptEnv in sshd_config)", name)
+			envRejectedCount++
+			logger.Warn("[SSHProxy] VPS rejected env %s (may need AcceptEnv SSH_CLIENT SSH_CONNECTION SSH_CLIENT_REAL in sshd_config)", name)
 		} else {
+			envSetCount++
 			logger.Debug("[SSHProxy] Set env %s=%s", name, value)
 		}
 	}
@@ -58,6 +183,12 @@ func setClientIPEnv(channel ssh.Channel, clientIP, serverIP string) {
 	setEnv("SSH_CLIENT", sshClient)
 	setEnv("SSH_CONNECTION", sshConnection)
 	setEnv("SSH_CLIENT_REAL", clientIP)
+	
+	if envRejectedCount > 0 {
+		logger.Warn("[SSHProxy] VPS rejected %d environment variable(s) - real client IP (%s) may not be available in lastlog", envRejectedCount, clientIP)
+	} else {
+		logger.Info("[SSHProxy] Successfully set %d environment variable(s) for real client IP: %s", envSetCount, clientIP)
+	}
 }
 
 // SSHProxyServer handles SSH bastion/jump host functionality for VPS access.
@@ -139,11 +270,18 @@ func (s *SSHProxyServer) Start(ctx context.Context) error {
 			default:
 			}
 
-			logger.Info("[SSHProxy] Accepted connection from %s", conn.RemoteAddr())
+			// Wrap connection to parse PROXY protocol if present
+			realConn, realIP := s.parseProxyProtocol(conn)
+			if realIP != "" {
+				logger.Info("[SSHProxy] Accepted connection with PROXY protocol: real IP=%s, connection from=%s", realIP, conn.RemoteAddr())
+			} else {
+				logger.Info("[SSHProxy] Accepted connection from %s (no PROXY protocol)", conn.RemoteAddr())
+			}
+			
 			s.activeConnections.Add(1)
 			go func() {
 				defer s.activeConnections.Done()
-				s.handleConnection(ctx, conn)
+				s.handleConnection(ctx, realConn, realIP)
 			}()
 		}
 	}()
@@ -178,7 +316,7 @@ func (s *SSHProxyServer) Stop(timeout time.Duration) error {
 		close(s.shutdownChan)
 		
 		// Close the listener to stop accepting new connections
-		if s.listener != nil {
+	if s.listener != nil {
 			if err := s.listener.Close(); err != nil {
 				logger.Warn("[SSHProxy] Error closing listener: %v", err)
 			}
@@ -229,9 +367,86 @@ func (s *SSHProxyServer) getActiveConnectionCount() int {
 	}
 }
 
+// parseProxyProtocol attempts to parse PROXY protocol v1 or v2 from the connection
+// Returns the connection (wrapped if PROXY protocol was present) and the real client IP
+// If PROXY protocol is not present, returns the original connection and empty string
+func (s *SSHProxyServer) parseProxyProtocol(conn net.Conn) (net.Conn, string) {
+	// Set a short read timeout to detect PROXY protocol without blocking
+	conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	
+	// Try to read PROXY protocol header (max 108 bytes for v2, or first line for v1)
+	buffer := make([]byte, 108)
+	n, err := conn.Read(buffer)
+	conn.SetReadDeadline(time.Time{}) // Clear deadline
+	
+	if err != nil {
+		// No data or timeout - no PROXY protocol, return original connection
+		return conn, ""
+	}
+	
+	// Check for PROXY protocol v1 (text-based, starts with "PROXY ")
+	if n >= 6 && string(buffer[:6]) == "PROXY " {
+		// Parse PROXY protocol v1
+		// Format: "PROXY TCP4|TCP6 <srcip> <dstip> <srcport> <dstport>\r\n"
+		line := string(buffer[:n])
+		// Remove trailing \r\n if present
+		line = strings.TrimSuffix(line, "\r\n")
+		line = strings.TrimSuffix(line, "\n")
+		parts := strings.Fields(line)
+		if len(parts) >= 3 {
+			// Extract source IP (real client IP) - it's the 3rd field
+			realIP := parts[2]
+			// Validate it's a valid IP
+			if net.ParseIP(realIP) != nil {
+				logger.Debug("[SSHProxy] Parsed PROXY protocol v1: real IP=%s", realIP)
+				// Create a wrapper that prepends the read data back
+				return &proxyProtocolConn{Conn: conn, prefix: buffer[:n]}, realIP
+			}
+		}
+	}
+	
+	// Check for PROXY protocol v2 (binary)
+	// V2 starts with: 0x0D 0x0A 0x0D 0x0A 0x00 0x0D 0x0A 0x51 0x55 0x49 0x54 0x0A
+	if n >= 12 && buffer[0] == 0x0D && buffer[1] == 0x0A && buffer[2] == 0x0D && buffer[3] == 0x0A &&
+		buffer[4] == 0x00 && buffer[5] == 0x0D && buffer[6] == 0x0A && buffer[7] == 0x51 &&
+		buffer[8] == 0x55 && buffer[9] == 0x49 && buffer[10] == 0x54 && buffer[11] == 0x0A {
+		// Parse PROXY protocol v2 (simplified - just extract IP for now)
+		// V2 is complex, for now we'll log and return empty (can be enhanced later)
+		logger.Debug("[SSHProxy] Detected PROXY protocol v2 (binary parsing not yet implemented)")
+		return &proxyProtocolConn{Conn: conn, prefix: buffer[:n]}, ""
+	}
+	
+	// No PROXY protocol detected, prepend the read data back
+	return &proxyProtocolConn{Conn: conn, prefix: buffer[:n]}, ""
+}
+
+// proxyProtocolConn wraps a connection and prepends data that was read for PROXY protocol detection
+type proxyProtocolConn struct {
+	net.Conn
+	prefix []byte
+	prefixRead int
+}
+
+func (c *proxyProtocolConn) Read(b []byte) (n int, err error) {
+	// First, return the prefix data that was already read
+	if c.prefixRead < len(c.prefix) {
+		n = copy(b, c.prefix[c.prefixRead:])
+		c.prefixRead += n
+		if n < len(b) {
+			// Still have space, read from underlying connection
+			more, err := c.Conn.Read(b[n:])
+			return n + more, err
+		}
+		return n, nil
+	}
+	// Prefix exhausted, read from underlying connection
+	return c.Conn.Read(b)
+}
+
 // handleConnection handles an incoming SSH connection using a bastion pattern.
 // It extracts the VPS ID from the client's username and forwards SSH channels to the VPS.
-func (s *SSHProxyServer) handleConnection(ctx context.Context, clientConn net.Conn) {
+// realIP is the client's real IP if extracted from PROXY protocol, otherwise empty.
+func (s *SSHProxyServer) handleConnection(ctx context.Context, clientConn net.Conn, realIP string) {
 	logger.Info("[SSHProxy] Handling connection from %s", clientConn.RemoteAddr())
 
 	if s.gatewayClient == nil {
@@ -241,8 +456,72 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, clientConn net.Co
 	}
 
 	username, serverConn, chans, reqs, authInfo, err := s.extractVPSIDAndEstablishConnection(ctx, clientConn)
-	if err != nil {
+			if err != nil {
 		logger.Warn("[SSHProxy] Failed to extract username and establish connection: %v", err)
+		
+		// Try to extract and resolve VPS ID from error or username to show helpful error
+		vpsID := ""
+		if username != "" {
+			vpsIdentifier, _ := parseUsername(username)
+			// Try to resolve identifier (could be alias or full VPS ID) to actual VPS ID
+			resolvedID, resolveErr := resolveVPSID(vpsIdentifier)
+			if resolveErr == nil {
+				vpsID = resolvedID
+			} else {
+				// If resolution fails, use the identifier as-is (might be a non-existent VPS)
+				// But still try to extract from error message if it contains a VPS ID
+				vpsID = vpsIdentifier
+			}
+		}
+		
+		// If we still don't have a VPS ID, try to extract from error message
+		if vpsID == "" || (!strings.HasPrefix(vpsID, "vps-") && !strings.Contains(err.Error(), "not found")) {
+			errStr := err.Error()
+			// Check if error contains "VPS not found: <identifier>"
+			if strings.Contains(errStr, "VPS not found:") {
+				// Extract the identifier from the error message
+				parts := strings.Split(errStr, "VPS not found:")
+				if len(parts) > 1 {
+					identifier := strings.TrimSpace(parts[1])
+					// Remove any trailing commas, periods, or other punctuation
+					identifier = strings.TrimRight(identifier, ",.")
+					identifier = strings.TrimSpace(identifier)
+					// For "VPS not found" errors, use the identifier that was attempted
+					vpsID = identifier
+				}
+			} else if strings.Contains(errStr, "vps-") {
+				// Try to extract VPS ID from error message
+				parts := strings.Fields(errStr)
+				for _, part := range parts {
+					if strings.HasPrefix(part, "vps-") {
+						vpsID = part
+						break
+					}
+				}
+			}
+		}
+		
+		// Send formatted error message to client before closing
+		if vpsID != "" {
+			errorMsg := s.formatConnectionError(err, vpsID)
+			// Write error directly to the connection
+			// Note: This might not work if SSH handshake has already started,
+			// but we try anyway to show the error if possible
+			clientConn.Write([]byte("\r\n" + errorMsg + "\r\n"))
+			time.Sleep(500 * time.Millisecond) // Give client time to read the error
+		} else {
+			// Even if we don't have a VPS ID, try to show a generic error
+			genericError := createErrorBox("Connection Error", []string{
+				"Failed to establish SSH connection.",
+				"",
+				"Please verify your connection details and try again.",
+				"",
+				fmt.Sprintf("Error: %s", err.Error()),
+			})
+			clientConn.Write([]byte("\r\n" + genericError + "\r\n"))
+			time.Sleep(500 * time.Millisecond)
+		}
+		
 		clientConn.Close()
 		return
 	}
@@ -257,14 +536,24 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, clientConn net.Co
 		}
 	}()
 
-	// Parse username to extract VPS ID and target user
-	vpsID, targetUser := parseUsername(username)
-	if !strings.HasPrefix(vpsID, "vps-") {
-		logger.Warn("[SSHProxy] Invalid VPS ID format: %s (expected 'vps-' prefix)", vpsID)
+	// Parse username to extract VPS ID/alias and target user
+	vpsIdentifier, targetUser := parseUsername(username)
+	
+	// Resolve identifier (could be full VPS ID or alias) to actual VPS ID
+	vpsID, err := resolveVPSID(vpsIdentifier)
+	if err != nil {
+		logger.Warn("[SSHProxy] VPS not found (ID or alias: %s): %v", vpsIdentifier, err)
 		return
 	}
 
-	logger.Info("[SSHProxy] Extracted VPS ID: %s, target user: %s", vpsID, targetUser)
+	logger.Info("[SSHProxy] Resolved VPS identifier %s to VPS ID: %s, target user: %s", vpsIdentifier, vpsID, targetUser)
+
+	// Get VPS instance to access name
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		logger.Error("[SSHProxy] Failed to get VPS instance for %s: %v", vpsID, err)
+		return
+	}
 
 	// Get VPS IP or hostname
 	vpsIP, err := s.getVPSIP(ctx, vpsID)
@@ -275,12 +564,18 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, clientConn net.Co
 
 	logger.Info("[SSHProxy] Forwarding SSH channels to VPS %s at %s as user %s", vpsID, vpsIP, targetUser)
 
-	// Extract client IP from connection
-	// Note: For SSH connections, this is the direct TCP connection IP.
-	// If SSH is proxied through Traefik with PROXY protocol, the real client IP would be available.
-	// For now, we use the connection's RemoteAddr which may be the Docker network IP.
-	clientIP := extractIPFromAddr(clientConn.RemoteAddr())
-	logger.Debug("[SSHProxy] Client IP: %s", clientIP)
+	// Use real IP from PROXY protocol if available, otherwise extract from connection
+	var clientIP string
+	if realIP != "" {
+		clientIP = realIP
+		logger.Info("[SSHProxy] Using real client IP from PROXY protocol: %s", clientIP)
+	} else {
+		// Extract client IP from connection
+		// Note: For SSH connections through Docker Swarm ingress, this will be the Docker network IP.
+		// PROXY protocol is needed to get the real client IP when behind a load balancer.
+		clientIP = extractRealClientIP(clientConn)
+		logger.Info("[SSHProxy] Client IP: %s (connection from %s, no PROXY protocol)", clientIP, clientConn.RemoteAddr())
+	}
 
 	// Create audit log for SSH connection
 	go createSSHAuditLog(vpsID, targetUser, authInfo, clientIP)
@@ -289,43 +584,39 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, clientConn net.Co
 	go s.handleGlobalRequests(ctx, reqs, vpsID, vpsIP, authInfo)
 	
 	// Forward channels - this blocks until all channels are closed
-	s.forwardChannelsToVPS(ctx, serverConn, chans, vpsID, vpsIP, targetUser, authInfo, clientIP)
+	s.forwardChannelsToVPS(ctx, serverConn, chans, vpsID, vpsIP, targetUser, authInfo, clientIP, vps.Name)
 	
 	logger.Info("[SSHProxy] All channels closed, connection ending for VPS %s", vpsID)
 }
 
 // parseUsername extracts VPS ID and target user from username
-// Supports formats: "user@vps-xxx" (standard SSH format), "vps-xxx" (defaults to root)
+// Supports formats: 
+// - "user@vps-xxx" (standard SSH format with full VPS ID)
+// - "user@alias" (standard SSH format with SSH alias)
+// - "user@vps-xxx@hostname" (with hostname, hostname is ignored)
+// - "user@alias@hostname" (with hostname, hostname is ignored)
+// - "vps-xxx" (defaults to root, full VPS ID)
+// - "alias" (defaults to root, SSH alias)
 func parseUsername(username string) (vpsID, targetUser string) {
-	// Try standard SSH format: user@vps-xxx
-	// We look for the last @ that separates user from vps-id
-	// This handles cases like: root@vps-xxx, user@vps-xxx@domain (though domain is ignored)
-	if idx := strings.LastIndex(username, "@"); idx != -1 {
-		// Check if the part after @ looks like a VPS ID (starts with "vps-")
-		afterAt := username[idx+1:]
-		if strings.HasPrefix(afterAt, "vps-") {
-			// Format: user@vps-xxx
-			targetUser = username[:idx]
-			vpsID = afterAt
-			// If there's another @ after vps-id (like user@vps-xxx@domain), ignore the domain part
-			if domainIdx := strings.Index(vpsID, "@"); domainIdx != -1 {
-				vpsID = vpsID[:domainIdx]
-			}
+	// Count @ signs to determine format
+	atCount := strings.Count(username, "@")
+	
+	if atCount >= 2 {
+		// Format: user@identifier@hostname (e.g., root@test@localhost)
+		// Find first @ to get user, second @ to get identifier
+		firstAt := strings.Index(username, "@")
+		secondAt := strings.Index(username[firstAt+1:], "@")
+		if secondAt != -1 {
+			targetUser = username[:firstAt]
+			vpsID = username[firstAt+1 : firstAt+1+secondAt]
 			return
 		}
-		// If it doesn't start with vps-, might be old format: vps-xxx@user
-		// Check if the part before @ looks like a VPS ID
-		beforeAt := username[:idx]
-		if strings.HasPrefix(beforeAt, "vps-") {
-			// Old format: vps-xxx@user (backwards compatibility)
-			vpsID = beforeAt
-			targetUser = afterAt
-			// If there's another @ after user (like vps-xxx@user@domain), ignore the domain part
-			if domainIdx := strings.Index(targetUser, "@"); domainIdx != -1 {
-				targetUser = targetUser[:domainIdx]
-			}
-			return
-		}
+	} else if atCount == 1 {
+		// Format: user@identifier (e.g., root@test or root@vps-xxx)
+		idx := strings.Index(username, "@")
+		targetUser = username[:idx]
+		vpsID = username[idx+1:]
+		return
 	}
 
 	// Try : format for backwards compatibility (e.g., vps-xxx:user)
@@ -335,18 +626,24 @@ func parseUsername(username string) (vpsID, targetUser string) {
 		return
 	}
 
-	// No separator, use entire username as VPS ID, default to root
+	// No separator, use entire username as VPS ID or alias, default to root
 	vpsID = username
 	targetUser = "root"
 	return
 }
 
+// resolveVPSID resolves a VPS identifier (either full ID or alias) to the actual VPS ID
+func resolveVPSID(identifier string) (string, error) {
+	return database.ResolveVPSIDFromSSHIdentifierAnyOrg(identifier)
+}
+
 // connectSSHToVPSForChannelForwarding creates an SSH client connection to the target VPS via gateway.
 // Uses the bastion SSH key for authentication.
-func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context, vpsID, vpsIP, targetUser string, authInfo *clientAuthInfo) (*ssh.Client, error) {
+// If serverConn is provided, it can be used to send status messages to the client.
+func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context, serverConn *ssh.ServerConn, vpsID, vpsIP, targetUser string, authInfo *clientAuthInfo) (*ssh.Client, error) {
 	// Create TCP connection to VPS via gateway
 	targetConn, err := s.gatewayClient.CreateTCPConnection(ctx, vpsIP, 22)
-	if err != nil {
+			if err != nil {
 		return nil, fmt.Errorf("failed to create TCP connection via gateway: %w", err)
 	}
 
@@ -369,7 +666,60 @@ func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context
 		if err != nil {
 			return nil, fmt.Errorf("failed to create bastion SSH key for VPS %s: %w", vpsID, err)
 		}
-		logger.Info("[SSHProxy] Auto-created bastion key for VPS %s", vpsID)
+		logger.Info("[SSHProxy] Auto-created bastion key for VPS %s (fingerprint: %s)", vpsID, bastionKey.Fingerprint)
+		
+		// Regenerate cloud-init to include the new bastion key
+		// Only do this if VPS is already provisioned (has instance ID)
+		if vps.InstanceID != nil {
+			// Parse VM ID
+			vmIDInt := 0
+			fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+			if vmIDInt > 0 {
+				// Get Proxmox configuration
+		proxmoxConfig, err := orchestrator.GetProxmoxConfig()
+		if err == nil {
+					// Create Proxmox client
+			proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+			if err == nil {
+						// Find the node where the VM is running
+					nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+					if err == nil {
+							// Update cloud-init config to include the new bastion key
+							// We need to load current config, which will automatically include the new key
+							// when GenerateCloudInitUserData is called
+							vpsConfig := &orchestrator.VPSConfig{
+								VPSID:          vps.ID,
+								OrganizationID: vps.OrganizationID,
+								CloudInit:      nil, // Use default/current config
+							}
+							
+							// Generate cloud-init userData (will include the new bastion key)
+							userData := orchestrator.GenerateCloudInitUserData(vpsConfig)
+							
+							// Get storage for snippets
+							storage := "local"
+							if storageEnv := os.Getenv("PROXMOX_STORAGE"); storageEnv != "" {
+								storage = storageEnv
+							}
+							
+							// Upload cloud-init snippet
+							snippetPath, snippetErr := proxmoxClient.CreateCloudInitSnippet(ctx, nodeName, storage, vmIDInt, userData)
+							if snippetErr == nil {
+								// Update VM config with cicustom parameter
+								if updateErr := proxmoxClient.UpdateVMCicustom(ctx, nodeName, vmIDInt, snippetPath); updateErr == nil {
+									// Note: When using snippets, cloud-init changes are automatically applied on the next VM boot.
+									logger.Info("[SSHProxy] Successfully updated cloud-init after auto-creating bastion key for VPS %s. Changes will be applied on next boot.", vpsID)
+				} else {
+									logger.Warn("[SSHProxy] Failed to update VM cicustom after auto-creating bastion key for VPS %s: %v", vpsID, updateErr)
+				}
+			} else {
+								logger.Warn("[SSHProxy] Failed to create cloud-init snippet after auto-creating bastion key for VPS %s: %v", vpsID, snippetErr)
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
 	signer, err := ssh.ParsePrivateKey([]byte(bastionKey.PrivateKey))
@@ -395,10 +745,13 @@ func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context
 	}
 	
 	logger.Debug("[SSHProxy] Attempting to connect to VPS %s as user %s (using bastion key)", vpsIP, targetUser)
+	logger.Debug("[SSHProxy] Using bastion key fingerprint: %s", bastionKey.Fingerprint)
 
 	clientConn, chans, reqs, err := ssh.NewClientConn(targetConn, vpsIP, sshConfig)
-		if err != nil {
+	if err != nil {
 		targetConn.Close()
+		logger.Warn("[SSHProxy] Failed to connect to VPS %s with bastion key: %v", vpsID, err)
+		logger.Warn("[SSHProxy] Bastion key fingerprint: %s", bastionKey.Fingerprint)
 		return nil, fmt.Errorf("failed to create SSH client connection to VPS: %w", err)
 	}
 
@@ -417,24 +770,108 @@ func (s *SSHProxyServer) extractVPSIDAndEstablishConnection(ctx context.Context,
 	var extractedUsername string
 	authInfo := &clientAuthInfo{}
 	
+	// Store VPS validation result to share between callbacks
+	type vpsValidation struct {
+		validated bool
+		vpsID     string
+		identifier string
+		err       error
+	}
+	vpsValidationResult := &vpsValidation{}
+	
+	// Helper function to validate VPS
+	validateVPS := func(username string) (string, error) {
+		if vpsValidationResult.validated {
+			if vpsValidationResult.err != nil {
+				return "", vpsValidationResult.err
+			}
+			return vpsValidationResult.vpsID, nil
+		}
+		
+		// Parse username to get VPS ID or alias
+		vpsIdentifier, _ := parseUsername(username)
+		vpsValidationResult.identifier = vpsIdentifier
+		
+		// Resolve identifier (could be full VPS ID or alias) to actual VPS ID
+		vpsID, err := resolveVPSID(vpsIdentifier)
+		if err != nil {
+			logger.Warn("[SSHProxy] VPS not found (ID or alias: %s): %v", vpsIdentifier, err)
+			vpsValidationResult.validated = true
+			vpsValidationResult.err = fmt.Errorf("VPS not found: %s", vpsIdentifier)
+			return "", vpsValidationResult.err
+		}
+		
+		// Verify VPS exists in database
+		var vps database.VPSInstance
+		if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+			logger.Warn("[SSHProxy] VPS not found in database: %s", vpsID)
+			vpsValidationResult.validated = true
+			vpsValidationResult.err = fmt.Errorf("VPS not found: %s", vpsIdentifier)
+			return "", vpsValidationResult.err
+		}
+		
+		vpsValidationResult.validated = true
+		vpsValidationResult.vpsID = vpsID
+		return vpsID, nil
+	}
+	
 	config := &ssh.ServerConfig{
 		ServerVersion: "SSH-2.0-ObienteCloud",
+		BannerCallback: func(conn ssh.ConnMetadata) string {
+			// Validate VPS in banner callback - this is called early
+			username := conn.User()
+			_, err := validateVPS(username)
+			if err != nil {
+				// Return error message as banner - this will be displayed to user
+				identifier := vpsValidationResult.identifier
+				errorBox := createErrorBox("Connection Error", []string{
+					"The specified VPS was not found.",
+					"",
+					"Please verify the VPS ID or SSH alias and ensure you have access to it.",
+					"",
+					"You can use either:",
+					"• Full VPS ID: vps-xxx",
+					"• SSH alias: your-alias (if configured)",
+					"",
+					fmt.Sprintf("Identifier used: %s", identifier),
+				})
+				return errorBox
+			}
+			return createBox("Welcome to Obiente Cloud SSH Bastion", []string{})
+		},
+		NoClientAuthCallback: func(conn ssh.ConnMetadata) (*ssh.Permissions, error) {
+			// This callback is called early in the handshake
+			// We use it to validate VPS exists and reject immediately if it doesn't
+			username := conn.User()
+			logger.Debug("[SSHProxy] NoClientAuthCallback for user: %s", username)
+			
+			vpsID, err := validateVPS(username)
+	if err != nil {
+				// Reject immediately to prevent password prompts
+				return nil, err
+			}
+			
+			// Store resolved VPS ID for later use
+			authInfo.vpsID = vpsID
+			
+			// Allow authentication to proceed
+			return nil, nil
+		},
 		PublicKeyCallback: func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 			extractedUsername = conn.User()
 			logger.Debug("[SSHProxy] Validating public key authentication for user: %s", extractedUsername)
 			
-			// Parse username to get VPS ID
-			vpsID, _ := parseUsername(extractedUsername)
-			if !strings.HasPrefix(vpsID, "vps-") {
-				logger.Warn("[SSHProxy] Invalid VPS ID in username: %s", extractedUsername)
-				return nil, fmt.Errorf("invalid VPS ID format")
+			// Validate VPS exists (uses cached result if already validated)
+			vpsID, err := validateVPS(extractedUsername)
+			if err != nil {
+				return nil, err
 			}
 			
 			// Get VPS to find organization
 			var vps database.VPSInstance
 			if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
 				logger.Warn("[SSHProxy] VPS not found: %s", vpsID)
-				return nil, fmt.Errorf("VPS not found")
+				return nil, fmt.Errorf("VPS not found: %s", vpsValidationResult.identifier)
 			}
 			
 			// Get SSH keys for this VPS (includes org-wide and VPS-specific keys)
@@ -480,18 +917,17 @@ func (s *SSHProxyServer) extractVPSIDAndEstablishConnection(ctx context.Context,
 			passwordStr := string(password)
 			logger.Debug("[SSHProxy] Validating password/API token authentication for user: %s", extractedUsername)
 			
-			// Parse username to get VPS ID
-			vpsID, _ := parseUsername(extractedUsername)
-			if !strings.HasPrefix(vpsID, "vps-") {
-				logger.Warn("[SSHProxy] Invalid VPS ID in username: %s", extractedUsername)
-				return nil, fmt.Errorf("invalid VPS ID format")
+			// Validate VPS exists (uses cached result if already validated)
+			vpsID, err := validateVPS(extractedUsername)
+			if err != nil {
+				return nil, err
 			}
 			
 			// Get VPS to find organization
 			var vps database.VPSInstance
 			if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
 				logger.Warn("[SSHProxy] VPS not found: %s", vpsID)
-				return nil, fmt.Errorf("VPS not found")
+				return nil, fmt.Errorf("VPS not found: %s", vpsValidationResult.identifier)
 			}
 			
 			// Validate API token (password is used as API token)
@@ -509,7 +945,7 @@ func (s *SSHProxyServer) extractVPSIDAndEstablishConnection(ctx context.Context,
 				logger.Info("[SSHProxy] Admin user authenticated via API token for VPS %s", vpsID)
 			} else if vps.CreatedBy == userInfo.Id {
 				logger.Info("[SSHProxy] VPS owner authenticated via API token for VPS %s", vpsID)
-						} else {
+		} else {
 				// Check organization membership
 				var count int64
 				if err := database.DB.Model(&database.OrganizationMember{}).
@@ -553,6 +989,57 @@ func (s *SSHProxyServer) extractVPSIDAndEstablishConnection(ctx context.Context,
 	
 	serverConn, chans, reqs, err := ssh.NewServerConn(conn, config)
 	if err != nil {
+		// Try to extract username and VPS ID from the connection attempt
+		// The error might contain the VPS ID, or we might have captured it during auth callbacks
+		var resolvedVPSID string
+		if authInfo.vpsID != "" {
+			// We have the resolved VPS ID from auth callback
+			resolvedVPSID = authInfo.vpsID
+		} else if extractedUsername != "" {
+			// Try to resolve from username (might be alias)
+			vpsIdentifier, _ := parseUsername(extractedUsername)
+			if resolvedID, resolveErr := resolveVPSID(vpsIdentifier); resolveErr == nil {
+				resolvedVPSID = resolvedID
+			}
+		}
+		
+		// If we still don't have a VPS ID, try to extract from error message
+		if resolvedVPSID == "" {
+			errStr := err.Error()
+			// Check if error contains "VPS not found: <identifier>"
+			if strings.Contains(errStr, "VPS not found:") {
+				// Extract the identifier from the error message
+				parts := strings.Split(errStr, "VPS not found:")
+				if len(parts) > 1 {
+					identifier := strings.TrimSpace(parts[1])
+					// Remove any trailing commas, periods, or other punctuation
+					identifier = strings.TrimRight(identifier, ",.")
+					identifier = strings.TrimSpace(identifier)
+					// For "VPS not found" errors, use the identifier that was attempted (don't try to resolve)
+					resolvedVPSID = identifier
+				}
+			} else if strings.Contains(errStr, "vps-") {
+				// Try to extract VPS ID from error message
+				parts := strings.Fields(errStr)
+				for _, part := range parts {
+					if strings.HasPrefix(part, "vps-") {
+						resolvedVPSID = part
+						break
+					}
+				}
+			}
+		}
+		
+		// If we have a resolved VPS ID or identifier, include it in the error for better error messages
+		if resolvedVPSID != "" {
+			// Check if error is about VPS not found
+			if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "VPS not found") {
+				return "", nil, nil, nil, nil, fmt.Errorf("VPS not found: %s", resolvedVPSID)
+			}
+			// For other errors, wrap with VPS ID context
+			return "", nil, nil, nil, nil, fmt.Errorf("failed to establish SSH connection to VPS %s: %w", resolvedVPSID, err)
+		}
+		
 		return "", nil, nil, nil, nil, fmt.Errorf("failed to establish SSH connection: %w", err)
 	}
 	
@@ -601,7 +1088,7 @@ func (s *SSHProxyServer) handleGlobalRequests(ctx context.Context, reqs <-chan *
 				logger.Info("[SSHProxy] Client requested agent forwarding")
 				authInfo.hasAgentForwarding = true
 				if req.WantReply {
-				req.Reply(true, nil)
+								req.Reply(true, nil)
 			}
 			} else if req.WantReply {
 				req.Reply(false, nil)
@@ -610,31 +1097,373 @@ func (s *SSHProxyServer) handleGlobalRequests(ctx context.Context, reqs <-chan *
 	}
 }
 
-// forwardChannelsToVPS forwards SSH channels from the client to the VPS.
-func (s *SSHProxyServer) forwardChannelsToVPS(ctx context.Context, serverConn *ssh.ServerConn, chans <-chan ssh.NewChannel, vpsID, vpsIP, targetUser string, authInfo *clientAuthInfo, clientIP string) {
-	vpsClient, err := s.connectSSHToVPSForChannelForwarding(ctx, vpsID, vpsIP, targetUser, authInfo)
-	if err != nil {
-		logger.Error("[SSHProxy] Failed to connect to VPS for channel forwarding: %v", err)
-		serverConn.Close()
-		return
+// sendMessageToChannel sends a message to the client via a session channel.
+// This is used to show connection status, errors, and other messages.
+func (s *SSHProxyServer) sendMessageToChannel(channel ssh.Channel, message string, isError bool) {
+	if isError {
+		channel.Stderr().Write([]byte(message))
+	} else {
+		channel.Write([]byte(message))
 	}
-	defer vpsClient.Close()
+}
+
+// sendConnectionStatus sends connection status messages with loading indicators to a channel
+func (s *SSHProxyServer) sendConnectionStatus(channel ssh.Channel, vpsID, targetUser string) {
+	statusMessages := []string{
+		fmt.Sprintf("Connecting to your VPS (%s) as user %s", vpsID, targetUser),
+		".",
+		".",
+		".",
+		"\r\n",
+	}
+
+	for _, msg := range statusMessages {
+		s.sendMessageToChannel(channel, msg, false)
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+// forwardChannelsToVPS forwards SSH channels from the client to the VPS.
+func (s *SSHProxyServer) forwardChannelsToVPS(ctx context.Context, serverConn *ssh.ServerConn, chans <-chan ssh.NewChannel, vpsID, vpsIP, targetUser string, authInfo *clientAuthInfo, clientIP string, vpsName string) {
+	var vpsClient *ssh.Client
+	var connectionErr error
+	var connectionEstablished sync.Once
+	var firstSessionChannel sync.Once
 	
-	logger.Info("[SSHProxy] Connected to VPS, forwarding channels...")
+	// Try to establish VPS connection in background
+	connectionReady := make(chan struct{})
+	go func() {
+		vpsClient, connectionErr = s.connectSSHToVPSForChannelForwarding(ctx, serverConn, vpsID, vpsIP, targetUser, authInfo)
+		close(connectionReady)
+	}()
 	
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-connectionReady:
+			// Connection attempt completed, continue to handle channels
 		case newChannel, ok := <-chans:
 			if !ok {
-					return
-			}
+				// Channels closed, send goodbye if we had a connection
+				if vpsClient != nil {
+					// Goodbye message will be sent when channel closes
+				}
+		return
+	}
 
-			logger.Debug("[SSHProxy] Received new channel from client: %s", newChannel.ChannelType())
-			go s.forwardChannel(ctx, newChannel, vpsClient, serverConn, clientIP, vpsIP)
+			channelType := newChannel.ChannelType()
+			logger.Debug("[SSHProxy] Received new channel from client: %s", channelType)
+			
+			// For session channels, send connection status before forwarding (only for first one)
+			if channelType == "session" {
+				handled := false
+				firstSessionChannel.Do(func() {
+					handled = true
+					// Accept the channel first
+					clientChannel, clientReqs, err := newChannel.Accept()
+	if err != nil {
+						logger.Error("[SSHProxy] Failed to accept session channel: %v", err)
+		return
+	}
+
+					// Wait for connection attempt to complete
+					<-connectionReady
+					
+					if connectionErr != nil {
+						// Send error message
+						errorMsg := s.formatConnectionError(connectionErr, vpsID)
+						s.sendMessageToChannel(clientChannel, errorMsg, true)
+						time.Sleep(2 * time.Second)
+						clientChannel.Close()
+						serverConn.Close()
+		return
+	}
+					
+					// Send connection status
+					s.sendConnectionStatus(clientChannel, vpsID, targetUser)
+					
+					// Now forward the channel
+					connectionEstablished.Do(func() {
+						logger.Info("[SSHProxy] Connected to VPS, forwarding channels...")
+						// Use VPS name for display (fallback to ID if name is empty)
+						displayName := vpsID
+						if vpsName != "" {
+							displayName = vpsName
+						}
+						successMsg := fmt.Sprintf("✓ Successfully connected to VPS %s\r\n", displayName)
+						s.sendMessageToChannel(clientChannel, successMsg, false)
+						time.Sleep(500 * time.Millisecond)
+					})
+					
+					// Forward this channel with goodbye message
+					go s.forwardChannelWithGoodbye(ctx, clientChannel, clientReqs, vpsClient, serverConn, clientIP, vpsIP)
+				})
+				// If this is not the first session channel, handle it normally
+				if !handled {
+					// This is a subsequent session channel, forward normally
+	go func() {
+						<-connectionReady
+						if connectionErr != nil {
+							newChannel.Reject(ssh.ConnectionFailed, connectionErr.Error())
+					return
+				}
+						s.forwardChannel(ctx, newChannel, vpsClient, serverConn, clientIP, vpsIP)
+					}()
+				}
+			} else {
+				// For non-session channels, wait for connection and forward normally
+	go func() {
+					<-connectionReady
+					if connectionErr != nil {
+						newChannel.Reject(ssh.ConnectionFailed, connectionErr.Error())
+						return
+					}
+					s.forwardChannel(ctx, newChannel, vpsClient, serverConn, clientIP, vpsIP)
+				}()
+			}
 		}
 	}
+}
+
+// forwardChannelWithGoodbye forwards a session channel and sends goodbye message on close
+func (s *SSHProxyServer) forwardChannelWithGoodbye(ctx context.Context, clientChannel ssh.Channel, clientReqs <-chan *ssh.Request, vpsClient *ssh.Client, serverConn *ssh.ServerConn, clientIP, vpsIP string) {
+	defer func() {
+		// Send goodbye message before closing
+		goodbyeMsg := createBox("Thank you for using Obiente Cloud!", []string{
+			"Connection closed.",
+		})
+		s.sendMessageToChannel(clientChannel, goodbyeMsg, false)
+		time.Sleep(500 * time.Millisecond)
+		clientChannel.Close()
+	}()
+	
+	// Open session channel on VPS
+	vpsChannel, vpsReqs, err := vpsClient.OpenChannel("session", nil)
+	if err != nil {
+		logger.Error("[SSHProxy] Failed to open session channel on VPS: %v", err)
+		return
+	}
+	defer vpsChannel.Close()
+
+	// Set environment variables to forward client's real IP
+	if clientIP != "" {
+		logger.Debug("[SSHProxy] Setting environment variables for real client IP: %s", clientIP)
+		setClientIPEnv(vpsChannel, clientIP, vpsIP)
+	} else {
+		logger.Warn("[SSHProxy] No client IP available to forward to VPS")
+	}
+
+	done := make(chan struct{})
+	go func() {
+					io.Copy(vpsChannel, clientChannel)
+		vpsChannel.CloseWrite()
+		done <- struct{}{}
+	}()
+	go func() {
+		io.Copy(clientChannel, vpsChannel)
+		clientChannel.CloseWrite()
+		done <- struct{}{}
+	}()
+	
+	// Forward client requests to VPS
+	go func() {
+		for req := range clientReqs {
+			ok, err := vpsChannel.SendRequest(req.Type, req.WantReply, req.Payload)
+			if req.WantReply {
+				req.Reply(ok, nil)
+			}
+			if err != nil {
+				logger.Debug("[SSHProxy] Error forwarding request: %v", err)
+			}
+		}
+	}()
+	
+	// Forward VPS requests to server
+	go func() {
+		for req := range vpsReqs {
+			ok, payload, err := serverConn.SendRequest(req.Type, req.WantReply, req.Payload)
+			if req.WantReply {
+				req.Reply(ok, payload)
+			}
+			if err != nil {
+				logger.Debug("[SSHProxy] Error forwarding request: %v", err)
+			}
+		}
+	}()
+
+	<-done
+}
+
+// formatConnectionError formats an error into a user-friendly message with actionable guidance
+func (s *SSHProxyServer) formatConnectionError(err error, vpsID string) string {
+	errStr := strings.ToLower(err.Error())
+	
+	// Check for specific error types and provide helpful messages
+	
+	// 1. Bastion key not configured in database
+	if strings.Contains(errStr, "bastion key") || strings.Contains(errStr, "bastion ssh key") {
+		return createErrorBox("Connection Error", []string{
+			"The bastion SSH key for this VPS is not configured in the database.",
+			"",
+			"Please visit the VPS SSH tab in the dashboard and",
+			"ensure the bastion key is properly configured.",
+			"",
+			fmt.Sprintf("VPS ID: %s", vpsID),
+		})
+	}
+	
+	// 2. SSH authentication failure - bastion key missing on VPS
+	// This happens when the key exists in DB but not on the VPS (e.g., keys removed, cloud-init not run)
+	if strings.Contains(errStr, "unable to authenticate") || 
+	   strings.Contains(errStr, "no supported methods remain") ||
+	   (strings.Contains(errStr, "handshake failed") && strings.Contains(errStr, "publickey")) {
+		// Get bastion key info for better error message
+		bastionKey, keyErr := database.GetVPSBastionKey(vpsID)
+		fingerprint := "unknown"
+		if keyErr == nil && bastionKey != nil {
+			fingerprint = bastionKey.Fingerprint
+		}
+		
+		return createErrorBox("Authentication Error", []string{
+			"The bastion SSH key is not configured on the VPS.",
+			"",
+			"This usually means:",
+			"• The VPS needs to be rebooted to apply cloud-init changes",
+			"• Cloud-init hasn't run yet after key rotation",
+			"• The SSH keys were manually removed from the VPS",
+			"",
+			"To fix this:",
+			"1. Reboot the VPS to trigger cloud-init",
+			"   OR manually run on the VPS:",
+			"   cloud-init clean && cloud-init init",
+			"",
+			"2. Verify the key was added:",
+			fmt.Sprintf("   cat ~/.ssh/authorized_keys | grep %s", fingerprint),
+			"",
+			fmt.Sprintf("VPS ID: %s", vpsID),
+		})
+	}
+	
+	// 3. Connection timeout
+	if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "i/o timeout") {
+		return createErrorBox("Connection Timeout", []string{
+			"Failed to connect to the VPS within the timeout period.",
+			"",
+			"This may be due to:",
+			"• VPS is not running or is unresponsive",
+			"• Network connectivity issues",
+			"• Firewall blocking SSH connections",
+			"• Gateway service unavailable",
+			"",
+			"Please check:",
+			"• VPS status in the dashboard",
+			"• Network connectivity",
+			"• Firewall rules",
+			"",
+			fmt.Sprintf("VPS ID: %s", vpsID),
+		})
+	}
+	
+	// 4. Connection refused (VPS not listening on SSH port)
+	if strings.Contains(errStr, "connection refused") || strings.Contains(errStr, "refused") {
+		return createErrorBox("Connection Refused", []string{
+			"The VPS is not accepting SSH connections.",
+			"",
+			"This may be due to:",
+			"• SSH service is not running on the VPS",
+			"• VPS is not running",
+			"• Firewall is blocking SSH port 22",
+			"",
+			"Please check:",
+			"• VPS status in the dashboard",
+			"• SSH service status on the VPS",
+			"• Firewall configuration",
+			"",
+			fmt.Sprintf("VPS ID: %s", vpsID),
+		})
+	}
+	
+	// 5. VPS not found
+	if strings.Contains(errStr, "vps not found") {
+		return createErrorBox("Connection Error", []string{
+			"The specified VPS was not found.",
+			"",
+			"Please verify the VPS ID or SSH alias and ensure you have access to it.",
+			"",
+			"You can use either:",
+			"• Full VPS ID: vps-xxx",
+			"• SSH alias: your-alias (if configured)",
+			"",
+			fmt.Sprintf("Identifier used: %s", vpsID),
+		})
+	}
+	
+	// 6. TCP connection / Gateway errors
+	if strings.Contains(errStr, "tcp connection") || strings.Contains(errStr, "gateway") || 
+	   strings.Contains(errStr, "failed to create tcp connection") {
+		return createErrorBox("Connection Error", []string{
+			"Failed to establish connection to the VPS via gateway.",
+			"",
+			"This may be due to:",
+			"• VPS is not running",
+			"• Network connectivity issues",
+			"• Gateway service unavailable",
+			"• VPS IP address is incorrect",
+			"",
+			"Please check:",
+			"• VPS status in the dashboard",
+			"• Gateway service status",
+			"• VPS network configuration",
+			"",
+			fmt.Sprintf("VPS ID: %s", vpsID),
+		})
+	}
+	
+	// 7. Host key verification errors (shouldn't happen with InsecureIgnoreHostKey, but handle it)
+	if strings.Contains(errStr, "host key") || strings.Contains(errStr, "hostkey") {
+		return createErrorBox("Host Key Error", []string{
+			"Host key verification failed.",
+			"",
+			"This is an internal error. Please contact support.",
+			"",
+			fmt.Sprintf("VPS ID: %s", vpsID),
+		})
+	}
+	
+	// 8. SSH handshake failures (generic)
+	if strings.Contains(errStr, "handshake failed") {
+		return createErrorBox("SSH Handshake Failed", []string{
+			"The SSH handshake with the VPS failed.",
+			"",
+			"This may be due to:",
+			"• SSH service configuration issues on the VPS",
+			"• Authentication method not supported",
+			"• Network issues during handshake",
+			"",
+			"Please check:",
+			"• VPS SSH configuration",
+			"• Network connectivity",
+			"• VPS logs for SSH errors",
+			"",
+			fmt.Sprintf("VPS ID: %s", vpsID),
+		})
+	}
+	
+	// 9. Generic error message with full error details
+	errorLines := []string{
+		"Failed to connect to VPS.",
+		"",
+		fmt.Sprintf("Error: %s", err.Error()),
+		"",
+		"Please check:",
+		"• VPS status in the dashboard",
+		"• VPS configuration",
+		"• Network connectivity",
+		"",
+		fmt.Sprintf("VPS ID: %s", vpsID),
+	}
+	return createErrorBox("Connection Error", errorLines)
 }
 
 // forwardChannel forwards a single SSH channel from client to VPS.
@@ -656,10 +1485,10 @@ func (s *SSHProxyServer) forwardChannel(ctx context.Context, newChannel ssh.NewC
 			logger.Error("[SSHProxy] Failed to open agent forwarding channel on VPS: %v", err)
 					return
 				}
-		defer vpsChannel.Close()
+					defer vpsChannel.Close()
 		
 		done := make(chan struct{})
-		go func() {
+					go func() {
 			io.Copy(vpsChannel, clientChannel)
 			vpsChannel.CloseWrite()
 			done <- struct{}{}
@@ -672,21 +1501,21 @@ func (s *SSHProxyServer) forwardChannel(ctx context.Context, newChannel ssh.NewC
 		
 		go func() {
 			for req := range clientReqs {
+							if req.WantReply {
+									req.Reply(false, nil)
+							}
+						}
+					}()
+					go func() {
+						for req := range vpsReqs {
 				if req.WantReply {
-					req.Reply(false, nil)
+							req.Reply(false, nil)
 				}
-			}
-		}()
-		go func() {
-			for req := range vpsReqs {
-				if req.WantReply {
-					req.Reply(false, nil)
-				}
-			}
-		}()
+						}
+					}()
 		
 		<-done
-		return
+					return
 	}
 	
 	if channelType == "session" {
