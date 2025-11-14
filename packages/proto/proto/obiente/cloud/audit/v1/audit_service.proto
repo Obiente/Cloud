@@ -46,6 +46,7 @@ message ListAuditLogsRequest {
 message ListAuditLogsResponse {
   repeated AuditLogEntry audit_logs = 1;
   string next_page_token = 2; // Token for next page, empty if no more pages
+  int64 total_count = 3; // Total number of audit logs matching the filters (before pagination)
 }
 
 message GetAuditLogRequest {

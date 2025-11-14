@@ -74,45 +74,63 @@ func (s *Service) ListAuditLogs(ctx context.Context, req *connect.Request[auditv
 		}
 	}
 
-	// Build query
+	// Build base query for counting (without pagination)
+	countQuery := database.MetricsDB.Model(&database.AuditLog{})
+
+	// Build query for fetching (with pagination)
 	query := database.MetricsDB.Model(&database.AuditLog{})
 
-	// Apply filters
+	// Apply filters to both queries
 	// Note: If OrganizationId is not provided, all audit logs from all organizations are returned
 	// This allows superadmins/admins to view global audit logs
 	if req.Msg.OrganizationId != nil && *req.Msg.OrganizationId != "" {
+		countQuery = countQuery.Where("organization_id = ?", *req.Msg.OrganizationId)
 		query = query.Where("organization_id = ?", *req.Msg.OrganizationId)
 	}
 
 	if req.Msg.ResourceType != nil && *req.Msg.ResourceType != "" {
+		countQuery = countQuery.Where("resource_type = ?", *req.Msg.ResourceType)
 		query = query.Where("resource_type = ?", *req.Msg.ResourceType)
 	}
 
 	if req.Msg.ResourceId != nil && *req.Msg.ResourceId != "" {
+		countQuery = countQuery.Where("resource_id = ?", *req.Msg.ResourceId)
 		query = query.Where("resource_id = ?", *req.Msg.ResourceId)
 	}
 
 	if req.Msg.UserId != nil && *req.Msg.UserId != "" {
+		countQuery = countQuery.Where("user_id = ?", *req.Msg.UserId)
 		query = query.Where("user_id = ?", *req.Msg.UserId)
 	}
 
 	if req.Msg.Service != nil && *req.Msg.Service != "" {
+		countQuery = countQuery.Where("service = ?", *req.Msg.Service)
 		query = query.Where("service = ?", *req.Msg.Service)
 	}
 
 	if req.Msg.Action != nil && *req.Msg.Action != "" {
+		countQuery = countQuery.Where("action = ?", *req.Msg.Action)
 		query = query.Where("action = ?", *req.Msg.Action)
 	}
 
 	if req.Msg.StartTime != nil {
+		countQuery = countQuery.Where("created_at >= ?", req.Msg.StartTime.AsTime())
 		query = query.Where("created_at >= ?", req.Msg.StartTime.AsTime())
 	}
 
 	if req.Msg.EndTime != nil {
+		countQuery = countQuery.Where("created_at <= ?", req.Msg.EndTime.AsTime())
 		query = query.Where("created_at <= ?", req.Msg.EndTime.AsTime())
 	}
 
-	// Handle pagination
+	// Count total matching records (before pagination)
+	var totalCount int64
+	if err := countQuery.Count(&totalCount).Error; err != nil {
+		logger.Error("[AuditService] Failed to count audit logs: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to count audit logs: %w", err))
+	}
+
+	// Handle pagination (only for the fetch query)
 	if req.Msg.PageToken != nil && *req.Msg.PageToken != "" {
 		// Parse page token (simple offset-based for now)
 		var offset int
@@ -162,6 +180,7 @@ func (s *Service) ListAuditLogs(ctx context.Context, req *connect.Request[auditv
 	return connect.NewResponse(&auditv1.ListAuditLogsResponse{
 		AuditLogs:     protoLogs,
 		NextPageToken: nextPageToken,
+		TotalCount:    totalCount,
 	}), nil
 }
 

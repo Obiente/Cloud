@@ -177,9 +177,6 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 
 	// Extract client IP from request
 	clientIP := getClientIPFromRequest(r)
-	
-	// Create audit log for web terminal connection
-	go createWebTerminalAuditLog(initMsg.VPSID, userInfo, vps.OrganizationID, clientIP, r.UserAgent())
 
 	// Check VPS status
 	blockedStatuses := []int32{
@@ -346,6 +343,9 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 			log.Printf("[VPS Terminal WS] Failed to send connected message: %v", err)
 			return
 		}
+
+		// Create audit log for successful web terminal connection
+		go createWebTerminalAuditLog(initMsg.VPSID, userInfo, vps.OrganizationID, clientIP, r.UserAgent())
 
 		outputCtx, outputCancel := context.WithCancel(ctx)
 		defer outputCancel()

@@ -151,6 +151,7 @@ type ListAuditLogsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AuditLogs     []*AuditLogEntry       `protobuf:"bytes,1,rep,name=audit_logs,json=auditLogs,proto3" json:"audit_logs,omitempty"`
 	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"` // Token for next page, empty if no more pages
+	TotalCount    int64                  `protobuf:"varint,3,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`           // Total number of audit logs matching the filters (before pagination)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -197,6 +198,13 @@ func (x *ListAuditLogsResponse) GetNextPageToken() string {
 		return x.NextPageToken
 	}
 	return ""
+}
+
+func (x *ListAuditLogsResponse) GetTotalCount() int64 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
 }
 
 type GetAuditLogRequest struct {
@@ -484,11 +492,13 @@ const file_obiente_cloud_audit_v1_audit_service_proto_rawDesc = "" +
 	"\t_end_timeB\f\n" +
 	"\n" +
 	"_page_sizeB\r\n" +
-	"\v_page_token\"\x85\x01\n" +
+	"\v_page_token\"\xa6\x01\n" +
 	"\x15ListAuditLogsResponse\x12D\n" +
 	"\n" +
 	"audit_logs\x18\x01 \x03(\v2%.obiente.cloud.audit.v1.AuditLogEntryR\tauditLogs\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"6\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\x12\x1f\n" +
+	"\vtotal_count\x18\x03 \x01(\x03R\n" +
+	"totalCount\"6\n" +
 	"\x12GetAuditLogRequest\x12 \n" +
 	"\faudit_log_id\x18\x01 \x01(\tR\n" +
 	"auditLogId\"Y\n" +

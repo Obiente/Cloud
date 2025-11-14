@@ -440,9 +440,9 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 		return
 	}
 
-	// SSH key actions - check if they're VPS-specific first
-	// Action names: AddSSHKey, RemoveSSHKey (lowercase: addsshkey, removesshkey)
-	if strings.Contains(actionLower, "ssh") && (strings.Contains(actionLower, "key") || strings.Contains(actionLower, "add") || strings.Contains(actionLower, "remove")) {
+	// SSH key actions - check if they're VPS-specific by looking for vpsId in request
+	// Action names: AddSSHKey, RemoveSSHKey
+	if strings.Contains(actionLower, "ssh") && strings.Contains(actionLower, "key") && !strings.Contains(actionLower, "vps") {
 		// For AddSSHKey, check if there's a vpsId in the request
 		if strings.Contains(actionLower, "add") {
 			// Check both camelCase and snake_case field names
@@ -561,33 +561,16 @@ func inferResourceFromAction(action string, jsonData map[string]interface{}) (re
 		return
 	}
 
-	// VPS-related actions (including VPSConfigService actions)
-	// Check for VPS-specific patterns:
-	// - "vps" in action name (general VPS actions)
-	// - "vpsuser" in action name (CreateVPSUser, UpdateVPSUser, DeleteVPSUser, ListVPSUsers)
-	// - "cloudinit" in action name (GetCloudInitConfig, UpdateCloudInitConfig)
-	// - "firewall" in action name (firewall-related actions)
-	// - "setuserpassword" or "updateusersshkeys" for VPS user password/SSH key management
-	isVPSAction := strings.Contains(actionLower, "vps") || 
-		strings.Contains(actionLower, "vpsuser") || 
-		strings.Contains(actionLower, "cloudinit") || 
-		strings.Contains(actionLower, "firewall") ||
-		strings.Contains(actionLower, "setuserpassword") ||
-		strings.Contains(actionLower, "updateusersshkeys")
+	// VPS-related actions
+	// Simplified: If action contains "vps" OR vpsId is present in request, it's a VPS action
+	isVPSAction := strings.Contains(actionLower, "vps")
 	
-	// Also check if this is a VPSConfigService action by checking if vpsId is present
-	// This catches SetUserPassword and UpdateUserSSHKeys which don't have "vps" in the name
-	// but are part of VPSConfigService (they have vpsId in the request)
+	// Also check if vpsId is present in the request (catches VPSConfigService actions without "vps" in name)
 	if !isVPSAction {
 		if vpsIDVal, ok := jsonData["vpsId"].(string); ok && vpsIDVal != "" {
-			// If vpsId is present and this looks like a user/password/SSH key action, it's VPS-related
-			if strings.Contains(actionLower, "user") && (strings.Contains(actionLower, "password") || strings.Contains(actionLower, "ssh")) {
-				isVPSAction = true
-			}
+			isVPSAction = true
 		} else if vpsIDVal, ok := jsonData["vps_id"].(string); ok && vpsIDVal != "" {
-			if strings.Contains(actionLower, "user") && (strings.Contains(actionLower, "password") || strings.Contains(actionLower, "ssh")) {
-				isVPSAction = true
-			}
+			isVPSAction = true
 		}
 	}
 	
