@@ -76,10 +76,51 @@
       </OuiCardHeader>
       <OuiCardBody>
         <!-- Loading State -->
-        <OuiStack v-if="loadingRules" align="center" gap="md" class="py-8">
-          <OuiSpinner size="lg" />
-          <OuiText color="secondary">Loading firewall rules...</OuiText>
-        </OuiStack>
+        <OuiTable
+          v-if="loadingRules"
+          :columns="tableColumns"
+          :rows="Array(5).fill(null).map((_, i) => ({ id: i }))"
+          :loading="true"
+          empty-text=""
+        >
+          <!-- Custom skeletons per column type to match actual UI -->
+          <template #skeleton-pos>
+            <OuiText size="sm" skeleton skeleton-width="3rem" skeleton-height="1rem" />
+          </template>
+          <template #skeleton-action>
+            <OuiBadge variant="secondary" size="sm" skeleton skeleton-width="4rem" skeleton-height="0.875rem" />
+          </template>
+          <template #skeleton-direction>
+            <OuiBadge variant="secondary" size="sm" skeleton skeleton-width="2.5rem" skeleton-height="0.875rem" />
+          </template>
+          <template #skeleton-source>
+            <OuiText size="sm" class="font-mono" skeleton skeleton-width="10rem" skeleton-height="1rem" />
+          </template>
+          <template #skeleton-dest>
+            <OuiText size="sm" class="font-mono" skeleton skeleton-width="10rem" skeleton-height="1rem" />
+          </template>
+          <template #skeleton-protocol>
+            <OuiText size="sm" skeleton skeleton-width="4rem" skeleton-height="1rem" />
+          </template>
+          <template #skeleton-port>
+            <OuiText size="sm" class="font-mono" skeleton skeleton-width="5rem" skeleton-height="1rem" />
+          </template>
+          <template #skeleton-iface>
+            <OuiText size="sm" skeleton skeleton-width="6rem" skeleton-height="1rem" />
+          </template>
+          <template #skeleton-comment>
+            <OuiText size="sm" color="secondary" skeleton skeleton-width="12rem" skeleton-height="1rem" />
+          </template>
+          <template #skeleton-enable>
+            <OuiBadge variant="secondary" size="sm" skeleton skeleton-width="4.5rem" skeleton-height="0.875rem" />
+          </template>
+          <template #skeleton-actions>
+            <OuiFlex gap="xs">
+              <OuiSkeleton width="1.75rem" height="1.75rem" variant="rectangle" rounded />
+              <OuiSkeleton width="1.75rem" height="1.75rem" variant="rectangle" rounded />
+            </OuiFlex>
+          </template>
+        </OuiTable>
 
         <!-- Error State -->
         <div v-else-if="rulesError" class="text-center py-8">
@@ -295,7 +336,7 @@ import { useConnectClient } from "~/lib/connect-client";
 import { useToast } from "~/composables/useToast";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { useDialog } from "~/composables/useDialog";
-import OuiSpinner from "~/components/oui/Spinner.vue";
+import OuiSkeleton from "~/components/oui/Skeleton.vue";
 
 interface Props {
   vpsId: string;

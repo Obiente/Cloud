@@ -1,12 +1,19 @@
 <template>
   <component :is="as" :class="textClasses" :style="textStyles" v-bind="$attrs">
-    <slot />
+    <OuiSkeleton
+      v-if="skeleton"
+      :width="skeletonWidth"
+      :height="skeletonHeight"
+      variant="text"
+    />
+    <slot v-else />
   </component>
 </template>
 
 <script setup lang="ts">
   import { computed } from "vue";
   import type { OUISize, SizeRange } from "./types";
+  import OuiSkeleton from "./Skeleton.vue";
 
   export interface TextProps {
     /**
@@ -89,6 +96,22 @@
      * @default undefined
      */
     wrap?: "wrap" | "nowrap" | "balance";
+
+    /**
+     * Show skeleton loading state instead of content
+     * @default false
+     */
+    skeleton?: boolean;
+
+    /**
+     * Skeleton width (when skeleton prop is true)
+     */
+    skeletonWidth?: string;
+
+    /**
+     * Skeleton height (when skeleton prop is true)
+     */
+    skeletonHeight?: string;
   }
 
   const props = withDefaults(defineProps<TextProps>(), {
@@ -96,6 +119,9 @@
     size: "md",
     weight: "normal",
     color: "primary",
+    skeleton: false,
+    skeletonWidth: "8rem",
+    skeletonHeight: "1rem",
   });
 
   const textClasses = computed(() => {

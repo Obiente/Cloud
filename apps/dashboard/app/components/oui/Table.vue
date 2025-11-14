@@ -96,7 +96,25 @@
             ]"
             :style="getColumnStyle(column, colIndex)"
           >
+            <template v-if="loading">
+              <!-- Check for custom skeleton slot per column -->
+              <slot 
+                v-if="slots[`skeleton-${column.key}`]"
+                :name="`skeleton-${column.key}`"
+                :column="column"
+                :row="row"
+                :index="rowIndex"
+              />
+              <!-- Default skeleton fallback if no custom slot -->
+              <OuiSkeleton
+                v-else
+                width="8rem"
+                height="1rem"
+                variant="text"
+              />
+            </template>
             <slot 
+              v-else
               :name="`cell-${column.key}`" 
               :row="row" 
               :column="column"
@@ -107,7 +125,7 @@
             </slot>
           </td>
         </tr>
-        <tr v-if="!sortedRows.length">
+        <tr v-if="!sortedRows.length && !loading">
           <td 
             :colspan="columns.length" 
             :class="['px-3 md:px-6 py-4 md:py-8 text-center text-text-muted text-xs md:text-sm', emptyClass]"
@@ -125,7 +143,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, useSlots } from 'vue';
+import OuiSkeleton from './Skeleton.vue';
+
+const slots = useSlots();
 
 export interface TableColumn<T = any> {
   key: string;
@@ -157,6 +178,7 @@ export interface TableProps<T = any> {
   clickable?: boolean;
   ariaLabel?: string;
   rowKey?: string | ((row: T, index: number) => string | number);
+  loading?: boolean;
 }
 
 export type SortDirection = 'asc' | 'desc' | null;
@@ -172,6 +194,7 @@ const props = withDefaults(defineProps<TableProps>(), {
   resizable: true,
   sortable: false,
   clickable: false,
+  loading: false,
 });
 
 // Column resizing state

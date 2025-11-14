@@ -9,14 +9,20 @@
     v-bind="$attrs"
   >
     <component
-      v-if="showIcon && iconPosition === 'start'"
+      v-if="showIcon && iconPosition === 'start' && !skeleton"
       :is="icon"
       class="oui-badge__icon"
       aria-hidden="true"
     />
-    <slot />
+    <OuiSkeleton
+      v-if="skeleton"
+      :width="skeletonWidth"
+      :height="skeletonHeight"
+      variant="text"
+    />
+    <slot v-else />
     <component
-      v-if="showIcon && iconPosition === 'end'"
+      v-if="showIcon && iconPosition === 'end' && !skeleton"
       :is="icon"
       class="oui-badge__icon"
       aria-hidden="true"
@@ -27,6 +33,7 @@
 <script setup lang="ts">
 import { Comment, computed, useSlots } from "vue";
 import type { Component } from "vue";
+import OuiSkeleton from "./Skeleton.vue";
 
 type BadgeVariant =
   | "primary"
@@ -93,6 +100,22 @@ interface BadgeProps {
    * @default false
    */
   interactive?: boolean;
+
+  /**
+   * Show skeleton loading state instead of content
+   * @default false
+   */
+  skeleton?: boolean;
+
+  /**
+   * Skeleton width (when skeleton prop is true)
+   */
+  skeletonWidth?: string;
+
+  /**
+   * Skeleton height (when skeleton prop is true)
+   */
+  skeletonHeight?: string;
 }
 
 const props = withDefaults(defineProps<BadgeProps>(), {
@@ -105,6 +128,9 @@ const props = withDefaults(defineProps<BadgeProps>(), {
   pill: true,
   uppercase: false,
   interactive: false,
+  skeleton: false,
+  skeletonWidth: "4rem",
+  skeletonHeight: "0.875rem",
 });
 
 const slots = useSlots();

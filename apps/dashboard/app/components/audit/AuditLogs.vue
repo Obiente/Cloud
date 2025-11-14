@@ -5,7 +5,7 @@
       <OuiText as="h3" size="lg" weight="bold">Audit Logs</OuiText>
       <OuiFlex gap="sm" align="center" wrap="wrap">
         <OuiText v-if="!isLoading" size="sm" color="secondary">
-          {{ estimatedTotal }} log{{ estimatedTotal !== 1 ? 's' : '' }}
+          {{ totalCount }} log{{ totalCount !== 1 ? 's' : '' }}
         </OuiText>
         <OuiButton
           variant="ghost"
@@ -72,9 +72,52 @@
     </OuiCard>
 
     <!-- Loading State -->
-    <div v-if="isLoading && auditLogs.length === 0" class="flex justify-center items-center py-12">
-      <OuiText size="sm" color="secondary">Loading audit logs...</OuiText>
-    </div>
+    <OuiCard v-if="isLoading && auditLogs.length === 0" variant="default">
+      <OuiCardBody class="p-0">
+        <OuiTable
+          :columns="columns"
+          :rows="Array(10).fill(null).map((_, i) => ({ id: i }))"
+          :loading="true"
+          empty-text=""
+        >
+          <!-- Custom skeletons per column type to match actual UI -->
+          <template #skeleton-action>
+            <OuiFlex align="center" gap="sm">
+              <OuiBadge variant="secondary" size="sm" skeleton skeleton-width="5rem" skeleton-height="0.875rem" />
+            </OuiFlex>
+          </template>
+          <template #skeleton-service>
+            <OuiText size="sm" class="font-mono" skeleton skeleton-width="10rem" skeleton-height="1rem" />
+          </template>
+          <template #skeleton-user>
+            <OuiStack gap="xs">
+              <OuiText size="sm" weight="medium" skeleton skeleton-width="10rem" skeleton-height="1rem" />
+              <OuiText size="xs" color="secondary" class="font-mono" skeleton skeleton-width="8rem" skeleton-height="0.875rem" />
+            </OuiStack>
+          </template>
+          <template #skeleton-resource>
+            <OuiStack gap="xs">
+              <OuiText size="sm" weight="medium" skeleton skeleton-width="6rem" skeleton-height="1rem" />
+              <OuiText size="xs" color="secondary" class="font-mono" skeleton skeleton-width="12rem" skeleton-height="0.875rem" />
+            </OuiStack>
+          </template>
+          <template #skeleton-status>
+            <OuiBadge variant="secondary" size="sm" skeleton skeleton-width="3rem" skeleton-height="0.875rem" />
+          </template>
+          <template #skeleton-duration>
+            <OuiSkeleton width="5rem" height="1rem" variant="text" />
+          </template>
+          <template #skeleton-time>
+            <OuiSkeleton width="6rem" height="1rem" variant="text" />
+          </template>
+          <template #skeleton-details>
+            <OuiButton variant="ghost" size="xs" disabled>
+              <EyeIcon class="h-4 w-4" />
+            </OuiButton>
+          </template>
+        </OuiTable>
+      </OuiCardBody>
+    </OuiCard>
 
     <!-- Empty State -->
     <div v-else-if="auditLogs.length === 0" class="flex flex-col items-center justify-center py-12">
@@ -160,7 +203,7 @@
     <!-- Pagination -->
     <OuiFlex v-if="auditLogs.length > 0" justify="center" align="center" gap="md" class="py-4">
       <OuiPagination
-        :count="estimatedTotal"
+        :count="totalCount"
         :page="currentPage"
         :page-size="pageSize"
         @page-change="handlePageChange"
@@ -259,6 +302,7 @@ import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 import OuiCode from "~/components/oui/Code.vue";
 import OuiDuration from "~/components/oui/Duration.vue";
 import OuiPagination from "~/components/oui/Pagination.vue";
+import OuiSkeleton from "~/components/oui/Skeleton.vue";
 
 interface Props {
   organizationId?: string;
@@ -277,19 +321,7 @@ const isLoading = ref(false);
 const currentPage = ref(1);
 const pageSize = ref(50);
 const nextPageToken = ref<string | undefined>(undefined);
-const estimatedTotal = computed(() => {
-  // Estimate total based on current page and whether there's a next page
-  // If we're on page 1 and there's no next page, total is just current items
-  if (currentPage.value === 1 && !nextPageToken.value) {
-    return auditLogs.value.length;
-  }
-  // If there's a next page, estimate at least (currentPage * pageSize) + 1
-  if (nextPageToken.value) {
-    return currentPage.value * pageSize.value + 1;
-  }
-  // Otherwise, we're on the last page
-  return (currentPage.value - 1) * pageSize.value + auditLogs.value.length;
-});
+const totalCount = ref<number>(0);
 
 // Separate data for filter options (loaded without filters to show all available values)
 const filterOptionsData = ref<AuditLogEntry[]>([]);
@@ -529,6 +561,9 @@ const loadAuditLogs = async (page: number = currentPage.value) => {
     const response = await client.listAuditLogs(request);
 
     let logs = response.auditLogs || [];
+    
+    // Store the actual total count from the API (convert bigint to number)
+    totalCount.value = response.totalCount ? Number(response.totalCount) : 0;
     
     // Client-side status filtering (since backend doesn't support it)
     if (filters.value.status != null && filters.value.status !== "") {
