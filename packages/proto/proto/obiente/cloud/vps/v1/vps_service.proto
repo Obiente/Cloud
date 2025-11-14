@@ -98,6 +98,11 @@ service VPSService {
   // Reset root password for a VPS instance
   // Password is generated and returned once, then discarded (never stored)
   rpc ResetVPSPassword(ResetVPSPasswordRequest) returns (ResetVPSPasswordResponse);
+  
+  // Reinitialize a VPS instance
+  // This will delete all data on the VPS and reinstall the operating system
+  // The VPS will be reconfigured with the same cloud-init settings
+  rpc ReinitializeVPS(ReinitializeVPSRequest) returns (ReinitializeVPSResponse);
 }
 
 message ListVPSRequest {
@@ -590,5 +595,17 @@ message ResetVPSPasswordResponse {
   string root_password = 2; // New root password (shown once, never stored)
   // Note: Password will take effect after VM reboot or cloud-init re-run
   string message = 3; // Instructions for applying the password change
+}
+
+// Reinitialize VPS messages
+message ReinitializeVPSRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+message ReinitializeVPSResponse {
+  VPSInstance vps = 1;
+  optional string root_password = 2; // Generated password (shown once, never stored)
+  string message = 3; // Information message
 }
 

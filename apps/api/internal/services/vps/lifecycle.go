@@ -147,6 +147,44 @@ func (s *Service) RebootVPS(ctx context.Context, req *connect.Request[vpsv1.Rebo
 	}), nil
 }
 
+// ReinitializeVPS reinitializes a VPS instance by deleting the VM and recreating it
+func (s *Service) ReinitializeVPS(ctx context.Context, req *connect.Request[vpsv1.ReinitializeVPSRequest]) (*connect.Response[vpsv1.ReinitializeVPSResponse], error) {
+	ctx, err := s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.manage"); err != nil {
+		return nil, err
+	}
+
+	// Reinitialize VPS via manager
+	vpsInstance, rootPassword, err := s.vpsManager.ReinitializeVPS(ctx, vpsID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to reinitialize VPS: %w", err))
+	}
+
+	// Convert to proto
+	protoVPS := vpsToProto(vpsInstance)
+
+	// Build response message
+	message := "VPS has been reinitialized. The operating system has been reinstalled and cloud-init will be reapplied. "
+	if rootPassword != "" {
+		message += "Please save the root password as it will not be shown again."
+	}
+
+	response := &vpsv1.ReinitializeVPSResponse{
+		Vps:     protoVPS,
+		Message: message,
+	}
+	if rootPassword != "" {
+		response.RootPassword = &rootPassword
+	}
+
+	return connect.NewResponse(response), nil
+}
+
 // GetVPSProxyInfo returns proxy connection information for accessing a VPS without dedicated IP
 func (s *Service) GetVPSProxyInfo(ctx context.Context, req *connect.Request[vpsv1.GetVPSProxyInfoRequest]) (*connect.Response[vpsv1.GetVPSProxyInfoResponse], error) {
 	ctx, err := s.ensureAuthenticated(ctx, req)

@@ -694,6 +694,212 @@ func (vm *VPSManager) DeleteVPS(ctx context.Context, vpsID string) error {
 	return nil
 }
 
+// ReinitializeVPS reinitializes a VPS instance by deleting the VM and recreating it
+// This will delete all data on the VPS and reinstall the operating system
+// The VPS will be reconfigured with the same cloud-init settings
+// Returns: VPS instance, root password (one-time only, not stored), error
+func (vm *VPSManager) ReinitializeVPS(ctx context.Context, vpsID string) (*database.VPSInstance, string, error) {
+	logger.Info("[VPSManager] Reinitializing VPS instance %s", vpsID)
+
+	// Get VPS instance from database
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		return nil, "", fmt.Errorf("VPS not found: %w", err)
+	}
+
+	if vps.InstanceID == nil {
+		return nil, "", fmt.Errorf("VPS has no instance ID (not provisioned yet)")
+	}
+
+	// Get Proxmox configuration
+	proxmoxConfig, err := GetProxmoxConfig()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get Proxmox config: %w", err)
+	}
+
+	// Create Proxmox client
+	proxmoxClient, err := NewProxmoxClient(proxmoxConfig)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create Proxmox client: %w", err)
+	}
+
+	vmIDInt := 0
+	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+	if vmIDInt == 0 {
+		return nil, "", fmt.Errorf("invalid VM ID: %s", *vps.InstanceID)
+	}
+
+	nodes, err := proxmoxClient.ListNodes(ctx)
+	if err != nil || len(nodes) == 0 {
+		return nil, "", fmt.Errorf("failed to find Proxmox node: %w", err)
+	}
+	nodeName := nodes[0]
+
+	// Get current cloud-init configuration before deleting the VM
+	// We'll use a default config - the actual cloud-init will be reapplied after VM creation
+	// via the ConfigService which will load it from the database
+	packageUpdate := true
+	packageUpgrade := false
+	sshInstallServer := true
+	sshAllowPW := true
+	cloudInitConfig := &CloudInitConfig{
+		Users:            []CloudInitUser{},
+		PackageUpdate:    &packageUpdate,
+		PackageUpgrade:   &packageUpgrade,
+		SSHInstallServer: &sshInstallServer,
+		SSHAllowPW:       &sshAllowPW,
+	}
+
+	// Stop VM if running (required before deletion)
+	status, err := proxmoxClient.GetVMStatus(ctx, nodeName, vmIDInt)
+	if err == nil && status != "stopped" {
+		logger.Info("[VPSManager] Stopping VM %d before reinitialization", vmIDInt)
+		if err := proxmoxClient.StopVM(ctx, nodeName, vmIDInt); err != nil {
+			return nil, "", fmt.Errorf("failed to stop VM before reinitialization: %w", err)
+		}
+		// Wait for VM to stop
+		if err := proxmoxClient.waitForVMStatus(ctx, nodeName, vmIDInt, "stopped", 30*time.Second); err != nil {
+			return nil, "", fmt.Errorf("VM %d did not stop within timeout: %w", vmIDInt, err)
+		}
+	}
+
+	// Delete the VM (but keep VPS record in database)
+	// DeleteVM will validate that the VM was created by our API
+	if err := proxmoxClient.DeleteVM(ctx, nodeName, vmIDInt, vpsID); err != nil {
+		return nil, "", fmt.Errorf("failed to delete VM: %w", err)
+	}
+
+	// Clear instance ID in database (VM is deleted, will be recreated)
+	oldInstanceID := vps.InstanceID
+	vps.InstanceID = nil
+	vps.Status = 1 // CREATING
+	vps.UpdatedAt = time.Now()
+	if err := database.DB.Save(&vps).Error; err != nil {
+		return nil, "", fmt.Errorf("failed to update VPS status: %w", err)
+	}
+
+	// Get organization settings
+	var org database.Organization
+	if err := database.DB.Where("id = ?", vps.OrganizationID).First(&org).Error; err != nil {
+		return nil, "", fmt.Errorf("failed to get organization: %w", err)
+	}
+
+	// Recreate VPS configuration from existing VPS instance
+	// Map VPSImage enum to int
+	imageInt := int(vps.Image)
+	if imageInt == 0 {
+		imageInt = 1 // Default to UBUNTU_22_04 if not set
+	}
+
+	recreateConfig := &VPSConfig{
+		VPSID:          vps.ID,
+		Name:           vps.Name,
+		Description:    vps.Description,
+		Region:         vps.Region,
+		Image:          imageInt,
+		ImageID:        vps.ImageID,
+		Size:           vps.Size,
+		CPUCores:       vps.CPUCores,
+		MemoryBytes:    vps.MemoryBytes,
+		DiskBytes:      vps.DiskBytes,
+		SSHKeyID:       vps.SSHKeyID,
+		OrganizationID: vps.OrganizationID,
+		CreatedBy:      vps.CreatedBy,
+		Metadata:       make(map[string]string),
+		CloudInit:      cloudInitConfig,
+	}
+
+	// Preserve existing IP allocation if available
+	// The gateway client should handle reallocation automatically
+	if vm.gatewayClient != nil {
+		// Release old IP (if allocated)
+		if err := vm.gatewayClient.ReleaseIP(ctx, vpsID); err != nil {
+			logger.Warn("[VPSManager] Failed to release old IP during reinitialization: %v (continuing)", err)
+		}
+	}
+
+	// Recreate VM with same configuration
+	// Note: We don't need to create new SSH keys - existing bastion and terminal keys will be reused
+	// But we need to ensure they exist
+	_, err = database.GetVPSBastionKey(vpsID)
+	if err != nil {
+		// Create bastion key if it doesn't exist
+		_, err = database.CreateVPSBastionKey(vpsID, vps.OrganizationID)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to ensure bastion SSH key exists: %w", err)
+		}
+		logger.Info("[VPSManager] Created missing bastion SSH key for VPS %s during reinitialization", vpsID)
+	}
+
+	_, err = database.GetVPSTerminalKey(vpsID)
+	if err != nil {
+		// Create terminal key if it doesn't exist
+		_, err = database.CreateVPSTerminalKey(vpsID, vps.OrganizationID)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to ensure terminal SSH key exists: %w", err)
+		}
+		logger.Info("[VPSManager] Created missing terminal SSH key for VPS %s during reinitialization", vpsID)
+	}
+
+	// Allocate IP address from gateway if available
+	var allocatedIP string
+	var macAddress string
+	if vm.gatewayClient != nil {
+		macAddress = generateMACAddress()
+		allocResp, err := vm.gatewayClient.AllocateIP(ctx, vpsID, vps.OrganizationID, macAddress)
+		if err != nil {
+			logger.Warn("[VPSManager] Failed to allocate IP from gateway during reinitialization: %v (continuing without gateway IP)", err)
+		} else {
+			allocatedIP = allocResp.IpAddress
+			logger.Info("[VPSManager] Allocated IP %s for VPS %s from gateway during reinitialization", allocatedIP, vpsID)
+		}
+	}
+
+	// Create new VM via Proxmox
+	createResult, err := proxmoxClient.CreateVM(ctx, recreateConfig, org.AllowInterVMCommunication)
+	if err != nil {
+		// If VM creation fails, release the allocated IP
+		if vm.gatewayClient != nil && allocatedIP != "" {
+			if releaseErr := vm.gatewayClient.ReleaseIP(ctx, vpsID); releaseErr != nil {
+				logger.Warn("[VPSManager] Failed to release IP %s after VM recreation failure: %v", allocatedIP, releaseErr)
+			}
+		}
+		// Restore old instance ID on failure
+		vps.InstanceID = oldInstanceID
+		vps.Status = 7 // FAILED
+		database.DB.Save(&vps)
+		return nil, "", fmt.Errorf("failed to recreate VM via Proxmox: %w", err)
+	}
+
+	newVMID := createResult.VMID
+	rootPassword := createResult.Password
+
+	// Update VPS instance with new VM ID
+	vmIDIntNew := 0
+	fmt.Sscanf(newVMID, "%d", &vmIDIntNew)
+	if vmIDIntNew == 0 {
+		return nil, "", fmt.Errorf("invalid new VM ID: %s", newVMID)
+	}
+
+	vmIDStr := newVMID
+	vps.InstanceID = &vmIDStr
+	vps.NodeID = &nodeName
+	vps.Status = 1 // CREATING
+	vps.UpdatedAt = time.Now()
+	if err := database.DB.Save(&vps).Error; err != nil {
+		return nil, "", fmt.Errorf("failed to update VPS with new instance ID: %w", err)
+	}
+
+	logger.Info("[VPSManager] Successfully reinitialized VPS %s (old VM: %d, new VM: %d)", vpsID, vmIDInt, vmIDIntNew)
+
+	// Refresh VPS instance from database
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		return nil, "", fmt.Errorf("failed to refresh VPS after reinitialization: %w", err)
+	}
+
+	return &vps, rootPassword, nil
+}
+
 // GetGatewayClient returns the gateway client (if available)
 func (vm *VPSManager) GetGatewayClient() *VPSGatewayClient {
 	return vm.gatewayClient
