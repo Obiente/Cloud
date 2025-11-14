@@ -1,6 +1,9 @@
-import { createError } from "h3";
-
 export default defineNuxtRouteMiddleware(async () => {
+  // Only run on client side - server side auth check happens in auth middleware
+  if (import.meta.server) {
+    return;
+  }
+
   const superAdmin = useSuperAdmin();
   await superAdmin.fetchOverview();
 
