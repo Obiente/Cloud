@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"api/internal/auth"
 	"api/internal/database"
@@ -17,6 +18,7 @@ import (
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 )
 
@@ -103,6 +105,47 @@ func (s *ConfigService) GetCloudInitConfig(ctx context.Context, req *connect.Req
 
 	return connect.NewResponse(&vpsv1.GetCloudInitConfigResponse{
 		CloudInit: cloudInitProto,
+	}), nil
+}
+
+// GetCloudInitUserData retrieves the actual generated cloud-init userData for a VPS
+// This includes bastion and terminal keys that are dynamically added
+func (s *ConfigService) GetCloudInitUserData(ctx context.Context, req *connect.Request[vpsv1.GetCloudInitUserDataRequest]) (*connect.Response[vpsv1.GetCloudInitUserDataResponse], error) {
+	ctx, err := s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+		return nil, err
+	}
+
+	// Get VPS instance
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+	}
+
+	// Load cloud-init config
+	cloudInitConfig, err := s.loadCloudInitConfig(ctx, &vps)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to load cloud-init config: %w", err))
+	}
+
+	// Generate the actual cloud-init userData (includes bastion/terminal keys)
+	vpsConfig := &orchestrator.VPSConfig{
+		VPSID:          vps.ID,
+		OrganizationID: vps.OrganizationID,
+		CloudInit:      cloudInitConfig,
+	}
+	userData := orchestrator.GenerateCloudInitUserData(vpsConfig)
+
+	return connect.NewResponse(&vpsv1.GetCloudInitUserDataResponse{
+		UserData: userData,
 	}), nil
 }
 
@@ -667,21 +710,63 @@ func (s *ConfigService) loadCloudInitConfig(ctx context.Context, vps *database.V
 		}, nil
 	}
 
-	// TODO: Parse the cloud-init snippet file to extract the actual config
-	// For now, return a basic structure
-	// In the future, we could:
-	// 1. Store cloud-init config in database when saving
-	// 2. Parse the snippet file from Proxmox storage
-	// 3. Use Proxmox's cloud-init dump endpoint (if available)
+	// Parse cicustom parameter (format: "user=local:snippets/vm-301-user-data")
+	// Extract storage and filename
+	var storage, filename string
+	if strings.HasPrefix(cicustom, "user=") {
+		parts := strings.SplitN(cicustom[5:], ":", 2)
+		if len(parts) == 2 {
+			storage = parts[0]
+			snippetPath := parts[1]
+			// Extract filename from path (e.g., "snippets/vm-301-user-data" -> "vm-301-user-data")
+			if lastSlash := strings.LastIndex(snippetPath, "/"); lastSlash >= 0 {
+				filename = snippetPath[lastSlash+1:]
+			} else {
+				filename = snippetPath
+			}
+		}
+	}
 
-	logger.Info("[VPSConfigService] VPS %s has custom cloud-init (cicustom: %s), but parsing not yet implemented. Returning default config.", vps.ID, cicustom)
-	return &orchestrator.CloudInitConfig{
-		Users:            []orchestrator.CloudInitUser{},
-		PackageUpdate:    boolPtr(true),
-		PackageUpgrade:   boolPtr(false),
-		SSHInstallServer: boolPtr(true),
-		SSHAllowPW:       boolPtr(true),
-	}, nil
+	if storage == "" || filename == "" {
+		logger.Warn("[VPSConfigService] Failed to parse cicustom parameter '%s' for VPS %s. Returning default config.", cicustom, vps.ID)
+		return &orchestrator.CloudInitConfig{
+			Users:            []orchestrator.CloudInitUser{},
+			PackageUpdate:    boolPtr(true),
+			PackageUpgrade:   boolPtr(false),
+			SSHInstallServer: boolPtr(true),
+			SSHAllowPW:       boolPtr(true),
+		}, nil
+	}
+
+	// Read snippet file via SSH
+	userData, err := proxmoxClient.ReadSnippetViaSSH(ctx, nodeName, storage, filename)
+	if err != nil {
+		logger.Warn("[VPSConfigService] Failed to read cloud-init snippet for VPS %s: %v. Returning default config.", vps.ID, err)
+		return &orchestrator.CloudInitConfig{
+			Users:            []orchestrator.CloudInitUser{},
+			PackageUpdate:    boolPtr(true),
+			PackageUpgrade:   boolPtr(false),
+			SSHInstallServer: boolPtr(true),
+			SSHAllowPW:       boolPtr(true),
+		}, nil
+	}
+
+	// Parse YAML to extract cloud-init config
+	config, err := parseCloudInitYAML(userData)
+	if err != nil {
+		logger.Warn("[VPSConfigService] Failed to parse cloud-init YAML for VPS %s: %v. This may indicate malformed YAML in the snippet. Returning default config. Note: Bastion and terminal keys will still be included when regenerating cloud-init.", vps.ID, err)
+		// Return default config - GenerateCloudInitUserData will still add bastion/terminal keys from DB
+		return &orchestrator.CloudInitConfig{
+			Users:            []orchestrator.CloudInitUser{},
+			PackageUpdate:    boolPtr(true),
+			PackageUpgrade:   boolPtr(false),
+			SSHInstallServer: boolPtr(true),
+			SSHAllowPW:       boolPtr(true),
+		}, nil
+	}
+
+	logger.Info("[VPSConfigService] Successfully parsed cloud-init config for VPS %s from snippet", vps.ID)
+	return config, nil
 }
 
 func (s *ConfigService) saveCloudInitConfig(ctx context.Context, vps *database.VPSInstance, config *orchestrator.CloudInitConfig) error {
@@ -714,15 +799,33 @@ func (s *ConfigService) saveCloudInitConfig(ctx context.Context, vps *database.V
 		return fmt.Errorf("failed to find VM node: %w", err)
 	}
 
+	// Load existing config and merge with new config
+	existingConfig, err := s.loadCloudInitConfig(ctx, vps)
+	if err != nil {
+		logger.Warn("[VPSConfigService] Failed to load existing cloud-init config for VPS %s: %v. Using new config only.", vps.ID, err)
+		existingConfig = &orchestrator.CloudInitConfig{}
+	}
+
+	// Merge configs (new config takes precedence, but preserve fields not in new config)
+	mergedConfig := mergeCloudInitConfig(existingConfig, config)
+
 	// Create VPSConfig for cloud-init generation
 	vpsConfig := &orchestrator.VPSConfig{
 		VPSID:          vps.ID,
 		OrganizationID: vps.OrganizationID,
-		CloudInit:      config,
+		CloudInit:      mergedConfig,
 	}
 
 	// Generate cloud-init userData
 	userData := orchestrator.GenerateCloudInitUserData(vpsConfig)
+	
+	// Log bastion key inclusion for debugging
+	bastionKey, err := database.GetVPSBastionKey(vps.ID)
+	if err == nil {
+		logger.Debug("[VPSConfigService] Cloud-init userData includes bastion key for VPS %s (fingerprint: %s)", vps.ID, bastionKey.Fingerprint)
+	} else {
+		logger.Warn("[VPSConfigService] Cloud-init userData does NOT include bastion key for VPS %s: %v", vps.ID, err)
+	}
 
 	// Get storage for snippets (use local storage by default)
 	// Check if storage is configured in environment or use default
@@ -742,7 +845,7 @@ func (s *ConfigService) saveCloudInitConfig(ctx context.Context, vps *database.V
 		return fmt.Errorf("failed to update VM cicustom: %w", err)
 	}
 
-	logger.Info("[VPSConfigService] Updated cloud-init config for VPS %s (VM %d)", vps.ID, vmIDInt)
+	logger.Info("[VPSConfigService] Updated cloud-init config for VPS %s (VM %d). Changes will be applied on next boot.", vps.ID, vmIDInt)
 
 	return nil
 }
@@ -779,6 +882,305 @@ func (s *ConfigService) resolveSSHKeyIDs(ctx context.Context, orgID, vpsID strin
 	return publicKeys, nil
 }
 
+// parseCloudInitYAML parses cloud-init YAML userData into CloudInitConfig
+func parseCloudInitYAML(userData string) (*orchestrator.CloudInitConfig, error) {
+	// Remove #cloud-config header if present
+	content := userData
+	if strings.HasPrefix(content, "#cloud-config") {
+		lines := strings.SplitN(content, "\n", 2)
+		if len(lines) > 1 {
+			content = lines[1]
+		} else {
+			content = ""
+		}
+		// Also remove empty lines after header
+		content = strings.TrimLeft(content, "\n\r")
+	}
+	
+	// Clean up any potential encoding issues (BOM, carriage returns, etc.)
+	// Remove BOM if present
+	if len(content) >= 3 && content[0] == 0xEF && content[1] == 0xBB && content[2] == 0xBF {
+		content = content[3:]
+	}
+	// Normalize line endings
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\r", "\n")
+
+	var yamlData map[string]interface{}
+	if err := yaml.Unmarshal([]byte(content), &yamlData); err != nil {
+		// Try to extract line number from error message
+		errorMsg := err.Error()
+		logger.Warn("[VPSConfigService] YAML parse error: %s", errorMsg)
+		
+		// Extract line number from error message if present (format: "yaml: line X: ...")
+		lines := strings.Split(content, "\n")
+		errorLineNum := -1
+		if strings.Contains(errorMsg, "line ") {
+			// Try to extract line number
+			parts := strings.Split(errorMsg, "line ")
+			if len(parts) > 1 {
+				linePart := strings.Split(parts[1], ":")[0]
+				fmt.Sscanf(linePart, "%d", &errorLineNum)
+			}
+		}
+		
+		// Log the problematic area (use WARN level so it's always visible)
+		if errorLineNum > 0 && len(lines) >= errorLineNum {
+			logger.Warn("[VPSConfigService] YAML parse error at line %d. Content around error:", errorLineNum)
+			start := errorLineNum - 3
+			if start < 0 {
+				start = 0
+			}
+			end := errorLineNum + 3
+			if end > len(lines) {
+				end = len(lines)
+			}
+			for i := start; i < end; i++ {
+				lineContent := lines[i]
+				// Show first 120 chars to avoid huge logs
+				if len(lineContent) > 120 {
+					lineContent = lineContent[:120] + "..."
+				}
+				marker := ""
+				if i+1 == errorLineNum {
+					marker = " <-- ERROR HERE"
+				}
+				logger.Warn("[VPSConfigService]   Line %d: %q%s", i+1, lineContent, marker)
+			}
+		} else if len(lines) > 0 {
+			// Fallback: log first few lines if we couldn't extract line number
+			logger.Warn("[VPSConfigService] YAML content preview (first 10 lines):")
+			for i := 0; i < len(lines) && i < 10; i++ {
+				lineContent := lines[i]
+				if len(lineContent) > 120 {
+					lineContent = lineContent[:120] + "..."
+				}
+				logger.Warn("[VPSConfigService]   Line %d: %q", i+1, lineContent)
+			}
+		}
+		
+		// Return error with more context
+		return nil, fmt.Errorf("failed to parse YAML (this may indicate corrupted or malformed cloud-init snippet): %w", err)
+	}
+
+	config := &orchestrator.CloudInitConfig{
+		Users:            []orchestrator.CloudInitUser{},
+		PackageUpdate:    boolPtr(true),
+		PackageUpgrade:   boolPtr(false),
+		SSHInstallServer: boolPtr(true),
+		SSHAllowPW:       boolPtr(true),
+	}
+
+	// Parse SSH configuration
+	if sshVal, ok := yamlData["ssh"].(map[string]interface{}); ok {
+		if installServer, ok := sshVal["install-server"].(bool); ok {
+			config.SSHInstallServer = &installServer
+		}
+		if allowPW, ok := sshVal["allow-pw"].(bool); ok {
+			config.SSHAllowPW = &allowPW
+		}
+	}
+
+	// Parse hostname
+	if hostname, ok := yamlData["hostname"].(string); ok {
+		config.Hostname = &hostname
+	}
+
+	// Parse timezone
+	if timezone, ok := yamlData["timezone"].(string); ok {
+		config.Timezone = &timezone
+	}
+
+	// Parse locale
+	if locale, ok := yamlData["locale"].(string); ok {
+		config.Locale = &locale
+	}
+
+	// Parse packages
+	if packages, ok := yamlData["packages"].([]interface{}); ok {
+		config.Packages = make([]string, 0, len(packages))
+		for _, pkg := range packages {
+			if pkgStr, ok := pkg.(string); ok {
+				config.Packages = append(config.Packages, pkgStr)
+			}
+		}
+	}
+
+	// Parse package_update
+	if packageUpdate, ok := yamlData["package_update"].(bool); ok {
+		config.PackageUpdate = &packageUpdate
+	}
+
+	// Parse package_upgrade
+	if packageUpgrade, ok := yamlData["package_upgrade"].(bool); ok {
+		config.PackageUpgrade = &packageUpgrade
+	}
+
+	// Parse users (skip root user as it is handled separately)
+	if users, ok := yamlData["users"].([]interface{}); ok {
+		for _, userVal := range users {
+			if userMap, ok := userVal.(map[string]interface{}); ok {
+				name, _ := userMap["name"].(string)
+				if name == "root" {
+					continue
+				}
+
+				user := orchestrator.CloudInitUser{Name: name}
+				if passwd, ok := userMap["passwd"].(string); ok {
+					user.Password = &passwd
+				}
+				if sshKeys, ok := userMap["ssh_authorized_keys"].([]interface{}); ok {
+					user.SSHAuthorizedKeys = make([]string, 0, len(sshKeys))
+					for _, key := range sshKeys {
+						if keyStr, ok := key.(string); ok {
+							user.SSHAuthorizedKeys = append(user.SSHAuthorizedKeys, keyStr)
+						}
+					}
+				}
+				if sudo, ok := userMap["sudo"].(string); ok {
+					sudoBool := sudo == "ALL" || sudo == "NOPASSWD: ALL"
+					user.Sudo = &sudoBool
+					if strings.Contains(sudo, "NOPASSWD") {
+						nopasswd := true
+						user.SudoNopasswd = &nopasswd
+					}
+				}
+				if groups, ok := userMap["groups"].([]interface{}); ok {
+					user.Groups = make([]string, 0, len(groups))
+					for _, group := range groups {
+						if groupStr, ok := group.(string); ok {
+							user.Groups = append(user.Groups, groupStr)
+						}
+					}
+				}
+				if shell, ok := userMap["shell"].(string); ok {
+					user.Shell = &shell
+				}
+				if lockPasswd, ok := userMap["lock_passwd"].(bool); ok {
+					user.LockPasswd = &lockPasswd
+				}
+				if gecos, ok := userMap["gecos"].(string); ok {
+					user.Gecos = &gecos
+				}
+				config.Users = append(config.Users, user)
+			}
+		}
+	}
+
+	// Parse runcmd
+	if runcmd, ok := yamlData["runcmd"].([]interface{}); ok {
+		config.Runcmd = make([]string, 0, len(runcmd))
+		for _, cmd := range runcmd {
+			if cmdStr, ok := cmd.(string); ok {
+				config.Runcmd = append(config.Runcmd, cmdStr)
+			} else if cmdList, ok := cmd.([]interface{}); ok {
+				cmdParts := make([]string, 0, len(cmdList))
+				for _, part := range cmdList {
+					if partStr, ok := part.(string); ok {
+						cmdParts = append(cmdParts, partStr)
+					}
+				}
+				if len(cmdParts) > 0 {
+					config.Runcmd = append(config.Runcmd, strings.Join(cmdParts, " "))
+				}
+			}
+		}
+	}
+
+	// Parse write_files
+	if writeFiles, ok := yamlData["write_files"].([]interface{}); ok {
+		config.WriteFiles = make([]orchestrator.CloudInitWriteFile, 0, len(writeFiles))
+		for _, fileVal := range writeFiles {
+			if fileMap, ok := fileVal.(map[string]interface{}); ok {
+				file := orchestrator.CloudInitWriteFile{}
+				if path, ok := fileMap["path"].(string); ok {
+					file.Path = path
+				}
+				if content, ok := fileMap["content"].(string); ok {
+					file.Content = content
+				}
+				if owner, ok := fileMap["owner"].(string); ok {
+					file.Owner = &owner
+				}
+				if permissions, ok := fileMap["permissions"].(string); ok {
+					file.Permissions = &permissions
+				}
+				if appendVal, ok := fileMap["append"].(bool); ok {
+					file.Append = &appendVal
+					file.Append = &appendVal
+				}
+				if deferVal, ok := fileMap["defer"].(bool); ok {
+					file.Defer = &deferVal
+					file.Defer = &deferVal
+				}
+				config.WriteFiles = append(config.WriteFiles, file)
+			}
+		}
+	}
+
+	return config, nil
+}
+
+// mergeCloudInitConfig merges existing config with new config
+func mergeCloudInitConfig(existing, new *orchestrator.CloudInitConfig) *orchestrator.CloudInitConfig {
+	merged := &orchestrator.CloudInitConfig{}
+	if new.Hostname != nil {
+		merged.Hostname = new.Hostname
+	} else {
+		merged.Hostname = existing.Hostname
+	}
+	if new.Timezone != nil {
+		merged.Timezone = new.Timezone
+	} else {
+		merged.Timezone = existing.Timezone
+	}
+	if new.Locale != nil {
+		merged.Locale = new.Locale
+	} else {
+		merged.Locale = existing.Locale
+	}
+	if len(new.Packages) > 0 {
+		merged.Packages = new.Packages
+	} else {
+		merged.Packages = existing.Packages
+	}
+	if new.PackageUpdate != nil {
+		merged.PackageUpdate = new.PackageUpdate
+	} else {
+		merged.PackageUpdate = existing.PackageUpdate
+	}
+	if new.PackageUpgrade != nil {
+		merged.PackageUpgrade = new.PackageUpgrade
+	} else {
+		merged.PackageUpgrade = existing.PackageUpgrade
+	}
+	if new.SSHInstallServer != nil {
+		merged.SSHInstallServer = new.SSHInstallServer
+	} else {
+		merged.SSHInstallServer = existing.SSHInstallServer
+	}
+	if new.SSHAllowPW != nil {
+		merged.SSHAllowPW = new.SSHAllowPW
+	} else {
+		merged.SSHAllowPW = existing.SSHAllowPW
+	}
+	if len(new.Users) > 0 {
+		merged.Users = new.Users
+	} else {
+		merged.Users = existing.Users
+	}
+	if len(new.Runcmd) > 0 {
+		merged.Runcmd = new.Runcmd
+	} else {
+		merged.Runcmd = existing.Runcmd
+	}
+	if len(new.WriteFiles) > 0 {
+		merged.WriteFiles = new.WriteFiles
+	} else {
+		merged.WriteFiles = existing.WriteFiles
+	}
+	return merged
+}
 // Conversion helpers
 
 func protoToCloudInitConfig(proto *vpsv1.CloudInitConfig) *orchestrator.CloudInitConfig {
@@ -1180,6 +1582,7 @@ func (s *ConfigService) RotateBastionKey(ctx context.Context, req *connect.Reque
 	}
 
 	// Regenerate cloud-init config (this will automatically include the new bastion key)
+	// saveCloudInitConfig will also trigger cloud-init regeneration
 	if err := s.saveCloudInitConfig(ctx, &vps, cloudInitConfig); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update cloud-init config: %w", err))
 	}
@@ -1188,7 +1591,7 @@ func (s *ConfigService) RotateBastionKey(ctx context.Context, req *connect.Reque
 
 	return connect.NewResponse(&vpsv1.RotateBastionKeyResponse{
 		Fingerprint: bastionKey.Fingerprint,
-		Message:     "Bastion key rotated. The new key will take effect on the next reboot or when cloud-init is re-run.",
+		Message:     "Bastion key rotated. The new key will take effect on the next reboot or when cloud-init is re-run. If the connection still fails, try running 'cloud-init clean' on the VPS and rebooting.",
 	}), nil
 }
 
@@ -1217,5 +1620,133 @@ func (s *ConfigService) GetBastionKey(ctx context.Context, req *connect.Request[
 		Fingerprint: bastionKey.Fingerprint,
 		CreatedAt:   timestamppb.New(bastionKey.CreatedAt),
 		UpdatedAt:   timestamppb.New(bastionKey.UpdatedAt),
+	}), nil
+}
+
+// GetSSHAlias gets the SSH alias for a VPS
+func (s *ConfigService) GetSSHAlias(ctx context.Context, req *connect.Request[vpsv1.GetSSHAliasRequest]) (*connect.Response[vpsv1.GetSSHAliasResponse], error) {
+	ctx, err := s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.read"); err != nil {
+		return nil, err
+	}
+
+	// Get VPS to retrieve alias
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+	}
+
+	var alias *string
+	if vps.SSHAlias != nil && *vps.SSHAlias != "" {
+		alias = vps.SSHAlias
+	}
+
+	return connect.NewResponse(&vpsv1.GetSSHAliasResponse{
+		Alias: alias,
+	}), nil
+}
+
+// SetSSHAlias sets the SSH alias for a VPS
+func (s *ConfigService) SetSSHAlias(ctx context.Context, req *connect.Request[vpsv1.SetSSHAliasRequest]) (*connect.Response[vpsv1.SetSSHAliasResponse], error) {
+	ctx, err := s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	alias := req.Msg.GetAlias()
+
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.write"); err != nil {
+		return nil, err
+	}
+
+	// Validate alias format (alphanumeric, hyphens, underscores, 1-63 chars)
+	if alias == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("alias cannot be empty"))
+	}
+	if len(alias) > 63 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("alias must be 63 characters or less"))
+	}
+	// Check if alias contains only allowed characters
+	for _, r := range alias {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_') {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("alias can only contain alphanumeric characters, hyphens, and underscores"))
+		}
+	}
+	// Alias cannot start with "vps-" to avoid confusion with VPS IDs
+	if len(alias) >= 4 && alias[:4] == "vps-" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("alias cannot start with 'vps-'"))
+	}
+
+	// Get VPS to check organization
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+	}
+
+	// Check if alias is already in use by another VPS
+	var existingVPS database.VPSInstance
+	if err := database.DB.Where("ssh_alias = ? AND id != ? AND deleted_at IS NULL", alias, vpsID).First(&existingVPS).Error; err == nil {
+		return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("SSH alias '%s' is already in use by VPS %s", alias, existingVPS.ID))
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to check alias availability: %w", err))
+	}
+
+	// Update VPS with new alias
+	vps.SSHAlias = &alias
+	if err := database.DB.Save(&vps).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to set SSH alias: %w", err))
+	}
+
+	logger.Info("[ConfigService] Set SSH alias '%s' for VPS %s", alias, vpsID)
+
+	return connect.NewResponse(&vpsv1.SetSSHAliasResponse{
+		Alias:   alias,
+		Message: fmt.Sprintf("SSH alias '%s' has been set. You can now connect using: ssh -p 2323 root@%s@localhost", alias, alias),
+	}), nil
+}
+
+// RemoveSSHAlias removes the SSH alias for a VPS
+func (s *ConfigService) RemoveSSHAlias(ctx context.Context, req *connect.Request[vpsv1.RemoveSSHAliasRequest]) (*connect.Response[vpsv1.RemoveSSHAliasResponse], error) {
+	ctx, err := s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.write"); err != nil {
+		return nil, err
+	}
+
+	// Get VPS
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+	}
+
+	// Remove alias
+	vps.SSHAlias = nil
+	if err := database.DB.Save(&vps).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to remove SSH alias: %w", err))
+	}
+
+	logger.Info("[ConfigService] Removed SSH alias for VPS %s", vpsID)
+
+	return connect.NewResponse(&vpsv1.RemoveSSHAliasResponse{
+		Message: "SSH alias has been removed. You can still connect using the full VPS ID.",
 	}), nil
 }

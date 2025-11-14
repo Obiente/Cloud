@@ -236,7 +236,10 @@ func (pc *ProxmoxClient) apiRequest(ctx context.Context, method, endpoint string
 		}
 	}
 
-	req.Header.Set("Content-Type", "application/json")
+	// Only set Content-Type if there's a body
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	return pc.httpClient.Do(req)
 }
@@ -1709,7 +1712,9 @@ func generateCloudInitUserData(config *VPSConfig) string {
 
 	// Locale
 	if config.CloudInit != nil && config.CloudInit.Locale != nil && *config.CloudInit.Locale != "" {
-		userData += "locale: " + *config.CloudInit.Locale + "\n\n"
+		// Quote locale to handle special characters safely
+		escapedLocale := strings.ReplaceAll(*config.CloudInit.Locale, "'", "''")
+		userData += fmt.Sprintf("locale: '%s'\n\n", escapedLocale)
 	}
 
 	// Users configuration
@@ -1719,8 +1724,11 @@ func generateCloudInitUserData(config *VPSConfig) string {
 	userData += "  - name: root\n"
 
 	// Root password (from config or auto-generated)
+	// Quote the password to handle special YAML characters safely
 	if config.RootPassword != nil && *config.RootPassword != "" {
-		userData += fmt.Sprintf("    passwd: %s\n", *config.RootPassword)
+		// Escape any single quotes in the password and wrap in single quotes
+		escapedPassword := strings.ReplaceAll(*config.RootPassword, "'", "''")
+		userData += fmt.Sprintf("    passwd: '%s'\n", escapedPassword)
 	}
 
 	// Add SSH keys for root (includes both VPS-specific and org-wide keys, plus bastion and terminal keys)
@@ -1731,6 +1739,7 @@ func generateCloudInitUserData(config *VPSConfig) string {
 		bastionKey, err := database.GetVPSBastionKey(config.VPSID)
 		if err == nil {
 			rootSSHKeys = append(rootSSHKeys, strings.TrimSpace(bastionKey.PublicKey))
+			logger.Debug("[ProxmoxClient] Added bastion key to cloud-init for VPS %s (fingerprint: %s)", config.VPSID, bastionKey.Fingerprint)
 		} else {
 			logger.Warn("[ProxmoxClient] Failed to get bastion key for VPS %s: %v (SSH bastion may not work)", config.VPSID, err)
 		}
@@ -1784,7 +1793,9 @@ func generateCloudInitUserData(config *VPSConfig) string {
 			userData += fmt.Sprintf("  - name: %s\n", user.Name)
 
 			if user.Password != nil && *user.Password != "" {
-				userData += fmt.Sprintf("    passwd: %s\n", *user.Password)
+				// Escape any single quotes in the password and wrap in single quotes
+				escapedPassword := strings.ReplaceAll(*user.Password, "'", "''")
+				userData += fmt.Sprintf("    passwd: '%s'\n", escapedPassword)
 			}
 
 			if len(user.SSHAuthorizedKeys) > 0 {
@@ -2075,59 +2086,61 @@ func generateCloudInitUserData(config *VPSConfig) string {
 			userData += "      \n"
 			userData += "      # Update lastlog database with real client IP\n"
 			userData += "      python3 << 'PYTHON_SCRIPT'\n"
-			userData += "import struct\n"
-			userData += "import os\n"
-			userData += "import pwd\n"
-			userData += "import time\n"
-			userData += "import sys\n"
-			userData += "\n"
-			userData += "try:\n"
-			userData += "    user = os.environ.get('PAM_USER')\n"
-			userData += "    client_ip = os.environ.get('SSH_CLIENT_REAL') or (os.environ.get('SSH_CLIENT', '').split()[0] if os.environ.get('SSH_CLIENT') else '')\n"
-			userData += "    \n"
-			userData += "    if not user or not client_ip:\n"
-			userData += "        sys.exit(0)\n"
-			userData += "    \n"
-			userData += "    pw = pwd.getpwnam(user)\n"
-			userData += "    uid = pw.pw_uid\n"
-			userData += "    lastlog_path = '/var/log/lastlog'\n"
-			userData += "    \n"
-			userData += "    if not os.path.exists(lastlog_path) or not os.access(lastlog_path, os.W_OK):\n"
-			userData += "        sys.exit(0)\n"
-			userData += "    \n"
-			userData += "    # lastlog format: struct lastlog {\n"
-			userData += "    #     int32_t ll_time;      // 4 bytes (or 8 for 64-bit)\n"
-			userData += "    #     char ll_line[UT_LINESIZE];  // 32 bytes\n"
-			userData += "    #     char ll_host[UT_HOSTSIZE]; // 256 bytes\n"
-			userData += "    # };\n"
-			userData += "    # Total: 292 bytes (32-bit) or 296 bytes (64-bit)\n"
-			userData += "    \n"
-			userData += "    # Detect if time_t is 64-bit (check struct size)\n"
-			userData += "    import ctypes\n"
-			userData += "    time_t_size = ctypes.sizeof(ctypes.c_time_t) if hasattr(ctypes, 'c_time_t') else 8\n"
-			userData += "    record_size = 32 + 256 + time_t_size  # ll_line + ll_host + ll_time\n"
-			userData += "    \n"
-			userData += "    with open(lastlog_path, 'r+b') as f:\n"
-			userData += "        f.seek(uid * record_size)\n"
-			userData += "        \n"
-			userData += "        # Prepare data\n"
-			userData += "        current_time = int(time.time())\n"
-			userData += "        host_bytes = client_ip.encode('utf-8')[:255].ljust(256, b'\\0')\n"
-			userData += "        line_bytes = ('pts/0').encode('utf-8')[:31].ljust(32, b'\\0')\n"
-			userData += "        \n"
-			userData += "        # Write time_t (little-endian)\n"
-			userData += "        if time_t_size == 8:\n"
-			userData += "            f.write(struct.pack('<Q', current_time))  # 64-bit\n"
-			userData += "        else:\n"
-			userData += "            f.write(struct.pack('<I', current_time))  # 32-bit\n"
-			userData += "        \n"
-			userData += "        # Write line and host\n"
-			userData += "        f.write(line_bytes)\n"
-			userData += "        f.write(host_bytes)\n"
-			userData += "        \n"
-			userData += "except Exception:\n"
-			userData += "    pass\n"
-			userData += "PYTHON_SCRIPT\n"
+			// Python script lines must be indented for YAML parsing (6 spaces to match literal block)
+			// The heredoc will preserve this indentation, but Python at module level doesn't care about leading whitespace
+			userData += "      import struct\n"
+			userData += "      import os\n"
+			userData += "      import pwd\n"
+			userData += "      import time\n"
+			userData += "      import sys\n"
+			userData += "      \n"
+			userData += "      try:\n"
+			userData += "          user = os.environ.get('PAM_USER')\n"
+			userData += "          client_ip = os.environ.get('SSH_CLIENT_REAL') or (os.environ.get('SSH_CLIENT', '').split()[0] if os.environ.get('SSH_CLIENT') else '')\n"
+			userData += "          \n"
+			userData += "          if not user or not client_ip:\n"
+			userData += "              sys.exit(0)\n"
+			userData += "          \n"
+			userData += "          pw = pwd.getpwnam(user)\n"
+			userData += "          uid = pw.pw_uid\n"
+			userData += "          lastlog_path = '/var/log/lastlog'\n"
+			userData += "          \n"
+			userData += "          if not os.path.exists(lastlog_path) or not os.access(lastlog_path, os.W_OK):\n"
+			userData += "              sys.exit(0)\n"
+			userData += "          \n"
+			userData += "          # lastlog format: struct lastlog {\n"
+			userData += "          #     int32_t ll_time;      // 4 bytes (or 8 for 64-bit)\n"
+			userData += "          #     char ll_line[UT_LINESIZE];  // 32 bytes\n"
+			userData += "          #     char ll_host[UT_HOSTSIZE]; // 256 bytes\n"
+			userData += "          # };\n"
+			userData += "          # Total: 292 bytes (32-bit) or 296 bytes (64-bit)\n"
+			userData += "          \n"
+			userData += "          # Detect if time_t is 64-bit (check struct size)\n"
+			userData += "          import ctypes\n"
+			userData += "          time_t_size = ctypes.sizeof(ctypes.c_time_t) if hasattr(ctypes, 'c_time_t') else 8\n"
+			userData += "          record_size = 32 + 256 + time_t_size  # ll_line + ll_host + ll_time\n"
+			userData += "          \n"
+			userData += "          with open(lastlog_path, 'r+b') as f:\n"
+			userData += "              f.seek(uid * record_size)\n"
+			userData += "              \n"
+			userData += "              # Prepare data\n"
+			userData += "              current_time = int(time.time())\n"
+			userData += "              host_bytes = client_ip.encode('utf-8')[:255].ljust(256, b'\\0')\n"
+			userData += "              line_bytes = ('pts/0').encode('utf-8')[:31].ljust(32, b'\\0')\n"
+			userData += "              \n"
+			userData += "              # Write time_t (little-endian)\n"
+			userData += "              if time_t_size == 8:\n"
+			userData += "                  f.write(struct.pack('<Q', current_time))  # 64-bit\n"
+			userData += "              else:\n"
+			userData += "                  f.write(struct.pack('<I', current_time))  # 32-bit\n"
+			userData += "              \n"
+			userData += "              # Write line and host\n"
+			userData += "              f.write(line_bytes)\n"
+			userData += "              f.write(host_bytes)\n"
+			userData += "              \n"
+			userData += "      except Exception:\n"
+			userData += "          pass\n"
+			userData += "      PYTHON_SCRIPT\n"
 			userData += "      \n"
 			userData += "      exit 0\n"
 			userData += "    owner: root:root\n"
@@ -2527,6 +2540,111 @@ func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName strin
 
 	logger.Info("[ProxmoxClient] Successfully deleted snippet file via SSH: %s", filePath)
 	return nil
+}
+
+// readSnippetViaSSH reads a cloud-init snippet file from Proxmox storage via SSH
+func (pc *ProxmoxClient) ReadSnippetViaSSH(ctx context.Context, nodeName string, storage string, filename string) (string, error) {
+	if pc.config.SSHHost == "" {
+		return "", fmt.Errorf("SSH host not configured (PROXMOX_SSH_HOST)")
+	}
+	if pc.config.SSHUser == "" {
+		return "", fmt.Errorf("SSH user not configured (PROXMOX_SSH_USER)")
+	}
+	if pc.config.SSHKeyPath == "" && pc.config.SSHKeyData == "" {
+		return "", fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
+	}
+
+	// Load SSH private key
+	var signer ssh.Signer
+	var err error
+
+	if pc.config.SSHKeyData != "" {
+		keyData := []byte(pc.config.SSHKeyData)
+		if decoded, err := base64.StdEncoding.DecodeString(pc.config.SSHKeyData); err == nil {
+			if strings.Contains(string(decoded), "BEGIN") || strings.Contains(string(decoded), "PRIVATE KEY") {
+				keyData = decoded
+			}
+		}
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse SSH key data: %w", err)
+		}
+	} else if pc.config.SSHKeyPath != "" {
+		keyData, err := os.ReadFile(pc.config.SSHKeyPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read SSH key file: %w", err)
+		}
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse SSH key: %w", err)
+		}
+	} else {
+		return "", fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
+	}
+
+	// Create SSH client config
+	sshConfig := &ssh.ClientConfig{
+		User:            pc.config.SSHUser,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         10 * time.Second,
+	}
+
+	// Connect to Proxmox node via SSH
+	sshHost := pc.config.SSHHost
+	sshPort := "22"
+	if strings.Contains(sshHost, ":") {
+		parts := strings.Split(sshHost, ":")
+		sshHost = parts[0]
+		sshPort = parts[1]
+	}
+
+	conn, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", sshHost, sshPort), sshConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to Proxmox node via SSH: %w", err)
+	}
+	defer conn.Close()
+
+	// Determine snippets directory path
+	storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
+	var snippetsPath string
+	if err == nil && storageInfo != nil {
+		if pathVal, ok := storageInfo["path"].(string); ok && pathVal != "" {
+			snippetsPath = fmt.Sprintf("%s/snippets", pathVal)
+		}
+	}
+
+	if snippetsPath == "" {
+		snippetsPath = "/var/lib/vz/snippets"
+	}
+
+	filePath := fmt.Sprintf("%s/%s", snippetsPath, filename)
+	logger.Debug("[ProxmoxClient] Reading snippet file from: %s", filePath)
+
+	// Read file using cat
+	session, err := conn.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("failed to create SSH session: %w", err)
+	}
+	defer session.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	session.Stdout = &stdout
+	session.Stderr = &stderr
+
+	cmd := fmt.Sprintf("/bin/sh -c 'cat \"%s\"'", filePath)
+	if err := session.Run(cmd); err != nil {
+		return "", fmt.Errorf("failed to read snippet file %s: %w (stderr: %s)", filePath, err, stderr.String())
+	}
+
+	content := stdout.String()
+	if content == "" {
+		return "", fmt.Errorf("snippet file %s is empty", filePath)
+	}
+
+	logger.Debug("[ProxmoxClient] Successfully read snippet file via SSH: %s (%d bytes)", filePath, len(content))
+	return content, nil
 }
 
 // GenerateRandomPassword generates a random password
@@ -3493,75 +3611,10 @@ func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, v
 		// Even though we send valid data, Proxmox may report a false newline error
 		if strings.Contains(errorBody, "invalid urlencoded string") && strings.Contains(errorBody, "sshkeys") {
 			logger.Warn("[ProxmoxClient] Proxmox v8.4 sshkeys parsing error (possible bug). Error: %s", errorBody)
-			logger.Warn("[ProxmoxClient] Attempting to work around by using cloudinit/regen to apply keys")
-
-			// Try to work around by calling cloudinit/regen which might apply the keys anyway
-			// Even though the config update failed, the keys might be in the form data and regen might pick them up
-			regenEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit/regen", nodeName, vmID)
-			regenResp, regenErr := pc.apiRequest(ctx, "POST", regenEndpoint, nil)
-			if regenErr == nil && regenResp != nil {
-				defer regenResp.Body.Close()
-				if regenResp.StatusCode == http.StatusOK {
-					logger.Info("[ProxmoxClient] Cloud-init regen succeeded - keys may have been applied despite config error")
-					// Don't return error - regen might have worked
-					return nil
-				}
-			}
-
-			// If regen didn't work, return the original error
 			return fmt.Errorf("failed to update SSH keys (Proxmox v8.4 sshkeys parsing issue): %s (status: %d)", errorBody, resp.StatusCode)
 		}
 
 		return fmt.Errorf("failed to update SSH keys: %s (status: %d)", errorBody, resp.StatusCode)
-	}
-
-	// After setting sshkeys, regenerate cloud-init configuration as per Proxmox docs
-	// This is especially important when clearing keys (sending empty value) as Proxmox v8.4
-	// might not apply the change until cloud-init is regenerated
-	regenEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit/regen", nodeName, vmID)
-	logger.Debug("[ProxmoxClient] Regenerating cloud-init config for VM %d to apply SSH key changes", vmID)
-	regenResp, regenErr := pc.apiRequest(ctx, "POST", regenEndpoint, nil)
-	if regenErr != nil {
-		logger.Warn("[ProxmoxClient] Failed to regenerate cloud-init config for VM %d: %v", vmID, regenErr)
-		// Don't fail the whole operation if regen fails - sshkeys might still work
-	} else {
-		defer regenResp.Body.Close()
-		if regenResp.StatusCode != http.StatusOK {
-			logger.Warn("[ProxmoxClient] Cloud-init regen returned non-OK status for VM %d: %d", vmID, regenResp.StatusCode)
-		} else {
-			logger.Info("[ProxmoxClient] Successfully regenerated cloud-init config for VM %d", vmID)
-			// If we cleared keys (sent 0 keys), wait longer and verify again
-			// Proxmox v8.4 may need more time to process the cloud-init regen
-			if len(sshKeys) == 0 {
-				time.Sleep(1 * time.Second) // Wait longer for Proxmox to process
-				verifyKeys, err := pc.GetVMSSHKeys(ctx, nodeName, vmID)
-				if err == nil {
-					if verifyKeys == "" {
-						logger.Info("[ProxmoxClient] Verified after regen: Proxmox now has no SSH keys configured for VM %d", vmID)
-					} else {
-						decodedVerify, _ := url.QueryUnescape(verifyKeys)
-						verifyKeyLines := strings.Split(decodedVerify, "\n")
-						verifyKeyCount := 0
-						for _, line := range verifyKeyLines {
-							line = strings.TrimSpace(line)
-							if line != "" {
-								verifyKeyCount++
-							}
-						}
-						logger.Warn("[ProxmoxClient] Verified after regen: Proxmox still has %d SSH key(s) configured for VM %d (we sent 0) - Proxmox v8.4 may have a bug where empty sshkeys doesn't clear the parameter", verifyKeyCount, vmID)
-						// Try one more time: force another cloud-init regen after a delay
-						time.Sleep(1 * time.Second)
-						regenResp2, regenErr2 := pc.apiRequest(ctx, "POST", regenEndpoint, nil)
-						if regenErr2 == nil && regenResp2 != nil {
-							regenResp2.Body.Close()
-							if regenResp2.StatusCode == http.StatusOK {
-								logger.Info("[ProxmoxClient] Forced second cloud-init regen for VM %d to clear SSH keys", vmID)
-							}
-						}
-					}
-				}
-			}
-		}
 	}
 
 	logger.Info("[ProxmoxClient] Successfully updated SSH keys for VM %d (org: %s) - %d key(s) sent to Proxmox", vmID, organizationID, len(sshKeys))
@@ -3774,18 +3827,6 @@ func (pc *ProxmoxClient) RecoverVMGuestAgent(ctx context.Context, nodeName strin
 		}
 	}
 
-	// Regenerate cloud-init to apply changes
-	regenEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit/regen", nodeName, vmID)
-	regenResp, err := pc.apiRequest(ctx, "POST", regenEndpoint, nil)
-	if err != nil {
-		logger.Warn("[ProxmoxClient] Failed to regenerate cloud-init for VM %d: %v", vmID, err)
-	} else {
-		defer regenResp.Body.Close()
-		if regenResp.StatusCode == http.StatusOK {
-			logger.Info("[ProxmoxClient] Successfully regenerated cloud-init for VM %d", vmID)
-		}
-	}
-
 	logger.Info("[ProxmoxClient] Successfully recovered guest agent configuration for VM %d. VM should be rebooted for changes to take effect.", vmID)
 	return nil
 }
@@ -3808,21 +3849,6 @@ func (pc *ProxmoxClient) UpdateVMCloudInitPassword(ctx context.Context, nodeName
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to update password: %s (status: %d)", string(body), resp.StatusCode)
-	}
-
-	// Regenerate cloud-init to apply the password change
-	regenEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit/regen", nodeName, vmID)
-	regenResp, err := pc.apiRequest(ctx, "POST", regenEndpoint, nil)
-	if err != nil {
-		logger.Warn("[ProxmoxClient] Failed to regenerate cloud-init for VM %d: %v", vmID, err)
-		// Continue anyway - password update succeeded
-	} else {
-		defer regenResp.Body.Close()
-		if regenResp.StatusCode == http.StatusOK {
-			logger.Info("[ProxmoxClient] Successfully regenerated cloud-init for VM %d to apply password change", vmID)
-		} else {
-			logger.Warn("[ProxmoxClient] Failed to regenerate cloud-init for VM %d: status %d", vmID, regenResp.StatusCode)
-		}
 	}
 
 	logger.Info("[ProxmoxClient] Successfully updated root password for VM %d. Password will take effect after VM reboot or cloud-init re-run.", vmID)
