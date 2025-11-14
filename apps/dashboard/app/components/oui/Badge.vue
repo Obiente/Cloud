@@ -35,7 +35,7 @@ import { Comment, computed, useSlots } from "vue";
 import type { Component } from "vue";
 import OuiSkeleton from "./Skeleton.vue";
 
-type BadgeVariant =
+export type BadgeVariant =
   | "primary"
   | "secondary"
   | "success"
@@ -45,7 +45,7 @@ type BadgeVariant =
 
 type BadgeTone = "soft" | "solid" | "outline";
 
-type BadgeSize = "xs" | "sm" | "md";
+export type BadgeSize = "xs" | "sm" | "md";
 
 interface BadgeProps {
   /**
