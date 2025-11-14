@@ -24,7 +24,12 @@ export async function exchangeCodeForTokens(
       }),
     }
   ).catch((error) => {
-    throw new Error(error);
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : typeof error === 'string' 
+        ? error 
+        : error?.message || String(error) || 'Unknown error';
+    throw new Error(errorMessage);
   });
   return response;
 }
