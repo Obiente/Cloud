@@ -443,6 +443,7 @@ type VPSInstance struct {
 	
 	// SSH access
 	SSHKeyID       *string   `gorm:"column:ssh_key_id" json:"ssh_key_id"`
+	SSHAlias       *string   `gorm:"column:ssh_alias;index;unique" json:"ssh_alias"` // Short memorable alias for SSH (e.g., "prod-db", "web-1")
 	
 	// NOTE: Root password is NEVER stored in the database for security
 	// Password is only returned once in CreateVPS response, then discarded

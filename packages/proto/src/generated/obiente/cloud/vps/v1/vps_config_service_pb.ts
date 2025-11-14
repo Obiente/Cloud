@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/vps/v1/vps_config_service.proto.
  */
 export const file_obiente_cloud_vps_v1_vps_config_service: GenFile = /*@__PURE__*/
-  fileDesc("Ci1vYmllbnRlL2Nsb3VkL3Zwcy92MS92cHNfY29uZmlnX3NlcnZpY2UucHJvdG8SFG9iaWVudGUuY2xvdWQudnBzLnYxIkQKGUdldENsb3VkSW5pdENvbmZpZ1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSJXChpHZXRDbG91ZEluaXRDb25maWdSZXNwb25zZRI5CgpjbG91ZF9pbml0GAEgASgLMiUub2JpZW50ZS5jbG91ZC52cHMudjEuQ2xvdWRJbml0Q29uZmlnIoIBChxVcGRhdGVDbG91ZEluaXRDb25maWdSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkSOQoKY2xvdWRfaW5pdBgDIAEoCzIlLm9iaWVudGUuY2xvdWQudnBzLnYxLkNsb3VkSW5pdENvbmZpZyJrCh1VcGRhdGVDbG91ZEluaXRDb25maWdSZXNwb25zZRI5CgpjbG91ZF9pbml0GAEgASgLMiUub2JpZW50ZS5jbG91ZC52cHMudjEuQ2xvdWRJbml0Q29uZmlnEg8KB21lc3NhZ2UYAiABKAkiPgoTTGlzdFZQU1VzZXJzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJIkQKFExpc3RWUFNVc2Vyc1Jlc3BvbnNlEiwKBXVzZXJzGAEgAygLMh0ub2JpZW50ZS5jbG91ZC52cHMudjEuVlBTVXNlciLQAQoHVlBTVXNlchIMCgRuYW1lGAEgASgJEhQKDGhhc19wYXNzd29yZBgCIAEoCBIbChNzc2hfYXV0aG9yaXplZF9rZXlzGAMgAygJEgwKBHN1ZG8YBCABKAgSFQoNc3Vkb19ub3Bhc3N3ZBgFIAEoCBIOCgZncm91cHMYBiADKAkSEgoFc2hlbGwYByABKAlIAIgBARITCgtsb2NrX3Bhc3N3ZBgIIAEoCBISCgVnZWNvcxgJIAEoCUgBiAEBQggKBl9zaGVsbEIICgZfZ2Vjb3MizgIKFENyZWF0ZVZQU1VzZXJSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkSDAoEbmFtZRgDIAEoCRIVCghwYXNzd29yZBgEIAEoCUgAiAEBEhsKE3NzaF9hdXRob3JpemVkX2tleXMYBSADKAkSEQoEc3VkbxgGIAEoCEgBiAEBEhoKDXN1ZG9fbm9wYXNzd2QYByABKAhIAogBARIOCgZncm91cHMYCCADKAkSEgoFc2hlbGwYCSABKAlIA4gBARIYCgtsb2NrX3Bhc3N3ZBgKIAEoCEgEiAEBEhIKBWdlY29zGAsgASgJSAWIAQFCCwoJX3Bhc3N3b3JkQgcKBV9zdWRvQhAKDl9zdWRvX25vcGFzc3dkQggKBl9zaGVsbEIOCgxfbG9ja19wYXNzd2RCCAoGX2dlY29zIlUKFUNyZWF0ZVZQU1VzZXJSZXNwb25zZRIrCgR1c2VyGAEgASgLMh0ub2JpZW50ZS5jbG91ZC52cHMudjEuVlBTVXNlchIPCgdtZXNzYWdlGAIgASgJIs4CChRVcGRhdGVWUFNVc2VyUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEgwKBG5hbWUYAyABKAkSFQoIbmV3X25hbWUYBCABKAlIAIgBARIbChNzc2hfYXV0aG9yaXplZF9rZXlzGAUgAygJEhEKBHN1ZG8YBiABKAhIAYgBARIaCg1zdWRvX25vcGFzc3dkGAcgASgISAKIAQESDgoGZ3JvdXBzGAggAygJEhIKBXNoZWxsGAkgASgJSAOIAQESGAoLbG9ja19wYXNzd2QYCiABKAhIBIgBARISCgVnZWNvcxgLIAEoCUgFiAEBQgsKCV9uZXdfbmFtZUIHCgVfc3Vkb0IQCg5fc3Vkb19ub3Bhc3N3ZEIICgZfc2hlbGxCDgoMX2xvY2tfcGFzc3dkQggKBl9nZWNvcyJVChVVcGRhdGVWUFNVc2VyUmVzcG9uc2USKwoEdXNlchgBIAEoCzIdLm9iaWVudGUuY2xvdWQudnBzLnYxLlZQU1VzZXISDwoHbWVzc2FnZRgCIAEoCSJNChREZWxldGVWUFNVc2VyUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEgwKBG5hbWUYAyABKAkiKAoVRGVsZXRlVlBTVXNlclJlc3BvbnNlEg8KB21lc3NhZ2UYASABKAkiZgoWU2V0VXNlclBhc3N3b3JkUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEhEKCXVzZXJfbmFtZRgDIAEoCRIQCghwYXNzd29yZBgEIAEoCSIqChdTZXRVc2VyUGFzc3dvcmRSZXNwb25zZRIPCgdtZXNzYWdlGAEgASgJImsKGFVwZGF0ZVVzZXJTU0hLZXlzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEhEKCXVzZXJfbmFtZRgDIAEoCRITCgtzc2hfa2V5X2lkcxgEIAMoCSJZChlVcGRhdGVVc2VyU1NIS2V5c1Jlc3BvbnNlEisKBHVzZXIYASABKAsyHS5vYmllbnRlLmNsb3VkLnZwcy52MS5WUFNVc2VyEg8KB21lc3NhZ2UYAiABKAkiQwoYUm90YXRlVGVybWluYWxLZXlSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkiQQoZUm90YXRlVGVybWluYWxLZXlSZXNwb25zZRITCgtmaW5nZXJwcmludBgBIAEoCRIPCgdtZXNzYWdlGAIgASgJIkMKGFJlbW92ZVRlcm1pbmFsS2V5UmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJIiwKGVJlbW92ZVRlcm1pbmFsS2V5UmVzcG9uc2USDwoHbWVzc2FnZRgBIAEoCSJAChVHZXRUZXJtaW5hbEtleVJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSKNAQoWR2V0VGVybWluYWxLZXlSZXNwb25zZRITCgtmaW5nZXJwcmludBgBIAEoCRIuCgpjcmVhdGVkX2F0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJCChdSb3RhdGVCYXN0aW9uS2V5UmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJIkAKGFJvdGF0ZUJhc3Rpb25LZXlSZXNwb25zZRITCgtmaW5nZXJwcmludBgBIAEoCRIPCgdtZXNzYWdlGAIgASgJIj8KFEdldEJhc3Rpb25LZXlSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkijAEKFUdldEJhc3Rpb25LZXlSZXNwb25zZRITCgtmaW5nZXJwcmludBgBIAEoCRIuCgpjcmVhdGVkX2F0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcDLPCwoQVlBTQ29uZmlnU2VydmljZRJ3ChJHZXRDbG91ZEluaXRDb25maWcSLy5vYmllbnRlLmNsb3VkLnZwcy52MS5HZXRDbG91ZEluaXRDb25maWdSZXF1ZXN0GjAub2JpZW50ZS5jbG91ZC52cHMudjEuR2V0Q2xvdWRJbml0Q29uZmlnUmVzcG9uc2USgAEKFVVwZGF0ZUNsb3VkSW5pdENvbmZpZxIyLm9iaWVudGUuY2xvdWQudnBzLnYxLlVwZGF0ZUNsb3VkSW5pdENvbmZpZ1JlcXVlc3QaMy5vYmllbnRlLmNsb3VkLnZwcy52MS5VcGRhdGVDbG91ZEluaXRDb25maWdSZXNwb25zZRJlCgxMaXN0VlBTVXNlcnMSKS5vYmllbnRlLmNsb3VkLnZwcy52MS5MaXN0VlBTVXNlcnNSZXF1ZXN0Gioub2JpZW50ZS5jbG91ZC52cHMudjEuTGlzdFZQU1VzZXJzUmVzcG9uc2USaAoNQ3JlYXRlVlBTVXNlchIqLm9iaWVudGUuY2xvdWQudnBzLnYxLkNyZWF0ZVZQU1VzZXJSZXF1ZXN0Gisub2JpZW50ZS5jbG91ZC52cHMudjEuQ3JlYXRlVlBTVXNlclJlc3BvbnNlEmgKDVVwZGF0ZVZQU1VzZXISKi5vYmllbnRlLmNsb3VkLnZwcy52MS5VcGRhdGVWUFNVc2VyUmVxdWVzdBorLm9iaWVudGUuY2xvdWQudnBzLnYxLlVwZGF0ZVZQU1VzZXJSZXNwb25zZRJoCg1EZWxldGVWUFNVc2VyEioub2JpZW50ZS5jbG91ZC52cHMudjEuRGVsZXRlVlBTVXNlclJlcXVlc3QaKy5vYmllbnRlLmNsb3VkLnZwcy52MS5EZWxldGVWUFNVc2VyUmVzcG9uc2USbgoPU2V0VXNlclBhc3N3b3JkEiwub2JpZW50ZS5jbG91ZC52cHMudjEuU2V0VXNlclBhc3N3b3JkUmVxdWVzdBotLm9iaWVudGUuY2xvdWQudnBzLnYxLlNldFVzZXJQYXNzd29yZFJlc3BvbnNlEnQKEVVwZGF0ZVVzZXJTU0hLZXlzEi4ub2JpZW50ZS5jbG91ZC52cHMudjEuVXBkYXRlVXNlclNTSEtleXNSZXF1ZXN0Gi8ub2JpZW50ZS5jbG91ZC52cHMudjEuVXBkYXRlVXNlclNTSEtleXNSZXNwb25zZRJ0ChFSb3RhdGVUZXJtaW5hbEtleRIuLm9iaWVudGUuY2xvdWQudnBzLnYxLlJvdGF0ZVRlcm1pbmFsS2V5UmVxdWVzdBovLm9iaWVudGUuY2xvdWQudnBzLnYxLlJvdGF0ZVRlcm1pbmFsS2V5UmVzcG9uc2USdAoRUmVtb3ZlVGVybWluYWxLZXkSLi5vYmllbnRlLmNsb3VkLnZwcy52MS5SZW1vdmVUZXJtaW5hbEtleVJlcXVlc3QaLy5vYmllbnRlLmNsb3VkLnZwcy52MS5SZW1vdmVUZXJtaW5hbEtleVJlc3BvbnNlEmsKDkdldFRlcm1pbmFsS2V5Eisub2JpZW50ZS5jbG91ZC52cHMudjEuR2V0VGVybWluYWxLZXlSZXF1ZXN0Giwub2JpZW50ZS5jbG91ZC52cHMudjEuR2V0VGVybWluYWxLZXlSZXNwb25zZRJxChBSb3RhdGVCYXN0aW9uS2V5Ei0ub2JpZW50ZS5jbG91ZC52cHMudjEuUm90YXRlQmFzdGlvbktleVJlcXVlc3QaLi5vYmllbnRlLmNsb3VkLnZwcy52MS5Sb3RhdGVCYXN0aW9uS2V5UmVzcG9uc2USaAoNR2V0QmFzdGlvbktleRIqLm9iaWVudGUuY2xvdWQudnBzLnYxLkdldEJhc3Rpb25LZXlSZXF1ZXN0Gisub2JpZW50ZS5jbG91ZC52cHMudjEuR2V0QmFzdGlvbktleVJlc3BvbnNlQkdaRWdpdGh1Yi5jb20vb2JpZW50ZS9jbG91ZC9hcHBzL3NoYXJlZC9wcm90by9vYmllbnRlL2Nsb3VkL3Zwcy92MTt2cHN2MWIGcHJvdG8z", [file_obiente_cloud_vps_v1_vps_service, file_google_protobuf_timestamp]);
+  fileDesc("Ci1vYmllbnRlL2Nsb3VkL3Zwcy92MS92cHNfY29uZmlnX3NlcnZpY2UucHJvdG8SFG9iaWVudGUuY2xvdWQudnBzLnYxIkQKGUdldENsb3VkSW5pdENvbmZpZ1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSJXChpHZXRDbG91ZEluaXRDb25maWdSZXNwb25zZRI5CgpjbG91ZF9pbml0GAEgASgLMiUub2JpZW50ZS5jbG91ZC52cHMudjEuQ2xvdWRJbml0Q29uZmlnIkYKG0dldENsb3VkSW5pdFVzZXJEYXRhUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJIjEKHEdldENsb3VkSW5pdFVzZXJEYXRhUmVzcG9uc2USEQoJdXNlcl9kYXRhGAEgASgJIoIBChxVcGRhdGVDbG91ZEluaXRDb25maWdSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkSOQoKY2xvdWRfaW5pdBgDIAEoCzIlLm9iaWVudGUuY2xvdWQudnBzLnYxLkNsb3VkSW5pdENvbmZpZyJrCh1VcGRhdGVDbG91ZEluaXRDb25maWdSZXNwb25zZRI5CgpjbG91ZF9pbml0GAEgASgLMiUub2JpZW50ZS5jbG91ZC52cHMudjEuQ2xvdWRJbml0Q29uZmlnEg8KB21lc3NhZ2UYAiABKAkiPgoTTGlzdFZQU1VzZXJzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJIkQKFExpc3RWUFNVc2Vyc1Jlc3BvbnNlEiwKBXVzZXJzGAEgAygLMh0ub2JpZW50ZS5jbG91ZC52cHMudjEuVlBTVXNlciLQAQoHVlBTVXNlchIMCgRuYW1lGAEgASgJEhQKDGhhc19wYXNzd29yZBgCIAEoCBIbChNzc2hfYXV0aG9yaXplZF9rZXlzGAMgAygJEgwKBHN1ZG8YBCABKAgSFQoNc3Vkb19ub3Bhc3N3ZBgFIAEoCBIOCgZncm91cHMYBiADKAkSEgoFc2hlbGwYByABKAlIAIgBARITCgtsb2NrX3Bhc3N3ZBgIIAEoCBISCgVnZWNvcxgJIAEoCUgBiAEBQggKBl9zaGVsbEIICgZfZ2Vjb3MizgIKFENyZWF0ZVZQU1VzZXJSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkSDAoEbmFtZRgDIAEoCRIVCghwYXNzd29yZBgEIAEoCUgAiAEBEhsKE3NzaF9hdXRob3JpemVkX2tleXMYBSADKAkSEQoEc3VkbxgGIAEoCEgBiAEBEhoKDXN1ZG9fbm9wYXNzd2QYByABKAhIAogBARIOCgZncm91cHMYCCADKAkSEgoFc2hlbGwYCSABKAlIA4gBARIYCgtsb2NrX3Bhc3N3ZBgKIAEoCEgEiAEBEhIKBWdlY29zGAsgASgJSAWIAQFCCwoJX3Bhc3N3b3JkQgcKBV9zdWRvQhAKDl9zdWRvX25vcGFzc3dkQggKBl9zaGVsbEIOCgxfbG9ja19wYXNzd2RCCAoGX2dlY29zIlUKFUNyZWF0ZVZQU1VzZXJSZXNwb25zZRIrCgR1c2VyGAEgASgLMh0ub2JpZW50ZS5jbG91ZC52cHMudjEuVlBTVXNlchIPCgdtZXNzYWdlGAIgASgJIs4CChRVcGRhdGVWUFNVc2VyUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEgwKBG5hbWUYAyABKAkSFQoIbmV3X25hbWUYBCABKAlIAIgBARIbChNzc2hfYXV0aG9yaXplZF9rZXlzGAUgAygJEhEKBHN1ZG8YBiABKAhIAYgBARIaCg1zdWRvX25vcGFzc3dkGAcgASgISAKIAQESDgoGZ3JvdXBzGAggAygJEhIKBXNoZWxsGAkgASgJSAOIAQESGAoLbG9ja19wYXNzd2QYCiABKAhIBIgBARISCgVnZWNvcxgLIAEoCUgFiAEBQgsKCV9uZXdfbmFtZUIHCgVfc3Vkb0IQCg5fc3Vkb19ub3Bhc3N3ZEIICgZfc2hlbGxCDgoMX2xvY2tfcGFzc3dkQggKBl9nZWNvcyJVChVVcGRhdGVWUFNVc2VyUmVzcG9uc2USKwoEdXNlchgBIAEoCzIdLm9iaWVudGUuY2xvdWQudnBzLnYxLlZQU1VzZXISDwoHbWVzc2FnZRgCIAEoCSJNChREZWxldGVWUFNVc2VyUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEgwKBG5hbWUYAyABKAkiKAoVRGVsZXRlVlBTVXNlclJlc3BvbnNlEg8KB21lc3NhZ2UYASABKAkiZgoWU2V0VXNlclBhc3N3b3JkUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEhEKCXVzZXJfbmFtZRgDIAEoCRIQCghwYXNzd29yZBgEIAEoCSIqChdTZXRVc2VyUGFzc3dvcmRSZXNwb25zZRIPCgdtZXNzYWdlGAEgASgJImsKGFVwZGF0ZVVzZXJTU0hLZXlzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEhEKCXVzZXJfbmFtZRgDIAEoCRITCgtzc2hfa2V5X2lkcxgEIAMoCSJZChlVcGRhdGVVc2VyU1NIS2V5c1Jlc3BvbnNlEisKBHVzZXIYASABKAsyHS5vYmllbnRlLmNsb3VkLnZwcy52MS5WUFNVc2VyEg8KB21lc3NhZ2UYAiABKAkiQwoYUm90YXRlVGVybWluYWxLZXlSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkiQQoZUm90YXRlVGVybWluYWxLZXlSZXNwb25zZRITCgtmaW5nZXJwcmludBgBIAEoCRIPCgdtZXNzYWdlGAIgASgJIkMKGFJlbW92ZVRlcm1pbmFsS2V5UmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJIiwKGVJlbW92ZVRlcm1pbmFsS2V5UmVzcG9uc2USDwoHbWVzc2FnZRgBIAEoCSJAChVHZXRUZXJtaW5hbEtleVJlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSKNAQoWR2V0VGVybWluYWxLZXlSZXNwb25zZRITCgtmaW5nZXJwcmludBgBIAEoCRIuCgpjcmVhdGVkX2F0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJCChdSb3RhdGVCYXN0aW9uS2V5UmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJIkAKGFJvdGF0ZUJhc3Rpb25LZXlSZXNwb25zZRITCgtmaW5nZXJwcmludBgBIAEoCRIPCgdtZXNzYWdlGAIgASgJIj8KFEdldEJhc3Rpb25LZXlSZXF1ZXN0EhcKD29yZ2FuaXphdGlvbl9pZBgBIAEoCRIOCgZ2cHNfaWQYAiABKAkijAEKFUdldEJhc3Rpb25LZXlSZXNwb25zZRITCgtmaW5nZXJwcmludBgBIAEoCRIuCgpjcmVhdGVkX2F0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIuCgp1cGRhdGVkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCI9ChJHZXRTU0hBbGlhc1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSIzChNHZXRTU0hBbGlhc1Jlc3BvbnNlEhIKBWFsaWFzGAEgASgJSACIAQFCCAoGX2FsaWFzIkwKElNldFNTSEFsaWFzUmVxdWVzdBIXCg9vcmdhbml6YXRpb25faWQYASABKAkSDgoGdnBzX2lkGAIgASgJEg0KBWFsaWFzGAMgASgJIjUKE1NldFNTSEFsaWFzUmVzcG9uc2USDQoFYWxpYXMYASABKAkSDwoHbWVzc2FnZRgCIAEoCSJAChVSZW1vdmVTU0hBbGlhc1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSIpChZSZW1vdmVTU0hBbGlhc1Jlc3BvbnNlEg8KB21lc3NhZ2UYASABKAkygw8KEFZQU0NvbmZpZ1NlcnZpY2USdwoSR2V0Q2xvdWRJbml0Q29uZmlnEi8ub2JpZW50ZS5jbG91ZC52cHMudjEuR2V0Q2xvdWRJbml0Q29uZmlnUmVxdWVzdBowLm9iaWVudGUuY2xvdWQudnBzLnYxLkdldENsb3VkSW5pdENvbmZpZ1Jlc3BvbnNlEn0KFEdldENsb3VkSW5pdFVzZXJEYXRhEjEub2JpZW50ZS5jbG91ZC52cHMudjEuR2V0Q2xvdWRJbml0VXNlckRhdGFSZXF1ZXN0GjIub2JpZW50ZS5jbG91ZC52cHMudjEuR2V0Q2xvdWRJbml0VXNlckRhdGFSZXNwb25zZRKAAQoVVXBkYXRlQ2xvdWRJbml0Q29uZmlnEjIub2JpZW50ZS5jbG91ZC52cHMudjEuVXBkYXRlQ2xvdWRJbml0Q29uZmlnUmVxdWVzdBozLm9iaWVudGUuY2xvdWQudnBzLnYxLlVwZGF0ZUNsb3VkSW5pdENvbmZpZ1Jlc3BvbnNlEmUKDExpc3RWUFNVc2VycxIpLm9iaWVudGUuY2xvdWQudnBzLnYxLkxpc3RWUFNVc2Vyc1JlcXVlc3QaKi5vYmllbnRlLmNsb3VkLnZwcy52MS5MaXN0VlBTVXNlcnNSZXNwb25zZRJoCg1DcmVhdGVWUFNVc2VyEioub2JpZW50ZS5jbG91ZC52cHMudjEuQ3JlYXRlVlBTVXNlclJlcXVlc3QaKy5vYmllbnRlLmNsb3VkLnZwcy52MS5DcmVhdGVWUFNVc2VyUmVzcG9uc2USaAoNVXBkYXRlVlBTVXNlchIqLm9iaWVudGUuY2xvdWQudnBzLnYxLlVwZGF0ZVZQU1VzZXJSZXF1ZXN0Gisub2JpZW50ZS5jbG91ZC52cHMudjEuVXBkYXRlVlBTVXNlclJlc3BvbnNlEmgKDURlbGV0ZVZQU1VzZXISKi5vYmllbnRlLmNsb3VkLnZwcy52MS5EZWxldGVWUFNVc2VyUmVxdWVzdBorLm9iaWVudGUuY2xvdWQudnBzLnYxLkRlbGV0ZVZQU1VzZXJSZXNwb25zZRJuCg9TZXRVc2VyUGFzc3dvcmQSLC5vYmllbnRlLmNsb3VkLnZwcy52MS5TZXRVc2VyUGFzc3dvcmRSZXF1ZXN0Gi0ub2JpZW50ZS5jbG91ZC52cHMudjEuU2V0VXNlclBhc3N3b3JkUmVzcG9uc2USdAoRVXBkYXRlVXNlclNTSEtleXMSLi5vYmllbnRlLmNsb3VkLnZwcy52MS5VcGRhdGVVc2VyU1NIS2V5c1JlcXVlc3QaLy5vYmllbnRlLmNsb3VkLnZwcy52MS5VcGRhdGVVc2VyU1NIS2V5c1Jlc3BvbnNlEnQKEVJvdGF0ZVRlcm1pbmFsS2V5Ei4ub2JpZW50ZS5jbG91ZC52cHMudjEuUm90YXRlVGVybWluYWxLZXlSZXF1ZXN0Gi8ub2JpZW50ZS5jbG91ZC52cHMudjEuUm90YXRlVGVybWluYWxLZXlSZXNwb25zZRJ0ChFSZW1vdmVUZXJtaW5hbEtleRIuLm9iaWVudGUuY2xvdWQudnBzLnYxLlJlbW92ZVRlcm1pbmFsS2V5UmVxdWVzdBovLm9iaWVudGUuY2xvdWQudnBzLnYxLlJlbW92ZVRlcm1pbmFsS2V5UmVzcG9uc2USawoOR2V0VGVybWluYWxLZXkSKy5vYmllbnRlLmNsb3VkLnZwcy52MS5HZXRUZXJtaW5hbEtleVJlcXVlc3QaLC5vYmllbnRlLmNsb3VkLnZwcy52MS5HZXRUZXJtaW5hbEtleVJlc3BvbnNlEnEKEFJvdGF0ZUJhc3Rpb25LZXkSLS5vYmllbnRlLmNsb3VkLnZwcy52MS5Sb3RhdGVCYXN0aW9uS2V5UmVxdWVzdBouLm9iaWVudGUuY2xvdWQudnBzLnYxLlJvdGF0ZUJhc3Rpb25LZXlSZXNwb25zZRJoCg1HZXRCYXN0aW9uS2V5Eioub2JpZW50ZS5jbG91ZC52cHMudjEuR2V0QmFzdGlvbktleVJlcXVlc3QaKy5vYmllbnRlLmNsb3VkLnZwcy52MS5HZXRCYXN0aW9uS2V5UmVzcG9uc2USYgoLR2V0U1NIQWxpYXMSKC5vYmllbnRlLmNsb3VkLnZwcy52MS5HZXRTU0hBbGlhc1JlcXVlc3QaKS5vYmllbnRlLmNsb3VkLnZwcy52MS5HZXRTU0hBbGlhc1Jlc3BvbnNlEmIKC1NldFNTSEFsaWFzEigub2JpZW50ZS5jbG91ZC52cHMudjEuU2V0U1NIQWxpYXNSZXF1ZXN0Gikub2JpZW50ZS5jbG91ZC52cHMudjEuU2V0U1NIQWxpYXNSZXNwb25zZRJrCg5SZW1vdmVTU0hBbGlhcxIrLm9iaWVudGUuY2xvdWQudnBzLnYxLlJlbW92ZVNTSEFsaWFzUmVxdWVzdBosLm9iaWVudGUuY2xvdWQudnBzLnYxLlJlbW92ZVNTSEFsaWFzUmVzcG9uc2VCR1pFZ2l0aHViLmNvbS9vYmllbnRlL2Nsb3VkL2FwcHMvc2hhcmVkL3Byb3RvL29iaWVudGUvY2xvdWQvdnBzL3YxO3Zwc3YxYgZwcm90bzM", [file_obiente_cloud_vps_v1_vps_service, file_google_protobuf_timestamp]);
 
 /**
  * GetCloudInitConfigRequest requests the cloud-init configuration for a VPS
@@ -60,6 +60,52 @@ export const GetCloudInitConfigResponseSchema: GenMessage<GetCloudInitConfigResp
   messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 1);
 
 /**
+ * GetCloudInitUserDataRequest requests the actual generated cloud-init userData
+ *
+ * @generated from message obiente.cloud.vps.v1.GetCloudInitUserDataRequest
+ */
+export type GetCloudInitUserDataRequest = Message<"obiente.cloud.vps.v1.GetCloudInitUserDataRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string vps_id = 2;
+   */
+  vpsId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vps.v1.GetCloudInitUserDataRequest.
+ * Use `create(GetCloudInitUserDataRequestSchema)` to create a new message.
+ */
+export const GetCloudInitUserDataRequestSchema: GenMessage<GetCloudInitUserDataRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 2);
+
+/**
+ * GetCloudInitUserDataResponse returns the actual generated cloud-init userData
+ * This includes bastion and terminal keys that are dynamically added
+ *
+ * @generated from message obiente.cloud.vps.v1.GetCloudInitUserDataResponse
+ */
+export type GetCloudInitUserDataResponse = Message<"obiente.cloud.vps.v1.GetCloudInitUserDataResponse"> & {
+  /**
+   * The actual generated cloud-init YAML
+   *
+   * @generated from field: string user_data = 1;
+   */
+  userData: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vps.v1.GetCloudInitUserDataResponse.
+ * Use `create(GetCloudInitUserDataResponseSchema)` to create a new message.
+ */
+export const GetCloudInitUserDataResponseSchema: GenMessage<GetCloudInitUserDataResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 3);
+
+/**
  * UpdateCloudInitConfigRequest updates the cloud-init configuration
  *
  * @generated from message obiente.cloud.vps.v1.UpdateCloudInitConfigRequest
@@ -86,7 +132,7 @@ export type UpdateCloudInitConfigRequest = Message<"obiente.cloud.vps.v1.UpdateC
  * Use `create(UpdateCloudInitConfigRequestSchema)` to create a new message.
  */
 export const UpdateCloudInitConfigRequestSchema: GenMessage<UpdateCloudInitConfigRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 2);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 4);
 
 /**
  * UpdateCloudInitConfigResponse confirms the update
@@ -112,7 +158,7 @@ export type UpdateCloudInitConfigResponse = Message<"obiente.cloud.vps.v1.Update
  * Use `create(UpdateCloudInitConfigResponseSchema)` to create a new message.
  */
 export const UpdateCloudInitConfigResponseSchema: GenMessage<UpdateCloudInitConfigResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 3);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 5);
 
 /**
  * ListVPSUsersRequest lists all users configured for a VPS
@@ -136,7 +182,7 @@ export type ListVPSUsersRequest = Message<"obiente.cloud.vps.v1.ListVPSUsersRequ
  * Use `create(ListVPSUsersRequestSchema)` to create a new message.
  */
 export const ListVPSUsersRequestSchema: GenMessage<ListVPSUsersRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 4);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 6);
 
 /**
  * ListVPSUsersResponse returns the list of users
@@ -155,7 +201,7 @@ export type ListVPSUsersResponse = Message<"obiente.cloud.vps.v1.ListVPSUsersRes
  * Use `create(ListVPSUsersResponseSchema)` to create a new message.
  */
 export const ListVPSUsersResponseSchema: GenMessage<ListVPSUsersResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 5);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 7);
 
 /**
  * VPSUser represents a user configured on a VPS instance
@@ -218,7 +264,7 @@ export type VPSUser = Message<"obiente.cloud.vps.v1.VPSUser"> & {
  * Use `create(VPSUserSchema)` to create a new message.
  */
 export const VPSUserSchema: GenMessage<VPSUser> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 6);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 8);
 
 /**
  * CreateVPSUserRequest creates a new user
@@ -287,7 +333,7 @@ export type CreateVPSUserRequest = Message<"obiente.cloud.vps.v1.CreateVPSUserRe
  * Use `create(CreateVPSUserRequestSchema)` to create a new message.
  */
 export const CreateVPSUserRequestSchema: GenMessage<CreateVPSUserRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 7);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 9);
 
 /**
  * CreateVPSUserResponse confirms user creation
@@ -313,7 +359,7 @@ export type CreateVPSUserResponse = Message<"obiente.cloud.vps.v1.CreateVPSUserR
  * Use `create(CreateVPSUserResponseSchema)` to create a new message.
  */
 export const CreateVPSUserResponseSchema: GenMessage<CreateVPSUserResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 8);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 10);
 
 /**
  * UpdateVPSUserRequest updates an existing user
@@ -386,7 +432,7 @@ export type UpdateVPSUserRequest = Message<"obiente.cloud.vps.v1.UpdateVPSUserRe
  * Use `create(UpdateVPSUserRequestSchema)` to create a new message.
  */
 export const UpdateVPSUserRequestSchema: GenMessage<UpdateVPSUserRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 9);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 11);
 
 /**
  * UpdateVPSUserResponse confirms the update
@@ -410,7 +456,7 @@ export type UpdateVPSUserResponse = Message<"obiente.cloud.vps.v1.UpdateVPSUserR
  * Use `create(UpdateVPSUserResponseSchema)` to create a new message.
  */
 export const UpdateVPSUserResponseSchema: GenMessage<UpdateVPSUserResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 10);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 12);
 
 /**
  * DeleteVPSUserRequest deletes a user
@@ -441,7 +487,7 @@ export type DeleteVPSUserRequest = Message<"obiente.cloud.vps.v1.DeleteVPSUserRe
  * Use `create(DeleteVPSUserRequestSchema)` to create a new message.
  */
 export const DeleteVPSUserRequestSchema: GenMessage<DeleteVPSUserRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 11);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 13);
 
 /**
  * DeleteVPSUserResponse confirms deletion
@@ -460,7 +506,7 @@ export type DeleteVPSUserResponse = Message<"obiente.cloud.vps.v1.DeleteVPSUserR
  * Use `create(DeleteVPSUserResponseSchema)` to create a new message.
  */
 export const DeleteVPSUserResponseSchema: GenMessage<DeleteVPSUserResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 12);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 14);
 
 /**
  * SetUserPasswordRequest sets or resets a user's password
@@ -496,7 +542,7 @@ export type SetUserPasswordRequest = Message<"obiente.cloud.vps.v1.SetUserPasswo
  * Use `create(SetUserPasswordRequestSchema)` to create a new message.
  */
 export const SetUserPasswordRequestSchema: GenMessage<SetUserPasswordRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 13);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 15);
 
 /**
  * SetUserPasswordResponse confirms password update
@@ -517,7 +563,7 @@ export type SetUserPasswordResponse = Message<"obiente.cloud.vps.v1.SetUserPassw
  * Use `create(SetUserPasswordResponseSchema)` to create a new message.
  */
 export const SetUserPasswordResponseSchema: GenMessage<SetUserPasswordResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 14);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 16);
 
 /**
  * UpdateUserSSHKeysRequest updates SSH keys for a user
@@ -553,7 +599,7 @@ export type UpdateUserSSHKeysRequest = Message<"obiente.cloud.vps.v1.UpdateUserS
  * Use `create(UpdateUserSSHKeysRequestSchema)` to create a new message.
  */
 export const UpdateUserSSHKeysRequestSchema: GenMessage<UpdateUserSSHKeysRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 15);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 17);
 
 /**
  * UpdateUserSSHKeysResponse confirms the update
@@ -577,7 +623,7 @@ export type UpdateUserSSHKeysResponse = Message<"obiente.cloud.vps.v1.UpdateUser
  * Use `create(UpdateUserSSHKeysResponseSchema)` to create a new message.
  */
 export const UpdateUserSSHKeysResponseSchema: GenMessage<UpdateUserSSHKeysResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 16);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 18);
 
 /**
  * RotateTerminalKeyRequest rotates the web terminal SSH key
@@ -601,7 +647,7 @@ export type RotateTerminalKeyRequest = Message<"obiente.cloud.vps.v1.RotateTermi
  * Use `create(RotateTerminalKeyRequestSchema)` to create a new message.
  */
 export const RotateTerminalKeyRequestSchema: GenMessage<RotateTerminalKeyRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 17);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 19);
 
 /**
  * RotateTerminalKeyResponse confirms the key rotation
@@ -629,7 +675,7 @@ export type RotateTerminalKeyResponse = Message<"obiente.cloud.vps.v1.RotateTerm
  * Use `create(RotateTerminalKeyResponseSchema)` to create a new message.
  */
 export const RotateTerminalKeyResponseSchema: GenMessage<RotateTerminalKeyResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 18);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 20);
 
 /**
  * RemoveTerminalKeyRequest removes the web terminal SSH key
@@ -653,7 +699,7 @@ export type RemoveTerminalKeyRequest = Message<"obiente.cloud.vps.v1.RemoveTermi
  * Use `create(RemoveTerminalKeyRequestSchema)` to create a new message.
  */
 export const RemoveTerminalKeyRequestSchema: GenMessage<RemoveTerminalKeyRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 19);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 21);
 
 /**
  * RemoveTerminalKeyResponse confirms the key removal
@@ -674,7 +720,7 @@ export type RemoveTerminalKeyResponse = Message<"obiente.cloud.vps.v1.RemoveTerm
  * Use `create(RemoveTerminalKeyResponseSchema)` to create a new message.
  */
 export const RemoveTerminalKeyResponseSchema: GenMessage<RemoveTerminalKeyResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 20);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 22);
 
 /**
  * GetTerminalKeyRequest gets the web terminal SSH key status
@@ -698,7 +744,7 @@ export type GetTerminalKeyRequest = Message<"obiente.cloud.vps.v1.GetTerminalKey
  * Use `create(GetTerminalKeyRequestSchema)` to create a new message.
  */
 export const GetTerminalKeyRequestSchema: GenMessage<GetTerminalKeyRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 21);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 23);
 
 /**
  * GetTerminalKeyResponse returns the terminal key status
@@ -733,7 +779,7 @@ export type GetTerminalKeyResponse = Message<"obiente.cloud.vps.v1.GetTerminalKe
  * Use `create(GetTerminalKeyResponseSchema)` to create a new message.
  */
 export const GetTerminalKeyResponseSchema: GenMessage<GetTerminalKeyResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 22);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 24);
 
 /**
  * RotateBastionKeyRequest rotates the bastion SSH key
@@ -757,7 +803,7 @@ export type RotateBastionKeyRequest = Message<"obiente.cloud.vps.v1.RotateBastio
  * Use `create(RotateBastionKeyRequestSchema)` to create a new message.
  */
 export const RotateBastionKeyRequestSchema: GenMessage<RotateBastionKeyRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 23);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 25);
 
 /**
  * RotateBastionKeyResponse confirms the key rotation
@@ -785,7 +831,7 @@ export type RotateBastionKeyResponse = Message<"obiente.cloud.vps.v1.RotateBasti
  * Use `create(RotateBastionKeyResponseSchema)` to create a new message.
  */
 export const RotateBastionKeyResponseSchema: GenMessage<RotateBastionKeyResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 24);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 26);
 
 /**
  * GetBastionKeyRequest gets the bastion SSH key status
@@ -809,7 +855,7 @@ export type GetBastionKeyRequest = Message<"obiente.cloud.vps.v1.GetBastionKeyRe
  * Use `create(GetBastionKeyRequestSchema)` to create a new message.
  */
 export const GetBastionKeyRequestSchema: GenMessage<GetBastionKeyRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 25);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 27);
 
 /**
  * GetBastionKeyResponse returns the bastion key status
@@ -844,7 +890,156 @@ export type GetBastionKeyResponse = Message<"obiente.cloud.vps.v1.GetBastionKeyR
  * Use `create(GetBastionKeyResponseSchema)` to create a new message.
  */
 export const GetBastionKeyResponseSchema: GenMessage<GetBastionKeyResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 26);
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 28);
+
+/**
+ * GetSSHAliasRequest gets the SSH alias for a VPS instance
+ *
+ * @generated from message obiente.cloud.vps.v1.GetSSHAliasRequest
+ */
+export type GetSSHAliasRequest = Message<"obiente.cloud.vps.v1.GetSSHAliasRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string vps_id = 2;
+   */
+  vpsId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vps.v1.GetSSHAliasRequest.
+ * Use `create(GetSSHAliasRequestSchema)` to create a new message.
+ */
+export const GetSSHAliasRequestSchema: GenMessage<GetSSHAliasRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 29);
+
+/**
+ * GetSSHAliasResponse returns the SSH alias
+ *
+ * @generated from message obiente.cloud.vps.v1.GetSSHAliasResponse
+ */
+export type GetSSHAliasResponse = Message<"obiente.cloud.vps.v1.GetSSHAliasResponse"> & {
+  /**
+   * The SSH alias, or empty if not set
+   *
+   * @generated from field: optional string alias = 1;
+   */
+  alias?: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vps.v1.GetSSHAliasResponse.
+ * Use `create(GetSSHAliasResponseSchema)` to create a new message.
+ */
+export const GetSSHAliasResponseSchema: GenMessage<GetSSHAliasResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 30);
+
+/**
+ * SetSSHAliasRequest sets the SSH alias for a VPS instance
+ *
+ * @generated from message obiente.cloud.vps.v1.SetSSHAliasRequest
+ */
+export type SetSSHAliasRequest = Message<"obiente.cloud.vps.v1.SetSSHAliasRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string vps_id = 2;
+   */
+  vpsId: string;
+
+  /**
+   * The alias to set (must be unique, alphanumeric with hyphens/underscores)
+   *
+   * @generated from field: string alias = 3;
+   */
+  alias: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vps.v1.SetSSHAliasRequest.
+ * Use `create(SetSSHAliasRequestSchema)` to create a new message.
+ */
+export const SetSSHAliasRequestSchema: GenMessage<SetSSHAliasRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 31);
+
+/**
+ * SetSSHAliasResponse confirms the alias was set
+ *
+ * @generated from message obiente.cloud.vps.v1.SetSSHAliasResponse
+ */
+export type SetSSHAliasResponse = Message<"obiente.cloud.vps.v1.SetSSHAliasResponse"> & {
+  /**
+   * The alias that was set
+   *
+   * @generated from field: string alias = 1;
+   */
+  alias: string;
+
+  /**
+   * Information message
+   *
+   * @generated from field: string message = 2;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vps.v1.SetSSHAliasResponse.
+ * Use `create(SetSSHAliasResponseSchema)` to create a new message.
+ */
+export const SetSSHAliasResponseSchema: GenMessage<SetSSHAliasResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 32);
+
+/**
+ * RemoveSSHAliasRequest removes the SSH alias for a VPS instance
+ *
+ * @generated from message obiente.cloud.vps.v1.RemoveSSHAliasRequest
+ */
+export type RemoveSSHAliasRequest = Message<"obiente.cloud.vps.v1.RemoveSSHAliasRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string vps_id = 2;
+   */
+  vpsId: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vps.v1.RemoveSSHAliasRequest.
+ * Use `create(RemoveSSHAliasRequestSchema)` to create a new message.
+ */
+export const RemoveSSHAliasRequestSchema: GenMessage<RemoveSSHAliasRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 33);
+
+/**
+ * RemoveSSHAliasResponse confirms the alias was removed
+ *
+ * @generated from message obiente.cloud.vps.v1.RemoveSSHAliasResponse
+ */
+export type RemoveSSHAliasResponse = Message<"obiente.cloud.vps.v1.RemoveSSHAliasResponse"> & {
+  /**
+   * Confirmation message
+   *
+   * @generated from field: string message = 1;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vps.v1.RemoveSSHAliasResponse.
+ * Use `create(RemoveSSHAliasResponseSchema)` to create a new message.
+ */
+export const RemoveSSHAliasResponseSchema: GenMessage<RemoveSSHAliasResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vps_v1_vps_config_service, 34);
 
 /**
  * VPSConfigService provides endpoints for managing VPS configuration
@@ -862,6 +1057,16 @@ export const VPSConfigService: GenService<{
     methodKind: "unary";
     input: typeof GetCloudInitConfigRequestSchema;
     output: typeof GetCloudInitConfigResponseSchema;
+  },
+  /**
+   * Get the actual generated cloud-init userData (includes bastion/terminal keys)
+   *
+   * @generated from rpc obiente.cloud.vps.v1.VPSConfigService.GetCloudInitUserData
+   */
+  getCloudInitUserData: {
+    methodKind: "unary";
+    input: typeof GetCloudInitUserDataRequestSchema;
+    output: typeof GetCloudInitUserDataResponseSchema;
   },
   /**
    * Update cloud-init configuration for a VPS instance
@@ -982,6 +1187,36 @@ export const VPSConfigService: GenService<{
     methodKind: "unary";
     input: typeof GetBastionKeyRequestSchema;
     output: typeof GetBastionKeyResponseSchema;
+  },
+  /**
+   * Get the SSH alias for a VPS instance
+   *
+   * @generated from rpc obiente.cloud.vps.v1.VPSConfigService.GetSSHAlias
+   */
+  getSSHAlias: {
+    methodKind: "unary";
+    input: typeof GetSSHAliasRequestSchema;
+    output: typeof GetSSHAliasResponseSchema;
+  },
+  /**
+   * Set the SSH alias for a VPS instance
+   *
+   * @generated from rpc obiente.cloud.vps.v1.VPSConfigService.SetSSHAlias
+   */
+  setSSHAlias: {
+    methodKind: "unary";
+    input: typeof SetSSHAliasRequestSchema;
+    output: typeof SetSSHAliasResponseSchema;
+  },
+  /**
+   * Remove the SSH alias for a VPS instance
+   *
+   * @generated from rpc obiente.cloud.vps.v1.VPSConfigService.RemoveSSHAlias
+   */
+  removeSSHAlias: {
+    methodKind: "unary";
+    input: typeof RemoveSSHAliasRequestSchema;
+    output: typeof RemoveSSHAliasResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_obiente_cloud_vps_v1_vps_config_service, 0);

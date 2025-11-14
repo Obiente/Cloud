@@ -36,6 +36,9 @@ const (
 	// VPSConfigServiceGetCloudInitConfigProcedure is the fully-qualified name of the VPSConfigService's
 	// GetCloudInitConfig RPC.
 	VPSConfigServiceGetCloudInitConfigProcedure = "/obiente.cloud.vps.v1.VPSConfigService/GetCloudInitConfig"
+	// VPSConfigServiceGetCloudInitUserDataProcedure is the fully-qualified name of the
+	// VPSConfigService's GetCloudInitUserData RPC.
+	VPSConfigServiceGetCloudInitUserDataProcedure = "/obiente.cloud.vps.v1.VPSConfigService/GetCloudInitUserData"
 	// VPSConfigServiceUpdateCloudInitConfigProcedure is the fully-qualified name of the
 	// VPSConfigService's UpdateCloudInitConfig RPC.
 	VPSConfigServiceUpdateCloudInitConfigProcedure = "/obiente.cloud.vps.v1.VPSConfigService/UpdateCloudInitConfig"
@@ -72,12 +75,23 @@ const (
 	// VPSConfigServiceGetBastionKeyProcedure is the fully-qualified name of the VPSConfigService's
 	// GetBastionKey RPC.
 	VPSConfigServiceGetBastionKeyProcedure = "/obiente.cloud.vps.v1.VPSConfigService/GetBastionKey"
+	// VPSConfigServiceGetSSHAliasProcedure is the fully-qualified name of the VPSConfigService's
+	// GetSSHAlias RPC.
+	VPSConfigServiceGetSSHAliasProcedure = "/obiente.cloud.vps.v1.VPSConfigService/GetSSHAlias"
+	// VPSConfigServiceSetSSHAliasProcedure is the fully-qualified name of the VPSConfigService's
+	// SetSSHAlias RPC.
+	VPSConfigServiceSetSSHAliasProcedure = "/obiente.cloud.vps.v1.VPSConfigService/SetSSHAlias"
+	// VPSConfigServiceRemoveSSHAliasProcedure is the fully-qualified name of the VPSConfigService's
+	// RemoveSSHAlias RPC.
+	VPSConfigServiceRemoveSSHAliasProcedure = "/obiente.cloud.vps.v1.VPSConfigService/RemoveSSHAlias"
 )
 
 // VPSConfigServiceClient is a client for the obiente.cloud.vps.v1.VPSConfigService service.
 type VPSConfigServiceClient interface {
 	// Get cloud-init configuration for a VPS instance
 	GetCloudInitConfig(context.Context, *connect.Request[v1.GetCloudInitConfigRequest]) (*connect.Response[v1.GetCloudInitConfigResponse], error)
+	// Get the actual generated cloud-init userData (includes bastion/terminal keys)
+	GetCloudInitUserData(context.Context, *connect.Request[v1.GetCloudInitUserDataRequest]) (*connect.Response[v1.GetCloudInitUserDataResponse], error)
 	// Update cloud-init configuration for a VPS instance
 	UpdateCloudInitConfig(context.Context, *connect.Request[v1.UpdateCloudInitConfigRequest]) (*connect.Response[v1.UpdateCloudInitConfigResponse], error)
 	// List users configured for a VPS instance
@@ -102,6 +116,12 @@ type VPSConfigServiceClient interface {
 	RotateBastionKey(context.Context, *connect.Request[v1.RotateBastionKeyRequest]) (*connect.Response[v1.RotateBastionKeyResponse], error)
 	// Get the bastion SSH key status for a VPS instance
 	GetBastionKey(context.Context, *connect.Request[v1.GetBastionKeyRequest]) (*connect.Response[v1.GetBastionKeyResponse], error)
+	// Get the SSH alias for a VPS instance
+	GetSSHAlias(context.Context, *connect.Request[v1.GetSSHAliasRequest]) (*connect.Response[v1.GetSSHAliasResponse], error)
+	// Set the SSH alias for a VPS instance
+	SetSSHAlias(context.Context, *connect.Request[v1.SetSSHAliasRequest]) (*connect.Response[v1.SetSSHAliasResponse], error)
+	// Remove the SSH alias for a VPS instance
+	RemoveSSHAlias(context.Context, *connect.Request[v1.RemoveSSHAliasRequest]) (*connect.Response[v1.RemoveSSHAliasResponse], error)
 }
 
 // NewVPSConfigServiceClient constructs a client for the obiente.cloud.vps.v1.VPSConfigService
@@ -119,6 +139,12 @@ func NewVPSConfigServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+VPSConfigServiceGetCloudInitConfigProcedure,
 			connect.WithSchema(vPSConfigServiceMethods.ByName("GetCloudInitConfig")),
+			connect.WithClientOptions(opts...),
+		),
+		getCloudInitUserData: connect.NewClient[v1.GetCloudInitUserDataRequest, v1.GetCloudInitUserDataResponse](
+			httpClient,
+			baseURL+VPSConfigServiceGetCloudInitUserDataProcedure,
+			connect.WithSchema(vPSConfigServiceMethods.ByName("GetCloudInitUserData")),
 			connect.WithClientOptions(opts...),
 		),
 		updateCloudInitConfig: connect.NewClient[v1.UpdateCloudInitConfigRequest, v1.UpdateCloudInitConfigResponse](
@@ -193,12 +219,31 @@ func NewVPSConfigServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(vPSConfigServiceMethods.ByName("GetBastionKey")),
 			connect.WithClientOptions(opts...),
 		),
+		getSSHAlias: connect.NewClient[v1.GetSSHAliasRequest, v1.GetSSHAliasResponse](
+			httpClient,
+			baseURL+VPSConfigServiceGetSSHAliasProcedure,
+			connect.WithSchema(vPSConfigServiceMethods.ByName("GetSSHAlias")),
+			connect.WithClientOptions(opts...),
+		),
+		setSSHAlias: connect.NewClient[v1.SetSSHAliasRequest, v1.SetSSHAliasResponse](
+			httpClient,
+			baseURL+VPSConfigServiceSetSSHAliasProcedure,
+			connect.WithSchema(vPSConfigServiceMethods.ByName("SetSSHAlias")),
+			connect.WithClientOptions(opts...),
+		),
+		removeSSHAlias: connect.NewClient[v1.RemoveSSHAliasRequest, v1.RemoveSSHAliasResponse](
+			httpClient,
+			baseURL+VPSConfigServiceRemoveSSHAliasProcedure,
+			connect.WithSchema(vPSConfigServiceMethods.ByName("RemoveSSHAlias")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // vPSConfigServiceClient implements VPSConfigServiceClient.
 type vPSConfigServiceClient struct {
 	getCloudInitConfig    *connect.Client[v1.GetCloudInitConfigRequest, v1.GetCloudInitConfigResponse]
+	getCloudInitUserData  *connect.Client[v1.GetCloudInitUserDataRequest, v1.GetCloudInitUserDataResponse]
 	updateCloudInitConfig *connect.Client[v1.UpdateCloudInitConfigRequest, v1.UpdateCloudInitConfigResponse]
 	listVPSUsers          *connect.Client[v1.ListVPSUsersRequest, v1.ListVPSUsersResponse]
 	createVPSUser         *connect.Client[v1.CreateVPSUserRequest, v1.CreateVPSUserResponse]
@@ -211,11 +256,19 @@ type vPSConfigServiceClient struct {
 	getTerminalKey        *connect.Client[v1.GetTerminalKeyRequest, v1.GetTerminalKeyResponse]
 	rotateBastionKey      *connect.Client[v1.RotateBastionKeyRequest, v1.RotateBastionKeyResponse]
 	getBastionKey         *connect.Client[v1.GetBastionKeyRequest, v1.GetBastionKeyResponse]
+	getSSHAlias           *connect.Client[v1.GetSSHAliasRequest, v1.GetSSHAliasResponse]
+	setSSHAlias           *connect.Client[v1.SetSSHAliasRequest, v1.SetSSHAliasResponse]
+	removeSSHAlias        *connect.Client[v1.RemoveSSHAliasRequest, v1.RemoveSSHAliasResponse]
 }
 
 // GetCloudInitConfig calls obiente.cloud.vps.v1.VPSConfigService.GetCloudInitConfig.
 func (c *vPSConfigServiceClient) GetCloudInitConfig(ctx context.Context, req *connect.Request[v1.GetCloudInitConfigRequest]) (*connect.Response[v1.GetCloudInitConfigResponse], error) {
 	return c.getCloudInitConfig.CallUnary(ctx, req)
+}
+
+// GetCloudInitUserData calls obiente.cloud.vps.v1.VPSConfigService.GetCloudInitUserData.
+func (c *vPSConfigServiceClient) GetCloudInitUserData(ctx context.Context, req *connect.Request[v1.GetCloudInitUserDataRequest]) (*connect.Response[v1.GetCloudInitUserDataResponse], error) {
+	return c.getCloudInitUserData.CallUnary(ctx, req)
 }
 
 // UpdateCloudInitConfig calls obiente.cloud.vps.v1.VPSConfigService.UpdateCloudInitConfig.
@@ -278,11 +331,28 @@ func (c *vPSConfigServiceClient) GetBastionKey(ctx context.Context, req *connect
 	return c.getBastionKey.CallUnary(ctx, req)
 }
 
+// GetSSHAlias calls obiente.cloud.vps.v1.VPSConfigService.GetSSHAlias.
+func (c *vPSConfigServiceClient) GetSSHAlias(ctx context.Context, req *connect.Request[v1.GetSSHAliasRequest]) (*connect.Response[v1.GetSSHAliasResponse], error) {
+	return c.getSSHAlias.CallUnary(ctx, req)
+}
+
+// SetSSHAlias calls obiente.cloud.vps.v1.VPSConfigService.SetSSHAlias.
+func (c *vPSConfigServiceClient) SetSSHAlias(ctx context.Context, req *connect.Request[v1.SetSSHAliasRequest]) (*connect.Response[v1.SetSSHAliasResponse], error) {
+	return c.setSSHAlias.CallUnary(ctx, req)
+}
+
+// RemoveSSHAlias calls obiente.cloud.vps.v1.VPSConfigService.RemoveSSHAlias.
+func (c *vPSConfigServiceClient) RemoveSSHAlias(ctx context.Context, req *connect.Request[v1.RemoveSSHAliasRequest]) (*connect.Response[v1.RemoveSSHAliasResponse], error) {
+	return c.removeSSHAlias.CallUnary(ctx, req)
+}
+
 // VPSConfigServiceHandler is an implementation of the obiente.cloud.vps.v1.VPSConfigService
 // service.
 type VPSConfigServiceHandler interface {
 	// Get cloud-init configuration for a VPS instance
 	GetCloudInitConfig(context.Context, *connect.Request[v1.GetCloudInitConfigRequest]) (*connect.Response[v1.GetCloudInitConfigResponse], error)
+	// Get the actual generated cloud-init userData (includes bastion/terminal keys)
+	GetCloudInitUserData(context.Context, *connect.Request[v1.GetCloudInitUserDataRequest]) (*connect.Response[v1.GetCloudInitUserDataResponse], error)
 	// Update cloud-init configuration for a VPS instance
 	UpdateCloudInitConfig(context.Context, *connect.Request[v1.UpdateCloudInitConfigRequest]) (*connect.Response[v1.UpdateCloudInitConfigResponse], error)
 	// List users configured for a VPS instance
@@ -307,6 +377,12 @@ type VPSConfigServiceHandler interface {
 	RotateBastionKey(context.Context, *connect.Request[v1.RotateBastionKeyRequest]) (*connect.Response[v1.RotateBastionKeyResponse], error)
 	// Get the bastion SSH key status for a VPS instance
 	GetBastionKey(context.Context, *connect.Request[v1.GetBastionKeyRequest]) (*connect.Response[v1.GetBastionKeyResponse], error)
+	// Get the SSH alias for a VPS instance
+	GetSSHAlias(context.Context, *connect.Request[v1.GetSSHAliasRequest]) (*connect.Response[v1.GetSSHAliasResponse], error)
+	// Set the SSH alias for a VPS instance
+	SetSSHAlias(context.Context, *connect.Request[v1.SetSSHAliasRequest]) (*connect.Response[v1.SetSSHAliasResponse], error)
+	// Remove the SSH alias for a VPS instance
+	RemoveSSHAlias(context.Context, *connect.Request[v1.RemoveSSHAliasRequest]) (*connect.Response[v1.RemoveSSHAliasResponse], error)
 }
 
 // NewVPSConfigServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -320,6 +396,12 @@ func NewVPSConfigServiceHandler(svc VPSConfigServiceHandler, opts ...connect.Han
 		VPSConfigServiceGetCloudInitConfigProcedure,
 		svc.GetCloudInitConfig,
 		connect.WithSchema(vPSConfigServiceMethods.ByName("GetCloudInitConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSConfigServiceGetCloudInitUserDataHandler := connect.NewUnaryHandler(
+		VPSConfigServiceGetCloudInitUserDataProcedure,
+		svc.GetCloudInitUserData,
+		connect.WithSchema(vPSConfigServiceMethods.ByName("GetCloudInitUserData")),
 		connect.WithHandlerOptions(opts...),
 	)
 	vPSConfigServiceUpdateCloudInitConfigHandler := connect.NewUnaryHandler(
@@ -394,10 +476,30 @@ func NewVPSConfigServiceHandler(svc VPSConfigServiceHandler, opts ...connect.Han
 		connect.WithSchema(vPSConfigServiceMethods.ByName("GetBastionKey")),
 		connect.WithHandlerOptions(opts...),
 	)
+	vPSConfigServiceGetSSHAliasHandler := connect.NewUnaryHandler(
+		VPSConfigServiceGetSSHAliasProcedure,
+		svc.GetSSHAlias,
+		connect.WithSchema(vPSConfigServiceMethods.ByName("GetSSHAlias")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSConfigServiceSetSSHAliasHandler := connect.NewUnaryHandler(
+		VPSConfigServiceSetSSHAliasProcedure,
+		svc.SetSSHAlias,
+		connect.WithSchema(vPSConfigServiceMethods.ByName("SetSSHAlias")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSConfigServiceRemoveSSHAliasHandler := connect.NewUnaryHandler(
+		VPSConfigServiceRemoveSSHAliasProcedure,
+		svc.RemoveSSHAlias,
+		connect.WithSchema(vPSConfigServiceMethods.ByName("RemoveSSHAlias")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.vps.v1.VPSConfigService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case VPSConfigServiceGetCloudInitConfigProcedure:
 			vPSConfigServiceGetCloudInitConfigHandler.ServeHTTP(w, r)
+		case VPSConfigServiceGetCloudInitUserDataProcedure:
+			vPSConfigServiceGetCloudInitUserDataHandler.ServeHTTP(w, r)
 		case VPSConfigServiceUpdateCloudInitConfigProcedure:
 			vPSConfigServiceUpdateCloudInitConfigHandler.ServeHTTP(w, r)
 		case VPSConfigServiceListVPSUsersProcedure:
@@ -422,6 +524,12 @@ func NewVPSConfigServiceHandler(svc VPSConfigServiceHandler, opts ...connect.Han
 			vPSConfigServiceRotateBastionKeyHandler.ServeHTTP(w, r)
 		case VPSConfigServiceGetBastionKeyProcedure:
 			vPSConfigServiceGetBastionKeyHandler.ServeHTTP(w, r)
+		case VPSConfigServiceGetSSHAliasProcedure:
+			vPSConfigServiceGetSSHAliasHandler.ServeHTTP(w, r)
+		case VPSConfigServiceSetSSHAliasProcedure:
+			vPSConfigServiceSetSSHAliasHandler.ServeHTTP(w, r)
+		case VPSConfigServiceRemoveSSHAliasProcedure:
+			vPSConfigServiceRemoveSSHAliasHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -433,6 +541,10 @@ type UnimplementedVPSConfigServiceHandler struct{}
 
 func (UnimplementedVPSConfigServiceHandler) GetCloudInitConfig(context.Context, *connect.Request[v1.GetCloudInitConfigRequest]) (*connect.Response[v1.GetCloudInitConfigResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSConfigService.GetCloudInitConfig is not implemented"))
+}
+
+func (UnimplementedVPSConfigServiceHandler) GetCloudInitUserData(context.Context, *connect.Request[v1.GetCloudInitUserDataRequest]) (*connect.Response[v1.GetCloudInitUserDataResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSConfigService.GetCloudInitUserData is not implemented"))
 }
 
 func (UnimplementedVPSConfigServiceHandler) UpdateCloudInitConfig(context.Context, *connect.Request[v1.UpdateCloudInitConfigRequest]) (*connect.Response[v1.UpdateCloudInitConfigResponse], error) {
@@ -481,4 +593,16 @@ func (UnimplementedVPSConfigServiceHandler) RotateBastionKey(context.Context, *c
 
 func (UnimplementedVPSConfigServiceHandler) GetBastionKey(context.Context, *connect.Request[v1.GetBastionKeyRequest]) (*connect.Response[v1.GetBastionKeyResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSConfigService.GetBastionKey is not implemented"))
+}
+
+func (UnimplementedVPSConfigServiceHandler) GetSSHAlias(context.Context, *connect.Request[v1.GetSSHAliasRequest]) (*connect.Response[v1.GetSSHAliasResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSConfigService.GetSSHAlias is not implemented"))
+}
+
+func (UnimplementedVPSConfigServiceHandler) SetSSHAlias(context.Context, *connect.Request[v1.SetSSHAliasRequest]) (*connect.Response[v1.SetSSHAliasResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSConfigService.SetSSHAlias is not implemented"))
+}
+
+func (UnimplementedVPSConfigServiceHandler) RemoveSSHAlias(context.Context, *connect.Request[v1.RemoveSSHAliasRequest]) (*connect.Response[v1.RemoveSSHAliasResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vps.v1.VPSConfigService.RemoveSSHAlias is not implemented"))
 }

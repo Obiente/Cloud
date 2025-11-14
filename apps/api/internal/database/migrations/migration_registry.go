@@ -31,6 +31,7 @@ func RegisterMigrations(registry *MigrationRegistry) {
 	registry.Register("2025_11_07_003", "Ensure idx_domain_type constraint exists on delegated_dns_records", ensureDelegatedDNSRecordsConstraint)
 	registry.Register("2025_11_07_004", "Create audit_logs table", createAuditLogsTable)
 	registry.Register("2025_11_13_001", "Create vps_bastion_keys table", createVPSBastionKeysTable)
+	registry.Register("2025_11_14_001", "Add ssh_alias column to vps_instances", addSSHAliasToVPSInstances)
 
 	// Add new migrations here
 }
@@ -638,6 +639,23 @@ func createVPSBastionKeysTable(db *gorm.DB) error {
 			INDEX idx_fingerprint (fingerprint)
 		)
 	`).Error
+}
+
+// addSSHAliasToVPSInstances adds the ssh_alias column to vps_instances table
+func addSSHAliasToVPSInstances(db *gorm.DB) error {
+	// Check if column already exists
+	if db.Migrator().HasColumn("vps_instances", "ssh_alias") {
+		return nil
+	}
+
+	// Add column with unique index
+	// First add the column
+	if err := db.Exec("ALTER TABLE vps_instances ADD COLUMN ssh_alias VARCHAR(255)").Error; err != nil {
+		return err
+	}
+
+	// Add unique index (allowing NULL values - multiple NULLs are allowed in unique indexes)
+	return db.Exec("CREATE UNIQUE INDEX idx_vps_instances_ssh_alias ON vps_instances(ssh_alias) WHERE ssh_alias IS NOT NULL").Error
 }
 
 // Template for creating a new migration:

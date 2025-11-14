@@ -13,6 +13,9 @@ service VPSConfigService {
   // Get cloud-init configuration for a VPS instance
   rpc GetCloudInitConfig(GetCloudInitConfigRequest) returns (GetCloudInitConfigResponse);
   
+  // Get the actual generated cloud-init userData (includes bastion/terminal keys)
+  rpc GetCloudInitUserData(GetCloudInitUserDataRequest) returns (GetCloudInitUserDataResponse);
+  
   // Update cloud-init configuration for a VPS instance
   rpc UpdateCloudInitConfig(UpdateCloudInitConfigRequest) returns (UpdateCloudInitConfigResponse);
   
@@ -48,6 +51,15 @@ service VPSConfigService {
   
   // Get the bastion SSH key status for a VPS instance
   rpc GetBastionKey(GetBastionKeyRequest) returns (GetBastionKeyResponse);
+  
+  // Get the SSH alias for a VPS instance
+  rpc GetSSHAlias(GetSSHAliasRequest) returns (GetSSHAliasResponse);
+  
+  // Set the SSH alias for a VPS instance
+  rpc SetSSHAlias(SetSSHAliasRequest) returns (SetSSHAliasResponse);
+  
+  // Remove the SSH alias for a VPS instance
+  rpc RemoveSSHAlias(RemoveSSHAliasRequest) returns (RemoveSSHAliasResponse);
 }
 
 // GetCloudInitConfigRequest requests the cloud-init configuration for a VPS
@@ -59,6 +71,18 @@ message GetCloudInitConfigRequest {
 // GetCloudInitConfigResponse returns the cloud-init configuration
 message GetCloudInitConfigResponse {
   CloudInitConfig cloud_init = 1;
+}
+
+// GetCloudInitUserDataRequest requests the actual generated cloud-init userData
+message GetCloudInitUserDataRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+// GetCloudInitUserDataResponse returns the actual generated cloud-init userData
+// This includes bastion and terminal keys that are dynamically added
+message GetCloudInitUserDataResponse {
+  string user_data = 1; // The actual generated cloud-init YAML
 }
 
 // UpdateCloudInitConfigRequest updates the cloud-init configuration
@@ -238,5 +262,40 @@ message GetBastionKeyResponse {
   string fingerprint = 1; // Fingerprint of the key
   google.protobuf.Timestamp created_at = 2; // Timestamp when the key was created
   google.protobuf.Timestamp updated_at = 3; // Timestamp when the key was last updated
+}
+
+// GetSSHAliasRequest gets the SSH alias for a VPS instance
+message GetSSHAliasRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+// GetSSHAliasResponse returns the SSH alias
+message GetSSHAliasResponse {
+  optional string alias = 1; // The SSH alias, or empty if not set
+}
+
+// SetSSHAliasRequest sets the SSH alias for a VPS instance
+message SetSSHAliasRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+  string alias = 3; // The alias to set (must be unique, alphanumeric with hyphens/underscores)
+}
+
+// SetSSHAliasResponse confirms the alias was set
+message SetSSHAliasResponse {
+  string alias = 1; // The alias that was set
+  string message = 2; // Information message
+}
+
+// RemoveSSHAliasRequest removes the SSH alias for a VPS instance
+message RemoveSSHAliasRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+// RemoveSSHAliasResponse confirms the alias was removed
+message RemoveSSHAliasResponse {
+  string message = 1; // Confirmation message
 }
 
