@@ -535,11 +535,12 @@ services:
       stop_grace_period: 1h  # Allow 1 hour for SSH connections to close gracefully
       # Note: Health check will fail when draining starts, so Swarm stops routing
       # new connections but keeps container running until connections close
-      ports:
-        - target: 2222
-          published: ${SSH_PROXY_PORT:-2222}
-          protocol: tcp
-          mode: ingress  # SSH proxy port (exposed directly, bypassing Traefik)
+      # SSH is now routed through Traefik, so we don't expose it directly
+      # ports:
+      #   - target: 2222
+      #     published: ${SSH_PROXY_PORT:-2222}
+      #     protocol: tcp
+      #     mode: ingress  # SSH proxy port (exposed directly, bypassing Traefik)
       resources:
         limits:
           cpus: "2"
@@ -587,6 +588,8 @@ services:
       - --entryPoints.websecure.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       - --entryPoints.deployments.address=:8000
       - --entryPoints.deployments.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - --entryPoints.ssh.address=:${SSH_PROXY_PORT:-2222}
+      - --entryPoints.ssh.proxyProtocol.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
       - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
@@ -610,6 +613,10 @@ services:
         published: 8080
         protocol: tcp
         mode: ingress  # Traefik dashboard accessible on port 8080
+      - target: ${SSH_PROXY_PORT:-2222}
+        published: ${SSH_PROXY_PORT:-2222}
+        protocol: tcp
+        mode: ingress  # SSH proxy port (routed through Traefik)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
@@ -645,6 +652,11 @@ services:
         # Note: Forwarded headers are configured at entrypoint level in Traefik command
         # This ensures real client IPs are forwarded from Docker network IPs
         - "traefik.http.services.api.loadbalancer.server.port=3001"
+        # SSH TCP routing through Traefik
+        - "traefik.tcp.routers.ssh.rule=HostSNI(`*`)"
+        - "traefik.tcp.routers.ssh.entrypoints=ssh"
+        - "traefik.tcp.routers.ssh.service=ssh"
+        - "traefik.tcp.services.ssh.loadbalancer.server.port=${SSH_PROXY_PORT:-2222}"
     networks:
       - obiente-network
 

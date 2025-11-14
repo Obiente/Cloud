@@ -219,11 +219,12 @@ services:
       - postgres
       - timescaledb
       - redis
-    ports:
-      - target: 2222
-        published: ${SSH_PROXY_PORT:-2222}
-        protocol: tcp
-        mode: ingress  # SSH proxy port (exposed directly, bypassing Traefik)
+    # SSH is now routed through Traefik, so we don't expose it directly
+    # ports:
+    #   - target: 2222
+    #     published: ${SSH_PROXY_PORT:-2222}
+    #     protocol: tcp
+    #     mode: ingress  # SSH proxy port (exposed directly, bypassing Traefik)
     deploy:
       mode: global # One instance per node for local Docker access
       update_config:
@@ -267,6 +268,11 @@ services:
         - "traefik.http.services.api.loadbalancer.server.port=3001"
         # Note: Forwarded headers are configured at entrypoint level in Traefik command
         # This ensures real client IPs are forwarded from Docker network IPs
+        # SSH TCP routing through Traefik
+        - "traefik.tcp.routers.ssh.rule=HostSNI(`*`)"
+        - "traefik.tcp.routers.ssh.entrypoints=ssh"
+        - "traefik.tcp.routers.ssh.service=ssh"
+        - "traefik.tcp.services.ssh.loadbalancer.server.port=${SSH_PROXY_PORT:-2222}"
     healthcheck:
       test:
         [
@@ -296,6 +302,8 @@ services:
       - --entryPoints.websecure.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       - --entryPoints.deployments.address=:8000
       - --entryPoints.deployments.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - --entryPoints.ssh.address=:${SSH_PROXY_PORT:-2222}
+      - --entryPoints.ssh.proxyProtocol.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       # Port 8080 is used by Traefik API (--api.insecure=true)
       # Grafana is accessible via port 80/443 at /grafana
       # Let's Encrypt
@@ -324,6 +332,10 @@ services:
         published: 8080
         protocol: tcp
         mode: ingress  # Traefik dashboard accessible on port 8080
+      - target: ${SSH_PROXY_PORT:-2222}
+        published: ${SSH_PROXY_PORT:-2222}
+        protocol: tcp
+        mode: ingress  # SSH proxy port (routed through Traefik)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt

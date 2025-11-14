@@ -122,8 +122,9 @@ services:
     # Docker's DNS (127.0.0.11) resolves service names, but we need to clear search domains
     # to prevent "postgres" from resolving to "postgres.my.obiente.cloud" (external IPs)
     dns_search: []  # Clear search domains - prevents appending .my.obiente.cloud to service names
-    ports:
-      - "${SSH_PROXY_PORT:-2222}:${SSH_PROXY_PORT:-2222}"  # SSH proxy port (exposed directly, bypassing Traefik)
+    # SSH is now routed through Traefik, so we don't expose it directly
+    # ports:
+    #   - "${SSH_PROXY_PORT:-2222}:${SSH_PROXY_PORT:-2222}"  # SSH proxy port (exposed directly, bypassing Traefik)
     networks:
       - obiente-network
       # Option 2: Connect to production Swarm network (uncomment if both dev and prod are on same host)
@@ -146,6 +147,11 @@ services:
       - "traefik.http.routers.api-secure.entrypoints=websecure"
       - "traefik.http.routers.api-secure.service=api"
       - "traefik.http.routers.api-secure.tls=true"
+      # SSH TCP routing through Traefik
+      - "traefik.tcp.routers.ssh.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.ssh.entrypoints=ssh"
+      - "traefik.tcp.routers.ssh.service=ssh"
+      - "traefik.tcp.services.ssh.loadbalancer.server.port=${SSH_PROXY_PORT:-2222}"
   postgres:
     image: postgres:16-alpine
     container_name: obiente-postgres
@@ -210,6 +216,8 @@ services:
       - --entryPoints.web.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       - --entryPoints.websecure.address=:443
       - --entryPoints.websecure.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      - --entryPoints.ssh.address=:${SSH_PROXY_PORT:-2222}
+      - --entryPoints.ssh.proxyProtocol.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
     labels:
       - "cloud.obiente.traefik=true"
       - "traefik.enable=true"
@@ -221,6 +229,7 @@ services:
       - "${PUBLIC_HTTP_PORT:-80}:80"
       - "${PUBLIC_HTTPS_PORT:-443}:443"
       - "${PUBLIC_TRAEFIK_DASHBOARD_PORT:-8080}:8080"
+      - "${SSH_PROXY_PORT:-2222}:${SSH_PROXY_PORT:-2222}"  # SSH proxy port (routed through Traefik)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
