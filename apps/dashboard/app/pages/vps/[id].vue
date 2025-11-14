@@ -21,15 +21,58 @@
         </OuiCardBody>
       </OuiCard>
 
-      <!-- Loading State -->
-      <OuiCard v-else-if="pending">
-        <OuiCardBody>
-          <OuiStack align="center" gap="md" class="py-16">
-            <OuiSpinner size="lg" />
-            <OuiText color="secondary">Loading VPS instance...</OuiText>
-          </OuiStack>
-        </OuiCardBody>
-      </OuiCard>
+      <!-- Loading State (only on initial load, not during refresh) -->
+      <template v-else-if="pending && !vps">
+        <!-- Header Skeleton -->
+        <OuiStack gap="md" class="md:gap-xl">
+          <OuiCard>
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiFlex justify="between" align="start" wrap="wrap" gap="md">
+                  <OuiStack gap="sm" class="flex-1 min-w-0">
+                    <OuiSkeleton width="12rem" height="2rem" variant="text" />
+                    <OuiSkeleton width="20rem" height="1.25rem" variant="text" />
+                  </OuiStack>
+                  <OuiFlex gap="sm">
+                    <OuiSkeleton width="5rem" height="2rem" variant="rectangle" rounded />
+                    <OuiSkeleton width="5rem" height="2rem" variant="rectangle" rounded />
+                    <OuiSkeleton width="5rem" height="2rem" variant="rectangle" rounded />
+                  </OuiFlex>
+                </OuiFlex>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+
+          <!-- Overview Cards Skeleton -->
+          <ResourceDetailsGrid cols="1" cols-md="2" cols-lg="4">
+            <OuiCard v-for="i in 4" :key="i">
+              <OuiCardBody>
+                <OuiStack gap="sm">
+                  <OuiSkeleton width="6rem" height="0.875rem" variant="text" />
+                  <OuiSkeleton width="4rem" height="1.5rem" variant="text" />
+                </OuiStack>
+              </OuiCardBody>
+            </OuiCard>
+          </ResourceDetailsGrid>
+
+          <!-- Tab Content Skeleton -->
+          <OuiCard>
+            <OuiCardHeader>
+              <OuiSkeleton width="8rem" height="1.5rem" variant="text" />
+            </OuiCardHeader>
+            <OuiCardBody>
+              <OuiStack gap="lg">
+                <OuiStack gap="md">
+                  <OuiSkeleton width="100%" height="1rem" variant="text" />
+                  <OuiSkeleton width="80%" height="1rem" variant="text" />
+                  <OuiSkeleton width="90%" height="1rem" variant="text" />
+                </OuiStack>
+                <OuiSkeleton width="100%" height="12rem" variant="rectangle" rounded />
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+        </OuiStack>
+      </template>
 
       <!-- Error State -->
       <OuiCard v-else-if="error" variant="outline" class="border-danger/20">
@@ -157,24 +200,6 @@
                 class="hidden sm:inline"
               >
                 Reboot
-              </OuiText>
-            </OuiButton>
-            <OuiButton
-              variant="outline"
-              color="danger"
-              size="sm"
-              @click="handleDelete"
-              :disabled="isActioning"
-              class="gap-1.5 md:gap-2 flex-1 md:flex-initial"
-            >
-              <TrashIcon class="h-4 w-4" />
-              <OuiText
-                as="span"
-                size="xs"
-                weight="medium"
-                class="hidden sm:inline"
-              >
-                Delete
               </OuiText>
             </OuiButton>
           </template>
@@ -392,9 +417,15 @@
                               </OuiStack>
                             </div>
                             <div v-else-if="sshInfoLoading" class="mt-2">
-                              <OuiStack align="center" gap="sm">
-                                <OuiSpinner size="sm" />
-                                <OuiText size="xs" color="secondary">Loading SSH connection info...</OuiText>
+                              <OuiStack gap="sm">
+                                <OuiText size="xs" weight="semibold">Quick Connect:</OuiText>
+                                <OuiBox p="sm" rounded="md" class="bg-surface-muted font-mono text-xs">
+                                  <OuiSkeleton width="24rem" height="1rem" variant="text" />
+                                </OuiBox>
+                                <OuiButton variant="ghost" size="xs" disabled class="self-start">
+                                  <ClipboardDocumentListIcon class="h-3 w-3 mr-1" />
+                                  Copy Command
+                                </OuiButton>
                               </OuiStack>
                             </div>
                             <div v-else-if="sshInfoError" class="mt-2">
@@ -469,6 +500,207 @@
                   :vps="vps"
                 />
               </template>
+              <template #settings>
+                <OuiStack gap="xl">
+                  <!-- General Settings -->
+                  <OuiCard>
+                    <OuiCardHeader>
+                      <OuiStack gap="xs">
+                        <OuiText as="h2" class="oui-card-title">General Settings</OuiText>
+                        <OuiText color="secondary" size="sm">
+                          Manage basic VPS configuration and information
+                        </OuiText>
+                      </OuiStack>
+                    </OuiCardHeader>
+                    <OuiCardBody>
+                      <OuiStack gap="lg">
+                        <!-- VPS Name -->
+                        <OuiStack gap="sm">
+                          <OuiText size="sm" weight="semibold">VPS Name</OuiText>
+                          <OuiFlex gap="sm" align="end">
+                            <OuiInput
+                              v-model="vpsName"
+                              placeholder="Enter VPS name"
+                              class="flex-1"
+                            />
+                            <OuiButton
+                              variant="solid"
+                              size="sm"
+                              @click="handleRename"
+                              :disabled="isActioning || !vpsName || vpsName === vps?.name"
+                            >
+                              Save
+                            </OuiButton>
+                          </OuiFlex>
+                          <OuiText size="xs" color="secondary">
+                            A descriptive name to identify this VPS instance
+                          </OuiText>
+                        </OuiStack>
+
+                        <!-- VPS Description -->
+                        <OuiStack gap="sm">
+                          <OuiText size="sm" weight="semibold">Description</OuiText>
+                          <OuiFlex gap="sm" align="end">
+                            <OuiInput
+                              v-model="vpsDescription"
+                              placeholder="Enter description (optional)"
+                              class="flex-1"
+                            />
+                            <OuiButton
+                              variant="solid"
+                              size="sm"
+                              @click="handleUpdateDescription"
+                              :disabled="isActioning || vpsDescription === vps?.description"
+                            >
+                              Save
+                            </OuiButton>
+                          </OuiFlex>
+                          <OuiText size="xs" color="secondary">
+                            Optional description for this VPS instance
+                          </OuiText>
+                        </OuiStack>
+
+                        <!-- VPS Information (Read-only) -->
+                        <OuiStack gap="sm">
+                          <OuiText size="sm" weight="semibold">VPS Information</OuiText>
+                          <OuiStack gap="xs">
+                            <OuiFlex justify="between" align="center">
+                              <OuiText size="sm" color="secondary">VPS ID</OuiText>
+                              <OuiText size="sm" weight="medium" class="font-mono text-xs">{{ vps?.id }}</OuiText>
+                            </OuiFlex>
+                            <OuiFlex justify="between" align="center" v-if="vps?.instanceId">
+                              <OuiText size="sm" color="secondary">VM ID</OuiText>
+                              <OuiText size="sm" weight="medium" class="font-mono text-xs">{{ vps.instanceId }}</OuiText>
+                            </OuiFlex>
+                            <OuiFlex justify="between" align="center" v-if="vps?.nodeId">
+                              <OuiText size="sm" color="secondary">Node ID</OuiText>
+                              <OuiText size="sm" weight="medium" class="font-mono text-xs">{{ vps.nodeId }}</OuiText>
+                            </OuiFlex>
+                            <OuiFlex justify="between" align="center">
+                              <OuiText size="sm" color="secondary">Region</OuiText>
+                              <OuiText size="sm" weight="medium">{{ vps?.region || "—" }}</OuiText>
+                            </OuiFlex>
+                            <OuiFlex justify="between" align="center">
+                              <OuiText size="sm" color="secondary">Size</OuiText>
+                              <OuiText size="sm" weight="medium">{{ vps?.size || "—" }}</OuiText>
+                            </OuiFlex>
+                          </OuiStack>
+                        </OuiStack>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+
+                  <!-- Security Settings -->
+                  <OuiCard>
+                    <OuiCardHeader>
+                      <OuiStack gap="xs">
+                        <OuiText as="h2" class="oui-card-title">Security Settings</OuiText>
+                        <OuiText color="secondary" size="sm">
+                          Manage passwords and security configurations
+                        </OuiText>
+                      </OuiStack>
+                    </OuiCardHeader>
+                    <OuiCardBody>
+                      <OuiStack gap="lg">
+                        <!-- Reset Root Password -->
+                        <OuiStack gap="sm">
+                          <OuiText size="sm" weight="semibold">Root Password</OuiText>
+                          <OuiText size="xs" color="secondary">
+                            Reset the root password for this VPS. The new password will be generated and shown once.
+                            It will take effect after the VPS is rebooted or cloud-init is re-run.
+                          </OuiText>
+                          <OuiButton
+                            variant="outline"
+                            size="sm"
+                            @click="resetPasswordDialogOpen = true"
+                            :disabled="isActioning || !vps?.instanceId"
+                            class="self-start"
+                          >
+                            Reset Root Password
+                          </OuiButton>
+                        </OuiStack>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+
+                  <!-- VM Management -->
+                  <OuiCard>
+                    <OuiCardHeader>
+                      <OuiStack gap="xs">
+                        <OuiText as="h2" class="oui-card-title">VM Management</OuiText>
+                        <OuiText color="secondary" size="sm">
+                          Advanced VM operations and reinitialization
+                        </OuiText>
+                      </OuiStack>
+                    </OuiCardHeader>
+                    <OuiCardBody>
+                      <OuiStack gap="lg">
+                        <!-- Reinitialize VM -->
+                        <OuiStack gap="sm">
+                          <OuiText size="sm" weight="semibold">Reinitialize VPS</OuiText>
+                          <OuiText size="xs" color="secondary">
+                            Reinstall the VPS with a fresh OS image. This will permanently delete all data on the VPS
+                            and reinstall the operating system. The VPS will be reconfigured with cloud-init settings.
+                          </OuiText>
+                          <OuiButton
+                            variant="outline"
+                            color="warning"
+                            size="sm"
+                            @click="handleReinit"
+                            :disabled="isActioning || !vps?.instanceId"
+                            class="self-start"
+                          >
+                            Reinitialize VPS
+                          </OuiButton>
+                        </OuiStack>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+
+                  <!-- Danger Zone -->
+                  <OuiCard variant="outline" class="border-danger/20">
+                    <OuiCardBody>
+                      <OuiStack gap="md">
+                        <OuiStack gap="xs">
+                          <OuiText as="h3" size="lg" weight="semibold" color="danger">
+                            Danger Zone
+                          </OuiText>
+                          <OuiText size="sm" color="secondary">
+                            Irreversible and destructive actions
+                          </OuiText>
+                        </OuiStack>
+                        <OuiStack gap="md">
+                          <!-- Delete VPS -->
+                          <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
+                            <OuiStack gap="xs" class="flex-1 min-w-0">
+                              <OuiText size="sm" weight="medium" color="primary">
+                                Delete VPS Instance
+                              </OuiText>
+                              <OuiText size="xs" color="secondary">
+                                Once you delete a VPS instance, there is no going back. This will
+                                permanently remove the VPS and all associated data.
+                              </OuiText>
+                            </OuiStack>
+                            <OuiButton
+                              variant="outline"
+                              color="danger"
+                              size="sm"
+                              @click="handleDelete"
+                              :disabled="isActioning"
+                              class="gap-2 shrink-0"
+                            >
+                              <TrashIcon class="h-4 w-4" />
+                              <OuiText as="span" size="xs" weight="medium"
+                                >Delete VPS</OuiText
+                              >
+                            </OuiButton>
+                          </OuiFlex>
+                        </OuiStack>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+                </OuiStack>
+              </template>
               <template #ssh-settings>
                 <!-- SSH Keys Management -->
                 <OuiStack gap="md">
@@ -496,8 +728,25 @@
                         </OuiFlex>
 
                         <!-- SSH Keys List -->
-                        <div v-if="sshKeysLoading" class="py-8">
-                          <OuiText color="secondary" class="text-center">Loading SSH keys...</OuiText>
+                        <div v-if="sshKeysLoading" class="space-y-3">
+                          <OuiBox
+                            v-for="i in 3"
+                            :key="i"
+                            p="md"
+                            rounded="lg"
+                            class="bg-surface-muted/40 ring-1 ring-border-muted"
+                          >
+                            <OuiStack gap="sm">
+                              <OuiFlex justify="between" align="start">
+                                <OuiStack gap="xs" class="flex-1">
+                                  <OuiSkeleton width="10rem" height="1rem" variant="text" />
+                                  <OuiSkeleton width="8rem" height="0.875rem" variant="text" />
+                                  <OuiSkeleton width="100%" height="1.5rem" variant="rectangle" rounded />
+                                </OuiStack>
+                                <OuiSkeleton width="4rem" height="1.75rem" variant="rectangle" rounded />
+                              </OuiFlex>
+                            </OuiStack>
+                          </OuiBox>
                         </div>
                         <div v-else-if="sshKeysError" class="py-8">
                           <OuiText color="danger" class="text-center">
@@ -599,6 +848,104 @@
                     </OuiCardBody>
                   </OuiCard>
 
+                  <!-- SSH Alias -->
+                  <OuiCard>
+                    <OuiCardHeader>
+                      <OuiStack gap="xs">
+                        <OuiText as="h2" class="oui-card-title">SSH Alias</OuiText>
+                        <OuiText color="secondary" size="sm">
+                          Set a memorable alias for easier SSH connections. Instead of using the long VPS ID, you can use a short alias like "prod-db" or "web-1".
+                        </OuiText>
+                      </OuiStack>
+                    </OuiCardHeader>
+                    <OuiCardBody>
+                      <OuiStack gap="md">
+                        <OuiBox variant="info" p="sm" rounded="md">
+                          <OuiStack gap="xs">
+                            <OuiText size="xs" weight="semibold">About SSH Aliases</OuiText>
+                            <OuiText size="xs" color="secondary">
+                              SSH aliases make it easier to connect to your VPS. Instead of typing the long VPS ID, you can use a short, memorable alias. Aliases must be unique and can only contain alphanumeric characters, hyphens, and underscores.
+                            </OuiText>
+                          </OuiStack>
+                        </OuiBox>
+
+                        <div v-if="sshAliasLoading" class="py-4">
+                          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+                            <OuiStack gap="sm">
+                              <OuiSkeleton width="8rem" height="1rem" variant="text" />
+                              <OuiSkeleton width="12rem" height="0.875rem" variant="text" />
+                              <OuiSkeleton width="100%" height="1.5rem" variant="rectangle" rounded />
+                            </OuiStack>
+                          </OuiBox>
+                        </div>
+                        <div v-else-if="sshAliasError" class="py-4">
+                          <OuiBox variant="danger" p="sm" rounded="md">
+                            <OuiText color="danger" size="sm" class="text-center">
+                              Failed to load SSH alias: {{ sshAliasError }}
+                            </OuiText>
+                          </OuiBox>
+                        </div>
+                        <div v-else-if="sshAlias" class="space-y-3">
+                          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+                            <OuiStack gap="sm">
+                              <OuiFlex justify="between" align="start">
+                                <OuiStack gap="xs">
+                                  <OuiText size="sm" weight="semibold">SSH Alias Active</OuiText>
+                                  <OuiText size="xs" color="secondary" class="font-mono">
+                                    {{ sshAlias }}
+                                  </OuiText>
+                                  <OuiText size="xs" color="muted">
+                                    Connect using: <code class="text-xs bg-surface-muted px-1 py-0.5 rounded">ssh -p 2323 root@{{ sshAlias }}@localhost</code>
+                                  </OuiText>
+                                </OuiStack>
+                                <OuiBadge variant="success" size="sm">Active</OuiBadge>
+                              </OuiFlex>
+                            </OuiStack>
+                          </OuiBox>
+
+                          <OuiFlex gap="sm">
+                            <OuiButton
+                              variant="outline"
+                              color="primary"
+                              @click="openSetSSHAliasDialog"
+                              :disabled="settingSSHAlias || removingSSHAlias || !vps.instanceId"
+                              class="flex-1"
+                            >
+                              <PencilIcon class="h-4 w-4 mr-2" />
+                              Change Alias
+                            </OuiButton>
+                            <OuiButton
+                              variant="outline"
+                              color="danger"
+                              @click="openRemoveSSHAliasDialog"
+                              :disabled="settingSSHAlias || removingSSHAlias || !vps.instanceId"
+                              class="flex-1"
+                            >
+                              <TrashIcon class="h-4 w-4 mr-2" />
+                              Remove
+                            </OuiButton>
+                          </OuiFlex>
+                        </div>
+                        <div v-else class="py-4">
+                          <OuiStack gap="md" align="center">
+                            <OuiText color="secondary" class="text-center">
+                              No SSH alias set. Set an alias to make SSH connections easier.
+                            </OuiText>
+                            <OuiButton
+                              variant="outline"
+                              color="primary"
+                              @click="openSetSSHAliasDialog"
+                              :disabled="settingSSHAlias || !vps.instanceId"
+                            >
+                              <PlusIcon class="h-4 w-4 mr-2" />
+                              Set SSH Alias
+                            </OuiButton>
+                          </OuiStack>
+                        </div>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+
                   <!-- SSH Bastion Key -->
                   <OuiCard>
                     <OuiCardHeader>
@@ -621,10 +968,14 @@
                         </OuiBox>
 
                         <div v-if="bastionKeyLoading" class="py-4">
-                          <OuiStack align="center" gap="sm">
-                            <OuiSpinner size="sm" />
-                            <OuiText color="secondary" size="sm">Loading bastion key status...</OuiText>
-                          </OuiStack>
+                          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+                            <OuiStack gap="sm">
+                              <OuiSkeleton width="10rem" height="1rem" variant="text" />
+                              <OuiSkeleton width="8rem" height="0.875rem" variant="text" />
+                              <OuiSkeleton width="100%" height="1.5rem" variant="rectangle" rounded />
+                              <OuiSkeleton width="6rem" height="1.75rem" variant="rectangle" rounded />
+                            </OuiStack>
+                          </OuiBox>
                         </div>
                         <div v-else-if="bastionKeyError" class="py-4">
                           <OuiBox variant="danger" p="sm" rounded="md">
@@ -708,10 +1059,14 @@
                         </OuiBox>
 
                         <div v-if="terminalKeyLoading" class="py-4">
-                          <OuiStack align="center" gap="sm">
-                            <OuiSpinner size="sm" />
-                            <OuiText color="secondary" size="sm">Loading terminal key status...</OuiText>
-                          </OuiStack>
+                          <OuiBox p="md" rounded="lg" class="bg-surface-muted/40 ring-1 ring-border-muted">
+                            <OuiStack gap="sm">
+                              <OuiSkeleton width="10rem" height="1rem" variant="text" />
+                              <OuiSkeleton width="8rem" height="0.875rem" variant="text" />
+                              <OuiSkeleton width="100%" height="1.5rem" variant="rectangle" rounded />
+                              <OuiSkeleton width="6rem" height="1.75rem" variant="rectangle" rounded />
+                            </OuiStack>
+                          </OuiBox>
                         </div>
                         <div v-else-if="terminalKeyError" class="py-4">
                           <OuiBox variant="danger" p="sm" rounded="md">
@@ -823,6 +1178,92 @@
                         :disabled="removingTerminalKey"
                       >
                         {{ removingTerminalKey ? "Removing..." : "Remove Key" }}
+                      </OuiButton>
+                    </OuiFlex>
+                  </OuiStack>
+                </OuiDialog>
+
+                <!-- Set SSH Alias Dialog -->
+                <OuiDialog
+                  v-model:open="setSSHAliasDialogOpen"
+                  title="Set SSH Alias"
+                  description="Set a memorable alias for easier SSH connections."
+                  size="md"
+                >
+                  <OuiStack gap="md">
+                    <OuiBox variant="info" p="sm" rounded="md">
+                      <OuiStack gap="xs">
+                        <OuiText size="xs" weight="semibold">Alias Requirements</OuiText>
+                        <OuiText size="xs" color="secondary">
+                          • 1-63 characters<br/>
+                          • Alphanumeric characters, hyphens, and underscores only<br/>
+                          • Cannot start with "vps-"<br/>
+                          • Must be unique across all VPS instances
+                        </OuiText>
+                      </OuiStack>
+                    </OuiBox>
+
+                    <div>
+                      <OuiInput
+                        v-model="newSSHAlias"
+                        label="SSH Alias"
+                        placeholder="e.g., prod-db, web-1, api-server"
+                        :disabled="settingSSHAlias"
+                        @keyup.enter="setSSHAlias"
+                      />
+                      <OuiText v-if="newSSHAlias" size="xs" color="secondary" class="mt-1">
+                        Connect using: <code class="text-xs bg-surface-muted px-1 py-0.5 rounded">ssh -p 2323 root@{{ newSSHAlias }}@localhost</code>
+                      </OuiText>
+                    </div>
+
+                    <OuiFlex justify="end" gap="sm">
+                      <OuiButton
+                        variant="ghost"
+                        @click="setSSHAliasDialogOpen = false"
+                        :disabled="settingSSHAlias"
+                      >
+                        Cancel
+                      </OuiButton>
+                      <OuiButton
+                        variant="solid"
+                        @click="setSSHAlias"
+                        :disabled="settingSSHAlias || !newSSHAlias || !isValidSSHAlias(newSSHAlias)"
+                      >
+                        {{ settingSSHAlias ? "Setting..." : "Set Alias" }}
+                      </OuiButton>
+                    </OuiFlex>
+                  </OuiStack>
+                </OuiDialog>
+
+                <!-- Remove SSH Alias Dialog -->
+                <OuiDialog
+                  v-model:open="removeSSHAliasDialogOpen"
+                  title="Remove SSH Alias"
+                  description="This will remove the SSH alias for this VPS."
+                  size="md"
+                >
+                  <OuiStack gap="md">
+                    <OuiBox variant="info" p="sm" rounded="md">
+                      <OuiText size="xs" color="secondary">
+                        After removing the alias, you'll need to use the full VPS ID to connect: <code class="text-xs bg-surface-muted px-1 py-0.5 rounded">ssh -p 2323 root@{{ vpsId }}@localhost</code>
+                      </OuiText>
+                    </OuiBox>
+
+                    <OuiFlex justify="end" gap="sm">
+                      <OuiButton
+                        variant="ghost"
+                        @click="removeSSHAliasDialogOpen = false"
+                        :disabled="removingSSHAlias"
+                      >
+                        Cancel
+                      </OuiButton>
+                      <OuiButton
+                        variant="solid"
+                        color="danger"
+                        @click="removeSSHAlias"
+                        :disabled="removingSSHAlias"
+                      >
+                        {{ removingSSHAlias ? "Removing..." : "Remove Alias" }}
                       </OuiButton>
                     </OuiFlex>
                   </OuiStack>
@@ -1088,7 +1529,7 @@ import ResourceStatusBadge from "~/components/resource/ResourceStatusBadge.vue";
 import ResourceDetailsGrid from "~/components/resource/ResourceDetailsGrid.vue";
 import ResourceDetailCard from "~/components/resource/ResourceDetailCard.vue";
 import ResourceTabs from "~/components/resource/ResourceTabs.vue";
-import OuiSpinner from "~/components/oui/Spinner.vue";
+import OuiSkeleton from "~/components/oui/Skeleton.vue";
 import type { TabItem } from "~/components/oui/Tabs.vue";
 import { date } from "@obiente/proto/utils";
 import { formatDate } from "~/utils/common";
@@ -1136,6 +1577,7 @@ const {
   pending,
   error,
   refresh: refreshVPSData,
+  execute: executeVPSData,
 } = await useAsyncData(
   () => `vps-${vpsId.value}`,
   async () => {
@@ -1163,12 +1605,27 @@ const {
 
 const vps = computed(() => vpsData.value);
 
+// Settings form data
+const vpsName = ref("");
+const vpsDescription = ref("");
+
+// Watch VPS data to update form fields
+watch(vps, (newVps) => {
+  if (newVps) {
+    vpsName.value = newVps.name || "";
+    vpsDescription.value = newVps.description || "";
+  }
+}, { immediate: true });
+
 // Refresh function with loading state
+// This keeps existing data visible while refreshing in the background
 const refreshVPS = async () => {
   if (isRefreshing.value) return;
   isRefreshing.value = true;
   try {
-    await refreshVPSData();
+    // Use execute instead of refresh to avoid setting pending to true
+    // This keeps the existing UI visible while data is being fetched
+    await executeVPSData();
   } finally {
     isRefreshing.value = false;
   }
@@ -1253,6 +1710,16 @@ const bastionKeyLoading = ref(false);
 const bastionKeyError = ref<string | null>(null);
 const rotatingBastionKey = ref(false);
 
+// SSH alias management
+const sshAlias = ref<string | null>(null);
+const sshAliasLoading = ref(false);
+const sshAliasError = ref<string | null>(null);
+const setSSHAliasDialogOpen = ref(false);
+const removeSSHAliasDialogOpen = ref(false);
+const newSSHAlias = ref("");
+const settingSSHAlias = ref(false);
+const removingSSHAlias = ref(false);
+
 // Password Reset
 const resetPasswordDialogOpen = ref(false);
 const resettingPassword = ref(false);
@@ -1326,13 +1793,115 @@ const fetchBastionKey = async () => {
   }
 };
 
-// Fetch both keys when VPS is loaded
+// SSH alias functions
+const fetchSSHAlias = async () => {
+  if (!orgId.value || !vpsId.value || !vps.value?.instanceId) {
+    sshAlias.value = null;
+    sshAliasLoading.value = false;
+    return;
+  }
+
+  sshAliasLoading.value = true;
+  sshAliasError.value = null;
+  try {
+    const res = await configClient.getSSHAlias({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+    
+    sshAlias.value = res.alias || null;
+    sshAliasLoading.value = false;
+  } catch (err: any) {
+    if (err instanceof ConnectError && err.code === Code.NotFound) {
+      sshAlias.value = null;
+    } else {
+      sshAliasError.value = err instanceof Error ? err.message : "Failed to load SSH alias";
+    }
+    sshAliasLoading.value = false;
+  }
+};
+
+const isValidSSHAlias = (alias: string): boolean => {
+  if (!alias || alias.length === 0 || alias.length > 63) {
+    return false;
+  }
+  // Check if contains only allowed characters
+  const validPattern = /^[a-zA-Z0-9_-]+$/;
+  if (!validPattern.test(alias)) {
+    return false;
+  }
+  // Cannot start with "vps-"
+  if (alias.length >= 4 && alias.substring(0, 4) === "vps-") {
+    return false;
+  }
+  return true;
+};
+
+const openSetSSHAliasDialog = () => {
+  newSSHAlias.value = sshAlias.value || "";
+  setSSHAliasDialogOpen.value = true;
+};
+
+const openRemoveSSHAliasDialog = () => {
+  removeSSHAliasDialogOpen.value = true;
+};
+
+const setSSHAlias = async () => {
+  if (!orgId.value || !vpsId.value || !newSSHAlias.value || !isValidSSHAlias(newSSHAlias.value)) {
+    return;
+  }
+
+  settingSSHAlias.value = true;
+  try {
+    const response = await configClient.setSSHAlias({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+      alias: newSSHAlias.value,
+    });
+    
+    toast.success(response.message || `SSH alias '${response.alias}' has been set.`);
+    sshAlias.value = response.alias;
+    setSSHAliasDialogOpen.value = false;
+    newSSHAlias.value = "";
+  } catch (err: any) {
+    const errorMsg = err instanceof Error ? err.message : "Failed to set SSH alias";
+    toast.error(errorMsg);
+  } finally {
+    settingSSHAlias.value = false;
+  }
+};
+
+const removeSSHAlias = async () => {
+  if (!orgId.value || !vpsId.value) {
+    return;
+  }
+
+  removingSSHAlias.value = true;
+  try {
+    const response = await configClient.removeSSHAlias({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+    
+    toast.success(response.message || "SSH alias has been removed.");
+    sshAlias.value = null;
+    removeSSHAliasDialogOpen.value = false;
+  } catch (err: any) {
+    const errorMsg = err instanceof Error ? err.message : "Failed to remove SSH alias";
+    toast.error(errorMsg);
+  } finally {
+    removingSSHAlias.value = false;
+  }
+};
+
+// Fetch both keys and alias when VPS is loaded
 watch(() => vps.value?.instanceId, async (instanceId) => {
   if (instanceId) {
-    await Promise.all([fetchTerminalKey(), fetchBastionKey()]);
+    await Promise.all([fetchTerminalKey(), fetchBastionKey(), fetchSSHAlias()]);
   } else {
     terminalKey.value = null;
     bastionKey.value = null;
+    sshAlias.value = null;
   }
 }, { immediate: true });
 
@@ -1908,6 +2477,85 @@ async function performReboot() {
   }
 }
 
+async function handleRename() {
+  if (!vps.value || !vpsName.value.trim() || vpsName.value === vps.value.name) return;
+
+  isActioning.value = true;
+  try {
+    await client.updateVPS({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+      name: vpsName.value.trim(),
+    });
+    toast.success("VPS renamed", "The VPS name has been updated.");
+    await refreshVPS();
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    toast.error("Failed to rename VPS", message);
+  } finally {
+    isActioning.value = false;
+  }
+}
+
+async function handleUpdateDescription() {
+  if (!vps.value || vpsDescription.value === vps.value.description) return;
+
+  isActioning.value = true;
+  try {
+    await client.updateVPS({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+      description: vpsDescription.value.trim() || undefined,
+    });
+    toast.success("Description updated", "The VPS description has been updated.");
+    await refreshVPS();
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    toast.error("Failed to update description", message);
+  } finally {
+    isActioning.value = false;
+  }
+}
+
+async function handleReinit() {
+  if (!vps.value) return;
+  
+  const confirmed = await showConfirm({
+    title: "Reinitialize VPS",
+    message: `Are you sure you want to reinitialize "${vps.value.name}"? This will permanently delete all data on the VPS and reinstall the operating system. The VPS will be reconfigured with the same cloud-init settings. This action cannot be undone.`,
+    confirmLabel: "Reinitialize",
+    cancelLabel: "Cancel",
+    variant: "danger",
+  });
+  if (!confirmed) return;
+
+  isActioning.value = true;
+  try {
+    const res = await client.reinitializeVPS({
+      organizationId: orgId.value,
+      vpsId: vpsId.value,
+    });
+    
+    toast.success("VPS reinitialized", res.message || "The VPS is being reinitialized.");
+    
+    // Show password dialog if password was returned
+    if (res.rootPassword) {
+      await showAlert({
+        title: "VPS Reinitialized",
+        message: `The VPS has been reinitialized. Please save this root password as it will not be shown again:\n\n${res.rootPassword}\n\nThe VPS is being provisioned and cloud-init will be reapplied.`,
+      });
+    }
+    
+    // Refresh VPS data
+    await refreshVPS();
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    toast.error("Failed to reinitialize VPS", message);
+  } finally {
+    isActioning.value = false;
+  }
+}
+
 async function handleDelete() {
   if (!vps.value) return;
   const confirmed = await showConfirm({
@@ -1944,6 +2592,7 @@ const tabs = computed<TabItem[]>(() => [
   { id: "users", label: "Users", icon: UserIcon },
   { id: "cloud-init", label: "Cloud-Init", icon: CogIcon },
   { id: "ssh-settings", label: "SSH Settings", icon: KeyIcon },
+  { id: "settings", label: "Settings", icon: CogIcon },
   { id: "audit-logs", label: "Audit Logs", icon: ClipboardDocumentListIcon },
 ]);
 
