@@ -52,6 +52,13 @@ service SuperadminService {
   
   // VPS management endpoints
   rpc ListAllVPS(ListAllVPSRequest) returns (ListAllVPSResponse);
+  rpc SuperadminGetVPS(SuperadminGetVPSRequest) returns (SuperadminGetVPSResponse);
+  rpc SuperadminResizeVPS(SuperadminResizeVPSRequest) returns (SuperadminResizeVPSResponse);
+  rpc SuperadminSuspendVPS(SuperadminSuspendVPSRequest) returns (SuperadminSuspendVPSResponse);
+  rpc SuperadminUnsuspendVPS(SuperadminUnsuspendVPSRequest) returns (SuperadminUnsuspendVPSResponse);
+  rpc SuperadminUpdateVPSCloudInit(SuperadminUpdateVPSCloudInitRequest) returns (SuperadminUpdateVPSCloudInitResponse);
+  rpc SuperadminForceStopVPS(SuperadminForceStopVPSRequest) returns (SuperadminForceStopVPSResponse);
+  rpc SuperadminForceDeleteVPS(SuperadminForceDeleteVPSRequest) returns (SuperadminForceDeleteVPSResponse);
   
   // VPS size catalog management endpoints
   rpc ListVPSSizes(ListVPSSizesRequest) returns (ListVPSSizesResponse);
@@ -92,6 +99,8 @@ message OrganizationOverview {
   int64 member_count = 8;
   int64 invite_count = 9;
   int64 deployment_count = 10;
+  optional string owner_id = 11; // Owner user ID
+  optional string owner_name = 12; // Owner name or email
 }
 
 message SuperadminPendingInvite {
@@ -105,12 +114,13 @@ message SuperadminPendingInvite {
 message DeploymentOverview {
   string id = 1;
   string organization_id = 2;
-  string name = 3;
-  obiente.cloud.deployments.v1.Environment environment = 4;
-  obiente.cloud.deployments.v1.DeploymentStatus status = 5;
-  optional string domain = 6;
-  google.protobuf.Timestamp created_at = 7;
-  google.protobuf.Timestamp last_deployed_at = 8;
+  optional string organization_name = 3; // Organization name for display
+  string name = 4;
+  obiente.cloud.deployments.v1.Environment environment = 5;
+  obiente.cloud.deployments.v1.DeploymentStatus status = 6;
+  optional string domain = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp last_deployed_at = 9;
 }
 
 message OrganizationUsage {
@@ -669,6 +679,92 @@ message DeleteVPSSizeRequest {
 // Delete VPS Size Response
 message DeleteVPSSizeResponse {
   bool success = 1;
+}
+
+// Superadmin VPS Management Messages
+
+// Superadmin Get VPS Request (superadmin - bypasses organization checks)
+message SuperadminGetVPSRequest {
+  string vps_id = 1; // VPS ID to fetch
+}
+
+// Superadmin Get VPS Response
+message SuperadminGetVPSResponse {
+  obiente.cloud.vps.v1.VPSInstance vps = 1;
+  string organization_name = 2; // Organization name (for display)
+}
+
+// Superadmin Resize VPS Request
+message SuperadminResizeVPSRequest {
+  string vps_id = 1; // VPS ID to resize
+  string new_size = 2; // New VPS size ID (e.g., "small", "medium", "large")
+  bool grow_disk = 3; // Whether to grow the disk (default: true)
+  bool apply_cloudinit = 4; // Whether to apply cloud-init for disk growth (default: true)
+}
+
+// Superadmin Resize VPS Response
+message SuperadminResizeVPSResponse {
+  obiente.cloud.vps.v1.VPSInstance vps = 1;
+  string message = 2; // Information message about the resize operation
+}
+
+// Superadmin Suspend VPS Request
+message SuperadminSuspendVPSRequest {
+  string vps_id = 1; // VPS ID to suspend
+  optional string reason = 2; // Optional reason for suspension
+}
+
+// Superadmin Suspend VPS Response
+message SuperadminSuspendVPSResponse {
+  obiente.cloud.vps.v1.VPSInstance vps = 1;
+  string message = 2;
+}
+
+// Superadmin Unsuspend VPS Request
+message SuperadminUnsuspendVPSRequest {
+  string vps_id = 1; // VPS ID to unsuspend
+}
+
+// Superadmin Unsuspend VPS Response
+message SuperadminUnsuspendVPSResponse {
+  obiente.cloud.vps.v1.VPSInstance vps = 1;
+  string message = 2;
+}
+
+// Superadmin Update VPS CloudInit Request
+message SuperadminUpdateVPSCloudInitRequest {
+  string vps_id = 1; // VPS ID
+  obiente.cloud.vps.v1.CloudInitConfig cloud_init = 2; // New cloud-init configuration
+  bool grow_disk_if_needed = 3; // Whether to grow disk if cloud-init requires it (default: true)
+}
+
+// Superadmin Update VPS CloudInit Response
+message SuperadminUpdateVPSCloudInitResponse {
+  obiente.cloud.vps.v1.VPSInstance vps = 1;
+  string message = 2;
+}
+
+// Superadmin Force Stop VPS Request
+message SuperadminForceStopVPSRequest {
+  string vps_id = 1; // VPS ID to force stop
+}
+
+// Superadmin Force Stop VPS Response
+message SuperadminForceStopVPSResponse {
+  obiente.cloud.vps.v1.VPSInstance vps = 1;
+  string message = 2;
+}
+
+// Superadmin Force Delete VPS Request
+message SuperadminForceDeleteVPSRequest {
+  string vps_id = 1; // VPS ID to force delete
+  bool hard_delete = 2; // If true, perform hard delete (default: false, soft delete)
+}
+
+// Superadmin Force Delete VPS Response
+message SuperadminForceDeleteVPSResponse {
+  bool success = 1;
+  string message = 2;
 }
 
 // Pagination moved to obiente.cloud.common.v1.Pagination

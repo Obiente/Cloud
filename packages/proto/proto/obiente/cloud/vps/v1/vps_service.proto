@@ -20,6 +20,7 @@ enum VPSStatus {
   FAILED = 7;        // VPS provisioning or operation failed
   DELETING = 8;      // VPS is being deleted
   DELETED = 9;       // VPS has been deleted (soft delete)
+  SUSPENDED = 10;     // VPS is suspended (superadmin action, prevents normal operations)
 }
 
 // VPSImage represents the OS image for the VPS
