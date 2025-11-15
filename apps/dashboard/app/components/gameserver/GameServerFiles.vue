@@ -75,6 +75,46 @@
           >
         </div>
 
+        <!-- Volume/Container Selector -->
+        <div v-if="volumes.length > 0" class="p-3 border-b border-border-default">
+          <OuiText
+            size="xs"
+            weight="semibold"
+            class="uppercase tracking-[0.08em] text-[11px] mb-2 block"
+            >Source</OuiText
+          >
+          <nav class="flex flex-col gap-1.5">
+            <button
+              class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[13px] text-left transition-colors duration-150 text-text-secondary border-none bg-transparent cursor-pointer hover:bg-surface-hover hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed"
+              :class="{
+                'bg-surface-selected text-text-primary':
+                  source.type === 'container',
+              }"
+              :disabled="!containerRunning"
+              @click="handleSwitchSource('container')"
+            >
+              <ServerIcon class="h-4 w-4" />
+              <span>Container filesystem</span>
+            </button>
+            <button
+              v-for="volume in volumes"
+              :key="volume.name"
+              class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[13px] text-left transition-colors duration-150 text-text-secondary border-none bg-transparent cursor-pointer hover:bg-surface-hover hover:text-text-primary"
+              :class="{
+                'bg-surface-selected text-text-primary':
+                  source.type === 'volume' && source.volumeName === volume.name,
+              }"
+              @click="handleSwitchSource('volume', volume.name || '')"
+            >
+              <CubeIcon class="h-4 w-4" />
+              <span>{{ volume.mountPoint || volume.name }}</span>
+              <span v-if="volume.mountPoint && volume.name !== volume.mountPoint" class="ml-auto text-[11px] text-text-tertiary">
+                {{ getVolumeDisplayName(volume.name) }}
+              </span>
+            </button>
+          </nav>
+        </div>
+
         <div class="flex-1 overflow-y-auto font-mono" role="tree">
           <div class="p-2">
             <div
@@ -160,7 +200,7 @@
         class="flex flex-col border border-border-default rounded-[10px] bg-surface-base overflow-hidden min-h-0"
       >
         <header
-          class="flex justify-between items-center gap-4 py-3 px-4 border-b border-border-default"
+          class="flex justify-between items-center gap-4 sm:gap-6 py-3 px-4 border-b border-border-default flex-wrap"
         >
           <div class="flex flex-col gap-1.5">
             <OuiText size="sm" weight="semibold">
@@ -271,13 +311,13 @@
               </Transition>
             </OuiFlex>
           </div>
-          <OuiFlex gap="sm" align="center">
+          <OuiFlex gap="md" align="center" wrap="wrap" class="w-full sm:w-auto shrink-0">
             <OuiCombobox
               v-if="currentNode?.type === 'file'"
               v-model="fileLanguage"
               :options="languageOptions"
               placeholder="Search language..."
-              class="min-w-[180px] max-w-[250px]"
+              class="w-full sm:w-auto min-w-[180px] max-w-[250px] shrink-0"
               size="sm"
             />
             <OuiButton
@@ -295,38 +335,30 @@
               size="sm"
               :disabled="isSaving"
               @click="handleSaveFile"
+              class="flex-1 sm:flex-initial shrink-0 min-w-fit"
             >
-              <DocumentArrowDownIcon class="h-4 w-4 mr-1.5" />
-              <span>{{ isSaving ? "Saving..." : "Save" }}</span>
+              <DocumentArrowDownIcon class="h-4 w-4 sm:mr-1.5" />
+              <span class="hidden sm:inline">{{ isSaving ? "Saving..." : "Save" }}</span>
+              <span class="sm:hidden">{{ isSaving ? "..." : "Save" }}</span>
             </OuiButton>
             <OuiButton
               variant="ghost"
               size="sm"
               :disabled="!currentNode || currentNode.type !== 'file'"
               @click="handleDownload"
+              class="flex-1 sm:flex-initial shrink-0 min-w-fit"
+              title="Download"
             >
-              Download
+              <span class="hidden sm:inline">Download</span>
+              <DocumentArrowDownIcon class="h-4 w-4 sm:hidden" />
             </OuiButton>
-            <OuiMenu v-if="currentNode">
-              <template #trigger>
-                <OuiButton variant="ghost" size="sm">More</OuiButton>
-              </template>
-              <OuiMenuItem value="refresh" @select="handleRefreshSelection"
-                >Refresh</OuiMenuItem
-              >
-              <OuiMenuItem
-                value="rename"
-                @select="() => currentNode && queueRename(currentNode)"
-                >Rename</OuiMenuItem
-              >
-              <OuiMenuSeparator />
-              <OuiMenuItem
-                value="delete"
-                @select="() => currentNode && queueDelete([currentNode.path])"
-              >
-                Delete
-              </OuiMenuItem>
-            </OuiMenu>
+            <FileActionsMenu
+              :current-node="currentNode"
+              button-class="flex-1 sm:flex-initial shrink-0 min-w-fit"
+              @refresh="handleRefreshSelection"
+              @rename="(node) => queueRename(node)"
+              @delete="(node) => queueDelete([node.path])"
+            />
           </OuiFlex>
         </header>
 
@@ -492,7 +524,7 @@
               @save="handleSaveFile"
             />
             <div
-              v-else
+              v-else-if="!selectedPath || !currentNode || currentNode.type !== 'file'"
               class="h-full flex items-center justify-center text-text-tertiary"
             >
               <OuiText size="sm" color="secondary"
@@ -518,6 +550,8 @@
     CheckCircleIcon,
     XCircleIcon,
     DocumentArrowDownIcon,
+    ServerIcon,
+    CubeIcon,
   } from "@heroicons/vue/24/outline";
   import { TreeView } from "@ark-ui/vue/tree-view";
   import {
@@ -526,6 +560,11 @@
   } from "@ark-ui/vue/collection";
   import TreeNode from "../deployment/TreeNode.vue";
   import FileUploader from "./GameServerFileUploader.vue";
+import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
+import MinecraftEULAEditor from "./MinecraftEULAEditor.vue";
+import MinecraftServerPropertiesEditor from "./MinecraftServerPropertiesEditor.vue";
+import MinecraftWhitelistEditor from "./MinecraftWhitelistEditor.vue";
+import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
   import { useFileExplorer } from "~/composables/useFileExplorer";
   import { useConnectClient } from "~/lib/connect-client";
   import { GameServerService } from "@obiente/proto";
@@ -711,6 +750,34 @@
 
   // Ensure volumes is reactive for template - access via computed
   const volumes = computed(() => volumesRef.value || []);
+
+  // Helper function to get a user-friendly volume display name
+  function getVolumeDisplayName(volumeName: string | undefined): string {
+    if (!volumeName) return "";
+    
+    // For game server volumes, extract meaningful name from the volume name
+    // e.g., "gameserver-gs-1763160031-data" -> "Data Volume"
+    if (volumeName.startsWith("gameserver-") && volumeName.endsWith("-data")) {
+      return "Data Volume";
+    }
+    
+    // For anonymous volumes with mount point names, extract the mount point
+    // e.g., "anonymous-config" -> "Config Volume"
+    if (volumeName.startsWith("anonymous-")) {
+      const mountPoint = volumeName.replace("anonymous-", "");
+      if (mountPoint && mountPoint !== "volume") {
+        return mountPoint.charAt(0).toUpperCase() + mountPoint.slice(1) + " Volume";
+      }
+      return "Anonymous Volume";
+    }
+    
+    // For other volumes, show a shortened version if it's a hash
+    if (volumeName.length > 20 && /^[a-f0-9]+$/.test(volumeName)) {
+      return volumeName.substring(0, 8) + "...";
+    }
+    
+    return volumeName;
+  }
 
   type ExplorerTreeNode = ArkTreeNode & {
     value: ExplorerNode | null;

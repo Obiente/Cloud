@@ -121,37 +121,44 @@ const RECONNECT_DELAY = 2000; // Start with 2 seconds, exponential backoff
 const logs = ref<Array<{ line: string; timestamp: string; level?: number }>>([]);
 let terminalOutputBuffer = ""; // Buffer for partial lines from terminal WebSocket
 
+// Helper function to check if a line is empty or only whitespace
+function isEmptyOrWhitespace(line: string): boolean {
+  return !line || line.trim().length === 0;
+}
+
 // Format logs for OuiLogs component
 const formattedLogs = computed<LogEntry[]>(() => {
-  return logs.value.map((log) => {
-    // Map log level from backend to frontend format
-    // OuiLogs expects: "info" | "warning" | "error" | "debug" | "trace"
-    let level: "info" | "warning" | "error" | "debug" | "trace" = "info";
-    if (log.level !== undefined) {
-      // LogLevel enum: 0=UNSPECIFIED, 1=TRACE, 2=DEBUG, 3=INFO, 4=WARN, 5=ERROR
-      switch (log.level) {
-        case 5: // ERROR
-          level = "error";
-          break;
-        case 4: // WARN -> "warning" (OuiLogs expects "warning", not "warn")
-          level = "warning";
-          break;
-        case 2: // DEBUG
-        case 1: // TRACE
-          level = "debug";
-          break;
-        case 3: // INFO
-        default:
-          level = "info";
-          break;
+  return logs.value
+    .filter((log) => !isEmptyOrWhitespace(log.line)) // Filter out empty/whitespace-only lines
+    .map((log) => {
+      // Map log level from backend to frontend format
+      // OuiLogs expects: "info" | "warning" | "error" | "debug" | "trace"
+      let level: "info" | "warning" | "error" | "debug" | "trace" = "info";
+      if (log.level !== undefined) {
+        // LogLevel enum: 0=UNSPECIFIED, 1=TRACE, 2=DEBUG, 3=INFO, 4=WARN, 5=ERROR
+        switch (log.level) {
+          case 5: // ERROR
+            level = "error";
+            break;
+          case 4: // WARN -> "warning" (OuiLogs expects "warning", not "warn")
+            level = "warning";
+            break;
+          case 2: // DEBUG
+          case 1: // TRACE
+            level = "debug";
+            break;
+          case 3: // INFO
+          default:
+            level = "info";
+            break;
+        }
       }
-    }
-    return {
-      line: log.line,
-      timestamp: log.timestamp ? new Date(log.timestamp) : undefined,
-      level,
-    };
-  });
+      return {
+        line: log.line,
+        timestamp: log.timestamp ? new Date(log.timestamp) : undefined,
+        level,
+      };
+    });
 });
 
 const toggleFollow = async () => {
@@ -234,7 +241,10 @@ const startFollowing = async () => {
           // Only add logs if we don't have recent ones to avoid duplicates
           const existingLogs = logs.value.map(l => l.line);
           const newLogs = response.lines
-            .filter((line) => !existingLogs.includes(line.line || ''))
+            .filter((line) => {
+              const lineText = line.line || '';
+              return !isEmptyOrWhitespace(lineText) && !existingLogs.includes(lineText);
+            })
             .map((line) => {
               // Safely parse timestamp
               let timestamp: string;
@@ -301,11 +311,15 @@ const startFollowing = async () => {
         timestamp = new Date().toISOString();
       }
 
-      logs.value.push({
-        line: logLine.line || '',
-        timestamp,
-        level: logLine.level,
-      });
+      // Only add non-empty lines
+      const line = logLine.line || '';
+      if (!isEmptyOrWhitespace(line)) {
+        logs.value.push({
+          line: line,
+          timestamp,
+          level: logLine.level,
+        });
+      }
 
       // Keep only last 10000 lines
       if (logs.value.length > 10000) {
@@ -416,15 +430,20 @@ const handleTerminalOutput = (text: string) => {
     terminalOutputBuffer = lines.pop() || ""; // Keep last incomplete line
   }
   
-  // Add complete lines to logs (including empty lines)
-  const linesAdded = lines.length;
+  // Add complete lines to logs (filter out empty/whitespace-only lines)
+  let linesAdded = 0;
   for (const line of lines) {
-    // Add line even if empty (for proper spacing)
+    // Skip empty or whitespace-only lines
+    if (isEmptyOrWhitespace(line)) {
+      continue;
+    }
+    
     logs.value.push({
-      line: line || " ", // Use space for empty lines so they still render
+      line: line,
       timestamp: new Date().toISOString(),
       level: undefined, // Terminal output doesn't have a log level
     });
+    linesAdded++;
     
     // Keep only last 10000 lines
     if (logs.value.length > 10000) {
