@@ -124,6 +124,10 @@ WORKDIR /app
 COPY --from=go-builder /build/api .
 COPY --from=go-builder /build/dns-server .
 
+# Copy entrypoint script
+COPY apps/api/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 # Set environment variables for commit hashes and messages (from build args)
 ENV API_COMMIT=${API_COMMIT}
 ENV DASHBOARD_COMMIT=${DASHBOARD_COMMIT}
@@ -131,7 +135,11 @@ ENV API_COMMIT_MESSAGE=${API_COMMIT_MESSAGE}
 ENV DASHBOARD_COMMIT_MESSAGE=${DASHBOARD_COMMIT_MESSAGE}
 
 # Expose ports
-EXPOSE 3001 53/udp 53/tcp
+# Note: Port 53 is only for the DNS server service, not the API service
+EXPOSE 3001
+
+# Use entrypoint to create directories before running
+ENTRYPOINT ["/docker-entrypoint.sh"]
 
 # Run the application (default to API)
 CMD ["./api"]
