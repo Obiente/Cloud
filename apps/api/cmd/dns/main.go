@@ -277,46 +277,65 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 					// Normalize target domain by removing trailing dot for database lookup
 					targetDomainNormalized := strings.TrimSuffix(targetDomain, ".")
 					aRecord, aErr := database.GetDelegatedDNSRecord(targetDomainNormalized, "A")
+					var nodeIP string
+					var ttl uint32 = uint32(delegatedRecord.TTL)
 					if aErr == nil && aRecord != nil {
 						var recordIPs []string
 						if err := json.Unmarshal([]byte(aRecord.Records), &recordIPs); err == nil && len(recordIPs) > 0 {
-							nodeIP := recordIPs[0]
-							// Use delegated SRV record
-							targetHostname := gameServerID + ".my.obiente.cloud"
-							srv := &dns.SRV{
-								Hdr: dns.RR_Header{
-									Name:   q.Name,
-									Rrtype: dns.TypeSRV,
-									Class:  dns.ClassINET,
-									Ttl:    uint32(delegatedRecord.TTL),
-								},
-								Priority: 0,
-								Weight:   0,
-								Port:     uint16(port),
-								Target:   targetHostname,
-							}
-							msg.Answer = append(msg.Answer, srv)
-							// Also add A record for the target
-							ip := net.ParseIP(nodeIP)
-							if ip != nil {
-								a := &dns.A{
-									Hdr: dns.RR_Header{
-										Name:   targetHostname,
-										Rrtype: dns.TypeA,
-										Class:  dns.ClassINET,
-										Ttl:    uint32(delegatedRecord.TTL),
-									},
-									A: ip,
-								}
-								msg.Answer = append(msg.Answer, a)
-							}
-							log.Printf("[DNS] Resolved SRV for game server %s via delegated record", gameServerID)
-							return true
+							nodeIP = recordIPs[0]
 						} else {
 							log.Printf("[DNS] Failed to parse A record for SRV target: %v", err)
 						}
 					} else {
-						log.Printf("[DNS] Failed to resolve A record for SRV target: %v", aErr)
+						log.Printf("[DNS] Delegated A record not found for SRV target %s, falling back to local lookup: %v", targetDomainNormalized, aErr)
+						// Fallback to local database lookup for the A record
+						localIP, localErr := database.GetGameServerIP(gameServerID)
+						if localErr == nil && localIP != "" {
+							nodeIP = localIP
+							ttl = uint32(cacheTTL.Seconds()) // Use cache TTL for local records
+							log.Printf("[DNS] Using local A record for SRV target: %s", nodeIP)
+						} else {
+							log.Printf("[DNS] Failed to resolve A record for SRV target from local database: %v", localErr)
+						}
+					}
+					
+					// If we have an IP (from delegated or local), return the SRV record
+					if nodeIP != "" {
+						targetHostname := gameServerID + ".my.obiente.cloud"
+						srv := &dns.SRV{
+							Hdr: dns.RR_Header{
+								Name:   q.Name,
+								Rrtype: dns.TypeSRV,
+								Class:  dns.ClassINET,
+								Ttl:    uint32(delegatedRecord.TTL),
+							},
+							Priority: 0,
+							Weight:   0,
+							Port:     uint16(port),
+							Target:   targetHostname,
+						}
+						msg.Answer = append(msg.Answer, srv)
+						// Also add A record for the target
+						ip := net.ParseIP(nodeIP)
+						if ip != nil {
+							a := &dns.A{
+								Hdr: dns.RR_Header{
+									Name:   targetHostname + ".",
+									Rrtype: dns.TypeA,
+									Class:  dns.ClassINET,
+									Ttl:    ttl,
+								},
+								A: ip,
+							}
+							msg.Extra = append(msg.Extra, a)
+						}
+						log.Printf("[DNS] Resolved SRV for game server %s via delegated record (A record from %s)", gameServerID, func() string {
+							if aErr == nil && aRecord != nil {
+								return "delegated"
+							}
+							return "local"
+						}())
+						return true
 					}
 				} else {
 					log.Printf("[DNS] Failed to parse port from SRV record")
@@ -496,6 +515,7 @@ func (s *DNSServer) handleDeploymentAQuery(ctx context.Context, msg *dns.Msg, do
 
 // handleGameServerAQuery handles A record queries for game servers
 func (s *DNSServer) handleGameServerAQuery(msg *dns.Msg, domain string, q dns.Question, gameServerID string) bool {
+	log.Printf("[DNS] Handling A query for game server %s (domain: %s)", gameServerID, domain)
 	// Check for delegated DNS records FIRST - if a self-hosted instance is pushing records,
 	// those should take precedence over local database entries
 	// Normalize domain by removing trailing dot for database lookup
@@ -533,14 +553,40 @@ func (s *DNSServer) handleGameServerAQuery(msg *dns.Msg, domain string, q dns.Qu
 	nodeIP, err := database.GetGameServerIP(gameServerID)
 	if err != nil {
 		log.Printf("[DNS] Failed to resolve game server %s locally: %v", gameServerID, err)
+		// Check if game server exists but is not running
+		var gameServer struct {
+			ID     string
+			Status int32
+		}
+		if dbErr := database.DB.Table("game_servers").Select("id, status").Where("id = ?", gameServerID).First(&gameServer).Error; dbErr == nil {
+			log.Printf("[DNS] Game server %s exists with status %d but has no running location", gameServerID, gameServer.Status)
+		}
 		return false
 	}
 
-	// Parse IP address
+	// Parse IP address (or resolve hostname if fallback returned hostname)
 	ip := net.ParseIP(nodeIP)
 	if ip == nil {
-		log.Printf("[DNS] Invalid IP address for game server %s: %s", gameServerID, nodeIP)
-		return false
+		// If nodeIP is not a valid IP, it might be a hostname from fallback
+		// Try to resolve it
+		log.Printf("[DNS] nodeIP is not a valid IP address, attempting to resolve as hostname: %s", nodeIP)
+		resolvedIPs, err := net.LookupIP(nodeIP)
+		if err != nil || len(resolvedIPs) == 0 {
+			log.Printf("[DNS] Failed to resolve hostname %s for game server %s: %v", nodeIP, gameServerID, err)
+			return false
+		}
+		// Use the first resolved IP (prefer IPv4)
+		for _, resolvedIP := range resolvedIPs {
+			if resolvedIP.To4() != nil {
+				ip = resolvedIP
+				break
+			}
+		}
+		if ip == nil {
+			// No IPv4 found, use first IP (IPv6)
+			ip = resolvedIPs[0]
+		}
+		log.Printf("[DNS] Resolved hostname %s to IP %s for game server %s", nodeIP, ip.String(), gameServerID)
 	}
 
 	// Return A record

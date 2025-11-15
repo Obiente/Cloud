@@ -174,13 +174,13 @@ func PushAllDNSRecords(config PusherConfig) error {
 	// Push game server A records and SRV records
 	gameServerLocations, err := database.DB.Table("game_server_locations").
 		Where("status = ?", "running").
-		Select("game_server_id, node_ip, port").
+		Select("game_server_id, node_ip, node_id, port").
 		Rows()
 	if err == nil {
 		for gameServerLocations.Next() {
-			var gameServerID, nodeIP string
+			var gameServerID, nodeIP, nodeID string
 			var port int32
-			if err := gameServerLocations.Scan(&gameServerID, &nodeIP, &port); err != nil {
+			if err := gameServerLocations.Scan(&gameServerID, &nodeIP, &nodeID, &port); err != nil {
 				continue
 			}
 
@@ -195,6 +195,15 @@ func PushAllDNSRecords(config PusherConfig) error {
 				First(&gameServerInfo).Error; err != nil {
 				logger.Warn("[DNS Pusher] Failed to get organization ID and game type for game server %s: %v", gameServerID, err)
 				// Continue anyway - we'll try to store without org ID
+			}
+
+			// If nodeIP is empty, try to get it from NodeMetadata (fallback)
+			if nodeIP == "" && nodeID != "" {
+				var node database.NodeMetadata
+				if err := database.DB.First(&node, "id = ?", nodeID).Error; err == nil && node.IP != "" {
+					nodeIP = node.IP
+					logger.Debug("[DNS Pusher] Using NodeMetadata IP %s for game server %s (node_ip was empty)", nodeIP, gameServerID)
+				}
 			}
 
 			// Push A record for {id}.my.obiente.cloud format (e.g., gs-123.my.obiente.cloud)
