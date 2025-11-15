@@ -81,17 +81,8 @@ func HandleDNSQuery(w http.ResponseWriter, r *http.Request) {
 		}
 
 		gameServerID := parts[2]
-		// Normalize game server ID: support both gameserver-{id} and gs-{id} formats
-		if strings.HasPrefix(gameServerID, "gameserver-") {
-			// Extract actual game server ID (gameserver-gs-123 -> gs-123)
-			actualID := strings.TrimPrefix(gameServerID, "gameserver-")
-			if strings.HasPrefix(actualID, "gs-") {
-				gameServerID = actualID
-			} else {
-				// Legacy format: gameserver-123 -> gs-123
-				gameServerID = "gs-" + actualID
-			}
-		} else if !strings.HasPrefix(gameServerID, "gs-") {
+		// Game server ID should be in gs-{id} format
+		if !strings.HasPrefix(gameServerID, "gs-") {
 			http.Error(w, "Invalid game server ID format", http.StatusBadRequest)
 			return
 		}
@@ -165,16 +156,9 @@ func HandleDNSQuery(w http.ResponseWriter, r *http.Request) {
 
 	resourceID := parts[0]
 
-	// Check if this is a game server (gameserver-{id} or gs-{id})
+	// Check if this is a game server (gs-{id})
 	var gameServerID string
-	if strings.HasPrefix(resourceID, "gameserver-") {
-		// Extract actual game server ID (gameserver-gs-123 -> gs-123)
-		gameServerID = strings.TrimPrefix(resourceID, "gameserver-")
-		if !strings.HasPrefix(gameServerID, "gs-") {
-			gameServerID = "gs-" + gameServerID
-		}
-	} else if strings.HasPrefix(resourceID, "gs-") {
-		// Direct gs-{id} format
+	if strings.HasPrefix(resourceID, "gs-") {
 		gameServerID = resourceID
 	} else {
 		// Not a game server, treat as deployment

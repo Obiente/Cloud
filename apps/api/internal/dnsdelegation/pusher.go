@@ -197,10 +197,10 @@ func PushAllDNSRecords(config PusherConfig) error {
 				// Continue anyway - we'll try to store without org ID
 			}
 
-			// Push A record for gs-{id}.my.obiente.cloud format
+			// Push A record for {id}.my.obiente.cloud format (e.g., gs-123.my.obiente.cloud)
 			if nodeIP != "" {
-				// Game server IDs are in gs-{id} format, so use that directly
-				domain := gameServerID + ".my.obiente.cloud"
+				// Game server IDs are in gs-{id} format, use directly
+				domain := fmt.Sprintf("%s.my.obiente.cloud", gameServerID)
 				record := map[string]interface{}{
 					"domain":      domain,
 					"record_type": "A",
@@ -217,9 +217,9 @@ func PushAllDNSRecords(config PusherConfig) error {
 			// GameType enum values:
 			// MINECRAFT = 1, MINECRAFT_JAVA = 2, MINECRAFT_BEDROCK = 3, RUST = 6
 			if port > 0 {
-				// Use gameserver-{id} format for SRV records to maintain compatibility
+				// Use {id} format for SRV records to match A record format
 				// The target hostname in SRV records should point to the A record
-				targetHostname := gameServerID + ".my.obiente.cloud"
+				targetHostname := fmt.Sprintf("%s.my.obiente.cloud", gameServerID)
 				srvRecordValue := fmt.Sprintf("0 0 %d %s", port, targetHostname)
 
 				// Minecraft Java Edition (TCP) - gameType 1 or 2

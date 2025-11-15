@@ -159,9 +159,9 @@ func (s *DNSServer) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 		}
 
 		// Handle SRV record queries for game servers
-		// Format: _minecraft._tcp.gameserver-123.my.obiente.cloud
-		// Format: _minecraft._udp.gameserver-123.my.obiente.cloud (Bedrock)
-		// Format: _rust._udp.gameserver-123.my.obiente.cloud
+		// Format: _minecraft._tcp.gs-123.my.obiente.cloud
+		// Format: _minecraft._udp.gs-123.my.obiente.cloud (Bedrock)
+		// Format: _rust._udp.gs-123.my.obiente.cloud
 		if q.Qtype == dns.TypeSRV {
 			if s.handleSRVQuery(msg, domain, q) {
 				w.WriteMsg(msg)
@@ -172,7 +172,7 @@ func (s *DNSServer) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 
 		// Handle A record queries for deployments and game servers
 		// Format: deploy-123.my.obiente.cloud (deployments)
-		// Format: gameserver-123.my.obiente.cloud (game servers)
+		// Format: gs-123.my.obiente.cloud (game servers)
 		if q.Qtype == dns.TypeA {
 			if s.handleAQuery(ctx, msg, domain, q) {
 				w.WriteMsg(msg)
@@ -191,15 +191,15 @@ func (s *DNSServer) handleDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
 
 // handleSRVQuery handles SRV record queries for game servers
 // Supports:
-// - Minecraft Java: _minecraft._tcp.gameserver-123.my.obiente.cloud
-// - Minecraft Bedrock: _minecraft._udp.gameserver-123.my.obiente.cloud
-// - Rust: _rust._udp.gameserver-123.my.obiente.cloud
+// - Minecraft Java: _minecraft._tcp.gs-123.my.obiente.cloud
+// - Minecraft Bedrock: _minecraft._udp.gs-123.my.obiente.cloud
+// - Rust: _rust._udp.gs-123.my.obiente.cloud
 func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) bool {
-	// Parse SRV query format: _service._protocol.gameserver-123.my.obiente.cloud.
+	// Parse SRV query format: _service._protocol.gs-123.my.obiente.cloud.
 	// Normalize domain - remove trailing dot if present
 	domainNormalized := strings.TrimSuffix(domain, ".")
 	parts := strings.Split(domainNormalized, ".")
-	// Need at least: _service._protocol.gameserver-123.my.obiente.cloud = 5 parts
+	// Need at least: _service._protocol.gs-123.my.obiente.cloud = 5 parts
 	if len(parts) < 5 {
 		log.Printf("[DNS] Invalid SRV domain format (too few parts): %s (parts: %v)", domain, parts)
 		return false
@@ -337,7 +337,7 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 	}
 
 	// For SRV records, use the A record hostname as target
-	// Format: gameserver-123.my.obiente.cloud
+	// Format: gs-123.my.obiente.cloud
 	targetHostname := gameServerID + ".my.obiente.cloud"
 
 	srv := &dns.SRV{
@@ -374,7 +374,7 @@ func (s *DNSServer) handleSRVQuery(msg *dns.Msg, domain string, q dns.Question) 
 
 // handleAQuery handles A record queries for deployments and game servers
 // Format: deploy-123.my.obiente.cloud -> deploy-123 (deployments)
-// Format: gameserver-123.my.obiente.cloud -> gameserver-123 (game servers)
+// Format: gs-123.my.obiente.cloud -> gs-123 (game servers)
 func (s *DNSServer) handleAQuery(ctx context.Context, msg *dns.Msg, domain string, q dns.Question) bool {
 	// Normalize domain - remove trailing dot if present
 	domainNormalized := strings.TrimSuffix(domain, ".")
@@ -392,20 +392,9 @@ func (s *DNSServer) handleAQuery(ctx context.Context, msg *dns.Msg, domain strin
 		return false
 	}
 
-	// Check if this is a game server (gameserver-123 or gs-123)
-	var gameServerID string
-	if strings.HasPrefix(resourceID, "gameserver-") {
-		// Extract actual game server ID (gameserver-gs-123 -> gs-123)
-		gameServerID = strings.TrimPrefix(resourceID, "gameserver-")
-		// If it still has gs- prefix, use it as-is, otherwise prepend gs-
-		if !strings.HasPrefix(gameServerID, "gs-") {
-			gameServerID = "gs-" + gameServerID
-		}
-		return s.handleGameServerAQuery(msg, domain, q, gameServerID)
-	} else if strings.HasPrefix(resourceID, "gs-") {
-		// Direct gs-{id} format
-		gameServerID = resourceID
-		return s.handleGameServerAQuery(msg, domain, q, gameServerID)
+	// Check if this is a game server (gs-123)
+	if strings.HasPrefix(resourceID, "gs-") {
+		return s.handleGameServerAQuery(msg, domain, q, resourceID)
 	}
 
 	// Otherwise, treat as deployment (deploy-123)
