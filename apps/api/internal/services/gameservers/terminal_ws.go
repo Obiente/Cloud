@@ -13,6 +13,7 @@ import (
 
 	"api/docker"
 	"api/internal/auth"
+	"api/internal/middleware"
 
 	"connectrpc.com/connect"
 	"nhooyr.io/websocket"
@@ -43,10 +44,26 @@ type gameServerTerminalWSOutput struct {
 func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		// Origin checking can be added here if needed; for now, rely on auth token validation.
-		InsecureSkipVerify: true,
-	})
+	// Validate origin using CORS configuration
+	origin := r.Header.Get("Origin")
+	if !middleware.IsOriginAllowed(origin) {
+		log.Printf("[GameServer Terminal WS] Origin %s not allowed", origin)
+		http.Error(w, "Origin not allowed", http.StatusForbidden)
+		return
+	}
+
+	// Prepare origin patterns for WebSocket library
+	// If origin is empty (same-origin) and wildcard is configured, allow all
+	acceptOptions := &websocket.AcceptOptions{}
+	if origin != "" {
+		acceptOptions.OriginPatterns = []string{origin}
+	} else {
+		// Empty origin with wildcard - allow all (same as InsecureSkipVerify but more explicit)
+		// The CORS middleware already validated this is allowed
+		acceptOptions.OriginPatterns = []string{"*"}
+	}
+
+	conn, err := websocket.Accept(w, r, acceptOptions)
 	if err != nil {
 		log.Printf("[GameServer Terminal WS] Failed to accept websocket connection: %v", err)
 		return

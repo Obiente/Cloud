@@ -17,6 +17,7 @@ import (
 	"api/internal/auth"
 	"api/internal/database"
 	"api/internal/logger"
+	"api/internal/middleware"
 	"api/internal/orchestrator"
 
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
@@ -76,10 +77,28 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true,
-		CompressionMode:    websocket.CompressionDisabled, // Disable compression for better performance with binary data
-	})
+	// Validate origin using CORS configuration
+	origin := r.Header.Get("Origin")
+	if !middleware.IsOriginAllowed(origin) {
+		log.Printf("[VPS Terminal WS] Origin %s not allowed", origin)
+		http.Error(w, "Origin not allowed", http.StatusForbidden)
+		return
+	}
+
+	// Prepare origin patterns for WebSocket library
+	// If origin is empty (same-origin) and wildcard is configured, allow all
+	acceptOptions := &websocket.AcceptOptions{
+		CompressionMode: websocket.CompressionDisabled, // Disable compression for better performance with binary data
+	}
+	if origin != "" {
+		acceptOptions.OriginPatterns = []string{origin}
+	} else {
+		// Empty origin with wildcard - allow all (same as InsecureSkipVerify but more explicit)
+		// The CORS middleware already validated this is allowed
+		acceptOptions.OriginPatterns = []string{"*"}
+	}
+
+	conn, err := websocket.Accept(w, r, acceptOptions)
 	if err != nil {
 		log.Printf("[VPS Terminal WS] Failed to accept websocket connection: %v", err)
 		return

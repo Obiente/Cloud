@@ -194,3 +194,40 @@ func CORSHandler(handler http.Handler) http.Handler {
 		config.AllowedOrigins, config.AllowCredentials)
 	return CORS(config)(handler)
 }
+
+// IsOriginAllowed checks if an origin is allowed based on the CORS configuration.
+// This is useful for WebSocket handlers that need to validate origins.
+// For WebSocket: cross-origin requests always include an Origin header.
+// Same-origin requests may not include an Origin header, which we allow when wildcard is configured.
+func IsOriginAllowed(origin string) bool {
+	config := DefaultCORSConfig()
+	
+	// Check if wildcard is configured
+	isWildcard := len(config.AllowedOrigins) == 1 && config.AllowedOrigins[0] == "*"
+	
+	if isWildcard {
+		// Wildcard allows all origins (including empty origin for same-origin requests)
+		return true
+	}
+	
+	if origin == "" {
+		// No origin header - might be same-origin request
+		// For WebSocket, cross-origin requests always have Origin header
+		// Same-origin requests may not have it, but we can't easily distinguish
+		// When specific origins are configured, we require Origin header for security
+		return false
+	}
+	
+	// Check if the specific origin is in the allowed list
+	for _, allowed := range config.AllowedOrigins {
+		// Normalize origins for comparison (trim trailing slashes)
+		normalizedOrigin := strings.TrimSuffix(origin, "/")
+		normalizedAllowed := strings.TrimSuffix(allowed, "/")
+		
+		if normalizedAllowed == normalizedOrigin || allowed == "*" {
+			return true
+		}
+	}
+	
+	return false
+}

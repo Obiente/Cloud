@@ -13,6 +13,7 @@ import (
 
 	"api/docker"
 	"api/internal/auth"
+	"api/internal/middleware"
 
 	"connectrpc.com/connect"
 	"nhooyr.io/websocket"
@@ -45,10 +46,26 @@ type terminalWSOutput struct {
 func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		// Origin checking can be added here if needed; for now, rely on auth token validation.
-		InsecureSkipVerify: true,
-	})
+	// Validate origin using CORS configuration
+	origin := r.Header.Get("Origin")
+	if !middleware.IsOriginAllowed(origin) {
+		log.Printf("[Terminal WS] Origin %s not allowed", origin)
+		http.Error(w, "Origin not allowed", http.StatusForbidden)
+		return
+	}
+
+	// Prepare origin patterns for WebSocket library
+	// If origin is empty (same-origin) and wildcard is configured, allow all
+	acceptOptions := &websocket.AcceptOptions{}
+	if origin != "" {
+		acceptOptions.OriginPatterns = []string{origin}
+	} else {
+		// Empty origin with wildcard - allow all (same as InsecureSkipVerify but more explicit)
+		// The CORS middleware already validated this is allowed
+		acceptOptions.OriginPatterns = []string{"*"}
+	}
+
+	conn, err := websocket.Accept(w, r, acceptOptions)
 	if err != nil {
 		log.Printf("[Terminal WS] Failed to accept websocket connection: %v", err)
 		return
@@ -518,10 +535,27 @@ func (s *Service) forwardTerminalWebSocket(ctx context.Context, w http.ResponseW
 		return
 	}
 
+	// Validate origin using CORS configuration (origin should already be validated, but double-check for security)
+	origin := r.Header.Get("Origin")
+	if !middleware.IsOriginAllowed(origin) {
+		log.Printf("[Terminal WS Forward] Origin %s not allowed", origin)
+		http.Error(w, "Origin not allowed", http.StatusForbidden)
+		return
+	}
+
+	// Prepare origin patterns for WebSocket library
+	// If origin is empty (same-origin) and wildcard is configured, allow all
+	acceptOptions := &websocket.AcceptOptions{}
+	if origin != "" {
+		acceptOptions.OriginPatterns = []string{origin}
+	} else {
+		// Empty origin with wildcard - allow all (same as InsecureSkipVerify but more explicit)
+		// The CORS middleware already validated this is allowed
+		acceptOptions.OriginPatterns = []string{"*"}
+	}
+
 	// Get the original WebSocket connection from the client
-	clientConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true,
-	})
+	clientConn, err := websocket.Accept(w, r, acceptOptions)
 	if err != nil {
 		log.Printf("[Terminal WS Forward] Failed to accept client WebSocket: %v", err)
 		return
