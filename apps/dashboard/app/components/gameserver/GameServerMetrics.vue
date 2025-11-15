@@ -1,7 +1,7 @@
 <template>
   <OuiStack gap="xl">
     <!-- Usage Summary Cards -->
-    <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="lg">
+    <OuiGrid cols="1" cols-md="2" cols-lg="5" gap="lg">
       <OuiCard>
         <OuiCardBody>
           <OuiStack gap="md">
@@ -69,7 +69,121 @@
           </OuiStack>
         </OuiCardBody>
       </OuiCard>
+
+      <OuiCard>
+        <OuiCardBody>
+          <OuiStack gap="md">
+            <OuiStack gap="xs">
+              <OuiText size="sm" color="muted">Storage Usage</OuiText>
+              <OuiFlex align="center" gap="sm">
+                <CubeIcon class="h-5 w-5 text-secondary" />
+                <OuiText size="2xl" weight="bold">
+                  <OuiByte :value="getStorageBytesValue(usageData?.current?.storageBytes)" unit-display="short" />
+                </OuiText>
+              </OuiFlex>
+            </OuiStack>
+            <OuiText size="xs" color="muted">
+              Image + Volumes + Disk
+            </OuiText>
+          </OuiStack>
+        </OuiCardBody>
+      </OuiCard>
     </OuiGrid>
+
+    <!-- Cost Breakdown -->
+    <OuiCard>
+      <OuiCardBody>
+        <OuiStack gap="lg">
+          <OuiText size="xl" weight="bold">Cost Breakdown</OuiText>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Current Cost Breakdown -->
+            <OuiCard variant="outline">
+              <OuiCardBody>
+                <OuiStack gap="md">
+                  <OuiText size="md" weight="semibold">Current Month Usage</OuiText>
+                  
+                  <OuiStack gap="sm">
+                    <div class="flex justify-between items-center py-2 border-b border-border-default">
+                      <OuiText size="sm" color="muted">CPU</OuiText>
+                      <OuiText size="sm" weight="semibold">
+                        {{ formatCurrency(costBreakdown.current.cpu) }}
+                      </OuiText>
+                    </div>
+                    <div class="flex justify-between items-center py-2 border-b border-border-default">
+                      <OuiText size="sm" color="muted">Memory</OuiText>
+                      <OuiText size="sm" weight="semibold">
+                        {{ formatCurrency(costBreakdown.current.memory) }}
+                      </OuiText>
+                    </div>
+                    <div class="flex justify-between items-center py-2 border-b border-border-default">
+                      <OuiText size="sm" color="muted">Bandwidth</OuiText>
+                      <OuiText size="sm" weight="semibold">
+                        {{ formatCurrency(costBreakdown.current.bandwidth) }}
+                      </OuiText>
+                    </div>
+                    <div class="flex justify-between items-center py-2 border-b border-border-default">
+                      <OuiText size="sm" color="muted">Storage</OuiText>
+                      <OuiText size="sm" weight="semibold">
+                        {{ formatCurrency(costBreakdown.current.storage) }}
+                      </OuiText>
+                    </div>
+                    <div class="flex justify-between items-center pt-2 border-t-2 border-border-default">
+                      <OuiText size="sm" weight="semibold">Total</OuiText>
+                      <OuiText size="lg" weight="bold">
+                        {{ formatCurrency(costBreakdown.current.total) }}
+                      </OuiText>
+                    </div>
+                  </OuiStack>
+                </OuiStack>
+              </OuiCardBody>
+            </OuiCard>
+
+            <!-- Estimated Cost Breakdown -->
+            <OuiCard variant="outline">
+              <OuiCardBody>
+                <OuiStack gap="md">
+                  <OuiText size="md" weight="semibold">Estimated Monthly</OuiText>
+                  
+                  <OuiStack gap="sm">
+                    <div class="flex justify-between items-center py-2 border-b border-border-default">
+                      <OuiText size="sm" color="muted">CPU</OuiText>
+                      <OuiText size="sm" weight="semibold">
+                        {{ formatCurrency(costBreakdown.estimated.cpu) }}
+                      </OuiText>
+                    </div>
+                    <div class="flex justify-between items-center py-2 border-b border-border-default">
+                      <OuiText size="sm" color="muted">Memory</OuiText>
+                      <OuiText size="sm" weight="semibold">
+                        {{ formatCurrency(costBreakdown.estimated.memory) }}
+                      </OuiText>
+                    </div>
+                    <div class="flex justify-between items-center py-2 border-b border-border-default">
+                      <OuiText size="sm" color="muted">Bandwidth</OuiText>
+                      <OuiText size="sm" weight="semibold">
+                        {{ formatCurrency(costBreakdown.estimated.bandwidth) }}
+                      </OuiText>
+                    </div>
+                    <div class="flex justify-between items-center py-2 border-b border-border-default">
+                      <OuiText size="sm" color="muted">Storage</OuiText>
+                      <OuiText size="sm" weight="semibold">
+                        {{ formatCurrency(costBreakdown.estimated.storage) }}
+                      </OuiText>
+                    </div>
+                    <div class="flex justify-between items-center pt-2 border-t-2 border-border-default">
+                      <OuiText size="sm" weight="semibold">Total</OuiText>
+                      <OuiText size="lg" weight="bold">
+                        {{ formatCurrency(costBreakdown.estimated.total) }}
+                      </OuiText>
+                    </div>
+                  </OuiStack>
+                </OuiStack>
+              </OuiCardBody>
+            </OuiCard>
+          </div>
+        </OuiStack>
+      </OuiCardBody>
+    </OuiCard>
 
     <!-- Real-time Metrics Charts -->
     <OuiStack gap="lg">
@@ -185,6 +299,8 @@ import {
   getOUIEChartsColors,
   createAreaGradient,
 } from "~/utils/echarts-theme";
+import { CubeIcon } from "@heroicons/vue/24/outline";
+import OuiByte from "~/components/oui/Byte.vue";
 
 // Register ECharts components
 echarts.use([
@@ -265,6 +381,13 @@ const toNumber = (value: bigint | number | undefined | null): number => {
   return Number(value) || 0;
 };
 
+// Helper function to convert BigInt to number for storageBytes
+const getStorageBytesValue = (value: bigint | number | undefined | null): number => {
+  if (!value) return 0;
+  if (typeof value === 'bigint') return Number(value);
+  return value;
+};
+
 // Format helpers
 const formatCurrency = (cents: number | bigint) => {
   const dollars = Number(cents) / 100;
@@ -314,6 +437,30 @@ const formatBytes = (bytes: number) => {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
 };
+
+// Cost breakdown per resource - uses backend calculated values
+const costBreakdown = computed(() => {
+  const current = usageData.value?.current || {};
+  const estimated = usageData.value?.estimatedMonthly || {};
+  
+  // All costs are calculated on the backend and returned in cents
+  return {
+    current: {
+      cpu: current.cpuCostCents != null ? toNumber(current.cpuCostCents) : 0,
+      memory: current.memoryCostCents != null ? toNumber(current.memoryCostCents) : 0,
+      bandwidth: current.bandwidthCostCents != null ? toNumber(current.bandwidthCostCents) : 0,
+      storage: current.storageCostCents != null ? toNumber(current.storageCostCents) : 0,
+      total: current.estimatedCostCents != null ? toNumber(current.estimatedCostCents) : 0,
+    },
+    estimated: {
+      cpu: estimated.cpuCostCents != null ? toNumber(estimated.cpuCostCents) : 0,
+      memory: estimated.memoryCostCents != null ? toNumber(estimated.memoryCostCents) : 0,
+      bandwidth: estimated.bandwidthCostCents != null ? toNumber(estimated.bandwidthCostCents) : 0,
+      storage: estimated.storageCostCents != null ? toNumber(estimated.storageCostCents) : 0,
+      total: estimated.estimatedCostCents != null ? toNumber(estimated.estimatedCostCents) : 0,
+    },
+  };
+});
 
 // Initialize charts
 const initCharts = async () => {
