@@ -1,0 +1,843 @@
+{
+  "version": "1.0.0",
+  "properties": [
+    {
+      "key": "motd",
+      "label": "Server Name (MOTD)",
+      "hint": "Message shown in server list",
+      "type": "string",
+      "default": "A Minecraft Server",
+      "category": "server",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "validation": {
+        "maxLength": 59
+      }
+    },
+    {
+      "key": "server-port",
+      "label": "Server Port",
+      "hint": "Port the server listens on",
+      "type": "number",
+      "default": 25565,
+      "category": "server",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 1,
+        "max": 65535
+      }
+    },
+    {
+      "key": "max-players",
+      "label": "Max Players",
+      "hint": "Maximum number of players",
+      "type": "number",
+      "default": 20,
+      "category": "server",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 1,
+        "max": 1000
+      }
+    },
+    {
+      "key": "online-mode",
+      "label": "Online Mode",
+      "hint": "Verify players with Mojang",
+      "type": "boolean",
+      "default": true,
+      "category": "network",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "difficulty",
+      "label": "Difficulty",
+      "hint": "Game difficulty level",
+      "type": "select",
+      "default": "easy",
+      "category": "game",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "options": [
+        { "label": "Peaceful", "value": "peaceful" },
+        { "label": "Easy", "value": "easy" },
+        { "label": "Normal", "value": "normal" },
+        { "label": "Hard", "value": "hard" }
+      ]
+    },
+    {
+      "key": "gamemode",
+      "label": "Game Mode",
+      "hint": "Default game mode for new players",
+      "type": "select",
+      "default": "survival",
+      "category": "game",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "options": [
+        { "label": "Survival", "value": "survival" },
+        { "label": "Creative", "value": "creative" },
+        { "label": "Adventure", "value": "adventure" },
+        { "label": "Spectator", "value": "spectator" }
+      ]
+    },
+    {
+      "key": "hardcore",
+      "label": "Hardcore Mode",
+      "hint": "Enable hardcore mode (permanent death)",
+      "type": "boolean",
+      "default": false,
+      "category": "game",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "pvp",
+      "label": "PvP Enabled",
+      "hint": "Allow player vs player combat",
+      "type": "boolean",
+      "default": true,
+      "category": "game",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "spawn-monsters",
+      "label": "Spawn Monsters",
+      "hint": "Spawn hostile mobs",
+      "type": "boolean",
+      "default": true,
+      "category": "game",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "spawn-animals",
+      "label": "Spawn Animals",
+      "hint": "Spawn passive mobs",
+      "type": "boolean",
+      "default": true,
+      "category": "game",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "spawn-npcs",
+      "label": "Spawn NPCs",
+      "hint": "Spawn villagers",
+      "type": "boolean",
+      "default": true,
+      "category": "game",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "generate-structures",
+      "label": "Generate Structures",
+      "hint": "Generate villages, temples, etc.",
+      "type": "boolean",
+      "default": true,
+      "category": "world",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "view-distance",
+      "label": "View Distance",
+      "hint": "Maximum chunk render distance",
+      "type": "number",
+      "default": 10,
+      "category": "performance",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 3,
+        "max": 32
+      }
+    },
+    {
+      "key": "simulation-distance",
+      "label": "Simulation Distance",
+      "hint": "Chunk simulation distance",
+      "type": "number",
+      "default": 10,
+      "category": "performance",
+      "versions": {
+        "min": "1.18",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 3,
+        "max": 32
+      }
+    },
+    {
+      "key": "max-world-size",
+      "label": "Max World Size",
+      "hint": "Maximum world border size",
+      "type": "number",
+      "default": 29999984,
+      "category": "world",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 1,
+        "max": 29999984
+      }
+    },
+    {
+      "key": "white-list",
+      "label": "Enforce Whitelist",
+      "hint": "Only allow whitelisted players",
+      "type": "boolean",
+      "default": false,
+      "category": "network",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "enforce-whitelist",
+      "label": "Enforce Whitelist (Operator)",
+      "hint": "Enforce whitelist on operators",
+      "type": "boolean",
+      "default": false,
+      "category": "network",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "resource-pack",
+      "label": "Resource Pack URL",
+      "hint": "URL to resource pack",
+      "type": "string",
+      "default": "",
+      "category": "network",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "resource-pack-sha1",
+      "label": "Resource Pack SHA-1",
+      "hint": "SHA-1 hash of resource pack",
+      "type": "string",
+      "default": "",
+      "category": "network",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "network-compression-threshold",
+      "label": "Network Compression Threshold",
+      "hint": "Compression threshold in bytes (-1 to disable)",
+      "type": "number",
+      "default": 256,
+      "category": "network",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "validation": {
+        "min": -1,
+        "max": 2147483647
+      }
+    },
+    {
+      "key": "max-tick-time",
+      "label": "Max Tick Time",
+      "hint": "Maximum tick time in milliseconds (-1 to disable)",
+      "type": "number",
+      "default": 60000,
+      "category": "performance",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "validation": {
+        "min": -1,
+        "max": 2147483647
+      }
+    },
+    {
+      "key": "level-name",
+      "label": "Level Name",
+      "hint": "World folder name",
+      "type": "string",
+      "default": "world",
+      "category": "world",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "level-type",
+      "label": "Level Type",
+      "hint": "World generation type",
+      "type": "select",
+      "default": "default",
+      "category": "world",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "options": [
+        { "label": "Default", "value": "default" },
+        { "label": "Flat", "value": "flat" },
+        { "label": "Large Biomes", "value": "largeBiomes" },
+        { "label": "Amplified", "value": "amplified" },
+        { "label": "Single Biome", "value": "single_biome_surface" }
+      ]
+    },
+    {
+      "key": "level-seed",
+      "label": "Level Seed",
+      "hint": "World generation seed",
+      "type": "string",
+      "default": "",
+      "category": "world",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "allow-flight",
+      "label": "Allow Flight",
+      "hint": "Allow players to fly",
+      "type": "boolean",
+      "default": false,
+      "category": "game",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "spawn-protection",
+      "label": "Spawn Protection",
+      "hint": "Spawn protection radius",
+      "type": "number",
+      "default": 16,
+      "category": "world",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 0,
+        "max": 2147483647
+      }
+    },
+    {
+      "key": "max-build-height",
+      "label": "Max Build Height",
+      "hint": "Maximum build height",
+      "type": "number",
+      "default": 384,
+      "category": "world",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 64,
+        "max": 384
+      }
+    },
+    {
+      "key": "player-idle-timeout",
+      "label": "Player Idle Timeout",
+      "hint": "Kick idle players (minutes, 0 to disable)",
+      "type": "number",
+      "default": 0,
+      "category": "game",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 0,
+        "max": 2147483647
+      }
+    },
+    {
+      "key": "enable-command-block",
+      "label": "Enable Command Block",
+      "hint": "Enable command blocks",
+      "type": "boolean",
+      "default": false,
+      "category": "advanced",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "enable-query",
+      "label": "Enable Query",
+      "hint": "Enable GameSpy4 protocol",
+      "type": "boolean",
+      "default": false,
+      "category": "advanced",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "enable-rcon",
+      "label": "Enable RCON",
+      "hint": "Enable remote console",
+      "type": "boolean",
+      "default": false,
+      "category": "advanced",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "enable-jmx-monitoring",
+      "label": "Enable JMX Monitoring",
+      "hint": "Enable JMX monitoring",
+      "type": "boolean",
+      "default": false,
+      "category": "advanced",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "rcon.port",
+      "label": "RCON Port",
+      "hint": "RCON remote console port",
+      "type": "number",
+      "default": 25575,
+      "category": "advanced",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 1,
+        "max": 65535
+      },
+      "dependsOn": {
+        "enable-rcon": true
+      }
+    },
+    {
+      "key": "rcon.password",
+      "label": "RCON Password",
+      "hint": "RCON remote console password",
+      "type": "password",
+      "default": "",
+      "category": "advanced",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "dependsOn": {
+        "enable-rcon": true
+      }
+    },
+    {
+      "key": "query.port",
+      "label": "Query Port",
+      "hint": "Query protocol port",
+      "type": "number",
+      "default": 25565,
+      "category": "advanced",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 1,
+        "max": 65535
+      },
+      "dependsOn": {
+        "enable-query": true
+      }
+    },
+    {
+      "key": "max-chained-neighbor-updates",
+      "label": "Max Chained Neighbor Updates",
+      "hint": "Maximum chained block updates",
+      "type": "number",
+      "default": 1000000,
+      "category": "performance",
+      "versions": {
+        "min": "1.19",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 0,
+        "max": 2147483647
+      }
+    },
+    {
+      "key": "sync-chunk-writes",
+      "label": "Sync Chunk Writes",
+      "hint": "Synchronously write chunks",
+      "type": "boolean",
+      "default": true,
+      "category": "performance",
+      "versions": {
+        "min": "1.14",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "function-permission-level",
+      "label": "Function Permission Level",
+      "hint": "Permission level for functions",
+      "type": "number",
+      "default": 2,
+      "category": "advanced",
+      "versions": {
+        "min": "1.12",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 0,
+        "max": 4
+      }
+    },
+    {
+      "key": "max-chunk-loads-per-tick",
+      "label": "Max Chunk Loads Per Tick",
+      "hint": "Maximum chunk loads per tick",
+      "type": "number",
+      "default": 5,
+      "category": "performance",
+      "versions": {
+        "min": "1.18",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 1,
+        "max": 100
+      }
+    },
+    {
+      "key": "prevent-proxy-connections",
+      "label": "Prevent Proxy Connections",
+      "hint": "Prevent proxy connections",
+      "type": "boolean",
+      "default": false,
+      "category": "network",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "hide-online-players",
+      "label": "Hide Online Players",
+      "hint": "Hide online players in server list",
+      "type": "boolean",
+      "default": false,
+      "category": "network",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "entity-broadcast-range-percentage",
+      "label": "Entity Broadcast Range Percentage",
+      "hint": "Entity broadcast range percentage",
+      "type": "number",
+      "default": 100,
+      "category": "performance",
+      "versions": {
+        "min": "1.18",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 0,
+        "max": 1000
+      }
+    },
+    {
+      "key": "text-filtering-config",
+      "label": "Text Filtering Config",
+      "hint": "Text filtering configuration",
+      "type": "string",
+      "default": "",
+      "category": "advanced",
+      "versions": {
+        "min": "1.19",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "server-ip",
+      "label": "Server IP",
+      "hint": "IP address to bind to (empty for all)",
+      "type": "string",
+      "default": "",
+      "category": "network",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "enforce-secure-profile",
+      "label": "Enforce Secure Profile",
+      "hint": "Enforce secure profile (1.19.1+)",
+      "type": "boolean",
+      "default": true,
+      "category": "network",
+      "versions": {
+        "min": "1.19.1",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "log-ips",
+      "label": "Log IPs",
+      "hint": "Log player IP addresses",
+      "type": "boolean",
+      "default": true,
+      "category": "advanced",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "op-permission-level",
+      "label": "Operator Permission Level",
+      "hint": "Permission level for operators (1-4)",
+      "type": "number",
+      "default": 4,
+      "category": "advanced",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 1,
+        "max": 4
+      }
+    },
+    {
+      "key": "broadcast-console-to-ops",
+      "label": "Broadcast Console to Ops",
+      "hint": "Send console messages to operators",
+      "type": "boolean",
+      "default": true,
+      "category": "advanced",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "broadcast-rcon-to-ops",
+      "label": "Broadcast RCON to Ops",
+      "hint": "Send RCON messages to operators",
+      "type": "boolean",
+      "default": true,
+      "category": "advanced",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "use-native-transport",
+      "label": "Use Native Transport",
+      "hint": "Use native transport for better performance",
+      "type": "boolean",
+      "default": true,
+      "category": "performance",
+      "versions": {
+        "min": "1.18",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "enable-status",
+      "label": "Enable Status",
+      "hint": "Enable server status responses",
+      "type": "boolean",
+      "default": true,
+      "category": "network",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "rate-limit",
+      "label": "Rate Limit",
+      "hint": "Rate limit for packet processing (0 to disable)",
+      "type": "number",
+      "default": 0,
+      "category": "network",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      },
+      "validation": {
+        "min": 0,
+        "max": 2147483647
+      }
+    },
+    {
+      "key": "require-resource-pack",
+      "label": "Require Resource Pack",
+      "hint": "Require clients to use resource pack",
+      "type": "boolean",
+      "default": false,
+      "category": "network",
+      "versions": {
+        "min": "1.17",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "resource-pack-prompt",
+      "label": "Resource Pack Prompt",
+      "hint": "Prompt message for resource pack",
+      "type": "string",
+      "default": "",
+      "category": "network",
+      "versions": {
+        "min": "1.17",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "initial-disabled-packs",
+      "label": "Initial Disabled Packs",
+      "hint": "Comma-separated list of disabled data packs",
+      "type": "string",
+      "default": "",
+      "category": "world",
+      "versions": {
+        "min": "1.20.2",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "initial-enabled-packs",
+      "label": "Initial Enabled Packs",
+      "hint": "Comma-separated list of enabled data packs",
+      "type": "string",
+      "default": "vanilla",
+      "category": "world",
+      "versions": {
+        "min": "1.20.2",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "force-gamemode",
+      "label": "Force Game Mode",
+      "hint": "Force players to default game mode",
+      "type": "boolean",
+      "default": false,
+      "category": "game",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "allow-nether",
+      "label": "Allow Nether",
+      "hint": "Allow players to travel to the Nether",
+      "type": "boolean",
+      "default": true,
+      "category": "world",
+      "versions": {
+        "min": "1.0",
+        "max": "latest"
+      }
+    },
+    {
+      "key": "announce-player-achievements",
+      "label": "Announce Player Achievements",
+      "hint": "Announce player achievements (removed in 1.12+)",
+      "type": "boolean",
+      "default": true,
+      "category": "game",
+      "versions": {
+        "min": "1.0",
+        "max": "1.11"
+      }
+    }
+  ],
+  "categories": {
+    "server": {
+      "label": "Server Settings",
+      "icon": "ServerIcon"
+    },
+    "game": {
+      "label": "Game Settings",
+      "icon": "CubeIcon"
+    },
+    "world": {
+      "label": "World Settings",
+      "icon": "GlobeIcon"
+    },
+    "network": {
+      "label": "Network & Security",
+      "icon": "NetworkIcon"
+    },
+    "performance": {
+      "label": "Performance",
+      "icon": "ChartBarIcon"
+    },
+    "advanced": {
+      "label": "Advanced Settings",
+      "icon": "Cog6ToothIcon"
+    }
+  }
+}
+

@@ -717,6 +717,11 @@ func (s *Service) WriteGameServerFile(ctx context.Context, req *connect.Request[
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
+	// For server.properties files, filter out restricted properties that are managed by the platform
+	if strings.HasSuffix(pathValue, "server.properties") {
+		content = sanitizeServerProperties(content)
+	}
+
 	dcli, err := docker.New()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
@@ -1123,6 +1128,41 @@ func createVolumeSymlink(target, link string, overwrite bool) error {
 		return fmt.Errorf("create symlink: %w", err)
 	}
 	return nil
+}
+
+// sanitizeServerProperties removes restricted properties from server.properties files
+// These properties (server-port, server-ip) are managed by the platform and should not be user-editable
+func sanitizeServerProperties(content []byte) []byte {
+	// Properties that are managed by the platform and should be removed
+	restrictedProperties := []string{"server-port", "server-ip"}
+
+	lines := strings.Split(string(content), "\n")
+	var filteredLines []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip empty lines and comments
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			filteredLines = append(filteredLines, line)
+			continue
+		}
+
+		// Check if this line contains a restricted property
+		shouldFilter := false
+		for _, restricted := range restrictedProperties {
+			// Match property at start of line (with optional whitespace)
+			if strings.HasPrefix(trimmed, restricted+"=") {
+				shouldFilter = true
+				break
+			}
+		}
+
+		if !shouldFilter {
+			filteredLines = append(filteredLines, line)
+		}
+	}
+
+	return []byte(strings.Join(filteredLines, "\n"))
 }
 
 func writeVolumeFile(path string, content []byte, mode os.FileMode, create bool) error {
