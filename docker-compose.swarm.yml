@@ -253,10 +253,10 @@ services:
       resources:
         limits:
           cpus: "2"
-          memory: 1G
+          memory: 4G
         reservations:
           cpus: "1"
-          memory: 512M
+          memory: 1G
       labels:
         - "cloud.obiente.service=api"
         - "cloud.obiente.role=control-plane"
