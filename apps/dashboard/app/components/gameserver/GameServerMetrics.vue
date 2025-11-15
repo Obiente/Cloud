@@ -677,6 +677,7 @@ const refreshUsage = async () => {
     const month = new Date().toISOString().slice(0, 7); // YYYY-MM
     const res = await client.getGameServerUsage({
       gameServerId: props.gameServerId,
+      organizationId: props.organizationId,
       month,
     });
     usageData.value = res;

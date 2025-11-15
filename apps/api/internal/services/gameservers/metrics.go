@@ -8,7 +8,7 @@ import (
 	"api/internal/database"
 	"api/internal/logger"
 	"api/internal/orchestrator"
-	"api/internal/pricing"
+	"api/internal/services/common"
 
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 
@@ -278,84 +278,157 @@ func (s *Service) StreamGameServerMetrics(ctx context.Context, req *connect.Requ
 // GetGameServerUsage retrieves aggregated usage for a game server
 func (s *Service) GetGameServerUsage(ctx context.Context, req *connect.Request[gameserversv1.GetGameServerUsageRequest]) (*connect.Response[gameserversv1.GetGameServerUsageResponse], error) {
 	gameServerID := req.Msg.GetGameServerId()
+	orgID := req.Msg.GetOrganizationId()
+
+	// Check permissions
 	if err := s.checkGameServerPermission(ctx, gameServerID, "view"); err != nil {
 		return nil, err
 	}
 
-	// Get game server to determine organization
+	// Get game server to verify organization and get storage
 	gameServer, err := database.NewGameServerRepository(database.DB, database.RedisClient).GetByID(ctx, gameServerID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("game server not found: %w", err))
 	}
+	if gameServer.OrganizationID != orgID {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("game server does not belong to organization"))
+	}
 
-	// Determine month
+	// Determine month (default to current month)
 	month := req.Msg.GetMonth()
 	if month == "" {
-		month = time.Now().Format("2006-01")
+		month = time.Now().UTC().Format("2006-01")
 	}
 
-	// Parse month
-	monthTime, err := time.Parse("2006-01", month)
+	// Calculate estimated monthly usage based on current month progress
+	now := time.Now().UTC()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0).Add(-time.Second)
+
+	// Parse requested month for historical queries
+	requestedMonthStart := monthStart
+	if month != now.Format("2006-01") {
+		// Parse historical month
+		t, err := time.Parse("2006-01", month)
+		if err == nil {
+			requestedMonthStart = time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+			monthEnd = requestedMonthStart.AddDate(0, 1, 0).Add(-time.Second)
+		}
+	}
+
+	// Calculate usage from hourly aggregates and raw metrics using shared helper
+	rawCutoff := time.Now().Add(-24 * time.Hour)
+	if rawCutoff.Before(monthStart) {
+		rawCutoff = monthStart
+	}
+
+	currentMetrics, err := common.CalculateUsageFromHourlyAndRaw(
+		gameServerID,
+		"gameserver",
+		requestedMonthStart,
+		monthEnd,
+		rawCutoff,
+		gameServer.StorageBytes,
+	)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid month format: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to calculate usage: %w", err))
 	}
 
-	monthStart := time.Date(monthTime.Year(), monthTime.Month(), 1, 0, 0, 0, 0, time.UTC)
-	monthEnd := monthStart.AddDate(0, 1, 0)
+	// Calculate uptime from game_server_locations (similar to deployment_locations)
+	var uptime struct {
+		UptimeSeconds int64
+	}
+	if month == now.Format("2006-01") {
+		// Current month: calculate uptime from locations
+		database.DB.Table("game_server_locations gsl").
+			Select(`
+				COALESCE(SUM(EXTRACT(EPOCH FROM (
+					CASE 
+						WHEN gsl.status = 'running' THEN NOW() - gsl.created_at
+						WHEN gsl.updated_at > gsl.created_at THEN gsl.updated_at - gsl.created_at
+						ELSE '0 seconds'::interval
+					END
+				))), 0)::bigint as uptime_seconds
+			`).
+			Where("gsl.game_server_id = ? AND (gsl.created_at >= ? OR gsl.updated_at >= ?)", gameServerID, monthStart, monthStart).
+			Scan(&uptime)
+	} else {
+		// Historical month: calculate uptime for the specific month
+		database.DB.Table("game_server_locations gsl").
+			Select(`
+				COALESCE(SUM(EXTRACT(EPOCH FROM (
+					CASE 
+						WHEN gsl.status = 'running' AND gsl.updated_at <= ? THEN ?::timestamp - gsl.created_at
+						WHEN gsl.updated_at > gsl.created_at AND gsl.updated_at <= ? THEN gsl.updated_at - gsl.created_at
+						WHEN gsl.created_at >= ? AND gsl.created_at < ? THEN ?::timestamp - gsl.created_at
+						ELSE '0 seconds'::interval
+					END
+				))), 0)::bigint as uptime_seconds
+			`, monthEnd, monthEnd, monthEnd, requestedMonthStart, monthEnd, monthEnd).
+			Where("gsl.game_server_id = ? AND ((gsl.created_at >= ? AND gsl.created_at <= ?) OR (gsl.updated_at >= ? AND gsl.updated_at <= ?))",
+				gameServerID, requestedMonthStart, monthEnd, requestedMonthStart, monthEnd).
+			Scan(&uptime)
+	}
+	currentMetrics.UptimeSeconds = uptime.UptimeSeconds
 
-	// Query hourly aggregates for the month
-	metricsDB := database.GetMetricsDB()
-	var hourlyAggregates []database.GameServerUsageHourly
-	if err := metricsDB.Where("game_server_id = ? AND hour >= ? AND hour < ?", gameServerID, monthStart, monthEnd).
-		Order("hour ASC").
-		Find(&hourlyAggregates).Error; err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to query usage: %w", err))
+	// Calculate estimated monthly usage
+	var estimatedMonthly common.ContainerUsageMetrics
+	if month == now.Format("2006-01") {
+		estimatedMonthly = common.CalculateEstimatedMonthly(currentMetrics, monthStart, monthEnd)
+	} else {
+		// Historical month: estimated equals current
+		estimatedMonthly = currentMetrics
 	}
 
-	// Calculate totals
-	var cpuCoreSeconds int64
-	var memoryByteSeconds int64
-	var bandwidthRxBytes int64
-	var bandwidthTxBytes int64
-	var storageBytes int64
+	// Calculate costs using shared helper
+	isCurrentMonth := month == now.Format("2006-01")
+	currCPUCost, currMemoryCost, currBandwidthCost, currStorageCost, currTotalCost := common.CalculateCosts(currentMetrics, isCurrentMonth, monthStart, monthEnd)
+	estCPUCost, estMemoryCost, estBandwidthCost, estStorageCost, estTotalCost := common.CalculateCosts(estimatedMonthly, false, monthStart, monthEnd)
 
-	for _, h := range hourlyAggregates {
-		// CPU: avg_cpu_usage is stored as percentage, convert to core-seconds
-		// avg_cpu_usage = (core-seconds / 3600) * 100, so core-seconds = (avg_cpu_usage / 100) * 3600
-		cpuCoreSeconds += int64((h.AvgCPUUsage / 100.0) * 3600.0)
+	// Build response with current and estimated monthly metrics
+	currentProto := &gameserversv1.GameServerUsageMetrics{
+		CpuCoreSeconds:     currentMetrics.CPUCoreSeconds,
+		MemoryByteSeconds:  currentMetrics.MemoryByteSeconds,
+		BandwidthRxBytes:   currentMetrics.BandwidthRxBytes,
+		BandwidthTxBytes:   currentMetrics.BandwidthTxBytes,
+		StorageBytes:       currentMetrics.StorageBytes,
+		UptimeSeconds:      currentMetrics.UptimeSeconds,
+		EstimatedCostCents:  currTotalCost,
+	}
+	currCPUCostPtr := int64(currCPUCost)
+	currMemoryCostPtr := int64(currMemoryCost)
+	currBandwidthCostPtr := int64(currBandwidthCost)
+	currStorageCostPtr := int64(currStorageCost)
+	currentProto.CpuCostCents = &currCPUCostPtr
+	currentProto.MemoryCostCents = &currMemoryCostPtr
+	currentProto.BandwidthCostCents = &currBandwidthCostPtr
+	currentProto.StorageCostCents = &currStorageCostPtr
 
-		// Memory: avg_memory_usage is stored as bytes/second average, convert to byte-seconds
-		// avg_memory_usage = byte-seconds / 3600, so byte-seconds = avg_memory_usage * 3600
-		memoryByteSeconds += int64(h.AvgMemoryUsage * 3600.0)
+	estimatedProto := &gameserversv1.GameServerUsageMetrics{
+		CpuCoreSeconds:     estimatedMonthly.CPUCoreSeconds,
+		MemoryByteSeconds:  estimatedMonthly.MemoryByteSeconds,
+		BandwidthRxBytes:   estimatedMonthly.BandwidthRxBytes,
+		BandwidthTxBytes:   estimatedMonthly.BandwidthTxBytes,
+		StorageBytes:       estimatedMonthly.StorageBytes,
+		UptimeSeconds:      estimatedMonthly.UptimeSeconds,
+		EstimatedCostCents:  estTotalCost,
+	}
+	estCPUCostPtr := int64(estCPUCost)
+	estMemoryCostPtr := int64(estMemoryCost)
+	estBandwidthCostPtr := int64(estBandwidthCost)
+	estStorageCostPtr := int64(estStorageCost)
+	estimatedProto.CpuCostCents = &estCPUCostPtr
+	estimatedProto.MemoryCostCents = &estMemoryCostPtr
+	estimatedProto.BandwidthCostCents = &estBandwidthCostPtr
+	estimatedProto.StorageCostCents = &estStorageCostPtr
 
-		bandwidthRxBytes += h.BandwidthRxBytes
-		bandwidthTxBytes += h.BandwidthTxBytes
+	response := &gameserversv1.GetGameServerUsageResponse{
+		GameServerId:     gameServerID,
+		OrganizationId:   orgID,
+		Month:            month,
+		Current:          currentProto,
+		EstimatedMonthly: estimatedProto,
 	}
 
-	// Get storage from game server
-	storageBytes = gameServer.StorageBytes
-
-	// Calculate costs
-	pricingModel := pricing.GetPricing()
-	cpuCostCents := int64(float64(cpuCoreSeconds) * pricingModel.CPUCostPerCoreSecond * 100)
-	memoryCostCents := int64(float64(memoryByteSeconds) * pricingModel.MemoryCostPerByteSecond * 100)
-	bandwidthTotalBytes := bandwidthRxBytes + bandwidthTxBytes
-	bandwidthCostCents := int64(float64(bandwidthTotalBytes) * pricingModel.BandwidthCostPerByte * 100)
-	storageCostCents := int64(float64(storageBytes) * pricingModel.StorageCostPerByteMonth * 100)
-
-	totalCostCents := cpuCostCents + memoryCostCents + bandwidthCostCents + storageCostCents
-
-	return connect.NewResponse(&gameserversv1.GetGameServerUsageResponse{
-		GameServerId:       gameServerID,
-		Month:              month,
-		CpuCoreSeconds:     cpuCoreSeconds,
-		MemoryByteSeconds:  memoryByteSeconds,
-		BandwidthBytes:     bandwidthTotalBytes,
-		StorageBytes:       storageBytes,
-		CpuCostCents:       cpuCostCents,
-		MemoryCostCents:    memoryCostCents,
-		BandwidthCostCents: bandwidthCostCents,
-		StorageCostCents:   storageCostCents,
-		TotalCostCents:     totalCostCents,
-	}), nil
+	return connect.NewResponse(response), nil
 }
