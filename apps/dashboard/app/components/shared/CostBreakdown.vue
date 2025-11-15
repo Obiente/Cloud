@@ -7,7 +7,7 @@
           <OuiText size="xs" color="muted">
             Cost breakdown by resource type
           </OuiText>
-        </OuiFlex>
+        </OuiStack>
       </OuiFlex>
     </OuiCardHeader>
     <OuiCardBody>
@@ -105,4 +105,3 @@ const costBreakdown = computed(() => {
   return breakdown;
 });
 </script>
-

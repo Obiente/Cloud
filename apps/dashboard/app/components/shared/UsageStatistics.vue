@@ -24,7 +24,7 @@
             </OuiText>
           </OuiFlex>
           <OuiText size="xs" color="muted">
-            {{ formatCurrency(Number(usageData.current.estimatedCostCents) / 100) }} estimated
+            {{ formatCurrency((usageData.current.cpuCostCents ? Number(usageData.current.cpuCostCents) : 0) / 100) }} estimated
           </OuiText>
         </OuiStack>
 
@@ -50,7 +50,7 @@
             </OuiText>
           </OuiFlex>
           <OuiText size="xs" color="muted">
-            <template v-if="usageData.current.requestCount !== undefined">
+            <template v-if="usageData.current.requestCount !== undefined && Number(usageData.current.requestCount) > 0">
               {{ formatNumber(Number(usageData.current.requestCount)) }} requests
             </template>
             <template v-else>
@@ -68,7 +68,7 @@
             </OuiText>
           </OuiFlex>
           <OuiText size="xs" color="muted">
-            <template v-if="usageData.current.errorCount !== undefined">
+            <template v-if="usageData.current.errorCount !== undefined && Number(usageData.current.errorCount) > 0">
               {{ formatNumber(Number(usageData.current.errorCount)) }} errors
             </template>
             <template v-else>
