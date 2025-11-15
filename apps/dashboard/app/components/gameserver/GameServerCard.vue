@@ -184,10 +184,27 @@
         gameServerId: props.gameServer.id,
       });
       emit("refresh");
-    } catch (error) {
+    } catch (error: any) {
+      const errorMessage = error?.message || "Unknown error";
+      
+      // Check for common configuration errors
+      let hint = "";
+      if (errorMessage.includes("exited immediately") || errorMessage.includes("container exit")) {
+        hint = "The container may be missing required environment variables. Check the game server settings.";
+        
+        // Add specific hint for CS2 servers
+        const gameTypeNum = typeof props.gameServer.gameType === 'number' 
+          ? props.gameServer.gameType 
+          : (props.gameServer.gameType ? Number(props.gameServer.gameType) : undefined);
+        if (gameTypeNum === GameType.CS2 && errorMessage.includes("exit")) {
+          hint = "CS2 servers require a Steam Game Server Login Token (SRCDS_TOKEN). Configure it in the game server settings.";
+        }
+      }
+      
+      const message = hint ? `${hint}\n\nError: ${errorMessage}` : errorMessage;
       await showAlert({
         title: "Failed to start game server",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: message,
       });
     } finally {
       isActioning.value = false;

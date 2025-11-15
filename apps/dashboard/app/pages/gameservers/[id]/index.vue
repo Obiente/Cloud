@@ -197,9 +197,6 @@
                 <OuiText size="2xl" weight="bold" color="primary">
                   {{ formatCurrency(estimatedMonthlyCost) }}
                 </OuiText>
-                <OuiText size="xs" color="secondary" class="mt-1">
-                  Pay-as-you-go based on actual usage
-                </OuiText>
               </OuiStack>
             </OuiCardBody>
           </OuiCard>
@@ -211,194 +208,16 @@
           <OuiCard variant="default">
             <OuiTabs v-model="activeTab" :tabs="tabs" :content-only="true">
               <template #overview>
-                <OuiCard variant="default">
-                  <OuiCardBody>
-                    <OuiStack gap="lg">
-                      <OuiText as="h2" size="lg" weight="semibold" color="primary">
-                        Game Server Information
-                      </OuiText>
-                      <OuiStack gap="md">
-                        <OuiFlex justify="between" align="center">
-                          <OuiText size="sm" color="secondary">Game Type</OuiText>
-                          <OuiText size="sm" weight="medium" color="primary">
-                            {{ gameServer.gameType !== undefined ? getGameTypeLabel(gameServer.gameType) : "Not set" }}
-                          </OuiText>
-                        </OuiFlex>
-                        <OuiFlex justify="between" align="center">
-                          <OuiText size="sm" color="secondary">Status</OuiText>
-                          <OuiBadge :variant="statusMeta.badge" size="sm">
-                            {{ statusMeta.label }}
-                          </OuiBadge>
-                        </OuiFlex>
-                        <OuiFlex justify="between" align="center">
-                          <OuiText size="sm" color="secondary">Created</OuiText>
-                          <OuiText size="sm" weight="medium" color="primary">
-                            <OuiRelativeTime
-                              :value="gameServer.createdAt ? date(gameServer.createdAt) : undefined"
-                            />
-                          </OuiText>
-                        </OuiFlex>
-                        <OuiFlex justify="between" align="center">
-                          <OuiText size="sm" color="secondary">Last Updated</OuiText>
-                          <OuiText size="sm" weight="medium" color="primary">
-                            <OuiRelativeTime
-                              :value="gameServer.updatedAt ? date(gameServer.updatedAt) : undefined"
-                            />
-                          </OuiText>
-                        </OuiFlex>
-                      </OuiStack>
-                    </OuiStack>
-                  </OuiCardBody>
-                </OuiCard>
-
-                <!-- Connection Information Card -->
-                <OuiCard v-if="gameServer.status === 'RUNNING' && gameServer.port" variant="default">
-                  <OuiCardBody>
-                    <OuiStack gap="lg">
-                      <OuiStack gap="sm">
-                        <OuiFlex align="center" gap="sm">
-                          <GlobeAltIcon class="h-5 w-5 text-accent-primary" />
-                          <OuiText as="h2" size="lg" weight="semibold" color="primary">
-                            Connection Information
-                          </OuiText>
-                        </OuiFlex>
-                        <OuiText size="sm" color="secondary">
-                          Use this information to connect to your game server
-                        </OuiText>
-                      </OuiStack>
-
-                      <!-- SRV Records (for games that support them) -->
-                      <OuiStack v-if="hasSRVRecords" gap="md">
-                        <OuiStack gap="xs">
-                          <OuiText size="sm" weight="medium" color="secondary">
-                            SRV Records (Recommended)
-                          </OuiText>
-                          <OuiText size="xs" color="secondary" class="opacity-75">
-                            Use these domains for automatic port resolution
-                          </OuiText>
-                        </OuiStack>
-                        <OuiCard 
-                          v-for="(srv, index) in srvDomains" 
-                          :key="index"
-                          variant="outline" 
-                          class="bg-surface-muted/30"
-                        >
-                          <OuiCardBody>
-                            <OuiStack gap="sm">
-                              <OuiText size="xs" weight="medium" color="secondary">
-                                {{ srv.label }}
-                              </OuiText>
-                              <OuiText size="xs" color="secondary" class="opacity-75">
-                                {{ srv.description }}
-                              </OuiText>
-                              <OuiFlex justify="between" align="center" gap="md" wrap="wrap">
-                                <OuiText 
-                                  size="sm" 
-                                  weight="medium" 
-                                  color="primary"
-                                  class="font-mono break-all"
-                                >
-                                  {{ srv.domain }}
-                                </OuiText>
-                                <OuiButton
-                                  variant="ghost"
-                                  size="sm"
-                                  @click="copyToClipboard(srv.domain)"
-                                  class="shrink-0 gap-2"
-                                >
-                                  <ClipboardIcon class="h-4 w-4" />
-                                  <OuiText as="span" size="xs">Copy</OuiText>
-                                </OuiButton>
-                              </OuiFlex>
-                            </OuiStack>
-                          </OuiCardBody>
-                        </OuiCard>
-                      </OuiStack>
-
-                      <!-- Direct Connection Info -->
-                      <OuiStack gap="md">
-                        <OuiStack gap="xs">
-                          <OuiText size="sm" weight="medium" color="secondary">
-                            Direct Connection
-                          </OuiText>
-                          <OuiText size="xs" color="secondary" class="opacity-75">
-                            Use this if SRV records are not supported
-                          </OuiText>
-                        </OuiStack>
-                        <OuiCard variant="outline" class="bg-surface-muted/30">
-                          <OuiCardBody>
-                            <OuiStack gap="sm">
-                              <OuiFlex justify="between" align="center" gap="md" wrap="wrap">
-                                <OuiStack gap="xs" class="flex-1 min-w-0">
-                                  <OuiText size="xs" color="secondary">Domain</OuiText>
-                                  <OuiText 
-                                    size="sm" 
-                                    weight="medium" 
-                                    color="primary"
-                                    class="font-mono break-all"
-                                  >
-                                    {{ connectionDomain }}
-                                  </OuiText>
-                                </OuiStack>
-                                <OuiButton
-                                  variant="ghost"
-                                  size="sm"
-                                  @click="copyToClipboard(connectionDomain)"
-                                  class="shrink-0 gap-2"
-                                >
-                                  <ClipboardIcon class="h-4 w-4" />
-                                  <OuiText as="span" size="xs">Copy</OuiText>
-                                </OuiButton>
-                              </OuiFlex>
-                              <OuiFlex justify="between" align="center" gap="md" wrap="wrap">
-                                <OuiStack gap="xs" class="flex-1 min-w-0">
-                                  <OuiText size="xs" color="secondary">Port</OuiText>
-                                  <OuiText 
-                                    size="sm" 
-                                    weight="medium" 
-                                    color="primary"
-                                    class="font-mono"
-                                  >
-                                    {{ gameServer.port }}
-                                  </OuiText>
-                                </OuiStack>
-                                <OuiButton
-                                  variant="ghost"
-                                  size="sm"
-                                  @click="copyToClipboard(gameServer.port.toString())"
-                                  class="shrink-0 gap-2"
-                                >
-                                  <ClipboardIcon class="h-4 w-4" />
-                                  <OuiText as="span" size="xs">Copy</OuiText>
-                                </OuiButton>
-                              </OuiFlex>
-                            </OuiStack>
-                          </OuiCardBody>
-                        </OuiCard>
-                      </OuiStack>
-
-                      <!-- Instructions -->
-                      <OuiStack gap="sm" class="mt-2">
-                        <OuiText size="xs" weight="medium" color="secondary">
-                          How to Connect:
-                        </OuiText>
-                        <OuiStack gap="xs" class="pl-4">
-                          <OuiText size="xs" color="secondary" class="list-item">
-                            <span v-if="hasSRVRecords">
-                              For games with SRV records: Use the SRV record domain in your game client. The port will be resolved automatically.
-                            </span>
-                            <span v-else>
-                              Use the domain and port shown above to connect to your server.
-                            </span>
-                          </OuiText>
-                          <OuiText size="xs" color="secondary" class="list-item">
-                            The domain <code class="px-1 py-0.5 rounded bg-surface-muted text-xs font-mono">{{ connectionDomain }}</code> will automatically resolve to the correct server IP.
-                          </OuiText>
-                        </OuiStack>
-                      </OuiStack>
-                    </OuiStack>
-                  </OuiCardBody>
-                </OuiCard>
+              <GameServerOverview
+                :game-server="gameServer"
+                :usage-data="usageData"
+                :is-streaming="isStreaming"
+                :latest-metric="latestMetric"
+                :current-cpu-usage="currentCpuUsage"
+                :current-memory-usage="currentMemoryUsage"
+                :current-network-rx="currentNetworkRx"
+                :current-network-tx="currentNetworkTx"
+              />
               </template>
             <template #logs>
               <GameServerLogs
@@ -414,9 +233,25 @@
                 />
               </template>
             <template #files>
-              <GameServerFiles
+              <GameServerFiles :game-server-id="gameServerId" />
+            </template>
+            <template #eula>
+              <MinecraftFileEditor
                 :game-server-id="gameServerId"
+                file-path="eula.txt"
+                :editor-component="MinecraftEULAEditor"
               />
+            </template>
+            <template #server-properties>
+              <MinecraftFileEditor
+                :game-server-id="gameServerId"
+                file-path="server.properties"
+                :editor-component="MinecraftServerPropertiesEditor"
+                :editor-props="{ serverVersion: gameServer?.serverVersion }"
+              />
+            </template>
+            <template #users>
+              <MinecraftUsersEditor :game-server-id="gameServerId" />
             </template>
             <template #settings>
               <GameServerSettings
@@ -483,7 +318,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   ArrowPathIcon,
@@ -502,6 +337,10 @@ import {
   ClipboardIcon,
   FolderIcon,
   ClipboardDocumentListIcon,
+  DocumentCheckIcon,
+  UserGroupIcon,
+  UserMinusIcon,
+  ShieldCheckIcon,
 } from "@heroicons/vue/24/outline";
 
 import type { TabItem } from "~/components/oui/Tabs.vue";
@@ -512,6 +351,11 @@ import GameServerMetrics from "~/components/gameserver/GameServerMetrics.vue";
 import GameServerLogs from "~/components/gameserver/GameServerLogs.vue";
 import GameServerFiles from "~/components/gameserver/GameServerFiles.vue";
 import GameServerSettings from "~/components/gameserver/GameServerSettings.vue";
+import GameServerOverview from "~/components/gameserver/GameServerOverview.vue";
+import MinecraftFileEditor from "~/components/gameserver/MinecraftFileEditor.vue";
+import MinecraftEULAEditor from "~/components/gameserver/MinecraftEULAEditor.vue";
+import MinecraftServerPropertiesEditor from "~/components/gameserver/MinecraftServerPropertiesEditor.vue";
+import MinecraftUsersEditor from "~/components/gameserver/MinecraftUsersEditor.vue";
 import AuditLogs from "~/components/audit/AuditLogs.vue";
 import { date } from "@obiente/proto/utils";
 import { useToast } from "~/composables/useToast";
@@ -603,6 +447,28 @@ const gameServer = computed(() => {
 });
 const usageData = ref<any>(null);
 
+// Live metrics state
+const isStreaming = ref(false);
+const latestMetric = ref<any>(null);
+const streamController = ref<AbortController | null>(null);
+
+// Computed metrics from latest data
+const currentCpuUsage = computed(() => {
+  return latestMetric.value?.cpuUsagePercent ?? 0;
+});
+
+const currentMemoryUsage = computed(() => {
+  return latestMetric.value?.memoryUsageBytes ?? 0;
+});
+
+const currentNetworkRx = computed(() => {
+  return latestMetric.value?.networkRxBytes ?? 0;
+});
+
+const currentNetworkTx = computed(() => {
+  return latestMetric.value?.networkTxBytes ?? 0;
+});
+
 // State variables
 const isRefreshing = ref(false);
 const isStarting = ref(false);
@@ -612,14 +478,46 @@ const isDeleting = ref(false);
 const showDeleteDialog = ref(false);
 
 // Tabs definition
-const tabs = computed<TabItem[]>(() => [
-  { id: "overview", label: "Overview", icon: CubeIcon },
-  { id: "logs", label: "Logs", icon: DocumentTextIcon },
-  { id: "metrics", label: "Metrics", icon: ChartBarIcon },
-  { id: "files", label: "Files", icon: FolderIcon },
-  { id: "settings", label: "Settings", icon: Cog6ToothIcon },
-  { id: "audit-logs", label: "Audit Logs", icon: ClipboardDocumentListIcon },
-]);
+const isMinecraft = computed(() => {
+  const gameType = gameServer.value?.gameType;
+  if (typeof gameType === 'number') {
+    return gameType === GameType.MINECRAFT || 
+           gameType === GameType.MINECRAFT_JAVA || 
+           gameType === GameType.MINECRAFT_BEDROCK;
+  }
+  return false;
+});
+
+const tabs = computed<TabItem[]>(() => {
+  const baseTabs: TabItem[] = [
+    { id: "overview", label: "Overview", icon: CubeIcon },
+    { id: "logs", label: "Logs", icon: DocumentTextIcon },
+    { id: "metrics", label: "Metrics", icon: ChartBarIcon },
+    { id: "files", label: "Files", icon: FolderIcon },
+  ];
+
+  // Add Minecraft-specific tabs
+  if (isMinecraft.value) {
+    baseTabs.push(
+      { id: "server-properties", label: "Server Properties", icon: Cog6ToothIcon },
+      { id: "users", label: "Users", icon: UserGroupIcon }
+    );
+  }
+
+  baseTabs.push(
+    { id: "settings", label: "Settings", icon: Cog6ToothIcon },
+    { id: "audit-logs", label: "Audit Logs", icon: ClipboardDocumentListIcon }
+  );
+
+  // Add EULA tab at the end
+  if (isMinecraft.value) {
+    baseTabs.push(
+      { id: "eula", label: "EULA", icon: DocumentCheckIcon }
+    );
+  }
+
+  return baseTabs;
+});
 
 // Use composable for tab query parameter management
 const activeTab = useTabQuery(tabs);
@@ -678,25 +576,12 @@ const statusMeta = computed(() => {
 
 // Estimated monthly cost based on actual usage and pricing
 const estimatedMonthlyCost = computed(() => {
-  // Use actual usage data if available
-  if (usageData.value?.totalCostCents) {
-    return Number(usageData.value.totalCostCents) / 100;
+  // Use actual usage data if available (current price of usage, like deployments)
+  if (usageData.value?.estimatedMonthly?.estimatedCostCents) {
+    return Number(usageData.value.estimatedMonthly.estimatedCostCents) / 100;
   }
   
-  // Otherwise estimate based on configuration if running 24/7
-  // This is just an estimate - actual cost depends on usage
-  if (gameServer.value?.cpuCores && gameServer.value?.memoryBytes) {
-    const cpuCores = gameServer.value.cpuCores;
-    const memoryBytes = typeof gameServer.value.memoryBytes === 'bigint' 
-      ? Number(gameServer.value.memoryBytes) 
-      : gameServer.value.memoryBytes;
-    const memoryGB = memoryBytes / (1024 * 1024 * 1024);
-    
-    // Use actual pricing from API if available, otherwise estimate
-    // Pricing: ~$2/core/month + ~$3/GB/month for 24/7 usage
-    // Actual cost is pay-as-you-go based on actual CPU and memory usage
-    return (cpuCores * 2) + (memoryGB * 3);
-  }
+  // If no usage data available yet, return 0
   return 0;
 });
 
@@ -858,6 +743,78 @@ watch(() => gameServer.value, (newValue) => {
   }
 }, { immediate: true });
 
+// Start streaming metrics
+const startStreaming = async () => {
+  if (isStreaming.value || streamController.value || !gameServer.value?.id) {
+    return;
+  }
+
+  isStreaming.value = true;
+  streamController.value = new AbortController();
+
+  try {
+    const stream = await client.streamGameServerMetrics({
+      gameServerId: gameServerId.value,
+    });
+
+    for await (const metric of stream) {
+      if (streamController.value?.signal.aborted) {
+        break;
+      }
+      latestMetric.value = metric;
+    }
+  } catch (err: any) {
+    if (err.name === "AbortError") {
+      return;
+    }
+    // Suppress "missing trailer" errors
+    const isMissingTrailerError =
+      err.message?.toLowerCase().includes("missing trailer") ||
+      err.message?.toLowerCase().includes("trailer") ||
+      err.code === "unknown";
+
+    if (!isMissingTrailerError) {
+      console.error("Failed to stream metrics:", err);
+    }
+  } finally {
+    isStreaming.value = false;
+    streamController.value = null;
+  }
+};
+
+// Stop streaming
+const stopStreaming = () => {
+  if (streamController.value) {
+    streamController.value.abort();
+    streamController.value = null;
+  }
+  isStreaming.value = false;
+};
+
+// Start streaming when component mounts if server is running
+onMounted(() => {
+  if (gameServer.value?.status === "RUNNING") {
+    startStreaming();
+  }
+});
+
+// Watch game server status and start/stop streaming accordingly
+watch(
+  () => gameServer.value?.status,
+  (status) => {
+    if (status === "RUNNING" && !isStreaming.value) {
+      startStreaming();
+    } else if (status !== "RUNNING" && isStreaming.value) {
+      stopStreaming();
+    }
+  }
+);
+
+// Clean up on unmount
+onUnmounted(() => {
+  stopStreaming();
+});
+
 // Actions
 const refreshAll = async () => {
   isRefreshing.value = true;
@@ -890,8 +847,23 @@ const startServer = async () => {
     });
     await loadGameServer();
     toast.success("Game server started");
-  } catch (error) {
-    toast.error("Failed to start game server");
+  } catch (error: any) {
+    // Extract error message from backend
+    const errorMessage = error?.message || "Unknown error";
+    
+    // Check for common configuration errors
+    let hint = "";
+    if (errorMessage.includes("exited immediately") || errorMessage.includes("container exit")) {
+      hint = "The container may be missing required environment variables or configuration. Check the Logs tab for details.";
+      
+      // Add specific hint for CS2 servers
+      if (gameServer.value?.gameType === GameType.CS2 && errorMessage.includes("exit")) {
+        hint = "CS2 servers require a Steam Game Server Login Token (SRCDS_TOKEN). Add it in the Settings tab under Environment Variables.";
+      }
+    }
+    
+    const description = hint ? `${hint}\n\nError: ${errorMessage}` : errorMessage;
+    toast.error("Failed to start game server", description);
   } finally {
     isStarting.value = false;
   }
