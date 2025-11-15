@@ -9,6 +9,7 @@ Step-by-step guides for common tasks with Obiente Cloud.
 ## Integrations
 
 - [GitHub Integration](github-integration.md) - Set up GitHub OAuth and automatic deployments
+- [Stripe Payment Setup](stripe-setup.md) - Configure Stripe for payment processing and billing
 
 ## Routing
 

@@ -85,6 +85,7 @@ type OrganizationPlan struct {
 	StorageBytes       int64  `json:"storage_bytes"`
 	MinimumPaymentCents int64 `gorm:"column:minimum_payment_cents;default:0" json:"minimum_payment_cents"` // Minimum payment in cents to automatically upgrade to this plan
 	MonthlyFreeCreditsCents int64 `gorm:"column:monthly_free_credits_cents;default:0" json:"monthly_free_credits_cents"` // Monthly free credits in cents granted to organizations on this plan
+	TrialDays int `gorm:"column:trial_days;default:0" json:"trial_days"` // Number of trial days for Stripe subscriptions (0 = no trial)
 	Description        string `gorm:"column:description;type:text" json:"description"` // Optional description of the plan
 }
 
@@ -209,10 +210,16 @@ func (CreditTransaction) TableName() string { return "credit_transactions" }
 
 // StripeWebhookEvent tracks processed Stripe webhook events for idempotency
 type StripeWebhookEvent struct {
-	ID        string    `gorm:"primaryKey" json:"id"` // Stripe event ID (evt_*)
-	EventType string    `gorm:"index;not null" json:"event_type"`
-	ProcessedAt time.Time `gorm:"not null" json:"processed_at"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          string     `gorm:"primaryKey" json:"id"` // Stripe event ID (evt_*)
+	EventType   string     `gorm:"index;not null" json:"event_type"`
+	ProcessedAt time.Time  `gorm:"not null" json:"processed_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+	// Extracted IDs for easier querying and display
+	OrganizationID *string `gorm:"index;column:organization_id" json:"organization_id,omitempty"` // Organization ID if available
+	CustomerID     *string `gorm:"index;column:customer_id" json:"customer_id,omitempty"`         // Stripe customer ID if available
+	SubscriptionID *string `gorm:"index;column:subscription_id" json:"subscription_id,omitempty"` // Stripe subscription ID if available
+	InvoiceID      *string `gorm:"index;column:invoice_id" json:"invoice_id,omitempty"`           // Stripe invoice ID if available
+	CheckoutSessionID *string `gorm:"index;column:checkout_session_id" json:"checkout_session_id,omitempty"` // Stripe checkout session ID if available
 }
 
 func (StripeWebhookEvent) TableName() string { return "stripe_webhook_events" }

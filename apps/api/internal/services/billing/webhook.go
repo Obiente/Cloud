@@ -77,6 +77,9 @@ func HandleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Extract organization/customer info from event data for tracking
+	orgID, customerID, subscriptionID, invoiceID, checkoutSessionID := extractEventIDs(string(event.Type), event.Data.Raw)
+	
 	// Mark event as being processed (with a small delay to handle race conditions)
 	// Use a transaction to ensure atomicity
 	var processedEvent database.StripeWebhookEvent
@@ -86,12 +89,17 @@ func HandleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("event already processed")
 		}
 		
-		// Create record
+		// Create record with extracted IDs
 		processedEvent = database.StripeWebhookEvent{
-			ID:         event.ID,
-			EventType:  string(event.Type),
-			ProcessedAt: time.Now(),
-			CreatedAt:  time.Now(),
+			ID:               event.ID,
+			EventType:        string(event.Type),
+			ProcessedAt:      time.Now(),
+			CreatedAt:        time.Now(),
+			OrganizationID:   orgID,
+			CustomerID:       customerID,
+			SubscriptionID:   subscriptionID,
+			InvoiceID:        invoiceID,
+			CheckoutSessionID: checkoutSessionID,
 		}
 		return tx.Create(&processedEvent).Error
 	})
@@ -192,8 +200,277 @@ func HandleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+	case "invoice.payment_failed":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.payment_failed: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if err := handleInvoicePaymentFailed(&invoice, event.Data.Raw); err != nil {
+			log.Printf("[Stripe Webhook] Error handling invoice.payment_failed: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+	case "invoice.payment_action_required":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.payment_action_required: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleInvoicePaymentActionRequired(&invoice, event.Data.Raw)
+
+	case "invoice.finalization_failed":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.finalization_failed: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleInvoiceFinalizationFailed(&invoice, event.Data.Raw)
+
+	case "checkout.session.expired":
+		var session stripe.CheckoutSession
+		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing checkout.session.expired: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleCheckoutSessionExpired(&session, event.Data.Raw)
+
+	case "checkout.session.async_payment_succeeded":
+		var session stripe.CheckoutSession
+		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing checkout.session.async_payment_succeeded: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if err := handleCheckoutSessionAsyncPaymentSucceeded(&session, event.Data.Raw); err != nil {
+			log.Printf("[Stripe Webhook] Error handling checkout.session.async_payment_succeeded: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+	case "checkout.session.async_payment_failed":
+		var session stripe.CheckoutSession
+		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing checkout.session.async_payment_failed: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleCheckoutSessionAsyncPaymentFailed(&session, event.Data.Raw)
+
+	case "customer.subscription.trial_will_end":
+		var subscription stripe.Subscription
+		if err := json.Unmarshal(event.Data.Raw, &subscription); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing customer.subscription.trial_will_end: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleSubscriptionTrialWillEnd(&subscription, event.Data.Raw)
+
+	case "customer.subscription.paused":
+		var subscription stripe.Subscription
+		if err := json.Unmarshal(event.Data.Raw, &subscription); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing customer.subscription.paused: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleSubscriptionPaused(&subscription, event.Data.Raw)
+
+	case "customer.subscription.resumed":
+		var subscription stripe.Subscription
+		if err := json.Unmarshal(event.Data.Raw, &subscription); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing customer.subscription.resumed: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleSubscriptionResumed(&subscription, event.Data.Raw)
+
+	case "customer.subscription.pending_update_applied":
+		var subscription stripe.Subscription
+		if err := json.Unmarshal(event.Data.Raw, &subscription); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing customer.subscription.pending_update_applied: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleSubscriptionPendingUpdateApplied(&subscription, event.Data.Raw)
+
+	case "customer.subscription.pending_update_expired":
+		var subscription stripe.Subscription
+		if err := json.Unmarshal(event.Data.Raw, &subscription); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing customer.subscription.pending_update_expired: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleSubscriptionPendingUpdateExpired(&subscription, event.Data.Raw)
+
+	case "invoice.created":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.created: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleInvoiceCreated(&invoice, event.Data.Raw)
+
+	case "invoice.deleted":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.deleted: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleInvoiceDeleted(&invoice, event.Data.Raw)
+
+	case "invoice.finalized":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.finalized: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleInvoiceFinalized(&invoice, event.Data.Raw)
+
+	case "invoice.marked_uncollectible":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.marked_uncollectible: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleInvoiceMarkedUncollectible(&invoice, event.Data.Raw)
+
+	case "invoice.overdue":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.overdue: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleInvoiceOverdue(&invoice, event.Data.Raw)
+
+	case "invoice.overpaid":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.overpaid: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleInvoiceOverpaid(&invoice, event.Data.Raw)
+
+	case "invoice.payment_succeeded":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.payment_succeeded: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleInvoicePaymentSucceeded(&invoice, event.Data.Raw)
+
+	case "invoice.sent":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.sent: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleInvoiceSent(&invoice, event.Data.Raw)
+
+	case "invoice.upcoming":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.upcoming: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleInvoiceUpcoming(&invoice, event.Data.Raw)
+
+	case "invoice.updated":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.updated: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleInvoiceUpdated(&invoice, event.Data.Raw)
+
+	case "invoice.voided":
+		var invoice stripe.Invoice
+		if err := json.Unmarshal(event.Data.Raw, &invoice); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing invoice.voided: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleInvoiceVoided(&invoice, event.Data.Raw)
+
+	case "subscription_schedule.aborted":
+		var schedule stripe.SubscriptionSchedule
+		if err := json.Unmarshal(event.Data.Raw, &schedule); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing subscription_schedule.aborted: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleSubscriptionScheduleAborted(&schedule, event.Data.Raw)
+
+	case "subscription_schedule.canceled":
+		var schedule stripe.SubscriptionSchedule
+		if err := json.Unmarshal(event.Data.Raw, &schedule); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing subscription_schedule.canceled: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleSubscriptionScheduleCanceled(&schedule, event.Data.Raw)
+
+	case "subscription_schedule.completed":
+		var schedule stripe.SubscriptionSchedule
+		if err := json.Unmarshal(event.Data.Raw, &schedule); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing subscription_schedule.completed: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleSubscriptionScheduleCompleted(&schedule, event.Data.Raw)
+
+	case "subscription_schedule.created":
+		var schedule stripe.SubscriptionSchedule
+		if err := json.Unmarshal(event.Data.Raw, &schedule); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing subscription_schedule.created: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleSubscriptionScheduleCreated(&schedule, event.Data.Raw)
+
+	case "subscription_schedule.expiring":
+		var schedule stripe.SubscriptionSchedule
+		if err := json.Unmarshal(event.Data.Raw, &schedule); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing subscription_schedule.expiring: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleSubscriptionScheduleExpiring(&schedule, event.Data.Raw)
+
+	case "subscription_schedule.released":
+		var schedule stripe.SubscriptionSchedule
+		if err := json.Unmarshal(event.Data.Raw, &schedule); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing subscription_schedule.released: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleSubscriptionScheduleReleased(&schedule, event.Data.Raw)
+
+	case "subscription_schedule.updated":
+		var schedule stripe.SubscriptionSchedule
+		if err := json.Unmarshal(event.Data.Raw, &schedule); err != nil {
+			log.Printf("[Stripe Webhook] Error parsing subscription_schedule.updated: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		handleSubscriptionScheduleUpdated(&schedule, event.Data.Raw)
+
 	default:
-		log.Printf("[Stripe Webhook] Unhandled event type: %s", event.Type)
+		log.Printf("[Stripe Webhook] Unhandled event type: %s (ID: %s)", event.Type, event.ID)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -309,20 +586,25 @@ func handleSubscriptionCreated(subscription *stripe.Subscription, rawData []byte
 		existingKey, err := database.GetActiveDNSDelegationAPIKeyForOrganization(orgID)
 		if err == nil && existingKey != nil {
 			log.Printf("[Stripe Webhook] Organization %s already has an active API key, skipping creation", orgID)
-			return nil
+		} else {
+			subscriptionID := subscription.ID
+			description := fmt.Sprintf("DNS Delegation API Key (Subscription: %s)", subscriptionID)
+			sourceAPI := "" // Will be set by user when they configure their API
+
+			apiKey, err := database.CreateDNSDelegationAPIKey(description, sourceAPI, orgID, &subscriptionID)
+			if err != nil {
+				return fmt.Errorf("create DNS delegation API key: %w", err)
+			}
+
+			log.Printf("[Stripe Webhook] Created DNS delegation API key for organization %s (subscription: %s)", orgID, subscriptionID)
+			log.Printf("[Stripe Webhook] API Key: %s (save this securely!)", apiKey)
 		}
 
-		subscriptionID := subscription.ID
-		description := fmt.Sprintf("DNS Delegation API Key (Subscription: %s)", subscriptionID)
-		sourceAPI := "" // Will be set by user when they configure their API
-
-		apiKey, err := database.CreateDNSDelegationAPIKey(description, sourceAPI, orgID, &subscriptionID)
-		if err != nil {
-			return fmt.Errorf("create DNS delegation API key: %w", err)
+		// Grant monthly free credits from plan when subscription becomes active
+		if err := grantMonthlyFreeCreditsFromPlan(orgID, subscription.ID); err != nil {
+			log.Printf("[Stripe Webhook] Failed to grant free credits on subscription creation: %v", err)
+			// Don't fail the whole handler if free credits grant fails
 		}
-
-		log.Printf("[Stripe Webhook] Created DNS delegation API key for organization %s (subscription: %s)", orgID, subscriptionID)
-		log.Printf("[Stripe Webhook] API Key: %s (save this securely!)", apiKey)
 	}
 
 	return nil
@@ -384,6 +666,12 @@ func handleSubscriptionUpdated(subscription *stripe.Subscription, rawData []byte
 					log.Printf("[Stripe Webhook] Created DNS delegation API key for reactivated subscription %s (org: %s)", subscriptionID, orgID)
 					log.Printf("[Stripe Webhook] API Key: %s", apiKey)
 				}
+			}
+
+			// Grant monthly free credits from plan when subscription becomes active again
+			if err := grantMonthlyFreeCreditsFromPlan(orgID, subscriptionID); err != nil {
+				log.Printf("[Stripe Webhook] Failed to grant free credits on subscription update: %v", err)
+				// Don't fail the whole handler if free credits grant fails
 			}
 		}
 	}
@@ -536,6 +824,626 @@ func handleInvoicePaid(invoice *stripe.Invoice, rawData []byte) error {
 	}
 
 	return nil
+}
+
+// handleInvoicePaymentFailed handles when an invoice payment fails
+func handleInvoicePaymentFailed(invoice *stripe.Invoice, rawData []byte) error {
+	// Get customer ID
+	var customerID string
+	if invoice.Customer != nil {
+		customerID = invoice.Customer.ID
+	} else {
+		var rawInvoice map[string]interface{}
+		if err := json.Unmarshal(rawData, &rawInvoice); err == nil {
+			if cust, ok := rawInvoice["customer"].(string); ok {
+				customerID = cust
+			}
+		}
+	}
+
+	if customerID == "" {
+		return fmt.Errorf("missing customer in invoice")
+	}
+
+	// Find organization by Stripe customer ID
+	var billingAccount database.BillingAccount
+	if err := database.DB.Where("stripe_customer_id = ?", customerID).First(&billingAccount).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("[Stripe Webhook] No billing account found for customer %s (invoice %s)", customerID, invoice.ID)
+			return nil
+		}
+		return fmt.Errorf("find billing account: %w", err)
+	}
+
+	// Update billing account status if needed
+	billingAccount.Status = "PAYMENT_FAILED"
+	billingAccount.UpdatedAt = time.Now()
+	if err := database.DB.Save(&billingAccount).Error; err != nil {
+		log.Printf("[Stripe Webhook] Failed to update billing account status: %v", err)
+	}
+
+	log.Printf("[Stripe Webhook] Invoice payment failed for organization %s (invoice %s, amount: %d cents)", 
+		billingAccount.OrganizationID, invoice.ID, invoice.AmountDue)
+	
+	// TODO: Could send notification email to user about failed payment
+	return nil
+}
+
+// handleInvoicePaymentActionRequired handles when payment requires user action (e.g., 3D Secure)
+func handleInvoicePaymentActionRequired(invoice *stripe.Invoice, rawData []byte) {
+	// Get customer ID
+	var customerID string
+	if invoice.Customer != nil {
+		customerID = invoice.Customer.ID
+	} else {
+		var rawInvoice map[string]interface{}
+		if err := json.Unmarshal(rawData, &rawInvoice); err == nil {
+			if cust, ok := rawInvoice["customer"].(string); ok {
+				customerID = cust
+			}
+		}
+	}
+
+	if customerID == "" {
+		log.Printf("[Stripe Webhook] Missing customer in invoice.payment_action_required (invoice %s)", invoice.ID)
+		return
+	}
+
+	log.Printf("[Stripe Webhook] Payment action required for customer %s (invoice %s)", customerID, invoice.ID)
+	// TODO: Could send notification email to user with payment link
+}
+
+// handleInvoiceFinalizationFailed handles when invoice finalization fails
+func handleInvoiceFinalizationFailed(invoice *stripe.Invoice, rawData []byte) {
+	// Get customer ID
+	var customerID string
+	if invoice.Customer != nil {
+		customerID = invoice.Customer.ID
+	} else {
+		var rawInvoice map[string]interface{}
+		if err := json.Unmarshal(rawData, &rawInvoice); err == nil {
+			if cust, ok := rawInvoice["customer"].(string); ok {
+				customerID = cust
+			}
+		}
+	}
+
+	if customerID == "" {
+		log.Printf("[Stripe Webhook] Missing customer in invoice.finalization_failed (invoice %s)", invoice.ID)
+		return
+	}
+
+	log.Printf("[Stripe Webhook] Invoice finalization failed for customer %s (invoice %s)", customerID, invoice.ID)
+	// TODO: Could send notification email to admin about finalization failure
+}
+
+// handleCheckoutSessionExpired handles when a checkout session expires
+func handleCheckoutSessionExpired(session *stripe.CheckoutSession, rawData []byte) {
+	// Extract organization ID from metadata if available
+	orgID, ok := session.Metadata["organization_id"]
+	if !ok {
+		log.Printf("[Stripe Webhook] Checkout session expired (session %s) - no organization_id in metadata", session.ID)
+		return
+	}
+
+	log.Printf("[Stripe Webhook] Checkout session expired for organization %s (session %s)", orgID, session.ID)
+	// TODO: Could send notification email to user that their checkout session expired
+}
+
+// handleCheckoutSessionAsyncPaymentSucceeded handles when an async payment (e.g., bank transfer) succeeds
+func handleCheckoutSessionAsyncPaymentSucceeded(session *stripe.CheckoutSession, rawData []byte) error {
+	// Extract organization ID from metadata
+	orgID, ok := session.Metadata["organization_id"]
+	if !ok {
+		return fmt.Errorf("missing organization_id in metadata")
+	}
+
+	// Get payment intent amount from session
+	amountCents := session.AmountTotal
+	if amountCents <= 0 {
+		return fmt.Errorf("invalid amount_total: %d", amountCents)
+	}
+
+	// Extract customer ID
+	var customerID string
+	if session.Customer != nil {
+		customerID = session.Customer.ID
+	} else {
+		var rawSession map[string]interface{}
+		if err := json.Unmarshal(rawData, &rawSession); err == nil {
+			if cust, ok := rawSession["customer"].(string); ok {
+				customerID = cust
+			}
+		}
+	}
+
+	if customerID == "" {
+		return fmt.Errorf("missing customer in checkout session")
+	}
+
+	// Add credits to organization (same as regular checkout.session.completed)
+	if err := addCreditsFromPayment(orgID, amountCents, session.ID, customerID); err != nil {
+		return fmt.Errorf("add credits from payment: %w", err)
+	}
+
+	log.Printf("[Stripe Webhook] Successfully added %d cents to organization %s from async payment checkout session %s", 
+		amountCents, orgID, session.ID)
+	return nil
+}
+
+// handleCheckoutSessionAsyncPaymentFailed handles when an async payment fails
+func handleCheckoutSessionAsyncPaymentFailed(session *stripe.CheckoutSession, rawData []byte) {
+	// Extract organization ID from metadata if available
+	orgID, ok := session.Metadata["organization_id"]
+	if !ok {
+		log.Printf("[Stripe Webhook] Async payment failed (session %s) - no organization_id in metadata", session.ID)
+		return
+	}
+
+	log.Printf("[Stripe Webhook] Async payment failed for organization %s (session %s)", orgID, session.ID)
+	// TODO: Could send notification email to user about failed async payment
+}
+
+// handleSubscriptionTrialWillEnd handles when a subscription trial is about to end
+func handleSubscriptionTrialWillEnd(subscription *stripe.Subscription, rawData []byte) {
+	// Get organization from customer
+	var orgID string
+	var customerID string
+	
+	if subscription.Customer != nil {
+		customerID = subscription.Customer.ID
+		if orgIDVal, ok := subscription.Customer.Metadata["organization_id"]; ok {
+			orgID = orgIDVal
+		}
+	}
+	
+	if customerID == "" {
+		var rawSub map[string]interface{}
+		if err := json.Unmarshal(rawData, &rawSub); err == nil {
+			if cust, ok := rawSub["customer"].(string); ok {
+				customerID = cust
+			}
+		}
+	}
+
+	if orgID == "" && customerID != "" {
+		var billingAccount database.BillingAccount
+		if err := database.DB.Where("stripe_customer_id = ?", customerID).First(&billingAccount).Error; err == nil {
+			orgID = billingAccount.OrganizationID
+		}
+	}
+
+	if orgID == "" {
+		log.Printf("[Stripe Webhook] Could not find organization for subscription trial_will_end %s", subscription.ID)
+		return
+	}
+
+	// Get trial end date
+	trialEnd := time.Unix(subscription.TrialEnd, 0)
+	daysUntilEnd := int(time.Until(trialEnd).Hours() / 24)
+
+	log.Printf("[Stripe Webhook] Subscription trial will end for organization %s (subscription %s, ends in %d days)", 
+		orgID, subscription.ID, daysUntilEnd)
+	// TODO: Could send notification email to user about trial ending
+}
+
+// grantMonthlyFreeCreditsFromPlan grants monthly free credits to an organization based on their plan
+// This is called when a subscription becomes active to grant the plan's monthly free credits
+func grantMonthlyFreeCreditsFromPlan(orgID string, subscriptionID string) error {
+	// Get organization's quota to find their plan
+	var quota database.OrgQuota
+	if err := database.DB.Where("organization_id = ?", orgID).First(&quota).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("[Stripe Webhook] No quota found for organization %s, skipping free credits grant", orgID)
+			return nil
+		}
+		return fmt.Errorf("get quota: %w", err)
+	}
+
+	if quota.PlanID == "" {
+		log.Printf("[Stripe Webhook] Organization %s has no plan assigned, skipping free credits grant", orgID)
+		return nil
+	}
+
+	// Get the plan
+	var plan database.OrganizationPlan
+	if err := database.DB.First(&plan, "id = ?", quota.PlanID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("[Stripe Webhook] Plan %s not found, skipping free credits grant", quota.PlanID)
+			return nil
+		}
+		return fmt.Errorf("get plan: %w", err)
+	}
+
+	// Skip if plan has no monthly free credits
+	if plan.MonthlyFreeCreditsCents <= 0 {
+		return nil
+	}
+
+	// Grant credits in a transaction
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+		// Get organization
+		var org database.Organization
+		if err := tx.First(&org, "id = ?", orgID).Error; err != nil {
+			return fmt.Errorf("organization not found: %w", err)
+		}
+
+		// Check if we've already granted credits this month
+		now := time.Now()
+		monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+
+		var existingGrant database.MonthlyCreditGrant
+		if err := tx.Where("organization_id = ? AND plan_id = ? AND grant_month = ?",
+			orgID, plan.ID, monthStart).First(&existingGrant).Error; err == nil {
+			log.Printf("[Stripe Webhook] Credits already granted to org %s for %s, skipping", orgID, monthStart.Format("2006-01"))
+			return nil // Already granted this month
+		}
+
+		// Grant credits
+		oldBalance := org.Credits
+		org.Credits += plan.MonthlyFreeCreditsCents
+		if err := tx.Save(&org).Error; err != nil {
+			return fmt.Errorf("update credits: %w", err)
+		}
+
+		// Record credit transaction
+		monthStr := monthStart.Format("2006-01")
+		note := fmt.Sprintf("Monthly free credits for %s (plan: %s, subscription: %s)", monthStr, plan.Name, subscriptionID)
+		transactionID := generateID("ct")
+		transaction := &database.CreditTransaction{
+			ID:             transactionID,
+			OrganizationID: orgID,
+			AmountCents:    plan.MonthlyFreeCreditsCents,
+			BalanceAfter:   org.Credits,
+			Type:           "admin_add",
+			Source:         "stripe",
+			Note:           &note,
+			CreatedAt:      time.Now(),
+		}
+		if err := tx.Create(transaction).Error; err != nil {
+			return fmt.Errorf("create transaction: %w", err)
+		}
+
+		// Record grant in tracking table
+		grant := &database.MonthlyCreditGrant{
+			OrganizationID: orgID,
+			PlanID:         plan.ID,
+			GrantMonth:     monthStart,
+			AmountCents:    plan.MonthlyFreeCreditsCents,
+			GrantedAt:      time.Now(),
+			CreatedAt:      time.Now(),
+		}
+		if err := tx.Create(grant).Error; err != nil {
+			return fmt.Errorf("create grant record: %w", err)
+		}
+
+		log.Printf("[Stripe Webhook] Granted %d cents monthly free credits to org %s (plan: %s, subscription: %s, balance: %d -> %d)",
+			plan.MonthlyFreeCreditsCents, orgID, plan.Name, subscriptionID, oldBalance, org.Credits)
+
+		return nil
+	})
+}
+
+// Helper function to get organization ID from subscription
+func getOrgIDFromSubscription(subscription *stripe.Subscription, rawData []byte) (string, string) {
+	var orgID string
+	var customerID string
+	
+	if subscription.Customer != nil {
+		customerID = subscription.Customer.ID
+		if orgIDVal, ok := subscription.Customer.Metadata["organization_id"]; ok {
+			orgID = orgIDVal
+		}
+	}
+	
+	if customerID == "" {
+		var rawSub map[string]interface{}
+		if err := json.Unmarshal(rawData, &rawSub); err == nil {
+			if cust, ok := rawSub["customer"].(string); ok {
+				customerID = cust
+			}
+		}
+	}
+
+	if orgID == "" && customerID != "" {
+		var billingAccount database.BillingAccount
+		if err := database.DB.Where("stripe_customer_id = ?", customerID).First(&billingAccount).Error; err == nil {
+			orgID = billingAccount.OrganizationID
+		}
+	}
+
+	return orgID, customerID
+}
+
+// handleSubscriptionPaused handles when a subscription is paused
+func handleSubscriptionPaused(subscription *stripe.Subscription, rawData []byte) {
+	orgID, _ := getOrgIDFromSubscription(subscription, rawData)
+	if orgID == "" {
+		log.Printf("[Stripe Webhook] Could not find organization for paused subscription %s", subscription.ID)
+		return
+	}
+
+	log.Printf("[Stripe Webhook] Subscription paused for organization %s (subscription %s)", orgID, subscription.ID)
+	// TODO: Could pause services or send notification
+}
+
+// handleSubscriptionResumed handles when a subscription is resumed
+func handleSubscriptionResumed(subscription *stripe.Subscription, rawData []byte) {
+	orgID, _ := getOrgIDFromSubscription(subscription, rawData)
+	if orgID == "" {
+		log.Printf("[Stripe Webhook] Could not find organization for resumed subscription %s", subscription.ID)
+		return
+	}
+
+	log.Printf("[Stripe Webhook] Subscription resumed for organization %s (subscription %s)", orgID, subscription.ID)
+	
+	// Grant monthly free credits if subscription is active
+	if subscription.Status == "active" || subscription.Status == "trialing" {
+		if err := grantMonthlyFreeCreditsFromPlan(orgID, subscription.ID); err != nil {
+			log.Printf("[Stripe Webhook] Failed to grant free credits on resume: %v", err)
+		}
+	}
+}
+
+// handleSubscriptionPendingUpdateApplied handles when a pending subscription update is applied
+func handleSubscriptionPendingUpdateApplied(subscription *stripe.Subscription, rawData []byte) {
+	orgID, _ := getOrgIDFromSubscription(subscription, rawData)
+	if orgID == "" {
+		log.Printf("[Stripe Webhook] Could not find organization for subscription pending_update_applied %s", subscription.ID)
+		return
+	}
+
+	log.Printf("[Stripe Webhook] Subscription pending update applied for organization %s (subscription %s)", orgID, subscription.ID)
+}
+
+// handleSubscriptionPendingUpdateExpired handles when a pending subscription update expires
+func handleSubscriptionPendingUpdateExpired(subscription *stripe.Subscription, rawData []byte) {
+	orgID, _ := getOrgIDFromSubscription(subscription, rawData)
+	if orgID == "" {
+		log.Printf("[Stripe Webhook] Could not find organization for subscription pending_update_expired %s", subscription.ID)
+		return
+	}
+
+	log.Printf("[Stripe Webhook] Subscription pending update expired for organization %s (subscription %s)", orgID, subscription.ID)
+}
+
+// Invoice event handlers
+func handleInvoiceCreated(invoice *stripe.Invoice, rawData []byte) {
+	log.Printf("[Stripe Webhook] Invoice created: %s (amount: %d cents)", invoice.ID, invoice.AmountDue)
+	// Invoice is created, will be finalized and paid later
+}
+
+func handleInvoiceDeleted(invoice *stripe.Invoice, rawData []byte) {
+	log.Printf("[Stripe Webhook] Invoice deleted: %s", invoice.ID)
+	// Invoice was deleted, typically means it was a draft
+}
+
+func handleInvoiceFinalized(invoice *stripe.Invoice, rawData []byte) {
+	log.Printf("[Stripe Webhook] Invoice finalized: %s (amount: %d cents)", invoice.ID, invoice.AmountDue)
+	// Invoice is finalized and ready for payment
+}
+
+func handleInvoiceMarkedUncollectible(invoice *stripe.Invoice, rawData []byte) {
+	var customerID string
+	if invoice.Customer != nil {
+		customerID = invoice.Customer.ID
+	} else {
+		var rawInvoice map[string]interface{}
+		if err := json.Unmarshal(rawData, &rawInvoice); err == nil {
+			if cust, ok := rawInvoice["customer"].(string); ok {
+				customerID = cust
+			}
+		}
+	}
+
+	if customerID != "" {
+		var billingAccount database.BillingAccount
+		if err := database.DB.Where("stripe_customer_id = ?", customerID).First(&billingAccount).Error; err == nil {
+			billingAccount.Status = "UNCOLLECTIBLE"
+			billingAccount.UpdatedAt = time.Now()
+			database.DB.Save(&billingAccount)
+			log.Printf("[Stripe Webhook] Invoice marked uncollectible for organization %s (invoice %s)", 
+				billingAccount.OrganizationID, invoice.ID)
+		}
+	}
+}
+
+func handleInvoiceOverdue(invoice *stripe.Invoice, rawData []byte) {
+	var customerID string
+	if invoice.Customer != nil {
+		customerID = invoice.Customer.ID
+	} else {
+		var rawInvoice map[string]interface{}
+		if err := json.Unmarshal(rawData, &rawInvoice); err == nil {
+			if cust, ok := rawInvoice["customer"].(string); ok {
+				customerID = cust
+			}
+		}
+	}
+
+	if customerID != "" {
+		log.Printf("[Stripe Webhook] Invoice overdue for customer %s (invoice %s, amount: %d cents)", 
+			customerID, invoice.ID, invoice.AmountDue)
+		// TODO: Could send notification email to user
+	}
+}
+
+func handleInvoiceOverpaid(invoice *stripe.Invoice, rawData []byte) {
+	var customerID string
+	if invoice.Customer != nil {
+		customerID = invoice.Customer.ID
+	} else {
+		var rawInvoice map[string]interface{}
+		if err := json.Unmarshal(rawData, &rawInvoice); err == nil {
+			if cust, ok := rawInvoice["customer"].(string); ok {
+				customerID = cust
+			}
+		}
+	}
+
+	if customerID != "" {
+		log.Printf("[Stripe Webhook] Invoice overpaid for customer %s (invoice %s, overpaid: %d cents)", 
+			customerID, invoice.ID, invoice.AmountRemaining)
+		// TODO: Could add overpaid amount as credits or refund
+	}
+}
+
+func handleInvoicePaymentSucceeded(invoice *stripe.Invoice, rawData []byte) {
+	// This is similar to invoice.paid but fires for all successful payments
+	// We already handle invoice.paid, so this is mainly for logging
+	var customerID string
+	if invoice.Customer != nil {
+		customerID = invoice.Customer.ID
+	} else {
+		var rawInvoice map[string]interface{}
+		if err := json.Unmarshal(rawData, &rawInvoice); err == nil {
+			if cust, ok := rawInvoice["customer"].(string); ok {
+				customerID = cust
+			}
+		}
+	}
+
+	log.Printf("[Stripe Webhook] Invoice payment succeeded for customer %s (invoice %s, amount: %d cents)", 
+		customerID, invoice.ID, invoice.AmountPaid)
+}
+
+func handleInvoiceSent(invoice *stripe.Invoice, rawData []byte) {
+	log.Printf("[Stripe Webhook] Invoice sent: %s", invoice.ID)
+	// Invoice was sent to customer
+}
+
+func handleInvoiceUpcoming(invoice *stripe.Invoice, rawData []byte) {
+	var customerID string
+	if invoice.Customer != nil {
+		customerID = invoice.Customer.ID
+	} else {
+		var rawInvoice map[string]interface{}
+		if err := json.Unmarshal(rawData, &rawInvoice); err == nil {
+			if cust, ok := rawInvoice["customer"].(string); ok {
+				customerID = cust
+			}
+		}
+	}
+
+	if customerID != "" {
+		log.Printf("[Stripe Webhook] Invoice upcoming for customer %s (invoice %s, amount: %d cents)", 
+			customerID, invoice.ID, invoice.AmountDue)
+		// TODO: Could send notification email to user about upcoming invoice
+	}
+}
+
+func handleInvoiceUpdated(invoice *stripe.Invoice, rawData []byte) {
+	log.Printf("[Stripe Webhook] Invoice updated: %s", invoice.ID)
+	// Invoice was updated (amount, status, etc.)
+}
+
+func handleInvoiceVoided(invoice *stripe.Invoice, rawData []byte) {
+	log.Printf("[Stripe Webhook] Invoice voided: %s", invoice.ID)
+	// Invoice was voided and will not be paid
+}
+
+// Subscription schedule event handlers
+func handleSubscriptionScheduleAborted(schedule *stripe.SubscriptionSchedule, rawData []byte) {
+	log.Printf("[Stripe Webhook] Subscription schedule aborted: %s", schedule.ID)
+}
+
+func handleSubscriptionScheduleCanceled(schedule *stripe.SubscriptionSchedule, rawData []byte) {
+	log.Printf("[Stripe Webhook] Subscription schedule canceled: %s", schedule.ID)
+}
+
+func handleSubscriptionScheduleCompleted(schedule *stripe.SubscriptionSchedule, rawData []byte) {
+	log.Printf("[Stripe Webhook] Subscription schedule completed: %s", schedule.ID)
+}
+
+func handleSubscriptionScheduleCreated(schedule *stripe.SubscriptionSchedule, rawData []byte) {
+	log.Printf("[Stripe Webhook] Subscription schedule created: %s", schedule.ID)
+}
+
+func handleSubscriptionScheduleExpiring(schedule *stripe.SubscriptionSchedule, rawData []byte) {
+	log.Printf("[Stripe Webhook] Subscription schedule expiring: %s", schedule.ID)
+}
+
+func handleSubscriptionScheduleReleased(schedule *stripe.SubscriptionSchedule, rawData []byte) {
+	log.Printf("[Stripe Webhook] Subscription schedule released: %s", schedule.ID)
+}
+
+func handleSubscriptionScheduleUpdated(schedule *stripe.SubscriptionSchedule, rawData []byte) {
+	log.Printf("[Stripe Webhook] Subscription schedule updated: %s", schedule.ID)
+}
+
+// extractEventIDs extracts organization, customer, subscription, invoice, and checkout session IDs from webhook event data
+func extractEventIDs(eventType string, rawData []byte) (*string, *string, *string, *string, *string) {
+	var orgID, customerID, subscriptionID, invoiceID, checkoutSessionID *string
+	
+	// Parse raw JSON to extract IDs
+	var eventData map[string]interface{}
+	if err := json.Unmarshal(rawData, &eventData); err != nil {
+		return nil, nil, nil, nil, nil
+	}
+	
+	// Extract customer ID (common across many event types)
+	if cust, ok := eventData["customer"].(string); ok {
+		customerID = &cust
+	} else if custObj, ok := eventData["customer"].(map[string]interface{}); ok {
+		if custID, ok := custObj["id"].(string); ok {
+			customerID = &custID
+			// Try to get organization_id from customer metadata
+			if metadata, ok := custObj["metadata"].(map[string]interface{}); ok {
+				if orgIDVal, ok := metadata["organization_id"].(string); ok {
+					orgID = &orgIDVal
+				}
+			}
+		}
+	}
+	
+	// Extract IDs based on event type
+	switch {
+	case strings.HasPrefix(eventType, "checkout.session."):
+		if sessionID, ok := eventData["id"].(string); ok {
+			checkoutSessionID = &sessionID
+		}
+		// Try to get organization_id from metadata
+		if metadata, ok := eventData["metadata"].(map[string]interface{}); ok {
+			if orgIDVal, ok := metadata["organization_id"].(string); ok {
+				orgID = &orgIDVal
+			}
+		}
+		
+	case strings.HasPrefix(eventType, "customer.subscription."):
+		if subID, ok := eventData["id"].(string); ok {
+			subscriptionID = &subID
+		}
+		// Try to get organization from customer if not already found
+		if orgID == nil && customerID != nil {
+			var billingAccount database.BillingAccount
+			if err := database.DB.Where("stripe_customer_id = ?", *customerID).First(&billingAccount).Error; err == nil {
+				orgID = &billingAccount.OrganizationID
+			}
+		}
+		
+	case strings.HasPrefix(eventType, "invoice."):
+		if invID, ok := eventData["id"].(string); ok {
+			invoiceID = &invID
+		}
+		// Try to get organization from customer if not already found
+		if orgID == nil && customerID != nil {
+			var billingAccount database.BillingAccount
+			if err := database.DB.Where("stripe_customer_id = ?", *customerID).First(&billingAccount).Error; err == nil {
+				orgID = &billingAccount.OrganizationID
+			}
+		}
+		
+	case strings.HasPrefix(eventType, "payment_intent."):
+		// Try to get organization from customer if available
+		if orgID == nil && customerID != nil {
+			var billingAccount database.BillingAccount
+			if err := database.DB.Where("stripe_customer_id = ?", *customerID).First(&billingAccount).Error; err == nil {
+				orgID = &billingAccount.OrganizationID
+			}
+		}
+	}
+	
+	return orgID, customerID, subscriptionID, invoiceID, checkoutSessionID
 }
 
 func addCreditsFromPayment(orgID string, amountCents int64, sessionID, customerID string) error {
