@@ -587,17 +587,17 @@ func handleSubscriptionCreated(subscription *stripe.Subscription, rawData []byte
 		if err == nil && existingKey != nil {
 			log.Printf("[Stripe Webhook] Organization %s already has an active API key, skipping creation", orgID)
 		} else {
-			subscriptionID := subscription.ID
-			description := fmt.Sprintf("DNS Delegation API Key (Subscription: %s)", subscriptionID)
-			sourceAPI := "" // Will be set by user when they configure their API
+		subscriptionID := subscription.ID
+		description := fmt.Sprintf("DNS Delegation API Key (Subscription: %s)", subscriptionID)
+		sourceAPI := "" // Will be set by user when they configure their API
 
-			apiKey, err := database.CreateDNSDelegationAPIKey(description, sourceAPI, orgID, &subscriptionID)
-			if err != nil {
-				return fmt.Errorf("create DNS delegation API key: %w", err)
-			}
+		apiKey, err := database.CreateDNSDelegationAPIKey(description, sourceAPI, orgID, &subscriptionID)
+		if err != nil {
+			return fmt.Errorf("create DNS delegation API key: %w", err)
+		}
 
-			log.Printf("[Stripe Webhook] Created DNS delegation API key for organization %s (subscription: %s)", orgID, subscriptionID)
-			log.Printf("[Stripe Webhook] API Key: %s (save this securely!)", apiKey)
+		log.Printf("[Stripe Webhook] Created DNS delegation API key for organization %s (subscription: %s)", orgID, subscriptionID)
+		log.Printf("[Stripe Webhook] API Key: %s (save this securely!)", apiKey)
 		}
 
 		// Grant monthly free credits from plan when subscription becomes active

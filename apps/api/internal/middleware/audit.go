@@ -83,8 +83,8 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 			isSuperAdmin := false
 			if user != nil {
 				if user.Id != "" {
-					userID = user.Id
-					logger.Debug("[Audit] Extracted user ID from context: %s", userID)
+				userID = user.Id
+				logger.Debug("[Audit] Extracted user ID from context: %s", userID)
 				}
 				// Check if user is superadmin
 				for _, role := range user.Roles {
@@ -164,7 +164,7 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 					logger.Debug("[Audit] Superadmin service action on organization %s: %s/%s - logging to global audit logs (orgID=nil)", *orgID, service, action)
 					logOrgID = nil // Set to nil so it goes to global audit logs, not org-specific
 				}
-
+				
 				// Log what we're saving for debugging
 				orgIDStr := "nil"
 				if logOrgID != nil {

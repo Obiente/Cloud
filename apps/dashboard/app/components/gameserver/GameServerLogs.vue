@@ -19,9 +19,17 @@
         >
           <ArrowPathIcon
             class="h-4 w-4 mr-1"
-            :class="{ 'animate-spin': isLoading || (isFollowing && !isConnected) }"
+            :class="{
+              'animate-spin': isLoading || (isFollowing && !isConnected),
+            }"
           />
-          {{ isLoading ? "Connecting..." : isFollowing && isConnected ? "Connected" : "Disconnected" }}
+          {{
+            isLoading
+              ? "Connecting..."
+              : isFollowing && isConnected
+              ? "Connected"
+              : "Disconnected"
+          }}
         </OuiButton>
         <OuiButton variant="ghost" size="sm" @click="clearLogs">
           Clear
@@ -41,7 +49,9 @@
               />
             </OuiMenuItem>
             <OuiMenuItem>
-              <label class="flex items-center gap-2 px-4 py-2 text-sm cursor-pointer">
+              <label
+                class="flex items-center gap-2 px-4 py-2 text-sm cursor-pointer"
+              >
                 <span>Tail lines:</span>
                 <OuiInput
                   :model-value="tailLines.toString()"
@@ -49,7 +59,7 @@
                   :min="10"
                   :max="10000"
                   size="sm"
-                  style="width: 100px;"
+                  style="width: 100px"
                   @update:model-value="handleTailChange"
                   @click.stop
                 />
@@ -75,7 +85,11 @@
       </OuiText>
     </div>
 
-    <div ref="logsContainer" class="logs-container-wrapper" @scroll="handleScroll">
+    <div
+      ref="logsContainer"
+      class="logs-container-wrapper"
+      @scroll="handleScroll"
+    >
       <OuiLogs
         ref="logsComponent"
         :logs="formattedLogs"
@@ -128,7 +142,9 @@ const orgsStore = useOrganizationsStore();
 const auth = useAuth();
 const client = useConnectClient(GameServerService);
 
-const effectiveOrgId = computed(() => props.organizationId || orgsStore.currentOrgId || "");
+const effectiveOrgId = computed(
+  () => props.organizationId || orgsStore.currentOrgId || ""
+);
 
 const logsComponent = ref<any>(null);
 const logsContainer = ref<HTMLDivElement | null>(null);
@@ -147,7 +163,9 @@ let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_DELAY = 2000;
-const logs = ref<Array<{ line: string; timestamp: string; level?: number }>>([]);
+const logs = ref<Array<{ line: string; timestamp: string; level?: number }>>(
+  []
+);
 let terminalOutputBuffer = "";
 let scrollPositionBeforeLoad = 0;
 let isLoadingOlderLogsDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -191,18 +209,23 @@ const formattedLogs = computed<LogEntry[]>(() => {
 
 // Handle scroll to detect when user scrolls to top for lazy loading
 const handleScroll = () => {
-  if (!logsContainer.value || isLoadingOlderLogs.value || hasLoadedAllLogs.value) return;
+  if (
+    !logsContainer.value ||
+    isLoadingOlderLogs.value ||
+    hasLoadedAllLogs.value
+  )
+    return;
 
   const container = logsContainer.value;
   const scrollTop = container.scrollTop;
-  
+
   // If user scrolls within 200px of the top, load older logs
   if (scrollTop < 200 && logs.value.length > 0) {
     // Debounce to avoid multiple rapid requests
     if (isLoadingOlderLogsDebounce) {
       clearTimeout(isLoadingOlderLogsDebounce);
     }
-    
+
     isLoadingOlderLogsDebounce = setTimeout(() => {
       loadOlderLogs();
     }, 300);
@@ -211,10 +234,15 @@ const handleScroll = () => {
 
 // Load older logs using the since parameter
 const loadOlderLogs = async () => {
-  if (isLoadingOlderLogs.value || hasLoadedAllLogs.value || logs.value.length === 0) return;
+  if (
+    isLoadingOlderLogs.value ||
+    hasLoadedAllLogs.value ||
+    logs.value.length === 0
+  )
+    return;
 
   isLoadingOlderLogs.value = true;
-  
+
   try {
     // Get the oldest timestamp we have
     const oldestLog = logs.value[0];
@@ -225,7 +253,8 @@ const loadOlderLogs = async () => {
 
     // Save current scroll position
     if (logsContainer.value) {
-      scrollPositionBeforeLoad = logsContainer.value.scrollHeight - logsContainer.value.scrollTop;
+      scrollPositionBeforeLoad =
+        logsContainer.value.scrollHeight - logsContainer.value.scrollTop;
     }
 
     // Convert timestamp to protobuf Timestamp format
@@ -243,17 +272,20 @@ const loadOlderLogs = async () => {
       // Parse and add older logs to the beginning
       const olderLogs = response.lines
         .filter((line) => {
-          const lineText = line.line || '';
+          const lineText = line.line || "";
           return !isEmptyOrWhitespace(lineText);
         })
         .map((line) => {
           let timestamp: string;
           try {
             if (line.timestamp) {
-              const ts = typeof line.timestamp === 'string' 
-                ? line.timestamp 
-                : (line.timestamp as any)?.seconds 
-                  ? new Date(Number((line.timestamp as any).seconds) * 1000).toISOString()
+              const ts =
+                typeof line.timestamp === "string"
+                  ? line.timestamp
+                  : (line.timestamp as any)?.seconds
+                  ? new Date(
+                      Number((line.timestamp as any).seconds) * 1000
+                    ).toISOString()
                   : new Date(line.timestamp as any).toISOString();
               timestamp = ts;
             } else {
@@ -263,7 +295,7 @@ const loadOlderLogs = async () => {
             timestamp = new Date().toISOString();
           }
           return {
-            line: line.line || '',
+            line: line.line || "",
             timestamp,
             level: line.level,
           };
@@ -276,7 +308,8 @@ const loadOlderLogs = async () => {
       await nextTick();
       if (logsContainer.value) {
         const newScrollHeight = logsContainer.value.scrollHeight;
-        logsContainer.value.scrollTop = newScrollHeight - scrollPositionBeforeLoad;
+        logsContainer.value.scrollTop =
+          newScrollHeight - scrollPositionBeforeLoad;
       }
 
       // If we got fewer logs than requested, we've reached the beginning
@@ -308,22 +341,28 @@ const scheduleReconnect = () => {
   if (reconnectTimeout) {
     clearTimeout(reconnectTimeout);
   }
-  
+
   if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-    error.value = "Failed to reconnect after multiple attempts. Please refresh the page.";
+    error.value =
+      "Failed to reconnect after multiple attempts. Please refresh the page.";
     isFollowing.value = false;
     isConnected.value = false;
     return;
   }
 
   reconnectAttempts++;
-  const delay = Math.min(RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1), 30000);
-  
+  const delay = Math.min(
+    RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1),
+    30000
+  );
+
   reconnectTimeout = setTimeout(async () => {
     if (!isFollowing.value) {
       return;
     }
-    console.log(`Attempting to reconnect (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+    console.log(
+      `Attempting to reconnect (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`
+    );
     error.value = `Reconnecting... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`;
     await startFollowing();
   }, delay);
@@ -331,12 +370,12 @@ const scheduleReconnect = () => {
 
 const startFollowing = async () => {
   if (isFollowing.value && isConnected.value) return;
-  
+
   if (reconnectTimeout) {
     clearTimeout(reconnectTimeout);
     reconnectTimeout = null;
   }
-  
+
   isLoading.value = true;
   error.value = null;
   isFollowing.value = true;
@@ -370,20 +409,26 @@ const startFollowing = async () => {
         });
 
         if (response.lines && response.lines.length > 0) {
-          const existingLogs = logs.value.map(l => l.line);
+          const existingLogs = logs.value.map((l) => l.line);
           const newLogs = response.lines
             .filter((line) => {
-              const lineText = line.line || '';
-              return !isEmptyOrWhitespace(lineText) && !existingLogs.includes(lineText);
+              const lineText = line.line || "";
+              return (
+                !isEmptyOrWhitespace(lineText) &&
+                !existingLogs.includes(lineText)
+              );
             })
             .map((line) => {
               let timestamp: string;
               try {
                 if (line.timestamp) {
-                  const ts = typeof line.timestamp === 'string' 
-                    ? line.timestamp 
-                    : (line.timestamp as any)?.seconds 
-                      ? new Date(Number((line.timestamp as any).seconds) * 1000).toISOString()
+                  const ts =
+                    typeof line.timestamp === "string"
+                      ? line.timestamp
+                      : (line.timestamp as any)?.seconds
+                      ? new Date(
+                          Number((line.timestamp as any).seconds) * 1000
+                        ).toISOString()
                       : new Date(line.timestamp as any).toISOString();
                   timestamp = ts;
                 } else {
@@ -393,7 +438,7 @@ const startFollowing = async () => {
                 timestamp = new Date().toISOString();
               }
               return {
-                line: line.line || '',
+                line: line.line || "",
                 timestamp,
                 level: line.level,
               };
@@ -426,10 +471,13 @@ const startFollowing = async () => {
       let timestamp: string;
       try {
         if (logLine.timestamp) {
-          const ts = typeof logLine.timestamp === 'string' 
-            ? logLine.timestamp 
-            : (logLine.timestamp as any)?.seconds 
-              ? new Date(Number((logLine.timestamp as any).seconds) * 1000).toISOString()
+          const ts =
+            typeof logLine.timestamp === "string"
+              ? logLine.timestamp
+              : (logLine.timestamp as any)?.seconds
+              ? new Date(
+                  Number((logLine.timestamp as any).seconds) * 1000
+                ).toISOString()
               : new Date(logLine.timestamp as any).toISOString();
           timestamp = ts;
         } else {
@@ -439,7 +487,7 @@ const startFollowing = async () => {
         timestamp = new Date().toISOString();
       }
 
-      const line = logLine.line || '';
+      const line = logLine.line || "";
       if (!isEmptyOrWhitespace(line)) {
         logs.value.push({
           line: line,
@@ -453,14 +501,14 @@ const startFollowing = async () => {
         logs.value = logs.value.slice(-10000);
       }
     }
-    
+
     if (isFollowing.value && !streamController.signal.aborted) {
       isConnected.value = false;
       scheduleReconnect();
     }
   } catch (err: any) {
-    const isAbortError = 
-      err.name === "AbortError" || 
+    const isAbortError =
+      err.name === "AbortError" ||
       err.message?.toLowerCase().includes("aborted") ||
       err.message?.toLowerCase().includes("canceled") ||
       err.message?.toLowerCase().includes("cancelled");
@@ -482,7 +530,7 @@ const startFollowing = async () => {
       console.error("Failed to stream logs:", err);
       error.value = err.message || "Failed to connect to logs stream";
     }
-    
+
     if (isFollowing.value && !isAbortError) {
       isConnected.value = false;
       scheduleReconnect();
@@ -501,7 +549,7 @@ const stopFollowing = () => {
     reconnectTimeout = null;
   }
   reconnectAttempts = 0;
-  
+
   if (streamController) {
     streamController.abort();
     streamController = null;
@@ -536,33 +584,36 @@ const handleTailChange = (value: string) => {
 // Handle output from terminal WebSocket
 const handleTerminalOutput = (text: string) => {
   if (!text) return;
-  
+
   terminalOutputBuffer += text;
-  
+
   const lines = terminalOutputBuffer.split(/\r?\n/);
-  
-  if (terminalOutputBuffer.endsWith("\n") || terminalOutputBuffer.endsWith("\r")) {
+
+  if (
+    terminalOutputBuffer.endsWith("\n") ||
+    terminalOutputBuffer.endsWith("\r")
+  ) {
     terminalOutputBuffer = "";
   } else {
     terminalOutputBuffer = lines.pop() || "";
   }
-  
+
   for (const line of lines) {
     if (isEmptyOrWhitespace(line)) {
       continue;
     }
-    
+
     logs.value.push({
       line: line,
       timestamp: new Date().toISOString(),
       level: undefined,
     });
-    
+
     if (logs.value.length > 10000) {
       logs.value = logs.value.slice(-10000);
     }
   }
-  
+
   if (terminalOutputBuffer.length > 1000) {
     logs.value.push({
       line: terminalOutputBuffer,
@@ -570,7 +621,7 @@ const handleTerminalOutput = (text: string) => {
       level: undefined,
     });
     terminalOutputBuffer = "";
-    
+
     if (logs.value.length > 10000) {
       logs.value = logs.value.slice(-10000);
     }
@@ -588,14 +639,17 @@ onUnmounted(() => {
   }
 });
 
-watch(() => props.gameServerId, () => {
-  if (isFollowing.value) {
-    stopFollowing();
-    nextTick(() => {
-      startFollowing();
-    });
+watch(
+  () => props.gameServerId,
+  () => {
+    if (isFollowing.value) {
+      stopFollowing();
+      nextTick(() => {
+        startFollowing();
+      });
+    }
   }
-});
+);
 </script>
 
 <style scoped>
