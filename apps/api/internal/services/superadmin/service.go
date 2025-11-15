@@ -522,14 +522,19 @@ func (s *Service) listGameServerDNSRecords(req *connect.Request[superadminv1.Lis
 		// A record for all game servers
 		// Format: gs-123.my.obiente.cloud
 		aRecordDomain := fmt.Sprintf("%s.my.obiente.cloud", row.GameServerID)
+		ipAddresses := []string{}
+		if targetIP != "" {
+			ipAddresses = []string{targetIP}
+		}
 		records = append(records, &superadminv1.DNSRecord{
 			RecordType:     "A",
 			GameServerId:   row.GameServerID,
 			OrganizationId: row.OrganizationID,
 			GameServerName: row.GameServerName,
 			Domain:         aRecordDomain,
-			Target:         targetIP, // IP address for A record
-			Port:           0, // A records don't have ports
+			IpAddresses:    ipAddresses, // IP addresses for A record (frontend displays this)
+			Target:         targetIP,     // Also set target for consistency
+			Port:           0,            // A records don't have ports
 			Region:         region,
 			Status:         fmt.Sprintf("%d", row.Status),
 			LastResolved:   timestamppb.New(now),

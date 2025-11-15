@@ -1037,6 +1037,12 @@
         status,
         organizationId: record.organizationId || "—",
         recordType: record.recordType || "A",
+        // Map ipAddresses to ips for table column
+        ips: record.ipAddresses || [],
+        // Map target and port to srvTarget for SRV records
+        srvTarget: record.recordType === "SRV" ? (record.target || "") : undefined,
+        // Ensure region is set
+        region: record.region || "",
       };
     });
   });
