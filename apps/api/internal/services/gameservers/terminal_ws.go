@@ -217,6 +217,15 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 			defer outputDoneWg.Done()
 			defer close(outputDone)
 			defer outputCancel()
+			// Recover from any panics to prevent crashing the API
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[GameServer Terminal WS] Panic in attach stream reader goroutine: %v", r)
+					_ = writeJSON(gameServerTerminalWSOutput{Type: "error", Message: "Terminal stream error (panic recovered)"})
+					conn.Close(websocket.StatusInternalError, "terminal panic")
+					closed = true
+				}
+			}()
 
 			buf := make([]byte, 4096)
 			for {
@@ -276,6 +285,13 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 		outputDoneWg.Add(1)
 		go func() {
 			defer outputDoneWg.Done()
+			// Recover from any panics to prevent crashing the API
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[GameServer Terminal WS] Panic in logs reader goroutine: %v", r)
+					_ = writeJSON(gameServerTerminalWSOutput{Type: "error", Message: "Log stream error (panic recovered)"})
+				}
+			}()
 			
 			dcli, err := docker.New()
 			if err != nil {
@@ -554,6 +570,15 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 							defer outputDoneWg.Done()
 							defer close(outputDone)
 							defer outputCancel()
+							// Recover from any panics to prevent crashing the API
+							defer func() {
+								if r := recover(); r != nil {
+									log.Printf("[GameServer Terminal WS] Panic in attach stream reader goroutine (after start): %v", r)
+									_ = writeJSON(gameServerTerminalWSOutput{Type: "error", Message: "Terminal stream error (panic recovered)"})
+									conn.Close(websocket.StatusInternalError, "terminal panic")
+									closed = true
+								}
+							}()
 
 							log.Printf("[GameServer Terminal WS] Attach stream reader goroutine started")
 							// Capture the session reference at the start
@@ -608,6 +633,13 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 						outputDoneWg.Add(1)
 						go func() {
 							defer outputDoneWg.Done()
+							// Recover from any panics to prevent crashing the API
+							defer func() {
+								if r := recover(); r != nil {
+									log.Printf("[GameServer Terminal WS] Panic in logs reader goroutine (after start): %v", r)
+									_ = writeJSON(gameServerTerminalWSOutput{Type: "error", Message: "Log stream error (panic recovered)"})
+								}
+							}()
 							
 							dcli, err := docker.New()
 							if err != nil {
