@@ -816,6 +816,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		if metricsDB == nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("metrics database not available"))
 		}
+		// Get deployment usage from hourly aggregates
 		metricsDB.Table("deployment_usage_hourly duh").
 			Select(`
 				COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
@@ -826,12 +827,46 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour <= ?", orgID, monthStart, aggregateCutoff).
 			Scan(&hourlyUsage)
 		
+		// Get game server usage from hourly aggregates and add to deployment usage
+		var gameServerHourlyUsage struct {
+			CPUCoreSeconds    int64
+			MemoryByteSeconds int64
+			BandwidthRxBytes  int64
+			BandwidthTxBytes  int64
+		}
+		metricsDB.Table("game_server_usage_hourly gsuh").
+			Select(`
+				COALESCE(CAST(SUM((gsuh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
+				COALESCE(CAST(SUM(gsuh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
+				COALESCE(SUM(gsuh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
+				COALESCE(SUM(gsuh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
+			`).
+			Where("gsuh.organization_id = ? AND gsuh.hour >= ? AND gsuh.hour <= ?", orgID, monthStart, aggregateCutoff).
+			Scan(&gameServerHourlyUsage)
+		
+		// Combine deployment and game server hourly usage
+		hourlyUsage.CPUCoreSeconds += gameServerHourlyUsage.CPUCoreSeconds
+		hourlyUsage.MemoryByteSeconds += gameServerHourlyUsage.MemoryByteSeconds
+		hourlyUsage.BandwidthRxBytes += gameServerHourlyUsage.BandwidthRxBytes
+		hourlyUsage.BandwidthTxBytes += gameServerHourlyUsage.BandwidthTxBytes
+		
 		// Check if aggregates exist for the current hour (aggregateCutoff)
 		// If they do, we should exclude raw metrics for that hour to avoid double-counting
 		var currentHourAggregateCount int64
 		metricsDB.Table("deployment_usage_hourly duh").
 			Where("duh.organization_id = ? AND duh.hour = ?", orgID, aggregateCutoff).
 			Count(&currentHourAggregateCount)
+		
+		// Also check game server aggregates for current hour
+		var gameServerCurrentHourAggregateCount int64
+		metricsDB.Table("game_server_usage_hourly gsuh").
+			Where("gsuh.organization_id = ? AND gsuh.hour = ?", orgID, aggregateCutoff).
+			Count(&gameServerCurrentHourAggregateCount)
+		
+		// If either has aggregates for current hour, we should exclude raw metrics for that hour
+		if gameServerCurrentHourAggregateCount > 0 {
+			currentHourAggregateCount += gameServerCurrentHourAggregateCount
+		}
 		
 		// Raw metrics start time: if aggregates exist for current hour, start from next hour
 		// Otherwise, start from current hour (aggregateCutoff)
@@ -854,12 +889,18 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		// Get recent usage from raw metrics (current incomplete hour only - not yet aggregated)
 		// Raw metrics are only needed for the current incomplete hour since aggregates exist up to current hour
 		// Use the SAME logic as deployment-level service: query from aggregateCutoff (current hour start)
-		// First get deployment IDs for this organization from main DB, then query metrics from MetricsDB
+		// First get deployment IDs and game server IDs for this organization from main DB, then query metrics from MetricsDB
 		var deploymentIDs []string
 		database.DB.Table("deployments d").
 			Select("d.id").
 			Where("d.organization_id = ?", orgID).
 			Pluck("id", &deploymentIDs)
+		
+		var gameServerIDs []string
+		database.DB.Table("game_servers gs").
+			Select("gs.id").
+			Where("gs.organization_id = ?", orgID).
+			Pluck("id", &gameServerIDs)
 		
 		// Calculate CPU and Memory from raw metrics per deployment (same approach as deployment-level)
 		// Only get metrics from aggregateCutoff onwards (current incomplete hour)
@@ -916,10 +957,53 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 				}
 			}
 		}
+		
+		// Process game server raw metrics (same logic as deployments)
+		if len(gameServerIDs) > 0 {
+			for _, gameServerID := range gameServerIDs {
+				var gameServerTimestamps []metricTimestamp
+				metricsDB.Table("game_server_metrics gsm").
+					Select(`
+						AVG(gsm.cpu_usage) as cpu_usage,
+						SUM(gsm.memory_usage) as memory_sum,
+						gsm.timestamp as timestamp
+					`).
+					Where("gsm.game_server_id = ? AND gsm.timestamp >= ?", gameServerID, rawMetricsStart).
+					Group("gsm.timestamp").
+					Order("gsm.timestamp ASC").
+					Scan(&gameServerTimestamps)
+				
+				// Calculate byte-seconds from timestamped metrics (same logic as deployments)
+				metricInterval := int64(5)
+				if len(gameServerTimestamps) > 0 {
+					// First timestamp: use time from rawMetricsStart to first timestamp, or default interval
+					firstTimestamp := gameServerTimestamps[0].Timestamp
+					firstInterval := int64(firstTimestamp.Sub(rawMetricsStart).Seconds())
+					if firstInterval <= 0 {
+						firstInterval = metricInterval
+					} else if firstInterval > 3600 {
+						firstInterval = metricInterval // Sanity check
+					}
+					recentCPUFloat += (gameServerTimestamps[0].CPUUsage / 100.0) * float64(firstInterval)
+					recentMemory += gameServerTimestamps[0].MemorySum * firstInterval
+					
+					// Subsequent timestamps: use actual interval between timestamps
+					for i := 1; i < len(gameServerTimestamps); i++ {
+						interval := metricInterval
+						intervalSeconds := int64(gameServerTimestamps[i].Timestamp.Sub(gameServerTimestamps[i-1].Timestamp).Seconds())
+						if intervalSeconds > 0 && intervalSeconds <= 3600 {
+							interval = intervalSeconds
+						}
+						recentCPUFloat += (gameServerTimestamps[i-1].CPUUsage / 100.0) * float64(interval)
+						recentMemory += gameServerTimestamps[i-1].MemorySum * interval
+					}
+				}
+			}
+		}
 		recentCPU := int64(recentCPUFloat) // Convert to int64 at the end
 
 		// Get bandwidth from raw metrics (current incomplete hour only)
-		// Use MetricsDB (TimescaleDB) for deployment_metrics
+		// Use MetricsDB (TimescaleDB) for deployment_metrics and game_server_metrics
 		var recentBandwidth struct {
 			BandwidthRxBytes int64
 			BandwidthTxBytes int64
@@ -933,6 +1017,23 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 				Where("dm.deployment_id IN ? AND dm.timestamp >= ?", deploymentIDs, rawMetricsStart).
 				Scan(&recentBandwidth)
 		}
+		
+		// Add game server bandwidth
+		var gameServerRecentBandwidth struct {
+			BandwidthRxBytes int64
+			BandwidthTxBytes int64
+		}
+		if len(gameServerIDs) > 0 {
+			metricsDB.Table("game_server_metrics gsm").
+				Select(`
+					COALESCE(SUM(gsm.network_rx_bytes), 0) as bandwidth_rx_bytes,
+					COALESCE(SUM(gsm.network_tx_bytes), 0) as bandwidth_tx_bytes
+				`).
+				Where("gsm.game_server_id IN ? AND gsm.timestamp >= ?", gameServerIDs, rawMetricsStart).
+				Scan(&gameServerRecentBandwidth)
+			recentBandwidth.BandwidthRxBytes += gameServerRecentBandwidth.BandwidthRxBytes
+			recentBandwidth.BandwidthTxBytes += gameServerRecentBandwidth.BandwidthTxBytes
+		}
 
 		// Combine: hourly aggregates (all hours up to current hour) + raw metrics (current incomplete hour) = live current month usage
 		currentCPUCoreSeconds = hourlyUsage.CPUCoreSeconds + recentCPU
@@ -944,14 +1045,25 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			orgID, currentCPUCoreSeconds, hourlyUsage.CPUCoreSeconds, recentCPU,
 			currentMemoryByteSeconds, hourlyUsage.MemoryByteSeconds, recentMemory,
 			currentBandwidthRxBytes+currentBandwidthTxBytes, hourlyUsage.BandwidthRxBytes+hourlyUsage.BandwidthTxBytes, recentBandwidth.BandwidthRxBytes+recentBandwidth.BandwidthTxBytes)
-		var storageSum struct {
+		
+		// Get storage from both deployments and game servers
+		var deploymentStorage struct {
 			StorageBytes int64
 		}
 		database.DB.Table("deployments d").
 			Select("COALESCE(SUM(d.storage_bytes), 0) as storage_bytes").
 			Where("d.organization_id = ?", orgID).
-			Scan(&storageSum)
-		currentStorageBytes = storageSum.StorageBytes
+			Scan(&deploymentStorage)
+		
+		var gameServerStorage struct {
+			StorageBytes int64
+		}
+		database.DB.Table("game_servers gs").
+			Select("COALESCE(SUM(gs.storage_bytes), 0) as storage_bytes").
+			Where("gs.organization_id = ?", orgID).
+			Scan(&gameServerStorage)
+		
+		currentStorageBytes = deploymentStorage.StorageBytes + gameServerStorage.StorageBytes
 		
 		// Get peak deployments count for current month
 		var peakCount int
@@ -975,6 +1087,7 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 		if metricsDB == nil {
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("metrics database not available"))
 		}
+		// Get deployment usage from hourly aggregates
 		metricsDB.Table("deployment_usage_hourly duh").
 			Select(`
 				COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
@@ -985,20 +1098,47 @@ func (s *Service) GetUsage(ctx context.Context, req *connect.Request[organizatio
 			Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour <= ?", orgID, requestedMonthStart, monthEnd).
 			Scan(&hourlyUsage)
 		
-		currentCPUCoreSeconds = hourlyUsage.CPUCoreSeconds
-		currentMemoryByteSeconds = hourlyUsage.MemoryByteSeconds
-		currentBandwidthRxBytes = hourlyUsage.BandwidthRxBytes
-		currentBandwidthTxBytes = hourlyUsage.BandwidthTxBytes
+		// Get game server usage from hourly aggregates and add to deployment usage
+		var gameServerHourlyUsage struct {
+			CPUCoreSeconds    int64
+			MemoryByteSeconds int64
+			BandwidthRxBytes  int64
+			BandwidthTxBytes  int64
+		}
+		metricsDB.Table("game_server_usage_hourly gsuh").
+			Select(`
+				COALESCE(CAST(SUM((gsuh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
+				COALESCE(CAST(SUM(gsuh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
+				COALESCE(SUM(gsuh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
+				COALESCE(SUM(gsuh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
+			`).
+			Where("gsuh.organization_id = ? AND gsuh.hour >= ? AND gsuh.hour <= ?", orgID, requestedMonthStart, monthEnd).
+			Scan(&gameServerHourlyUsage)
 		
-		// Storage: get snapshot from deployments table for the month (use current, as historical storage is not tracked)
-		var storageSum struct {
+		// Combine deployment and game server usage
+		currentCPUCoreSeconds = hourlyUsage.CPUCoreSeconds + gameServerHourlyUsage.CPUCoreSeconds
+		currentMemoryByteSeconds = hourlyUsage.MemoryByteSeconds + gameServerHourlyUsage.MemoryByteSeconds
+		currentBandwidthRxBytes = hourlyUsage.BandwidthRxBytes + gameServerHourlyUsage.BandwidthRxBytes
+		currentBandwidthTxBytes = hourlyUsage.BandwidthTxBytes + gameServerHourlyUsage.BandwidthTxBytes
+		
+		// Storage: get snapshot from deployments and game servers tables for the month (use current, as historical storage is not tracked)
+		var deploymentStorage struct {
 			StorageBytes int64
 		}
 		database.DB.Table("deployments d").
 			Select("COALESCE(SUM(d.storage_bytes), 0) as storage_bytes").
 			Where("d.organization_id = ?", orgID).
-			Scan(&storageSum)
-		currentStorageBytes = storageSum.StorageBytes
+			Scan(&deploymentStorage)
+		
+		var gameServerStorage struct {
+			StorageBytes int64
+		}
+		database.DB.Table("game_servers gs").
+			Select("COALESCE(SUM(gs.storage_bytes), 0) as storage_bytes").
+			Where("gs.organization_id = ?", orgID).
+			Scan(&gameServerStorage)
+		
+		currentStorageBytes = deploymentStorage.StorageBytes + gameServerStorage.StorageBytes
 		
 		// Peak deployments: not tracked historically, use 0 or current
 		deploymentsActivePeak = 0
@@ -1308,6 +1448,7 @@ func organizationToProto(org *database.Organization) *organizationsv1.Organizati
 					StorageBytes:            plan.StorageBytes,
 					MinimumPaymentCents:     plan.MinimumPaymentCents,
 					MonthlyFreeCreditsCents: plan.MonthlyFreeCreditsCents,
+					TrialDays:               int32(plan.TrialDays),
 				}
 			}
 		} else {

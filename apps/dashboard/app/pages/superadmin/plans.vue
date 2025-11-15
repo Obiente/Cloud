@@ -62,6 +62,11 @@
               <OuiCurrency :value="typeof value === 'bigint' ? Number(value) : (Number(value) || 0)" />
             </span>
           </template>
+          <template #cell-trialDays="{ value }">
+            <span class="font-mono text-sm">
+              {{ value || 0 }} days
+            </span>
+          </template>
           <template #cell-actions="{ row }">
             <OuiFlex gap="sm" justify="end">
               <OuiButton size="xs" variant="ghost" @click="openEditDialog(row)">
@@ -111,6 +116,18 @@
             />
             <OuiText size="xs" color="muted" class="mt-1">
               Monthly free credits (in cents) automatically granted to organizations on this plan. Set to 0 for no free credits.
+            </OuiText>
+          </OuiField>
+
+          <OuiField label="Trial Days" required>
+            <OuiInput
+              v-model="planForm.trialDays"
+              type="number"
+              min="0"
+              placeholder="0"
+            />
+            <OuiText size="xs" color="muted" class="mt-1">
+              Number of trial days for Stripe subscriptions. Set to 0 for no trial period.
             </OuiText>
           </OuiField>
         </OuiStack>
@@ -218,6 +235,7 @@ const planForm = ref({
   storageBytes: "",
   minimumPaymentCents: "",
   monthlyFreeCreditsCents: "",
+  trialDays: "",
 });
 
 const tableColumns = computed(() => [
@@ -225,6 +243,7 @@ const tableColumns = computed(() => [
   { key: "resources", label: "Resource Limits", defaultWidth: 300, minWidth: 250 },
   { key: "minimumPaymentCents", label: "Min Payment", defaultWidth: 150, minWidth: 120 },
   { key: "monthlyFreeCreditsCents", label: "Monthly Free Credits", defaultWidth: 180, minWidth: 150 },
+  { key: "trialDays", label: "Trial Days", defaultWidth: 120, minWidth: 100 },
   { key: "actions", label: "Actions", defaultWidth: 150, minWidth: 120, resizable: false },
 ]);
 
@@ -257,6 +276,7 @@ const openCreateDialog = () => {
     storageBytes: "",
     minimumPaymentCents: "",
     monthlyFreeCreditsCents: "",
+    trialDays: "",
   };
   planDialogOpen.value = true;
 };
@@ -274,6 +294,7 @@ const openEditDialog = (plan: any) => {
     storageBytes: plan.storageBytes != null ? String(plan.storageBytes) : "",
     minimumPaymentCents: plan.minimumPaymentCents != null ? String(Number(plan.minimumPaymentCents) / 100) : "", // Convert to dollars for input
     monthlyFreeCreditsCents: plan.monthlyFreeCreditsCents != null ? String(Number(plan.monthlyFreeCreditsCents) / 100) : "", // Convert to dollars for input
+    trialDays: plan.trialDays != null ? String(plan.trialDays) : "0",
   };
   planDialogOpen.value = true;
 };
@@ -300,6 +321,7 @@ const savePlan = async () => {
     const storageBytes = Number(planForm.value.storageBytes) || 0;
     const minimumPaymentCents = Math.round((Number(planForm.value.minimumPaymentCents) || 0) * 100);
     const monthlyFreeCreditsCents = Math.round((Number(planForm.value.monthlyFreeCreditsCents) || 0) * 100);
+    const trialDays = Number(planForm.value.trialDays) || 0;
 
     if (editingPlan.value) {
       const updateRequest: any = {
@@ -315,6 +337,7 @@ const savePlan = async () => {
       if (storageBytes !== undefined) updateRequest.storageBytes = BigInt(storageBytes);
       if (minimumPaymentCents !== undefined) updateRequest.minimumPaymentCents = BigInt(minimumPaymentCents);
       if (monthlyFreeCreditsCents !== undefined) updateRequest.monthlyFreeCreditsCents = BigInt(monthlyFreeCreditsCents);
+      if (trialDays !== undefined) updateRequest.trialDays = trialDays;
 
       await client.updatePlan(updateRequest);
       toast.success("Plan updated successfully");
@@ -330,6 +353,7 @@ const savePlan = async () => {
         storageBytes: BigInt(storageBytes),
         minimumPaymentCents: BigInt(minimumPaymentCents),
         monthlyFreeCreditsCents: BigInt(monthlyFreeCreditsCents),
+        trialDays: trialDays,
       });
       toast.success("Plan created successfully");
     }

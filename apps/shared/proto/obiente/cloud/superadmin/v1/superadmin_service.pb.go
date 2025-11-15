@@ -3557,6 +3557,7 @@ type CreatePlanRequest struct {
 	StorageBytes            int64                  `protobuf:"varint,6,opt,name=storage_bytes,json=storageBytes,proto3" json:"storage_bytes,omitempty"`
 	MinimumPaymentCents     int64                  `protobuf:"varint,7,opt,name=minimum_payment_cents,json=minimumPaymentCents,proto3" json:"minimum_payment_cents,omitempty"`               // Minimum payment in cents to automatically upgrade to this plan
 	MonthlyFreeCreditsCents int64                  `protobuf:"varint,8,opt,name=monthly_free_credits_cents,json=monthlyFreeCreditsCents,proto3" json:"monthly_free_credits_cents,omitempty"` // Monthly free credits in cents granted to organizations on this plan
+	TrialDays               int32                  `protobuf:"varint,11,opt,name=trial_days,json=trialDays,proto3" json:"trial_days,omitempty"`                                              // Number of trial days for Stripe subscriptions (0 = no trial)
 	Description             string                 `protobuf:"bytes,9,opt,name=description,proto3" json:"description,omitempty"`                                                             // Optional description of the plan
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
@@ -3655,6 +3656,13 @@ func (x *CreatePlanRequest) GetMonthlyFreeCreditsCents() int64 {
 	return 0
 }
 
+func (x *CreatePlanRequest) GetTrialDays() int32 {
+	if x != nil {
+		return x.TrialDays
+	}
+	return 0
+}
+
 func (x *CreatePlanRequest) GetDescription() string {
 	if x != nil {
 		return x.Description
@@ -3720,6 +3728,7 @@ type UpdatePlanRequest struct {
 	StorageBytes            *int64                 `protobuf:"varint,7,opt,name=storage_bytes,json=storageBytes,proto3,oneof" json:"storage_bytes,omitempty"`
 	MinimumPaymentCents     *int64                 `protobuf:"varint,8,opt,name=minimum_payment_cents,json=minimumPaymentCents,proto3,oneof" json:"minimum_payment_cents,omitempty"`
 	MonthlyFreeCreditsCents *int64                 `protobuf:"varint,9,opt,name=monthly_free_credits_cents,json=monthlyFreeCreditsCents,proto3,oneof" json:"monthly_free_credits_cents,omitempty"`
+	TrialDays               *int32                 `protobuf:"varint,12,opt,name=trial_days,json=trialDays,proto3,oneof" json:"trial_days,omitempty"` // Number of trial days for Stripe subscriptions (0 = no trial)
 	Description             *string                `protobuf:"bytes,10,opt,name=description,proto3,oneof" json:"description,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
@@ -3821,6 +3830,13 @@ func (x *UpdatePlanRequest) GetMinimumPaymentCents() int64 {
 func (x *UpdatePlanRequest) GetMonthlyFreeCreditsCents() int64 {
 	if x != nil && x.MonthlyFreeCreditsCents != nil {
 		return *x.MonthlyFreeCreditsCents
+	}
+	return 0
+}
+
+func (x *UpdatePlanRequest) GetTrialDays() int32 {
+	if x != nil && x.TrialDays != nil {
+		return *x.TrialDays
 	}
 	return 0
 }
@@ -3980,6 +3996,7 @@ type Plan struct {
 	StorageBytes            int64                  `protobuf:"varint,7,opt,name=storage_bytes,json=storageBytes,proto3" json:"storage_bytes,omitempty"`
 	MinimumPaymentCents     int64                  `protobuf:"varint,8,opt,name=minimum_payment_cents,json=minimumPaymentCents,proto3" json:"minimum_payment_cents,omitempty"`               // Minimum payment in cents to automatically upgrade to this plan
 	MonthlyFreeCreditsCents int64                  `protobuf:"varint,9,opt,name=monthly_free_credits_cents,json=monthlyFreeCreditsCents,proto3" json:"monthly_free_credits_cents,omitempty"` // Monthly free credits in cents granted to organizations on this plan
+	TrialDays               int32                  `protobuf:"varint,12,opt,name=trial_days,json=trialDays,proto3" json:"trial_days,omitempty"`                                              // Number of trial days for Stripe subscriptions (0 = no trial)
 	Description             string                 `protobuf:"bytes,10,opt,name=description,proto3" json:"description,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
@@ -4081,6 +4098,13 @@ func (x *Plan) GetMinimumPaymentCents() int64 {
 func (x *Plan) GetMonthlyFreeCreditsCents() int64 {
 	if x != nil {
 		return x.MonthlyFreeCreditsCents
+	}
+	return 0
+}
+
+func (x *Plan) GetTrialDays() int32 {
+	if x != nil {
+		return x.TrialDays
 	}
 	return 0
 }
@@ -6041,6 +6065,269 @@ func (x *SuperadminForceDeleteVPSResponse) GetMessage() string {
 	return ""
 }
 
+// List Stripe Webhook Events Request
+type ListStripeWebhookEventsRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OrganizationId *string                `protobuf:"bytes,1,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"` // Filter by organization ID (optional)
+	EventType      *string                `protobuf:"bytes,2,opt,name=event_type,json=eventType,proto3,oneof" json:"event_type,omitempty"`                // Filter by event type (optional, e.g., "invoice.paid")
+	CustomerId     *string                `protobuf:"bytes,3,opt,name=customer_id,json=customerId,proto3,oneof" json:"customer_id,omitempty"`             // Filter by Stripe customer ID (optional)
+	SubscriptionId *string                `protobuf:"bytes,4,opt,name=subscription_id,json=subscriptionId,proto3,oneof" json:"subscription_id,omitempty"` // Filter by Stripe subscription ID (optional)
+	InvoiceId      *string                `protobuf:"bytes,5,opt,name=invoice_id,json=invoiceId,proto3,oneof" json:"invoice_id,omitempty"`                // Filter by Stripe invoice ID (optional)
+	Limit          *int32                 `protobuf:"varint,6,opt,name=limit,proto3,oneof" json:"limit,omitempty"`                                        // Limit number of results (default: 50, max: 500)
+	Offset         *int32                 `protobuf:"varint,7,opt,name=offset,proto3,oneof" json:"offset,omitempty"`                                      // Offset for pagination (default: 0)
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ListStripeWebhookEventsRequest) Reset() {
+	*x = ListStripeWebhookEventsRequest{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[91]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListStripeWebhookEventsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListStripeWebhookEventsRequest) ProtoMessage() {}
+
+func (x *ListStripeWebhookEventsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[91]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListStripeWebhookEventsRequest.ProtoReflect.Descriptor instead.
+func (*ListStripeWebhookEventsRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{91}
+}
+
+func (x *ListStripeWebhookEventsRequest) GetOrganizationId() string {
+	if x != nil && x.OrganizationId != nil {
+		return *x.OrganizationId
+	}
+	return ""
+}
+
+func (x *ListStripeWebhookEventsRequest) GetEventType() string {
+	if x != nil && x.EventType != nil {
+		return *x.EventType
+	}
+	return ""
+}
+
+func (x *ListStripeWebhookEventsRequest) GetCustomerId() string {
+	if x != nil && x.CustomerId != nil {
+		return *x.CustomerId
+	}
+	return ""
+}
+
+func (x *ListStripeWebhookEventsRequest) GetSubscriptionId() string {
+	if x != nil && x.SubscriptionId != nil {
+		return *x.SubscriptionId
+	}
+	return ""
+}
+
+func (x *ListStripeWebhookEventsRequest) GetInvoiceId() string {
+	if x != nil && x.InvoiceId != nil {
+		return *x.InvoiceId
+	}
+	return ""
+}
+
+func (x *ListStripeWebhookEventsRequest) GetLimit() int32 {
+	if x != nil && x.Limit != nil {
+		return *x.Limit
+	}
+	return 0
+}
+
+func (x *ListStripeWebhookEventsRequest) GetOffset() int32 {
+	if x != nil && x.Offset != nil {
+		return *x.Offset
+	}
+	return 0
+}
+
+// Stripe Webhook Event with organization info
+type StripeWebhookEvent struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                                                                 // Stripe event ID (evt_*)
+	EventType         string                 `protobuf:"bytes,2,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`                                  // Event type (e.g., "invoice.paid")
+	ProcessedAt       *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=processed_at,json=processedAt,proto3" json:"processed_at,omitempty"`                            // When the event was processed
+	CreatedAt         *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`                                  // When the event was created
+	OrganizationId    *string                `protobuf:"bytes,5,opt,name=organization_id,json=organizationId,proto3,oneof" json:"organization_id,omitempty"`             // Organization ID if available
+	OrganizationName  *string                `protobuf:"bytes,6,opt,name=organization_name,json=organizationName,proto3,oneof" json:"organization_name,omitempty"`       // Organization name if available
+	CustomerId        *string                `protobuf:"bytes,7,opt,name=customer_id,json=customerId,proto3,oneof" json:"customer_id,omitempty"`                         // Stripe customer ID if available
+	SubscriptionId    *string                `protobuf:"bytes,8,opt,name=subscription_id,json=subscriptionId,proto3,oneof" json:"subscription_id,omitempty"`             // Stripe subscription ID if available
+	InvoiceId         *string                `protobuf:"bytes,9,opt,name=invoice_id,json=invoiceId,proto3,oneof" json:"invoice_id,omitempty"`                            // Stripe invoice ID if available
+	CheckoutSessionId *string                `protobuf:"bytes,10,opt,name=checkout_session_id,json=checkoutSessionId,proto3,oneof" json:"checkout_session_id,omitempty"` // Stripe checkout session ID if available
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *StripeWebhookEvent) Reset() {
+	*x = StripeWebhookEvent{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[92]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StripeWebhookEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StripeWebhookEvent) ProtoMessage() {}
+
+func (x *StripeWebhookEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[92]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StripeWebhookEvent.ProtoReflect.Descriptor instead.
+func (*StripeWebhookEvent) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{92}
+}
+
+func (x *StripeWebhookEvent) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *StripeWebhookEvent) GetEventType() string {
+	if x != nil {
+		return x.EventType
+	}
+	return ""
+}
+
+func (x *StripeWebhookEvent) GetProcessedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ProcessedAt
+	}
+	return nil
+}
+
+func (x *StripeWebhookEvent) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *StripeWebhookEvent) GetOrganizationId() string {
+	if x != nil && x.OrganizationId != nil {
+		return *x.OrganizationId
+	}
+	return ""
+}
+
+func (x *StripeWebhookEvent) GetOrganizationName() string {
+	if x != nil && x.OrganizationName != nil {
+		return *x.OrganizationName
+	}
+	return ""
+}
+
+func (x *StripeWebhookEvent) GetCustomerId() string {
+	if x != nil && x.CustomerId != nil {
+		return *x.CustomerId
+	}
+	return ""
+}
+
+func (x *StripeWebhookEvent) GetSubscriptionId() string {
+	if x != nil && x.SubscriptionId != nil {
+		return *x.SubscriptionId
+	}
+	return ""
+}
+
+func (x *StripeWebhookEvent) GetInvoiceId() string {
+	if x != nil && x.InvoiceId != nil {
+		return *x.InvoiceId
+	}
+	return ""
+}
+
+func (x *StripeWebhookEvent) GetCheckoutSessionId() string {
+	if x != nil && x.CheckoutSessionId != nil {
+		return *x.CheckoutSessionId
+	}
+	return ""
+}
+
+// List Stripe Webhook Events Response
+type ListStripeWebhookEventsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Events        []*StripeWebhookEvent  `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	TotalCount    int64                  `protobuf:"varint,2,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"` // Total number of events matching filters
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListStripeWebhookEventsResponse) Reset() {
+	*x = ListStripeWebhookEventsResponse{}
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[93]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListStripeWebhookEventsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListStripeWebhookEventsResponse) ProtoMessage() {}
+
+func (x *ListStripeWebhookEventsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[93]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListStripeWebhookEventsResponse.ProtoReflect.Descriptor instead.
+func (*ListStripeWebhookEventsResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP(), []int{93}
+}
+
+func (x *ListStripeWebhookEventsResponse) GetEvents() []*StripeWebhookEvent {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+func (x *ListStripeWebhookEventsResponse) GetTotalCount() int64 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
+}
+
 var File_obiente_cloud_superadmin_v1_superadmin_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
@@ -6368,7 +6655,7 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"\x12\n" +
 	"\x10ListPlansRequest\"L\n" +
 	"\x11ListPlansResponse\x127\n" +
-	"\x05plans\x18\x01 \x03(\v2!.obiente.cloud.superadmin.v1.PlanR\x05plans\"\xa8\x03\n" +
+	"\x05plans\x18\x01 \x03(\v2!.obiente.cloud.superadmin.v1.PlanR\x05plans\"\xc7\x03\n" +
 	"\x11CreatePlanRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n" +
 	"\tcpu_cores\x18\x02 \x01(\x05R\bcpuCores\x12!\n" +
@@ -6379,10 +6666,12 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\x15bandwidth_bytes_month\x18\x05 \x01(\x03R\x13bandwidthBytesMonth\x12#\n" +
 	"\rstorage_bytes\x18\x06 \x01(\x03R\fstorageBytes\x122\n" +
 	"\x15minimum_payment_cents\x18\a \x01(\x03R\x13minimumPaymentCents\x12;\n" +
-	"\x1amonthly_free_credits_cents\x18\b \x01(\x03R\x17monthlyFreeCreditsCents\x12 \n" +
+	"\x1amonthly_free_credits_cents\x18\b \x01(\x03R\x17monthlyFreeCreditsCents\x12\x1d\n" +
+	"\n" +
+	"trial_days\x18\v \x01(\x05R\ttrialDays\x12 \n" +
 	"\vdescription\x18\t \x01(\tR\vdescription\"K\n" +
 	"\x12CreatePlanResponse\x125\n" +
-	"\x04plan\x18\x01 \x01(\v2!.obiente.cloud.superadmin.v1.PlanR\x04plan\"\xb1\x05\n" +
+	"\x04plan\x18\x01 \x01(\v2!.obiente.cloud.superadmin.v1.PlanR\x04plan\"\xe4\x05\n" +
 	"\x11UpdatePlanRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\x04name\x18\x02 \x01(\tH\x00R\x04name\x88\x01\x01\x12 \n" +
@@ -6393,9 +6682,12 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\x15bandwidth_bytes_month\x18\x06 \x01(\x03H\x05R\x13bandwidthBytesMonth\x88\x01\x01\x12(\n" +
 	"\rstorage_bytes\x18\a \x01(\x03H\x06R\fstorageBytes\x88\x01\x01\x127\n" +
 	"\x15minimum_payment_cents\x18\b \x01(\x03H\aR\x13minimumPaymentCents\x88\x01\x01\x12@\n" +
-	"\x1amonthly_free_credits_cents\x18\t \x01(\x03H\bR\x17monthlyFreeCreditsCents\x88\x01\x01\x12%\n" +
+	"\x1amonthly_free_credits_cents\x18\t \x01(\x03H\bR\x17monthlyFreeCreditsCents\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"trial_days\x18\f \x01(\x05H\tR\ttrialDays\x88\x01\x01\x12%\n" +
 	"\vdescription\x18\n" +
-	" \x01(\tH\tR\vdescription\x88\x01\x01B\a\n" +
+	" \x01(\tH\n" +
+	"R\vdescription\x88\x01\x01B\a\n" +
 	"\x05_nameB\f\n" +
 	"\n" +
 	"_cpu_coresB\x0f\n" +
@@ -6405,14 +6697,15 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\x16_bandwidth_bytes_monthB\x10\n" +
 	"\x0e_storage_bytesB\x18\n" +
 	"\x16_minimum_payment_centsB\x1d\n" +
-	"\x1b_monthly_free_credits_centsB\x0e\n" +
+	"\x1b_monthly_free_credits_centsB\r\n" +
+	"\v_trial_daysB\x0e\n" +
 	"\f_description\"K\n" +
 	"\x12UpdatePlanResponse\x125\n" +
 	"\x04plan\x18\x01 \x01(\v2!.obiente.cloud.superadmin.v1.PlanR\x04plan\"#\n" +
 	"\x11DeletePlanRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\".\n" +
 	"\x12DeletePlanResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xab\x03\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xca\x03\n" +
 	"\x04Plan\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
@@ -6423,7 +6716,9 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\x15bandwidth_bytes_month\x18\x06 \x01(\x03R\x13bandwidthBytesMonth\x12#\n" +
 	"\rstorage_bytes\x18\a \x01(\x03R\fstorageBytes\x122\n" +
 	"\x15minimum_payment_cents\x18\b \x01(\x03R\x13minimumPaymentCents\x12;\n" +
-	"\x1amonthly_free_credits_cents\x18\t \x01(\x03R\x17monthlyFreeCreditsCents\x12 \n" +
+	"\x1amonthly_free_credits_cents\x18\t \x01(\x03R\x17monthlyFreeCreditsCents\x12\x1d\n" +
+	"\n" +
+	"trial_days\x18\f \x01(\x05R\ttrialDays\x12 \n" +
 	"\vdescription\x18\n" +
 	" \x01(\tR\vdescription\"c\n" +
 	"\x1fAssignPlanToOrganizationRequest\x12'\n" +
@@ -6586,7 +6881,51 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"hardDelete\"V\n" +
 	" SuperadminForceDeleteVPSResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage2\x86#\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\x8d\x03\n" +
+	"\x1eListStripeWebhookEventsRequest\x12,\n" +
+	"\x0forganization_id\x18\x01 \x01(\tH\x00R\x0eorganizationId\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"event_type\x18\x02 \x01(\tH\x01R\teventType\x88\x01\x01\x12$\n" +
+	"\vcustomer_id\x18\x03 \x01(\tH\x02R\n" +
+	"customerId\x88\x01\x01\x12,\n" +
+	"\x0fsubscription_id\x18\x04 \x01(\tH\x03R\x0esubscriptionId\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"invoice_id\x18\x05 \x01(\tH\x04R\tinvoiceId\x88\x01\x01\x12\x19\n" +
+	"\x05limit\x18\x06 \x01(\x05H\x05R\x05limit\x88\x01\x01\x12\x1b\n" +
+	"\x06offset\x18\a \x01(\x05H\x06R\x06offset\x88\x01\x01B\x12\n" +
+	"\x10_organization_idB\r\n" +
+	"\v_event_typeB\x0e\n" +
+	"\f_customer_idB\x12\n" +
+	"\x10_subscription_idB\r\n" +
+	"\v_invoice_idB\b\n" +
+	"\x06_limitB\t\n" +
+	"\a_offset\"\xbf\x04\n" +
+	"\x12StripeWebhookEvent\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
+	"\n" +
+	"event_type\x18\x02 \x01(\tR\teventType\x12=\n" +
+	"\fprocessed_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\vprocessedAt\x129\n" +
+	"\n" +
+	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12,\n" +
+	"\x0forganization_id\x18\x05 \x01(\tH\x00R\x0eorganizationId\x88\x01\x01\x120\n" +
+	"\x11organization_name\x18\x06 \x01(\tH\x01R\x10organizationName\x88\x01\x01\x12$\n" +
+	"\vcustomer_id\x18\a \x01(\tH\x02R\n" +
+	"customerId\x88\x01\x01\x12,\n" +
+	"\x0fsubscription_id\x18\b \x01(\tH\x03R\x0esubscriptionId\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"invoice_id\x18\t \x01(\tH\x04R\tinvoiceId\x88\x01\x01\x123\n" +
+	"\x13checkout_session_id\x18\n" +
+	" \x01(\tH\x05R\x11checkoutSessionId\x88\x01\x01B\x12\n" +
+	"\x10_organization_idB\x14\n" +
+	"\x12_organization_nameB\x0e\n" +
+	"\f_customer_idB\x12\n" +
+	"\x10_subscription_idB\r\n" +
+	"\v_invoice_idB\x16\n" +
+	"\x14_checkout_session_id\"\x8b\x01\n" +
+	"\x1fListStripeWebhookEventsResponse\x12G\n" +
+	"\x06events\x18\x01 \x03(\v2/.obiente.cloud.superadmin.v1.StripeWebhookEventR\x06events\x12\x1f\n" +
+	"\vtotal_count\x18\x02 \x01(\x03R\n" +
+	"totalCount2\x9d$\n" +
 	"\x11SuperadminService\x12p\n" +
 	"\vGetOverview\x12/.obiente.cloud.superadmin.v1.GetOverviewRequest\x1a0.obiente.cloud.superadmin.v1.GetOverviewResponse\x12g\n" +
 	"\bQueryDNS\x12,.obiente.cloud.superadmin.v1.QueryDNSRequest\x1a-.obiente.cloud.superadmin.v1.QueryDNSResponse\x12y\n" +
@@ -6626,7 +6965,8 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\fListVPSSizes\x120.obiente.cloud.superadmin.v1.ListVPSSizesRequest\x1a1.obiente.cloud.superadmin.v1.ListVPSSizesResponse\x12v\n" +
 	"\rCreateVPSSize\x121.obiente.cloud.superadmin.v1.CreateVPSSizeRequest\x1a2.obiente.cloud.superadmin.v1.CreateVPSSizeResponse\x12v\n" +
 	"\rUpdateVPSSize\x121.obiente.cloud.superadmin.v1.UpdateVPSSizeRequest\x1a2.obiente.cloud.superadmin.v1.UpdateVPSSizeResponse\x12v\n" +
-	"\rDeleteVPSSize\x121.obiente.cloud.superadmin.v1.DeleteVPSSizeRequest\x1a2.obiente.cloud.superadmin.v1.DeleteVPSSizeResponseBUZSgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/superadmin/v1;superadminv1b\x06proto3"
+	"\rDeleteVPSSize\x121.obiente.cloud.superadmin.v1.DeleteVPSSizeRequest\x1a2.obiente.cloud.superadmin.v1.DeleteVPSSizeResponse\x12\x94\x01\n" +
+	"\x17ListStripeWebhookEvents\x12;.obiente.cloud.superadmin.v1.ListStripeWebhookEventsRequest\x1a<.obiente.cloud.superadmin.v1.ListStripeWebhookEventsResponseBUZSgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/superadmin/v1;superadminv1b\x06proto3"
 
 var (
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescOnce sync.Once
@@ -6640,7 +6980,7 @@ func file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescGZIP() []b
 	return file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDescData
 }
 
-var file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes = make([]protoimpl.MessageInfo, 92)
+var file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes = make([]protoimpl.MessageInfo, 95)
 var file_obiente_cloud_superadmin_v1_superadmin_service_proto_goTypes = []any{
 	(*GetOverviewRequest)(nil),                               // 0: obiente.cloud.superadmin.v1.GetOverviewRequest
 	(*GetOverviewResponse)(nil),                              // 1: obiente.cloud.superadmin.v1.GetOverviewResponse
@@ -6733,16 +7073,19 @@ var file_obiente_cloud_superadmin_v1_superadmin_service_proto_goTypes = []any{
 	(*SuperadminForceStopVPSResponse)(nil),                   // 88: obiente.cloud.superadmin.v1.SuperadminForceStopVPSResponse
 	(*SuperadminForceDeleteVPSRequest)(nil),                  // 89: obiente.cloud.superadmin.v1.SuperadminForceDeleteVPSRequest
 	(*SuperadminForceDeleteVPSResponse)(nil),                 // 90: obiente.cloud.superadmin.v1.SuperadminForceDeleteVPSResponse
-	nil,                                                      // 91: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
-	(*timestamppb.Timestamp)(nil),                            // 92: google.protobuf.Timestamp
-	(v1.Environment)(0),                                      // 93: obiente.cloud.deployments.v1.Environment
-	(v1.DeploymentStatus)(0),                                 // 94: obiente.cloud.deployments.v1.DeploymentStatus
-	(*v11.Invoice)(nil),                                      // 95: obiente.cloud.billing.v1.Invoice
-	(*v12.Pagination)(nil),                                   // 96: obiente.cloud.common.v1.Pagination
-	(v13.VPSStatus)(0),                                       // 97: obiente.cloud.vps.v1.VPSStatus
-	(*v13.VPSInstance)(nil),                                  // 98: obiente.cloud.vps.v1.VPSInstance
-	(*v12.VPSSize)(nil),                                      // 99: obiente.cloud.common.v1.VPSSize
-	(*v13.CloudInitConfig)(nil),                              // 100: obiente.cloud.vps.v1.CloudInitConfig
+	(*ListStripeWebhookEventsRequest)(nil),                   // 91: obiente.cloud.superadmin.v1.ListStripeWebhookEventsRequest
+	(*StripeWebhookEvent)(nil),                               // 92: obiente.cloud.superadmin.v1.StripeWebhookEvent
+	(*ListStripeWebhookEventsResponse)(nil),                  // 93: obiente.cloud.superadmin.v1.ListStripeWebhookEventsResponse
+	nil,                                                      // 94: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
+	(*timestamppb.Timestamp)(nil),                            // 95: google.protobuf.Timestamp
+	(v1.Environment)(0),                                      // 96: obiente.cloud.deployments.v1.Environment
+	(v1.DeploymentStatus)(0),                                 // 97: obiente.cloud.deployments.v1.DeploymentStatus
+	(*v11.Invoice)(nil),                                      // 98: obiente.cloud.billing.v1.Invoice
+	(*v12.Pagination)(nil),                                   // 99: obiente.cloud.common.v1.Pagination
+	(v13.VPSStatus)(0),                                       // 100: obiente.cloud.vps.v1.VPSStatus
+	(*v13.VPSInstance)(nil),                                  // 101: obiente.cloud.vps.v1.VPSInstance
+	(*v12.VPSSize)(nil),                                      // 102: obiente.cloud.common.v1.VPSSize
+	(*v13.CloudInitConfig)(nil),                              // 103: obiente.cloud.vps.v1.CloudInitConfig
 }
 var file_obiente_cloud_superadmin_v1_superadmin_service_proto_depIdxs = []int32{
 	2,   // 0: obiente.cloud.superadmin.v1.GetOverviewResponse.counts:type_name -> obiente.cloud.superadmin.v1.OverviewCounts
@@ -6750,137 +7093,142 @@ var file_obiente_cloud_superadmin_v1_superadmin_service_proto_depIdxs = []int32{
 	4,   // 2: obiente.cloud.superadmin.v1.GetOverviewResponse.pending_invites:type_name -> obiente.cloud.superadmin.v1.SuperadminPendingInvite
 	5,   // 3: obiente.cloud.superadmin.v1.GetOverviewResponse.deployments:type_name -> obiente.cloud.superadmin.v1.DeploymentOverview
 	6,   // 4: obiente.cloud.superadmin.v1.GetOverviewResponse.usages:type_name -> obiente.cloud.superadmin.v1.OrganizationUsage
-	92,  // 5: obiente.cloud.superadmin.v1.OrganizationOverview.created_at:type_name -> google.protobuf.Timestamp
-	92,  // 6: obiente.cloud.superadmin.v1.SuperadminPendingInvite.invited_at:type_name -> google.protobuf.Timestamp
-	93,  // 7: obiente.cloud.superadmin.v1.DeploymentOverview.environment:type_name -> obiente.cloud.deployments.v1.Environment
-	94,  // 8: obiente.cloud.superadmin.v1.DeploymentOverview.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
-	92,  // 9: obiente.cloud.superadmin.v1.DeploymentOverview.created_at:type_name -> google.protobuf.Timestamp
-	92,  // 10: obiente.cloud.superadmin.v1.DeploymentOverview.last_deployed_at:type_name -> google.protobuf.Timestamp
-	92,  // 11: obiente.cloud.superadmin.v1.DNSRecord.last_resolved:type_name -> google.protobuf.Timestamp
+	95,  // 5: obiente.cloud.superadmin.v1.OrganizationOverview.created_at:type_name -> google.protobuf.Timestamp
+	95,  // 6: obiente.cloud.superadmin.v1.SuperadminPendingInvite.invited_at:type_name -> google.protobuf.Timestamp
+	96,  // 7: obiente.cloud.superadmin.v1.DeploymentOverview.environment:type_name -> obiente.cloud.deployments.v1.Environment
+	97,  // 8: obiente.cloud.superadmin.v1.DeploymentOverview.status:type_name -> obiente.cloud.deployments.v1.DeploymentStatus
+	95,  // 9: obiente.cloud.superadmin.v1.DeploymentOverview.created_at:type_name -> google.protobuf.Timestamp
+	95,  // 10: obiente.cloud.superadmin.v1.DeploymentOverview.last_deployed_at:type_name -> google.protobuf.Timestamp
+	95,  // 11: obiente.cloud.superadmin.v1.DNSRecord.last_resolved:type_name -> google.protobuf.Timestamp
 	10,  // 12: obiente.cloud.superadmin.v1.ListDNSRecordsResponse.records:type_name -> obiente.cloud.superadmin.v1.DNSRecord
-	91,  // 13: obiente.cloud.superadmin.v1.DNSConfig.traefik_ips_by_region:type_name -> obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
+	94,  // 13: obiente.cloud.superadmin.v1.DNSConfig.traefik_ips_by_region:type_name -> obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry
 	13,  // 14: obiente.cloud.superadmin.v1.GetDNSConfigResponse.config:type_name -> obiente.cloud.superadmin.v1.DNSConfig
-	92,  // 15: obiente.cloud.superadmin.v1.DelegatedDNSRecord.expires_at:type_name -> google.protobuf.Timestamp
-	92,  // 16: obiente.cloud.superadmin.v1.DelegatedDNSRecord.last_updated:type_name -> google.protobuf.Timestamp
-	92,  // 17: obiente.cloud.superadmin.v1.DelegatedDNSRecord.created_at:type_name -> google.protobuf.Timestamp
+	95,  // 15: obiente.cloud.superadmin.v1.DelegatedDNSRecord.expires_at:type_name -> google.protobuf.Timestamp
+	95,  // 16: obiente.cloud.superadmin.v1.DelegatedDNSRecord.last_updated:type_name -> google.protobuf.Timestamp
+	95,  // 17: obiente.cloud.superadmin.v1.DelegatedDNSRecord.created_at:type_name -> google.protobuf.Timestamp
 	17,  // 18: obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsResponse.records:type_name -> obiente.cloud.superadmin.v1.DelegatedDNSRecord
-	92,  // 19: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.created_at:type_name -> google.protobuf.Timestamp
-	92,  // 20: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.revoked_at:type_name -> google.protobuf.Timestamp
+	95,  // 19: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.created_at:type_name -> google.protobuf.Timestamp
+	95,  // 20: obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo.revoked_at:type_name -> google.protobuf.Timestamp
 	30,  // 21: obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse.api_keys:type_name -> obiente.cloud.superadmin.v1.DNSDelegationAPIKeyInfo
 	34,  // 22: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.suspicious_organizations:type_name -> obiente.cloud.superadmin.v1.SuspiciousOrganization
 	35,  // 23: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.suspicious_activities:type_name -> obiente.cloud.superadmin.v1.SuspiciousActivity
 	36,  // 24: obiente.cloud.superadmin.v1.GetAbuseDetectionResponse.metrics:type_name -> obiente.cloud.superadmin.v1.AbuseMetrics
-	92,  // 25: obiente.cloud.superadmin.v1.SuspiciousOrganization.created_at:type_name -> google.protobuf.Timestamp
-	92,  // 26: obiente.cloud.superadmin.v1.SuspiciousOrganization.last_activity:type_name -> google.protobuf.Timestamp
-	92,  // 27: obiente.cloud.superadmin.v1.SuspiciousActivity.occurred_at:type_name -> google.protobuf.Timestamp
+	95,  // 25: obiente.cloud.superadmin.v1.SuspiciousOrganization.created_at:type_name -> google.protobuf.Timestamp
+	95,  // 26: obiente.cloud.superadmin.v1.SuspiciousOrganization.last_activity:type_name -> google.protobuf.Timestamp
+	95,  // 27: obiente.cloud.superadmin.v1.SuspiciousActivity.occurred_at:type_name -> google.protobuf.Timestamp
 	39,  // 28: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.summary:type_name -> obiente.cloud.superadmin.v1.IncomeSummary
 	40,  // 29: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.monthly_income:type_name -> obiente.cloud.superadmin.v1.MonthlyIncome
 	41,  // 30: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.top_customers:type_name -> obiente.cloud.superadmin.v1.TopCustomer
 	42,  // 31: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.transactions:type_name -> obiente.cloud.superadmin.v1.BillingTransaction
 	43,  // 32: obiente.cloud.superadmin.v1.GetIncomeOverviewResponse.payment_metrics:type_name -> obiente.cloud.superadmin.v1.PaymentMetrics
-	92,  // 33: obiente.cloud.superadmin.v1.TopCustomer.first_payment:type_name -> google.protobuf.Timestamp
-	92,  // 34: obiente.cloud.superadmin.v1.TopCustomer.last_payment:type_name -> google.protobuf.Timestamp
-	92,  // 35: obiente.cloud.superadmin.v1.BillingTransaction.created_at:type_name -> google.protobuf.Timestamp
+	95,  // 33: obiente.cloud.superadmin.v1.TopCustomer.first_payment:type_name -> google.protobuf.Timestamp
+	95,  // 34: obiente.cloud.superadmin.v1.TopCustomer.last_payment:type_name -> google.protobuf.Timestamp
+	95,  // 35: obiente.cloud.superadmin.v1.BillingTransaction.created_at:type_name -> google.protobuf.Timestamp
 	46,  // 36: obiente.cloud.superadmin.v1.ListAllInvoicesResponse.invoices:type_name -> obiente.cloud.superadmin.v1.InvoiceWithOrganization
-	95,  // 37: obiente.cloud.superadmin.v1.InvoiceWithOrganization.invoice:type_name -> obiente.cloud.billing.v1.Invoice
+	98,  // 37: obiente.cloud.superadmin.v1.InvoiceWithOrganization.invoice:type_name -> obiente.cloud.billing.v1.Invoice
 	57,  // 38: obiente.cloud.superadmin.v1.ListPlansResponse.plans:type_name -> obiente.cloud.superadmin.v1.Plan
 	57,  // 39: obiente.cloud.superadmin.v1.CreatePlanResponse.plan:type_name -> obiente.cloud.superadmin.v1.Plan
 	57,  // 40: obiente.cloud.superadmin.v1.UpdatePlanResponse.plan:type_name -> obiente.cloud.superadmin.v1.Plan
 	64,  // 41: obiente.cloud.superadmin.v1.ListUsersResponse.users:type_name -> obiente.cloud.superadmin.v1.UserInfo
-	96,  // 42: obiente.cloud.superadmin.v1.ListUsersResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	99,  // 42: obiente.cloud.superadmin.v1.ListUsersResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
 	64,  // 43: obiente.cloud.superadmin.v1.GetUserResponse.user:type_name -> obiente.cloud.superadmin.v1.UserInfo
 	65,  // 44: obiente.cloud.superadmin.v1.GetUserResponse.organizations:type_name -> obiente.cloud.superadmin.v1.UserOrganization
-	92,  // 45: obiente.cloud.superadmin.v1.UserInfo.created_at:type_name -> google.protobuf.Timestamp
-	92,  // 46: obiente.cloud.superadmin.v1.UserInfo.updated_at:type_name -> google.protobuf.Timestamp
-	92,  // 47: obiente.cloud.superadmin.v1.UserOrganization.joined_at:type_name -> google.protobuf.Timestamp
-	97,  // 48: obiente.cloud.superadmin.v1.ListAllVPSRequest.status:type_name -> obiente.cloud.vps.v1.VPSStatus
-	98,  // 49: obiente.cloud.superadmin.v1.VPSOverview.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	95,  // 45: obiente.cloud.superadmin.v1.UserInfo.created_at:type_name -> google.protobuf.Timestamp
+	95,  // 46: obiente.cloud.superadmin.v1.UserInfo.updated_at:type_name -> google.protobuf.Timestamp
+	95,  // 47: obiente.cloud.superadmin.v1.UserOrganization.joined_at:type_name -> google.protobuf.Timestamp
+	100, // 48: obiente.cloud.superadmin.v1.ListAllVPSRequest.status:type_name -> obiente.cloud.vps.v1.VPSStatus
+	101, // 49: obiente.cloud.superadmin.v1.VPSOverview.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
 	67,  // 50: obiente.cloud.superadmin.v1.ListAllVPSResponse.vps_instances:type_name -> obiente.cloud.superadmin.v1.VPSOverview
-	96,  // 51: obiente.cloud.superadmin.v1.ListAllVPSResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
-	99,  // 52: obiente.cloud.superadmin.v1.ListVPSSizesResponse.sizes:type_name -> obiente.cloud.common.v1.VPSSize
-	99,  // 53: obiente.cloud.superadmin.v1.CreateVPSSizeResponse.size:type_name -> obiente.cloud.common.v1.VPSSize
-	99,  // 54: obiente.cloud.superadmin.v1.UpdateVPSSizeResponse.size:type_name -> obiente.cloud.common.v1.VPSSize
-	98,  // 55: obiente.cloud.superadmin.v1.SuperadminGetVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	98,  // 56: obiente.cloud.superadmin.v1.SuperadminResizeVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	98,  // 57: obiente.cloud.superadmin.v1.SuperadminSuspendVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	98,  // 58: obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	100, // 59: obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitRequest.cloud_init:type_name -> obiente.cloud.vps.v1.CloudInitConfig
-	98,  // 60: obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	98,  // 61: obiente.cloud.superadmin.v1.SuperadminForceStopVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
-	14,  // 62: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry.value:type_name -> obiente.cloud.superadmin.v1.TraefikIPs
-	0,   // 63: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:input_type -> obiente.cloud.superadmin.v1.GetOverviewRequest
-	7,   // 64: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:input_type -> obiente.cloud.superadmin.v1.QueryDNSRequest
-	9,   // 65: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:input_type -> obiente.cloud.superadmin.v1.ListDNSRecordsRequest
-	12,  // 66: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:input_type -> obiente.cloud.superadmin.v1.GetDNSConfigRequest
-	16,  // 67: obiente.cloud.superadmin.v1.SuperadminService.ListDelegatedDNSRecords:input_type -> obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsRequest
-	19,  // 68: obiente.cloud.superadmin.v1.SuperadminService.HasDelegatedDNS:input_type -> obiente.cloud.superadmin.v1.HasDelegatedDNSRequest
-	23,  // 69: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyRequest
-	29,  // 70: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:input_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysRequest
-	25,  // 71: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyRequest
-	27,  // 72: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationRequest
-	21,  // 73: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:input_type -> obiente.cloud.superadmin.v1.GetPricingRequest
-	32,  // 74: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:input_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionRequest
-	37,  // 75: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:input_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewRequest
-	44,  // 76: obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices:input_type -> obiente.cloud.superadmin.v1.ListAllInvoicesRequest
-	47,  // 77: obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder:input_type -> obiente.cloud.superadmin.v1.SendInvoiceReminderRequest
-	49,  // 78: obiente.cloud.superadmin.v1.SuperadminService.ListPlans:input_type -> obiente.cloud.superadmin.v1.ListPlansRequest
-	51,  // 79: obiente.cloud.superadmin.v1.SuperadminService.CreatePlan:input_type -> obiente.cloud.superadmin.v1.CreatePlanRequest
-	53,  // 80: obiente.cloud.superadmin.v1.SuperadminService.UpdatePlan:input_type -> obiente.cloud.superadmin.v1.UpdatePlanRequest
-	55,  // 81: obiente.cloud.superadmin.v1.SuperadminService.DeletePlan:input_type -> obiente.cloud.superadmin.v1.DeletePlanRequest
-	58,  // 82: obiente.cloud.superadmin.v1.SuperadminService.AssignPlanToOrganization:input_type -> obiente.cloud.superadmin.v1.AssignPlanToOrganizationRequest
-	60,  // 83: obiente.cloud.superadmin.v1.SuperadminService.ListUsers:input_type -> obiente.cloud.superadmin.v1.ListUsersRequest
-	62,  // 84: obiente.cloud.superadmin.v1.SuperadminService.GetUser:input_type -> obiente.cloud.superadmin.v1.GetUserRequest
-	66,  // 85: obiente.cloud.superadmin.v1.SuperadminService.ListAllVPS:input_type -> obiente.cloud.superadmin.v1.ListAllVPSRequest
-	77,  // 86: obiente.cloud.superadmin.v1.SuperadminService.SuperadminGetVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminGetVPSRequest
-	79,  // 87: obiente.cloud.superadmin.v1.SuperadminService.SuperadminResizeVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminResizeVPSRequest
-	81,  // 88: obiente.cloud.superadmin.v1.SuperadminService.SuperadminSuspendVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminSuspendVPSRequest
-	83,  // 89: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUnsuspendVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSRequest
-	85,  // 90: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUpdateVPSCloudInit:input_type -> obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitRequest
-	87,  // 91: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceStopVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminForceStopVPSRequest
-	89,  // 92: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceDeleteVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminForceDeleteVPSRequest
-	69,  // 93: obiente.cloud.superadmin.v1.SuperadminService.ListVPSSizes:input_type -> obiente.cloud.superadmin.v1.ListVPSSizesRequest
-	71,  // 94: obiente.cloud.superadmin.v1.SuperadminService.CreateVPSSize:input_type -> obiente.cloud.superadmin.v1.CreateVPSSizeRequest
-	73,  // 95: obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSSize:input_type -> obiente.cloud.superadmin.v1.UpdateVPSSizeRequest
-	75,  // 96: obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSSize:input_type -> obiente.cloud.superadmin.v1.DeleteVPSSizeRequest
-	1,   // 97: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:output_type -> obiente.cloud.superadmin.v1.GetOverviewResponse
-	8,   // 98: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:output_type -> obiente.cloud.superadmin.v1.QueryDNSResponse
-	11,  // 99: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:output_type -> obiente.cloud.superadmin.v1.ListDNSRecordsResponse
-	15,  // 100: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:output_type -> obiente.cloud.superadmin.v1.GetDNSConfigResponse
-	18,  // 101: obiente.cloud.superadmin.v1.SuperadminService.ListDelegatedDNSRecords:output_type -> obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsResponse
-	20,  // 102: obiente.cloud.superadmin.v1.SuperadminService.HasDelegatedDNS:output_type -> obiente.cloud.superadmin.v1.HasDelegatedDNSResponse
-	24,  // 103: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyResponse
-	31,  // 104: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:output_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse
-	26,  // 105: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyResponse
-	28,  // 106: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationResponse
-	22,  // 107: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:output_type -> obiente.cloud.superadmin.v1.GetPricingResponse
-	33,  // 108: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:output_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionResponse
-	38,  // 109: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:output_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewResponse
-	45,  // 110: obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices:output_type -> obiente.cloud.superadmin.v1.ListAllInvoicesResponse
-	48,  // 111: obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder:output_type -> obiente.cloud.superadmin.v1.SendInvoiceReminderResponse
-	50,  // 112: obiente.cloud.superadmin.v1.SuperadminService.ListPlans:output_type -> obiente.cloud.superadmin.v1.ListPlansResponse
-	52,  // 113: obiente.cloud.superadmin.v1.SuperadminService.CreatePlan:output_type -> obiente.cloud.superadmin.v1.CreatePlanResponse
-	54,  // 114: obiente.cloud.superadmin.v1.SuperadminService.UpdatePlan:output_type -> obiente.cloud.superadmin.v1.UpdatePlanResponse
-	56,  // 115: obiente.cloud.superadmin.v1.SuperadminService.DeletePlan:output_type -> obiente.cloud.superadmin.v1.DeletePlanResponse
-	59,  // 116: obiente.cloud.superadmin.v1.SuperadminService.AssignPlanToOrganization:output_type -> obiente.cloud.superadmin.v1.AssignPlanToOrganizationResponse
-	61,  // 117: obiente.cloud.superadmin.v1.SuperadminService.ListUsers:output_type -> obiente.cloud.superadmin.v1.ListUsersResponse
-	63,  // 118: obiente.cloud.superadmin.v1.SuperadminService.GetUser:output_type -> obiente.cloud.superadmin.v1.GetUserResponse
-	68,  // 119: obiente.cloud.superadmin.v1.SuperadminService.ListAllVPS:output_type -> obiente.cloud.superadmin.v1.ListAllVPSResponse
-	78,  // 120: obiente.cloud.superadmin.v1.SuperadminService.SuperadminGetVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminGetVPSResponse
-	80,  // 121: obiente.cloud.superadmin.v1.SuperadminService.SuperadminResizeVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminResizeVPSResponse
-	82,  // 122: obiente.cloud.superadmin.v1.SuperadminService.SuperadminSuspendVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminSuspendVPSResponse
-	84,  // 123: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUnsuspendVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSResponse
-	86,  // 124: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUpdateVPSCloudInit:output_type -> obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitResponse
-	88,  // 125: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceStopVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminForceStopVPSResponse
-	90,  // 126: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceDeleteVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminForceDeleteVPSResponse
-	70,  // 127: obiente.cloud.superadmin.v1.SuperadminService.ListVPSSizes:output_type -> obiente.cloud.superadmin.v1.ListVPSSizesResponse
-	72,  // 128: obiente.cloud.superadmin.v1.SuperadminService.CreateVPSSize:output_type -> obiente.cloud.superadmin.v1.CreateVPSSizeResponse
-	74,  // 129: obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSSize:output_type -> obiente.cloud.superadmin.v1.UpdateVPSSizeResponse
-	76,  // 130: obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSSize:output_type -> obiente.cloud.superadmin.v1.DeleteVPSSizeResponse
-	97,  // [97:131] is the sub-list for method output_type
-	63,  // [63:97] is the sub-list for method input_type
-	63,  // [63:63] is the sub-list for extension type_name
-	63,  // [63:63] is the sub-list for extension extendee
-	0,   // [0:63] is the sub-list for field type_name
+	99,  // 51: obiente.cloud.superadmin.v1.ListAllVPSResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	102, // 52: obiente.cloud.superadmin.v1.ListVPSSizesResponse.sizes:type_name -> obiente.cloud.common.v1.VPSSize
+	102, // 53: obiente.cloud.superadmin.v1.CreateVPSSizeResponse.size:type_name -> obiente.cloud.common.v1.VPSSize
+	102, // 54: obiente.cloud.superadmin.v1.UpdateVPSSizeResponse.size:type_name -> obiente.cloud.common.v1.VPSSize
+	101, // 55: obiente.cloud.superadmin.v1.SuperadminGetVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	101, // 56: obiente.cloud.superadmin.v1.SuperadminResizeVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	101, // 57: obiente.cloud.superadmin.v1.SuperadminSuspendVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	101, // 58: obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	103, // 59: obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitRequest.cloud_init:type_name -> obiente.cloud.vps.v1.CloudInitConfig
+	101, // 60: obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	101, // 61: obiente.cloud.superadmin.v1.SuperadminForceStopVPSResponse.vps:type_name -> obiente.cloud.vps.v1.VPSInstance
+	95,  // 62: obiente.cloud.superadmin.v1.StripeWebhookEvent.processed_at:type_name -> google.protobuf.Timestamp
+	95,  // 63: obiente.cloud.superadmin.v1.StripeWebhookEvent.created_at:type_name -> google.protobuf.Timestamp
+	92,  // 64: obiente.cloud.superadmin.v1.ListStripeWebhookEventsResponse.events:type_name -> obiente.cloud.superadmin.v1.StripeWebhookEvent
+	14,  // 65: obiente.cloud.superadmin.v1.DNSConfig.TraefikIpsByRegionEntry.value:type_name -> obiente.cloud.superadmin.v1.TraefikIPs
+	0,   // 66: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:input_type -> obiente.cloud.superadmin.v1.GetOverviewRequest
+	7,   // 67: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:input_type -> obiente.cloud.superadmin.v1.QueryDNSRequest
+	9,   // 68: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:input_type -> obiente.cloud.superadmin.v1.ListDNSRecordsRequest
+	12,  // 69: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:input_type -> obiente.cloud.superadmin.v1.GetDNSConfigRequest
+	16,  // 70: obiente.cloud.superadmin.v1.SuperadminService.ListDelegatedDNSRecords:input_type -> obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsRequest
+	19,  // 71: obiente.cloud.superadmin.v1.SuperadminService.HasDelegatedDNS:input_type -> obiente.cloud.superadmin.v1.HasDelegatedDNSRequest
+	23,  // 72: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyRequest
+	29,  // 73: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:input_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysRequest
+	25,  // 74: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyRequest
+	27,  // 75: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:input_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationRequest
+	21,  // 76: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:input_type -> obiente.cloud.superadmin.v1.GetPricingRequest
+	32,  // 77: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:input_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionRequest
+	37,  // 78: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:input_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewRequest
+	44,  // 79: obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices:input_type -> obiente.cloud.superadmin.v1.ListAllInvoicesRequest
+	47,  // 80: obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder:input_type -> obiente.cloud.superadmin.v1.SendInvoiceReminderRequest
+	49,  // 81: obiente.cloud.superadmin.v1.SuperadminService.ListPlans:input_type -> obiente.cloud.superadmin.v1.ListPlansRequest
+	51,  // 82: obiente.cloud.superadmin.v1.SuperadminService.CreatePlan:input_type -> obiente.cloud.superadmin.v1.CreatePlanRequest
+	53,  // 83: obiente.cloud.superadmin.v1.SuperadminService.UpdatePlan:input_type -> obiente.cloud.superadmin.v1.UpdatePlanRequest
+	55,  // 84: obiente.cloud.superadmin.v1.SuperadminService.DeletePlan:input_type -> obiente.cloud.superadmin.v1.DeletePlanRequest
+	58,  // 85: obiente.cloud.superadmin.v1.SuperadminService.AssignPlanToOrganization:input_type -> obiente.cloud.superadmin.v1.AssignPlanToOrganizationRequest
+	60,  // 86: obiente.cloud.superadmin.v1.SuperadminService.ListUsers:input_type -> obiente.cloud.superadmin.v1.ListUsersRequest
+	62,  // 87: obiente.cloud.superadmin.v1.SuperadminService.GetUser:input_type -> obiente.cloud.superadmin.v1.GetUserRequest
+	66,  // 88: obiente.cloud.superadmin.v1.SuperadminService.ListAllVPS:input_type -> obiente.cloud.superadmin.v1.ListAllVPSRequest
+	77,  // 89: obiente.cloud.superadmin.v1.SuperadminService.SuperadminGetVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminGetVPSRequest
+	79,  // 90: obiente.cloud.superadmin.v1.SuperadminService.SuperadminResizeVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminResizeVPSRequest
+	81,  // 91: obiente.cloud.superadmin.v1.SuperadminService.SuperadminSuspendVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminSuspendVPSRequest
+	83,  // 92: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUnsuspendVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSRequest
+	85,  // 93: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUpdateVPSCloudInit:input_type -> obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitRequest
+	87,  // 94: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceStopVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminForceStopVPSRequest
+	89,  // 95: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceDeleteVPS:input_type -> obiente.cloud.superadmin.v1.SuperadminForceDeleteVPSRequest
+	69,  // 96: obiente.cloud.superadmin.v1.SuperadminService.ListVPSSizes:input_type -> obiente.cloud.superadmin.v1.ListVPSSizesRequest
+	71,  // 97: obiente.cloud.superadmin.v1.SuperadminService.CreateVPSSize:input_type -> obiente.cloud.superadmin.v1.CreateVPSSizeRequest
+	73,  // 98: obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSSize:input_type -> obiente.cloud.superadmin.v1.UpdateVPSSizeRequest
+	75,  // 99: obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSSize:input_type -> obiente.cloud.superadmin.v1.DeleteVPSSizeRequest
+	91,  // 100: obiente.cloud.superadmin.v1.SuperadminService.ListStripeWebhookEvents:input_type -> obiente.cloud.superadmin.v1.ListStripeWebhookEventsRequest
+	1,   // 101: obiente.cloud.superadmin.v1.SuperadminService.GetOverview:output_type -> obiente.cloud.superadmin.v1.GetOverviewResponse
+	8,   // 102: obiente.cloud.superadmin.v1.SuperadminService.QueryDNS:output_type -> obiente.cloud.superadmin.v1.QueryDNSResponse
+	11,  // 103: obiente.cloud.superadmin.v1.SuperadminService.ListDNSRecords:output_type -> obiente.cloud.superadmin.v1.ListDNSRecordsResponse
+	15,  // 104: obiente.cloud.superadmin.v1.SuperadminService.GetDNSConfig:output_type -> obiente.cloud.superadmin.v1.GetDNSConfigResponse
+	18,  // 105: obiente.cloud.superadmin.v1.SuperadminService.ListDelegatedDNSRecords:output_type -> obiente.cloud.superadmin.v1.ListDelegatedDNSRecordsResponse
+	20,  // 106: obiente.cloud.superadmin.v1.SuperadminService.HasDelegatedDNS:output_type -> obiente.cloud.superadmin.v1.HasDelegatedDNSResponse
+	24,  // 107: obiente.cloud.superadmin.v1.SuperadminService.CreateDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.CreateDNSDelegationAPIKeyResponse
+	31,  // 108: obiente.cloud.superadmin.v1.SuperadminService.ListDNSDelegationAPIKeys:output_type -> obiente.cloud.superadmin.v1.ListDNSDelegationAPIKeysResponse
+	26,  // 109: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKey:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyResponse
+	28,  // 110: obiente.cloud.superadmin.v1.SuperadminService.RevokeDNSDelegationAPIKeyForOrganization:output_type -> obiente.cloud.superadmin.v1.RevokeDNSDelegationAPIKeyForOrganizationResponse
+	22,  // 111: obiente.cloud.superadmin.v1.SuperadminService.GetPricing:output_type -> obiente.cloud.superadmin.v1.GetPricingResponse
+	33,  // 112: obiente.cloud.superadmin.v1.SuperadminService.GetAbuseDetection:output_type -> obiente.cloud.superadmin.v1.GetAbuseDetectionResponse
+	38,  // 113: obiente.cloud.superadmin.v1.SuperadminService.GetIncomeOverview:output_type -> obiente.cloud.superadmin.v1.GetIncomeOverviewResponse
+	45,  // 114: obiente.cloud.superadmin.v1.SuperadminService.ListAllInvoices:output_type -> obiente.cloud.superadmin.v1.ListAllInvoicesResponse
+	48,  // 115: obiente.cloud.superadmin.v1.SuperadminService.SendInvoiceReminder:output_type -> obiente.cloud.superadmin.v1.SendInvoiceReminderResponse
+	50,  // 116: obiente.cloud.superadmin.v1.SuperadminService.ListPlans:output_type -> obiente.cloud.superadmin.v1.ListPlansResponse
+	52,  // 117: obiente.cloud.superadmin.v1.SuperadminService.CreatePlan:output_type -> obiente.cloud.superadmin.v1.CreatePlanResponse
+	54,  // 118: obiente.cloud.superadmin.v1.SuperadminService.UpdatePlan:output_type -> obiente.cloud.superadmin.v1.UpdatePlanResponse
+	56,  // 119: obiente.cloud.superadmin.v1.SuperadminService.DeletePlan:output_type -> obiente.cloud.superadmin.v1.DeletePlanResponse
+	59,  // 120: obiente.cloud.superadmin.v1.SuperadminService.AssignPlanToOrganization:output_type -> obiente.cloud.superadmin.v1.AssignPlanToOrganizationResponse
+	61,  // 121: obiente.cloud.superadmin.v1.SuperadminService.ListUsers:output_type -> obiente.cloud.superadmin.v1.ListUsersResponse
+	63,  // 122: obiente.cloud.superadmin.v1.SuperadminService.GetUser:output_type -> obiente.cloud.superadmin.v1.GetUserResponse
+	68,  // 123: obiente.cloud.superadmin.v1.SuperadminService.ListAllVPS:output_type -> obiente.cloud.superadmin.v1.ListAllVPSResponse
+	78,  // 124: obiente.cloud.superadmin.v1.SuperadminService.SuperadminGetVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminGetVPSResponse
+	80,  // 125: obiente.cloud.superadmin.v1.SuperadminService.SuperadminResizeVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminResizeVPSResponse
+	82,  // 126: obiente.cloud.superadmin.v1.SuperadminService.SuperadminSuspendVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminSuspendVPSResponse
+	84,  // 127: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUnsuspendVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminUnsuspendVPSResponse
+	86,  // 128: obiente.cloud.superadmin.v1.SuperadminService.SuperadminUpdateVPSCloudInit:output_type -> obiente.cloud.superadmin.v1.SuperadminUpdateVPSCloudInitResponse
+	88,  // 129: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceStopVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminForceStopVPSResponse
+	90,  // 130: obiente.cloud.superadmin.v1.SuperadminService.SuperadminForceDeleteVPS:output_type -> obiente.cloud.superadmin.v1.SuperadminForceDeleteVPSResponse
+	70,  // 131: obiente.cloud.superadmin.v1.SuperadminService.ListVPSSizes:output_type -> obiente.cloud.superadmin.v1.ListVPSSizesResponse
+	72,  // 132: obiente.cloud.superadmin.v1.SuperadminService.CreateVPSSize:output_type -> obiente.cloud.superadmin.v1.CreateVPSSizeResponse
+	74,  // 133: obiente.cloud.superadmin.v1.SuperadminService.UpdateVPSSize:output_type -> obiente.cloud.superadmin.v1.UpdateVPSSizeResponse
+	76,  // 134: obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSSize:output_type -> obiente.cloud.superadmin.v1.DeleteVPSSizeResponse
+	93,  // 135: obiente.cloud.superadmin.v1.SuperadminService.ListStripeWebhookEvents:output_type -> obiente.cloud.superadmin.v1.ListStripeWebhookEventsResponse
+	101, // [101:136] is the sub-list for method output_type
+	66,  // [66:101] is the sub-list for method input_type
+	66,  // [66:66] is the sub-list for extension type_name
+	66,  // [66:66] is the sub-list for extension extendee
+	0,   // [0:66] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_superadmin_v1_superadmin_service_proto_init() }
@@ -6905,13 +7253,15 @@ func file_obiente_cloud_superadmin_v1_superadmin_service_proto_init() {
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[69].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[73].OneofWrappers = []any{}
 	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[81].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[91].OneofWrappers = []any{}
+	file_obiente_cloud_superadmin_v1_superadmin_service_proto_msgTypes[92].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc), len(file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   92,
+			NumMessages:   95,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -158,7 +158,7 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 
 	parts := strings.Split(strings.ToLower(domain), ".")
 	
-	// Handle SRV queries: _minecraft._tcp.gameserver-123.my.obiente.cloud
+	// Handle SRV queries: _minecraft._tcp.gs-123.my.obiente.cloud
 	// Also supports: _minecraft._udp (Bedrock), _rust._udp
 	if recordType == "SRV" {
 		if len(parts) < 4 {
@@ -167,13 +167,11 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 		
 		service := parts[0]  // _minecraft, _rust, etc.
 		protocol := parts[1]  // _tcp, _udp
-		resourceID := parts[2] // gameserver-123
+		gameServerID := parts[2] // gs-123
 		
-		if !strings.HasPrefix(resourceID, "gameserver-") {
+		if !strings.HasPrefix(gameServerID, "gs-") {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid game server ID format"))
 		}
-		
-		gameServerID := resourceID
 		
 		// Get game server type to validate SRV service matches
 		gameType, err := database.GetGameServerType(gameServerID)
@@ -229,15 +227,15 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 		}), nil
 	}
 
-	// Handle A record queries: deploy-123.my.obiente.cloud or gameserver-123.my.obiente.cloud
+	// Handle A record queries: deploy-123.my.obiente.cloud or gs-123.my.obiente.cloud
 	if len(parts) < 3 {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid domain format"))
 	}
 
 	resourceID := parts[0]
 	
-	// Check if this is a game server
-	if strings.HasPrefix(resourceID, "gameserver-") {
+	// Check if this is a game server (starts with gs-)
+	if strings.HasPrefix(resourceID, "gs-") {
 		// Get game server IP
 		nodeIP, err := database.GetGameServerIP(resourceID)
 		if err != nil {
@@ -522,8 +520,8 @@ func (s *Service) listGameServerDNSRecords(req *connect.Request[superadminv1.Lis
 		}
 
 		// A record for all game servers
-		// Format: gameserver-123.my.obiente.cloud
-		aRecordDomain := fmt.Sprintf("gameserver-%s.my.obiente.cloud", row.GameServerID)
+		// Format: gs-123.my.obiente.cloud
+		aRecordDomain := fmt.Sprintf("%s.my.obiente.cloud", row.GameServerID)
 		records = append(records, &superadminv1.DNSRecord{
 			RecordType:     "A",
 			GameServerId:   row.GameServerID,
@@ -541,8 +539,8 @@ func (s *Service) listGameServerDNSRecords(req *connect.Request[superadminv1.Lis
 		// GameType enum values: MINECRAFT = 1, MINECRAFT_JAVA = 2, MINECRAFT_BEDROCK = 3, RUST = 6
 		if row.GameType == 1 || row.GameType == 2 {
 			// Minecraft Java Edition - TCP SRV record
-			// Format: _minecraft._tcp.gameserver-123.my.obiente.cloud
-			srvDomain := fmt.Sprintf("_minecraft._tcp.gameserver-%s.my.obiente.cloud", row.GameServerID)
+			// Format: _minecraft._tcp.gs-123.my.obiente.cloud
+			srvDomain := fmt.Sprintf("_minecraft._tcp.%s.my.obiente.cloud", row.GameServerID)
 			records = append(records, &superadminv1.DNSRecord{
 				RecordType:     "SRV",
 				GameServerId:   row.GameServerID,
@@ -559,8 +557,8 @@ func (s *Service) listGameServerDNSRecords(req *connect.Request[superadminv1.Lis
 		
 		if row.GameType == 1 || row.GameType == 3 {
 			// Minecraft Bedrock Edition - UDP SRV record
-			// Format: _minecraft._udp.gameserver-123.my.obiente.cloud
-			srvDomain := fmt.Sprintf("_minecraft._udp.gameserver-%s.my.obiente.cloud", row.GameServerID)
+			// Format: _minecraft._udp.gs-123.my.obiente.cloud
+			srvDomain := fmt.Sprintf("_minecraft._udp.%s.my.obiente.cloud", row.GameServerID)
 			records = append(records, &superadminv1.DNSRecord{
 				RecordType:     "SRV",
 				GameServerId:   row.GameServerID,
@@ -577,8 +575,8 @@ func (s *Service) listGameServerDNSRecords(req *connect.Request[superadminv1.Lis
 		
 		if row.GameType == 6 {
 			// Rust - UDP SRV record
-			// Format: _rust._udp.gameserver-123.my.obiente.cloud
-			srvDomain := fmt.Sprintf("_rust._udp.gameserver-%s.my.obiente.cloud", row.GameServerID)
+			// Format: _rust._udp.gs-123.my.obiente.cloud
+			srvDomain := fmt.Sprintf("_rust._udp.%s.my.obiente.cloud", row.GameServerID)
 			records = append(records, &superadminv1.DNSRecord{
 				RecordType:     "SRV",
 				GameServerId:   row.GameServerID,
@@ -2089,6 +2087,7 @@ func (s *Service) ListPlans(ctx context.Context, _ *connect.Request[superadminv1
 			StorageBytes:            plan.StorageBytes,
 			MinimumPaymentCents:     plan.MinimumPaymentCents,
 			MonthlyFreeCreditsCents: plan.MonthlyFreeCreditsCents,
+			TrialDays:               int32(plan.TrialDays),
 			Description:             plan.Description,
 		}
 	}
@@ -2118,6 +2117,7 @@ func (s *Service) CreatePlan(ctx context.Context, req *connect.Request[superadmi
 		StorageBytes:            req.Msg.GetStorageBytes(),
 		MinimumPaymentCents:     req.Msg.GetMinimumPaymentCents(),
 		MonthlyFreeCreditsCents: req.Msg.GetMonthlyFreeCreditsCents(),
+		TrialDays:               int(req.Msg.GetTrialDays()),
 		Description:             req.Msg.GetDescription(),
 	}
 
@@ -2185,6 +2185,9 @@ func (s *Service) UpdatePlan(ctx context.Context, req *connect.Request[superadmi
 	if req.Msg.MonthlyFreeCreditsCents != nil {
 		plan.MonthlyFreeCreditsCents = *req.Msg.MonthlyFreeCreditsCents
 	}
+	if req.Msg.TrialDays != nil {
+		plan.TrialDays = int(*req.Msg.TrialDays)
+	}
 	if req.Msg.Description != nil {
 		plan.Description = *req.Msg.Description
 	}
@@ -2204,6 +2207,7 @@ func (s *Service) UpdatePlan(ctx context.Context, req *connect.Request[superadmi
 		StorageBytes:            plan.StorageBytes,
 		MinimumPaymentCents:     plan.MinimumPaymentCents,
 		MonthlyFreeCreditsCents: plan.MonthlyFreeCreditsCents,
+		TrialDays:               int32(plan.TrialDays),
 		Description:             plan.Description,
 	}
 
@@ -2284,6 +2288,130 @@ func (s *Service) AssignPlanToOrganization(ctx context.Context, req *connect.Req
 	return connect.NewResponse(&superadminv1.AssignPlanToOrganizationResponse{
 		Success: true,
 		Message: fmt.Sprintf("Plan %s assigned to organization %s", plan.Name, org.Name),
+	}), nil
+}
+
+// ListStripeWebhookEvents lists all Stripe webhook events with optional filters
+func (s *Service) ListStripeWebhookEvents(ctx context.Context, req *connect.Request[superadminv1.ListStripeWebhookEventsRequest]) (*connect.Response[superadminv1.ListStripeWebhookEventsResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	limit := int(req.Msg.GetLimit())
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	offset := int(req.Msg.GetOffset())
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Build query with filters
+	query := database.DB.Model(&database.StripeWebhookEvent{})
+
+	if orgID := req.Msg.GetOrganizationId(); orgID != "" {
+		query = query.Where("organization_id = ?", orgID)
+	}
+
+	if eventType := req.Msg.GetEventType(); eventType != "" {
+		query = query.Where("event_type = ?", eventType)
+	}
+
+	if customerID := req.Msg.GetCustomerId(); customerID != "" {
+		query = query.Where("customer_id = ?", customerID)
+	}
+
+	if subscriptionID := req.Msg.GetSubscriptionId(); subscriptionID != "" {
+		query = query.Where("subscription_id = ?", subscriptionID)
+	}
+
+	if invoiceID := req.Msg.GetInvoiceId(); invoiceID != "" {
+		query = query.Where("invoice_id = ?", invoiceID)
+	}
+
+	// Get total count
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		logger.Error("[SuperAdmin] Failed to count webhook events: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to count events: %w", err))
+	}
+
+	// Get events with pagination
+	var events []database.StripeWebhookEvent
+	if err := query.Order("processed_at DESC").Limit(limit).Offset(offset).Find(&events).Error; err != nil {
+		logger.Error("[SuperAdmin] Failed to query webhook events: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to query events: %w", err))
+	}
+
+	// Get organization names for events that have organization_id
+	orgIDs := make([]string, 0)
+	orgIDSet := make(map[string]bool)
+	for _, event := range events {
+		if event.OrganizationID != nil && *event.OrganizationID != "" {
+			if !orgIDSet[*event.OrganizationID] {
+				orgIDs = append(orgIDs, *event.OrganizationID)
+				orgIDSet[*event.OrganizationID] = true
+			}
+		}
+	}
+
+	orgNames := make(map[string]string)
+	if len(orgIDs) > 0 {
+		var orgs []database.Organization
+		if err := database.DB.Where("id IN ?", orgIDs).Find(&orgs).Error; err == nil {
+			for _, org := range orgs {
+				orgNames[org.ID] = org.Name
+			}
+		}
+	}
+
+	// Convert to proto messages
+	protoEvents := make([]*superadminv1.StripeWebhookEvent, 0, len(events))
+	for _, event := range events {
+		protoEvent := &superadminv1.StripeWebhookEvent{
+			Id:         event.ID,
+			EventType:  event.EventType,
+			ProcessedAt: timestamppb.New(event.ProcessedAt),
+			CreatedAt:  timestamppb.New(event.CreatedAt),
+		}
+
+		if event.OrganizationID != nil {
+			protoEvent.OrganizationId = event.OrganizationID
+			if orgName, ok := orgNames[*event.OrganizationID]; ok {
+				protoEvent.OrganizationName = &orgName
+			}
+		}
+
+		if event.CustomerID != nil {
+			protoEvent.CustomerId = event.CustomerID
+		}
+
+		if event.SubscriptionID != nil {
+			protoEvent.SubscriptionId = event.SubscriptionID
+		}
+
+		if event.InvoiceID != nil {
+			protoEvent.InvoiceId = event.InvoiceID
+		}
+
+		if event.CheckoutSessionID != nil {
+			protoEvent.CheckoutSessionId = event.CheckoutSessionID
+		}
+
+		protoEvents = append(protoEvents, protoEvent)
+	}
+
+	return connect.NewResponse(&superadminv1.ListStripeWebhookEventsResponse{
+		Events:     protoEvents,
+		TotalCount: totalCount,
 	}), nil
 }
 

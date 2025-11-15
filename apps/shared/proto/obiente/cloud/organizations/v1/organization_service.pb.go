@@ -1955,8 +1955,10 @@ type PlanInfo struct {
 	MinimumPaymentCents int64 `protobuf:"varint,9,opt,name=minimum_payment_cents,json=minimumPaymentCents,proto3" json:"minimum_payment_cents,omitempty"`
 	// Monthly free credits in cents granted to organizations on this plan
 	MonthlyFreeCreditsCents int64 `protobuf:"varint,10,opt,name=monthly_free_credits_cents,json=monthlyFreeCreditsCents,proto3" json:"monthly_free_credits_cents,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// Number of trial days for Stripe subscriptions (0 = no trial)
+	TrialDays     int32 `protobuf:"varint,12,opt,name=trial_days,json=trialDays,proto3" json:"trial_days,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlanInfo) Reset() {
@@ -2062,6 +2064,13 @@ func (x *PlanInfo) GetMinimumPaymentCents() int64 {
 func (x *PlanInfo) GetMonthlyFreeCreditsCents() int64 {
 	if x != nil {
 		return x.MonthlyFreeCreditsCents
+	}
+	return 0
+}
+
+func (x *PlanInfo) GetTrialDays() int32 {
+	if x != nil {
+		return x.TrialDays
 	}
 	return 0
 }
@@ -2895,7 +2904,7 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\x10total_paid_cents\x18\r \x01(\x03R\x0etotalPaidCentsB\t\n" +
 	"\a_domainB\f\n" +
 	"\n" +
-	"_plan_info\"\xc1\x03\n" +
+	"_plan_info\"\xe0\x03\n" +
 	"\bPlanInfo\x12\x17\n" +
 	"\aplan_id\x18\x01 \x01(\tR\x06planId\x12\x1b\n" +
 	"\tplan_name\x18\x02 \x01(\tR\bplanName\x12 \n" +
@@ -2908,7 +2917,9 @@ const file_obiente_cloud_organizations_v1_organization_service_proto_rawDesc = "
 	"\rstorage_bytes\x18\b \x01(\x03R\fstorageBytes\x122\n" +
 	"\x15minimum_payment_cents\x18\t \x01(\x03R\x13minimumPaymentCents\x12;\n" +
 	"\x1amonthly_free_credits_cents\x18\n" +
-	" \x01(\x03R\x17monthlyFreeCreditsCents\"\xba\x01\n" +
+	" \x01(\x03R\x17monthlyFreeCreditsCents\x12\x1d\n" +
+	"\n" +
+	"trial_days\x18\f \x01(\x05R\ttrialDays\"\xba\x01\n" +
 	"\x12OrganizationMember\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12/\n" +
 	"\x04user\x18\x02 \x01(\v2\x1b.obiente.cloud.auth.v1.UserR\x04user\x12\x12\n" +

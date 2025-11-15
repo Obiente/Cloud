@@ -65,6 +65,9 @@ service SuperadminService {
   rpc CreateVPSSize(CreateVPSSizeRequest) returns (CreateVPSSizeResponse);
   rpc UpdateVPSSize(UpdateVPSSizeRequest) returns (UpdateVPSSizeResponse);
   rpc DeleteVPSSize(DeleteVPSSizeRequest) returns (DeleteVPSSizeResponse);
+  
+  // Stripe webhook events management endpoints
+  rpc ListStripeWebhookEvents(ListStripeWebhookEventsRequest) returns (ListStripeWebhookEventsResponse);
 }
 
 message GetOverviewRequest {}
@@ -483,6 +486,7 @@ message CreatePlanRequest {
   int64 storage_bytes = 6;
   int64 minimum_payment_cents = 7; // Minimum payment in cents to automatically upgrade to this plan
   int64 monthly_free_credits_cents = 8; // Monthly free credits in cents granted to organizations on this plan
+  int32 trial_days = 11; // Number of trial days for Stripe subscriptions (0 = no trial)
   string description = 9; // Optional description of the plan
 }
 
@@ -503,6 +507,7 @@ message UpdatePlanRequest {
   optional int64 storage_bytes = 7;
   optional int64 minimum_payment_cents = 8;
   optional int64 monthly_free_credits_cents = 9;
+  optional int32 trial_days = 12; // Number of trial days for Stripe subscriptions (0 = no trial)
   optional string description = 10;
 }
 
@@ -533,6 +538,7 @@ message Plan {
   int64 storage_bytes = 7;
   int64 minimum_payment_cents = 8; // Minimum payment in cents to automatically upgrade to this plan
   int64 monthly_free_credits_cents = 9; // Monthly free credits in cents granted to organizations on this plan
+  int32 trial_days = 12; // Number of trial days for Stripe subscriptions (0 = no trial)
   string description = 10;
 }
 
@@ -765,6 +771,37 @@ message SuperadminForceDeleteVPSRequest {
 message SuperadminForceDeleteVPSResponse {
   bool success = 1;
   string message = 2;
+}
+
+// List Stripe Webhook Events Request
+message ListStripeWebhookEventsRequest {
+  optional string organization_id = 1; // Filter by organization ID (optional)
+  optional string event_type = 2; // Filter by event type (optional, e.g., "invoice.paid")
+  optional string customer_id = 3; // Filter by Stripe customer ID (optional)
+  optional string subscription_id = 4; // Filter by Stripe subscription ID (optional)
+  optional string invoice_id = 5; // Filter by Stripe invoice ID (optional)
+  optional int32 limit = 6; // Limit number of results (default: 50, max: 500)
+  optional int32 offset = 7; // Offset for pagination (default: 0)
+}
+
+// Stripe Webhook Event with organization info
+message StripeWebhookEvent {
+  string id = 1; // Stripe event ID (evt_*)
+  string event_type = 2; // Event type (e.g., "invoice.paid")
+  google.protobuf.Timestamp processed_at = 3; // When the event was processed
+  google.protobuf.Timestamp created_at = 4; // When the event was created
+  optional string organization_id = 5; // Organization ID if available
+  optional string organization_name = 6; // Organization name if available
+  optional string customer_id = 7; // Stripe customer ID if available
+  optional string subscription_id = 8; // Stripe subscription ID if available
+  optional string invoice_id = 9; // Stripe invoice ID if available
+  optional string checkout_session_id = 10; // Stripe checkout session ID if available
+}
+
+// List Stripe Webhook Events Response
+message ListStripeWebhookEventsResponse {
+  repeated StripeWebhookEvent events = 1;
+  int64 total_count = 2; // Total number of events matching filters
 }
 
 // Pagination moved to obiente.cloud.common.v1.Pagination

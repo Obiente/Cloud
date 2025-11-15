@@ -1115,12 +1115,23 @@ func (s *Service) CreateDNSDelegationSubscriptionCheckout(ctx context.Context, r
 	successURL := req.Msg.GetSuccessUrl()
 	cancelURL := req.Msg.GetCancelUrl()
 
+	// Get organization's plan to check for trial days
+	var trialDays int
+	var quota database.OrgQuota
+	if err := database.DB.Where("organization_id = ?", orgID).First(&quota).Error; err == nil && quota.PlanID != "" {
+		var plan database.OrganizationPlan
+		if err := database.DB.First(&plan, "id = ?", quota.PlanID).Error; err == nil {
+			trialDays = plan.TrialDays
+		}
+	}
+
 	// Create subscription checkout session
 	sessionParams := &stripe.SubscriptionCheckoutSessionParams{
 		OrganizationID: orgID,
 		CustomerEmail:  userEmail,
 		SuccessURL:     successURL,
 		CancelURL:      cancelURL,
+		TrialDays:      trialDays,
 	}
 
 	// If billing account already has a Stripe customer ID, use it

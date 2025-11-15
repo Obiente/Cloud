@@ -406,6 +406,15 @@ func (c *Client) CreateSubscriptionCheckoutSession(ctx context.Context, params *
 		},
 	}
 
+	// Add trial period if specified
+	if params.TrialDays > 0 {
+		// Calculate trial end timestamp (now + trial days)
+		trialEnd := time.Now().AddDate(0, 0, params.TrialDays).Unix()
+		sessionParams.SubscriptionData = &stripe.CheckoutSessionSubscriptionDataParams{
+			TrialEnd: stripe.Int64(trialEnd),
+		}
+	}
+
 	sess, err := session.New(sessionParams)
 	if err != nil {
 		return nil, fmt.Errorf("create subscription checkout session: %w", err)
@@ -578,6 +587,7 @@ type SubscriptionCheckoutSessionParams struct {
 	CustomerID     string // Optional: existing Stripe customer ID
 	SuccessURL     string
 	CancelURL      string
+	TrialDays      int    // Optional: number of trial days (0 = no trial)
 }
 
 // SendInvoice sends an invoice to the customer via email

@@ -280,6 +280,8 @@ message PlanInfo {
   int64 minimum_payment_cents = 9;
   // Monthly free credits in cents granted to organizations on this plan
   int64 monthly_free_credits_cents = 10;
+  // Number of trial days for Stripe subscriptions (0 = no trial)
+  int32 trial_days = 12;
 }
 
 message OrganizationMember {
