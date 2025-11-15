@@ -2,7 +2,9 @@
   <OuiStack gap="xl">
     <OuiFlex align="center" justify="between" wrap="wrap" gap="md">
       <OuiStack gap="xs">
-        <OuiText tag="h1" size="3xl" weight="extrabold">Invoice Management</OuiText>
+        <OuiText tag="h1" size="3xl" weight="extrabold"
+          >Invoice Management</OuiText
+        >
         <OuiText color="muted">
           View and manage all invoices across organizations.
         </OuiText>
@@ -35,9 +37,17 @@
             @change="fetchInvoices"
           />
         </div>
-        <OuiButton variant="ghost" size="sm" @click="refresh" :disabled="isLoading">
+        <OuiButton
+          variant="ghost"
+          size="sm"
+          @click="refresh"
+          :disabled="isLoading"
+        >
           <span class="flex items-center gap-2">
-            <ArrowPathIcon class="h-4 w-4" :class="{ 'animate-spin': isLoading }" />
+            <ArrowPathIcon
+              class="h-4 w-4"
+              :class="{ 'animate-spin': isLoading }"
+            />
             Refresh
           </span>
         </OuiButton>
@@ -95,14 +105,22 @@
         >
           <template #cell-organization="{ value, row }">
             <div>
-              <div class="font-medium text-text-primary">{{ row.organizationName }}</div>
-              <div class="text-xs font-mono text-text-tertiary mt-0.5">{{ value }}</div>
+              <div class="font-medium text-text-primary">
+                {{ row.organizationName }}
+              </div>
+              <div class="text-xs font-mono text-text-tertiary mt-0.5">
+                {{ value }}
+              </div>
             </div>
           </template>
           <template #cell-invoice="{ value, row }">
             <div>
-              <div class="font-medium text-text-primary">{{ row.invoice?.number || value }}</div>
-              <div class="text-xs font-mono text-text-tertiary mt-0.5">{{ value }}</div>
+              <div class="font-medium text-text-primary">
+                {{ row.invoice?.number || value }}
+              </div>
+              <div class="text-xs font-mono text-text-tertiary mt-0.5">
+                {{ value }}
+              </div>
             </div>
           </template>
           <template #cell-amount="{ value }">
@@ -114,11 +132,15 @@
             </OuiBadge>
           </template>
           <template #cell-dueDate="{ value }">
-            <span v-if="value" class="text-text-secondary">{{ formatDate(value) }}</span>
+            <span v-if="value" class="text-text-secondary">{{
+              formatDate(value)
+            }}</span>
             <span v-else class="text-text-tertiary">—</span>
           </template>
           <template #cell-date="{ value }">
-            <span v-if="value" class="text-text-secondary">{{ formatDate(value) }}</span>
+            <span v-if="value" class="text-text-secondary">{{
+              formatDate(value)
+            }}</span>
             <span v-else class="text-text-tertiary">—</span>
           </template>
           <template #cell-actions="{ row }">
@@ -132,13 +154,20 @@
                 View
               </OuiButton>
               <OuiButton
-                v-if="row.invoice?.status === 'open' || row.invoice?.status === 'draft'"
+                v-if="
+                  row.invoice?.status === 'open' ||
+                  row.invoice?.status === 'draft'
+                "
                 variant="ghost"
                 size="xs"
                 @click="sendReminder(row.invoice?.id)"
                 :disabled="sendingReminder === row.invoice?.id"
               >
-                {{ sendingReminder === row.invoice?.id ? "Sending..." : "Send Reminder" }}
+                {{
+                  sendingReminder === row.invoice?.id
+                    ? "Sending..."
+                    : "Send Reminder"
+                }}
               </OuiButton>
             </OuiFlex>
           </template>
@@ -209,8 +238,12 @@ await fetchInvoices();
 const metrics = computed(() => {
   const invoices = invoicesData.value?.invoices || [];
   const total = invoices.length;
-  const open = invoices.filter((inv: any) => inv.invoice?.status === "open").length;
-  const paid = invoices.filter((inv: any) => inv.invoice?.status === "paid").length;
+  const open = invoices.filter(
+    (inv: any) => inv.invoice?.status === "open"
+  ).length;
+  const paid = invoices.filter(
+    (inv: any) => inv.invoice?.status === "paid"
+  ).length;
   const overdue = invoices.filter((inv: any) => {
     const dueDate = inv.invoice?.dueDate;
     if (!dueDate || inv.invoice?.status === "paid") return false;
@@ -242,15 +275,21 @@ const invoices = computed(() => {
   return (
     invoicesData.value?.invoices?.map((inv: any) => {
       // Sanitize invoice object to convert BigInt values to numbers/strings
-      const invoice = inv.invoice ? {
-        ...inv.invoice,
-        id: String(inv.invoice.id || ""),
-        amountDue: Number(inv.invoice.amountDue || 0),
-        amountPaid: Number(inv.invoice.amountPaid || 0),
-        subtotal: inv.invoice.subtotal ? Number(inv.invoice.subtotal) : undefined,
-        total: inv.invoice.total ? Number(inv.invoice.total) : undefined,
-        amountRemaining: inv.invoice.amountRemaining ? Number(inv.invoice.amountRemaining) : undefined,
-      } : null;
+      const invoice = inv.invoice
+        ? {
+            ...inv.invoice,
+            id: String(inv.invoice.id || ""),
+            amountDue: Number(inv.invoice.amountDue || 0),
+            amountPaid: Number(inv.invoice.amountPaid || 0),
+            subtotal: inv.invoice.subtotal
+              ? Number(inv.invoice.subtotal)
+              : undefined,
+            total: inv.invoice.total ? Number(inv.invoice.total) : undefined,
+            amountRemaining: inv.invoice.amountRemaining
+              ? Number(inv.invoice.amountRemaining)
+              : undefined,
+          }
+        : null;
 
       return {
         id: String(inv.invoice?.id || ""),
@@ -288,14 +327,30 @@ const filteredInvoices = computed(() => {
 });
 
 const columns = computed(() => [
-  { key: "organization", label: "Organization", defaultWidth: 200, minWidth: 150 },
+  {
+    key: "organization",
+    label: "Organization",
+    defaultWidth: 200,
+    minWidth: 150,
+  },
   { key: "invoice", label: "Invoice", defaultWidth: 150, minWidth: 120 },
-  { key: "customerEmail", label: "Customer Email", defaultWidth: 200, minWidth: 150 },
+  {
+    key: "customerEmail",
+    label: "Customer Email",
+    defaultWidth: 200,
+    minWidth: 150,
+  },
   { key: "amount", label: "Amount Due", defaultWidth: 120, minWidth: 100 },
   { key: "status", label: "Status", defaultWidth: 120, minWidth: 100 },
   { key: "dueDate", label: "Due Date", defaultWidth: 150, minWidth: 120 },
   { key: "date", label: "Date", defaultWidth: 150, minWidth: 120 },
-  { key: "actions", label: "Actions", defaultWidth: 150, minWidth: 120, resizable: false },
+  {
+    key: "actions",
+    label: "Actions",
+    defaultWidth: 150,
+    minWidth: 120,
+    resizable: false,
+  },
 ]);
 
 function formatCurrency(cents: number): string {
@@ -312,12 +367,20 @@ function getStatusVariant(status: string): "success" | "danger" | "warning" {
   return "warning";
 }
 
-function formatDate(timestamp?: { seconds?: number | bigint; nanos?: number } | null) {
+function formatDate(
+  timestamp?: { seconds?: number | bigint; nanos?: number } | null
+) {
   if (!timestamp || timestamp.seconds === undefined) return "—";
-  const seconds = typeof timestamp.seconds === "bigint" ? Number(timestamp.seconds) : timestamp.seconds;
-  const millis = seconds * 1000 + Math.floor((timestamp.nanos ?? 0) / 1_000_000);
+  const seconds =
+    typeof timestamp.seconds === "bigint"
+      ? Number(timestamp.seconds)
+      : timestamp.seconds;
+  const millis =
+    seconds * 1000 + Math.floor((timestamp.nanos ?? 0) / 1_000_000);
   const date = new Date(millis);
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date);
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
+    date
+  );
 }
 
 function openInvoice(url?: string) {
@@ -348,4 +411,3 @@ function refresh() {
   fetchInvoices();
 }
 </script>
-
