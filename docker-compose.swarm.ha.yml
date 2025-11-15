@@ -516,6 +516,15 @@ services:
       - pgpool
       - metrics-pgpool
       - redis-1
+    stop_grace_period: 1h  # Allow 1 hour for SSH connections to close gracefully
+    # Note: Health check will fail when draining starts, so Swarm stops routing
+    # new connections but keeps container running until connections close
+    # SSH is now routed through Traefik, so we don't expose it directly
+    # ports:
+    #   - target: 2222
+    #     published: ${SSH_PROXY_PORT:-2222}
+    #     protocol: tcp
+    #     mode: ingress  # SSH proxy port (exposed directly, bypassing Traefik)
     deploy:
       mode: global # One instance per node
       update_config:
@@ -532,15 +541,6 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 3
-      stop_grace_period: 1h  # Allow 1 hour for SSH connections to close gracefully
-      # Note: Health check will fail when draining starts, so Swarm stops routing
-      # new connections but keeps container running until connections close
-      # SSH is now routed through Traefik, so we don't expose it directly
-      # ports:
-      #   - target: 2222
-      #     published: ${SSH_PROXY_PORT:-2222}
-      #     protocol: tcp
-      #     mode: ingress  # SSH proxy port (exposed directly, bypassing Traefik)
       resources:
         limits:
           cpus: "2"

@@ -198,6 +198,9 @@ services:
       - postgres
       - timescaledb
       - redis
+    stop_grace_period: 1h  # Allow 1 hour for SSH connections to close gracefully
+    # Note: Health check will fail when draining starts, so Swarm stops routing
+    # new connections but keeps container running until connections close
     deploy:
       mode: global # Run on all nodes (or use replicated with constraints)
       update_config:
@@ -215,9 +218,6 @@ services:
         delay: 5s
         max_attempts: 3
         window: 120s
-      stop_grace_period: 1h  # Allow 1 hour for SSH connections to close gracefully
-      # Note: Health check will fail when draining starts, so Swarm stops routing
-      # new connections but keeps container running until connections close
       resources:
         limits:
           cpus: "2"
