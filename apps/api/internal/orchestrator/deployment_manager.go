@@ -143,6 +143,69 @@ func (dm *DeploymentManager) GetNodeID() string {
 	return dm.nodeID
 }
 
+// getSwarmNetworkName gets the actual Swarm network name
+// In Swarm mode, external networks keep their original name (e.g., obiente_obiente-network)
+// Stack-managed networks are prefixed with stack name (e.g., stackname_obiente-network)
+// This function looks up the network dynamically
+func (dm *DeploymentManager) getSwarmNetworkName(ctx context.Context) (string, error) {
+	// Try multiple approaches to find the network
+	// 1. Look for exact match: obiente_obiente-network (external network)
+	checkCmd := exec.CommandContext(ctx, "docker", "network", "inspect", "obiente_obiente-network", "--format", "{{.Name}}")
+	output, err := checkCmd.Output()
+	if err == nil {
+		networkName := strings.TrimSpace(string(output))
+		if networkName != "" {
+			logger.Debug("[DeploymentManager] Found Swarm network (exact match): %s", networkName)
+			return networkName, nil
+		}
+	}
+
+	// 2. List all networks and find one matching the pattern
+	listCmd := exec.CommandContext(ctx, "docker", "network", "ls", "--format", "{{.Name}}")
+	output, err = listCmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to list networks: %w", err)
+	}
+
+	networks := strings.Split(strings.TrimSpace(string(output)), "\n")
+	// Priority order: exact match > stack-prefixed > simple name
+	var exactMatch, stackPrefixed, simpleName string
+	for _, network := range networks {
+		network = strings.TrimSpace(network)
+		if network == "" {
+			continue
+		}
+		if network == "obiente_obiente-network" {
+			exactMatch = network
+		} else if strings.HasSuffix(network, "_obiente-network") {
+			if stackPrefixed == "" {
+				stackPrefixed = network
+			}
+		} else if network == "obiente-network" {
+			simpleName = network
+		}
+	}
+
+	// Return in priority order
+	if exactMatch != "" {
+		logger.Debug("[DeploymentManager] Found Swarm network (exact): %s", exactMatch)
+		return exactMatch, nil
+	}
+	if stackPrefixed != "" {
+		logger.Debug("[DeploymentManager] Found Swarm network (stack-prefixed): %s", stackPrefixed)
+		return stackPrefixed, nil
+	}
+	if simpleName != "" {
+		logger.Debug("[DeploymentManager] Found Swarm network (simple): %s", simpleName)
+		return simpleName, nil
+	}
+
+	// Fallback: use the expected name (will fail if network doesn't exist, but that's better than silent failure)
+	fallbackName := "obiente_obiente-network"
+	logger.Warn("[DeploymentManager] Network not found in network list, using fallback name: %s", fallbackName)
+	return fallbackName, nil
+}
+
 // ensureNetwork ensures the obiente-network exists, creating it if necessary
 func (dm *DeploymentManager) ensureNetwork(ctx context.Context) error {
 	// Use exec to check and create network since Docker API types may vary
@@ -1645,10 +1708,17 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		swarmServiceName = fmt.Sprintf("deploy-%s-%s-replica-%d", config.DeploymentID, serviceName, replicaIndex)
 	}
 
+	// Get the actual Swarm network name (may be prefixed with stack name)
+	swarmNetworkName, err := dm.getSwarmNetworkName(ctx)
+	if err != nil {
+		logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
+		swarmNetworkName = "obiente_obiente-network" // Fallback to common name
+	}
+
 	// Build docker service create command
 	args := []string{"service", "create",
 		"--name", swarmServiceName,
-		"--network", "obiente_obiente-network", // Use the Swarm network name
+		"--network", swarmNetworkName, // Use the dynamically determined Swarm network name
 		"--replicas", "1",
 		"--with-registry-auth=true", // Enable registry auth for private images
 	}
