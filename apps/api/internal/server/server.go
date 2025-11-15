@@ -289,6 +289,7 @@ func registerRoot(mux *http.ServeMux, serverInfo *ServerInfo) {
 			w.Write([]byte(gatewayMetricsText))
 		}
 	})
+
 }
 
 func registerServices(mux *http.ServeMux, serverInfo *ServerInfo) *deploymentsvc.Service {

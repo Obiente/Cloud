@@ -480,7 +480,8 @@ func getDefaultDockerImage(gameType gameserversv1.GameType) string {
 	switch gameType {
 	case gameserversv1.GameType_MINECRAFT, gameserversv1.GameType_MINECRAFT_JAVA:
 		// itzg/minecraft-server is the most popular Minecraft server image
-		return "itzg/minecraft-server:latest"
+		// Using a specific version tag for better stability (Java 21, supports all modern versions)
+		return "itzg/minecraft-server:java21"
 	case gameserversv1.GameType_MINECRAFT_BEDROCK:
 		// itzg/minecraft-bedrock-server for Bedrock Edition
 		return "itzg/minecraft-bedrock-server:latest"
@@ -488,17 +489,21 @@ func getDefaultDockerImage(gameType gameserversv1.GameType) string {
 		// lloesche/valheim-server is a popular Valheim server image
 		return "lloesche/valheim-server:latest"
 	case gameserversv1.GameType_TERRARIA:
-		// ryansheehan/terraria is a popular Terraria server image
-		return "ryansheehan/terraria:latest"
+		// beardedio/terraria is a well-maintained Terraria server image
+		// Alternative: ryshe/terraria (if beardedio doesn't work)
+		return "beardedio/terraria:latest"
 	case gameserversv1.GameType_RUST:
 		// didstopia/rust-server is a popular Rust server image
 		return "didstopia/rust-server:latest"
 	case gameserversv1.GameType_CS2:
-		// cs2server is a common CS2 server image
-		return "cs2server/cs2:latest"
+		// CS2 server - joedwards32/cs2 is the most popular and well-maintained CS2 server image
+		// Requires SRCDS_TOKEN environment variable for Steam authentication
+		// See: https://github.com/joedwards32/CS2
+		return "joedwards32/cs2:latest"
 	case gameserversv1.GameType_TF2:
-		// tf2server is a common TF2 server image
-		return "tf2server/tf2:latest"
+		// TF2 server - using cm2network image (well-maintained community image)
+		// Alternative: joedwards32/tf2 (if available)
+		return "cm2network/tf2:latest"
 	case gameserversv1.GameType_ARK:
 		// didstopia/ark-server is a popular ARK server image
 		return "didstopia/ark-server:latest"
@@ -548,5 +553,14 @@ func addGameSpecificEnvVars(envVars map[string]string, gameType gameserversv1.Ga
 				envVars["VERSION"] = *serverVersion
 			}
 		}
+	case gameserversv1.GameType_CS2:
+		// joedwards32/cs2 requires SRCDS_TOKEN for Steam authentication
+		// Note: Users must provide their own Steam Game Server Login Token
+		// The token can be obtained from: https://steamcommunity.com/dev/managegameservers
+		// We don't set a default value here - users must configure it
+		// But we document the requirement in comments
+	case gameserversv1.GameType_TF2:
+		// cm2network/tf2 may require SRCDS_TOKEN for Steam authentication
+		// Similar to CS2, users should configure this if needed
 	}
 }

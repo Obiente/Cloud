@@ -962,20 +962,25 @@ func (c *Client) GetContainerVolumes(ctx context.Context, containerID string) ([
 
 			// For Obiente Cloud volumes (bind mounts), use the source path directly
 			if isObienteVolume {
-				// Extract volume name from path: /var/lib/obiente/volumes/{deploymentID}/{volumeName}
+				// Extract volume name from path
+				// Structure can be:
+				// - /var/lib/obiente/volumes/{deploymentID}/{volumeName} (for deployments)
+				// - /var/lib/obiente/volumes/{volumeName} (for game servers)
 				parts := strings.Split(strings.TrimPrefix(volumePath, "/var/lib/obiente/volumes/"), "/")
 				volumeName := ""
 				if len(parts) >= 2 {
-					volumeName = parts[1] // Second part after deploymentID
+					// For deployments: second part after deploymentID
+					volumeName = parts[1]
 				} else if len(parts) == 1 {
-					// Fallback: use the last component
-					volumeName = filepath.Base(volumePath)
+					// For game servers: use the volume name directly
+					volumeName = parts[0]
 				}
 				if volumeName == "" {
+					// Fallback: use the last component of the path
 					volumeName = filepath.Base(volumePath)
 				}
 				
-				// Use mount destination as the display name if volume name is empty
+				// Use mount destination as the display name if volume name is still empty
 				if volumeName == "" {
 					volumeName = filepath.Base(mount.Destination)
 				}
@@ -1042,11 +1047,22 @@ func (c *Client) GetContainerVolumes(ctx context.Context, containerID string) ([
 			// Only include volumes with valid, accessible paths
 			// Skip if the path still doesn't exist after all attempts
 			if _, err := os.Stat(volumePath); err == nil {
-				// Generate a display name for anonymous volumes
+				// Generate a display name for volumes
 				displayName := mount.Name
 				if displayName == "" {
-					// Use a hash of the mount point or source path as identifier
-					displayName = fmt.Sprintf("anonymous-%s", mount.Destination)
+					// For anonymous volumes, create a name based on mount point
+					// e.g., "/config" -> "config" or "/data" -> "data"
+					if mount.Destination != "" {
+						// Extract the last part of the mount point path
+						mountPointName := strings.Trim(mount.Destination, "/")
+						if mountPointName == "" {
+							mountPointName = "root"
+						}
+						// Use the mount point name as the display name for anonymous volumes
+						displayName = fmt.Sprintf("anonymous-%s", mountPointName)
+					} else {
+						displayName = "anonymous-volume"
+					}
 				}
 				
 				volumeMount := VolumeMount{

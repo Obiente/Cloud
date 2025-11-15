@@ -747,11 +747,9 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 				continue
 			}
 			
-			// Try sending via stdin first (for real-time terminal interaction)
-			stdinWritten := false
+			// Send command via stdin (for real-time terminal interaction)
 			if n, err := currentSession.conn.Write(inputBytes); err == nil {
 				log.Printf("[GameServer Terminal WS] Successfully wrote %d bytes to game server stdin", n)
-				stdinWritten = true
 				
 				// Try to flush if supported (important for TTY mode to ensure data is sent immediately)
 				if flusher, ok := currentSession.conn.(interface{ Flush() error }); ok {
@@ -763,25 +761,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 				}
 			} else {
 				log.Printf("[GameServer Terminal WS] Failed to write to stdin: %v", err)
-			}
-			
-			// Also try via GameServerManager which uses multiple fallback methods
-			// (RCON, named pipes, wrapper scripts, etc.) - many game servers don't read from stdin
-			if manager, err := s.getGameServerManager(); err == nil {
-				if err := manager.SendGameServerCommand(ctx, initMsg.GameServerID, commandStr); err != nil {
-					log.Printf("[GameServer Terminal WS] Failed to send command via GameServerManager: %v", err)
-					if !stdinWritten {
-						// Both methods failed
-						sendError(fmt.Sprintf("Failed to send command: %v", err))
-					}
-				} else {
-					log.Printf("[GameServer Terminal WS] Successfully sent command via GameServerManager fallback methods")
-				}
-			} else {
-				log.Printf("[GameServer Terminal WS] Failed to get GameServerManager: %v", err)
-				if !stdinWritten {
-					sendError("Failed to send command")
-				}
+				sendError(fmt.Sprintf("Failed to send command: %v", err))
 			}
 		case "resize":
 			// Resize container TTY (only works if container has TTY enabled)

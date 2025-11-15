@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -162,12 +163,18 @@ func (gsm *GameServerManager) CreateGameServer(ctx context.Context, config *Game
 		logger.Warn("[GameServerManager] Failed to register game server location: %v", err)
 	}
 
-	// Update database with container info
+	// Update database with container info (but keep status as CREATED - user must start manually)
 	if err := gsm.updateGameServerContainerInfo(ctx, config.GameServerID, containerID, containerName); err != nil {
 		logger.Warn("[GameServerManager] Failed to update game server container info: %v", err)
 	}
 
-	logger.Info("[GameServerManager] Successfully created container %s for game server %s",
+	// Ensure status is CREATED (not STARTING) - containers are created but not started
+	// User must explicitly start the container via StartGameServer
+	if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, config.GameServerID, 0); err != nil { // CREATED = 0
+		logger.Warn("[GameServerManager] Failed to ensure status is CREATED: %v", err)
+	}
+
+	logger.Info("[GameServerManager] Successfully created container %s for game server %s (status: CREATED)",
 		containerID[:12], config.GameServerID)
 
 	return nil
@@ -228,8 +235,8 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 	// Check if container exists and is stopped
 	containerInfo, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
 	if err != nil {
-		// Container doesn't exist - try to recreate it
-		logger.Warn("[GameServerManager] Container %s doesn't exist, attempting to recreate it", *gameServer.ContainerID)
+		// Container doesn't exist - try to recreate it with existing volumes
+		logger.Warn("[GameServerManager] Container %s doesn't exist, attempting to recreate it with existing volumes", *gameServer.ContainerID)
 		
 		// Parse environment variables from JSON
 		envVars := make(map[string]string)
@@ -251,7 +258,7 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 			StartCommand: gameServer.StartCommand,
 		}
 
-		// Create the container
+		// Create the container (this will reuse existing volumes)
 		if err := gsm.CreateGameServer(ctx, config); err != nil {
 			return fmt.Errorf("failed to recreate game server container: %w", err)
 		}
@@ -268,19 +275,67 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 
 		logger.Info("[GameServerManager] Successfully recreated container %s for game server %s", (*gameServer.ContainerID)[:12], gameServerID)
 		
-		// Re-inspect the new container
+		// Re-inspect the new container (use the NEW container ID)
 		containerInfo, err = gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
 		if err != nil {
-			return fmt.Errorf("failed to inspect recreated container: %w", err)
+			return fmt.Errorf("failed to inspect recreated container %s: %w", (*gameServer.ContainerID)[:12], err)
 		}
 	}
 
 	// Only start if not already running
 	if !containerInfo.State.Running {
+		logger.Info("[GameServerManager] Container %s is not running, starting it...", (*gameServer.ContainerID)[:12])
 		if err := gsm.dockerHelper.StartContainer(ctx, *gameServer.ContainerID); err != nil {
+			logger.Error("[GameServerManager] Failed to start container %s: %v", (*gameServer.ContainerID)[:12], err)
+			// Update status to FAILED if start fails
+			_ = database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, 7) // FAILED = 7
 			return fmt.Errorf("failed to start container: %w", err)
 		}
-		logger.Info("[GameServerManager] Started container %s", (*gameServer.ContainerID)[:12])
+		logger.Info("[GameServerManager] Successfully started container %s", (*gameServer.ContainerID)[:12])
+		
+		// Wait a moment for container to initialize, then verify it's actually running
+		// Some containers may exit immediately if misconfigured
+		time.Sleep(2 * time.Second)
+		
+		// Re-inspect to check if container is still running
+		containerInfo, err = gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
+		if err != nil {
+			return fmt.Errorf("failed to inspect container after start: %w", err)
+		}
+		
+		// If container exited, check why and update status accordingly
+		if !containerInfo.State.Running {
+			exitCode := containerInfo.State.ExitCode
+			logger.Warn("[GameServerManager] Container %s exited immediately with code %d", (*gameServer.ContainerID)[:12], exitCode)
+			
+			// Try to get container logs for debugging
+			logs, logErr := gsm.dockerClient.ContainerLogs(ctx, *gameServer.ContainerID, client.ContainerLogsOptions{
+				ShowStdout: true,
+				ShowStderr: true,
+				Tail:       "50",
+			})
+			if logErr == nil {
+				defer logs.Close()
+				logContent, _ := io.ReadAll(logs)
+				if len(logContent) > 0 {
+					logger.Warn("[GameServerManager] Container %s logs (last 50 lines):\n%s", (*gameServer.ContainerID)[:12], string(logContent))
+				}
+			}
+			
+			// Update status to STOPPED since container exited
+			if err := database.NewGameServerRepository(database.DB, database.RedisClient).UpdateStatus(ctx, gameServerID, 5); err != nil { // STOPPED = 5
+				logger.Warn("[GameServerManager] Failed to update game server status to STOPPED: %v", err)
+			}
+			
+			// Update location status
+			if err := database.DB.Model(&database.GameServerLocation{}).
+				Where("container_id = ?", *gameServer.ContainerID).
+				Update("status", "stopped").Error; err != nil {
+				logger.Warn("[GameServerManager] Failed to update location status: %v", err)
+			}
+			
+			return fmt.Errorf("container exited immediately with code %d (check container logs and configuration)", exitCode)
+		}
 	} else {
 		logger.Info("[GameServerManager] Container %s is already running", (*gameServer.ContainerID)[:12])
 	}
@@ -452,115 +507,6 @@ func (gsm *GameServerManager) GetGameServerLogs(ctx context.Context, gameServerI
 	return gsm.dockerHelper.ContainerLogs(ctx, *gameServer.ContainerID, tail, follow)
 }
 
-// SendGameServerCommand sends a command to a running game server container
-func (gsm *GameServerManager) SendGameServerCommand(ctx context.Context, gameServerID string, command string) error {
-	// Get game server from database
-	gameServer, err := database.NewGameServerRepository(database.DB, database.RedisClient).GetByID(ctx, gameServerID)
-	if err != nil {
-		return fmt.Errorf("failed to get game server: %w", err)
-	}
-
-	if gameServer.ContainerID == nil {
-		return fmt.Errorf("game server %s has no container ID", gameServerID)
-	}
-
-	// Check if container is running
-	containerInfo, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
-	if err != nil {
-		return fmt.Errorf("failed to inspect container: %w", err)
-	}
-
-	if !containerInfo.State.Running {
-		return fmt.Errorf("game server container is not running")
-	}
-
-	// Method 1: Try Pterodactyl-style console input (named pipe or file)
-	// Pterodactyl servers use /tmp/console-input or similar
-	consoleInputPaths := []string{
-		"/tmp/console-input",
-		"/tmp/server-console",
-		"/var/run/server-console",
-		"/server/console-input",
-	}
-	for _, consolePath := range consoleInputPaths {
-		// Try writing to console input file/FIFO
-		cmd := []string{"sh", "-c", fmt.Sprintf("test -p %s && echo '%s' > %s 2>/dev/null || echo '%s' > %s 2>/dev/null || true", consolePath, strings.ReplaceAll(command, "'", "'\"'\"'"), consolePath, strings.ReplaceAll(command, "'", "'\"'\"'"), consolePath)}
-		output, err := gsm.dockerHelper.ContainerExecRun(ctx, *gameServer.ContainerID, cmd)
-		if err == nil {
-			logger.Debug("[GameServerManager] Sent command via console input %s to game server %s: %s (output: %s)", consolePath, gameServerID, command, output)
-			// Check if command was actually written (some methods return success even if it fails)
-			// If we got here without error, assume success
-			return nil
-		}
-	}
-
-	// Method 2: Try using rcon-cli if available (Minecraft servers often have this)
-	// RCON is the most reliable method for Minecraft servers
-	rconCmd := []string{"rcon-cli", command}
-	output, rconErr := gsm.dockerHelper.ContainerExecRun(ctx, *gameServer.ContainerID, rconCmd)
-	if rconErr == nil {
-		logger.Debug("[GameServerManager] Sent command via rcon-cli to game server %s: %s", gameServerID, command)
-		if output != "" {
-			logger.Debug("[GameServerManager] RCON response: %s", output)
-		}
-		return nil
-	}
-	logger.Debug("[GameServerManager] RCON method failed for game server %s: %v", gameServerID, rconErr)
-
-	// Method 3: Try using Docker attach API to write to main process stdin
-	// This works for servers that have stdin open and accept commands directly
-	attachErr := gsm.sendCommandViaAttach(ctx, *gameServer.ContainerID, command)
-	if attachErr == nil {
-		logger.Debug("[GameServerManager] Sent command via Docker attach to game server %s: %s", gameServerID, command)
-		return nil
-	}
-	logger.Debug("[GameServerManager] Docker attach method failed for game server %s: %v", gameServerID, attachErr)
-
-	// Method 4: Try common Minecraft server wrapper scripts
-	// itzg/minecraft-server and similar images often have helper scripts
-	wrapperScripts := []string{
-		"/usr/local/bin/mc-send-to-console",
-		"/usr/local/bin/mc-send-console",
-		"/usr/bin/mc-send-to-console",
-		"/bin/mc-send-to-console",
-		"/usr/local/bin/docker-entrypoint.sh", // Some images use this
-	}
-	for _, script := range wrapperScripts {
-		cmd := []string{"sh", "-c", fmt.Sprintf("test -f %s && %s '%s' || exit 1", script, script, strings.ReplaceAll(command, "'", "'\"'\"'"))}
-		_, err := gsm.dockerHelper.ContainerExecRun(ctx, *gameServer.ContainerID, cmd)
-		if err == nil {
-			logger.Debug("[GameServerManager] Sent command via wrapper script %s to game server %s: %s", script, gameServerID, command)
-			return nil
-		}
-	}
-
-	// Method 5: Try writing to stdin file descriptor (works if stdin is a regular file)
-	// Escape the command properly for shell
-	commandEscaped := strings.ReplaceAll(command, "'", "'\"'\"'")
-	commandEscaped = strings.ReplaceAll(commandEscaped, "\n", "\\n")
-	commandEscaped = strings.ReplaceAll(commandEscaped, "\r", "\\r")
-
-	// Try different methods to write to stdin
-	stdinMethods := []string{
-		fmt.Sprintf("printf '%%s\\n' '%s' > /proc/1/fd/0 2>/dev/null || true", commandEscaped),
-		fmt.Sprintf("echo '%s' > /proc/1/fd/0 2>/dev/null || true", commandEscaped),
-		fmt.Sprintf("echo '%s' | dd of=/proc/1/fd/0 bs=1 2>/dev/null || true", commandEscaped),
-		fmt.Sprintf("echo '%s' >> /proc/1/fd/0 2>/dev/null || true", commandEscaped),
-	}
-
-	for _, method := range stdinMethods {
-		cmd := []string{"sh", "-c", method}
-		_, err := gsm.dockerHelper.ContainerExecRun(ctx, *gameServer.ContainerID, cmd)
-		if err == nil {
-			logger.Debug("[GameServerManager] Sent command via stdin file descriptor to game server %s: %s", gameServerID, command)
-			return nil
-		}
-	}
-
-	// All methods failed - provide helpful error message with all attempted methods
-	return fmt.Errorf("failed to send command to game server (tried Pterodactyl console input, RCON, Docker attach, wrapper scripts, and stdin methods). RCON error: %v, Attach error: %v. Ensure the server accepts commands via stdin or has RCON enabled", rconErr, attachErr)
-}
-
 // sendCommandViaAttach uses Docker attach API to send command to container's main process stdin
 func (gsm *GameServerManager) sendCommandViaAttach(ctx context.Context, containerID string, command string) error {
 	// Create a context with timeout for the attach operation
@@ -724,9 +670,27 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 	// 1024 shares = 1 CPU core, so multiply by 1024
 	cpuShares := int64(config.CPUCores) * 1024
 
+	// Create or get volume for game server data persistence
+	// Most game server images (especially itzg/minecraft-server) require /data mount
+	// We use bind mounts to /var/lib/obiente/volumes so the API can access files directly
+	volumeName := fmt.Sprintf("gameserver-%s-data", config.GameServerID)
+	volumeMountPoint := "/data" // Standard mount point for most game server images
+	volumeHostPath := fmt.Sprintf("/var/lib/obiente/volumes/%s", volumeName)
+	
+	// Ensure volume directory exists
+	if err := gsm.ensureVolume(ctx, volumeName); err != nil {
+		return "", fmt.Errorf("failed to ensure volume: %w", err)
+	}
+
+	// Configure bind mount (host path -> container path)
+	binds := []string{
+		fmt.Sprintf("%s:%s", volumeHostPath, volumeMountPoint),
+	}
+
 	// Host configuration
 	hostConfig := &container.HostConfig{
 		PortBindings: portBindings,
+		Binds:        binds, // Mount volume for persistent data
 		RestartPolicy: container.RestartPolicy{
 			Name: "unless-stopped",
 		},
@@ -752,6 +716,28 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 	}
 
 	return resp.ID, nil
+}
+
+// ensureVolume ensures the volume directory exists in /var/lib/obiente/volumes
+// We use bind mounts instead of Docker named volumes so the API can access files directly
+func (gsm *GameServerManager) ensureVolume(ctx context.Context, volumeName string) error {
+	// Volume path in /var/lib/obiente/volumes
+	volumePath := fmt.Sprintf("/var/lib/obiente/volumes/%s", volumeName)
+	
+	// Check if directory already exists
+	if _, err := os.Stat(volumePath); err == nil {
+		// Directory exists
+		logger.Debug("[GameServerManager] Volume directory %s already exists", volumePath)
+		return nil
+	}
+
+	// Create the volume directory with proper permissions
+	if err := os.MkdirAll(volumePath, 0755); err != nil {
+		return fmt.Errorf("failed to create volume directory %s: %w", volumePath, err)
+	}
+
+	logger.Info("[GameServerManager] Created volume directory %s for game server data", volumePath)
+	return nil
 }
 
 // ensureImage pulls the Docker image if it doesn't exist locally
@@ -812,12 +798,15 @@ func (gsm *GameServerManager) ensureImage(ctx context.Context, imageName string)
 }
 
 // updateGameServerContainerInfo updates the game server record with container information
+// Note: This function does NOT update status to avoid overwriting STARTING/STOPPING states
+// Status should be managed by the StartGameServer/StopGameServer functions
 func (gsm *GameServerManager) updateGameServerContainerInfo(ctx context.Context, gameServerID, containerID, containerName string) error {
 	updates := map[string]interface{}{
 		"container_id":   containerID,
 		"container_name": containerName,
-		"status":         2, // STARTING = 2
 		"updated_at":     time.Now(),
+		// Do NOT update status here - let StartGameServer/StopGameServer manage status
+		// This prevents overwriting STARTING/STOPPING states during container creation
 	}
 
 	return database.DB.Model(&database.GameServer{}).
