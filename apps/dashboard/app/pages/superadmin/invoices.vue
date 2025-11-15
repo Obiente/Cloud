@@ -240,18 +240,31 @@ const metrics = computed(() => {
 
 const invoices = computed(() => {
   return (
-    invoicesData.value?.invoices?.map((inv: any) => ({
-      id: inv.invoice?.id || "",
-      invoice: inv.invoice,
-      organizationId: inv.organizationId || "",
-      organizationName: inv.organizationName || "Unknown",
-      customerEmail: inv.customerEmail || "",
-      amountDue: inv.invoice?.amountDue || 0,
-      amountPaid: inv.invoice?.amountPaid || 0,
-      status: inv.invoice?.status || "unknown",
-      dueDate: inv.invoice?.dueDate,
-      date: inv.invoice?.date,
-    })) || []
+    invoicesData.value?.invoices?.map((inv: any) => {
+      // Sanitize invoice object to convert BigInt values to numbers/strings
+      const invoice = inv.invoice ? {
+        ...inv.invoice,
+        id: String(inv.invoice.id || ""),
+        amountDue: Number(inv.invoice.amountDue || 0),
+        amountPaid: Number(inv.invoice.amountPaid || 0),
+        subtotal: inv.invoice.subtotal ? Number(inv.invoice.subtotal) : undefined,
+        total: inv.invoice.total ? Number(inv.invoice.total) : undefined,
+        amountRemaining: inv.invoice.amountRemaining ? Number(inv.invoice.amountRemaining) : undefined,
+      } : null;
+
+      return {
+        id: String(inv.invoice?.id || ""),
+        invoice: invoice,
+        organizationId: inv.organizationId || "",
+        organizationName: inv.organizationName || "Unknown",
+        customerEmail: inv.customerEmail || "",
+        amountDue: Number(inv.invoice?.amountDue || 0),
+        amountPaid: Number(inv.invoice?.amountPaid || 0),
+        status: inv.invoice?.status || "unknown",
+        dueDate: inv.invoice?.dueDate,
+        date: inv.invoice?.date,
+      };
+    }) || []
   );
 });
 
