@@ -204,6 +204,12 @@
             :icon="DocumentTextIcon"
             @navigate="handleNavigate"
           />
+          <AppNavigationLink
+            to="/superadmin/webhook-events"
+            label="Webhook Events"
+            :icon="BoltIcon"
+            @navigate="handleNavigate"
+          />
         </template>
       </nav>
     </OuiBox>
@@ -237,6 +243,7 @@ import {
   CurrencyDollarIcon,
   DocumentTextIcon,
   ClipboardDocumentListIcon,
+  BoltIcon,
 } from "@heroicons/vue/24/outline";
 import OrgSwitcher from "@/components/oui/OrgSwitcher.vue";
 import { createListCollection } from "@ark-ui/vue";

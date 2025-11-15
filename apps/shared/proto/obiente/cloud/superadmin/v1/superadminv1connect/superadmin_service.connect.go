@@ -135,6 +135,9 @@ const (
 	// SuperadminServiceDeleteVPSSizeProcedure is the fully-qualified name of the SuperadminService's
 	// DeleteVPSSize RPC.
 	SuperadminServiceDeleteVPSSizeProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/DeleteVPSSize"
+	// SuperadminServiceListStripeWebhookEventsProcedure is the fully-qualified name of the
+	// SuperadminService's ListStripeWebhookEvents RPC.
+	SuperadminServiceListStripeWebhookEventsProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListStripeWebhookEvents"
 )
 
 // SuperadminServiceClient is a client for the obiente.cloud.superadmin.v1.SuperadminService
@@ -185,6 +188,8 @@ type SuperadminServiceClient interface {
 	CreateVPSSize(context.Context, *connect.Request[v1.CreateVPSSizeRequest]) (*connect.Response[v1.CreateVPSSizeResponse], error)
 	UpdateVPSSize(context.Context, *connect.Request[v1.UpdateVPSSizeRequest]) (*connect.Response[v1.UpdateVPSSizeResponse], error)
 	DeleteVPSSize(context.Context, *connect.Request[v1.DeleteVPSSizeRequest]) (*connect.Response[v1.DeleteVPSSizeResponse], error)
+	// Stripe webhook events management endpoints
+	ListStripeWebhookEvents(context.Context, *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error)
 }
 
 // NewSuperadminServiceClient constructs a client for the
@@ -403,6 +408,12 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("DeleteVPSSize")),
 			connect.WithClientOptions(opts...),
 		),
+		listStripeWebhookEvents: connect.NewClient[v1.ListStripeWebhookEventsRequest, v1.ListStripeWebhookEventsResponse](
+			httpClient,
+			baseURL+SuperadminServiceListStripeWebhookEventsProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListStripeWebhookEvents")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -442,6 +453,7 @@ type superadminServiceClient struct {
 	createVPSSize                            *connect.Client[v1.CreateVPSSizeRequest, v1.CreateVPSSizeResponse]
 	updateVPSSize                            *connect.Client[v1.UpdateVPSSizeRequest, v1.UpdateVPSSizeResponse]
 	deleteVPSSize                            *connect.Client[v1.DeleteVPSSizeRequest, v1.DeleteVPSSizeResponse]
+	listStripeWebhookEvents                  *connect.Client[v1.ListStripeWebhookEventsRequest, v1.ListStripeWebhookEventsResponse]
 }
 
 // GetOverview calls obiente.cloud.superadmin.v1.SuperadminService.GetOverview.
@@ -624,6 +636,12 @@ func (c *superadminServiceClient) DeleteVPSSize(ctx context.Context, req *connec
 	return c.deleteVPSSize.CallUnary(ctx, req)
 }
 
+// ListStripeWebhookEvents calls
+// obiente.cloud.superadmin.v1.SuperadminService.ListStripeWebhookEvents.
+func (c *superadminServiceClient) ListStripeWebhookEvents(ctx context.Context, req *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error) {
+	return c.listStripeWebhookEvents.CallUnary(ctx, req)
+}
+
 // SuperadminServiceHandler is an implementation of the
 // obiente.cloud.superadmin.v1.SuperadminService service.
 type SuperadminServiceHandler interface {
@@ -672,6 +690,8 @@ type SuperadminServiceHandler interface {
 	CreateVPSSize(context.Context, *connect.Request[v1.CreateVPSSizeRequest]) (*connect.Response[v1.CreateVPSSizeResponse], error)
 	UpdateVPSSize(context.Context, *connect.Request[v1.UpdateVPSSizeRequest]) (*connect.Response[v1.UpdateVPSSizeResponse], error)
 	DeleteVPSSize(context.Context, *connect.Request[v1.DeleteVPSSizeRequest]) (*connect.Response[v1.DeleteVPSSizeResponse], error)
+	// Stripe webhook events management endpoints
+	ListStripeWebhookEvents(context.Context, *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error)
 }
 
 // NewSuperadminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -885,6 +905,12 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		connect.WithSchema(superadminServiceMethods.ByName("DeleteVPSSize")),
 		connect.WithHandlerOptions(opts...),
 	)
+	superadminServiceListStripeWebhookEventsHandler := connect.NewUnaryHandler(
+		SuperadminServiceListStripeWebhookEventsProcedure,
+		svc.ListStripeWebhookEvents,
+		connect.WithSchema(superadminServiceMethods.ByName("ListStripeWebhookEvents")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.superadmin.v1.SuperadminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SuperadminServiceGetOverviewProcedure:
@@ -955,6 +981,8 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceUpdateVPSSizeHandler.ServeHTTP(w, r)
 		case SuperadminServiceDeleteVPSSizeProcedure:
 			superadminServiceDeleteVPSSizeHandler.ServeHTTP(w, r)
+		case SuperadminServiceListStripeWebhookEventsProcedure:
+			superadminServiceListStripeWebhookEventsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1098,4 +1126,8 @@ func (UnimplementedSuperadminServiceHandler) UpdateVPSSize(context.Context, *con
 
 func (UnimplementedSuperadminServiceHandler) DeleteVPSSize(context.Context, *connect.Request[v1.DeleteVPSSizeRequest]) (*connect.Response[v1.DeleteVPSSizeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.DeleteVPSSize is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListStripeWebhookEvents(context.Context, *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListStripeWebhookEvents is not implemented"))
 }
