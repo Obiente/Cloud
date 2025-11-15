@@ -80,10 +80,21 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 			// context.Value() searches up the chain, so if the inner interceptor set it,
 			// we should be able to access it. If that fails, try response headers.
 			user, userErr := auth.GetUserFromContext(ctx)
-			if user != nil && user.Id != "" {
-				userID = user.Id
-				logger.Debug("[Audit] Extracted user ID from context: %s", userID)
-			} else {
+			isSuperAdmin := false
+			if user != nil {
+				if user.Id != "" {
+					userID = user.Id
+					logger.Debug("[Audit] Extracted user ID from context: %s", userID)
+				}
+				// Check if user is superadmin
+				for _, role := range user.Roles {
+					if role == auth.RoleSuperAdmin {
+						isSuperAdmin = true
+						break
+					}
+				}
+			}
+			if user == nil || user.Id == "" {
 				// Fallback: Try to extract from response headers (if auth interceptor exposes them)
 				// Use panic recovery since resp might be a typed nil that passes != nil check
 				if resp != nil {
@@ -142,17 +153,29 @@ func AuditLogInterceptor() connect.UnaryInterceptorFunc {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 				
+				// If superadmin is making a request through the superadmin service with an organization ID,
+				// log it to global audit logs (set orgID to nil) instead of the organization's audit logs.
+				// This prevents superadmin service actions from polluting organization audit logs.
+				// However, if a superadmin makes a normal request to an org/resource they have access to
+				// (through non-superadmin services), it should be logged normally to the org's audit logs.
+				logOrgID := orgID
+				isSuperAdminService := service == "SuperadminService"
+				if isSuperAdmin && isSuperAdminService && orgID != nil && *orgID != "" {
+					logger.Debug("[Audit] Superadmin service action on organization %s: %s/%s - logging to global audit logs (orgID=nil)", *orgID, service, action)
+					logOrgID = nil // Set to nil so it goes to global audit logs, not org-specific
+				}
+
 				// Log what we're saving for debugging
 				orgIDStr := "nil"
-				if orgID != nil {
-					orgIDStr = *orgID
+				if logOrgID != nil {
+					orgIDStr = *logOrgID
 				}
 				logger.Debug("[Audit] Saving log: service=%s, action=%s, userID=%s, orgID=%s, resourceType=%v, resourceID=%v",
 					service, action, userID, orgIDStr, resourceType, resourceID)
 
 				if err := createAuditLog(ctx, auditLogData{
 					UserID:         userID,
-					OrganizationID: orgID,
+					OrganizationID: logOrgID,
 					Action:         action,
 					Service:        service,
 					ResourceType:   resourceType,
