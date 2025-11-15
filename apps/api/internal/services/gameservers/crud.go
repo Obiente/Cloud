@@ -210,6 +210,15 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 			_ = s.repo.UpdateStatus(ctx, id, int32(gameserversv1.GameServerStatus_FAILED))
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create game server container: %w", err))
 		}
+
+		// Update storage after container is created
+		go func() {
+			// Use background context for async storage update
+			bgCtx := context.Background()
+			if err := s.updateGameServerStorage(bgCtx, id); err != nil {
+				logger.Warn("[CreateGameServer] Failed to update storage for game server %s: %v", id, err)
+			}
+		}()
 	}
 
 	// Fetch the created game server
@@ -349,6 +358,15 @@ func (s *Service) StartGameServer(ctx context.Context, req *connect.Request[game
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start game server container: %w", err))
 	}
 
+	// Update storage after container is started
+	go func() {
+		// Use background context for async storage update
+		bgCtx := context.Background()
+		if err := s.updateGameServerStorage(bgCtx, gameServerID); err != nil {
+			logger.Warn("[StartGameServer] Failed to update storage for game server %s: %v", gameServerID, err)
+		}
+	}()
+
 	updatedGameServer, err := s.repo.GetByID(ctx, gameServerID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to fetch updated game server: %w", err))
@@ -419,6 +437,15 @@ func (s *Service) RestartGameServer(ctx context.Context, req *connect.Request[ga
 		_ = s.repo.UpdateStatus(ctx, gameServerID, int32(gameserversv1.GameServerStatus_FAILED))
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to restart game server container: %w", err))
 	}
+
+	// Update storage after container is restarted
+	go func() {
+		// Use background context for async storage update
+		bgCtx := context.Background()
+		if err := s.updateGameServerStorage(bgCtx, gameServerID); err != nil {
+			logger.Warn("[RestartGameServer] Failed to update storage for game server %s: %v", gameServerID, err)
+		}
+	}()
 
 	// Fetch updated game server
 	startResp, err := s.GetGameServer(ctx, connect.NewRequest(&gameserversv1.GetGameServerRequest{
