@@ -1,9 +1,14 @@
 <template>
   <OuiStack gap="md">
     <OuiFlex justify="between" align="center">
-      <OuiText as="h3" size="md" weight="semibold">
-        Game Server Logs
-      </OuiText>
+      <OuiStack gap="xs">
+        <OuiText as="h3" size="md" weight="semibold">
+          Game Server Logs
+        </OuiText>
+        <OuiText size="xs" color="muted">
+          Real-time logs from your game server
+        </OuiText>
+      </OuiStack>
       <OuiFlex gap="sm">
         <OuiButton
           variant="ghost"
@@ -55,20 +60,40 @@
       </OuiFlex>
     </OuiFlex>
 
-    <OuiLogs
-      ref="logsComponent"
-      :logs="formattedLogs"
-      :is-loading="isLoading"
-      :show-timestamps="showTimestamps"
-      :show-tail-controls="false"
-      :enable-ansi="true"
-      :auto-scroll="true"
-      empty-message="No logs available. Start following to see real-time logs."
-      loading-message="Connecting..."
-      title="Game Server Logs"
-    />
+    <!-- Loading older logs indicator -->
+    <div v-if="isLoadingOlderLogs" class="logs-loading-indicator">
+      <OuiFlex align="center" justify="center" gap="sm">
+        <ArrowPathIcon class="h-4 w-4 animate-spin" />
+        <OuiText size="xs" color="muted">Loading older logs...</OuiText>
+      </OuiFlex>
+    </div>
 
-    <!-- Interactive Terminal (replaces command input for tab autocomplete support) -->
+    <!-- No more logs indicator -->
+    <div v-if="hasLoadedAllLogs && logs.length > 0" class="logs-end-indicator">
+      <OuiText size="xs" color="muted" align="center">
+        No more logs available
+      </OuiText>
+    </div>
+
+    <div ref="logsContainer" class="logs-container-wrapper" @scroll="handleScroll">
+      <OuiLogs
+        ref="logsComponent"
+        :logs="formattedLogs"
+        :is-loading="isLoading"
+        :show-timestamps="showTimestamps"
+        :show-tail-controls="false"
+        :enable-ansi="true"
+        :auto-scroll="true"
+        empty-message="No logs available. Start following to see real-time logs."
+        loading-message="Connecting..."
+      >
+        <template #footer>
+          <!-- Empty footer to hide inline controls since we have them in the menu -->
+        </template>
+      </OuiLogs>
+    </div>
+
+    <!-- Interactive Terminal -->
     <GameServerTerminal
       :game-server-id="props.gameServerId"
       :organization-id="props.organizationId"
@@ -87,6 +112,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { ArrowPathIcon, EllipsisVerticalIcon } from "@heroicons/vue/24/outline";
 import { useConnectClient } from "~/lib/connect-client";
 import { GameServerService } from "@obiente/proto";
+import { timestamp } from "@obiente/proto/utils";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { useAuth } from "~/composables/useAuth";
 import type { LogEntry } from "~/components/oui/Logs.vue";
@@ -105,21 +131,26 @@ const client = useConnectClient(GameServerService);
 const effectiveOrgId = computed(() => props.organizationId || orgsStore.currentOrgId || "");
 
 const logsComponent = ref<any>(null);
+const logsContainer = ref<HTMLDivElement | null>(null);
 const isLoading = ref(false);
+const isLoadingOlderLogs = ref(false);
 const isFollowing = ref(false);
 const isConnected = ref(false);
 const error = ref<string | null>(null);
 const showTimestamps = ref(true);
 const tailLines = ref(100);
+const hasLoadedAllLogs = ref(false);
 
 let logStream: any = null;
 let streamController: AbortController | null = null;
 let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
-const RECONNECT_DELAY = 2000; // Start with 2 seconds, exponential backoff
+const RECONNECT_DELAY = 2000;
 const logs = ref<Array<{ line: string; timestamp: string; level?: number }>>([]);
-let terminalOutputBuffer = ""; // Buffer for partial lines from terminal WebSocket
+let terminalOutputBuffer = "";
+let scrollPositionBeforeLoad = 0;
+let isLoadingOlderLogsDebounce: ReturnType<typeof setTimeout> | null = null;
 
 // Helper function to check if a line is empty or only whitespace
 function isEmptyOrWhitespace(line: string): boolean {
@@ -129,18 +160,15 @@ function isEmptyOrWhitespace(line: string): boolean {
 // Format logs for OuiLogs component
 const formattedLogs = computed<LogEntry[]>(() => {
   return logs.value
-    .filter((log) => !isEmptyOrWhitespace(log.line)) // Filter out empty/whitespace-only lines
+    .filter((log) => !isEmptyOrWhitespace(log.line))
     .map((log) => {
-      // Map log level from backend to frontend format
-      // OuiLogs expects: "info" | "warning" | "error" | "debug" | "trace"
       let level: "info" | "warning" | "error" | "debug" | "trace" = "info";
       if (log.level !== undefined) {
-        // LogLevel enum: 0=UNSPECIFIED, 1=TRACE, 2=DEBUG, 3=INFO, 4=WARN, 5=ERROR
         switch (log.level) {
           case 5: // ERROR
             level = "error";
             break;
-          case 4: // WARN -> "warning" (OuiLogs expects "warning", not "warn")
+          case 4: // WARN
             level = "warning";
             break;
           case 2: // DEBUG
@@ -160,6 +188,112 @@ const formattedLogs = computed<LogEntry[]>(() => {
       };
     });
 });
+
+// Handle scroll to detect when user scrolls to top for lazy loading
+const handleScroll = () => {
+  if (!logsContainer.value || isLoadingOlderLogs.value || hasLoadedAllLogs.value) return;
+
+  const container = logsContainer.value;
+  const scrollTop = container.scrollTop;
+  
+  // If user scrolls within 200px of the top, load older logs
+  if (scrollTop < 200 && logs.value.length > 0) {
+    // Debounce to avoid multiple rapid requests
+    if (isLoadingOlderLogsDebounce) {
+      clearTimeout(isLoadingOlderLogsDebounce);
+    }
+    
+    isLoadingOlderLogsDebounce = setTimeout(() => {
+      loadOlderLogs();
+    }, 300);
+  }
+};
+
+// Load older logs using the since parameter
+const loadOlderLogs = async () => {
+  if (isLoadingOlderLogs.value || hasLoadedAllLogs.value || logs.value.length === 0) return;
+
+  isLoadingOlderLogs.value = true;
+  
+  try {
+    // Get the oldest timestamp we have
+    const oldestLog = logs.value[0];
+    if (!oldestLog || !oldestLog.timestamp) {
+      hasLoadedAllLogs.value = true;
+      return;
+    }
+
+    // Save current scroll position
+    if (logsContainer.value) {
+      scrollPositionBeforeLoad = logsContainer.value.scrollHeight - logsContainer.value.scrollTop;
+    }
+
+    // Convert timestamp to protobuf Timestamp format
+    const oldestDate = new Date(oldestLog.timestamp);
+    const sinceTimestamp = timestamp(oldestDate);
+
+    // Fetch logs before this timestamp
+    const response = await client.getGameServerLogs({
+      gameServerId: props.gameServerId,
+      limit: 500, // Load 500 older lines at a time
+      since: sinceTimestamp,
+    });
+
+    if (response.lines && response.lines.length > 0) {
+      // Parse and add older logs to the beginning
+      const olderLogs = response.lines
+        .filter((line) => {
+          const lineText = line.line || '';
+          return !isEmptyOrWhitespace(lineText);
+        })
+        .map((line) => {
+          let timestamp: string;
+          try {
+            if (line.timestamp) {
+              const ts = typeof line.timestamp === 'string' 
+                ? line.timestamp 
+                : (line.timestamp as any)?.seconds 
+                  ? new Date(Number((line.timestamp as any).seconds) * 1000).toISOString()
+                  : new Date(line.timestamp as any).toISOString();
+              timestamp = ts;
+            } else {
+              timestamp = new Date().toISOString();
+            }
+          } catch (err) {
+            timestamp = new Date().toISOString();
+          }
+          return {
+            line: line.line || '',
+            timestamp,
+            level: line.level,
+          };
+        });
+
+      // Prepend older logs (they should be in chronological order, oldest first)
+      logs.value = [...olderLogs, ...logs.value];
+
+      // Restore scroll position after DOM update
+      await nextTick();
+      if (logsContainer.value) {
+        const newScrollHeight = logsContainer.value.scrollHeight;
+        logsContainer.value.scrollTop = newScrollHeight - scrollPositionBeforeLoad;
+      }
+
+      // If we got fewer logs than requested, we've reached the beginning
+      if (response.lines.length < 500) {
+        hasLoadedAllLogs.value = true;
+      }
+    } else {
+      // No more logs available
+      hasLoadedAllLogs.value = true;
+    }
+  } catch (err: any) {
+    console.error("Failed to load older logs:", err);
+    // Don't set hasLoadedAllLogs on error - user can try again
+  } finally {
+    isLoadingOlderLogs.value = false;
+  }
+};
 
 const toggleFollow = async () => {
   if (isFollowing.value) {
@@ -183,11 +317,11 @@ const scheduleReconnect = () => {
   }
 
   reconnectAttempts++;
-  const delay = Math.min(RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1), 30000); // Exponential backoff, max 30s
+  const delay = Math.min(RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1), 30000);
   
   reconnectTimeout = setTimeout(async () => {
     if (!isFollowing.value) {
-      return; // User stopped following
+      return;
     }
     console.log(`Attempting to reconnect (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
     error.value = `Reconnecting... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`;
@@ -196,9 +330,8 @@ const scheduleReconnect = () => {
 };
 
 const startFollowing = async () => {
-  if (isFollowing.value && isConnected.value) return; // Already connected
+  if (isFollowing.value && isConnected.value) return;
   
-  // Cancel any pending reconnect
   if (reconnectTimeout) {
     clearTimeout(reconnectTimeout);
     reconnectTimeout = null;
@@ -207,9 +340,9 @@ const startFollowing = async () => {
   isLoading.value = true;
   error.value = null;
   isFollowing.value = true;
+  hasLoadedAllLogs.value = false; // Reset when reconnecting
 
   try {
-    // Wait for auth to be ready before making the request
     if (!auth.ready) {
       await new Promise((resolve) => {
         const checkReady = () => {
@@ -223,7 +356,6 @@ const startFollowing = async () => {
       });
     }
 
-    // Ensure we have a token before streaming
     const token = await auth.getAccessToken();
     if (!token) {
       throw new Error("Authentication required. Please log in.");
@@ -238,7 +370,6 @@ const startFollowing = async () => {
         });
 
         if (response.lines && response.lines.length > 0) {
-          // Only add logs if we don't have recent ones to avoid duplicates
           const existingLogs = logs.value.map(l => l.line);
           const newLogs = response.lines
             .filter((line) => {
@@ -246,7 +377,6 @@ const startFollowing = async () => {
               return !isEmptyOrWhitespace(lineText) && !existingLogs.includes(lineText);
             })
             .map((line) => {
-              // Safely parse timestamp
               let timestamp: string;
               try {
                 if (line.timestamp) {
@@ -271,17 +401,16 @@ const startFollowing = async () => {
           logs.value.push(...newLogs);
         }
       } catch (err) {
-        // Non-fatal - continue with streaming even if initial fetch fails
         console.warn("Failed to fetch initial logs:", err);
       }
     }
 
-    // Start streaming logs with abort controller
+    // Start streaming logs
     streamController = new AbortController();
     logStream = client.streamGameServerLogs(
       {
         gameServerId: props.gameServerId,
-        follow: true, // Always follow
+        follow: true,
         tail: tailLines.value,
       },
       { signal: streamController.signal }
@@ -289,12 +418,11 @@ const startFollowing = async () => {
 
     isConnected.value = true;
     isLoading.value = false;
-    reconnectAttempts = 0; // Reset on successful connection
+    reconnectAttempts = 0;
     error.value = null;
 
     // Handle stream messages
     for await (const logLine of logStream) {
-      // Safely parse timestamp
       let timestamp: string;
       try {
         if (logLine.timestamp) {
@@ -311,7 +439,6 @@ const startFollowing = async () => {
         timestamp = new Date().toISOString();
       }
 
-      // Only add non-empty lines
       const line = logLine.line || '';
       if (!isEmptyOrWhitespace(line)) {
         logs.value.push({
@@ -327,13 +454,11 @@ const startFollowing = async () => {
       }
     }
     
-    // Stream ended (not aborted) - schedule reconnect
     if (isFollowing.value && !streamController.signal.aborted) {
       isConnected.value = false;
       scheduleReconnect();
     }
   } catch (err: any) {
-    // Suppress abort-related errors
     const isAbortError = 
       err.name === "AbortError" || 
       err.message?.toLowerCase().includes("aborted") ||
@@ -344,7 +469,6 @@ const startFollowing = async () => {
       return;
     }
 
-    // Suppress benign errors (missing trailer, etc.)
     const isBenignError =
       err.message?.toLowerCase().includes("missing trailer") ||
       err.message?.toLowerCase().includes("trailer") ||
@@ -359,7 +483,6 @@ const startFollowing = async () => {
       error.value = err.message || "Failed to connect to logs stream";
     }
     
-    // Schedule reconnect if we're still supposed to be following
     if (isFollowing.value && !isAbortError) {
       isConnected.value = false;
       scheduleReconnect();
@@ -373,7 +496,6 @@ const startFollowing = async () => {
 };
 
 const stopFollowing = () => {
-  // Cancel reconnect attempts
   if (reconnectTimeout) {
     clearTimeout(reconnectTimeout);
     reconnectTimeout = null;
@@ -398,6 +520,7 @@ const stopFollowing = () => {
 
 const clearLogs = () => {
   logs.value = [];
+  hasLoadedAllLogs.value = false;
   if (logsComponent.value) {
     logsComponent.value.scrollToTop?.();
   }
@@ -414,26 +537,17 @@ const handleTailChange = (value: string) => {
 const handleTerminalOutput = (text: string) => {
   if (!text) return;
   
-  console.log("[GameServer Logs] handleTerminalOutput called with:", text.length, "chars, first 100:", text.substring(0, 100));
-  
-  // Add to buffer
   terminalOutputBuffer += text;
   
-  // Split by newlines - keep incomplete line in buffer
   const lines = terminalOutputBuffer.split(/\r?\n/);
   
-  // If buffer ends with newline, last element will be empty string
-  // Otherwise, last element is an incomplete line that stays in buffer
   if (terminalOutputBuffer.endsWith("\n") || terminalOutputBuffer.endsWith("\r")) {
     terminalOutputBuffer = "";
   } else {
-    terminalOutputBuffer = lines.pop() || ""; // Keep last incomplete line
+    terminalOutputBuffer = lines.pop() || "";
   }
   
-  // Add complete lines to logs (filter out empty/whitespace-only lines)
-  let linesAdded = 0;
   for (const line of lines) {
-    // Skip empty or whitespace-only lines
     if (isEmptyOrWhitespace(line)) {
       continue;
     }
@@ -441,21 +555,15 @@ const handleTerminalOutput = (text: string) => {
     logs.value.push({
       line: line,
       timestamp: new Date().toISOString(),
-      level: undefined, // Terminal output doesn't have a log level
+      level: undefined,
     });
-    linesAdded++;
     
-    // Keep only last 10000 lines
     if (logs.value.length > 10000) {
       logs.value = logs.value.slice(-10000);
     }
   }
   
-  console.log("[GameServer Logs] Added", linesAdded, "lines to logs. Total logs:", logs.value.length);
-  
-  // Also flush buffer if it gets too large (in case we never get a newline)
   if (terminalOutputBuffer.length > 1000) {
-    console.log("[GameServer Logs] Flushing large buffer:", terminalOutputBuffer.length, "chars");
     logs.value.push({
       line: terminalOutputBuffer,
       timestamp: new Date().toISOString(),
@@ -470,16 +578,16 @@ const handleTerminalOutput = (text: string) => {
 };
 
 onMounted(() => {
-  // Auto-start following logs when component mounts
   startFollowing();
 });
 
 onUnmounted(() => {
-  // Clean up when component unmounts
   stopFollowing();
+  if (isLoadingOlderLogsDebounce) {
+    clearTimeout(isLoadingOlderLogsDebounce);
+  }
 });
 
-// Watch for gameServerId changes and restart streaming
 watch(() => props.gameServerId, () => {
   if (isFollowing.value) {
     stopFollowing();
@@ -490,3 +598,22 @@ watch(() => props.gameServerId, () => {
 });
 </script>
 
+<style scoped>
+.logs-container-wrapper {
+  position: relative;
+}
+
+.logs-loading-indicator {
+  padding: 0.5rem;
+  background: var(--oui-surface-muted, rgba(255, 255, 255, 0.05));
+  border-radius: 0.375rem;
+  margin-bottom: 0.5rem;
+}
+
+.logs-end-indicator {
+  padding: 0.5rem;
+  background: var(--oui-surface-muted, rgba(255, 255, 255, 0.05));
+  border-radius: 0.375rem;
+  margin-bottom: 0.5rem;
+}
+</style>
