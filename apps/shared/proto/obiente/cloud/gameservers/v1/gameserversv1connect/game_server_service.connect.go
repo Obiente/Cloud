@@ -66,9 +66,6 @@ const (
 	// GameServerServiceStreamGameServerLogsProcedure is the fully-qualified name of the
 	// GameServerService's StreamGameServerLogs RPC.
 	GameServerServiceStreamGameServerLogsProcedure = "/obiente.cloud.gameservers.v1.GameServerService/StreamGameServerLogs"
-	// GameServerServiceSendGameServerCommandProcedure is the fully-qualified name of the
-	// GameServerService's SendGameServerCommand RPC.
-	GameServerServiceSendGameServerCommandProcedure = "/obiente.cloud.gameservers.v1.GameServerService/SendGameServerCommand"
 	// GameServerServiceGetGameServerMetricsProcedure is the fully-qualified name of the
 	// GameServerService's GetGameServerMetrics RPC.
 	GameServerServiceGetGameServerMetricsProcedure = "/obiente.cloud.gameservers.v1.GameServerService/GetGameServerMetrics"
@@ -99,6 +96,12 @@ const (
 	// GameServerServiceRenameGameServerEntryProcedure is the fully-qualified name of the
 	// GameServerService's RenameGameServerEntry RPC.
 	GameServerServiceRenameGameServerEntryProcedure = "/obiente.cloud.gameservers.v1.GameServerService/RenameGameServerEntry"
+	// GameServerServiceGetMinecraftPlayerUUIDProcedure is the fully-qualified name of the
+	// GameServerService's GetMinecraftPlayerUUID RPC.
+	GameServerServiceGetMinecraftPlayerUUIDProcedure = "/obiente.cloud.gameservers.v1.GameServerService/GetMinecraftPlayerUUID"
+	// GameServerServiceGetMinecraftPlayerProfileProcedure is the fully-qualified name of the
+	// GameServerService's GetMinecraftPlayerProfile RPC.
+	GameServerServiceGetMinecraftPlayerProfileProcedure = "/obiente.cloud.gameservers.v1.GameServerService/GetMinecraftPlayerProfile"
 )
 
 // GameServerServiceClient is a client for the obiente.cloud.gameservers.v1.GameServerService
@@ -126,8 +129,6 @@ type GameServerServiceClient interface {
 	GetGameServerLogs(context.Context, *connect.Request[v1.GetGameServerLogsRequest]) (*connect.Response[v1.GetGameServerLogsResponse], error)
 	// Stream game server logs (tail/follow)
 	StreamGameServerLogs(context.Context, *connect.Request[v1.StreamGameServerLogsRequest]) (*connect.ServerStreamForClient[v1.GameServerLogLine], error)
-	// Send a command to a running game server
-	SendGameServerCommand(context.Context, *connect.Request[v1.SendGameServerCommandRequest]) (*connect.Response[v1.SendGameServerCommandResponse], error)
 	// Get game server metrics (real-time or historical)
 	GetGameServerMetrics(context.Context, *connect.Request[v1.GetGameServerMetricsRequest]) (*connect.Response[v1.GetGameServerMetricsResponse], error)
 	// Stream real-time game server metrics
@@ -149,6 +150,11 @@ type GameServerServiceClient interface {
 	WriteGameServerFile(context.Context, *connect.Request[v1.WriteGameServerFileRequest]) (*connect.Response[v1.WriteGameServerFileResponse], error)
 	// Rename a file or directory in a game server
 	RenameGameServerEntry(context.Context, *connect.Request[v1.RenameGameServerEntryRequest]) (*connect.Response[v1.RenameGameServerEntryResponse], error)
+	// Minecraft player lookup (proxies Mojang API to avoid CORS)
+	// Get player UUID from username
+	GetMinecraftPlayerUUID(context.Context, *connect.Request[v1.GetMinecraftPlayerUUIDRequest]) (*connect.Response[v1.GetMinecraftPlayerUUIDResponse], error)
+	// Get player profile (name, UUID) from UUID
+	GetMinecraftPlayerProfile(context.Context, *connect.Request[v1.GetMinecraftPlayerProfileRequest]) (*connect.Response[v1.GetMinecraftPlayerProfileResponse], error)
 }
 
 // NewGameServerServiceClient constructs a client for the
@@ -229,12 +235,6 @@ func NewGameServerServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(gameServerServiceMethods.ByName("StreamGameServerLogs")),
 			connect.WithClientOptions(opts...),
 		),
-		sendGameServerCommand: connect.NewClient[v1.SendGameServerCommandRequest, v1.SendGameServerCommandResponse](
-			httpClient,
-			baseURL+GameServerServiceSendGameServerCommandProcedure,
-			connect.WithSchema(gameServerServiceMethods.ByName("SendGameServerCommand")),
-			connect.WithClientOptions(opts...),
-		),
 		getGameServerMetrics: connect.NewClient[v1.GetGameServerMetricsRequest, v1.GetGameServerMetricsResponse](
 			httpClient,
 			baseURL+GameServerServiceGetGameServerMetricsProcedure,
@@ -295,33 +295,46 @@ func NewGameServerServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(gameServerServiceMethods.ByName("RenameGameServerEntry")),
 			connect.WithClientOptions(opts...),
 		),
+		getMinecraftPlayerUUID: connect.NewClient[v1.GetMinecraftPlayerUUIDRequest, v1.GetMinecraftPlayerUUIDResponse](
+			httpClient,
+			baseURL+GameServerServiceGetMinecraftPlayerUUIDProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("GetMinecraftPlayerUUID")),
+			connect.WithClientOptions(opts...),
+		),
+		getMinecraftPlayerProfile: connect.NewClient[v1.GetMinecraftPlayerProfileRequest, v1.GetMinecraftPlayerProfileResponse](
+			httpClient,
+			baseURL+GameServerServiceGetMinecraftPlayerProfileProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("GetMinecraftPlayerProfile")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // gameServerServiceClient implements GameServerServiceClient.
 type gameServerServiceClient struct {
-	listGameServers         *connect.Client[v1.ListGameServersRequest, v1.ListGameServersResponse]
-	createGameServer        *connect.Client[v1.CreateGameServerRequest, v1.CreateGameServerResponse]
-	getGameServer           *connect.Client[v1.GetGameServerRequest, v1.GetGameServerResponse]
-	updateGameServer        *connect.Client[v1.UpdateGameServerRequest, v1.UpdateGameServerResponse]
-	deleteGameServer        *connect.Client[v1.DeleteGameServerRequest, v1.DeleteGameServerResponse]
-	startGameServer         *connect.Client[v1.StartGameServerRequest, v1.StartGameServerResponse]
-	stopGameServer          *connect.Client[v1.StopGameServerRequest, v1.StopGameServerResponse]
-	restartGameServer       *connect.Client[v1.RestartGameServerRequest, v1.RestartGameServerResponse]
-	streamGameServerStatus  *connect.Client[v1.StreamGameServerStatusRequest, v1.GameServerStatusUpdate]
-	getGameServerLogs       *connect.Client[v1.GetGameServerLogsRequest, v1.GetGameServerLogsResponse]
-	streamGameServerLogs    *connect.Client[v1.StreamGameServerLogsRequest, v1.GameServerLogLine]
-	sendGameServerCommand   *connect.Client[v1.SendGameServerCommandRequest, v1.SendGameServerCommandResponse]
-	getGameServerMetrics    *connect.Client[v1.GetGameServerMetricsRequest, v1.GetGameServerMetricsResponse]
-	streamGameServerMetrics *connect.Client[v1.StreamGameServerMetricsRequest, v1.GameServerMetric]
-	getGameServerUsage      *connect.Client[v1.GetGameServerUsageRequest, v1.GetGameServerUsageResponse]
-	listGameServerFiles     *connect.Client[v1.ListGameServerFilesRequest, v1.ListGameServerFilesResponse]
-	getGameServerFile       *connect.Client[v1.GetGameServerFileRequest, v1.GetGameServerFileResponse]
-	uploadGameServerFiles   *connect.Client[v1.UploadGameServerFilesRequest, v1.UploadGameServerFilesResponse]
-	deleteGameServerEntries *connect.Client[v1.DeleteGameServerEntriesRequest, v1.DeleteGameServerEntriesResponse]
-	createGameServerEntry   *connect.Client[v1.CreateGameServerEntryRequest, v1.CreateGameServerEntryResponse]
-	writeGameServerFile     *connect.Client[v1.WriteGameServerFileRequest, v1.WriteGameServerFileResponse]
-	renameGameServerEntry   *connect.Client[v1.RenameGameServerEntryRequest, v1.RenameGameServerEntryResponse]
+	listGameServers           *connect.Client[v1.ListGameServersRequest, v1.ListGameServersResponse]
+	createGameServer          *connect.Client[v1.CreateGameServerRequest, v1.CreateGameServerResponse]
+	getGameServer             *connect.Client[v1.GetGameServerRequest, v1.GetGameServerResponse]
+	updateGameServer          *connect.Client[v1.UpdateGameServerRequest, v1.UpdateGameServerResponse]
+	deleteGameServer          *connect.Client[v1.DeleteGameServerRequest, v1.DeleteGameServerResponse]
+	startGameServer           *connect.Client[v1.StartGameServerRequest, v1.StartGameServerResponse]
+	stopGameServer            *connect.Client[v1.StopGameServerRequest, v1.StopGameServerResponse]
+	restartGameServer         *connect.Client[v1.RestartGameServerRequest, v1.RestartGameServerResponse]
+	streamGameServerStatus    *connect.Client[v1.StreamGameServerStatusRequest, v1.GameServerStatusUpdate]
+	getGameServerLogs         *connect.Client[v1.GetGameServerLogsRequest, v1.GetGameServerLogsResponse]
+	streamGameServerLogs      *connect.Client[v1.StreamGameServerLogsRequest, v1.GameServerLogLine]
+	getGameServerMetrics      *connect.Client[v1.GetGameServerMetricsRequest, v1.GetGameServerMetricsResponse]
+	streamGameServerMetrics   *connect.Client[v1.StreamGameServerMetricsRequest, v1.GameServerMetric]
+	getGameServerUsage        *connect.Client[v1.GetGameServerUsageRequest, v1.GetGameServerUsageResponse]
+	listGameServerFiles       *connect.Client[v1.ListGameServerFilesRequest, v1.ListGameServerFilesResponse]
+	getGameServerFile         *connect.Client[v1.GetGameServerFileRequest, v1.GetGameServerFileResponse]
+	uploadGameServerFiles     *connect.Client[v1.UploadGameServerFilesRequest, v1.UploadGameServerFilesResponse]
+	deleteGameServerEntries   *connect.Client[v1.DeleteGameServerEntriesRequest, v1.DeleteGameServerEntriesResponse]
+	createGameServerEntry     *connect.Client[v1.CreateGameServerEntryRequest, v1.CreateGameServerEntryResponse]
+	writeGameServerFile       *connect.Client[v1.WriteGameServerFileRequest, v1.WriteGameServerFileResponse]
+	renameGameServerEntry     *connect.Client[v1.RenameGameServerEntryRequest, v1.RenameGameServerEntryResponse]
+	getMinecraftPlayerUUID    *connect.Client[v1.GetMinecraftPlayerUUIDRequest, v1.GetMinecraftPlayerUUIDResponse]
+	getMinecraftPlayerProfile *connect.Client[v1.GetMinecraftPlayerProfileRequest, v1.GetMinecraftPlayerProfileResponse]
 }
 
 // ListGameServers calls obiente.cloud.gameservers.v1.GameServerService.ListGameServers.
@@ -380,11 +393,6 @@ func (c *gameServerServiceClient) StreamGameServerLogs(ctx context.Context, req 
 	return c.streamGameServerLogs.CallServerStream(ctx, req)
 }
 
-// SendGameServerCommand calls obiente.cloud.gameservers.v1.GameServerService.SendGameServerCommand.
-func (c *gameServerServiceClient) SendGameServerCommand(ctx context.Context, req *connect.Request[v1.SendGameServerCommandRequest]) (*connect.Response[v1.SendGameServerCommandResponse], error) {
-	return c.sendGameServerCommand.CallUnary(ctx, req)
-}
-
 // GetGameServerMetrics calls obiente.cloud.gameservers.v1.GameServerService.GetGameServerMetrics.
 func (c *gameServerServiceClient) GetGameServerMetrics(ctx context.Context, req *connect.Request[v1.GetGameServerMetricsRequest]) (*connect.Response[v1.GetGameServerMetricsResponse], error) {
 	return c.getGameServerMetrics.CallUnary(ctx, req)
@@ -437,6 +445,18 @@ func (c *gameServerServiceClient) RenameGameServerEntry(ctx context.Context, req
 	return c.renameGameServerEntry.CallUnary(ctx, req)
 }
 
+// GetMinecraftPlayerUUID calls
+// obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerUUID.
+func (c *gameServerServiceClient) GetMinecraftPlayerUUID(ctx context.Context, req *connect.Request[v1.GetMinecraftPlayerUUIDRequest]) (*connect.Response[v1.GetMinecraftPlayerUUIDResponse], error) {
+	return c.getMinecraftPlayerUUID.CallUnary(ctx, req)
+}
+
+// GetMinecraftPlayerProfile calls
+// obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerProfile.
+func (c *gameServerServiceClient) GetMinecraftPlayerProfile(ctx context.Context, req *connect.Request[v1.GetMinecraftPlayerProfileRequest]) (*connect.Response[v1.GetMinecraftPlayerProfileResponse], error) {
+	return c.getMinecraftPlayerProfile.CallUnary(ctx, req)
+}
+
 // GameServerServiceHandler is an implementation of the
 // obiente.cloud.gameservers.v1.GameServerService service.
 type GameServerServiceHandler interface {
@@ -462,8 +482,6 @@ type GameServerServiceHandler interface {
 	GetGameServerLogs(context.Context, *connect.Request[v1.GetGameServerLogsRequest]) (*connect.Response[v1.GetGameServerLogsResponse], error)
 	// Stream game server logs (tail/follow)
 	StreamGameServerLogs(context.Context, *connect.Request[v1.StreamGameServerLogsRequest], *connect.ServerStream[v1.GameServerLogLine]) error
-	// Send a command to a running game server
-	SendGameServerCommand(context.Context, *connect.Request[v1.SendGameServerCommandRequest]) (*connect.Response[v1.SendGameServerCommandResponse], error)
 	// Get game server metrics (real-time or historical)
 	GetGameServerMetrics(context.Context, *connect.Request[v1.GetGameServerMetricsRequest]) (*connect.Response[v1.GetGameServerMetricsResponse], error)
 	// Stream real-time game server metrics
@@ -485,6 +503,11 @@ type GameServerServiceHandler interface {
 	WriteGameServerFile(context.Context, *connect.Request[v1.WriteGameServerFileRequest]) (*connect.Response[v1.WriteGameServerFileResponse], error)
 	// Rename a file or directory in a game server
 	RenameGameServerEntry(context.Context, *connect.Request[v1.RenameGameServerEntryRequest]) (*connect.Response[v1.RenameGameServerEntryResponse], error)
+	// Minecraft player lookup (proxies Mojang API to avoid CORS)
+	// Get player UUID from username
+	GetMinecraftPlayerUUID(context.Context, *connect.Request[v1.GetMinecraftPlayerUUIDRequest]) (*connect.Response[v1.GetMinecraftPlayerUUIDResponse], error)
+	// Get player profile (name, UUID) from UUID
+	GetMinecraftPlayerProfile(context.Context, *connect.Request[v1.GetMinecraftPlayerProfileRequest]) (*connect.Response[v1.GetMinecraftPlayerProfileResponse], error)
 }
 
 // NewGameServerServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -560,12 +583,6 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 		connect.WithSchema(gameServerServiceMethods.ByName("StreamGameServerLogs")),
 		connect.WithHandlerOptions(opts...),
 	)
-	gameServerServiceSendGameServerCommandHandler := connect.NewUnaryHandler(
-		GameServerServiceSendGameServerCommandProcedure,
-		svc.SendGameServerCommand,
-		connect.WithSchema(gameServerServiceMethods.ByName("SendGameServerCommand")),
-		connect.WithHandlerOptions(opts...),
-	)
 	gameServerServiceGetGameServerMetricsHandler := connect.NewUnaryHandler(
 		GameServerServiceGetGameServerMetricsProcedure,
 		svc.GetGameServerMetrics,
@@ -626,6 +643,18 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 		connect.WithSchema(gameServerServiceMethods.ByName("RenameGameServerEntry")),
 		connect.WithHandlerOptions(opts...),
 	)
+	gameServerServiceGetMinecraftPlayerUUIDHandler := connect.NewUnaryHandler(
+		GameServerServiceGetMinecraftPlayerUUIDProcedure,
+		svc.GetMinecraftPlayerUUID,
+		connect.WithSchema(gameServerServiceMethods.ByName("GetMinecraftPlayerUUID")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceGetMinecraftPlayerProfileHandler := connect.NewUnaryHandler(
+		GameServerServiceGetMinecraftPlayerProfileProcedure,
+		svc.GetMinecraftPlayerProfile,
+		connect.WithSchema(gameServerServiceMethods.ByName("GetMinecraftPlayerProfile")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.gameservers.v1.GameServerService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case GameServerServiceListGameServersProcedure:
@@ -650,8 +679,6 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 			gameServerServiceGetGameServerLogsHandler.ServeHTTP(w, r)
 		case GameServerServiceStreamGameServerLogsProcedure:
 			gameServerServiceStreamGameServerLogsHandler.ServeHTTP(w, r)
-		case GameServerServiceSendGameServerCommandProcedure:
-			gameServerServiceSendGameServerCommandHandler.ServeHTTP(w, r)
 		case GameServerServiceGetGameServerMetricsProcedure:
 			gameServerServiceGetGameServerMetricsHandler.ServeHTTP(w, r)
 		case GameServerServiceStreamGameServerMetricsProcedure:
@@ -672,6 +699,10 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 			gameServerServiceWriteGameServerFileHandler.ServeHTTP(w, r)
 		case GameServerServiceRenameGameServerEntryProcedure:
 			gameServerServiceRenameGameServerEntryHandler.ServeHTTP(w, r)
+		case GameServerServiceGetMinecraftPlayerUUIDProcedure:
+			gameServerServiceGetMinecraftPlayerUUIDHandler.ServeHTTP(w, r)
+		case GameServerServiceGetMinecraftPlayerProfileProcedure:
+			gameServerServiceGetMinecraftPlayerProfileHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -725,10 +756,6 @@ func (UnimplementedGameServerServiceHandler) StreamGameServerLogs(context.Contex
 	return connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.StreamGameServerLogs is not implemented"))
 }
 
-func (UnimplementedGameServerServiceHandler) SendGameServerCommand(context.Context, *connect.Request[v1.SendGameServerCommandRequest]) (*connect.Response[v1.SendGameServerCommandResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.SendGameServerCommand is not implemented"))
-}
-
 func (UnimplementedGameServerServiceHandler) GetGameServerMetrics(context.Context, *connect.Request[v1.GetGameServerMetricsRequest]) (*connect.Response[v1.GetGameServerMetricsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.GetGameServerMetrics is not implemented"))
 }
@@ -767,4 +794,12 @@ func (UnimplementedGameServerServiceHandler) WriteGameServerFile(context.Context
 
 func (UnimplementedGameServerServiceHandler) RenameGameServerEntry(context.Context, *connect.Request[v1.RenameGameServerEntryRequest]) (*connect.Response[v1.RenameGameServerEntryResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.RenameGameServerEntry is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) GetMinecraftPlayerUUID(context.Context, *connect.Request[v1.GetMinecraftPlayerUUIDRequest]) (*connect.Response[v1.GetMinecraftPlayerUUIDResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerUUID is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) GetMinecraftPlayerProfile(context.Context, *connect.Request[v1.GetMinecraftPlayerProfileRequest]) (*connect.Response[v1.GetMinecraftPlayerProfileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerProfile is not implemented"))
 }
