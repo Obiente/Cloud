@@ -53,13 +53,19 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 	}
 
 	// Prepare origin patterns for WebSocket library
-	// If origin is empty (same-origin) and wildcard is configured, allow all
+	// Check if wildcard CORS is configured - if so, allow all origins
 	acceptOptions := &websocket.AcceptOptions{}
-	if origin != "" {
+	corsConfig := middleware.DefaultCORSConfig()
+	isWildcard := len(corsConfig.AllowedOrigins) == 1 && corsConfig.AllowedOrigins[0] == "*"
+	
+	if isWildcard {
+		// Wildcard CORS configured - allow all origins in WebSocket library
+		acceptOptions.OriginPatterns = []string{"*"}
+	} else if origin != "" {
+		// Specific origins configured - use the validated origin
 		acceptOptions.OriginPatterns = []string{origin}
 	} else {
-		// Empty origin with wildcard - allow all (same as InsecureSkipVerify but more explicit)
-		// The CORS middleware already validated this is allowed
+		// Empty origin - might be same-origin request, allow all
 		acceptOptions.OriginPatterns = []string{"*"}
 	}
 

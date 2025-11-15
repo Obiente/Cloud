@@ -221,12 +221,12 @@ services:
       - postgres
       - timescaledb
       - redis
-    # SSH is now routed through Traefik, so we don't expose it directly
-    # ports:
-    #   - target: 2222
-    #     published: ${SSH_PROXY_PORT:-2222}
-    #     protocol: tcp
-    #     mode: ingress  # SSH proxy port (exposed directly, bypassing Traefik)
+    # Publish port 3001 for Traefik service discovery
+    ports:
+      - target: 3001
+        published: 3001
+        protocol: tcp
+        mode: ingress
     stop_grace_period: 1h  # Allow 1 hour for SSH connections to close gracefully
     # Note: Health check will fail when draining starts, so Swarm stops routing
     # new connections but keeps container running until connections close
