@@ -246,7 +246,7 @@
         class="flex flex-col border border-border-default rounded-[10px] bg-surface-base overflow-hidden min-h-0 order-1 lg:order-2 flex-1"
       >
         <header
-          class="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 py-3 px-4 border-b border-border-default"
+          class="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-6 py-3 px-4 border-b border-border-default"
         >
           <OuiButton
             v-if="!showSidebarOnMobile"
@@ -370,13 +370,13 @@
               </Transition>
             </OuiFlex>
           </div>
-          <OuiFlex gap="sm" align="center" wrap="wrap" class="w-full sm:w-auto">
+          <OuiFlex gap="md" align="center" wrap="wrap" class="w-full sm:w-auto shrink-0">
             <OuiCombobox
               v-if="currentNode?.type === 'file'"
               v-model="fileLanguage"
               :options="languageOptions"
               placeholder="Search language..."
-              class="w-full sm:w-auto min-w-[180px] max-w-[250px]"
+              class="w-full sm:w-auto min-w-[180px] max-w-[250px] shrink-0"
               size="sm"
             />
             <OuiButton
@@ -394,49 +394,32 @@
               size="sm"
               :disabled="isSaving"
               @click="handleSaveFile"
-              class="flex-1 sm:flex-initial"
+              class="flex-1 sm:flex-initial shrink-0 min-w-fit"
             >
               <DocumentArrowDownIcon class="h-4 w-4 sm:mr-1.5" />
               <span class="hidden sm:inline">{{
                 isSaving ? "Saving..." : "Save"
               }}</span>
+              <span class="sm:hidden">{{ isSaving ? "..." : "Save" }}</span>
             </OuiButton>
             <OuiButton
               variant="ghost"
               size="sm"
               :disabled="!currentNode || currentNode.type !== 'file'"
               @click="handleDownload"
-              class="flex-1 sm:flex-initial"
+              class="flex-1 sm:flex-initial shrink-0 min-w-fit"
               title="Download"
             >
               <span class="hidden sm:inline">Download</span>
               <DocumentArrowDownIcon class="h-4 w-4 sm:hidden" />
             </OuiButton>
-            <OuiMenu v-if="currentNode">
-              <template #trigger>
-                <OuiButton
-                  variant="ghost"
-                  size="sm"
-                  class="flex-1 sm:flex-initial"
-                  >More</OuiButton
-                >
-              </template>
-              <OuiMenuItem value="refresh" @select="handleRefreshSelection"
-                >Refresh</OuiMenuItem
-              >
-              <OuiMenuItem
-                value="rename"
-                @select="() => currentNode && queueRename(currentNode)"
-                >Rename</OuiMenuItem
-              >
-              <OuiMenuSeparator />
-              <OuiMenuItem
-                value="delete"
-                @select="() => currentNode && queueDelete([currentNode.path])"
-              >
-                Delete
-              </OuiMenuItem>
-            </OuiMenu>
+            <FileActionsMenu
+              :current-node="currentNode"
+              button-class="flex-1 sm:flex-initial shrink-0 min-w-fit"
+              @refresh="handleRefreshSelection"
+              @rename="(node) => queueRename(node)"
+              @delete="(node) => queueDelete([node.path])"
+            />
           </OuiFlex>
         </header>
 
@@ -649,6 +632,7 @@
   } from "@ark-ui/vue/collection";
   import TreeNode from "./TreeNode.vue";
   import FileUploader from "./FileUploader.vue";
+import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
   import { useFileExplorer } from "~/composables/useFileExplorer";
   import { useDeploymentContainerQuery } from "~/composables/useDeploymentContainerQuery";
   import { useConnectClient } from "~/lib/connect-client";

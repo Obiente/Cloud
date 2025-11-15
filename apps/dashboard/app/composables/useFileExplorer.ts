@@ -144,9 +144,19 @@ export function useFileExplorer(options: ExplorerOptions) {
         volumes.value = (res.volumes ?? []) as VolumeType[];
         containerRunning.value = !!res.containerRunning;
 
+        // For game servers, prefer volume view (where server files are stored)
+        // Default to the first volume if available, otherwise use container filesystem
         const firstVolume = volumes.value[0] as GameServerVolumeInfo | undefined;
-        if (!containerRunning.value && firstVolume) {
+        if (firstVolume) {
+          // Check if this volume is mounted at /data (standard for game servers)
+          const isDataVolume = firstVolume.mountPoint === "/data" || 
+                               (volumes.value.length === 1 && firstVolume.mountPoint?.includes("data"));
+          if (isDataVolume || !containerRunning.value) {
           switchToVolume(firstVolume.name ?? "");
+          } else {
+            source.type = "container";
+            delete source.volumeName;
+          }
         } else {
           source.type = "container";
           delete source.volumeName;

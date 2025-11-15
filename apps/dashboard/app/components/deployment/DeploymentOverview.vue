@@ -247,260 +247,20 @@
       </OuiGrid>
 
       <!-- Usage Statistics Section -->
-      <OuiCard v-if="usageData && usageData.current">
-        <OuiCardHeader>
-          <OuiFlex justify="between" align="center">
-            <OuiStack gap="xs">
-              <OuiText size="lg" weight="bold">Monthly Usage</OuiText>
-              <OuiText size="xs" color="muted">
-                Current month resource usage and estimated costs
-              </OuiText>
-            </OuiStack>
-            <OuiBadge variant="secondary">
-              {{ usageData.month }}
-            </OuiBadge>
-          </OuiFlex>
-        </OuiCardHeader>
-        <OuiCardBody>
-          <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="lg">
-            <!-- CPU Usage -->
-            <OuiStack gap="sm">
-              <OuiFlex align="center" justify="between">
-                <OuiText size="sm" weight="medium" color="primary">CPU</OuiText>
-                <OuiText size="xs" color="muted">
-                  {{ formatCPUUsage(Number(usageData.current.cpuCoreSeconds)) }}
-                </OuiText>
-              </OuiFlex>
-              <OuiText size="xs" color="muted">
-                {{ formatCurrency(Number(usageData.current.estimatedCostCents) / 100) }} estimated
-              </OuiText>
-            </OuiStack>
-
-            <!-- Memory Usage -->
-            <OuiStack gap="sm">
-              <OuiFlex align="center" justify="between">
-                <OuiText size="sm" weight="medium" color="primary">Memory</OuiText>
-                <OuiText size="xs" color="muted">
-                  <OuiByte :value="Number(usageData.current.memoryByteSeconds) / 3600" unit-display="short" />/hr avg
-                </OuiText>
-              </OuiFlex>
-              <OuiText size="xs" color="muted">
-                {{ formatUptime(Number(usageData.current.uptimeSeconds)) }} uptime
-              </OuiText>
-            </OuiStack>
-
-            <!-- Bandwidth Usage -->
-            <OuiStack gap="sm">
-              <OuiFlex align="center" justify="between">
-                <OuiText size="sm" weight="medium" color="primary">Bandwidth</OuiText>
-                <OuiText size="xs" color="muted">
-                  <OuiByte :value="Number(usageData.current.bandwidthRxBytes) + Number(usageData.current.bandwidthTxBytes)" unit-display="short" />
-                </OuiText>
-              </OuiFlex>
-              <OuiText size="xs" color="muted">
-                {{ formatNumber(Number(usageData.current.requestCount)) }} requests
-              </OuiText>
-            </OuiStack>
-
-            <!-- Storage Usage -->
-            <OuiStack gap="sm">
-              <OuiFlex align="center" justify="between">
-                <OuiText size="sm" weight="medium" color="primary">Storage</OuiText>
-                <OuiText size="xs" color="muted">
-                  <OuiByte :value="Number(usageData.current.storageBytes)" unit-display="short" />
-                </OuiText>
-              </OuiFlex>
-              <OuiText size="xs" color="muted">
-                {{ formatNumber(Number(usageData.current.errorCount)) }} errors
-              </OuiText>
-            </OuiStack>
-          </OuiGrid>
-        </OuiCardBody>
-      </OuiCard>
+      <UsageStatistics v-if="usageData" :usage-data="usageData" />
 
       <!-- Cost Breakdown -->
-      <OuiCard v-if="usageData && usageData.estimatedMonthly && usageData.current">
-        <OuiCardHeader>
-          <OuiFlex justify="between" align="center">
-            <OuiStack gap="xs">
-              <OuiText size="lg" weight="bold">Estimated Monthly Cost</OuiText>
-              <OuiText size="xs" color="muted">
-                Cost breakdown by resource type
-              </OuiText>
-            </OuiStack>
-          </OuiFlex>
-        </OuiCardHeader>
-        <OuiCardBody>
-          <OuiStack gap="md">
-            <OuiFlex align="center" justify="between" class="pb-3 border-b border-border-muted">
-              <OuiStack gap="xs">
-                <OuiText size="sm" color="muted">Total Estimated</OuiText>
-                <OuiText size="2xl" weight="bold" color="primary">
-                  {{ formatCurrency(Number(usageData.estimatedMonthly.estimatedCostCents) / 100) }}
-                </OuiText>
-              </OuiStack>
-              <OuiText size="xs" color="muted">
-                Current: {{ formatCurrency(Number(usageData.current.estimatedCostCents) / 100) }}
-              </OuiText>
-            </OuiFlex>
-            <OuiGrid cols="1" cols-md="2" gap="sm">
-              <OuiBox
-                v-for="cost in costBreakdown"
-                :key="cost.label"
-                p="sm"
-                rounded="lg"
-                class="bg-surface-muted/40 ring-1 ring-border-muted"
-              >
-                <OuiFlex align="center" justify="between" gap="md">
-                  <OuiFlex align="center" gap="sm" class="flex-1">
-                    <OuiBox
-                      class="w-3 h-3 rounded-full"
-                      :class="cost.color"
-                    />
-                    <OuiText size="sm" weight="medium" color="primary">
-                      {{ cost.label }}
-                    </OuiText>
-                  </OuiFlex>
-                  <OuiText size="sm" weight="semibold" color="primary">
-                    {{ cost.value }}
-                  </OuiText>
-                </OuiFlex>
-              </OuiBox>
-            </OuiGrid>
-          </OuiStack>
-        </OuiCardBody>
-      </OuiCard>
+      <CostBreakdown v-if="usageData" :usage-data="usageData" />
 
       <!-- Enhanced Live Metrics -->
-      <OuiCard>
-        <OuiCardHeader>
-          <OuiFlex justify="between" align="center">
-            <OuiStack gap="xs">
-              <OuiText size="lg" weight="bold">Live Metrics</OuiText>
-              <OuiText size="xs" color="muted">
-                Real-time resource usage from running containers
-              </OuiText>
-            </OuiStack>
-            <OuiFlex align="center" gap="sm">
-              <span
-                class="h-2 w-2 rounded-full"
-                :class="isStreaming ? 'bg-success animate-pulse' : 'bg-secondary'"
-              />
-              <OuiText size="xs" color="muted">
-                {{ isStreaming ? "Live" : "Stopped" }}
-              </OuiText>
-            </OuiFlex>
-          </OuiFlex>
-        </OuiCardHeader>
-        <OuiCardBody>
-          <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="md">
-            <!-- CPU Usage -->
-            <OuiBox
-              p="md"
-              rounded="xl"
-              class="ring-1 ring-border-muted bg-surface-muted/30 hover:bg-surface-muted/50 transition-colors"
-            >
-              <OuiStack gap="xs">
-                <OuiFlex align="center" justify="between">
-                  <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                    CPU Usage
-                  </OuiText>
-                  <OuiBadge v-if="latestMetric" variant="secondary" size="sm">
-                    Live
-                  </OuiBadge>
-                </OuiFlex>
-                <OuiText size="2xl" weight="bold">
-                  {{ currentCpuUsage.toFixed(1) }}%
-                </OuiText>
-                <OuiBox
-                  w="full"
-                  class="h-1 bg-surface-muted overflow-hidden rounded-full mt-1"
-                >
-                  <OuiBox
-                    class="h-full bg-accent-primary transition-all duration-300"
-                    :style="{ width: `${Math.min(currentCpuUsage, 100)}%` }"
-                  />
-                </OuiBox>
-                <OuiText size="xs" color="muted">
-                  {{ latestMetric ? "Current" : "No data" }}
-                </OuiText>
-              </OuiStack>
-            </OuiBox>
-
-            <!-- Memory Usage -->
-            <OuiBox
-              p="md"
-              rounded="xl"
-              class="ring-1 ring-border-muted bg-surface-muted/30 hover:bg-surface-muted/50 transition-colors"
-            >
-              <OuiStack gap="xs">
-                <OuiFlex align="center" justify="between">
-                  <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                    Memory Usage
-                  </OuiText>
-                  <OuiBadge v-if="latestMetric" variant="secondary" size="sm">
-                    Live
-                  </OuiBadge>
-                </OuiFlex>
-                <OuiText size="2xl" weight="bold">
-                  <OuiByte :value="currentMemoryUsage" unit-display="short" />
-                </OuiText>
-                <OuiText size="xs" color="muted">
-                  {{ latestMetric ? "Current" : "No data" }}
-                </OuiText>
-              </OuiStack>
-            </OuiBox>
-
-            <!-- Network Rx -->
-            <OuiBox
-              p="md"
-              rounded="xl"
-              class="ring-1 ring-border-muted bg-surface-muted/30 hover:bg-surface-muted/50 transition-colors"
-            >
-              <OuiStack gap="xs">
-                <OuiFlex align="center" justify="between">
-                  <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                    Network Rx
-                  </OuiText>
-                  <OuiBadge v-if="latestMetric" variant="secondary" size="sm">
-                    Live
-                  </OuiBadge>
-                </OuiFlex>
-                <OuiText size="2xl" weight="bold">
-                  <OuiByte :value="currentNetworkRx" unit-display="short" />
-                </OuiText>
-                <OuiText size="xs" color="muted">
-                  {{ latestMetric ? "Total received" : "No data" }}
-                </OuiText>
-              </OuiStack>
-            </OuiBox>
-
-            <!-- Network Tx -->
-            <OuiBox
-              p="md"
-              rounded="xl"
-              class="ring-1 ring-border-muted bg-surface-muted/30 hover:bg-surface-muted/50 transition-colors"
-            >
-              <OuiStack gap="xs">
-                <OuiFlex align="center" justify="between">
-                  <OuiText size="xs" color="muted" transform="uppercase" weight="semibold">
-                    Network Tx
-                  </OuiText>
-                  <OuiBadge v-if="latestMetric" variant="secondary" size="sm">
-                    Live
-                  </OuiBadge>
-                </OuiFlex>
-                <OuiText size="2xl" weight="bold">
-                  <OuiByte :value="currentNetworkTx" unit-display="short" />
-                </OuiText>
-                <OuiText size="xs" color="muted">
-                  {{ latestMetric ? "Total sent" : "No data" }}
-                </OuiText>
-              </OuiStack>
-            </OuiBox>
-          </OuiGrid>
-        </OuiCardBody>
-      </OuiCard>
+      <LiveMetrics
+        :is-streaming="isStreaming"
+        :latest-metric="latestMetric"
+        :current-cpu-usage="currentCpuUsage"
+        :current-memory-usage="currentMemoryUsage"
+        :current-network-rx="currentNetworkRx"
+        :current-network-tx="currentNetworkTx"
+      />
 
       <!-- Main Information Grid -->
       <OuiGrid cols="1" cols-lg="2" gap="lg">
@@ -858,6 +618,9 @@ import { date } from "@obiente/proto/utils";
 import { useConnectClient } from "~/lib/connect-client";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 import OuiByte from "~/components/oui/Byte.vue";
+import UsageStatistics from "~/components/shared/UsageStatistics.vue";
+import CostBreakdown from "~/components/shared/CostBreakdown.vue";
+import LiveMetrics from "~/components/shared/LiveMetrics.vue";
 
 interface Props {
   deployment: Deployment;
@@ -923,68 +686,6 @@ const formatBytes = (bytes: number | bigint) => {
   return `${(b / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 };
 
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
-
-const formatNumber = (value: number) =>
-  new Intl.NumberFormat("en-US").format(value);
-
-const formatCPUUsage = (coreSeconds: number): string => {
-  const hours = coreSeconds / 3600;
-  if (hours < 1) {
-    return `${(coreSeconds / 60).toFixed(1)} min`;
-  }
-  return `${hours.toFixed(1)} core-hrs`;
-};
-
-const formatUptime = (seconds: number): string => {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-  return `${Math.floor(seconds / 86400)}d`;
-};
-
-
-// Cost breakdown
-const costBreakdown = computed(() => {
-  if (!usageData.value?.estimatedMonthly) return [];
-  const estimated = usageData.value.estimatedMonthly;
-  const breakdown = [];
-  
-  const totalCents = Number(estimated.estimatedCostCents);
-  if (totalCents > 0) {
-    // Use actual cost breakdown if available, otherwise estimate
-    breakdown.push(
-      { 
-        label: "CPU", 
-        value: formatCurrency(estimated.cpuCostCents ? Number(estimated.cpuCostCents) / 100 : totalCents * 0.4 / 100), 
-        color: "bg-accent-primary" 
-      },
-      { 
-        label: "Memory", 
-        value: formatCurrency(estimated.memoryCostCents ? Number(estimated.memoryCostCents) / 100 : totalCents * 0.3 / 100), 
-        color: "bg-success" 
-      },
-      { 
-        label: "Bandwidth", 
-        value: formatCurrency(estimated.bandwidthCostCents ? Number(estimated.bandwidthCostCents) / 100 : totalCents * 0.2 / 100), 
-        color: "bg-accent-secondary" 
-      },
-      { 
-        label: "Storage", 
-        value: formatCurrency(estimated.storageCostCents ? Number(estimated.storageCostCents) / 100 : totalCents * 0.1 / 100), 
-        color: "bg-warning" 
-      },
-    );
-  }
-  
-  return breakdown;
-});
 
 // Start streaming metrics
 const startStreaming = async () => {
