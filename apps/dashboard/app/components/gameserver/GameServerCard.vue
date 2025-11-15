@@ -51,6 +51,34 @@
         <ArrowPathIcon class="h-4 w-4" />
       </OuiButton>
     </template>
+
+    <template #resources>
+      <OuiGrid :cols="String(resources.length) as any" gap="sm">
+        <OuiBox
+          v-for="(resource, idx) in resources"
+          :key="idx"
+          p="sm"
+          rounded="lg"
+          class="bg-surface-muted/40"
+        >
+          <OuiStack gap="xs" align="center">
+            <component
+              v-if="resource.icon"
+              :is="resource.icon"
+              class="h-4 w-4 text-secondary"
+            />
+            <OuiText size="xs" weight="medium">
+              <template v-if="resource.type === 'memory'">
+                <OuiByte :value="resource.value" unit-display="short" />
+              </template>
+              <template v-else>
+                {{ resource.label }}
+              </template>
+            </OuiText>
+          </OuiStack>
+        </OuiBox>
+      </OuiGrid>
+    </template>
   </ResourceCard>
 </template>
 
@@ -70,6 +98,11 @@
   import { useDialog } from "~/composables/useDialog";
   import { useOrganizationId } from "~/composables/useOrganizationId";
   import ResourceCard from "~/components/shared/ResourceCard.vue";
+  import OuiByte from "~/components/oui/Byte.vue";
+  import OuiGrid from "~/components/oui/Grid.vue";
+  import OuiBox from "~/components/oui/Box.vue";
+  import OuiStack from "~/components/oui/Stack.vue";
+  import OuiText from "~/components/oui/Text.vue";
 
   interface GameServer {
     id: string;
@@ -78,7 +111,7 @@
     status: string;
     port?: number;
     cpuCores?: number;
-    memoryBytes?: number;
+    memoryBytes?: number | bigint;
     updatedAt?: string;
   }
 
@@ -160,10 +193,11 @@
     return new Date(props.gameServer.updatedAt);
   });
 
-  const formatMemory = (bytes: number | undefined) => {
-    if (!bytes) return "0 GB";
-    const gb = bytes / (1024 * 1024 * 1024);
-    return `${gb.toFixed(1)} GB`;
+  // Helper function to convert BigInt to number for memoryBytes
+  const getMemoryBytesValue = (value: bigint | number | undefined | null): number => {
+    if (!value) return 0;
+    if (typeof value === 'bigint') return Number(value);
+    return value;
   };
 
   const resources = computed(() => [
@@ -173,7 +207,9 @@
     },
     {
       icon: CircleStackIcon,
-      label: formatMemory(props.gameServer.memoryBytes),
+      label: "Memory", // Label for type compatibility, but we use custom slot
+      type: "memory" as const,
+      value: getMemoryBytesValue(props.gameServer.memoryBytes),
     },
   ]);
 
