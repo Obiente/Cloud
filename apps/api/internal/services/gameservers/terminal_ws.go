@@ -294,7 +294,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 			
 			// Read logs with follow=true to stream new output
 			// Use tail=0 to get all logs, or a small number to get recent logs
-			logsReader, err := dcli.ContainerLogs(ctx, containerID, "0", true)
+			logsReader, err := dcli.ContainerLogs(ctx, containerID, "0", true, nil, nil)
 			if err != nil {
 				log.Printf("[GameServer Terminal WS] Failed to start log stream: %v", err)
 				return
@@ -625,7 +625,7 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 							containerID := currentSession.containerID
 							
 							// Read logs with follow=true to stream new output
-							logsReader, err := dcli.ContainerLogs(ctx, containerID, "0", true)
+							logsReader, err := dcli.ContainerLogs(ctx, containerID, "0", true, nil, nil)
 							if err != nil {
 								log.Printf("[GameServer Terminal WS] Failed to start log stream: %v", err)
 								return

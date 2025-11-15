@@ -65,16 +65,137 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 		limit = &limitVal
 	}
 
-	logsReader, err := manager.GetGameServerLogs(ctx, gameServerID, fmt.Sprintf("%d", *limit), false)
+	// Parse since timestamp if provided
+	var sinceTime *time.Time
+	if req.Msg.Since != nil {
+		since := req.Msg.Since.AsTime()
+		sinceTime = &since
+	}
+
+	// For lazy loading (scrolling up), we want logs BEFORE the since timestamp
+	// Docker's "until" parameter gets logs before a timestamp
+	var untilTime *time.Time
+	if sinceTime != nil {
+		// Use until to get logs before the since timestamp
+		untilTime = sinceTime
+		sinceTime = nil // Clear since when using until
+	}
+
+	logsReader, err := manager.GetGameServerLogs(ctx, gameServerID, fmt.Sprintf("%d", *limit), false, sinceTime, untilTime)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get game server logs: %w", err))
 	}
 	defer logsReader.Close()
 
-	// TODO: Parse Docker logs format and convert to GameServerLogLine messages
-	// For now, return empty response
+	// Parse Docker multiplexed log format
+	// Docker logs format: [8-byte header][payload]
+	// Header: [stream_type(1)][reserved(3)][size(4 bytes, big-endian)]
+	// stream_type: 1=stdout, 2=stderr
+	var logLines []*gameserversv1.GameServerLogLine
+	header := make([]byte, 8)
+	
+	for {
+		// Check if context is cancelled
+		select {
+		case <-ctx.Done():
+			break
+		default:
+		}
+
+		// Read 8-byte header
+		_, err := io.ReadFull(logsReader, header)
+		if err != nil {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				// EOF means we've read all available logs
+				break
+			}
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read log header: %w", err))
+		}
+
+		streamType := header[0]
+		// Read payload length (bytes 4-7, big-endian)
+		payloadLength := int(binary.BigEndian.Uint32(header[4:8]))
+
+		if payloadLength == 0 {
+			continue
+		}
+
+		// Read payload
+		payload := make([]byte, payloadLength)
+		_, err = io.ReadFull(logsReader, payload)
+		if err != nil {
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				// Partial payload, process what we have
+				if len(payload) > 0 {
+					sanitizedLine := stripTimestampFromLine(strings.ToValidUTF8(string(payload), ""))
+					if sanitizedLine != "" {
+						logLevel := detectLogLevelFromContent(sanitizedLine, streamType == 2)
+						line := &gameserversv1.GameServerLogLine{
+							Line:      sanitizedLine,
+							Timestamp: timestamppb.Now(),
+							Level:     &logLevel,
+						}
+						logLines = append(logLines, line)
+					}
+				}
+				break
+			}
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read log payload: %w", err))
+		}
+
+		// Sanitize to valid UTF-8
+		sanitizedLine := strings.ToValidUTF8(string(payload), "")
+		
+		// Split by newlines to handle multiple lines in one payload
+		lines := strings.Split(sanitizedLine, "\n")
+		for _, lineText := range lines {
+			lineText = strings.TrimRight(lineText, "\r")
+			if lineText == "" {
+				continue
+			}
+
+			// Strip timestamps from log lines (e.g., [01:57:06] or 2025-11-05T01:57:06.052Z)
+			lineText = stripTimestampFromLine(lineText)
+			
+			// Detect log level from content
+			logLevel := detectLogLevelFromContent(lineText, streamType == 2)
+			
+			// Try to extract timestamp from Docker log line if timestamps are enabled
+			// Docker logs with timestamps have format: 2025-01-01T12:00:00.123456789Z <log content>
+			var logTimestamp *timestamppb.Timestamp
+			timestampRegex := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z)\s+`)
+			// Check the original payload before stripping timestamps
+			if matches := timestampRegex.FindStringSubmatch(string(payload)); len(matches) > 1 {
+				if parsedTime, err := time.Parse(time.RFC3339Nano, matches[1]); err == nil {
+					logTimestamp = timestamppb.New(parsedTime)
+				}
+			}
+			
+			// If no timestamp extracted, use current time
+			if logTimestamp == nil {
+				logTimestamp = timestamppb.Now()
+			}
+			
+			line := &gameserversv1.GameServerLogLine{
+				Line:      lineText,
+				Timestamp: logTimestamp,
+				Level:     &logLevel,
+			}
+			logLines = append(logLines, line)
+			
+			// Limit the number of lines returned
+			if len(logLines) >= int(*limit) {
+				break
+			}
+		}
+		
+		if len(logLines) >= int(*limit) {
+			break
+		}
+	}
+
 	res := connect.NewResponse(&gameserversv1.GetGameServerLogsResponse{
-		Lines: []*gameserversv1.GameServerLogLine{},
+		Lines: logLines,
 	})
 	return res, nil
 }
@@ -109,7 +230,7 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 	// This ensures logs are always streamed while the tab is open
 	follow := true
 
-	logsReader, err := manager.GetGameServerLogs(ctx, gameServerID, fmt.Sprintf("%d", *tail), follow)
+	logsReader, err := manager.GetGameServerLogs(ctx, gameServerID, fmt.Sprintf("%d", *tail), follow, nil, nil)
 	if err != nil {
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get game server logs: %w", err))
 	}

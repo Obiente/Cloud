@@ -90,6 +90,23 @@ func (gsm *GameServerManager) GetNodeID() string {
 	return gsm.nodeID
 }
 
+// getNodeIP retrieves the IP address for the current node from NodeMetadata
+func (gsm *GameServerManager) getNodeIP(ctx context.Context) string {
+	var node database.NodeMetadata
+	if err := database.DB.First(&node, "id = ?", gsm.nodeID).Error; err != nil {
+		logger.Warn("[GameServerManager] Failed to get node metadata for node %s: %v", gsm.nodeID, err)
+		return ""
+	}
+	
+	if node.IP != "" {
+		return node.IP
+	}
+	
+	// If IP is not set in NodeMetadata, log a warning
+	logger.Warn("[GameServerManager] Node %s (%s) has no IP address configured in NodeMetadata", gsm.nodeID, gsm.nodeHostname)
+	return ""
+}
+
 // CreateGameServer creates a new game server container
 func (gsm *GameServerManager) CreateGameServer(ctx context.Context, config *GameServerConfig) error {
 	logger.Info("[GameServerManager] Creating game server container %s", config.GameServerID)
@@ -141,10 +158,8 @@ func (gsm *GameServerManager) CreateGameServer(ctx context.Context, config *Game
 	}
 
 	// Register game server location
-	// Get node IP for the location - try to get from node metadata
-	// Note: NodeMetadata.Address is JSONB and might contain IP info
-	// For now, we'll leave NodeIP empty and let DNS resolve it via hostname
-	nodeIP := ""
+	// Get node IP for the location from node metadata
+	nodeIP := gsm.getNodeIP(ctx)
 
 	location := &database.GameServerLocation{
 		ID:           fmt.Sprintf("loc-gs-%s-%s", config.GameServerID, containerID[:12]),
@@ -340,10 +355,17 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 		logger.Info("[GameServerManager] Container %s is already running", (*gameServer.ContainerID)[:12])
 	}
 
-	// Update location status
+	// Update location status and ensure nodeIP is set
+	nodeIP := gsm.getNodeIP(ctx)
+	updateData := map[string]interface{}{
+		"status": "running",
+	}
+	if nodeIP != "" {
+		updateData["node_ip"] = nodeIP
+	}
 	if err := database.DB.Model(&database.GameServerLocation{}).
 		Where("container_id = ?", *gameServer.ContainerID).
-		Update("status", "running").Error; err != nil {
+		Updates(updateData).Error; err != nil {
 		logger.Warn("[GameServerManager] Failed to update location status: %v", err)
 	}
 
@@ -493,7 +515,7 @@ func (gsm *GameServerManager) DeleteGameServer(ctx context.Context, gameServerID
 }
 
 // GetGameServerLogs retrieves logs for a game server container
-func (gsm *GameServerManager) GetGameServerLogs(ctx context.Context, gameServerID string, tail string, follow bool) (io.ReadCloser, error) {
+func (gsm *GameServerManager) GetGameServerLogs(ctx context.Context, gameServerID string, tail string, follow bool, since *time.Time, until *time.Time) (io.ReadCloser, error) {
 	// Get game server from database
 	gameServer, err := database.NewGameServerRepository(database.DB, database.RedisClient).GetByID(ctx, gameServerID)
 	if err != nil {
@@ -504,7 +526,7 @@ func (gsm *GameServerManager) GetGameServerLogs(ctx context.Context, gameServerI
 		return nil, fmt.Errorf("game server %s has no container ID", gameServerID)
 	}
 
-	return gsm.dockerHelper.ContainerLogs(ctx, *gameServer.ContainerID, tail, follow)
+	return gsm.dockerHelper.ContainerLogs(ctx, *gameServer.ContainerID, tail, follow, since, until)
 }
 
 // sendCommandViaAttach uses Docker attach API to send command to container's main process stdin
