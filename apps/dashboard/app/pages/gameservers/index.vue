@@ -277,11 +277,34 @@ const gameServers = computed(() => {
           : date(gs.updatedAt)?.toISOString() || new Date().toISOString())
       : new Date().toISOString();
     
+    // Convert status from enum number to string if needed
+    let status: string = "CREATED";
+    if (gs.status !== undefined && gs.status !== null) {
+      if (typeof gs.status === 'number') {
+        // Map GameServerStatus enum values (from proto)
+        // Note: The detail page uses a different mapping, but proto shows:
+        // 0: GAME_SERVER_STATUS_UNSPECIFIED, 1: CREATED, 2: STARTING, 3: RUNNING, 4: STOPPING, 5: STOPPED, 6: FAILED, 7: RESTARTING
+        const statusMap: Record<number, string> = {
+          0: 'CREATED', // GAME_SERVER_STATUS_UNSPECIFIED -> treat as CREATED
+          1: 'CREATED',
+          2: 'STARTING',
+          3: 'RUNNING',
+          4: 'STOPPING',
+          5: 'STOPPED',
+          6: 'FAILED',
+          7: 'RESTARTING',
+        };
+        status = statusMap[gs.status] || 'CREATED';
+      } else if (typeof gs.status === 'string') {
+        status = gs.status;
+      }
+    }
+    
     return {
       id: gs.id,
       name: gs.name,
       gameType: gs.gameType?.toString(),
-      status: gs.status?.toString() || "CREATED",
+      status: status,
       port: gs.port,
       cpuCores: gs.cpuCores,
       memoryBytes: gs.memoryBytes ? Number(gs.memoryBytes) : undefined,

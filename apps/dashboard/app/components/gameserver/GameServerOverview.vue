@@ -486,7 +486,7 @@ const estimatedMonthlyCost = computed(() => {
 
 const connectionDomain = computed(() => {
   if (!props.gameServer?.id) return "";
-  return `gameserver-${props.gameServer.id}.my.obiente.cloud`;
+  return `${props.gameServer.id}.my.obiente.cloud`;
 });
 
 const srvDomains = computed(() => {
@@ -501,7 +501,7 @@ const srvDomains = computed(() => {
   if (gameType === GameType.MINECRAFT || gameType === GameType.MINECRAFT_JAVA) {
     domains.push({
       label: "Minecraft Java (SRV)",
-      domain: `_minecraft._tcp.gameserver-${id}.my.obiente.cloud`,
+      domain: `_minecraft._tcp.${id}.my.obiente.cloud`,
       description: "Use this domain in Minecraft Java Edition for automatic port resolution"
     });
   }
@@ -509,7 +509,7 @@ const srvDomains = computed(() => {
   if (gameType === GameType.MINECRAFT || gameType === GameType.MINECRAFT_BEDROCK) {
     domains.push({
       label: "Minecraft Bedrock (SRV)",
-      domain: `_minecraft._udp.gameserver-${id}.my.obiente.cloud`,
+      domain: `_minecraft._udp.${id}.my.obiente.cloud`,
       description: "Use this domain in Minecraft Bedrock Edition for automatic port resolution"
     });
   }
@@ -517,7 +517,7 @@ const srvDomains = computed(() => {
   if (gameType === GameType.RUST) {
     domains.push({
       label: "Rust (SRV)",
-      domain: `_rust._udp.gameserver-${id}.my.obiente.cloud`,
+      domain: `_rust._udp.${id}.my.obiente.cloud`,
       description: "Use this domain in Rust for automatic port resolution"
     });
   }
@@ -600,10 +600,10 @@ const getStatusDotClass = (status: string) => {
   return statusMap[status] || "bg-secondary";
 };
 
-const getStatusBadgeVariant = (status: string): "success" | "warning" | "danger" | "muted" | "secondary" => {
-  const statusMap: Record<string, "success" | "warning" | "danger" | "muted" | "secondary"> = {
+const getStatusBadgeVariant = (status: string): "success" | "warning" | "danger" | "secondary" => {
+  const statusMap: Record<string, "success" | "warning" | "danger" | "secondary"> = {
     RUNNING: "success",
-    STOPPED: "muted",
+    STOPPED: "secondary",
     STARTING: "warning",
     STOPPING: "warning",
     RESTARTING: "warning",

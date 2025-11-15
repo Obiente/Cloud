@@ -424,19 +424,25 @@ const gameServer = computed(() => {
   if (!data) return null;
   
   // Convert status from enum number to string if needed
-  let status: string = data.status?.toString() || 'CREATED';
-  if (typeof data.status === 'number') {
-    // Map GameServerStatus enum values
-    const statusMap: Record<number, string> = {
-      0: 'CREATED',
-      1: 'STARTING',
-      2: 'STOPPING',
-      3: 'RUNNING',
-      4: 'RESTARTING',
-      5: 'STOPPED',
-      6: 'FAILED',
-    };
-    status = statusMap[data.status] || 'CREATED';
+  let status: string = 'CREATED';
+  if (data.status !== undefined && data.status !== null) {
+    if (typeof data.status === 'number') {
+      // Map GameServerStatus enum values (from proto)
+      // 0: GAME_SERVER_STATUS_UNSPECIFIED, 1: CREATED, 2: STARTING, 3: RUNNING, 4: STOPPING, 5: STOPPED, 6: FAILED, 7: RESTARTING
+      const statusMap: Record<number, string> = {
+        0: 'CREATED', // GAME_SERVER_STATUS_UNSPECIFIED -> treat as CREATED
+        1: 'CREATED',
+        2: 'STARTING',
+        3: 'RUNNING',
+        4: 'STOPPING',
+        5: 'STOPPED',
+        6: 'FAILED',
+        7: 'RESTARTING',
+      };
+      status = statusMap[data.status] || 'CREATED';
+    } else if (typeof data.status === 'string') {
+      status = data.status;
+    }
   }
   
   return {
@@ -637,8 +643,8 @@ const getGameTypeLabel = (gameType: number) => {
 // Connection domain helpers
 const connectionDomain = computed(() => {
   if (!gameServer.value?.id) return "";
-  // Format: gameserver-123.my.obiente.cloud
-  return `gameserver-${gameServer.value.id}.my.obiente.cloud`;
+  // Format: gs-123.my.obiente.cloud
+  return `${gameServer.value.id}.my.obiente.cloud`;
 });
 
 // Get SRV domains based on game type
@@ -656,7 +662,7 @@ const srvDomains = computed(() => {
     // Minecraft Java Edition - TCP SRV record
     domains.push({
       label: "Minecraft Java (SRV)",
-      domain: `_minecraft._tcp.gameserver-${id}.my.obiente.cloud`,
+      domain: `_minecraft._tcp.${id}.my.obiente.cloud`,
       description: "Use this domain in Minecraft Java Edition for automatic port resolution"
     });
   }
@@ -665,7 +671,7 @@ const srvDomains = computed(() => {
     // Minecraft Bedrock Edition - UDP SRV record
     domains.push({
       label: "Minecraft Bedrock (SRV)",
-      domain: `_minecraft._udp.gameserver-${id}.my.obiente.cloud`,
+      domain: `_minecraft._udp.${id}.my.obiente.cloud`,
       description: "Use this domain in Minecraft Bedrock Edition for automatic port resolution"
     });
   }
@@ -674,7 +680,7 @@ const srvDomains = computed(() => {
     // Rust - UDP SRV record
     domains.push({
       label: "Rust (SRV)",
-      domain: `_rust._udp.gameserver-${id}.my.obiente.cloud`,
+      domain: `_rust._udp.${id}.my.obiente.cloud`,
       description: "Use this domain in Rust for automatic port resolution"
     });
   }
@@ -727,6 +733,7 @@ const loadUsage = async () => {
     const month = new Date().toISOString().slice(0, 7); // YYYY-MM
     const res = await client.getGameServerUsage({
       gameServerId: gameServerId.value,
+      organizationId: gameServer.value.organizationId || effectiveOrgId.value,
       month,
     });
     usageData.value = res;
