@@ -1721,9 +1721,19 @@ func (s *ConfigService) SetSSHAlias(ctx context.Context, req *connect.Request[vp
 
 	logger.Info("[ConfigService] Set SSH alias '%s' for VPS %s", alias, vpsID)
 
+	// Get domain from environment variable
+	domain := os.Getenv("DOMAIN")
+	if domain == "" || domain == "localhost" {
+		domain = "localhost"
+	}
+	sshProxyPort := os.Getenv("SSH_PROXY_PORT")
+	if sshProxyPort == "" {
+		sshProxyPort = "2323"
+	}
+
 	return connect.NewResponse(&vpsv1.SetSSHAliasResponse{
 		Alias:   alias,
-		Message: fmt.Sprintf("SSH alias '%s' has been set. You can now connect using: ssh -p 2323 root@%s@localhost", alias, alias),
+		Message: fmt.Sprintf("SSH alias '%s' has been set. You can now connect using: ssh -p %s root@%s@%s", alias, sshProxyPort, alias, domain),
 	}), nil
 }
 

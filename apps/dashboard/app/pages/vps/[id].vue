@@ -895,7 +895,7 @@
                                     {{ sshAlias }}
                                   </OuiText>
                                   <OuiText size="xs" color="muted">
-                                    Connect using: <code class="text-xs bg-surface-muted px-1 py-0.5 rounded">ssh -p 2323 root@{{ sshAlias }}@localhost</code>
+                                    Connect using: <code class="text-xs bg-surface-muted px-1 py-0.5 rounded">ssh -p {{ sshPort }} root@{{ sshAlias }}@{{ sshDomain }}</code>
                                   </OuiText>
                                 </OuiStack>
                                 <OuiBadge variant="success" size="sm">Active</OuiBadge>
@@ -1212,7 +1212,7 @@
                         @keyup.enter="setSSHAlias"
                       />
                       <OuiText v-if="newSSHAlias" size="xs" color="secondary" class="mt-1">
-                        Connect using: <code class="text-xs bg-surface-muted px-1 py-0.5 rounded">ssh -p 2323 root@{{ newSSHAlias }}@localhost</code>
+                        Connect using: <code class="text-xs bg-surface-muted px-1 py-0.5 rounded">ssh -p {{ sshPort }} root@{{ newSSHAlias }}@{{ sshDomain }}</code>
                       </OuiText>
                     </div>
 
@@ -1245,7 +1245,7 @@
                   <OuiStack gap="md">
                     <OuiBox variant="info" p="sm" rounded="md">
                       <OuiText size="xs" color="secondary">
-                        After removing the alias, you'll need to use the full VPS ID to connect: <code class="text-xs bg-surface-muted px-1 py-0.5 rounded">ssh -p 2323 root@{{ vpsId }}@localhost</code>
+                        After removing the alias, you'll need to use the full VPS ID to connect: <code class="text-xs bg-surface-muted px-1 py-0.5 rounded">ssh -p {{ sshPort }} root@{{ vpsId }}@{{ sshDomain }}</code>
                       </OuiText>
                     </OuiBox>
 
@@ -1712,6 +1712,26 @@ const fetchSSHInfo = async () => {
     sshInfoLoading.value = false;
   }
 };
+
+// Extract domain and port from SSH proxy command
+// Format: ssh -p {port} root@{vpsId}@{domain}
+const sshDomain = computed(() => {
+  if (!sshInfo.value?.sshProxyCommand) {
+    return "localhost";
+  }
+  // Parse: ssh -p {port} root@{vpsId}@{domain}
+  const match = sshInfo.value.sshProxyCommand.match(/@([^@]+)$/);
+  return match ? match[1] : "localhost";
+});
+
+const sshPort = computed(() => {
+  if (!sshInfo.value?.sshProxyCommand) {
+    return "2323";
+  }
+  // Parse: ssh -p {port} root@{vpsId}@{domain}
+  const match = sshInfo.value.sshProxyCommand.match(/-p\s+(\d+)/);
+  return match ? match[1] : "2323";
+});
 
 // Fetch SSH info when VPS is running
 watch(

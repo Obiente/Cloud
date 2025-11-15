@@ -230,30 +230,29 @@ func (s *Service) GetVPSProxyInfo(ctx context.Context, req *connect.Request[vpsv
 
 	// SSH proxy is exposed directly on port 2222 (bypassing Traefik)
 	// Get API server hostname for SSH connection
-	apiHost := ""
-	if apiBaseURL != "" {
+	// Use DOMAIN environment variable directly, or extract from API base URL
+	sshHost := ""
+	domain := os.Getenv("DOMAIN")
+	if domain != "" && domain != "localhost" {
+		// Use DOMAIN env variable directly
+		sshHost = domain
+	} else if apiBaseURL != "" {
+		// Fallback: extract from API base URL
 		if u, err := url.Parse(apiBaseURL); err == nil {
-			apiHost = u.Hostname()
-			// For localhost, keep it as localhost
-			if apiHost == "localhost" || apiHost == "127.0.0.1" {
-				// Keep localhost for dev
-			} else if strings.Contains(apiHost, "api.") {
-				// If hostname is api.domain.com, use just domain.com for SSH
-				// Or use the full hostname - let's use the full hostname for clarity
+			apiHost := u.Hostname()
+			// If hostname is api.domain.com, use just domain.com for SSH
+			if strings.HasPrefix(apiHost, "api.") {
+				sshHost = strings.TrimPrefix(apiHost, "api.")
+			} else if apiHost != "localhost" && apiHost != "127.0.0.1" {
+				sshHost = apiHost
 			}
 		}
 	}
-	if apiHost == "" {
-		// Fallback: try DOMAIN or use localhost
-		domain := os.Getenv("DOMAIN")
-		if domain != "" && domain != "localhost" {
-			apiHost = domain
-		} else {
-			apiHost = "localhost"
-		}
+	if sshHost == "" {
+		// Final fallback: use localhost for dev
+		sshHost = "localhost"
 	}
 	
-	sshHost := apiHost
 	sshProxyPort := os.Getenv("SSH_PROXY_PORT")
 	if sshProxyPort == "" {
 		sshProxyPort = "2222"
@@ -312,3 +311,5 @@ Note:
 		ConnectionInstructions: instructions,
 	}), nil
 }
+
+
