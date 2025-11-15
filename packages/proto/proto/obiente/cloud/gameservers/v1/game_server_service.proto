@@ -73,9 +73,6 @@ service GameServerService {
   // Stream game server logs (tail/follow)
   rpc StreamGameServerLogs(StreamGameServerLogsRequest) returns (stream GameServerLogLine);
 
-  // Send a command to a running game server
-  rpc SendGameServerCommand(SendGameServerCommandRequest) returns (SendGameServerCommandResponse);
-
   // Get game server metrics (real-time or historical)
   rpc GetGameServerMetrics(GetGameServerMetricsRequest) returns (GetGameServerMetricsResponse);
 
@@ -106,6 +103,13 @@ service GameServerService {
   
   // Rename a file or directory in a game server
   rpc RenameGameServerEntry(RenameGameServerEntryRequest) returns (RenameGameServerEntryResponse);
+  
+  // Minecraft player lookup (proxies Mojang API to avoid CORS)
+  // Get player UUID from username
+  rpc GetMinecraftPlayerUUID(GetMinecraftPlayerUUIDRequest) returns (GetMinecraftPlayerUUIDResponse);
+  
+  // Get player profile (name, UUID) from UUID
+  rpc GetMinecraftPlayerProfile(GetMinecraftPlayerProfileRequest) returns (GetMinecraftPlayerProfileResponse);
 }
 
 // Request/Response messages
@@ -233,16 +237,6 @@ message GameServerLogLine {
   optional obiente.cloud.common.v1.LogLevel level = 3;
 }
 
-message SendGameServerCommandRequest {
-  string game_server_id = 1;
-  string command = 2;  // Command to send to the game server
-}
-
-message SendGameServerCommandResponse {
-  bool success = 1;
-  optional string error_message = 2;
-}
-
 message GetGameServerMetricsRequest {
   string game_server_id = 1;
   optional google.protobuf.Timestamp start_time = 2;
@@ -274,25 +268,33 @@ message GameServerMetric {
 
 message GetGameServerUsageRequest {
   string game_server_id = 1;
-  optional string month = 2;  // Format: "YYYY-MM" (e.g., "2024-01")
+  string organization_id = 2;
+  // Optional: specify a month (YYYY-MM format). Defaults to current month.
+  optional string month = 3;
 }
 
 message GetGameServerUsageResponse {
   string game_server_id = 1;
-  string month = 2;
-  
-  // Usage metrics
-  int64 cpu_core_seconds = 3;      // Total CPU core-seconds used
-  int64 memory_byte_seconds = 4;    // Total memory byte-seconds used
-  int64 bandwidth_bytes = 5;        // Total bandwidth used (inbound + outbound)
-  int64 storage_bytes = 6;          // Storage used
-  
-  // Cost breakdown
-  int64 cpu_cost_cents = 7;         // CPU cost in cents
-  int64 memory_cost_cents = 8;      // Memory cost in cents
-  int64 bandwidth_cost_cents = 9;   // Bandwidth cost in cents
-  int64 storage_cost_cents = 10;    // Storage cost in cents
-  int64 total_cost_cents = 11;      // Total cost in cents
+  string organization_id = 2;
+  string month = 3; // YYYY-MM format
+  GameServerUsageMetrics current = 4;
+  GameServerUsageMetrics estimated_monthly = 5;
+}
+
+message GameServerUsageMetrics {
+  int64 cpu_core_seconds = 1;
+  int64 memory_byte_seconds = 2;
+  int64 bandwidth_rx_bytes = 3;
+  int64 bandwidth_tx_bytes = 4;
+  int64 storage_bytes = 5;
+  int64 uptime_seconds = 6;
+  // Estimated cost in cents
+  int64 estimated_cost_cents = 7;
+  // Per-resource cost breakdown in cents
+  optional int64 cpu_cost_cents = 8;
+  optional int64 memory_cost_cents = 9;
+  optional int64 bandwidth_cost_cents = 10;
+  optional int64 storage_cost_cents = 11;
 }
 
 // GameServer represents a game server instance
@@ -489,5 +491,25 @@ message WriteGameServerFileResponse {
   bool success = 1;
   optional GameServerFile entry = 2;
   optional string error = 3;
+}
+
+// Minecraft player lookup messages
+message GetMinecraftPlayerUUIDRequest {
+  string username = 1; // Minecraft username
+}
+
+message GetMinecraftPlayerUUIDResponse {
+  optional string uuid = 1; // Player UUID (dashed format, e.g., "550e8400-e29b-41d4-a716-446655440000")
+  optional string name = 2; // Current username (may differ from requested username if changed)
+}
+
+message GetMinecraftPlayerProfileRequest {
+  string uuid = 1; // Player UUID (dashed or undashed format)
+}
+
+message GetMinecraftPlayerProfileResponse {
+  optional string uuid = 1; // Player UUID (dashed format)
+  optional string name = 2; // Current username
+  optional string avatar_url = 3; // Avatar URL (from Crafatar)
 }
 
