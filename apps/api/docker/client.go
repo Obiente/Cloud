@@ -122,16 +122,25 @@ func (c *Client) RestartContainer(ctx context.Context, containerID string, timeo
 
 // ContainerLogs fetches the container logs as an io.ReadCloser.
 // If follow is true, the logs will be streamed continuously.
-func (c *Client) ContainerLogs(ctx context.Context, containerID string, tail string, follow bool) (io.ReadCloser, error) {
+// since and until are optional time.Time values for filtering logs by timestamp.
+func (c *Client) ContainerLogs(ctx context.Context, containerID string, tail string, follow bool, since *time.Time, until *time.Time) (io.ReadCloser, error) {
 	if c == nil || c.api == nil {
 		return nil, ErrUninitialized
 	}
-	logs, err := c.api.ContainerLogs(ctx, containerID, client.ContainerLogsOptions{
+	opts := client.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Tail:       tail,
 		Follow:     follow,
-	})
+		Timestamps: true, // Enable timestamps for parsing
+	}
+	if since != nil {
+		opts.Since = since.Format(time.RFC3339Nano)
+	}
+	if until != nil {
+		opts.Until = until.Format(time.RFC3339Nano)
+	}
+	logs, err := c.api.ContainerLogs(ctx, containerID, opts)
 	if err != nil {
 		return nil, fmt.Errorf("docker: logs for %s: %w", containerID, err)
 	}

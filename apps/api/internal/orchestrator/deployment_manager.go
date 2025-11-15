@@ -62,7 +62,7 @@ type dockerHelper interface {
 	StopContainer(ctx context.Context, containerID string, timeout time.Duration) error
 	RemoveContainer(ctx context.Context, containerID string, force bool) error
 	RestartContainer(ctx context.Context, containerID string, timeout time.Duration) error
-	ContainerLogs(ctx context.Context, containerID string, tail string, follow bool) (io.ReadCloser, error)
+	ContainerLogs(ctx context.Context, containerID string, tail string, follow bool, since *time.Time, until *time.Time) (io.ReadCloser, error)
 	ContainerExecRun(ctx context.Context, containerID string, cmd []string) (string, error)
 }
 
@@ -2720,7 +2720,7 @@ func (dm *DeploymentManager) GetDeploymentLogs(ctx context.Context, deploymentID
 	// Get logs from first container on this node
 	for _, location := range locations {
 		if location.NodeID == dm.nodeID {
-			logs, err := dm.dockerHelper.ContainerLogs(ctx, location.ContainerID, tail, false) // follow=false for non-streaming logs
+			logs, err := dm.dockerHelper.ContainerLogs(ctx, location.ContainerID, tail, false, nil, nil) // follow=false for non-streaming logs
 			if err != nil {
 				return "", fmt.Errorf("failed to get logs: %w", err)
 			}

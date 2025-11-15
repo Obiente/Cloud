@@ -583,7 +583,7 @@ func (s *Service) StreamContainerLogs(ctx context.Context, req *connect.Request[
 		tail = 200
 	}
 
-	reader, err := dcli.ContainerLogs(ctx, loc.ContainerID, fmt.Sprintf("%d", tail), true) // follow=true for streaming
+	reader, err := dcli.ContainerLogs(ctx, loc.ContainerID, fmt.Sprintf("%d", tail), true, nil, nil) // follow=true for streaming
 	if err != nil {
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("logs: %w", err))
 	}

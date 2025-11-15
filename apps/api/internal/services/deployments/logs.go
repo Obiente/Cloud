@@ -117,7 +117,7 @@ func (s *Service) StreamDeploymentLogs(ctx context.Context, req *connect.Request
 	follow := isRunning
 	
 	// Start container logs stream
-	reader, err := dcli.ContainerLogs(ctx, loc.ContainerID, fmt.Sprintf("%d", tail), follow)
+	reader, err := dcli.ContainerLogs(ctx, loc.ContainerID, fmt.Sprintf("%d", tail), follow, nil, nil)
 	if err != nil {
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("logs: %w", err))
 	}
