@@ -143,7 +143,7 @@
                 <OuiText size="sm" weight="medium">Domain</OuiText>
                 <OuiInput
                   v-model="queryDomain"
-                  placeholder="deploy-123.my.obiente.cloud or _minecraft._tcp.gameserver-123.my.obiente.cloud"
+                  placeholder="deploy-123.my.obiente.cloud or _minecraft._tcp.gs-123.my.obiente.cloud"
                   @keyup.enter="queryDNS"
                 />
               </OuiStack>

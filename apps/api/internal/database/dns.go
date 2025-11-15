@@ -267,17 +267,19 @@ func GetGameServerLocation(gameServerID string) (string, int32, error) {
 			return "", 0, fmt.Errorf("failed to find node %s: %w", location.NodeID, err)
 		}
 
-		// NodeMetadata.Address is a JSONB field that might contain IP
-		// For now, use NodeHostname if available, or try to parse Address
+		// First try to use node.IP from NodeMetadata
+		if node.IP != "" {
+			return node.IP, location.Port, nil
+		}
+
+		// Fallback to hostname if IP is not available
 		if location.NodeHostname != "" {
 			// Try to resolve hostname to IP (this is a fallback - ideally NodeIP should be populated)
 			// For now, return hostname and let DNS resolve it
 			return location.NodeHostname, location.Port, nil
 		}
 
-		// If Address is set, try to extract IP from it
-		// Address is JSONB, so it might be a JSON object or string
-		// For now, return error if we can't find IP
+		// If neither IP nor hostname is available, return error
 		return "", 0, fmt.Errorf("node %s has no IP address configured for game server %s", location.NodeID, gameServerID)
 	}
 
