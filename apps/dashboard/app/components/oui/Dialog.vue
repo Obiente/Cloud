@@ -2,9 +2,12 @@
   <!-- Only render dialog when mounted on client to avoid hydration mismatches -->
   <ClientOnly>
   <Dialog.Root 
-    :open="open" 
+    v-model:open="localOpen"
     :closeOnInteractOutside="closeOnInteractOutside !== false"
-    @open-change="handleOpenChange"
+    :trapFocus="true"
+    :restoreFocus="true"
+    :preventScroll="true"
+    :modal="true"
   >
       <Teleport to="body">
         <Dialog.Backdrop
@@ -24,7 +27,7 @@
                   </OuiText>
                   <span v-else class="sr-only">Dialog</span>
                 </Dialog.Title>
-                <Dialog.CloseTrigger>
+                <Dialog.CloseTrigger :asChild="true">
                   <OuiButton
                     variant="ghost"
                     size="sm"
@@ -61,6 +64,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { Dialog } from "@ark-ui/vue/dialog";
 import { XMarkIcon } from "@heroicons/vue/24/outline";
 import OuiCard from "./Card.vue";
@@ -77,13 +81,17 @@ interface Props {
   closeOnInteractOutside?: boolean;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 
 const emit = defineEmits<{
   "update:open": [open: boolean];
 }>();
 
-const handleOpenChange = (details: Dialog.OpenChangeDetails) => {
-  emit("update:open", details.open);
-};
+// Use computed for two-way binding with v-model:open
+const localOpen = computed({
+  get: () => props.open ?? false,
+  set: (value: boolean) => {
+    emit("update:open", value);
+  },
+});
 </script>
