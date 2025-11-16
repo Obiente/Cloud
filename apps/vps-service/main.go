@@ -12,13 +12,13 @@ import (
 	"syscall"
 	"time"
 
-	"api/internal/auth"
-	"api/internal/database"
-	"api/internal/logger"
-	"api/internal/middleware"
-	"api/internal/orchestrator"
-	"api/internal/quota"
-	vpssvc "api/internal/services/vps"
+	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/middleware"
+	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
+	"github.com/obiente/cloud/apps/shared/pkg/quota"
+	vpssvc "vps-service/internal/service"
 
 	vpsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1/vpsv1connect"
 
