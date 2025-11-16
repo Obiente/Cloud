@@ -206,19 +206,44 @@ rm -f "$MERGED_COMPOSE"
 echo ""
 echo "✅ Main stack deployment started!"
 echo ""
-echo "ℹ️  Dashboard is now part of the main stack (moved from separate stack to fix DNS issues)"
-echo "   No separate dashboard deployment needed - it's included in the main stack."
 
-echo ""
+# Deploy dashboard separately if enabled
+if [ "$DEPLOY_DASHBOARD" = "true" ]; then
+  echo "🚀 Deploying dashboard stack..."
+  
+  # Ensure DOMAIN is set for label substitution
+  export DOMAIN="${DOMAIN:-obiente.cloud}"
+  
+  # Merge docker-compose.base.yml with docker-compose.dashboard.yml
+  # Note: dashboard compose file uses external network, so we need to substitute the network name
+  TEMP_DASHBOARD_COMPOSE=$(mktemp)
+  ./scripts/merge-compose-files.sh docker-compose.dashboard.yml "$TEMP_DASHBOARD_COMPOSE"
+  
+  # Substitute __STACK_NAME__ placeholder and DOMAIN variables
+  sed -i "s/__STACK_NAME__/${STACK_NAME}/g" "$TEMP_DASHBOARD_COMPOSE"
+  sed -i "s/\${DOMAIN:-localhost}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
+  sed -i "s/\${DOMAIN}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
+  
+  # Deploy dashboard stack
+  DASHBOARD_STACK_NAME="${STACK_NAME}_dashboard"
+  docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "$DASHBOARD_STACK_NAME"
+  rm -f "$TEMP_DASHBOARD_COMPOSE"
+  
+  echo "✅ Dashboard stack deployment started!"
+  echo ""
+fi
+
 echo "✅ All deployments started!"
 echo ""
 echo "📋 Useful commands:"
 echo "  View services:     docker stack services $STACK_NAME"
 echo "  View logs:         docker service logs -f ${STACK_NAME}_api-gateway"
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
-  echo "  Dashboard logs:    docker service logs -f ${STACK_NAME}_dashboard"
+  echo "  Dashboard logs:    docker service logs -f ${STACK_NAME}_dashboard_dashboard"
+  echo "  Remove stacks:     docker stack rm $STACK_NAME ${STACK_NAME}_dashboard"
+else
+  echo "  Remove stacks:     docker stack rm $STACK_NAME"
 fi
-echo "  Remove stacks:     docker stack rm $STACK_NAME${DEPLOY_DASHBOARD:+ ${STACK_NAME}_dashboard}"
 echo "  List tasks:        docker stack ps $STACK_NAME"
 echo ""
 echo "📦 Microservices deployed:"

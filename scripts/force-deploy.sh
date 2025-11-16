@@ -74,10 +74,19 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo -e "${BLUE}🚀 Redeploying dashboard stack...${NC}"
   # Ensure DOMAIN is set for label substitution
   export DOMAIN="${DOMAIN:-obiente.cloud}"
-  # Substitute __STACK_NAME__ placeholder and DOMAIN variables in labels and network name
+  
+  # Merge docker-compose.base.yml with docker-compose.dashboard.yml
   TEMP_DASHBOARD_COMPOSE=$(mktemp)
-  sed "s/__STACK_NAME__/${STACK_NAME}/g; s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
-  STACK_NAME="$STACK_NAME" docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}"
+  ./scripts/merge-compose-files.sh docker-compose.dashboard.yml "$TEMP_DASHBOARD_COMPOSE"
+  
+  # Substitute __STACK_NAME__ placeholder and DOMAIN variables
+  sed -i "s/__STACK_NAME__/${STACK_NAME}/g" "$TEMP_DASHBOARD_COMPOSE"
+  sed -i "s/\${DOMAIN:-localhost}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
+  sed -i "s/\${DOMAIN}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
+  
+  # Deploy dashboard stack
+  DASHBOARD_STACK_NAME="${STACK_NAME}_dashboard"
+  docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "$DASHBOARD_STACK_NAME"
   rm -f "$TEMP_DASHBOARD_COMPOSE"
   echo -e "${GREEN}✅ Dashboard stack redeployed!${NC}"
   echo ""
@@ -109,7 +118,8 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo -e "${BLUE}📦 Step 3: Force updating dashboard services...${NC}"
   echo ""
   
-  DASHBOARD_SERVICES=$(get_stack_services "${STACK_NAME}_dashboard")
+  DASHBOARD_STACK_NAME="${STACK_NAME}_dashboard"
+  DASHBOARD_SERVICES=$(get_stack_services "$DASHBOARD_STACK_NAME")
   if [ -z "$DASHBOARD_SERVICES" ]; then
     echo -e "${YELLOW}⚠️  No services found in dashboard stack${NC}"
   else
@@ -134,7 +144,8 @@ docker stack services "$STACK_NAME" --format "table {{.Name}}\t{{.Replicas}}\t{{
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo ""
   echo -e "${BLUE}Dashboard stack services:${NC}"
-  docker stack services "${STACK_NAME}_dashboard" --format "table {{.Name}}\t{{.Replicas}}\t{{.Image}}"
+  DASHBOARD_STACK_NAME="${STACK_NAME}_dashboard"
+  docker stack services "$DASHBOARD_STACK_NAME" --format "table {{.Name}}\t{{.Replicas}}\t{{.Image}}"
 fi
 
 echo ""
@@ -142,10 +153,13 @@ echo -e "${BLUE}📋 Useful commands:${NC}"
 echo "  View all services:  docker stack services $STACK_NAME"
 echo "  View service logs:  docker service logs -f ${STACK_NAME}_api"
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
-  echo "  Dashboard logs:     docker service logs -f ${STACK_NAME}_dashboard"
+  DASHBOARD_STACK_NAME="${STACK_NAME}_dashboard"
+  echo "  Dashboard logs:     docker service logs -f ${DASHBOARD_STACK_NAME}_dashboard"
+  echo "  Remove stacks:      docker stack rm $STACK_NAME $DASHBOARD_STACK_NAME"
+else
+  echo "  Remove stacks:      docker stack rm $STACK_NAME"
 fi
-echo "  Service status:     docker service ps ${STACK_NAME}_api"
-echo "  Remove stacks:      docker stack rm $STACK_NAME${DEPLOY_DASHBOARD:+ ${STACK_NAME}_dashboard}"
+echo "  Service status:     docker service ps ${STACK_NAME}_api-gateway"
 echo ""
 echo -e "${YELLOW}💡 Note: Services are being updated. Check status with: docker service ps <service-name>${NC}"
 echo ""

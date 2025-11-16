@@ -20,12 +20,18 @@ fi
 # Override DOMAIN if provided as argument
 export DOMAIN="$DOMAIN"
 
-# Substitute __STACK_NAME__ placeholder and DOMAIN variables in labels and network name
+# Merge docker-compose.base.yml with docker-compose.dashboard.yml
 TEMP_DASHBOARD_COMPOSE=$(mktemp)
-sed "s/__STACK_NAME__/${STACK_NAME}/g; s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
+./scripts/merge-compose-files.sh docker-compose.dashboard.yml "$TEMP_DASHBOARD_COMPOSE"
 
-# Deploy dashboard stack
-docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}"
+# Substitute __STACK_NAME__ placeholder and DOMAIN variables
+sed -i "s/__STACK_NAME__/${STACK_NAME}/g" "$TEMP_DASHBOARD_COMPOSE"
+sed -i "s/\${DOMAIN:-localhost}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
+sed -i "s/\${DOMAIN}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
+
+# Deploy dashboard stack with correct stack name
+DASHBOARD_STACK_NAME="${STACK_NAME}_dashboard"
+docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "$DASHBOARD_STACK_NAME"
 rm -f "$TEMP_DASHBOARD_COMPOSE"
 
 echo "✅ Dashboard redeployed!"
