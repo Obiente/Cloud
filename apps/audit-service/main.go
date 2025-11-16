@@ -10,11 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	"api/internal/auth"
-	"api/internal/database"
-	"api/internal/logger"
-	"api/internal/middleware"
-	"api/internal/services/audit"
+	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/middleware"
+	"audit-service/internal/service"
 
 	auditv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/audit/v1/auditv1connect"
 

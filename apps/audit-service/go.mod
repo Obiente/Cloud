@@ -3,11 +3,12 @@ module audit-service
 go 1.25
 
 require (
-	api v0.0.0
 	connectrpc.com/connect v1.19.1
 	github.com/joho/godotenv v1.5.1
 	github.com/obiente/cloud/apps/shared v0.0.0
 	golang.org/x/net v0.43.0
+	google.golang.org/protobuf v1.36.9
+	gorm.io/gorm v1.31.0
 )
 
 require (
@@ -34,21 +35,20 @@ require (
 	github.com/moby/moby/client v0.1.0-beta.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/redis/go-redis/v9 v9.16.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.60.0 // indirect
 	go.opentelemetry.io/otel v1.38.0 // indirect
 	go.opentelemetry.io/otel/metric v1.38.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.38.0 // indirect
+	go.opentelemetry.io/otel/sdk/metric v1.38.0 // indirect
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	golang.org/x/crypto v0.41.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
-	google.golang.org/protobuf v1.36.9 // indirect
 	gorm.io/driver/postgres v1.6.0 // indirect
-	gorm.io/gorm v1.31.0 // indirect
 )
-
-replace api => ../api
 
 replace github.com/obiente/cloud/apps/shared => ../shared

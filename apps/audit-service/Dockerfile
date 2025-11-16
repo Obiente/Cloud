@@ -11,32 +11,35 @@ WORKDIR /build
 ENV GOCACHE=/root/.cache/go-build
 ENV GOMODCACHE=/root/go/pkg/mod
 
-# Copy go mod files
-COPY apps/api/go.mod apps/api/go.sum ./apps/api/
+# Copy go mod files for shared and service
 COPY apps/shared/go.mod apps/shared/go.sum ./apps/shared/
+COPY apps/audit-service/go.mod apps/audit-service/go.sum ./apps/audit-service/
 
-# Download dependencies for API module (which contains internal packages)
-WORKDIR /build/apps/api
+# Download dependencies for shared module
+WORKDIR /build/apps/shared
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go mod download
+
+# Download dependencies for service module
+WORKDIR /build/apps/audit-service
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go mod download
 
 # Copy all source code
 WORKDIR /build
-COPY apps/api/ ./apps/api/
 COPY apps/shared/ ./apps/shared/
+COPY apps/audit-service/ ./apps/audit-service/
 
-# Copy service main.go into api/cmd/audit-service so it's part of the api module
-COPY apps/audit-service/main.go ./apps/api/cmd/audit-service/main.go
-
-# Build the audit service from API module directory (to access internal packages)
-WORKDIR /build/apps/api
+# Build the service from its own module directory
+WORKDIR /build/apps/audit-service
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -trimpath \
     -ldflags="-w -s -extldflags '-static'" \
-    -o /build/audit-service ./cmd/audit-service/main.go
+    -o /build/audit-service .
 
 # Final stage
 FROM alpine:latest
@@ -54,4 +57,3 @@ EXPOSE 3010
 
 # Run the service
 CMD ["./audit-service"]
-
