@@ -1,7 +1,17 @@
 go 1.25
 
 use (
-	./apps/api
+	./apps/api-gateway
+	./apps/audit-service
+	./apps/auth-service
+	./apps/billing-service
+	./apps/deployments-service
+	./apps/dns-service
+	./apps/gameservers-service
+	./apps/orchestrator-service
+	./apps/organizations-service
 	./apps/shared
-	./apps/vps-gateway
+	./apps/superadmin-service
+	./apps/support-service
+	./apps/vps-service
 )
