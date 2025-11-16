@@ -50,14 +50,15 @@ FROM deps AS builder
 # Build the application with optimized cache mounts
 # Combine nuxt prepare and build into a single RUN to reduce layers
 # Use all available cache mounts for maximum speed
-# Skip nuxt prepare if .nuxt already exists (from cache)
+# Always run nuxt prepare to ensure .nuxt directory is complete
+# (Cache mount may have incomplete directory from previous builds)
 RUN --mount=type=cache,id=nuxt-build,target=/app/apps/dashboard/.nuxt \
     --mount=type=cache,id=nuxt-nitro,target=/app/apps/dashboard/.nitro \
     --mount=type=cache,id=vite-cache,target=/app/apps/dashboard/node_modules/.vite \
     --mount=type=cache,id=nx-cache,target=/app/.nx/cache \
     --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     cd apps/dashboard && \
-    ([ -d .nuxt ] || pnpm exec nuxt prepare) && \
+    pnpm exec nuxt prepare && \
     SKIP_TYPE_CHECK=true pnpm exec nx nuxt:build
 
 # Production image - minimal runtime
