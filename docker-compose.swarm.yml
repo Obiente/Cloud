@@ -913,9 +913,7 @@ volumes:
 
 networks:
   obiente-network:
-    external: true
-    name: obiente_obiente-network
-    # Network must be created manually before deployment
-    # Create with: docker network create --driver overlay --subnet <subnet> obiente_obiente-network
-    # Or use: ./scripts/create-swarm-network.sh [--subnet <subnet>]
-    # Default subnet if not specified: 10.0.9.0/24
+    driver: overlay
+    attachable: true
+    # Docker Swarm will automatically create this network when the stack is deployed
+    # Services in the same stack can resolve each other by service name

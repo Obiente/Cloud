@@ -160,23 +160,10 @@ fi
 echo ""
 echo "🚀 Deploying main stack '$STACK_NAME'..."
 
-# Check if required overlay network exists (must be created manually on manager node)
+# Network will be created automatically by Swarm when the stack is deployed
+# No need to check for pre-existing network - Swarm handles it
 NETWORK_NAME="${STACK_NAME}_obiente-network"
-if ! docker network inspect "$NETWORK_NAME" &>/dev/null; then
-  echo "❌ Error: Required overlay network '$NETWORK_NAME' does not exist!"
-  echo ""
-  echo "📋 Create the network first on a Swarm manager node:"
-  echo ""
-  echo "  Option 1: Use the script (recommended):"
-  echo "    ./scripts/create-swarm-network.sh --subnet 10.0.9.0/24"
-  echo ""
-  echo "  Option 2: Manual creation:"
-  echo "    docker network create --driver overlay --subnet 10.0.9.0/24 $NETWORK_NAME"
-  echo ""
-  echo "💡 Note: Overlay networks can only be created on Swarm manager nodes"
-  echo ""
-  exit 1
-fi
+echo "ℹ️  Network '$NETWORK_NAME' will be created automatically by Docker Swarm"
 
 # Check if registry auth is configured
 if [ ! -f "/var/lib/obiente/registry-auth/htpasswd" ]; then
@@ -227,10 +214,10 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   
   # Deploy dashboard stack (uses external network from main stack)
   # The network name in docker-compose.dashboard.yml references: ${STACK_NAME}_obiente-network
-  # Substitute DOMAIN variable in labels (Docker Swarm doesn't expand env vars in labels)
+  # Substitute DOMAIN and STACK_NAME variables in labels and network name
   export DOMAIN="${DOMAIN:-obiente.cloud}"
   TEMP_DASHBOARD_COMPOSE=$(mktemp)
-  sed "s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
+  sed "s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g; s/\${STACK_NAME:-obiente}_obiente-network/${STACK_NAME}_obiente-network/g; s/obiente_obiente-network/${STACK_NAME}_obiente-network/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
   # Use --resolve-image always to force pulling latest images
   docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}"
   rm -f "$TEMP_DASHBOARD_COMPOSE"

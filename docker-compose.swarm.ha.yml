@@ -585,7 +585,7 @@ services:
       - --api.insecure=false  # Use secure API (HTTPS only)
       - --providers.swarm=true  # Use Swarm provider for Docker Swarm mode (v3.0)
       - --providers.swarm.exposedbydefault=false
-      - --providers.swarm.network=obiente-network
+      - --providers.swarm.network=obiente_obiente-network
       - --providers.swarm.watch=true  # Watch for service changes
       - --providers.swarm.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
       - --providers.etcd.endpoints=etcd:2379
@@ -973,5 +973,7 @@ volumes:
 
 networks:
   obiente-network:
-    external: true
-    name: obiente_obiente-network
+    driver: overlay
+    attachable: true
+    # Docker Swarm will automatically create this network when the stack is deployed
+    # Services in the same stack can resolve each other by service name
