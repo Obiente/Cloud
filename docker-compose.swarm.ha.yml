@@ -579,7 +579,7 @@ services:
 
   # Traefik - Dynamic reverse proxy with service discovery
   traefik:
-    image: traefik:v3.0
+    image: traefik:v3.6.1
     command:
       - --api.dashboard=true
       - --api.insecure=false  # Use secure API (HTTPS only)
