@@ -318,7 +318,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   ArrowPathIcon,
@@ -347,16 +347,17 @@ import type { TabItem } from "~/components/oui/Tabs.vue";
 import { useTabQuery } from "~/composables/useTabQuery";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 import OuiByte from "~/components/oui/Byte.vue";
-import GameServerMetrics from "~/components/gameserver/GameServerMetrics.vue";
-import GameServerLogs from "~/components/gameserver/GameServerLogs.vue";
-import GameServerFiles from "~/components/gameserver/GameServerFiles.vue";
-import GameServerSettings from "~/components/gameserver/GameServerSettings.vue";
-import GameServerOverview from "~/components/gameserver/GameServerOverview.vue";
-import MinecraftFileEditor from "~/components/gameserver/MinecraftFileEditor.vue";
-import MinecraftEULAEditor from "~/components/gameserver/MinecraftEULAEditor.vue";
-import MinecraftServerPropertiesEditor from "~/components/gameserver/MinecraftServerPropertiesEditor.vue";
-import MinecraftUsersEditor from "~/components/gameserver/MinecraftUsersEditor.vue";
-import AuditLogs from "~/components/audit/AuditLogs.vue";
+// Lazy load tab components for better performance
+const GameServerMetrics = defineAsyncComponent(() => import("~/components/gameserver/GameServerMetrics.vue"));
+const GameServerLogs = defineAsyncComponent(() => import("~/components/gameserver/GameServerLogs.vue"));
+const GameServerFiles = defineAsyncComponent(() => import("~/components/gameserver/GameServerFiles.vue"));
+const GameServerSettings = defineAsyncComponent(() => import("~/components/gameserver/GameServerSettings.vue"));
+const GameServerOverview = defineAsyncComponent(() => import("~/components/gameserver/GameServerOverview.vue"));
+const MinecraftFileEditor = defineAsyncComponent(() => import("~/components/gameserver/MinecraftFileEditor.vue"));
+const MinecraftEULAEditor = defineAsyncComponent(() => import("~/components/gameserver/MinecraftEULAEditor.vue"));
+const MinecraftServerPropertiesEditor = defineAsyncComponent(() => import("~/components/gameserver/MinecraftServerPropertiesEditor.vue"));
+const MinecraftUsersEditor = defineAsyncComponent(() => import("~/components/gameserver/MinecraftUsersEditor.vue"));
+const AuditLogs = defineAsyncComponent(() => import("~/components/audit/AuditLogs.vue"));
 import { date } from "@obiente/proto/utils";
 import { useToast } from "~/composables/useToast";
 import { useConnectClient } from "~/lib/connect-client";

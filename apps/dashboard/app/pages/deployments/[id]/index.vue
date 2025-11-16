@@ -353,6 +353,7 @@
     nextTick,
     onMounted,
     onUnmounted,
+    defineAsyncComponent,
   } from "vue";
   import { useRoute, useRouter } from "vue-router";
   import type { TabItem } from "~/components/oui/Tabs.vue";
@@ -392,7 +393,21 @@
   import { useDialog } from "~/composables/useDialog";
   import { ConnectError, Code } from "@connectrpc/connect";
   import ErrorAlert from "~/components/ErrorAlert.vue";
-  import AuditLogs from "~/components/audit/AuditLogs.vue";
+  
+  // Lazy load tab components for better performance
+  const DeploymentOverview = defineAsyncComponent(() => import("~/components/deployment/DeploymentOverview.vue"));
+  const DeploymentSettings = defineAsyncComponent(() => import("~/components/deployment/DeploymentSettings.vue"));
+  const DeploymentBuilds = defineAsyncComponent(() => import("~/components/deployment/DeploymentBuilds.vue"));
+  const DeploymentMetrics = defineAsyncComponent(() => import("~/components/deployment/DeploymentMetrics.vue"));
+  const DeploymentRouting = defineAsyncComponent(() => import("~/components/deployment/DeploymentRouting.vue"));
+  const DeploymentBuildLogs = defineAsyncComponent(() => import("~/components/deployment/DeploymentBuildLogs.vue"));
+  const DeploymentLogs = defineAsyncComponent(() => import("~/components/deployment/DeploymentLogs.vue"));
+  const DeploymentTerminal = defineAsyncComponent(() => import("~/components/deployment/DeploymentTerminal.vue"));
+  const DeploymentFiles = defineAsyncComponent(() => import("~/components/deployment/DeploymentFiles.vue"));
+  const DeploymentCompose = defineAsyncComponent(() => import("~/components/deployment/DeploymentCompose.vue"));
+  const DeploymentServices = defineAsyncComponent(() => import("~/components/deployment/DeploymentServices.vue"));
+  const DeploymentEnvVars = defineAsyncComponent(() => import("~/components/deployment/DeploymentEnvVars.vue"));
+  const AuditLogs = defineAsyncComponent(() => import("~/components/audit/AuditLogs.vue"));
 
   definePageMeta({
     layout: "default",

@@ -37,15 +37,32 @@ export default defineNuxtConfig({
       cssMinify: "esbuild", // Use esbuild for CSS minification (faster than default)
       rollupOptions: {
         output: {
-          // Only split out very large, independent dependencies
-          // Let Nuxt/Vite handle the rest automatically to avoid circular dependencies
+          // Improved code splitting strategy for better performance
           manualChunks: (id) => {
-            // Only split monaco-editor as it's very large and independent
-            if (id.includes("node_modules") && id.includes("monaco-editor")) {
-              return "monaco";
+            // Split large, independent dependencies into separate chunks
+            if (id.includes("node_modules")) {
+              // Monaco Editor - very large editor dependency
+              if (id.includes("monaco-editor")) {
+                return "monaco";
+              }
+              // Connect RPC - API client library
+              if (id.includes("@connectrpc") || id.includes("@bufbuild")) {
+                return "connect";
+              }
+              // Heroicons - icon library (used everywhere)
+              if (id.includes("@heroicons")) {
+                return "icons";
+              }
+              // VueUse - utility library
+              if (id.includes("@vueuse")) {
+                return "vueuse";
+              }
+              // Keep vendor chunks reasonable - group smaller deps
+              if (id.includes("node_modules")) {
+                return "vendor";
+              }
             }
-            // Let Nuxt handle all other chunk splitting automatically
-            // This prevents circular dependency issues
+            // Let Nuxt handle page-level chunk splitting automatically
           },
         },
         watch: {

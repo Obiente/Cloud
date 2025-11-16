@@ -1486,7 +1486,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from "vue";
+import { computed, ref, watch, nextTick, defineAsyncComponent } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   ArrowPathIcon,
@@ -1519,18 +1519,19 @@ import { ConnectError, Code } from "@connectrpc/connect";
 import OuiByte from "~/components/oui/Byte.vue";
 import OuiDate from "~/components/oui/Date.vue";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
-import VPSFirewall from "~/components/vps/VPSFirewall.vue";
-import VPSXTermTerminal from "~/components/vps/VPSXTermTerminal.vue";
-import VPSUsersManagement from "~/components/vps/VPSUsersManagement.vue";
-import VPSCloudInitSettings from "~/components/vps/VPSCloudInitSettings.vue";
-import AuditLogs from "~/components/audit/AuditLogs.vue";
 import ErrorAlert from "~/components/ErrorAlert.vue";
-import ResourceHeader from "~/components/resource/ResourceHeader.vue";
-import ResourceStatusBadge from "~/components/resource/ResourceStatusBadge.vue";
-import ResourceDetailsGrid from "~/components/resource/ResourceDetailsGrid.vue";
-import ResourceDetailCard from "~/components/resource/ResourceDetailCard.vue";
-import ResourceTabs from "~/components/resource/ResourceTabs.vue";
 import OuiSkeleton from "~/components/oui/Skeleton.vue";
+// Lazy load tab components for better performance
+const VPSFirewall = defineAsyncComponent(() => import("~/components/vps/VPSFirewall.vue"));
+const VPSXTermTerminal = defineAsyncComponent(() => import("~/components/vps/VPSXTermTerminal.vue"));
+const VPSUsersManagement = defineAsyncComponent(() => import("~/components/vps/VPSUsersManagement.vue"));
+const VPSCloudInitSettings = defineAsyncComponent(() => import("~/components/vps/VPSCloudInitSettings.vue"));
+const AuditLogs = defineAsyncComponent(() => import("~/components/audit/AuditLogs.vue"));
+const ResourceHeader = defineAsyncComponent(() => import("~/components/resource/ResourceHeader.vue"));
+const ResourceStatusBadge = defineAsyncComponent(() => import("~/components/resource/ResourceStatusBadge.vue"));
+const ResourceDetailsGrid = defineAsyncComponent(() => import("~/components/resource/ResourceDetailsGrid.vue"));
+const ResourceDetailCard = defineAsyncComponent(() => import("~/components/resource/ResourceDetailCard.vue"));
+const ResourceTabs = defineAsyncComponent(() => import("~/components/resource/ResourceTabs.vue"));
 import type { TabItem } from "~/components/oui/Tabs.vue";
 import { date } from "@obiente/proto/utils";
 import { formatDate } from "~/utils/common";

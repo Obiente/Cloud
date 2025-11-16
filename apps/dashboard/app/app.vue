@@ -6,5 +6,6 @@
 </template>
 
 <script setup lang="ts">
-import AlertDialog from "~/components/oui/AlertDialog.vue";
+import { defineAsyncComponent } from "vue";
+const AlertDialog = defineAsyncComponent(() => import("~/components/oui/AlertDialog.vue"));
 </script>
