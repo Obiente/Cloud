@@ -1,4 +1,4 @@
-# Build stage for Game Servers Service
+# Build stage for Gameservers Service
 FROM golang:1.25-alpine AS go-builder
 
 # Install build dependencies
@@ -11,32 +11,35 @@ WORKDIR /build
 ENV GOCACHE=/root/.cache/go-build
 ENV GOMODCACHE=/root/go/pkg/mod
 
-# Copy go mod files
-COPY apps/api/go.mod apps/api/go.sum ./apps/api/
+# Copy go mod files for shared and service
 COPY apps/shared/go.mod apps/shared/go.sum ./apps/shared/
+COPY apps/gameservers-service/go.mod apps/gameservers-service/go.sum ./apps/gameservers-service/
 
-# Download dependencies for API module (which contains internal packages)
-WORKDIR /build/apps/api
+# Download dependencies for shared module
+WORKDIR /build/apps/shared
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go mod download
+
+# Download dependencies for service module
+WORKDIR /build/apps/gameservers-service
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go mod download
 
 # Copy all source code
 WORKDIR /build
-COPY apps/api/ ./apps/api/
 COPY apps/shared/ ./apps/shared/
+COPY apps/gameservers-service/ ./apps/gameservers-service/
 
-# Copy service main.go into api/cmd/gameservers-service so it's part of the api module
-COPY apps/gameservers-service/main.go ./apps/api/cmd/gameservers-service/main.go
-
-# Build the gameservers service from API module directory (to access internal packages)
-WORKDIR /build/apps/api
+# Build the service from its own module directory
+WORKDIR /build/apps/gameservers-service
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -trimpath \
     -ldflags="-w -s -extldflags '-static'" \
-    -o /build/gameservers-service ./cmd/gameservers-service/main.go
+    -o /build/gameservers-service .
 
 # Final stage
 FROM alpine:latest
@@ -54,4 +57,3 @@ EXPOSE 3006
 
 # Run the service
 CMD ["./gameservers-service"]
-
