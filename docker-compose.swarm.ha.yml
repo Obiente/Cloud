@@ -973,7 +973,8 @@ volumes:
 
 networks:
   obiente-network:
-    driver: overlay
-    attachable: true
-    # Docker Swarm will automatically create this network when the stack is deployed
-    # Services in the same stack can resolve each other by service name
+    external: true
+    name: __STACK_NAME__obiente-network
+    # Network must be created before deploying the stack
+    # The deploy script will create it if it doesn't exist
+    # This ensures DNS resolution works from the start

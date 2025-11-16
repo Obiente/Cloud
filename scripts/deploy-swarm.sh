@@ -193,6 +193,26 @@ MERGED_COMPOSE=$(mktemp)
 # This makes network names dynamic (e.g., __STACK_NAME__obiente-network → obiente_obiente-network)
 sed -i "s/__STACK_NAME__/${STACK_NAME}/g" "$MERGED_COMPOSE"
 
+# Ensure the overlay network exists before deploying
+# Making the network external ensures it's created before services start,
+# which helps with DNS resolution timing issues
+NETWORK_NAME="${STACK_NAME}_obiente-network"
+if ! docker network ls | grep -q "$NETWORK_NAME"; then
+  echo "📡 Creating overlay network: $NETWORK_NAME"
+  docker network create \
+    --driver overlay \
+    --attachable \
+    --opt encrypted=true \
+    "$NETWORK_NAME" || {
+    echo "⚠️  Network creation failed (may already exist)"
+    # Continue anyway - network might exist but not show up in ls
+  }
+  # Wait a moment for network to be fully initialized
+  sleep 2
+else
+  echo "✅ Network $NETWORK_NAME already exists"
+fi
+
 # Deploy the main stack with environment variables loaded from .env
 # Use --resolve-image always to force pulling latest images
 docker stack deploy --resolve-image always -c "$MERGED_COMPOSE" "$STACK_NAME"
