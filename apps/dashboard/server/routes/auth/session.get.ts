@@ -23,7 +23,17 @@ export default eventHandler(async (event) => {
   const session = await getUserSession(event);
   // Populate user data if session exists
   if (Object.keys(session).length > 0) {
-    await getUserData(event, session);
+    try {
+      await getUserData(event, session);
+      // Re-fetch session after getUserData (it may have updated it)
+      const updatedSession = await getUserSession(event);
+      const { secure, ...data } = updatedSession;
+      return data;
+    } catch (error) {
+      // If getUserData fails (e.g., token expired and refresh failed), return empty session
+      console.error("Failed to get user data:", error);
+      return { user: null };
+    }
   }
   // Exclude secure (server-only) data from response
   const { secure, ...data } = session;
