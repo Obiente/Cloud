@@ -1,157 +1,536 @@
+x-common-database: &common-database
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_USER: ${POSTGRES_USER:-postgres}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+  DB_NAME: ${POSTGRES_DB:-obiente}
+
+x-common-metrics-db: &common-metrics-db
+  METRICS_DB_HOST: timescaledb
+  METRICS_DB_PORT: 5432
+  METRICS_DB_USER: ${METRICS_DB_USER:-postgres}
+  METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-postgres}
+  METRICS_DB_NAME: ${METRICS_DB_NAME:-obiente_metrics}
+
+x-common-auth: &common-auth
+  LOG_LEVEL: ${LOG_LEVEL:-debug}
+  DB_LOG_LEVEL: ${DB_LOG_LEVEL:-}
+  CORS_ORIGIN: ${CORS_ORIGIN:-*}
+  ZITADEL_URL: ${ZITADEL_URL:-https://auth.obiente.cloud}
+  ZITADEL_CLIENT_ID: ${ZITADEL_CLIENT_ID:-}
+  ZITADEL_MANAGEMENT_TOKEN: ${ZITADEL_MANAGEMENT_TOKEN:-}
+  SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
+  ZITADEL_ORGANIZATION_ID: ${ZITADEL_ORGANIZATION_ID:-}
+  DISABLE_AUTH: ${DISABLE_AUTH:-false}
+  SKIP_TLS_VERIFY: ${SKIP_TLS_VERIFY:-false}
+
+x-common-smtp: &common-smtp
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USERNAME: ${SMTP_USERNAME:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-}
+  SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Obiente Cloud}
+  SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
+  SMTP_USE_STARTTLS: ${SMTP_USE_STARTTLS:-true}
+  SMTP_SKIP_TLS_VERIFY: ${SMTP_SKIP_TLS_VERIFY:-false}
+  SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-10}
+  SMTP_LOCAL_NAME: ${SMTP_LOCAL_NAME:-api.obiente.local}
+
+x-common-dashboard: &common-dashboard
+  DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3000}
+  SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+  SELF_HOSTED: ${SELF_HOSTED:-false}
+  BILLING_ENABLED: ${BILLING_ENABLED:-true}
+
+x-common-stripe: &common-stripe
+  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+
+x-common-redis: &common-redis
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+
+x-common-orchestrator: &common-orchestrator
+  DOMAIN: ${DOMAIN:-localhost}
+  ACME_EMAIL: ${ACME_EMAIL:-}
+  REGISTRY_URL: ${REGISTRY_URL:-}
+  REGISTRY_USERNAME: ${REGISTRY_USERNAME:-}
+  REGISTRY_PASSWORD: ${REGISTRY_PASSWORD:-}
+  ENABLE_SWARM: ${ENABLE_SWARM:-false}
+  TRAEFIK_IPS: ${TRAEFIK_IPS:-127.0.0.1}
+  API_BASE_URL: ${API_BASE_URL:-http://api-gateway:3001}
+  DEPLOYMENT_STRATEGY: ${DEPLOYMENT_STRATEGY:-least-loaded}
+  MAX_DEPLOYMENTS_PER_NODE: ${MAX_DEPLOYMENTS_PER_NODE:-50}
+
+x-common-vps: &common-vps
+  VPS_REGIONS: ${VPS_REGIONS:-}
+  PROXMOX_API_URL: ${PROXMOX_API_URL:-}
+  PROXMOX_USERNAME: ${PROXMOX_USERNAME:-root@pam}
+  PROXMOX_PASSWORD: ${PROXMOX_PASSWORD:-}
+  PROXMOX_TOKEN_ID: ${PROXMOX_TOKEN_ID:-}
+  PROXMOX_TOKEN_SECRET: ${PROXMOX_TOKEN_SECRET:-}
+  PROXMOX_STORAGE_POOL: ${PROXMOX_STORAGE_POOL:-local-lvm}
+  PROXMOX_VM_ID_START: ${PROXMOX_VM_ID_START:-}
+  PROXMOX_VLAN_ID: ${PROXMOX_VLAN_ID:-}
+  PROXMOX_SSH_HOST: ${PROXMOX_SSH_HOST:-}
+  PROXMOX_SSH_USER: ${PROXMOX_SSH_USER:-obiente-cloud}
+  PROXMOX_SSH_KEY_PATH: ${PROXMOX_SSH_KEY_PATH:-}
+  PROXMOX_SSH_KEY_DATA: ${PROXMOX_SSH_KEY_DATA:-}
+  VPS_GATEWAY_API_SECRET: ${VPS_GATEWAY_API_SECRET:-}
+  VPS_GATEWAY_URL: ${VPS_GATEWAY_URL:-}
+  VPS_GATEWAY_BRIDGE: ${VPS_GATEWAY_BRIDGE:-OCvpsnet}
+  SSH_PROXY_PORT: ${SSH_PROXY_PORT:-2222}
+
+x-common-dns-delegation: &common-dns-delegation
+  DNS_DELEGATION_PRODUCTION_API_URL: ${DNS_DELEGATION_PRODUCTION_API_URL:-}
+  DNS_DELEGATION_API_KEY: ${DNS_DELEGATION_API_KEY:-}
+  DNS_DELEGATION_PUSH_INTERVAL: ${DNS_DELEGATION_PUSH_INTERVAL:-2m}
+  DNS_DELEGATION_TTL: ${DNS_DELEGATION_TTL:-300s}
+
+x-common-dns: &common-dns
+  DNS_IPS: ${DNS_IPS:-}
+  DNS_PORT: ${DNS_PORT:-53}
+  DNS_HTTP_PORT: ${DNS_HTTP_PORT:-8053}
+  ENABLE_DNS: ${ENABLE_DNS:-true}
+
+x-common-security: &common-security
+  SECRET: ${SECRET:-}
+  RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+  RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+
+x-common-github: &common-github
+  GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+  GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+
 services:
-  api:
-    image: obiente/cloud-api:latest
+  # Main API service removed - all functionality has been moved to microservices
+  # API Gateway (port 3001) is the primary entry point and routes to microservices
+  
+  # Audit Service - Microservice for audit log management
+  audit-service:
+    image: obiente/audit-service:latest
     build:
       context: .
-      dockerfile: apps/api/Dockerfile
+      dockerfile: apps/audit-service/Dockerfile
+    container_name: obiente-audit-service
     environment:
-      PORT: ${GO_API_PORT:-3001}
-      DB_HOST: postgres  # Use container name to avoid DNS search domain issues
-      DB_PORT: 5432
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      DB_NAME: ${POSTGRES_DB:-obiente}
-      METRICS_DB_HOST: timescaledb
-      METRICS_DB_PORT: 5432
-      METRICS_DB_USER: ${METRICS_DB_USER:-postgres}
-      METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-postgres}
-      METRICS_DB_NAME: ${METRICS_DB_NAME:-obiente_metrics}
-      METRICS_COLLECTION_INTERVAL: ${METRICS_COLLECTION_INTERVAL:-5s}
-      METRICS_STORAGE_INTERVAL: ${METRICS_STORAGE_INTERVAL:-60s}
-      METRICS_LIVE_RETENTION: ${METRICS_LIVE_RETENTION:-5m}
-      METRICS_MAX_WORKERS: ${METRICS_MAX_WORKERS:-50}
-      METRICS_BATCH_SIZE: ${METRICS_BATCH_SIZE:-100}
-      METRICS_MAX_LIVE_PER_DEPLOYMENT: ${METRICS_MAX_LIVE_PER_DEPLOYMENT:-1000}
-      METRICS_MAX_PREVIOUS_STATS: ${METRICS_MAX_PREVIOUS_STATS:-10000}
-      METRICS_DOCKER_API_TIMEOUT: ${METRICS_DOCKER_API_TIMEOUT:-10s}
-      METRICS_DOCKER_API_RETRY_MAX: ${METRICS_DOCKER_API_RETRY_MAX:-3}
-      METRICS_DOCKER_API_RETRY_BACKOFF_INITIAL: ${METRICS_DOCKER_API_RETRY_BACKOFF_INITIAL:-1s}
-      METRICS_DOCKER_API_RETRY_BACKOFF_MAX: ${METRICS_DOCKER_API_RETRY_BACKOFF_MAX:-30s}
-      METRICS_CIRCUIT_BREAKER_FAILURE_THRESHOLD: ${METRICS_CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
-      METRICS_CIRCUIT_BREAKER_COOLDOWN: ${METRICS_CIRCUIT_BREAKER_COOLDOWN:-1m}
-      METRICS_CIRCUIT_BREAKER_HALFOPEN_MAX: ${METRICS_CIRCUIT_BREAKER_HALFOPEN_MAX:-3}
-      METRICS_HEALTH_CHECK_INTERVAL: ${METRICS_HEALTH_CHECK_INTERVAL:-30s}
-      METRICS_HEALTH_CHECK_FAILURE_THRESHOLD: ${METRICS_HEALTH_CHECK_FAILURE_THRESHOLD:-3}
-      METRICS_SUBSCRIBER_BUFFER_SIZE: ${METRICS_SUBSCRIBER_BUFFER_SIZE:-100}
-      METRICS_SUBSCRIBER_SLOW_THRESHOLD: ${METRICS_SUBSCRIBER_SLOW_THRESHOLD:-5s}
-      METRICS_SUBSCRIBER_CLEANUP_INTERVAL: ${METRICS_SUBSCRIBER_CLEANUP_INTERVAL:-1m}
-      METRICS_RETRY_MAX_RETRIES: ${METRICS_RETRY_MAX_RETRIES:-5}
-      METRICS_RETRY_INTERVAL: ${METRICS_RETRY_INTERVAL:-1m}
-      METRICS_RETRY_MAX_QUEUE_SIZE: ${METRICS_RETRY_MAX_QUEUE_SIZE:-10000}
-      REDIS_URL: redis://redis:6379
-      LOG_LEVEL: ${LOG_LEVEL:-debug}
-      DB_LOG_LEVEL: ${DB_LOG_LEVEL:-}
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
-      ZITADEL_URL: ${ZITADEL_URL:-https://auth.obiente.cloud}
-      ZITADEL_CLIENT_ID: ${ZITADEL_CLIENT_ID:-}
-      ZITADEL_CLIENT_SECRET: ${ZITADEL_CLIENT_SECRET:-}  # Optional: Use Client Credentials Grant instead of PAT
-      ZITADEL_MANAGEMENT_TOKEN: ${ZITADEL_MANAGEMENT_TOKEN:-}
-      ZITADEL_ORGANIZATION_ID: ${ZITADEL_ORGANIZATION_ID:-}  # REQUIRED: Service users don't have a default organization
-      DISABLE_AUTH: ${DISABLE_AUTH:-false}
-      SKIP_TLS_VERIFY: ${SKIP_TLS_VERIFY:-false}
-      SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
-      BILLING_ENABLED: ${BILLING_ENABLED:-true}
-      SELF_HOSTED: ${SELF_HOSTED:-false}
-      TRAEFIK_IPS: ${TRAEFIK_IPS:-} # Format: "region1:ip1,ip2;region2:ip3,ip4" or simple "ip1,ip2"
-      # VPS Configuration
-      VPS_REGIONS: ${VPS_REGIONS:-} # Format: "region1:Name 1;region2:Name 2" or simple "region1"
-      PROXMOX_API_URL: ${PROXMOX_API_URL:-}
-      PROXMOX_USERNAME: ${PROXMOX_USERNAME:-root@pam}
-      PROXMOX_PASSWORD: ${PROXMOX_PASSWORD:-}
-      PROXMOX_TOKEN_ID: ${PROXMOX_TOKEN_ID:-}
-      PROXMOX_TOKEN_SECRET: ${PROXMOX_TOKEN_SECRET:-}
-      PROXMOX_STORAGE_POOL: ${PROXMOX_STORAGE_POOL:-local-lvm}
-      PROXMOX_VM_ID_START: ${PROXMOX_VM_ID_START:-} # Starting VM ID range (e.g., 300)
-      PROXMOX_VLAN_ID: ${PROXMOX_VLAN_ID:-} # Optional VLAN tag for VM network isolation (e.g., 100)
-      PROXMOX_SSH_HOST: ${PROXMOX_SSH_HOST:-} # SSH host for snippet writing (defaults to PROXMOX_API_URL host)
-      PROXMOX_SSH_USER: ${PROXMOX_SSH_USER:-obiente-cloud} # SSH user for snippet writing
-      PROXMOX_SSH_KEY_PATH: ${PROXMOX_SSH_KEY_PATH:-} # Path to SSH private key file
-      PROXMOX_SSH_KEY_DATA: ${PROXMOX_SSH_KEY_DATA:-} # SSH private key content (raw or base64-encoded)
-      SSH_PROXY_PORT: ${SSH_PROXY_PORT:-2222}
-      # VPS Gateway Configuration (optional, for DHCP and SSH proxying)
-      VPS_GATEWAY_URL: ${VPS_GATEWAY_URL:-} # gRPC URL for vps-gateway service (e.g., http://vps-gateway:8080)
-      VPS_GATEWAY_API_SECRET: ${VPS_GATEWAY_API_SECRET:-} # Shared secret for authenticating with vps-gateway
-      # DNS configuration - optional, for documentation/deployment purposes only
-      # Set MAIN_DNS_IPS to production DNS IP addresses (e.g., export MAIN_DNS_IPS=10.0.9.10)
-      # Note: DNS_IPS must contain IP addresses, not container names or hostnames
-      # For local dev, containers can resolve via the 'dns' service name automatically
-      DNS_IPS: ${MAIN_DNS_IPS:-} # Comma-separated list of DNS server IP addresses (optional)
-      DNS_PORT: ${MAIN_DNS_PORT:-${DNS_PORT:-53}} # Use dev DNS port (53) by default, or production port if MAIN_DNS_PORT is set
-      PRICING_CPU_COST_PER_CORE_SECOND: ${PRICING_CPU_COST_PER_CORE_SECOND:-0.000000761}
-      PRICING_MEMORY_COST_PER_BYTE_SECOND: ${PRICING_MEMORY_COST_PER_BYTE_SECOND:-0.000000000000001063}
-      PRICING_BANDWIDTH_COST_PER_BYTE: ${PRICING_BANDWIDTH_COST_PER_BYTE:-0.000000000009313}
-      PRICING_STORAGE_COST_PER_BYTE_MONTH: ${PRICING_STORAGE_COST_PER_BYTE_MONTH:-0.000000000186264}
-      # Stripe Payment Processing
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      # Dashboard URL for redirects (used by billing service and email notifications)
-      DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3000}
-      # Support email (optional)
-      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
-      # SMTP configuration for email delivery
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-}
-      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Obiente Cloud}
-      SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
-      SMTP_USE_STARTTLS: ${SMTP_USE_STARTTLS:-true}
-      SMTP_SKIP_TLS_VERIFY: ${SMTP_SKIP_TLS_VERIFY:-false}
-      SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-10}
-      SMTP_LOCAL_NAME: ${SMTP_LOCAL_NAME:-api.obiente.local}
-      # DNS Delegation Configuration (for dev/self-hosted APIs to push DNS records to production)
-      # Set DNS_DELEGATION_PRODUCTION_API_URL to production API URL (e.g., "https://api.obiente.cloud")
-      # Set DNS_DELEGATION_API_KEY to the API key received from production (see docs/deployment/dns-delegation.md)
-      # Set DNS_DELEGATION_PUSH_INTERVAL to how often to push records (default: 2m)
-      # Set DNS_DELEGATION_TTL to TTL for pushed records (default: 300s)
-      DNS_DELEGATION_PRODUCTION_API_URL: ${DNS_DELEGATION_PRODUCTION_API_URL:-} # URL of production API
-      DNS_DELEGATION_API_KEY: ${DNS_DELEGATION_API_KEY:-} # API key from production (required for pushing DNS records)
-      DNS_DELEGATION_PUSH_INTERVAL: ${DNS_DELEGATION_PUSH_INTERVAL:-2m} # How often to push DNS records
-      DNS_DELEGATION_TTL: ${DNS_DELEGATION_TTL:-300s} # TTL for pushed DNS records
-      # Swarm configuration - disable swarm features for non-swarm deployments
-      ENABLE_SWARM: ${ENABLE_SWARM:-false} # Set to 'true' to enable Docker Swarm features (default: false for non-swarm)
+      PORT: 3010
+      <<: [*common-database, *common-metrics-db, *common-auth]
     depends_on:
       postgres:
         condition: service_healthy
       timescaledb:
         condition: service_healthy
-      dns:
-        condition: service_started
-    # Explicitly configure DNS to prevent search domain issues
-    # Docker's DNS (127.0.0.11) resolves service names, but we need to clear search domains
-    # to prevent "postgres" from resolving to "postgres.my.obiente.cloud" (external IPs)
-    dns_search: []  # Clear search domains - prevents appending .my.obiente.cloud to service names
-    # SSH is now routed through Traefik, so we don't expose it directly
-    # ports:
-    #   - "${SSH_PROXY_PORT:-2222}:${SSH_PROXY_PORT:-2222}"  # SSH proxy port (exposed directly, bypassing Traefik)
+    dns_search: []
     networks:
       - obiente-network
-      # Option 2: Connect to production Swarm network (uncomment if both dev and prod are on same host)
-      # - production-network
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      # Mount Docker volumes directory for named volumes (read-only)
-      - /var/lib/docker/volumes:/var/lib/docker/volumes:ro
-      # Mount custom safe directories for sanitized bind mounts
-      - /var/lib/obiente:/var/lib/obiente
-      - /tmp/obiente-volumes:/tmp/obiente-volumes
-      - /tmp/obiente-deployments:/tmp/obiente-deployments
     labels:
       - "cloud.obiente.traefik=true"
       - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api.${DOMAIN:-localhost}`) || Host(`api.localhost`) || Host(`localhost`)"
-      - "traefik.http.routers.api.entrypoints=web"
-      - "traefik.http.services.api.loadbalancer.server.port=3001"
-      - "traefik.http.routers.api-secure.rule=Host(`api.${DOMAIN:-localhost}`) || Host(`api.localhost`) || Host(`localhost`)"
-      - "traefik.http.routers.api-secure.entrypoints=websecure"
-      - "traefik.http.routers.api-secure.service=api"
-      - "traefik.http.routers.api-secure.tls=true"
-      # SSH TCP routing through Traefik
-      - "traefik.tcp.routers.ssh.rule=HostSNI(`*`)"
-      - "traefik.tcp.routers.ssh.entrypoints=ssh"
-      - "traefik.tcp.routers.ssh.service=ssh"
-      - "traefik.tcp.services.ssh.loadbalancer.server.port=${SSH_PROXY_PORT:-2222}"
+      - "traefik.http.routers.audit-service.rule=Host(`audit-service.${DOMAIN:-localhost}`) || Host(`audit-service.localhost`)"
+      - "traefik.http.routers.audit-service.entrypoints=web"
+      - "traefik.http.services.audit-service.loadbalancer.server.port=3010"
+      - "traefik.http.routers.audit-service-secure.rule=Host(`audit-service.${DOMAIN:-localhost}`) || Host(`audit-service.localhost`)"
+      - "traefik.http.routers.audit-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.audit-service-secure.service=audit-service"
+      - "traefik.http.routers.audit-service-secure.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3010/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Support Service - Microservice for support ticket management
+  support-service:
+    image: obiente/support-service:latest
+    build:
+      context: .
+      dockerfile: apps/support-service/Dockerfile
+    container_name: obiente-support-service
+    environment:
+      PORT: 3009
+      <<: [*common-database, *common-auth]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    dns_search: []
+    networks:
+      - obiente-network
+    labels:
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.support-service.rule=Host(`support-service.${DOMAIN:-localhost}`) || Host(`support-service.localhost`)"
+      - "traefik.http.routers.support-service.entrypoints=web"
+      - "traefik.http.services.support-service.loadbalancer.server.port=3009"
+      - "traefik.http.routers.support-service-secure.rule=Host(`support-service.${DOMAIN:-localhost}`) || Host(`support-service.localhost`)"
+      - "traefik.http.routers.support-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.support-service-secure.service=support-service"
+      - "traefik.http.routers.support-service-secure.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3009/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Auth Service - Microservice for authentication
+  auth-service:
+    image: obiente/auth-service:latest
+    build:
+      context: .
+      dockerfile: apps/auth-service/Dockerfile
+    container_name: obiente-auth-service
+    environment:
+      PORT: 3002
+      <<: [*common-database, *common-auth, *common-dashboard]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    dns_search: []
+    networks:
+      - obiente-network
+    labels:
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth-service.rule=Host(`auth-service.${DOMAIN:-localhost}`) || Host(`auth-service.localhost`)"
+      - "traefik.http.routers.auth-service.entrypoints=web"
+      - "traefik.http.services.auth-service.loadbalancer.server.port=3002"
+      - "traefik.http.routers.auth-service-secure.rule=Host(`auth-service.${DOMAIN:-localhost}`) || Host(`auth-service.localhost`)"
+      - "traefik.http.routers.auth-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.auth-service-secure.service=auth-service"
+      - "traefik.http.routers.auth-service-secure.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3002/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Organizations Service - Microservice for organization management
+  organizations-service:
+    image: obiente/organizations-service:latest
+    build:
+      context: .
+      dockerfile: apps/organizations-service/Dockerfile
+    container_name: obiente-organizations-service
+    environment:
+      PORT: 3003
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    dns_search: []
+    networks:
+      - obiente-network
+    labels:
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.organizations-service.rule=Host(`organizations-service.${DOMAIN:-localhost}`) || Host(`organizations-service.localhost`)"
+      - "traefik.http.routers.organizations-service.entrypoints=web"
+      - "traefik.http.services.organizations-service.loadbalancer.server.port=3003"
+      - "traefik.http.routers.organizations-service-secure.rule=Host(`organizations-service.${DOMAIN:-localhost}`) || Host(`organizations-service.localhost`)"
+      - "traefik.http.routers.organizations-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.organizations-service-secure.service=organizations-service"
+      - "traefik.http.routers.organizations-service-secure.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3003/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Billing Service - Microservice for billing and Stripe integration
+  billing-service:
+    image: obiente/billing-service:latest
+    build:
+      context: .
+      dockerfile: apps/billing-service/Dockerfile
+    container_name: obiente-billing-service
+    environment:
+      PORT: 3004
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-dashboard]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    dns_search: []
+    networks:
+      - obiente-network
+    labels:
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.billing-service.rule=Host(`billing-service.${DOMAIN:-localhost}`) || Host(`billing-service.localhost`)"
+      - "traefik.http.routers.billing-service.entrypoints=web"
+      - "traefik.http.services.billing-service.loadbalancer.server.port=3004"
+      - "traefik.http.routers.billing-service-secure.rule=Host(`billing-service.${DOMAIN:-localhost}`) || Host(`billing-service.localhost`)"
+      - "traefik.http.routers.billing-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.billing-service-secure.service=billing-service"
+      - "traefik.http.routers.billing-service-secure.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3004/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Deployments Service - Microservice for deployment management
+  deployments-service:
+    image: obiente/deployments-service:latest
+    build:
+      context: .
+      dockerfile: apps/deployments-service/Dockerfile
+    container_name: obiente-deployments-service
+    environment:
+      PORT: 3005
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-orchestrator, *common-dns-delegation]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    dns_search: []
+    networks:
+      - obiente-network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.deployments-service.rule=Host(`deployments-service.${DOMAIN:-localhost}`) || Host(`deployments-service.localhost`)"
+      - "traefik.http.routers.deployments-service.entrypoints=web"
+      - "traefik.http.services.deployments-service.loadbalancer.server.port=3005"
+      - "traefik.http.routers.deployments-service-secure.rule=Host(`deployments-service.${DOMAIN:-localhost}`) || Host(`deployments-service.localhost`)"
+      - "traefik.http.routers.deployments-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.deployments-service-secure.service=deployments-service"
+      - "traefik.http.routers.deployments-service-secure.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3005/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Game Servers Service - Microservice for game server management
+  gameservers-service:
+    image: obiente/gameservers-service:latest
+    build:
+      context: .
+      dockerfile: apps/gameservers-service/Dockerfile
+    container_name: obiente-gameservers-service
+    environment:
+      PORT: 3006
+      <<: [*common-database, *common-metrics-db, *common-auth]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    dns_search: []
+    networks:
+      - obiente-network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.gameservers-service.rule=Host(`gameservers-service.${DOMAIN:-localhost}`) || Host(`gameservers-service.localhost`)"
+      - "traefik.http.routers.gameservers-service.entrypoints=web"
+      - "traefik.http.services.gameservers-service.loadbalancer.server.port=3006"
+      - "traefik.http.routers.gameservers-service-secure.rule=Host(`gameservers-service.${DOMAIN:-localhost}`) || Host(`gameservers-service.localhost`)"
+      - "traefik.http.routers.gameservers-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.gameservers-service-secure.service=gameservers-service"
+      - "traefik.http.routers.gameservers-service-secure.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3006/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Orchestrator Service - Microservice for container orchestration and metrics
+  orchestrator-service:
+    image: obiente/orchestrator-service:latest
+    build:
+      context: .
+      dockerfile: apps/orchestrator-service/Dockerfile
+    container_name: obiente-orchestrator-service
+    environment:
+      PORT: 3007
+      <<: [*common-database, *common-metrics-db, *common-redis, *common-orchestrator, *common-vps, *common-dns-delegation]
+      ORCHESTRATOR_SYNC_INTERVAL: ${ORCHESTRATOR_SYNC_INTERVAL:-30s}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    dns_search: []
+    networks:
+      - obiente-network
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.orchestrator-service.rule=Host(`orchestrator-service.${DOMAIN:-localhost}`) || Host(`orchestrator-service.localhost`)"
+      - "traefik.http.routers.orchestrator-service.entrypoints=web"
+      - "traefik.http.services.orchestrator-service.loadbalancer.server.port=3007"
+      - "traefik.http.routers.orchestrator-service-secure.rule=Host(`orchestrator-service.${DOMAIN:-localhost}`) || Host(`orchestrator-service.localhost`)"
+      - "traefik.http.routers.orchestrator-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.orchestrator-service-secure.service=orchestrator-service"
+      - "traefik.http.routers.orchestrator-service-secure.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3007/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # VPS Service - Microservice for VPS management
+  vps-service:
+    image: obiente/vps-service:latest
+    build:
+      context: .
+      dockerfile: apps/vps-service/Dockerfile
+    container_name: obiente-vps-service
+    environment:
+      PORT: 3008
+      <<: [*common-database, *common-auth, *common-orchestrator, *common-vps]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    dns_search: []
+    networks:
+      - obiente-network
+    labels:
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.vps-service.rule=Host(`vps-service.${DOMAIN:-localhost}`) || Host(`vps-service.localhost`)"
+      - "traefik.http.routers.vps-service.entrypoints=web"
+      - "traefik.http.services.vps-service.loadbalancer.server.port=3008"
+      - "traefik.http.routers.vps-service-secure.rule=Host(`vps-service.${DOMAIN:-localhost}`) || Host(`vps-service.localhost`)"
+      - "traefik.http.routers.vps-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.vps-service-secure.service=vps-service"
+      - "traefik.http.routers.vps-service-secure.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3008/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Superadmin Service - Microservice for superadmin operations
+  superadmin-service:
+    image: obiente/superadmin-service:latest
+    build:
+      context: .
+      dockerfile: apps/superadmin-service/Dockerfile
+    container_name: obiente-superadmin-service
+    environment:
+      PORT: 3011
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-orchestrator]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    dns_search: []
+    networks:
+      - obiente-network
+    labels:
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.superadmin-service.rule=Host(`superadmin-service.${DOMAIN:-localhost}`) || Host(`superadmin-service.localhost`)"
+      - "traefik.http.routers.superadmin-service.entrypoints=web"
+      - "traefik.http.services.superadmin-service.loadbalancer.server.port=3011"
+      - "traefik.http.routers.superadmin-service-secure.rule=Host(`superadmin-service.${DOMAIN:-localhost}`) || Host(`superadmin-service.localhost`)"
+      - "traefik.http.routers.superadmin-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.superadmin-service-secure.service=superadmin-service"
+      - "traefik.http.routers.superadmin-service-secure.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3011/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # DNS Service - Microservice for DNS resolution
+  # Set ENABLE_DNS=false to disable this service when using DNS delegation
+  # When disabled, the service will exit gracefully (container will stop)
+  dns-service:
+    image: obiente/dns-service:latest
+    build:
+      context: .
+      dockerfile: apps/dns-service/Dockerfile
+    container_name: obiente-dns-service
+    environment:
+      <<: [*common-database, *common-redis, *common-orchestrator, *common-dns]
+      HTTP_PORT: ${DNS_HTTP_PORT:-8053}  # HTTP port for DNS delegation push endpoints
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    dns_search: []
+    networks:
+      - obiente-network
+    # Ports mapping - automatically handled based on ENABLE_DNS
+    # When ENABLE_DNS=false, the service exits immediately before binding ports
+    # Docker will still try to map ports, but since the container exits, no conflict occurs
+    # If you still get port conflicts, the external service is likely already using port 53
+    ports:
+      - "${DNS_PORT:-53}:${DNS_PORT:-53}/udp"
+      - "${DNS_PORT:-53}:${DNS_PORT:-53}/tcp"
+    cap_add:
+      - NET_BIND_SERVICE
+    # Health check - service exits immediately when ENABLE_DNS=false, so healthcheck not needed
+    # When enabled, check DNS port is listening
+    healthcheck:
+      test: ["CMD-SHELL", "if command -v nc >/dev/null 2>&1; then nc -z localhost ${DNS_PORT:-53} || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost ${DNS_PORT:-53} || exit 1; fi"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # API Gateway - Routes requests to all microservices
+  api-gateway:
+    image: obiente/api-gateway:latest
+    build:
+      context: .
+      dockerfile: apps/api-gateway/Dockerfile
+    container_name: obiente-api-gateway
+    environment:
+      PORT: 3001
+      <<: [*common-auth]
+    dns_search: []
+    networks:
+      - obiente-network
+    labels:
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.api-gateway.rule=Host(`api.${DOMAIN:-localhost}`) || Host(`api.localhost`)"
+      - "traefik.http.routers.api-gateway.entrypoints=web"
+      - "traefik.http.routers.api-gateway.service=api-gateway"
+      - "traefik.http.services.api-gateway.loadbalancer.server.port=3001"
+      - "traefik.http.services.api-gateway.loadbalancer.passHostHeader=true"
+      - "traefik.http.routers.api-gateway-secure.rule=Host(`api.${DOMAIN:-localhost}`) || Host(`api.localhost`)"
+      - "traefik.http.routers.api-gateway-secure.entrypoints=websecure"
+      - "traefik.http.routers.api-gateway-secure.service=api-gateway"
+      - "traefik.http.routers.api-gateway-secure.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   postgres:
     image: postgres:16-alpine
     container_name: obiente-postgres
@@ -240,40 +619,8 @@ services:
   # The DNS server queries the dev database, so dev deployments resolve correctly
   # Containers can resolve domains via this DNS server (no nameserver config needed)
   # To use production DNS instead, set MAIN_DNS_IP and comment out this service
-  dns:
-    image: obiente/cloud-api:latest
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-    container_name: obiente-dns
-    command: ["./dns-server"]
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      DB_NAME: ${POSTGRES_DB:-obiente}
-      TRAEFIK_IPS: ${TRAEFIK_IPS:-127.0.0.1} # Format: "region1:ip1,ip2;region2:ip3,ip4" or simple "ip1,ip2"
-      DNS_IPS: ${DNS_IPS:-} # Comma-separated list of DNS server IPs (optional)
-      DNS_PORT: ${DNS_PORT:-53} # Use port 53 inside Docker (not exposed to host)
-      # DNS Delegation Configuration (for production DNS to accept pushed records)
-      # Set DNS_DELEGATION_API_KEY to enable the /dns/push endpoint
-      # This allows dev/self-hosted APIs to push DNS records to production DNS
-      DNS_DELEGATION_API_KEY: ${DNS_DELEGATION_API_KEY:-} # Optional: API key for DNS delegation (enables /dns/push endpoint)
-      # Note: API keys are managed via /dns/delegation/api-keys/create endpoint (superadmin only)
-    # No ports exposed - DNS only accessible within Docker network
-    # For external DNS queries, use Swarm deployment (docker-compose.swarm.yml) which exposes port 53
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "if command -v nc >/dev/null 2>&1; then nc -z localhost 53 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 53 || exit 1; fi"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    networks:
-      - obiente-network
+  # Note: DNS service is now a microservice (dns-service above)
+  # This old service definition is kept for reference but dns-service should be used instead
 
 volumes:
   postgres_data:
