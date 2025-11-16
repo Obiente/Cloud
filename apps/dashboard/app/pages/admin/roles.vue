@@ -127,7 +127,7 @@ const selectedOrg = computed({
   },
 });
 
-const { data: permissionsCatalog } = await useAsyncData(
+const { data: permissionsCatalog } = await useClientFetch(
   "admin-permissions",
   async () => {
     const res = await adminClient.listPermissions({});
@@ -139,7 +139,7 @@ const { data: permissionsCatalog } = await useAsyncData(
   }
 );
 
-const { data: roles, refresh: refreshRoles } = await useAsyncData(
+const { data: roles, refresh: refreshRoles } = await useClientFetch(
   () =>
     selectedOrg.value
       ? `admin-roles-${selectedOrg.value}`
@@ -151,7 +151,7 @@ const { data: roles, refresh: refreshRoles } = await useAsyncData(
     });
     return res.roles || [];
   },
-  { watch: [selectedOrg], server: true }
+  { watch: [selectedOrg] }
 );
 
 watch(

@@ -138,7 +138,7 @@ const selectedOrg = computed({
   },
 });
 
-const { data: bindingsData, refresh: refreshBindings } = await useAsyncData(
+const { data: bindingsData, refresh: refreshBindings } = await useClientFetch(
   () =>
     organizationId.value
       ? `admin-bindings-${organizationId.value}`
@@ -151,11 +151,11 @@ const { data: bindingsData, refresh: refreshBindings } = await useAsyncData(
     });
     return res.bindings || [];
   },
-  { watch: [selectedOrg], server: true }
+  { watch: [selectedOrg] }
 );
 const bindings = computed(() => bindingsData.value || []);
 
-const { data: roleOptionsData, refresh: refreshRoleOptions } = await useAsyncData(
+const { data: roleOptionsData, refresh: refreshRoleOptions } = await useClientFetch(
   () =>
     organizationId.value
       ? `admin-binding-roles-${organizationId.value}`
@@ -172,7 +172,7 @@ const { data: roleOptionsData, refresh: refreshRoleOptions } = await useAsyncDat
     }
     return roles.map((r) => ({ id: r.id, name: r.name }));
   },
-  { watch: [selectedOrg], server: true }
+  { watch: [selectedOrg] }
 );
 const roleLabelMap = computed(() => {
   const map = new Map<string, string>();
@@ -183,7 +183,7 @@ const roleItems = computed(() =>
   (roleOptionsData.value || []).map((r) => ({ label: r.name, value: r.id }))
 );
 
-const { data: memberOptionsData, refresh: refreshMemberOptions } = await useAsyncData(
+const { data: memberOptionsData, refresh: refreshMemberOptions } = await useClientFetch(
   () =>
     organizationId.value
       ? `admin-binding-members-${organizationId.value}`
@@ -203,7 +203,7 @@ const { data: memberOptionsData, refresh: refreshMemberOptions } = await useAsyn
       label: m.user?.name || m.user?.email || m.id,
     }));
   },
-  { watch: [selectedOrg], server: true }
+  { watch: [selectedOrg] }
 );
 const memberLabelMap = computed(() => {
   const map = new Map<string, string>();
@@ -218,7 +218,7 @@ const memberItems = computed(() =>
 );
 
 const { data: deploymentOptionsData, refresh: refreshDeploymentOptions } =
-  await useAsyncData(
+  await useClientFetch(
     () =>
       organizationId.value
         ? `admin-binding-deployments-${organizationId.value}`
@@ -234,7 +234,7 @@ const { data: deploymentOptionsData, refresh: refreshDeploymentOptions } =
         name: d.name || d.id,
       }));
     },
-    { watch: [selectedOrg], server: true }
+    { watch: [selectedOrg] }
   );
 const deploymentItems = computed(() =>
   (deploymentOptionsData.value || []).map((d) => ({

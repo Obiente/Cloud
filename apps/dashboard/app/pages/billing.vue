@@ -103,7 +103,7 @@
   });
 
   // Get current member record for permission checks
-  const { data: membersData } = await useAsyncData(
+  const { data: membersData } = await useClientFetch(
     () =>
       selectedOrg.value
         ? `org-members-${selectedOrg.value}`
@@ -143,7 +143,7 @@
   });
 
   // Fetch usage data
-  const { data: usageData, refresh: refreshUsage } = await useAsyncData(
+  const { data: usageData, refresh: refreshUsage } = await useClientFetch(
     () =>
       selectedOrg.value
         ? `org-usage-${selectedOrg.value}`
@@ -166,7 +166,7 @@
   const usage = computed(() => usageData.value);
   
   // Fetch credit transactions (billing history)
-  const { data: creditLogData, refresh: refreshCreditLog } = await useAsyncData(
+  const { data: creditLogData, refresh: refreshCreditLog } = await useClientFetch(
     () =>
       selectedOrg.value
         ? `org-credit-log-${selectedOrg.value}`
@@ -219,7 +219,7 @@
 
   // Fetch billing account
   const { data: billingAccountData, refresh: refreshBillingAccount } =
-    await useAsyncData(
+    await useClientFetch(
       () =>
         selectedOrg.value
           ? `billing-account-${selectedOrg.value}`
@@ -243,7 +243,7 @@
 
   // Fetch payment methods
   const { data: paymentMethodsData, refresh: refreshPaymentMethods } =
-    await useAsyncData(
+    await useClientFetch(
       () =>
         selectedOrg.value
           ? `payment-methods-${selectedOrg.value}`
@@ -267,7 +267,7 @@
 
   // Fetch invoices
   const { data: invoicesData, refresh: refreshInvoices } =
-    await useAsyncData(
+    await useClientFetch(
       () =>
         selectedOrg.value
           ? `invoices-${selectedOrg.value}`

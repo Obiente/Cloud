@@ -251,8 +251,8 @@ if (route.query.organizationId && typeof route.query.organizationId === "string"
 // Get organizationId using SSR-compatible composable
 const organizationId = useOrganizationId();
 
-// Fetch game servers via Nuxt's useAsyncData
-const { data: gameServersData, refresh: refreshGameServers } = await useAsyncData(
+// Fetch game servers via optimized client fetch
+const { data: gameServersData, refresh: refreshGameServers } = await useClientFetch(
   () => `game-servers-list-${organizationId.value}`,
   async () => {
     try {

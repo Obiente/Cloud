@@ -370,7 +370,7 @@ const {
   pending,
   error,
   refresh: refreshTickets,
-} = await useAsyncData<SupportTicket[]>(
+} = await useClientFetch<SupportTicket[]>(
   "support-tickets",
   async () => {
     try {

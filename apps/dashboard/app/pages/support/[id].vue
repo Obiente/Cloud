@@ -389,7 +389,7 @@ const {
   pending,
   error,
   refresh: refreshTicket,
-} = await useAsyncData<SupportTicket>(
+} = await useClientFetch<SupportTicket>(
   () => `support-ticket-${ticketId.value}`,
   async () => {
     try {
@@ -413,7 +413,7 @@ const {
   data: comments,
   pending: commentsPending,
   refresh: refreshComments,
-} = await useAsyncData<TicketComment[]>(
+} = await useClientFetch<TicketComment[]>(
   () => `support-ticket-comments-${ticketId.value}`,
   async () => {
     if (!ticket.value) return [];

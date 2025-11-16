@@ -209,11 +209,16 @@
   const superAdmin = useSuperAdmin();
   const config = useConfig();
   
-  // Fetch config on mount (both server and client)
+  // Fetch config on mount (non-blocking)
+  // On server, await briefly then continue
+  // On client, fetch in background
   if (import.meta.server) {
-    await config.fetchConfig();
+    const configPromise = config.fetchConfig();
+    const timeoutPromise = new Promise(resolve => setTimeout(resolve, 300));
+    await Promise.race([configPromise, timeoutPromise]);
   } else {
-    config.fetchConfig();
+    // Client-side: fetch in background, don't block
+    config.fetchConfig().catch(() => null);
   }
 
   // Reset superadmin state when user logs in or changes
@@ -224,12 +229,16 @@
     }
   }, { immediate: true });
 
-  // Fetch superadmin overview - await on client side too to ensure state is initialized
+  // Fetch superadmin overview (non-blocking)
+  // On server, await briefly then continue
+  // On client, fetch in background
   if (import.meta.server) {
-    await superAdmin.fetchOverview().catch(() => null);
+    const overviewPromise = superAdmin.fetchOverview();
+    const timeoutPromise = new Promise(resolve => setTimeout(resolve, 300));
+    await Promise.race([overviewPromise, timeoutPromise]);
   } else {
-    // On client, await the fetch to ensure state is initialized before computing showSuperAdmin
-    await superAdmin.fetchOverview().catch(() => null);
+    // Client-side: fetch in background, don't block
+    superAdmin.fetchOverview().catch(() => null);
   }
   
   // Show superadmin sidebar if allowed is explicitly true (not null or false)
@@ -277,7 +286,7 @@
     },
   });
 
-  const { refresh: refreshOrganizations } = await useAsyncData(
+  const { refresh: refreshOrganizations } = await useClientFetch(
     "organizations",
     async () => {
       if (!user.isAuthenticated) return [];

@@ -772,7 +772,7 @@
     data,
     status,
     refresh: refreshDashboard,
-  } = await useAsyncData<DashboardData>(
+  } = await useClientFetch<DashboardData>(
     () => `dashboard-data-${organizationId.value}`,
     async () => {
       // Use organizationId from composable (SSR-compatible)
@@ -911,6 +911,9 @@
       }> = [];
 
       return { stats, recentDeployments, activity };
+    },
+    {
+      watch: [organizationId],
     }
   );
 
@@ -919,7 +922,7 @@
     data: usageData,
     status: usageStatus,
     refresh: refreshUsage,
-  } = await useAsyncData(
+  } = await useClientFetch(
     () => `org-usage-data-${organizationId.value}`,
     async () => {
       // Use organizationId from composable (SSR-compatible)
@@ -934,6 +937,9 @@
         console.error("Failed to fetch usage:", err);
         return null;
       }
+    },
+    {
+      watch: [organizationId],
     }
   );
 

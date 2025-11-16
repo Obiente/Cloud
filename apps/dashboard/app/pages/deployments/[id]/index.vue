@@ -435,7 +435,7 @@
     data: deploymentData,
     refresh: refreshDeployment,
     error: fetchError,
-  } = useAsyncData(
+  } = useClientFetch(
     `deployment-${id.value}`,
     async () => {
       if (!orgId.value) {

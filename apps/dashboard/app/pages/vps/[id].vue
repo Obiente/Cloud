@@ -1583,7 +1583,7 @@ const {
   error,
   refresh: refreshVPSData,
   execute: executeVPSData,
-} = await useAsyncData(
+} = await useClientFetch(
   () => `vps-${vpsId.value}-${orgId.value}-${isSuperAdmin.value}`,
   async () => {
     try {

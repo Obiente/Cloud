@@ -201,7 +201,7 @@
     data: vpsInstances,
     status,
     refresh: refreshVPS,
-  } = await useAsyncData(
+  } = await useClientFetch(
     () => `vps-list-${organizationId.value}`,
     async () => {
       try {
@@ -220,7 +220,7 @@
   );
 
   // Fetch regions for filter
-  const { data: regions, error: regionsError } = await useAsyncData(
+  const { data: regions, error: regionsError } = await useClientFetch(
     () => "vps-regions",
     async () => {
       try {

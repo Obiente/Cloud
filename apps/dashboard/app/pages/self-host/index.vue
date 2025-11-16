@@ -526,7 +526,7 @@ const currentUserIdentifiers = computed(() => {
 });
 
 // Get current member record for permission checks
-const { data: membersData } = await useAsyncData(
+const { data: membersData } = await useClientFetch(
   () =>
     selectedOrg.value
       ? `org-members-${selectedOrg.value}`
@@ -561,7 +561,7 @@ const currentUserIsOwner = computed(() => {
 });
 
 // Billing account
-const { data: billingAccountData, refresh: refreshBillingAccount } = await useAsyncData(
+const { data: billingAccountData, refresh: refreshBillingAccount } = await useClientFetch(
   () => selectedOrg.value ? `billing-${selectedOrg.value}` : "billing-none",
   async () => {
     if (!selectedOrg.value) return null;

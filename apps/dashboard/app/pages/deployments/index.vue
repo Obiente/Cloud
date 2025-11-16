@@ -506,7 +506,7 @@
   // Get organizationId using SSR-compatible composable
   const organizationId = useOrganizationId();
 
-  const { data: deployments, refresh: refreshDeployments } = await useAsyncData(
+  const { data: deployments, refresh: refreshDeployments } = await useClientFetch(
     () => `deployments-list-${organizationId.value}`,
     async () => {
       try {

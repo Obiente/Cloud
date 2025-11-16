@@ -636,7 +636,7 @@ defineEmits<{
 const client = useConnectClient(DeploymentService);
 
 // Fetch deployment usage data
-const { data: usageData } = await useAsyncData(
+const { data: usageData } = await useClientFetch(
   () => `deployment-usage-${props.deployment.id}`,
   async () => {
     if (!props.deployment?.id || !props.organizationId) return null;

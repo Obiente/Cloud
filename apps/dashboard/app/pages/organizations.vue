@@ -82,7 +82,7 @@
     }
   }
 
-  const { data: membersData, refresh: refreshMembers } = await useAsyncData(
+  const { data: membersData, refresh: refreshMembers } = await useClientFetch(
     () =>
       organizationId.value
         ? `org-members-${organizationId.value}`
@@ -95,7 +95,7 @@
       });
       return res.members || [];
     },
-    { watch: [selectedOrg], server: true }
+    { watch: [selectedOrg] }
   );
   const members = computed(() => membersData.value || []);
 
@@ -117,7 +117,7 @@
   );
 
   const { data: roleCatalogData, refresh: refreshRoleCatalog } =
-    await useAsyncData(
+    await useClientFetch(
       () =>
         organizationId.value
           ? `org-role-catalog-${organizationId.value}`
@@ -130,7 +130,7 @@
         });
         return (res.roles || []).map((r) => ({ id: r.id, name: r.name }));
       },
-      { watch: [selectedOrg], server: true }
+      { watch: [selectedOrg] }
     );
 
   const roleDisplayMap = computed(() => {
@@ -518,7 +518,7 @@
   });
 
   // Fetch usage data
-  const { data: usageData, refresh: refreshUsage } = await useAsyncData(
+  const { data: usageData, refresh: refreshUsage } = await useClientFetch(
     () =>
       selectedOrg.value
         ? `org-usage-${selectedOrg.value}`
@@ -539,13 +539,13 @@
         return null;
       }
     },
-    { watch: [selectedOrg], server: false }
+    { watch: [selectedOrg] }
   );
 
   const usage = computed(() => usageData.value);
   
   // Fetch credit transactions (billing history)
-  const { data: creditLogData, refresh: refreshCreditLog } = await useAsyncData(
+  const { data: creditLogData, refresh: refreshCreditLog } = await useClientFetch(
     () =>
       selectedOrg.value
         ? `org-credit-log-${selectedOrg.value}`
@@ -559,7 +559,7 @@
       });
       return res;
     },
-    { watch: [selectedOrg], server: false }
+    { watch: [selectedOrg] }
   );
 
   const billingHistory = computed(() => {
@@ -580,7 +580,7 @@
 
   // Fetch billing account
   const { data: billingAccountData, refresh: refreshBillingAccount } =
-    await useAsyncData(
+    await useClientFetch(
       () =>
         selectedOrg.value
           ? `billing-account-${selectedOrg.value}`
@@ -604,7 +604,7 @@
 
   // Fetch payment methods
   const { data: paymentMethodsData, refresh: refreshPaymentMethods } =
-    await useAsyncData(
+    await useClientFetch(
       () =>
         selectedOrg.value
           ? `payment-methods-${selectedOrg.value}`
@@ -628,7 +628,7 @@
 
   // Fetch invoices
   const { data: invoicesData, refresh: refreshInvoices } =
-    await useAsyncData(
+    await useClientFetch(
       () =>
         selectedOrg.value
           ? `invoices-${selectedOrg.value}`

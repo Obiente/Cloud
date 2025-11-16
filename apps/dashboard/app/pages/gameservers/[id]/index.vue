@@ -387,7 +387,7 @@ const errorHint = computed(() => {
 });
 
 // Fetch game server data
-const { data: gameServerData, refresh: refreshGameServer, error: fetchError } = useAsyncData(
+const { data: gameServerData, refresh: refreshGameServer, error: fetchError } = useClientFetch(
   () => `game-server-${gameServerId.value}`,
   async () => {
     try {
