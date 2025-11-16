@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"api/internal/database"
-	"api/internal/metrics"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/metrics"
 
 	"github.com/miekg/dns"
 	"gorm.io/driver/postgres"

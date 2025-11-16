@@ -11,47 +11,49 @@ WORKDIR /build
 ENV GOCACHE=/root/.cache/go-build
 ENV GOMODCACHE=/root/go/pkg/mod
 
-# Copy go mod files
-COPY apps/api/go.mod apps/api/go.sum ./apps/api/
+# Copy go mod files for shared and service
 COPY apps/shared/go.mod apps/shared/go.sum ./apps/shared/
+COPY apps/dns-service/go.mod apps/dns-service/go.sum ./apps/dns-service/
 
-# Download dependencies for API module (which contains internal packages)
-WORKDIR /build/apps/api
+# Download dependencies for shared module
+WORKDIR /build/apps/shared
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go mod download
+
+# Download dependencies for service module
+WORKDIR /build/apps/dns-service
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go mod download
 
 # Copy all source code
 WORKDIR /build
-COPY apps/api/ ./apps/api/
 COPY apps/shared/ ./apps/shared/
+COPY apps/dns-service/ ./apps/dns-service/
 
-# Copy service main.go into api/cmd/dns-service so it's part of the api module
-COPY apps/dns-service/main.go ./apps/api/cmd/dns-service/main.go
-
-# Build the dns service from API module directory (to access internal packages)
-WORKDIR /build/apps/api
+# Build the service from its own module directory
+WORKDIR /build/apps/dns-service
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -trimpath \
     -ldflags="-w -s -extldflags '-static'" \
-    -o /build/dns-service ./cmd/dns-service/main.go
+    -o /build/dns-service .
 
 # Final stage
 FROM alpine:latest
 
-# Install CA certificates
-RUN apk --no-cache add ca-certificates
+# Install CA certificates and curl for health checks
+RUN apk --no-cache add ca-certificates curl
 
 WORKDIR /app
 
 # Copy binary from builder
 COPY --from=go-builder /build/dns-service .
 
-# Expose DNS ports
-EXPOSE 53/udp 53/tcp
+# Expose ports (DNS and HTTP)
+EXPOSE 53 53/udp 8053
 
 # Run the service
 CMD ["./dns-service"]
-
