@@ -207,10 +207,20 @@ if ! docker network ls | grep -q "$NETWORK_NAME"; then
     echo "⚠️  Network creation failed (may already exist)"
     # Continue anyway - network might exist but not show up in ls
   }
-  # Wait a moment for network to be fully initialized
-  sleep 2
+  # Wait for network to be fully initialized and propagated to all nodes
+  # Overlay networks need time to sync across the Swarm cluster
+  echo "⏳ Waiting for network to propagate to all nodes..."
+  sleep 5
+  # Verify network exists on this node
+  if docker network inspect "$NETWORK_NAME" >/dev/null 2>&1; then
+    echo "✅ Network $NETWORK_NAME created and ready"
+  else
+    echo "⚠️  Network $NETWORK_NAME not found on this node, but continuing..."
+  fi
 else
   echo "✅ Network $NETWORK_NAME already exists"
+  # Still wait a moment to ensure it's ready on all nodes
+  sleep 2
 fi
 
 # Deploy the main stack with environment variables loaded from .env

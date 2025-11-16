@@ -17,8 +17,9 @@ services:
       NUXT_PUBLIC_REQUEST_HOST: ${DASHBOARD_URL:-https://obiente.cloud}
       NUXT_PUBLIC_API_HOST: ${API_URL:-https://api.obiente.cloud}
       # Internal API host for server-side requests (uses Docker service name)
-      # This allows the dashboard container to reach the API via internal networking
-      NUXT_API_HOST_INTERNAL: ${API_HOST_INTERNAL:-http://api:3001}
+      # This allows the dashboard container to reach the API Gateway via internal networking
+      # API Gateway is the single entry point that routes to all microservices
+      NUXT_API_HOST_INTERNAL: ${API_HOST_INTERNAL:-http://api-gateway:3001}
       NUXT_PUBLIC_OIDC_ISSUER: ${ZITADEL_URL:-https://obiente.cloud}
       NUXT_PUBLIC_OIDC_BASE: ${ZITADEL_BASE_URL:-https://auth.obiente.cloud}
       NUXT_PUBLIC_OIDC_CLIENT_ID: ${ZITADEL_CLIENT_ID:-339499954043158530}
