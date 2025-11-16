@@ -10,12 +10,13 @@ import (
 	"syscall"
 	"time"
 
-	"api/internal/auth"
-	"api/internal/database"
-	"api/internal/email"
-	"api/internal/logger"
-	"api/internal/middleware"
-	"api/internal/services/organizations"
+	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/email"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/middleware"
+
+	orgservice "organizations-service/internal/service"
 
 	organizationsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/organizations/v1/organizationsv1connect"
 
@@ -81,7 +82,7 @@ func main() {
 	supportEmail := os.Getenv("SUPPORT_EMAIL")
 
 	// Register organizations service
-	orgService := organizations.NewService(organizations.Config{
+	orgService := orgservice.NewService(orgservice.Config{
 		EmailSender:  mailer,
 		ConsoleURL:   consoleURL,
 		SupportEmail: supportEmail,
