@@ -7,7 +7,7 @@ export const useConfig = () => {
     selfHosted: boolean | null;
     disableAuth: boolean | null;
     loading: boolean;
-    error: Error | null;
+    error: string | null;
   }>("app-config", () => ({
     billingEnabled: null,
     selfHosted: null,
@@ -81,7 +81,7 @@ export const useConfig = () => {
       configState.value.disableAuth = response.disableAuth ?? false;
     } catch (err) {
       console.error("Failed to fetch public config:", err);
-      configState.value.error = err instanceof Error ? err : new Error(String(err));
+      configState.value.error = err instanceof Error ? err.message : String(err);
       // Set defaults on error
       configState.value.billingEnabled = true;
       configState.value.selfHosted = false;
