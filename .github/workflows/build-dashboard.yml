@@ -20,7 +20,8 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
+  build-and-push-dashboard:
+    name: Build and Push Dashboard
     runs-on: self-hosted
     env:
       REGISTRY: ghcr.io

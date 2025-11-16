@@ -22,7 +22,8 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
+  build-and-push-vps-gateway:
+    name: Build and Push VPS Gateway
     runs-on: self-hosted
     env:
       REGISTRY: ghcr.io

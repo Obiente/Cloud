@@ -22,7 +22,8 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
+  build-and-push-superadmin-service:
+    name: Build and Push Superadmin Service
     runs-on: self-hosted
     env:
       REGISTRY: ghcr.io

@@ -22,7 +22,8 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
+  build-and-push-gameservers-service:
+    name: Build and Push Game Servers Service
     runs-on: self-hosted
     env:
       REGISTRY: ghcr.io

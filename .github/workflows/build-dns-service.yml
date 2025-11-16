@@ -22,7 +22,8 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
+  build-and-push-dns-service:
+    name: Build and Push DNS Service
     runs-on: self-hosted
     env:
       REGISTRY: ghcr.io

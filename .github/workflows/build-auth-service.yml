@@ -22,7 +22,8 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
+  build-and-push-auth-service:
+    name: Build and Push Auth Service
     runs-on: self-hosted
     env:
       REGISTRY: ghcr.io

@@ -22,7 +22,8 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
+  build-and-push-organizations-service:
+    name: Build and Push Organizations Service
     runs-on: self-hosted
     env:
       REGISTRY: ghcr.io

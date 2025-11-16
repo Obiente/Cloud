@@ -22,7 +22,8 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
+  build-and-push-api-gateway:
+    name: Build and Push API Gateway
     runs-on: self-hosted
     env:
       REGISTRY: ghcr.io

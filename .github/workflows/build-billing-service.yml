@@ -22,7 +22,8 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
+  build-and-push-billing-service:
+    name: Build and Push Billing Service
     runs-on: self-hosted
     env:
       REGISTRY: ghcr.io

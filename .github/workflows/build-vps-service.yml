@@ -22,7 +22,8 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
+  build-and-push-vps-service:
+    name: Build and Push VPS Service
     runs-on: self-hosted
     env:
       REGISTRY: ghcr.io

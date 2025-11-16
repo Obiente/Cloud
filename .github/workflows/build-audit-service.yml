@@ -22,7 +22,8 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
+  build-and-push-audit-service:
+    name: Build and Push Audit Service
     runs-on: self-hosted
     env:
       REGISTRY: ghcr.io
