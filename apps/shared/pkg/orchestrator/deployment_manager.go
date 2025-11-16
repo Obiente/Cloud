@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
 	"github.com/obiente/cloud/apps/shared/pkg/registry"
@@ -1247,12 +1247,20 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 			compose["networks"] = networks
 		}
 
+		// Get the actual Swarm network name dynamically (supports any stack name)
+		// This will find networks matching the pattern *_obiente-network
+		swarmNetworkName, err := dm.getSwarmNetworkName(context.Background())
+		if err != nil {
+			logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
+			// Fallback: try to find any network ending with _obiente-network
+			swarmNetworkName = "obiente_obiente-network"
+		}
+
 		// Add or update obiente-network to be external (references the Swarm network)
-		// In Swarm mode, the network name is prefixed with stack name: obiente_obiente-network
-		// But we'll use the simple name and let Docker Compose handle the prefix
+		// In Swarm mode, the network name is prefixed with stack name: {stack-name}_obiente-network
 		networkConfig := map[string]interface{}{
 			"external": true,
-			"name":     "obiente_obiente-network", // Use the actual Swarm network name
+			"name":     swarmNetworkName, // Use the dynamically discovered Swarm network name
 		}
 		networks["obiente-network"] = networkConfig
 
@@ -1897,7 +1905,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 
 	// Wait a moment for the service to create a task
 	time.Sleep(2 * time.Second)
-	
+
 	// Immediately try to get logs to see what's happening
 	logsArgs := []string{"service", "logs", "--tail", "50", "--raw", swarmServiceName}
 	logsCmd := exec.CommandContext(ctx, "docker", logsArgs...)
@@ -1928,7 +1936,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 			if taskStatus != "" {
 				lastTaskStatus = taskStatus
 				logger.Info("[DeploymentManager] Service %s task status (check %d/%d):\n%s", swarmServiceName, i+1, maxChecks, taskStatus)
-				
+
 				// Check if there are any errors
 				if strings.Contains(taskStatus, "Error") || strings.Contains(taskStatus, "Failed") || strings.Contains(taskStatus, "Rejected") {
 					logger.Error("[DeploymentManager] Service %s has task errors detected!", swarmServiceName)
@@ -1995,7 +2003,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 					} else {
 						logger.Warn("[DeploymentManager] Failed to get service logs: %v (stderr: %s)", err, logsStderr.String())
 					}
-					
+
 					// Also try to get logs from the specific task/container if we can find it
 					// Get task ID again for container log retrieval
 					taskIDForLogsArgs := []string{"service", "ps", swarmServiceName, "--format", "{{.ID}}", "--no-trunc"}
@@ -2053,7 +2061,7 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		} else {
 			logger.Warn("[DeploymentManager] Failed to check task status for service %s: %v (stderr: %s)", swarmServiceName, err, taskStatusStderr.String())
 		}
-		
+
 		// Get logs on each check to see what's happening in real-time
 		if i > 0 { // Skip first check since we already got initial logs
 			logsArgs := []string{"service", "logs", "--tail", "20", "--raw", swarmServiceName}
@@ -2067,13 +2075,13 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 				}
 			}
 		}
-		
+
 		// Wait before next check (except on last iteration)
 		if i < maxChecks-1 {
 			time.Sleep(checkInterval)
 		}
 	}
-	
+
 	// Final status summary
 	if lastTaskStatus != "" {
 		logger.Info("[DeploymentManager] Final task status for service %s:\n%s", swarmServiceName, lastTaskStatus)

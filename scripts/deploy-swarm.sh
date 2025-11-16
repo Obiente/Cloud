@@ -189,6 +189,10 @@ fi
 MERGED_COMPOSE=$(mktemp)
 ./scripts/merge-compose-files.sh "$COMPOSE_FILE" "$MERGED_COMPOSE"
 
+# Substitute __STACK_NAME__ placeholder with actual stack name
+# This makes network names dynamic (e.g., __STACK_NAME__obiente-network → obiente_obiente-network)
+sed -i "s/__STACK_NAME__/${STACK_NAME}/g" "$MERGED_COMPOSE"
+
 # Deploy the main stack with environment variables loaded from .env
 # Use --resolve-image always to force pulling latest images
 docker stack deploy --resolve-image always -c "$MERGED_COMPOSE" "$STACK_NAME"
@@ -213,11 +217,10 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   fi
   
   # Deploy dashboard stack (uses external network from main stack)
-  # The network name in docker-compose.dashboard.yml references: ${STACK_NAME}_obiente-network
-  # Substitute DOMAIN and STACK_NAME variables in labels and network name
+  # Substitute __STACK_NAME__ placeholder and DOMAIN variables in labels and network name
   export DOMAIN="${DOMAIN:-obiente.cloud}"
   TEMP_DASHBOARD_COMPOSE=$(mktemp)
-  sed "s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g; s/\${STACK_NAME:-obiente}_obiente-network/${STACK_NAME}_obiente-network/g; s/obiente_obiente-network/${STACK_NAME}_obiente-network/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
+  sed "s/__STACK_NAME__/${STACK_NAME}/g; s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
   # Use --resolve-image always to force pulling latest images
   docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}"
   rm -f "$TEMP_DASHBOARD_COMPOSE"

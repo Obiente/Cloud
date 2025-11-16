@@ -60,6 +60,10 @@ echo -e "${BLUE}🚀 Redeploying main stack '${STACK_NAME}'...${NC}"
 MERGED_COMPOSE=$(mktemp)
 ./scripts/merge-compose-files.sh "$COMPOSE_FILE" "$MERGED_COMPOSE"
 
+# Substitute __STACK_NAME__ placeholder with actual stack name
+# This makes network names dynamic (e.g., __STACK_NAME__obiente-network → obiente_obiente-network)
+sed -i "s/__STACK_NAME__/${STACK_NAME}/g" "$MERGED_COMPOSE"
+
 docker stack deploy --resolve-image always -c "$MERGED_COMPOSE" "$STACK_NAME"
 rm -f "$MERGED_COMPOSE"
 echo -e "${GREEN}✅ Main stack redeployed!${NC}"
@@ -70,9 +74,9 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo -e "${BLUE}🚀 Redeploying dashboard stack...${NC}"
   # Ensure DOMAIN is set for label substitution
   export DOMAIN="${DOMAIN:-obiente.cloud}"
-  # Substitute DOMAIN variable in labels (Docker Swarm doesn't expand env vars in labels)
+  # Substitute __STACK_NAME__ placeholder and DOMAIN variables in labels and network name
   TEMP_DASHBOARD_COMPOSE=$(mktemp)
-  sed "s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
+  sed "s/__STACK_NAME__/${STACK_NAME}/g; s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
   STACK_NAME="$STACK_NAME" docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}"
   rm -f "$TEMP_DASHBOARD_COMPOSE"
   echo -e "${GREEN}✅ Dashboard stack redeployed!${NC}"

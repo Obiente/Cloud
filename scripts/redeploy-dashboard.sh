@@ -20,9 +20,9 @@ fi
 # Override DOMAIN if provided as argument
 export DOMAIN="$DOMAIN"
 
-# Substitute DOMAIN variable in labels (Docker Swarm doesn't expand env vars in labels)
+# Substitute __STACK_NAME__ placeholder and DOMAIN variables in labels and network name
 TEMP_DASHBOARD_COMPOSE=$(mktemp)
-sed "s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
+sed "s/__STACK_NAME__/${STACK_NAME}/g; s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
 
 # Deploy dashboard stack
 docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}"
