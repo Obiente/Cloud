@@ -102,12 +102,12 @@ func NewUserInfoCache() *UserInfoCache {
 }
 
 // Get retrieves cached user info if valid from Redis
-func (c *UserInfoCache) Get(token string) (*authv1.User, bool) {
+// Accepts context for proper cancellation and timeout handling
+func (c *UserInfoCache) Get(ctx context.Context, token string) (*authv1.User, bool) {
 	if c.redisCache == nil {
 		return nil, false
 	}
 
-	ctx := context.Background()
 	cacheKey := fmt.Sprintf("userinfo:%s", token)
 	cachedData, err := c.redisCache.Get(ctx, cacheKey)
 	if err != nil || cachedData == "" {
@@ -123,12 +123,12 @@ func (c *UserInfoCache) Get(token string) (*authv1.User, bool) {
 }
 
 // Set stores user info in Redis cache
-func (c *UserInfoCache) Set(token string, user *authv1.User) {
+// Accepts context for proper cancellation and timeout handling
+func (c *UserInfoCache) Set(ctx context.Context, token string, user *authv1.User) {
 	if c.redisCache == nil {
 		return
 	}
 
-	ctx := context.Background()
 	cacheKey := fmt.Sprintf("userinfo:%s", token)
 	c.redisCache.Set(ctx, cacheKey, user, UserInfoCacheDuration)
 }
@@ -285,7 +285,7 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 // validateToken validates a token against Zitadel's userinfo endpoint
 func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.User, error) {
 	// Check cache first
-	if cachedUser, found := c.UserInfoCache.Get(token); found {
+	if cachedUser, found := c.UserInfoCache.Get(ctx, token); found {
 		logger.Debug("✓ Token validated (cached) for user: %s (%s)", cachedUser.Id, cachedUser.Email)
 		
 		// Always check superadmin emails for cached users, as SUPERADMIN_EMAILS might have changed
@@ -323,7 +323,7 @@ func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.U
 			
 			// Update cache if roles changed to ensure persistence
 			if rolesChanged {
-				c.UserInfoCache.Set(token, cachedUser)
+				c.UserInfoCache.Set(ctx, token, cachedUser)
 				logger.Debug("[SuperAdmin] Updated cache with new roles for user: %s", cachedUser.Email)
 			}
 		} else {
@@ -409,7 +409,7 @@ func (c *AuthConfig) validateToken(ctx context.Context, token string) (*authv1.U
 	}
 
 	// Cache the result
-	c.UserInfoCache.Set(token, user)
+	c.UserInfoCache.Set(ctx, token, user)
 
 	logger.Debug("✓ Token validated for user: %s (%s)", user.Id, user.Email)
 	return user, nil
