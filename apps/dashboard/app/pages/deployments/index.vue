@@ -77,8 +77,18 @@
         </OuiCardBody>
       </OuiCard>
 
+      <!-- Loading State with Skeleton Cards -->
+      <OuiGrid v-if="pending && !deployments" cols="1" cols-md="2" cols-lg="3" gap="lg">
+        <DeploymentCard
+          v-for="i in 6"
+          :key="i"
+          :loading="true"
+        />
+      </OuiGrid>
+
+      <!-- Empty State -->
       <OuiStack
-        v-if="filteredDeployments.length === 0"
+        v-else-if="filteredDeployments.length === 0"
         align="center"
         gap="lg"
         class="text-center py-20"
@@ -506,7 +516,7 @@
   // Get organizationId using SSR-compatible composable
   const organizationId = useOrganizationId();
 
-  const { data: deployments, refresh: refreshDeployments } = await useClientFetch(
+  const { data: deployments, pending, refresh: refreshDeployments } = await useClientFetch(
     () => `deployments-list-${organizationId.value}`,
     async () => {
       try {

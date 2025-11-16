@@ -69,8 +69,18 @@
         </OuiCardBody>
       </OuiCard>
 
+      <!-- Loading State with Skeleton Cards -->
+      <OuiGrid v-if="pending && !gameServersData" cols="1" cols-md="2" cols-lg="3" gap="lg">
+        <GameServerCard
+          v-for="i in 6"
+          :key="i"
+          :loading="true"
+        />
+      </OuiGrid>
+
+      <!-- Empty State -->
       <OuiStack
-        v-if="filteredGameServers.length === 0"
+        v-else-if="filteredGameServers.length === 0"
         align="center"
         gap="lg"
         class="text-center py-20"
@@ -252,7 +262,7 @@ if (route.query.organizationId && typeof route.query.organizationId === "string"
 const organizationId = useOrganizationId();
 
 // Fetch game servers via optimized client fetch
-const { data: gameServersData, refresh: refreshGameServers } = await useClientFetch(
+const { data: gameServersData, pending, refresh: refreshGameServers } = await useClientFetch(
   () => `game-servers-list-${organizationId.value}`,
   async () => {
     try {

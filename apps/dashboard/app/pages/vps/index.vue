@@ -103,33 +103,13 @@
         </OuiStack>
       </OuiStack>
 
-      <!-- Loading State -->
+      <!-- Loading State with Skeleton Cards -->
       <OuiGrid v-if="isLoading && !vpsInstances" cols="1" cols-md="2" cols-lg="3" gap="lg">
-        <OuiCard v-for="i in 6" :key="i">
-          <OuiCardBody>
-            <OuiStack gap="md">
-              <OuiFlex justify="between" align="start">
-                <OuiStack gap="sm" class="flex-1">
-                  <OuiSkeleton width="12rem" height="1.5rem" variant="text" />
-                  <OuiSkeleton width="8rem" height="1rem" variant="text" />
-                </OuiStack>
-                <OuiSkeleton width="5rem" height="1.5rem" variant="rectangle" rounded />
-              </OuiFlex>
-              <OuiStack gap="sm">
-                <OuiSkeleton width="100%" height="1rem" variant="text" />
-                <OuiSkeleton width="80%" height="1rem" variant="text" />
-              </OuiStack>
-              <OuiFlex gap="sm" justify="between">
-                <OuiSkeleton width="6rem" height="1rem" variant="text" />
-                <OuiSkeleton width="6rem" height="1rem" variant="text" />
-              </OuiFlex>
-              <OuiFlex gap="sm">
-                <OuiButton variant="outline" size="sm" disabled>Start</OuiButton>
-                <OuiButton variant="outline" size="sm" disabled>Reboot</OuiButton>
-              </OuiFlex>
-            </OuiStack>
-          </OuiCardBody>
-        </OuiCard>
+        <VPSCard
+          v-for="i in 6"
+          :key="i"
+          :loading="true"
+        />
       </OuiGrid>
 
       <!-- VPS Grid -->

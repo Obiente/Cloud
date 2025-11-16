@@ -1,12 +1,13 @@
 <template>
   <ResourceCard
-    :title="vps.name"
-    :subtitle="`${vps.region} • ${sizeLabel}`"
+    :title="vps?.name || ''"
+    :subtitle="vps ? `${vps.region} • ${sizeLabel}` : ''"
     :status-meta="statusMeta"
     :resources="resources"
     :created-at="createdAtDate"
-    :detail-url="`/vps/${vps.id}`"
+    :detail-url="vps ? `/vps/${vps.id}` : undefined"
     :is-actioning="isActioning"
+    :loading="loading"
   >
     <template #actions>
             <OuiButton
@@ -40,6 +41,7 @@
               <ArrowPathIcon class="h-4 w-4" />
             </OuiButton>
             <OuiButton
+              v-if="!loading && vps"
               variant="ghost"
               size="sm"
               icon-only
@@ -51,8 +53,21 @@
     </template>
 
     <template #info>
-        <!-- IP Addresses -->
-        <OuiStack v-if="ipAddresses.length > 0" gap="xs">
+        <!-- IP Addresses Skeleton -->
+        <OuiStack v-if="loading" gap="xs">
+          <OuiText size="xs" weight="medium" color="secondary" class="opacity-50">IP Addresses</OuiText>
+          <OuiFlex gap="xs" wrap="wrap">
+            <OuiBadge variant="secondary" size="xs" class="opacity-30">
+              <OuiSkeleton :width="randomTextWidthByType('short')" height="0.875rem" variant="text" class="bg-transparent" />
+            </OuiBadge>
+            <OuiBadge variant="secondary" size="xs" class="opacity-30">
+              <OuiSkeleton :width="randomTextWidthByType('short')" height="0.875rem" variant="text" class="bg-transparent" />
+            </OuiBadge>
+          </OuiFlex>
+        </OuiStack>
+        
+        <!-- IP Addresses Actual -->
+        <OuiStack v-else-if="ipAddresses.length > 0" gap="xs">
           <OuiText size="xs" weight="medium" color="secondary">IP Addresses</OuiText>
           <OuiFlex gap="xs" wrap="wrap">
             <OuiBadge
@@ -93,12 +108,18 @@
   import { useDialog } from "~/composables/useDialog";
   import { useOrganizationId } from "~/composables/useOrganizationId";
   import ResourceCard from "~/components/shared/ResourceCard.vue";
+  import OuiSkeleton from "~/components/oui/Skeleton.vue";
+  import OuiBadge from "~/components/oui/Badge.vue";
+  import { randomTextWidthByType, randomIconVariation } from "~/composables/useSkeletonVariations";
 
   interface Props {
-    vps: VPSInstance;
+    vps?: VPSInstance;
+    loading?: boolean;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    loading: false,
+  });
   const emit = defineEmits<{
     refresh: [];
     delete: [];
@@ -108,6 +129,9 @@
   const { showAlert, showConfirm } = useDialog();
   const organizationId = useOrganizationId();
   const isActioning = ref(false);
+
+  // Generate random variations for skeleton icons
+  const iconVar = randomIconVariation();
 
   const STATUS_META = {
     [VPSStatus.RUNNING]: {
@@ -183,6 +207,9 @@
   } as const;
 
   const statusMeta = computed(() => {
+    if (!props.vps || props.loading) {
+      return STATUS_META[VPSStatus.STOPPED];
+    }
     const status = props.vps.status as VPSStatus;
     // Handle all status values, defaulting to STOPPED for unknown statuses
     if (status in STATUS_META) {
@@ -193,16 +220,18 @@
   });
 
   const sizeLabel = computed(() => {
+    if (!props.vps || props.loading) return "Unknown";
     return props.vps.size || "Unknown";
   });
 
   const ipAddresses = computed(() => {
+    if (!props.vps || props.loading) return [];
     return [...(props.vps.ipv4Addresses || []), ...(props.vps.ipv6Addresses || [])];
   });
 
-  const canStart = computed(() => props.vps.status === VPSStatus.STOPPED);
-  const canStop = computed(() => props.vps.status === VPSStatus.RUNNING);
-  const canReboot = computed(() => props.vps.status === VPSStatus.RUNNING);
+  const canStart = computed(() => !props.loading && props.vps?.status === VPSStatus.STOPPED);
+  const canStop = computed(() => !props.loading && props.vps?.status === VPSStatus.RUNNING);
+  const canReboot = computed(() => !props.loading && props.vps?.status === VPSStatus.RUNNING);
 
   const formatMemory = (bytes: bigint | number | undefined) => {
     if (!bytes) return "0 GB";
@@ -217,15 +246,23 @@
   };
 
   const createdAtDate = computed(() => {
+    if (!props.vps || props.loading) return new Date();
     if (!props.vps.createdAt) return new Date();
     return date(props.vps.createdAt);
   });
 
-  const resources = computed(() => [
-    {
-      icon: ServerIcon,
-      label: `${props.vps.cpuCores} CPU`,
-    },
+  const resources = computed(() => {
+    if (props.loading || !props.vps) {
+      return [
+        { icon: ServerIcon, label: "CPU" },
+        { icon: CircleStackIcon, label: "Memory" },
+      ];
+    }
+    return [
+      {
+        icon: ServerIcon,
+        label: `${props.vps.cpuCores} CPU`,
+      },
     {
       icon: CircleStackIcon,
       label: formatMemory(props.vps.memoryBytes),
@@ -234,9 +271,11 @@
       icon: CircleStackIcon,
       label: formatDisk(props.vps.diskBytes),
     },
-  ]);
+    ];
+  });
 
   const handleStart = async () => {
+    if (!props.vps) return;
     isActioning.value = true;
     try {
       await client.startVPS({
@@ -255,6 +294,7 @@
   };
 
   const handleStop = async () => {
+    if (!props.vps) return;
     const confirmed = await showConfirm({
       title: "Stop VPS Instance",
       message: `Are you sure you want to stop "${props.vps.name}"?`,
@@ -282,6 +322,7 @@
   };
 
   const handleReboot = async () => {
+    if (!props.vps) return;
     const confirmed = await showConfirm({
       title: "Reboot VPS Instance",
       message: `Are you sure you want to reboot "${props.vps.name}"?`,
@@ -309,6 +350,7 @@
   };
 
   const handleDelete = async () => {
+    if (!props.vps) return;
     const confirmed = await showConfirm({
       title: "Delete VPS Instance",
       message: `Are you sure you want to delete "${props.vps.name}"? This action cannot be undone.`,

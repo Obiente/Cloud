@@ -1,16 +1,18 @@
-<template>
+ <template>
   <ResourceCard
-    :title="deployment.name"
-    :subtitle="deployment.domain"
+    :title="deployment?.name || ''"
+    :subtitle="deployment?.domain"
     :status-meta="statusMeta"
     :created-at="lastDeployedAtDate"
-    :detail-url="`/deployments/${deployment.id}`"
+    :detail-url="deployment ? `/deployments/${deployment.id}` : undefined"
     :is-actioning="isActioning || showProgress"
+    :loading="loading"
+    :resources="resources"
   >
     <template #subtitle>
       <OuiStack gap="xs">
         <a
-          v-if="deployment.domain"
+          v-if="!loading && deployment?.domain"
           :href="`https://${deployment.domain}`"
           target="_blank"
           rel="noopener noreferrer"
@@ -26,13 +28,14 @@
     <template #actions>
       <OuiFlex gap="xs" wrap="wrap">
         <OuiBadge
-          v-if="showContainerStatus"
+          v-if="!loading && showContainerStatus"
           :variant="containerStatusVariant"
           size="sm"
         >
-          {{ deployment.containersRunning ?? 0 }}/{{ deployment.containersTotal }} running
+          {{ deployment?.containersRunning ?? 0 }}/{{ deployment?.containersTotal }} running
         </OuiBadge>
         <OuiBadge
+          v-if="!loading"
           v-for="(group, idx) in deploymentGroups"
           :key="idx"
           variant="secondary"
@@ -41,7 +44,7 @@
           {{ group }}
         </OuiBadge>
         <OuiButton
-          v-if="deployment.status === DeploymentStatus.RUNNING"
+          v-if="!loading && deployment && deployment.status === DeploymentStatus.RUNNING"
           variant="ghost"
           size="sm"
           icon-only
@@ -51,7 +54,7 @@
           <StopIcon class="h-4 w-4" />
         </OuiButton>
         <OuiButton
-          v-if="deployment.status === DeploymentStatus.STOPPED"
+          v-if="!loading && deployment && deployment.status === DeploymentStatus.STOPPED"
           variant="ghost"
           size="sm"
           icon-only
@@ -61,6 +64,7 @@
           <PlayIcon class="h-4 w-4" />
         </OuiButton>
         <OuiButton
+          v-if="!loading && deployment"
           variant="ghost"
           size="sm"
           icon-only
@@ -73,7 +77,97 @@
     </template>
 
     <template #resources>
-      <OuiStack gap="md">
+      <!-- Skeleton for resources section -->
+      <OuiStack v-if="loading" gap="md">
+        <OuiFlex justify="between" align="center">
+          <OuiFlex align="center" gap="sm">
+            <OuiBox
+              p="xs"
+              rounded="lg"
+              bg="surface-muted"
+              class="bg-surface-muted/50 ring-1 ring-border-muted opacity-30"
+            >
+              <CodeBracketIcon 
+                class="h-4 w-4 text-primary" 
+                :style="{ opacity: iconVar.opacity, transform: `scale(${iconVar.scale})` }"
+              />
+            </OuiBox>
+            <OuiSkeleton :width="randomTextWidthByType('label')" height="1rem" variant="text" />
+          </OuiFlex>
+          <OuiFlex align="center" gap="xs" class="text-xs text-secondary opacity-30">
+            <CalendarIcon 
+              class="h-3.5 w-3.5"
+              :style="{ opacity: iconVar.opacity, transform: `scale(${iconVar.scale})` }"
+            />
+            <OuiSkeleton :width="randomTextWidthByType('short')" height="0.875rem" variant="text" />
+          </OuiFlex>
+        </OuiFlex>
+
+        <OuiFlex justify="between" align="center">
+          <OuiBox
+            p="sm"
+            rounded="lg"
+            w="4xl"
+            bg="surface-muted"
+            class="bg-surface-muted/30 ring-1 ring-border-muted opacity-30"
+          >
+            <OuiFlex align="center" gap="sm" class="min-w-0">
+              <Icon
+                name="uil:github"
+                class="h-4 w-4 text-secondary shrink-0"
+                :style="{ opacity: iconVar.opacity, transform: `scale(${iconVar.scale})` }"
+              />
+              <OuiSkeleton :width="randomTextWidthByType('subtitle')" height="0.875rem" variant="text" />
+            </OuiFlex>
+          </OuiBox>
+          <OuiSkeleton :width="randomTextWidthByType('short')" height="1.5rem" variant="rectangle" :rounded="true" class="opacity-30" />
+        </OuiFlex>
+
+        <OuiGrid cols="2" gap="sm">
+          <OuiBox
+            p="sm"
+            rounded="lg"
+            bg="surface-muted"
+            class="bg-surface-muted/40 ring-1 ring-border-muted opacity-30"
+          >
+            <OuiStack gap="xs">
+              <OuiText
+                size="xs"
+                weight="bold"
+                transform="uppercase"
+                color="secondary"
+                class="tracking-wider opacity-50"
+              >
+                Build Time
+              </OuiText>
+              <OuiSkeleton :width="randomTextWidthByType('value')" height="1.5rem" variant="text" />
+            </OuiStack>
+          </OuiBox>
+
+          <OuiBox
+            p="sm"
+            rounded="lg"
+            bg="surface-muted"
+            class="bg-surface-muted/40 ring-1 ring-border-muted opacity-30"
+          >
+            <OuiStack gap="xs">
+              <OuiText
+                size="xs"
+                weight="bold"
+                transform="uppercase"
+                color="secondary"
+                class="tracking-wider opacity-50"
+              >
+                Bundle Size
+              </OuiText>
+              <OuiSkeleton :width="randomTextWidthByType('value')" height="1.5rem" variant="text" />
+            </OuiStack>
+          </OuiBox>
+        </OuiGrid>
+      </OuiStack>
+
+      <!-- Actual resources content -->
+      <OuiStack v-else-if="deployment" gap="md">
         <OuiFlex justify="between" align="center">
           <OuiFlex align="center" gap="sm">
             <OuiBox
@@ -96,7 +190,7 @@
 
         <OuiFlex justify="between" align="center">
           <OuiBox
-            v-if="deployment.repositoryUrl"
+            v-if="deployment?.repositoryUrl"
             p="sm"
             rounded="lg"
             w="4xl"
@@ -119,6 +213,7 @@
             </OuiFlex>
           </OuiBox>
           <span
+            v-if="deployment"
             class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold uppercase tracking-wide ml-auto"
             :class="environmentMeta.chipClass"
           >
@@ -145,7 +240,7 @@
                 Build Time
               </OuiText>
               <OuiText size="lg" weight="bold" color="primary">
-                {{ formatBuildTime(deployment.buildTime ?? 0) }}
+                {{ formatBuildTime(deployment?.buildTime ?? 0) }}
               </OuiText>
             </OuiStack>
           </OuiBox>
@@ -253,16 +348,20 @@
   import ResourceCard from "~/components/shared/ResourceCard.vue";
   import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
   import OuiByte from "~/components/oui/Byte.vue";
+  import { useSkeletonVariations, randomTextWidthByType, randomIconVariation } from "~/composables/useSkeletonVariations";
+  import OuiSkeleton from "~/components/oui/Skeleton.vue";
 
   interface Props {
-    deployment: Deployment;
+    deployment?: Deployment;
     progressValue?: number;
     progressPhase?: string;
+    loading?: boolean;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     progressValue: 0,
     progressPhase: "",
+    loading: false,
   });
 
   const emit = defineEmits<{
@@ -271,6 +370,10 @@
 
   const { startDeployment, stopDeployment, redeployDeployment } = useDeploymentActions();
   const isActioning = ref(false);
+
+  // Generate random variations for skeleton (consistent per instance)
+  const skeletonVars = useSkeletonVariations();
+  const iconVar = randomIconVariation();
 
   const STATUS_META = {
     [DeploymentStatus.RUNNING]: {
@@ -326,6 +429,9 @@
   } as const;
 
   const statusMeta = computed(() => {
+    if (!props.deployment || props.loading) {
+      return STATUS_META[DeploymentStatus.STOPPED];
+    }
     const status = props.deployment.status as DeploymentStatus;
     if (status in STATUS_META) {
       return STATUS_META[status as keyof typeof STATUS_META];
@@ -333,7 +439,18 @@
     return STATUS_META[DeploymentStatus.STOPPED];
   });
 
+  const resources = computed(() => {
+    if (props.loading || !props.deployment) {
+      return [
+        { label: "Build Time", icon: null },
+        { label: "Memory", icon: null },
+      ];
+    }
+    return [];
+  });
+
   const typeLabel = computed(() => {
+    if (!props.deployment || props.loading) return "Unknown";
     const type = props.deployment.type;
     if (!type) return "Unknown";
     
@@ -351,6 +468,7 @@
   });
 
   const environmentLabel = computed(() => {
+    if (!props.deployment || props.loading) return "Unknown";
     const env = props.deployment.environment;
     if (!env) return "Unknown";
     
@@ -364,6 +482,7 @@
   });
 
   const lastDeployedAtDate = computed(() => {
+    if (!props.deployment || props.loading) return new Date();
     if (props.deployment.lastDeployedAt) {
       return date(props.deployment.lastDeployedAt);
     }
@@ -410,6 +529,12 @@
   } as const;
 
   const environmentMeta = computed(() => {
+    if (!props.deployment || props.loading) {
+      return {
+        label: "Unknown",
+        chipClass: "bg-surface-muted text-secondary ring-1 ring-border-muted",
+      };
+    }
     const env = props.deployment.environment;
     if (env && env in ENVIRONMENT_META) {
       return ENVIRONMENT_META[env as keyof typeof ENVIRONMENT_META];
@@ -421,10 +546,12 @@
   });
 
   const deploymentGroups = computed(() => {
+    if (!props.deployment || props.loading) return [];
     return (props.deployment as any).groups || [];
   });
 
   const showContainerStatus = computed(() => {
+    if (!props.deployment || props.loading) return false;
     return (
       props.deployment.containersTotal &&
       props.deployment.containersTotal > 0 &&
@@ -434,6 +561,7 @@
   });
 
   const containerStatusVariant = computed<"success" | "warning" | "danger">(() => {
+    if (!props.deployment || props.loading) return "danger";
     const running = props.deployment.containersRunning ?? 0;
     const total = props.deployment.containersTotal ?? 0;
     if (total === 0) return "danger";
@@ -443,6 +571,7 @@
   });
 
   const showProgress = computed(() => {
+    if (!props.deployment || props.loading) return false;
     return (
       props.deployment.status === DeploymentStatus.BUILDING ||
       props.deployment.status === DeploymentStatus.DEPLOYING ||
@@ -451,6 +580,7 @@
   });
 
   const isProgressFailed = computed(() => {
+    if (!props.deployment || props.loading) return false;
     return props.deployment.status === DeploymentStatus.FAILED;
   });
 
@@ -474,6 +604,7 @@
   });
 
   const handleStart = async () => {
+    if (!props.deployment) return;
     isActioning.value = true;
     try {
       await startDeployment(props.deployment.id, null);
@@ -484,6 +615,7 @@
   };
 
   const handleStop = async () => {
+    if (!props.deployment) return;
     isActioning.value = true;
     try {
       await stopDeployment(props.deployment.id, null);
@@ -494,6 +626,7 @@
   };
 
   const handleRedeploy = async () => {
+    if (!props.deployment) return;
     isActioning.value = true;
     try {
       await redeployDeployment(props.deployment.id, null);

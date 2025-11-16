@@ -44,6 +44,5 @@ export function createWebTransport(
     interceptors: [interceptor],
     // Use JSON for better browser compatibility
     useBinaryFormat: false,
-    defaultTimeoutMs: 5000, // 5 seconds timeout for client-side API calls
   });
 }

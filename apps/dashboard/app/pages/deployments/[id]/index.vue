@@ -23,45 +23,80 @@
 
       <!-- Deployment Content (only show if no access error) -->
       <template v-else>
+        <!-- Loading Skeleton -->
+        <template v-if="pending && !deploymentData">
+          <OuiCard variant="outline" class="border-border-default/50">
+            <OuiCardBody class="p-3 md:p-6">
+              <OuiStack gap="md" class="md:gap-lg">
+                <OuiFlex justify="between" align="start" wrap="wrap" gap="md">
+                  <OuiStack gap="sm" class="flex-1 min-w-0">
+                    <OuiFlex align="center" gap="sm">
+                      <OuiSkeleton width="3rem" height="3rem" variant="rectangle" :rounded="true" class="rounded-lg" />
+                      <OuiStack gap="xs" class="flex-1">
+                        <OuiSkeleton width="20rem" height="2rem" variant="text" />
+                        <OuiSkeleton width="12rem" height="1rem" variant="text" />
+                      </OuiStack>
+                    </OuiFlex>
+                  </OuiStack>
+                  <OuiFlex gap="sm">
+                    <OuiSkeleton width="6rem" height="2rem" variant="rectangle" rounded />
+                    <OuiSkeleton width="6rem" height="2rem" variant="rectangle" rounded />
+                  </OuiFlex>
+                </OuiFlex>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+          <OuiCard variant="outline" class="border-border-default/50">
+            <OuiCardBody>
+              <OuiStack gap="md">
+                <OuiSkeleton width="100%" height="2rem" variant="text" />
+                <OuiSkeleton width="80%" height="1rem" variant="text" />
+                <OuiSkeleton width="60%" height="1rem" variant="text" />
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+        </template>
+
         <!-- Header -->
-        <OuiCard variant="outline" class="border-border-default/50">
-          <OuiCardBody class="p-3 md:p-6">
-            <OuiFlex
-              justify="between"
-              align="start"
-              wrap="wrap"
-              gap="md"
-              class="md:gap-lg md:items-center"
-            >
-              <OuiStack gap="sm" class="flex-1 min-w-0 md:gap-md">
-                <OuiFlex align="center" gap="sm" wrap="wrap" class="md:gap-md">
-                  <OuiBox
-                    p="xs"
-                    rounded="lg"
-                    bg="accent-primary"
-                    class="bg-primary/10 ring-1 ring-primary/20 shrink-0 md:p-sm md:rounded-xl"
-                  >
-                    <RocketLaunchIcon
-                      class="w-6 h-6 md:w-8 md:h-8 text-primary"
-                    />
-                  </OuiBox>
-                  <OuiStack gap="xs" class="min-w-0 flex-1 md:gap-none">
-                    <OuiFlex
-                      align="center"
-                      justify="between"
-                      gap="md"
-                      wrap="wrap"
-                      class="md:justify-start"
+        <Transition name="fade" mode="out-in">
+          <OuiCard v-if="!pending && deployment" variant="outline" class="border-border-default/50">
+            <OuiCardBody class="p-3 md:p-6">
+              <OuiFlex
+                justify="between"
+                align="start"
+                wrap="wrap"
+                gap="md"
+                class="md:gap-lg md:items-center"
+              >
+                <OuiStack gap="sm" class="flex-1 min-w-0 md:gap-md">
+                  <OuiFlex align="center" gap="sm" wrap="wrap" class="md:gap-md">
+                    <OuiBox
+                      p="xs"
+                      rounded="lg"
+                      bg="accent-primary"
+                      class="bg-primary/10 ring-1 ring-primary/20 shrink-0 md:p-sm md:rounded-xl"
                     >
-                      <OuiText
-                        as="h1"
-                        size="xl"
-                        weight="bold"
-                        truncate
-                        class="md:text-2xl"
+                      <RocketLaunchIcon
+                        class="w-6 h-6 md:w-8 md:h-8 text-primary"
+                      />
+                    </OuiBox>
+                    <OuiStack gap="xs" class="min-w-0 flex-1 md:gap-none">
+                      <OuiFlex
+                        align="center"
+                        justify="between"
+                        gap="md"
+                        wrap="wrap"
+                        class="md:justify-start"
                       >
-                        {{ deployment.name }}
-                      </OuiText>
+                        <OuiText
+                          as="h1"
+                          size="xl"
+                          weight="bold"
+                          truncate
+                          class="md:text-2xl"
+                        >
+                          {{ deployment.name }}
+                        </OuiText>
                       <OuiBadge :variant="statusMeta.badge" size="xs">
                         <span
                           class="inline-flex h-1.5 w-1.5 rounded-full mr-1.5"
@@ -254,6 +289,7 @@
             </OuiFlex>
           </OuiCardBody>
         </OuiCard>
+        </Transition>
 
         <!-- Tabbed Content -->
         <OuiStack gap="sm" class="md:gap-md">
@@ -433,6 +469,7 @@
   // Fetch deployment data
   const {
     data: deploymentData,
+    pending,
     refresh: refreshDeployment,
     error: fetchError,
   } = useClientFetch(

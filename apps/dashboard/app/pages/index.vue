@@ -1091,10 +1091,16 @@
 
   // Check if self-hosted and redirect to dashboard (non-blocking)
   const config = useConfig();
-  // Don't block page load - fetch config in background
-  const configPromise = config.fetchConfig();
-  const timeoutPromise = new Promise(resolve => setTimeout(resolve, 500));
-  await Promise.race([configPromise, timeoutPromise]);
+  // On SSR: use timeout to prevent blocking page render
+  // On client: no timeout - let slow connections complete
+  if (import.meta.server) {
+    const configPromise = config.fetchConfig();
+    const timeoutPromise = new Promise(resolve => setTimeout(resolve, 500));
+    await Promise.race([configPromise, timeoutPromise]);
+  } else {
+    // Client-side: fetch without timeout, don't block
+    config.fetchConfig().catch(() => null);
+  }
 
   if (config.selfHosted.value === true) {
     // Redirect to dashboard for self-hosted instances

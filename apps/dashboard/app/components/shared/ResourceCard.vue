@@ -30,93 +30,171 @@
 
     <OuiCardBody>
       <OuiStack gap="md">
-        <!-- Header -->
-        <OuiFlex justify="between" align="start">
-          <OuiStack gap="xs" class="flex-1 min-w-0">
-            <OuiFlex align="center" gap="sm">
-              <component
-                v-if="statusMeta.icon"
-                :is="statusMeta.icon"
-                :class="['h-5 w-5 shrink-0 transition-colors duration-500', statusMeta.iconClass]"
-              />
-              <slot name="icon">
+        <!-- Loading Skeleton -->
+        <template v-if="loading">
+          <!-- Header Skeleton - Match actual structure with icon placeholder -->
+          <OuiFlex justify="between" align="start">
+            <OuiStack gap="xs" class="flex-1 min-w-0">
+              <OuiFlex align="center" gap="sm">
+                <!-- Icon placeholder - use actual icon if available, with random variation -->
                 <component
-                  v-if="icon"
-                  :is="icon"
-                  :class="['h-5 w-5 shrink-0', iconClass]"
+                  v-if="statusMeta?.icon"
+                  :is="statusMeta.icon"
+                  :class="['h-5 w-5 shrink-0', statusMeta.iconClass]"
+                  :style="{ opacity: skeletonVars.iconOpacity, transform: `scale(${skeletonVars.iconScale})` }"
                 />
+                <slot name="icon">
+                  <component
+                    v-if="icon"
+                    :is="icon"
+                    :class="['h-5 w-5 shrink-0', iconClass]"
+                    :style="{ opacity: skeletonVars.iconOpacity, transform: `scale(${skeletonVars.iconScale})` }"
+                  />
+                </slot>
+                <OuiSkeleton v-if="!statusMeta?.icon && !icon" width="1.25rem" height="1.25rem" variant="rectangle" :rounded="true" />
+                <OuiSkeleton :width="skeletonVars.titleWidth" height="1.5rem" variant="text" />
+              </OuiFlex>
+              <slot name="subtitle">
+                <OuiSkeleton :width="skeletonVars.subtitleWidth" height="1rem" variant="text" />
               </slot>
-              <OuiText
-                as="h3"
-                size="lg"
-                weight="semibold"
-                class="truncate"
-                :title="title"
-              >
-                {{ title }}
-              </OuiText>
+            </OuiStack>
+            <OuiFlex gap="xs">
+              <slot name="actions" />
             </OuiFlex>
-            <slot name="subtitle">
-              <OuiText v-if="subtitle" size="sm" color="secondary" class="truncate">
-                {{ subtitle }}
+          </OuiFlex>
+
+          <!-- Status Badge Skeleton - Use actual badge structure -->
+          <OuiBadge variant="secondary" size="sm" class="opacity-30">
+            <OuiSkeleton :width="randomTextWidthByType('short')" height="0.875rem" variant="text" class="bg-transparent" />
+          </OuiBadge>
+
+          <!-- Resources Skeleton - Use actual resource structure -->
+          <slot name="resources">
+            <OuiGrid v-if="resources && resources.length > 0" :cols="String(resources.length) as any" gap="sm">
+              <OuiBox
+                v-for="(resource, idx) in resources"
+                :key="idx"
+                p="sm"
+                rounded="lg"
+                class="bg-surface-muted/40"
+              >
+                <OuiStack gap="xs" align="center">
+                  <component
+                    v-if="resource.icon"
+                    :is="resource.icon"
+                    class="h-4 w-4 text-secondary"
+                    :style="{ opacity: skeletonVars.iconOpacity, transform: `scale(${skeletonVars.iconScale})` }"
+                  />
+                  <OuiSkeleton :width="randomTextWidthByType('label')" height="0.875rem" variant="text" />
+                </OuiStack>
+              </OuiBox>
+            </OuiGrid>
+          </slot>
+
+          <!-- Custom Info Section Skeleton -->
+          <slot name="info" />
+
+          <!-- Footer Skeleton - Match actual structure -->
+          <OuiFlex justify="between" align="center">
+            <slot name="footer-left">
+              <OuiSkeleton :width="skeletonVars.subtitleWidth" height="0.875rem" variant="text" />
+            </slot>
+            <slot name="footer-right">
+              <OuiSkeleton width="6rem" height="2rem" variant="rectangle" :rounded="true" />
+            </slot>
+          </OuiFlex>
+        </template>
+
+        <!-- Actual Content -->
+        <template v-else>
+          <!-- Header -->
+          <OuiFlex justify="between" align="start">
+            <OuiStack gap="xs" class="flex-1 min-w-0">
+              <OuiFlex align="center" gap="sm">
+                <component
+                  v-if="statusMeta?.icon"
+                  :is="statusMeta.icon"
+                  :class="['h-5 w-5 shrink-0 transition-colors duration-500', statusMeta.iconClass]"
+                />
+                <slot name="icon">
+                  <component
+                    v-if="icon"
+                    :is="icon"
+                    :class="['h-5 w-5 shrink-0', iconClass]"
+                  />
+                </slot>
+                <OuiText
+                  as="h3"
+                  size="lg"
+                  weight="semibold"
+                  class="truncate"
+                  :title="title"
+                >
+                  {{ title }}
+                </OuiText>
+              </OuiFlex>
+              <slot name="subtitle">
+                <OuiText v-if="subtitle" size="sm" color="secondary" class="truncate">
+                  {{ subtitle }}
+                </OuiText>
+              </slot>
+            </OuiStack>
+
+            <OuiFlex gap="xs">
+              <slot name="actions" />
+            </OuiFlex>
+          </OuiFlex>
+
+          <!-- Status Badge -->
+          <OuiBadge v-if="statusMeta" :variant="statusMeta.badge" size="sm" class="transition-all duration-300">
+            {{ statusMeta.label }}
+          </OuiBadge>
+
+          <!-- Resources / Custom Content -->
+          <slot name="resources">
+            <OuiGrid v-if="resources && resources.length > 0" :cols="String(resources.length) as any" gap="sm">
+              <OuiBox
+                v-for="(resource, idx) in resources"
+                :key="idx"
+                p="sm"
+                rounded="lg"
+                class="bg-surface-muted/40"
+              >
+                <OuiStack gap="xs" align="center">
+                  <component
+                    v-if="resource.icon"
+                    :is="resource.icon"
+                    class="h-4 w-4 text-secondary"
+                  />
+                  <OuiText size="xs" weight="medium">{{ resource.label }}</OuiText>
+                </OuiStack>
+              </OuiBox>
+            </OuiGrid>
+          </slot>
+
+          <!-- Custom Info Section -->
+          <slot name="info" />
+
+          <!-- Footer -->
+          <OuiFlex justify="between" align="center">
+            <slot name="footer-left">
+              <OuiText v-if="createdAt" size="xs" color="secondary">
+                <OuiRelativeTime :value="createdAt" />
               </OuiText>
             </slot>
-          </OuiStack>
-
-          <OuiFlex gap="xs">
-            <slot name="actions" />
+            <slot name="footer-right">
+              <OuiButton
+                v-if="detailUrl"
+                variant="ghost"
+                size="sm"
+                @click.stop="navigateToDetail"
+              >
+                View Details
+                <ArrowRightIcon class="h-4 w-4" />
+              </OuiButton>
+            </slot>
           </OuiFlex>
-        </OuiFlex>
-
-        <!-- Status Badge -->
-        <OuiBadge :variant="statusMeta.badge" size="sm" class="transition-all duration-300">
-          {{ statusMeta.label }}
-        </OuiBadge>
-
-        <!-- Resources / Custom Content -->
-        <slot name="resources">
-          <OuiGrid v-if="resources && resources.length > 0" :cols="String(resources.length) as any" gap="sm">
-            <OuiBox
-              v-for="(resource, idx) in resources"
-              :key="idx"
-              p="sm"
-              rounded="lg"
-              class="bg-surface-muted/40"
-            >
-              <OuiStack gap="xs" align="center">
-                <component
-                  v-if="resource.icon"
-                  :is="resource.icon"
-                  class="h-4 w-4 text-secondary"
-                />
-                <OuiText size="xs" weight="medium">{{ resource.label }}</OuiText>
-              </OuiStack>
-            </OuiBox>
-          </OuiGrid>
-        </slot>
-
-        <!-- Custom Info Section -->
-        <slot name="info" />
-
-        <!-- Footer -->
-        <OuiFlex justify="between" align="center">
-          <slot name="footer-left">
-            <OuiText v-if="createdAt" size="xs" color="secondary">
-              <OuiRelativeTime :value="createdAt" />
-            </OuiText>
-          </slot>
-          <slot name="footer-right">
-            <OuiButton
-              v-if="detailUrl"
-              variant="ghost"
-              size="sm"
-              @click.stop="navigateToDetail"
-            >
-              View Details
-              <ArrowRightIcon class="h-4 w-4" />
-            </OuiButton>
-          </slot>
-        </OuiFlex>
+        </template>
       </OuiStack>
     </OuiCardBody>
   </OuiCard>
@@ -127,6 +205,11 @@
   import { useRouter } from "vue-router";
   import { ArrowRightIcon } from "@heroicons/vue/24/outline";
   import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
+  import OuiSkeleton from "~/components/oui/Skeleton.vue";
+  import OuiBadge from "~/components/oui/Badge.vue";
+  import OuiGrid from "~/components/oui/Grid.vue";
+  import OuiBox from "~/components/oui/Box.vue";
+  import { useSkeletonVariations, randomTextWidthByType, randomIconVariation } from "~/composables/useSkeletonVariations";
 
   interface Resource {
     icon?: any;
@@ -144,9 +227,9 @@
   }
 
   interface Props {
-    title: string;
+    title?: string;
     subtitle?: string;
-    statusMeta: StatusMeta;
+    statusMeta?: StatusMeta;
     icon?: any;
     iconClass?: string;
     resources?: Resource[];
@@ -155,11 +238,22 @@
     clickable?: boolean;
     progressValue?: number;
     isActioning?: boolean;
+    loading?: boolean;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     clickable: true,
     isActioning: false,
+    loading: false,
+    title: "",
+    statusMeta: () => ({
+      badge: "secondary" as const,
+      label: "",
+      cardClass: "",
+      beforeGradient: "",
+      barClass: "",
+      iconClass: "",
+    }),
   });
 
   const emit = defineEmits<{
@@ -167,6 +261,9 @@
   }>();
 
   const router = useRouter();
+
+  // Generate random variations for skeleton (consistent per instance)
+  const skeletonVars = useSkeletonVariations();
 
   const handleClick = () => {
     if (props.clickable) {

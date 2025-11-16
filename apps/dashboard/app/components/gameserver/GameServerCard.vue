@@ -1,28 +1,29 @@
 <template>
   <ResourceCard
-    :title="gameServer.name"
+    :title="gameServer?.name || ''"
     :subtitle="gameTypeLabel"
     :status-meta="statusMeta"
     :resources="resources"
     :created-at="updatedAtDate"
-    :detail-url="`/gameservers/${gameServer.id}`"
+    :detail-url="gameServer ? `/gameservers/${gameServer.id}` : undefined"
     :is-actioning="isActioning"
+    :loading="loading"
   >
     <template #subtitle>
       <OuiStack gap="xs">
         <OuiText size="sm" color="secondary">
           {{ gameTypeLabel }}
         </OuiText>
-        <OuiFlex v-if="gameServer.port" align="center" gap="xs">
+        <OuiFlex v-if="!loading && gameServer?.port" align="center" gap="xs">
           <ServerIcon class="h-3 w-3 text-secondary" />
-          <OuiText size="xs" color="secondary">Port: {{ gameServer.port }}</OuiText>
+          <OuiText size="xs" color="secondary">Port: {{ gameServer?.port }}</OuiText>
         </OuiFlex>
       </OuiStack>
     </template>
 
     <template #actions>
       <OuiButton
-        v-if="gameServer.status === 'RUNNING'"
+        v-if="!loading && gameServer && gameServer.status === 'RUNNING'"
         variant="ghost"
         size="sm"
         icon-only
@@ -32,7 +33,7 @@
         <StopIcon class="h-4 w-4" />
       </OuiButton>
       <OuiButton
-        v-if="gameServer.status === 'STOPPED'"
+        v-if="!loading && gameServer && gameServer.status === 'STOPPED'"
         variant="ghost"
         size="sm"
         icon-only
@@ -42,6 +43,7 @@
         <PlayIcon class="h-4 w-4" />
       </OuiButton>
       <OuiButton
+        v-if="!loading && gameServer"
         variant="ghost"
         size="sm"
         icon-only
@@ -53,7 +55,29 @@
     </template>
 
     <template #resources>
-      <OuiGrid :cols="String(resources.length) as any" gap="sm">
+      <!-- Skeleton for resources -->
+      <OuiGrid v-if="loading" :cols="String(resources.length) as any" gap="sm">
+        <OuiBox
+          v-for="(resource, idx) in resources"
+          :key="idx"
+          p="sm"
+          rounded="lg"
+          class="bg-surface-muted/40 opacity-30"
+        >
+          <OuiStack gap="xs" align="center">
+            <component
+              v-if="resource.icon"
+              :is="resource.icon"
+              class="h-4 w-4 text-secondary"
+              :style="{ opacity: iconVar.opacity, transform: `scale(${iconVar.scale})` }"
+            />
+            <OuiSkeleton :width="randomTextWidthByType('label')" height="0.875rem" variant="text" />
+          </OuiStack>
+        </OuiBox>
+      </OuiGrid>
+      
+      <!-- Actual resources content -->
+      <OuiGrid v-else :cols="String(resources.length) as any" gap="sm">
         <OuiBox
           v-for="(resource, idx) in resources"
           :key="idx"
@@ -103,6 +127,8 @@
   import OuiBox from "~/components/oui/Box.vue";
   import OuiStack from "~/components/oui/Stack.vue";
   import OuiText from "~/components/oui/Text.vue";
+  import OuiSkeleton from "~/components/oui/Skeleton.vue";
+  import { randomTextWidthByType, randomIconVariation } from "~/composables/useSkeletonVariations";
 
   interface GameServer {
     id: string;
@@ -116,10 +142,13 @@
   }
 
   interface Props {
-    gameServer: GameServer;
+    gameServer?: GameServer;
+    loading?: boolean;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    loading: false,
+  });
   const emit = defineEmits<{
     refresh: [];
   }>();
@@ -127,6 +156,9 @@
   const client = useConnectClient(GameServerService);
   const { showAlert } = useDialog();
   const isActioning = ref(false);
+
+  // Generate random variations for skeleton icons
+  const iconVar = randomIconVariation();
 
   const getStatusMeta = (status: string) => {
     const statusMap: Record<string, any> = {
@@ -162,9 +194,15 @@
     return statusMap[status] || statusMap.STOPPED;
   };
 
-  const statusMeta = computed(() => getStatusMeta(props.gameServer.status));
+  const statusMeta = computed(() => {
+    if (!props.gameServer || props.loading) {
+      return getStatusMeta("STOPPED");
+    }
+    return getStatusMeta(props.gameServer.status);
+  });
 
   const gameTypeLabel = computed((): string => {
+    if (!props.gameServer || props.loading) return "Unknown";
     const gameType = props.gameServer.gameType;
     if (!gameType) return "Unknown";
     
@@ -189,6 +227,7 @@
   });
 
   const updatedAtDate = computed(() => {
+    if (!props.gameServer || props.loading) return new Date();
     if (!props.gameServer.updatedAt) return new Date();
     return new Date(props.gameServer.updatedAt);
   });
@@ -200,20 +239,29 @@
     return value;
   };
 
-  const resources = computed(() => [
-    {
-      icon: CpuChipIcon,
-      label: `${props.gameServer.cpuCores || "N/A"} vCPU`,
-    },
-    {
-      icon: CircleStackIcon,
-      label: "Memory", // Label for type compatibility, but we use custom slot
-      type: "memory" as const,
-      value: getMemoryBytesValue(props.gameServer.memoryBytes),
-    },
-  ]);
+  const resources = computed(() => {
+    if (props.loading || !props.gameServer) {
+      return [
+        { icon: CpuChipIcon, label: "vCPU" },
+        { icon: CircleStackIcon, label: "Memory" },
+      ];
+    }
+    return [
+      {
+        icon: CpuChipIcon,
+        label: `${props.gameServer.cpuCores || "N/A"} vCPU`,
+      },
+      {
+        icon: CircleStackIcon,
+        label: "Memory", // Label for type compatibility, but we use custom slot
+        type: "memory" as const,
+        value: getMemoryBytesValue(props.gameServer.memoryBytes),
+      },
+    ];
+  });
 
   const handleStart = async () => {
+    if (!props.gameServer) return;
     isActioning.value = true;
     try {
       await client.startGameServer({
@@ -248,6 +296,7 @@
   };
 
   const handleStop = async () => {
+    if (!props.gameServer) return;
     isActioning.value = true;
     try {
       await client.stopGameServer({

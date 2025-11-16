@@ -135,10 +135,36 @@
           </OuiStack>
         </OuiCardHeader>
         <OuiCardBody>
-          <!-- Loading State -->
-          <OuiStack v-if="pending" align="center" gap="md" class="py-16">
-            <OuiSpinner size="lg" />
-            <OuiText color="secondary">Loading tickets...</OuiText>
+          <!-- Loading State with Skeleton Cards -->
+          <OuiStack v-if="pending && !tickets" spacing="sm">
+            <OuiCard
+              v-for="i in 5"
+              :key="i"
+              class="transition-all duration-200"
+            >
+              <OuiCardBody>
+                <OuiStack spacing="md">
+                  <OuiFlex justify="between" align="start" gap="md" wrap="wrap">
+                    <OuiStack spacing="xs" class="flex-1 min-w-0">
+                      <OuiFlex gap="sm" align="center" wrap="wrap">
+                        <OuiSkeleton width="20rem" height="1.5rem" variant="text" />
+                        <OuiSkeleton width="6rem" height="1.5rem" variant="rectangle" rounded />
+                      </OuiFlex>
+                      <OuiSkeleton width="30rem" height="1rem" variant="text" />
+                    </OuiStack>
+                    <OuiFlex gap="xs" wrap="wrap" class="shrink-0">
+                      <OuiSkeleton width="5rem" height="1.5rem" variant="rectangle" rounded />
+                      <OuiSkeleton width="5rem" height="1.5rem" variant="rectangle" rounded />
+                    </OuiFlex>
+                  </OuiFlex>
+                  <OuiFlex gap="md" align="center" wrap="wrap">
+                    <OuiSkeleton width="8rem" height="1rem" variant="text" />
+                    <OuiSkeleton width="8rem" height="1rem" variant="text" />
+                    <OuiSkeleton width="8rem" height="1rem" variant="text" />
+                  </OuiFlex>
+                </OuiStack>
+              </OuiCardBody>
+            </OuiCard>
           </OuiStack>
 
           <!-- Error State -->
