@@ -1089,9 +1089,12 @@
     layout: false, // Use custom layout for homepage
   });
 
-  // Check if self-hosted and redirect to dashboard
+  // Check if self-hosted and redirect to dashboard (non-blocking)
   const config = useConfig();
-  await config.fetchConfig();
+  // Don't block page load - fetch config in background
+  const configPromise = config.fetchConfig();
+  const timeoutPromise = new Promise(resolve => setTimeout(resolve, 500));
+  await Promise.race([configPromise, timeoutPromise]);
 
   if (config.selfHosted.value === true) {
     // Redirect to dashboard for self-hosted instances

@@ -40,8 +40,8 @@ export const useConfig = () => {
           baseUrl: apiHost,
           httpVersion: "1.1",
           useBinaryFormat: false,
-          // Longer timeout for internal API connections (may need time to resolve service name)
-          defaultTimeoutMs: 10000, // 10 seconds
+          // Reduced timeout for faster failure detection
+          defaultTimeoutMs: 2000, // 2 seconds
         });
       } else {
         const { createConnectTransport } = await import("@connectrpc/connect-web");
@@ -67,7 +67,7 @@ export const useConfig = () => {
             baseUrl: config.public.apiHost,
             httpVersion: "1.1",
             useBinaryFormat: false,
-            defaultTimeoutMs: 10000, // 10 seconds
+            defaultTimeoutMs: 2000, // 2 seconds
           });
           const fallbackClient = createClient(AuthService, fallbackTransport);
           response = await fallbackClient.getPublicConfig({});
@@ -91,9 +91,12 @@ export const useConfig = () => {
     }
   };
 
-  // Fetch config on first access if not already loaded
+  // Fetch config on first access if not already loaded (non-blocking)
   if (configState.value.billingEnabled === null && !configState.value.loading) {
-    fetchConfig();
+    // Don't await - fetch in background to avoid blocking
+    fetchConfig().catch(err => {
+      console.warn("Config fetch failed, using defaults:", err);
+    });
   }
 
   return {

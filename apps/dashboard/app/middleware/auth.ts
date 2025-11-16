@@ -1,6 +1,10 @@
 export default defineNuxtRouteMiddleware(async (to, from) => {
   const user = useAuth();
-  await user.fetch();
+  // Don't block navigation - fetch auth in background
+  // Use Promise.race to prevent blocking if fetch is slow
+  const fetchPromise = user.fetch();
+  const timeoutPromise = new Promise(resolve => setTimeout(resolve, 1000));
+  await Promise.race([fetchPromise, timeoutPromise]);
   if (import.meta.server) return;
   if (!user.session || !user.user) {
     // Check if we just logged out (prevent silent auth immediately after logout)

@@ -34,7 +34,7 @@ export default defineNuxtPlugin({
             baseUrl: apiHost,
             httpVersion: "1.1",
             useBinaryFormat: false,
-            defaultTimeoutMs: 10000, // 10 seconds timeout (longer for internal API service name resolution)
+            defaultTimeoutMs: 2000, // 2 seconds timeout for faster failure detection
           });
           
           const { AuthService } = await import("@obiente/proto");
@@ -53,7 +53,7 @@ export default defineNuxtPlugin({
                 baseUrl: apiHost,
                 httpVersion: "1.1",
                 useBinaryFormat: false,
-                defaultTimeoutMs: 10000, // 10 seconds
+                defaultTimeoutMs: 2000, // 2 seconds
               });
               client = createClient(AuthService, publicTransport);
               publicConfig = await client.getPublicConfig({});
@@ -130,6 +130,7 @@ export default defineNuxtPlugin({
       httpVersion: "1.1", // Use HTTP/1.1 (h2c not supported by connect-node)
       useBinaryFormat: false, // Use Connect Protocol (JSON) instead of gRPC
       interceptors: [authInterceptor],
+      defaultTimeoutMs: 3000, // 3 seconds timeout for API calls
     });
 
     return {
