@@ -15,8 +15,8 @@ import (
 	"syscall"
 	"time"
 
-	"api/internal/logger"
-	"api/internal/middleware"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
