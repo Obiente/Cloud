@@ -29,8 +29,7 @@ services:
       # Note: BILLING_ENABLED and SELF_HOSTED are fetched from API via GetPublicConfig endpoint
       # They are not needed here as the dashboard fetches them from the API
     dns:
-      - 127.0.0.11  # Docker's embedded DNS server (ONLY - no fallback to prevent host DNS forwarding)
-    dns_search: .  # Use root domain to prevent host search domain from breaking service name resolution
+      - 127.0.0.11  # Docker's embedded DNS server
     networks:
       - obiente-network
     healthcheck:
