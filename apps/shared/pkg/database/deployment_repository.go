@@ -220,7 +220,10 @@ func (r *DeploymentRepository) Delete(ctx context.Context, id string) error {
 
 	// Clear cache AFTER successful delete
 	if r.cache != nil {
+		// Clear deployment cache
 		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", id))
+		// Also clear DNS cache for this deployment (DNS service caches IPs by deployment ID)
+		r.cache.Delete(ctx, fmt.Sprintf("dns:deployment:%s", id))
 	}
 
 	return nil
