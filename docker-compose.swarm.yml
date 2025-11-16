@@ -104,6 +104,11 @@ services:
     environment:
       PORT: 3001
       <<: [*common-auth]
+    dns:
+      - 127.0.0.11  # Docker's embedded DNS server
+      - 8.8.8.8     # Fallback to Google DNS
+    dns_search:
+      - obiente-network
     ports:
       - target: 3001
         published: 3001
@@ -160,6 +165,11 @@ services:
     environment:
       PORT: 3002
       <<: [*common-database, *common-auth, *common-dashboard]
+    dns:
+      - 127.0.0.11  # Docker's embedded DNS server
+      - 8.8.8.8     # Fallback to Google DNS
+    dns_search:
+      - obiente-network
     deploy:
       mode: replicated
       replicas: 2
@@ -204,6 +214,11 @@ services:
     environment:
       PORT: 3003
       <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard]
+    dns:
+      - 127.0.0.11  # Docker's embedded DNS server
+      - 8.8.8.8     # Fallback to Google DNS
+    dns_search:
+      - obiente-network
     deploy:
       mode: replicated
       replicas: 2
@@ -248,6 +263,11 @@ services:
     environment:
       PORT: 3004
       <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-dashboard]
+    dns:
+      - 127.0.0.11  # Docker's embedded DNS server
+      - 8.8.8.8     # Fallback to Google DNS
+    dns_search:
+      - obiente-network
     deploy:
       mode: replicated
       replicas: 2
@@ -297,6 +317,11 @@ services:
       - /var/lib/obiente:/var/lib/obiente
       - /var/obiente/tmp/obiente-volumes:/tmp/obiente-volumes
       - /var/obiente/tmp/obiente-deployments:/tmp/obiente-deployments
+    dns:
+      - 127.0.0.11  # Docker's embedded DNS server
+      - 8.8.8.8     # Fallback to Google DNS
+    dns_search:
+      - obiente-network
     deploy:
       mode: global  # One instance per node for local Docker access
       update_config:
@@ -342,6 +367,11 @@ services:
       <<: [*common-database, *common-metrics-db, *common-auth]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    dns:
+      - 127.0.0.11  # Docker's embedded DNS server
+      - 8.8.8.8     # Fallback to Google DNS
+    dns_search:
+      - obiente-network
     deploy:
       mode: replicated
       replicas: 2
@@ -389,6 +419,11 @@ services:
       ORCHESTRATOR_SYNC_INTERVAL: ${ORCHESTRATOR_SYNC_INTERVAL:-30s}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    dns:
+      - 127.0.0.11  # Docker's embedded DNS server
+      - 8.8.8.8     # Fallback to Google DNS
+    dns_search:
+      - obiente-network
     deploy:
       mode: replicated
       replicas: 2
@@ -433,6 +468,11 @@ services:
     environment:
       PORT: 3008
       <<: [*common-database, *common-auth, *common-orchestrator, *common-vps]
+    dns:
+      - 127.0.0.11  # Docker's embedded DNS server
+      - 8.8.8.8     # Fallback to Google DNS
+    dns_search:
+      - obiente-network
     deploy:
       mode: replicated
       replicas: 2
@@ -477,6 +517,11 @@ services:
     environment:
       PORT: 3009
       <<: [*common-database, *common-auth]
+    dns:
+      - 127.0.0.11  # Docker's embedded DNS server
+      - 8.8.8.8     # Fallback to Google DNS
+    dns_search:
+      - obiente-network
     deploy:
       mode: replicated
       replicas: 2
@@ -521,6 +566,11 @@ services:
     environment:
       PORT: 3010
       <<: [*common-database, *common-metrics-db, *common-auth]
+    dns:
+      - 127.0.0.11  # Docker's embedded DNS server
+      - 8.8.8.8     # Fallback to Google DNS
+    dns_search:
+      - obiente-network
     deploy:
       mode: replicated
       replicas: 2
@@ -565,6 +615,11 @@ services:
     environment:
       PORT: 3011
       <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-orchestrator]
+    dns:
+      - 127.0.0.11  # Docker's embedded DNS server
+      - 8.8.8.8     # Fallback to Google DNS
+    dns_search:
+      - obiente-network
     deploy:
       mode: replicated
       replicas: 1
@@ -610,6 +665,11 @@ services:
     environment:
       <<: [*common-database, *common-redis, *common-orchestrator, *common-dns]
       HTTP_PORT: ${DNS_HTTP_PORT:-8053}
+    dns:
+      - 127.0.0.11  # Docker's embedded DNS server
+      - 8.8.8.8     # Fallback to Google DNS
+    dns_search:
+      - obiente-network
     ports:
       # Use host mode publishing to expose port 53 directly on the host
       # DNS only runs on nodes labeled with dns.enabled=true
