@@ -22,7 +22,17 @@ func NewGameServerRepository(db *gorm.DB, cache *RedisCache) *GameServerReposito
 }
 
 func (r *GameServerRepository) Create(ctx context.Context, gameServer *GameServer) error {
-	return r.db.WithContext(ctx).Create(gameServer).Error
+	if err := r.db.WithContext(ctx).Create(gameServer).Error; err != nil {
+		return err
+	}
+
+	// Cache the newly created game server
+	if r.cache != nil {
+		cacheKey := fmt.Sprintf("gameserver:%s", gameServer.ID)
+		r.cache.Set(ctx, cacheKey, gameServer, 5*time.Minute)
+	}
+
+	return nil
 }
 
 func (r *GameServerRepository) GetByID(ctx context.Context, id string) (*GameServer, error) {
@@ -105,13 +115,8 @@ func (r *GameServerRepository) GetAll(ctx context.Context, organizationID string
 }
 
 func (r *GameServerRepository) Update(ctx context.Context, gameServer *GameServer) error {
-	// Clear cache
-	if r.cache != nil {
-		r.cache.Delete(ctx, fmt.Sprintf("gameserver:%s", gameServer.ID))
-	}
-
 	// Use Select to explicitly update fields
-	return r.db.WithContext(ctx).
+	if err := r.db.WithContext(ctx).
 		Model(gameServer).
 		Select(
 			"name", "description", "game_type", "status",
@@ -122,26 +127,42 @@ func (r *GameServerRepository) Update(ctx context.Context, gameServer *GameServe
 			"player_count", "max_players",
 			"last_started_at", "updated_at",
 		).
-		Updates(gameServer).Error
+		Updates(gameServer).Error; err != nil {
+		return err
+	}
+
+	// Clear and re-populate cache AFTER successful update
+	if r.cache != nil {
+		cacheKey := fmt.Sprintf("gameserver:%s", gameServer.ID)
+		// Fetch the updated game server to ensure we have all fields
+		var updatedGameServer GameServer
+		if err := r.db.WithContext(ctx).Where("id = ?", gameServer.ID).First(&updatedGameServer).Error; err == nil {
+			r.cache.Set(ctx, cacheKey, updatedGameServer, 5*time.Minute)
+		} else {
+			// If fetch fails, at least clear the cache to avoid stale data
+			r.cache.Delete(ctx, cacheKey)
+		}
+	}
+
+	return nil
 }
 
 func (r *GameServerRepository) UpdateStatus(ctx context.Context, id string, status int32) error {
-	// Clear cache
+	if err := r.db.WithContext(ctx).Model(&GameServer{}).
+		Where("id = ?", id).
+		Update("status", status).Error; err != nil {
+		return err
+	}
+
+	// Clear cache AFTER successful update
 	if r.cache != nil {
 		r.cache.Delete(ctx, fmt.Sprintf("gameserver:%s", id))
 	}
 
-	return r.db.WithContext(ctx).Model(&GameServer{}).
-		Where("id = ?", id).
-		Update("status", status).Error
+	return nil
 }
 
 func (r *GameServerRepository) UpdateContainerInfo(ctx context.Context, id string, containerID *string, containerName *string) error {
-	// Clear cache
-	if r.cache != nil {
-		r.cache.Delete(ctx, fmt.Sprintf("gameserver:%s", id))
-	}
-
 	updates := map[string]interface{}{
 		"updated_at": time.Now(),
 	}
@@ -152,42 +173,63 @@ func (r *GameServerRepository) UpdateContainerInfo(ctx context.Context, id strin
 		updates["container_name"] = *containerName
 	}
 
-	return r.db.WithContext(ctx).Model(&GameServer{}).
+	if err := r.db.WithContext(ctx).Model(&GameServer{}).
 		Where("id = ?", id).
-		Updates(updates).Error
+		Updates(updates).Error; err != nil {
+		return err
+	}
+
+	// Clear cache AFTER successful update
+	if r.cache != nil {
+		r.cache.Delete(ctx, fmt.Sprintf("gameserver:%s", id))
+	}
+
+	return nil
 }
 
 func (r *GameServerRepository) UpdateStorage(ctx context.Context, id string, storageBytes int64) error {
-	// Clear cache
+	if err := r.db.WithContext(ctx).Model(&GameServer{}).
+		Where("id = ?", id).
+		Update("storage_bytes", storageBytes).Error; err != nil {
+		return err
+	}
+
+	// Clear cache AFTER successful update
 	if r.cache != nil {
 		r.cache.Delete(ctx, fmt.Sprintf("gameserver:%s", id))
 	}
 
-	return r.db.WithContext(ctx).Model(&GameServer{}).
-		Where("id = ?", id).
-		Update("storage_bytes", storageBytes).Error
+	return nil
 }
 
 func (r *GameServerRepository) Delete(ctx context.Context, id string) error {
-	// Clear cache
+	// Soft delete
+	now := time.Now()
+	if err := r.db.WithContext(ctx).Model(&GameServer{}).
+		Where("id = ?", id).
+		Update("deleted_at", now).Error; err != nil {
+		return err
+	}
+
+	// Clear cache AFTER successful delete
 	if r.cache != nil {
 		r.cache.Delete(ctx, fmt.Sprintf("gameserver:%s", id))
 	}
 
-	// Soft delete
-	now := time.Now()
-	return r.db.WithContext(ctx).Model(&GameServer{}).
-		Where("id = ?", id).
-		Update("deleted_at", now).Error
+	return nil
 }
 
 func (r *GameServerRepository) HardDelete(ctx context.Context, id string) error {
-	// Clear cache
+	if err := r.db.WithContext(ctx).Unscoped().Delete(&GameServer{}, "id = ?", id).Error; err != nil {
+		return err
+	}
+
+	// Clear cache AFTER successful delete
 	if r.cache != nil {
 		r.cache.Delete(ctx, fmt.Sprintf("gameserver:%s", id))
 	}
 
-	return r.db.WithContext(ctx).Unscoped().Delete(&GameServer{}, "id = ?", id).Error
+	return nil
 }
 
 // GetAvailablePort finds an available port starting from a base port

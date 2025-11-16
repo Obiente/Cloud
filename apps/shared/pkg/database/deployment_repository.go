@@ -22,7 +22,17 @@ func NewDeploymentRepository(db *gorm.DB, cache *RedisCache) *DeploymentReposito
 }
 
 func (r *DeploymentRepository) Create(ctx context.Context, deployment *Deployment) error {
-	return r.db.WithContext(ctx).Create(deployment).Error
+	if err := r.db.WithContext(ctx).Create(deployment).Error; err != nil {
+		return err
+	}
+
+	// Cache the newly created deployment
+	if r.cache != nil {
+		cacheKey := fmt.Sprintf("deployment:%s", deployment.ID)
+		r.cache.Set(ctx, cacheKey, deployment, 5*time.Minute)
+	}
+
+	return nil
 }
 
 func (r *DeploymentRepository) GetByID(ctx context.Context, id string) (*Deployment, error) {
@@ -93,13 +103,8 @@ func (r *DeploymentRepository) GetAll(ctx context.Context, organizationID string
 func (r *DeploymentRepository) Update(ctx context.Context, deployment *Deployment) error {
 	deployment.LastDeployedAt = time.Now()
 
-	// Clear cache
-	if r.cache != nil {
-		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", deployment.ID))
-	}
-
 	// Use Select to explicitly update fields, including zero values like empty strings
-	return r.db.WithContext(ctx).
+	if err := r.db.WithContext(ctx).
 		Model(deployment).
 		Select(
 			"name", "domain", "custom_domains", "type", "build_strategy",
@@ -112,76 +117,113 @@ func (r *DeploymentRepository) Update(ctx context.Context, deployment *Deploymen
 			"build_time", "size", "storage_bytes", "bandwidth_usage",
 			"last_deployed_at", "updated_at",
 		).
-		Updates(deployment).Error
+		Updates(deployment).Error; err != nil {
+		return err
+	}
+
+	// Clear and re-populate cache AFTER successful update
+	if r.cache != nil {
+		cacheKey := fmt.Sprintf("deployment:%s", deployment.ID)
+		// Fetch the updated deployment to ensure we have all fields
+		var updatedDeployment Deployment
+		if err := r.db.WithContext(ctx).Where("id = ?", deployment.ID).First(&updatedDeployment).Error; err == nil {
+			r.cache.Set(ctx, cacheKey, updatedDeployment, 5*time.Minute)
+		} else {
+			// If fetch fails, at least clear the cache to avoid stale data
+			r.cache.Delete(ctx, cacheKey)
+		}
+	}
+
+	return nil
 }
 
 // UpdateEnvVars updates only the environment variables fields
 func (r *DeploymentRepository) UpdateEnvVars(ctx context.Context, id string, envFileContent string, envVarsJSON string) error {
-	// Clear cache
-	if r.cache != nil {
-		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", id))
-	}
-
-	return r.db.WithContext(ctx).Model(&Deployment{}).
+	if err := r.db.WithContext(ctx).Model(&Deployment{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
 			"env_file_content": envFileContent,
 			"env_vars":         envVarsJSON,
 			"last_deployed_at": time.Now(),
-		}).Error
+		}).Error; err != nil {
+		return err
+	}
+
+	// Clear cache AFTER successful update
+	if r.cache != nil {
+		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", id))
+	}
+
+	return nil
 }
 
 func (r *DeploymentRepository) UpdateStatus(ctx context.Context, id string, status int32) error {
-	// Clear cache
+	if err := r.db.WithContext(ctx).Model(&Deployment{}).
+		Where("id = ?", id).
+		Update("status", status).Error; err != nil {
+		return err
+	}
+
+	// Clear cache AFTER successful update
 	if r.cache != nil {
 		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", id))
 	}
 
-	return r.db.WithContext(ctx).Model(&Deployment{}).
-		Where("id = ?", id).
-		Update("status", status).Error
+	return nil
 }
 
 func (r *DeploymentRepository) UpdateHealthStatus(ctx context.Context, id string, healthStatus string) error {
-	// Clear cache
+	if err := r.db.WithContext(ctx).Model(&Deployment{}).
+		Where("id = ?", id).
+		Update("health_status", healthStatus).Error; err != nil {
+		return err
+	}
+
+	// Clear cache AFTER successful update
 	if r.cache != nil {
 		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", id))
 	}
 
-	return r.db.WithContext(ctx).Model(&Deployment{}).
-		Where("id = ?", id).
-		Update("health_status", healthStatus).Error
+	return nil
 }
 
 func (r *DeploymentRepository) UpdateStorage(ctx context.Context, id string, storageBytes int64) error {
-	// Clear cache
-	if r.cache != nil {
-		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", id))
-	}
-
 	// Store bytes as string (client will format it)
 	sizeStr := fmt.Sprintf("%d", storageBytes)
 
-	return r.db.WithContext(ctx).Model(&Deployment{}).
+	if err := r.db.WithContext(ctx).Model(&Deployment{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
 			"storage_bytes": storageBytes,
 			"size":          sizeStr,
-		}).Error
-}
+		}).Error; err != nil {
+		return err
+	}
 
-func (r *DeploymentRepository) Delete(ctx context.Context, id string) error {
-	// Clear cache
+	// Clear cache AFTER successful update
 	if r.cache != nil {
 		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", id))
 	}
 
+	return nil
+}
+
+func (r *DeploymentRepository) Delete(ctx context.Context, id string) error {
 	// Soft delete: set DeletedAt timestamp
 	now := time.Now()
-	return r.db.WithContext(ctx).
+	if err := r.db.WithContext(ctx).
 		Model(&Deployment{}).
 		Where("id = ?", id).
-		Update("deleted_at", now).Error
+		Update("deleted_at", now).Error; err != nil {
+		return err
+	}
+
+	// Clear cache AFTER successful delete
+	if r.cache != nil {
+		r.cache.Delete(ctx, fmt.Sprintf("deployment:%s", id))
+	}
+
+	return nil
 }
 
 func (r *DeploymentRepository) Count(ctx context.Context, organizationID string, filters *DeploymentFilters) (int64, error) {
