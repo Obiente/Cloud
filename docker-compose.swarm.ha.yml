@@ -1,5 +1,11 @@
+
 # Obiente Cloud - High Availability Docker Swarm Configuration
 # This setup supports distributed deployments across multiple nodes
+
+
+
+# This file requires docker-compose.base.yml to be merged before use
+# Usage: cat docker-compose.base.yml docker-compose.swarm.ha.yml | docker stack deploy -c - obiente
 
 services:
   # ============================================================================

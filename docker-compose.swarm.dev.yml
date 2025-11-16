@@ -1,5 +1,11 @@
+
 # Obiente Cloud - Development Docker Swarm Configuration
 # This setup uses Swarm mode for development and delegates DNS to the main deployment
+
+
+
+# This file requires docker-compose.base.yml to be merged before use
+# Usage: cat docker-compose.base.yml docker-compose.swarm.dev.yml | docker stack deploy -c - obiente
 
 services:
   # ============================================================================

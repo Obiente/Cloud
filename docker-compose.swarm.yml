@@ -1,5 +1,11 @@
+
 # Obiente Cloud - Docker Swarm Deployment
 # This is a simplified setup. For high availability, use docker-compose.swarm.ha.yml
+
+
+
+# This file requires docker-compose.base.yml to be merged before use
+# Usage: cat docker-compose.base.yml docker-compose.swarm.yml | docker stack deploy -c - obiente
 
 services:
   postgres:

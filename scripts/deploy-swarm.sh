@@ -163,9 +163,15 @@ if [ ! -f "/var/lib/obiente/registry-auth/htpasswd" ]; then
   echo "⚠️  Continuing without registry authentication (registry will reject push/pull requests)"
 fi
 
+# Merge docker-compose.base.yml with the compose file
+# YAML anchors don't work across files, so we merge them first
+MERGED_COMPOSE=$(mktemp)
+./scripts/merge-compose-files.sh "$COMPOSE_FILE" "$MERGED_COMPOSE"
+
 # Deploy the main stack with environment variables loaded from .env
 # Use --resolve-image always to force pulling latest images
-docker stack deploy --resolve-image always -c "$COMPOSE_FILE" "$STACK_NAME"
+docker stack deploy --resolve-image always -c "$MERGED_COMPOSE" "$STACK_NAME"
+rm -f "$MERGED_COMPOSE"
 
 echo ""
 echo "✅ Main stack deployment started!"

@@ -54,7 +54,14 @@ echo ""
 
 # Redeploy main stack
 echo -e "${BLUE}🚀 Redeploying main stack '${STACK_NAME}'...${NC}"
-docker stack deploy --resolve-image always -c "$COMPOSE_FILE" "$STACK_NAME"
+
+# Merge docker-compose.base.yml with the compose file
+# YAML anchors don't work across files, so we merge them first
+MERGED_COMPOSE=$(mktemp)
+./scripts/merge-compose-files.sh "$COMPOSE_FILE" "$MERGED_COMPOSE"
+
+docker stack deploy --resolve-image always -c "$MERGED_COMPOSE" "$STACK_NAME"
+rm -f "$MERGED_COMPOSE"
 echo -e "${GREEN}✅ Main stack redeployed!${NC}"
 echo ""
 

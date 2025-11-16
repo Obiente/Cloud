@@ -47,7 +47,7 @@ echo "   sudo sed -i 's/DNSStubListener=yes/DNSStubListener=no/' /etc/systemd/re
 echo "   sudo systemctl restart systemd-resolved"
 echo ""
 echo "2. Deploy the stack:"
-echo "   docker stack deploy -c docker-compose.swarm.yml obiente"
+echo "   ./scripts/deploy-swarm.sh obiente docker-compose.swarm.yml"
 echo ""
 echo "3. Verify DNS is running on the labeled node:"
 echo "   docker service ps obiente_dns"
