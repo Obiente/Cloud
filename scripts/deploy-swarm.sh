@@ -205,34 +205,9 @@ rm -f "$MERGED_COMPOSE"
 
 echo ""
 echo "✅ Main stack deployment started!"
-
-# Deploy dashboard stack if enabled
-if [ "$DEPLOY_DASHBOARD" = "true" ]; then
-  echo ""
-  echo "🚀 Deploying dashboard stack..."
-  
-  # Wait a moment for the network to be created
-  sleep 2
-  
-  # Ensure the network exists (Docker Swarm creates it with stack prefix)
-  NETWORK_NAME="${STACK_NAME}_obiente-network"
-  if ! docker network ls | grep -q "$NETWORK_NAME"; then
-    echo "⚠️  Warning: Network $NETWORK_NAME not found. Waiting for main stack to create it..."
-    sleep 3
-  fi
-  
-  # Deploy dashboard stack (uses external network from main stack)
-  # Substitute __STACK_NAME__ placeholder and DOMAIN variables in labels and network name
-  export DOMAIN="${DOMAIN:-obiente.cloud}"
-  TEMP_DASHBOARD_COMPOSE=$(mktemp)
-  sed "s/__STACK_NAME__/${STACK_NAME}/g; s/\${DOMAIN:-localhost}/${DOMAIN}/g; s/\${DOMAIN}/${DOMAIN}/g" docker-compose.dashboard.yml > "$TEMP_DASHBOARD_COMPOSE"
-  # Use --resolve-image always to force pulling latest images
-  docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "${STACK_NAME}"
-  rm -f "$TEMP_DASHBOARD_COMPOSE"
-  
-  echo ""
-  echo "✅ Dashboard stack deployment started!"
-fi
+echo ""
+echo "ℹ️  Dashboard is now part of the main stack (moved from separate stack to fix DNS issues)"
+echo "   No separate dashboard deployment needed - it's included in the main stack."
 
 echo ""
 echo "✅ All deployments started!"
