@@ -10,11 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	"api/internal/auth"
-	"api/internal/database"
-	"api/internal/logger"
-	"api/internal/middleware"
-	superadminsvc "api/internal/services/superadmin"
+	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/middleware"
+	superadminsvc "superadmin-service/internal/service"
 
 	superadminv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/superadmin/v1/superadminv1connect"
 
