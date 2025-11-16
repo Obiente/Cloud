@@ -31,11 +31,11 @@ services:
         max_replicas_per_node: 1
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
     volumes:
       - etcd_data:/etcd-data
     networks:
@@ -59,11 +59,11 @@ services:
       replicas: 2
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
     healthcheck:
       test: ["CMD", "/opt/bitnami/scripts/pgpool/healthcheck.sh"]
       interval: 10s
@@ -101,11 +101,11 @@ services:
           - node.labels.postgres.replica == 1
       resources:
         limits:
+          cpus: "4"
+          memory: 4G
+        reservations:
           cpus: "2"
           memory: 2G
-        reservations:
-          cpus: "1"
-          memory: 1G
     networks:
       - obiente-network
 
@@ -138,11 +138,11 @@ services:
           - node.labels.postgres.replica == 2
       resources:
         limits:
+          cpus: "4"
+          memory: 4G
+        reservations:
           cpus: "2"
           memory: 2G
-        reservations:
-          cpus: "1"
-          memory: 1G
     networks:
       - obiente-network
 
@@ -175,11 +175,11 @@ services:
           - node.labels.postgres.replica == 3
       resources:
         limits:
+          cpus: "4"
+          memory: 4G
+        reservations:
           cpus: "2"
           memory: 2G
-        reservations:
-          cpus: "1"
-          memory: 1G
     networks:
       - obiente-network
 
@@ -205,11 +205,11 @@ services:
       replicas: 2
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
     healthcheck:
       test: ["CMD", "/opt/bitnami/scripts/pgpool/healthcheck.sh"]
       interval: 10s
@@ -247,11 +247,11 @@ services:
           - node.labels.metrics.replica == 1
       resources:
         limits:
-          cpus: "2"
+          cpus: "4"
           memory: 4G
         reservations:
-          cpus: "1"
-          memory: 2G
+          cpus: "2"
+          memory: 4G
     networks:
       - obiente-network
 
@@ -284,11 +284,11 @@ services:
           - node.labels.metrics.replica == 2
       resources:
         limits:
-          cpus: "2"
+          cpus: "4"
           memory: 4G
         reservations:
-          cpus: "1"
-          memory: 2G
+          cpus: "2"
+          memory: 4G
     networks:
       - obiente-network
 
@@ -321,11 +321,11 @@ services:
           - node.labels.metrics.replica == 3
       resources:
         limits:
-          cpus: "2"
+          cpus: "4"
           memory: 4G
         reservations:
-          cpus: "1"
-          memory: 2G
+          cpus: "2"
+          memory: 4G
     networks:
       - obiente-network
 
@@ -351,11 +351,11 @@ services:
           - node.labels.redis == 1
       resources:
         limits:
-          cpus: "0.5"
+          cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.25"
-          memory: 256M
+          cpus: "0.5"
+          memory: 512M
     networks:
       - obiente-network
 
@@ -377,11 +377,11 @@ services:
           - node.labels.redis == 2
       resources:
         limits:
-          cpus: "0.5"
+          cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.25"
-          memory: 256M
+          cpus: "0.5"
+          memory: 512M
     networks:
       - obiente-network
 
@@ -403,11 +403,11 @@ services:
           - node.labels.redis == 3
       resources:
         limits:
-          cpus: "0.5"
+          cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.25"
-          memory: 256M
+          cpus: "0.5"
+          memory: 512M
     networks:
       - obiente-network
 
@@ -551,11 +551,11 @@ services:
         max_attempts: 3
       resources:
         limits:
-          cpus: "2"
+          cpus: "4"
           memory: 4G
         reservations:
-          cpus: "1"
-          memory: 1G
+          cpus: "2"
+          memory: 2G
       labels:
         - "cloud.obiente.service=api"
         - "cloud.obiente.role=control-plane"
@@ -640,11 +640,11 @@ services:
           - node.labels.traefik.exclude != true  # Exclude nodes labeled with traefik.exclude=true
       resources:
         limits:
+          cpus: "2"
+          memory: 512M
+        reservations:
           cpus: "1"
           memory: 256M
-        reservations:
-          cpus: "0.5"
-          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -745,11 +745,11 @@ services:
         order: start-first
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
     cap_add:
       - NET_BIND_SERVICE
     depends_on:
@@ -786,10 +786,10 @@ services:
           - node.role == manager
       resources:
         limits:
-          cpus: "1"
-          memory: 1G
+          cpus: "2"
+          memory: 2G
         reservations:
-          cpus: "0.5"
+          cpus: "1"
           memory: 512M
       labels:
         - "cloud.obiente.traefik=true"
@@ -850,11 +850,11 @@ services:
           - node.role == manager
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -899,11 +899,11 @@ services:
           - node.role == manager
       resources:
         limits:
-          cpus: "1"
+          cpus: "2"
           memory: 512M
       reservations:
-        cpus: "0.25"
-        memory: 256M
+        cpus: "0.5"
+        memory: 512M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"

@@ -33,11 +33,11 @@ services:
           - node.role == manager
       resources:
         limits:
-          cpus: "1"
+          cpus: "2"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "1"
+          memory: 512M
     networks:
       - obiente-network
 
@@ -62,10 +62,10 @@ services:
           - node.role == manager
       resources:
         limits:
-          cpus: "1"
-          memory: 1G
+          cpus: "2"
+          memory: 2G
         reservations:
-          cpus: "0.5"
+          cpus: "1"
           memory: 512M
     networks:
       - obiente-network
@@ -88,11 +88,11 @@ services:
           - node.role == manager
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
     networks:
       - obiente-network
 
@@ -228,11 +228,11 @@ services:
         window: 120s
       resources:
         limits:
-          cpus: "2"
+          cpus: "4"
           memory: 4G
         reservations:
-          cpus: "1"
-          memory: 1G
+          cpus: "2"
+          memory: 2G
       labels:
         - "cloud.obiente.service=api"
         - "cloud.obiente.role=control-plane"
@@ -333,11 +333,11 @@ services:
           - node.labels.traefik.exclude != true  # Exclude nodes labeled with traefik.exclude=true
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -376,8 +376,8 @@ services:
   #     replicas: 1
   #     resources:
   #       limits:
-  #         cpus: "0.5"
-  #         memory: 256M
+  #         cpus: "1"
+  #         memory: 512M
   #   cap_add:
   #     - NET_BIND_SERVICE
   #   networks:

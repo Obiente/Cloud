@@ -29,11 +29,11 @@ services:
           - node.role == manager
       resources:
         limits:
+          cpus: "4"
+          memory: 4G
+        reservations:
           cpus: "2"
           memory: 2G
-        reservations:
-          cpus: "1"
-          memory: 1G
     networks:
       - obiente-network
 
@@ -58,11 +58,11 @@ services:
           - node.role == manager
       resources:
         limits:
+          cpus: "4"
+          memory: 4G
+        reservations:
           cpus: "2"
           memory: 2G
-        reservations:
-          cpus: "1"
-          memory: 1G
     networks:
       - obiente-network
 
@@ -84,11 +84,11 @@ services:
           - node.role == manager
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
     networks:
       - obiente-network
 
@@ -123,11 +123,11 @@ services:
         max_attempts: 3
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -171,11 +171,11 @@ services:
         condition: on-failure
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -212,11 +212,11 @@ services:
         condition: on-failure
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -253,11 +253,11 @@ services:
         condition: on-failure
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -301,10 +301,10 @@ services:
         max_attempts: 3
       resources:
         limits:
-          cpus: "1"
-          memory: 1G
+          cpus: "2"
+          memory: 2G
         reservations:
-          cpus: "0.5"
+          cpus: "1"
           memory: 512M
       labels:
         - "cloud.obiente.traefik=true"
@@ -344,11 +344,11 @@ services:
         condition: on-failure
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -388,11 +388,11 @@ services:
         condition: on-failure
       resources:
         limits:
-          cpus: "1"
+          cpus: "2"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "1"
+          memory: 512M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -429,11 +429,11 @@ services:
         condition: on-failure
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -470,11 +470,11 @@ services:
         condition: on-failure
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -511,11 +511,11 @@ services:
         condition: on-failure
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -552,11 +552,11 @@ services:
         condition: on-failure
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -610,11 +610,11 @@ services:
         condition: on-failure
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
     healthcheck:
       test: ["CMD-SHELL", "if command -v nc >/dev/null 2>&1; then nc -z localhost ${DNS_PORT:-53} || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost ${DNS_PORT:-53} || exit 1; fi"]
       interval: 30s
@@ -650,11 +650,11 @@ services:
         condition: on-failure
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
     networks:
       - obiente-network
 
@@ -722,11 +722,11 @@ services:
           - node.labels.traefik.exclude != true  # Exclude nodes labeled with traefik.exclude=true
       resources:
         limits:
+          cpus: "2"
+          memory: 512M
+        reservations:
           cpus: "1"
           memory: 256M
-        reservations:
-          cpus: "0.5"
-          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -762,10 +762,10 @@ services:
           - node.role == manager
       resources:
         limits:
-          cpus: "1"
-          memory: 1G
+          cpus: "2"
+          memory: 2G
         reservations:
-          cpus: "0.5"
+          cpus: "1"
           memory: 512M
       labels:
         - "cloud.obiente.traefik=true"
@@ -826,11 +826,11 @@ services:
           - node.role == manager
       resources:
         limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.25"
-          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -876,11 +876,11 @@ services:
           - node.role == manager
       resources:
         limits:
-          cpus: "1"
+          cpus: "2"
           memory: 512M
         reservations:
-          cpus: "0.25"
-          memory: 256M
+          cpus: "0.5"
+          memory: 512M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
