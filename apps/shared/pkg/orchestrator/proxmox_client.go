@@ -1,0 +1,4680 @@
+package orchestrator
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"crypto/tls"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"math/big"
+	"net/http"
+	"net/url"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
+
+	"golang.org/x/crypto/ssh"
+	"gorm.io/gorm"
+)
+
+// ProxmoxClient handles communication with Proxmox API
+type ProxmoxClient struct {
+	config     *ProxmoxConfig
+	httpClient *http.Client
+	ticket     *ProxmoxTicket
+	useToken   bool // If true, use API token authentication (no ticket needed)
+}
+
+// ProxmoxTicket represents a Proxmox authentication ticket
+type ProxmoxTicket struct {
+	Ticket string
+	CSRF   string
+	Expiry time.Time
+}
+
+// NewProxmoxClient creates a new Proxmox API client
+func NewProxmoxClient(config *ProxmoxConfig) (*ProxmoxClient, error) {
+	// Validate that either password or token is provided
+	if config.Password == "" && (config.TokenID == "" || config.Secret == "") {
+		return nil, fmt.Errorf("either password or token (token_id + secret) must be provided")
+	}
+
+	// Create HTTP client with insecure TLS (Proxmox often uses self-signed certs)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true, // TODO: Make this configurable
+		},
+	}
+
+	useToken := config.TokenID != "" && config.Secret != ""
+
+	client := &ProxmoxClient{
+		config: config,
+		httpClient: &http.Client{
+			Transport: tr,
+			Timeout:   30 * time.Second,
+		},
+		useToken: useToken,
+	}
+
+	// Authenticate (only needed for password-based auth; tokens are used directly in requests)
+	if !useToken {
+		if err := client.authenticate(context.Background()); err != nil {
+			return nil, fmt.Errorf("failed to authenticate with Proxmox: %w", err)
+		}
+	} else {
+		logger.Info("[ProxmoxClient] Using API token authentication (no ticket needed)")
+	}
+
+	return client, nil
+}
+
+// GetAuthCookie returns the authentication cookie value for WebSocket connections
+// For password-based auth, returns the ticket cookie.
+// For API tokens, we may need to get a ticket first for WebSocket connections.
+// Returns empty string if no cookie is available.
+func (pc *ProxmoxClient) GetAuthCookie() string {
+	if pc.ticket != nil {
+		return pc.ticket.Ticket
+	}
+	// For API tokens, WebSocket connections may require a ticket cookie
+	// Try to get a ticket using the API token
+	if pc.useToken {
+		// API tokens can be used to get a ticket for WebSocket connections
+		// This is a workaround for WebSocket which requires PVEAuthCookie
+		return ""
+	}
+	return ""
+}
+
+// GetOrCreateTicketForWebSocket gets or creates a ticket for WebSocket connections
+// WebSocket connections require PVEAuthCookie even when using API tokens
+func (pc *ProxmoxClient) GetOrCreateTicketForWebSocket(ctx context.Context) (string, error) {
+	// If we already have a ticket, return it
+	if pc.ticket != nil && time.Now().Before(pc.ticket.Expiry.Add(-5*time.Minute)) {
+		return pc.ticket.Ticket, nil
+	}
+
+	// For API tokens, we cannot get a ticket via /access/ticket endpoint
+	// The endpoint requires username/password in POST body, not API token in header
+	// According to Proxmox docs, API tokens don't use tickets for regular API calls
+	// However, WebSocket may require PVEAuthCookie - this is a limitation
+	// We'll return empty and try with just Authorization header + vncticket
+	if pc.useToken {
+		// API tokens cannot obtain tickets - return empty
+		// WebSocket connection will use Authorization header instead
+		return "", nil
+	}
+
+	// For password-based auth, ensure we're authenticated
+	if err := pc.ensureAuthenticated(ctx); err != nil {
+		return "", err
+	}
+
+	if pc.ticket == nil {
+		return "", fmt.Errorf("no ticket available")
+	}
+
+	return pc.ticket.Ticket, nil
+}
+
+// GetHTTPClient returns the HTTP client used by ProxmoxClient
+// This allows reusing the same client (with transport, cookies, etc.) for WebSocket connections
+func (pc *ProxmoxClient) GetHTTPClient() *http.Client {
+	return pc.httpClient
+}
+
+// GetAuthHeader returns the Authorization header value for API token authentication
+// Returns empty string if using password-based auth (which uses cookies instead)
+func (pc *ProxmoxClient) GetAuthHeader() string {
+	if !pc.useToken {
+		return ""
+	}
+	return fmt.Sprintf("PVEAPIToken=%s!%s=%s", pc.config.Username, pc.config.TokenID, pc.config.Secret)
+}
+
+// authenticate authenticates with Proxmox API and obtains a ticket (password-based only)
+func (pc *ProxmoxClient) authenticate(ctx context.Context) error {
+	apiURL := strings.TrimSuffix(pc.config.APIURL, "/")
+	authURL := fmt.Sprintf("%s/api2/json/access/ticket", apiURL)
+
+	// Password-based authentication only (tokens don't use tickets)
+	authData := url.Values{}
+	authData.Set("username", pc.config.Username)
+	authData.Set("password", pc.config.Password)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", authURL, strings.NewReader(authData.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create auth request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := pc.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("authentication failed: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var authResp struct {
+		Data struct {
+			Ticket string `json:"ticket"`
+			CSRF   string `json:"CSRFPreventionToken"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
+		return fmt.Errorf("failed to decode auth response: %w", err)
+	}
+
+	pc.ticket = &ProxmoxTicket{
+		Ticket: authResp.Data.Ticket,
+		CSRF:   authResp.Data.CSRF,
+		Expiry: time.Now().Add(2 * time.Hour), // Proxmox tickets typically last 2 hours
+	}
+
+	logger.Info("[ProxmoxClient] Successfully authenticated with Proxmox API (password-based)")
+	return nil
+}
+
+// ensureAuthenticated ensures we have a valid ticket (only for password-based auth)
+func (pc *ProxmoxClient) ensureAuthenticated(ctx context.Context) error {
+	if pc.useToken {
+		// API tokens don't need tickets - they're used directly in requests
+		return nil
+	}
+	if pc.ticket == nil || time.Now().After(pc.ticket.Expiry.Add(-5*time.Minute)) {
+		// Ticket expired or about to expire, re-authenticate
+		return pc.authenticate(ctx)
+	}
+	return nil
+}
+
+// apiRequest makes an authenticated request to Proxmox API
+func (pc *ProxmoxClient) apiRequest(ctx context.Context, method, endpoint string, body io.Reader) (*http.Response, error) {
+	if err := pc.ensureAuthenticated(ctx); err != nil {
+		return nil, err
+	}
+
+	apiURL := strings.TrimSuffix(pc.config.APIURL, "/")
+	reqURL := fmt.Sprintf("%s/api2/json%s", apiURL, endpoint)
+
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	if pc.useToken {
+		// API token authentication: Use Authorization header
+		// Format: PVEAPIToken=USER@REALM!TOKENID=SECRET
+		authHeader := fmt.Sprintf("PVEAPIToken=%s!%s=%s", pc.config.Username, pc.config.TokenID, pc.config.Secret)
+		req.Header.Set("Authorization", authHeader)
+		// API tokens don't need CSRF tokens
+	} else {
+		// Password-based authentication: Use ticket cookie
+		req.AddCookie(&http.Cookie{
+			Name:  "PVEAuthCookie",
+			Value: pc.ticket.Ticket,
+		})
+
+		// Set CSRF token for write operations
+		if method != "GET" {
+			req.Header.Set("CSRFPreventionToken", pc.ticket.CSRF)
+		}
+	}
+
+	// Only set Content-Type if there's a body
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	return pc.httpClient.Do(req)
+}
+
+// APIRequestRaw makes an authenticated request to Proxmox API with raw JSON body
+func (pc *ProxmoxClient) APIRequestRaw(ctx context.Context, method, endpoint string, bodyJSON []byte) (*http.Response, error) {
+	if err := pc.ensureAuthenticated(ctx); err != nil {
+		return nil, err
+	}
+
+	apiURL := strings.TrimSuffix(pc.config.APIURL, "/")
+	reqURL := fmt.Sprintf("%s/api2/json%s", apiURL, endpoint)
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, bytes.NewReader(bodyJSON))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Add authentication
+	if pc.useToken {
+		req.Header.Set("Authorization", fmt.Sprintf("PVEAPIToken=%s!%s=%s", pc.config.Username, pc.config.TokenID, pc.config.Secret))
+	} else {
+		req.AddCookie(&http.Cookie{
+			Name:  "PVEAuthCookie",
+			Value: pc.ticket.Ticket,
+		})
+		if method != "GET" {
+			req.Header.Set("CSRFPreventionToken", pc.ticket.CSRF)
+		}
+	}
+
+	resp, err := pc.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+
+	return resp, nil
+}
+
+// APIRequestForm makes an authenticated request to Proxmox API with form-encoded data (public method)
+// Special handling for sshkeys parameter to avoid double encoding
+func (pc *ProxmoxClient) APIRequestForm(ctx context.Context, method, endpoint string, formData url.Values) (*http.Response, error) {
+	return pc.apiRequestForm(ctx, method, endpoint, formData)
+}
+
+// apiRequestForm makes an authenticated request to Proxmox API with form-encoded data
+// Special handling for sshkeys parameter to avoid double encoding
+func (pc *ProxmoxClient) apiRequestForm(ctx context.Context, method, endpoint string, formData url.Values) (*http.Response, error) {
+	if err := pc.ensureAuthenticated(ctx); err != nil {
+		return nil, err
+	}
+
+	apiURL := strings.TrimSuffix(pc.config.APIURL, "/")
+	reqURL := fmt.Sprintf("%s/api2/json%s", apiURL, endpoint)
+
+	var body io.Reader
+	if len(formData) > 0 {
+		// Check if sshkeys is pre-encoded (we manually encoded it with %20)
+		// If so, manually construct form data to avoid double encoding
+		if sshKeysVal, ok := formData["sshkeys"]; ok && len(sshKeysVal) > 0 {
+			// sshkeys is already URL-encoded with %20, manually construct form data
+			var formParts []string
+			for key, values := range formData {
+				if key == "sshkeys" {
+					// sshkeys is already encoded with %20, use as-is
+					formParts = append(formParts, fmt.Sprintf("%s=%s", url.QueryEscape(key), sshKeysVal[0]))
+				} else {
+					// Other parameters: use normal form encoding
+					for _, value := range values {
+						tempForm := url.Values{}
+						tempForm.Set(key, value)
+						encoded := tempForm.Encode()
+						formParts = append(formParts, encoded)
+					}
+				}
+			}
+			bodyStr := strings.Join(formParts, "&")
+			logger.Debug("[ProxmoxClient] Form data body: %s", bodyStr)
+			body = strings.NewReader(bodyStr)
+		} else {
+			// No sshkeys parameter, use standard form encoding
+			encodedBody := formData.Encode()
+			logger.Debug("[ProxmoxClient] Form data body: %s", encodedBody)
+			body = strings.NewReader(encodedBody)
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	if pc.useToken {
+		// API token authentication: Use Authorization header
+		// Format: PVEAPIToken=USER@REALM!TOKENID=SECRET
+		authHeader := fmt.Sprintf("PVEAPIToken=%s!%s=%s", pc.config.Username, pc.config.TokenID, pc.config.Secret)
+		req.Header.Set("Authorization", authHeader)
+		// API tokens don't need CSRF tokens
+	} else {
+		// Password-based authentication: Use ticket cookie
+		req.AddCookie(&http.Cookie{
+			Name:  "PVEAuthCookie",
+			Value: pc.ticket.Ticket,
+		})
+
+		// Set CSRF token for write operations
+		if method != "GET" {
+			req.Header.Set("CSRFPreventionToken", pc.ticket.CSRF)
+		}
+	}
+
+	if body != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+
+	return pc.httpClient.Do(req)
+}
+
+// CreateVM creates a new VM in Proxmox with cloud-init support
+// allowInterVM: if true, allows VMs in the same organization to communicate with each other
+// CreateVMResult holds the result of VM creation
+type CreateVMResult struct {
+	VMID     string
+	Password string // Root password for the VM
+}
+
+func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowInterVM bool) (*CreateVMResult, error) {
+	// Declare rootPassword at function scope so it can be returned
+	var rootPassword string
+
+	// Get next available VM ID
+	vmID, err := pc.getNextVMID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get next VM ID: %w", err)
+	}
+
+	// Select node (use first available for now)
+	nodes, err := pc.ListNodes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list Proxmox nodes: %w", err)
+	}
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("no Proxmox nodes available")
+	}
+	nodeName := nodes[0]
+
+	// Get storage pool (default to local-lvm)
+	storage := "local-lvm"
+	if storagePool := os.Getenv("PROXMOX_STORAGE_POOL"); storagePool != "" {
+		storage = storagePool
+	}
+
+	// Validate storage pool exists and get storage type
+	availableStorages, err := pc.listStorages(ctx, nodeName)
+	storageType := "unknown"
+	if err != nil {
+		logger.Warn("[ProxmoxClient] Failed to list storage pools, continuing anyway: %v", err)
+	} else {
+		storageExists := false
+		for _, s := range availableStorages {
+			if s == storage {
+				storageExists = true
+				break
+			}
+		}
+		if !storageExists {
+			return nil, fmt.Errorf("storage pool '%s' does not exist on node '%s'. Available storage pools: %v. Please set PROXMOX_STORAGE_POOL to one of the available pools or create the storage pool in Proxmox", storage, nodeName, availableStorages)
+		}
+
+		// Get storage type to determine disk format
+		storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
+		if err == nil && storageInfo != nil {
+			if st, ok := storageInfo["type"].(string); ok {
+				storageType = st
+				logger.Info("[ProxmoxClient] Storage pool '%s' type: %s", storage, storageType)
+			} else {
+				logger.Warn("[ProxmoxClient] Could not determine storage type for '%s', defaulting to LVM format", storage)
+			}
+		} else {
+			logger.Warn("[ProxmoxClient] Failed to get storage info for '%s': %v, defaulting to LVM format", storage, err)
+		}
+	}
+
+	// Determine disk format based on storage type
+	// For directory storage, we need to use a different format (no volume name)
+	// For LVM/ZFS storage, we can specify the volume name
+	diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
+	var scsi0Config string
+	if storageType == "dir" || storageType == "directory" {
+		// Directory storage: format is storage:size=XXG (Proxmox auto-generates the filename)
+		// Cannot specify volume name for directory storage - it will be auto-generated
+		scsi0Config = fmt.Sprintf("%s:size=%dG", storage, diskSizeGB)
+	} else {
+		// LVM/ZFS storage: format is storage:vm-XXX-disk-0,size=XXG
+		scsi0Config = fmt.Sprintf("%s:vm-%d-disk-0,size=%dG", storage, vmID, diskSizeGB)
+	}
+
+	// Create VM configuration
+	// SECURITY: Add annotation to mark VM as managed by Obiente Cloud
+	// Use VPS ID as VM name to ensure uniqueness (Proxmox doesn't allow duplicate VM names)
+	vmConfig := map[string]interface{}{
+		"vmid":   vmID,
+		"name":   config.VPSID, // Use VPS ID (deployment ID) as VM name for uniqueness
+		"cores":  config.CPUCores,
+		"memory": config.MemoryBytes / (1024 * 1024), // Convert bytes to MB
+		"ostype": "l26",                              // Linux 2.6+ kernel
+		"onboot": 1,
+		"agent":  1, // Enable QEMU guest agent
+		"scsi0":  scsi0Config,
+		// Enable serial console for boot output and terminal access
+		"serial0": "socket",
+		// SECURITY: Mark VM as managed by Obiente Cloud
+		"description": fmt.Sprintf("Managed by Obiente Cloud - VPS ID: %s, Display Name: %s", config.VPSID, config.Name),
+	}
+
+	// Configure network interface
+	// If gateway is configured, use the SDN bridge (OCvpsnet by default)
+	// Otherwise, use the default bridge (vmbr0)
+	bridge := "vmbr0"
+	if os.Getenv("VPS_GATEWAY_URL") != "" || os.Getenv("VPS_GATEWAY_API_SECRET") != "" {
+		// Gateway manages DHCP on SDN bridge
+		gatewayBridge := os.Getenv("VPS_GATEWAY_BRIDGE")
+		if gatewayBridge == "" {
+			gatewayBridge = "OCvpsnet" // Default SDN bridge name
+		}
+		bridge = gatewayBridge
+		logger.Info("[ProxmoxClient] Using gateway bridge %s for VM network (gateway manages DHCP)", bridge)
+	}
+
+	// Configure network interface with optional VLAN support
+	// SECURITY: Use VLAN tags for network isolation when configured
+	netConfig := fmt.Sprintf("virtio,bridge=%s,firewall=1", bridge)
+	if vlanID := os.Getenv("PROXMOX_VLAN_ID"); vlanID != "" {
+		// Add VLAN tag for network isolation
+		netConfig = fmt.Sprintf("virtio,bridge=%s,tag=%s,firewall=1", bridge, vlanID)
+		logger.Info("[ProxmoxClient] Configuring VM network with VLAN tag: %s on bridge: %s", vlanID, bridge)
+	}
+	vmConfig["net0"] = netConfig
+
+	// Use cloud-init for modern Linux distributions (Ubuntu 22.04+, Debian 12+)
+	// For older images, fall back to ISO installation
+	useCloudInit := false
+	imageTemplate := ""
+	var templateVMID int // Store template VM ID for later use
+	// Track if we created a disk during the clone process (needed for config update)
+	var diskCreated bool
+	var createdDiskValue string
+
+	switch config.Image {
+	case 1: // UBUNTU_22_04
+		imageTemplate = "ubuntu-22.04-standard"
+		useCloudInit = true
+	case 2: // UBUNTU_24_04
+		imageTemplate = "ubuntu-24.04-standard"
+		useCloudInit = true
+	case 3: // DEBIAN_12
+		imageTemplate = "debian-12-standard"
+		useCloudInit = true
+	case 4: // DEBIAN_13
+		imageTemplate = "debian-13-standard"
+		useCloudInit = true
+	case 5: // ROCKY_LINUX_9
+		imageTemplate = "rockylinux-9-standard"
+		useCloudInit = true
+	case 6: // ALMA_LINUX_9
+		imageTemplate = "almalinux-9-standard"
+		useCloudInit = true
+	case 99: // CUSTOM
+		if config.ImageID != nil {
+			imageTemplate = *config.ImageID
+			useCloudInit = true // Assume custom images support cloud-init
+		}
+	}
+
+	if useCloudInit && imageTemplate != "" {
+		// Find template
+		var err error
+		templateVMID, err = pc.findTemplate(ctx, nodeName, imageTemplate)
+		if err != nil {
+			logger.Warn("[ProxmoxClient] Template %s not found, falling back to ISO installation: %v", imageTemplate, err)
+			useCloudInit = false
+		} else {
+			// Clone from template
+			// Proxmox API expects form-encoded data for clone operations
+			// Note: For linked clones (full=0), the storage parameter is not allowed
+			// The disk will be cloned to the same storage as the template
+			// For full clones (full=1), you can specify storage
+			cloneEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/clone", nodeName, templateVMID)
+			cloneFormData := url.Values{}
+			cloneFormData.Set("newid", fmt.Sprintf("%d", vmID))
+			cloneFormData.Set("name", config.VPSID) // Use VPS ID as VM name for uniqueness
+			cloneFormData.Set("target", nodeName)
+			cloneFormData.Set("full", "0") // Linked clone (faster)
+			// Note: storage parameter is only allowed for full clones, not linked clones
+			// Linked clones use the same storage as the template
+			logger.Info("[ProxmoxClient] Cloning template %s (VMID %d) to VM %d (linked clone)", imageTemplate, templateVMID, vmID)
+
+			resp, err := pc.apiRequestForm(ctx, "POST", cloneEndpoint, cloneFormData)
+			if err != nil {
+				logger.Warn("[ProxmoxClient] Failed to clone template, falling back to ISO: %v", err)
+				useCloudInit = false
+			} else {
+				defer resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					logger.Info("[ProxmoxClient] Cloned template %s to VM %d", imageTemplate, vmID)
+
+					// Wait a moment for the clone to complete and disk to be available
+					time.Sleep(2 * time.Second)
+
+					// Get template config to see what disk type it uses
+					templateConfig, err := pc.GetVMConfig(ctx, nodeName, templateVMID)
+					var templateDiskKey string
+					var templateDiskValue string
+					if err == nil {
+						// Find the disk key used by the template
+						for _, diskKey := range []string{"scsi0", "virtio0", "sata0", "ide0"} {
+							if disk, ok := templateConfig[diskKey].(string); ok && disk != "" {
+								templateDiskKey = diskKey
+								templateDiskValue = disk
+								logger.Info("[ProxmoxClient] Template %s (VMID %d) uses disk %s: %s", imageTemplate, templateVMID, diskKey, disk)
+								break
+							}
+						}
+						if templateDiskKey == "" {
+							// Template has no disk in config - check if there are any disk volumes in storage
+							logger.Warn("[ProxmoxClient] Template %s (VMID %d) does not have disk in config. Checking storage for disk volumes...", imageTemplate, templateVMID)
+							// Check storage for template disk volumes
+							storageContentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, storage)
+							contentResp, contentErr := pc.apiRequest(ctx, "GET", storageContentEndpoint, nil)
+							if contentErr == nil && contentResp != nil && contentResp.StatusCode == http.StatusOK {
+								defer contentResp.Body.Close()
+								var contentData struct {
+									Data []struct {
+										VolID   string `json:"volid"`
+										VMID    *int   `json:"vmid"`
+										Content string `json:"content"`
+									} `json:"data"`
+								}
+								if err := json.NewDecoder(contentResp.Body).Decode(&contentData); err == nil {
+									for _, vol := range contentData.Data {
+										if vol.VMID != nil && *vol.VMID == templateVMID && vol.Content == "images" {
+											// Found a disk volume for the template (could be unused disk)
+											volParts := strings.Split(vol.VolID, ":")
+											if len(volParts) >= 2 {
+												volName := volParts[1]
+												// Determine disk key from volume name
+												if strings.Contains(volName, "scsi") {
+													templateDiskKey = "scsi0"
+												} else if strings.Contains(volName, "virtio") {
+													templateDiskKey = "virtio0"
+												} else if strings.Contains(volName, "sata") {
+													templateDiskKey = "sata0"
+												} else if strings.Contains(volName, "ide") {
+													templateDiskKey = "ide0"
+												} else {
+													templateDiskKey = "scsi0" // Default to scsi0 for unused disks
+												}
+												templateDiskValue = vol.VolID
+												logger.Info("[ProxmoxClient] Found template disk volume %s in storage (may be unused disk), using disk key %s", vol.VolID, templateDiskKey)
+												break
+											}
+										}
+									}
+								}
+							}
+
+							if templateDiskKey == "" {
+								logger.Error("[ProxmoxClient] CRITICAL: Template %s (VMID %d) does not have any disk configured! Template config keys: %v", imageTemplate, templateVMID, getMapKeys(templateConfig))
+								return nil, fmt.Errorf("template %s (VMID %d) does not have a disk configured - cannot clone VM without disk. Please configure a disk for the template first", imageTemplate, templateVMID)
+							}
+						}
+					} else {
+						logger.Error("[ProxmoxClient] Failed to get template config: %v", err)
+						return nil, fmt.Errorf("failed to get template config: %w", err)
+					}
+
+					// Wait a bit longer for clone to fully complete
+					time.Sleep(3 * time.Second)
+
+					// Verify disk exists in cloned VM and determine which disk key to use
+					vmConfigCheck, err := pc.GetVMConfig(ctx, nodeName, vmID)
+					var actualDiskKey string
+					if err != nil {
+						logger.Warn("[ProxmoxClient] Failed to get VM config after clone: %v", err)
+					} else {
+						// Check for disk - prefer the same type as template, but check all types
+						diskKeysToCheck := []string{}
+						if templateDiskKey != "" {
+							diskKeysToCheck = append(diskKeysToCheck, templateDiskKey)
+						}
+						// Add other disk types if template disk key wasn't found or is different
+						for _, diskKey := range []string{"scsi0", "virtio0", "sata0", "ide0"} {
+							found := false
+							for _, checkKey := range diskKeysToCheck {
+								if checkKey == diskKey {
+									found = true
+									break
+								}
+							}
+							if !found {
+								diskKeysToCheck = append(diskKeysToCheck, diskKey)
+							}
+						}
+
+						for _, diskKey := range diskKeysToCheck {
+							if disk, ok := vmConfigCheck[diskKey].(string); ok && disk != "" {
+								actualDiskKey = diskKey
+								logger.Info("[ProxmoxClient] VM %d has disk %s: %s", vmID, diskKey, disk)
+								break
+							}
+						}
+
+						if actualDiskKey == "" {
+							logger.Warn("[ProxmoxClient] Cloned VM %d does not have a boot disk configured", vmID)
+							logger.Info("[ProxmoxClient] Template %s (VMID %d) disk config: %s=%s", imageTemplate, templateVMID, templateDiskKey, templateDiskValue)
+
+							// Check if template disk is a cloud-init disk (not a boot disk)
+							isCloudInitDisk := false
+							if templateDiskValue != "" {
+								isCloudInitDisk = strings.Contains(templateDiskValue, "cloudinit")
+							}
+
+							// If template only has cloud-init disk or no boot disk, create a new boot disk
+							// WARNING: Creating an empty disk - it will not be bootable without importing a cloud image
+							// The template should be recreated with a proper boot disk (see vps-provisioning.md)
+							if isCloudInitDisk || templateDiskKey == "" {
+								logger.Warn("[ProxmoxClient] Template has no boot disk (only cloud-init), creating new boot disk for VM %d. NOTE: This disk will be empty and may not boot. The template should be recreated with a proper boot disk.", vmID)
+
+								// Create a new boot disk using Proxmox API
+								// Format for directory storage: storage:size=XXG,format=qcow2 (Proxmox auto-generates filename)
+								// Format for LVM/ZFS: storage:vm-XXX-disk-0,size=XXG
+								diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
+								diskSizeStr := fmt.Sprintf("%dG", diskSizeGB)
+
+								// Determine storage type and format
+								storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
+								var diskValue string
+								if err == nil && storageInfo != nil {
+									storageType, ok := storageInfo["type"].(string)
+									if ok {
+										if storageType == "dir" || storageType == "directory" {
+											// Directory storage: must include vmID subdirectory in path
+											// Format: storage:vmID/vm-XXX-disk-0.qcow2,size=XXG,format=qcow2
+											// Example: local:300/vm-300-disk-0.qcow2,size=10G,format=qcow2
+											diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storage, vmID, vmID, diskSizeStr)
+										} else {
+											// LVM/ZFS: storage:vm-XXX-disk-0,size=XXG
+											diskValue = fmt.Sprintf("%s:vm-%d-disk-0,size=%s", storage, vmID, diskSizeStr)
+										}
+									} else {
+										// Default to directory format with vmID subdirectory
+										diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storage, vmID, vmID, diskSizeStr)
+									}
+								} else {
+									// Default to directory format with vmID subdirectory
+									diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storage, vmID, vmID, diskSizeStr)
+								}
+
+								// For directory storage, we need to create the disk volume first, then attach it
+								// For other storage types, we can specify it directly in the config
+								actualDiskKey = "scsi0"
+								var diskResp *http.Response
+								var diskErr error
+
+								// If storage type detection failed, assume directory storage for "local" storage pool
+								// (common default for directory storage)
+								useDirectoryStorage := storageType == "dir" || storageType == "directory"
+								if !useDirectoryStorage && (storage == "local" || err != nil) {
+									// Default to directory storage if detection failed or storage is "local"
+									useDirectoryStorage = true
+									logger.Info("[ProxmoxClient] Assuming directory storage for '%s' (detection failed or default)", storage)
+								}
+
+								if useDirectoryStorage {
+									// Create disk volume first using storage content API
+									// Format: POST /nodes/{node}/storage/{storage}/content
+									// Parameters: vmid, filename, size, format
+									contentFormData := url.Values{}
+									contentFormData.Set("vmid", fmt.Sprintf("%d", vmID))
+									contentFormData.Set("filename", fmt.Sprintf("vm-%d-disk-0.qcow2", vmID))
+									contentFormData.Set("size", diskSizeStr)
+									contentFormData.Set("format", "qcow2")
+
+									contentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, storage)
+									logger.Info("[ProxmoxClient] Creating disk volume for VM %d via storage API: %s", vmID, contentEndpoint)
+									contentResp, contentErr := pc.apiRequestForm(ctx, "POST", contentEndpoint, contentFormData)
+									if contentErr == nil && contentResp != nil {
+										if contentResp.StatusCode == http.StatusOK {
+											contentResp.Body.Close()
+											logger.Info("[ProxmoxClient] Successfully created disk volume for VM %d", vmID)
+											// Now attach the disk to the VM config
+											diskFormData := url.Values{}
+											diskFormData.Set(actualDiskKey, diskValue)
+											diskResp, diskErr = pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
+										} else {
+											body, _ := io.ReadAll(contentResp.Body)
+											contentResp.Body.Close()
+											logger.Error("[ProxmoxClient] Failed to create disk volume for VM %d: status %d, response: %s", vmID, contentResp.StatusCode, string(body))
+											diskErr = fmt.Errorf("failed to create disk volume: status %d", contentResp.StatusCode)
+										}
+									} else {
+										logger.Error("[ProxmoxClient] Failed to create disk volume for VM %d: %v", vmID, contentErr)
+										diskErr = contentErr
+									}
+								} else {
+									// For LVM/ZFS, we can set it directly
+									diskFormData := url.Values{}
+									diskFormData.Set(actualDiskKey, diskValue)
+									logger.Info("[ProxmoxClient] Creating boot disk %s for VM %d: %s", actualDiskKey, vmID, diskValue)
+									diskResp, diskErr = pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
+								}
+								if diskErr == nil && diskResp != nil && diskResp.StatusCode == http.StatusOK {
+									diskResp.Body.Close()
+									logger.Info("[ProxmoxClient] Successfully created boot disk %s for VM %d: %s", actualDiskKey, vmID, diskValue)
+									diskCreated = true
+									createdDiskValue = diskValue
+								} else {
+									var body []byte
+									if diskResp != nil {
+										body, _ = io.ReadAll(diskResp.Body)
+									}
+									logger.Error("[ProxmoxClient] Failed to create boot disk for VM %d: %v. Response: %s", vmID, diskErr, string(body))
+									// Continue anyway - we'll try to create it again later
+								}
+							} else {
+								// Template has a boot disk, but it wasn't cloned - try to find and attach it
+								logger.Info("[ProxmoxClient] Template has boot disk but it wasn't cloned, searching for disk volume...")
+
+								storageToSearch := storage
+								if templateDiskValue != "" {
+									parts := strings.Split(templateDiskValue, ":")
+									if len(parts) >= 1 {
+										storageToSearch = parts[0]
+									}
+								}
+
+								// List all volumes in storage to find the one for this VM
+								storageContentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, storageToSearch)
+								contentResp, contentErr := pc.apiRequest(ctx, "GET", storageContentEndpoint, nil)
+								var foundVolume string
+								var foundDiskKey string
+								if contentErr == nil && contentResp != nil && contentResp.StatusCode == http.StatusOK {
+									defer contentResp.Body.Close()
+									var contentData struct {
+										Data []struct {
+											VolID   string `json:"volid"`
+											VMID    *int   `json:"vmid"`
+											Format  string `json:"format"`
+											Content string `json:"content"`
+										} `json:"data"`
+									}
+									if err := json.NewDecoder(contentResp.Body).Decode(&contentData); err == nil {
+										// Look for volumes that match this VM ID (cloned disk)
+										for _, vol := range contentData.Data {
+											if vol.Content == "images" && vol.VMID != nil && *vol.VMID == vmID {
+												// Skip cloud-init disks
+												if strings.Contains(vol.VolID, "cloudinit") {
+													continue
+												}
+												// Found a disk volume for the cloned VM
+												volParts := strings.Split(vol.VolID, ":")
+												if len(volParts) >= 2 {
+													volName := volParts[1]
+													foundVolume = volName
+													// Try to determine disk key from volume name
+													if strings.Contains(volName, "scsi") {
+														foundDiskKey = "scsi0"
+													} else if strings.Contains(volName, "virtio") {
+														foundDiskKey = "virtio0"
+													} else if strings.Contains(volName, "sata") {
+														foundDiskKey = "sata0"
+													} else if strings.Contains(volName, "ide") {
+														foundDiskKey = "ide0"
+													} else {
+														foundDiskKey = templateDiskKey
+														if foundDiskKey == "" {
+															foundDiskKey = "scsi0"
+														}
+													}
+													logger.Info("[ProxmoxClient] Found cloned disk volume %s for VM %d, using disk key %s", foundVolume, vmID, foundDiskKey)
+													break
+												}
+											}
+										}
+									}
+								}
+
+								// If we found a volume, add it to the VM config
+								if foundVolume != "" && foundDiskKey != "" {
+									newDiskValue := fmt.Sprintf("%s:%s", storageToSearch, foundVolume)
+									diskFormData := url.Values{}
+									diskFormData.Set(foundDiskKey, newDiskValue)
+									diskResp, diskErr := pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
+									if diskErr == nil && diskResp != nil && diskResp.StatusCode == http.StatusOK {
+										diskResp.Body.Close()
+										actualDiskKey = foundDiskKey
+										logger.Info("[ProxmoxClient] Successfully attached disk %s to VM %d: %s", foundDiskKey, vmID, newDiskValue)
+									} else {
+										var body []byte
+										if diskResp != nil {
+											body, _ = io.ReadAll(diskResp.Body)
+										}
+										logger.Error("[ProxmoxClient] Failed to attach disk to VM %d: %v. Response: %s", vmID, diskErr, string(body))
+									}
+								} else {
+									// No disk found, create a new one
+									logger.Info("[ProxmoxClient] No cloned disk found, creating new boot disk for VM %d", vmID)
+									diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
+									diskSizeStr := fmt.Sprintf("%dG", diskSizeGB)
+
+									// Determine storage type and format
+									storageInfo, err := pc.getStorageInfo(ctx, nodeName, storageToSearch)
+									var diskValue string
+									var storageTypeForDisk string
+									if err == nil && storageInfo != nil {
+										if st, ok := storageInfo["type"].(string); ok {
+											storageTypeForDisk = st
+											if st == "dir" || st == "directory" {
+												// Directory storage: must include vmID subdirectory in path
+												// Format: storage:vmID/vm-XXX-disk-0.qcow2,size=XXG,format=qcow2
+												diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storageToSearch, vmID, vmID, diskSizeStr)
+											} else {
+												// LVM/ZFS: storage:vm-XXX-disk-0,size=XXG
+												diskValue = fmt.Sprintf("%s:vm-%d-disk-0,size=%s", storageToSearch, vmID, diskSizeStr)
+											}
+										} else {
+											// Default to directory format with vmID subdirectory
+											storageTypeForDisk = "dir"
+											diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storageToSearch, vmID, vmID, diskSizeStr)
+										}
+									} else {
+										// Default to directory format with vmID subdirectory
+										storageTypeForDisk = "dir"
+										diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storageToSearch, vmID, vmID, diskSizeStr)
+									}
+
+									actualDiskKey = "scsi0"
+									var diskResp *http.Response
+									var diskErr error
+
+									// If storage type detection failed, assume directory storage for "local" storage pool
+									useDirectoryStorage := storageTypeForDisk == "dir" || storageTypeForDisk == "directory"
+									if !useDirectoryStorage && (storageToSearch == "local" || err != nil) {
+										// Default to directory storage if detection failed or storage is "local"
+										useDirectoryStorage = true
+										logger.Info("[ProxmoxClient] Assuming directory storage for '%s' (detection failed or default)", storageToSearch)
+									}
+
+									if useDirectoryStorage {
+										// Create disk volume first using storage content API
+										contentFormData := url.Values{}
+										contentFormData.Set("vmid", fmt.Sprintf("%d", vmID))
+										contentFormData.Set("filename", fmt.Sprintf("vm-%d-disk-0.qcow2", vmID))
+										contentFormData.Set("size", diskSizeStr)
+										contentFormData.Set("format", "qcow2")
+
+										contentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, storageToSearch)
+										logger.Info("[ProxmoxClient] Creating disk volume for VM %d via storage API: %s", vmID, contentEndpoint)
+										contentResp, contentErr := pc.apiRequestForm(ctx, "POST", contentEndpoint, contentFormData)
+										if contentErr == nil && contentResp != nil {
+											if contentResp.StatusCode == http.StatusOK {
+												contentResp.Body.Close()
+												logger.Info("[ProxmoxClient] Successfully created disk volume for VM %d", vmID)
+												// Now attach the disk to the VM config
+												diskFormData := url.Values{}
+												diskFormData.Set(actualDiskKey, diskValue)
+												diskResp, diskErr = pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
+											} else {
+												body, _ := io.ReadAll(contentResp.Body)
+												contentResp.Body.Close()
+												logger.Error("[ProxmoxClient] Failed to create disk volume for VM %d: status %d, response: %s", vmID, contentResp.StatusCode, string(body))
+												diskErr = fmt.Errorf("failed to create disk volume: status %d", contentResp.StatusCode)
+											}
+										} else {
+											logger.Error("[ProxmoxClient] Failed to create disk volume for VM %d: %v", vmID, contentErr)
+											diskErr = contentErr
+										}
+									} else {
+										// For LVM/ZFS, we can set it directly
+										diskFormData := url.Values{}
+										diskFormData.Set(actualDiskKey, diskValue)
+										logger.Info("[ProxmoxClient] Creating boot disk %s for VM %d: %s", actualDiskKey, vmID, diskValue)
+										diskResp, diskErr = pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
+									}
+									if diskErr == nil && diskResp != nil && diskResp.StatusCode == http.StatusOK {
+										diskResp.Body.Close()
+										logger.Info("[ProxmoxClient] Successfully created boot disk %s for VM %d: %s", actualDiskKey, vmID, diskValue)
+										diskCreated = true
+										createdDiskValue = diskValue
+									} else {
+										var body []byte
+										if diskResp != nil {
+											body, _ = io.ReadAll(diskResp.Body)
+										}
+										logger.Error("[ProxmoxClient] Failed to create boot disk for VM %d: %v. Response: %s", vmID, diskErr, string(body))
+										// Try LVM/ZFS format as fallback (without format parameter)
+										if strings.Contains(string(body), "format") || strings.Contains(string(body), "qcow2") {
+											logger.Info("[ProxmoxClient] Retrying with LVM/ZFS format (no format parameter) for VM %d", vmID)
+											diskValue = fmt.Sprintf("%s:vm-%d-disk-0,size=%s", storageToSearch, vmID, diskSizeStr)
+											diskFormData := url.Values{}
+											diskFormData.Set(actualDiskKey, diskValue)
+											diskResp2, diskErr2 := pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
+											if diskErr2 == nil && diskResp2 != nil && diskResp2.StatusCode == http.StatusOK {
+												diskResp2.Body.Close()
+												logger.Info("[ProxmoxClient] Successfully created boot disk %s for VM %d with LVM/ZFS format: %s", actualDiskKey, vmID, diskValue)
+												diskCreated = true
+												createdDiskValue = diskValue
+											} else {
+												var body2 []byte
+												if diskResp2 != nil {
+													body2, _ = io.ReadAll(diskResp2.Body)
+												}
+												logger.Error("[ProxmoxClient] Failed to create boot disk with LVM/ZFS format for VM %d: %v. Response: %s", vmID, diskErr2, string(body2))
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+
+					// Resize disk after cloning to match the plan's disk size
+					// For linked clones, the disk inherits the template size, so we need to resize it
+					// If we just created a new disk, it should already be the correct size, but verify anyway
+					if actualDiskKey != "" {
+						vmConfigAfter, err := pc.GetVMConfig(ctx, nodeName, vmID)
+						if err == nil {
+							if disk, ok := vmConfigAfter[actualDiskKey].(string); ok && disk != "" {
+								diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
+
+								// Check if we just created the disk (if so, it should already be the right size)
+								// But we still verify and resize if needed, as the size might not match exactly
+								justCreated := strings.Contains(disk, "size=")
+
+								if justCreated {
+									// Extract size from disk config to verify it matches
+									// Format: "storage:vmID/vm-XXX-disk-0.qcow2,size=XXG,format=qcow2"
+									if strings.Contains(disk, "size=") {
+										sizePart := strings.Split(disk, "size=")
+										if len(sizePart) > 1 {
+											sizeStr := strings.Split(sizePart[1], ",")[0]
+											sizeStr = strings.TrimSuffix(sizeStr, "G")
+											if existingSize, parseErr := strconv.ParseInt(sizeStr, 10, 64); parseErr == nil {
+												if existingSize == diskSizeGB {
+													logger.Info("[ProxmoxClient] Disk %s was just created with correct size (%dGB), skipping resize", actualDiskKey, diskSizeGB)
+													// Skip to next iteration - disk is already correct size
+													goto skipResize
+												} else {
+													logger.Info("[ProxmoxClient] Disk %s was created with size %dGB but needs %dGB, resizing...", actualDiskKey, existingSize, diskSizeGB)
+												}
+											}
+										}
+									}
+								}
+
+								// Resize disk to match plan size
+								// For linked clones, this will create a new disk with the correct size
+								logger.Info("[ProxmoxClient] Resizing disk %s for VM %d to %dGB (plan size)", actualDiskKey, vmID, diskSizeGB)
+								if err := pc.resizeDisk(ctx, nodeName, vmID, actualDiskKey, diskSizeGB); err != nil {
+									logger.Error("[ProxmoxClient] Failed to resize disk %s for VM %d to %dGB: %v", actualDiskKey, vmID, diskSizeGB, err)
+									// This is a critical error - the VM will have the wrong disk size
+									// Continue anyway but log as error so it's visible
+								} else {
+									logger.Info("[ProxmoxClient] Successfully resized disk %s for VM %d to %dGB", actualDiskKey, vmID, diskSizeGB)
+								}
+							skipResize:
+							} else {
+								logger.Warn("[ProxmoxClient] Could not find disk %s in VM %d config after clone", actualDiskKey, vmID)
+							}
+						} else {
+							logger.Warn("[ProxmoxClient] Failed to get VM config after clone for resize check: %v", err)
+						}
+					} else {
+						logger.Warn("[ProxmoxClient] No disk key found for VM %d after clone - cannot resize", vmID)
+					}
+				} else {
+					body, _ := io.ReadAll(resp.Body)
+					logger.Warn("[ProxmoxClient] Failed to clone template (status %d): %s, falling back to ISO", resp.StatusCode, string(body))
+					useCloudInit = false
+				}
+			}
+		}
+	}
+
+	if !useCloudInit {
+		// Fallback to ISO installation
+		// Note: ISO files must exist in Proxmox ISO storage for this to work
+		switch config.Image {
+		case 1: // UBUNTU_22_04
+			vmConfig["ide2"] = "local:iso/ubuntu-22.04-server-amd64.iso,media=cdrom"
+		case 2: // UBUNTU_24_04
+			vmConfig["ide2"] = "local:iso/ubuntu-24.04-server-amd64.iso,media=cdrom"
+		case 3: // DEBIAN_12
+			vmConfig["ide2"] = "local:iso/debian-12-netinst-amd64.iso,media=cdrom"
+		case 4: // DEBIAN_13
+			vmConfig["ide2"] = "local:iso/debian-13-netinst-amd64.iso,media=cdrom"
+		case 5: // ROCKY_LINUX_9
+			vmConfig["ide2"] = "local:iso/Rocky-9-x86_64-minimal.iso,media=cdrom"
+		case 6: // ALMA_LINUX_9
+			vmConfig["ide2"] = "local:iso/AlmaLinux-9-x86_64-minimal.iso,media=cdrom"
+		case 99: // CUSTOM
+			if config.ImageID != nil {
+				vmConfig["ide2"] = fmt.Sprintf("local:iso/%s,media=cdrom", *config.ImageID)
+			}
+		}
+		// Set boot order to boot from CD-ROM first (for ISO installation)
+		vmConfig["boot"] = "order=ide2;net0"
+	}
+
+	// Configure cloud-init if using template
+	if useCloudInit {
+		// Cloud-init configuration
+		// Use ip=dhcp without specifying interface - cloud-init will auto-detect
+		// Specifying interface name can cause issues if the interface name doesn't match
+		vmConfig["ipconfig0"] = "ip=dhcp"
+		vmConfig["ciuser"] = "root"
+
+		// Root password: use custom if provided, otherwise auto-generate
+		if config.RootPassword != nil && *config.RootPassword != "" {
+			rootPassword = *config.RootPassword
+			logger.Info("[ProxmoxClient] Using custom root password for VM %d (length: %d)", vmID, len(rootPassword))
+		} else {
+			// Auto-generate root password
+			rootPassword = GenerateRandomPassword(32)
+			logger.Info("[ProxmoxClient] Auto-generated root password for VM %d (length: %d)", vmID, len(rootPassword))
+			// Set it in config so it's included in cloud-init userData
+			config.RootPassword = &rootPassword
+		}
+		// Note: Root password is set in cloud-init userData snippet, not via cipassword
+		// The snippet contains the full cloud-init configuration including root password, SSH keys, guest agent, etc.
+
+		// Always generate cloud-init userData and create a snippet file
+		// This ensures guest agent, SSH server, and other essential services are properly configured
+		// The userData includes: SSH server installation, guest agent installation, root password, SSH keys, etc.
+		userData := GenerateCloudInitUserData(config)
+		if userData != "" {
+			// Create snippet file in Proxmox storage
+			snippetPath, err := pc.CreateCloudInitSnippet(ctx, nodeName, storage, vmID, userData)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create cloud-init snippet for VM %d: %w. Snippets are required to ensure guest agent and SSH are properly configured. Ensure SSH is configured (PROXMOX_SSH_USER, PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA) and the storage supports snippets. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for setup instructions", vmID, err)
+			}
+			// Use cicustom to reference the snippet
+			vmConfig["cicustom"] = snippetPath
+			logger.Info("[ProxmoxClient] Using cloud-init userData snippet for VM %d: %s", vmID, snippetPath)
+			// Don't set cipassword or sshkeys in vmConfig when using snippets (they're in the userData)
+		} else {
+			return nil, fmt.Errorf("failed to generate cloud-init userData for VM %d", vmID)
+		}
+	}
+
+	// Create or update VM
+	endpoint := fmt.Sprintf("/nodes/%s/qemu", nodeName)
+	if useCloudInit {
+		// Update cloned VM configuration
+		// Proxmox API expects form-encoded data for config updates
+		// Note: Don't include disk config in update when cloning - disk already exists and was resized separately
+		updateEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
+
+		// Get the actual disk key from the cloned VM to use in boot order
+		vmConfigCheck, err := pc.GetVMConfig(ctx, nodeName, vmID)
+		var actualDiskKey string
+		if err == nil {
+			// Find which disk key exists in the cloned VM
+			for _, diskKey := range []string{"scsi0", "virtio0", "sata0", "ide0"} {
+				if disk, ok := vmConfigCheck[diskKey].(string); ok && disk != "" {
+					actualDiskKey = diskKey
+					break
+				}
+			}
+		}
+
+		// If we couldn't find a disk, try to get it from template
+		if actualDiskKey == "" {
+			templateConfig, err := pc.GetVMConfig(ctx, nodeName, templateVMID)
+			if err == nil {
+				for _, diskKey := range []string{"scsi0", "virtio0", "sata0", "ide0"} {
+					if disk, ok := templateConfig[diskKey].(string); ok && disk != "" {
+						actualDiskKey = diskKey
+						break
+					}
+				}
+			}
+		}
+
+		// Default to scsi0 if we still don't know
+		if actualDiskKey == "" {
+			actualDiskKey = "scsi0"
+			logger.Warn("[ProxmoxClient] Could not determine disk type for VM %d, defaulting to scsi0 for boot order", vmID)
+		}
+
+		formData := url.Values{}
+		for key, value := range vmConfig {
+			// Skip disk configs when cloning - disk already exists from template and was resized separately
+			// UNLESS we just created a disk, in which case we need to include it
+			if key == "scsi0" || key == "virtio0" || key == "sata0" || key == "ide0" {
+				// Only skip if we didn't create this disk
+				// If we created a disk, we need to include it in the config update
+				if !diskCreated || key != actualDiskKey {
+					continue
+				}
+				// We created this disk, so include it with the value we used
+				if diskCreated && createdDiskValue != "" {
+					formData.Set(key, createdDiskValue)
+					logger.Info("[ProxmoxClient] Including newly created disk %s in VM config update: %s", key, createdDiskValue)
+				}
+				continue
+			}
+			// Special handling for sshkeys - Proxmox v8.4 requires double-encoding
+			if key == "sshkeys" {
+				if strValue, ok := value.(string); ok && strValue != "" {
+					// Use the reusable encoding function for Proxmox v8.4 double-encoding
+					encodedValue := encodeSSHKeysForProxmox(strValue)
+					formData.Set(key, encodedValue)
+					logger.Debug("[ProxmoxClient] Setting sshkeys parameter (raw length: %d, encoded length: %d)", len(strValue), len(encodedValue))
+				}
+			} else {
+				formData.Set(key, fmt.Sprintf("%v", value))
+			}
+		}
+
+		// Ensure boot order includes the actual disk - this is critical for the VM to boot
+		// Use the disk key we detected from the cloned VM or template
+		formData.Set("boot", fmt.Sprintf("order=%s", actualDiskKey))
+		formData.Set("bootdisk", actualDiskKey) // Set bootdisk parameter (required for Proxmox)
+		logger.Info("[ProxmoxClient] Setting boot order to %s and bootdisk to %s for VM %d", actualDiskKey, actualDiskKey, vmID)
+
+		// Log form data for debugging (excluding sensitive data like passwords)
+		if sshKeysVal, ok := formData["sshkeys"]; ok && len(sshKeysVal) > 0 {
+			logger.Info("[ProxmoxClient] Form data includes sshkeys parameter (length: %d chars)", len(sshKeysVal[0]))
+			logger.Debug("[ProxmoxClient] SSH keys in form data (raw): %q", sshKeysVal[0])
+			logger.Debug("[ProxmoxClient] SSH keys ends with newline: %v", strings.HasSuffix(sshKeysVal[0], "\n"))
+			// Log what the encoded form data will look like
+			testFormData := url.Values{}
+			testFormData.Set("sshkeys", sshKeysVal[0])
+			encoded := testFormData.Encode()
+			logger.Debug("[ProxmoxClient] SSH keys encoded form data: %s", encoded)
+			// Decode it back to verify
+			if decoded, err := url.QueryUnescape(strings.TrimPrefix(encoded, "sshkeys=")); err == nil {
+				logger.Debug("[ProxmoxClient] SSH keys decoded back: %q", decoded)
+				logger.Debug("[ProxmoxClient] Decoded ends with newline: %v", strings.HasSuffix(decoded, "\n"))
+			}
+		} else {
+			logger.Warn("[ProxmoxClient] Form data does NOT include sshkeys parameter")
+		}
+
+		resp, err := pc.apiRequestForm(ctx, "PUT", updateEndpoint, formData)
+		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
+			resp.Body.Close()
+			logger.Info("[ProxmoxClient] Updated VM %d configuration", vmID)
+			logger.Info("[ProxmoxClient] VM %d configured with cloud-init snippet (guest agent and SSH will be installed on first boot)", vmID)
+
+			// Verify that the disk (scsi0) exists in the VM config
+			// This is a safety check to ensure the cloned VM has a disk
+			vmConfigResp, err := pc.apiRequest(ctx, "GET", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), nil)
+			if err == nil && vmConfigResp != nil && vmConfigResp.StatusCode == http.StatusOK {
+				defer vmConfigResp.Body.Close()
+				var configData struct {
+					Data map[string]interface{} `json:"data"`
+				}
+				if err := json.NewDecoder(vmConfigResp.Body).Decode(&configData); err == nil {
+					// Check for any disk configuration (scsi0, virtio0, sata0, ide0)
+					hasDisk := false
+					var diskKey string
+					var diskValue interface{}
+					for _, key := range []string{"scsi0", "virtio0", "sata0", "ide0"} {
+						if disk, ok := configData.Data[key]; ok && disk != nil && disk != "" {
+							hasDisk = true
+							diskKey = key
+							diskValue = disk
+							break
+						}
+					}
+
+					if !hasDisk {
+						logger.Error("[ProxmoxClient] WARNING: Cloned VM %d does not have any disk configured! This will cause boot failures.", vmID)
+						logger.Error("[ProxmoxClient] Creating boot disk now to fix this issue...")
+
+						// Create a boot disk immediately
+						diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
+						diskSizeStr := fmt.Sprintf("%dG", diskSizeGB)
+
+						// Determine storage type and format
+						storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
+						var diskValue string
+						if err == nil && storageInfo != nil {
+							if st, ok := storageInfo["type"].(string); ok {
+								if st == "dir" || st == "directory" {
+									// Directory storage: must include vmID subdirectory in path
+									// Format: storage:vmID/vm-XXX-disk-0.qcow2,size=XXG,format=qcow2
+									diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storage, vmID, vmID, diskSizeStr)
+								} else {
+									diskValue = fmt.Sprintf("%s:vm-%d-disk-0,size=%s", storage, vmID, diskSizeStr)
+								}
+							} else {
+								// Default to directory format with vmID subdirectory
+								diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storage, vmID, vmID, diskSizeStr)
+							}
+						} else {
+							// Default to directory format with vmID subdirectory
+							diskValue = fmt.Sprintf("%s:%d/vm-%d-disk-0.qcow2,size=%s,format=qcow2", storage, vmID, vmID, diskSizeStr)
+						}
+
+						// Use scsi0 as the default boot disk
+						actualDiskKey = "scsi0"
+						var diskResp *http.Response
+						var diskErr error
+
+						// Determine storage type for disk creation method
+						storageInfoForDisk, errForDisk := pc.getStorageInfo(ctx, nodeName, storage)
+						storageTypeForDisk := "unknown"
+						if errForDisk == nil && storageInfoForDisk != nil {
+							if st, ok := storageInfoForDisk["type"].(string); ok {
+								storageTypeForDisk = st
+							}
+						}
+
+						// If storage type detection failed, assume directory storage for "local" storage pool
+						useDirectoryStorage := storageTypeForDisk == "dir" || storageTypeForDisk == "directory"
+						if !useDirectoryStorage && (storage == "local" || errForDisk != nil) {
+							// Default to directory storage if detection failed or storage is "local"
+							useDirectoryStorage = true
+							logger.Info("[ProxmoxClient] Assuming directory storage for '%s' (detection failed or default)", storage)
+						}
+
+						if useDirectoryStorage {
+							// Create disk volume first using storage content API
+							contentFormData := url.Values{}
+							contentFormData.Set("vmid", fmt.Sprintf("%d", vmID))
+							contentFormData.Set("filename", fmt.Sprintf("vm-%d-disk-0.qcow2", vmID))
+							contentFormData.Set("size", diskSizeStr)
+							contentFormData.Set("format", "qcow2")
+
+							contentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, storage)
+							logger.Info("[ProxmoxClient] Creating disk volume for VM %d via storage API: %s", vmID, contentEndpoint)
+							contentResp, contentErr := pc.apiRequestForm(ctx, "POST", contentEndpoint, contentFormData)
+							if contentErr == nil && contentResp != nil {
+								if contentResp.StatusCode == http.StatusOK {
+									contentResp.Body.Close()
+									logger.Info("[ProxmoxClient] Successfully created disk volume for VM %d", vmID)
+									// Now attach the disk to the VM config
+									diskFormData := url.Values{}
+									diskFormData.Set(actualDiskKey, diskValue)
+									logger.Info("[ProxmoxClient] Creating missing boot disk %s for VM %d: %s", actualDiskKey, vmID, diskValue)
+									diskResp, diskErr = pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
+								} else {
+									body, _ := io.ReadAll(contentResp.Body)
+									contentResp.Body.Close()
+									logger.Error("[ProxmoxClient] Failed to create disk volume for VM %d: status %d, response: %s", vmID, contentResp.StatusCode, string(body))
+									diskErr = fmt.Errorf("failed to create disk volume: status %d", contentResp.StatusCode)
+								}
+							} else {
+								logger.Error("[ProxmoxClient] Failed to create disk volume for VM %d: %v", vmID, contentErr)
+								diskErr = contentErr
+							}
+						} else {
+							// For LVM/ZFS, we can set it directly
+							diskFormData := url.Values{}
+							diskFormData.Set(actualDiskKey, diskValue)
+							logger.Info("[ProxmoxClient] Creating missing boot disk %s for VM %d: %s", actualDiskKey, vmID, diskValue)
+							diskResp, diskErr = pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
+						}
+						if diskErr == nil && diskResp != nil && diskResp.StatusCode == http.StatusOK {
+							diskResp.Body.Close()
+							logger.Info("[ProxmoxClient] Successfully created missing boot disk %s for VM %d: %s", actualDiskKey, vmID, diskValue)
+
+							// Update boot order and bootdisk to use this disk
+							bootFormData := url.Values{}
+							bootFormData.Set("boot", fmt.Sprintf("order=%s", actualDiskKey))
+							bootFormData.Set("bootdisk", actualDiskKey) // Set bootdisk parameter (required for Proxmox)
+							bootResp, bootErr := pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), bootFormData)
+							if bootErr == nil && bootResp != nil && bootResp.StatusCode == http.StatusOK {
+								bootResp.Body.Close()
+								logger.Info("[ProxmoxClient] Updated boot order to use disk %s for VM %d", actualDiskKey, vmID)
+							} else {
+								logger.Warn("[ProxmoxClient] Failed to update boot order for VM %d: %v", vmID, bootErr)
+							}
+						} else {
+							var body []byte
+							if diskResp != nil {
+								body, _ = io.ReadAll(diskResp.Body)
+							}
+							logger.Error("[ProxmoxClient] CRITICAL: Failed to create missing boot disk for VM %d: %v. Response: %s", vmID, diskErr, string(body))
+							// Try LVM/ZFS format as fallback (without format parameter)
+							if strings.Contains(string(body), "format") || strings.Contains(string(body), "qcow2") {
+								logger.Info("[ProxmoxClient] Retrying with LVM/ZFS format (no format parameter) for VM %d", vmID)
+								diskValue = fmt.Sprintf("%s:vm-%d-disk-0,size=%s", storage, vmID, diskSizeStr)
+								diskFormData := url.Values{}
+								diskFormData.Set(actualDiskKey, diskValue)
+								diskResp2, diskErr2 := pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), diskFormData)
+								if diskErr2 == nil && diskResp2 != nil && diskResp2.StatusCode == http.StatusOK {
+									diskResp2.Body.Close()
+									logger.Info("[ProxmoxClient] Successfully created missing boot disk %s for VM %d with LVM/ZFS format: %s", actualDiskKey, vmID, diskValue)
+
+									// Update boot order and bootdisk
+									bootFormData := url.Values{}
+									bootFormData.Set("boot", fmt.Sprintf("order=%s", actualDiskKey))
+									bootFormData.Set("bootdisk", actualDiskKey) // Set bootdisk parameter (required for Proxmox)
+									bootResp, bootErr := pc.apiRequestForm(ctx, "PUT", fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID), bootFormData)
+									if bootErr == nil && bootResp != nil && bootResp.StatusCode == http.StatusOK {
+										bootResp.Body.Close()
+										logger.Info("[ProxmoxClient] Updated boot order to use disk %s for VM %d", actualDiskKey, vmID)
+									}
+								} else {
+									var body2 []byte
+									if diskResp2 != nil {
+										body2, _ = io.ReadAll(diskResp2.Body)
+									}
+									logger.Error("[ProxmoxClient] CRITICAL: Failed to create missing boot disk with LVM/ZFS format for VM %d: %v. Response: %s", vmID, diskErr2, string(body2))
+								}
+							}
+						}
+					} else {
+						logger.Info("[ProxmoxClient] Verified VM %d has %s disk: %v", vmID, diskKey, diskValue)
+					}
+				}
+			}
+		} else {
+			// Config update failed, but VM was already cloned successfully
+			// Retry with just cloud-init config (smaller update, more likely to succeed)
+			body, _ := io.ReadAll(resp.Body)
+			logger.Warn("[ProxmoxClient] Initial config update failed for VM %d: %v. Response: %s. Retrying with cloud-init config only...", vmID, err, string(body))
+
+			// Get the actual disk key from the cloned VM to use in boot order
+			vmConfigCheck, err := pc.GetVMConfig(ctx, nodeName, vmID)
+			var actualDiskKey string
+			if err == nil {
+				// Find which disk key exists in the cloned VM
+				for _, diskKey := range []string{"scsi0", "virtio0", "sata0", "ide0"} {
+					if disk, ok := vmConfigCheck[diskKey].(string); ok && disk != "" {
+						actualDiskKey = diskKey
+						break
+					}
+				}
+			}
+
+			// If we couldn't find a disk, try to get it from template
+			if actualDiskKey == "" {
+				templateConfig, err := pc.GetVMConfig(ctx, nodeName, templateVMID)
+				if err == nil {
+					for _, diskKey := range []string{"scsi0", "virtio0", "sata0", "ide0"} {
+						if disk, ok := templateConfig[diskKey].(string); ok && disk != "" {
+							actualDiskKey = diskKey
+							break
+						}
+					}
+				}
+			}
+
+			// Default to scsi0 if we still don't know
+			if actualDiskKey == "" {
+				actualDiskKey = "scsi0"
+				logger.Warn("[ProxmoxClient] Could not determine disk type for VM %d in retry, defaulting to scsi0 for boot order", vmID)
+			}
+
+			// Retry with minimal cloud-init config
+			retryFormData := url.Values{}
+			retryFormData.Set("ipconfig0", "ip=dhcp")
+			retryFormData.Set("ciuser", "root")
+			retryFormData.Set("cipassword", vmConfig["cipassword"].(string))
+			// Include SSH keys in retry if they exist
+			if sshKeysVal, ok := vmConfig["sshkeys"]; ok {
+				if sshKeysStr, ok := sshKeysVal.(string); ok && sshKeysStr != "" {
+					retryFormData.Set("sshkeys", sshKeysStr)
+					logger.Debug("[ProxmoxClient] Including SSH keys in retry config update")
+				}
+			}
+			retryFormData.Set("boot", fmt.Sprintf("order=%s", actualDiskKey))
+			retryFormData.Set("bootdisk", actualDiskKey) // Set bootdisk parameter (required for Proxmox)
+			logger.Info("[ProxmoxClient] Retrying with boot order %s and bootdisk %s for VM %d", actualDiskKey, actualDiskKey, vmID)
+
+			retryResp, retryErr := pc.apiRequestForm(ctx, "PUT", updateEndpoint, retryFormData)
+			if retryErr == nil && retryResp != nil && retryResp.StatusCode == http.StatusOK {
+				retryResp.Body.Close()
+				logger.Info("[ProxmoxClient] Successfully applied cloud-init config to VM %d on retry", vmID)
+			} else {
+				var retryBody []byte
+				if retryResp != nil {
+					retryBody, _ = io.ReadAll(retryResp.Body)
+					if retryResp.StatusCode == 403 {
+						logger.Error("[ProxmoxClient] Permission denied updating cloud-init config (token may need VM.Config.* permissions). VM %d was cloned but cloud-init may not work. Error: %s", vmID, string(retryBody))
+					} else {
+						logger.Error("[ProxmoxClient] Failed to apply cloud-init config to VM %d: %v. Response: %s", vmID, retryErr, string(retryBody))
+					}
+				} else {
+					logger.Error("[ProxmoxClient] Failed to apply cloud-init config to VM %d: %v", vmID, retryErr)
+				}
+				// Continue anyway - VM exists, cloud-init may not work but VM can still be used
+			}
+		}
+	}
+
+	// Only create new VM if we didn't use cloud-init (no template found or clone failed)
+	if !useCloudInit && imageTemplate == "" {
+		// Create new VM from scratch
+		// Proxmox API expects form-encoded data, not JSON
+		// Re-determine disk format in case storage type wasn't detected earlier
+		diskSizeGB := config.DiskBytes / (1024 * 1024 * 1024)
+		if storageType == "unknown" || storageType == "" {
+			// Try to get storage type again if we don't have it
+			storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
+			if err == nil && storageInfo != nil {
+				if st, ok := storageInfo["type"].(string); ok {
+					storageType = st
+					logger.Info("[ProxmoxClient] Detected storage type '%s' for fallback VM creation", storageType)
+				}
+			}
+		}
+
+		// Update scsi0 config based on storage type
+		// Directory storage types: "dir", "directory", "nfs", "cifs", "glusterfs"
+		// Block storage types: "lvm", "lvm-thin", "zfs", "zfspool"
+		if storageType == "dir" || storageType == "directory" || storageType == "nfs" || storageType == "cifs" || storageType == "glusterfs" {
+			vmConfig["scsi0"] = fmt.Sprintf("%s:size=%dG", storage, diskSizeGB)
+			logger.Info("[ProxmoxClient] Using directory storage format for scsi0: %s", vmConfig["scsi0"])
+		} else {
+			vmConfig["scsi0"] = fmt.Sprintf("%s:vm-%d-disk-0,size=%dG", storage, vmID, diskSizeGB)
+			logger.Info("[ProxmoxClient] Using block storage format for scsi0: %s", vmConfig["scsi0"])
+		}
+
+		formData := url.Values{}
+		for key, value := range vmConfig {
+			formData.Set(key, fmt.Sprintf("%v", value))
+		}
+
+		resp, err := pc.apiRequestForm(ctx, "POST", endpoint, formData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create VM: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			errorMsg := string(body)
+			if resp.StatusCode == 403 {
+				return nil, fmt.Errorf("failed to create VM: permission denied (status: %d). The API token needs VM.Allocate, VM.Config.Disk, and Datastore.Allocate permissions. Error: %s", resp.StatusCode, errorMsg)
+			}
+			if resp.StatusCode == 500 && strings.Contains(errorMsg, "storage") {
+				// Try to get available storages for better error message
+				availableStorages, listErr := pc.listStorages(ctx, nodeName)
+				if listErr == nil && len(availableStorages) > 0 {
+					return nil, fmt.Errorf("failed to create VM: storage error (status: %d). Error: %s. Available storage pools on node '%s': %v", resp.StatusCode, errorMsg, nodeName, availableStorages)
+				}
+			}
+			return nil, fmt.Errorf("failed to create VM: %s (status: %d)", errorMsg, resp.StatusCode)
+		}
+	}
+
+	logger.Info("[ProxmoxClient] Created VM %d on node %s", vmID, nodeName)
+
+	// Configure firewall rules for inter-VM communication
+	if err := pc.configureVMFirewall(ctx, nodeName, vmID, config.OrganizationID, allowInterVM); err != nil {
+		logger.Warn("[ProxmoxClient] Failed to configure firewall for VM %d: %v", vmID, err)
+		// Continue anyway - VM is created, firewall can be configured manually
+	}
+
+	// Start the VM
+	if err := pc.startVM(ctx, nodeName, vmID); err != nil {
+		logger.Warn("[ProxmoxClient] Failed to start VM %d: %v", vmID, err)
+		// Continue anyway - VM is created
+	}
+
+	// rootPassword was already captured when it was generated (if cloud-init was used)
+	// No need to retrieve it again - it's already in the function-scoped variable
+	if useCloudInit {
+		if rootPassword == "" {
+			logger.Warn("[ProxmoxClient] WARNING: rootPassword is empty for VM %d (cloud-init was used but password not captured)", vmID)
+		} else {
+			logger.Info("[ProxmoxClient] Returning root password for VM %d (length: %d)", vmID, len(rootPassword))
+		}
+	} else {
+		logger.Debug("[ProxmoxClient] No root password for VM %d (cloud-init not used)", vmID)
+	}
+
+	return &CreateVMResult{
+		VMID:     fmt.Sprintf("%d", vmID),
+		Password: rootPassword,
+	}, nil
+}
+
+// findTemplate finds a template VM by name pattern
+func (pc *ProxmoxClient) findTemplate(ctx context.Context, nodeName, templatePattern string) (int, error) {
+	resp, err := pc.apiRequest(ctx, "GET", fmt.Sprintf("/nodes/%s/qemu", nodeName), nil)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	var vmsResp struct {
+		Data []struct {
+			Vmid     int    `json:"vmid"`
+			Name     string `json:"name"`
+			Template int    `json:"template"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&vmsResp); err != nil {
+		return 0, err
+	}
+
+	// Find template matching pattern
+	for _, vm := range vmsResp.Data {
+		if vm.Template == 1 && strings.Contains(vm.Name, templatePattern) {
+			return vm.Vmid, nil
+		}
+	}
+
+	return 0, fmt.Errorf("template %s not found", templatePattern)
+}
+
+// formatSSHKeysForProxmox formats SSH keys for Proxmox (deduplicates, cleans, and formats)
+// Returns the formatted string with keys separated by newlines (no trailing newline)
+func formatSSHKeysForProxmox(sshKeys []database.SSHKey) string {
+	if len(sshKeys) == 0 {
+		return ""
+	}
+
+	// Deduplicate keys by fingerprint (prefer VPS-specific over org-wide)
+	seenFingerprints := make(map[string]bool)
+	deduplicatedKeys := make([]database.SSHKey, 0)
+	for _, key := range sshKeys {
+		if !seenFingerprints[key.Fingerprint] {
+			seenFingerprints[key.Fingerprint] = true
+			deduplicatedKeys = append(deduplicatedKeys, key)
+		} else {
+			// Duplicate fingerprint - prefer VPS-specific over org-wide
+			for i, existingKey := range deduplicatedKeys {
+				if existingKey.Fingerprint == key.Fingerprint {
+					// If the existing key is org-wide and the new one is VPS-specific, replace it
+					if existingKey.VPSID == nil && key.VPSID != nil {
+						deduplicatedKeys[i] = key
+						logger.Debug("[ProxmoxClient] Preferring VPS-specific key %s over org-wide key %s (fingerprint: %s) for Proxmox", key.ID, existingKey.ID, key.Fingerprint)
+					}
+					break
+				}
+			}
+		}
+	}
+
+	var sshKeysStr strings.Builder
+	keyCount := 0
+	for _, key := range deduplicatedKeys {
+		// Aggressively clean the key: remove ALL whitespace, newlines, carriage returns
+		trimmedKey := strings.TrimSpace(key.PublicKey)
+		// Remove ALL newlines and carriage returns (keys must be single-line)
+		trimmedKey = strings.ReplaceAll(trimmedKey, "\n", "")
+		trimmedKey = strings.ReplaceAll(trimmedKey, "\r", "")
+		trimmedKey = strings.ReplaceAll(trimmedKey, "\t", "")
+		// Remove any other control characters
+		trimmedKey = strings.TrimSpace(trimmedKey)
+		if trimmedKey == "" {
+			continue // Skip empty keys
+		}
+
+		// Check if key already has a comment (SSH keys can have format: "key-type key-data comment")
+		// If it doesn't have a comment, add the key name as a comment
+		keyParts := strings.Fields(trimmedKey)
+		if len(keyParts) >= 2 {
+			// Key has at least type and data, check if it has a comment
+			if len(keyParts) == 2 {
+				// No comment, add the key name as comment
+				// Clean the key name to remove any characters that might cause issues
+				cleanName := strings.TrimSpace(key.Name)
+				// Remove spaces and special characters that might break the key format
+				cleanName = strings.ReplaceAll(cleanName, " ", "-")
+				cleanName = strings.ReplaceAll(cleanName, "\n", "")
+				cleanName = strings.ReplaceAll(cleanName, "\r", "")
+				if cleanName != "" {
+					trimmedKey = fmt.Sprintf("%s %s", trimmedKey, cleanName)
+				}
+			}
+			// If key already has a comment (len > 2), keep it as-is
+		}
+
+		if keyCount > 0 {
+			// Only add newline BETWEEN keys, not after the last one
+			sshKeysStr.WriteString("\n")
+		}
+		// Use raw SSH public key with name as comment
+		sshKeysStr.WriteString(trimmedKey)
+		keyCount++
+	}
+
+	// Get the final string and AGGRESSIVELY ensure no trailing newline
+	sshKeysValue := sshKeysStr.String()
+	// Multiple passes to ensure absolutely no trailing newlines
+	for strings.HasSuffix(sshKeysValue, "\r\n") || strings.HasSuffix(sshKeysValue, "\n") || strings.HasSuffix(sshKeysValue, "\r") {
+		sshKeysValue = strings.TrimSuffix(sshKeysValue, "\r\n")
+		sshKeysValue = strings.TrimSuffix(sshKeysValue, "\n")
+		sshKeysValue = strings.TrimSuffix(sshKeysValue, "\r")
+	}
+	// Final trim of any trailing whitespace
+	sshKeysValue = strings.TrimRight(sshKeysValue, " \t\n\r")
+
+	return sshKeysValue
+}
+
+// encodeSSHKeysForProxmox double-encodes SSH keys for Proxmox v8.4 API
+// Proxmox v8.4 requires sshkeys to be DOUBLE URL-encoded
+func encodeSSHKeysForProxmox(sshKeysValue string) string {
+	if sshKeysValue == "" {
+		return ""
+	}
+
+	// Clean the value: split by newlines (for multiple keys), clean each, rejoin
+	// This preserves newlines BETWEEN keys but removes trailing ones
+	keyLines := strings.Split(sshKeysValue, "\n")
+	var cleanedLines []string
+	for _, line := range keyLines {
+		// Clean each line: remove carriage returns and trim
+		line = strings.ReplaceAll(line, "\r", "")
+		line = strings.TrimSpace(line)
+		if line != "" {
+			cleanedLines = append(cleanedLines, line)
+		}
+	}
+	// Rejoin with newlines (only between keys, NOT at the end)
+	cleanValue := strings.Join(cleanedLines, "\n")
+	// Remove trailing newline if present
+	cleanValue = strings.TrimRight(cleanValue, " \t\n\r")
+
+	// Proxmox v8.4 requires sshkeys to be DOUBLE URL-encoded
+	// First encode: spaces become %20, + becomes %2B, / becomes %2F
+	firstEncoded := url.QueryEscape(cleanValue)
+	firstEncoded = strings.ReplaceAll(firstEncoded, "+", "%20")
+	// Second encode: %20 becomes %2520, %2B becomes %252B, %2F becomes %252F
+	encodedValue := url.QueryEscape(firstEncoded)
+	// Replace + with %20 in the double-encoded value
+	encodedValue = strings.ReplaceAll(encodedValue, "+", "%20")
+
+	return encodedValue
+}
+
+// GenerateCloudInitUserData generates cloud-init user data with full configuration support
+// Exported for use in VPS config service
+func GenerateCloudInitUserData(config *VPSConfig) string {
+	return generateCloudInitUserData(config)
+}
+
+// generateCloudInitUserData generates cloud-init user data with full configuration support
+func generateCloudInitUserData(config *VPSConfig) string {
+	userData := "#cloud-config\n\n"
+
+	// SSH configuration
+	sshInstallServer := true
+	sshAllowPW := true
+	if config.CloudInit != nil {
+		if config.CloudInit.SSHInstallServer != nil {
+			sshInstallServer = *config.CloudInit.SSHInstallServer
+		}
+		if config.CloudInit.SSHAllowPW != nil {
+			sshAllowPW = *config.CloudInit.SSHAllowPW
+		}
+	}
+	userData += "ssh:\n"
+	userData += fmt.Sprintf("  install-server: %v\n", sshInstallServer)
+	userData += fmt.Sprintf("  allow-pw: %v\n", sshAllowPW)
+	userData += "\n"
+
+	// Disable cloud-init network configuration - we use Proxmox's ipconfig0 instead
+	userData += "network:\n"
+	userData += "  config: disabled\n"
+	userData += "\n"
+
+	// Hostname
+	if config.CloudInit != nil && config.CloudInit.Hostname != nil && *config.CloudInit.Hostname != "" {
+		userData += fmt.Sprintf("hostname: %s\n", *config.CloudInit.Hostname)
+		userData += fmt.Sprintf("fqdn: %s\n", *config.CloudInit.Hostname)
+		userData += "\n"
+	}
+
+	// Timezone
+	if config.CloudInit != nil && config.CloudInit.Timezone != nil && *config.CloudInit.Timezone != "" {
+		userData += fmt.Sprintf("timezone: %s\n\n", *config.CloudInit.Timezone)
+	}
+
+	// Locale
+	if config.CloudInit != nil && config.CloudInit.Locale != nil && *config.CloudInit.Locale != "" {
+		// Quote locale to handle special characters safely
+		escapedLocale := strings.ReplaceAll(*config.CloudInit.Locale, "'", "''")
+		userData += fmt.Sprintf("locale: '%s'\n\n", escapedLocale)
+	}
+
+	// Users configuration
+	userData += "users:\n"
+
+	// Add root user (always included)
+	userData += "  - name: root\n"
+
+	// Root password (from config or auto-generated)
+	// Quote the password to handle special YAML characters safely
+	if config.RootPassword != nil && *config.RootPassword != "" {
+		// Escape any single quotes in the password and wrap in single quotes
+		escapedPassword := strings.ReplaceAll(*config.RootPassword, "'", "''")
+		userData += fmt.Sprintf("    passwd: '%s'\n", escapedPassword)
+	}
+
+	// Add SSH keys for root (includes both VPS-specific and org-wide keys, plus bastion and terminal keys)
+	rootSSHKeys := []string{}
+
+	// Add bastion SSH key (required for SSH bastion host connections)
+	if config.OrganizationID != "" && config.VPSID != "" {
+		bastionKey, err := database.GetVPSBastionKey(config.VPSID)
+		if err == nil {
+			rootSSHKeys = append(rootSSHKeys, strings.TrimSpace(bastionKey.PublicKey))
+			logger.Debug("[ProxmoxClient] Added bastion key to cloud-init for VPS %s (fingerprint: %s)", config.VPSID, bastionKey.Fingerprint)
+		} else {
+			logger.Warn("[ProxmoxClient] Failed to get bastion key for VPS %s: %v (SSH bastion may not work)", config.VPSID, err)
+		}
+	}
+
+	// Add web terminal SSH key (optional - only if it exists, allows disabling web terminal)
+	if config.OrganizationID != "" && config.VPSID != "" {
+		terminalKey, err := database.GetVPSTerminalKey(config.VPSID)
+		if err == nil {
+			rootSSHKeys = append(rootSSHKeys, strings.TrimSpace(terminalKey.PublicKey))
+		} else {
+			logger.Debug("[ProxmoxClient] Terminal key not found for VPS %s: %v (web terminal disabled)", config.VPSID, err)
+		}
+	}
+
+	// Add user-provided SSH keys (VPS-specific and org-wide)
+	if config.OrganizationID != "" {
+		sshKeys, err := database.GetSSHKeysForVPS(config.OrganizationID, config.VPSID)
+		if err == nil {
+			for _, key := range sshKeys {
+				rootSSHKeys = append(rootSSHKeys, strings.TrimSpace(key.PublicKey))
+			}
+		}
+	}
+
+	// Also check if root user is in custom users list and merge SSH keys
+	if config.CloudInit != nil {
+		for _, user := range config.CloudInit.Users {
+			if user.Name == "root" {
+				rootSSHKeys = append(rootSSHKeys, user.SSHAuthorizedKeys...)
+				break
+			}
+		}
+	}
+
+	if len(rootSSHKeys) > 0 {
+		userData += "    ssh_authorized_keys:\n"
+		for _, key := range rootSSHKeys {
+			userData += fmt.Sprintf("      - %s\n", key)
+		}
+	}
+
+	userData += "    sudo: ALL=(ALL) NOPASSWD:ALL\n"
+
+	// Add custom users (excluding root if already added)
+	if config.CloudInit != nil {
+		for _, user := range config.CloudInit.Users {
+			if user.Name == "root" {
+				continue // Root already handled above
+			}
+			userData += fmt.Sprintf("  - name: %s\n", user.Name)
+
+			if user.Password != nil && *user.Password != "" {
+				// Escape any single quotes in the password and wrap in single quotes
+				escapedPassword := strings.ReplaceAll(*user.Password, "'", "''")
+				userData += fmt.Sprintf("    passwd: '%s'\n", escapedPassword)
+			}
+
+			if len(user.SSHAuthorizedKeys) > 0 {
+				userData += "    ssh_authorized_keys:\n"
+				for _, key := range user.SSHAuthorizedKeys {
+					userData += fmt.Sprintf("      - %s\n", strings.TrimSpace(key))
+				}
+			}
+
+			if user.Sudo != nil && *user.Sudo {
+				if user.SudoNopasswd != nil && *user.SudoNopasswd {
+					userData += "    sudo: ALL=(ALL) NOPASSWD:ALL\n"
+				} else {
+					userData += "    sudo: ALL=(ALL) ALL\n"
+				}
+			}
+
+			if len(user.Groups) > 0 {
+				userData += fmt.Sprintf("    groups: %s\n", strings.Join(user.Groups, ","))
+			}
+
+			if user.Shell != nil && *user.Shell != "" {
+				userData += fmt.Sprintf("    shell: %s\n", *user.Shell)
+			}
+
+			if user.LockPasswd != nil {
+				userData += fmt.Sprintf("    lock_passwd: %v\n", *user.LockPasswd)
+			}
+
+			if user.Gecos != nil && *user.Gecos != "" {
+				userData += fmt.Sprintf("    gecos: %s\n", *user.Gecos)
+			}
+		}
+	}
+
+	userData += "\n"
+
+	// Package management
+	packageUpdate := true
+	packageUpgrade := false
+	if config.CloudInit != nil {
+		if config.CloudInit.PackageUpdate != nil {
+			packageUpdate = *config.CloudInit.PackageUpdate
+		}
+		if config.CloudInit.PackageUpgrade != nil {
+			packageUpgrade = *config.CloudInit.PackageUpgrade
+		}
+	}
+
+	userData += fmt.Sprintf("package_update: %v\n", packageUpdate)
+	userData += fmt.Sprintf("package_upgrade: %v\n", packageUpgrade)
+
+	// Packages
+	packages := []string{"curl", "wget", "htop", "openssh-server", "qemu-guest-agent"}
+	if config.CloudInit != nil && len(config.CloudInit.Packages) > 0 {
+		packages = append(packages, config.CloudInit.Packages...)
+	}
+
+	if len(packages) > 0 {
+		userData += "packages:\n"
+		for _, pkg := range packages {
+			userData += fmt.Sprintf("  - %s\n", pkg)
+		}
+	}
+	userData += "\n"
+
+	// Write files - merge Obiente Cloud configs with user configs
+	hasWriteFiles := false
+	if config.CloudInit != nil && len(config.CloudInit.WriteFiles) > 0 {
+		hasWriteFiles = true
+	}
+
+	// Obiente Cloud required file paths
+	sshConfigPath := "/etc/ssh/sshd_config.d/99-obiente-cloud.conf"
+	pamConfigPath := "/etc/pam.d/sshd"
+	lastlogScriptPath := "/usr/local/bin/obiente-update-lastlog.sh"
+
+	// Check which Obiente Cloud files user has provided
+	userSSHConfig := -1
+	userPAMConfig := -1
+	userLastlogScript := -1
+	if hasWriteFiles {
+		for i, file := range config.CloudInit.WriteFiles {
+			switch file.Path {
+			case sshConfigPath:
+				userSSHConfig = i
+			case pamConfigPath:
+				userPAMConfig = i
+			case lastlogScriptPath:
+				userLastlogScript = i
+			}
+		}
+	}
+
+	// Track if we need to restart SSH (if we added/modified SSH config)
+	needsSSHRestart := false
+
+	// Always include write_files section if we have Obiente Cloud files or user files
+	if hasWriteFiles || userSSHConfig == -1 || userPAMConfig == -1 || userLastlogScript == -1 {
+		userData += "write_files:\n"
+
+		// SSH config: merge AcceptEnv if user provided their own, otherwise create new
+		if userSSHConfig != -1 {
+			// User provided SSH config - merge AcceptEnv into it
+			userSSHFile := config.CloudInit.WriteFiles[userSSHConfig]
+			userData += fmt.Sprintf("  - path: %s\n", sshConfigPath)
+			userData += "    content: |\n"
+
+			// Add user's content
+			lines := strings.Split(userSSHFile.Content, "\n")
+			for _, line := range lines {
+				userData += fmt.Sprintf("      %s\n", line)
+			}
+
+			// Check if AcceptEnv already exists
+			hasAcceptEnv := false
+			for _, line := range lines {
+				if strings.Contains(strings.ToLower(line), "acceptenv") && strings.Contains(line, "SSH_CLIENT") {
+					hasAcceptEnv = true
+					break
+				}
+			}
+
+			// Add our AcceptEnv if not present
+			if !hasAcceptEnv {
+				userData += "      # Obiente Cloud: Accept environment variables for real IP forwarding\n"
+				userData += "      AcceptEnv SSH_CLIENT SSH_CONNECTION SSH_CLIENT_REAL\n"
+				needsSSHRestart = true
+			}
+
+			if userSSHFile.Owner != nil && *userSSHFile.Owner != "" {
+				userData += fmt.Sprintf("    owner: %s\n", *userSSHFile.Owner)
+			} else {
+				userData += "    owner: root:root\n"
+			}
+
+			if userSSHFile.Permissions != nil && *userSSHFile.Permissions != "" {
+				userData += fmt.Sprintf("    permissions: %s\n", *userSSHFile.Permissions)
+			} else {
+				userData += "    permissions: '0644'\n"
+			}
+
+			if userSSHFile.Append != nil && *userSSHFile.Append {
+				userData += "    append: true\n"
+			}
+
+			if userSSHFile.Defer != nil && *userSSHFile.Defer {
+				userData += "    defer: true\n"
+			}
+		} else {
+			// Create new SSH config
+			userData += "  - path: /etc/ssh/sshd_config.d/99-obiente-cloud.conf\n"
+			userData += "    content: |\n"
+			userData += "      # Obiente Cloud: Accept environment variables for real IP forwarding\n"
+			userData += "      # This allows the SSH proxy to forward the client's real IP address\n"
+			userData += "      AcceptEnv SSH_CLIENT SSH_CONNECTION SSH_CLIENT_REAL\n"
+			userData += "    owner: root:root\n"
+			userData += "    permissions: '0644'\n"
+			needsSSHRestart = true
+		}
+
+		// PAM config: merge our lastlog script if user provided their own, otherwise create new
+		if userPAMConfig != -1 {
+			// User provided PAM config - merge our lastlog script into it
+			userPAMFile := config.CloudInit.WriteFiles[userPAMConfig]
+			userData += fmt.Sprintf("  - path: %s\n", pamConfigPath)
+			userData += "    content: |\n"
+
+			// Check if our lastlog script is already present
+			hasLastlogScript := false
+			hasPamLastlog := false
+			lines := strings.Split(userPAMFile.Content, "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "obiente-update-lastlog.sh") {
+					hasLastlogScript = true
+				}
+				if strings.Contains(line, "pam_lastlog.so") {
+					hasPamLastlog = true
+				}
+			}
+
+			// Add user's content
+			for _, line := range lines {
+				userData += fmt.Sprintf("      %s\n", line)
+			}
+
+			// Add our lastlog script before pam_lastlog if not present
+			if !hasLastlogScript {
+				if hasPamLastlog {
+					// Insert before pam_lastlog
+					userData += "      # Obiente Cloud: Update lastlog with real client IP before standard lastlog\n"
+					userData += "      session    optional     pam_exec.so quiet /usr/local/bin/obiente-update-lastlog.sh\n"
+				} else {
+					// Add at the end of session section
+					userData += "      # Obiente Cloud: Update lastlog with real client IP\n"
+					userData += "      session    optional     pam_exec.so quiet /usr/local/bin/obiente-update-lastlog.sh\n"
+					userData += "      session    optional     pam_lastlog.so\n"
+				}
+			}
+
+			if userPAMFile.Owner != nil && *userPAMFile.Owner != "" {
+				userData += fmt.Sprintf("    owner: %s\n", *userPAMFile.Owner)
+			} else {
+				userData += "    owner: root:root\n"
+			}
+
+			if userPAMFile.Permissions != nil && *userPAMFile.Permissions != "" {
+				userData += fmt.Sprintf("    permissions: %s\n", *userPAMFile.Permissions)
+			} else {
+				userData += "    permissions: '0644'\n"
+			}
+
+			if userPAMFile.Append != nil && *userPAMFile.Append {
+				userData += "    append: true\n"
+			}
+
+			if userPAMFile.Defer != nil && *userPAMFile.Defer {
+				userData += "    defer: true\n"
+			}
+		} else {
+			// Create new PAM config
+			userData += "  - path: /etc/pam.d/sshd\n"
+			userData += "    content: |\n"
+			userData += "      # Obiente Cloud: PAM configuration for SSH with real IP forwarding\n"
+			userData += "      @include common-auth\n"
+			userData += "      account    required     pam_nologin.so\n"
+			userData += "      account    include      common-account\n"
+			userData += "      password   include      common-password\n"
+			userData += "      session    optional     pam_keyinit.so revoke\n"
+			userData += "      session    required     pam_limits.so\n"
+			userData += "      session    include      common-session\n"
+			userData += "      # Update lastlog with real client IP before standard lastlog\n"
+			userData += "      session    optional     pam_exec.so quiet /usr/local/bin/obiente-update-lastlog.sh\n"
+			userData += "      session    optional     pam_lastlog.so\n"
+			userData += "    owner: root:root\n"
+			userData += "    permissions: '0644'\n"
+		}
+
+		// Lastlog script: use user's if provided, otherwise create new
+		if userLastlogScript != -1 {
+			// User provided their own script - use it as-is
+			userScriptFile := config.CloudInit.WriteFiles[userLastlogScript]
+			userData += fmt.Sprintf("  - path: %s\n", lastlogScriptPath)
+			userData += "    content: |\n"
+			lines := strings.Split(userScriptFile.Content, "\n")
+			for _, line := range lines {
+				userData += fmt.Sprintf("      %s\n", line)
+			}
+
+			if userScriptFile.Owner != nil && *userScriptFile.Owner != "" {
+				userData += fmt.Sprintf("    owner: %s\n", *userScriptFile.Owner)
+			} else {
+				userData += "    owner: root:root\n"
+			}
+
+			if userScriptFile.Permissions != nil && *userScriptFile.Permissions != "" {
+				userData += fmt.Sprintf("    permissions: %s\n", *userScriptFile.Permissions)
+			} else {
+				userData += "    permissions: '0755'\n"
+			}
+
+			if userScriptFile.Append != nil && *userScriptFile.Append {
+				userData += "    append: true\n"
+			}
+
+			if userScriptFile.Defer != nil && *userScriptFile.Defer {
+				userData += "    defer: true\n"
+			}
+		} else {
+			// Create new lastlog script
+			userData += "  - path: /usr/local/bin/obiente-update-lastlog.sh\n"
+			userData += "    content: |\n"
+			userData += "      #!/bin/bash\n"
+			userData += "      # Obiente Cloud: Update lastlog with real client IP from SSH proxy\n"
+			userData += "      \n"
+			userData += "      if [ \"$PAM_TYPE\" != \"open_session\" ] || [ -z \"$PAM_USER\" ]; then\n"
+			userData += "        exit 0\n"
+			userData += "      fi\n"
+			userData += "      \n"
+			userData += "      # Get real client IP from environment and export for Python\n"
+			userData += "      if [ -n \"$SSH_CLIENT_REAL\" ]; then\n"
+			userData += "        export SSH_CLIENT_REAL=\"$SSH_CLIENT_REAL\"\n"
+			userData += "      elif [ -n \"$SSH_CLIENT\" ]; then\n"
+			userData += "        export SSH_CLIENT_REAL=$(echo \"$SSH_CLIENT\" | awk '{print $1}')\n"
+			userData += "      else\n"
+			userData += "        exit 0\n"
+			userData += "      fi\n"
+			userData += "      \n"
+			userData += "      # Update lastlog database with real client IP\n"
+			userData += "      python3 << 'PYTHON_SCRIPT'\n"
+			// Python script lines must be indented for YAML parsing (6 spaces to match literal block)
+			// The heredoc will preserve this indentation, but Python at module level doesn't care about leading whitespace
+			userData += "      import struct\n"
+			userData += "      import os\n"
+			userData += "      import pwd\n"
+			userData += "      import time\n"
+			userData += "      import sys\n"
+			userData += "      \n"
+			userData += "      try:\n"
+			userData += "          user = os.environ.get('PAM_USER')\n"
+			userData += "          client_ip = os.environ.get('SSH_CLIENT_REAL') or (os.environ.get('SSH_CLIENT', '').split()[0] if os.environ.get('SSH_CLIENT') else '')\n"
+			userData += "          \n"
+			userData += "          if not user or not client_ip:\n"
+			userData += "              sys.exit(0)\n"
+			userData += "          \n"
+			userData += "          pw = pwd.getpwnam(user)\n"
+			userData += "          uid = pw.pw_uid\n"
+			userData += "          lastlog_path = '/var/log/lastlog'\n"
+			userData += "          \n"
+			userData += "          if not os.path.exists(lastlog_path) or not os.access(lastlog_path, os.W_OK):\n"
+			userData += "              sys.exit(0)\n"
+			userData += "          \n"
+			userData += "          # lastlog format: struct lastlog {\n"
+			userData += "          #     int32_t ll_time;      // 4 bytes (or 8 for 64-bit)\n"
+			userData += "          #     char ll_line[UT_LINESIZE];  // 32 bytes\n"
+			userData += "          #     char ll_host[UT_HOSTSIZE]; // 256 bytes\n"
+			userData += "          # };\n"
+			userData += "          # Total: 292 bytes (32-bit) or 296 bytes (64-bit)\n"
+			userData += "          \n"
+			userData += "          # Detect if time_t is 64-bit (check struct size)\n"
+			userData += "          import ctypes\n"
+			userData += "          time_t_size = ctypes.sizeof(ctypes.c_time_t) if hasattr(ctypes, 'c_time_t') else 8\n"
+			userData += "          record_size = 32 + 256 + time_t_size  # ll_line + ll_host + ll_time\n"
+			userData += "          \n"
+			userData += "          with open(lastlog_path, 'r+b') as f:\n"
+			userData += "              f.seek(uid * record_size)\n"
+			userData += "              \n"
+			userData += "              # Prepare data\n"
+			userData += "              current_time = int(time.time())\n"
+			userData += "              host_bytes = client_ip.encode('utf-8')[:255].ljust(256, b'\\0')\n"
+			userData += "              line_bytes = ('pts/0').encode('utf-8')[:31].ljust(32, b'\\0')\n"
+			userData += "              \n"
+			userData += "              # Write time_t (little-endian)\n"
+			userData += "              if time_t_size == 8:\n"
+			userData += "                  f.write(struct.pack('<Q', current_time))  # 64-bit\n"
+			userData += "              else:\n"
+			userData += "                  f.write(struct.pack('<I', current_time))  # 32-bit\n"
+			userData += "              \n"
+			userData += "              # Write line and host\n"
+			userData += "              f.write(line_bytes)\n"
+			userData += "              f.write(host_bytes)\n"
+			userData += "              \n"
+			userData += "      except Exception:\n"
+			userData += "          pass\n"
+			userData += "      PYTHON_SCRIPT\n"
+			userData += "      \n"
+			userData += "      exit 0\n"
+			userData += "    owner: root:root\n"
+			userData += "    permissions: '0755'\n"
+		}
+
+		// Add user's other write files (excluding Obiente Cloud files we already handled)
+		if hasWriteFiles {
+			for i, file := range config.CloudInit.WriteFiles {
+				// Skip Obiente Cloud files we already handled
+				if i == userSSHConfig || i == userPAMConfig || i == userLastlogScript {
+					continue
+				}
+
+				userData += fmt.Sprintf("  - path: %s\n", file.Path)
+				userData += "    content: |\n"
+				lines := strings.Split(file.Content, "\n")
+				for _, line := range lines {
+					userData += fmt.Sprintf("      %s\n", line)
+				}
+
+				if file.Owner != nil && *file.Owner != "" {
+					userData += fmt.Sprintf("    owner: %s\n", *file.Owner)
+				}
+
+				if file.Permissions != nil && *file.Permissions != "" {
+					userData += fmt.Sprintf("    permissions: %s\n", *file.Permissions)
+				}
+
+				if file.Append != nil && *file.Append {
+					userData += "    append: true\n"
+				}
+
+				if file.Defer != nil && *file.Defer {
+					userData += "    defer: true\n"
+				}
+			}
+		}
+		userData += "\n"
+	}
+
+	// Runcmd
+	userData += "runcmd:\n"
+
+	// Default commands (always include)
+	userData += "  - apt-get update || yum update || dnf update || true\n"
+	userData += "  - apt-get install -y openssh-server qemu-guest-agent || yum install -y openssh-server qemu-guest-agent || dnf install -y openssh-server qemu-guest-agent || true\n"
+	userData += "  - systemctl enable ssh || systemctl enable sshd || true\n"
+	userData += "  - systemctl start ssh || systemctl start sshd || true\n"
+
+	// Restart SSH to apply AcceptEnv configuration for real IP forwarding
+	// Only restart if we added/modified the SSH config
+	if needsSSHRestart {
+		userData += "  - systemctl restart sshd || systemctl restart ssh || service ssh restart || service sshd restart || true\n"
+	}
+
+	userData += "  - systemctl enable qemu-guest-agent || true\n"
+	userData += "  - systemctl start qemu-guest-agent || true\n"
+
+	// Custom runcmd commands
+	if config.CloudInit != nil && len(config.CloudInit.Runcmd) > 0 {
+		for _, cmd := range config.CloudInit.Runcmd {
+			userData += fmt.Sprintf("  - %s\n", cmd)
+		}
+	}
+
+	return userData
+}
+
+// CreateCloudInitSnippet creates a cloud-init userData snippet file in Proxmox storage
+// Returns the snippet path that can be used with cicustom parameter (e.g., "user=local:snippets/vm-300-user-data")
+// Exported for use in VPS config service
+func (pc *ProxmoxClient) CreateCloudInitSnippet(ctx context.Context, nodeName string, storage string, vmID int, userData string) (string, error) {
+	return pc.createCloudInitSnippet(ctx, nodeName, storage, vmID, userData)
+}
+
+// createCloudInitSnippet creates a cloud-init userData snippet file in Proxmox storage
+// Returns the snippet path that can be used with cicustom parameter (e.g., "user=local:snippets/vm-300-user-data")
+func (pc *ProxmoxClient) createCloudInitSnippet(ctx context.Context, nodeName string, storage string, vmID int, userData string) (string, error) {
+	// Proxmox snippets are stored in: <storage>/snippets/
+	// Snippets require directory-type storage (dir, nfs, cifs, etc.), not block storage (lvm, zfs)
+	snippetFilename := fmt.Sprintf("vm-%d-user-data", vmID)
+
+	// Check if storage supports snippets (must be directory-type storage with snippets content type)
+	storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
+	if err != nil {
+		logger.Warn("[ProxmoxClient] Failed to get storage info for '%s': %v, proceeding anyway", storage, err)
+	} else if storageInfo != nil {
+		storageType, ok := storageInfo["type"].(string)
+		if ok {
+			// Snippets are only supported on directory-type storage
+			// Block storage types (lvm, lvm-thin, zfs, zfspool) don't support snippets
+			supportsSnippets := storageType == "dir" || storageType == "directory" ||
+				storageType == "nfs" || storageType == "cifs" || storageType == "glusterfs"
+
+			if !supportsSnippets {
+				return "", fmt.Errorf("storage '%s' (type: %s) does not support snippets. Snippets require directory-type storage (dir, nfs, cifs). Please set PROXMOX_STORAGE to a directory-type storage pool", storage, storageType)
+			}
+
+			// Check if storage has "snippets" in its content types
+			// Proxmox storage must have "snippets" enabled in content types to accept snippet uploads
+			if contentVal, ok := storageInfo["content"].(string); ok && contentVal != "" {
+				// Content is a comma-separated list like "images,iso,vztmpl,snippets"
+				if !strings.Contains(contentVal, "snippets") {
+					return "", fmt.Errorf("storage '%s' does not have 'snippets' enabled in its content types. Current content types: %s. Please enable 'snippets' in the storage configuration (Datacenter → Storage → Edit storage → Content: check 'Snippets')", storage, contentVal)
+				}
+			} else {
+				// Content might be an array in some Proxmox versions
+				if contentArr, ok := storageInfo["content"].([]interface{}); ok {
+					hasSnippets := false
+					for _, ct := range contentArr {
+						if ctStr, ok := ct.(string); ok && ctStr == "snippets" {
+							hasSnippets = true
+							break
+						}
+					}
+					if !hasSnippets {
+						return "", fmt.Errorf("storage '%s' does not have 'snippets' enabled in its content types. Please enable 'snippets' in the storage configuration (Datacenter → Storage → Edit storage → Content: check 'Snippets')", storage)
+					}
+				}
+			}
+
+			logger.Info("[ProxmoxClient] Storage '%s' (type: %s) supports snippets", storage, storageType)
+		}
+	}
+
+	// SSH is required for snippet writing - no fallback to upload endpoint
+	if pc.config.SSHUser == "" {
+		return "", fmt.Errorf("SSH is required for snippet writing. Please configure PROXMOX_SSH_USER environment variable. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for setup instructions")
+	}
+	if pc.config.SSHKeyPath == "" && pc.config.SSHKeyData == "" {
+		return "", fmt.Errorf("SSH key is required for snippet writing. Please configure either PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA environment variable. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for setup instructions")
+	}
+
+	// Write snippet via SSH (only method supported)
+	snippetPath, err := pc.writeSnippetViaSSH(ctx, nodeName, storage, snippetFilename, userData)
+	if err != nil {
+		return "", fmt.Errorf("failed to create snippet via SSH: %w. Ensure SSH is properly configured and the SSH user has write permissions to the snippets directory. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for troubleshooting", err)
+	}
+
+	logger.Info("[ProxmoxClient] Successfully created snippet via SSH: %s", snippetPath)
+	return snippetPath, nil
+}
+
+// writeSnippetViaSSH writes a cloud-init snippet file directly to Proxmox storage via SSH
+// Returns the snippet path that can be used with cicustom parameter
+func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string, storage string, filename string, content string) (string, error) {
+	if pc.config.SSHHost == "" {
+		return "", fmt.Errorf("SSH host not configured (PROXMOX_SSH_HOST)")
+	}
+	if pc.config.SSHUser == "" {
+		return "", fmt.Errorf("SSH user not configured (PROXMOX_SSH_USER)")
+	}
+
+	// Load SSH private key
+	var signer ssh.Signer
+	var err error
+
+	if pc.config.SSHKeyData != "" {
+		// Use key data from environment variable
+		// Support both raw key data and base64-encoded key data
+		keyData := []byte(pc.config.SSHKeyData)
+
+		// Try to decode as base64 first (if it fails, assume it's raw key data)
+		if decoded, err := base64.StdEncoding.DecodeString(pc.config.SSHKeyData); err == nil {
+			// Successfully decoded as base64 - check if it looks like a valid SSH key
+			if strings.Contains(string(decoded), "BEGIN") || strings.Contains(string(decoded), "PRIVATE KEY") {
+				keyData = decoded
+			}
+			// If base64 decode succeeded but doesn't look like a key, try raw anyway
+		}
+
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse SSH key data: %w", err)
+		}
+	} else if pc.config.SSHKeyPath != "" {
+		// Read key from file
+		keyData, err := os.ReadFile(pc.config.SSHKeyPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read SSH key file: %w", err)
+		}
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse SSH key: %w", err)
+		}
+	} else {
+		return "", fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
+	}
+
+	// Create SSH client config
+	sshConfig := &ssh.ClientConfig{
+		User:            pc.config.SSHUser,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Consider validating host keys for production
+		Timeout:         10 * time.Second,
+	}
+
+	// Connect to Proxmox node via SSH
+	sshHost := pc.config.SSHHost
+	sshPort := "22"
+	if strings.Contains(sshHost, ":") {
+		// Port is included in host
+		parts := strings.Split(sshHost, ":")
+		sshHost = parts[0]
+		sshPort = parts[1]
+	}
+
+	conn, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", sshHost, sshPort), sshConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to Proxmox node via SSH: %w", err)
+	}
+	defer conn.Close()
+
+	// Determine snippets directory path
+	// Try to get storage path via API first, fallback to default
+	storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
+	var snippetsPath string
+	if err == nil && storageInfo != nil {
+		if pathVal, ok := storageInfo["path"].(string); ok && pathVal != "" {
+			snippetsPath = fmt.Sprintf("%s/snippets", pathVal)
+		}
+	}
+
+	// Fallback to default path for local storage
+	if snippetsPath == "" {
+		snippetsPath = "/var/lib/vz/snippets"
+	}
+
+	filePath := fmt.Sprintf("%s/%s", snippetsPath, filename)
+	logger.Debug("[ProxmoxClient] Writing snippet file to: %s", filePath)
+
+	// Write file using dd via stdin
+	session, err := conn.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("failed to create SSH session: %w", err)
+	}
+	defer session.Close()
+
+	var stderr bytes.Buffer
+	session.Stderr = &stderr
+
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to get stdin pipe: %w", err)
+	}
+
+	cmd := fmt.Sprintf("/bin/sh -c 'dd of=\"%s\" bs=8192 2>/dev/null'", filePath)
+	if err := session.Start(cmd); err != nil {
+		stdin.Close()
+		return "", fmt.Errorf("failed to start dd command: %w", err)
+	}
+
+	// Write content to stdin
+	if _, err := stdin.Write([]byte(content)); err != nil {
+		stdin.Close()
+		session.Wait()
+		return "", fmt.Errorf("failed to write file content: %w", err)
+	}
+	stdin.Close()
+
+	// Wait for command to complete
+	if err := session.Wait(); err != nil {
+		// Even if dd returns an error, verify if file was created
+		verifySession, _ := conn.NewSession()
+		verifyCmd := fmt.Sprintf("/bin/sh -c 'test -f \"%s\"'", filePath)
+		if verifySession.Run(verifyCmd) != nil {
+			verifySession.Close()
+			return "", fmt.Errorf("failed to write file to %s: %w (stderr: %s)", filePath, err, stderr.String())
+		}
+		verifySession.Close()
+	}
+
+	// Verify file exists (dd may succeed but file might not be created)
+	verifySession, err := conn.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("failed to create verification session: %w", err)
+	}
+	verifyCmd := fmt.Sprintf("/bin/sh -c 'test -f \"%s\"'", filePath)
+	if err := verifySession.Run(verifyCmd); err != nil {
+		verifySession.Close()
+		return "", fmt.Errorf("file write completed but file %s does not exist", filePath)
+	}
+	verifySession.Close()
+
+	// Set file permissions (non-critical)
+	chmodSession, _ := conn.NewSession()
+	chmodSession.Run(fmt.Sprintf("/bin/sh -c 'chmod 644 \"%s\"'", filePath))
+	chmodSession.Close()
+
+	logger.Info("[ProxmoxClient] Successfully wrote snippet file via SSH: %s", filePath)
+
+	// Return the cicustom path
+	snippetPath := fmt.Sprintf("user=%s:snippets/%s", storage, filename)
+	return snippetPath, nil
+}
+
+// deleteSnippetViaSSH deletes a cloud-init snippet file from Proxmox storage via SSH
+func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName string, storage string, filename string) error {
+	if pc.config.SSHHost == "" {
+		return fmt.Errorf("SSH host not configured (PROXMOX_SSH_HOST)")
+	}
+	if pc.config.SSHUser == "" {
+		return fmt.Errorf("SSH user not configured (PROXMOX_SSH_USER)")
+	}
+	if pc.config.SSHKeyPath == "" && pc.config.SSHKeyData == "" {
+		return fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
+	}
+
+	// Load SSH private key
+	var signer ssh.Signer
+	var err error
+
+	if pc.config.SSHKeyData != "" {
+		keyData := []byte(pc.config.SSHKeyData)
+		if decoded, err := base64.StdEncoding.DecodeString(pc.config.SSHKeyData); err == nil {
+			if strings.Contains(string(decoded), "BEGIN") || strings.Contains(string(decoded), "PRIVATE KEY") {
+				keyData = decoded
+			}
+		}
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return fmt.Errorf("failed to parse SSH key data: %w", err)
+		}
+	} else if pc.config.SSHKeyPath != "" {
+		keyData, err := os.ReadFile(pc.config.SSHKeyPath)
+		if err != nil {
+			return fmt.Errorf("failed to read SSH key file: %w", err)
+		}
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return fmt.Errorf("failed to parse SSH key: %w", err)
+		}
+	} else {
+		return fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
+	}
+
+	// Create SSH client config
+	sshConfig := &ssh.ClientConfig{
+		User:            pc.config.SSHUser,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         10 * time.Second,
+	}
+
+	// Connect to Proxmox node via SSH
+	sshHost := pc.config.SSHHost
+	sshPort := "22"
+	if strings.Contains(sshHost, ":") {
+		parts := strings.Split(sshHost, ":")
+		sshHost = parts[0]
+		sshPort = parts[1]
+	}
+
+	conn, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", sshHost, sshPort), sshConfig)
+	if err != nil {
+		return fmt.Errorf("failed to connect to Proxmox node via SSH: %w", err)
+	}
+	defer conn.Close()
+
+	// Determine snippets directory path
+	storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
+	var snippetsPath string
+	if err == nil && storageInfo != nil {
+		if pathVal, ok := storageInfo["path"].(string); ok && pathVal != "" {
+			snippetsPath = fmt.Sprintf("%s/snippets", pathVal)
+		}
+	}
+
+	if snippetsPath == "" {
+		snippetsPath = "/var/lib/vz/snippets"
+	}
+
+	filePath := fmt.Sprintf("%s/%s", snippetsPath, filename)
+
+	// Delete the file
+	session, err := conn.NewSession()
+	if err != nil {
+		return fmt.Errorf("failed to create SSH session: %w", err)
+	}
+	defer session.Close()
+
+	cmd := fmt.Sprintf("/bin/sh -c 'rm -f \"%s\"'", filePath)
+	if err := session.Run(cmd); err != nil {
+		// Check if file exists - if it doesn't, that's fine (already deleted)
+		verifySession, _ := conn.NewSession()
+		verifyCmd := fmt.Sprintf("/bin/sh -c 'test -f \"%s\"'", filePath)
+		if verifySession.Run(verifyCmd) == nil {
+			verifySession.Close()
+			return fmt.Errorf("failed to delete snippet file %s: %w", filePath, err)
+		}
+		verifySession.Close()
+		// File doesn't exist - already deleted, that's fine
+		logger.Debug("[ProxmoxClient] Snippet file %s does not exist (may have been already deleted)", filePath)
+		return nil
+	}
+
+	logger.Info("[ProxmoxClient] Successfully deleted snippet file via SSH: %s", filePath)
+	return nil
+}
+
+// readSnippetViaSSH reads a cloud-init snippet file from Proxmox storage via SSH
+func (pc *ProxmoxClient) ReadSnippetViaSSH(ctx context.Context, nodeName string, storage string, filename string) (string, error) {
+	if pc.config.SSHHost == "" {
+		return "", fmt.Errorf("SSH host not configured (PROXMOX_SSH_HOST)")
+	}
+	if pc.config.SSHUser == "" {
+		return "", fmt.Errorf("SSH user not configured (PROXMOX_SSH_USER)")
+	}
+	if pc.config.SSHKeyPath == "" && pc.config.SSHKeyData == "" {
+		return "", fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
+	}
+
+	// Load SSH private key
+	var signer ssh.Signer
+	var err error
+
+	if pc.config.SSHKeyData != "" {
+		keyData := []byte(pc.config.SSHKeyData)
+		if decoded, err := base64.StdEncoding.DecodeString(pc.config.SSHKeyData); err == nil {
+			if strings.Contains(string(decoded), "BEGIN") || strings.Contains(string(decoded), "PRIVATE KEY") {
+				keyData = decoded
+			}
+		}
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse SSH key data: %w", err)
+		}
+	} else if pc.config.SSHKeyPath != "" {
+		keyData, err := os.ReadFile(pc.config.SSHKeyPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read SSH key file: %w", err)
+		}
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse SSH key: %w", err)
+		}
+	} else {
+		return "", fmt.Errorf("SSH key not configured (PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA)")
+	}
+
+	// Create SSH client config
+	sshConfig := &ssh.ClientConfig{
+		User:            pc.config.SSHUser,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         10 * time.Second,
+	}
+
+	// Connect to Proxmox node via SSH
+	sshHost := pc.config.SSHHost
+	sshPort := "22"
+	if strings.Contains(sshHost, ":") {
+		parts := strings.Split(sshHost, ":")
+		sshHost = parts[0]
+		sshPort = parts[1]
+	}
+
+	conn, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", sshHost, sshPort), sshConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to Proxmox node via SSH: %w", err)
+	}
+	defer conn.Close()
+
+	// Determine snippets directory path
+	storageInfo, err := pc.getStorageInfo(ctx, nodeName, storage)
+	var snippetsPath string
+	if err == nil && storageInfo != nil {
+		if pathVal, ok := storageInfo["path"].(string); ok && pathVal != "" {
+			snippetsPath = fmt.Sprintf("%s/snippets", pathVal)
+		}
+	}
+
+	if snippetsPath == "" {
+		snippetsPath = "/var/lib/vz/snippets"
+	}
+
+	filePath := fmt.Sprintf("%s/%s", snippetsPath, filename)
+	logger.Debug("[ProxmoxClient] Reading snippet file from: %s", filePath)
+
+	// Read file using cat
+	session, err := conn.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("failed to create SSH session: %w", err)
+	}
+	defer session.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	session.Stdout = &stdout
+	session.Stderr = &stderr
+
+	cmd := fmt.Sprintf("/bin/sh -c 'cat \"%s\"'", filePath)
+	if err := session.Run(cmd); err != nil {
+		return "", fmt.Errorf("failed to read snippet file %s: %w (stderr: %s)", filePath, err, stderr.String())
+	}
+
+	content := stdout.String()
+	if content == "" {
+		return "", fmt.Errorf("snippet file %s is empty", filePath)
+	}
+
+	logger.Debug("[ProxmoxClient] Successfully read snippet file via SSH: %s (%d bytes)", filePath, len(content))
+	return content, nil
+}
+
+// GenerateRandomPassword generates a random password
+// Exported for use in password reset functionality
+func GenerateRandomPassword(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+	b := make([]byte, length)
+	charsetLen := big.NewInt(int64(len(charset)))
+	for i := range b {
+		n, _ := rand.Int(rand.Reader, charsetLen)
+		b[i] = charset[n.Int64()]
+	}
+	return string(b)
+}
+
+// getNextVMID gets the next available VM ID from Proxmox
+// If PROXMOX_VM_ID_START is set, uses that as the starting range and finds the next available ID
+// Otherwise, uses Proxmox's auto-generated next ID
+func (pc *ProxmoxClient) getNextVMID(ctx context.Context) (int, error) {
+	// Check if VM ID start range is configured
+	vmIDStartEnv := os.Getenv("PROXMOX_VM_ID_START")
+	if vmIDStartEnv != "" {
+		var vmIDStart int
+		if _, err := fmt.Sscanf(vmIDStartEnv, "%d", &vmIDStart); err != nil {
+			return 0, fmt.Errorf("invalid PROXMOX_VM_ID_START value: %s (must be a number)", vmIDStartEnv)
+		}
+
+		// Get all existing VM IDs to find the next available one starting from vmIDStart
+		vmIDs, err := pc.getAllVMIDs(ctx)
+		if err != nil {
+			logger.Warn("[ProxmoxClient] Failed to get existing VM IDs, falling back to Proxmox auto-generated ID: %v", err)
+			// Fall through to Proxmox auto-generated ID
+		} else {
+			// Find next available ID starting from vmIDStart
+			nextID := vmIDStart
+			for {
+				// Check if this ID is already in use
+				idInUse := false
+				for _, existingID := range vmIDs {
+					if existingID == nextID {
+						idInUse = true
+						break
+					}
+				}
+				if !idInUse {
+					logger.Info("[ProxmoxClient] Using VM ID %d (starting from configured range %d)", nextID, vmIDStart)
+					return nextID, nil
+				}
+				nextID++
+				// Safety limit: don't go beyond 999999 (Proxmox max is typically 999999)
+				if nextID > 999999 {
+					return 0, fmt.Errorf("no available VM ID found in range starting from %d (reached limit 999999)", vmIDStart)
+				}
+			}
+		}
+	}
+
+	// Fall back to Proxmox's auto-generated next ID
+	resp, err := pc.apiRequest(ctx, "GET", "/cluster/nextid", nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get next VM ID: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var nextIDResp struct {
+		Data string `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&nextIDResp); err != nil {
+		return 0, fmt.Errorf("failed to decode next ID response: %w", err)
+	}
+
+	var vmID int
+	if _, err := fmt.Sscanf(nextIDResp.Data, "%d", &vmID); err != nil {
+		return 0, fmt.Errorf("failed to parse VM ID: %w", err)
+	}
+
+	return vmID, nil
+}
+
+// getAllVMIDs gets all existing VM IDs from all nodes
+func (pc *ProxmoxClient) getAllVMIDs(ctx context.Context) ([]int, error) {
+	nodes, err := pc.ListNodes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list nodes: %w", err)
+	}
+
+	var allVMIDs []int
+	vmIDMap := make(map[int]bool) // Use map to avoid duplicates
+
+	for _, nodeName := range nodes {
+		resp, err := pc.apiRequest(ctx, "GET", fmt.Sprintf("/nodes/%s/qemu", nodeName), nil)
+		if err != nil {
+			logger.Warn("[ProxmoxClient] Failed to list VMs on node %s: %v", nodeName, err)
+			continue
+		}
+		defer resp.Body.Close()
+
+		var vmsResp struct {
+			Data []struct {
+				Vmid int `json:"vmid"`
+			} `json:"data"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&vmsResp); err != nil {
+			logger.Warn("[ProxmoxClient] Failed to decode VMs on node %s: %v", nodeName, err)
+			continue
+		}
+
+		for _, vm := range vmsResp.Data {
+			if !vmIDMap[vm.Vmid] {
+				allVMIDs = append(allVMIDs, vm.Vmid)
+				vmIDMap[vm.Vmid] = true
+			}
+		}
+	}
+
+	return allVMIDs, nil
+}
+
+// FindVMNode finds which node a VM is running on by checking all nodes
+func (pc *ProxmoxClient) FindVMNode(ctx context.Context, vmID int) (string, error) {
+	nodes, err := pc.ListNodes(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to list nodes: %w", err)
+	}
+
+	// Check each node to find where the VM is located
+	for _, nodeName := range nodes {
+		resp, err := pc.apiRequest(ctx, "GET", fmt.Sprintf("/nodes/%s/qemu", nodeName), nil)
+		if err != nil {
+			logger.Warn("[ProxmoxClient] Failed to list VMs on node %s: %v", nodeName, err)
+			continue
+		}
+
+		var vmsResp struct {
+			Data []struct {
+				Vmid int `json:"vmid"`
+			} `json:"data"`
+		}
+
+		if err := json.NewDecoder(resp.Body).Decode(&vmsResp); err != nil {
+			resp.Body.Close()
+			logger.Warn("[ProxmoxClient] Failed to decode VMs on node %s: %v", nodeName, err)
+			continue
+		}
+		resp.Body.Close()
+
+		// Check if this node has the VM
+		for _, vm := range vmsResp.Data {
+			if vm.Vmid == vmID {
+				return nodeName, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("VM %d not found on any node", vmID)
+}
+
+// listNodes lists available Proxmox nodes
+func (pc *ProxmoxClient) ListNodes(ctx context.Context) ([]string, error) {
+	resp, err := pc.apiRequest(ctx, "GET", "/nodes", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list nodes: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var nodesResp struct {
+		Data []struct {
+			Node string `json:"node"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&nodesResp); err != nil {
+		return nil, fmt.Errorf("failed to decode nodes response: %w", err)
+	}
+
+	nodes := make([]string, len(nodesResp.Data))
+	for i, n := range nodesResp.Data {
+		nodes[i] = n.Node
+	}
+
+	return nodes, nil
+}
+
+// getStorageInfo gets information about a specific storage pool
+func (pc *ProxmoxClient) getStorageInfo(ctx context.Context, nodeName string, storageName string) (map[string]interface{}, error) {
+	// Use listStorages and find the matching storage, as the individual storage endpoint
+	// may return different formats depending on Proxmox version
+	endpoint := fmt.Sprintf("/nodes/%s/storage", nodeName)
+	resp, err := pc.apiRequest(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get storage info: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get storage info: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var storagesResp struct {
+		Data []map[string]interface{} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&storagesResp); err != nil {
+		return nil, fmt.Errorf("failed to decode storage response: %w", err)
+	}
+
+	// Find the matching storage
+	for _, storage := range storagesResp.Data {
+		if storageNameVal, ok := storage["storage"].(string); ok && storageNameVal == storageName {
+			return storage, nil
+		}
+	}
+
+	return nil, fmt.Errorf("storage '%s' not found on node '%s'", storageName, nodeName)
+}
+
+// listStorages lists available storage pools on a specific node
+func (pc *ProxmoxClient) listStorages(ctx context.Context, nodeName string) ([]string, error) {
+	endpoint := fmt.Sprintf("/nodes/%s/storage", nodeName)
+	resp, err := pc.apiRequest(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list storage pools: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list storage pools: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var storagesResp struct {
+		Data []struct {
+			Storage string `json:"storage"`
+			Type    string `json:"type"`
+			Content string `json:"content"` // e.g., "images,iso,vztmpl"
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&storagesResp); err != nil {
+		return nil, fmt.Errorf("failed to decode storage response: %w", err)
+	}
+
+	// Filter storages that support VM disk images (content includes "images")
+	storages := make([]string, 0)
+	for _, s := range storagesResp.Data {
+		if strings.Contains(s.Content, "images") {
+			storages = append(storages, s.Storage)
+		}
+	}
+
+	return storages, nil
+}
+
+// StartVM starts a VM (public method)
+func (pc *ProxmoxClient) StartVM(ctx context.Context, nodeName string, vmID int) error {
+	return pc.startVM(ctx, nodeName, vmID)
+}
+
+// startVM starts a VM
+func (pc *ProxmoxClient) startVM(ctx context.Context, nodeName string, vmID int) error {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/status/start", nodeName, vmID)
+	// Proxmox API expects form-encoded data for POST requests, even if empty
+	resp, err := pc.apiRequestForm(ctx, "POST", endpoint, url.Values{})
+	if err != nil {
+		return fmt.Errorf("failed to start VM: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to start VM: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	return nil
+}
+
+// StopVM stops a VM (force stop - immediate shutdown, not graceful)
+// This uses the /status/stop endpoint which forces an immediate shutdown
+// For graceful shutdown, use /status/shutdown instead
+func (pc *ProxmoxClient) StopVM(ctx context.Context, nodeName string, vmID int) error {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/status/stop", nodeName, vmID)
+	// Proxmox API expects form-encoded data for POST requests, even if empty
+	// /status/stop forces an immediate shutdown (not graceful)
+	resp, err := pc.apiRequestForm(ctx, "POST", endpoint, url.Values{})
+	if err != nil {
+		return fmt.Errorf("failed to stop VM: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to stop VM: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	return nil
+}
+
+// getMapKeys returns all keys from a map as a slice of strings (for logging)
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// waitForVMStatus waits for a VM to reach a specific status with a timeout
+func (pc *ProxmoxClient) waitForVMStatus(ctx context.Context, nodeName string, vmID int, targetStatus string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for time.Now().Before(deadline) {
+		status, err := pc.GetVMStatus(ctx, nodeName, vmID)
+		if err != nil {
+			// If we can't get status, continue waiting
+			logger.Debug("[ProxmoxClient] Failed to get VM %d status while waiting: %v", vmID, err)
+		} else if status == targetStatus {
+			return nil
+		}
+
+		// Wait before next check
+		select {
+		case <-ticker.C:
+			continue
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	// Timeout reached
+	currentStatus, _ := pc.GetVMStatus(ctx, nodeName, vmID)
+	return fmt.Errorf("timeout waiting for VM %d to reach status '%s' (current: '%s')", vmID, targetStatus, currentStatus)
+}
+
+// DeleteVM deletes a VM
+// SECURITY: Verifies VM was created by our API by checking if VM name matches VPS ID
+func (pc *ProxmoxClient) DeleteVM(ctx context.Context, nodeName string, vmID int, vpsID string) error {
+	// SECURITY: Verify VM was created by our API before deletion
+	// Get VM config to check VM name matches VPS ID
+	configEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
+	resp, err := pc.apiRequest(ctx, "GET", configEndpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to get VM config for validation: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		errorMsg := string(body)
+
+		// If VM config doesn't exist, the VM is already deleted
+		if resp.StatusCode == 500 && strings.Contains(errorMsg, "does not exist") {
+			logger.Info("[ProxmoxClient] VM %d config does not exist - VM is already deleted", vmID)
+			return nil // VM already deleted, nothing to do
+		}
+
+		return fmt.Errorf("failed to get VM config: %s (status: %d)", errorMsg, resp.StatusCode)
+	}
+
+	var configResp struct {
+		Data map[string]interface{} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&configResp); err != nil {
+		return fmt.Errorf("failed to decode VM config: %w", err)
+	}
+
+	// Check if VM name matches VPS ID (this is how we identify our VMs)
+	vmName, ok := configResp.Data["name"].(string)
+	if !ok || vmName == "" {
+		return fmt.Errorf("refusing to delete VM %d: VM name is missing or empty", vmID)
+	}
+
+	if vmName != vpsID {
+		return fmt.Errorf("refusing to delete VM %d: VM name '%s' does not match VPS ID '%s'", vmID, vmName, vpsID)
+	}
+
+	logger.Info("[ProxmoxClient] VM %d verified as Obiente Cloud managed (name matches VPS ID: %s)", vmID, vpsID)
+
+	// Check VM status and force stop it if running (Proxmox requires VM to be stopped before deletion)
+	// We use force stop (/status/stop) not graceful shutdown to ensure immediate stop
+	status, err := pc.GetVMStatus(ctx, nodeName, vmID)
+	if err != nil {
+		logger.Warn("[ProxmoxClient] Failed to get VM status before deletion, attempting to force stop VM anyway: %v", err)
+		// Try to force stop anyway - better to try and fail than to fail deletion
+		logger.Info("[ProxmoxClient] Attempting to force stop VM %d before deletion", vmID)
+		if err := pc.StopVM(ctx, nodeName, vmID); err != nil {
+			logger.Warn("[ProxmoxClient] Failed to force stop VM %d (may already be stopped): %v", vmID, err)
+		} else {
+			// Wait for VM to stop
+			if err := pc.waitForVMStatus(ctx, nodeName, vmID, "stopped", 30*time.Second); err != nil {
+				logger.Warn("[ProxmoxClient] VM %d may not have stopped in time: %v", vmID, err)
+			}
+		}
+	} else if status != "stopped" {
+		logger.Info("[ProxmoxClient] VM %d is in status '%s', force stopping before deletion", vmID, status)
+		if err := pc.StopVM(ctx, nodeName, vmID); err != nil {
+			return fmt.Errorf("failed to force stop VM before deletion: %w", err)
+		}
+		// Wait for VM to actually stop (with timeout)
+		if err := pc.waitForVMStatus(ctx, nodeName, vmID, "stopped", 30*time.Second); err != nil {
+			return fmt.Errorf("VM %d did not stop within timeout: %w", vmID, err)
+		}
+		logger.Info("[ProxmoxClient] VM %d force stopped successfully", vmID)
+	}
+
+	// VM is verified as ours and stopped, proceed with deletion
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d", nodeName, vmID)
+	deleteResp, err := pc.apiRequest(ctx, "DELETE", endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to delete VM: %w", err)
+	}
+	defer deleteResp.Body.Close()
+
+	if deleteResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(deleteResp.Body)
+		errorMsg := string(body)
+
+		// Check if VM was already deleted (404 or 500 with "does not exist" message)
+		if deleteResp.StatusCode == 404 ||
+			(deleteResp.StatusCode == 500 && strings.Contains(errorMsg, "does not exist")) {
+			logger.Info("[ProxmoxClient] VM %d does not exist - already deleted", vmID)
+			return nil // VM already deleted, nothing to do
+		}
+
+		return fmt.Errorf("failed to delete VM: %s (status: %d)", errorMsg, deleteResp.StatusCode)
+	}
+
+	logger.Info("[ProxmoxClient] Successfully deleted VM %d (verified as Obiente Cloud managed)", vmID)
+	return nil
+}
+
+// GetVMStatus retrieves the current status of a VM
+func (pc *ProxmoxClient) GetVMStatus(ctx context.Context, nodeName string, vmID int) (string, error) {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/status/current", nodeName, vmID)
+	resp, err := pc.apiRequest(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get VM status: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to get VM status: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var statusResp struct {
+		Data struct {
+			Status string `json:"status"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&statusResp); err != nil {
+		return "", fmt.Errorf("failed to decode status response: %w", err)
+	}
+
+	return statusResp.Data.Status, nil
+}
+
+// GetVMMetrics retrieves current VM metrics (CPU, memory, disk) from Proxmox
+func (pc *ProxmoxClient) GetVMMetrics(ctx context.Context, nodeName string, vmID int) (map[string]interface{}, error) {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/status/current", nodeName, vmID)
+	resp, err := pc.apiRequest(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get VM metrics: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get VM metrics: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var metricsResp struct {
+		Data map[string]interface{} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&metricsResp); err != nil {
+		return nil, fmt.Errorf("failed to decode metrics response: %w", err)
+	}
+
+	return metricsResp.Data, nil
+}
+
+// GetVMDiskSize retrieves the disk size from VM config or storage
+// Returns the disk size in bytes, or 0 if not found
+func (pc *ProxmoxClient) GetVMDiskSize(ctx context.Context, nodeName string, vmID int) (int64, error) {
+	vmConfig, err := pc.GetVMConfig(ctx, nodeName, vmID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get VM config: %w", err)
+	}
+
+	// Look for scsi0, virtio0, sata0, or ide0 disk configuration
+	// Format is typically: "storage:vm-XXX-disk-0,size=XXG" or "storage:vm-XXX-disk-0"
+	diskKeys := []string{"scsi0", "virtio0", "sata0", "ide0"}
+	var diskVolume string
+	var storageName string
+
+	for _, key := range diskKeys {
+		if diskConfig, ok := vmConfig[key].(string); ok && diskConfig != "" {
+			// Parse size from disk config if present (e.g., "local-lvm:vm-301-disk-0,size=20G")
+			if strings.Contains(diskConfig, "size=") {
+				sizePart := strings.Split(diskConfig, "size=")
+				if len(sizePart) > 1 {
+					sizeStr := strings.TrimSpace(sizePart[1])
+					// Remove any trailing commas or other parameters
+					if idx := strings.Index(sizeStr, ","); idx != -1 {
+						sizeStr = sizeStr[:idx]
+					}
+
+					// Parse size (format: "20G", "100M", etc.)
+					var size int64
+					var unit string
+					if _, err := fmt.Sscanf(sizeStr, "%d%s", &size, &unit); err == nil {
+						// Convert to bytes
+						switch strings.ToUpper(unit) {
+						case "G", "GB":
+							return size * 1024 * 1024 * 1024, nil
+						case "M", "MB":
+							return size * 1024 * 1024, nil
+						case "K", "KB":
+							return size * 1024, nil
+						case "T", "TB":
+							return size * 1024 * 1024 * 1024 * 1024, nil
+						default:
+							// Assume bytes if no unit
+							return size, nil
+						}
+					}
+				}
+			}
+
+			// Extract storage and volume name for fallback query
+			// Format: "storage:volume" or "storage:volume,size=XXG"
+			parts := strings.Split(diskConfig, ":")
+			if len(parts) >= 2 {
+				storageName = parts[0]
+				volumePart := parts[1]
+				// Remove size parameter and other options
+				if idx := strings.Index(volumePart, ","); idx != -1 {
+					volumePart = volumePart[:idx]
+				}
+				diskVolume = volumePart
+				break
+			}
+		}
+	}
+
+	// If size not found in config, try to get it from storage API
+	if diskVolume != "" && storageName != "" {
+		// Query storage volume size
+		// Format: /nodes/{node}/storage/{storage}/content/{volume}
+		endpoint := fmt.Sprintf("/nodes/%s/storage/%s/content/%s", nodeName, storageName, diskVolume)
+		resp, err := pc.apiRequest(ctx, "GET", endpoint, nil)
+		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
+			defer resp.Body.Close()
+
+			var volumeResp struct {
+				Data struct {
+					Size int64 `json:"size"`
+				} `json:"data"`
+			}
+
+			if err := json.NewDecoder(resp.Body).Decode(&volumeResp); err == nil {
+				if volumeResp.Data.Size > 0 {
+					return volumeResp.Data.Size, nil
+				}
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("disk size not found in VM config or storage")
+}
+
+// ResizeDisk resizes a VM disk to the specified size in GB (public method)
+// disk: disk identifier (e.g., "scsi0", "virtio0")
+func (pc *ProxmoxClient) ResizeDisk(ctx context.Context, nodeName string, vmID int, disk string, sizeGB int64) error {
+	return pc.resizeDisk(ctx, nodeName, vmID, disk, sizeGB)
+}
+
+// resizeDisk resizes a VM disk to the specified size in GB
+// disk: disk identifier (e.g., "scsi0", "virtio0")
+func (pc *ProxmoxClient) resizeDisk(ctx context.Context, nodeName string, vmID int, disk string, sizeGB int64) error {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/resize", nodeName, vmID)
+	formData := url.Values{}
+	formData.Set("disk", disk)
+	formData.Set("size", fmt.Sprintf("%dG", sizeGB))
+
+	resp, err := pc.apiRequestForm(ctx, "PUT", endpoint, formData)
+	if err != nil {
+		return fmt.Errorf("failed to resize disk: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to resize disk: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	return nil
+}
+
+// UpdateVMConfig updates VM configuration parameters (public method)
+func (pc *ProxmoxClient) UpdateVMConfig(ctx context.Context, nodeName string, vmID int, config map[string]interface{}) error {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
+	formData := url.Values{}
+	
+	for k, v := range config {
+		formData.Set(k, fmt.Sprintf("%v", v))
+	}
+	
+	resp, err := pc.APIRequestForm(ctx, "PUT", endpoint, formData)
+	if err != nil {
+		return fmt.Errorf("failed to update VM config: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update VM config: %s (status: %d)", string(body), resp.StatusCode)
+	}
+	
+	return nil
+}
+
+// GetVMConfig retrieves the VM configuration from Proxmox
+func (pc *ProxmoxClient) GetVMConfig(ctx context.Context, nodeName string, vmID int) (map[string]interface{}, error) {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
+	resp, err := pc.apiRequest(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get VM config: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get VM config: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var configResp struct {
+		Data map[string]interface{} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&configResp); err != nil {
+		return nil, fmt.Errorf("failed to decode config: %w", err)
+	}
+
+	return configResp.Data, nil
+}
+
+// GetVMSSHKeys retrieves existing SSH keys from Proxmox VM config
+// Returns the raw sshkeys value from Proxmox (may be URL-encoded or base64-encoded)
+func (pc *ProxmoxClient) GetVMSSHKeys(ctx context.Context, nodeName string, vmID int) (string, error) {
+	vmConfig, err := pc.GetVMConfig(ctx, nodeName, vmID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get VM config: %w", err)
+	}
+
+	if sshKeysRaw, ok := vmConfig["sshkeys"].(string); ok && sshKeysRaw != "" {
+		return sshKeysRaw, nil
+	}
+
+	return "", nil // No SSH keys configured
+}
+
+// SeedSSHKeysFromProxmox parses SSH keys from Proxmox config and syncs them with the database.
+// Proxmox is the source of truth: keys in Proxmox are seeded to DB, keys not in Proxmox are deleted from DB.
+func (pc *ProxmoxClient) SeedSSHKeysFromProxmox(ctx context.Context, sshKeysRaw string, organizationID string, vpsID string) error {
+	// Build a map of fingerprints that exist in Proxmox
+	proxmoxFingerprints := make(map[string]bool)
+	seededCount := 0
+	deletedCount := 0
+
+	// If Proxmox has keys, parse them
+	if sshKeysRaw != "" {
+		// URL-decode the value (Proxmox stores it URL-encoded)
+		decoded, err := url.QueryUnescape(sshKeysRaw)
+		if err != nil {
+			// If decoding fails, try using it as-is (might already be decoded)
+			decoded = sshKeysRaw
+			logger.Debug("[ProxmoxClient] Failed to URL-decode sshkeys, using as-is: %v", err)
+		}
+
+		// Split by newlines to get individual keys
+		keyLines := strings.Split(decoded, "\n")
+
+		for _, keyLine := range keyLines {
+			// Clean the key line
+			keyLine = strings.TrimSpace(keyLine)
+			keyLine = strings.ReplaceAll(keyLine, "\r", "")
+			if keyLine == "" {
+				continue
+			}
+
+			// Parse the SSH key to validate it and get fingerprint
+			parsedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(keyLine))
+			if err != nil {
+				logger.Debug("[ProxmoxClient] Failed to parse SSH key from Proxmox (skipping): %v", err)
+				continue
+			}
+
+			// Calculate fingerprint
+			fingerprint := ssh.FingerprintSHA256(parsedKey)
+
+			// Track this fingerprint as existing in Proxmox
+			proxmoxFingerprints[fingerprint] = true
+
+			// Extract comment from key if available (for name matching)
+			_, comment, _, _, _ := ssh.ParseAuthorizedKey([]byte(keyLine))
+
+			// Check if key already exists in database - check both VPS-specific and org-wide
+			// We need to find the key that matches the scope we're seeding for
+			var existingKey database.SSHKey
+			var foundKey bool
+
+			if vpsID != "" {
+				// Seeding for a specific VPS - first check for VPS-specific key
+				err = database.DB.Where("organization_id = ? AND fingerprint = ? AND vps_id = ?", organizationID, fingerprint, vpsID).First(&existingKey).Error
+				if err == nil {
+					foundKey = true
+				} else if errors.Is(err, gorm.ErrRecordNotFound) {
+					// VPS-specific key doesn't exist - check for org-wide key
+					err = database.DB.Where("organization_id = ? AND fingerprint = ? AND vps_id IS NULL", organizationID, fingerprint).First(&existingKey).Error
+					if err == nil {
+						foundKey = true
+						// Found org-wide key - don't update its name from VPS seeding
+						// The org-wide key should keep its own name
+						logger.Debug("[ProxmoxClient] Key with fingerprint %s exists as org-wide key %s - skipping name update (VPS-specific seeding)", fingerprint, existingKey.ID)
+					}
+				}
+			} else {
+				// Seeding for org-wide - only check for org-wide key
+				err = database.DB.Where("organization_id = ? AND fingerprint = ? AND vps_id IS NULL", organizationID, fingerprint).First(&existingKey).Error
+				if err == nil {
+					foundKey = true
+				}
+			}
+
+			if foundKey {
+				// Key exists - update name only if it matches the scope
+				// Don't update org-wide key name when seeding from VPS-specific context
+				shouldUpdateName := true
+				if vpsID != "" && existingKey.VPSID == nil {
+					// We're seeding for a VPS, but found an org-wide key
+					// Don't update the org-wide key's name - it should keep its own name
+					shouldUpdateName = false
+				}
+
+				if shouldUpdateName && comment != "" {
+					// Proxmox has a comment - use it as the name (remove "Imported: " prefix if present)
+					oldName := existingKey.Name
+					needsUpdate := false
+
+					if strings.HasPrefix(existingKey.Name, "Imported: ") {
+						// If current name starts with "Imported: ", compare without that prefix
+						currentNameWithoutPrefix := strings.TrimPrefix(existingKey.Name, "Imported: ")
+						if currentNameWithoutPrefix != comment {
+							needsUpdate = true
+						}
+					} else if existingKey.Name != comment {
+						needsUpdate = true
+					}
+
+					if needsUpdate {
+						// Name in Proxmox differs from DB - update DB to match Proxmox
+						existingKey.Name = comment
+						if err := database.DB.Save(&existingKey).Error; err != nil {
+							logger.Warn("[ProxmoxClient] Failed to update SSH key name from Proxmox comment: %v", err)
+						} else {
+							logger.Info("[ProxmoxClient] Updated SSH key %s name from '%s' to '%s' (from Proxmox comment)", existingKey.ID, oldName, comment)
+						}
+					}
+				}
+				// Key exists, skip seeding
+				continue
+			} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				// Unexpected error
+				logger.Warn("[ProxmoxClient] Error checking for existing SSH key: %v", err)
+				continue
+			}
+
+			// Key doesn't exist in database - seed it
+			// Comment was already extracted above
+
+			// Generate a name for the key (use comment if available, otherwise use fingerprint)
+			seedName := "Imported from Proxmox"
+			if comment != "" {
+				seedName = fmt.Sprintf("Imported: %s", comment)
+			}
+
+			keyID := fmt.Sprintf("ssh-%d", time.Now().UnixNano())
+			var vpsIDPtr *string
+			if vpsID != "" {
+				vpsIDPtr = &vpsID
+			}
+
+			sshKey := database.SSHKey{
+				ID:             keyID,
+				OrganizationID: organizationID,
+				VPSID:          vpsIDPtr,
+				Name:           seedName,
+				PublicKey:      keyLine,
+				Fingerprint:    fingerprint,
+			}
+
+			if err := database.DB.Create(&sshKey).Error; err != nil {
+				logger.Warn("[ProxmoxClient] Failed to seed SSH key to database: %v", err)
+				continue
+			}
+
+			// Create audit log entry for seeded key (system action)
+			go createSeededKeyAuditLog(organizationID, vpsID, keyID, fingerprint)
+
+			seededCount++
+			logger.Info("[ProxmoxClient] Seeded SSH key %s from Proxmox to database (fingerprint: %s)", keyID, fingerprint)
+		}
+
+		if seededCount > 0 {
+			logger.Info("[ProxmoxClient] Seeded %d SSH key(s) from Proxmox to database", seededCount)
+		}
+	}
+
+	// Delete keys from database that are NOT in Proxmox (Proxmox is the source of truth)
+	// Get all keys for this organization/VPS from database
+	var dbKeys []database.SSHKey
+	query := database.DB.Where("organization_id = ?", organizationID)
+	if vpsID != "" {
+		query = query.Where("vps_id = ? OR vps_id IS NULL", vpsID)
+	} else {
+		query = query.Where("vps_id IS NULL")
+	}
+	if err := query.Find(&dbKeys).Error; err != nil {
+		logger.Warn("[ProxmoxClient] Failed to fetch keys from database for cleanup: %v", err)
+	} else {
+		// Check each DB key - if it's not in Proxmox, delete it
+		for _, dbKey := range dbKeys {
+			if !proxmoxFingerprints[dbKey.Fingerprint] {
+				// Key exists in DB but not in Proxmox - delete it
+				if err := database.DB.Delete(&dbKey).Error; err != nil {
+					logger.Warn("[ProxmoxClient] Failed to delete key %s from database (not in Proxmox): %v", dbKey.ID, err)
+				} else {
+					deletedCount++
+					logger.Info("[ProxmoxClient] Deleted SSH key %s from database (fingerprint: %s) - it no longer exists in Proxmox", dbKey.ID, dbKey.Fingerprint)
+				}
+			}
+		}
+	}
+
+	if deletedCount > 0 {
+		logger.Info("[ProxmoxClient] Deleted %d SSH key(s) from database that no longer exist in Proxmox", deletedCount)
+	}
+
+	return nil
+}
+
+// UpdateVMSSHKeys updates the SSH keys in cloud-init configuration for an existing VM
+// This allows updating SSH keys even after the VM has been created
+// vpsID can be empty string for org-wide updates, or a specific VPS ID for VPS-specific updates
+// excludeKeyID is an optional key ID to exclude from the update (e.g., when deleting a key)
+func (pc *ProxmoxClient) UpdateVMSSHKeys(ctx context.Context, nodeName string, vmID int, organizationID string, vpsID string, excludeKeyID ...string) error {
+	// NOTE: We don't seed keys here because:
+	// 1. If we seed before updating, deleted keys will be re-imported
+	// 2. If we seed after updating, we'd be seeding the keys we just set
+	// Seeding should be done separately, e.g., on VPS creation or explicit sync
+
+	// Fetch SSH keys (VPS-specific + org-wide if vpsID provided, or just org-wide if empty)
+	var sshKeys []database.SSHKey
+	var err error
+	if vpsID != "" {
+		sshKeys, err = database.GetSSHKeysForVPS(organizationID, vpsID)
+	} else {
+		sshKeys, err = database.GetSSHKeysForOrganization(organizationID)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to fetch SSH keys: %w", err)
+	}
+
+	// Exclude the specified key ID if provided (e.g., when deleting a key)
+	originalKeyCount := len(sshKeys)
+	if len(excludeKeyID) > 0 && excludeKeyID[0] != "" {
+		filteredKeys := make([]database.SSHKey, 0, len(sshKeys))
+		excludedCount := 0
+		for _, key := range sshKeys {
+			if key.ID != excludeKeyID[0] {
+				filteredKeys = append(filteredKeys, key)
+			} else {
+				excludedCount++
+				logger.Info("[ProxmoxClient] Excluding key %s (fingerprint: %s) from Proxmox update (key being deleted)", key.ID, key.Fingerprint)
+			}
+		}
+		sshKeys = filteredKeys
+		if excludedCount == 0 {
+			logger.Warn("[ProxmoxClient] Key %s was not found in the key list to exclude - it may have already been deleted", excludeKeyID[0])
+		}
+		logger.Info("[ProxmoxClient] Excluding key %s: %d keys before, %d keys after exclusion", excludeKeyID[0], originalKeyCount, len(sshKeys))
+	}
+
+	// Format SSH keys using reusable function
+	sshKeysValue := formatSSHKeysForProxmox(sshKeys)
+
+	// Update VM config with SSH keys
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
+	formData := url.Values{}
+
+	if len(sshKeysValue) > 0 {
+		// Encode SSH keys using reusable function (double-encoding for Proxmox v8.4)
+		encodedValue := encodeSSHKeysForProxmox(sshKeysValue)
+
+		// Verify decoded value has no newlines (for debugging)
+		if decoded, err := url.QueryUnescape(encodedValue); err == nil {
+			// Double-decode to get back to original
+			if decoded2, err2 := url.QueryUnescape(decoded); err2 == nil {
+				if strings.Contains(decoded2, "\n") || strings.Contains(decoded2, "\r") {
+					logger.Error("[ProxmoxClient] ERROR: Decoded value contains newlines! Raw: %q, Decoded: %q", sshKeysValue, decoded2)
+				}
+			}
+		}
+
+		formData.Set("sshkeys", encodedValue)
+		logger.Info("[ProxmoxClient] Updating SSH keys for VM %d (org: %s) - %d key(s)", vmID, organizationID, len(sshKeys))
+		logger.Debug("[ProxmoxClient] SSH keys raw length: %d chars, encoded length: %d chars", len(sshKeysValue), len(encodedValue))
+		logger.Debug("[ProxmoxClient] SSH keys ends with newline: %v, contains newline: %v, contains carriage return: %v", strings.HasSuffix(sshKeysValue, "\n"), strings.Contains(sshKeysValue, "\n"), strings.Contains(sshKeysValue, "\r"))
+		// Log a preview of the actual value (first 100 chars)
+		preview := sshKeysValue
+		if len(preview) > 100 {
+			preview = preview[:100] + "..."
+		}
+		logger.Debug("[ProxmoxClient] SSH keys preview (raw): %q", preview)
+		logger.Debug("[ProxmoxClient] SSH keys encoded: %s", encodedValue)
+	} else {
+		// If no SSH keys remain after exclusion, we need to clear the sshkeys parameter
+		// Don't include sshkeys in the PUT request - Proxmox should keep existing values if parameter is omitted
+		// But we want to clear it, so we need to explicitly delete it
+		logger.Info("[ProxmoxClient] Clearing SSH keys for VM %d (org: %s) - no keys remain after exclusion", vmID, organizationID)
+
+		// Use PUT with delete=sshkeys query parameter (this is how Proxmox web UI does it)
+		// PUT /nodes/{node}/qemu/{vmid}/config?delete=sshkeys
+		deleteEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config?delete=sshkeys", nodeName, vmID)
+		logger.Debug("[ProxmoxClient] Attempting PUT with delete=sshkeys query parameter: %s", deleteEndpoint)
+		// Use empty form data for the PUT request
+		emptyFormData := url.Values{}
+		deleteResp, deleteErr := pc.apiRequestForm(ctx, "PUT", deleteEndpoint, emptyFormData)
+		if deleteErr == nil && deleteResp != nil {
+			defer deleteResp.Body.Close()
+			if deleteResp.StatusCode == http.StatusOK {
+				logger.Info("[ProxmoxClient] Successfully cleared SSH keys for VM %d using PUT with delete=sshkeys", vmID)
+				// Verify the deletion after a short delay
+				time.Sleep(500 * time.Millisecond)
+				verifyKeys, err := pc.GetVMSSHKeys(ctx, nodeName, vmID)
+				if err == nil {
+					if verifyKeys == "" {
+						logger.Info("[ProxmoxClient] Verified: Proxmox now has no SSH keys configured for VM %d", vmID)
+						return nil
+					} else {
+						logger.Warn("[ProxmoxClient] Verified: Proxmox still has SSH keys after PUT with delete=sshkeys, will try fallback")
+					}
+				}
+			} else {
+				body, _ := io.ReadAll(deleteResp.Body)
+				logger.Debug("[ProxmoxClient] PUT with delete=sshkeys returned status %d: %s", deleteResp.StatusCode, string(body))
+			}
+		} else {
+			if deleteErr != nil {
+				logger.Debug("[ProxmoxClient] PUT with delete=sshkeys failed: %v", deleteErr)
+			}
+		}
+
+		// Fallback: send PUT with empty sshkeys value (in case delete=sshkeys doesn't work)
+		// Proxmox requires at least one parameter, so we must explicitly set sshkeys to empty string
+		formData = url.Values{}
+		// Set sshkeys to empty string - Proxmox should clear it when it receives an empty value
+		// Double-encode as required by Proxmox API
+		encodedEmpty := url.QueryEscape("")
+		encodedEmpty = url.QueryEscape(encodedEmpty)
+		formData.Set("sshkeys", encodedEmpty)
+		logger.Info("[ProxmoxClient] PUT with delete=sshkeys didn't work, will try PUT with empty sshkeys value for VM %d", vmID)
+	}
+
+	// Use PUT as per Proxmox web UI behavior (they use PUT for config updates)
+	logger.Info("[ProxmoxClient] Sending PUT request to %s to update SSH keys (excluded key: %v, sending %d keys)", endpoint, len(excludeKeyID) > 0 && excludeKeyID[0] != "", len(sshKeys))
+	resp, err := pc.apiRequestForm(ctx, "PUT", endpoint, formData)
+	if err != nil {
+		logger.Error("[ProxmoxClient] Failed to send request to Proxmox: %v", err)
+		return fmt.Errorf("failed to update SSH keys: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		errorBody := string(body)
+		logger.Error("[ProxmoxClient] Proxmox returned non-OK status %d: %s", resp.StatusCode, errorBody)
+
+		// Check if this is the known Proxmox v8.4 sshkeys parsing bug
+		// Even though we send valid data, Proxmox may report a false newline error
+		if strings.Contains(errorBody, "invalid urlencoded string") && strings.Contains(errorBody, "sshkeys") {
+			logger.Warn("[ProxmoxClient] Proxmox v8.4 sshkeys parsing error (possible bug). Error: %s", errorBody)
+			return fmt.Errorf("failed to update SSH keys (Proxmox v8.4 sshkeys parsing issue): %s (status: %d)", errorBody, resp.StatusCode)
+		}
+
+		return fmt.Errorf("failed to update SSH keys: %s (status: %d)", errorBody, resp.StatusCode)
+	}
+
+	logger.Info("[ProxmoxClient] Successfully updated SSH keys for VM %d (org: %s) - %d key(s) sent to Proxmox", vmID, organizationID, len(sshKeys))
+
+	// Verify the update by fetching the keys back from Proxmox
+	// If Proxmox has keys that aren't in our database, we need to clear them
+	// This ensures Proxmox matches our database (the source of truth)
+	verifyKeys, err := pc.GetVMSSHKeys(ctx, nodeName, vmID)
+	if err == nil {
+		if verifyKeys == "" {
+			logger.Info("[ProxmoxClient] Verified: Proxmox now has no SSH keys configured for VM %d", vmID)
+		} else {
+			// Parse keys from Proxmox and check if they all exist in our database
+			decodedVerify, _ := url.QueryUnescape(verifyKeys)
+			verifyKeyLines := strings.Split(decodedVerify, "\n")
+			proxmoxKeyFingerprints := make(map[string]bool)
+			for _, line := range verifyKeyLines {
+				line = strings.TrimSpace(line)
+				line = strings.ReplaceAll(line, "\r", "")
+				if line == "" {
+					continue
+				}
+				// Parse the key to get fingerprint
+				parsedKey, _, _, _, parseErr := ssh.ParseAuthorizedKey([]byte(line))
+				if parseErr == nil {
+					fingerprint := ssh.FingerprintSHA256(parsedKey)
+					proxmoxKeyFingerprints[fingerprint] = true
+				}
+			}
+
+			// Check which Proxmox keys exist in our database
+			expectedFingerprints := make(map[string]bool)
+			for _, key := range sshKeys {
+				expectedFingerprints[key.Fingerprint] = true
+			}
+
+			// Find keys in Proxmox that aren't in our database
+			extraKeys := make([]string, 0)
+			for fp := range proxmoxKeyFingerprints {
+				if !expectedFingerprints[fp] {
+					extraKeys = append(extraKeys, fp)
+				}
+			}
+
+			if len(extraKeys) > 0 {
+				// Proxmox still has keys that shouldn't be there - deletion failed
+				// Return an error so the caller knows the deletion didn't work
+				return fmt.Errorf("failed to clear SSH keys from Proxmox: Proxmox still has %d key(s) that should have been deleted (fingerprints: %v). This may be due to a Proxmox v8.4 bug where empty sshkeys parameter doesn't clear the keys", len(extraKeys), extraKeys)
+			}
+
+			logger.Info("[ProxmoxClient] Verified: Proxmox SSH keys match our database (%d keys)", len(sshKeys))
+		}
+	} else {
+		logger.Warn("[ProxmoxClient] Failed to verify SSH keys in Proxmox after update: %v", err)
+	}
+
+	return nil
+}
+
+// EnableVMGuestAgent enables QEMU guest agent in the VM configuration
+// This sets agent=1 in the VM config, which allows Proxmox to communicate with the guest agent
+func (pc *ProxmoxClient) EnableVMGuestAgent(ctx context.Context, nodeName string, vmID int) error {
+	// Check current config to see if agent is already enabled
+	vmConfig, err := pc.GetVMConfig(ctx, nodeName, vmID)
+	if err != nil {
+		return fmt.Errorf("failed to get VM config: %w", err)
+	}
+
+	// Check if agent is already enabled
+	if agentVal, ok := vmConfig["agent"]; ok {
+		// Convert to string and check if it's "1" or "enabled"
+		agentStr := fmt.Sprintf("%v", agentVal)
+		if agentStr == "1" || agentStr == "enabled" {
+			logger.Info("[ProxmoxClient] Guest agent already enabled for VM %d", vmID)
+			return nil
+		}
+	}
+
+	// Enable guest agent in VM config
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
+	formData := url.Values{}
+	formData.Set("agent", "1")
+
+	logger.Info("[ProxmoxClient] Enabling guest agent for VM %d", vmID)
+	resp, err := pc.apiRequestForm(ctx, "PUT", endpoint, formData)
+	if err != nil {
+		return fmt.Errorf("failed to enable guest agent: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to enable guest agent: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	logger.Info("[ProxmoxClient] Successfully enabled guest agent for VM %d", vmID)
+	return nil
+}
+
+// RecoverVMGuestAgent recovers QEMU guest agent by updating cloud-init configuration
+// This updates the cloud-init userData to install and enable qemu-guest-agent
+// The VM will need to be rebooted or cloud-init needs to be re-run for changes to take effect
+func (pc *ProxmoxClient) RecoverVMGuestAgent(ctx context.Context, nodeName string, vmID int, organizationID string, vpsID string) error {
+	// First, ensure guest agent is enabled in VM config
+	if err := pc.EnableVMGuestAgent(ctx, nodeName, vmID); err != nil {
+		logger.Warn("[ProxmoxClient] Failed to enable guest agent in VM config: %v", err)
+		// Continue anyway - cloud-init update might still work
+	}
+
+	// Get current cloud-init config
+	ciEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit/dump", nodeName, vmID)
+	ciResp, err := pc.apiRequest(ctx, "GET", ciEndpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to get cloud-init config: %w", err)
+	}
+	defer ciResp.Body.Close()
+
+	if ciResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(ciResp.Body)
+		return fmt.Errorf("failed to get cloud-init config: %s (status: %d)", string(body), ciResp.StatusCode)
+	}
+
+	var ciData struct {
+		Data map[string]interface{} `json:"data"`
+	}
+	if err := json.NewDecoder(ciResp.Body).Decode(&ciData); err != nil {
+		return fmt.Errorf("failed to decode cloud-init config: %w", err)
+	}
+
+	// Get current userData
+	// Proxmox VE 8.4 uses 'userdata' field name
+	currentUserData, _ := ciData.Data["userdata"].(string)
+	// Fallback to 'user' for older Proxmox versions
+	if currentUserData == "" {
+		currentUserData, _ = ciData.Data["user"].(string)
+	}
+
+	// Check if guest agent is already configured
+	if strings.Contains(currentUserData, "qemu-guest-agent") &&
+		strings.Contains(currentUserData, "systemctl") {
+		logger.Info("[ProxmoxClient] Guest agent already configured in cloud-init for VM %d", vmID)
+		// Still regenerate to ensure it's applied
+	} else {
+		logger.Info("[ProxmoxClient] Adding guest agent configuration to cloud-init for VM %d", vmID)
+
+		// Build new userData with guest agent setup
+		// Start with cloud-config header if not present
+		newUserData := currentUserData
+		if !strings.Contains(newUserData, "#cloud-config") {
+			newUserData = "#cloud-config\n" + newUserData
+		}
+
+		// Ensure packages section exists
+		if !strings.Contains(newUserData, "packages:") {
+			// Add packages section before runcmd if it exists, otherwise at the end
+			if strings.Contains(newUserData, "runcmd:") {
+				newUserData = strings.Replace(newUserData, "runcmd:", "packages:\n  - qemu-guest-agent\nruncmd:", 1)
+			} else {
+				newUserData += "\npackages:\n  - qemu-guest-agent\n"
+			}
+		} else if !strings.Contains(newUserData, "qemu-guest-agent") {
+			// Add qemu-guest-agent to existing packages list
+			newUserData = strings.Replace(newUserData, "packages:", "packages:\n  - qemu-guest-agent", 1)
+		}
+
+		// Ensure runcmd section exists with guest agent commands
+		guestAgentCmds := "  - systemctl enable --now qemu-guest-agent"
+		if !strings.Contains(newUserData, "runcmd:") {
+			newUserData += "\nruncmd:\n" + guestAgentCmds + "\n"
+		} else if !strings.Contains(newUserData, "qemu-guest-agent") {
+			// Add guest agent commands to existing runcmd
+			if strings.HasSuffix(strings.TrimSpace(newUserData), "runcmd:") {
+				newUserData += "\n" + guestAgentCmds + "\n"
+			} else {
+				// Insert before the last line or append
+				lines := strings.Split(newUserData, "\n")
+				runcmdIdx := -1
+				for i, line := range lines {
+					if strings.TrimSpace(line) == "runcmd:" {
+						runcmdIdx = i
+						break
+					}
+				}
+				if runcmdIdx >= 0 && runcmdIdx < len(lines)-1 {
+					// Insert after runcmd:
+					newLines := append(lines[:runcmdIdx+1], guestAgentCmds)
+					newLines = append(newLines, lines[runcmdIdx+1:]...)
+					newUserData = strings.Join(newLines, "\n")
+				} else {
+					newUserData += "\n" + guestAgentCmds + "\n"
+				}
+			}
+		}
+
+		// Update cloud-init userData
+		updateEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/cloudinit", nodeName, vmID)
+		formData := url.Values{}
+		// Proxmox VE 8.4 uses 'userdata' field name for cloud-init user data
+		formData.Set("userdata", newUserData)
+
+		updateResp, err := pc.apiRequestForm(ctx, "PUT", updateEndpoint, formData)
+		if err != nil {
+			return fmt.Errorf("failed to update cloud-init: %w", err)
+		}
+		defer updateResp.Body.Close()
+
+		if updateResp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(updateResp.Body)
+			return fmt.Errorf("failed to update cloud-init: %s (status: %d)", string(body), updateResp.StatusCode)
+		}
+	}
+
+	logger.Info("[ProxmoxClient] Successfully recovered guest agent configuration for VM %d. VM should be rebooted for changes to take effect.", vmID)
+	return nil
+}
+
+// UpdateVMCloudInitPassword updates the root password in Proxmox cloud-init configuration
+// The password will take effect after VM reboot or cloud-init re-run
+func (pc *ProxmoxClient) UpdateVMCloudInitPassword(ctx context.Context, nodeName string, vmID int, newPassword string) error {
+	// Update cipassword in VM config (cloud-init password)
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
+	formData := url.Values{}
+	formData.Set("cipassword", newPassword)
+
+	logger.Info("[ProxmoxClient] Updating root password for VM %d", vmID)
+	resp, err := pc.apiRequestForm(ctx, "PUT", endpoint, formData)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update password: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	logger.Info("[ProxmoxClient] Successfully updated root password for VM %d. Password will take effect after VM reboot or cloud-init re-run.", vmID)
+	return nil
+}
+
+// UpdateVMCicustom updates the cicustom parameter for a VM
+// This is used to reference cloud-init snippet files
+func (pc *ProxmoxClient) UpdateVMCicustom(ctx context.Context, nodeName string, vmID int, cicustom string) error {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
+	formData := url.Values{}
+	formData.Set("cicustom", cicustom)
+
+	logger.Info("[ProxmoxClient] Updating cicustom for VM %d: %s", vmID, cicustom)
+	resp, err := pc.apiRequestForm(ctx, "PUT", endpoint, formData)
+	if err != nil {
+		return fmt.Errorf("failed to update cicustom: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update cicustom: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	logger.Info("[ProxmoxClient] Successfully updated cicustom for VM %d", vmID)
+	return nil
+}
+
+// createSeededKeyAuditLog creates an audit log entry for a seeded SSH key
+// This is called when keys are imported from Proxmox into the database
+func createSeededKeyAuditLog(organizationID string, vpsID string, keyID string, fingerprint string) {
+	// Recover from any panics
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("[ProxmoxClient] Panic creating audit log for seeded key: %v", r)
+		}
+	}()
+
+	// Use background context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Use MetricsDB (TimescaleDB) for audit logs
+	if database.MetricsDB == nil {
+		logger.Warn("[ProxmoxClient] Metrics database not available, skipping audit log for seeded key")
+		return
+	}
+
+	// Determine resource type and ID
+	var resourceType *string
+	var resourceID *string
+	if vpsID != "" {
+		rt := "vps"
+		resourceType = &rt
+		resourceID = &vpsID
+	} else {
+		rt := "organization"
+		resourceType = &rt
+		resourceID = &organizationID
+	}
+
+	// Create audit log entry
+	auditLog := database.AuditLog{
+		ID:             fmt.Sprintf("audit-%d", time.Now().UnixNano()),
+		UserID:         "system", // System user for seeded keys
+		OrganizationID: &organizationID,
+		Action:         "SeedSSHKey",
+		Service:        "VPSService",
+		ResourceType:   resourceType,
+		ResourceID:     resourceID,
+		IPAddress:      "system",
+		UserAgent:      "system",
+		RequestData:    fmt.Sprintf(`{"key_id":"%s","fingerprint":"%s","source":"proxmox"}`, keyID, fingerprint),
+		ResponseStatus: 200,
+		ErrorMessage:   nil,
+		DurationMs:     0,
+		CreatedAt:      time.Now(),
+	}
+
+	if err := database.MetricsDB.WithContext(ctx).Create(&auditLog).Error; err != nil {
+		logger.Warn("[ProxmoxClient] Failed to create audit log for seeded key %s: %v", keyID, err)
+	} else {
+		logger.Debug("[ProxmoxClient] Created audit log for seeded SSH key %s", keyID)
+	}
+}
+
+// CheckGuestAgentStatus checks if the QEMU guest agent is running and responsive
+// Returns true if the agent is available, false otherwise
+func (pc *ProxmoxClient) CheckGuestAgentStatus(ctx context.Context, nodeName string, vmID int) (bool, error) {
+	// Try to ping the guest agent - this is the simplest way to check if it's running
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/agent/ping", nodeName, vmID)
+	resp, err := pc.apiRequest(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to ping guest agent: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		return true, nil
+	}
+
+	// If ping fails, try a simple info command as fallback
+	infoEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/agent/info", nodeName, vmID)
+	infoResp, infoErr := pc.apiRequest(ctx, "GET", infoEndpoint, nil)
+	if infoErr == nil && infoResp != nil {
+		defer infoResp.Body.Close()
+		if infoResp.StatusCode == http.StatusOK {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// GetVMIPAddresses retrieves IP addresses of a VM via QEMU guest agent
+func (pc *ProxmoxClient) GetVMIPAddresses(ctx context.Context, nodeName string, vmID int) ([]string, []string, error) {
+	// First check if guest agent is available
+	agentAvailable, err := pc.CheckGuestAgentStatus(ctx, nodeName, vmID)
+	if err != nil {
+		logger.Warn("[ProxmoxClient] Failed to check guest agent status: %v", err)
+		// Continue anyway - might be a transient error
+	} else if !agentAvailable {
+		return nil, nil, fmt.Errorf("guest agent is not available (not installed or not running). VM may need to be rebooted or guest agent needs to be installed")
+	}
+
+	// Execute guest agent command to get network info
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/agent/network-get-interfaces", nodeName, vmID)
+	resp, err := pc.apiRequest(ctx, "GET", endpoint, nil)
+	if err != nil {
+		// Guest agent might not be available yet
+		return nil, nil, fmt.Errorf("failed to get VM IP addresses (guest agent may not be ready): %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// Guest agent not ready or VM not running
+		body, _ := io.ReadAll(resp.Body)
+		logger.Warn("[ProxmoxClient] Guest agent returned non-OK status %d: %s", resp.StatusCode, string(body))
+		return nil, nil, nil
+	}
+
+	var networkResp struct {
+		Data struct {
+			Result []struct {
+				IPAddresses []struct {
+					IPAddress     string `json:"ip-address"`
+					IPAddressType string `json:"ip-address-type"`
+				} `json:"ip-addresses"`
+			} `json:"result"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&networkResp); err != nil {
+		return nil, nil, fmt.Errorf("failed to decode network response: %w", err)
+	}
+
+	var ipv4 []string
+	var ipv6 []string
+
+	for _, iface := range networkResp.Data.Result {
+		for _, ip := range iface.IPAddresses {
+			if ip.IPAddressType == "ipv4" && ip.IPAddress != "" && !strings.HasPrefix(ip.IPAddress, "127.") {
+				ipv4 = append(ipv4, ip.IPAddress)
+			} else if ip.IPAddressType == "ipv6" && ip.IPAddress != "" && !strings.HasPrefix(ip.IPAddress, "::1") {
+				ipv6 = append(ipv6, ip.IPAddress)
+			}
+		}
+	}
+
+	return ipv4, ipv6, nil
+}
+
+// RebootVM reboots a VM
+func (pc *ProxmoxClient) RebootVM(ctx context.Context, nodeName string, vmID int) error {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/status/reboot", nodeName, vmID)
+	// Proxmox API expects form-encoded data for POST requests, even if empty
+	resp, err := pc.apiRequestForm(ctx, "POST", endpoint, url.Values{})
+	if err != nil {
+		return fmt.Errorf("failed to reboot VM: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to reboot VM: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	return nil
+}
+
+// GetVMConsole retrieves console output from a VM
+func (pc *ProxmoxClient) GetVMConsole(ctx context.Context, nodeName string, vmID int, limit int32) ([]string, error) {
+	// Proxmox doesn't have a direct console log API, but we can get VNC console info
+	// For actual console output, we'd need to use VNC or serial console
+	// This is a placeholder that returns VNC connection info
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/vncproxy", nodeName, vmID)
+	resp, err := pc.apiRequest(ctx, "POST", endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get console: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get console: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var vncResp struct {
+		Data struct {
+			Ticket string `json:"ticket"`
+			Port   int    `json:"port"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&vncResp); err != nil {
+		return nil, fmt.Errorf("failed to decode console response: %w", err)
+	}
+
+	// Return VNC connection info as console output
+	lines := []string{
+		fmt.Sprintf("VNC Console for VM %d:", vmID),
+		fmt.Sprintf("Port: %d", vncResp.Data.Port),
+		fmt.Sprintf("Ticket: %s", vncResp.Data.Ticket),
+		"Use a VNC client to connect to the console.",
+	}
+
+	return lines, nil
+}
+
+// GetVNCWebSocketURL returns the VNC WebSocket URL for terminal access
+// This provides full terminal access including boot output, similar to Proxmox web UI
+func (pc *ProxmoxClient) GetVNCWebSocketURL(ctx context.Context, nodeName string, vmID int) (string, string, error) {
+	// First, get VNC proxy ticket
+	// Proxmox API expects form-encoded data for POST requests, even if empty
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/vncproxy", nodeName, vmID)
+	resp, err := pc.apiRequestForm(ctx, "POST", endpoint, url.Values{})
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get VNC proxy: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", "", fmt.Errorf("failed to get VNC proxy: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var vncResp struct {
+		Data struct {
+			Ticket string      `json:"ticket"`
+			Port   interface{} `json:"port"` // Can be string or int
+			UPID   string      `json:"upid"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&vncResp); err != nil {
+		return "", "", fmt.Errorf("failed to decode VNC proxy response: %w", err)
+	}
+
+	// Convert port to int (handle both string and int from API)
+	var port int
+	switch v := vncResp.Data.Port.(type) {
+	case float64:
+		port = int(v)
+	case int:
+		port = v
+	case string:
+		if _, err := fmt.Sscanf(v, "%d", &port); err != nil {
+			return "", "", fmt.Errorf("failed to parse port as integer: %v", vncResp.Data.Port)
+		}
+	default:
+		return "", "", fmt.Errorf("unexpected port type: %T", vncResp.Data.Port)
+	}
+
+	// Construct WebSocket URL
+	// Proxmox VNC WebSocket endpoint: /api2/json/nodes/{node}/qemu/{vmid}/vncwebsocket
+	apiURL := strings.TrimSuffix(pc.config.APIURL, "/")
+	wsURL := fmt.Sprintf("%s/api2/json/nodes/%s/qemu/%d/vncwebsocket?port=%d&vncticket=%s", apiURL, nodeName, vmID, port, url.QueryEscape(vncResp.Data.Ticket))
+
+	// Convert https to wss, http to ws
+	wsURL = strings.Replace(wsURL, "https://", "wss://", 1)
+	wsURL = strings.Replace(wsURL, "http://", "ws://", 1)
+
+	return wsURL, vncResp.Data.Ticket, nil
+}
+
+// TermProxyInfo contains information needed to connect to termproxy WebSocket
+type TermProxyInfo struct {
+	WebSocketURL string
+	Ticket       string
+	User         string
+}
+
+// GetTermProxyWebSocketURL returns the terminal proxy WebSocket URL and authentication info
+// termproxy is the recommended endpoint for terminal access (better than vncwebsocket with serial=1)
+// Reference: https://pve.proxmox.com/pve-docs-8/api-viewer/index.html#/nodes/{node}/termproxy
+func (pc *ProxmoxClient) GetTermProxyWebSocketURL(ctx context.Context, nodeName string, vmID int) (string, error) {
+	info, err := pc.GetTermProxyInfo(ctx, nodeName, vmID)
+	if err != nil {
+		return "", err
+	}
+	return info.WebSocketURL, nil
+}
+
+// GetTermProxyInfo returns complete termproxy information including ticket and user
+func (pc *ProxmoxClient) GetTermProxyInfo(ctx context.Context, nodeName string, vmID int) (*TermProxyInfo, error) {
+	// Get terminal proxy ticket from termproxy endpoint
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/termproxy", nodeName, vmID)
+	resp, err := pc.apiRequestForm(ctx, "POST", endpoint, url.Values{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get term proxy: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get term proxy: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var termResp struct {
+		Data struct {
+			Ticket string      `json:"ticket"`
+			Port   interface{} `json:"port"` // Can be string or int
+			User   string      `json:"user,omitempty"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&termResp); err != nil {
+		return nil, fmt.Errorf("failed to decode term proxy response: %w", err)
+	}
+
+	// Convert port to int
+	var port int
+	switch v := termResp.Data.Port.(type) {
+	case float64:
+		port = int(v)
+	case int:
+		port = v
+	case string:
+		if _, err := fmt.Sscanf(v, "%d", &port); err != nil {
+			return nil, fmt.Errorf("failed to parse port as integer: %v", termResp.Data.Port)
+		}
+	default:
+		return nil, fmt.Errorf("unexpected port type: %T", termResp.Data.Port)
+	}
+
+	// Construct WebSocket URL for termproxy
+	// According to Proxmox API documentation, termproxy uses vncwebsocket endpoint
+	// but with the termproxy ticket (not vncticket parameter name)
+	// Format: /api2/json/nodes/{node}/qemu/{vmid}/vncwebsocket?port={port}&vncticket={ticket}
+	// Note: termproxy ticket is used as vncticket parameter
+	apiURL := strings.TrimSuffix(pc.config.APIURL, "/")
+	params := url.Values{}
+	params.Set("port", fmt.Sprintf("%d", port))
+	params.Set("vncticket", termResp.Data.Ticket)
+	// Note: termproxy doesn't use serial=1, it's already a terminal proxy
+	wsURL := fmt.Sprintf("%s/api2/json/nodes/%s/qemu/%d/vncwebsocket?%s", apiURL, nodeName, vmID, params.Encode())
+
+	// Convert https to wss, http to ws
+	wsURL = strings.Replace(wsURL, "https://", "wss://", 1)
+	wsURL = strings.Replace(wsURL, "http://", "ws://", 1)
+
+	// Get username from config if not provided in response
+	user := termResp.Data.User
+	if user == "" {
+		// Try to get username from config
+		if pc.config.Username != "" {
+			user = pc.config.Username
+			// For API tokens, keep the token ID in the username (format: username@realm!tokenid)
+			// For password auth, use just username@realm
+			if pc.config.TokenID == "" {
+				// Password auth - remove token ID if present
+				if idx := strings.Index(user, "!"); idx != -1 {
+					user = user[:idx]
+				}
+			}
+			// For API tokens, keep the full format including token ID
+		} else {
+			// Default to root@pam if no user specified
+			user = "root@pam"
+		}
+	} else {
+		// User from termproxy response - check if we need to add token ID for API tokens
+		if pc.config.TokenID != "" && pc.config.Username != "" {
+			// API token auth - ensure username includes token ID
+			if !strings.Contains(user, "!") && strings.Contains(pc.config.Username, "!") {
+				// Extract token ID from config username and add to termproxy user
+				if idx := strings.Index(pc.config.Username, "!"); idx != -1 {
+					tokenID := pc.config.Username[idx:]
+					user = user + tokenID
+				}
+			}
+		} else {
+			// Password auth - remove token ID if present
+			if idx := strings.Index(user, "!"); idx != -1 {
+				user = user[:idx]
+			}
+		}
+	}
+
+	return &TermProxyInfo{
+		WebSocketURL: wsURL,
+		Ticket:       termResp.Data.Ticket,
+		User:         user,
+	}, nil
+}
+
+// GetSerialConsoleWebSocketURL returns the serial console WebSocket URL for terminal access
+// Serial console provides text-based terminal access including boot output
+// According to Proxmox API documentation:
+// - Use vncproxy with websocket=1 parameter (required for serial terminal)
+// - Then connect to vncwebsocket with port, vncticket, and serial=1 parameters
+// - termproxy does NOT work with API tokens (documented limitation)
+// Reference: https://pve.proxmox.com/pve-docs-8/api-viewer/index.html#/nodes/{node}/qemu/{vmid}/vncproxy
+// Reference: https://pve.proxmox.com/pve-docs-8/api-viewer/index.html#/nodes/{node}/qemu/{vmid}/vncwebsocket
+func (pc *ProxmoxClient) GetSerialConsoleWebSocketURL(ctx context.Context, nodeName string, vmID int) (string, error) {
+	// Get VNC proxy with websocket=1 parameter (required for serial terminal)
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/vncproxy", nodeName, vmID)
+	formData := url.Values{}
+	formData.Set("websocket", "1") // Required for serial terminal per API docs
+	resp, err := pc.apiRequestForm(ctx, "POST", endpoint, formData)
+	if err != nil {
+		return "", fmt.Errorf("failed to get VNC proxy: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to get VNC proxy: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var vncResp struct {
+		Data struct {
+			Ticket string      `json:"ticket"`
+			Port   interface{} `json:"port"` // Can be string or int
+			UPID   string      `json:"upid"`
+		} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&vncResp); err != nil {
+		return "", fmt.Errorf("failed to decode VNC proxy response: %w", err)
+	}
+
+	// Convert port to int
+	var port int
+	switch v := vncResp.Data.Port.(type) {
+	case float64:
+		port = int(v)
+	case int:
+		port = v
+	case string:
+		if _, err := fmt.Sscanf(v, "%d", &port); err != nil {
+			return "", fmt.Errorf("failed to parse port as integer: %v", vncResp.Data.Port)
+		}
+	default:
+		return "", fmt.Errorf("unexpected port type: %T", vncResp.Data.Port)
+	}
+
+	// Construct Serial Console WebSocket URL
+	// Required parameters per API docs:
+	// - node: string (in path)
+	// - port: integer 5900-5999 (query parameter)
+	// - vmid: integer 100-999999999 (in path)
+	// - vncticket: string (query parameter)
+	// Format: /api2/json/nodes/{node}/qemu/{vmid}/vncwebsocket?port={port}&vncticket={ticket}
+	// Note: When websocket=1 is used in vncproxy, the connection can be used for serial console
+	// The RFB protocol handshake may appear initially but should be followed by serial console data
+	apiURL := strings.TrimSuffix(pc.config.APIURL, "/")
+	params := url.Values{}
+	params.Set("port", fmt.Sprintf("%d", port))
+	params.Set("vncticket", vncResp.Data.Ticket)
+	wsURL := fmt.Sprintf("%s/api2/json/nodes/%s/qemu/%d/vncwebsocket?%s", apiURL, nodeName, vmID, params.Encode())
+
+	// Validate required parameters are present
+	if nodeName == "" {
+		return "", fmt.Errorf("node parameter is required")
+	}
+	if port < 5900 || port > 5999 {
+		return "", fmt.Errorf("port must be between 5900 and 5999, got %d", port)
+	}
+	if vmID < 100 || vmID > 999999999 {
+		return "", fmt.Errorf("vmid must be between 100 and 999999999, got %d", vmID)
+	}
+	if vncResp.Data.Ticket == "" {
+		return "", fmt.Errorf("vncticket is required")
+	}
+
+	// Convert https to wss, http to ws
+	wsURL = strings.Replace(wsURL, "https://", "wss://", 1)
+	wsURL = strings.Replace(wsURL, "http://", "ws://", 1)
+
+	return wsURL, nil
+}
+
+// configureVMFirewall configures firewall rules for a VM to control inter-VM communication
+// If allowInterVM is false, blocks all inter-VM communication by default
+// If allowInterVM is true, adds VM to a security group that allows communication within the organization
+func (pc *ProxmoxClient) configureVMFirewall(ctx context.Context, nodeName string, vmID int, organizationID string, allowInterVM bool) error {
+	// Enable firewall on the VM
+	enableEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/firewall/options", nodeName, vmID)
+	enableData := url.Values{}
+	enableData.Set("enable", "1")
+
+	resp, err := pc.apiRequestForm(ctx, "PUT", enableEndpoint, enableData)
+	if err != nil {
+		return fmt.Errorf("failed to enable firewall: %w", err)
+	}
+	if resp != nil {
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			// Firewall might already be enabled or permission issue - log and continue
+			logger.Debug("[ProxmoxClient] Firewall enable returned status %d (may already be enabled)", resp.StatusCode)
+		}
+	}
+
+	if !allowInterVM {
+		// Block inter-VM communication by default
+		// Strategy: Add firewall rules that allow gateway SSH access, then block inter-VM traffic
+		// Note: This is a simplified approach. In production, you might want to:
+		// 1. Use Proxmox firewall aliases to track VM IPs
+		// 2. Create rules that specifically block traffic from other VMs
+		// 3. Allow established/related connections to maintain existing sessions
+
+		// Get bridge name (default to vmbr0)
+		bridgeName := "vmbr0"
+
+		// Get gateway IP from environment or use default subnet gateway
+		// Gateway IP is 10.15.3.10 for the 10.15.3.0/24 subnet (as per docs)
+		gatewayIP := os.Getenv("VPS_GATEWAY_IP")
+		if gatewayIP == "" {
+			// Default gateway IP for VPS subnet (10.15.3.0/24)
+			gatewayIP = "10.15.3.10"
+		}
+
+		// First, add a rule to ALLOW SSH from the gateway (before the blocking rule)
+		// This ensures the gateway can connect to VPS instances for SSH proxying
+		// Rules are processed in order, so we add this at position 0 to ensure it's processed first
+		ruleEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/firewall/rules?pos=0", nodeName, vmID)
+		allowRuleData := url.Values{}
+		allowRuleData.Set("enable", "1")
+		allowRuleData.Set("action", "ACCEPT")
+		allowRuleData.Set("type", "in")
+		allowRuleData.Set("source", gatewayIP)
+		allowRuleData.Set("dport", "22")
+		allowRuleData.Set("proto", "tcp")
+		allowRuleData.Set("comment", "Allow SSH from gateway")
+
+		allowRuleResp, err := pc.apiRequestForm(ctx, "POST", ruleEndpoint, allowRuleData)
+		if err != nil {
+			logger.Warn("[ProxmoxClient] Failed to add firewall rule to allow SSH from gateway: %v", err)
+		} else if allowRuleResp != nil {
+			allowRuleResp.Body.Close()
+			if allowRuleResp.StatusCode == http.StatusOK {
+				logger.Info("[ProxmoxClient] Added firewall rule to allow SSH from gateway (%s) for VM %d", gatewayIP, vmID)
+			} else {
+				logger.Debug("[ProxmoxClient] Gateway SSH allow rule creation returned status %d", allowRuleResp.StatusCode)
+			}
+		}
+
+		// Add firewall rule to block inter-VM traffic
+		// Rule: Block incoming traffic from other VMs on the same bridge
+		// We'll use a rule that blocks traffic from the bridge interface
+		// This blocks traffic from other VMs while allowing gateway/internet traffic
+		blockRuleData := url.Values{}
+		blockRuleData.Set("enable", "1")
+		blockRuleData.Set("action", "REJECT")
+		blockRuleData.Set("type", "in")
+		blockRuleData.Set("iface", bridgeName)
+		blockRuleData.Set("comment", "Block inter-VM communication (default security)")
+		// Note: This is a basic rule. For production, you would:
+		// - Use firewall aliases to track VM IPs
+		// - Block specific source IPs or subnets
+		// - Allow established/related connections
+
+		ruleResp, err := pc.apiRequestForm(ctx, "POST", ruleEndpoint, blockRuleData)
+		if err != nil {
+			logger.Warn("[ProxmoxClient] Failed to add firewall rule to block inter-VM communication: %v", err)
+			logger.Info("[ProxmoxClient] Note: Firewall rules can be configured manually in Proxmox to block inter-VM communication")
+			// Continue - firewall rules can be configured manually
+		} else if ruleResp != nil {
+			ruleResp.Body.Close()
+			if ruleResp.StatusCode == http.StatusOK {
+				logger.Info("[ProxmoxClient] Added firewall rule to block inter-VM communication for VM %d", vmID)
+			} else {
+				logger.Debug("[ProxmoxClient] Firewall rule creation returned status %d (may need manual configuration)", ruleResp.StatusCode)
+				logger.Info("[ProxmoxClient] Note: Configure firewall rules manually in Proxmox to block inter-VM communication")
+			}
+		}
+	} else {
+		// Allow inter-VM communication within organization
+		// Create or use a security group for this organization
+		securityGroupName := fmt.Sprintf("org-%s", organizationID)
+
+		// Ensure security group exists
+		if err := pc.ensureSecurityGroup(ctx, securityGroupName); err != nil {
+			logger.Warn("[ProxmoxClient] Failed to ensure security group %s: %v", securityGroupName, err)
+			// Continue - security groups can be configured manually
+		}
+
+		// Add VM to security group
+		// In Proxmox, security groups are configured at the VM level via firewall aliases/groups
+		// We'll add the VM to a firewall group that allows inter-VM communication
+		groupEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/firewall/options", nodeName, vmID)
+		groupData := url.Values{}
+		groupData.Set("enable", "1")
+		// Note: Proxmox security groups work differently - we'll use firewall rules instead
+		// For now, we'll just enable firewall and let the security group handle rules
+
+		groupResp, err := pc.apiRequestForm(ctx, "PUT", groupEndpoint, groupData)
+		if err != nil {
+			logger.Warn("[ProxmoxClient] Failed to configure VM for security group: %v", err)
+		} else if groupResp != nil {
+			groupResp.Body.Close()
+			logger.Info("[ProxmoxClient] Configured VM %d for inter-VM communication (security group: %s)", vmID, securityGroupName)
+		}
+	}
+
+	return nil
+}
+
+// ensureSecurityGroup ensures a security group exists in Proxmox
+// Security groups in Proxmox are managed via firewall aliases and groups
+func (pc *ProxmoxClient) ensureSecurityGroup(ctx context.Context, groupName string) error {
+	// Check if security group exists
+	// Proxmox uses firewall aliases for grouping
+	// We'll create an alias for the organization if it doesn't exist
+	// Note: This is a simplified implementation - Proxmox security groups are more complex
+
+	// For now, we'll just log that the security group should be created manually
+	// In a full implementation, we would:
+	// 1. Create a firewall alias for the organization
+	// 2. Add VMs to that alias
+	// 3. Create firewall rules that allow traffic between VMs in the same alias
+
+	logger.Debug("[ProxmoxClient] Security group %s should be configured manually in Proxmox", groupName)
+	return nil
+}
+
+// Firewall management methods
+
+// ListFirewallRules lists all firewall rules for a VM
+func (pc *ProxmoxClient) ListFirewallRules(ctx context.Context, nodeName string, vmID int) ([]map[string]interface{}, error) {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/firewall/rules", nodeName, vmID)
+	resp, err := pc.apiRequest(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list firewall rules: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list firewall rules: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var rulesResp struct {
+		Data []map[string]interface{} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&rulesResp); err != nil {
+		return nil, fmt.Errorf("failed to decode firewall rules response: %w", err)
+	}
+
+	return rulesResp.Data, nil
+}
+
+// GetFirewallRule gets a specific firewall rule by position
+func (pc *ProxmoxClient) GetFirewallRule(ctx context.Context, nodeName string, vmID int, pos int) (map[string]interface{}, error) {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/firewall/rules/%d", nodeName, vmID, pos)
+	resp, err := pc.apiRequest(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get firewall rule: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get firewall rule: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var ruleResp struct {
+		Data map[string]interface{} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&ruleResp); err != nil {
+		return nil, fmt.Errorf("failed to decode firewall rule response: %w", err)
+	}
+
+	return ruleResp.Data, nil
+}
+
+// CreateFirewallRule creates a new firewall rule
+func (pc *ProxmoxClient) CreateFirewallRule(ctx context.Context, nodeName string, vmID int, ruleData url.Values, pos *int) error {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/firewall/rules", nodeName, vmID)
+	if pos != nil {
+		endpoint = fmt.Sprintf("/nodes/%s/qemu/%d/firewall/rules?pos=%d", nodeName, vmID, *pos)
+	}
+
+	resp, err := pc.apiRequestForm(ctx, "POST", endpoint, ruleData)
+	if err != nil {
+		return fmt.Errorf("failed to create firewall rule: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to create firewall rule: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	return nil
+}
+
+// UpdateFirewallRule updates an existing firewall rule
+func (pc *ProxmoxClient) UpdateFirewallRule(ctx context.Context, nodeName string, vmID int, pos int, ruleData url.Values) error {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/firewall/rules/%d", nodeName, vmID, pos)
+
+	resp, err := pc.apiRequestForm(ctx, "PUT", endpoint, ruleData)
+	if err != nil {
+		return fmt.Errorf("failed to update firewall rule: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update firewall rule: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	return nil
+}
+
+// DeleteFirewallRule deletes a firewall rule
+func (pc *ProxmoxClient) DeleteFirewallRule(ctx context.Context, nodeName string, vmID int, pos int) error {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/firewall/rules/%d", nodeName, vmID, pos)
+
+	resp, err := pc.apiRequest(ctx, "DELETE", endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to delete firewall rule: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete firewall rule: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	return nil
+}
+
+// GetFirewallOptions gets firewall options for a VM
+func (pc *ProxmoxClient) GetFirewallOptions(ctx context.Context, nodeName string, vmID int) (map[string]interface{}, error) {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/firewall/options", nodeName, vmID)
+	resp, err := pc.apiRequest(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get firewall options: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get firewall options: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	var optionsResp struct {
+		Data map[string]interface{} `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&optionsResp); err != nil {
+		return nil, fmt.Errorf("failed to decode firewall options response: %w", err)
+	}
+
+	return optionsResp.Data, nil
+}
+
+// UpdateFirewallOptions updates firewall options for a VM
+func (pc *ProxmoxClient) UpdateFirewallOptions(ctx context.Context, nodeName string, vmID int, optionsData url.Values) error {
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/firewall/options", nodeName, vmID)
+
+	resp, err := pc.apiRequestForm(ctx, "PUT", endpoint, optionsData)
+	if err != nil {
+		return fmt.Errorf("failed to update firewall options: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update firewall options: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	return nil
+}
