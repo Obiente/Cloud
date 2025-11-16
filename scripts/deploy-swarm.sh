@@ -9,9 +9,26 @@ set -e
 STACK_NAME="${1:-obiente}"
 COMPOSE_FILE="${2:-docker-compose.swarm.yml}"
 BUILD_LOCAL="${BUILD_LOCAL:-false}"
-API_IMAGE="${API_IMAGE:-ghcr.io/obiente/cloud-api:latest}"
-DASHBOARD_IMAGE="${DASHBOARD_IMAGE:-ghcr.io/obiente/cloud-dashboard:latest}"
 DEPLOY_DASHBOARD="${DEPLOY_DASHBOARD:-true}"
+
+# Define all microservice images
+REGISTRY="${REGISTRY:-ghcr.io/obiente}"
+MICROSERVICES=(
+  "api-gateway"
+  "audit-service"
+  "auth-service"
+  "billing-service"
+  "deployments-service"
+  "dns-service"
+  "gameservers-service"
+  "orchestrator-service"
+  "organizations-service"
+  "superadmin-service"
+  "support-service"
+  "vps-gateway"
+  "vps-service"
+)
+DASHBOARD_IMAGE="${DASHBOARD_IMAGE:-${REGISTRY}/cloud-dashboard:latest}"
 
 # Load .env file if it exists
 if [ -f .env ]; then
@@ -59,7 +76,7 @@ if [ ${#MISSING_DIRS[@]} -gt 0 ]; then
   fi
   echo "✅ Directories created!"
   echo ""
-  echo "⚠️  IMPORTANT: The API service runs on ALL nodes (mode: global)."
+  echo "⚠️  IMPORTANT: Some services run on ALL nodes (mode: global)."
   echo "   You must create these directories on ALL worker nodes before deployment:"
   echo ""
   echo "   Run this on each worker node:"
@@ -79,45 +96,62 @@ if [ ${#MISSING_DIRS[@]} -gt 0 ]; then
 fi
 
 if [ "$BUILD_LOCAL" = "true" ]; then
-  echo "🔨 Building Obiente Cloud images locally..."
+  echo "🔨 Building Obiente Cloud microservice images locally..."
   
   # Enable BuildKit for faster builds
   export DOCKER_BUILDKIT=1
   
-  # Build the API image (used by both api and dns services)
-  echo "📦 Building obiente/cloud-api:latest..."
-  docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
+  # Build all microservice images
+  for service in "${MICROSERVICES[@]}"; do
+    echo "📦 Building obiente/cloud-${service}:latest..."
+    docker build -f apps/${service}/Dockerfile -t obiente/cloud-${service}:latest . || {
+      echo "❌ Failed to build ${service}"
+      exit 1
+    }
+  done
   
   # Build the Dashboard image
-  echo "📦 Building obiente/cloud-dashboard:latest..."
-  docker build -f apps/dashboard/Dockerfile -t obiente/cloud-dashboard:latest .
-  
-  # Use local image names
-  export API_IMAGE="obiente/cloud-api:latest"
-  export DASHBOARD_IMAGE="obiente/cloud-dashboard:latest"
+  if [ "$DEPLOY_DASHBOARD" = "true" ]; then
+    echo "📦 Building obiente/cloud-dashboard:latest..."
+    docker build -f apps/dashboard/Dockerfile -t obiente/cloud-dashboard:latest .
+  fi
   
   echo "✅ Build complete!"
 else
-  echo "📥 Pulling Obiente Cloud images from GitHub Container Registry..."
+  echo "📥 Pulling Obiente Cloud microservice images from GitHub Container Registry..."
   
-  # Pull the API image from ghcr.io
-  echo "📦 Pulling $API_IMAGE..."
-  docker pull "$API_IMAGE" || {
-    echo "⚠️  Warning: Failed to pull image. Make sure you're authenticated to ghcr.io:"
-    echo "   docker login ghcr.io"
-    echo "   Or set BUILD_LOCAL=true to build locally"
-    exit 1
-  }
+  # Pull all microservice images
+  FAILED_PULLS=()
+  for service in "${MICROSERVICES[@]}"; do
+    IMAGE="${REGISTRY}/cloud-${service}:latest"
+    echo "📦 Pulling ${IMAGE}..."
+    if ! docker pull "${IMAGE}"; then
+      echo "⚠️  Warning: Failed to pull ${service} image"
+      FAILED_PULLS+=("${service}")
+    fi
+  done
   
   # Pull the Dashboard image if deploying dashboard
   if [ "$DEPLOY_DASHBOARD" = "true" ]; then
-    echo "📦 Pulling $DASHBOARD_IMAGE..."
-    docker pull "$DASHBOARD_IMAGE" || {
-      echo "⚠️  Warning: Failed to pull dashboard image. Make sure you're authenticated to ghcr.io:"
-      echo "   docker login ghcr.io"
-      echo "   Or set BUILD_LOCAL=true to build locally"
-      exit 1
-    }
+    echo "📦 Pulling ${DASHBOARD_IMAGE}..."
+    if ! docker pull "${DASHBOARD_IMAGE}"; then
+      echo "⚠️  Warning: Failed to pull dashboard image"
+      FAILED_PULLS+=("dashboard")
+    fi
+  fi
+  
+  if [ ${#FAILED_PULLS[@]} -gt 0 ]; then
+    echo ""
+    echo "❌ Failed to pull the following images:"
+    for service in "${FAILED_PULLS[@]}"; do
+      echo "   - ${service}"
+    done
+    echo ""
+    echo "Make sure you're authenticated to ghcr.io:"
+    echo "   docker login ghcr.io"
+    echo ""
+    echo "Or set BUILD_LOCAL=true to build locally"
+    exit 1
   fi
   
   echo "✅ Image pull complete!"
@@ -210,12 +244,17 @@ echo "✅ All deployments started!"
 echo ""
 echo "📋 Useful commands:"
 echo "  View services:     docker stack services $STACK_NAME"
-echo "  View logs:         docker service logs -f ${STACK_NAME}_api"
+echo "  View logs:         docker service logs -f ${STACK_NAME}_api-gateway"
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo "  Dashboard logs:    docker service logs -f ${STACK_NAME}_dashboard"
 fi
 echo "  Remove stacks:     docker stack rm $STACK_NAME${DEPLOY_DASHBOARD:+ ${STACK_NAME}_dashboard}"
 echo "  List tasks:        docker stack ps $STACK_NAME"
+echo ""
+echo "📦 Microservices deployed:"
+for service in "${MICROSERVICES[@]}"; do
+  echo "   - ${service}"
+done
 echo ""
 echo "⚠️  If you see mount errors on worker nodes, ensure directories exist:"
 echo "   Run on each worker: ./scripts/setup-all-nodes.sh"
