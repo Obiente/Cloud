@@ -2,7 +2,8 @@
 node_modules
 **/node_modules
 
-# Build outputs
+# Build outputs (excluded to force fresh builds, but cache mounts handle persistence)
+# Note: We exclude these from COPY but use cache mounts in Dockerfile
 .nuxt
 .nitro
 .output

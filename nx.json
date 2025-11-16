@@ -2,7 +2,25 @@
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
-    "production": ["default"],
+    "production": [
+      "default",
+      "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
+      "!{projectRoot}/**/*.test.[jt]s?(x)?(.snap)",
+      "!{projectRoot}/**/*.spec.[jt]s?(x)?(.snap)",
+      "!{projectRoot}/.env*",
+      "!{projectRoot}/.env.local",
+      "!{projectRoot}/**/__tests__/**",
+      "!{projectRoot}/**/test/**",
+      "!{projectRoot}/**/tests/**",
+      "!{projectRoot}/**/*.test.ts",
+      "!{projectRoot}/**/*.test.tsx",
+      "!{projectRoot}/**/*.test.js",
+      "!{projectRoot}/**/*.test.jsx",
+      "!{projectRoot}/**/*.spec.ts",
+      "!{projectRoot}/**/*.spec.tsx",
+      "!{projectRoot}/**/*.spec.js",
+      "!{projectRoot}/**/*.spec.jsx"
+    ],
     "sharedGlobals": [
       "{workspaceRoot}/.github/workflows/ci.yml",
       "{workspaceRoot}/go.work"
@@ -46,6 +64,31 @@
   ],
   "targetDefaults": {
     "@nx/js:tsc": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["production", "^production"]
+    },
+    "nuxt:build": {
+      "cache": true,
+      "dependsOn": ["^nuxt:build"],
+      "inputs": [
+        "production",
+        "^production",
+        {
+          "externalDependencies": ["nuxt"]
+        }
+      ],
+      "outputs": [
+        "{workspaceRoot}/apps/dashboard/.nuxt",
+        "{projectRoot}/.output"
+      ]
+    },
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["production", "^production"]
+    },
+    "build-deps": {
       "cache": true,
       "dependsOn": ["^build"],
       "inputs": ["production", "^production"]

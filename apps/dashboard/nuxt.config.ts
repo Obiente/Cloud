@@ -35,6 +35,10 @@ export default defineNuxtConfig({
       minify: "esbuild", // Use esbuild instead of terser for lower memory usage and faster builds
       // Enable build optimizations
       cssMinify: "esbuild", // Use esbuild for CSS minification (faster than default)
+      // Optimize chunk splitting for better caching and parallel loading
+      target: "esnext", // Target modern browsers for smaller bundles
+      // Reduce source map generation in production for faster builds
+      sourcemap: process.env.NODE_ENV === "development",
       rollupOptions: {
         output: {
           // Improved code splitting strategy for better performance
@@ -183,5 +187,11 @@ export default defineNuxtConfig({
     },
     minify: true,
     sourceMap: false,
+    // Optimize build performance
+    compressPublicAssets: true,
+    // Enable parallel builds for faster compilation
+    prerender: {
+      crawlLinks: false, // Disable link crawling for faster builds (only prerender explicit routes)
+    },
   },
 });
