@@ -112,8 +112,10 @@ export default defineNuxtConfig({
     // Private keys (only available on server-side)
     apiSecret: "",
     // Server-side API host (for internal Docker service communication)
-    // Defaults to public API host if not set, but can be overridden for Docker internal networking
-    apiHostInternal: process.env.NUXT_API_HOST_INTERNAL || process.env.NUXT_PUBLIC_API_HOST || "http://localhost:3001",
+    // Use API Gateway for all requests (routes to microservices)
+    // When running locally (not in Docker), use localhost with Traefik port
+    // When running in Docker, use api-gateway service name
+    apiHostInternal: process.env.NUXT_API_HOST_INTERNAL || process.env.NUXT_PUBLIC_API_HOST || "http://localhost:80",
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET || "", // Server-side only - never expose to client
     session: {
       password: "changeme_" + crypto.randomUUID(), // CHANGE THIS IN PRODUCTION, should be at least 32 characters
@@ -124,7 +126,9 @@ export default defineNuxtConfig({
     // Public keys (exposed to client-side)
     public: {
       requestHost: "http://localhost:3000",
-      apiHost: "http://localhost:3001",
+      // API Gateway is the single entry point for all API requests
+      // It routes to appropriate microservices automatically
+      apiHost: "http://api.localhost",
       oidcIssuer: "https://obiente.cloud",
       oidcBase: "https://auth.obiente.cloud",
       oidcClientId: "339499954043158530",
