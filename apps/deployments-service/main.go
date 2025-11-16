@@ -10,13 +10,13 @@ import (
 	"syscall"
 	"time"
 
-	"api/internal/auth"
-	"api/internal/database"
-	"api/internal/logger"
-	"api/internal/middleware"
-	"api/internal/orchestrator"
-	"api/internal/quota"
-	deploymentsvc "api/internal/services/deployments"
+	"github.com/obiente/cloud/apps/shared/pkg/auth"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/middleware"
+	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
+	"github.com/obiente/cloud/apps/shared/pkg/quota"
+	deploymentsvc "deployments-service/internal/service"
 
 	deploymentsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
 
