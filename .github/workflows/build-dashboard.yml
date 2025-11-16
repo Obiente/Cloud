@@ -15,11 +15,6 @@ on:
       - 'apps/dashboard/**'
   workflow_dispatch:
 
-env:
-  REGISTRY: ghcr.io
-  SERVICE_NAME: dashboard
-  IMAGE_NAME: ${{ env.REGISTRY }}/obiente/cloud-dashboard
-
 permissions:
   contents: read
   packages: write
@@ -27,6 +22,10 @@ permissions:
 jobs:
   build-and-push:
     runs-on: self-hosted
+    env:
+      REGISTRY: ghcr.io
+      SERVICE_NAME: dashboard
+      IMAGE_NAME: ghcr.io/obiente/cloud-dashboard
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

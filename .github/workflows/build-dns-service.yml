@@ -17,11 +17,6 @@ on:
       - 'apps/shared/**'
   workflow_dispatch:
 
-env:
-  REGISTRY: ghcr.io
-  SERVICE_NAME: dns-service
-  IMAGE_NAME: ${{ env.REGISTRY }}/obiente/cloud-dns-service
-
 permissions:
   contents: read
   packages: write
@@ -29,6 +24,10 @@ permissions:
 jobs:
   build-and-push:
     runs-on: self-hosted
+    env:
+      REGISTRY: ghcr.io
+      SERVICE_NAME: dns-service
+      IMAGE_NAME: ghcr.io/obiente/cloud-dns-service
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
