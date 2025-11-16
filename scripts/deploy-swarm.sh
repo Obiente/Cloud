@@ -190,7 +190,7 @@ MERGED_COMPOSE=$(mktemp)
 ./scripts/merge-compose-files.sh "$COMPOSE_FILE" "$MERGED_COMPOSE"
 
 # Substitute __STACK_NAME__ placeholder with actual stack name
-# This makes network names dynamic (e.g., __STACK_NAME__obiente-network → obiente_obiente-network)
+# This makes network names dynamic (e.g., __STACK_NAME___obiente-network → obiente_obiente-network)
 sed -i "s/__STACK_NAME__/${STACK_NAME}/g" "$MERGED_COMPOSE"
 
 # Ensure the overlay network exists before deploying
