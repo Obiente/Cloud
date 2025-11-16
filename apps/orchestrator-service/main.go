@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"api/internal/database"
-	"api/internal/logger"
-	"api/internal/orchestrator"
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 
 	_ "github.com/joho/godotenv/autoload"
 )
