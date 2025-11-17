@@ -64,6 +64,12 @@ MERGED_COMPOSE=$(mktemp)
 # This makes network names dynamic (e.g., __STACK_NAME___obiente-network → obiente_obiente-network)
 sed -i "s/__STACK_NAME__/${STACK_NAME}/g" "$MERGED_COMPOSE"
 
+# Convert relative config file paths to absolute paths
+# Docker configs resolve file: paths relative to current working directory
+# We need absolute paths so they work regardless of where docker stack deploy is run
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+sed -i "s|file: \\./scripts/internal/|file: ${REPO_ROOT}/scripts/internal/|g" "$MERGED_COMPOSE"
+
 docker stack deploy --resolve-image always -c "$MERGED_COMPOSE" "$STACK_NAME"
 rm -f "$MERGED_COMPOSE"
 echo -e "${GREEN}✅ Main stack redeployed!${NC}"
