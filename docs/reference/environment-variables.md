@@ -127,7 +127,29 @@ POSTGRES_ALLOWED_HOSTS=10.0.0.0/8
 POSTGRES_ALLOWED_HOSTS=10.10.10.1,10.0.0.0/8,192.168.1.0/24
 ```
 
-**Note:** Single IPs are automatically converted to `/32` CIDR format. The init script adds these rules to `pg_hba.conf` automatically on container start. After adding allowed hosts, restart the PostgreSQL service for changes to take effect.
+**Note:** Single IPs are automatically converted to `/32` CIDR format. 
+
+**To apply allowed hosts changes:**
+
+1. **Update the environment variable** in your deployment:
+   ```bash
+   # Update the service with new allowed hosts
+   docker service update --env-add POSTGRES_ALLOWED_HOSTS="10.10.10.1,10.0.0.0/8" obiente_postgres
+   ```
+
+2. **Run the manual update script** to apply changes to pg_hba.conf:
+   ```bash
+   # For postgres service
+   ./scripts/update-postgres-hba.sh postgres
+   
+   # For timescaledb service
+   ./scripts/update-postgres-hba.sh timescaledb
+   ```
+
+The script will:
+- Read the `POSTGRES_ALLOWED_HOSTS` (or `METRICS_DB_ALLOWED_HOSTS` for timescaledb) from the service environment
+- Add missing rules to `pg_hba.conf`
+- Reload PostgreSQL configuration automatically
 
 ### API Configuration
 
