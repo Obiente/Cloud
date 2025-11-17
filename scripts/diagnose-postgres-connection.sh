@@ -66,11 +66,31 @@ echo ""
 
 # Test connection from within the container
 echo "7. Testing connection from PostgreSQL container itself:"
-if docker exec "$CONTAINER_ID" psql -U obiente_postgres -d obiente -c "SELECT 1;" >/dev/null 2>&1; then
-  echo "   ✅ Local connection works"
+# First check if user exists
+POSTGRES_USER="${POSTGRES_USER:-obiente_postgres}"
+POSTGRES_DB="${POSTGRES_DB:-obiente}"
+USER_EXISTS=$(docker exec "$CONTAINER_ID" psql -U postgres -d postgres -t -c "SELECT 1 FROM pg_roles WHERE rolname='$POSTGRES_USER';" 2>/dev/null | tr -d ' \n\r' || echo "")
+
+if [ "$USER_EXISTS" != "1" ]; then
+  echo "   ⚠️  User '$POSTGRES_USER' does NOT exist in PostgreSQL!"
+  echo "   💡 Run: ./scripts/fix-postgres-user.sh"
+  echo ""
+  echo "   Trying to connect as 'postgres' user instead..."
+  if docker exec "$CONTAINER_ID" psql -U postgres -d postgres -c "SELECT current_user;" >/dev/null 2>&1; then
+    echo "   ✅ Can connect as 'postgres' user"
+    echo ""
+    echo "   Listing all users:"
+    docker exec "$CONTAINER_ID" psql -U postgres -d postgres -c "\du" 2>/dev/null || true
+  else
+    echo "   ❌ Cannot connect as 'postgres' user either"
+  fi
 else
-  echo "   ❌ Local connection failed"
-  docker exec "$CONTAINER_ID" psql -U obiente_postgres -d obiente -c "SELECT 1;" 2>&1 | head -3 || true
+  if docker exec "$CONTAINER_ID" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1;" >/dev/null 2>&1; then
+    echo "   ✅ Local connection works"
+  else
+    echo "   ❌ Local connection failed"
+    docker exec "$CONTAINER_ID" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1;" 2>&1 | head -3 || true
+  fi
 fi
 echo ""
 
