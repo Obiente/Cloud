@@ -16,12 +16,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-obiente}
       # Configure PostgreSQL to listen on all interfaces (required for Docker Swarm overlay network)
       POSTGRES_HOST_AUTH_METHOD: md5
-    command:
-      - postgres
-      - -c
-      - listen_addresses=*
-      - -c
-      - max_connections=200
+      # Override postgresql.conf settings via environment
+      POSTGRES_INITDB_ARGS: "-c listen_addresses='*'"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
