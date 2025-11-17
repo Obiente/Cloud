@@ -3,11 +3,35 @@
 # Deploys both the main stack and dashboard stack
 # Set BUILD_LOCAL=true to build images locally instead
 # Set DEPLOY_DASHBOARD=false to skip dashboard deployment
+# Use -p or --pull to pull images before deploying
 
 set -e
 
-STACK_NAME="${1:-obiente}"
-COMPOSE_FILE="${2:-docker-compose.swarm.yml}"
+# Parse command-line arguments
+PULL_IMAGES=false
+STACK_NAME=""
+COMPOSE_FILE=""
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -p|--pull)
+      PULL_IMAGES=true
+      shift
+      ;;
+    *)
+      if [ -z "$STACK_NAME" ]; then
+        STACK_NAME="$1"
+      elif [ -z "$COMPOSE_FILE" ]; then
+        COMPOSE_FILE="$1"
+      fi
+      shift
+      ;;
+  esac
+done
+
+# Set defaults if not provided
+STACK_NAME="${STACK_NAME:-obiente}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.swarm.yml}"
 BUILD_LOCAL="${BUILD_LOCAL:-false}"
 DEPLOY_DASHBOARD="${DEPLOY_DASHBOARD:-true}"
 
@@ -117,7 +141,7 @@ if [ "$BUILD_LOCAL" = "true" ]; then
   fi
   
   echo "✅ Build complete!"
-else
+elif [ "$PULL_IMAGES" = "true" ]; then
   echo "📥 Pulling Obiente Cloud microservice images from GitHub Container Registry..."
   
   # Pull all microservice images
@@ -155,6 +179,8 @@ else
   fi
   
   echo "✅ Image pull complete!"
+else
+  echo "ℹ️  Skipping image pull (use -p or --pull to pull images)"
 fi
 
 echo ""
@@ -250,8 +276,12 @@ echo "✅ Config cleanup complete"
 # This ensures proper DNS configuration and service name resolution
 
 # Deploy the main stack with environment variables loaded from .env
-# Use --resolve-image always to force pulling latest images
-docker stack deploy --resolve-image always -c "$MERGED_COMPOSE" "$STACK_NAME"
+# Use --resolve-image always to force pulling latest images if PULL_IMAGES is true
+if [ "$PULL_IMAGES" = "true" ]; then
+  docker stack deploy --resolve-image always -c "$MERGED_COMPOSE" "$STACK_NAME"
+else
+  docker stack deploy --resolve-image never -c "$MERGED_COMPOSE" "$STACK_NAME"
+fi
 rm -f "$MERGED_COMPOSE"
 
 echo ""
@@ -275,7 +305,11 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   sed -i "s/\${DOMAIN}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
   
   # Deploy dashboard service in the same stack (not a separate stack)
-  docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "$STACK_NAME"
+  if [ "$PULL_IMAGES" = "true" ]; then
+    docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "$STACK_NAME"
+  else
+    docker stack deploy --resolve-image never -c "$TEMP_DASHBOARD_COMPOSE" "$STACK_NAME"
+  fi
   rm -f "$TEMP_DASHBOARD_COMPOSE"
   
   echo "✅ Dashboard service added to stack '$STACK_NAME'!"
