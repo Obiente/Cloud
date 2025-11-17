@@ -142,6 +142,8 @@ func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 			}
 
 			// Set CORS headers if origin is allowed
+			// Always set headers for wildcard config, or when origin matches
+			// This ensures CORS headers are present even on error responses
 			if allowedOrigin != "" {
 				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 
@@ -169,6 +171,17 @@ func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 				if config.MaxAge != "" {
 					w.Header().Set("Access-Control-Max-Age", config.MaxAge)
 				}
+			} else if isWildcard {
+				// Wildcard is configured but no origin header - still set headers for same-origin requests
+				// This ensures CORS headers are present on all responses (including errors)
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+				if len(config.AllowedMethods) > 0 {
+					w.Header().Set("Access-Control-Allow-Methods", strings.Join(config.AllowedMethods, ", "))
+				}
+				if len(config.AllowedHeaders) > 0 {
+					w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowedHeaders, ", "))
+				}
+				logger.Debug("[CORS] Wildcard configured, setting CORS headers without origin header")
 			} else if origin != "" {
 				// Origin was provided but didn't match - log for debugging
 				logger.Debug("[CORS] Origin %s not allowed, not setting CORS headers", origin)
