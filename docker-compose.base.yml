@@ -6,15 +6,15 @@
 # (Docker Compose v2.20+). This allows YAML anchors to work across files.
 
 x-common-database: &common-database
-  DB_HOST: postgres
-  DB_PORT: 5432
+  DB_HOST: ${DB_HOST:-postgres}
+  DB_PORT: ${DB_PORT:-5432}
   DB_USER: ${POSTGRES_USER:-obiente_postgres}
   DB_PASSWORD: ${POSTGRES_PASSWORD:-obiente_postgres}
   DB_NAME: ${POSTGRES_DB:-obiente}
 
 x-common-metrics-db: &common-metrics-db
-  METRICS_DB_HOST: timescaledb
-  METRICS_DB_PORT: 5432
+  METRICS_DB_HOST: ${METRICS_DB_HOST:-timescaledb}
+  METRICS_DB_PORT: ${METRICS_DB_PORT:-5432}
   METRICS_DB_USER: ${METRICS_DB_USER:-obiente_postgres}
   METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-obiente_postgres}
   METRICS_DB_NAME: ${METRICS_DB_NAME:-obiente_metrics}
