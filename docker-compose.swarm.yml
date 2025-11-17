@@ -18,8 +18,6 @@ services:
       POSTGRES_HOST_AUTH_METHOD: md5
       # Overlay network subnet for pg_hba.conf configuration
       OVERLAY_SUBNET: ${OVERLAY_SUBNET:-10.15.3.0/24}
-    # Use custom entrypoint that configures pg_hba.conf properly
-    entrypoint: ["/bin/sh", "/docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh"]
     command:
       - postgres
       - -c
@@ -29,17 +27,12 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     configs:
-      # Mount custom pg_hba.conf file (prevents PostgreSQL from regenerating it)
+      # Mount custom pg_hba.conf file and init script
       - source: postgres_hba_conf
-        target: /etc/postgresql/pg_hba.conf
+        target: /docker-entrypoint-initdb.d/pg_hba.conf
         mode: 0644
-      # Mount entrypoint wrapper to configure postgresql.conf
-      - source: postgres_entrypoint_wrapper
-        target: /docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh
-        mode: 0755
-      # Mount init script to ensure user exists (runs after initialization)
-      - source: postgres_init_user
-        target: /docker-entrypoint-initdb.d/01-init-user.sh
+      - source: postgres_hba_init
+        target: /docker-entrypoint-initdb.d/01-init-pg-hba.sh
         mode: 0755
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-obiente_postgres} -d ${POSTGRES_DB:-obiente}"]
@@ -73,8 +66,6 @@ services:
       POSTGRES_HOST_AUTH_METHOD: md5
       # Overlay network subnet for pg_hba.conf configuration
       OVERLAY_SUBNET: ${OVERLAY_SUBNET:-10.15.3.0/24}
-    # Use custom entrypoint that configures pg_hba.conf properly
-    entrypoint: ["/bin/sh", "/docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh"]
     command:
       - postgres
       - -c
@@ -84,17 +75,12 @@ services:
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
     configs:
-      # Mount custom pg_hba.conf file (prevents PostgreSQL from regenerating it)
+      # Mount custom pg_hba.conf file and init script
       - source: postgres_hba_conf
-        target: /etc/postgresql/pg_hba.conf
+        target: /docker-entrypoint-initdb.d/pg_hba.conf
         mode: 0644
-      # Mount entrypoint wrapper to configure postgresql.conf
-      - source: postgres_entrypoint_wrapper
-        target: /docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh
-        mode: 0755
-      # Mount init script to ensure user exists (runs after initialization)
-      - source: postgres_init_user
-        target: /docker-entrypoint-initdb.d/01-init-user.sh
+      - source: postgres_hba_init
+        target: /docker-entrypoint-initdb.d/01-init-pg-hba.sh
         mode: 0755
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${METRICS_DB_USER:-obiente_postgres} -d ${METRICS_DB_NAME:-obiente_metrics}"]
@@ -1037,12 +1023,9 @@ networks:
     # The embedded DNS server (127.0.0.11) only works properly when the network is created BY THE STACK
 
 configs:
-  # Custom pg_hba.conf file (mounted to prevent PostgreSQL from regenerating it)
+  # Custom pg_hba.conf file
   postgres_hba_conf:
     file: ./scripts/internal/pg_hba.conf
-  # PostgreSQL entrypoint wrapper to configure postgresql.conf (hba_file and listen_addresses)
-  postgres_entrypoint_wrapper:
-    file: ./scripts/internal/docker-entrypoint-postgres.sh
-  # PostgreSQL init script to ensure user exists (runs after initialization)
-  postgres_init_user:
-    file: ./scripts/internal/postgres-init-user.sh
+  # Init script to copy pg_hba.conf to PGDATA
+  postgres_hba_init:
+    file: ./scripts/internal/init-pg-hba.sh

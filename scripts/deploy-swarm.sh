@@ -229,8 +229,7 @@ sed -i "s|file: \\./scripts/internal/|file: ${REPO_ROOT}/scripts/internal/|g" "$
 echo "🔍 Verifying Docker config files exist..."
 CONFIG_FILES=(
   "${REPO_ROOT}/scripts/internal/pg_hba.conf"
-  "${REPO_ROOT}/scripts/internal/docker-entrypoint-postgres.sh"
-  "${REPO_ROOT}/scripts/internal/postgres-init-user.sh"
+  "${REPO_ROOT}/scripts/internal/init-pg-hba.sh"
 )
 MISSING_CONFIGS=()
 for config_file in "${CONFIG_FILES[@]}"; do
@@ -259,12 +258,12 @@ echo "🔧 Checking for existing Docker configs that need updating..."
 OLD_CONFIG_NAMES=(
   "${STACK_NAME}_postgres_init_hba"
   "${STACK_NAME}_postgres_entrypoint_wrapper"
+  "${STACK_NAME}_postgres_init_user"
 )
 
 NEW_CONFIG_NAMES=(
   "${STACK_NAME}_postgres_hba_conf"
-  "${STACK_NAME}_postgres_entrypoint_wrapper"
-  "${STACK_NAME}_postgres_init_user"
+  "${STACK_NAME}_postgres_hba_init"
 )
 
 # Check if we need to migrate from old config names to new ones
@@ -333,11 +332,8 @@ get_config_source_file() {
     "${STACK_NAME}_postgres_hba_conf")
       echo "${REPO_ROOT}/scripts/internal/pg_hba.conf"
       ;;
-    "${STACK_NAME}_postgres_entrypoint_wrapper")
-      echo "${REPO_ROOT}/scripts/internal/docker-entrypoint-postgres.sh"
-      ;;
-    "${STACK_NAME}_postgres_init_user")
-      echo "${REPO_ROOT}/scripts/internal/postgres-init-user.sh"
+    "${STACK_NAME}_postgres_hba_init")
+      echo "${REPO_ROOT}/scripts/internal/init-pg-hba.sh"
       ;;
     *)
       echo ""
