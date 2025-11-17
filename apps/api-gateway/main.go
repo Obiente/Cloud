@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -75,20 +76,63 @@ func main() {
 		routes: serviceRoutes,
 	}
 
+	// Initialize health checker for backend services
+	proxy.initHealthChecker()
+	logger.Info("✓ Health checker initialized for backend services")
+
 	// Register all service routes
 	for path, targetURL := range serviceRoutes {
 		mux.Handle(path, proxy)
 		logger.Info("✓ Route registered: %s -> %s", path, targetURL)
 	}
 
-	// Health check endpoint
+	// Health check endpoint - reports unhealthy if any backend service is unhealthy
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
 
+		// Check health of all backend services
+		proxy.healthMutex.RLock()
+		allHealthy := true
+		unhealthyServices := []string{}
+		checkedCount := 0
+		for serviceURL, healthy := range proxy.healthStatus {
+			checkedCount++
+			if !healthy {
+				allHealthy = false
+				unhealthyServices = append(unhealthyServices, serviceURL)
+			}
+		}
+		proxy.healthMutex.RUnlock()
+
 		w.Header().Set("Content-Type", "application/json")
+		
+		// If we haven't checked any services yet (startup), consider it healthy
+		// This allows the gateway to start up even if backend services aren't ready
+		if checkedCount == 0 {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"healthy","service":"api-gateway","message":"health checks not yet initialized"}`))
+			return
+		}
+		
+		if !allHealthy {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			// Format unhealthy services as JSON array
+			unhealthyList := "["
+			for i, svc := range unhealthyServices {
+				if i > 0 {
+					unhealthyList += ","
+				}
+				unhealthyList += fmt.Sprintf(`"%s"`, svc)
+			}
+			unhealthyList += "]"
+			unhealthyJSON := fmt.Sprintf(`{"status":"unhealthy","service":"api-gateway","unhealthy_backends":%s}`, unhealthyList)
+			_, _ = w.Write([]byte(unhealthyJSON))
+			return
+		}
+
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"healthy","service":"api-gateway"}`))
 	})
@@ -161,7 +205,84 @@ func main() {
 
 // ReverseProxy handles routing requests to backend services
 type ReverseProxy struct {
-	routes map[string]string
+	routes       map[string]string
+	healthStatus map[string]bool // Tracks health status of each backend service
+	healthMutex  sync.RWMutex
+}
+
+// initHealthChecker starts background health checks for all backend services
+func (p *ReverseProxy) initHealthChecker() {
+	p.healthStatus = make(map[string]bool)
+	
+	// Start health checking goroutine
+	go func() {
+		ticker := time.NewTicker(10 * time.Second) // Check every 10 seconds
+		defer ticker.Stop()
+		
+		for range ticker.C {
+			p.checkAllServicesHealth()
+		}
+	}()
+	
+	// Do initial health check
+	p.checkAllServicesHealth()
+}
+
+// checkAllServicesHealth checks health of all backend services
+func (p *ReverseProxy) checkAllServicesHealth() {
+	for _, targetURL := range p.routes {
+		// Extract service URL (e.g., "http://auth-service:3002" -> "http://auth-service:3002/health")
+		target, err := url.Parse(targetURL)
+		if err != nil {
+			continue
+		}
+		
+		healthURL := fmt.Sprintf("%s://%s/health", target.Scheme, target.Host)
+		isHealthy := p.checkServiceHealth(healthURL)
+		
+		p.healthMutex.Lock()
+		p.healthStatus[targetURL] = isHealthy
+		p.healthMutex.Unlock()
+		
+		if !isHealthy {
+			logger.Warn("[API Gateway] Service %s is unhealthy", targetURL)
+		}
+	}
+}
+
+// checkServiceHealth checks if a service is healthy by calling its /health endpoint
+func (p *ReverseProxy) checkServiceHealth(healthURL string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
+	if err != nil {
+		return false
+	}
+	
+	client := &http.Client{
+		Timeout: 3 * time.Second,
+	}
+	
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	
+	return resp.StatusCode == http.StatusOK
+}
+
+// isServiceHealthy checks if a service is currently healthy
+func (p *ReverseProxy) isServiceHealthy(targetURL string) bool {
+	p.healthMutex.RLock()
+	defer p.healthMutex.RUnlock()
+	
+	// Default to healthy if we haven't checked yet (optimistic)
+	if healthy, exists := p.healthStatus[targetURL]; exists {
+		return healthy
+	}
+	return true // Assume healthy until we check
 }
 
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -176,6 +297,15 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if targetURL == "" {
 		http.NotFound(w, r)
+		return
+	}
+
+	// Check if service is healthy before routing
+	if !p.isServiceHealthy(targetURL) {
+		logger.Warn("[API Gateway] Service %s is unhealthy, returning 503", targetURL)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"error":"service_unavailable","message":"Backend service is currently unavailable"}`))
 		return
 	}
 
