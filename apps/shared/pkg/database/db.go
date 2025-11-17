@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -111,6 +112,16 @@ func InitDatabase() error {
 		host, port, user, password, dbname)
 
 	logger.Info("Attempting to connect to database at %s:%s (database: %s, user: %s)", host, port, dbname, user)
+	
+	// Diagnostic: Log network information for troubleshooting worker node connectivity
+	if host != "localhost" && host != "127.0.0.1" {
+		logger.Debug("[DB] Resolving database hostname: %s", host)
+		if addrs, err := net.LookupHost(host); err == nil {
+			logger.Debug("[DB] Database hostname resolves to: %v", addrs)
+		} else {
+			logger.Warn("[DB] Failed to resolve database hostname %s: %v", host, err)
+		}
+	}
 
 	// Retry database connection with exponential backoff
 	// This handles cases where DNS resolution isn't ready yet (common in Docker Swarm)
