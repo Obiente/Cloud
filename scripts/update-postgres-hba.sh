@@ -57,25 +57,25 @@ fi
 # Get database user from service environment (check common-database anchor)
 DB_USER=""
 if echo "$SERVICE_ENV" | grep -q "^${DB_USER_ENV}="; then
-  DB_USER=$(echo "$SERVICE_ENV" | grep "^${DB_USER_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
+  DB_USER=$(echo "$SERVICE_ENV" | grep "^${DB_USER_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
 elif echo "$SERVICE_ENV" | grep -q "^${FALLBACK_USER_ENV}="; then
-  DB_USER=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_USER_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
+  DB_USER=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_USER_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
 fi
 
 # Get database password
 DB_PASSWORD=""
 if echo "$SERVICE_ENV" | grep -q "^${DB_PASSWORD_ENV}="; then
-  DB_PASSWORD=$(echo "$SERVICE_ENV" | grep "^${DB_PASSWORD_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
+  DB_PASSWORD=$(echo "$SERVICE_ENV" | grep "^${DB_PASSWORD_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
 elif echo "$SERVICE_ENV" | grep -q "^${FALLBACK_PASSWORD_ENV}="; then
-  DB_PASSWORD=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_PASSWORD_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
+  DB_PASSWORD=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_PASSWORD_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
 fi
 
 # Get database name
 DB_NAME=""
 if echo "$SERVICE_ENV" | grep -q "^${DB_NAME_ENV}="; then
-  DB_NAME=$(echo "$SERVICE_ENV" | grep "^${DB_NAME_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
+  DB_NAME=$(echo "$SERVICE_ENV" | grep "^${DB_NAME_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
 elif echo "$SERVICE_ENV" | grep -q "^${FALLBACK_DB_ENV}="; then
-  DB_NAME=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_DB_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
+  DB_NAME=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_DB_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
 fi
 
 # Fallback to defaults if not found
@@ -86,9 +86,9 @@ DB_NAME="${DB_NAME:-obiente}"
 # Get allowed hosts from service environment
 ALLOWED_HOSTS=""
 if echo "$SERVICE_ENV" | grep -q "^${ALLOWED_HOSTS_ENV}="; then
-  ALLOWED_HOSTS=$(echo "$SERVICE_ENV" | grep "^${ALLOWED_HOSTS_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
+  ALLOWED_HOSTS=$(echo "$SERVICE_ENV" | grep "^${ALLOWED_HOSTS_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
 elif [ -n "$FALLBACK_ENV" ] && echo "$SERVICE_ENV" | grep -q "^${FALLBACK_ENV}="; then
-  ALLOWED_HOSTS=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
+  ALLOWED_HOSTS=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_ENV}=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs)
 fi
 
 # Also check current environment (in case set locally)
