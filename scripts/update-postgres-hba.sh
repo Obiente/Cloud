@@ -30,18 +30,60 @@ fi
 echo "✅ Found container: ${CONTAINER_ID:0:12}"
 echo ""
 
-# Get environment variable from the service
+# Get environment variables from the service
+SERVICE_ENV=$(docker service inspect "$FULL_SERVICE_NAME" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null || echo "")
+
+# Extract database user and password from service environment
 if [ "$SERVICE_NAME" = "timescaledb" ]; then
   ALLOWED_HOSTS_ENV="METRICS_DB_ALLOWED_HOSTS"
   FALLBACK_ENV="POSTGRES_ALLOWED_HOSTS"
+  DB_USER_ENV="METRICS_DB_USER"
+  DB_PASSWORD_ENV="METRICS_DB_PASSWORD"
+  DB_NAME_ENV="METRICS_DB_NAME"
+  FALLBACK_USER_ENV="POSTGRES_USER"
+  FALLBACK_PASSWORD_ENV="POSTGRES_PASSWORD"
+  FALLBACK_DB_ENV="POSTGRES_DB"
 else
   ALLOWED_HOSTS_ENV="POSTGRES_ALLOWED_HOSTS"
   FALLBACK_ENV=""
+  DB_USER_ENV="DB_USER"
+  DB_PASSWORD_ENV="DB_PASSWORD"
+  DB_NAME_ENV="DB_NAME"
+  FALLBACK_USER_ENV="POSTGRES_USER"
+  FALLBACK_PASSWORD_ENV="POSTGRES_PASSWORD"
+  FALLBACK_DB_ENV="POSTGRES_DB"
 fi
 
-# Get allowed hosts from service environment
-SERVICE_ENV=$(docker service inspect "$FULL_SERVICE_NAME" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null || echo "")
+# Get database user from service environment (check common-database anchor)
+DB_USER=""
+if echo "$SERVICE_ENV" | grep -q "^${DB_USER_ENV}="; then
+  DB_USER=$(echo "$SERVICE_ENV" | grep "^${DB_USER_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
+elif echo "$SERVICE_ENV" | grep -q "^${FALLBACK_USER_ENV}="; then
+  DB_USER=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_USER_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
+fi
 
+# Get database password
+DB_PASSWORD=""
+if echo "$SERVICE_ENV" | grep -q "^${DB_PASSWORD_ENV}="; then
+  DB_PASSWORD=$(echo "$SERVICE_ENV" | grep "^${DB_PASSWORD_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
+elif echo "$SERVICE_ENV" | grep -q "^${FALLBACK_PASSWORD_ENV}="; then
+  DB_PASSWORD=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_PASSWORD_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
+fi
+
+# Get database name
+DB_NAME=""
+if echo "$SERVICE_ENV" | grep -q "^${DB_NAME_ENV}="; then
+  DB_NAME=$(echo "$SERVICE_ENV" | grep "^${DB_NAME_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
+elif echo "$SERVICE_ENV" | grep -q "^${FALLBACK_DB_ENV}="; then
+  DB_NAME=$(echo "$SERVICE_ENV" | grep "^${FALLBACK_DB_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
+fi
+
+# Fallback to defaults if not found
+DB_USER="${DB_USER:-obiente_postgres}"
+DB_PASSWORD="${DB_PASSWORD:-obiente_postgres}"
+DB_NAME="${DB_NAME:-obiente}"
+
+# Get allowed hosts from service environment
 ALLOWED_HOSTS=""
 if echo "$SERVICE_ENV" | grep -q "^${ALLOWED_HOSTS_ENV}="; then
   ALLOWED_HOSTS=$(echo "$SERVICE_ENV" | grep "^${ALLOWED_HOSTS_ENV}=" | cut -d'=' -f2- | tr -d '\n\r')
@@ -57,6 +99,29 @@ if [ -z "$ALLOWED_HOSTS" ]; then
     ALLOWED_HOSTS="${POSTGRES_ALLOWED_HOSTS:-}"
   fi
 fi
+
+echo "📋 Database configuration:"
+echo "   User: $DB_USER"
+echo "   Database: $DB_NAME"
+echo ""
+
+# Ensure database user exists and has correct password
+echo "🔧 Ensuring database user '$DB_USER' exists..."
+USER_EXISTS=$(docker exec "$CONTAINER_ID" psql -U postgres -d postgres -t -c "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER';" 2>/dev/null | tr -d ' \n\r' || echo "")
+
+if [ "$USER_EXISTS" = "1" ]; then
+  echo "   ✅ User '$DB_USER' exists"
+  echo "   Updating password..."
+  docker exec "$CONTAINER_ID" psql -U postgres -d postgres -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || true
+  echo "   ✅ Password updated"
+else
+  echo "   Creating user '$DB_USER'..."
+  docker exec "$CONTAINER_ID" psql -U postgres -d postgres -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD' CREATEDB SUPERUSER;" 2>/dev/null || true
+  docker exec "$CONTAINER_ID" psql -U postgres -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" 2>/dev/null || true
+  echo "   ✅ User '$DB_USER' created"
+fi
+
+echo ""
 
 if [ -z "$ALLOWED_HOSTS" ]; then
   echo "⚠️  No allowed hosts configured (${ALLOWED_HOSTS_ENV} not set)"
