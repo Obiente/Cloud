@@ -14,6 +14,14 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-obiente_postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-obiente_postgres}
       POSTGRES_DB: ${POSTGRES_DB:-obiente}
+      # Configure PostgreSQL to listen on all interfaces (required for Docker Swarm overlay network)
+      POSTGRES_HOST_AUTH_METHOD: md5
+    command:
+      - postgres
+      - -c
+      - listen_addresses=*
+      - -c
+      - max_connections=200
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -44,6 +52,14 @@ services:
       POSTGRES_USER: ${METRICS_DB_USER:-obiente_postgres}
       POSTGRES_PASSWORD: ${METRICS_DB_PASSWORD:-obiente_postgres}
       POSTGRES_DB: ${METRICS_DB_NAME:-obiente_metrics}
+      # Configure PostgreSQL to listen on all interfaces (required for Docker Swarm overlay network)
+      POSTGRES_HOST_AUTH_METHOD: md5
+    command:
+      - postgres
+      - -c
+      - listen_addresses=*
+      - -c
+      - max_connections=200
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
     healthcheck:
