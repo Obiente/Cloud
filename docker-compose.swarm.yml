@@ -16,6 +16,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-obiente}
       # Configure PostgreSQL to listen on all interfaces (required for Docker Swarm overlay network)
       POSTGRES_HOST_AUTH_METHOD: md5
+      # Overlay network subnet for pg_hba.conf configuration
+      OVERLAY_SUBNET: ${OVERLAY_SUBNET:-10.15.3.0/24}
+    # Use custom entrypoint that configures pg_hba.conf properly
+    entrypoint: ["/bin/sh", "/docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh"]
     command:
       - postgres
       - -c
@@ -24,6 +28,10 @@ services:
       - max_connections=200
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Mount init script for new database initialization (standard PostgreSQL mechanism)
+      - ./scripts/internal/postgres-init-hba.sh:/docker-entrypoint-initdb.d/init-hba.sh:ro
+      # Mount entrypoint wrapper for existing databases
+      - ./scripts/internal/docker-entrypoint-postgres.sh:/docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-obiente_postgres} -d ${POSTGRES_DB:-obiente}"]
       interval: 10s
@@ -54,6 +62,10 @@ services:
       POSTGRES_DB: ${METRICS_DB_NAME:-obiente_metrics}
       # Configure PostgreSQL to listen on all interfaces (required for Docker Swarm overlay network)
       POSTGRES_HOST_AUTH_METHOD: md5
+      # Overlay network subnet for pg_hba.conf configuration
+      OVERLAY_SUBNET: ${OVERLAY_SUBNET:-10.15.3.0/24}
+    # Use custom entrypoint that configures pg_hba.conf properly
+    entrypoint: ["/bin/sh", "/docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh"]
     command:
       - postgres
       - -c
@@ -62,6 +74,10 @@ services:
       - max_connections=200
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
+      # Mount init script for new database initialization (standard PostgreSQL mechanism)
+      - ./scripts/internal/postgres-init-hba.sh:/docker-entrypoint-initdb.d/init-hba.sh:ro
+      # Mount entrypoint wrapper for existing databases
+      - ./scripts/internal/docker-entrypoint-postgres.sh:/docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${METRICS_DB_USER:-obiente_postgres} -d ${METRICS_DB_NAME:-obiente_metrics}"]
       interval: 10s
@@ -993,6 +1009,9 @@ networks:
     attachable: true
     driver_opts:
       encrypted: "true"
+    ipam:
+      config:
+        - subnet: 10.15.3.0/24
     # Docker Swarm will automatically create this network when the stack is deployed
     # Network name will be: {stack-name}_obiente-network (e.g., obiente_obiente-network)
     # Services on this network can resolve each other by service name (e.g., "postgres")
