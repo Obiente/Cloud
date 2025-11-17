@@ -18,32 +18,12 @@ services:
       POSTGRES_HOST_AUTH_METHOD: md5
       # Overlay network subnet for pg_hba.conf configuration
       OVERLAY_SUBNET: ${OVERLAY_SUBNET:-10.15.3.0/24}
-    entrypoint: ["/bin/bash", "-c"]
     command:
-      - |
-        # Ensure pg_hba.conf is always applied on container start
-        PGDATA=${PGDATA:-/var/lib/postgresql/data}
-        HBA_SOURCE="/docker-entrypoint-initdb.d/pg_hba.conf"
-        HBA_TARGET="$PGDATA/pg_hba.conf"
-        
-        # Copy pg_hba.conf if source exists and target doesn't match
-        if [ -f "$HBA_SOURCE" ]; then
-          if [ ! -f "$HBA_TARGET" ] || ! cmp -s "$HBA_SOURCE" "$HBA_TARGET"; then
-            echo "📋 Applying custom pg_hba.conf for overlay network (10.15.3.0/24)..."
-            cp "$HBA_SOURCE" "$HBA_TARGET"
-            chmod 0600 "$HBA_TARGET"
-            chown postgres:postgres "$HBA_TARGET" 2>/dev/null || true
-            echo "✅ pg_hba.conf updated with overlay network rule"
-          fi
-        fi
-        
-        # Run the init script if database is being initialized
-        if [ -f "/docker-entrypoint-initdb.d/01-init-pg-hba.sh" ]; then
-          /docker-entrypoint-initdb.d/01-init-pg-hba.sh || true
-        fi
-        
-        # Start PostgreSQL with original entrypoint
-        exec /usr/local/bin/docker-entrypoint.sh postgres -c listen_addresses=* -c max_connections=200
+      - postgres
+      - -c
+      - listen_addresses=*
+      - -c
+      - max_connections=200
     volumes:
       - postgres_data:/var/lib/postgresql/data
     configs:
@@ -86,32 +66,12 @@ services:
       POSTGRES_HOST_AUTH_METHOD: md5
       # Overlay network subnet for pg_hba.conf configuration
       OVERLAY_SUBNET: ${OVERLAY_SUBNET:-10.15.3.0/24}
-    entrypoint: ["/bin/bash", "-c"]
     command:
-      - |
-        # Ensure pg_hba.conf is always applied on container start
-        PGDATA=${PGDATA:-/var/lib/postgresql/data}
-        HBA_SOURCE="/docker-entrypoint-initdb.d/pg_hba.conf"
-        HBA_TARGET="$PGDATA/pg_hba.conf"
-        
-        # Copy pg_hba.conf if source exists and target doesn't match
-        if [ -f "$HBA_SOURCE" ]; then
-          if [ ! -f "$HBA_TARGET" ] || ! cmp -s "$HBA_SOURCE" "$HBA_TARGET"; then
-            echo "📋 Applying custom pg_hba.conf for overlay network (10.15.3.0/24)..."
-            cp "$HBA_SOURCE" "$HBA_TARGET"
-            chmod 0600 "$HBA_TARGET"
-            chown postgres:postgres "$HBA_TARGET" 2>/dev/null || true
-            echo "✅ pg_hba.conf updated with overlay network rule"
-          fi
-        fi
-        
-        # Run the init script if database is being initialized
-        if [ -f "/docker-entrypoint-initdb.d/01-init-pg-hba.sh" ]; then
-          /docker-entrypoint-initdb.d/01-init-pg-hba.sh || true
-        fi
-        
-        # Start PostgreSQL with original entrypoint
-        exec /usr/local/bin/docker-entrypoint.sh postgres -c listen_addresses=* -c max_connections=200
+      - postgres
+      - -c
+      - listen_addresses=*
+      - -c
+      - max_connections=200
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
     configs:
