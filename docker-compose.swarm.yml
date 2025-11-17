@@ -203,9 +203,7 @@ services:
     image: ghcr.io/obiente/cloud-api-gateway:latest
     environment:
       PORT: 3001
-      <<: [*common-auth]
-      USE_TRAEFIK_ROUTING: ${USE_TRAEFIK_ROUTING:-false}
-      SKIP_TLS_VERIFY: ${SKIP_TLS_VERIFY:-false}
+      <<: [*common-auth, *common-api-gateway]
     ports:
       - target: 3001
         published: 3001

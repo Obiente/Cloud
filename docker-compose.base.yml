@@ -75,11 +75,15 @@ x-common-redis: &common-redis
   # Format: redis://:password@host:port (if password set) or redis://host:port (if no password)
   REDIS_URL: ${REDIS_URL:-}
 
+x-common-api-gateway: &common-api-gateway
+  DOMAIN: ${DOMAIN:-localhost}
+  USE_TRAEFIK_ROUTING: ${USE_TRAEFIK_ROUTING:-false}
+  SKIP_TLS_VERIFY: ${SKIP_TLS_VERIFY:-false}
+
 x-common-orchestrator: &common-orchestrator
   DOMAIN: ${DOMAIN:-localhost}
   # Service routing mode: "internal" (default, direct service-to-service) or "traefik" (via Traefik with HTTPS)
   # When USE_TRAEFIK_ROUTING=true, API gateway routes to services via Traefik using HTTPS
-  USE_TRAEFIK_ROUTING: ${USE_TRAEFIK_ROUTING:-false}
   ACME_EMAIL: ${ACME_EMAIL:-}
   REGISTRY_URL: ${REGISTRY_URL:-}
   REGISTRY_USERNAME: ${REGISTRY_USERNAME:-}
