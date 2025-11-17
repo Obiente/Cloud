@@ -83,9 +83,11 @@ services:
     container_name: obiente-auth-service
     environment:
       PORT: 3002
-      <<: [*common-database, *common-auth, *common-dashboard]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-dashboard]
     depends_on:
       postgres:
+        condition: service_healthy
+      timescaledb:
         condition: service_healthy
     dns_search: []
     networks:

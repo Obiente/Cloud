@@ -159,7 +159,7 @@ services:
     image: ghcr.io/obiente/cloud-auth-service:latest
     environment:
       PORT: 3002
-      <<: [*common-database, *common-auth, *common-dashboard]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-dashboard]
     deploy:
       mode: replicated
       replicas: 2
