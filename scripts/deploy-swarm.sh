@@ -224,6 +224,26 @@ if [ ${#MISSING_CONFIGS[@]} -gt 0 ]; then
 fi
 echo "✅ All config files found"
 
+# Remove old Docker configs if they exist (Docker configs can't be updated, only labels)
+# We need to remove them first, then they'll be recreated with new content
+echo ""
+echo "🔧 Checking for existing Docker configs..."
+CONFIG_NAMES=(
+  "${STACK_NAME}_postgres_init_hba"
+  "${STACK_NAME}_postgres_entrypoint_wrapper"
+)
+for config_name in "${CONFIG_NAMES[@]}"; do
+  if docker config ls --format "{{.Name}}" | grep -q "^${config_name}$"; then
+    echo "   ⚠️  Removing existing config: $config_name"
+    # Check if config is in use by any services
+    if docker service ls --format "{{.Name}}" | xargs -I {} docker service inspect {} --format '{{range .Spec.TaskTemplate.ContainerSpec.Configs}}{{.ConfigName}}{{end}}' 2>/dev/null | grep -q "^${config_name}$"; then
+      echo "   ⚠️  Config is in use by services. Services will be updated during deployment."
+    fi
+    docker config rm "$config_name" 2>/dev/null || echo "   ⚠️  Could not remove config (may be in use, will be recreated)"
+  fi
+done
+echo "✅ Config cleanup complete"
+
 # Note: We no longer pre-create the network as external
 # External networks break DNS resolution in Docker Swarm
 # Docker Swarm will create the network automatically when the stack deploys

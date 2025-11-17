@@ -15,8 +15,8 @@ x-common-database: &common-database
 x-common-metrics-db: &common-metrics-db
   METRICS_DB_HOST: timescaledb
   METRICS_DB_PORT: 5432
-  METRICS_DB_USER: ${METRICS_DB_USER:-postgres}
-  METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-postgres}
+  METRICS_DB_USER: ${METRICS_DB_USER:-obiente_postgres}
+  METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-obiente_postgres}
   METRICS_DB_NAME: ${METRICS_DB_NAME:-obiente_metrics}
 
 x-common-auth: &common-auth
