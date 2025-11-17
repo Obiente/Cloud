@@ -184,7 +184,6 @@ const client = useConnectClient(SuperadminService);
 const userId = computed(() => route.params.userId as string);
 const user = ref<any>(null);
 const organizations = ref<any[]>([]);
-const loading = ref(false);
 
 const orgColumns = [
   { key: "organization", label: "Organization", defaultWidth: 250, minWidth: 200 },
