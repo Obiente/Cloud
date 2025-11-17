@@ -17,8 +17,9 @@ if [ ! -f "$COMPOSE_FILE" ]; then
     exit 1
 fi
 
-# Create temporary merged file
+# Create temporary merged file in /tmp
 TMP_FILE=$(mktemp)
+PROJECT_DIR="$(pwd)"
 {
     cat "$BASE_FILE"
     echo ""
@@ -27,8 +28,9 @@ TMP_FILE=$(mktemp)
 } > "$TMP_FILE"
 
 # Run docker compose with merged file
+# Use --project-directory to ensure relative paths resolve correctly
 shift || true
-docker compose -f "$TMP_FILE" "$@"
+docker compose --project-directory "$PROJECT_DIR" -f "$TMP_FILE" "$@"
 EXIT_CODE=$?
 
 # Cleanup
