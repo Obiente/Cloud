@@ -116,15 +116,34 @@ for host in "${HOSTS[@]}"; do
   fi
   
   # Add rule after the overlay network rule (or at the end if not found)
+  # Use awk for reliable insertion (works in Alpine Linux)
   if docker exec "$CONTAINER_ID" grep -qE "^host\s+all\s+all\s+10\.15\.3\.0/24\s+md5" "$HBA_TARGET" 2>/dev/null; then
-    # Insert after overlay network rule
-    docker exec "$CONTAINER_ID" sed -i "/^host\s+all\s+all\s+10\.15\.3\.0\/24\s+md5/a host    all    all    $normalized_host    md5" "$HBA_TARGET"
+    # Insert after overlay network rule using awk
+    docker exec "$CONTAINER_ID" sh -c "
+      awk -v new_rule=\"host    all    all    $normalized_host    md5\" '
+        /^host[[:space:]]+all[[:space:]]+all[[:space:]]+10\\.15\\.3\\.0\\/24[[:space:]]+md5/ {
+          print
+          print new_rule
+          next
+        }
+        {print}
+      ' $HBA_TARGET > $HBA_TARGET.tmp && \
+      mv $HBA_TARGET.tmp $HBA_TARGET && \
+      chmod 0600 $HBA_TARGET && \
+      chown postgres:postgres $HBA_TARGET
+    "
   else
     # Append at the end
-    docker exec "$CONTAINER_ID" sh -c "echo 'host    all    all    $normalized_host    md5' >> $HBA_TARGET"
+    docker exec "$CONTAINER_ID" sh -c "echo 'host    all    all    $normalized_host    md5' >> $HBA_TARGET && chmod 0600 $HBA_TARGET && chown postgres:postgres $HBA_TARGET"
   fi
   
-  echo "   ✅ Added rule for $normalized_host"
+  # Verify the rule was actually added
+  if docker exec "$CONTAINER_ID" grep -qE "^host\s+all\s+all\s+${escaped_host}\s+md5" "$HBA_TARGET" 2>/dev/null; then
+    echo "   ✅ Added rule for $normalized_host"
+  else
+    echo "   ❌ Failed to add rule for $normalized_host (check container logs)"
+    echo "      Attempted to add: host    all    all    $normalized_host    md5"
+  fi
 done
 
 echo ""
@@ -147,6 +166,10 @@ fi
 echo ""
 echo "✅ Update complete!"
 echo ""
-echo "📝 To verify, check pg_hba.conf:"
-echo "   docker exec $CONTAINER_ID cat $HBA_TARGET | grep -E '^host.*all.*all'"
+echo "📝 Verifying pg_hba.conf rules:"
+echo "   Allowed host rules:"
+docker exec "$CONTAINER_ID" grep -E '^host[[:space:]]+all[[:space:]]+all' "$HBA_TARGET" 2>/dev/null | grep -v '127.0.0.1\|::1' || echo "   (no remote host rules found)"
+echo ""
+echo "   To view full file:"
+echo "   docker exec $CONTAINER_ID cat $HBA_TARGET"
 
