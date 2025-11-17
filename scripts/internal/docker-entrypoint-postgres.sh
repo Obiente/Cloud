@@ -78,6 +78,22 @@ configure_postgresql_conf() {
 # Configure postgresql.conf before starting PostgreSQL
 configure_postgresql_conf
 
+# Ensure listen_addresses is in the command arguments if not already present
+# This ensures it's set even if postgresql.conf doesn't have it
+HAS_LISTEN_ARG=false
+for arg in "$@"; do
+  if echo "$arg" | grep -qE "listen_addresses"; then
+    HAS_LISTEN_ARG=true
+    break
+  fi
+done
+
+# If not in arguments, add it
+if [ "$HAS_LISTEN_ARG" = false ]; then
+  echo "📝 Adding listen_addresses=* to command arguments..."
+  set -- "$@" -c "listen_addresses=*"
+fi
+
 # Call the original PostgreSQL entrypoint
 # This will initialize the database if needed, then start PostgreSQL
 exec /usr/local/bin/docker-entrypoint.sh "$@"
