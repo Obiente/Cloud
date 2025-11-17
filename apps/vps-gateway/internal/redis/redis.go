@@ -7,8 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"vps-gateway/internal/logger"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type Client struct {
@@ -17,9 +18,28 @@ type Client struct {
 
 func NewClient() (*Client, error) {
 	redisURL := os.Getenv("REDIS_URL")
+
+	// If REDIS_URL is not set, construct it from REDIS_HOST, REDIS_PORT, and REDIS_PASSWORD
 	if redisURL == "" {
-		// Default to localhost if not set
-		redisURL = "redis://localhost:6379"
+		host := os.Getenv("REDIS_HOST")
+		if host == "" {
+			host = "redis"
+		}
+
+		port := os.Getenv("REDIS_PORT")
+		if port == "" {
+			port = "6379"
+		}
+
+		password := os.Getenv("REDIS_PASSWORD")
+
+		// Construct Redis URL with password if set
+		// Format: redis://:password@host:port or redis://host:port
+		if password != "" {
+			redisURL = fmt.Sprintf("redis://:%s@%s:%s", password, host, port)
+		} else {
+			redisURL = fmt.Sprintf("redis://%s:%s", host, port)
+		}
 	}
 
 	opt, err := redis.ParseURL(redisURL)
@@ -75,4 +95,3 @@ func (c *Client) Close() error {
 	}
 	return nil
 }
-

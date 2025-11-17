@@ -197,9 +197,10 @@ DB_LOG_LEVEL=debug
 | ------------------- | ------ | ------- | -------- |
 | `REDIS_HOST`        | string | `redis` | ❌       |
 | `REDIS_PORT`        | number | `6379`  | ❌       |
+| `REDIS_PASSWORD`    | string | -       | ❌       | Redis password (required if port is exposed) |
 | `REDIS_EXPOSE_PORT` | number | `6379`  | ❌       | Port to expose Redis on host (default: 6379, localhost only) |
 | `REDIS_PORT_MODE`   | string | `host`  | ❌       | Port mode: `host` (default, for localhost binding) or `ingress` |
-| `REDIS_URL`         | string | -       | ❌       | Full Redis URL (constructed from REDIS_HOST and REDIS_PORT if not set) |
+| `REDIS_URL`         | string | -       | ❌       | Full Redis URL (constructed from REDIS_HOST, REDIS_PORT, and REDIS_PASSWORD if not set) |
 
 **Redis Host Configuration (`REDIS_HOST`):**
 
@@ -227,18 +228,38 @@ REDIS_HOST=redis.example.netbird
 REDIS_PORT=6379
 ```
 
-**Redis URL (`REDIS_URL`):**
+**Redis Password (`REDIS_PASSWORD`):**
 
-If `REDIS_URL` is not explicitly set, it is automatically constructed from `REDIS_HOST` and `REDIS_PORT`:
+**⚠️ Security Note:** If Redis port is exposed (via `REDIS_EXPOSE_PORT`), you **must** set a password to secure Redis. Without a password, Redis will be accessible to anyone who can reach the exposed port.
+
+**Examples:**
 
 ```bash
-# Automatically constructed (default)
+# Set a strong password (required if port is exposed)
+REDIS_PASSWORD=your_secure_random_password_here
+
+# Generate a secure password
+openssl rand -base64 32
+```
+
+**Redis URL (`REDIS_URL`):**
+
+If `REDIS_URL` is not explicitly set, it is automatically constructed from `REDIS_HOST`, `REDIS_PORT`, and `REDIS_PASSWORD`:
+
+```bash
+# Automatically constructed (default, no password)
 REDIS_HOST=redis
 REDIS_PORT=6379
 # Results in: redis://redis:6379
 
-# Explicit URL (overrides REDIS_HOST and REDIS_PORT)
-REDIS_URL=redis://redis.example.netbird:6379
+# Automatically constructed (with password)
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=my_secure_password
+# Results in: redis://:my_secure_password@redis:6379
+
+# Explicit URL (overrides REDIS_HOST, REDIS_PORT, and REDIS_PASSWORD)
+REDIS_URL=redis://:password@redis.example.netbird:6379
 ```
 
 **Redis Port Exposure (`REDIS_EXPOSE_PORT`):**
