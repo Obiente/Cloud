@@ -412,168 +412,6 @@ services:
       - obiente-network
 
   # ============================================================================
-  # OBIENTE CLOUD API SERVICES
-  # ============================================================================
-
-  # Go API - ConnectRPC service for deployments
-  api:
-    image: ${API_IMAGE:-ghcr.io/obiente/cloud-api:latest}
-    # Build section removed - using image from GitHub Container Registry
-    # To build locally, set API_IMAGE=obiente/cloud-api:latest and uncomment build section below
-    # build:
-    #   context: .
-    #   dockerfile: apps/api/Dockerfile
-    environment:
-      PORT: ${GO_API_PORT:-3001}
-      # Connect to PostgreSQL via PgPool
-      DB_HOST: pgpool
-      DB_PORT: 5432
-      DB_USER: ${POSTGRES_USER:-obiente_postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-obiente_postgres}
-      DB_NAME: ${POSTGRES_DB:-obiente}
-      # Metrics database (TimescaleDB via PgPool)
-      METRICS_DB_HOST: metrics-pgpool
-      METRICS_DB_PORT: 5432
-      METRICS_DB_USER: ${METRICS_DB_USER:-obiente_postgres}
-      METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-obiente_postgres}
-      METRICS_DB_NAME: ${METRICS_DB_NAME:-obiente_metrics}
-      METRICS_COLLECTION_INTERVAL: ${METRICS_COLLECTION_INTERVAL:-5s}
-      METRICS_STORAGE_INTERVAL: ${METRICS_STORAGE_INTERVAL:-60s}
-      METRICS_LIVE_RETENTION: ${METRICS_LIVE_RETENTION:-5m}
-      METRICS_MAX_WORKERS: ${METRICS_MAX_WORKERS:-50}
-      METRICS_BATCH_SIZE: ${METRICS_BATCH_SIZE:-100}
-      METRICS_MAX_LIVE_PER_DEPLOYMENT: ${METRICS_MAX_LIVE_PER_DEPLOYMENT:-1000}
-      METRICS_MAX_PREVIOUS_STATS: ${METRICS_MAX_PREVIOUS_STATS:-10000}
-      METRICS_DOCKER_API_TIMEOUT: ${METRICS_DOCKER_API_TIMEOUT:-10s}
-      METRICS_DOCKER_API_RETRY_MAX: ${METRICS_DOCKER_API_RETRY_MAX:-3}
-      METRICS_DOCKER_API_RETRY_BACKOFF_INITIAL: ${METRICS_DOCKER_API_RETRY_BACKOFF_INITIAL:-1s}
-      METRICS_DOCKER_API_RETRY_BACKOFF_MAX: ${METRICS_DOCKER_API_RETRY_BACKOFF_MAX:-30s}
-      METRICS_CIRCUIT_BREAKER_FAILURE_THRESHOLD: ${METRICS_CIRCUIT_BREAKER_FAILURE_THRESHOLD:-5}
-      METRICS_CIRCUIT_BREAKER_COOLDOWN: ${METRICS_CIRCUIT_BREAKER_COOLDOWN:-1m}
-      METRICS_CIRCUIT_BREAKER_HALFOPEN_MAX: ${METRICS_CIRCUIT_BREAKER_HALFOPEN_MAX:-3}
-      METRICS_HEALTH_CHECK_INTERVAL: ${METRICS_HEALTH_CHECK_INTERVAL:-30s}
-      METRICS_HEALTH_CHECK_FAILURE_THRESHOLD: ${METRICS_HEALTH_CHECK_FAILURE_THRESHOLD:-3}
-      METRICS_SUBSCRIBER_BUFFER_SIZE: ${METRICS_SUBSCRIBER_BUFFER_SIZE:-100}
-      METRICS_SUBSCRIBER_SLOW_THRESHOLD: ${METRICS_SUBSCRIBER_SLOW_THRESHOLD:-5s}
-      METRICS_SUBSCRIBER_CLEANUP_INTERVAL: ${METRICS_SUBSCRIBER_CLEANUP_INTERVAL:-1m}
-      METRICS_RETRY_MAX_RETRIES: ${METRICS_RETRY_MAX_RETRIES:-5}
-      METRICS_RETRY_INTERVAL: ${METRICS_RETRY_INTERVAL:-1m}
-      METRICS_RETRY_MAX_QUEUE_SIZE: ${METRICS_RETRY_MAX_QUEUE_SIZE:-10000}
-      # Redis cluster endpoints
-      REDIS_CLUSTER_NODES: redis-1:6379,redis-2:6379,redis-3:6379
-      # Logging
-      LOG_LEVEL: ${LOG_LEVEL:-debug}
-      # CORS Configuration
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
-      # Authentication - Zitadel
-      ZITADEL_URL: ${ZITADEL_URL:-https://auth.obiente.cloud}
-      ZITADEL_CLIENT_ID: ${ZITADEL_CLIENT_ID:-}
-      ZITADEL_MANAGEMENT_TOKEN: ${ZITADEL_MANAGEMENT_TOKEN:-}
-      ZITADEL_ORGANIZATION_ID: ${ZITADEL_ORGANIZATION_ID:-}
-      DISABLE_AUTH: ${DISABLE_AUTH:-false}
-      SKIP_TLS_VERIFY: ${SKIP_TLS_VERIFY:-false}
-      SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
-      BILLING_ENABLED: ${BILLING_ENABLED:-true}
-      SELF_HOSTED: ${SELF_HOSTED:-false}
-      # Docker Swarm API
-      DOCKER_HOST: unix:///var/run/docker.sock
-      # Deployment tracking
-      NODE_ID: ${NODE_ID}
-      SWARM_MANAGER_URL: ${SWARM_MANAGER_URL}
-      # Pricing Configuration (optional - defaults are used if not set)
-      PRICING_CPU_COST_PER_CORE_SECOND: ${PRICING_CPU_COST_PER_CORE_SECOND:-0.000000761}
-      PRICING_MEMORY_COST_PER_BYTE_SECOND: ${PRICING_MEMORY_COST_PER_BYTE_SECOND:-0.000000000000001063}
-      PRICING_BANDWIDTH_COST_PER_BYTE: ${PRICING_BANDWIDTH_COST_PER_BYTE:-0.000000000009313}
-      PRICING_STORAGE_COST_PER_BYTE_MONTH: ${PRICING_STORAGE_COST_PER_BYTE_MONTH:-0.000000000186264}
-      # Stripe Payment Processing
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      # Dashboard URL for redirects (used by billing service and email notifications)
-      DASHBOARD_URL: ${DASHBOARD_URL:-https://obiente.cloud}
-      # Support email (optional)
-      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
-      # SMTP configuration for email delivery
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-}
-      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Obiente Cloud}
-      SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
-      SMTP_USE_STARTTLS: ${SMTP_USE_STARTTLS:-true}
-      SMTP_SKIP_TLS_VERIFY: ${SMTP_SKIP_TLS_VERIFY:-false}
-      SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-10}
-      SMTP_LOCAL_NAME: ${SMTP_LOCAL_NAME:-api.obiente.local}
-      # Swarm configuration - enable swarm features for HA swarm deployments
-      ENABLE_SWARM: ${ENABLE_SWARM:-true} # Set to 'true' to enable Docker Swarm features (default: true for HA swarm)
-      # Docker Registry authentication (required for pushing/pulling images)
-      REGISTRY_USERNAME: ${REGISTRY_USERNAME:-obiente}
-      REGISTRY_PASSWORD: ${REGISTRY_PASSWORD:-}
-      # Domain configuration for SSH proxy and API URLs
-      DOMAIN: ${DOMAIN:-obiente.cloud}
-    volumes:
-      # Mount Docker socket for managing deployments
-      - /var/run/docker.sock:/var/run/docker.sock
-      # Mount Docker volumes directory for named volumes (read-only)
-      - /var/lib/docker/volumes:/var/lib/docker/volumes:ro
-      # Mount custom safe directories for sanitized bind mounts
-      - /var/lib/obiente:/var/lib/obiente
-      - /var/obiente/tmp/obiente-volumes:/tmp/obiente-volumes
-      - /var/obiente/tmp/obiente-deployments:/tmp/obiente-deployments
-    depends_on:
-      - pgpool
-      - metrics-pgpool
-      - redis-1
-    stop_grace_period: 1h  # Allow 1 hour for SSH connections to close gracefully
-    # Note: Health check will fail when draining starts, so Swarm stops routing
-    # new connections but keeps container running until connections close
-    # SSH is now routed through Traefik, so we don't expose it directly
-    # ports:
-    #   - target: 2222
-    #     published: ${SSH_PROXY_PORT:-2222}
-    #     protocol: tcp
-    #     mode: ingress  # SSH proxy port (exposed directly, bypassing Traefik)
-    deploy:
-      mode: global # One instance per node
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: start-first
-        failure_action: rollback
-        monitor: 60s
-      rollback_config:
-        parallelism: 1
-        delay: 10s
-        order: start-first
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-      resources:
-        limits:
-          cpus: "4"
-          memory: 4G
-        reservations:
-          cpus: "2"
-          memory: 2G
-      labels:
-        - "cloud.obiente.service=api"
-        - "cloud.obiente.role=control-plane"
-        - "cloud.obiente.traefik=true"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -f http://localhost:${GO_API_PORT:-3001}/health || exit 1",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - obiente-network
-
-  # ============================================================================
   # SERVICE DISCOVERY & ROUTING
   # ============================================================================
 
@@ -665,101 +503,6 @@ services:
         - "traefik.tcp.routers.ssh.entrypoints=ssh"
         - "traefik.tcp.routers.ssh.service=ssh"
         - "traefik.tcp.services.ssh.loadbalancer.server.port=${SSH_PROXY_PORT:-2222}"
-    networks:
-      - obiente-network
-
-  # ============================================================================
-  # DNS SERVER
-  # ============================================================================
-
-  # DNS Server - Resolves *.my.obiente.cloud domains
-  # Configured to run on specific nodes using placement constraints
-  dns:
-    image: ${API_IMAGE:-ghcr.io/obiente/cloud-api:latest}
-    # Build section removed - using image from GitHub Container Registry
-    # To build locally, set API_IMAGE=obiente/cloud-api:latest and uncomment build section below
-    # build:
-    #   context: .
-    #   dockerfile: apps/api/Dockerfile
-    command: ["./dns-server"]
-    environment:
-      DB_HOST: pgpool
-      DB_PORT: 5432
-      DB_USER: ${POSTGRES_USER:-obiente_postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-obiente_postgres}
-      DB_NAME: ${POSTGRES_DB:-obiente}
-      TRAEFIK_IPS: ${TRAEFIK_IPS:-} # Format: "region1:ip1,ip2;region2:ip3,ip4"
-      DNS_IPS: ${DNS_IPS:-} # Comma-separated list of DNS server IPs
-      DNS_PORT: ${DNS_PORT:-53} # DNS server port (default: 53)
-      # VPS Configuration
-      VPS_REGIONS: ${VPS_REGIONS:-} # Format: "region1:Name 1;region2:Name 2" or simple "region1"
-      PROXMOX_API_URL: ${PROXMOX_API_URL:-}
-      PROXMOX_USERNAME: ${PROXMOX_USERNAME:-root@pam}
-      PROXMOX_PASSWORD: ${PROXMOX_PASSWORD:-}
-      PROXMOX_TOKEN_ID: ${PROXMOX_TOKEN_ID:-}
-      PROXMOX_TOKEN_SECRET: ${PROXMOX_TOKEN_SECRET:-}
-      PROXMOX_STORAGE_POOL: ${PROXMOX_STORAGE_POOL:-local-lvm}
-      PROXMOX_VM_ID_START: ${PROXMOX_VM_ID_START:-} # Starting VM ID range (e.g., 300)
-      PROXMOX_VLAN_ID: ${PROXMOX_VLAN_ID:-} # Optional VLAN tag for VM network isolation (e.g., 100)
-      PROXMOX_SSH_HOST: ${PROXMOX_SSH_HOST:-} # SSH host for snippet writing (defaults to PROXMOX_API_URL host)
-      PROXMOX_SSH_USER: ${PROXMOX_SSH_USER:-obiente-cloud} # SSH user for snippet writing
-      PROXMOX_SSH_KEY_PATH: ${PROXMOX_SSH_KEY_PATH:-} # Path to SSH private key file
-      PROXMOX_SSH_KEY_DATA: ${PROXMOX_SSH_KEY_DATA:-} # SSH private key content (raw or base64-encoded)
-      SSH_PROXY_PORT: ${SSH_PROXY_PORT:-2222}
-      # VPS Gateway Configuration (optional, for DHCP and SSH proxying)
-      VPS_GATEWAY_URL: ${VPS_GATEWAY_URL:-} # gRPC URL for vps-gateway service (e.g., http://vps-gateway:8080)
-      VPS_GATEWAY_API_SECRET: ${VPS_GATEWAY_API_SECRET:-} # Shared secret for authenticating with vps-gateway
-      VPS_GATEWAY_BRIDGE: ${VPS_GATEWAY_BRIDGE:-vmbr1} # Bridge name for gateway network (defaults to vmbr1)
-    ports:
-      - "${DNS_PORT:-53}:${DNS_PORT:-53}/udp"
-      - "${DNS_PORT:-53}:${DNS_PORT:-53}/tcp"
-    deploy:
-      # Use placement constraints to control which nodes run DNS
-      # By default, DNS runs on all nodes (global mode)
-      # To delegate DNS to specific nodes:
-      #   1. Set DNS_MODE=replicated in your .env file
-      #   2. Set DNS_REPLICAS to the number of DNS instances you want
-      #   3. Add node labels: docker node update --label-add dns.enabled=true <node-name>
-      #   4. Uncomment/modify the constraint below to restrict DNS to specific nodes
-      # Examples:
-      #   - node.labels.dns.enabled == true (only runs on nodes with dns.enabled=true)
-      #   - node.role == manager (only runs on manager nodes)
-      #   - node.labels.dns.enabled != false (runs on all nodes except those with dns.enabled=false)
-      # To disable DNS on specific nodes, label them: docker node update --label-add dns.enabled=false <node-name>
-      mode: ${DNS_MODE:-global} # Options: global (all nodes), replicated (specific nodes)
-      # replicas is only valid when mode is replicated
-      # When using replicated mode, set DNS_REPLICAS environment variable and uncomment the line below
-      # replicas: ${DNS_REPLICAS:-1} # Only used if mode is replicated
-      placement:
-        constraints:
-          # Uncomment and modify the constraint below to restrict DNS to specific nodes
-          # Example: Run only on nodes with dns.enabled=true label
-          # - node.labels.dns.enabled == true
-          # Example: Run only on manager nodes
-          # - node.role == manager
-          # Example: Run on all nodes except those with dns.enabled=false
-          # - node.labels.dns.enabled != false
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: start-first
-      resources:
-        limits:
-          cpus: "1"
-          memory: 512M
-        reservations:
-          cpus: "0.5"
-          memory: 256M
-    cap_add:
-      - NET_BIND_SERVICE
-    depends_on:
-      - pgpool
-    healthcheck:
-      test: ["CMD-SHELL", "if command -v nc >/dev/null 2>&1; then nc -z localhost 53 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 53 || exit 1; fi"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
     networks:
       - obiente-network
 
@@ -912,6 +655,644 @@ services:
         - "traefik.http.routers.registry.tls.certresolver=letsencrypt"
         - "traefik.http.routers.registry.service=registry"
         - "traefik.http.services.registry.loadbalancer.server.port=5000"
+    networks:
+      - obiente-network
+
+  # ============================================================================
+  # MICROSERVICES
+  # ============================================================================
+  # All functionality has been moved from the monolithic API to microservices
+  # API Gateway (port 3001) is the primary entry point and routes to microservices
+  # Note: In HA setup, services connect to pgpool/metrics-pgpool instead of direct postgres/timescaledb
+  # Note: Redis cluster connection - services should use redis-1, redis-2, or redis-3, or a Redis proxy
+
+  # API Gateway - Routes requests to all microservices
+  api-gateway:
+    image: ghcr.io/obiente/cloud-api-gateway:latest
+    environment:
+      PORT: 3001
+      <<: [*common-auth]
+    ports:
+      - target: 3001
+        published: 3001
+        protocol: tcp
+        mode: ingress
+    deploy:
+      mode: replicated
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.api-gateway.rule=Host(`api.${DOMAIN}`)"
+        - "traefik.http.routers.api-gateway.entrypoints=web"
+        - "traefik.http.routers.api-gateway.service=api-gateway"
+        - "traefik.http.services.api-gateway.loadbalancer.server.port=3001"
+        - "traefik.http.services.api-gateway.loadbalancer.passHostHeader=true"
+        - "traefik.http.routers.api-gateway-secure.rule=Host(`api.${DOMAIN}`)"
+        - "traefik.http.routers.api-gateway-secure.entrypoints=websecure"
+        - "traefik.http.routers.api-gateway-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.api-gateway-secure.service=api-gateway"
+        # SSH TCP routing through Traefik (handled by api-gateway)
+        - "traefik.tcp.routers.ssh.rule=HostSNI(`*`)"
+        - "traefik.tcp.routers.ssh.entrypoints=ssh"
+        - "traefik.tcp.routers.ssh.service=ssh"
+        - "traefik.tcp.services.ssh.loadbalancer.server.port=${SSH_PROXY_PORT:-2222}"
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3001 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3001 || exit 1; fi'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    dns_search: []
+    networks:
+      - obiente-network
+
+  # Auth Service - Microservice for authentication
+  auth-service:
+    image: ghcr.io/obiente/cloud-auth-service:latest
+    environment:
+      PORT: 3002
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-dashboard]
+      DB_HOST: pgpool
+      METRICS_DB_HOST: metrics-pgpool
+    deploy:
+      mode: replicated
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.auth-service.rule=Host(`auth-service.${DOMAIN}`)"
+        - "traefik.http.routers.auth-service.entrypoints=web"
+        - "traefik.http.services.auth-service.loadbalancer.server.port=3002"
+        - "traefik.http.routers.auth-service-secure.rule=Host(`auth-service.${DOMAIN}`)"
+        - "traefik.http.routers.auth-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.auth-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.auth-service-secure.service=auth-service"
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3002 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3002 || exit 1; fi'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    dns_search: []
+    networks:
+      - obiente-network
+
+  # Organizations Service - Microservice for organization management
+  organizations-service:
+    image: ghcr.io/obiente/cloud-organizations-service:latest
+    environment:
+      PORT: 3003
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard]
+      DB_HOST: pgpool
+      METRICS_DB_HOST: metrics-pgpool
+    deploy:
+      mode: replicated
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.organizations-service.rule=Host(`organizations-service.${DOMAIN}`)"
+        - "traefik.http.routers.organizations-service.entrypoints=web"
+        - "traefik.http.services.organizations-service.loadbalancer.server.port=3003"
+        - "traefik.http.routers.organizations-service-secure.rule=Host(`organizations-service.${DOMAIN}`)"
+        - "traefik.http.routers.organizations-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.organizations-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.organizations-service-secure.service=organizations-service"
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3003 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3003 || exit 1; fi'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    dns_search: []
+    networks:
+      - obiente-network
+
+  # Billing Service - Microservice for billing and Stripe integration
+  billing-service:
+    image: ghcr.io/obiente/cloud-billing-service:latest
+    environment:
+      PORT: 3004
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-dashboard]
+      DB_HOST: pgpool
+      METRICS_DB_HOST: metrics-pgpool
+    deploy:
+      mode: replicated
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.billing-service.rule=Host(`billing-service.${DOMAIN}`)"
+        - "traefik.http.routers.billing-service.entrypoints=web"
+        - "traefik.http.services.billing-service.loadbalancer.server.port=3004"
+        - "traefik.http.routers.billing-service-secure.rule=Host(`billing-service.${DOMAIN}`)"
+        - "traefik.http.routers.billing-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.billing-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.billing-service-secure.service=billing-service"
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3004 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3004 || exit 1; fi'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    dns_search: []
+    networks:
+      - obiente-network
+
+  # Deployments Service - Microservice for deployment management
+  deployments-service:
+    image: ghcr.io/obiente/cloud-deployments-service:latest
+    environment:
+      PORT: 3005
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-orchestrator, *common-dns-delegation]
+      DB_HOST: pgpool
+      METRICS_DB_HOST: metrics-pgpool
+      REDIS_URL: ${REDIS_URL:-redis://redis-1:6379}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/obiente:/var/lib/obiente
+      - /var/obiente/tmp/obiente-volumes:/tmp/obiente-volumes
+      - /var/obiente/tmp/obiente-deployments:/tmp/obiente-deployments
+    deploy:
+      mode: global  # One instance per node for local Docker access
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "1"
+          memory: 512M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.deployments-service.rule=Host(`deployments-service.${DOMAIN}`)"
+        - "traefik.http.routers.deployments-service.entrypoints=web"
+        - "traefik.http.services.deployments-service.loadbalancer.server.port=3005"
+        - "traefik.http.routers.deployments-service-secure.rule=Host(`deployments-service.${DOMAIN}`)"
+        - "traefik.http.routers.deployments-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.deployments-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.deployments-service-secure.service=deployments-service"
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3005 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3005 || exit 1; fi'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    dns_search: []
+    networks:
+      - obiente-network
+
+  # Game Servers Service - Microservice for game server management
+  gameservers-service:
+    image: ghcr.io/obiente/cloud-gameservers-service:latest
+    environment:
+      PORT: 3006
+      <<: [*common-database, *common-metrics-db, *common-auth]
+      DB_HOST: pgpool
+      METRICS_DB_HOST: metrics-pgpool
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      mode: replicated
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.gameservers-service.rule=Host(`gameservers-service.${DOMAIN}`)"
+        - "traefik.http.routers.gameservers-service.entrypoints=web"
+        - "traefik.http.services.gameservers-service.loadbalancer.server.port=3006"
+        - "traefik.http.routers.gameservers-service-secure.rule=Host(`gameservers-service.${DOMAIN}`)"
+        - "traefik.http.routers.gameservers-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.gameservers-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.gameservers-service-secure.service=gameservers-service"
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3006 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3006 || exit 1; fi'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    dns_search: []
+    networks:
+      - obiente-network
+
+  # Orchestrator Service - Microservice for container orchestration and metrics
+  orchestrator-service:
+    image: ghcr.io/obiente/cloud-orchestrator-service:latest
+    environment:
+      PORT: 3007
+      <<: [*common-database, *common-metrics-db, *common-redis, *common-orchestrator, *common-vps, *common-dns-delegation]
+      DB_HOST: pgpool
+      METRICS_DB_HOST: metrics-pgpool
+      REDIS_URL: ${REDIS_URL:-redis://redis-1:6379}
+      ORCHESTRATOR_SYNC_INTERVAL: ${ORCHESTRATOR_SYNC_INTERVAL:-30s}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      mode: replicated
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "2"
+          memory: 512M
+        reservations:
+          cpus: "1"
+          memory: 512M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.orchestrator-service.rule=Host(`orchestrator-service.${DOMAIN}`)"
+        - "traefik.http.routers.orchestrator-service.entrypoints=web"
+        - "traefik.http.services.orchestrator-service.loadbalancer.server.port=3007"
+        - "traefik.http.routers.orchestrator-service-secure.rule=Host(`orchestrator-service.${DOMAIN}`)"
+        - "traefik.http.routers.orchestrator-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.orchestrator-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.orchestrator-service-secure.service=orchestrator-service"
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3007 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3007 || exit 1; fi'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    dns_search: []
+    networks:
+      - obiente-network
+
+  # VPS Service - Microservice for VPS management
+  vps-service:
+    image: ghcr.io/obiente/cloud-vps-service:latest
+    environment:
+      PORT: 3008
+      <<: [*common-database, *common-auth, *common-orchestrator, *common-vps]
+      DB_HOST: pgpool
+    deploy:
+      mode: replicated
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.vps-service.rule=Host(`vps-service.${DOMAIN}`)"
+        - "traefik.http.routers.vps-service.entrypoints=web"
+        - "traefik.http.services.vps-service.loadbalancer.server.port=3008"
+        - "traefik.http.routers.vps-service-secure.rule=Host(`vps-service.${DOMAIN}`)"
+        - "traefik.http.routers.vps-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.vps-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.vps-service-secure.service=vps-service"
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3008 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3008 || exit 1; fi'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    dns_search: []
+    networks:
+      - obiente-network
+
+  # Support Service - Microservice for support ticket management
+  support-service:
+    image: ghcr.io/obiente/cloud-support-service:latest
+    environment:
+      PORT: 3009
+      <<: [*common-database, *common-auth]
+      DB_HOST: pgpool
+    deploy:
+      mode: replicated
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.support-service.rule=Host(`support-service.${DOMAIN}`)"
+        - "traefik.http.routers.support-service.entrypoints=web"
+        - "traefik.http.services.support-service.loadbalancer.server.port=3009"
+        - "traefik.http.routers.support-service-secure.rule=Host(`support-service.${DOMAIN}`)"
+        - "traefik.http.routers.support-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.support-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.support-service-secure.service=support-service"
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3009 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3009 || exit 1; fi'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    dns_search: []
+    networks:
+      - obiente-network
+
+  # Audit Service - Microservice for audit log management
+  audit-service:
+    image: ghcr.io/obiente/cloud-audit-service:latest
+    environment:
+      PORT: 3010
+      <<: [*common-database, *common-metrics-db, *common-auth]
+      DB_HOST: pgpool
+      METRICS_DB_HOST: metrics-pgpool
+    deploy:
+      mode: replicated
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.audit-service.rule=Host(`audit-service.${DOMAIN}`)"
+        - "traefik.http.routers.audit-service.entrypoints=web"
+        - "traefik.http.services.audit-service.loadbalancer.server.port=3010"
+        - "traefik.http.routers.audit-service-secure.rule=Host(`audit-service.${DOMAIN}`)"
+        - "traefik.http.routers.audit-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.audit-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.audit-service-secure.service=audit-service"
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3010 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3010 || exit 1; fi'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    dns_search: []
+    networks:
+      - obiente-network
+
+  # Superadmin Service - Microservice for superadmin operations
+  superadmin-service:
+    image: ghcr.io/obiente/cloud-superadmin-service:latest
+    environment:
+      PORT: 3011
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-orchestrator]
+      DB_HOST: pgpool
+      METRICS_DB_HOST: metrics-pgpool
+    deploy:
+      mode: replicated
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.superadmin-service.rule=Host(`superadmin-service.${DOMAIN}`)"
+        - "traefik.http.routers.superadmin-service.entrypoints=web"
+        - "traefik.http.services.superadmin-service.loadbalancer.server.port=3011"
+        - "traefik.http.routers.superadmin-service-secure.rule=Host(`superadmin-service.${DOMAIN}`)"
+        - "traefik.http.routers.superadmin-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.superadmin-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.superadmin-service-secure.service=superadmin-service"
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3011 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3011 || exit 1; fi'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    dns_search: []
+    networks:
+      - obiente-network
+
+  # DNS Service - Microservice for DNS resolution
+  # Set ENABLE_DNS=false to disable this service when using DNS delegation
+  dns-service:
+    image: ghcr.io/obiente/cloud-dns-service:latest
+    environment:
+      <<: [*common-database, *common-redis, *common-orchestrator, *common-dns]
+      DB_HOST: pgpool
+      HTTP_PORT: ${DNS_HTTP_PORT:-8053}
+      REDIS_URL: ${REDIS_URL:-redis://redis-1:6379}
+    ports:
+      # Use host mode publishing to expose port 53 directly on the host
+      # DNS only runs on nodes labeled with dns.enabled=true
+      - target: 53
+        published: 53
+        protocol: udp
+        mode: host
+      - target: 53
+        published: 53
+        protocol: tcp
+        mode: host
+    cap_add:
+      - NET_BIND_SERVICE
+    deploy:
+      mode: replicated
+      replicas: ${DNS_REPLICAS:-1}
+      placement:
+        constraints:
+          - node.labels.dns.enabled == true
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "if command -v nc >/dev/null 2>&1; then nc -z localhost ${DNS_PORT:-53} || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost ${DNS_PORT:-53} || exit 1; fi"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    dns_search: []
+    networks:
+      - obiente-network
+
+  # VPS Gateway - gRPC gateway for VPS operations (optional)
+  vps-gateway:
+    image: ghcr.io/obiente/cloud-vps-gateway:latest
+    ports:
+      - target: 1537
+        published: 1537
+        protocol: tcp
+        mode: ingress
+      - target: 9091
+        published: 9091
+        protocol: tcp
+        mode: ingress
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.vps-gateway.enabled == true
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    dns_search: []
     networks:
       - obiente-network
 

@@ -110,12 +110,13 @@ services:
       dockerfile: apps/api/Dockerfile
     environment:
       PORT: ${GO_API_PORT:-3001}
-      DB_HOST: postgres
+      # Use stack-prefixed service names for reliable DNS resolution in Swarm
+      DB_HOST: ${DB_HOST:-obiente_postgres}
       DB_PORT: 5432
       DB_USER: ${POSTGRES_USER:-postgres}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       DB_NAME: ${POSTGRES_DB:-obiente}
-      METRICS_DB_HOST: timescaledb
+      METRICS_DB_HOST: ${METRICS_DB_HOST:-obiente_timescaledb}
       METRICS_DB_PORT: 5432
       METRICS_DB_USER: ${METRICS_DB_USER:-postgres}
       METRICS_DB_PASSWORD: ${METRICS_DB_PASSWORD:-postgres}
