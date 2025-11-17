@@ -107,8 +107,9 @@ func InitDatabase() error {
 
 	// Build DSN with increased connection timeout for Docker Swarm overlay networks
 	// connect_timeout: Time to wait for initial connection (default 5s, increased to 60s)
+	// statement_timeout: Maximum time for a query to run (30s) - prevents hanging queries
 	// This helps with overlay network initialization delays and slow DNS resolution
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable connect_timeout=60",
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable connect_timeout=60 statement_timeout=30000",
 		host, port, user, password, dbname)
 
 	logger.Info("Attempting to connect to database at %s:%s (database: %s, user: %s)", host, port, dbname, user)
