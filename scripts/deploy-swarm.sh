@@ -207,15 +207,14 @@ echo ""
 echo "✅ Main stack deployment started!"
 echo ""
 
-# Deploy dashboard separately if enabled
+# Deploy dashboard in the same stack if enabled
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
-  echo "🚀 Deploying dashboard stack..."
+  echo "🚀 Adding dashboard service to main stack '$STACK_NAME'..."
   
   # Ensure DOMAIN is set for label substitution
   export DOMAIN="${DOMAIN:-obiente.cloud}"
   
   # Merge docker-compose.base.yml with docker-compose.dashboard.yml
-  # Note: dashboard compose file uses external network, so we need to substitute the network name
   TEMP_DASHBOARD_COMPOSE=$(mktemp)
   ./scripts/merge-compose-files.sh docker-compose.dashboard.yml "$TEMP_DASHBOARD_COMPOSE"
   
@@ -224,12 +223,11 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   sed -i "s/\${DOMAIN:-localhost}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
   sed -i "s/\${DOMAIN}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
   
-  # Deploy dashboard stack
-  DASHBOARD_STACK_NAME="${STACK_NAME}_dashboard"
-  docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "$DASHBOARD_STACK_NAME"
+  # Deploy dashboard service in the same stack (not a separate stack)
+  docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "$STACK_NAME"
   rm -f "$TEMP_DASHBOARD_COMPOSE"
   
-  echo "✅ Dashboard stack deployment started!"
+  echo "✅ Dashboard service added to stack '$STACK_NAME'!"
   echo ""
 fi
 
@@ -239,10 +237,10 @@ echo "📋 Useful commands:"
 echo "  View services:     docker stack services $STACK_NAME"
 echo "  View logs:         docker service logs -f ${STACK_NAME}_api-gateway"
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
-  echo "  Dashboard logs:    docker service logs -f ${STACK_NAME}_dashboard_dashboard"
-  echo "  Remove stacks:     docker stack rm $STACK_NAME ${STACK_NAME}_dashboard"
+  echo "  Dashboard logs:    docker service logs -f ${STACK_NAME}_dashboard"
+  echo "  Remove stack:      docker stack rm $STACK_NAME"
 else
-  echo "  Remove stacks:     docker stack rm $STACK_NAME"
+  echo "  Remove stack:      docker stack rm $STACK_NAME"
 fi
 echo "  List tasks:        docker stack ps $STACK_NAME"
 echo ""

@@ -20,7 +20,7 @@ NC='\033[0m'
 echo -e "${RED}⚠️  WARNING: This will completely remove all Obiente Cloud resources!${NC}"
 echo ""
 echo -e "${YELLOW}This includes:${NC}"
-echo "  - Obiente Cloud stacks (${STACK_NAME} and ${STACK_NAME}_dashboard)"
+echo "  - Obiente Cloud stack (${STACK_NAME} - includes dashboard)"
 echo "  - Obiente Cloud services"
 echo "  - Obiente Cloud containers and tasks"
 echo "  - Obiente Cloud volumes (DATA WILL BE LOST)"
@@ -74,10 +74,7 @@ echo -e "${BLUE}1️⃣  Removing stacks...${NC}"
 echo ""
 
 # Main stack
-safe_remove "stack" "$STACK_NAME" "Stack"
-
-# Dashboard stack
-safe_remove "stack" "${STACK_NAME}_dashboard" "Dashboard stack"
+safe_remove "stack" "$STACK_NAME" "Stack (includes dashboard service)"
 
 # Wait a moment for stacks to remove
 sleep 5
@@ -113,7 +110,6 @@ echo ""
 
 # Get containers that belong to Obiente services
 OBIENTE_CONTAINERS=$(docker ps -a --filter "label=com.docker.stack.namespace=${STACK_NAME}" --format "{{.ID}}" 2>/dev/null || echo "")
-OBIENTE_CONTAINERS="$OBIENTE_CONTAINERS $(docker ps -a --filter "label=com.docker.stack.namespace=${STACK_NAME}_dashboard" --format "{{.ID}}" 2>/dev/null || echo "")"
 
 # Also check by container name pattern
 OBIENTE_CONTAINERS="$OBIENTE_CONTAINERS $(docker ps -a --filter "name=${STACK_NAME}_" --format "{{.ID}}" 2>/dev/null || echo "")"

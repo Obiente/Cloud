@@ -29,9 +29,8 @@ sed -i "s/__STACK_NAME__/${STACK_NAME}/g" "$TEMP_DASHBOARD_COMPOSE"
 sed -i "s/\${DOMAIN:-localhost}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
 sed -i "s/\${DOMAIN}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
 
-# Deploy dashboard stack with correct stack name
-DASHBOARD_STACK_NAME="${STACK_NAME}_dashboard"
-docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "$DASHBOARD_STACK_NAME"
+# Deploy dashboard service in the same stack (not a separate stack)
+docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "$STACK_NAME"
 rm -f "$TEMP_DASHBOARD_COMPOSE"
 
 echo "✅ Dashboard redeployed!"

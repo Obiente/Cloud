@@ -19,8 +19,7 @@ services:
       # Internal API host for server-side requests (uses Docker service name)
       # This allows the dashboard container to reach the API Gateway via internal networking
       # API Gateway is the single entry point that routes to all microservices
-      # Note: Use fully qualified service name (stack_name_service_name) since dashboard is in a separate stack
-      NUXT_API_HOST_INTERNAL: ${API_HOST_INTERNAL:-http://__STACK_NAME___api-gateway:3001}
+      NUXT_API_HOST_INTERNAL: ${API_HOST_INTERNAL:-http://api-gateway:3001}
       NUXT_PUBLIC_OIDC_ISSUER: ${ZITADEL_URL:-https://obiente.cloud}
       NUXT_PUBLIC_OIDC_BASE: ${ZITADEL_BASE_URL:-https://auth.obiente.cloud}
       NUXT_PUBLIC_OIDC_CLIENT_ID: ${ZITADEL_CLIENT_ID:-339499954043158530}
@@ -108,7 +107,6 @@ services:
 
 networks:
   obiente-network:
-    external: true
-    name: __STACK_NAME___obiente-network
     # Network is created by main stack (docker-compose.swarm.yml)
-    # with subnet: 10.0.9.0/24
+    # Since dashboard is in the same stack, it uses the same network automatically
+    # No need for external network reference

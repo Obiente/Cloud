@@ -194,7 +194,7 @@ if docker network inspect "$NETWORK_NAME" &>/dev/null; then
     echo -e "${YELLOW}    Services must be removed or updated first${NC}"
     echo ""
     echo -e "${BLUE}    Removing stacks to free network...${NC}"
-    docker stack rm "$STACK_NAME" "${STACK_NAME}_dashboard" 2>/dev/null || true
+    docker stack rm "$STACK_NAME" 2>/dev/null || true
     echo -e "${BLUE}    Waiting for stacks to remove...${NC}"
     sleep 10
   fi
@@ -205,7 +205,7 @@ if docker network inspect "$NETWORK_NAME" &>/dev/null; then
     NETWORK_REMOVED=true
   else
     echo -e "${YELLOW}    ⚠️  Failed to remove (may need to remove services first)${NC}"
-    echo -e "${YELLOW}    Try: docker stack rm ${STACK_NAME} ${STACK_NAME}_dashboard${NC}"
+    echo -e "${YELLOW}    Try: docker stack rm ${STACK_NAME}${NC}"
   fi
 else
   echo -e "${GREEN}  Target network does not exist - skipping removal${NC}"

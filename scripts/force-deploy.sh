@@ -69,9 +69,9 @@ rm -f "$MERGED_COMPOSE"
 echo -e "${GREEN}✅ Main stack redeployed!${NC}"
 echo ""
 
-# Redeploy dashboard stack if enabled
+# Redeploy dashboard service in the same stack if enabled
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
-  echo -e "${BLUE}🚀 Redeploying dashboard stack...${NC}"
+  echo -e "${BLUE}🚀 Redeploying dashboard service in stack '${STACK_NAME}'...${NC}"
   # Ensure DOMAIN is set for label substitution
   export DOMAIN="${DOMAIN:-obiente.cloud}"
   
@@ -84,11 +84,10 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   sed -i "s/\${DOMAIN:-localhost}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
   sed -i "s/\${DOMAIN}/${DOMAIN}/g" "$TEMP_DASHBOARD_COMPOSE"
   
-  # Deploy dashboard stack
-  DASHBOARD_STACK_NAME="${STACK_NAME}_dashboard"
-  docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "$DASHBOARD_STACK_NAME"
+  # Deploy dashboard service in the same stack (not a separate stack)
+  docker stack deploy --resolve-image always -c "$TEMP_DASHBOARD_COMPOSE" "$STACK_NAME"
   rm -f "$TEMP_DASHBOARD_COMPOSE"
-  echo -e "${GREEN}✅ Dashboard stack redeployed!${NC}"
+  echo -e "${GREEN}✅ Dashboard service redeployed in stack '${STACK_NAME}'!${NC}"
   echo ""
 fi
 
@@ -118,10 +117,10 @@ if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo -e "${BLUE}📦 Step 3: Force updating dashboard services...${NC}"
   echo ""
   
-  DASHBOARD_STACK_NAME="${STACK_NAME}_dashboard"
-  DASHBOARD_SERVICES=$(get_stack_services "$DASHBOARD_STACK_NAME")
+  # Dashboard is now in the same stack, so check for dashboard service in main stack
+  DASHBOARD_SERVICES=$(docker stack services "$STACK_NAME" --format "{{.Name}}" 2>/dev/null | grep -i dashboard || echo "")
   if [ -z "$DASHBOARD_SERVICES" ]; then
-    echo -e "${YELLOW}⚠️  No services found in dashboard stack${NC}"
+    echo -e "${YELLOW}⚠️  No dashboard service found in stack${NC}"
   else
     while IFS= read -r service; do
       if [ -n "$service" ]; then
@@ -143,9 +142,8 @@ docker stack services "$STACK_NAME" --format "table {{.Name}}\t{{.Replicas}}\t{{
 
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
   echo ""
-  echo -e "${BLUE}Dashboard stack services:${NC}"
-  DASHBOARD_STACK_NAME="${STACK_NAME}_dashboard"
-  docker stack services "$DASHBOARD_STACK_NAME" --format "table {{.Name}}\t{{.Replicas}}\t{{.Image}}"
+  echo -e "${BLUE}Dashboard service (in main stack):${NC}"
+  docker stack services "$STACK_NAME" --format "table {{.Name}}\t{{.Replicas}}\t{{.Image}}" | grep -i dashboard || echo "No dashboard service found"
 fi
 
 echo ""
@@ -153,9 +151,8 @@ echo -e "${BLUE}📋 Useful commands:${NC}"
 echo "  View all services:  docker stack services $STACK_NAME"
 echo "  View service logs:  docker service logs -f ${STACK_NAME}_api"
 if [ "$DEPLOY_DASHBOARD" = "true" ]; then
-  DASHBOARD_STACK_NAME="${STACK_NAME}_dashboard"
-  echo "  Dashboard logs:     docker service logs -f ${DASHBOARD_STACK_NAME}_dashboard"
-  echo "  Remove stacks:      docker stack rm $STACK_NAME $DASHBOARD_STACK_NAME"
+  echo "  Dashboard logs:     docker service logs -f ${STACK_NAME}_dashboard"
+  echo "  Remove stack:       docker stack rm $STACK_NAME"
 else
   echo "  Remove stacks:      docker stack rm $STACK_NAME"
 fi
