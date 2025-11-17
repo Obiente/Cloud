@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -53,12 +54,33 @@ func InitMetricsDatabase() error {
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		host, port, user, password, dbname)
 
-	// Open database connection
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: getGormLogger(),
-	})
+	// Retry database connection with exponential backoff
+	// This handles cases where DNS resolution isn't ready yet (common in Docker Swarm)
+	maxRetries := 10
+	retryDelay := 2 * time.Second
+	var db *gorm.DB
+	var err error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+			Logger: getGormLogger(),
+		})
+		if err == nil {
+			break
+		}
+
+		if attempt < maxRetries {
+			logger.Warn("Metrics database connection attempt %d/%d failed: %v. Retrying in %v...", attempt, maxRetries, err, retryDelay)
+			time.Sleep(retryDelay)
+			retryDelay = time.Duration(float64(retryDelay) * 1.5) // Exponential backoff, max 30s
+			if retryDelay > 30*time.Second {
+				retryDelay = 30 * time.Second
+			}
+		}
+	}
+
 	if err != nil {
-		return fmt.Errorf("failed to connect to metrics database (TimescaleDB required): %w", err)
+		return fmt.Errorf("failed to connect to metrics database (TimescaleDB required) after %d attempts: %w", maxRetries, err)
 	}
 
 	MetricsDB = db
