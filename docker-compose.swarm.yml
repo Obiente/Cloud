@@ -28,10 +28,15 @@ services:
       - max_connections=200
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    configs:
       # Mount init script for new database initialization (standard PostgreSQL mechanism)
-      - ./scripts/internal/postgres-init-hba.sh:/docker-entrypoint-initdb.d/init-hba.sh:ro
+      - source: postgres_init_hba
+        target: /docker-entrypoint-initdb.d/init-hba.sh
+        mode: 0755
       # Mount entrypoint wrapper for existing databases
-      - ./scripts/internal/docker-entrypoint-postgres.sh:/docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh:ro
+      - source: postgres_entrypoint_wrapper
+        target: /docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh
+        mode: 0755
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-obiente_postgres} -d ${POSTGRES_DB:-obiente}"]
       interval: 10s
@@ -74,10 +79,15 @@ services:
       - max_connections=200
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
+    configs:
       # Mount init script for new database initialization (standard PostgreSQL mechanism)
-      - ./scripts/internal/postgres-init-hba.sh:/docker-entrypoint-initdb.d/init-hba.sh:ro
+      - source: postgres_init_hba
+        target: /docker-entrypoint-initdb.d/init-hba.sh
+        mode: 0755
       # Mount entrypoint wrapper for existing databases
-      - ./scripts/internal/docker-entrypoint-postgres.sh:/docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh:ro
+      - source: postgres_entrypoint_wrapper
+        target: /docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh
+        mode: 0755
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${METRICS_DB_USER:-obiente_postgres} -d ${METRICS_DB_NAME:-obiente_metrics}"]
       interval: 10s
@@ -1017,3 +1027,11 @@ networks:
     # Services on this network can resolve each other by service name (e.g., "postgres")
     # IMPORTANT: Do NOT use external: true - it breaks DNS resolution in Swarm
     # The embedded DNS server (127.0.0.11) only works properly when the network is created BY THE STACK
+
+configs:
+  # PostgreSQL initialization script for pg_hba.conf configuration
+  postgres_init_hba:
+    file: ./scripts/internal/postgres-init-hba.sh
+  # PostgreSQL entrypoint wrapper for pg_hba.conf configuration
+  postgres_entrypoint_wrapper:
+    file: ./scripts/internal/docker-entrypoint-postgres.sh
