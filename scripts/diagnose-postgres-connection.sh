@@ -70,20 +70,32 @@ if docker exec "$CONTAINER_ID" psql -U obiente_postgres -d obiente -c "SELECT 1;
   echo "   ✅ Local connection works"
 else
   echo "   ❌ Local connection failed"
+  docker exec "$CONTAINER_ID" psql -U obiente_postgres -d obiente -c "SELECT 1;" 2>&1 | head -3 || true
 fi
 echo ""
 
-# Check if we can connect using the overlay IP
+# Check if we can connect using the overlay IP with password
 OVERLAY_IP=$(docker exec "$CONTAINER_ID" ip addr show eth0 | grep "inet " | awk '{print $2}' | cut -d/ -f1)
 if [ -n "$OVERLAY_IP" ]; then
-  echo "8. Testing connection using overlay IP ($OVERLAY_IP):"
-  if docker exec "$CONTAINER_ID" psql -h "$OVERLAY_IP" -U obiente_postgres -d obiente -c "SELECT 1;" >/dev/null 2>&1; then
-    echo "   ✅ Connection via overlay IP works"
+  echo "8. Testing connection using overlay IP ($OVERLAY_IP) with password:"
+  PGPASSWORD="${POSTGRES_PASSWORD:-obiente_postgres}" docker exec -e PGPASSWORD="$PGPASSWORD" "$CONTAINER_ID" psql -h "$OVERLAY_IP" -U obiente_postgres -d obiente -c "SELECT 1;" >/dev/null 2>&1
+  if [ $? -eq 0 ]; then
+    echo "   ✅ Connection via overlay IP works with authentication"
   else
     echo "   ❌ Connection via overlay IP failed"
-    docker exec "$CONTAINER_ID" psql -h "$OVERLAY_IP" -U obiente_postgres -d obiente -c "SELECT 1;" 2>&1 | head -5 || true
+    PGPASSWORD="${POSTGRES_PASSWORD:-obiente_postgres}" docker exec -e PGPASSWORD="$PGPASSWORD" "$CONTAINER_ID" psql -h "$OVERLAY_IP" -U obiente_postgres -d obiente -c "SELECT 1;" 2>&1 | head -5 || true
   fi
 fi
+echo ""
+
+# Check PostgreSQL process and what it's actually listening on
+echo "9. PostgreSQL process details:"
+docker exec "$CONTAINER_ID" ps aux | grep postgres | head -3 || echo "   (could not get process info)"
+echo ""
+
+# Check if there are any connection rejections in recent logs
+echo "10. Checking for connection rejections in PostgreSQL logs:"
+docker exec "$CONTAINER_ID" find /var/lib/postgresql/data -name "*.log" -type f -exec tail -50 {} \; 2>/dev/null | grep -iE "connection|auth|reject|fatal|timeout" | tail -10 || echo "   (no relevant log entries found)"
 echo ""
 
 echo "✅ Diagnostic complete!"

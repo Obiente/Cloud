@@ -8,8 +8,8 @@
 x-common-database: &common-database
   DB_HOST: postgres
   DB_PORT: 5432
-  DB_USER: ${POSTGRES_USER:-postgres}
-  DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+  DB_USER: ${POSTGRES_USER:-obiente_postgres}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:-obiente_postgres}
   DB_NAME: ${POSTGRES_DB:-obiente}
 
 x-common-metrics-db: &common-metrics-db
