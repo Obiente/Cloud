@@ -86,8 +86,22 @@ func main() {
 		logger.Info("✓ Route registered: %s -> %s", path, targetURL)
 	}
 
-	// Health check endpoint - reports unhealthy if any backend service is unhealthy
+	// Health check endpoint - always returns healthy so Docker doesn't restart the gateway
+	// The gateway itself is healthy as long as it's running, even if backends are unhealthy
+	// Backend health is checked before routing (in ServeHTTP), not in this endpoint
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"healthy","service":"api-gateway"}`))
+	})
+
+	// Detailed health endpoint - shows backend service health status (for monitoring/debugging)
+	mux.HandleFunc("/health/detailed", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -97,44 +111,61 @@ func main() {
 		proxy.healthMutex.RLock()
 		allHealthy := true
 		unhealthyServices := []string{}
+		healthyServices := []string{}
 		checkedCount := 0
 		for serviceURL, healthy := range proxy.healthStatus {
 			checkedCount++
 			if !healthy {
 				allHealthy = false
 				unhealthyServices = append(unhealthyServices, serviceURL)
+			} else {
+				healthyServices = append(healthyServices, serviceURL)
 			}
 		}
 		proxy.healthMutex.RUnlock()
 
 		w.Header().Set("Content-Type", "application/json")
 		
-		// If we haven't checked any services yet (startup), consider it healthy
-		// This allows the gateway to start up even if backend services aren't ready
+		// If we haven't checked any services yet (startup), show that
 		if checkedCount == 0 {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"status":"healthy","service":"api-gateway","message":"health checks not yet initialized"}`))
+			_, _ = w.Write([]byte(`{"status":"healthy","service":"api-gateway","message":"health checks not yet initialized","backends_checked":0}`))
 			return
 		}
 		
-		if !allHealthy {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			// Format unhealthy services as JSON array
-			unhealthyList := "["
-			for i, svc := range unhealthyServices {
-				if i > 0 {
-					unhealthyList += ","
-				}
-				unhealthyList += fmt.Sprintf(`"%s"`, svc)
+		// Format service lists as JSON arrays
+		unhealthyList := "["
+		for i, svc := range unhealthyServices {
+			if i > 0 {
+				unhealthyList += ","
 			}
-			unhealthyList += "]"
-			unhealthyJSON := fmt.Sprintf(`{"status":"unhealthy","service":"api-gateway","unhealthy_backends":%s}`, unhealthyList)
-			_, _ = w.Write([]byte(unhealthyJSON))
-			return
+			unhealthyList += fmt.Sprintf(`"%s"`, svc)
 		}
-
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"healthy","service":"api-gateway"}`))
+		unhealthyList += "]"
+		
+		healthyList := "["
+		for i, svc := range healthyServices {
+			if i > 0 {
+				healthyList += ","
+			}
+			healthyList += fmt.Sprintf(`"%s"`, svc)
+		}
+		healthyList += "]"
+		
+		statusCode := http.StatusOK
+		if !allHealthy {
+			statusCode = http.StatusServiceUnavailable
+		}
+		
+		detailedJSON := fmt.Sprintf(`{"status":"%s","service":"api-gateway","all_backends_healthy":%t,"healthy_backends":%s,"unhealthy_backends":%s,"total_backends":%d}`,
+			map[bool]string{true: "healthy", false: "degraded"}[allHealthy],
+			allHealthy,
+			healthyList,
+			unhealthyList,
+			checkedCount)
+		
+		w.WriteHeader(statusCode)
+		_, _ = w.Write([]byte(detailedJSON))
 	})
 
 	// Root endpoint
