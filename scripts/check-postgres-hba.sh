@@ -59,12 +59,16 @@ fi
 
 echo ""
 echo "3. Checking PostgreSQL listen_addresses..."
-LISTEN_ADDR=$(docker exec "$CONTAINER_ID" psql -U obiente_postgres -d obiente -t -c "SHOW listen_addresses;" 2>/dev/null | tr -d ' ' || echo "unknown")
-echo "   listen_addresses: $LISTEN_ADDR"
-if [ "$LISTEN_ADDR" = "*" ]; then
+LISTEN_ADDR=$(docker exec "$CONTAINER_ID" psql -U obiente_postgres -d obiente -t -c "SHOW listen_addresses;" 2>/dev/null | tr -d ' \n\r' || echo "unknown")
+echo "   listen_addresses: '$LISTEN_ADDR'"
+# Check if it contains * (might be quoted or have whitespace)
+if echo "$LISTEN_ADDR" | grep -qE '\*|0\.0\.0\.0'; then
   echo "   ✅ PostgreSQL is listening on all interfaces"
+elif [ "$LISTEN_ADDR" = "localhost" ] || [ "$LISTEN_ADDR" = "127.0.0.1" ]; then
+  echo "   ⚠️  PostgreSQL is ONLY listening on localhost (not accessible from overlay network)"
 else
-  echo "   ⚠️  PostgreSQL is NOT listening on all interfaces"
+  echo "   ⚠️  PostgreSQL listen_addresses: '$LISTEN_ADDR' (may not be accessible from overlay network)"
+  echo "   💡 Note: If port test passes, PostgreSQL is likely listening correctly despite this value"
 fi
 
 echo ""
