@@ -50,8 +50,9 @@ func InitMetricsDatabase() error {
 		dbname = "obiente_metrics" // Default metrics database name
 	}
 
-	// Build DSN
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+	// Build DSN with increased connection timeout for Docker Swarm overlay networks
+	// connect_timeout: Time to wait for initial connection (default 5s, increased to 30s)
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable connect_timeout=30",
 		host, port, user, password, dbname)
 
 	// Retry database connection with exponential backoff
