@@ -325,18 +325,29 @@ fi
 # Docker configs can't be updated, so we need to remove and recreate if content changed
 echo ""
 echo "🔍 Checking if config content has changed..."
-CONFIGS_NEED_UPDATE=false
 
-# Map config names to their source files
-declare -A CONFIG_FILES=(
-  ["${STACK_NAME}_postgres_hba_conf"]="${REPO_ROOT}/scripts/internal/pg_hba.conf"
-  ["${STACK_NAME}_postgres_entrypoint_wrapper"]="${REPO_ROOT}/scripts/internal/docker-entrypoint-postgres.sh"
-  ["${STACK_NAME}_postgres_init_user"]="${REPO_ROOT}/scripts/internal/postgres-init-user.sh"
-)
+# Function to get source file for a config name
+get_config_source_file() {
+  local config_name=$1
+  case "$config_name" in
+    "${STACK_NAME}_postgres_hba_conf")
+      echo "${REPO_ROOT}/scripts/internal/pg_hba.conf"
+      ;;
+    "${STACK_NAME}_postgres_entrypoint_wrapper")
+      echo "${REPO_ROOT}/scripts/internal/docker-entrypoint-postgres.sh"
+      ;;
+    "${STACK_NAME}_postgres_init_user")
+      echo "${REPO_ROOT}/scripts/internal/postgres-init-user.sh"
+      ;;
+    *)
+      echo ""
+      ;;
+  esac
+}
 
 for config_name in "${NEW_CONFIG_NAMES[@]}"; do
   if docker config ls --format "{{.Name}}" | grep -q "^${config_name}$"; then
-    SOURCE_FILE="${CONFIG_FILES[$config_name]}"
+    SOURCE_FILE=$(get_config_source_file "$config_name")
     if [ -n "$SOURCE_FILE" ] && [ -f "$SOURCE_FILE" ]; then
       # Get existing config content
       EXISTING_CONTENT=$(docker config inspect "$config_name" --format '{{json .Spec.Data}}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
