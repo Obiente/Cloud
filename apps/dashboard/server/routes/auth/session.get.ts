@@ -24,14 +24,16 @@ export default eventHandler(async (event) => {
   // Populate user data if session exists
   if (Object.keys(session).length > 0) {
     try {
+      // getUserData will refresh the token if needed and update the session
       await getUserData(event, session);
-      // Re-fetch session after getUserData (it may have updated it)
+      // Re-fetch session after getUserData (it may have updated it with refreshed token)
       const updatedSession = await getUserSession(event);
       const { secure, ...data } = updatedSession;
       return data;
     } catch (error) {
       // If getUserData fails (e.g., token expired and refresh failed), return empty session
-      console.error("Failed to get user data:", error);
+      console.error("[session.get] Failed to get user data:", error);
+      // Return empty session so client knows to redirect to login
       return { user: null };
     }
   }

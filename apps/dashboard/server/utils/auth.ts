@@ -115,22 +115,32 @@ export async function getUserData(
   ).catch(async (e: any) => {
     // If we get a 401, try to refresh the token
     if (e?.statusCode === 401 || e?.status === 401) {
-      console.log("Token expired, attempting refresh...");
+      console.log("[getUserData] Token expired, attempting refresh...");
       const refreshedSession = await refreshAccessToken(event, currentSession);
       
       if (refreshedSession?.secure?.access_token) {
+        // Update currentSession to use the refreshed token
+        currentSession = refreshedSession;
+        accessToken = refreshedSession.secure.access_token;
+        
         // Retry with new token
         try {
-          return await $fetch<User>(
+          const userData = await $fetch<User>(
             `${config.public.oidcBase}/oidc/v1/userinfo`,
             {
               headers: {
-                Authorization: `Bearer ${refreshedSession.secure.access_token}`,
+                Authorization: `Bearer ${accessToken}`,
               },
             }
           );
+          // Update session with user data AND ensure refreshed session is persisted
+          await setUserSession(event, { 
+            user: userData,
+            secure: refreshedSession.secure 
+          });
+          return userData;
         } catch (retryError: any) {
-          console.error("Failed to fetch user data after refresh:", retryError);
+          console.error("[getUserData] Failed to fetch user data after refresh:", retryError);
           // If refresh token is also invalid, clear session
           if (retryError?.statusCode === 401 || retryError?.status === 401) {
             await clearUserSession(event);
@@ -139,17 +149,21 @@ export async function getUserData(
         }
       } else {
         // Refresh failed, clear session
-        console.error("Token refresh failed, clearing session");
+        console.error("[getUserData] Token refresh failed, clearing session");
         await clearUserSession(event);
         return null;
       }
     } else {
-      console.error("Failed to fetch user data:", e);
+      console.error("[getUserData] Failed to fetch user data:", e);
       return null;
     }
   });
 
   if (response) {
-    await setUserSession(event, { user: response });
+    // Ensure we persist the current session (which may have been refreshed)
+    await setUserSession(event, { 
+      user: response,
+      secure: currentSession.secure 
+    });
   }
 }

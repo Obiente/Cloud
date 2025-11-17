@@ -79,6 +79,7 @@ export default defineNuxtPlugin({
 
     // Function to get the authentication token from the session
     // Using a function so it's evaluated on each request to get the latest token
+    // This ensures we always get the most up-to-date token, including after refreshes
     const getToken = async (): Promise<string | undefined> => {
       // Check if auth is disabled (development mode)
       const disableAuth = await fetchDisableAuth();
@@ -92,15 +93,8 @@ export default defineNuxtPlugin({
       const event = useRequestEvent();
       if (!event) return undefined;
 
-      // Try to get the token directly from the cookie first (simpler approach)
-      const { AUTH_COOKIE_NAME } = await import("../../server/utils/auth");
-      const token = getCookie(event, AUTH_COOKIE_NAME);
-
-      if (token && typeof token === "string" && token.trim() !== "") {
-        return token;
-      }
-
-      // Fallback to session if cookie approach fails
+      // Always check session first (it's the source of truth and gets updated on refresh)
+      // Then fallback to cookie (which may lag behind session updates)
       try {
         const { getUserSession } = await import("../../server/utils/session");
         const session = await getUserSession(event);
@@ -114,12 +108,24 @@ export default defineNuxtPlugin({
           return sessionToken;
         }
       } catch (e) {
-        console.error("Failed to get server-side token from session:", e);
+        console.error("[Server Transport] Failed to get token from session:", e);
+      }
+
+      // Fallback to cookie if session doesn't have token
+      try {
+        const { AUTH_COOKIE_NAME } = await import("../../server/utils/auth");
+        const token = getCookie(event, AUTH_COOKIE_NAME);
+
+        if (token && typeof token === "string" && token.trim() !== "") {
+          return token;
+        }
+      } catch (e) {
+        console.error("[Server Transport] Failed to get token from cookie:", e);
       }
 
       // Only warn if auth is not disabled
-      console.warn("No token available for SSR request");
-        return undefined;
+      console.warn("[Server Transport] No token available for SSR request");
+      return undefined;
     };
 
     const authInterceptor = createAuthInterceptor(getToken);
