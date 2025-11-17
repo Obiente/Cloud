@@ -88,7 +88,7 @@ func main() {
 
 	// Health check endpoint - always returns healthy so Docker doesn't restart the gateway
 	// The gateway itself is healthy as long as it's running, even if backends are unhealthy
-	// Backend health is checked before routing (in ServeHTTP), not in this endpoint
+	// Backend health is monitored but does not block routing (allows degraded services to still receive traffic)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
@@ -331,13 +331,10 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if service is healthy before routing
+	// Log health status for monitoring, but don't block routing
+	// This allows degraded services to still receive traffic
 	if !p.isServiceHealthy(targetURL) {
-		logger.Warn("[API Gateway] Service %s is unhealthy, returning 503", targetURL)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte(`{"error":"service_unavailable","message":"Backend service is currently unavailable"}`))
-		return
+		logger.Warn("[API Gateway] Service %s is unhealthy, but routing anyway (degraded mode)", targetURL)
 	}
 
 	// Parse target URL
