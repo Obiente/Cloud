@@ -319,6 +319,7 @@ services:
     environment:
       PORT: 3005
       <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-orchestrator, *common-dns-delegation]
+      ENABLE_SWARM: ${ENABLE_SWARM:-true}  # Override to enable Swarm mode (default: true for Swarm deployment)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/obiente:/var/lib/obiente
