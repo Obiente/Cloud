@@ -657,8 +657,13 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 			// We rely on only setting web entrypoint which won't trigger TLS
 		}
 
-		// Service port
+		// Service name label (used for both service definition and router reference)
 		serviceNameLabel := routerName
+
+		// Explicitly set the service for the router (required for Swarm mode)
+		labels["traefik.http.routers."+routerName+".service"] = serviceNameLabel
+
+		// Service port
 		labels["traefik.http.services."+serviceNameLabel+".loadbalancer.server.port"] = strconv.Itoa(routing.TargetPort)
 	}
 
