@@ -153,8 +153,8 @@ services:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3001 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3001 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 120s
     dns_search: []
     networks:
       - obiente-network
@@ -198,8 +198,8 @@ services:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3002 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3002 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 120s
     dns_search: []
     networks:
       - obiente-network
@@ -243,8 +243,8 @@ services:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3003 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3003 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 120s
     dns_search: []
     networks:
       - obiente-network
@@ -288,8 +288,8 @@ services:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3004 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3004 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 120s
     dns_search: []
     networks:
       - obiente-network
@@ -338,8 +338,8 @@ services:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3005 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3005 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 120s
     dns_search: []
     networks:
       - obiente-network
@@ -385,8 +385,8 @@ services:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3006 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3006 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 120s
     dns_search: []
     networks:
       - obiente-network
@@ -433,8 +433,8 @@ services:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3007 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3007 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 120s
     dns_search: []
     networks:
       - obiente-network
@@ -478,8 +478,8 @@ services:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3008 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3008 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 120s
     dns_search: []
     networks:
       - obiente-network
@@ -523,8 +523,8 @@ services:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3009 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3009 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 120s
     dns_search: []
     networks:
       - obiente-network
@@ -568,8 +568,8 @@ services:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3010 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3010 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 120s
     dns_search: []
     networks:
       - obiente-network
@@ -613,8 +613,8 @@ services:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3011 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3011 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 120s
     dns_search: []
     networks:
       - obiente-network
@@ -665,8 +665,8 @@ services:
       test: ["CMD-SHELL", "if command -v nc >/dev/null 2>&1; then nc -z localhost ${DNS_PORT:-53} || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost ${DNS_PORT:-53} || exit 1; fi"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 120s
     dns_search: []
     networks:
       - obiente-network
@@ -921,8 +921,8 @@ services:
       test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 5000 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 5000 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 10s
+      retries: 5
+      start_period: 60s
     deploy:
       replicas: 1
       placement:
