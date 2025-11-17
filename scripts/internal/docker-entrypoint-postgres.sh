@@ -29,24 +29,47 @@ configure_postgresql_conf() {
   fi
   
   # Copy custom pg_hba.conf to PGDATA if it exists
+  # We do this BEFORE PostgreSQL starts to prevent it from regenerating the file
   if [ -f "$CUSTOM_HBA" ]; then
     echo "📋 Copying custom pg_hba.conf to $PGDATA..."
     cp "$CUSTOM_HBA" "$PGDATA/pg_hba.conf"
     chmod 0600 "$PGDATA/pg_hba.conf"
+    chown postgres:postgres "$PGDATA/pg_hba.conf" 2>/dev/null || true
     echo "✅ Custom pg_hba.conf installed"
+    
+    # Verify the rule is present
+    if grep -qE "^host\s+all\s+all\s+10\.15\.3\.0/24\s+md5" "$PGDATA/pg_hba.conf" 2>/dev/null; then
+      echo "✅ Verified overlay network rule in pg_hba.conf"
+    else
+      echo "⚠️  Warning: Overlay network rule not found in copied file!"
+    fi
+  else
+    echo "⚠️  Warning: Custom pg_hba.conf not found at $CUSTOM_HBA"
   fi
   
-  # Configure listen_addresses=* if not already set
+  # Configure listen_addresses=* in postgresql.conf
+  # We need to set this in the config file, not just command line, to ensure it persists
   if ! grep -qE "^listen_addresses\s*=" "$POSTGRESQL_CONF" 2>/dev/null; then
     echo "📝 Adding listen_addresses=* to postgresql.conf..."
     echo "listen_addresses = '*'" >> "$POSTGRESQL_CONF"
     echo "✅ listen_addresses configured"
-  elif ! grep -qE "^listen_addresses\s*=\s*'\*'" "$POSTGRESQL_CONF" 2>/dev/null; then
-    echo "📝 Updating listen_addresses to '*' in postgresql.conf..."
-    sed -i "s/^listen_addresses\s*=.*/listen_addresses = '*'/" "$POSTGRESQL_CONF"
-    echo "✅ listen_addresses updated"
   else
-    echo "✅ listen_addresses already set to '*'"
+    # Check current value
+    CURRENT_VALUE=$(grep -E "^listen_addresses\s*=" "$POSTGRESQL_CONF" | head -1 | sed 's/.*=\s*//' | tr -d " '")
+    if [ "$CURRENT_VALUE" != "*" ]; then
+      echo "📝 Updating listen_addresses from '$CURRENT_VALUE' to '*' in postgresql.conf..."
+      sed -i "s/^listen_addresses\s*=.*/listen_addresses = '*'/" "$POSTGRESQL_CONF"
+      echo "✅ listen_addresses updated to '*'"
+    else
+      echo "✅ listen_addresses already set to '*'"
+    fi
+  fi
+  
+  # Also verify it's set correctly
+  if grep -qE "^listen_addresses\s*=\s*'\*'" "$POSTGRESQL_CONF" 2>/dev/null; then
+    echo "✅ Verified listen_addresses = '*' in postgresql.conf"
+  else
+    echo "⚠️  Warning: listen_addresses may not be set correctly"
   fi
   
   return 0
