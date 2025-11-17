@@ -251,23 +251,81 @@ fi
 echo "✅ All config files found"
 
 # Remove old Docker configs if they exist (Docker configs can't be updated, only labels)
-# We need to remove them first, then they'll be recreated with new content
+# We need to update services first to remove config references, then remove the configs
 echo ""
-echo "🔧 Checking for existing Docker configs..."
-CONFIG_NAMES=(
+echo "🔧 Checking for existing Docker configs that need updating..."
+
+OLD_CONFIG_NAMES=(
+  "${STACK_NAME}_postgres_init_hba"
+  "${STACK_NAME}_postgres_entrypoint_wrapper"
+)
+
+NEW_CONFIG_NAMES=(
   "${STACK_NAME}_postgres_hba_conf"
   "${STACK_NAME}_postgres_entrypoint_wrapper"
 )
-for config_name in "${CONFIG_NAMES[@]}"; do
-  if docker config ls --format "{{.Name}}" | grep -q "^${config_name}$"; then
-    echo "   ⚠️  Removing existing config: $config_name"
-    # Check if config is in use by any services
-    if docker service ls --format "{{.Name}}" | xargs -I {} docker service inspect {} --format '{{range .Spec.TaskTemplate.ContainerSpec.Configs}}{{.ConfigName}}{{end}}' 2>/dev/null | grep -q "^${config_name}$"; then
-      echo "   ⚠️  Config is in use by services. Services will be updated during deployment."
-    fi
-    docker config rm "$config_name" 2>/dev/null || echo "   ⚠️  Could not remove config (may be in use, will be recreated)"
+
+# Check if we need to migrate from old config names to new ones
+NEEDS_MIGRATION=false
+for old_config in "${OLD_CONFIG_NAMES[@]}"; do
+  if docker config ls --format "{{.Name}}" | grep -q "^${old_config}$"; then
+    NEEDS_MIGRATION=true
+    break
   fi
 done
+
+if [ "$NEEDS_MIGRATION" = true ]; then
+  echo "   ⚠️  Found old config names that need migration"
+  echo "   📋 Updating services to remove old config references..."
+  
+  # Find services using old configs and update them
+  SERVICES_TO_UPDATE=()
+  for service in $(docker service ls --format "{{.Name}}" | grep "^${STACK_NAME}_"); do
+    SERVICE_CONFIGS=$(docker service inspect "$service" --format '{{range .Spec.TaskTemplate.ContainerSpec.Configs}}{{.ConfigName}} {{end}}' 2>/dev/null || echo "")
+    for old_config in "${OLD_CONFIG_NAMES[@]}"; do
+      if echo "$SERVICE_CONFIGS" | grep -q "$old_config"; then
+        SERVICES_TO_UPDATE+=("$service")
+        break
+      fi
+    done
+  done
+  
+  if [ ${#SERVICES_TO_UPDATE[@]} -gt 0 ]; then
+    echo "   ⚠️  Services using old configs: ${SERVICES_TO_UPDATE[*]}"
+    echo "   💡 Removing old configs from services..."
+    
+    for service in "${SERVICES_TO_UPDATE[@]}"; do
+      echo "      Updating $service..."
+      # Get current service spec and remove old config references
+      docker service update --config-rm "${OLD_CONFIG_NAMES[0]}" "$service" 2>/dev/null || true
+      docker service update --config-rm "${OLD_CONFIG_NAMES[1]}" "$service" 2>/dev/null || true
+    done
+    
+    echo "   ⏳ Waiting for service updates to complete..."
+    sleep 5
+  fi
+  
+  # Now try to remove old configs
+  echo "   🗑️  Removing old configs..."
+  for old_config in "${OLD_CONFIG_NAMES[@]}"; do
+    if docker config ls --format "{{.Name}}" | grep -q "^${old_config}$"; then
+      if docker config rm "$old_config" 2>/dev/null; then
+        echo "      ✅ Removed: $old_config"
+      else
+        echo "      ⚠️  Could not remove $old_config (may still be in use)"
+        echo "      💡 You may need to remove the stack and redeploy: docker stack rm $STACK_NAME"
+      fi
+    fi
+  done
+fi
+
+# Check for new config names that might conflict
+for config_name in "${NEW_CONFIG_NAMES[@]}"; do
+  if docker config ls --format "{{.Name}}" | grep -q "^${config_name}$"; then
+    echo "   ℹ️  Config already exists: $config_name (will be updated if content changed)"
+  fi
+done
+
 echo "✅ Config cleanup complete"
 
 # Note: We no longer pre-create the network as external
