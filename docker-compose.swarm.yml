@@ -96,13 +96,13 @@ services:
     # To change binding, set METRICS_DB_EXPOSE_PORT and METRICS_DB_PORT_MODE environment variables
     # For localhost-only binding, use host mode (default) and configure firewall rules
     # Examples:
-    #   - METRICS_DB_EXPOSE_PORT=5432  # Default: localhost only (requires firewall rules)
+    #   - METRICS_DB_EXPOSE_PORT=5433  # Default: localhost only (requires firewall rules)
     #   - METRICS_DB_PORT_MODE=host    # Default: host mode for localhost binding
     # Note: Docker Swarm host mode binds to all interfaces by default
     # Configure iptables/firewall to restrict to localhost: iptables -A INPUT -p tcp --dport 5432 -s 127.0.0.1 -j ACCEPT
     ports:
       - target: 5432
-        published: ${METRICS_DB_EXPOSE_PORT:-5432}
+        published: ${METRICS_DB_EXPOSE_PORT:-5433}
         protocol: tcp
         mode: ${METRICS_DB_PORT_MODE:-host}
     volumes:

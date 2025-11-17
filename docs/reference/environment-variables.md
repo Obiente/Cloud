@@ -293,7 +293,7 @@ The API uses `DASHBOARD_URL` to build links in transactional emails and billing 
 | --------------------- | ------ | --------------------------------- | -------- |
 | `METRICS_DB_HOST`         | string | `timescaledb`                     | ❌       |
 | `METRICS_DB_PORT`         | number | `5432`                            | ❌       |
-| `METRICS_DB_EXPOSE_PORT`  | number | `5432`                            | ❌       | Port to expose TimescaleDB on host (default: 5432, localhost only) |
+| `METRICS_DB_EXPOSE_PORT`  | number | `5433`                            | ❌       | Port to expose TimescaleDB on host (default: 5433, localhost only) |
 | `METRICS_DB_PORT_MODE`    | string | `host`                             | ❌       | Port mode: `host` (default, for localhost binding) or `ingress` |
 | `METRICS_DB_ALLOWED_HOSTS` | string | -                                 | ❌       | Comma-separated IPs/subnets to allow in pg_hba.conf (falls back to POSTGRES_ALLOWED_HOSTS) |
 | `METRICS_DB_USER`         | string | `POSTGRES_USER` or `postgres`     | ❌       |
@@ -323,10 +323,10 @@ METRICS_DB_HOST=metrics-db.example.com
 
 **Metrics Database Port Exposure (`METRICS_DB_EXPOSE_PORT`):**
 
-TimescaleDB port is **exposed by default on localhost only** (127.0.0.1:5432) for security, similar to PostgreSQL.
+TimescaleDB port is **exposed by default on localhost only** (127.0.0.1:5433) for security, similar to PostgreSQL.
 
 **Default Configuration:**
-- Port exposed: `5432` (configurable via `METRICS_DB_EXPOSE_PORT`)
+- Port exposed: `5433` (configurable via `METRICS_DB_EXPOSE_PORT`)
 - Mode: `host` (for localhost binding)
 - Binding: All interfaces (restrict via firewall for localhost-only)
 
@@ -340,11 +340,11 @@ sudo iptables -A INPUT -p tcp --dport 5432 ! -s 127.0.0.1 -j DROP
 
 ```bash
 # Default: Exposed on localhost only
-METRICS_DB_EXPOSE_PORT=5432
+METRICS_DB_EXPOSE_PORT=5433
 METRICS_DB_PORT_MODE=host
 
 # Expose on all interfaces (for Netbird VPN access)
-METRICS_DB_EXPOSE_PORT=5432
+METRICS_DB_EXPOSE_PORT=5433
 METRICS_DB_PORT_MODE=host
 ```
 
