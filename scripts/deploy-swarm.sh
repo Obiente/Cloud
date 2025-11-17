@@ -186,10 +186,31 @@ fi
 echo ""
 echo "🚀 Deploying main stack '$STACK_NAME'..."
 
-# Network will be created automatically by Swarm when the stack is deployed
-# No need to check for pre-existing network - Swarm handles it
+# Ensure the network exists before deploying services
+# Docker Swarm sometimes creates services before the network, causing failures
 NETWORK_NAME="${STACK_NAME}_obiente-network"
-echo "ℹ️  Network '$NETWORK_NAME' will be created automatically by Docker Swarm"
+echo "🔧 Ensuring network '$NETWORK_NAME' exists..."
+
+# Check if network exists
+if ! docker network ls --format "{{.Name}}" | grep -q "^${NETWORK_NAME}$"; then
+  echo "   📋 Creating network '$NETWORK_NAME'..."
+  
+  # Create the overlay network with the correct subnet
+  docker network create \
+    --driver overlay \
+    --attachable \
+    --opt encrypted=true \
+    --subnet 10.15.3.0/24 \
+    "$NETWORK_NAME" 2>/dev/null || {
+    echo "   ⚠️  Network creation failed or already exists, continuing..."
+  }
+  
+  # Wait a moment for network to be ready
+  sleep 2
+  echo "   ✅ Network ready"
+else
+  echo "   ✅ Network already exists"
+fi
 
 # Check if registry auth is configured
 if [ ! -f "/var/lib/obiente/registry-auth/htpasswd" ]; then
