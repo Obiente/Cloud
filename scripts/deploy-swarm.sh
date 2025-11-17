@@ -228,7 +228,7 @@ sed -i "s|file: \\./scripts/internal/|file: ${REPO_ROOT}/scripts/internal/|g" "$
 # Verify config files exist before deploying
 echo "🔍 Verifying Docker config files exist..."
 CONFIG_FILES=(
-  "${REPO_ROOT}/scripts/internal/postgres-init-hba.sh"
+  "${REPO_ROOT}/scripts/internal/pg_hba.conf"
   "${REPO_ROOT}/scripts/internal/docker-entrypoint-postgres.sh"
 )
 MISSING_CONFIGS=()
@@ -255,7 +255,7 @@ echo "✅ All config files found"
 echo ""
 echo "🔧 Checking for existing Docker configs..."
 CONFIG_NAMES=(
-  "${STACK_NAME}_postgres_init_hba"
+  "${STACK_NAME}_postgres_hba_conf"
   "${STACK_NAME}_postgres_entrypoint_wrapper"
 )
 for config_name in "${CONFIG_NAMES[@]}"; do

@@ -29,11 +29,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     configs:
-      # Mount init script for new database initialization (standard PostgreSQL mechanism)
-      - source: postgres_init_hba
-        target: /docker-entrypoint-initdb.d/init-hba.sh
-        mode: 0755
-      # Mount entrypoint wrapper for existing databases
+      # Mount custom pg_hba.conf file (prevents PostgreSQL from regenerating it)
+      - source: postgres_hba_conf
+        target: /etc/postgresql/pg_hba.conf
+        mode: 0644
+      # Mount entrypoint wrapper to configure postgresql.conf
       - source: postgres_entrypoint_wrapper
         target: /docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh
         mode: 0755
@@ -80,11 +80,11 @@ services:
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
     configs:
-      # Mount init script for new database initialization (standard PostgreSQL mechanism)
-      - source: postgres_init_hba
-        target: /docker-entrypoint-initdb.d/init-hba.sh
-        mode: 0755
-      # Mount entrypoint wrapper for existing databases
+      # Mount custom pg_hba.conf file (prevents PostgreSQL from regenerating it)
+      - source: postgres_hba_conf
+        target: /etc/postgresql/pg_hba.conf
+        mode: 0644
+      # Mount entrypoint wrapper to configure postgresql.conf
       - source: postgres_entrypoint_wrapper
         target: /docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh
         mode: 0755
@@ -1029,9 +1029,9 @@ networks:
     # The embedded DNS server (127.0.0.11) only works properly when the network is created BY THE STACK
 
 configs:
-  # PostgreSQL initialization script for pg_hba.conf configuration
-  postgres_init_hba:
-    file: ./scripts/internal/postgres-init-hba.sh
-  # PostgreSQL entrypoint wrapper for pg_hba.conf configuration
+  # Custom pg_hba.conf file (mounted to prevent PostgreSQL from regenerating it)
+  postgres_hba_conf:
+    file: ./scripts/internal/pg_hba.conf
+  # PostgreSQL entrypoint wrapper to configure postgresql.conf (hba_file and listen_addresses)
   postgres_entrypoint_wrapper:
     file: ./scripts/internal/docker-entrypoint-postgres.sh

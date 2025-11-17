@@ -7,7 +7,7 @@ set -e
 STACK_NAME="${STACK_NAME:-obiente}"
 
 CONFIG_NAMES=(
-  "${STACK_NAME}_postgres_init_hba"
+  "${STACK_NAME}_postgres_hba_conf"
   "${STACK_NAME}_postgres_entrypoint_wrapper"
 )
 
