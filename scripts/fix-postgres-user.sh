@@ -56,25 +56,102 @@ fi
 echo "✅ Container: ${CONTAINER_ID:0:12}"
 echo ""
 
-# Check if user exists
-echo "2. Checking if user '$POSTGRES_USER' exists..."
-# First, try to connect as postgres user (default superuser)
-# The postgres user might not have a password, or might use trust authentication locally
-USER_EXISTS=""
-ERROR_OUTPUT=""
+# Find the actual superuser in the database
+# PostgreSQL might have been initialized with a custom user, so "postgres" might not exist
+echo "2. Finding PostgreSQL superuser..."
+SUPERUSER=""
+SUPERUSER_PASSWORD=""
 
-# Try without password first (trust authentication for local connections)
-if docker exec "$CONTAINER_ID" psql -U postgres -d postgres -t -c "SELECT 1 FROM pg_roles WHERE rolname='$POSTGRES_USER';" 2>/dev/null | tr -d ' \n\r' | grep -q "1"; then
-  USER_EXISTS="1"
-elif docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_ID" psql -U postgres -d postgres -t -c "SELECT 1 FROM pg_roles WHERE rolname='$POSTGRES_USER';" 2>/dev/null | tr -d ' \n\r' | grep -q "1"; then
-  USER_EXISTS="1"
+# Try to get the superuser from the service environment
+SERVICE_ENV=$(docker service inspect "$POSTGRES_SERVICE" --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' 2>/dev/null || echo "")
+SERVICE_POSTGRES_USER=$(echo "$SERVICE_ENV" | grep "^POSTGRES_USER=" | cut -d= -f2- | head -1 || echo "")
+
+# Try different users to find one that works
+CANDIDATE_USERS=("postgres" "$SERVICE_POSTGRES_USER" "$POSTGRES_USER")
+CANDIDATE_PASSWORDS=("" "$POSTGRES_PASSWORD")
+
+for candidate_user in "${CANDIDATE_USERS[@]}"; do
+  if [ -z "$candidate_user" ]; then
+    continue
+  fi
+  
+  # Try without password first (trust authentication)
+  if docker exec "$CONTAINER_ID" psql -U "$candidate_user" -d postgres -t -c "SELECT 1;" >/dev/null 2>&1; then
+    SUPERUSER="$candidate_user"
+    SUPERUSER_PASSWORD=""
+    echo "   ✅ Found superuser: $SUPERUSER (trust authentication)"
+    break
+  fi
+  
+  # Try with password
+  for candidate_password in "${CANDIDATE_PASSWORDS[@]}"; do
+    if [ -n "$candidate_password" ] && docker exec -e PGPASSWORD="$candidate_password" "$CONTAINER_ID" psql -U "$candidate_user" -d postgres -t -c "SELECT 1;" >/dev/null 2>&1; then
+      SUPERUSER="$candidate_user"
+      SUPERUSER_PASSWORD="$candidate_password"
+      echo "   ✅ Found superuser: $SUPERUSER (password authentication)"
+      break 2
+    fi
+  done
+done
+
+if [ -z "$SUPERUSER" ]; then
+  echo "   ❌ Could not find a working superuser"
+  echo "   💡 Trying to list all users to find one..."
+  
+  # Try to connect using the database's own user (might work via peer auth)
+  # List users by checking pg_authid directly (requires superuser, but we'll try)
+  for candidate_user in "${CANDIDATE_USERS[@]}"; do
+    if [ -z "$candidate_user" ]; then
+      continue
+    fi
+    EXISTING_USERS=$(docker exec "$CONTAINER_ID" psql -U "$candidate_user" -d postgres -t -c "SELECT rolname FROM pg_roles WHERE rolname NOT LIKE 'pg_%' AND rolcanlogin ORDER BY rolname;" 2>/dev/null | tr '\n' ' ' || echo "")
+    if [ -n "$EXISTING_USERS" ]; then
+      echo "   Found users: $EXISTING_USERS"
+      # Try the first user as superuser
+      FIRST_USER=$(echo "$EXISTING_USERS" | awk '{print $1}')
+      if [ -n "$FIRST_USER" ]; then
+        SUPERUSER="$FIRST_USER"
+        echo "   ⚠️  Attempting to use first user as superuser: $SUPERUSER"
+        break
+      fi
+    fi
+  done
+  
+  if [ -z "$SUPERUSER" ]; then
+    echo "   ❌ Cannot proceed without a superuser connection"
+    echo "   💡 You may need to:"
+    echo "      1. Check your .env file for POSTGRES_USER and POSTGRES_PASSWORD"
+    echo "      2. Or manually connect to PostgreSQL and create the user:"
+    echo "         docker exec -it $CONTAINER_ID psql -U <existing_user> -d postgres"
+    exit 1
+  fi
+fi
+
+echo ""
+
+# Check if user exists using the found superuser
+echo "3. Checking if user '$POSTGRES_USER' exists..."
+USER_EXISTS=""
+
+if [ -z "$SUPERUSER_PASSWORD" ]; then
+  # Trust authentication
+  if docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -t -c "SELECT 1 FROM pg_roles WHERE rolname='$POSTGRES_USER';" 2>/dev/null | tr -d ' \n\r' | grep -q "1"; then
+    USER_EXISTS="1"
+  fi
 else
-  # Check what users actually exist
+  # Password authentication
+  if docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -t -c "SELECT 1 FROM pg_roles WHERE rolname='$POSTGRES_USER';" 2>/dev/null | tr -d ' \n\r' | grep -q "1"; then
+    USER_EXISTS="1"
+  fi
+fi
+
+if [ "$USER_EXISTS" != "1" ]; then
+  # List existing users for debugging
   echo "   Checking existing users..."
-  EXISTING_USERS=$(docker exec "$CONTAINER_ID" psql -U postgres -d postgres -t -c "SELECT rolname FROM pg_roles WHERE rolname NOT LIKE 'pg_%' ORDER BY rolname;" 2>/dev/null | tr -d ' \n\r' || echo "")
-  if [ -z "$EXISTING_USERS" ]; then
-    # Try with password
-    EXISTING_USERS=$(docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_ID" psql -U postgres -d postgres -t -c "SELECT rolname FROM pg_roles WHERE rolname NOT LIKE 'pg_%' ORDER BY rolname;" 2>/dev/null | tr -d ' \n\r' || echo "")
+  if [ -z "$SUPERUSER_PASSWORD" ]; then
+    EXISTING_USERS=$(docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -t -c "SELECT rolname FROM pg_roles WHERE rolname NOT LIKE 'pg_%' ORDER BY rolname;" 2>/dev/null | tr '\n' ' ' || echo "")
+  else
+    EXISTING_USERS=$(docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -t -c "SELECT rolname FROM pg_roles WHERE rolname NOT LIKE 'pg_%' ORDER BY rolname;" 2>/dev/null | tr '\n' ' ' || echo "")
   fi
   if [ -n "$EXISTING_USERS" ]; then
     echo "   Existing users: $EXISTING_USERS"
@@ -84,42 +161,42 @@ fi
 if [ "$USER_EXISTS" = "1" ]; then
   echo "✅ User '$POSTGRES_USER' already exists"
   echo ""
-  echo "3. Verifying user can connect..."
+  echo "4. Verifying user can connect..."
   if docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_ID" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT current_user;" >/dev/null 2>&1; then
     echo "✅ User can connect successfully"
   else
     echo "⚠️  User exists but cannot connect. Updating password..."
-    docker exec "$CONTAINER_ID" psql -U postgres -d postgres -c "ALTER USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';" 2>/dev/null || true
+    if [ -z "$SUPERUSER_PASSWORD" ]; then
+      docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "ALTER USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';" 2>/dev/null || true
+    else
+      docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "ALTER USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';" 2>/dev/null || true
+    fi
     echo "✅ Password updated"
   fi
 else
   echo "❌ User '$POSTGRES_USER' does NOT exist"
   echo ""
-  echo "3. Creating user '$POSTGRES_USER'..."
+  echo "4. Creating user '$POSTGRES_USER'..."
   
-  # Try to create the user - try without password first, then with password
+  # Create the user using the found superuser
   CREATE_SUCCESS=false
   
-  # Try without password (trust authentication)
-  if docker exec "$CONTAINER_ID" psql -U postgres -d postgres -c "CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD' CREATEDB;" 2>&1; then
-    CREATE_SUCCESS=true
-  elif docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_ID" psql -U postgres -d postgres -c "CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD' CREATEDB;" 2>&1; then
-    CREATE_SUCCESS=true
-  else
-    # Show the actual error
-    echo "   Attempting to connect as postgres user to diagnose..."
-    ERROR_MSG=$(docker exec "$CONTAINER_ID" psql -U postgres -d postgres -c "SELECT 1;" 2>&1 || true)
-    if echo "$ERROR_MSG" | grep -q "password authentication failed\|FATAL.*password"; then
-      echo "   ⚠️  Password authentication required for postgres user"
-      echo "   💡 Try setting POSTGRES_PASSWORD in your .env file to match the service password"
-      echo ""
-      echo "   Or, if you know the postgres user password, run:"
-      echo "   PGPASSWORD=your_password docker exec -e PGPASSWORD=your_password $CONTAINER_ID psql -U postgres -d postgres -c \"CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD' CREATEDB;\""
+  if [ -z "$SUPERUSER_PASSWORD" ]; then
+    # Trust authentication
+    if docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD' CREATEDB;" 2>&1; then
+      CREATE_SUCCESS=true
     else
-      echo "   Error: $ERROR_MSG"
+      CREATE_ERROR=$(docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD' CREATEDB;" 2>&1 || true)
+      echo "   Error: $CREATE_ERROR"
     fi
-    echo "❌ Failed to create user"
-    exit 1
+  else
+    # Password authentication
+    if docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD' CREATEDB;" 2>&1; then
+      CREATE_SUCCESS=true
+    else
+      CREATE_ERROR=$(docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD' CREATEDB;" 2>&1 || true)
+      echo "   Error: $CREATE_ERROR"
+    fi
   fi
   
   if [ "$CREATE_SUCCESS" = true ]; then
@@ -127,24 +204,38 @@ else
     echo ""
     
     # Grant privileges
-    echo "4. Granting privileges..."
-    # Try without password first, then with password
-    if ! docker exec "$CONTAINER_ID" psql -U postgres -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;" 2>/dev/null; then
-      docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_ID" psql -U postgres -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;" 2>/dev/null || true
-    fi
-    if ! docker exec "$CONTAINER_ID" psql -U postgres -d postgres -c "ALTER USER $POSTGRES_USER WITH SUPERUSER;" 2>/dev/null; then
-      docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_ID" psql -U postgres -d postgres -c "ALTER USER $POSTGRES_USER WITH SUPERUSER;" 2>/dev/null || true
+    echo "5. Granting privileges..."
+    if [ -z "$SUPERUSER_PASSWORD" ]; then
+      docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;" 2>/dev/null || true
+      docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "ALTER USER $POSTGRES_USER WITH SUPERUSER;" 2>/dev/null || true
+    else
+      docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;" 2>/dev/null || true
+      docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "ALTER USER $POSTGRES_USER WITH SUPERUSER;" 2>/dev/null || true
     fi
     echo "✅ Privileges granted"
     echo ""
     
     # Test connection
-    echo "5. Testing connection..."
+    echo "6. Testing connection..."
     if docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$CONTAINER_ID" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT current_user;" >/dev/null 2>&1; then
       echo "✅ Connection test successful"
     else
       echo "⚠️  Connection test failed, but user was created"
     fi
+  else
+    echo "❌ Failed to create user"
+    echo ""
+    echo "💡 Troubleshooting:"
+    echo "   1. Check that POSTGRES_USER and POSTGRES_PASSWORD are set correctly in your .env file"
+    echo "   2. The superuser '$SUPERUSER' might not have sufficient privileges"
+    echo "   3. Try manually creating the user:"
+    if [ -z "$SUPERUSER_PASSWORD" ]; then
+      echo "      docker exec -it $CONTAINER_ID psql -U $SUPERUSER -d postgres"
+    else
+      echo "      docker exec -it -e PGPASSWORD='$SUPERUSER_PASSWORD' $CONTAINER_ID psql -U $SUPERUSER -d postgres"
+    fi
+    echo "      Then run: CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD' CREATEDB SUPERUSER;"
+    exit 1
   fi
 fi
 
