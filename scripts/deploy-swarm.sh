@@ -230,6 +230,7 @@ echo "🔍 Verifying Docker config files exist..."
 CONFIG_FILES=(
   "${REPO_ROOT}/scripts/internal/pg_hba.conf"
   "${REPO_ROOT}/scripts/internal/docker-entrypoint-postgres.sh"
+  "${REPO_ROOT}/scripts/internal/postgres-init-user.sh"
 )
 MISSING_CONFIGS=()
 for config_file in "${CONFIG_FILES[@]}"; do
@@ -263,6 +264,7 @@ OLD_CONFIG_NAMES=(
 NEW_CONFIG_NAMES=(
   "${STACK_NAME}_postgres_hba_conf"
   "${STACK_NAME}_postgres_entrypoint_wrapper"
+  "${STACK_NAME}_postgres_init_user"
 )
 
 # Check if we need to migrate from old config names to new ones

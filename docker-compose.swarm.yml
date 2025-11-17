@@ -37,6 +37,10 @@ services:
       - source: postgres_entrypoint_wrapper
         target: /docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh
         mode: 0755
+      # Mount init script to ensure user exists (runs after initialization)
+      - source: postgres_init_user
+        target: /docker-entrypoint-initdb.d/01-init-user.sh
+        mode: 0755
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-obiente_postgres} -d ${POSTGRES_DB:-obiente}"]
       interval: 10s
@@ -87,6 +91,10 @@ services:
       # Mount entrypoint wrapper to configure postgresql.conf
       - source: postgres_entrypoint_wrapper
         target: /docker-entrypoint-initdb.d/docker-entrypoint-wrapper.sh
+        mode: 0755
+      # Mount init script to ensure user exists (runs after initialization)
+      - source: postgres_init_user
+        target: /docker-entrypoint-initdb.d/01-init-user.sh
         mode: 0755
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${METRICS_DB_USER:-obiente_postgres} -d ${METRICS_DB_NAME:-obiente_metrics}"]
@@ -1035,3 +1043,6 @@ configs:
   # PostgreSQL entrypoint wrapper to configure postgresql.conf (hba_file and listen_addresses)
   postgres_entrypoint_wrapper:
     file: ./scripts/internal/docker-entrypoint-postgres.sh
+  # PostgreSQL init script to ensure user exists (runs after initialization)
+  postgres_init_user:
+    file: ./scripts/internal/postgres-init-user.sh
