@@ -134,7 +134,7 @@ ID             NAME                MODE         REPLICAS   IMAGE
 abc123         obiente_api        global       3/3        obiente/cloud-api:latest
 def456         obiente_postgres      replicated   1/1        postgres:16-alpine
 ghi789         obiente_timescaledb  replicated   1/1        timescale/timescaledb:latest-pg16
-jkl012         obiente_redis         replicated   1/1        redis:7-alpine
+jkl012         obiente_redis         replicated   1/1        redis:8-alpine
 mno345         obiente_traefik       global       3/3        traefik:v2.11
 ```
 

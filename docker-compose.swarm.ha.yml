@@ -334,7 +334,7 @@ services:
   # ============================================================================
 
   redis-1:
-    image: redis:7-alpine
+    image: redis:8-alpine
     command: >
       redis-server
       --appendonly yes
@@ -360,7 +360,7 @@ services:
       - obiente-network
 
   redis-2:
-    image: redis:7-alpine
+    image: redis:8-alpine
     command: >
       redis-server
       --appendonly yes
@@ -386,7 +386,7 @@ services:
       - obiente-network
 
   redis-3:
-    image: redis:7-alpine
+    image: redis:8-alpine
     command: >
       redis-server
       --appendonly yes
