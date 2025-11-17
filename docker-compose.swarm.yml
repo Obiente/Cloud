@@ -144,12 +144,14 @@ services:
       # If REDIS_PASSWORD is set, Redis will require authentication
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     command:
-      - redis-server
-      - --appendonly
-      - yes
-      # Enable password authentication if REDIS_PASSWORD is set
-      - ${REDIS_PASSWORD:+--requirepass}
-      - ${REDIS_PASSWORD:+${REDIS_PASSWORD}}
+      - sh
+      - -c
+      - |
+        if [ -n "$$REDIS_PASSWORD" ]; then
+          exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"
+        else
+          exec redis-server --appendonly yes
+        fi
     # Port exposure configuration for Netbird VPN access
     # Default: Exposed on localhost only (127.0.0.1) for security
     # To change binding, set REDIS_EXPOSE_PORT and REDIS_PORT_MODE environment variables
@@ -169,7 +171,7 @@ services:
     healthcheck:
       # Health check with password support
       # If REDIS_PASSWORD is set, use AUTH command
-      test: ["CMD-SHELL", "redis-cli ${REDIS_PASSWORD:+-a ${REDIS_PASSWORD}} ping || exit 1"]
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -a \"$$REDIS_PASSWORD\" ping; else redis-cli ping; fi || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 5
