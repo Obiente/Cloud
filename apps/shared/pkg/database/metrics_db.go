@@ -44,6 +44,9 @@ func InitMetricsDatabase() error {
 	if password == "" {
 		password = os.Getenv("DB_PASSWORD") // Fallback to main DB password
 	}
+	if password == "" {
+		return fmt.Errorf("METRICS_DB_PASSWORD or DB_PASSWORD environment variable is required but not set")
+	}
 
 	dbname := os.Getenv("METRICS_DB_NAME")
 	if dbname == "" {
