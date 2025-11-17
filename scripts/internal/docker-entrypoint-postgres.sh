@@ -40,8 +40,11 @@ configure_postgresql_conf() {
     # Verify the rule is present
     if grep -qE "^host\s+all\s+all\s+10\.15\.3\.0/24\s+md5" "$PGDATA/pg_hba.conf" 2>/dev/null; then
       echo "✅ Verified overlay network rule in pg_hba.conf"
+      echo "   Rule: $(grep -E '^host\s+all\s+all\s+10\.15\.3\.0/24\s+md5' "$PGDATA/pg_hba.conf")"
     else
       echo "⚠️  Warning: Overlay network rule not found in copied file!"
+      echo "   Current rules:"
+      grep -E "^host|^local" "$PGDATA/pg_hba.conf" | head -5 || echo "   (no rules found)"
     fi
   else
     echo "⚠️  Warning: Custom pg_hba.conf not found at $CUSTOM_HBA"

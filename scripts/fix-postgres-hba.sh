@@ -85,27 +85,45 @@ fi
 # Fix listen_addresses if not set to *
 echo ""
 echo "4. Checking and fixing listen_addresses..."
-LISTEN_ADDR=$(docker exec "$CONTAINER_ID" psql -U obiente_postgres -d obiente -t -c "SHOW listen_addresses;" 2>/dev/null | tr -d ' ' || echo "unknown")
-echo "   Current listen_addresses: $LISTEN_ADDR"
+LISTEN_ADDR=$(docker exec "$CONTAINER_ID" psql -U obiente_postgres -d obiente -t -c "SHOW listen_addresses;" 2>/dev/null | tr -d ' \n\r' || echo "unknown")
+echo "   Current listen_addresses (from SHOW): '$LISTEN_ADDR'"
 
-if [ "$LISTEN_ADDR" != "*" ]; then
-  echo "   ⚠️  PostgreSQL is NOT listening on all interfaces"
-  echo "   Setting listen_addresses=* in postgresql.conf..."
+# Check what's in postgresql.conf
+POSTGRESQL_CONF="$PGDATA/postgresql.conf"
+if docker exec "$CONTAINER_ID" test -f "$POSTGRESQL_CONF" 2>/dev/null; then
+  CONF_VALUE=$(docker exec "$CONTAINER_ID" grep -E "^listen_addresses\s*=" "$POSTGRESQL_CONF" 2>/dev/null | head -1 | sed 's/.*=\s*//' | tr -d " '")
+  echo "   Current listen_addresses (in postgresql.conf): '$CONF_VALUE'"
   
-  POSTGRESQL_CONF="$PGDATA/postgresql.conf"
-  if docker exec "$CONTAINER_ID" test -f "$POSTGRESQL_CONF" 2>/dev/null; then
-    # Remove existing listen_addresses line
+  if [ "$CONF_VALUE" != "*" ] && [ -n "$CONF_VALUE" ]; then
+    echo "   ⚠️  PostgreSQL config has listen_addresses='$CONF_VALUE' (not '*')"
+    echo "   Setting listen_addresses=* in postgresql.conf..."
     docker exec "$CONTAINER_ID" sed -i '/^listen_addresses\s*=/d' "$POSTGRESQL_CONF" 2>/dev/null || true
-    # Add new line
+    docker exec "$CONTAINER_ID" sh -c "echo 'listen_addresses = '\''*'\''' >> $POSTGRESQL_CONF"
+    echo "   ✅ Updated listen_addresses=* in postgresql.conf"
+    echo "   ⚠️  PostgreSQL MUST be restarted for listen_addresses to take effect"
+    echo "   Run: docker service update --force $POSTGRES_SERVICE"
+  elif [ -z "$CONF_VALUE" ] || [ "$CONF_VALUE" = "" ]; then
+    echo "   ⚠️  listen_addresses not set in postgresql.conf, adding it..."
     docker exec "$CONTAINER_ID" sh -c "echo 'listen_addresses = '\''*'\''' >> $POSTGRESQL_CONF"
     echo "   ✅ Added listen_addresses=* to postgresql.conf"
-    echo "   ⚠️  PostgreSQL needs to be restarted for this to take effect"
+    echo "   ⚠️  PostgreSQL MUST be restarted for listen_addresses to take effect"
     echo "   Run: docker service update --force $POSTGRES_SERVICE"
   else
-    echo "   ⚠️  postgresql.conf not found. This should be set via command line in docker-compose."
+    echo "   ✅ listen_addresses=* is set in postgresql.conf"
+    if [ "$LISTEN_ADDR" != "*" ] && [ "$LISTEN_ADDR" != "" ]; then
+      echo "   ⚠️  But SHOW listen_addresses returns '$LISTEN_ADDR' - PostgreSQL needs restart"
+      echo "   Run: docker service update --force $POSTGRES_SERVICE"
+    fi
   fi
 else
-  echo "   ✅ PostgreSQL is listening on all interfaces"
+  echo "   ⚠️  postgresql.conf not found. listen_addresses should be set via command line."
+fi
+
+# Note: listen_addresses requires a restart, not just a reload
+if [ "$LISTEN_ADDR" != "*" ]; then
+  echo ""
+  echo "   💡 IMPORTANT: listen_addresses changes require a PostgreSQL RESTART (not reload)"
+  echo "   pg_reload_conf() only reloads pg_hba.conf, not postgresql.conf settings"
 fi
 
 # Reload PostgreSQL configuration
