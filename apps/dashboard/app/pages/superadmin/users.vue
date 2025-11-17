@@ -101,7 +101,6 @@ const pagination = ref({
 });
 const search = ref("");
 const roleFilter = ref<string>("all");
-const loading = ref(false);
 let searchTimeout: NodeJS.Timeout | null = null;
 
 const columns = [
@@ -187,7 +186,6 @@ function handleFilterChange(key: string, value: string) {
 }
 
 async function loadUsers() {
-  loading.value = true;
   try {
     const response = await client.listUsers({
       page: pagination.value.page,
@@ -226,10 +224,14 @@ async function loadUsers() {
     console.error("Failed to load users:", error);
     const { toast } = useToast();
     toast.error(error?.message || "Failed to load users");
-  } finally {
-    loading.value = false;
   }
 }
+
+// Use client-side fetching for non-blocking navigation
+const { pending: loading } = useClientFetch(
+  () => `superadmin-users-${pagination.value.page}-${search.value}`,
+  loadUsers
+);
 
 function handleSearch() {
   if (searchTimeout) {

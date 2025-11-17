@@ -331,7 +331,8 @@
   });
 
   const superAdmin = useSuperAdmin();
-  await superAdmin.fetchOverview();
+  // Use client-side fetching for non-blocking navigation
+  useClientFetch("superadmin-overview", () => superAdmin.fetchOverview());
 
   const overview = computed(() => superAdmin.overview.value);
   const organizations = computed(() => overview.value?.organizations ?? []);

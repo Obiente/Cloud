@@ -128,7 +128,8 @@ import type { FilterConfig } from "~/components/superadmin/SuperadminFilterBar.v
 import type { BadgeVariant } from "~/components/oui/Badge.vue";
 
 const superAdmin = useSuperAdmin();
-await superAdmin.fetchOverview(true);
+// Use client-side fetching for non-blocking navigation
+useClientFetch("superadmin-organizations-overview", () => superAdmin.fetchOverview(true));
 
 const search = ref("");
 const planFilter = ref<string>("all");

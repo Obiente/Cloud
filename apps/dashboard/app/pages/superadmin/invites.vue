@@ -88,7 +88,8 @@ definePageMeta({
 });
 
 const superAdmin = useSuperAdmin();
-await superAdmin.fetchOverview(true);
+// Use client-side fetching for non-blocking navigation
+useClientFetch("superadmin-invites-overview", () => superAdmin.fetchOverview(true));
 
 const router = useRouter();
 const organizationsStore = useOrganizationsStore();

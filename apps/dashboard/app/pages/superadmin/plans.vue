@@ -216,7 +216,6 @@ const { toast } = useToast();
 const client = useConnectClient(SuperadminService);
 
 const plans = ref<any[]>([]);
-const isLoading = ref(false);
 const isSaving = ref(false);
 const isDeleting = ref(false);
 const planDialogOpen = ref(false);
@@ -252,16 +251,16 @@ const tableRows = computed(() => plans.value);
 const { formatBytes, formatCurrency } = useUtils();
 
 const fetchPlans = async () => {
-  isLoading.value = true;
   try {
     const response = await client.listPlans({});
     plans.value = response.plans || [];
   } catch (error: any) {
     toast.error(`Failed to load plans: ${error?.message || "Unknown error"}`);
-  } finally {
-    isLoading.value = false;
   }
 };
+
+// Use client-side fetching for non-blocking navigation
+const { pending: isLoading } = useClientFetch("superadmin-plans", fetchPlans);
 
 const openCreateDialog = () => {
   editingPlan.value = null;

@@ -199,7 +199,6 @@ definePageMeta({
 const router = useRouter();
 const client = useConnectClient(SuperadminService);
 
-const isLoading = ref(false);
 const incomeData = ref<any>(null);
 
 const startDate = ref("");
@@ -214,7 +213,6 @@ startDate.value = thirtyDaysAgo.toISOString().split("T")[0] || "";
 endDate.value = today.toISOString().split("T")[0] || "";
 
 async function fetchIncome() {
-  isLoading.value = true;
   try {
     const response = await client.getIncomeOverview({
       startDate: startDate.value ? startDate.value : undefined,
@@ -223,12 +221,14 @@ async function fetchIncome() {
     incomeData.value = response;
   } catch (err) {
     console.error("Failed to fetch income overview:", err);
-  } finally {
-    isLoading.value = false;
   }
 }
 
-await fetchIncome();
+// Use client-side fetching for non-blocking navigation
+const { pending: isLoading } = useClientFetch(
+  () => `superadmin-income-${startDate.value}-${endDate.value}`,
+  fetchIncome
+);
 
 const summaryMetrics = computed(() => {
   const s = incomeData.value?.summary;

@@ -126,22 +126,19 @@ definePageMeta({
 const router = useRouter();
 const client = useConnectClient(SuperadminService);
 
-const isLoading = ref(false);
 const abuseData = ref<any>(null);
 
 async function fetchAbuseDetection() {
-  isLoading.value = true;
   try {
     const response = await client.getAbuseDetection({});
     abuseData.value = response;
   } catch (err) {
     console.error("Failed to fetch abuse detection:", err);
-  } finally {
-    isLoading.value = false;
   }
 }
 
-await fetchAbuseDetection();
+// Use client-side fetching for non-blocking navigation
+const { pending: isLoading } = useClientFetch("superadmin-abuse", fetchAbuseDetection);
 
 const metrics = computed(() => {
   const m = abuseData.value?.metrics;

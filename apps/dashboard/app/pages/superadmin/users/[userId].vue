@@ -202,7 +202,6 @@ function viewOrganization(orgId: string) {
 
 async function loadUser() {
   if (!userId.value) return;
-  loading.value = true;
   try {
     const response = await client.getUser({
       userId: userId.value,
@@ -213,11 +212,13 @@ async function loadUser() {
     console.error("Failed to load user:", error);
     const { toast } = useToast();
     toast.error(error?.message || "Failed to load user");
-  } finally {
-    loading.value = false;
   }
 }
 
-await loadUser();
+// Use client-side fetching for non-blocking navigation
+const { pending: loading } = useClientFetch(
+  () => `superadmin-user-${userId.value}`,
+  loadUser
+);
 </script>
 

@@ -172,7 +172,6 @@ definePageMeta({
 const router = useRouter();
 const client = useConnectClient(SuperadminService);
 
-const isLoading = ref(false);
 const events = ref<any[]>([]);
 const totalCount = ref(0);
 const limit = ref(50);
@@ -195,7 +194,6 @@ const columns = [
 ];
 
 async function fetchEvents() {
-  isLoading.value = true;
   try {
     const response = await client.listStripeWebhookEvents({
       eventType: eventTypeFilter.value || undefined,
@@ -211,8 +209,6 @@ async function fetchEvents() {
     totalCount.value = Number(response.totalCount || 0);
   } catch (err) {
     console.error("Failed to fetch webhook events:", err);
-  } finally {
-    isLoading.value = false;
   }
 }
 
@@ -226,7 +222,11 @@ async function refresh() {
   await fetchEvents();
 }
 
-await fetchEvents();
+// Use client-side fetching for non-blocking navigation
+const { pending: isLoading } = useClientFetch(
+  () => `superadmin-webhook-events-${eventTypeFilter.value}-${customerIdFilter.value}-${offset.value}`,
+  fetchEvents
+);
 
 const metrics = computed(() => {
   const total = totalCount.value;

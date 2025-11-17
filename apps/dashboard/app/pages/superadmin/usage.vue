@@ -60,7 +60,8 @@ definePageMeta({
 });
 
 const superAdmin = useSuperAdmin();
-await superAdmin.fetchOverview(true);
+// Use client-side fetching for non-blocking navigation
+useClientFetch("superadmin-usage-overview", () => superAdmin.fetchOverview(true));
 
 const organizationsStore = useOrganizationsStore();
 const router = useRouter();
