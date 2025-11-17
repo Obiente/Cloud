@@ -34,29 +34,29 @@ func (r *RedisCache) Connect() error {
 	// PoolSize: Number of connections per CPU core (default is 10 * numCPU)
 	// MinIdleConns: Minimum idle connections to maintain
 	if opt.PoolSize == 0 {
-		opt.PoolSize = 20 // Increased from default for better concurrency
+		opt.PoolSize = 30 // Increased for better concurrency (was 20)
 	}
 	if opt.MinIdleConns == 0 {
-		opt.MinIdleConns = 5 // Keep some connections warm
+		opt.MinIdleConns = 10 // Keep more connections warm (was 5)
 	}
 
-	// Connection timeouts
+	// Connection timeouts - optimized for faster failure detection
 	if opt.DialTimeout == 0 {
 		opt.DialTimeout = 5 * time.Second
 	}
 	if opt.ReadTimeout == 0 {
-		opt.ReadTimeout = 3 * time.Second
+		opt.ReadTimeout = 2 * time.Second // Reduced from 3s for faster timeouts
 	}
 	if opt.WriteTimeout == 0 {
-		opt.WriteTimeout = 3 * time.Second
+		opt.WriteTimeout = 2 * time.Second // Reduced from 3s for faster timeouts
 	}
 
 	// Connection pool timeouts
 	if opt.PoolTimeout == 0 {
-		opt.PoolTimeout = 4 * time.Second
+		opt.PoolTimeout = 3 * time.Second // Reduced from 4s
 	}
 
-	// Retry configuration
+	// Retry configuration - optimized for faster recovery
 	if opt.MaxRetries == 0 {
 		opt.MaxRetries = 3
 	}
@@ -64,7 +64,7 @@ func (r *RedisCache) Connect() error {
 		opt.MinRetryBackoff = 8 * time.Millisecond
 	}
 	if opt.MaxRetryBackoff == 0 {
-		opt.MaxRetryBackoff = 512 * time.Millisecond
+		opt.MaxRetryBackoff = 256 * time.Millisecond // Reduced from 512ms for faster retries
 	}
 
 	// Allow configuration via environment variables
@@ -147,6 +147,40 @@ func (r *RedisCache) MGet(ctx context.Context, keys ...string) ([]interface{}, e
 		return []interface{}{}, nil
 	}
 	return r.client.MGet(ctx, keys...).Result()
+}
+
+// MGetWithUnmarshal retrieves multiple keys and unmarshals them into a map
+// Returns a map of key -> unmarshaled value, only including successfully retrieved items
+func (r *RedisCache) MGetWithUnmarshal(ctx context.Context, keys []string, targetType interface{}) (map[string]interface{}, error) {
+	if r.client == nil {
+		return nil, fmt.Errorf("redis client not initialized")
+	}
+	if len(keys) == 0 {
+		return make(map[string]interface{}), nil
+	}
+
+	values, err := r.client.MGet(ctx, keys...).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]interface{})
+	for i, val := range values {
+		if val == nil {
+			continue // Key doesn't exist
+		}
+		valStr, ok := val.(string)
+		if !ok {
+			continue
+		}
+		// Try to unmarshal - caller should provide appropriate type
+		var item interface{}
+		if err := json.Unmarshal([]byte(valStr), &item); err == nil {
+			result[keys[i]] = item
+		}
+	}
+
+	return result, nil
 }
 
 // MSet sets multiple key-value pairs at once (more efficient than multiple Sets)
@@ -236,6 +270,19 @@ func (r *RedisCache) ScanPattern(ctx context.Context, pattern string, count int6
 		return nil, err
 	}
 	return keys, nil
+}
+
+// GetClient returns the underlying Redis client (for advanced operations)
+func (r *RedisCache) GetClient() *redis.Client {
+	return r.client
+}
+
+// Ping checks if Redis is available
+func (r *RedisCache) Ping(ctx context.Context) error {
+	if r.client == nil {
+		return fmt.Errorf("redis client not initialized")
+	}
+	return r.client.Ping(ctx).Err()
 }
 
 // Increment increments a key's value (useful for counters)

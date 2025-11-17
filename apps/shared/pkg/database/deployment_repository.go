@@ -70,6 +70,10 @@ func (r *DeploymentRepository) GetByIDIncludeDeleted(ctx context.Context, id str
 }
 
 func (r *DeploymentRepository) GetAll(ctx context.Context, organizationID string, filters *DeploymentFilters) ([]*Deployment, error) {
+	// For list queries, we don't cache individual items but could cache the list result
+	// However, lists are often filtered/paginated, so caching is less effective
+	// We'll rely on individual item caching from GetByID calls
+	
 	query := r.db.WithContext(ctx).Where("organization_id = ? AND deleted_at IS NULL", organizationID)
 
 	if filters != nil {
@@ -95,6 +99,16 @@ func (r *DeploymentRepository) GetAll(ctx context.Context, organizationID string
 	var deployments []*Deployment
 	if err := query.Find(&deployments).Error; err != nil {
 		return nil, err
+	}
+
+	// Cache individual items for faster subsequent GetByID calls
+	if r.cache != nil && len(deployments) > 0 {
+		pairs := make(map[string]interface{})
+		for _, dep := range deployments {
+			pairs[fmt.Sprintf("deployment:%s", dep.ID)] = dep
+		}
+		// Use MSet for batch caching (more efficient)
+		r.cache.MSet(ctx, pairs, 5*time.Minute)
 	}
 
 	return deployments, nil

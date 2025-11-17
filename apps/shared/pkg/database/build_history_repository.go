@@ -2,33 +2,72 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
 )
 
 type BuildHistoryRepository struct {
-	db *gorm.DB
+	db    *gorm.DB
+	cache *RedisCache
 }
 
 func NewBuildHistoryRepository(db *gorm.DB) *BuildHistoryRepository {
 	return &BuildHistoryRepository{
-		db: db,
+		db:    db,
+		cache: nil, // Builds are less frequently accessed, caching optional
+	}
+}
+
+func NewBuildHistoryRepositoryWithCache(db *gorm.DB, cache *RedisCache) *BuildHistoryRepository {
+	return &BuildHistoryRepository{
+		db:    db,
+		cache: cache,
 	}
 }
 
 // CreateBuild creates a new build record
 func (r *BuildHistoryRepository) CreateBuild(ctx context.Context, build *BuildHistory) error {
-	return r.db.WithContext(ctx).Create(build).Error
+	if err := r.db.WithContext(ctx).Create(build).Error; err != nil {
+		return err
+	}
+
+	// Cache the newly created build if cache is available
+	if r.cache != nil {
+		cacheKey := fmt.Sprintf("build:%s", build.ID)
+		r.cache.Set(ctx, cacheKey, build, 2*time.Minute)
+	}
+
+	return nil
 }
 
 // GetBuildByID retrieves a build by ID
 func (r *BuildHistoryRepository) GetBuildByID(ctx context.Context, buildID string) (*BuildHistory, error) {
+	cacheKey := fmt.Sprintf("build:%s", buildID)
+
+	// Try cache first if available
+	if r.cache != nil {
+		if cachedData, err := r.cache.Get(ctx, cacheKey); err == nil && cachedData != "" {
+			var build BuildHistory
+			if err := json.Unmarshal([]byte(cachedData), &build); err == nil {
+				return &build, nil
+			}
+		}
+	}
+
 	var build BuildHistory
 	if err := r.db.WithContext(ctx).Where("id = ?", buildID).First(&build).Error; err != nil {
 		return nil, err
 	}
+
+	// Cache the result if cache is available
+	if r.cache != nil {
+		r.cache.Set(ctx, cacheKey, build, 2*time.Minute) // Shorter TTL for builds
+	}
+
 	return &build, nil
 }
 
@@ -94,10 +133,19 @@ func (r *BuildHistoryRepository) UpdateBuildStatus(ctx context.Context, buildID 
 		update["error"] = *errorMsg
 	}
 	
-	return r.db.WithContext(ctx).
+	if err := r.db.WithContext(ctx).
 		Model(&BuildHistory{}).
 		Where("id = ?", buildID).
-		Updates(update).Error
+		Updates(update).Error; err != nil {
+		return err
+	}
+
+	// Clear cache AFTER successful update
+	if r.cache != nil {
+		r.cache.Delete(ctx, fmt.Sprintf("build:%s", buildID))
+	}
+
+	return nil
 }
 
 // UpdateBuildResults updates build result fields (image name, compose yaml, size)
@@ -116,10 +164,19 @@ func (r *BuildHistoryRepository) UpdateBuildResults(ctx context.Context, buildID
 		update["size"] = *size
 	}
 	
-	return r.db.WithContext(ctx).
+	if err := r.db.WithContext(ctx).
 		Model(&BuildHistory{}).
 		Where("id = ?", buildID).
-		Updates(update).Error
+		Updates(update).Error; err != nil {
+		return err
+	}
+
+	// Clear cache AFTER successful update
+	if r.cache != nil {
+		r.cache.Delete(ctx, fmt.Sprintf("build:%s", buildID))
+	}
+
+	return nil
 }
 
 // NOTE: Build log methods (AddBuildLog, AddBuildLogsBatch, GetBuildLogs) have been moved
@@ -156,7 +213,16 @@ func (r *BuildHistoryRepository) DeleteBuild(ctx context.Context, buildID, organ
 	}
 
 	// Delete the build (logs are handled separately in the service layer using TimescaleDB)
-	return r.db.WithContext(ctx).Where("id = ?", buildID).Delete(&BuildHistory{}).Error
+	if err := r.db.WithContext(ctx).Where("id = ?", buildID).Delete(&BuildHistory{}).Error; err != nil {
+		return err
+	}
+
+	// Clear cache AFTER successful delete
+	if r.cache != nil {
+		r.cache.Delete(ctx, fmt.Sprintf("build:%s", buildID))
+	}
+
+	return nil
 }
 
 // DeleteBuildsByDeployment deletes all builds for a deployment

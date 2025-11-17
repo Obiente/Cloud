@@ -79,6 +79,10 @@ type GameServerFilters struct {
 }
 
 func (r *GameServerRepository) GetAll(ctx context.Context, organizationID string, filters *GameServerFilters) ([]*GameServer, error) {
+	// For list queries, we don't cache individual items but could cache the list result
+	// However, lists are often filtered/paginated, so caching is less effective
+	// We'll rely on individual item caching from GetByID calls
+	
 	query := r.db.WithContext(ctx).Where("organization_id = ? AND deleted_at IS NULL", organizationID)
 
 	if filters != nil {
@@ -109,6 +113,16 @@ func (r *GameServerRepository) GetAll(ctx context.Context, organizationID string
 	var gameServers []*GameServer
 	if err := query.Find(&gameServers).Error; err != nil {
 		return nil, err
+	}
+
+	// Cache individual items for faster subsequent GetByID calls
+	if r.cache != nil && len(gameServers) > 0 {
+		pairs := make(map[string]interface{})
+		for _, gs := range gameServers {
+			pairs[fmt.Sprintf("gameserver:%s", gs.ID)] = gs
+		}
+		// Use MSet for batch caching (more efficient)
+		r.cache.MSet(ctx, pairs, 5*time.Minute)
 	}
 
 	return gameServers, nil
