@@ -35,6 +35,7 @@ Complete reference for all Obiente Cloud environment variables.
 | `DB_PORT`                | number | `5432`     | ❌           |
 | `POSTGRES_EXPOSE_PORT`   | number | `5432`     | ❌           | Port to expose PostgreSQL on host (default: 5432, localhost only) |
 | `POSTGRES_PORT_MODE`     | string | `host`     | ❌           | Port mode: `host` (default, for localhost binding) or `ingress` |
+| `POSTGRES_ALLOWED_HOSTS` | string | -          | ❌           | Comma-separated IPs/subnets to allow in pg_hba.conf (e.g., "10.10.10.1,10.0.0.0/8") |
 | `REPLICATION_PASSWORD`   | string | -          | ❌ (HA only) |
 | `PATRONI_ADMIN_PASSWORD` | string | -          | ❌ (HA only) |
 
@@ -103,6 +104,30 @@ POSTGRES_PORT_MODE=ingress
 ```
 
 **Note:** The port is exposed by default. To disable, comment out the `ports:` section in `docker-compose.swarm.yml`.
+
+**Database Allowed Hosts (`POSTGRES_ALLOWED_HOSTS`):**
+
+Configure additional IP addresses or subnets that are allowed to connect to PostgreSQL. This adds entries to `pg_hba.conf` automatically.
+
+**Format:** Comma-separated list of IP addresses or CIDR subnets
+
+**Examples:**
+
+```bash
+# Allow specific IP address
+POSTGRES_ALLOWED_HOSTS=10.10.10.1
+
+# Allow multiple IPs
+POSTGRES_ALLOWED_HOSTS=10.10.10.1,192.168.1.100
+
+# Allow subnet (CIDR notation)
+POSTGRES_ALLOWED_HOSTS=10.0.0.0/8
+
+# Mix of IPs and subnets
+POSTGRES_ALLOWED_HOSTS=10.10.10.1,10.0.0.0/8,192.168.1.0/24
+```
+
+**Note:** Single IPs are automatically converted to `/32` CIDR format. The init script adds these rules to `pg_hba.conf` automatically on container start. After adding allowed hosts, restart the PostgreSQL service for changes to take effect.
 
 ### API Configuration
 
@@ -248,6 +273,7 @@ The API uses `DASHBOARD_URL` to build links in transactional emails and billing 
 | `METRICS_DB_PORT`         | number | `5432`                            | ❌       |
 | `METRICS_DB_EXPOSE_PORT`  | number | `5432`                            | ❌       | Port to expose TimescaleDB on host (default: 5432, localhost only) |
 | `METRICS_DB_PORT_MODE`    | string | `host`                             | ❌       | Port mode: `host` (default, for localhost binding) or `ingress` |
+| `METRICS_DB_ALLOWED_HOSTS` | string | -                                 | ❌       | Comma-separated IPs/subnets to allow in pg_hba.conf (falls back to POSTGRES_ALLOWED_HOSTS) |
 | `METRICS_DB_USER`         | string | `POSTGRES_USER` or `postgres`     | ❌       |
 | `METRICS_DB_PASSWORD`     | string | `POSTGRES_PASSWORD` or `postgres` | ❌       |
 | `METRICS_DB_NAME`         | string | `obiente_metrics`                 | ❌       |
@@ -301,6 +327,23 @@ METRICS_DB_PORT_MODE=host
 ```
 
 **Note:** The port is exposed by default. To disable, comment out the `ports:` section in `docker-compose.swarm.yml`.
+
+**Metrics Database Allowed Hosts (`METRICS_DB_ALLOWED_HOSTS`):**
+
+Similar to `POSTGRES_ALLOWED_HOSTS`, configure allowed hosts for TimescaleDB. Falls back to `POSTGRES_ALLOWED_HOSTS` if not set.
+
+**Examples:**
+
+```bash
+# Allow specific IP for metrics database
+METRICS_DB_ALLOWED_HOSTS=10.10.10.1
+
+# Allow subnet
+METRICS_DB_ALLOWED_HOSTS=10.0.0.0/8
+
+# Falls back to POSTGRES_ALLOWED_HOSTS if not set
+POSTGRES_ALLOWED_HOSTS=10.10.10.1,10.0.0.0/8
+```
 
 **Notes:**
 

@@ -18,6 +18,8 @@ services:
       POSTGRES_HOST_AUTH_METHOD: md5
       # Overlay network subnet for pg_hba.conf configuration
       OVERLAY_SUBNET: ${OVERLAY_SUBNET:-10.15.3.0/24}
+      # Allowed hosts for pg_hba.conf (comma-separated IPs or subnets, e.g., "10.10.10.1,10.0.0.0/8")
+      POSTGRES_ALLOWED_HOSTS: ${POSTGRES_ALLOWED_HOSTS:-}
     command:
       - postgres
       - -c
@@ -80,6 +82,9 @@ services:
       POSTGRES_HOST_AUTH_METHOD: md5
       # Overlay network subnet for pg_hba.conf configuration
       OVERLAY_SUBNET: ${OVERLAY_SUBNET:-10.15.3.0/24}
+      # Allowed hosts for pg_hba.conf (comma-separated IPs or subnets, e.g., "10.10.10.1,10.0.0.0/8")
+      # Falls back to POSTGRES_ALLOWED_HOSTS if not set
+      POSTGRES_ALLOWED_HOSTS: ${METRICS_DB_ALLOWED_HOSTS:-${POSTGRES_ALLOWED_HOSTS:-}}
     command:
       - postgres
       - -c
