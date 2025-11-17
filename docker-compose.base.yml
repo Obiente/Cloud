@@ -63,7 +63,14 @@ x-common-stripe: &common-stripe
   STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
 
 x-common-redis: &common-redis
-  REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+  # Redis host configuration
+  # - Docker Swarm: Use service name (e.g., "redis")
+  # - Netbird VPN: Use Netbird internal domain (e.g., "redis.example.netbird")
+  # - Custom: Set REDIS_HOST environment variable to override
+  REDIS_HOST: ${REDIS_HOST:-redis}
+  REDIS_PORT: ${REDIS_PORT:-6379}
+  # REDIS_URL is constructed from REDIS_HOST and REDIS_PORT if not explicitly set
+  REDIS_URL: ${REDIS_URL:-redis://${REDIS_HOST:-redis}:${REDIS_PORT:-6379}}
 
 x-common-orchestrator: &common-orchestrator
   DOMAIN: ${DOMAIN:-localhost}

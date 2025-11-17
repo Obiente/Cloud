@@ -191,6 +191,96 @@ LOG_LEVEL=warn
 DB_LOG_LEVEL=debug
 ```
 
+### Redis Configuration
+
+| Variable            | Type   | Default | Required |
+| ------------------- | ------ | ------- | -------- |
+| `REDIS_HOST`        | string | `redis` | ❌       |
+| `REDIS_PORT`        | number | `6379`  | ❌       |
+| `REDIS_EXPOSE_PORT` | number | `6379`  | ❌       | Port to expose Redis on host (default: 6379, localhost only) |
+| `REDIS_PORT_MODE`   | string | `host`  | ❌       | Port mode: `host` (default, for localhost binding) or `ingress` |
+| `REDIS_URL`         | string | -       | ❌       | Full Redis URL (constructed from REDIS_HOST and REDIS_PORT if not set) |
+
+**Redis Host Configuration (`REDIS_HOST`):**
+
+The `REDIS_HOST` variable supports different networking configurations, similar to database configuration:
+
+- **Docker Swarm**: Use the service name (default: `redis`)
+- **Netbird VPN**: Use the Netbird internal domain (e.g., `redis.example.netbird`)
+- **Custom**: Set to any hostname or IP address
+
+**Examples:**
+
+```bash
+# Docker Swarm (default)
+REDIS_HOST=redis
+
+# Netbird VPN
+REDIS_HOST=redis.example.netbird
+
+# Custom hostname/IP
+REDIS_HOST=redis.example.com
+REDIS_HOST=10.0.0.5
+
+# Full example
+REDIS_HOST=redis.example.netbird
+REDIS_PORT=6379
+```
+
+**Redis URL (`REDIS_URL`):**
+
+If `REDIS_URL` is not explicitly set, it is automatically constructed from `REDIS_HOST` and `REDIS_PORT`:
+
+```bash
+# Automatically constructed (default)
+REDIS_HOST=redis
+REDIS_PORT=6379
+# Results in: redis://redis:6379
+
+# Explicit URL (overrides REDIS_HOST and REDIS_PORT)
+REDIS_URL=redis://redis.example.netbird:6379
+```
+
+**Redis Port Exposure (`REDIS_EXPOSE_PORT`):**
+
+Redis port is **exposed by default on localhost only** (127.0.0.1:6379) for security. This allows local access while preventing external connections.
+
+**Default Configuration:**
+- Port exposed: `6379` (configurable via `REDIS_EXPOSE_PORT`)
+- Mode: `host` (for localhost binding)
+- Binding: All interfaces (restrict via firewall for localhost-only)
+
+**To restrict to localhost only**, configure firewall rules on the host:
+```bash
+# Using iptables (restrict Redis to localhost only)
+sudo iptables -A INPUT -p tcp --dport 6379 ! -s 127.0.0.1 -j DROP
+
+# Or using ufw (if installed)
+sudo ufw deny 6379
+sudo ufw allow from 127.0.0.1 to any port 6379
+```
+
+**Examples:**
+
+```bash
+# Default: Exposed on localhost only (requires firewall rules for true localhost-only)
+REDIS_EXPOSE_PORT=6379
+REDIS_PORT_MODE=host
+
+# Expose on all interfaces (for Netbird VPN access)
+REDIS_EXPOSE_PORT=6379
+REDIS_PORT_MODE=host
+# Then configure firewall to allow Netbird VPN subnet
+
+# Use ingress mode (Docker Swarm load balancing)
+REDIS_EXPOSE_PORT=6379
+REDIS_PORT_MODE=ingress
+```
+
+**Note:** The port is exposed by default. To disable, comment out the `ports:` section in `docker-compose.swarm.yml`.
+
+**Note:** Redis is an internal service and typically communicates within the Docker Swarm overlay network or via VPN. Port exposure is optional and mainly for external access scenarios.
+
 ### Authentication
 
 | Variable          | Type    | Default                      | Required |

@@ -140,6 +140,20 @@ services:
   redis:
     image: redis:8-alpine
     command: redis-server --appendonly yes
+    # Port exposure configuration for Netbird VPN access
+    # Default: Exposed on localhost only (127.0.0.1) for security
+    # To change binding, set REDIS_EXPOSE_PORT and REDIS_PORT_MODE environment variables
+    # For localhost-only binding, use host mode (default) and configure firewall rules
+    # Examples:
+    #   - REDIS_EXPOSE_PORT=6379  # Default: localhost only (requires firewall rules)
+    #   - REDIS_PORT_MODE=host     # Default: host mode for localhost binding
+    # Note: Docker Swarm host mode binds to all interfaces by default
+    # Configure iptables/firewall to restrict to localhost: iptables -A INPUT -p tcp --dport 6379 -s 127.0.0.1 -j ACCEPT
+    ports:
+      - target: 6379
+        published: ${REDIS_EXPOSE_PORT:-6379}
+        protocol: tcp
+        mode: ${REDIS_PORT_MODE:-host}
     volumes:
       - redis_data:/data
     healthcheck:
