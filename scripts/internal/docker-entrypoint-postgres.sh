@@ -27,6 +27,7 @@ configure_pg_hba() {
   
   # Check if rule already exists
   if grep -qE "^host\s+all\s+all\s+${subnet//\//\\/}\s+md5" "$PG_HBA_CONF" 2>/dev/null; then
+    echo "✅ Overlay network rule already exists in pg_hba.conf"
     return 0
   fi
   
@@ -45,6 +46,13 @@ configure_pg_hba() {
   fi
   
   echo "✅ Added overlay network rule to pg_hba.conf"
+  
+  # If PostgreSQL is already running, reload configuration
+  # This handles the case where the container was restarted but PostgreSQL is already initialized
+  if pg_isready -U "${POSTGRES_USER:-postgres}" >/dev/null 2>&1; then
+    echo "🔄 Reloading PostgreSQL configuration..."
+    psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-postgres}" -c "SELECT pg_reload_conf();" >/dev/null 2>&1 && echo "✅ Configuration reloaded" || echo "⚠️  Could not reload (PostgreSQL may not be fully started yet)"
+  fi
 }
 
 # Configure pg_hba.conf before starting PostgreSQL
