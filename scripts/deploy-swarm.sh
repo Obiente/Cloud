@@ -225,6 +225,10 @@ sed -i "s/__STACK_NAME__/${STACK_NAME}/g" "$MERGED_COMPOSE"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 sed -i "s|file: \\./scripts/internal/|file: ${REPO_ROOT}/scripts/internal/|g" "$MERGED_COMPOSE"
 
+# Convert relative bind mount paths to absolute paths
+# Bind mounts with relative paths must exist on every node, so we convert them to absolute paths
+sed -i "s|\\./monitoring/|${REPO_ROOT}/monitoring/|g" "$MERGED_COMPOSE"
+
 # Verify config files exist before deploying
 echo "🔍 Verifying Docker config files exist..."
 CONFIG_FILES=(
