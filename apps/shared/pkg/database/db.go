@@ -105,10 +105,12 @@ func InitDatabase() error {
 	}
 
 	// Build DSN with increased connection timeout for Docker Swarm overlay networks
-	// connect_timeout: Time to wait for initial connection (default 5s, increased to 30s)
-	// This helps with overlay network initialization delays
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable connect_timeout=30",
+	// connect_timeout: Time to wait for initial connection (default 5s, increased to 60s)
+	// This helps with overlay network initialization delays and slow DNS resolution
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable connect_timeout=60",
 		host, port, user, password, dbname)
+
+	logger.Info("Attempting to connect to database at %s:%s (database: %s, user: %s)", host, port, dbname, user)
 
 	// Retry database connection with exponential backoff
 	// This handles cases where DNS resolution isn't ready yet (common in Docker Swarm)
@@ -118,10 +120,22 @@ func InitDatabase() error {
 	var err error
 	
 	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// Note: gorm.Open doesn't accept context directly, but the underlying driver
+		// will respect the connect_timeout in the DSN (set to 60s above)
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
 			Logger: getGormLogger(),
 		})
+		
 		if err == nil {
+			// Configure sql.DB connection pool settings for better reliability
+			sqlDB, err := db.DB()
+			if err == nil {
+				// Set connection pool timeouts
+				sqlDB.SetConnMaxLifetime(5 * time.Minute)
+				sqlDB.SetConnMaxIdleTime(1 * time.Minute)
+				sqlDB.SetMaxOpenConns(25)
+				sqlDB.SetMaxIdleConns(5)
+			}
 			break
 		}
 		
