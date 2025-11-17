@@ -105,19 +105,77 @@ echo "   User: $DB_USER"
 echo "   Database: $DB_NAME"
 echo ""
 
+# Find the actual superuser in the database
+# PostgreSQL might have been initialized with a custom user, so "postgres" might not exist
+echo "🔍 Finding PostgreSQL superuser..."
+SUPERUSER=""
+SUPERUSER_PASSWORD=""
+
+# Get POSTGRES_USER from service environment as a candidate
+SERVICE_POSTGRES_USER=$(echo "$SERVICE_ENV" | grep "^POSTGRES_USER=" | cut -d'=' -f2- | tr -d '\n\r' | sed 's/[{}]//g' | xargs || echo "")
+
+# Try different users to find one that works
+CANDIDATE_USERS=("postgres" "$SERVICE_POSTGRES_USER" "$DB_USER")
+CANDIDATE_PASSWORDS=("" "$DB_PASSWORD")
+
+for candidate_user in "${CANDIDATE_USERS[@]}"; do
+  if [ -z "$candidate_user" ]; then
+    continue
+  fi
+  
+  # Try without password first (trust authentication)
+  if docker exec "$CONTAINER_ID" psql -U "$candidate_user" -d postgres -t -c "SELECT 1;" >/dev/null 2>&1; then
+    SUPERUSER="$candidate_user"
+    SUPERUSER_PASSWORD=""
+    echo "   ✅ Found superuser: $SUPERUSER (trust authentication)"
+    break
+  fi
+  
+  # Try with password
+  for candidate_password in "${CANDIDATE_PASSWORDS[@]}"; do
+    if [ -n "$candidate_password" ] && docker exec -e PGPASSWORD="$candidate_password" "$CONTAINER_ID" psql -U "$candidate_user" -d postgres -t -c "SELECT 1;" >/dev/null 2>&1; then
+      SUPERUSER="$candidate_user"
+      SUPERUSER_PASSWORD="$candidate_password"
+      echo "   ✅ Found superuser: $SUPERUSER (password authentication)"
+      break 2
+    fi
+  done
+done
+
+if [ -z "$SUPERUSER" ]; then
+  echo "   ❌ Could not find a working superuser"
+  echo "   💡 Make sure PostgreSQL is running and accessible"
+  exit 1
+fi
+
+echo ""
+
 # Ensure database user exists and has correct password
 echo "🔧 Ensuring database user '$DB_USER' exists..."
-USER_EXISTS=$(docker exec "$CONTAINER_ID" psql -U postgres -d postgres -t -c "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER';" 2>/dev/null | tr -d ' \n\r' || echo "")
+if [ -z "$SUPERUSER_PASSWORD" ]; then
+  USER_EXISTS=$(docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -t -c "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER';" 2>/dev/null | tr -d ' \n\r' || echo "")
+else
+  USER_EXISTS=$(docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -t -c "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER';" 2>/dev/null | tr -d ' \n\r' || echo "")
+fi
 
 if [ "$USER_EXISTS" = "1" ]; then
   echo "   ✅ User '$DB_USER' exists"
   echo "   Updating password..."
-  docker exec "$CONTAINER_ID" psql -U postgres -d postgres -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || true
+  if [ -z "$SUPERUSER_PASSWORD" ]; then
+    docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || true
+  else
+    docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || true
+  fi
   echo "   ✅ Password updated"
 else
   echo "   Creating user '$DB_USER'..."
-  docker exec "$CONTAINER_ID" psql -U postgres -d postgres -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD' CREATEDB SUPERUSER;" 2>/dev/null || true
-  docker exec "$CONTAINER_ID" psql -U postgres -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" 2>/dev/null || true
+  if [ -z "$SUPERUSER_PASSWORD" ]; then
+    docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD' CREATEDB SUPERUSER;" 2>/dev/null || true
+    docker exec "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" 2>/dev/null || true
+  else
+    docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD' CREATEDB SUPERUSER;" 2>/dev/null || true
+    docker exec -e PGPASSWORD="$SUPERUSER_PASSWORD" "$CONTAINER_ID" psql -U "$SUPERUSER" -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" 2>/dev/null || true
+  fi
   echo "   ✅ User '$DB_USER' created"
 fi
 
