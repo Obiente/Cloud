@@ -38,6 +38,7 @@ services:
         reservations:
           cpus: "1"
           memory: 512M
+    dns_search: []
     networks:
       - obiente-network
 
@@ -67,6 +68,7 @@ services:
         reservations:
           cpus: "1"
           memory: 512M
+    dns_search: []
     networks:
       - obiente-network
 
@@ -93,6 +95,7 @@ services:
         reservations:
           cpus: "0.5"
           memory: 256M
+    dns_search: []
     networks:
       - obiente-network
 
@@ -269,8 +272,9 @@ services:
       # Option 2: Connect to main deployment's network (recommended)
       # Uncomment and set MAIN_DEPLOYMENT_NETWORK to your main deployment's network name
       # This allows direct access to the main deployment's DNS server via service name
-      # If connected, you can access DNS at: obiente_dns (or your main stack name + _dns)
-      # - main-deployment-network
+    # If connected, you can access DNS at: obiente_dns (or your main stack name + _dns)
+    # - main-deployment-network
+    dns_search: []
 
   # ============================================================================
   # SERVICE DISCOVERY & ROUTING
@@ -343,6 +347,7 @@ services:
         - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.traefik.entrypoints=web"
         - "traefik.http.routers.traefik.service=api@internal"
+    dns_search: []
     networks:
       - obiente-network
 

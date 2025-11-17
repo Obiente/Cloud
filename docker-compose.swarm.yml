@@ -34,6 +34,7 @@ services:
         reservations:
           cpus: "2"
           memory: 2G
+    dns_search: []
     networks:
       - obiente-network
 
@@ -63,6 +64,7 @@ services:
         reservations:
           cpus: "2"
           memory: 2G
+    dns_search: []
     networks:
       - obiente-network
 
@@ -89,6 +91,7 @@ services:
         reservations:
           cpus: "0.5"
           memory: 256M
+    dns_search: []
     networks:
       - obiente-network
 
@@ -151,6 +154,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    dns_search: []
     networks:
       - obiente-network
 
@@ -195,6 +199,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    dns_search: []
     networks:
       - obiente-network
 
@@ -239,6 +244,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    dns_search: []
     networks:
       - obiente-network
 
@@ -283,6 +289,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    dns_search: []
     networks:
       - obiente-network
 
@@ -331,6 +338,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    dns_search: []
     networks:
       - obiente-network
 
@@ -377,6 +385,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    dns_search: []
     networks:
       - obiente-network
 
@@ -424,6 +433,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    dns_search: []
     networks:
       - obiente-network
 
@@ -468,6 +478,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    dns_search: []
     networks:
       - obiente-network
 
@@ -512,6 +523,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    dns_search: []
     networks:
       - obiente-network
 
@@ -556,6 +568,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    dns_search: []
     networks:
       - obiente-network
 
@@ -600,6 +613,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    dns_search: []
     networks:
       - obiente-network
 
@@ -651,6 +665,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    dns_search: []
     networks:
       - obiente-network
 
@@ -688,6 +703,7 @@ services:
         reservations:
           cpus: "0.5"
           memory: 256M
+    dns_search: []
     networks:
       - obiente-network
 
@@ -769,6 +785,7 @@ services:
         - "traefik.http.routers.traefik.entrypoints=websecure"
         - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
         - "traefik.http.routers.traefik.service=api@internal"
+    dns_search: []
     networks:
       - obiente-network
 
@@ -807,6 +824,7 @@ services:
         - "traefik.http.routers.prometheus.entrypoints=websecure"
         - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
         - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+    dns_search: []
     networks:
       - obiente-network
 
@@ -877,6 +895,7 @@ services:
         - "traefik.http.routers.grafana-secure.entrypoints=websecure"
         - "traefik.http.routers.grafana-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.grafana-secure.service=grafana"
+    dns_search: []
     networks:
       - obiente-network
 
@@ -922,6 +941,7 @@ services:
         - "traefik.http.routers.registry.tls.certresolver=letsencrypt"
         - "traefik.http.routers.registry.service=registry"
         - "traefik.http.services.registry.loadbalancer.server.port=5000"
+    dns_search: []
     networks:
       - obiente-network
 
