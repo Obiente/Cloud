@@ -19,7 +19,7 @@ if [ ! -f "$HBA_TARGET" ]; then
 fi
 
 # Copy pg_hba.conf if source exists
-if [ -f "$HBA_SOURCE" ]; then
+  if [ -f "$HBA_SOURCE" ]; then
   if [ ! -f "$HBA_TARGET" ] || ! cmp -s "$HBA_SOURCE" "$HBA_TARGET"; then
     echo "📋 Copying custom pg_hba.conf to $PGDATA..."
     cp "$HBA_SOURCE" "$HBA_TARGET"

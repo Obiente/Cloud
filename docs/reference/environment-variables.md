@@ -33,16 +33,76 @@ Complete reference for all Obiente Cloud environment variables.
 | `POSTGRES_DB`            | string | `obiente`  | ❌           |
 | `DB_HOST`                | string | `postgres` | ❌           |
 | `DB_PORT`                | number | `5432`     | ❌           |
+| `POSTGRES_EXPOSE_PORT`   | number | `5432`     | ❌           | Port to expose PostgreSQL on host (default: 5432, localhost only) |
+| `POSTGRES_PORT_MODE`     | string | `host`     | ❌           | Port mode: `host` (default, for localhost binding) or `ingress` |
 | `REPLICATION_PASSWORD`   | string | -          | ❌ (HA only) |
 | `PATRONI_ADMIN_PASSWORD` | string | -          | ❌ (HA only) |
 
-**Example:**
+**Database Host Configuration (`DB_HOST`):**
+
+The `DB_HOST` variable supports different networking configurations:
+
+- **Docker Swarm**: Use the service name (default: `postgres`)
+- **Netbird VPN**: Use the Netbird internal domain (e.g., `postgres.example.netbird`)
+- **Custom**: Set to any hostname or IP address
+
+**Examples:**
 
 ```bash
+# Docker Swarm (default)
+DB_HOST=postgres
+
+# Netbird VPN
+DB_HOST=postgres.example.netbird
+
+# Custom hostname/IP
+DB_HOST=db.example.com
+DB_HOST=10.0.0.5
+
+# Full example
 POSTGRES_USER=obiente
 POSTGRES_PASSWORD=secure_random_password_here
 POSTGRES_DB=obiente
+DB_HOST=postgres.example.netbird
 ```
+
+**Database Port Exposure (`POSTGRES_EXPOSE_PORT`):**
+
+PostgreSQL port is **exposed by default on localhost only** (127.0.0.1:5432) for security. This allows local access while preventing external connections.
+
+**Default Configuration:**
+- Port exposed: `5432` (configurable via `POSTGRES_EXPOSE_PORT`)
+- Mode: `host` (for localhost binding)
+- Binding: All interfaces (restrict via firewall for localhost-only)
+
+**To restrict to localhost only**, configure firewall rules on the host:
+```bash
+# Using iptables (restrict PostgreSQL to localhost only)
+sudo iptables -A INPUT -p tcp --dport 5432 ! -s 127.0.0.1 -j DROP
+
+# Or using ufw (if installed)
+sudo ufw deny 5432
+sudo ufw allow from 127.0.0.1 to any port 5432
+```
+
+**Examples:**
+
+```bash
+# Default: Exposed on localhost only (requires firewall rules for true localhost-only)
+POSTGRES_EXPOSE_PORT=5432
+POSTGRES_PORT_MODE=host
+
+# Expose on all interfaces (for Netbird VPN access)
+POSTGRES_EXPOSE_PORT=5432
+POSTGRES_PORT_MODE=host
+# Then configure pg_hba.conf to allow Netbird VPN subnet
+
+# Use ingress mode (Docker Swarm load balancing)
+POSTGRES_EXPOSE_PORT=5432
+POSTGRES_PORT_MODE=ingress
+```
+
+**Note:** The port is exposed by default. To disable, comment out the `ports:` section in `docker-compose.swarm.yml`.
 
 ### API Configuration
 
@@ -184,11 +244,63 @@ The API uses `DASHBOARD_URL` to build links in transactional emails and billing 
 
 | Variable              | Type   | Default                           | Required |
 | --------------------- | ------ | --------------------------------- | -------- |
-| `METRICS_DB_HOST`     | string | `timescaledb`                     | ❌       |
-| `METRICS_DB_PORT`     | number | `5432`                            | ❌       |
-| `METRICS_DB_USER`     | string | `POSTGRES_USER` or `postgres`     | ❌       |
-| `METRICS_DB_PASSWORD` | string | `POSTGRES_PASSWORD` or `postgres` | ❌       |
-| `METRICS_DB_NAME`     | string | `obiente_metrics`                 | ❌       |
+| `METRICS_DB_HOST`         | string | `timescaledb`                     | ❌       |
+| `METRICS_DB_PORT`         | number | `5432`                            | ❌       |
+| `METRICS_DB_EXPOSE_PORT`  | number | `5432`                            | ❌       | Port to expose TimescaleDB on host (default: 5432, localhost only) |
+| `METRICS_DB_PORT_MODE`    | string | `host`                             | ❌       | Port mode: `host` (default, for localhost binding) or `ingress` |
+| `METRICS_DB_USER`         | string | `POSTGRES_USER` or `postgres`     | ❌       |
+| `METRICS_DB_PASSWORD`     | string | `POSTGRES_PASSWORD` or `postgres` | ❌       |
+| `METRICS_DB_NAME`         | string | `obiente_metrics`                 | ❌       |
+
+**Metrics Database Host Configuration (`METRICS_DB_HOST`):**
+
+Similar to `DB_HOST`, supports different networking configurations:
+
+- **Docker Swarm**: Use the service name (default: `timescaledb`)
+- **Netbird VPN**: Use the Netbird internal domain (e.g., `timescaledb.example.netbird`)
+- **Custom**: Set to any hostname or IP address
+
+**Examples:**
+
+```bash
+# Docker Swarm (default)
+METRICS_DB_HOST=timescaledb
+
+# Netbird VPN
+METRICS_DB_HOST=timescaledb.example.netbird
+
+# Custom hostname/IP
+METRICS_DB_HOST=metrics-db.example.com
+```
+
+**Metrics Database Port Exposure (`METRICS_DB_EXPOSE_PORT`):**
+
+TimescaleDB port is **exposed by default on localhost only** (127.0.0.1:5432) for security, similar to PostgreSQL.
+
+**Default Configuration:**
+- Port exposed: `5432` (configurable via `METRICS_DB_EXPOSE_PORT`)
+- Mode: `host` (for localhost binding)
+- Binding: All interfaces (restrict via firewall for localhost-only)
+
+**To restrict to localhost only**, configure firewall rules (same as PostgreSQL):
+```bash
+# Using iptables (restrict TimescaleDB to localhost only)
+sudo iptables -A INPUT -p tcp --dport 5432 ! -s 127.0.0.1 -j DROP
+```
+
+**Examples:**
+
+```bash
+# Default: Exposed on localhost only
+METRICS_DB_EXPOSE_PORT=5432
+METRICS_DB_PORT_MODE=host
+
+# Expose on all interfaces (for Netbird VPN access)
+METRICS_DB_EXPOSE_PORT=5432
+METRICS_DB_PORT_MODE=host
+```
+
+**Note:** The port is exposed by default. To disable, comment out the `ports:` section in `docker-compose.swarm.yml`.
 
 **Notes:**
 

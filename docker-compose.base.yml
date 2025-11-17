@@ -6,6 +6,10 @@
 # (Docker Compose v2.20+). This allows YAML anchors to work across files.
 
 x-common-database: &common-database
+  # Database host configuration
+  # - Docker Swarm: Use service name (e.g., "postgres")
+  # - Netbird VPN: Use Netbird internal domain (e.g., "postgres.example.netbird")
+  # - Custom: Set DB_HOST environment variable to override
   DB_HOST: ${DB_HOST:-postgres}
   DB_PORT: ${DB_PORT:-5432}
   DB_USER: ${POSTGRES_USER:-obiente_postgres}
@@ -13,6 +17,10 @@ x-common-database: &common-database
   DB_NAME: ${POSTGRES_DB:-obiente}
 
 x-common-metrics-db: &common-metrics-db
+  # Metrics database host configuration
+  # - Docker Swarm: Use service name (e.g., "timescaledb")
+  # - Netbird VPN: Use Netbird internal domain (e.g., "timescaledb.example.netbird")
+  # - Custom: Set METRICS_DB_HOST environment variable to override
   METRICS_DB_HOST: ${METRICS_DB_HOST:-timescaledb}
   METRICS_DB_PORT: ${METRICS_DB_PORT:-5432}
   METRICS_DB_USER: ${METRICS_DB_USER:-obiente_postgres}
