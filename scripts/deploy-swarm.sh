@@ -321,10 +321,68 @@ if [ "$NEEDS_MIGRATION" = true ]; then
   done
 fi
 
-# Check for new config names that might conflict
+# Check if existing configs have changed by comparing content
+# Docker configs can't be updated, so we need to remove and recreate if content changed
+echo ""
+echo "🔍 Checking if config content has changed..."
+CONFIGS_NEED_UPDATE=false
+
+# Map config names to their source files
+declare -A CONFIG_FILES=(
+  ["${STACK_NAME}_postgres_hba_conf"]="${REPO_ROOT}/scripts/internal/pg_hba.conf"
+  ["${STACK_NAME}_postgres_entrypoint_wrapper"]="${REPO_ROOT}/scripts/internal/docker-entrypoint-postgres.sh"
+  ["${STACK_NAME}_postgres_init_user"]="${REPO_ROOT}/scripts/internal/postgres-init-user.sh"
+)
+
 for config_name in "${NEW_CONFIG_NAMES[@]}"; do
   if docker config ls --format "{{.Name}}" | grep -q "^${config_name}$"; then
-    echo "   ℹ️  Config already exists: $config_name (will be updated if content changed)"
+    SOURCE_FILE="${CONFIG_FILES[$config_name]}"
+    if [ -n "$SOURCE_FILE" ] && [ -f "$SOURCE_FILE" ]; then
+      # Get existing config content
+      EXISTING_CONTENT=$(docker config inspect "$config_name" --format '{{json .Spec.Data}}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+      NEW_CONTENT=$(cat "$SOURCE_FILE")
+      
+      # Compare content (using a simple hash comparison)
+      EXISTING_HASH=$(echo "$EXISTING_CONTENT" | sha256sum | cut -d' ' -f1)
+      NEW_HASH=$(echo "$NEW_CONTENT" | sha256sum | cut -d' ' -f1)
+      
+      if [ "$EXISTING_HASH" != "$NEW_HASH" ]; then
+        echo "   ⚠️  Config $config_name content has changed, will be recreated"
+        CONFIGS_NEED_UPDATE=true
+        
+        # Remove old config (services will need to be updated first)
+        echo "   🗑️  Removing old config: $config_name"
+        # Find services using this config
+        SERVICES_USING_CONFIG=()
+        for service in $(docker service ls --format "{{.Name}}" | grep "^${STACK_NAME}_"); do
+          SERVICE_CONFIGS=$(docker service inspect "$service" --format '{{range .Spec.TaskTemplate.ContainerSpec.Configs}}{{.ConfigName}} {{end}}' 2>/dev/null || echo "")
+          if echo "$SERVICE_CONFIGS" | grep -q "$config_name"; then
+            SERVICES_USING_CONFIG+=("$service")
+          fi
+        done
+        
+        # Remove config from services first
+        for service in "${SERVICES_USING_CONFIG[@]}"; do
+          echo "      Removing config from $service..."
+          docker service update --config-rm "$config_name" "$service" 2>/dev/null || true
+        done
+        
+        # Wait for services to update
+        if [ ${#SERVICES_USING_CONFIG[@]} -gt 0 ]; then
+          echo "   ⏳ Waiting for services to update..."
+          sleep 3
+        fi
+        
+        # Remove the config
+        docker config rm "$config_name" 2>/dev/null || echo "      ⚠️  Could not remove $config_name (may still be in use)"
+      else
+        echo "   ✅ Config $config_name unchanged, skipping update"
+      fi
+    else
+      echo "   ℹ️  Config $config_name exists (source file not found, skipping content check)"
+    fi
+  else
+    echo "   ℹ️  Config $config_name does not exist, will be created"
   fi
 done
 
