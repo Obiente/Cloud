@@ -268,46 +268,45 @@ NEW_CONFIG_NAMES=(
 )
 
 # Check if we need to migrate from old config names to new ones
+# Only migrate if old configs exist AND services are actually using them
 NEEDS_MIGRATION=false
+SERVICES_USING_OLD_CONFIGS=()
+
 for old_config in "${OLD_CONFIG_NAMES[@]}"; do
   if docker config ls --format "{{.Name}}" | grep -q "^${old_config}$"; then
-    NEEDS_MIGRATION=true
-    break
+    # Check if any services are actually using this old config
+    for service in $(docker service ls --format "{{.Name}}" | grep "^${STACK_NAME}_"); do
+      SERVICE_CONFIGS=$(docker service inspect "$service" --format '{{range .Spec.TaskTemplate.ContainerSpec.Configs}}{{.ConfigName}} {{end}}' 2>/dev/null || echo "")
+      if echo "$SERVICE_CONFIGS" | grep -q "$old_config"; then
+        NEEDS_MIGRATION=true
+        if [[ ! " ${SERVICES_USING_OLD_CONFIGS[@]} " =~ " ${service} " ]]; then
+          SERVICES_USING_OLD_CONFIGS+=("$service")
+        fi
+      fi
+    done
   fi
 done
 
-if [ "$NEEDS_MIGRATION" = true ]; then
+if [ "$NEEDS_MIGRATION" = true ] && [ ${#SERVICES_USING_OLD_CONFIGS[@]} -gt 0 ]; then
   echo "   ⚠️  Found old config names that need migration"
-  echo "   📋 Updating services to remove old config references..."
+  echo "   📋 Services using old configs: ${SERVICES_USING_OLD_CONFIGS[*]}"
+  echo "   💡 Removing old configs from services..."
   
-  # Find services using old configs and update them
-  SERVICES_TO_UPDATE=()
-  for service in $(docker service ls --format "{{.Name}}" | grep "^${STACK_NAME}_"); do
-    SERVICE_CONFIGS=$(docker service inspect "$service" --format '{{range .Spec.TaskTemplate.ContainerSpec.Configs}}{{.ConfigName}} {{end}}' 2>/dev/null || echo "")
+  for service in "${SERVICES_USING_OLD_CONFIGS[@]}"; do
+    echo "      Updating $service..."
+    # Remove only the old configs that this service is actually using
     for old_config in "${OLD_CONFIG_NAMES[@]}"; do
+      SERVICE_CONFIGS=$(docker service inspect "$service" --format '{{range .Spec.TaskTemplate.ContainerSpec.Configs}}{{.ConfigName}} {{end}}' 2>/dev/null || echo "")
       if echo "$SERVICE_CONFIGS" | grep -q "$old_config"; then
-        SERVICES_TO_UPDATE+=("$service")
-        break
+        docker service update --config-rm "$old_config" "$service" 2>/dev/null || true
       fi
     done
   done
   
-  if [ ${#SERVICES_TO_UPDATE[@]} -gt 0 ]; then
-    echo "   ⚠️  Services using old configs: ${SERVICES_TO_UPDATE[*]}"
-    echo "   💡 Removing old configs from services..."
-    
-    for service in "${SERVICES_TO_UPDATE[@]}"; do
-      echo "      Updating $service..."
-      # Get current service spec and remove old config references
-      docker service update --config-rm "${OLD_CONFIG_NAMES[0]}" "$service" 2>/dev/null || true
-      docker service update --config-rm "${OLD_CONFIG_NAMES[1]}" "$service" 2>/dev/null || true
-    done
-    
-    echo "   ⏳ Waiting for service updates to complete..."
-    sleep 5
-  fi
+  echo "   ⏳ Waiting for service updates to complete..."
+  sleep 5
   
-  # Now try to remove old configs
+  # Now try to remove old configs (only if not in use)
   echo "   🗑️  Removing old configs..."
   for old_config in "${OLD_CONFIG_NAMES[@]}"; do
     if docker config ls --format "{{.Name}}" | grep -q "^${old_config}$"; then
@@ -315,10 +314,11 @@ if [ "$NEEDS_MIGRATION" = true ]; then
         echo "      ✅ Removed: $old_config"
       else
         echo "      ⚠️  Could not remove $old_config (may still be in use)"
-        echo "      💡 You may need to remove the stack and redeploy: docker stack rm $STACK_NAME"
       fi
     fi
   done
+else
+  echo "   ✅ No old configs found or no services using them"
 fi
 
 # Check if existing configs have changed by comparing content
@@ -350,12 +350,17 @@ for config_name in "${NEW_CONFIG_NAMES[@]}"; do
     SOURCE_FILE=$(get_config_source_file "$config_name")
     if [ -n "$SOURCE_FILE" ] && [ -f "$SOURCE_FILE" ]; then
       # Get existing config content
-      EXISTING_CONTENT=$(docker config inspect "$config_name" --format '{{json .Spec.Data}}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+      # Docker configs store data as base64-encoded JSON
+      EXISTING_CONTENT=$(docker config inspect "$config_name" --format '{{json .Spec.Data}}' 2>/dev/null | sed 's/^"//;s/"$//' | base64 -d 2>/dev/null || echo "")
       NEW_CONTENT=$(cat "$SOURCE_FILE")
       
+      # Normalize content for comparison (remove trailing newlines)
+      EXISTING_CONTENT=$(echo -n "$EXISTING_CONTENT")
+      NEW_CONTENT=$(echo -n "$NEW_CONTENT")
+      
       # Compare content (using a simple hash comparison)
-      EXISTING_HASH=$(echo "$EXISTING_CONTENT" | sha256sum | cut -d' ' -f1)
-      NEW_HASH=$(echo "$NEW_CONTENT" | sha256sum | cut -d' ' -f1)
+      EXISTING_HASH=$(echo -n "$EXISTING_CONTENT" | sha256sum | cut -d' ' -f1)
+      NEW_HASH=$(echo -n "$NEW_CONTENT" | sha256sum | cut -d' ' -f1)
       
       if [ "$EXISTING_HASH" != "$NEW_HASH" ]; then
         echo "   ⚠️  Config $config_name content has changed, will be recreated"
