@@ -44,8 +44,8 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
 # Final stage
 FROM alpine:latest
 
-# Install CA certificates and curl for health checks
-RUN apk --no-cache add ca-certificates curl
+# Install CA certificates, curl, and netcat for health checks
+RUN apk --no-cache add ca-certificates curl netcat-openbsd
 
 WORKDIR /app
 

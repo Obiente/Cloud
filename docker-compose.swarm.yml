@@ -146,7 +146,7 @@ services:
         - "traefik.tcp.routers.ssh.service=ssh"
         - "traefik.tcp.services.ssh.loadbalancer.server.port=${SSH_PROXY_PORT:-2222}"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3001 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3001 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -190,7 +190,7 @@ services:
         - "traefik.http.routers.auth-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.auth-service-secure.service=auth-service"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3002/health || exit 1"]
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3002 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3002 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -234,7 +234,7 @@ services:
         - "traefik.http.routers.organizations-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.organizations-service-secure.service=organizations-service"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3003/health || exit 1"]
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3003 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3003 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -278,7 +278,7 @@ services:
         - "traefik.http.routers.billing-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.billing-service-secure.service=billing-service"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3004/health || exit 1"]
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3004 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3004 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -326,7 +326,7 @@ services:
         - "traefik.http.routers.deployments-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.deployments-service-secure.service=deployments-service"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3005/health || exit 1"]
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3005 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3005 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -372,7 +372,7 @@ services:
         - "traefik.http.routers.gameservers-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.gameservers-service-secure.service=gameservers-service"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3006/health || exit 1"]
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3006 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3006 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -419,7 +419,7 @@ services:
         - "traefik.http.routers.orchestrator-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.orchestrator-service-secure.service=orchestrator-service"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3007/health || exit 1"]
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3007 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3007 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -463,7 +463,7 @@ services:
         - "traefik.http.routers.vps-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.vps-service-secure.service=vps-service"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3008/health || exit 1"]
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3008 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3008 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -507,7 +507,7 @@ services:
         - "traefik.http.routers.support-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.support-service-secure.service=support-service"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3009/health || exit 1"]
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3009 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3009 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -551,7 +551,7 @@ services:
         - "traefik.http.routers.audit-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.audit-service-secure.service=audit-service"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3010/health || exit 1"]
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3010 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3010 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -595,7 +595,7 @@ services:
         - "traefik.http.routers.superadmin-service-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.superadmin-service-secure.service=superadmin-service"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3011/health || exit 1"]
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3011 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3011 || exit 1; fi'"]
       interval: 30s
       timeout: 10s
       retries: 3

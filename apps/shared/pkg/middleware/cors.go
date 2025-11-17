@@ -136,14 +136,21 @@ func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 				if isWildcard && !config.AllowCredentials {
 					allowedOrigin = "*"
 					logger.Debug("[CORS] No origin header but wildcard configured, allowing")
+				} else if !isWildcard && len(config.AllowedOrigins) > 0 {
+					// With specific origins configured, if there's no origin header, it might be same-origin
+					// For error responses (like 504), we should still set CORS headers to allow the browser
+					// to read the error. Use the first allowed origin as a fallback.
+					// Note: This is a best-effort approach - ideally we'd know the actual origin
+					allowedOrigin = config.AllowedOrigins[0]
+					logger.Debug("[CORS] No origin header but specific origins configured, using first allowed origin: %s", allowedOrigin)
 				} else if r.Method == http.MethodOptions {
 					logger.Debug("[CORS] OPTIONS request with no Origin header")
 				}
 			}
 
 			// Set CORS headers if origin is allowed
-			// Always set headers for wildcard config, or when origin matches
-			// This ensures CORS headers are present even on error responses
+			// Always set headers when we have an allowed origin to ensure CORS headers
+			// are present even on error responses (like 504 timeouts)
 			if allowedOrigin != "" {
 				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 
@@ -183,8 +190,26 @@ func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 				}
 				logger.Debug("[CORS] Wildcard configured, setting CORS headers without origin header")
 			} else if origin != "" {
-				// Origin was provided but didn't match - log for debugging
-				logger.Debug("[CORS] Origin %s not allowed, not setting CORS headers", origin)
+				// Origin was provided but didn't match - still set headers for error responses
+				// This allows browsers to read error messages even if origin doesn't match
+				// Use the first allowed origin as a fallback
+				if len(config.AllowedOrigins) > 0 {
+					allowedOrigin = config.AllowedOrigins[0]
+					w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+					w.Header().Add("Vary", "Origin")
+					if config.AllowCredentials {
+						w.Header().Set("Access-Control-Allow-Credentials", "true")
+					}
+					if len(config.AllowedMethods) > 0 {
+						w.Header().Set("Access-Control-Allow-Methods", strings.Join(config.AllowedMethods, ", "))
+					}
+					if len(config.AllowedHeaders) > 0 {
+						w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowedHeaders, ", "))
+					}
+					logger.Debug("[CORS] Origin %s not in allowed list, but setting CORS headers with first allowed origin for error responses", origin)
+				} else {
+					logger.Debug("[CORS] Origin %s not allowed, not setting CORS headers", origin)
+				}
 			}
 
 			// Handle preflight OPTIONS request
