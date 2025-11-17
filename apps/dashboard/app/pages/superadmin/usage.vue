@@ -74,8 +74,8 @@ const search = ref("");
 
 const filteredUsage = computed(() => {
   const term = search.value.trim().toLowerCase();
-  if (!term) return usageRecords.value;
-  return usageRecords.value.filter((usage) => {
+  if (!term) return usageRecords.value || [];
+  return (usageRecords.value || []).filter((usage) => {
     const searchable = [
       usage.organizationName,
       usage.organizationId,
@@ -99,7 +99,7 @@ const tableColumns = computed(() => [
 ]);
 
 const tableRows = computed(() => {
-  return filteredUsage.value.map((usage) => ({
+  return (filteredUsage.value || []).map((usage) => ({
     ...usage,
     organization: usage.organizationName,
     cpuCoreSeconds: formatNumber(usage.cpuCoreSeconds),

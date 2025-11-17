@@ -114,7 +114,7 @@ const columns = [
 
 const roleOptions = computed(() => {
   const roles = new Set<string>();
-  users.value.forEach((user) => {
+  (users.value || []).forEach((user) => {
     if (user.roles) {
       user.roles.forEach((role: string) => roles.add(role));
     }
@@ -138,7 +138,7 @@ const filteredUsers = computed(() => {
   const term = search.value.trim().toLowerCase();
   const role = roleFilter.value;
 
-  return users.value.map((user) => {
+  return (users.value || []).map((user) => {
     // Fetch organizations for each user
     const userOrgs = user.organizations || [];
     return {
@@ -172,7 +172,7 @@ const filteredUsers = computed(() => {
   });
 });
 
-const tableRows = computed(() => filteredUsers.value);
+const tableRows = computed(() => filteredUsers.value || []);
 
 function handleSearchUpdate(value: string) {
   search.value = value;
@@ -213,25 +213,36 @@ async function loadUsers() {
       })
     );
     
-    users.value = usersWithOrgs;
-    pagination.value = {
-      page: response.pagination?.page || 1,
-      perPage: response.pagination?.perPage || 50,
-      total: response.pagination?.total || 0,
-      totalPages: response.pagination?.totalPages || 0,
+    return {
+      users: usersWithOrgs,
+      pagination: {
+        page: response.pagination?.page || 1,
+        perPage: response.pagination?.perPage || 50,
+        total: response.pagination?.total || 0,
+        totalPages: response.pagination?.totalPages || 0,
+      },
     };
   } catch (error: any) {
     console.error("Failed to load users:", error);
     const { toast } = useToast();
     toast.error(error?.message || "Failed to load users");
+    throw error;
   }
 }
 
 // Use client-side fetching for non-blocking navigation
-const { pending: loading } = useClientFetch(
+const { data: usersData, pending: loading } = useClientFetch(
   () => `superadmin-users-${pagination.value.page}-${search.value}`,
   loadUsers
 );
+
+// Update refs when data is loaded
+watch(usersData, (newData) => {
+  if (newData) {
+    users.value = newData.users;
+    pagination.value = newData.pagination;
+  }
+}, { immediate: true });
 
 function handleSearch() {
   if (searchTimeout) {

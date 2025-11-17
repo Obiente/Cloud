@@ -200,24 +200,35 @@ function viewOrganization(orgId: string) {
 }
 
 async function loadUser() {
-  if (!userId.value) return;
+  if (!userId.value) return null;
   try {
     const response = await client.getUser({
       userId: userId.value,
     });
-    user.value = response.user;
-    organizations.value = response.organizations || [];
+    return {
+      user: response.user,
+      organizations: response.organizations || [],
+    };
   } catch (error: any) {
     console.error("Failed to load user:", error);
     const { toast } = useToast();
     toast.error(error?.message || "Failed to load user");
+    throw error;
   }
 }
 
 // Use client-side fetching for non-blocking navigation
-const { pending: loading } = useClientFetch(
+const { data: userData, pending: loading } = useClientFetch(
   () => `superadmin-user-${userId.value}`,
   loadUser
 );
+
+// Update refs when data is loaded
+watch(userData, (newData) => {
+  if (newData) {
+    user.value = newData.user;
+    organizations.value = newData.organizations;
+  }
+}, { immediate: true });
 </script>
 

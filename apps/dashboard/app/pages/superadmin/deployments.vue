@@ -117,7 +117,7 @@ const filteredDeployments = computed(() => {
   const env = environmentFilter.value;
   const status = statusFilter.value;
   
-  return deployments.value.filter((deployment) => {
+  return (deployments.value || []).filter((deployment) => {
     // Environment filter
     if (env !== "all" && formatEnvironment(deployment.environment).toLowerCase() !== env.toLowerCase()) {
       return false;
@@ -157,7 +157,7 @@ const tableColumns = computed(() => [
 ]);
 
 const tableRows = computed(() => {
-  return filteredDeployments.value.map((deployment) => ({
+  return (filteredDeployments.value || []).map((deployment) => ({
     ...deployment,
     organization: deployment.organizationId,
     organizationName: deployment.organizationName,

@@ -199,8 +199,6 @@ definePageMeta({
 const router = useRouter();
 const client = useConnectClient(SuperadminService);
 
-const incomeData = ref<any>(null);
-
 const startDate = ref("");
 const endDate = ref("");
 const transactionSearch = ref("");
@@ -218,14 +216,15 @@ async function fetchIncome() {
       startDate: startDate.value ? startDate.value : undefined,
       endDate: endDate.value ? endDate.value : undefined,
     });
-    incomeData.value = response;
+    return response;
   } catch (err) {
     console.error("Failed to fetch income overview:", err);
+    throw err;
   }
 }
 
 // Use client-side fetching for non-blocking navigation
-const { pending: isLoading } = useClientFetch(
+const { data: incomeData, pending: isLoading } = useClientFetch(
   () => `superadmin-income-${startDate.value}-${endDate.value}`,
   fetchIncome
 );
@@ -266,7 +265,11 @@ const summaryMetrics = computed(() => {
 });
 
 const paymentMetrics = computed(() => {
-  return incomeData.value?.paymentMetrics || {};
+  return incomeData.value?.paymentMetrics || {
+    successRate: 0,
+    successfulPayments: 0,
+    averagePaymentAmount: 0,
+  };
 });
 
 const monthlyIncome = computed(() => {

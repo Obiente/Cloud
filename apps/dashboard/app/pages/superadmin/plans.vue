@@ -215,7 +215,6 @@ definePageMeta({
 const { toast } = useToast();
 const client = useConnectClient(SuperadminService);
 
-const plans = ref<any[]>([]);
 const isSaving = ref(false);
 const isDeleting = ref(false);
 const planDialogOpen = ref(false);
@@ -246,21 +245,22 @@ const tableColumns = computed(() => [
   { key: "actions", label: "Actions", defaultWidth: 150, minWidth: 120, resizable: false },
 ]);
 
-const tableRows = computed(() => plans.value);
+const tableRows = computed(() => plans.value || []);
 
 const { formatBytes, formatCurrency } = useUtils();
 
 const fetchPlans = async () => {
   try {
     const response = await client.listPlans({});
-    plans.value = response.plans || [];
+    return response.plans || [];
   } catch (error: any) {
     toast.error(`Failed to load plans: ${error?.message || "Unknown error"}`);
+    throw error;
   }
 };
 
 // Use client-side fetching for non-blocking navigation
-const { pending: isLoading } = useClientFetch("superadmin-plans", fetchPlans);
+const { data: plans, pending: isLoading } = useClientFetch("superadmin-plans", fetchPlans);
 
 const openCreateDialog = () => {
   editingPlan.value = null;

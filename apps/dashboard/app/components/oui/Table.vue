@@ -401,15 +401,18 @@ const getAriaSort = (column: TableColumn): 'ascending' | 'descending' | 'none' |
 };
 
 const sortedRows = computed(() => {
+  // Ensure rows is always an array
+  const rows = props.rows || [];
+  
   if (!props.sortable || !sortedColumn.value || !sortDirection.value) {
-    return props.rows;
+    return rows;
   }
   
   const column = sortedColumn.value;
   const direction = sortDirection.value;
-  const rows = [...props.rows];
+  const rowsCopy = [...rows];
   
-  rows.sort((a, b) => {
+  rowsCopy.sort((a, b) => {
     let comparison = 0;
     
     if (column.sortFn) {
@@ -436,7 +439,7 @@ const sortedRows = computed(() => {
     return direction === 'asc' ? comparison : -comparison;
   });
   
-  return rows;
+  return rowsCopy;
 });
 
 // Cell value accessor

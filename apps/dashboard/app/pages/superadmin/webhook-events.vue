@@ -201,32 +201,51 @@ async function fetchEvents() {
       limit: limit.value,
       offset: offset.value,
     });
-    if (offset.value === 0) {
-      events.value = response.events || [];
-    } else {
-      events.value = [...events.value, ...(response.events || [])];
-    }
-    totalCount.value = Number(response.totalCount || 0);
+    return {
+      events: response.events || [],
+      totalCount: Number(response.totalCount || 0),
+    };
   } catch (err) {
     console.error("Failed to fetch webhook events:", err);
+    throw err;
   }
 }
 
 async function loadMore() {
   offset.value += limit.value;
-  await fetchEvents();
+  const result = await fetchEvents();
+  if (result) {
+    events.value = [...events.value, ...result.events];
+    totalCount.value = result.totalCount;
+  }
 }
 
 async function refresh() {
   offset.value = 0;
-  await fetchEvents();
+  const result = await fetchEvents();
+  if (result) {
+    events.value = result.events;
+    totalCount.value = result.totalCount;
+  }
 }
 
 // Use client-side fetching for non-blocking navigation
-const { pending: isLoading } = useClientFetch(
+const { data: eventsData, pending: isLoading } = useClientFetch(
   () => `superadmin-webhook-events-${eventTypeFilter.value}-${customerIdFilter.value}-${offset.value}`,
   fetchEvents
 );
+
+// Update refs when data is loaded
+watch(eventsData, (newData) => {
+  if (newData) {
+    if (offset.value === 0) {
+      events.value = newData.events;
+    } else {
+      events.value = [...events.value, ...newData.events];
+    }
+    totalCount.value = newData.totalCount;
+  }
+}, { immediate: true });
 
 const metrics = computed(() => {
   const total = totalCount.value;

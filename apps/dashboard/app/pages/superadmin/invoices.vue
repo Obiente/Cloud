@@ -191,7 +191,6 @@ definePageMeta({
 const router = useRouter();
 const client = useConnectClient(SuperadminService);
 
-const invoicesData = ref<any>(null);
 const sendingReminder = ref<string | null>(null);
 
 const startDate = ref("");
@@ -223,14 +222,15 @@ async function fetchInvoices() {
       status: statusFilter.value !== "all" ? statusFilter.value : undefined,
       limit: 200,
     });
-    invoicesData.value = response;
+    return response;
   } catch (err) {
     console.error("Failed to fetch invoices:", err);
+    throw err;
   }
 }
 
 // Use client-side fetching for non-blocking navigation
-const { pending: isLoading } = useClientFetch(
+const { data: invoicesData, pending: isLoading } = useClientFetch(
   () => `superadmin-invoices-${startDate.value}-${endDate.value}-${statusFilter.value}`,
   fetchInvoices
 );

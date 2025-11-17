@@ -248,7 +248,7 @@ const tableColumns = computed(() => [
 ]);
 
 const tableRows = computed(() => {
-  return filteredOrganizations.value.map((org) => ({
+  return (filteredOrganizations.value || []).map((org) => ({
     ...org,
     memberCount: formatNumber(org.memberCount),
     deploymentCount: formatNumber(org.deploymentCount),
