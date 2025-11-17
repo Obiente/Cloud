@@ -302,6 +302,44 @@ REDIS_PORT_MODE=ingress
 
 **Note:** Redis is an internal service and typically communicates within the Docker Swarm overlay network or via VPN. Port exposure is optional and mainly for external access scenarios.
 
+### API Gateway Routing Configuration
+
+| Variable              | Type    | Default | Required |
+| --------------------- | ------- | ------- | -------- |
+| `USE_TRAEFIK_ROUTING` | boolean | `false` | ❌       | Route API gateway requests via Traefik (HTTPS) instead of direct service-to-service (HTTP) |
+| `SKIP_TLS_VERIFY`     | boolean | `false` | ❌       | Skip TLS certificate verification when using Traefik routing (for internal certs) |
+
+**Service Routing Modes:**
+
+The API Gateway can route to backend services in two ways:
+
+1. **Internal Routing (default)**: Direct service-to-service communication using Docker Swarm service names
+   - Uses HTTP: `http://auth-service:3002`
+   - Faster, no TLS overhead
+   - Requires services to be on the same Docker network
+
+2. **Traefik Routing**: Routes through Traefik reverse proxy with HTTPS
+   - Uses HTTPS: `https://auth-service.${DOMAIN}`
+   - All services must have Traefik labels configured
+   - Provides TLS termination and load balancing
+   - Better for distributed deployments and VPN access
+
+**Examples:**
+
+```bash
+# Internal routing (default)
+USE_TRAEFIK_ROUTING=false
+# Routes: http://auth-service:3002
+
+# Traefik routing with HTTPS
+USE_TRAEFIK_ROUTING=true
+DOMAIN=obiente.cloud
+SKIP_TLS_VERIFY=true  # Skip TLS verification for internal Traefik certificates
+# Routes: https://auth-service.obiente.cloud
+```
+
+**Note:** When using Traefik routing, ensure all services have Traefik labels configured in `docker-compose.swarm.yml`. DNS service may need special handling as it uses a different port (8053).
+
 ### Authentication
 
 | Variable          | Type    | Default                      | Required |

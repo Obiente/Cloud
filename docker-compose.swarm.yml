@@ -727,6 +727,16 @@ services:
     environment:
       <<: [*common-database, *common-redis, *common-orchestrator, *common-dns]
       HTTP_PORT: ${DNS_HTTP_PORT:-8053}
+    labels:
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.dns-service.rule=Host(`dns-service.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.dns-service.entrypoints=web"
+      - "traefik.http.services.dns-service.loadbalancer.server.port=8053"
+      - "traefik.http.routers.dns-service-secure.rule=Host(`dns-service.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.dns-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.dns-service-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dns-service-secure.service=dns-service"
     ports:
       # Use host mode publishing to expose port 53 directly on the host
       # DNS only runs on nodes labeled with dns.enabled=true

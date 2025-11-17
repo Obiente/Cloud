@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -33,23 +34,67 @@ const (
 )
 
 // Service routing configuration
-var serviceRoutes = map[string]string{
-	"/obiente.cloud.auth.v1.AuthService/":                  "http://auth-service:3002",
-	"/obiente.cloud.organizations.v1.OrganizationService/": "http://organizations-service:3003",
-	"/obiente.cloud.billing.v1.BillingService/":            "http://billing-service:3004",
-	"/obiente.cloud.deployments.v1.DeploymentService/":     "http://deployments-service:3005",
-	"/obiente.cloud.gameservers.v1.GameServerService/":     "http://gameservers-service:3006",
-	"/obiente.cloud.vps.v1.VPSService/":                    "http://vps-service:3008",
-	"/obiente.cloud.superadmin.v1.SuperadminService/":      "http://superadmin-service:3011",
-	"/obiente.cloud.support.v1.SupportService/":            "http://support-service:3009",
-	"/obiente.cloud.audit.v1.AuditService/":                "http://audit-service:3010",
-	"/webhooks/stripe":                                     "http://billing-service:3004",
-	"/dns/push":                                            "http://dns-service:8053",         // DNS delegation push endpoint
-	"/dns/push/batch":                                      "http://dns-service:8053",         // DNS delegation batch push endpoint
-	"/terminal/ws":                                         "http://deployments-service:3005", // Deployment terminals
-	"/gameservers/terminal/ws":                             "http://gameservers-service:3006", // Game server terminals
-	"/vps/":                                                "http://vps-service:3008",         // VPS terminals and other VPS endpoints
-	"/vps/ssh/":                                            "http://vps-service:3008",         // VPS SSH proxy
+// Base service routes (internal service names)
+var baseServiceRoutes = map[string]string{
+	"/obiente.cloud.auth.v1.AuthService/":                  "auth-service:3002",
+	"/obiente.cloud.organizations.v1.OrganizationService/": "organizations-service:3003",
+	"/obiente.cloud.billing.v1.BillingService/":            "billing-service:3004",
+	"/obiente.cloud.deployments.v1.DeploymentService/":     "deployments-service:3005",
+	"/obiente.cloud.gameservers.v1.GameServerService/":     "gameservers-service:3006",
+	"/obiente.cloud.vps.v1.VPSService/":                    "vps-service:3008",
+	"/obiente.cloud.superadmin.v1.SuperadminService/":      "superadmin-service:3011",
+	"/obiente.cloud.support.v1.SupportService/":            "support-service:3009",
+	"/obiente.cloud.audit.v1.AuditService/":                "audit-service:3010",
+	"/webhooks/stripe":                                     "billing-service:3004",
+	"/dns/push":                                            "dns-service:8053",         // DNS delegation push endpoint
+	"/dns/push/batch":                                      "dns-service:8053",         // DNS delegation batch push endpoint
+	"/terminal/ws":                                         "deployments-service:3005", // Deployment terminals
+	"/gameservers/terminal/ws":                             "gameservers-service:3006", // Game server terminals
+	"/vps/":                                                "vps-service:3008",         // VPS terminals and other VPS endpoints
+	"/vps/ssh/":                                            "vps-service:3008",         // VPS SSH proxy
+}
+
+// Service name to domain mapping (for Traefik routing)
+var serviceDomains = map[string]string{
+	"auth-service:3002":         "auth-service",
+	"organizations-service:3003": "organizations-service",
+	"billing-service:3004":      "billing-service",
+	"deployments-service:3005":  "deployments-service",
+	"gameservers-service:3006":  "gameservers-service",
+	"vps-service:3008":          "vps-service",
+	"superadmin-service:3011":   "superadmin-service",
+	"support-service:3009":     "support-service",
+	"audit-service:3010":        "audit-service",
+	"dns-service:8053":          "dns-service", // Note: DNS service may need special handling
+}
+
+// buildServiceRoutes constructs the service routes based on routing mode
+func buildServiceRoutes() map[string]string {
+	useTraefik := os.Getenv("USE_TRAEFIK_ROUTING")
+	domain := os.Getenv("DOMAIN")
+	if domain == "" {
+		domain = "localhost"
+	}
+
+	routes := make(map[string]string)
+
+	for path, serviceAddr := range baseServiceRoutes {
+		if useTraefik == "true" || useTraefik == "1" {
+			// Use Traefik routing with HTTPS
+			serviceDomain, ok := serviceDomains[serviceAddr]
+			if !ok {
+				// Fallback: extract service name from address
+				parts := strings.Split(serviceAddr, ":")
+				serviceDomain = parts[0]
+			}
+			routes[path] = fmt.Sprintf("https://%s.%s", serviceDomain, domain)
+		} else {
+			// Use internal routing (default)
+			routes[path] = fmt.Sprintf("http://%s", serviceAddr)
+		}
+	}
+
+	return routes
 }
 
 func main() {
@@ -66,6 +111,15 @@ func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "3001"
+	}
+
+	// Build service routes based on routing mode
+	serviceRoutes := buildServiceRoutes()
+	useTraefik := os.Getenv("USE_TRAEFIK_ROUTING")
+	if useTraefik == "true" || useTraefik == "1" {
+		logger.Info("Routing mode: Traefik (HTTPS)")
+	} else {
+		logger.Info("Routing mode: Internal (HTTP)")
 	}
 
 	// Create HTTP mux
@@ -291,8 +345,19 @@ func (p *ReverseProxy) checkServiceHealth(healthURL string) bool {
 		return false
 	}
 	
+	// Configure TLS for HTTPS health checks (Traefik routing)
+	skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
+	shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
+	
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: shouldSkipVerify, // Skip TLS verification for internal Traefik certs
+		},
+	}
+	
 	client := &http.Client{
-		Timeout: 3 * time.Second,
+		Transport: transport,
+		Timeout:   3 * time.Second,
 	}
 	
 	resp, err := client.Do(req)
@@ -356,9 +421,19 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	proxyURL.Scheme = target.Scheme
 	proxyURL.Host = target.Host
 
-	// Create HTTP client
+	// Create HTTP client with TLS configuration for HTTPS (Traefik routing)
+	skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
+	shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
+	
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: shouldSkipVerify, // Skip TLS verification for internal Traefik certs
+		},
+	}
+	
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Transport: transport,
+		Timeout:   30 * time.Second,
 	}
 
 	// Create request

@@ -77,6 +77,9 @@ x-common-redis: &common-redis
 
 x-common-orchestrator: &common-orchestrator
   DOMAIN: ${DOMAIN:-localhost}
+  # Service routing mode: "internal" (default, direct service-to-service) or "traefik" (via Traefik with HTTPS)
+  # When USE_TRAEFIK_ROUTING=true, API gateway routes to services via Traefik using HTTPS
+  USE_TRAEFIK_ROUTING: ${USE_TRAEFIK_ROUTING:-false}
   ACME_EMAIL: ${ACME_EMAIL:-}
   REGISTRY_URL: ${REGISTRY_URL:-}
   REGISTRY_USERNAME: ${REGISTRY_USERNAME:-}
