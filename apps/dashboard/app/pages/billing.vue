@@ -143,7 +143,7 @@
   });
 
   // Fetch usage data
-  const { data: usageData, refresh: refreshUsage } = await useClientFetch(
+  const { data: usageData, status: usageStatus, refresh: refreshUsage } = await useClientFetch(
     () =>
       selectedOrg.value
         ? `org-usage-${selectedOrg.value}`
@@ -164,9 +164,20 @@
   );
 
   const usage = computed(() => usageData.value);
+  const safeUsage = computed(() => {
+    const u = usage.value;
+    if (!u || !u.current) return null;
+    return u;
+  });
+  const safeUsageCurrent = computed(() => safeUsage.value?.current);
+  const isLoadingUsage = computed(
+    () =>
+      !usageData.value &&
+      (usageStatus.value === "pending" || usageStatus.value === "idle")
+  );
   
   // Fetch credit transactions (billing history)
-  const { data: creditLogData, refresh: refreshCreditLog } = await useClientFetch(
+  const { data: creditLogData, status: creditLogStatus, refresh: refreshCreditLog } = await useClientFetch(
     () =>
       selectedOrg.value
         ? `org-credit-log-${selectedOrg.value}`
@@ -181,6 +192,12 @@
       return res;
     },
     { watch: [selectedOrg], server: false }
+  );
+
+  const isLoadingCreditLog = computed(
+    () =>
+      !creditLogData.value &&
+      (creditLogStatus.value === "pending" || creditLogStatus.value === "idle")
   );
 
   const billingHistory = computed(() => {
@@ -218,7 +235,7 @@
   });
 
   // Fetch billing account
-  const { data: billingAccountData, refresh: refreshBillingAccount } =
+  const { data: billingAccountData, status: billingAccountStatus, refresh: refreshBillingAccount } =
     await useClientFetch(
       () =>
         selectedOrg.value
@@ -240,9 +257,14 @@
     );
 
   const billingAccount = computed(() => billingAccountData.value);
+  const isLoadingBillingAccount = computed(
+    () =>
+      !billingAccountData.value &&
+      (billingAccountStatus.value === "pending" || billingAccountStatus.value === "idle")
+  );
 
   // Fetch payment methods
-  const { data: paymentMethodsData, refresh: refreshPaymentMethods } =
+  const { data: paymentMethodsData, status: paymentMethodsStatus, refresh: refreshPaymentMethods } =
     await useClientFetch(
       () =>
         selectedOrg.value
@@ -264,9 +286,14 @@
     );
 
   const paymentMethods = computed(() => paymentMethodsData.value || []);
+  const isLoadingPaymentMethods = computed(
+    () =>
+      paymentMethodsData.value === undefined &&
+      (paymentMethodsStatus.value === "pending" || paymentMethodsStatus.value === "idle")
+  );
 
   // Fetch invoices
-  const { data: invoicesData, refresh: refreshInvoices } =
+  const { data: invoicesData, status: invoicesStatus, refresh: refreshInvoices } =
     await useClientFetch(
       () =>
         selectedOrg.value
@@ -290,6 +317,11 @@
 
   const invoices = computed(() => invoicesData.value?.invoices || []);
   const hasMoreInvoices = computed(() => invoicesData.value?.hasMore || false);
+  const isLoadingInvoices = computed(
+    () =>
+      invoicesData.value === undefined &&
+      (invoicesStatus.value === "pending" || invoicesStatus.value === "idle")
+  );
 
   // Access Stripe Customer Portal
   async function openCustomerPortal() {
@@ -1192,7 +1224,7 @@
             <!-- Current Usage -->
             <OuiStack gap="lg">
               <OuiText size="2xl" weight="bold">Current Usage</OuiText>
-              <template v-if="!usage || !usage.current">
+              <template v-if="isLoadingUsage">
                 <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="lg">
                   <!-- vCPU Usage Skeleton -->
                   <OuiCard>
@@ -1296,7 +1328,7 @@
                   </OuiCardBody>
                 </OuiCard>
               </template>
-              <template v-else>
+              <template v-else-if="safeUsage && safeUsageCurrent">
                 <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="lg">
                   <!-- vCPU Usage -->
                   <OuiCard>
@@ -1306,14 +1338,14 @@
                           <OuiStack gap="xs">
                             <OuiText size="sm" color="muted">vCPU Hours</OuiText>
                             <OuiText size="2xl" weight="bold">
-                              {{ formatCoreSecondsToHours(usage.current.cpuCoreSeconds ?? 0) }}
+                              {{ formatCoreSecondsToHours(safeUsageCurrent?.cpuCoreSeconds ?? 0) }}
                             </OuiText>
                           </OuiStack>
                           <OuiBadge 
                             :variant="getUsageBadgeVariant(
                               getUsagePercentage(
-                                usage.current.cpuCoreSeconds ?? 0,
-                                usage.quota?.cpuCoreSecondsMonthly || 0
+                                safeUsageCurrent?.cpuCoreSeconds ?? 0,
+                                safeUsage?.quota?.cpuCoreSecondsMonthly || 0
                               )
                             )"
                           >
@@ -1322,21 +1354,21 @@
                         </OuiFlex>
                         <OuiProgress 
                           :value="getUsagePercentage(
-                            usage.current.cpuCoreSeconds ?? 0,
-                            usage.quota?.cpuCoreSecondsMonthly || 0
+                            safeUsageCurrent?.cpuCoreSeconds ?? 0,
+                            safeUsage?.quota?.cpuCoreSecondsMonthly || 0
                           )" 
                           :max="100" 
                         />
                         <OuiText size="sm" color="muted">
-                          <template v-if="Number(usage.quota?.cpuCoreSecondsMonthly || 0) === 0">
+                          <template v-if="Number(safeUsage?.quota?.cpuCoreSecondsMonthly || 0) === 0">
                             Unlimited allocation
                           </template>
                           <template v-else>
                             {{ getUsagePercentage(
-                              usage.current.cpuCoreSeconds ?? 0,
-                              usage.quota?.cpuCoreSecondsMonthly || 0
+                              safeUsageCurrent?.cpuCoreSeconds ?? 0,
+                              safeUsage?.quota?.cpuCoreSecondsMonthly || 0
                             ) }}% of monthly allocation
-                            ({{ formatCoreSecondsToHours(usage.quota?.cpuCoreSecondsMonthly || 0) }})
+                            ({{ formatCoreSecondsToHours(safeUsage?.quota?.cpuCoreSecondsMonthly || 0) }})
                           </template>
                         </OuiText>
                       </OuiStack>
@@ -1351,45 +1383,45 @@
                           <OuiStack gap="xs">
                             <OuiText size="sm" color="muted">Memory</OuiText>
                             <OuiText size="2xl" weight="bold">
-                              {{ formatBytes(Number(usage.current.memoryByteSeconds ?? 0) / 3600) }}/hr avg
+                              {{ formatBytes(Number(safeUsageCurrent?.memoryByteSeconds ?? 0) / 3600) }}/hr avg
                             </OuiText>
                           </OuiStack>
                           <OuiBadge 
                             :variant="getUsageBadgeVariant(
                               getUsagePercentage(
-                                usage.current.memoryByteSeconds ?? 0,
-                                usage.quota?.memoryByteSecondsMonthly || 0
+                                safeUsageCurrent?.memoryByteSeconds ?? 0,
+                                safeUsage?.quota?.memoryByteSecondsMonthly || 0
                               )
                             )"
                           >
                             <template v-if="getUsagePercentage(
-                              usage.current.memoryByteSeconds ?? 0,
-                              usage.quota?.memoryByteSecondsMonthly || 0
+                              safeUsageCurrent?.memoryByteSeconds ?? 0,
+                              safeUsage?.quota?.memoryByteSecondsMonthly || 0
                             ) >= 90">High</template>
                             <template v-else-if="getUsagePercentage(
-                              usage.current.memoryByteSeconds ?? 0,
-                              usage.quota?.memoryByteSecondsMonthly || 0
+                              safeUsageCurrent?.memoryByteSeconds ?? 0,
+                              safeUsage?.quota?.memoryByteSecondsMonthly || 0
                             ) >= 75">Warning</template>
                             <template v-else>Normal</template>
                           </OuiBadge>
                         </OuiFlex>
                         <OuiProgress 
                           :value="getUsagePercentage(
-                            usage.current.memoryByteSeconds ?? 0,
-                            usage.quota?.memoryByteSecondsMonthly || 0
+                            safeUsageCurrent?.memoryByteSeconds ?? 0,
+                            safeUsage?.quota?.memoryByteSecondsMonthly || 0
                           )" 
                           :max="100" 
                         />
                         <OuiText size="sm" color="muted">
-                          <template v-if="Number(usage.quota?.memoryByteSecondsMonthly || 0) === 0">
+                          <template v-if="Number(safeUsage?.quota?.memoryByteSecondsMonthly || 0) === 0">
                             Unlimited allocation
                           </template>
                           <template v-else>
                             {{ getUsagePercentage(
-                              usage.current.memoryByteSeconds ?? 0,
-                              usage.quota?.memoryByteSecondsMonthly || 0
+                              safeUsageCurrent?.memoryByteSeconds ?? 0,
+                              safeUsage?.quota?.memoryByteSecondsMonthly || 0
                             ) }}% of monthly allocation
-                            ({{ formatMemoryByteSecondsToGB(usage.quota?.memoryByteSecondsMonthly || 0) }} GB)
+                            ({{ formatMemoryByteSecondsToGB(safeUsage?.quota?.memoryByteSecondsMonthly || 0) }} GB)
                           </template>
                         </OuiText>
                       </OuiStack>
@@ -1404,45 +1436,45 @@
                           <OuiStack gap="xs">
                             <OuiText size="sm" color="muted">Bandwidth</OuiText>
                             <OuiText size="2xl" weight="bold">
-                              {{ formatBytes(Number(usage.current.bandwidthRxBytes ?? 0) + Number(usage.current.bandwidthTxBytes ?? 0)) }}
+                              {{ formatBytes(Number(safeUsageCurrent?.bandwidthRxBytes ?? 0) + Number(safeUsageCurrent?.bandwidthTxBytes ?? 0)) }}
                             </OuiText>
                           </OuiStack>
                           <OuiBadge 
                             :variant="getUsageBadgeVariant(
                               getUsagePercentage(
-                                Number(usage.current.bandwidthRxBytes ?? 0) + Number(usage.current.bandwidthTxBytes ?? 0),
-                                usage.quota?.bandwidthBytesMonthly || 0
+                                Number(safeUsageCurrent?.bandwidthRxBytes ?? 0) + Number(safeUsageCurrent?.bandwidthTxBytes ?? 0),
+                                safeUsage?.quota?.bandwidthBytesMonthly || 0
                               )
                             )"
                           >
                             <template v-if="getUsagePercentage(
-                              Number(usage.current.bandwidthRxBytes ?? 0) + Number(usage.current.bandwidthTxBytes ?? 0),
-                              usage.quota?.bandwidthBytesMonthly || 0
+                              Number(safeUsageCurrent?.bandwidthRxBytes ?? 0) + Number(safeUsageCurrent?.bandwidthTxBytes ?? 0),
+                              safeUsage?.quota?.bandwidthBytesMonthly || 0
                             ) >= 90">High</template>
                             <template v-else-if="getUsagePercentage(
-                              Number(usage.current.bandwidthRxBytes ?? 0) + Number(usage.current.bandwidthTxBytes ?? 0),
-                              usage.quota?.bandwidthBytesMonthly || 0
+                              Number(safeUsageCurrent?.bandwidthRxBytes ?? 0) + Number(safeUsageCurrent?.bandwidthTxBytes ?? 0),
+                              safeUsage?.quota?.bandwidthBytesMonthly || 0
                             ) >= 75">Warning</template>
                             <template v-else>Normal</template>
                           </OuiBadge>
                         </OuiFlex>
                         <OuiProgress 
                           :value="getUsagePercentage(
-                            Number(usage.current.bandwidthRxBytes ?? 0) + Number(usage.current.bandwidthTxBytes ?? 0),
-                            usage.quota?.bandwidthBytesMonthly || 0
+                            Number(safeUsageCurrent?.bandwidthRxBytes ?? 0) + Number(safeUsageCurrent?.bandwidthTxBytes ?? 0),
+                            safeUsage?.quota?.bandwidthBytesMonthly || 0
                           )" 
                           :max="100" 
                         />
                         <OuiText size="sm" color="muted">
-                          <template v-if="Number(usage.quota?.bandwidthBytesMonthly || 0) === 0">
+                          <template v-if="Number(safeUsage?.quota?.bandwidthBytesMonthly || 0) === 0">
                             Unlimited allocation
                           </template>
                           <template v-else>
                             {{ getUsagePercentage(
-                              Number(usage.current.bandwidthRxBytes ?? 0) + Number(usage.current.bandwidthTxBytes ?? 0),
-                              usage.quota?.bandwidthBytesMonthly || 0
+                              Number(safeUsageCurrent?.bandwidthRxBytes ?? 0) + Number(safeUsageCurrent?.bandwidthTxBytes ?? 0),
+                              safeUsage?.quota?.bandwidthBytesMonthly || 0
                             ) }}% of monthly allocation
-                            ({{ formatBytes(usage.quota?.bandwidthBytesMonthly || 0) }})
+                            ({{ formatBytes(safeUsage?.quota?.bandwidthBytesMonthly || 0) }})
                           </template>
                         </OuiText>
                       </OuiStack>
@@ -1457,45 +1489,45 @@
                           <OuiStack gap="xs">
                             <OuiText size="sm" color="muted">Storage (GB)</OuiText>
                             <OuiText size="2xl" weight="bold">
-                              {{ formatBytesToGB(usage.current.storageBytes) }}
+                              {{ formatBytesToGB(safeUsageCurrent?.storageBytes ?? 0) }}
                             </OuiText>
                           </OuiStack>
                           <OuiBadge 
                             :variant="getUsageBadgeVariant(
                               getUsagePercentage(
-                                usage.current.storageBytes,
-                                usage.quota?.storageBytes || 0
+                                safeUsageCurrent?.storageBytes ?? 0,
+                                safeUsage?.quota?.storageBytes || 0
                               )
                             )"
                           >
                             <template v-if="getUsagePercentage(
-                              usage.current.storageBytes,
-                              usage.quota?.storageBytes || 0
+                              safeUsageCurrent?.storageBytes ?? 0,
+                              safeUsage?.quota?.storageBytes || 0
                             ) >= 90">High</template>
                             <template v-else-if="getUsagePercentage(
-                              usage.current.storageBytes,
-                              usage.quota?.storageBytes || 0
+                              safeUsageCurrent?.storageBytes ?? 0,
+                              safeUsage?.quota?.storageBytes || 0
                             ) >= 75">Warning</template>
                             <template v-else>Normal</template>
                           </OuiBadge>
                         </OuiFlex>
                         <OuiProgress 
                           :value="getUsagePercentage(
-                            usage.current.storageBytes,
-                            usage.quota?.storageBytes || 0
+                            safeUsageCurrent?.storageBytes ?? 0,
+                            safeUsage?.quota?.storageBytes || 0
                           )" 
                           :max="100" 
                         />
                         <OuiText size="sm" color="muted">
-                          <template v-if="Number(usage.quota?.storageBytes || 0) === 0">
+                          <template v-if="Number(safeUsage?.quota?.storageBytes || 0) === 0">
                             Unlimited allocation
                           </template>
                           <template v-else>
                             {{ getUsagePercentage(
-                              usage.current.storageBytes,
-                              usage.quota?.storageBytes || 0
+                              safeUsageCurrent?.storageBytes ?? 0,
+                              safeUsage?.quota?.storageBytes || 0
                             ) }}% of monthly allocation
-                            ({{ formatBytesToGB(usage.quota?.storageBytes || 0) }} GB)
+                            ({{ formatBytesToGB(safeUsage?.quota?.storageBytes || 0) }} GB)
                           </template>
                         </OuiText>
                       </OuiStack>
@@ -1540,8 +1572,8 @@
                         <OuiStack gap="xs">
                           <OuiText size="sm" color="muted">{{ currentMonth }}</OuiText>
                           <OuiText size="3xl" weight="bold">
-                            {{ usage.estimatedMonthly?.estimatedCostCents 
-                              ? formatCurrency(usage.estimatedMonthly.estimatedCostCents)
+                            {{ safeUsage?.estimatedMonthly?.estimatedCostCents 
+                              ? formatCurrency(safeUsage.estimatedMonthly.estimatedCostCents)
                               : '$0.00' }}
                           </OuiText>
                           <OuiText size="sm" color="muted">
@@ -1555,6 +1587,16 @@
                     </OuiStack>
                   </OuiCardBody>
                 </OuiCard>
+              </template>
+              <template v-else>
+                <OuiBox p="xl" class="text-center">
+                  <OuiStack gap="md" align="center">
+                    <OuiText size="lg" weight="semibold">No Usage Data</OuiText>
+                    <OuiText size="sm" color="muted">
+                      Usage data is not available for this organization.
+                    </OuiText>
+                  </OuiStack>
+                </OuiBox>
               </template>
               </OuiStack>
 
@@ -1579,7 +1621,33 @@
               <OuiCard>
                 <OuiCardBody>
                   <OuiStack gap="md">
-                    <template v-if="!billingAccount?.stripeCustomerId">
+                    <template v-if="isLoadingBillingAccount || isLoadingPaymentMethods">
+                      <OuiStack gap="sm">
+                        <OuiBox
+                          v-for="i in 2"
+                          :key="i"
+                          p="md"
+                          border="1"
+                          borderColor="muted"
+                          rounded="md"
+                        >
+                          <OuiFlex justify="between" align="center">
+                            <OuiFlex gap="md" align="center">
+                              <OuiSkeleton width="1.5rem" height="1.5rem" variant="rectangle" rounded />
+                              <OuiStack gap="xs">
+                                <OuiSkeleton width="12rem" height="1rem" variant="text" />
+                                <OuiSkeleton width="8rem" height="0.875rem" variant="text" />
+                              </OuiStack>
+                            </OuiFlex>
+                            <OuiFlex gap="sm">
+                              <OuiSkeleton width="6rem" height="2rem" variant="rectangle" rounded />
+                              <OuiSkeleton width="5rem" height="2rem" variant="rectangle" rounded />
+                            </OuiFlex>
+                          </OuiFlex>
+                        </OuiBox>
+                      </OuiStack>
+                    </template>
+                    <template v-else-if="!billingAccount?.stripeCustomerId">
                       <OuiStack gap="sm" align="center">
                         <CreditCardIcon class="h-12 w-12 text-muted" />
                         <OuiText size="lg" weight="semibold">No Payment Methods</OuiText>
@@ -1669,7 +1737,15 @@
               <OuiCard>
                 <OuiCardBody>
                   <OuiStack gap="md">
-                    <template v-if="!billingAccount?.stripeCustomerId">
+                    <template v-if="isLoadingBillingAccount">
+                      <OuiStack gap="sm">
+                        <OuiFlex justify="between" v-for="i in 5" :key="i">
+                          <OuiSkeleton width="8rem" height="1rem" variant="text" />
+                          <OuiSkeleton width="12rem" height="1rem" variant="text" />
+                        </OuiFlex>
+                      </OuiStack>
+                    </template>
+                    <template v-else-if="!billingAccount?.stripeCustomerId">
                       <OuiStack gap="sm" align="center">
                         <OuiText size="sm" color="muted">
                           Add credits to create a Stripe customer account and set billing information.
@@ -1933,7 +2009,30 @@
 
                     <!-- Table Rows -->
                     <OuiStack>
-                      <template v-if="!billingAccount?.stripeCustomerId">
+                      <template v-if="isLoadingBillingAccount || isLoadingInvoices">
+                        <OuiBox
+                          v-for="i in 3"
+                          :key="i"
+                          p="md"
+                          borderBottom="1"
+                          borderColor="muted"
+                        >
+                          <OuiGrid cols="5" gap="md" align="center">
+                            <OuiStack gap="xs">
+                              <OuiSkeleton width="8rem" height="1rem" variant="text" />
+                              <OuiSkeleton width="12rem" height="0.875rem" variant="text" />
+                            </OuiStack>
+                            <OuiSkeleton width="6rem" height="1rem" variant="text" />
+                            <OuiSkeleton width="5rem" height="1rem" variant="text" />
+                            <OuiSkeleton width="4rem" height="1.5rem" variant="rectangle" rounded />
+                            <OuiFlex gap="sm">
+                              <OuiSkeleton width="4rem" height="2rem" variant="rectangle" rounded />
+                              <OuiSkeleton width="4rem" height="2rem" variant="rectangle" rounded />
+                            </OuiFlex>
+                          </OuiGrid>
+                        </OuiBox>
+                      </template>
+                      <template v-else-if="!billingAccount?.stripeCustomerId">
                         <OuiBox p="md">
                           <OuiStack gap="sm" align="center">
                             <DocumentTextIcon class="h-8 w-8 text-muted" />
@@ -2039,7 +2138,24 @@
 
                     <!-- Table Rows -->
                     <OuiStack>
-                      <template v-if="billingHistory.length === 0">
+                      <template v-if="isLoadingCreditLog">
+                        <OuiBox
+                          v-for="i in 3"
+                          :key="i"
+                          p="md"
+                          borderBottom="1"
+                          borderColor="muted"
+                        >
+                          <OuiGrid cols="5" gap="md" align="center">
+                            <OuiSkeleton width="8rem" height="1rem" variant="text" />
+                            <OuiSkeleton width="6rem" height="1rem" variant="text" />
+                            <OuiSkeleton width="5rem" height="1rem" variant="text" />
+                            <OuiSkeleton width="4rem" height="1.5rem" variant="rectangle" rounded />
+                            <OuiSkeleton width="6rem" height="1rem" variant="text" />
+                          </OuiGrid>
+                        </OuiBox>
+                      </template>
+                      <template v-else-if="billingHistory.length === 0">
                         <OuiBox p="md">
                           <OuiText size="sm" color="muted" align="center">
                             No payment transactions yet. Add credits to see transaction history.

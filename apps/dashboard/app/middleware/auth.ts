@@ -1,4 +1,18 @@
 export default defineNuxtRouteMiddleware(async (to, from) => {
+  // Check if auth is disabled via public config
+  const appConfig = useConfig();
+  // Fetch config if not already loaded (with timeout to avoid blocking)
+  if (appConfig.disableAuth.value === null && !appConfig.loading.value) {
+    const fetchPromise = appConfig.fetchConfig();
+    const timeoutPromise = new Promise(resolve => setTimeout(resolve, 1000)); // 1s timeout
+    await Promise.race([fetchPromise, timeoutPromise]);
+  }
+  
+  // If auth is disabled, skip all authentication checks
+  if (appConfig.disableAuth.value === true) {
+    return;
+  }
+
   const user = useAuth();
   // Don't block navigation - fetch auth in background
   // On SSR: use timeout to prevent blocking page render, but ensure token refresh completes
