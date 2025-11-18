@@ -848,9 +848,6 @@ services:
       # Set ACME_CA_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory to avoid rate limits during testing
       # Default: production (https://acme-v02.api.letsencrypt.org/directory)
       - --certificatesresolvers.letsencrypt.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
-      # ACME retry configuration to handle rate limits gracefully
-      - --certificatesresolvers.letsencrypt.acme.certificatesDuration=2160h
-      - --certificatesresolvers.letsencrypt.acme.keyType=EC256
       # Metrics
       - --metrics.prometheus=true
       # Logging
