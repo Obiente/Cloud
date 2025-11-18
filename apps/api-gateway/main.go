@@ -329,34 +329,42 @@ func (p *ReverseProxy) checkAllServicesHealth() {
 		healthURL := fmt.Sprintf("%s://%s/health", target.Scheme, target.Host)
 		// Check multiple times to sample different replicas (Docker Swarm load balancer distributes requests)
 		// Service is healthy if at least one replica responds healthy
-		isHealthy := p.checkServiceHealthWithReplicas(healthURL)
+		isHealthy, err := p.checkServiceHealthWithReplicas(healthURL)
 		
 		p.healthMutex.Lock()
 		p.healthStatus[targetURL] = isHealthy
 		p.healthMutex.Unlock()
 		
 		if !isHealthy {
-			logger.Warn("[API Gateway] Service %s is unhealthy (all replica checks failed)", targetURL)
+			if err != nil {
+				logger.Warn("[API Gateway] Service %s is unhealthy (all replica checks failed): %v", targetURL, err)
+			} else {
+				logger.Warn("[API Gateway] Service %s is unhealthy (all replica checks failed)", targetURL)
+			}
 		}
 	}
 }
 
 // checkServiceHealthWithReplicas checks service health by sampling multiple replicas
 // Makes multiple health check requests to sample different replicas through the load balancer
-// Returns true if at least one replica is healthy (service is considered healthy if any replica works)
-func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string) bool {
+// Returns (isHealthy, error) - service is healthy if at least one replica is healthy
+func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string) (bool, error) {
 	// Number of health checks to perform (samples different replicas)
 	// For services with 2 replicas, checking 3 times should hit both replicas
 	numChecks := 3
 	healthyCount := 0
+	var lastError error
 	
 	for i := 0; i < numChecks; i++ {
-		if p.checkServiceHealth(healthURL) {
+		healthy, err := p.checkServiceHealth(healthURL)
+		if healthy {
 			healthyCount++
 			// If at least one replica is healthy, service is considered healthy
 			if healthyCount >= 1 {
-				return true
+				return true, nil
 			}
+		} else {
+			lastError = err
 		}
 		// Small delay between checks to increase chance of hitting different replicas
 		if i < numChecks-1 {
@@ -364,18 +372,23 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string) bool {
 		}
 	}
 	
-	// All checks failed - service is unhealthy
-	return false
+	// All checks failed - return the last error for logging
+	if lastError != nil {
+		return false, fmt.Errorf("all %d replica checks failed, last error: %w", numChecks, lastError)
+	}
+	
+	return false, fmt.Errorf("all %d replica checks failed (no error details)", numChecks)
 }
 
 // checkServiceHealth checks if a service is healthy by calling its /health endpoint
-func (p *ReverseProxy) checkServiceHealth(healthURL string) bool {
+// Returns (isHealthy, error) - error is only set if the check failed
+func (p *ReverseProxy) checkServiceHealth(healthURL string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
 	if err != nil {
-		return false
+		return false, fmt.Errorf("failed to create request: %w", err)
 	}
 	
 	// Configure TLS for HTTPS health checks (Traefik routing)
@@ -395,11 +408,15 @@ func (p *ReverseProxy) checkServiceHealth(healthURL string) bool {
 	
 	resp, err := client.Do(req)
 	if err != nil {
-		return false
+		return false, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 	
-	return resp.StatusCode == http.StatusOK
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("unexpected status code: %d (expected 200)", resp.StatusCode)
+	}
+	
+	return true, nil
 }
 
 // isServiceHealthy checks if a service is currently healthy
