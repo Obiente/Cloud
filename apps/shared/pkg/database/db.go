@@ -375,9 +375,12 @@ func InitAuditLogsTimescaleDB(db *gorm.DB) error {
 
 // InitRedis initializes the Redis connection
 func InitRedis() error {
-	// Will be implemented separately
-	// For now, return nil if Redis is not configured
-	if os.Getenv("REDIS_URL") == "" {
+	// Check if Redis is configured - either via REDIS_URL or REDIS_HOST
+	redisURL := os.Getenv("REDIS_URL")
+	redisHost := os.Getenv("REDIS_HOST")
+	
+	// If neither REDIS_URL nor REDIS_HOST is set, Redis is not configured
+	if redisURL == "" && redisHost == "" {
 		logger.Info("Redis not configured, running without cache")
 		return nil
 	}
