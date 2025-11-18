@@ -126,6 +126,11 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 		Metadata:       req.Msg.GetMetadata(),
 	}
 	
+	// Set creator name if available
+	if userInfo.Name != "" {
+		config.CreatorName = &userInfo.Name
+	}
+	
 	// Handle root password (custom or auto-generated)
 	if req.Msg.RootPassword != nil && req.Msg.GetRootPassword() != "" {
 		rootPass := req.Msg.GetRootPassword()

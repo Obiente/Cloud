@@ -131,6 +131,21 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 	if err := database.DB.Where("id = ?", config.OrganizationID).First(&org).Error; err != nil {
 		return nil, "", fmt.Errorf("failed to get organization: %w", err)
 	}
+	
+	// Fetch organization name if not provided
+	if config.OrganizationName == nil {
+		orgName := org.Name
+		config.OrganizationName = &orgName
+	}
+	
+	// Fetch organization owner if not provided
+	if config.OwnerID == nil || config.OwnerName == nil {
+		var ownerMember database.OrganizationMember
+		if err := database.DB.Where("organization_id = ? AND role = ? AND status = ?", config.OrganizationID, "owner", "active").First(&ownerMember).Error; err == nil {
+			config.OwnerID = &ownerMember.UserID
+			// Owner name will be resolved later if needed via user profile resolver
+		}
+	}
 
 	// Get Proxmox configuration from environment variables
 	proxmoxConfig, err := GetProxmoxConfig()
@@ -333,6 +348,12 @@ type VPSConfig struct {
 	IPv6Addresses  []string
 	OrganizationID string
 	CreatedBy      string
+	
+	// Optional metadata for VPS notes (organization and user names)
+	OrganizationName *string // Organization name (optional, fetched if not provided)
+	CreatorName      *string // Creator user name (optional, fetched if not provided)
+	OwnerID          *string // Organization owner ID (optional, fetched if not provided)
+	OwnerName        *string // Organization owner name (optional, fetched if not provided)
 	
 	// Cloud-init configuration
 	CloudInit      *CloudInitConfig

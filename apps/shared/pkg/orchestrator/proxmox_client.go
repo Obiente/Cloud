@@ -359,6 +359,43 @@ func (pc *ProxmoxClient) apiRequestForm(ctx context.Context, method, endpoint st
 	return pc.httpClient.Do(req)
 }
 
+// buildVPSDescription builds a comprehensive description for VPS notes in Proxmox
+func buildVPSDescription(config *VPSConfig) string {
+	var parts []string
+	
+	// Base information
+	parts = append(parts, fmt.Sprintf("Managed by Obiente Cloud - VPS ID: %s, Display Name: %s", config.VPSID, config.Name))
+	
+	// Organization information
+	if config.OrganizationID != "" {
+		orgInfo := fmt.Sprintf("Org ID: %s", config.OrganizationID)
+		if config.OrganizationName != nil && *config.OrganizationName != "" {
+			orgInfo += fmt.Sprintf(", Org Name: %s", *config.OrganizationName)
+		}
+		parts = append(parts, orgInfo)
+	}
+	
+	// Creator information
+	if config.CreatedBy != "" {
+		creatorInfo := fmt.Sprintf("Creator ID: %s", config.CreatedBy)
+		if config.CreatorName != nil && *config.CreatorName != "" {
+			creatorInfo += fmt.Sprintf(", Creator Name: %s", *config.CreatorName)
+		}
+		parts = append(parts, creatorInfo)
+	}
+	
+	// Owner information (always show if available, even if same as creator)
+	if config.OwnerID != nil && *config.OwnerID != "" {
+		ownerInfo := fmt.Sprintf("Owner ID: %s", *config.OwnerID)
+		if config.OwnerName != nil && *config.OwnerName != "" {
+			ownerInfo += fmt.Sprintf(", Owner Name: %s", *config.OwnerName)
+		}
+		parts = append(parts, ownerInfo)
+	}
+	
+	return strings.Join(parts, " | ")
+}
+
 // CreateVM creates a new VM in Proxmox with cloud-init support
 // allowInterVM: if true, allows VMs in the same organization to communicate with each other
 // CreateVMResult holds the result of VM creation
@@ -453,7 +490,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		// Enable serial console for boot output and terminal access
 		"serial0": "socket",
 		// SECURITY: Mark VM as managed by Obiente Cloud
-		"description": fmt.Sprintf("Managed by Obiente Cloud - VPS ID: %s, Display Name: %s", config.VPSID, config.Name),
+		"description": buildVPSDescription(config),
 	}
 
 	// Configure network interface
