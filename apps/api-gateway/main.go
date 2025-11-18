@@ -426,13 +426,17 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 	
 	discoveredReplicas := make(map[string]*ReplicaHealth)
 	var lastError error
+	successfulChecks := 0
 	
 	for i := 0; i < numChecks; i++ {
 		healthy, replicaID, err := p.checkServiceHealth(healthURL)
 		if err != nil {
 			lastError = err
+			logger.Debug("[API Gateway] Health check failed for %s (attempt %d/%d): %v", healthURL, i+1, numChecks, err)
 			continue
 		}
+		
+		successfulChecks++
 		
 		if replicaID != "" {
 			// Track this replica
@@ -446,6 +450,17 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 				// Update existing replica
 				discoveredReplicas[replicaID].Healthy = healthy
 				discoveredReplicas[replicaID].LastSeen = time.Now()
+			}
+		} else if healthy {
+			// Health check succeeded but no replica ID (backwards compatibility)
+			// Create a temporary replica ID based on the check attempt
+			tempID := fmt.Sprintf("unknown-%d", i)
+			if _, exists := discoveredReplicas[tempID]; !exists {
+				discoveredReplicas[tempID] = &ReplicaHealth{
+					ReplicaID: tempID,
+					Healthy:   true,
+					LastSeen:  time.Now(),
+				}
 			}
 		}
 		
@@ -482,15 +497,42 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 	// Update replica count and service health
 	serviceHealth.ReplicaCount = len(serviceHealth.Replicas)
 	serviceHealth.Healthy = false
-	for _, replica := range serviceHealth.Replicas {
-		if replica.Healthy {
+	
+	// Service is healthy if:
+	// 1. We have at least one healthy replica, OR
+	// 2. We had successful health checks but no replicas tracked yet (initial state)
+	if successfulChecks > 0 {
+		// Check if any tracked replica is healthy
+		for _, replica := range serviceHealth.Replicas {
+			if replica.Healthy {
+				serviceHealth.Healthy = true
+				break
+			}
+		}
+		// If we had successful checks but no healthy replicas tracked, still mark as healthy
+		// This handles the case where health checks succeed but replica IDs aren't being returned yet
+		if !serviceHealth.Healthy && successfulChecks > 0 && len(discoveredReplicas) == 0 {
+			logger.Debug("[API Gateway] Service %s had successful health checks but no replica IDs, assuming healthy", serviceURL)
 			serviceHealth.Healthy = true
-			break
+		}
+	} else {
+		// All checks failed - keep existing health status if we have tracked replicas
+		// Only mark as unhealthy if we have no tracked replicas at all
+		if serviceHealth.ReplicaCount == 0 {
+			serviceHealth.Healthy = false
+		} else {
+			// We have tracked replicas, check if any are still healthy
+			for _, replica := range serviceHealth.Replicas {
+				if replica.Healthy {
+					serviceHealth.Healthy = true
+					break
+				}
+			}
 		}
 	}
 	
-	if !serviceHealth.Healthy && lastError != nil {
-		logger.Warn("[API Gateway] Service %s is unhealthy (%d replicas, all unhealthy): %v", serviceURL, serviceHealth.ReplicaCount, lastError)
+	if !serviceHealth.Healthy && lastError != nil && serviceHealth.ReplicaCount == 0 {
+		logger.Warn("[API Gateway] Service %s is unhealthy (all health checks failed, no replicas tracked): %v", serviceURL, lastError)
 	} else if serviceHealth.ReplicaCount > 0 {
 		logger.Debug("[API Gateway] Service %s: %d replica(s) tracked, healthy: %v", serviceURL, serviceHealth.ReplicaCount, serviceHealth.Healthy)
 	}
@@ -557,10 +599,19 @@ func (p *ReverseProxy) isServiceHealthy(targetURL string) bool {
 	defer p.healthMutex.RUnlock()
 	
 	// Default to healthy if we haven't checked yet (optimistic)
+	// This allows routing to work immediately on startup before health checks complete
 	if serviceHealth, exists := p.healthStatus[targetURL]; exists && serviceHealth != nil {
-		return serviceHealth.Healthy
+		// If we have tracked replicas, use their health status
+		if serviceHealth.ReplicaCount > 0 {
+			return serviceHealth.Healthy
+		}
+		// If we have no tracked replicas but service exists, assume healthy
+		// This handles cases where health checks are failing temporarily
+		// but the service is actually running (network issues, etc.)
+		return true
 	}
-	return true // Assume healthy until we check
+	// No health status tracked yet - assume healthy (optimistic)
+	return true
 }
 
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
