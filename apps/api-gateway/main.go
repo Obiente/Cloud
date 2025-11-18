@@ -149,6 +149,8 @@ func main() {
 			return
 		}
 
+		// Always return healthy - gateway health is independent of backend health
+		// Backend health is tracked separately and only affects routing decisions, not gateway health
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"healthy","service":"api-gateway"}`))
@@ -314,6 +316,8 @@ func (p *ReverseProxy) initHealthChecker() {
 }
 
 // checkAllServicesHealth checks health of all backend services
+// For services with replicas, we check multiple times to sample different replicas
+// Service is considered healthy if at least one replica responds healthy
 func (p *ReverseProxy) checkAllServicesHealth() {
 	for _, targetURL := range p.routes {
 		// Extract service URL (e.g., "http://auth-service:3002" -> "http://auth-service:3002/health")
@@ -323,16 +327,45 @@ func (p *ReverseProxy) checkAllServicesHealth() {
 		}
 		
 		healthURL := fmt.Sprintf("%s://%s/health", target.Scheme, target.Host)
-		isHealthy := p.checkServiceHealth(healthURL)
+		// Check multiple times to sample different replicas (Docker Swarm load balancer distributes requests)
+		// Service is healthy if at least one replica responds healthy
+		isHealthy := p.checkServiceHealthWithReplicas(healthURL)
 		
 		p.healthMutex.Lock()
 		p.healthStatus[targetURL] = isHealthy
 		p.healthMutex.Unlock()
 		
 		if !isHealthy {
-			logger.Warn("[API Gateway] Service %s is unhealthy", targetURL)
+			logger.Warn("[API Gateway] Service %s is unhealthy (all replica checks failed)", targetURL)
 		}
 	}
+}
+
+// checkServiceHealthWithReplicas checks service health by sampling multiple replicas
+// Makes multiple health check requests to sample different replicas through the load balancer
+// Returns true if at least one replica is healthy (service is considered healthy if any replica works)
+func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string) bool {
+	// Number of health checks to perform (samples different replicas)
+	// For services with 2 replicas, checking 3 times should hit both replicas
+	numChecks := 3
+	healthyCount := 0
+	
+	for i := 0; i < numChecks; i++ {
+		if p.checkServiceHealth(healthURL) {
+			healthyCount++
+			// If at least one replica is healthy, service is considered healthy
+			if healthyCount >= 1 {
+				return true
+			}
+		}
+		// Small delay between checks to increase chance of hitting different replicas
+		if i < numChecks-1 {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	
+	// All checks failed - service is unhealthy
+	return false
 }
 
 // checkServiceHealth checks if a service is healthy by calling its /health endpoint
@@ -396,10 +429,16 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log health status for monitoring, but don't block routing
-	// This allows degraded services to still receive traffic
+	// Check if service has at least one healthy replica
+	// We sample multiple replicas in health checks - if at least one is healthy, service is considered healthy
+	// When routing, Docker Swarm's internal load balancer will automatically route to healthy replicas only
+	// This ensures we only route to services that have at least one working replica
 	if !p.isServiceHealthy(targetURL) {
-		logger.Warn("[API Gateway] Service %s is unhealthy, but routing anyway (degraded mode)", targetURL)
+		logger.Warn("[API Gateway] Service %s has no healthy replicas, returning 503", targetURL)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"error":"service_unavailable","message":"All service replicas are unhealthy"}`))
+		return
 	}
 
 	// Parse target URL
