@@ -66,8 +66,8 @@ services:
           cpus: "4"
           memory: 4G
         reservations:
-          cpus: "2"
-          memory: 2G
+          cpus: "0.25"
+          memory: 128M
     dns_search: []
     networks:
       - obiente-network
@@ -131,8 +131,8 @@ services:
           cpus: "4"
           memory: 4G
         reservations:
-          cpus: "2"
-          memory: 2G
+          cpus: "0.25"
+          memory: 128M
     dns_search: []
     networks:
       - obiente-network
@@ -186,8 +186,8 @@ services:
           cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.1"
+          memory: 128M
     dns_search: []
     networks:
       - obiente-network
@@ -227,8 +227,8 @@ services:
           cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.1"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -282,8 +282,8 @@ services:
           cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.1"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -327,8 +327,8 @@ services:
           cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.1"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -372,8 +372,8 @@ services:
           cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.1"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -423,8 +423,8 @@ services:
           cpus: "2"
           memory: 2G
         reservations:
-          cpus: "1"
-          memory: 512M
+          cpus: "0.25"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -470,8 +470,8 @@ services:
           cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.1"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -518,8 +518,8 @@ services:
           cpus: "2"
           memory: 512M
         reservations:
-          cpus: "1"
-          memory: 512M
+          cpus: "0.25"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -563,8 +563,8 @@ services:
           cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.1"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -608,8 +608,8 @@ services:
           cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.1"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -653,8 +653,8 @@ services:
           cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.1"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -698,8 +698,8 @@ services:
           cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.1"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -771,8 +771,8 @@ services:
           cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.1"
+          memory: 128M
     healthcheck:
       test: ["CMD-SHELL", "if command -v nc >/dev/null 2>&1; then nc -z localhost ${DNS_PORT:-53} || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost ${DNS_PORT:-53} || exit 1; fi"]
       interval: 30s
@@ -815,8 +815,8 @@ services:
           cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.1"
+          memory: 128M
     dns_search: []
     networks:
       - obiente-network
@@ -887,8 +887,8 @@ services:
           cpus: "2"
           memory: 512M
         reservations:
-          cpus: "1"
-          memory: 256M
+          cpus: "0.1"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -928,8 +928,8 @@ services:
           cpus: "2"
           memory: 2G
         reservations:
-          cpus: "1"
-          memory: 512M
+          cpus: "0.25"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -993,8 +993,8 @@ services:
           cpus: "1"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 256M
+          cpus: "0.1"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
@@ -1044,8 +1044,8 @@ services:
           cpus: "2"
           memory: 512M
         reservations:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "0.1"
+          memory: 128M
       labels:
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
