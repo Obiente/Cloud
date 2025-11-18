@@ -50,28 +50,49 @@ docker compose ps
 
 **For development on manager nodes only** (worker nodes cannot deploy stacks):
 
+**Recommended: Use the development deployment script:**
+
+```bash
+# Deploy using existing images (default - no build/pull)
+./scripts/deploy-swarm-dev.sh
+
+# Build images locally and deploy
+./scripts/deploy-swarm-dev.sh -b
+# or
+./scripts/deploy-swarm-dev.sh --build
+
+# Pull images from registry and deploy
+./scripts/deploy-swarm-dev.sh -p
+# or
+./scripts/deploy-swarm-dev.sh --pull
+
+# Custom stack name
+./scripts/deploy-swarm-dev.sh my-dev-stack
+```
+
+**Manual deployment (alternative):**
+
 ```bash
 # Verify you're a manager node
 docker node ls  # Should work, not show "not a manager" error
 
 # Build images first (required before deploying)
 export DOCKER_BUILDKIT=1
-docker build -f apps/api/Dockerfile -t obiente/cloud-api:latest .
+for service in api-gateway auth-service organizations-service billing-service deployments-service gameservers-service orchestrator-service vps-service support-service audit-service superadmin-service dns-service vps-gateway; do
+  docker build -f apps/$service/Dockerfile -t ghcr.io/obiente/cloud-$service:latest .
+done
 
-# Set main deployment DNS server IP (replace with your actual DNS server IP)
-export MAIN_DNS_IP=10.0.9.10  # Replace with your main deployment's DNS server IP
-
-# Deploy development stack using docker stack deploy (NOT docker compose)
-docker stack deploy -c docker-compose.swarm.dev.yml obiente-dev
+# Merge and deploy
+cat docker-compose.base.yml docker-compose.swarm.dev.yml | docker stack deploy -c - obiente-dev
 
 # View logs
-docker service logs -f obiente-dev_api
+docker service logs -f obiente-dev_api-gateway
 
 # Remove stack
 docker stack rm obiente-dev
 ```
 
-**Note**: The `docker-compose.swarm.dev.yml` file uses Swarm-specific features (overlay networks) and **must** be deployed with `docker stack deploy`, not `docker compose`. Only manager nodes can deploy stacks. Worker nodes should use regular `docker compose` (see above).
+**Note**: The `docker-compose.swarm.dev.yml` file uses Swarm-specific features (overlay networks) and **must** be deployed with `docker stack deploy`, not `docker compose`. Only manager nodes can deploy stacks. Worker nodes should use regular `docker compose` (see above). See [Development Deployment Guide](docs/deployment/docker-swarm.md#development-deployment) for more details.
 
 ### Docker Swarm (Production)
 

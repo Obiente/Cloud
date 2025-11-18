@@ -119,6 +119,90 @@ Or use the deploy script (recommended):
 ./scripts/deploy-swarm.sh
 ```
 
+## Development Deployment
+
+For development environments, use the development deployment script which uses existing images by default (use `-b` to build locally):
+
+### Quick Start (Development)
+
+```bash
+# Deploy using existing images (default - no build/pull)
+./scripts/deploy-swarm-dev.sh
+
+# Build images locally and deploy
+./scripts/deploy-swarm-dev.sh -b
+
+# Or specify custom stack name
+./scripts/deploy-swarm-dev.sh my-dev-stack
+
+# Or use custom compose file
+./scripts/deploy-swarm-dev.sh obiente-dev docker-compose.swarm.dev.yml
+```
+
+### Build Options
+
+The development script supports building images locally or pulling from registry:
+
+```bash
+# Build images locally (default)
+./scripts/deploy-swarm-dev.sh -b
+# or
+./scripts/deploy-swarm-dev.sh --build
+
+# Pull images from registry instead
+./scripts/deploy-swarm-dev.sh -p
+# or
+./scripts/deploy-swarm-dev.sh --pull
+```
+
+### Development vs Production
+
+| Feature | Development Script | Production Script |
+|---------|-------------------|-------------------|
+| Default compose file | `docker-compose.swarm.dev.yml` | `docker-compose.swarm.yml` |
+| Default stack name | `obiente-dev` | `obiente` |
+| Image building | Uses existing images by default (use `-b` to build) | Pulls from registry by default |
+| Dashboard | Not included | Included by default |
+| Registry auth | Optional | Required |
+
+### Development Workflow
+
+1. **Make code changes** in your local repository
+
+2. **Build and deploy**:
+   ```bash
+   ./scripts/deploy-swarm-dev.sh -b
+   ```
+
+3. **View logs**:
+   ```bash
+   docker service logs -f obiente-dev_api-gateway
+   ```
+
+4. **Update after changes**:
+   ```bash
+   # Rebuild and redeploy
+   ./scripts/deploy-swarm-dev.sh -b
+   ```
+
+### Development Stack Management
+
+```bash
+# View services
+docker stack services obiente-dev
+
+# View logs
+docker service logs -f obiente-dev_api-gateway
+
+# Remove stack
+docker stack rm obiente-dev
+
+# List tasks
+docker stack ps obiente-dev
+```
+
+**Note**: The development script uses `docker-compose.swarm.dev.yml` which includes build configurations for all microservices. Images are built locally and tagged with the registry prefix (e.g., `ghcr.io/obiente/cloud-api-gateway:latest`).
+
 ### 6. Verify Deployment
 
 Check service status:

@@ -675,6 +675,37 @@ ACME_EMAIL=admin@obiente.cloud
 | `DNS_IPS`     | string | -       | ❌       | DNS server IPs (comma-separated) for nameserver configuration                              |
 | `DNS_PORT`    | number | `53`    | ❌       | DNS server port (use different port if 53 is in use)                                       |
 
+### Traefik Port Configuration
+
+| Variable                  | Type   | Default | Required | Description                                                                                |
+| ------------------------- | ------ | ------- | -------- | ------------------------------------------------------------------------------------------ |
+| `TRAEFIK_HTTP_PORT`       | number | `80`    | ❌       | Published HTTP port for Traefik (default: 80)                                              |
+| `TRAEFIK_HTTPS_PORT`      | number | `443`   | ❌       | Published HTTPS port for Traefik (default: 443)                                            |
+| `TRAEFIK_DEPLOYMENTS_PORT`| number | `8000`  | ❌       | Published port for user deployments (default: 8000)                                        |
+| `TRAEFIK_DASHBOARD_PORT`  | number | `8080`  | ❌       | Published port for Traefik dashboard (default: 8080)                                       |
+| `TRAEFIK_SSH_PORT`        | number | `2222`  | ❌       | Published port for SSH proxy (default: 2222)                                              |
+
+**Examples:**
+
+```bash
+# Use default ports (80, 443, 8000, 8080, 2222)
+# No configuration needed
+
+# Use custom ports (e.g., when running behind another reverse proxy)
+TRAEFIK_HTTP_PORT=8080
+TRAEFIK_HTTPS_PORT=8443
+TRAEFIK_DEPLOYMENTS_PORT=8000
+TRAEFIK_DASHBOARD_PORT=8080
+TRAEFIK_SSH_PORT=2222
+
+# Use non-standard ports for development
+TRAEFIK_HTTP_PORT=8080
+TRAEFIK_HTTPS_PORT=8443
+TRAEFIK_DASHBOARD_PORT=9090
+```
+
+**Note:** These variables control the **published** (host) ports that Traefik listens on. The **target** ports (inside the container) remain fixed at 80, 443, 8000, 8080, and the SSH proxy port. This allows you to map Traefik to different host ports if needed (e.g., when running behind another reverse proxy or when standard ports are already in use).
+
 ### VPS Configuration
 
 | Variable                 | Type   | Default     | Required | Description                                                                                                                                                                                                                                                                                                                                             |

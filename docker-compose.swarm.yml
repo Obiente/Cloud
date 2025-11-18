@@ -738,14 +738,15 @@ services:
       - "traefik.http.routers.dns-service-secure.tls.certresolver=letsencrypt"
       - "traefik.http.routers.dns-service-secure.service=dns-service"
     ports:
-      # Use host mode publishing to expose port 53 directly on the host
+      # Use host mode publishing to expose DNS port directly on the host
       # DNS only runs on nodes labeled with dns.enabled=true
+      # Published port uses DNS_PORT environment variable (default: 53)
       - target: 53
-        published: 53
+        published: ${DNS_PORT:-53}
         protocol: udp
         mode: host
       - target: 53
-        published: 53
+        published: ${DNS_PORT:-53}
         protocol: tcp
         mode: host
     cap_add:
