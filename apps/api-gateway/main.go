@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -168,14 +169,22 @@ func main() {
 		allHealthy := true
 		unhealthyServices := []string{}
 		healthyServices := []string{}
+		serviceDetails := make(map[string]interface{})
 		checkedCount := 0
-		for serviceURL, healthy := range proxy.healthStatus {
+		for serviceURL, serviceHealth := range proxy.healthStatus {
 			checkedCount++
-			if !healthy {
+			if serviceHealth == nil || !serviceHealth.Healthy {
 				allHealthy = false
 				unhealthyServices = append(unhealthyServices, serviceURL)
 			} else {
 				healthyServices = append(healthyServices, serviceURL)
+			}
+			if serviceHealth != nil {
+				serviceDetails[serviceURL] = map[string]interface{}{
+					"healthy":      serviceHealth.Healthy,
+					"replica_count": serviceHealth.ReplicaCount,
+					"replicas":      serviceHealth.Replicas,
+				}
 			}
 		}
 		proxy.healthMutex.RUnlock()
@@ -213,15 +222,19 @@ func main() {
 			statusCode = http.StatusServiceUnavailable
 		}
 		
-		detailedJSON := fmt.Sprintf(`{"status":"%s","service":"api-gateway","all_backends_healthy":%t,"healthy_backends":%s,"unhealthy_backends":%s,"total_backends":%d}`,
-			map[bool]string{true: "healthy", false: "degraded"}[allHealthy],
-			allHealthy,
-			healthyList,
-			unhealthyList,
-			checkedCount)
+		// Build response with service details
+		response := map[string]interface{}{
+			"status":              map[bool]string{true: "healthy", false: "degraded"}[allHealthy],
+			"service":             "api-gateway",
+			"all_backends_healthy": allHealthy,
+			"healthy_backends":    healthyServices,
+			"unhealthy_backends":   unhealthyServices,
+			"total_backends":      checkedCount,
+			"services":            serviceDetails,
+		}
 		
 		w.WriteHeader(statusCode)
-		_, _ = w.Write([]byte(detailedJSON))
+		json.NewEncoder(w).Encode(response)
 	})
 
 	// Root endpoint
@@ -290,24 +303,47 @@ func main() {
 	}
 }
 
+// ReplicaHealth tracks health status of individual replicas
+type ReplicaHealth struct {
+	ReplicaID string
+	Healthy   bool
+	LastSeen  time.Time
+}
+
+// ServiceHealth tracks health status for a service and its replicas
+type ServiceHealth struct {
+	Healthy     bool
+	Replicas    map[string]*ReplicaHealth // Map of replica ID -> health status
+	ReplicaCount int // Number of unique healthy replicas
+}
+
 // ReverseProxy handles routing requests to backend services
 type ReverseProxy struct {
 	routes       map[string]string
-	healthStatus map[string]bool // Tracks health status of each backend service
+	healthStatus map[string]*ServiceHealth // Tracks health status of each backend service and its replicas
 	healthMutex  sync.RWMutex
 }
 
 // initHealthChecker starts background health checks for all backend services
 func (p *ReverseProxy) initHealthChecker() {
-	p.healthStatus = make(map[string]bool)
+	p.healthStatus = make(map[string]*ServiceHealth)
 	
 	// Start health checking goroutine
 	go func() {
 		ticker := time.NewTicker(10 * time.Second) // Check every 10 seconds
 		defer ticker.Stop()
 		
-		for range ticker.C {
-			p.checkAllServicesHealth()
+		// Cleanup goroutine: remove stale replicas (not seen for 2 minutes)
+		cleanupTicker := time.NewTicker(30 * time.Second)
+		defer cleanupTicker.Stop()
+		
+		for {
+			select {
+			case <-ticker.C:
+				p.checkAllServicesHealth()
+			case <-cleanupTicker.C:
+				p.cleanupStaleReplicas()
+			}
 		}
 	}()
 	
@@ -316,8 +352,7 @@ func (p *ReverseProxy) initHealthChecker() {
 }
 
 // checkAllServicesHealth checks health of all backend services
-// For services with replicas, we check multiple times to sample different replicas
-// Service is considered healthy if at least one replica responds healthy
+// Tracks individual replica IDs to determine actual replica count
 func (p *ReverseProxy) checkAllServicesHealth() {
 	for _, targetURL := range p.routes {
 		// Extract service URL (e.g., "http://auth-service:3002" -> "http://auth-service:3002/health")
@@ -327,68 +362,157 @@ func (p *ReverseProxy) checkAllServicesHealth() {
 		}
 		
 		healthURL := fmt.Sprintf("%s://%s/health", target.Scheme, target.Host)
-		// Check multiple times to sample different replicas (Docker Swarm load balancer distributes requests)
-		// Service is healthy if at least one replica responds healthy
-		isHealthy, err := p.checkServiceHealthWithReplicas(healthURL)
-		
-		p.healthMutex.Lock()
-		p.healthStatus[targetURL] = isHealthy
-		p.healthMutex.Unlock()
-		
-		if !isHealthy {
-			if err != nil {
-				logger.Warn("[API Gateway] Service %s is unhealthy (all replica checks failed): %v", targetURL, err)
-			} else {
-				logger.Warn("[API Gateway] Service %s is unhealthy (all replica checks failed)", targetURL)
+		// Check service health and collect replica IDs
+		p.checkServiceHealthWithReplicas(healthURL, targetURL)
+	}
+}
+
+// cleanupStaleReplicas removes replicas that haven't been seen recently
+// This handles cases where replicas are removed during upgrades
+func (p *ReverseProxy) cleanupStaleReplicas() {
+	p.healthMutex.Lock()
+	defer p.healthMutex.Unlock()
+	
+	staleThreshold := 2 * time.Minute // Remove replicas not seen for 2 minutes
+	now := time.Now()
+	
+	for serviceURL, serviceHealth := range p.healthStatus {
+		for replicaID, replica := range serviceHealth.Replicas {
+			if now.Sub(replica.LastSeen) > staleThreshold {
+				logger.Debug("[API Gateway] Removing stale replica %s from service %s (not seen for %v)", replicaID, serviceURL, now.Sub(replica.LastSeen))
+				delete(serviceHealth.Replicas, replicaID)
+			}
+		}
+		// Update replica count
+		serviceHealth.ReplicaCount = len(serviceHealth.Replicas)
+		// Update service health: healthy if at least one replica is healthy
+		serviceHealth.Healthy = false
+		for _, replica := range serviceHealth.Replicas {
+			if replica.Healthy {
+				serviceHealth.Healthy = true
+				break
 			}
 		}
 	}
 }
 
 // checkServiceHealthWithReplicas checks service health by sampling multiple replicas
-// Makes multiple health check requests to sample different replicas through the load balancer
-// Returns (isHealthy, error) - service is healthy if at least one replica is healthy
-func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string) (bool, error) {
-	// Number of health checks to perform (samples different replicas)
-	// For services with 2 replicas, checking 3 times should hit both replicas
-	numChecks := 3
-	healthyCount := 0
+// Tracks replica IDs to determine actual replica count and detect changes
+func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceURL string) {
+	// Determine number of checks based on current known replica count
+	// Start with a reasonable number, then adjust based on discovered replicas
+	p.healthMutex.RLock()
+	serviceHealth, exists := p.healthStatus[serviceURL]
+	knownReplicaCount := 0
+	if exists && serviceHealth != nil {
+		knownReplicaCount = serviceHealth.ReplicaCount
+	}
+	p.healthMutex.RUnlock()
+	
+	// Determine number of checks: use known count + 2 to discover new replicas
+	// Minimum 3 checks to ensure we sample replicas, maximum 10 to avoid excessive checks
+	numChecks := knownReplicaCount + 2
+	if numChecks < 3 {
+		numChecks = 3
+	}
+	if numChecks > 10 {
+		numChecks = 10
+	}
+	
+	// DNS service typically has 1 replica, so only check once
+	if strings.Contains(healthURL, "dns-service") {
+		numChecks = 1
+	}
+	
+	discoveredReplicas := make(map[string]*ReplicaHealth)
 	var lastError error
 	
 	for i := 0; i < numChecks; i++ {
-		healthy, err := p.checkServiceHealth(healthURL)
-		if healthy {
-			healthyCount++
-			// If at least one replica is healthy, service is considered healthy
-			if healthyCount >= 1 {
-				return true, nil
-			}
-		} else {
+		healthy, replicaID, err := p.checkServiceHealth(healthURL)
+		if err != nil {
 			lastError = err
+			continue
 		}
+		
+		if replicaID != "" {
+			// Track this replica
+			if _, exists := discoveredReplicas[replicaID]; !exists {
+				discoveredReplicas[replicaID] = &ReplicaHealth{
+					ReplicaID: replicaID,
+					Healthy:   healthy,
+					LastSeen:  time.Now(),
+				}
+			} else {
+				// Update existing replica
+				discoveredReplicas[replicaID].Healthy = healthy
+				discoveredReplicas[replicaID].LastSeen = time.Now()
+			}
+		}
+		
 		// Small delay between checks to increase chance of hitting different replicas
 		if i < numChecks-1 {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
 	
-	// All checks failed - return the last error for logging
-	if lastError != nil {
-		return false, fmt.Errorf("all %d replica checks failed, last error: %w", numChecks, lastError)
+	// Update service health status
+	p.healthMutex.Lock()
+	defer p.healthMutex.Unlock()
+	
+	if p.healthStatus[serviceURL] == nil {
+		p.healthStatus[serviceURL] = &ServiceHealth{
+			Replicas: make(map[string]*ReplicaHealth),
+		}
 	}
 	
-	return false, fmt.Errorf("all %d replica checks failed (no error details)", numChecks)
+	serviceHealth = p.healthStatus[serviceURL]
+	
+	// Merge discovered replicas with existing ones
+	for replicaID, replica := range discoveredReplicas {
+		// Update or add replica
+		if existing, exists := serviceHealth.Replicas[replicaID]; exists {
+			existing.Healthy = replica.Healthy
+			existing.LastSeen = replica.LastSeen
+		} else {
+			serviceHealth.Replicas[replicaID] = replica
+			logger.Debug("[API Gateway] Discovered new replica %s for service %s", replicaID, serviceURL)
+		}
+	}
+	
+	// Update replica count and service health
+	serviceHealth.ReplicaCount = len(serviceHealth.Replicas)
+	serviceHealth.Healthy = false
+	for _, replica := range serviceHealth.Replicas {
+		if replica.Healthy {
+			serviceHealth.Healthy = true
+			break
+		}
+	}
+	
+	if !serviceHealth.Healthy && lastError != nil {
+		logger.Warn("[API Gateway] Service %s is unhealthy (%d replicas, all unhealthy): %v", serviceURL, serviceHealth.ReplicaCount, lastError)
+	} else if serviceHealth.ReplicaCount > 0 {
+		logger.Debug("[API Gateway] Service %s: %d replica(s) tracked, healthy: %v", serviceURL, serviceHealth.ReplicaCount, serviceHealth.Healthy)
+	}
+}
+
+// HealthResponse represents the health check response from services
+type HealthResponse struct {
+	Status    string                 `json:"status"`
+	Service   string                 `json:"service"`
+	ReplicaID string                 `json:"replica_id"`
+	Extra     map[string]interface{} `json:"extra,omitempty"`
 }
 
 // checkServiceHealth checks if a service is healthy by calling its /health endpoint
-// Returns (isHealthy, error) - error is only set if the check failed
-func (p *ReverseProxy) checkServiceHealth(healthURL string) (bool, error) {
+// Returns (isHealthy, replicaID, error)
+func (p *ReverseProxy) checkServiceHealth(healthURL string) (bool, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
 	if err != nil {
-		return false, fmt.Errorf("failed to create request: %w", err)
+		return false, "", fmt.Errorf("failed to create request: %w", err)
 	}
 	
 	// Configure TLS for HTTPS health checks (Traefik routing)
@@ -408,15 +532,23 @@ func (p *ReverseProxy) checkServiceHealth(healthURL string) (bool, error) {
 	
 	resp, err := client.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("request failed: %w", err)
+		return false, "", fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 	
 	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("unexpected status code: %d (expected 200)", resp.StatusCode)
+		return false, "", fmt.Errorf("unexpected status code: %d (expected 200)", resp.StatusCode)
 	}
 	
-	return true, nil
+	// Parse health response to extract replica ID
+	var healthResp HealthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&healthResp); err != nil {
+		// If response doesn't have replica_id, that's okay (backwards compatibility)
+		return true, "", nil
+	}
+	
+	isHealthy := healthResp.Status == "healthy"
+	return isHealthy, healthResp.ReplicaID, nil
 }
 
 // isServiceHealthy checks if a service is currently healthy
@@ -425,8 +557,8 @@ func (p *ReverseProxy) isServiceHealthy(targetURL string) bool {
 	defer p.healthMutex.RUnlock()
 	
 	// Default to healthy if we haven't checked yet (optimistic)
-	if healthy, exists := p.healthStatus[targetURL]; exists {
-		return healthy
+	if serviceHealth, exists := p.healthStatus[targetURL]; exists && serviceHealth != nil {
+		return serviceHealth.Healthy
 	}
 	return true // Assume healthy until we check
 }

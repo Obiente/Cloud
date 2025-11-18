@@ -12,6 +12,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
@@ -119,32 +120,23 @@ func main() {
 	// WebSocket terminal endpoint (bypasses Connect RPC for direct access)
 	mux.HandleFunc("/terminal/ws", deploymentService.HandleTerminalWebSocket)
 
-	// Health check endpoint
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
-
+	// Health check endpoint with replica ID
+	mux.HandleFunc("/health", health.HandleHealth("deployments-service", func() (bool, string, map[string]interface{}) {
 		// Check database connection
 		sqlDB, err := database.DB.DB()
 		if err != nil || sqlDB.Ping() != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"status":"unhealthy","message":"database unavailable"}`))
-			return
+			return false, "database unavailable", nil
 		}
 
-		// Check if orchestrator is available
-		orchStatus := "available"
+		// Check if orchestrator manager is available
+		extra := make(map[string]interface{})
 		if manager == nil {
-			orchStatus = "unavailable"
+			extra["orchestrator"] = "unavailable"
+			return false, "orchestrator manager unavailable", extra
 		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"healthy","service":"deployments-service","orchestrator":"` + orchStatus + `"}`))
-	})
+		extra["orchestrator"] = "available"
+		return true, "healthy", extra
+	}))
 
 	// Root endpoint
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

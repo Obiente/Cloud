@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/metrics"
 
 	"github.com/miekg/dns"
@@ -871,19 +872,8 @@ func main() {
 	httpMux.HandleFunc("/dns/push", handlePushDNSRecord)
 	httpMux.HandleFunc("/dns/push/batch", handlePushDNSRecords)
 	
-	// Health check endpoint for API Gateway
-	httpMux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": "healthy",
-			"service": "dns-service",
-		})
-	})
+	// Health check endpoint for API Gateway with replica ID
+	httpMux.HandleFunc("/health", health.SimpleHealth("dns-service"))
 	
 	httpPort := os.Getenv("HTTP_PORT")
 	if httpPort == "" {

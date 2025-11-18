@@ -12,6 +12,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 	"billing-service/internal/service"
@@ -107,26 +108,15 @@ func main() {
 	// Register Stripe webhook endpoint (no auth required, uses signature verification)
 	mux.HandleFunc("/webhooks/stripe", billing.HandleStripeWebhook)
 
-	// Health check endpoint
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
-
+	// Health check endpoint with replica ID
+	mux.HandleFunc("/health", health.HandleHealth("billing-service", func() (bool, string, map[string]interface{}) {
 		// Check database connection
 		sqlDB, err := database.DB.DB()
 		if err != nil || sqlDB.Ping() != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"status":"unhealthy","message":"database unavailable"}`))
-			return
+			return false, "database unavailable", nil
 		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"healthy","service":"billing-service"}`))
-	})
+		return true, "healthy", nil
+	}))
 
 	// Root endpoint
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

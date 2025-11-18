@@ -14,6 +14,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
@@ -133,32 +134,23 @@ func main() {
 		logger.Info("✓ SSH proxy server started on port %d", sshProxyPort)
 	}
 
-	// Health check endpoint
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
-
+	// Health check endpoint with replica ID
+	mux.HandleFunc("/health", health.HandleHealth("vps-service", func() (bool, string, map[string]interface{}) {
 		// Check database connection
 		sqlDB, err := database.DB.DB()
 		if err != nil || sqlDB.Ping() != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"status":"unhealthy","message":"database unavailable"}`))
-			return
+			return false, "database unavailable", nil
 		}
 
 		// Check if VPS manager is available
-		vpsStatus := "available"
+		extra := make(map[string]interface{})
 		if vpsManager == nil {
-			vpsStatus = "unavailable"
+			extra["vps_manager"] = "unavailable"
+			return false, "VPS manager unavailable", extra
 		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"healthy","service":"vps-service","vps_manager":"` + vpsStatus + `"}`))
-	})
+		extra["vps_manager"] = "available"
+		return true, "healthy", extra
+	}))
 
 	// Root endpoint
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

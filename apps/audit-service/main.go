@@ -12,6 +12,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 	"audit-service/internal/service"
@@ -78,26 +79,15 @@ func main() {
 	)
 	mux.Handle(auditPath, auditHandler)
 
-	// Health check endpoint
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
-
-		// Check database connection
+	// Health check endpoint with replica ID
+	mux.HandleFunc("/health", health.HandleHealth("audit-service", func() (bool, string, map[string]interface{}) {
+		// Check metrics database connection (TimescaleDB)
 		sqlDB, err := database.MetricsDB.DB()
 		if err != nil || sqlDB.Ping() != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"status":"unhealthy","message":"database unavailable"}`))
-			return
+			return false, "metrics database unavailable", nil
 		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"healthy","service":"audit-service"}`))
-	})
+		return true, "healthy", nil
+	}))
 
 	// Root endpoint
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
