@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"time"
 
@@ -53,14 +54,24 @@ func InitMetricsDatabase() error {
 		dbname = "obiente_metrics" // Default metrics database name
 	}
 
-	// Build DSN with increased connection timeout for Docker Swarm overlay networks
-	// connect_timeout: Time to wait for initial connection (default 5s, increased to 60s)
+	// Build DSN with reasonable connection timeout for Docker Swarm overlay networks
+	// connect_timeout: Time to wait for initial connection (10s - faster failure for debugging)
 	// statement_timeout: Maximum time for a query to run (30s) - prevents hanging queries
 	// This helps with overlay network initialization delays and slow DNS resolution
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable connect_timeout=60 statement_timeout=30000",
+	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable connect_timeout=10 statement_timeout=30000",
 		host, port, user, password, dbname)
 
 	logger.Info("Attempting to connect to metrics database at %s:%s (database: %s, user: %s)", host, port, dbname, user)
+	
+	// Diagnostic: Log network information for troubleshooting
+	if host != "localhost" && host != "127.0.0.1" {
+		logger.Debug("[MetricsDB] Resolving metrics database hostname: %s", host)
+		if addrs, err := net.LookupHost(host); err == nil {
+			logger.Debug("[MetricsDB] Metrics database hostname resolves to: %v", addrs)
+		} else {
+			logger.Warn("[MetricsDB] Failed to resolve metrics database hostname %s: %v", host, err)
+		}
+	}
 
 	// Retry database connection with exponential backoff
 	// This handles cases where DNS resolution isn't ready yet (common in Docker Swarm)
