@@ -1768,6 +1768,21 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	cpuCores := float64(config.CPUShares) / 1024.0
 	args = append(args, "--limit-cpu", fmt.Sprintf("%.2f", cpuCores))
 
+	// Add resource reservations (minimal reservations for idle workloads)
+	// Reserve 25% of limit for memory (idle sites don't need much)
+	reserveMemory := config.Memory / 4 // Reserve 25% of limit
+	if reserveMemory < 32*1024*1024 { // Minimum 32MB for idle sites
+		reserveMemory = 32 * 1024 * 1024
+	}
+	args = append(args, "--reserve-memory", fmt.Sprintf("%d", reserveMemory))
+
+	// Reserve minimal CPU (idle sites use almost no CPU)
+	reserveCPU := cpuCores / 4.0 // Reserve 25% of limit
+	if reserveCPU < 0.01 { // Minimum 0.01 cores (10m) for idle workloads
+		reserveCPU = 0.01
+	}
+	args = append(args, "--reserve-cpu", fmt.Sprintf("%.2f", reserveCPU))
+
 	// Add restart policy
 	// For Swarm services, valid conditions are: none, on-failure, any
 	// Use "any" to always restart (closest to "unless-stopped" behavior)
@@ -2280,11 +2295,11 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				}
 			}
 
-			memory := int64(512 * 1024 * 1024) // Default 512MB
+			memory := int64(256 * 1024 * 1024) // Default 256MB
 			if deployment.MemoryBytes != nil {
 				memory = *deployment.MemoryBytes
 			}
-			cpuShares := int64(1024) // Default
+			cpuShares := int64(102) // Default 0.1 CPU (102 shares = 0.1 cores)
 			if deployment.CPUShares != nil {
 				cpuShares = *deployment.CPUShares
 			}
@@ -2394,11 +2409,11 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 					}
 				}
 
-				memory := int64(512 * 1024 * 1024) // Default 512MB
+				memory := int64(256 * 1024 * 1024) // Default 256MB
 				if deployment.MemoryBytes != nil {
 					memory = *deployment.MemoryBytes
 				}
-				cpuShares := int64(1024) // Default
+				cpuShares := int64(102) // Default 0.1 CPU (102 shares = 0.1 cores)
 				if deployment.CPUShares != nil {
 					cpuShares = *deployment.CPUShares
 				}
@@ -2716,11 +2731,11 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 	}
 
 	// Get resource limits
-	memory := int64(512 * 1024 * 1024) // Default 512MB
+	memory := int64(256 * 1024 * 1024) // Default 256MB
 	if deployment.MemoryBytes != nil {
 		memory = *deployment.MemoryBytes
 	}
-	cpuShares := int64(1024) // Default
+	cpuShares := int64(102) // Default 0.1 CPU (102 shares = 0.1 cores)
 	if deployment.CPUShares != nil {
 		cpuShares = *deployment.CPUShares
 	}

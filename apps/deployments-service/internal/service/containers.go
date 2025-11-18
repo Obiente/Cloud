@@ -112,11 +112,11 @@ func (s *Service) attemptAutomaticRedeployment(ctx context.Context, deploymentID
 				}
 			}
 			
-			memory := int64(512 * 1024 * 1024) // Default 512MB
+			memory := int64(256 * 1024 * 1024) // Default 256MB
 			if dbDep.MemoryBytes != nil {
 				memory = *dbDep.MemoryBytes
 			}
-			cpuShares := int64(1024) // Default
+			cpuShares := int64(102) // Default 0.1 CPU (102 shares = 0.1 cores)
 			if dbDep.CPUShares != nil {
 				cpuShares = *dbDep.CPUShares
 			}
