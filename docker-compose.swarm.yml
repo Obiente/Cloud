@@ -844,6 +844,13 @@ services:
       - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
       - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      # Use Let's Encrypt staging environment if ACME_CA_SERVER is set to staging URL
+      # Set ACME_CA_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory to avoid rate limits during testing
+      # Default: production (https://acme-v02.api.letsencrypt.org/directory)
+      - --certificatesresolvers.letsencrypt.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
+      # ACME retry configuration to handle rate limits gracefully
+      - --certificatesresolvers.letsencrypt.acme.certificatesDuration=2160h
+      - --certificatesresolvers.letsencrypt.acme.keyType=EC256
       # Metrics
       - --metrics.prometheus=true
       # Logging
@@ -898,6 +905,7 @@ services:
         - "traefik.http.routers.traefik.entrypoints=websecure"
         - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
         - "traefik.http.routers.traefik.service=api@internal"
+        - "traefik.http.services.traefik.loadbalancer.server.port=8080"
     dns_search: []
     networks:
       - obiente-network
