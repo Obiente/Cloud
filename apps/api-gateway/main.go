@@ -69,6 +69,56 @@ var serviceDomains = map[string]string{
 	"dns-service:8053":          "dns-service", // Note: DNS service may need special handling
 }
 
+// buildServiceDomain constructs a service domain with optional node-specific prefix
+// Supports two patterns:
+// 1. node-service-name.domain (e.g., "node1-auth-service.obiente.cloud") - when nodeSubdomain is provided
+// 2. service-name.node.domain (e.g., "auth-service.node1.obiente.cloud") - when useNodeSubdomain=true and nodeSubdomain is provided
+// 3. service-name.domain (e.g., "auth-service.obiente.cloud") - default fallback
+func buildServiceDomain(serviceName string, domain string, nodeSubdomain string, useNodeSubdomainPattern bool) string {
+	if nodeSubdomain == "" {
+		// No node subdomain - use standard service domain
+		return fmt.Sprintf("%s.%s", serviceName, domain)
+	}
+	
+	// Sanitize node subdomain
+	sanitizedNode := strings.ToLower(nodeSubdomain)
+	sanitizedNode = strings.ReplaceAll(sanitizedNode, "_", "-")
+	sanitizedNode = strings.ReplaceAll(sanitizedNode, " ", "-")
+	
+	if useNodeSubdomainPattern {
+		// Pattern: service-name.node.domain (e.g., "auth-service.node1.obiente.cloud")
+		return fmt.Sprintf("%s.%s.%s", serviceName, sanitizedNode, domain)
+	} else {
+		// Pattern: node-service-name.domain (e.g., "node1-auth-service.obiente.cloud")
+		return fmt.Sprintf("%s-%s.%s", sanitizedNode, serviceName, domain)
+	}
+}
+
+// getNodeSubdomain gets the node subdomain from environment or current node
+// Returns empty string if not configured
+func getNodeSubdomain() string {
+	// Check environment variable first (explicit configuration)
+	if subdomain := os.Getenv("NODE_SUBDOMAIN"); subdomain != "" {
+		return subdomain
+	}
+	if subdomain := os.Getenv("OBIENTE_NODE_SUBDOMAIN"); subdomain != "" {
+		return subdomain
+	}
+	
+	// Try to get from hostname
+	hostname := os.Getenv("HOSTNAME")
+	if hostname != "" {
+		// Extract node name from hostname (remove domain if present)
+		parts := strings.Split(hostname, ".")
+		if len(parts) > 0 {
+			return parts[0]
+		}
+		return hostname
+	}
+	
+	return ""
+}
+
 // buildServiceRoutes constructs the service routes based on routing mode
 func buildServiceRoutes() map[string]string {
 	useTraefik := os.Getenv("USE_TRAEFIK_ROUTING")
@@ -76,6 +126,16 @@ func buildServiceRoutes() map[string]string {
 	if domain == "" {
 		domain = "localhost"
 	}
+	
+	// Check if node-specific subdomain pattern should be used
+	// SERVICE_DOMAIN_PATTERN can be "node-service" (default) or "service-node"
+	domainPattern := os.Getenv("SERVICE_DOMAIN_PATTERN")
+	useNodeSubdomainPattern := domainPattern == "service-node" // Pattern: service-name.node.domain
+	
+	// Get node subdomain if available
+	nodeSubdomain := getNodeSubdomain()
+	useNodeSpecificDomains := os.Getenv("USE_NODE_SPECIFIC_DOMAINS")
+	enableNodeSpecific := useNodeSpecificDomains == "true" || useNodeSpecificDomains == "1"
 
 	routes := make(map[string]string)
 
@@ -88,7 +148,16 @@ func buildServiceRoutes() map[string]string {
 				parts := strings.Split(serviceAddr, ":")
 				serviceDomain = parts[0]
 			}
-			routes[path] = fmt.Sprintf("https://%s.%s", serviceDomain, domain)
+			
+			// Build domain with optional node-specific prefix
+			var targetDomain string
+			if enableNodeSpecific && nodeSubdomain != "" {
+				targetDomain = buildServiceDomain(serviceDomain, domain, nodeSubdomain, useNodeSubdomainPattern)
+			} else {
+				targetDomain = fmt.Sprintf("%s.%s", serviceDomain, domain)
+			}
+			
+			routes[path] = fmt.Sprintf("https://%s", targetDomain)
 		} else {
 			// Use internal routing (default)
 			routes[path] = fmt.Sprintf("http://%s", serviceAddr)
@@ -775,17 +844,47 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 	// Connect to backend service
 	backendAddr := target.Host
 	if !strings.Contains(backendAddr, ":") {
-		backendAddr += ":80"
+		// Default port based on scheme
 		if target.Scheme == "https" {
-			backendAddr = strings.Replace(backendAddr, ":80", ":443", 1)
+			backendAddr += ":443"
+		} else {
+			backendAddr += ":80"
 		}
 	}
 
-	backendConn, err := net.DialTimeout("tcp", backendAddr, 10*time.Second)
-	if err != nil {
-		logger.Error("[API Gateway] Failed to connect to backend %s: %v", backendAddr, err)
-		clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
-		return
+	// For HTTPS (domain-based routing), we need to handle TLS
+	var backendConn net.Conn
+	if target.Scheme == "https" {
+		// Use TLS connection for HTTPS
+		skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
+		shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
+		
+		tcpConn, err := net.DialTimeout("tcp", backendAddr, 10*time.Second)
+		if err != nil {
+			logger.Error("[API Gateway] Failed to connect to backend %s: %v", backendAddr, err)
+			clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
+			return
+		}
+		
+		// Extract hostname (without port) for TLS ServerName
+		hostname := target.Host
+		if idx := strings.Index(hostname, ":"); idx != -1 {
+			hostname = hostname[:idx]
+		}
+		
+		tlsConfig := &tls.Config{
+			ServerName:         hostname,
+			InsecureSkipVerify: shouldSkipVerify,
+		}
+		backendConn = tls.Client(tcpConn, tlsConfig)
+	} else {
+		// Plain TCP connection for HTTP
+		backendConn, err = net.DialTimeout("tcp", backendAddr, 10*time.Second)
+		if err != nil {
+			logger.Error("[API Gateway] Failed to connect to backend %s: %v", backendAddr, err)
+			clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
+			return
+		}
 	}
 	defer backendConn.Close()
 

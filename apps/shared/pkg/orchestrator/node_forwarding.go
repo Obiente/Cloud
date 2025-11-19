@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,29 +29,58 @@ func NewNodeForwarder() *NodeForwarder {
 	// Get API base URL from environment or construct from hostname
 	apiBaseURL := os.Getenv("API_BASE_URL")
 	if apiBaseURL == "" {
-		// Try to construct from hostname and port
-		hostname := os.Getenv("HOSTNAME")
-		port := os.Getenv("PORT")
-		if port == "" {
-			port = "3001"
-		}
-		if hostname != "" {
-			// In Swarm mode, use tasks.api service name for DNS resolution
-			// Otherwise, use hostname
-			if os.Getenv("ENABLE_SWARM") != "false" {
-				apiBaseURL = fmt.Sprintf("http://tasks.api:%s", port)
-			} else {
-				apiBaseURL = fmt.Sprintf("http://%s:%s", hostname, port)
+		// Check if domain-based routing is enabled
+		useDomainRouting := os.Getenv("USE_DOMAIN_ROUTING")
+		domain := os.Getenv("DOMAIN")
+		useTraefikRouting := os.Getenv("USE_TRAEFIK_ROUTING")
+		
+		// If domain routing is enabled and domain is set, use domain-based URL
+		if (useDomainRouting == "true" || useDomainRouting == "1") && domain != "" && domain != "localhost" {
+			scheme := "http"
+			if useTraefikRouting == "true" || useTraefikRouting == "1" {
+				scheme = "https"
 			}
+			apiBaseURL = fmt.Sprintf("%s://api.%s", scheme, domain)
 		} else {
-			// Fallback to localhost
-			apiBaseURL = fmt.Sprintf("http://localhost:%s", port)
+			// Fallback to service name or hostname-based URL
+			port := os.Getenv("PORT")
+			if port == "" {
+				port = "3001"
+			}
+			hostname := os.Getenv("HOSTNAME")
+			if hostname != "" {
+				// In Swarm mode, use tasks.api service name for DNS resolution
+				// Otherwise, use hostname
+				if os.Getenv("ENABLE_SWARM") != "false" {
+					apiBaseURL = fmt.Sprintf("http://tasks.api-gateway:%s", port)
+				} else {
+					apiBaseURL = fmt.Sprintf("http://%s:%s", hostname, port)
+				}
+			} else {
+				// Fallback to localhost or service name
+				if os.Getenv("ENABLE_SWARM") != "false" {
+					apiBaseURL = fmt.Sprintf("http://api-gateway:%s", port)
+				} else {
+					apiBaseURL = fmt.Sprintf("http://localhost:%s", port)
+				}
+			}
 		}
 	}
 
+	// Configure HTTP client with TLS support for HTTPS (domain-based routing)
+	skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
+	shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
+	
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: shouldSkipVerify, // Skip TLS verification for internal Traefik certs
+		},
+	}
+	
 	return &NodeForwarder{
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Transport: transport,
+			Timeout:  30 * time.Second,
 		},
 		apiBaseURL: strings.TrimSuffix(apiBaseURL, "/"),
 	}
@@ -64,10 +94,11 @@ func (nf *NodeForwarder) GetNodeAPIURL(nodeID string) (string, error) {
 		return "", fmt.Errorf("failed to find node %s: %w", nodeID, err)
 	}
 
-	// Check if node has API URL in labels (JSONB field)
+	// Check if node has API URL in labels (JSONB field) - highest priority
 	if node.Labels != "" {
 		var labels map[string]interface{}
 		if err := json.Unmarshal([]byte(node.Labels), &labels); err == nil {
+			// Check for explicit API URL first
 			if apiURL, ok := labels["api_url"].(string); ok && apiURL != "" {
 				return strings.TrimSuffix(apiURL, "/"), nil
 			}
@@ -77,6 +108,74 @@ func (nf *NodeForwarder) GetNodeAPIURL(nodeID string) (string, error) {
 		}
 	}
 
+	// Check if domain-based routing is enabled
+	useDomainRouting := os.Getenv("USE_DOMAIN_ROUTING")
+	domain := os.Getenv("DOMAIN")
+	useTraefikRouting := os.Getenv("USE_TRAEFIK_ROUTING")
+
+	// If domain routing is enabled and domain is set, try to use domain-based URL
+	if (useDomainRouting == "true" || useDomainRouting == "1") && domain != "" && domain != "localhost" {
+		// Determine scheme
+		scheme := "http"
+		if useTraefikRouting == "true" || useTraefikRouting == "1" {
+			scheme = "https"
+		}
+		
+		// Check for node-specific subdomain in labels
+		var nodeSubdomain string
+		if node.Labels != "" {
+			var labels map[string]interface{}
+			if err := json.Unmarshal([]byte(node.Labels), &labels); err == nil {
+				// Check for explicit subdomain configuration
+				if subdomain, ok := labels["api_subdomain"].(string); ok && subdomain != "" {
+					nodeSubdomain = subdomain
+				} else if subdomain, ok := labels["obiente.api_subdomain"].(string); ok && subdomain != "" {
+					nodeSubdomain = subdomain
+				} else if subdomain, ok := labels["subdomain"].(string); ok && subdomain != "" {
+					// Use subdomain with "api" prefix (e.g., "node1" -> "node1-api")
+					nodeSubdomain = subdomain + "-api"
+				} else if subdomain, ok := labels["obiente.subdomain"].(string); ok && subdomain != "" {
+					nodeSubdomain = subdomain + "-api"
+				}
+			}
+		}
+		
+		// If no explicit subdomain, try to generate from hostname
+		if nodeSubdomain == "" && node.Hostname != "" {
+			// Check if hostname is already a full domain (contains dots and domain)
+			if strings.Contains(node.Hostname, ".") {
+				// Check if hostname already contains the domain
+				if strings.HasSuffix(node.Hostname, domain) {
+					// Hostname is already a subdomain of our domain (e.g., "node1.obiente.cloud")
+					return fmt.Sprintf("%s://%s", scheme, node.Hostname), nil
+				}
+				// Hostname is a full domain but different domain - use as-is
+				return fmt.Sprintf("%s://%s", scheme, node.Hostname), nil
+			}
+			
+			// Generate subdomain from hostname
+			// Sanitize hostname to be DNS-safe (lowercase, replace invalid chars with hyphens)
+			sanitizedHostname := strings.ToLower(node.Hostname)
+			sanitizedHostname = strings.ReplaceAll(sanitizedHostname, "_", "-")
+			sanitizedHostname = strings.ReplaceAll(sanitizedHostname, " ", "-")
+			
+			// Use hostname as subdomain (e.g., "node1" -> "node1.obiente.cloud")
+			// For API, we can use either "node1-api.obiente.cloud" or "api-node1.obiente.cloud"
+			// Default to "node1-api" pattern for clarity
+			nodeSubdomain = sanitizedHostname + "-api"
+		}
+		
+		// If we have a node subdomain, use it
+		if nodeSubdomain != "" {
+			return fmt.Sprintf("%s://%s.%s", scheme, nodeSubdomain, domain), nil
+		}
+		
+		// Fallback: use main API domain if no node-specific subdomain available
+		// This assumes all nodes share the same API gateway domain
+		return fmt.Sprintf("%s://api.%s", scheme, domain), nil
+	}
+
+	// Fallback to IP-based or hostname-based routing
 	// Try to construct from node hostname/IP
 	if node.IP != "" {
 		port := os.Getenv("PORT")

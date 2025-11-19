@@ -205,17 +205,34 @@ func (s *Service) GetVPSProxyInfo(ctx context.Context, req *connect.Request[vpsv
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
 	}
 
-	// Get API base URL from environment or construct from DOMAIN
+	// Get API base URL from environment or construct from configuration
 	apiBaseURL := os.Getenv("API_BASE_URL")
 	if apiBaseURL == "" {
-		// Try to construct from DOMAIN environment variable (used in docker-compose)
+		// Check if domain-based routing is enabled
+		useDomainRouting := os.Getenv("USE_DOMAIN_ROUTING")
 		domain := os.Getenv("DOMAIN")
-		if domain != "" && domain != "localhost" {
-			// Use HTTPS for production domains
-			apiBaseURL = fmt.Sprintf("https://api.%s", domain)
+		useTraefikRouting := os.Getenv("USE_TRAEFIK_ROUTING")
+		
+		// If domain routing is enabled and domain is set, use domain-based URL
+		if (useDomainRouting == "true" || useDomainRouting == "1") && domain != "" && domain != "localhost" {
+			scheme := "http"
+			if useTraefikRouting == "true" || useTraefikRouting == "1" {
+				scheme = "https"
+			}
+			apiBaseURL = fmt.Sprintf("%s://api.%s", scheme, domain)
 		} else {
-			// For localhost/dev, use HTTP
-			apiBaseURL = "http://localhost:3001"
+			// Fallback to service name or localhost
+			port := os.Getenv("PORT")
+			if port == "" {
+				port = "3001"
+			}
+			// Try service name first (works in Docker networks)
+			if os.Getenv("ENABLE_SWARM") != "false" {
+				apiBaseURL = fmt.Sprintf("http://api-gateway:%s", port)
+			} else {
+				// For localhost/dev, use HTTP
+				apiBaseURL = fmt.Sprintf("http://localhost:%s", port)
+			}
 		}
 	}
 

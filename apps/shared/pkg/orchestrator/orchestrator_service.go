@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/registry"
 
@@ -129,6 +130,10 @@ func (os *OrchestratorService) Start() {
 		os.rollbackMonitor.Start()
 		logger.Debug("[Orchestrator] Started rollback monitor")
 	}
+
+	// Start microservice Traefik label sync (every 30 seconds)
+	go os.syncMicroserviceTraefikLabels()
+	logger.Debug("[Orchestrator] Started microservice Traefik label sync")
 
 	logger.Info("[Orchestrator] Orchestration service started successfully")
 }
@@ -1973,4 +1978,249 @@ func (os *OrchestratorService) runStrayContainerCleanup() {
 		database.DB.Model(&stray).Update("volumes_deleted_at", now)
 		logger.Info("[Orchestrator] Marked volumes as deleted for container %s", stray.ContainerID[:12])
 	}
+}
+
+// MicroserviceConfig defines a microservice that needs Traefik label sync
+type MicroserviceConfig struct {
+	Name     string
+	Port     int
+	BaseHost string // Base hostname without node prefix (e.g., "auth-service")
+}
+
+// syncMicroserviceTraefikLabels periodically syncs Traefik labels for Obiente Cloud microservices
+// This ensures that services get node-specific domains when configured
+func (os *OrchestratorService) syncMicroserviceTraefikLabels() {
+	// Run every 30 seconds
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	// Run immediately on startup
+	os.updateMicroserviceTraefikLabels()
+
+	for {
+		select {
+		case <-ticker.C:
+			os.updateMicroserviceTraefikLabels()
+		case <-os.ctx.Done():
+			return
+		}
+	}
+}
+
+// updateMicroserviceTraefikLabels updates Traefik labels for all microservices
+func (os *OrchestratorService) updateMicroserviceTraefikLabels() {
+	// Get node configuration
+	nodeID := os.deploymentManager.GetNodeID()
+	if nodeID == "" {
+		logger.Debug("[Orchestrator] No node ID available, skipping Traefik label sync")
+		return
+	}
+
+	// Get node metadata to check for subdomain configuration
+	var node database.NodeMetadata
+	if err := database.DB.Where("id = ?", nodeID).First(&node).Error; err != nil {
+		logger.Debug("[Orchestrator] Node %s not found in database, skipping Traefik label sync: %v", nodeID, err)
+		return
+	}
+
+	// Get environment configuration
+	domain := os.getEnvOrDefault("DOMAIN", "localhost")
+	useNodeSpecificDomains := os.getEnvOrDefault("USE_NODE_SPECIFIC_DOMAINS", "false")
+	domainPattern := os.getEnvOrDefault("SERVICE_DOMAIN_PATTERN", "node-service")
+	useTraefikRouting := os.getEnvOrDefault("USE_TRAEFIK_ROUTING", "true")
+
+	// Only sync if domain routing is enabled
+	if useTraefikRouting != "true" && useTraefikRouting != "1" {
+		logger.Debug("[Orchestrator] Traefik routing disabled, skipping label sync")
+		return
+	}
+
+	// Get node subdomain
+	nodeSubdomain := os.getNodeSubdomain(&node)
+	enableNodeSpecific := (useNodeSpecificDomains == "true" || useNodeSpecificDomains == "1") && nodeSubdomain != ""
+	useNodeSubdomainPattern := domainPattern == "service-node"
+
+	// Define all microservices that need Traefik labels
+	microservices := []MicroserviceConfig{
+		{Name: "api-gateway", Port: 3001, BaseHost: "api"},
+		{Name: "auth-service", Port: 3002, BaseHost: "auth-service"},
+		{Name: "organizations-service", Port: 3003, BaseHost: "organizations-service"},
+		{Name: "billing-service", Port: 3004, BaseHost: "billing-service"},
+		{Name: "deployments-service", Port: 3005, BaseHost: "deployments-service"},
+		{Name: "gameservers-service", Port: 3006, BaseHost: "gameservers-service"},
+		{Name: "orchestrator-service", Port: 3007, BaseHost: "orchestrator-service"},
+		{Name: "vps-service", Port: 3008, BaseHost: "vps-service"},
+		{Name: "support-service", Port: 3009, BaseHost: "support-service"},
+		{Name: "audit-service", Port: 3010, BaseHost: "audit-service"},
+		{Name: "superadmin-service", Port: 3011, BaseHost: "superadmin-service"},
+		{Name: "dns-service", Port: 8053, BaseHost: "dns-service"},
+	}
+
+	// Update labels for each microservice
+	for _, svc := range microservices {
+		if err := os.updateServiceTraefikLabels(svc, domain, nodeSubdomain, enableNodeSpecific, useNodeSubdomainPattern); err != nil {
+			logger.Warn("[Orchestrator] Failed to update Traefik labels for %s: %v", svc.Name, err)
+		}
+	}
+}
+
+// updateServiceTraefikLabels updates Traefik labels for a single Docker Swarm service
+func (os *OrchestratorService) updateServiceTraefikLabels(svc MicroserviceConfig, domain string, nodeSubdomain string, enableNodeSpecific bool, useNodeSubdomainPattern bool) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Build service domain
+	var serviceDomain string
+	if enableNodeSpecific && nodeSubdomain != "" {
+		// Sanitize node subdomain
+		sanitizedNode := strings.ToLower(nodeSubdomain)
+		sanitizedNode = strings.ReplaceAll(sanitizedNode, "_", "-")
+		sanitizedNode = strings.ReplaceAll(sanitizedNode, " ", "-")
+
+		if useNodeSubdomainPattern {
+			// Pattern: service-name.node.domain (e.g., "auth-service.node1.obiente.cloud")
+			serviceDomain = fmt.Sprintf("%s.%s.%s", svc.BaseHost, sanitizedNode, domain)
+		} else {
+			// Pattern: node-service-name.domain (e.g., "node1-auth-service.obiente.cloud")
+			serviceDomain = fmt.Sprintf("%s-%s.%s", sanitizedNode, svc.BaseHost, domain)
+		}
+	} else {
+		// Standard domain (e.g., "auth-service.obiente.cloud")
+		serviceDomain = fmt.Sprintf("%s.%s", svc.BaseHost, domain)
+	}
+
+	// Generate Traefik labels
+	labels := os.generateMicroserviceTraefikLabels(svc.Name, serviceDomain, svc.Port)
+
+	// Update Docker Swarm service labels
+	// In Swarm mode, we need to use docker service update
+	// Note: --label-add will add or update existing labels
+	// --label-rm will remove labels (ignored if label doesn't exist)
+	updateArgs := []string{"service", "update"}
+	
+	// Add/update all labels
+	for k, v := range labels {
+		updateArgs = append(updateArgs, "--label-add", fmt.Sprintf("%s=%s", k, v))
+	}
+
+	// Note: We don't need to explicitly remove old labels because --label-add will overwrite them
+	// However, if the domain pattern changed, old router rules might still exist
+	// Docker Swarm will handle this - new labels with same key will replace old ones
+
+	updateArgs = append(updateArgs, svc.Name)
+
+	// Execute docker service update
+	cmd := exec.CommandContext(ctx, "docker", updateArgs...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Check if service doesn't exist (that's OK - it might not be deployed yet)
+		if strings.Contains(string(output), "service not found") || strings.Contains(string(output), "No such service") {
+			logger.Debug("[Orchestrator] Service %s not found, skipping label update", svc.Name)
+			return nil
+		}
+		return fmt.Errorf("failed to update service labels: %v, output: %s", err, string(output))
+	}
+
+	logger.Debug("[Orchestrator] Updated Traefik labels for %s: %s", svc.Name, serviceDomain)
+	return nil
+}
+
+// generateMicroserviceTraefikLabels generates Traefik labels for a microservice
+func (os *OrchestratorService) generateMicroserviceTraefikLabels(serviceName string, serviceDomain string, port int) map[string]string {
+	labels := make(map[string]string)
+
+	// Enable Traefik
+	labels["traefik.enable"] = "true"
+	labels["cloud.obiente.traefik"] = "true"
+
+	// HTTP router
+	routerName := serviceName
+	labels["traefik.http.routers."+routerName+".rule"] = fmt.Sprintf("Host(`%s`)", serviceDomain)
+	labels["traefik.http.routers."+routerName+".entrypoints"] = "web"
+	labels["traefik.http.routers."+routerName+".service"] = routerName
+
+	// HTTPS router
+	secureRouterName := routerName + "-secure"
+	labels["traefik.http.routers."+secureRouterName+".rule"] = fmt.Sprintf("Host(`%s`)", serviceDomain)
+	labels["traefik.http.routers."+secureRouterName+".entrypoints"] = "websecure"
+	labels["traefik.http.routers."+secureRouterName+".tls.certresolver"] = "letsencrypt"
+	labels["traefik.http.routers."+secureRouterName+".service"] = routerName
+
+	// Service definition
+	labels["traefik.http.services."+routerName+".loadbalancer.server.port"] = fmt.Sprintf("%d", port)
+
+	// Load balancing configuration
+	// Traefik automatically load balances when multiple services have the same router rule
+	// In Swarm mode, when multiple nodes run the same service with the same router rule,
+	// Traefik will distribute requests across all healthy replicas
+	// 
+	// For shared load balancing (all nodes use same domain):
+	//   - Set USE_NODE_SPECIFIC_DOMAINS=false
+	//   - All nodes register with same domain (e.g., "auth-service.obiente.cloud")
+	//   - Traefik automatically load balances across all nodes
+	//
+	// For node-specific routing (each node has its own domain):
+	//   - Set USE_NODE_SPECIFIC_DOMAINS=true
+	//   - Each node registers with node-specific domain (e.g., "node1-auth-service.obiente.cloud")
+	//   - API Gateway routes to specific nodes based on node subdomain
+	//
+	// Load balancing strategy: Traefik uses round-robin by default
+	// Health checks: Traefik automatically excludes unhealthy services from load balancing
+
+	return labels
+}
+
+// getNodeSubdomain extracts the node subdomain from node metadata or environment
+func (os *OrchestratorService) getNodeSubdomain(node *database.NodeMetadata) string {
+	// Check environment variable first
+	if subdomain := os.getEnvOrDefault("NODE_SUBDOMAIN", ""); subdomain != "" {
+		return subdomain
+	}
+	if subdomain := os.getEnvOrDefault("OBIENTE_NODE_SUBDOMAIN", ""); subdomain != "" {
+		return subdomain
+	}
+
+	// Check node labels
+	if node.Labels != "" {
+		var labels map[string]interface{}
+		if err := json.Unmarshal([]byte(node.Labels), &labels); err == nil {
+			if subdomain, ok := labels["subdomain"].(string); ok && subdomain != "" {
+				return subdomain
+			}
+			if subdomain, ok := labels["obiente.subdomain"].(string); ok && subdomain != "" {
+				return subdomain
+			}
+		}
+	}
+
+	// Extract from hostname
+	if node.Hostname != "" {
+		parts := strings.Split(node.Hostname, ".")
+		if len(parts) > 0 {
+			return parts[0]
+		}
+		return node.Hostname
+	}
+
+	return ""
+}
+
+// getEnvOrDefault gets an environment variable or returns a default value
+func (os *OrchestratorService) getEnvOrDefault(key string, defaultValue string) string {
+	if value := os.getEnv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+// getEnv gets an environment variable (helper to allow mocking in tests)
+func (orch *OrchestratorService) getEnv(key string) string {
+	// This is a simple wrapper - in production, we'd use os.Getenv directly
+	// But this allows for easier testing
+	return orch.getEnvFromOS(key)
+}
+
+// getEnvFromOS gets an environment variable from the OS
+func (orch *OrchestratorService) getEnvFromOS(key string) string {
+	return os.Getenv(key)
 }
