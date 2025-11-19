@@ -64,9 +64,6 @@ x-common-api-gateway: &common-api-gateway
   DOMAIN: ${DOMAIN:-localhost}
   USE_TRAEFIK_ROUTING: ${USE_TRAEFIK_ROUTING:-true}
   USE_DOMAIN_ROUTING: ${USE_DOMAIN_ROUTING:-true}
-  USE_NODE_SPECIFIC_DOMAINS: ${USE_NODE_SPECIFIC_DOMAINS:-false}
-  NODE_SUBDOMAIN: ${NODE_SUBDOMAIN:-}
-  SERVICE_DOMAIN_PATTERN: ${SERVICE_DOMAIN_PATTERN:-node-service}
 
 x-common-orchestrator: &common-orchestrator
   DOMAIN: ${DOMAIN:-localhost}

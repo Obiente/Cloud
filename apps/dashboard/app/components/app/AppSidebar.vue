@@ -169,6 +169,12 @@
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            to="/superadmin/nodes"
+            label="Nodes"
+            :icon="ServerIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
             to="/superadmin/users"
             label="Users"
             :icon="UsersIcon"

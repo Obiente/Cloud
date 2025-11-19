@@ -114,6 +114,68 @@ export const useSuperAdmin = () => {
 
   const counts = computed(() => state.value.overview?.counts);
 
+  const listNodes = async (filters?: {
+    role?: string;
+    availability?: string;
+    status?: string;
+    region?: string;
+  }) => {
+    try {
+      const response = await client.listNodes({
+        role: filters?.role ? filters.role : undefined,
+        availability: filters?.availability ? filters.availability : undefined,
+        status: filters?.status ? filters.status : undefined,
+        region: filters?.region ? filters.region : undefined,
+      });
+      return response;
+    } catch (err) {
+      if (err instanceof ConnectError) {
+        throw new Error(err.message);
+      }
+      throw err;
+    }
+  };
+
+  const getNode = async (nodeId: string) => {
+    try {
+      const response = await client.getNode({ nodeId });
+      return response;
+    } catch (err) {
+      if (err instanceof ConnectError) {
+        throw new Error(err.message);
+      }
+      throw err;
+    }
+  };
+
+  const updateNodeConfig = async (config: {
+    nodeId: string;
+    subdomain?: string;
+    useNodeSpecificDomains?: boolean;
+    serviceDomainPattern?: string;
+    region?: string;
+    maxDeployments?: number;
+    customLabels?: Record<string, string>;
+  }) => {
+    try {
+      const response = await client.updateNodeConfig({
+        nodeId: config.nodeId,
+        subdomain: config.subdomain,
+        useNodeSpecificDomains: config.useNodeSpecificDomains,
+        serviceDomainPattern: config.serviceDomainPattern,
+        region: config.region,
+        maxDeployments: config.maxDeployments,
+        customLabels: config.customLabels,
+      });
+      return response;
+    } catch (err) {
+      if (err instanceof ConnectError) {
+        throw new Error(err.message);
+      }
+      throw err;
+    }
+  };
+
   return {
     state,
     overview: computed(() => state.value.overview),
@@ -124,6 +186,9 @@ export const useSuperAdmin = () => {
     error: computed(() => state.value.error),
     fetchOverview,
     reset,
+    listNodes,
+    getNode,
+    updateNodeConfig,
   };
 };
 

@@ -14,6 +14,7 @@ Step-by-step guides for common tasks with Obiente Cloud.
 ## Routing
 
 - [Traffic Routing & Domains](routing.md) - Set up custom domains and routing
+- [Domain-Based Routing](domain-based-routing.md) - Service-to-service communication across nodes and networks
 
 ## Troubleshooting
 

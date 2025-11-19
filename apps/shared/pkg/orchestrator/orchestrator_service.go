@@ -2023,10 +2023,8 @@ func (os *OrchestratorService) updateMicroserviceTraefikLabels() {
 		return
 	}
 
-	// Get environment configuration
+	// Get environment configuration (for global settings)
 	domain := os.getEnvOrDefault("DOMAIN", "localhost")
-	useNodeSpecificDomains := os.getEnvOrDefault("USE_NODE_SPECIFIC_DOMAINS", "false")
-	domainPattern := os.getEnvOrDefault("SERVICE_DOMAIN_PATTERN", "node-service")
 	useTraefikRouting := os.getEnvOrDefault("USE_TRAEFIK_ROUTING", "true")
 
 	// Only sync if domain routing is enabled
@@ -2035,12 +2033,44 @@ func (os *OrchestratorService) updateMicroserviceTraefikLabels() {
 		return
 	}
 
-	// Get node subdomain
+	// Get node-specific configuration from database labels
+	var useNodeSpecificDomains string
+	var domainPattern string
+	
+	// Parse node labels for node-specific configuration
+	if node.Labels != "" {
+		var labels map[string]interface{}
+		if err := json.Unmarshal([]byte(node.Labels), &labels); err == nil {
+			// Check for node-specific domain settings in database
+			if useNodeSpecific, ok := labels["obiente.use_node_specific_domains"].(bool); ok {
+				if useNodeSpecific {
+					useNodeSpecificDomains = "true"
+				} else {
+					useNodeSpecificDomains = "false"
+				}
+			}
+			if pattern, ok := labels["obiente.service_domain_pattern"].(string); ok && pattern != "" {
+				domainPattern = pattern
+			}
+		}
+	}
+	
+	// Default values if not configured in labels
+	if useNodeSpecificDomains == "" {
+		useNodeSpecificDomains = "false"
+	}
+	if domainPattern == "" {
+		domainPattern = "node-service"
+	}
+
+	// Get node subdomain from database labels
 	nodeSubdomain := os.getNodeSubdomain(&node)
 	enableNodeSpecific := (useNodeSpecificDomains == "true" || useNodeSpecificDomains == "1") && nodeSubdomain != ""
 	useNodeSubdomainPattern := domainPattern == "service-node"
 
 	// Define all microservices that need Traefik labels
+	// IMPORTANT: api-gateway and dashboard ALWAYS use shared domains (no node subdomains)
+	// This ensures proper load balancing across all nodes/clusters
 	microservices := []MicroserviceConfig{
 		{Name: "api-gateway", Port: 3001, BaseHost: "api"},
 		{Name: "auth-service", Port: 3002, BaseHost: "auth-service"},
@@ -2058,7 +2088,14 @@ func (os *OrchestratorService) updateMicroserviceTraefikLabels() {
 
 	// Update labels for each microservice
 	for _, svc := range microservices {
-		if err := os.updateServiceTraefikLabels(svc, domain, nodeSubdomain, enableNodeSpecific, useNodeSubdomainPattern); err != nil {
+		// API Gateway ALWAYS uses shared domain (api.DOMAIN) for load balancing
+		// Dashboard is handled separately in docker-compose with static labels
+		forceSharedDomain := svc.Name == "api-gateway"
+		
+		// Use shared domain if forced or if node-specific is disabled
+		useSharedDomain := forceSharedDomain || !enableNodeSpecific
+		
+		if err := os.updateServiceTraefikLabels(svc, domain, nodeSubdomain, !useSharedDomain, useNodeSubdomainPattern); err != nil {
 			logger.Warn("[Orchestrator] Failed to update Traefik labels for %s: %v", svc.Name, err)
 		}
 	}
@@ -2154,46 +2191,47 @@ func (os *OrchestratorService) generateMicroserviceTraefikLabels(serviceName str
 	// In Swarm mode, when multiple nodes run the same service with the same router rule,
 	// Traefik will distribute requests across all healthy replicas
 	// 
-	// For shared load balancing (all nodes use same domain):
-	//   - Set USE_NODE_SPECIFIC_DOMAINS=false
-	//   - All nodes register with same domain (e.g., "auth-service.obiente.cloud")
-	//   - Traefik automatically load balances across all nodes
+	// IMPORTANT: API Gateway and Dashboard ALWAYS use shared domains for load balancing:
+	//   - API Gateway: Always uses "api.DOMAIN" (e.g., "api.obiente.cloud")
+	//   - Dashboard: Always uses "DOMAIN" (e.g., "obiente.cloud")
+	//   - All nodes/clusters register with the same domain
+	//   - Traefik automatically load balances across all nodes/clusters
 	//
-	// For node-specific routing (each node has its own domain):
-	//   - Set USE_NODE_SPECIFIC_DOMAINS=true
-	//   - Each node registers with node-specific domain (e.g., "node1-auth-service.obiente.cloud")
-	//   - API Gateway routes to specific nodes based on node subdomain
+	// For other microservices:
+	//   - Shared load balancing (default): Configure node labels with use_node_specific_domains=false
+	//     All nodes register with same domain (e.g., "auth-service.obiente.cloud")
+	//     Traefik automatically load balances across all nodes
+	//
+	//   - Node-specific routing: Configure node labels with use_node_specific_domains=true
+	//     Each node registers with node-specific domain (e.g., "node1-auth-service.obiente.cloud")
+	//     API Gateway routes to specific nodes based on node subdomain
 	//
 	// Load balancing strategy: Traefik uses round-robin by default
 	// Health checks: Traefik automatically excludes unhealthy services from load balancing
+	// Multi-cluster: Works across multiple Swarm clusters when they share the same domain
 
 	return labels
 }
 
-// getNodeSubdomain extracts the node subdomain from node metadata or environment
+// getNodeSubdomain extracts the node subdomain from node metadata labels
+// Priority: Database labels > Hostname
 func (os *OrchestratorService) getNodeSubdomain(node *database.NodeMetadata) string {
-	// Check environment variable first
-	if subdomain := os.getEnvOrDefault("NODE_SUBDOMAIN", ""); subdomain != "" {
-		return subdomain
-	}
-	if subdomain := os.getEnvOrDefault("OBIENTE_NODE_SUBDOMAIN", ""); subdomain != "" {
-		return subdomain
-	}
-
-	// Check node labels
+	// Check node labels first (database configuration)
 	if node.Labels != "" {
 		var labels map[string]interface{}
 		if err := json.Unmarshal([]byte(node.Labels), &labels); err == nil {
-			if subdomain, ok := labels["subdomain"].(string); ok && subdomain != "" {
+			// Check obiente.subdomain first (new format)
+			if subdomain, ok := labels["obiente.subdomain"].(string); ok && subdomain != "" {
 				return subdomain
 			}
-			if subdomain, ok := labels["obiente.subdomain"].(string); ok && subdomain != "" {
+			// Fallback to subdomain (backwards compatibility)
+			if subdomain, ok := labels["subdomain"].(string); ok && subdomain != "" {
 				return subdomain
 			}
 		}
 	}
 
-	// Extract from hostname
+	// Extract from hostname (fallback)
 	if node.Hostname != "" {
 		parts := strings.Split(node.Hostname, ".")
 		if len(parts) > 0 {

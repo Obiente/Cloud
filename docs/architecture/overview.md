@@ -103,6 +103,19 @@ deployment_locations table:
 - **Load Balancing**: Distributes traffic across deployment replicas
 - **Middleware**: Rate limiting, authentication, compression
 
+**Domain-Based Routing:**
+
+Obiente Cloud uses domain-based routing for service-to-service communication, enabling:
+
+- **Cross-node communication**: Services on different nodes communicate via domains
+- **Cross-network communication**: Works with VPNs, service meshes, and custom networks
+- **Multi-cluster support**: Multiple Swarm clusters can share the same domain
+- **Automatic load balancing**: Traefik load balances across all healthy replicas
+
+By default, services communicate via HTTPS through Traefik (e.g., `https://auth-service.${DOMAIN}`) instead of direct service-to-service HTTP. This enables distributed deployments across nodes, networks, and clusters.
+
+See [Domain-Based Routing Guide](../guides/domain-based-routing.md) for detailed configuration.
+
 Routing flow:
 
 ```
@@ -115,6 +128,18 @@ Looks up deployment_routing table in DB
 Routes to correct node + container
        ↓
 User's deployed application
+```
+
+Service-to-service communication:
+
+```
+Service A (Node 1)
+       ↓
+Requests: https://auth-service.${DOMAIN}
+       ↓
+Traefik (load balances across all nodes)
+       ↓
+Service B (Node 2 or Node 3)
 ```
 
 ### 5. Monitoring & Observability

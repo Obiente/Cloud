@@ -3693,3 +3693,210 @@ func protoToCloudInitConfigForSuperadmin(proto *vpsv1.CloudInitConfig) *orchestr
 
 	return config
 }
+
+// ListNodes lists all nodes in the cluster
+func (s *Service) ListNodes(ctx context.Context, req *connect.Request[superadminv1.ListNodesRequest]) (*connect.Response[superadminv1.ListNodesResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	var nodes []database.NodeMetadata
+	query := database.DB
+
+	// Apply filters
+	if req.Msg.Role != nil {
+		query = query.Where("role = ?", req.Msg.GetRole())
+	}
+	if req.Msg.Availability != nil {
+		query = query.Where("availability = ?", req.Msg.GetAvailability())
+	}
+	if req.Msg.Status != nil {
+		query = query.Where("status = ?", req.Msg.GetStatus())
+	}
+	if req.Msg.Region != nil {
+		query = query.Where("region = ?", req.Msg.GetRegion())
+	}
+
+	if err := query.Find(&nodes).Error; err != nil {
+		logger.Error("[SuperAdmin] Failed to list nodes: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list nodes: %w", err))
+	}
+
+	nodeInfos := make([]*superadminv1.NodeInfo, 0, len(nodes))
+	for _, node := range nodes {
+		nodeInfo := convertNodeToProto(&node)
+		nodeInfos = append(nodeInfos, nodeInfo)
+	}
+
+	return connect.NewResponse(&superadminv1.ListNodesResponse{
+		Nodes: nodeInfos,
+	}), nil
+}
+
+// GetNode gets a specific node by ID
+func (s *Service) GetNode(ctx context.Context, req *connect.Request[superadminv1.GetNodeRequest]) (*connect.Response[superadminv1.GetNodeResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	var node database.NodeMetadata
+	if err := database.DB.Where("id = ?", req.Msg.GetNodeId()).First(&node).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("node not found"))
+		}
+		logger.Error("[SuperAdmin] Failed to get node: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get node: %w", err))
+	}
+
+	nodeInfo := convertNodeToProto(&node)
+	return connect.NewResponse(&superadminv1.GetNodeResponse{
+		Node: nodeInfo,
+	}), nil
+}
+
+// UpdateNodeConfig updates node-specific configuration
+func (s *Service) UpdateNodeConfig(ctx context.Context, req *connect.Request[superadminv1.UpdateNodeConfigRequest]) (*connect.Response[superadminv1.UpdateNodeConfigResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	var node database.NodeMetadata
+	if err := database.DB.Where("id = ?", req.Msg.GetNodeId()).First(&node).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("node not found"))
+		}
+		logger.Error("[SuperAdmin] Failed to get node: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get node: %w", err))
+	}
+
+	// Parse existing labels
+	var labels map[string]interface{}
+	if node.Labels != "" {
+		if err := json.Unmarshal([]byte(node.Labels), &labels); err != nil {
+			logger.Warn("[SuperAdmin] Failed to parse existing labels for node %s: %v", node.ID, err)
+			labels = make(map[string]interface{})
+		}
+	} else {
+		labels = make(map[string]interface{})
+	}
+
+	// Update configuration in labels
+	if req.Msg.Subdomain != nil {
+		labels["obiente.subdomain"] = req.Msg.GetSubdomain()
+		labels["subdomain"] = req.Msg.GetSubdomain() // Also set for backwards compatibility
+	}
+	if req.Msg.UseNodeSpecificDomains != nil {
+		labels["obiente.use_node_specific_domains"] = req.Msg.GetUseNodeSpecificDomains()
+	}
+	if req.Msg.ServiceDomainPattern != nil {
+		labels["obiente.service_domain_pattern"] = req.Msg.GetServiceDomainPattern()
+	}
+	if req.Msg.Region != nil {
+		node.Region = req.Msg.GetRegion()
+	}
+	if req.Msg.MaxDeployments != nil {
+		node.MaxDeployments = int(req.Msg.GetMaxDeployments())
+	}
+
+	// Merge custom labels
+	if req.Msg.CustomLabels != nil {
+		for k, v := range req.Msg.CustomLabels {
+			labels[k] = v
+		}
+	}
+
+	// Serialize labels back to JSON
+	labelsJSON, err := json.Marshal(labels)
+	if err != nil {
+		logger.Error("[SuperAdmin] Failed to marshal labels: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to marshal labels: %w", err))
+	}
+	node.Labels = string(labelsJSON)
+
+	// Save node
+	if err := database.DB.Save(&node).Error; err != nil {
+		logger.Error("[SuperAdmin] Failed to update node: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update node: %w", err))
+	}
+
+	logger.Info("[SuperAdmin] Updated node configuration for node %s (%s)", node.ID, node.Hostname)
+	nodeInfo := convertNodeToProto(&node)
+	return connect.NewResponse(&superadminv1.UpdateNodeConfigResponse{
+		Node:    nodeInfo,
+		Message: "Node configuration updated successfully",
+	}), nil
+}
+
+// convertNodeToProto converts a database NodeMetadata to a proto NodeInfo
+func convertNodeToProto(node *database.NodeMetadata) *superadminv1.NodeInfo {
+	nodeInfo := &superadminv1.NodeInfo{
+		Id:              node.ID,
+		Hostname:        node.Hostname,
+		Ip:              node.IP,
+		Role:            node.Role,
+		Availability:    node.Availability,
+		Status:          node.Status,
+		TotalCpu:        int32(node.TotalCPU),
+		TotalMemory:     node.TotalMemory,
+		UsedCpu:         node.UsedCPU,
+		UsedMemory:      node.UsedMemory,
+		DeploymentCount: int32(node.DeploymentCount),
+		MaxDeployments:  int32(node.MaxDeployments),
+		LastHeartbeat:   timestamppb.New(node.LastHeartbeat),
+		CreatedAt:       timestamppb.New(node.CreatedAt),
+		UpdatedAt:       timestamppb.New(node.UpdatedAt),
+	}
+
+	if node.Region != "" {
+		nodeInfo.Region = proto.String(node.Region)
+	}
+
+	// Parse node configuration from labels
+	config := &superadminv1.NodeConfig{
+		CustomLabels: make(map[string]string),
+	}
+
+	if node.Labels != "" {
+		var labels map[string]interface{}
+		if err := json.Unmarshal([]byte(node.Labels), &labels); err == nil {
+			// Extract node configuration
+			if subdomain, ok := labels["obiente.subdomain"].(string); ok && subdomain != "" {
+				config.Subdomain = proto.String(subdomain)
+			} else if subdomain, ok := labels["subdomain"].(string); ok && subdomain != "" {
+				config.Subdomain = proto.String(subdomain)
+			}
+
+			if useNodeSpecific, ok := labels["obiente.use_node_specific_domains"].(bool); ok {
+				config.UseNodeSpecificDomains = proto.Bool(useNodeSpecific)
+			}
+
+			if pattern, ok := labels["obiente.service_domain_pattern"].(string); ok && pattern != "" {
+				config.ServiceDomainPattern = proto.String(pattern)
+			}
+
+			// Extract all custom labels (excluding obiente.* keys)
+			for k, v := range labels {
+				if !strings.HasPrefix(k, "obiente.") && k != "subdomain" {
+					if strVal, ok := v.(string); ok {
+						config.CustomLabels[k] = strVal
+					}
+				}
+			}
+		}
+	}
+
+	nodeInfo.Config = config
+	return nodeInfo
+}

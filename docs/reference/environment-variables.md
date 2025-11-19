@@ -21,6 +21,8 @@ Complete reference for all Obiente Cloud environment variables.
 | `STRIPE_SECRET_KEY`                  | -                            | ✅ (billing)  | Stripe secret API key for payment processing                                                                        |
 | `STRIPE_WEBHOOK_SECRET`              | -                            | ✅ (webhooks) | Stripe webhook signing secret for webhook verification                                                              |
 | `NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | -                            | ✅ (frontend) | Stripe publishable key for client-side Stripe.js                                                                    |
+| `USE_TRAEFIK_ROUTING`                | `true`                       | ❌            | Route API gateway requests via Traefik (HTTPS) instead of direct service-to-service (HTTP)                          |
+| `USE_DOMAIN_ROUTING`                 | `true`                       | ❌            | Use domain-based routing for service-to-service communication (works across nodes/networks)                          |
 
 ## Configuration Sections
 
@@ -304,41 +306,103 @@ REDIS_PORT_MODE=ingress
 
 ### API Gateway Routing Configuration
 
-| Variable              | Type    | Default | Required |
-| --------------------- | ------- | ------- | -------- |
-| `USE_TRAEFIK_ROUTING` | boolean | `false` | ❌       | Route API gateway requests via Traefik (HTTPS) instead of direct service-to-service (HTTP) |
-| `SKIP_TLS_VERIFY`     | boolean | `false` | ❌       | Skip TLS certificate verification when using Traefik routing (for internal certs) |
+| Variable                    | Type    | Default | Required | Description                                                                                                                                    |
+| --------------------------- | ------- | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `USE_TRAEFIK_ROUTING`       | boolean | `true`  | ❌       | Route API gateway requests via Traefik (HTTPS) instead of direct service-to-service (HTTP). Defaults to `true` for cross-node compatibility. |
+| `USE_DOMAIN_ROUTING`        | boolean | `true`  | ❌       | Use domain-based routing for service-to-service communication. When `true`, services communicate via domains (works across nodes/networks).   |
+| `SKIP_TLS_VERIFY`           | boolean | `false` | ❌       | Skip TLS certificate verification when using Traefik routing (for internal certs).                                                         |
 
 **Service Routing Modes:**
 
 The API Gateway can route to backend services in two ways:
 
-1. **Internal Routing (default)**: Direct service-to-service communication using Docker Swarm service names
+1. **Internal Routing**: Direct service-to-service communication using Docker Swarm service names
    - Uses HTTP: `http://auth-service:3002`
    - Faster, no TLS overhead
    - Requires services to be on the same Docker network
+   - Only works within a single Docker network
 
-2. **Traefik Routing**: Routes through Traefik reverse proxy with HTTPS
+2. **Traefik Routing (default)**: Routes through Traefik reverse proxy with HTTPS
    - Uses HTTPS: `https://auth-service.${DOMAIN}`
    - All services must have Traefik labels configured
    - Provides TLS termination and load balancing
+   - Works across nodes, networks, and clusters
    - Better for distributed deployments and VPN access
+
+**Domain-Based Routing:**
+
+When `USE_DOMAIN_ROUTING=true` (default), services communicate via fully qualified domain names (FQDNs) instead of internal service names. This enables:
+
+- **Cross-node communication**: Services on different nodes can communicate
+- **Cross-network communication**: Works with VPNs, service meshes, and custom networks
+- **Multi-cluster support**: Multiple Swarm clusters can share the same domain
+- **Load balancing**: Traefik automatically load balances across all healthy replicas
+
+**Node-Specific Domains:**
+
+Node-specific domain configuration is managed via node labels in the database (configured through the Superadmin dashboard). This allows:
+
+- **Direct node routing**: API Gateway can route to specific nodes
+- **Node isolation**: Each node has its own service domains
+- **Custom routing logic**: Applications can target specific nodes
+
+**Node Configuration via Labels:**
+
+Node-specific domains are configured using node labels stored in the database:
+
+- **`obiente.subdomain`**: Node subdomain identifier (e.g., `node1`, `us-east-1`)
+- **`obiente.use_node_specific_domains`**: Boolean to enable node-specific domains
+- **`obiente.service_domain_pattern`**: Domain pattern (`node-service` or `service-node`)
+
+**Domain Patterns:**
+
+- **`node-service` (default)**: `node1-auth-service.obiente.cloud`
+  - Node identifier comes first
+  - Example: `node1-auth-service.obiente.cloud`, `us-east-1-billing-service.obiente.cloud`
+
+- **`service-node`**: `auth-service.node1.obiente.cloud`
+  - Service name comes first, node identifier is a subdomain
+  - Example: `auth-service.node1.obiente.cloud`, `billing-service.us-east-1.obiente.cloud`
+
+**Important Notes:**
+
+- **API Gateway and Dashboard ALWAYS use shared domains** (`api.${DOMAIN}` and `${DOMAIN}`) for load balancing, regardless of node-specific domain settings
+- **Node subdomain detection**: Extracted from node labels (`obiente.subdomain` or `subdomain`) or hostname if not configured
+- **Configuration**: Use the Superadmin dashboard to configure node-specific domains per node
 
 **Examples:**
 
 ```bash
-# Internal routing (default)
+# Internal routing (single network only)
 USE_TRAEFIK_ROUTING=false
+USE_DOMAIN_ROUTING=false
 # Routes: http://auth-service:3002
 
-# Traefik routing with HTTPS
+# Traefik routing with shared domains (default, load balanced)
 USE_TRAEFIK_ROUTING=true
+USE_DOMAIN_ROUTING=true
 DOMAIN=obiente.cloud
-SKIP_TLS_VERIFY=true  # Skip TLS verification for internal Traefik certificates
-# Routes: https://auth-service.obiente.cloud
+SKIP_TLS_VERIFY=true
+# Routes: https://auth-service.obiente.cloud (load balanced across all nodes)
+
+# Traefik routing with node-specific domains (configured via node labels)
+USE_TRAEFIK_ROUTING=true
+USE_DOMAIN_ROUTING=true
+DOMAIN=obiente.cloud
+SKIP_TLS_VERIFY=true
+# Node labels: obiente.subdomain=node1, obiente.use_node_specific_domains=true, obiente.service_domain_pattern=node-service
+# Routes: https://node1-auth-service.obiente.cloud (specific node)
 ```
 
-**Note:** When using Traefik routing, ensure all services have Traefik labels configured in `docker-compose.swarm.yml`. DNS service may need special handling as it uses a different port (8053).
+**Load Balancing:**
+
+Traefik automatically load balances services with the same router rule across all healthy replicas:
+
+- **Shared domains** (default): All nodes register with the same domain (e.g., `auth-service.obiente.cloud`). Traefik distributes requests across all healthy replicas using round-robin.
+- **Node-specific domains**: Each node registers with its own domain (e.g., `node1-auth-service.obiente.cloud`) when configured via node labels. API Gateway routes to specific nodes based on node subdomain.
+- **Multi-cluster**: When multiple Swarm clusters share the same domain (via external DNS/LB), Traefik load balances across all clusters.
+
+**Note:** When using Traefik routing, ensure all services have Traefik labels configured. The orchestrator service automatically syncs Traefik labels for microservices every 30 seconds. DNS service may need special handling as it uses a different port (8053).
 
 ### Authentication
 
@@ -425,16 +489,44 @@ The API uses `DASHBOARD_URL` to build links in transactional emails and billing 
 
 ### Orchestration
 
-| Variable                   | Type   | Default        | Required |
-| -------------------------- | ------ | -------------- | -------- |
-| `DEPLOYMENT_STRATEGY`      | string | `least-loaded` | ❌       |
-| `MAX_DEPLOYMENTS_PER_NODE` | number | `50`           | ❌       |
+| Variable                   | Type    | Default        | Required | Description                                                                                                                                    |
+| -------------------------- | ------- | -------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DEPLOYMENT_STRATEGY`      | string  | `least-loaded` | ❌       | Deployment strategy for node selection                                                                                                         |
+| `MAX_DEPLOYMENTS_PER_NODE` | number  | `50`           | ❌       | Maximum number of deployments allowed per node                                                                                                |
+| `API_BASE_URL`             | string  | `http://api-gateway:3001` | ❌   | Base URL for API service communication. Automatically uses domain-based URL (`https://api.${DOMAIN}`) when `USE_DOMAIN_ROUTING=true`.         |
+| `USE_DOMAIN_ROUTING`       | boolean | `true`         | ❌       | Use domain-based routing for service-to-service communication. When `true`, services use domain-based URLs (works across nodes/networks).    |
 
 **Deployment Strategies:**
 
 - `least-loaded` - Deploy to node with least resources
 - `round-robin` - Cycle through nodes
 - `resource-based` - Match resources to node capacity
+
+**API Base URL Configuration:**
+
+The `API_BASE_URL` variable controls how services communicate with the API Gateway:
+
+- **Default (internal)**: `http://api-gateway:3001` - Direct service-to-service communication within Docker network
+- **Domain-based (auto)**: When `USE_DOMAIN_ROUTING=true` and `DOMAIN` is set (not `localhost`), automatically uses `https://api.${DOMAIN}`
+- **Explicit**: Set `API_BASE_URL` explicitly to override automatic detection
+
+**Examples:**
+
+```bash
+# Internal routing (single network)
+USE_DOMAIN_ROUTING=false
+API_BASE_URL=http://api-gateway:3001
+# Services connect via: http://api-gateway:3001
+
+# Domain-based routing (default, cross-node)
+USE_DOMAIN_ROUTING=true
+DOMAIN=obiente.cloud
+# Services automatically connect via: https://api.obiente.cloud
+
+# Explicit override
+API_BASE_URL=https://api.example.com
+# Services connect via: https://api.example.com
+```
 
 ### Metrics Database Configuration
 

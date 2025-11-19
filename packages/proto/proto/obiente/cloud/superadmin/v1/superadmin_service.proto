@@ -68,6 +68,11 @@ service SuperadminService {
   
   // Stripe webhook events management endpoints
   rpc ListStripeWebhookEvents(ListStripeWebhookEventsRequest) returns (ListStripeWebhookEventsResponse);
+  
+  // Node management endpoints
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+  rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
+  rpc UpdateNodeConfig(UpdateNodeConfigRequest) returns (UpdateNodeConfigResponse);
 }
 
 message GetOverviewRequest {}
@@ -802,6 +807,77 @@ message StripeWebhookEvent {
 message ListStripeWebhookEventsResponse {
   repeated StripeWebhookEvent events = 1;
   int64 total_count = 2; // Total number of events matching filters
+}
+
+// Node Management
+
+// List Nodes Request
+message ListNodesRequest {
+  optional string role = 1; // Filter by role: "manager", "worker" (optional)
+  optional string availability = 2; // Filter by availability: "active", "pause", "drain" (optional)
+  optional string status = 3; // Filter by status: "ready", "down" (optional)
+  optional string region = 4; // Filter by region (optional)
+}
+
+// List Nodes Response
+message ListNodesResponse {
+  repeated NodeInfo nodes = 1;
+}
+
+// Get Node Request
+message GetNodeRequest {
+  string node_id = 1; // Node ID to fetch
+}
+
+// Get Node Response
+message GetNodeResponse {
+  NodeInfo node = 1;
+}
+
+// Update Node Config Request
+message UpdateNodeConfigRequest {
+  string node_id = 1; // Node ID to update
+  optional string subdomain = 2; // Node subdomain identifier (e.g., "node1", "us-east-1")
+  optional bool use_node_specific_domains = 3; // Enable node-specific domains for this node's microservices
+  optional string service_domain_pattern = 4; // Service domain pattern: "node-service" or "service-node"
+  optional string region = 5; // Region identifier
+  optional int32 max_deployments = 6; // Maximum deployments allowed on this node
+  map<string, string> custom_labels = 7; // Custom labels (key-value pairs)
+}
+
+// Update Node Config Response
+message UpdateNodeConfigResponse {
+  NodeInfo node = 1;
+  string message = 2; // Success message
+}
+
+// Node Info
+message NodeInfo {
+  string id = 1; // Swarm node ID
+  string hostname = 2;
+  string ip = 3;
+  string role = 4; // "manager" or "worker"
+  string availability = 5; // "active", "pause", "drain"
+  string status = 6; // "ready", "down"
+  int32 total_cpu = 7; // Total CPU cores
+  int64 total_memory = 8; // Total memory in bytes
+  double used_cpu = 9; // Used CPU percentage
+  int64 used_memory = 10; // Used memory in bytes
+  int32 deployment_count = 11; // Number of deployments on this node
+  int32 max_deployments = 12; // Max deployments allowed
+  optional string region = 13; // Region identifier
+  NodeConfig config = 14; // Node-specific configuration
+  google.protobuf.Timestamp last_heartbeat = 15;
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+}
+
+// Node Configuration (stored in Labels JSON field)
+message NodeConfig {
+  optional string subdomain = 1; // Node subdomain identifier
+  optional bool use_node_specific_domains = 2; // Enable node-specific domains
+  optional string service_domain_pattern = 3; // "node-service" or "service-node"
+  map<string, string> custom_labels = 4; // Custom labels
 }
 
 // Pagination moved to obiente.cloud.common.v1.Pagination

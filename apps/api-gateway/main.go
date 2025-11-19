@@ -57,66 +57,16 @@ var baseServiceRoutes = map[string]string{
 
 // Service name to domain mapping (for Traefik routing)
 var serviceDomains = map[string]string{
-	"auth-service:3002":         "auth-service",
+	"auth-service:3002":          "auth-service",
 	"organizations-service:3003": "organizations-service",
-	"billing-service:3004":      "billing-service",
-	"deployments-service:3005":  "deployments-service",
-	"gameservers-service:3006":  "gameservers-service",
-	"vps-service:3008":          "vps-service",
-	"superadmin-service:3011":   "superadmin-service",
-	"support-service:3009":     "support-service",
-	"audit-service:3010":        "audit-service",
-	"dns-service:8053":          "dns-service", // Note: DNS service may need special handling
-}
-
-// buildServiceDomain constructs a service domain with optional node-specific prefix
-// Supports two patterns:
-// 1. node-service-name.domain (e.g., "node1-auth-service.obiente.cloud") - when nodeSubdomain is provided
-// 2. service-name.node.domain (e.g., "auth-service.node1.obiente.cloud") - when useNodeSubdomain=true and nodeSubdomain is provided
-// 3. service-name.domain (e.g., "auth-service.obiente.cloud") - default fallback
-func buildServiceDomain(serviceName string, domain string, nodeSubdomain string, useNodeSubdomainPattern bool) string {
-	if nodeSubdomain == "" {
-		// No node subdomain - use standard service domain
-		return fmt.Sprintf("%s.%s", serviceName, domain)
-	}
-	
-	// Sanitize node subdomain
-	sanitizedNode := strings.ToLower(nodeSubdomain)
-	sanitizedNode = strings.ReplaceAll(sanitizedNode, "_", "-")
-	sanitizedNode = strings.ReplaceAll(sanitizedNode, " ", "-")
-	
-	if useNodeSubdomainPattern {
-		// Pattern: service-name.node.domain (e.g., "auth-service.node1.obiente.cloud")
-		return fmt.Sprintf("%s.%s.%s", serviceName, sanitizedNode, domain)
-	} else {
-		// Pattern: node-service-name.domain (e.g., "node1-auth-service.obiente.cloud")
-		return fmt.Sprintf("%s-%s.%s", sanitizedNode, serviceName, domain)
-	}
-}
-
-// getNodeSubdomain gets the node subdomain from environment or current node
-// Returns empty string if not configured
-func getNodeSubdomain() string {
-	// Check environment variable first (explicit configuration)
-	if subdomain := os.Getenv("NODE_SUBDOMAIN"); subdomain != "" {
-		return subdomain
-	}
-	if subdomain := os.Getenv("OBIENTE_NODE_SUBDOMAIN"); subdomain != "" {
-		return subdomain
-	}
-	
-	// Try to get from hostname
-	hostname := os.Getenv("HOSTNAME")
-	if hostname != "" {
-		// Extract node name from hostname (remove domain if present)
-		parts := strings.Split(hostname, ".")
-		if len(parts) > 0 {
-			return parts[0]
-		}
-		return hostname
-	}
-	
-	return ""
+	"billing-service:3004":       "billing-service",
+	"deployments-service:3005":   "deployments-service",
+	"gameservers-service:3006":   "gameservers-service",
+	"vps-service:3008":           "vps-service",
+	"superadmin-service:3011":    "superadmin-service",
+	"support-service:3009":       "support-service",
+	"audit-service:3010":         "audit-service",
+	"dns-service:8053":           "dns-service", // Note: DNS service may need special handling
 }
 
 // buildServiceRoutes constructs the service routes based on routing mode
@@ -126,16 +76,6 @@ func buildServiceRoutes() map[string]string {
 	if domain == "" {
 		domain = "localhost"
 	}
-	
-	// Check if node-specific subdomain pattern should be used
-	// SERVICE_DOMAIN_PATTERN can be "node-service" (default) or "service-node"
-	domainPattern := os.Getenv("SERVICE_DOMAIN_PATTERN")
-	useNodeSubdomainPattern := domainPattern == "service-node" // Pattern: service-name.node.domain
-	
-	// Get node subdomain if available
-	nodeSubdomain := getNodeSubdomain()
-	useNodeSpecificDomains := os.Getenv("USE_NODE_SPECIFIC_DOMAINS")
-	enableNodeSpecific := useNodeSpecificDomains == "true" || useNodeSpecificDomains == "1"
 
 	routes := make(map[string]string)
 
@@ -148,15 +88,11 @@ func buildServiceRoutes() map[string]string {
 				parts := strings.Split(serviceAddr, ":")
 				serviceDomain = parts[0]
 			}
-			
-			// Build domain with optional node-specific prefix
-			var targetDomain string
-			if enableNodeSpecific && nodeSubdomain != "" {
-				targetDomain = buildServiceDomain(serviceDomain, domain, nodeSubdomain, useNodeSubdomainPattern)
-			} else {
-				targetDomain = fmt.Sprintf("%s.%s", serviceDomain, domain)
-			}
-			
+
+			// Always use shared domain (no node subdomains)
+			// This ensures proper load balancing across all nodes/clusters
+			targetDomain := fmt.Sprintf("%s.%s", serviceDomain, domain)
+
 			routes[path] = fmt.Sprintf("https://%s", targetDomain)
 		} else {
 			// Use internal routing (default)
@@ -250,7 +186,7 @@ func main() {
 			}
 			if serviceHealth != nil {
 				serviceDetails[serviceURL] = map[string]interface{}{
-					"healthy":      serviceHealth.Healthy,
+					"healthy":       serviceHealth.Healthy,
 					"replica_count": serviceHealth.ReplicaCount,
 					"replicas":      serviceHealth.Replicas,
 				}
@@ -259,14 +195,14 @@ func main() {
 		proxy.healthMutex.RUnlock()
 
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		// If we haven't checked any services yet (startup), show that
 		if checkedCount == 0 {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"status":"healthy","service":"api-gateway","message":"health checks not yet initialized","backends_checked":0}`))
 			return
 		}
-		
+
 		// Format service lists as JSON arrays
 		unhealthyList := "["
 		for i, svc := range unhealthyServices {
@@ -276,7 +212,7 @@ func main() {
 			unhealthyList += fmt.Sprintf(`"%s"`, svc)
 		}
 		unhealthyList += "]"
-		
+
 		healthyList := "["
 		for i, svc := range healthyServices {
 			if i > 0 {
@@ -285,23 +221,23 @@ func main() {
 			healthyList += fmt.Sprintf(`"%s"`, svc)
 		}
 		healthyList += "]"
-		
+
 		statusCode := http.StatusOK
 		if !allHealthy {
 			statusCode = http.StatusServiceUnavailable
 		}
-		
+
 		// Build response with service details
 		response := map[string]interface{}{
-			"status":              map[bool]string{true: "healthy", false: "degraded"}[allHealthy],
-			"service":             "api-gateway",
+			"status":               map[bool]string{true: "healthy", false: "degraded"}[allHealthy],
+			"service":              "api-gateway",
 			"all_backends_healthy": allHealthy,
-			"healthy_backends":    healthyServices,
+			"healthy_backends":     healthyServices,
 			"unhealthy_backends":   unhealthyServices,
-			"total_backends":      checkedCount,
-			"services":            serviceDetails,
+			"total_backends":       checkedCount,
+			"services":             serviceDetails,
 		}
-		
+
 		w.WriteHeader(statusCode)
 		json.NewEncoder(w).Encode(response)
 	})
@@ -381,9 +317,9 @@ type ReplicaHealth struct {
 
 // ServiceHealth tracks health status for a service and its replicas
 type ServiceHealth struct {
-	Healthy     bool
-	Replicas    map[string]*ReplicaHealth // Map of replica ID -> health status
-	ReplicaCount int // Number of unique healthy replicas
+	Healthy      bool
+	Replicas     map[string]*ReplicaHealth // Map of replica ID -> health status
+	ReplicaCount int                       // Number of unique healthy replicas
 }
 
 // ReverseProxy handles routing requests to backend services
@@ -396,16 +332,16 @@ type ReverseProxy struct {
 // initHealthChecker starts background health checks for all backend services
 func (p *ReverseProxy) initHealthChecker() {
 	p.healthStatus = make(map[string]*ServiceHealth)
-	
+
 	// Start health checking goroutine
 	go func() {
 		ticker := time.NewTicker(10 * time.Second) // Check every 10 seconds
 		defer ticker.Stop()
-		
+
 		// Cleanup goroutine: remove stale replicas (not seen for 2 minutes)
 		cleanupTicker := time.NewTicker(30 * time.Second)
 		defer cleanupTicker.Stop()
-		
+
 		for {
 			select {
 			case <-ticker.C:
@@ -415,7 +351,7 @@ func (p *ReverseProxy) initHealthChecker() {
 			}
 		}
 	}()
-	
+
 	// Do initial health check
 	p.checkAllServicesHealth()
 }
@@ -429,7 +365,7 @@ func (p *ReverseProxy) checkAllServicesHealth() {
 		if err != nil {
 			continue
 		}
-		
+
 		healthURL := fmt.Sprintf("%s://%s/health", target.Scheme, target.Host)
 		// Check service health and collect replica IDs
 		p.checkServiceHealthWithReplicas(healthURL, targetURL)
@@ -441,10 +377,10 @@ func (p *ReverseProxy) checkAllServicesHealth() {
 func (p *ReverseProxy) cleanupStaleReplicas() {
 	p.healthMutex.Lock()
 	defer p.healthMutex.Unlock()
-	
+
 	staleThreshold := 2 * time.Minute // Remove replicas not seen for 2 minutes
 	now := time.Now()
-	
+
 	for serviceURL, serviceHealth := range p.healthStatus {
 		for replicaID, replica := range serviceHealth.Replicas {
 			if now.Sub(replica.LastSeen) > staleThreshold {
@@ -477,7 +413,7 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 		knownReplicaCount = serviceHealth.ReplicaCount
 	}
 	p.healthMutex.RUnlock()
-	
+
 	// Determine number of checks: use known count + 2 to discover new replicas
 	// Minimum 3 checks to ensure we sample replicas, maximum 10 to avoid excessive checks
 	numChecks := knownReplicaCount + 2
@@ -487,16 +423,16 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 	if numChecks > 10 {
 		numChecks = 10
 	}
-	
+
 	// DNS service typically has 1 replica, so only check once
 	if strings.Contains(healthURL, "dns-service") {
 		numChecks = 1
 	}
-	
+
 	discoveredReplicas := make(map[string]*ReplicaHealth)
 	var lastError error
 	successfulChecks := 0
-	
+
 	for i := 0; i < numChecks; i++ {
 		healthy, replicaID, err := p.checkServiceHealth(healthURL)
 		if err != nil {
@@ -504,9 +440,9 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 			logger.Debug("[API Gateway] Health check failed for %s (attempt %d/%d): %v", healthURL, i+1, numChecks, err)
 			continue
 		}
-		
+
 		successfulChecks++
-		
+
 		if replicaID != "" {
 			// Track this replica
 			if _, exists := discoveredReplicas[replicaID]; !exists {
@@ -532,25 +468,25 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 				}
 			}
 		}
-		
+
 		// Small delay between checks to increase chance of hitting different replicas
 		if i < numChecks-1 {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
-	
+
 	// Update service health status
 	p.healthMutex.Lock()
 	defer p.healthMutex.Unlock()
-	
+
 	if p.healthStatus[serviceURL] == nil {
 		p.healthStatus[serviceURL] = &ServiceHealth{
 			Replicas: make(map[string]*ReplicaHealth),
 		}
 	}
-	
+
 	serviceHealth = p.healthStatus[serviceURL]
-	
+
 	// Merge discovered replicas with existing ones
 	for replicaID, replica := range discoveredReplicas {
 		// Update or add replica
@@ -562,11 +498,11 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 			logger.Debug("[API Gateway] Discovered new replica %s for service %s", replicaID, serviceURL)
 		}
 	}
-	
+
 	// Update replica count and service health
 	serviceHealth.ReplicaCount = len(serviceHealth.Replicas)
 	serviceHealth.Healthy = false
-	
+
 	// Service is healthy if:
 	// 1. We have at least one healthy replica, OR
 	// 2. We had successful health checks but no replicas tracked yet (initial state)
@@ -599,7 +535,7 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 			}
 		}
 	}
-	
+
 	if !serviceHealth.Healthy && lastError != nil && serviceHealth.ReplicaCount == 0 {
 		logger.Warn("[API Gateway] Service %s is unhealthy (all health checks failed, no replicas tracked): %v", serviceURL, lastError)
 	} else if serviceHealth.ReplicaCount > 0 {
@@ -620,44 +556,44 @@ type HealthResponse struct {
 func (p *ReverseProxy) checkServiceHealth(healthURL string) (bool, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
 	if err != nil {
 		return false, "", fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	// Configure TLS for HTTPS health checks (Traefik routing)
 	skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
 	shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
-	
+
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: shouldSkipVerify, // Skip TLS verification for internal Traefik certs
 		},
 	}
-	
+
 	client := &http.Client{
 		Transport: transport,
 		Timeout:   3 * time.Second,
 	}
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return false, "", fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return false, "", fmt.Errorf("unexpected status code: %d (expected 200)", resp.StatusCode)
 	}
-	
+
 	// Parse health response to extract replica ID
 	var healthResp HealthResponse
 	if err := json.NewDecoder(resp.Body).Decode(&healthResp); err != nil {
 		// If response doesn't have replica_id, that's okay (backwards compatibility)
 		return true, "", nil
 	}
-	
+
 	isHealthy := healthResp.Status == "healthy"
 	return isHealthy, healthResp.ReplicaID, nil
 }
@@ -666,7 +602,7 @@ func (p *ReverseProxy) checkServiceHealth(healthURL string) (bool, string, error
 func (p *ReverseProxy) isServiceHealthy(targetURL string) bool {
 	p.healthMutex.RLock()
 	defer p.healthMutex.RUnlock()
-	
+
 	// Default to healthy if we haven't checked yet (optimistic)
 	// This allows routing to work immediately on startup before health checks complete
 	if serviceHealth, exists := p.healthStatus[targetURL]; exists && serviceHealth != nil {
@@ -732,13 +668,13 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Create HTTP client with TLS configuration for HTTPS (Traefik routing)
 	skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
 	shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
-	
+
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: shouldSkipVerify, // Skip TLS verification for internal Traefik certs
 		},
 	}
-	
+
 	client := &http.Client{
 		Transport: transport,
 		Timeout:   30 * time.Second,
@@ -858,20 +794,20 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 		// Use TLS connection for HTTPS
 		skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
 		shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
-		
+
 		tcpConn, err := net.DialTimeout("tcp", backendAddr, 10*time.Second)
 		if err != nil {
 			logger.Error("[API Gateway] Failed to connect to backend %s: %v", backendAddr, err)
 			clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
 			return
 		}
-		
+
 		// Extract hostname (without port) for TLS ServerName
 		hostname := target.Host
 		if idx := strings.Index(hostname, ":"); idx != -1 {
 			hostname = hostname[:idx]
 		}
-		
+
 		tlsConfig := &tls.Config{
 			ServerName:         hostname,
 			InsecureSkipVerify: shouldSkipVerify,

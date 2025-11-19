@@ -138,6 +138,15 @@ const (
 	// SuperadminServiceListStripeWebhookEventsProcedure is the fully-qualified name of the
 	// SuperadminService's ListStripeWebhookEvents RPC.
 	SuperadminServiceListStripeWebhookEventsProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListStripeWebhookEvents"
+	// SuperadminServiceListNodesProcedure is the fully-qualified name of the SuperadminService's
+	// ListNodes RPC.
+	SuperadminServiceListNodesProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListNodes"
+	// SuperadminServiceGetNodeProcedure is the fully-qualified name of the SuperadminService's GetNode
+	// RPC.
+	SuperadminServiceGetNodeProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetNode"
+	// SuperadminServiceUpdateNodeConfigProcedure is the fully-qualified name of the SuperadminService's
+	// UpdateNodeConfig RPC.
+	SuperadminServiceUpdateNodeConfigProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/UpdateNodeConfig"
 )
 
 // SuperadminServiceClient is a client for the obiente.cloud.superadmin.v1.SuperadminService
@@ -190,6 +199,10 @@ type SuperadminServiceClient interface {
 	DeleteVPSSize(context.Context, *connect.Request[v1.DeleteVPSSizeRequest]) (*connect.Response[v1.DeleteVPSSizeResponse], error)
 	// Stripe webhook events management endpoints
 	ListStripeWebhookEvents(context.Context, *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error)
+	// Node management endpoints
+	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
+	GetNode(context.Context, *connect.Request[v1.GetNodeRequest]) (*connect.Response[v1.GetNodeResponse], error)
+	UpdateNodeConfig(context.Context, *connect.Request[v1.UpdateNodeConfigRequest]) (*connect.Response[v1.UpdateNodeConfigResponse], error)
 }
 
 // NewSuperadminServiceClient constructs a client for the
@@ -414,6 +427,24 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("ListStripeWebhookEvents")),
 			connect.WithClientOptions(opts...),
 		),
+		listNodes: connect.NewClient[v1.ListNodesRequest, v1.ListNodesResponse](
+			httpClient,
+			baseURL+SuperadminServiceListNodesProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListNodes")),
+			connect.WithClientOptions(opts...),
+		),
+		getNode: connect.NewClient[v1.GetNodeRequest, v1.GetNodeResponse](
+			httpClient,
+			baseURL+SuperadminServiceGetNodeProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("GetNode")),
+			connect.WithClientOptions(opts...),
+		),
+		updateNodeConfig: connect.NewClient[v1.UpdateNodeConfigRequest, v1.UpdateNodeConfigResponse](
+			httpClient,
+			baseURL+SuperadminServiceUpdateNodeConfigProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("UpdateNodeConfig")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -454,6 +485,9 @@ type superadminServiceClient struct {
 	updateVPSSize                            *connect.Client[v1.UpdateVPSSizeRequest, v1.UpdateVPSSizeResponse]
 	deleteVPSSize                            *connect.Client[v1.DeleteVPSSizeRequest, v1.DeleteVPSSizeResponse]
 	listStripeWebhookEvents                  *connect.Client[v1.ListStripeWebhookEventsRequest, v1.ListStripeWebhookEventsResponse]
+	listNodes                                *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
+	getNode                                  *connect.Client[v1.GetNodeRequest, v1.GetNodeResponse]
+	updateNodeConfig                         *connect.Client[v1.UpdateNodeConfigRequest, v1.UpdateNodeConfigResponse]
 }
 
 // GetOverview calls obiente.cloud.superadmin.v1.SuperadminService.GetOverview.
@@ -642,6 +676,21 @@ func (c *superadminServiceClient) ListStripeWebhookEvents(ctx context.Context, r
 	return c.listStripeWebhookEvents.CallUnary(ctx, req)
 }
 
+// ListNodes calls obiente.cloud.superadmin.v1.SuperadminService.ListNodes.
+func (c *superadminServiceClient) ListNodes(ctx context.Context, req *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error) {
+	return c.listNodes.CallUnary(ctx, req)
+}
+
+// GetNode calls obiente.cloud.superadmin.v1.SuperadminService.GetNode.
+func (c *superadminServiceClient) GetNode(ctx context.Context, req *connect.Request[v1.GetNodeRequest]) (*connect.Response[v1.GetNodeResponse], error) {
+	return c.getNode.CallUnary(ctx, req)
+}
+
+// UpdateNodeConfig calls obiente.cloud.superadmin.v1.SuperadminService.UpdateNodeConfig.
+func (c *superadminServiceClient) UpdateNodeConfig(ctx context.Context, req *connect.Request[v1.UpdateNodeConfigRequest]) (*connect.Response[v1.UpdateNodeConfigResponse], error) {
+	return c.updateNodeConfig.CallUnary(ctx, req)
+}
+
 // SuperadminServiceHandler is an implementation of the
 // obiente.cloud.superadmin.v1.SuperadminService service.
 type SuperadminServiceHandler interface {
@@ -692,6 +741,10 @@ type SuperadminServiceHandler interface {
 	DeleteVPSSize(context.Context, *connect.Request[v1.DeleteVPSSizeRequest]) (*connect.Response[v1.DeleteVPSSizeResponse], error)
 	// Stripe webhook events management endpoints
 	ListStripeWebhookEvents(context.Context, *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error)
+	// Node management endpoints
+	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
+	GetNode(context.Context, *connect.Request[v1.GetNodeRequest]) (*connect.Response[v1.GetNodeResponse], error)
+	UpdateNodeConfig(context.Context, *connect.Request[v1.UpdateNodeConfigRequest]) (*connect.Response[v1.UpdateNodeConfigResponse], error)
 }
 
 // NewSuperadminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -911,6 +964,24 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		connect.WithSchema(superadminServiceMethods.ByName("ListStripeWebhookEvents")),
 		connect.WithHandlerOptions(opts...),
 	)
+	superadminServiceListNodesHandler := connect.NewUnaryHandler(
+		SuperadminServiceListNodesProcedure,
+		svc.ListNodes,
+		connect.WithSchema(superadminServiceMethods.ByName("ListNodes")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceGetNodeHandler := connect.NewUnaryHandler(
+		SuperadminServiceGetNodeProcedure,
+		svc.GetNode,
+		connect.WithSchema(superadminServiceMethods.ByName("GetNode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceUpdateNodeConfigHandler := connect.NewUnaryHandler(
+		SuperadminServiceUpdateNodeConfigProcedure,
+		svc.UpdateNodeConfig,
+		connect.WithSchema(superadminServiceMethods.ByName("UpdateNodeConfig")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.superadmin.v1.SuperadminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SuperadminServiceGetOverviewProcedure:
@@ -983,6 +1054,12 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceDeleteVPSSizeHandler.ServeHTTP(w, r)
 		case SuperadminServiceListStripeWebhookEventsProcedure:
 			superadminServiceListStripeWebhookEventsHandler.ServeHTTP(w, r)
+		case SuperadminServiceListNodesProcedure:
+			superadminServiceListNodesHandler.ServeHTTP(w, r)
+		case SuperadminServiceGetNodeProcedure:
+			superadminServiceGetNodeHandler.ServeHTTP(w, r)
+		case SuperadminServiceUpdateNodeConfigProcedure:
+			superadminServiceUpdateNodeConfigHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1130,4 +1207,16 @@ func (UnimplementedSuperadminServiceHandler) DeleteVPSSize(context.Context, *con
 
 func (UnimplementedSuperadminServiceHandler) ListStripeWebhookEvents(context.Context, *connect.Request[v1.ListStripeWebhookEventsRequest]) (*connect.Response[v1.ListStripeWebhookEventsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListStripeWebhookEvents is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListNodes is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) GetNode(context.Context, *connect.Request[v1.GetNodeRequest]) (*connect.Response[v1.GetNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetNode is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) UpdateNodeConfig(context.Context, *connect.Request[v1.UpdateNodeConfigRequest]) (*connect.Response[v1.UpdateNodeConfigResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.UpdateNodeConfig is not implemented"))
 }
