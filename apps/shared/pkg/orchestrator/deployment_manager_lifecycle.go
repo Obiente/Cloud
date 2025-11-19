@@ -12,12 +12,11 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
 	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/client"
 )
-
-// isSwarmModeEnabled checks if Swarm mode is enabled via ENABLE_SWARM environment variable
 
 // Lifecycle operations for deployments
 
@@ -82,7 +81,7 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 	}
 
 	// Check if we're in Swarm mode
-	isSwarmMode := isSwarmModeEnabled()
+	isSwarmMode := utils.IsSwarmModeEnabled()
 
 	// Create containers/services for each service and replica
 	for _, serviceName := range serviceNames {
@@ -559,7 +558,7 @@ func (dm *DeploymentManager) StopDeployment(ctx context.Context, deploymentID st
 	logger.Info("[DeploymentManager] Stopping deployment %s", deploymentID)
 
 	// Check if we're in Swarm mode
-	isSwarmMode := isSwarmModeEnabled()
+	isSwarmMode := utils.IsSwarmModeEnabled()
 
 	if isSwarmMode {
 		// In Swarm mode, we need to remove Swarm services

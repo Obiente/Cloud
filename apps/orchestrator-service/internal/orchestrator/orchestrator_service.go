@@ -136,7 +136,44 @@ func (os *OrchestratorService) Start() {
 	go os.syncMicroserviceTraefikLabels()
 	logger.Debug("[Orchestrator] Started microservice Traefik label sync")
 
+	// Start periodic node metadata sync (every 5 minutes) to update resource usage
+	go os.syncNodeMetadataPeriodically()
+	logger.Debug("[Orchestrator] Started periodic node metadata sync")
+
 	logger.Info("[Orchestrator] Orchestration service started successfully")
+}
+
+// syncNodeMetadataPeriodically periodically syncs node metadata to update resource usage
+func (os *OrchestratorService) syncNodeMetadataPeriodically() {
+	// Run every 5 minutes
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	// Run immediately on startup
+	ctx, cancel := context.WithTimeout(os.ctx, 30*time.Second)
+	err := os.deploymentManager.SyncNodeMetadata(ctx)
+	cancel()
+	if err != nil {
+		logger.Warn("[Orchestrator] Failed to sync node metadata on startup: %v", err)
+	} else {
+		logger.Debug("[Orchestrator] Node metadata synced on startup")
+	}
+
+	for {
+		select {
+		case <-ticker.C:
+			ctx, cancel := context.WithTimeout(os.ctx, 30*time.Second)
+			err := os.deploymentManager.SyncNodeMetadata(ctx)
+			cancel()
+			if err != nil {
+				logger.Warn("[Orchestrator] Failed to sync node metadata: %v", err)
+			} else {
+				logger.Debug("[Orchestrator] Node metadata synced successfully")
+			}
+		case <-os.ctx.Done():
+			return
+		}
+	}
 }
 
 func (os *OrchestratorService) Stop() {

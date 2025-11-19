@@ -5,14 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/client"
 )
 
@@ -142,9 +144,8 @@ func (ns *NodeSelector) selectByResources(nodes []database.NodeMetadata) *databa
 func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 	// Check if swarm is explicitly disabled via environment variable
 	// This allows non-swarm compose files to disable swarm features even if node is in swarm
-	enableSwarm := os.Getenv("ENABLE_SWARM")
-	if enableSwarm == "false" || enableSwarm == "0" || enableSwarm == "" {
-		// Swarm explicitly disabled or not set - treat as non-swarm mode
+	if !utils.IsSwarmModeEnabled() {
+		// Swarm explicitly disabled - treat as non-swarm mode
 		log.Printf("[NodeSelector] Swarm features disabled via ENABLE_SWARM=false, registering local Docker daemon as node")
 		info, err := ns.dockerClient.Info(ctx)
 		if err != nil {
@@ -190,9 +191,9 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 					totalCPU := int(nodeInfo.Description.Resources.NanoCPUs / 1e9)
 					totalMemory := nodeInfo.Description.Resources.MemoryBytes
 
-					// Get current resource usage (would require additional metrics)
-					// For now, we'll estimate based on deployment count
+					// Get current resource usage by aggregating container stats
 					deploymentCount := ns.getNodeDeploymentCount(ctx, node.ID)
+					usedCPU, usedMemory := ns.calculateNodeResourceUsage(ctx, node.ID, totalCPU)
 
 					// Update or create node metadata
 					labelsJSON := "{}"
@@ -211,6 +212,8 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 						Status:          string(node.Status.State),
 						TotalCPU:        totalCPU,
 						TotalMemory:     totalMemory,
+						UsedCPU:         usedCPU,
+						UsedMemory:      usedMemory,
 						DeploymentCount: deploymentCount,
 						MaxDeployments:  ns.maxDeploymentsPerNode,
 						Labels:          labelsJSON,
@@ -218,6 +221,9 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 
 					// Save to database
 					database.DB.Save(metadata)
+					
+					// Also update metrics separately to ensure last_heartbeat is updated
+					database.UpdateNodeMetrics(node.ID, usedCPU, usedMemory)
 				}
 				// Successfully synced all nodes, return
 				return nil
@@ -277,9 +283,18 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 	totalCPU := ncpu
 	totalMemory := memTotal
 	
-	// Use Swarm node ID if available, otherwise create synthetic ID
-	nodeID := swarmNodeID
-	if nodeID == "" {
+	// Determine node ID - respect ENABLE_SWARM environment variable
+	// If ENABLE_SWARM=false, always use local- prefix even if Swarm is enabled in Docker
+	var nodeID string
+	if utils.IsSwarmModeEnabled() {
+		// Swarm mode enabled - use Swarm node ID if available
+		nodeID = swarmNodeID
+		if nodeID == "" {
+			// Swarm enabled but not in Swarm - use synthetic ID
+			nodeID = "local-" + name
+		}
+	} else {
+		// Swarm mode disabled - always use local- prefix
 		nodeID = "local-" + name
 	}
 	deploymentCount := ns.getNodeDeploymentCount(ctx, nodeID)
@@ -295,6 +310,9 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 		log.Printf("[NodeSelector] Node with hostname %s exists with ID %s, updating to use ID %s", name, existingNode.ID, nodeID)
 		// Store old ID for deletion
 		oldID := existingNode.ID
+		// Calculate resource usage for local node
+		usedCPU, usedMemory := ns.calculateNodeResourceUsage(ctx, nodeID, totalCPU)
+		
 		// Update the existing node's ID and other fields
 		existingNode.ID = nodeID
 		existingNode.Role = "worker"
@@ -302,10 +320,10 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 		existingNode.Status = "ready"
 		existingNode.TotalCPU = totalCPU
 		existingNode.TotalMemory = totalMemory
+		existingNode.UsedCPU = usedCPU
+		existingNode.UsedMemory = usedMemory
 		existingNode.DeploymentCount = deploymentCount
 		existingNode.MaxDeployments = ns.maxDeploymentsPerNode
-		existingNode.UsedCPU = 0.0
-		existingNode.UsedMemory = 0
 		existingNode.Labels = "{}"
 		existingNode.UpdatedAt = time.Now()
 		
@@ -317,6 +335,9 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 		// Now create the new one
 		metadata = &existingNode
 	} else if !hostnameExists {
+		// Calculate resource usage for local node
+		usedCPU, usedMemory := ns.calculateNodeResourceUsage(ctx, nodeID, totalCPU)
+		
 		// No existing node with this hostname, create new one
 		metadata = &database.NodeMetadata{
 		ID:              nodeID,
@@ -326,12 +347,15 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 		Status:          "ready",
 		TotalCPU:        totalCPU,
 		TotalMemory:     totalMemory,
+		UsedCPU:         usedCPU,
+		UsedMemory:      usedMemory,
 		DeploymentCount: deploymentCount,
 		MaxDeployments:  ns.maxDeploymentsPerNode,
-		UsedCPU:         0.0,
-		UsedMemory:      0,
 		Labels:          "{}", // Empty JSON object for jsonb field
 		}
+		
+		// Also update metrics separately to ensure last_heartbeat is updated
+		database.UpdateNodeMetrics(nodeID, usedCPU, usedMemory)
 	} else {
 		// Node exists with same hostname and ID - just update it
 		metadata = &existingNode
@@ -342,14 +366,19 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 		metadata.TotalMemory = totalMemory
 		metadata.DeploymentCount = deploymentCount
 		metadata.MaxDeployments = ns.maxDeploymentsPerNode
-		metadata.UsedCPU = 0.0
-		metadata.UsedMemory = 0
+		// Calculate resource usage for local node
+		usedCPU, usedMemory := ns.calculateNodeResourceUsage(ctx, nodeID, totalCPU)
+		metadata.UsedCPU = usedCPU
+		metadata.UsedMemory = usedMemory
 		metadata.Labels = "{}"
 		metadata.UpdatedAt = time.Now()
 	}
 
 	// Use Save which will create or update based on primary key (ID)
 	result := database.DB.Save(metadata)
+	
+	// Also update metrics separately to ensure last_heartbeat is updated
+	database.UpdateNodeMetrics(nodeID, metadata.UsedCPU, metadata.UsedMemory)
 	if result.Error != nil {
 		log.Printf("[NodeSelector] ERROR: Failed to save local node: %v", result.Error)
 		return fmt.Errorf("failed to save local node: %w", result.Error)
@@ -370,12 +399,166 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 	return nil
 }
 
+// calculateNodeResourceUsage calculates CPU and memory usage for a node by aggregating container stats
+func (ns *NodeSelector) calculateNodeResourceUsage(ctx context.Context, nodeID string, totalCPU int) (float64, int64) {
+	// Get all containers on this node
+	var containers []container.Summary
+	var err error
+	
+	// For Swarm nodes, try filtering by node ID label first
+	if !strings.HasPrefix(nodeID, "local-") {
+		filterArgs := filters.NewArgs()
+		filterArgs.Add("label", fmt.Sprintf("com.docker.swarm.node.id=%s", nodeID))
+		filterArgs.Add("status", "running")
+		
+		containers, err = ns.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+			Filters: filterArgs,
+		})
+		if err != nil {
+			log.Printf("[NodeSelector] Failed to list containers for node %s: %v", nodeID, err)
+			return 0.0, 0
+		}
+		
+		// If no containers found with Swarm label, fall back to all running containers
+		// This handles cases where containers are from compose deployments on a Swarm node
+		if len(containers) == 0 {
+			log.Printf("[NodeSelector] No containers found with Swarm node ID label for %s, trying all running containers", nodeID)
+			containers, err = ns.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+				All:     false,
+				Filters: filters.NewArgs(filters.Arg("status", "running")),
+			})
+			if err != nil {
+				log.Printf("[NodeSelector] Failed to list all running containers: %v", err)
+				return 0.0, 0
+			}
+		}
+	} else {
+		// For local nodes (explicitly local- prefix), get all running containers (we're on the local node)
+		containers, err = ns.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+			All:     false,
+			Filters: filters.NewArgs(filters.Arg("status", "running")),
+		})
+		if err != nil {
+			log.Printf("[NodeSelector] Failed to list containers for local node: %v", err)
+			return 0.0, 0
+		}
+	}
+	
+	if len(containers) == 0 {
+		log.Printf("[NodeSelector] No running containers found on node %s", nodeID)
+		return 0.0, 0
+	}
+	
+	log.Printf("[NodeSelector] Calculating resource usage for node %s from %d containers", nodeID, len(containers))
+	
+	// Aggregate CPU and memory usage from all containers
+	var totalCPUUsage float64
+	var totalMemoryUsage int64
+	
+	for _, container := range containers {
+		// Get container stats
+		stats, err := ns.dockerClient.ContainerStats(ctx, container.ID, false)
+		if err != nil {
+			log.Printf("[NodeSelector] Failed to get stats for container %s: %v", container.ID[:12], err)
+			continue
+		}
+		
+		// Decode stats JSON
+		var statsJSON struct {
+			CPUStats struct {
+				CPUUsage struct {
+					TotalUsage  uint64   `json:"total_usage"`
+					PercpuUsage []uint64 `json:"percpu_usage"`
+				} `json:"cpu_usage"`
+				SystemUsage uint64 `json:"system_cpu_usage"`
+				OnlineCPUs  uint   `json:"online_cpus"`
+			} `json:"cpu_stats"`
+			PreCPUStats struct {
+				CPUUsage struct {
+					TotalUsage uint64 `json:"total_usage"`
+				} `json:"cpu_usage"`
+				SystemUsage uint64 `json:"system_cpu_usage"`
+			} `json:"precpu_stats"`
+			MemoryStats struct {
+				Usage uint64 `json:"usage"`
+				Limit uint64 `json:"limit"`
+			} `json:"memory_stats"`
+		}
+		
+		if err := json.NewDecoder(stats.Body).Decode(&statsJSON); err != nil {
+			stats.Body.Close()
+			log.Printf("[NodeSelector] Failed to decode stats for container %s: %v", container.ID[:12], err)
+			continue
+		}
+		stats.Body.Close()
+		
+		// Calculate CPU usage percentage
+		cpuUsage := 0.0
+		if statsJSON.PreCPUStats.SystemUsage > 0 && statsJSON.CPUStats.SystemUsage > statsJSON.PreCPUStats.SystemUsage {
+			cpuDelta := float64(statsJSON.CPUStats.CPUUsage.TotalUsage - statsJSON.PreCPUStats.CPUUsage.TotalUsage)
+			systemDelta := float64(statsJSON.CPUStats.SystemUsage - statsJSON.PreCPUStats.SystemUsage)
+			if systemDelta > 0 && statsJSON.CPUStats.OnlineCPUs > 0 {
+				cpuUsage = (cpuDelta / systemDelta) * float64(statsJSON.CPUStats.OnlineCPUs) * 100.0
+			}
+		}
+		
+		// Get memory usage
+		memoryUsage := int64(statsJSON.MemoryStats.Usage)
+		
+		totalCPUUsage += cpuUsage
+		totalMemoryUsage += memoryUsage
+	}
+	
+	// CPU usage is already a percentage, return as-is
+	// Memory usage is in bytes
+	log.Printf("[NodeSelector] Node %s resource usage: CPU=%.2f%%, Memory=%d bytes", nodeID, totalCPUUsage, totalMemoryUsage)
+	return totalCPUUsage, totalMemoryUsage
+}
+
 // getNodeDeploymentCount counts deployments on a specific node
+// Also checks by hostname as fallback for cases where node ID changed
+// This handles the case where a Swarm node has compose deployments with old node IDs
 func (ns *NodeSelector) getNodeDeploymentCount(ctx context.Context, nodeID string) int {
+	// Get node info to access hostname
+	var node database.NodeMetadata
+	if err := database.DB.Where("id = ?", nodeID).First(&node).Error; err != nil {
+		log.Printf("[NodeSelector] Failed to find node %s: %v", nodeID, err)
+		return 0
+	}
+	
 	count := int64(0)
+	
+	// First try by node ID
 	database.DB.Model(&database.DeploymentLocation{}).
 		Where("node_id = ? AND status = ?", nodeID, "running").
 		Count(&count)
+	
+	// Always check by hostname and update if needed (handles node ID changes)
+	// This is important for Swarm nodes that have compose deployments with old node IDs
+	if node.Hostname != "" {
+		var hostnameCount int64
+		database.DB.Model(&database.DeploymentLocation{}).
+			Where("node_hostname = ? AND status = ?", node.Hostname, "running").
+			Count(&hostnameCount)
+		
+		// If we found deployments by hostname that don't match current node ID, update them
+		if hostnameCount > 0 {
+			updateResult := database.DB.Model(&database.DeploymentLocation{}).
+				Where("node_hostname = ? AND node_id != ?", node.Hostname, nodeID).
+				Update("node_id", nodeID)
+			
+			if updateResult.Error == nil && updateResult.RowsAffected > 0 {
+				log.Printf("[NodeSelector] Updated %d deployment locations from old node ID to %s (hostname: %s)", 
+					updateResult.RowsAffected, nodeID, node.Hostname)
+			}
+			
+			// Use the hostname count if it's higher (includes both old and new node IDs)
+			if hostnameCount > count {
+				count = hostnameCount
+			}
+		}
+	}
+	
 	return int(count)
 }
 

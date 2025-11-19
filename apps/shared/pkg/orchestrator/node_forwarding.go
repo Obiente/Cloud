@@ -14,6 +14,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
 	"nhooyr.io/websocket"
 )
@@ -51,14 +52,14 @@ func NewNodeForwarder() *NodeForwarder {
 			if hostname != "" {
 				// In Swarm mode, use tasks.api service name for DNS resolution
 				// Otherwise, use hostname
-				if os.Getenv("ENABLE_SWARM") != "false" {
+				if utils.IsSwarmModeEnabled() {
 					apiBaseURL = fmt.Sprintf("http://tasks.api-gateway:%s", port)
 				} else {
 					apiBaseURL = fmt.Sprintf("http://%s:%s", hostname, port)
 				}
 			} else {
 				// Fallback to localhost or service name
-				if os.Getenv("ENABLE_SWARM") != "false" {
+				if utils.IsSwarmModeEnabled() {
 					apiBaseURL = fmt.Sprintf("http://api-gateway:%s", port)
 				} else {
 					apiBaseURL = fmt.Sprintf("http://localhost:%s", port)
@@ -193,7 +194,7 @@ func (nf *NodeForwarder) GetNodeAPIURL(nodeID string) (string, error) {
 		}
 		// In Swarm mode, try to use tasks.api service DNS
 		// Otherwise, use hostname directly
-		if os.Getenv("ENABLE_SWARM") != "false" {
+		if utils.IsSwarmModeEnabled() {
 			// For Swarm, we need to find the specific node's API
 			// Try using hostname first, fall back to tasks.api
 			return fmt.Sprintf("http://%s:%s", node.Hostname, port), nil

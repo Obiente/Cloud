@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
 	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/client"
@@ -43,12 +44,23 @@ func NewServiceRegistry() (*ServiceRegistry, error) {
 		return nil, fmt.Errorf("failed to get Docker info: %w", err)
 	}
 
-	// Determine node ID: use Swarm NodeID if in swarm mode, otherwise use hostname as identifier
-	nodeID := info.Swarm.NodeID
-	if nodeID == "" {
-		// Not in swarm mode - use hostname or ID as node identifier
-		// In single-node setups, we can use the hostname or generate a stable ID
-		// Prefix with "local-" to match GameServerManager format
+	// Determine node ID - respect ENABLE_SWARM environment variable
+	// If ENABLE_SWARM=false, always use local- prefix even if Swarm is enabled in Docker
+	var nodeID string
+	if utils.IsSwarmModeEnabled() {
+		// Swarm mode enabled - use Swarm node ID if available
+		nodeID = info.Swarm.NodeID
+		if nodeID == "" {
+			// Swarm enabled but not in Swarm - use synthetic ID
+			nodeID = info.Name
+			if nodeID == "" {
+				nodeID = "local-node"
+			} else {
+				nodeID = "local-" + nodeID
+			}
+		}
+	} else {
+		// Swarm mode disabled - always use local- prefix
 		nodeID = info.Name
 		if nodeID == "" {
 			nodeID = "local-node"

@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/registry"
+	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
 	"github.com/moby/moby/client"
 )
@@ -78,10 +76,18 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 		return nil, fmt.Errorf("failed to init docker helper: %w", err)
 	}
 
-	// Determine node ID - use Swarm node ID if available, otherwise use synthetic local ID
-	nodeID := info.Swarm.NodeID
-	if nodeID == "" {
-		// Not in Swarm mode - use synthetic ID matching what node selector uses
+	// Determine node ID - respect ENABLE_SWARM environment variable
+	// If ENABLE_SWARM=false, always use local- prefix even if Swarm is enabled in Docker
+	var nodeID string
+	if utils.IsSwarmModeEnabled() {
+		// Swarm mode enabled - use Swarm node ID if available
+		nodeID = info.Swarm.NodeID
+		if nodeID == "" {
+			// Swarm enabled but not in Swarm - use synthetic ID
+			nodeID = "local-" + info.Name
+		}
+	} else {
+		// Swarm mode disabled - always use local- prefix
 		nodeID = "local-" + info.Name
 	}
 
@@ -117,6 +123,12 @@ func (dm *DeploymentManager) GetNodeHostname() string {
 	return dm.nodeHostname
 }
 
+// SyncNodeMetadata syncs node metadata with Docker Swarm/local Docker daemon
+// This updates node resource usage (CPU, memory) and other metadata
+func (dm *DeploymentManager) SyncNodeMetadata(ctx context.Context) error {
+	return dm.nodeSelector.syncNodeMetadata(ctx)
+}
+
 // GetDockerClient returns the Docker client (for internal use by orchestrator service)
 func (dm *DeploymentManager) GetDockerClient() interface{} {
 	return dm.dockerClient
@@ -130,18 +142,4 @@ func (dm *DeploymentManager) Close() error {
 	return nil
 }
 
-func isSwarmModeEnabled() bool {
-	enableSwarm := os.Getenv("ENABLE_SWARM")
-	if enableSwarm == "" {
-		return false
-	}
-	// Parse as boolean (handles "true", "1", "yes", "on", etc.)
-	enabled, err := strconv.ParseBool(strings.ToLower(enableSwarm))
-	if err == nil {
-		return enabled
-	}
-	// Fallback: check for common truthy strings
-	lower := strings.ToLower(strings.TrimSpace(enableSwarm))
-	return lower == "true" || lower == "1" || lower == "yes" || lower == "on"
-}
 

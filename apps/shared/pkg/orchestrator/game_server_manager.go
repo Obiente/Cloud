@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
 	"github.com/docker/go-connections/nat"
 	"github.com/moby/moby/api/types/container"
@@ -66,9 +67,18 @@ func NewGameServerManager(strategy string, maxGameServersPerNode int) (*GameServ
 		return nil, fmt.Errorf("failed to init docker helper: %w", err)
 	}
 
-	// Determine node ID - use Swarm node ID if available, otherwise use synthetic local ID
-	nodeID := info.Swarm.NodeID
-	if nodeID == "" {
+	// Determine node ID - respect ENABLE_SWARM environment variable
+	// If ENABLE_SWARM=false, always use local- prefix even if Swarm is enabled in Docker
+	var nodeID string
+	if utils.IsSwarmModeEnabled() {
+		// Swarm mode enabled - use Swarm node ID if available
+		nodeID = info.Swarm.NodeID
+		if nodeID == "" {
+			// Swarm enabled but not in Swarm - use synthetic ID
+			nodeID = "local-" + info.Name
+		}
+	} else {
+		// Swarm mode disabled - always use local- prefix
 		nodeID = "local-" + info.Name
 	}
 

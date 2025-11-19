@@ -9,6 +9,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
+	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
 	"gopkg.in/yaml.v3"
 )
@@ -69,7 +70,7 @@ func (dm *DeploymentManager) injectPlanLimitsIntoCompose(composeYaml string, dep
 	}
 
 	// Detect if we're in Swarm mode
-	isSwarmMode := isSwarmModeEnabled()
+	isSwarmMode := utils.IsSwarmModeEnabled()
 
 	// Convert CPU cores to CPU shares (1024 shares = 1 core)
 	maxCPUShares := int64(maxCPUCores) * 1024
@@ -234,7 +235,7 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 	// Detect if we're in Swarm mode using ENABLE_SWARM environment variable
 	// In Swarm mode, labels must be in deploy.labels
 	// In non-Swarm mode, labels must be at the top-level labels
-	isSwarmMode := isSwarmModeEnabled()
+	isSwarmMode := utils.IsSwarmModeEnabled()
 	if isSwarmMode {
 		logger.Debug("[DeploymentManager] ENABLE_SWARM=true - labels will be placed in deploy.labels")
 	} else {

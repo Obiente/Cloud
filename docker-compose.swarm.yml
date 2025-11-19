@@ -7,6 +7,12 @@
 # This file requires docker-compose.base.yml to be merged before use
 # Usage: cat docker-compose.base.yml docker-compose.swarm.yml | docker stack deploy -c - obiente
 
+# Swarm-specific common environment variables
+# Override ENABLE_SWARM to default to true for Swarm deployments
+x-common-swarm-orchestrator: &common-swarm-orchestrator
+  <<: [*common-orchestrator]
+  ENABLE_SWARM: ${ENABLE_SWARM:-true}  # Default to true for Swarm stack deployments
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -403,8 +409,7 @@ services:
     image: ghcr.io/obiente/cloud-deployments-service:latest
     environment:
       PORT: 3005
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-orchestrator, *common-dns-delegation]
-      ENABLE_SWARM: ${ENABLE_SWARM:-true}  # Override to enable Swarm mode (default: true for Swarm deployment)
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-swarm-orchestrator, *common-dns-delegation]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/obiente:/var/lib/obiente
@@ -503,7 +508,7 @@ services:
     image: ghcr.io/obiente/cloud-orchestrator-service:latest
     environment:
       PORT: 3007
-      <<: [*common-database, *common-metrics-db, *common-redis, *common-orchestrator, *common-vps, *common-dns-delegation]
+      <<: [*common-database, *common-metrics-db, *common-redis, *common-swarm-orchestrator, *common-vps, *common-dns-delegation]
       ORCHESTRATOR_SYNC_INTERVAL: ${ORCHESTRATOR_SYNC_INTERVAL:-30s}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -552,7 +557,7 @@ services:
     image: ghcr.io/obiente/cloud-vps-service:latest
     environment:
       PORT: 3008
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-orchestrator, *common-vps]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-swarm-orchestrator, *common-vps]
     deploy:
       mode: replicated
       replicas: 2
@@ -690,7 +695,7 @@ services:
     image: ghcr.io/obiente/cloud-superadmin-service:latest
     environment:
       PORT: 3011
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-orchestrator]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-swarm-orchestrator]
     deploy:
       mode: replicated
       replicas: 1
@@ -736,7 +741,7 @@ services:
   dns-service:
     image: ghcr.io/obiente/cloud-dns-service:latest
     environment:
-      <<: [*common-database, *common-redis, *common-orchestrator, *common-dns, *common-dns-delegation]
+      <<: [*common-database, *common-redis, *common-swarm-orchestrator, *common-dns, *common-dns-delegation]
       HTTP_PORT: ${DNS_HTTP_PORT:-8053}
       labels:
       - "cloud.obiente.service=dns-service"

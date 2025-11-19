@@ -13,13 +13,12 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
 	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/client"
 	"gopkg.in/yaml.v3"
 )
-
-// isSwarmModeEnabled checks if Swarm mode is enabled via ENABLE_SWARM environment variable
 
 // Compose operations for deployments
 
@@ -193,7 +192,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 	projectName := fmt.Sprintf("deploy-%s", deploymentID)
 
 	// Check if we're in Swarm mode using ENABLE_SWARM environment variable
-	isSwarmMode := isSwarmModeEnabled()
+	isSwarmMode := utils.IsSwarmModeEnabled()
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -358,7 +357,7 @@ func (dm *DeploymentManager) DeployComposeFile(ctx context.Context, deploymentID
 // registerComposeContainers finds containers created by a compose project and registers them
 func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, deploymentID string, projectName string) error {
 	// Check if we're in Swarm mode
-	isSwarmMode := isSwarmModeEnabled()
+	isSwarmMode := utils.IsSwarmModeEnabled()
 
 	// containers will be initialized from ContainerList - type inferred from return value
 	// We initialize with an empty list to establish the type, then reassign in branches
@@ -546,9 +545,8 @@ func (dm *DeploymentManager) StopComposeDeployment(ctx context.Context, deployme
 
 	projectName := fmt.Sprintf("deploy-%s", deploymentID)
 
-	// Check if we're in Swarm mode
-	enableSwarm := os.Getenv("ENABLE_SWARM")
-	isSwarmMode := enableSwarm == "true" || enableSwarm == "1"
+	// Check if we're in Swarm mode using the shared helper function
+	isSwarmMode := utils.IsSwarmModeEnabled()
 
 	if isSwarmMode {
 		// In Swarm mode, use docker stack rm to remove the stack
