@@ -208,7 +208,7 @@ services:
       - target: 3001
         published: ${API_GATEWAY_PORT:-3001}
         protocol: tcp
-        mode: host  # Use host mode to avoid ingress network IP pool conflicts
+        mode: ingress  
     deploy:
       mode: replicated
       replicas: 2
@@ -781,44 +781,6 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
-    dns_search: []
-    networks:
-      - obiente-network
-
-  # VPS Gateway - gRPC gateway for VPS operations (optional)
-  vps-gateway:
-    image: ghcr.io/obiente/cloud-vps-gateway:latest
-    ports:
-      - target: 1537
-        published: 1537
-        protocol: tcp
-        mode: host  # Use host mode to avoid ingress network IP pool conflicts
-      - target: 9091
-        published: 9091
-        protocol: tcp
-        mode: host  # Use host mode to avoid ingress network IP pool conflicts
-    deploy:
-      mode: replicated
-      replicas: 1
-      placement:
-        constraints:
-          - node.labels.vps-gateway.enabled == true
-      update_config:
-        parallelism: 1
-        delay: 10s
-        order: start-first
-      restart_policy:
-        condition: on-failure
-        delay: 10s
-        max_attempts: 10
-        window: 60s
-      resources:
-        limits:
-          cpus: "1"
-          memory: 512M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
     dns_search: []
     networks:
       - obiente-network
