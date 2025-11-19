@@ -27,19 +27,18 @@ services:
       - -c
       - max_connections=200
     # Port exposure configuration for Netbird VPN access
-    # Default: Exposed on localhost only (127.0.0.1) for security
+    # Default: Use ingress mode for Swarm compatibility (host mode conflicts with overlay networks)
     # To change binding, set POSTGRES_EXPOSE_PORT and POSTGRES_PORT_MODE environment variables
-    # For localhost-only binding, use host mode (default) and configure firewall rules
+    # Note: In Docker Swarm, services on overlay networks must use ingress mode for ports
     # Examples:
-    #   - POSTGRES_EXPOSE_PORT=5432  # Default: localhost only (requires firewall rules)
-    #   - POSTGRES_PORT_MODE=host    # Default: host mode for localhost binding
-    # Note: Docker Swarm host mode binds to all interfaces by default
-    # Configure iptables/firewall to restrict to localhost: iptables -A INPUT -p tcp --dport 5432 -s 127.0.0.1 -j ACCEPT
+    #   - POSTGRES_EXPOSE_PORT=5432  # Default port
+    #   - POSTGRES_PORT_MODE=ingress  # Use ingress mode (required for overlay networks)
+    # Note: If you need host mode, the service must use network_mode: host (not compatible with overlay networks)
     ports:
       - target: 5432
         published: ${POSTGRES_EXPOSE_PORT:-5432}
         protocol: tcp
-        mode: ${POSTGRES_PORT_MODE:-host}
+        mode: ${POSTGRES_PORT_MODE:-ingress}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     configs:
@@ -92,19 +91,18 @@ services:
       - -c
       - max_connections=200
     # Port exposure configuration for Netbird VPN access
-    # Default: Exposed on localhost only (127.0.0.1) for security
+    # Default: Use ingress mode for Swarm compatibility (host mode conflicts with overlay networks)
     # To change binding, set METRICS_DB_EXPOSE_PORT and METRICS_DB_PORT_MODE environment variables
-    # For localhost-only binding, use host mode (default) and configure firewall rules
+    # Note: In Docker Swarm, services on overlay networks must use ingress mode for ports
     # Examples:
-    #   - METRICS_DB_EXPOSE_PORT=5433  # Default: localhost only (requires firewall rules)
-    #   - METRICS_DB_PORT_MODE=host    # Default: host mode for localhost binding
-    # Note: Docker Swarm host mode binds to all interfaces by default
-    # Configure iptables/firewall to restrict to localhost: iptables -A INPUT -p tcp --dport 5432 -s 127.0.0.1 -j ACCEPT
+    #   - METRICS_DB_EXPOSE_PORT=5433  # Default port
+    #   - METRICS_DB_PORT_MODE=ingress  # Use ingress mode (required for overlay networks)
+    # Note: If you need host mode, the service must use network_mode: host (not compatible with overlay networks)
     ports:
       - target: 5432
         published: ${METRICS_DB_EXPOSE_PORT:-5433}
         protocol: tcp
-        mode: ${METRICS_DB_PORT_MODE:-host}
+        mode: ${METRICS_DB_PORT_MODE:-ingress}
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
     configs:
@@ -153,19 +151,18 @@ services:
           exec redis-server --appendonly yes
         fi
     # Port exposure configuration for Netbird VPN access
-    # Default: Exposed on localhost only (127.0.0.1) for security
+    # Default: Use ingress mode for Swarm compatibility (host mode conflicts with overlay networks)
     # To change binding, set REDIS_EXPOSE_PORT and REDIS_PORT_MODE environment variables
-    # For localhost-only binding, use host mode (default) and configure firewall rules
+    # Note: In Docker Swarm, services on overlay networks must use ingress mode for ports
     # Examples:
-    #   - REDIS_EXPOSE_PORT=6379  # Default: localhost only (requires firewall rules)
-    #   - REDIS_PORT_MODE=host     # Default: host mode for localhost binding
-    # Note: Docker Swarm host mode binds to all interfaces by default
-    # Configure iptables/firewall to restrict to localhost: iptables -A INPUT -p tcp --dport 6379 -s 127.0.0.1 -j ACCEPT
+    #   - REDIS_EXPOSE_PORT=6379  # Default port
+    #   - REDIS_PORT_MODE=ingress  # Use ingress mode (required for overlay networks)
+    # Note: If you need host mode, the service must use network_mode: host (not compatible with overlay networks)
     ports:
       - target: 6379
         published: ${REDIS_EXPOSE_PORT:-6379}
         protocol: tcp
-        mode: ${REDIS_PORT_MODE:-host}
+        mode: ${REDIS_PORT_MODE:-ingress}
     volumes:
       - redis_data:/data
     healthcheck:
@@ -209,12 +206,12 @@ services:
       <<: [*common-auth, *common-api-gateway]
     ports:
       - target: 3001
-        # published: 3001
+        published: ${API_GATEWAY_PORT:-3001}
         protocol: tcp
-        mode: ingress
+        mode: ingress  # Use ingress mode for Swarm compatibility (host mode conflicts with overlay networks)
     deploy:
       mode: replicated
-      replicas: 2
+      replicas: 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -273,7 +270,7 @@ services:
       <<: [*common-database, *common-metrics-db, *common-auth, *common-dashboard]
     deploy:
       mode: replicated
-      replicas: 2
+      replicas: 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -321,7 +318,7 @@ services:
       <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard]
     deploy:
       mode: replicated
-      replicas: 2
+      replicas: 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -369,7 +366,7 @@ services:
       <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-dashboard]
     deploy:
       mode: replicated
-      replicas: 2
+      replicas: 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -473,7 +470,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     deploy:
       mode: replicated
-      replicas: 2
+      replicas: 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -524,7 +521,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     deploy:
       mode: replicated
-      replicas: 2
+      replicas: 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -572,7 +569,7 @@ services:
       <<: [*common-database, *common-metrics-db, *common-auth, *common-orchestrator, *common-vps]
     deploy:
       mode: replicated
-      replicas: 2
+      replicas: 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -620,7 +617,7 @@ services:
       <<: [*common-database, *common-metrics-db, *common-auth]
     deploy:
       mode: replicated
-      replicas: 2
+      replicas: 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -668,7 +665,7 @@ services:
       <<: [*common-database, *common-metrics-db, *common-auth]
     deploy:
       mode: replicated
-      replicas: 2
+      replicas: 1
       update_config:
         parallelism: 1
         delay: 10s
@@ -829,11 +826,11 @@ services:
       - target: 1537
         published: 1537
         protocol: tcp
-        mode: ingress
+        mode: ingress  # Use ingress mode for Swarm compatibility (host mode conflicts with overlay networks)
       - target: 9091
         published: 9091
         protocol: tcp
-        mode: ingress
+        mode: ingress  # Use ingress mode for Swarm compatibility (host mode conflicts with overlay networks)
     deploy:
       mode: replicated
       replicas: 1
