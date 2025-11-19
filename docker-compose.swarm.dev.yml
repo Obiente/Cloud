@@ -869,15 +869,13 @@ services:
       - --providers.swarm.exposedbydefault=false
       - --providers.swarm.watch=true  # Watch for service changes
       - --providers.swarm.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
-      # EntryPoints configured to listen on both IPv4 and IPv6
-      # Using [::]:port binds to all interfaces (IPv4 and IPv6) when IPv6 is enabled in Docker
-      - --entryPoints.web.address=[::]:80
+      - --entryPoints.web.address=:80
       - --entryPoints.web.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7,fe80::/10
-      - --entryPoints.websecure.address=[::]:443
+      - --entryPoints.websecure.address=:443
       - --entryPoints.websecure.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7,fe80::/10
-      - --entryPoints.deployments.address=[::]:8000
+      - --entryPoints.deployments.address=:8000
       - --entryPoints.deployments.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7,fe80::/10
-      - --entryPoints.ssh.address=[::]:${SSH_PROXY_PORT:-2222}
+      - --entryPoints.ssh.address=:${SSH_PROXY_PORT:-2222}
       - --entryPoints.ssh.proxyProtocol.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7,fe80::/10
       # Port 8080 is used by Traefik API (--api.insecure=true)
       # Grafana is accessible via port 80/443 at /grafana
@@ -1131,17 +1129,10 @@ networks:
     attachable: true
     driver_opts:
       encrypted: "true"
-    # Enable IPv6 support for the overlay network
-    enable_ipv6: true
     ipam:
       config:
-        - subnet: 10.15.3.0/24  # IPv4 subnet
-        - subnet: 2001:db8:1::/64  # IPv6 subnet (adjust to your actual IPv6 range if needed)
-    # Docker Swarm will automatically create this network when the stack is deployed
-    # Network name will be: {stack-name}_obiente-network (e.g., obiente_obiente-network)
-    # Services on this network can resolve each other by service name (e.g., "postgres")
-    # IMPORTANT: Do NOT use external: true - it breaks DNS resolution in Swarm
-    # The embedded DNS server (127.0.0.11) only works properly when the network is created BY THE STACK
+        - subnet: 10.15.3.0/24
+        - subnet: fd00:0b1e:cl0d::/64
     # Option: Connect to main deployment's network (recommended approach for dev)
     # Uncomment and configure to share the network with main deployment
     # This allows direct access to the main deployment's DNS server by service name
