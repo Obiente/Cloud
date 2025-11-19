@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -858,11 +859,217 @@ func handlePushDNSRecords(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":      successCount,
-		"errors":       errors,
-		"total":        len(req.Records),
+		"success":       successCount,
+		"errors":        errors,
+		"total":         len(req.Records),
 		"success_count": successCount,
 	})
+}
+
+// startDNSPusher starts a goroutine that periodically pushes DNS records to the production API
+func startDNSPusher(productionAPIURL, apiKey, sourceAPI string, pushInterval time.Duration, ttl int64, traefikIPMap map[string][]string) {
+	// Normalize production API URL (ensure it ends with /dns/push/batch)
+	baseURL := strings.TrimSuffix(productionAPIURL, "/")
+	pushURL := baseURL + "/dns/push/batch"
+
+	// Create HTTP client
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Test the endpoint first to verify it exists
+	log.Printf("[DNS Pusher] Testing endpoint availability: %s", pushURL)
+	testReq, err := http.NewRequest(http.MethodOptions, pushURL, nil)
+	if err == nil {
+		testReq.Header.Set("Authorization", "Bearer "+apiKey)
+		testResp, testErr := client.Do(testReq)
+		if testErr == nil {
+			testResp.Body.Close()
+			log.Printf("[DNS Pusher] Endpoint test: status %d", testResp.StatusCode)
+		}
+	}
+
+	// Initial push immediately
+	pushDNSRecords(client, pushURL, apiKey, sourceAPI, ttl, traefikIPMap)
+
+	// Then push at regular intervals
+	ticker := time.NewTicker(pushInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		pushDNSRecords(client, pushURL, apiKey, sourceAPI, ttl, traefikIPMap)
+	}
+}
+
+// pushDNSRecords collects all DNS records and pushes them to the production API
+func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl int64, traefikIPMap map[string][]string) {
+	ctx := context.Background()
+	records := make([]map[string]interface{}, 0)
+
+	// Get all running deployments
+	var deploymentLocations []database.DeploymentLocation
+	if err := database.DB.Where("status = ?", "running").Find(&deploymentLocations).Error; err != nil {
+		log.Printf("[DNS Pusher] Failed to query deployment locations: %v", err)
+	} else {
+		// Group by deployment ID to get unique deployments
+		deploymentMap := make(map[string]bool)
+		for _, loc := range deploymentLocations {
+			if deploymentMap[loc.DeploymentID] {
+				continue // Already processed this deployment
+			}
+			deploymentMap[loc.DeploymentID] = true
+
+			// Get Traefik IPs for this deployment
+			ips, err := database.GetDeploymentTraefikIP(loc.DeploymentID, traefikIPMap)
+			if err != nil {
+				log.Printf("[DNS Pusher] Failed to get Traefik IP for deployment %s: %v", loc.DeploymentID, err)
+				continue
+			}
+
+			if len(ips) > 0 {
+				domain := fmt.Sprintf("%s.my.obiente.cloud", loc.DeploymentID)
+				records = append(records, map[string]interface{}{
+					"domain":      domain,
+					"record_type": "A",
+					"records":     ips,
+					"ttl":         ttl,
+				})
+			}
+		}
+	}
+
+	// Get all running game servers
+	var gameServerLocations []database.GameServerLocation
+	if err := database.DB.Where("status = ?", "running").Find(&gameServerLocations).Error; err != nil {
+		log.Printf("[DNS Pusher] Failed to query game server locations: %v", err)
+	} else {
+		// Group by game server ID to get unique game servers
+		gameServerMap := make(map[string]bool)
+		for _, loc := range gameServerLocations {
+			if gameServerMap[loc.GameServerID] {
+				continue // Already processed this game server
+			}
+			gameServerMap[loc.GameServerID] = true
+
+			// Get IP for this game server
+			nodeIP, _, err := database.GetGameServerLocation(loc.GameServerID)
+			if err != nil {
+				log.Printf("[DNS Pusher] Failed to get IP for game server %s: %v", loc.GameServerID, err)
+				continue
+			}
+
+			if nodeIP != "" {
+				domain := fmt.Sprintf("%s.my.obiente.cloud", loc.GameServerID)
+				records = append(records, map[string]interface{}{
+					"domain":      domain,
+					"record_type": "A",
+					"records":     []string{nodeIP},
+					"ttl":         ttl,
+				})
+
+				// Also push SRV records for game servers that need them
+				// Check game type to determine if SRV is needed
+				gameType, err := database.GetGameServerType(loc.GameServerID)
+				if err == nil {
+					// Minecraft Java (1 or 2) uses TCP
+					// Minecraft Bedrock (3) uses UDP
+					// Rust (6) uses UDP
+					switch gameType {
+					case 1, 2:
+						// Minecraft Java - TCP SRV
+						srvDomain := fmt.Sprintf("_minecraft._tcp.%s.my.obiente.cloud", loc.GameServerID)
+						srvRecord := fmt.Sprintf("0 0 %d %s.my.obiente.cloud", loc.Port, loc.GameServerID)
+						records = append(records, map[string]interface{}{
+							"domain":      srvDomain,
+							"record_type": "SRV",
+							"records":     []string{srvRecord},
+							"ttl":         ttl,
+						})
+					case 3:
+						// Minecraft Bedrock - UDP SRV
+						srvDomain := fmt.Sprintf("_minecraft._udp.%s.my.obiente.cloud", loc.GameServerID)
+						srvRecord := fmt.Sprintf("0 0 %d %s.my.obiente.cloud", loc.Port, loc.GameServerID)
+						records = append(records, map[string]interface{}{
+							"domain":      srvDomain,
+							"record_type": "SRV",
+							"records":     []string{srvRecord},
+							"ttl":         ttl,
+						})
+					case 6:
+						// Rust - UDP SRV
+						srvDomain := fmt.Sprintf("_rust._udp.%s.my.obiente.cloud", loc.GameServerID)
+						srvRecord := fmt.Sprintf("0 0 %d %s.my.obiente.cloud", loc.Port, loc.GameServerID)
+						records = append(records, map[string]interface{}{
+							"domain":      srvDomain,
+							"record_type": "SRV",
+							"records":     []string{srvRecord},
+							"ttl":         ttl,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	if len(records) == 0 {
+		log.Printf("[DNS Pusher] No DNS records to push")
+		return
+	}
+
+	// Prepare request body
+	requestBody := map[string]interface{}{
+		"records": records,
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		log.Printf("[DNS Pusher] Failed to marshal DNS records: %v", err)
+		return
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, pushURL, strings.NewReader(string(jsonData)))
+	if err != nil {
+		log.Printf("[DNS Pusher] Failed to create request: %v", err)
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	if sourceAPI != "" {
+		req.Header.Set("X-Source-API", sourceAPI)
+	}
+
+	// Send request
+	log.Printf("[DNS Pusher] Pushing %d DNS records to %s", len(records), pushURL)
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[DNS Pusher] Failed to push DNS records to %s: %v", pushURL, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		log.Printf("[DNS Pusher] Failed to push DNS records to %s: status %d, response: %s", pushURL, resp.StatusCode, string(bodyBytes))
+		log.Printf("[DNS Pusher] Request URL: %s, Method: %s, Headers: Authorization=%t, X-Source-API=%q",
+			pushURL, req.Method, req.Header.Get("Authorization") != "", req.Header.Get("X-Source-API"))
+		return
+	}
+
+	// Parse response
+	var response map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		log.Printf("[DNS Pusher] Failed to parse response: %v", err)
+		return
+	}
+
+	successCount, _ := response["success_count"].(float64)
+	if successCount > 0 {
+		log.Printf("[DNS Pusher] Successfully pushed %d DNS records", int(successCount))
+	} else {
+		log.Printf("[DNS Pusher] Push completed but no records were successful")
+	}
 }
 
 func main() {
@@ -871,15 +1078,15 @@ func main() {
 	httpMux := http.NewServeMux()
 	httpMux.HandleFunc("/dns/push", handlePushDNSRecord)
 	httpMux.HandleFunc("/dns/push/batch", handlePushDNSRecords)
-	
+
 	// Health check endpoint for API Gateway with replica ID
 	httpMux.HandleFunc("/health", health.SimpleHealth("dns-service"))
-	
+
 	httpPort := os.Getenv("HTTP_PORT")
 	if httpPort == "" {
 		httpPort = "8053" // Default HTTP port for DNS service
 	}
-	
+
 	// Start HTTP server in a goroutine - this must always run
 	go func() {
 		log.Printf("[DNS] Starting HTTP server for DNS delegation on port %s", httpPort)
@@ -917,6 +1124,86 @@ func main() {
 		log.Printf("[DNS] Warning: Redis initialization failed: %v (will run without cache)", err)
 	} else {
 		log.Printf("[DNS] Redis cache initialized")
+	}
+
+	// Start DNS pusher if delegation is configured
+	// This pushes DNS records to production API when using DNS delegation
+	productionAPIURL := strings.Trim(strings.TrimSpace(os.Getenv("DNS_DELEGATION_PRODUCTION_API_URL")), `"'`)
+	apiKey := strings.Trim(strings.TrimSpace(os.Getenv("DNS_DELEGATION_API_KEY")), `"'`)
+
+	// Debug logging to help diagnose configuration issues
+	apiKeyPreview := ""
+	if apiKey != "" {
+		previewLen := 10
+		if len(apiKey) < previewLen {
+			previewLen = len(apiKey)
+		}
+		apiKeyPreview = apiKey[:previewLen] + "..."
+	}
+	log.Printf("[DNS Pusher] Checking configuration: productionAPIURL=%q, apiKey=%q (length: %d)",
+		productionAPIURL, apiKeyPreview, len(apiKey))
+
+	if productionAPIURL != "" && apiKey != "" {
+		// Parse push interval (default: 2m)
+		pushIntervalStr := os.Getenv("DNS_DELEGATION_PUSH_INTERVAL")
+		if pushIntervalStr == "" {
+			pushIntervalStr = "2m"
+		}
+		pushInterval, err := time.ParseDuration(pushIntervalStr)
+		if err != nil {
+			log.Printf("[DNS Pusher] Invalid DNS_DELEGATION_PUSH_INTERVAL: %v, using default 2m", err)
+			pushInterval = 2 * time.Minute
+		}
+
+		// Parse TTL (default: 300s)
+		ttlStr := os.Getenv("DNS_DELEGATION_TTL")
+		if ttlStr == "" {
+			ttlStr = "300s"
+		}
+		ttlDuration, err := time.ParseDuration(ttlStr)
+		if err != nil {
+			log.Printf("[DNS Pusher] Invalid DNS_DELEGATION_TTL: %v, using default 300s", err)
+			ttlDuration = 300 * time.Second
+		}
+		ttl := int64(ttlDuration.Seconds())
+
+		// Parse Traefik IPs for deployments
+		traefikIPsEnv := os.Getenv("TRAEFIK_IPS")
+		var traefikIPMap map[string][]string
+		if traefikIPsEnv != "" {
+			var err error
+			traefikIPMap, err = database.ParseTraefikIPsFromEnv(traefikIPsEnv)
+			if err != nil {
+				log.Printf("[DNS Pusher] Warning: Failed to parse TRAEFIK_IPS: %v", err)
+				traefikIPMap = make(map[string][]string)
+			}
+		} else {
+			traefikIPMap = make(map[string][]string)
+		}
+
+		// Get source API URL (for X-Source-API header)
+		sourceAPI := os.Getenv("API_URL")
+		if sourceAPI == "" {
+			sourceAPI = os.Getenv("DOMAIN")
+			if sourceAPI != "" {
+				sourceAPI = "https://" + sourceAPI
+			}
+		}
+
+		log.Printf("[DNS Pusher] DNS pusher service started")
+		log.Printf("[DNS Pusher] Production API: %s", productionAPIURL)
+		log.Printf("[DNS Pusher] Push interval: %v", pushInterval)
+		log.Printf("[DNS Pusher] TTL: %d seconds", ttl)
+
+		// Start DNS pusher goroutine
+		go startDNSPusher(productionAPIURL, apiKey, sourceAPI, pushInterval, ttl, traefikIPMap)
+	} else {
+		if productionAPIURL == "" {
+			log.Printf("[DNS Pusher] DNS pusher not configured: DNS_DELEGATION_PRODUCTION_API_URL is not set")
+		}
+		if apiKey == "" {
+			log.Printf("[DNS Pusher] DNS pusher not configured: DNS_DELEGATION_API_KEY is not set")
+		}
 	}
 
 	// Check if DNS service is enabled

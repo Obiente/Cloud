@@ -621,10 +621,35 @@ func (p *ReverseProxy) isServiceHealthy(targetURL string) bool {
 
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Find matching route
+	// Check longer/more specific paths first to ensure correct routing
+	// (e.g., /dns/push/batch should match before /dns/push)
 	var targetURL string
+	var matchedPath string
+	
+	// Sort paths by length (longest first) to match more specific routes first
+	type routeEntry struct {
+		path   string
+		target string
+	}
+	routes := make([]routeEntry, 0, len(p.routes))
 	for path, target := range p.routes {
-		if strings.HasPrefix(r.URL.Path, path) {
-			targetURL = target
+		routes = append(routes, routeEntry{path, target})
+	}
+	
+	// Sort by path length (descending) so longer/more specific paths are checked first
+	for i := 0; i < len(routes); i++ {
+		for j := i + 1; j < len(routes); j++ {
+			if len(routes[i].path) < len(routes[j].path) {
+				routes[i], routes[j] = routes[j], routes[i]
+			}
+		}
+	}
+	
+	// Check routes in order (longest first)
+	for _, route := range routes {
+		if strings.HasPrefix(r.URL.Path, route.path) {
+			targetURL = route.target
+			matchedPath = route.path
 			break
 		}
 	}
@@ -633,6 +658,8 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	
+	logger.Debug("[API Gateway] Routing %s -> %s (matched path: %s)", r.URL.Path, targetURL, matchedPath)
 
 	// Check if service has at least one healthy replica
 	// We sample multiple replicas in health checks - if at least one is healthy, service is considered healthy

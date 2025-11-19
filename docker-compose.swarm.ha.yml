@@ -1213,10 +1213,20 @@ services:
   dns-service:
     image: ghcr.io/obiente/cloud-dns-service:latest
     environment:
-      <<: [*common-database, *common-redis, *common-orchestrator, *common-dns]
+      <<: [*common-database, *common-redis, *common-orchestrator, *common-dns, *common-dns-delegation]
       DB_HOST: pgpool
       HTTP_PORT: ${DNS_HTTP_PORT:-8053}
       REDIS_URL: ${REDIS_URL:-redis://redis-1:6379}
+    labels:
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.dns-service.rule=Host(`dns-service.${DOMAIN}`)"
+      - "traefik.http.routers.dns-service.entrypoints=web"
+      - "traefik.http.services.dns-service.loadbalancer.server.port=8053"
+      - "traefik.http.routers.dns-service-secure.rule=Host(`dns-service.${DOMAIN}`)"
+      - "traefik.http.routers.dns-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.dns-service-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dns-service-secure.service=dns-service"
     ports:
       # Use host mode publishing to expose port 53 directly on the host
       # DNS only runs on nodes labeled with dns.enabled=true
@@ -1253,7 +1263,9 @@ services:
           cpus: "0.5"
           memory: 256M
     healthcheck:
-      test: ["CMD-SHELL", "if command -v nc >/dev/null 2>&1; then nc -z localhost ${DNS_PORT:-53} || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost ${DNS_PORT:-53} || exit 1; fi"]
+      # Check HTTP port (8053) instead of DNS port (53) since HTTP server always runs
+      # even when ENABLE_DNS=false, and this is what Traefik routes to
+      test: ["CMD-SHELL", "curl -sf http://localhost:${HTTP_PORT:-8053}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
