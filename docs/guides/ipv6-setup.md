@@ -15,13 +15,11 @@ Edit `/etc/docker/daemon.json` (create if it doesn't exist):
 ```json
 {
   "ipv6": true,
-  "fixed-cidr-v6": "fd00:0b1e:cl0d::/64",
-  "experimental": true,
-  "ip6tables": true
+  "fixed-cidr-v6": "fd00:0b1e:c10d::/64"
 }
 ```
 
-**Note**: This uses the Obiente Cloud IPv6 subnet `fd00:0b1e:cl0d::/64` (ULA - Unique Local Address range).
+**Note**: This uses the Obiente Cloud IPv6 subnet `fd00:0b1e:c10d::/64` (ULA - Unique Local Address range).
 
 Restart Docker:
 ```bash
@@ -46,12 +44,12 @@ networks:
     ipam:
       config:
         - subnet: 10.15.3.0/24  # IPv4
-        - subnet: fd00:0b1e:cl0d::/64  # IPv6 for Obiente Cloud
+        - subnet: fd00:0b1e:c10d::/64  # IPv6 for Obiente Cloud
 ```
 
 **Note**: 
 - IPv6 is automatically enabled when you include an IPv6 subnet in the `ipam.config` section
-- The IPv6 subnet (`fd00:0b1e:cl0d::/64`) must match the range configured in Docker daemon (`/etc/docker/daemon.json`)
+- The IPv6 subnet (`fd00:0b1e:c10d::/64`) must match the range configured in Docker daemon (`/etc/docker/daemon.json`)
 
 ## Step 4: Traefik Configuration
 

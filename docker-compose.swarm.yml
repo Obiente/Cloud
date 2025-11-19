@@ -1093,7 +1093,7 @@ networks:
     ipam:
       config:
         - subnet: 10.15.3.0/24
-        - subnet: fd00:0b1e:cl0d::/64
+        - subnet: fd00:0b1e:c10d::/64
 
 configs:
   # Custom pg_hba.conf file
