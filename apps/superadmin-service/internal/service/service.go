@@ -3781,6 +3781,23 @@ func (s *Service) UpdateNodeConfig(ctx context.Context, req *connect.Request[sup
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get node: %w", err))
 	}
 
+	// Check if this is a compose deployment node (node ID starts with "local-")
+	// Subdomain configuration is only allowed for Swarm stack services
+	isComposeDeployment := strings.HasPrefix(node.ID, "local-")
+	
+	// Reject subdomain-related config updates for compose deployments
+	if isComposeDeployment {
+		if req.Msg.Subdomain != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("node subdomain configuration is not available for compose deployments. Use NODE_SUBDOMAIN environment variable instead"))
+		}
+		if req.Msg.UseNodeSpecificDomains != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("node-specific domains configuration is not available for compose deployments. Use environment variables instead"))
+		}
+		if req.Msg.ServiceDomainPattern != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("service domain pattern configuration is not available for compose deployments. Use environment variables instead"))
+		}
+	}
+
 	// Parse existing labels
 	var labels map[string]interface{}
 	if node.Labels != "" {
@@ -3792,7 +3809,7 @@ func (s *Service) UpdateNodeConfig(ctx context.Context, req *connect.Request[sup
 		labels = make(map[string]interface{})
 	}
 
-	// Update configuration in labels
+	// Update configuration in labels (only for Swarm nodes)
 	if req.Msg.Subdomain != nil {
 		labels["obiente.subdomain"] = req.Msg.GetSubdomain()
 		labels["subdomain"] = req.Msg.GetSubdomain() // Also set for backwards compatibility

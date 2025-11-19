@@ -230,6 +230,7 @@ services:
           cpus: "0.1"
           memory: 128M
       labels:
+        - "cloud.obiente.service=api-gateway"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.api-gateway.rule=Host(`api.${DOMAIN:-localhost}`)"
@@ -285,6 +286,7 @@ services:
           cpus: "0.1"
           memory: 128M
       labels:
+        - "cloud.obiente.service=auth-service"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.auth-service.rule=Host(`auth-service.${DOMAIN:-localhost}`)"
@@ -330,6 +332,7 @@ services:
           cpus: "0.1"
           memory: 128M
       labels:
+        - "cloud.obiente.service=organizations-service"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.organizations-service.rule=Host(`organizations-service.${DOMAIN:-localhost}`)"
@@ -375,6 +378,7 @@ services:
           cpus: "0.1"
           memory: 128M
       labels:
+        - "cloud.obiente.service=billing-service"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.billing-service.rule=Host(`billing-service.${DOMAIN:-localhost}`)"
@@ -426,6 +430,7 @@ services:
           cpus: "0.25"
           memory: 128M
       labels:
+        - "cloud.obiente.service=deployments-service"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.deployments-service.rule=Host(`deployments-service.${DOMAIN:-localhost}`)"
@@ -473,6 +478,7 @@ services:
           cpus: "0.1"
           memory: 128M
       labels:
+        - "cloud.obiente.service=gameservers-service"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.gameservers-service.rule=Host(`gameservers-service.${DOMAIN:-localhost}`)"
@@ -521,6 +527,7 @@ services:
           cpus: "0.25"
           memory: 128M
       labels:
+        - "cloud.obiente.service=orchestrator-service"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.orchestrator-service.rule=Host(`orchestrator-service.${DOMAIN:-localhost}`)"
@@ -566,6 +573,7 @@ services:
           cpus: "0.1"
           memory: 128M
       labels:
+        - "cloud.obiente.service=vps-service"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.vps-service.rule=Host(`vps-service.${DOMAIN:-localhost}`)"
@@ -611,6 +619,7 @@ services:
           cpus: "0.1"
           memory: 128M
       labels:
+        - "cloud.obiente.service=support-service"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.support-service.rule=Host(`support-service.${DOMAIN:-localhost}`)"
@@ -656,6 +665,7 @@ services:
           cpus: "0.1"
           memory: 128M
       labels:
+        - "cloud.obiente.service=audit-service"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.audit-service.rule=Host(`audit-service.${DOMAIN:-localhost}`)"
@@ -701,6 +711,7 @@ services:
           cpus: "0.1"
           memory: 128M
       labels:
+        - "cloud.obiente.service=superadmin-service"
         - "cloud.obiente.traefik=true"
         - "traefik.enable=true"
         - "traefik.http.routers.superadmin-service.rule=Host(`superadmin-service.${DOMAIN:-localhost}`)"
@@ -727,7 +738,8 @@ services:
     environment:
       <<: [*common-database, *common-redis, *common-orchestrator, *common-dns, *common-dns-delegation]
       HTTP_PORT: ${DNS_HTTP_PORT:-8053}
-    labels:
+      labels:
+      - "cloud.obiente.service=dns-service"
       - "cloud.obiente.traefik=true"
       - "traefik.enable=true"
       - "traefik.http.routers.dns-service.rule=Host(`dns-service.${DOMAIN:-localhost}`)"

@@ -112,6 +112,11 @@ func (dm *DeploymentManager) GetNodeID() string {
 	return dm.nodeID
 }
 
+// GetNodeHostname returns the node hostname
+func (dm *DeploymentManager) GetNodeHostname() string {
+	return dm.nodeHostname
+}
+
 // GetDockerClient returns the Docker client (for internal use by orchestrator service)
 func (dm *DeploymentManager) GetDockerClient() interface{} {
 	return dm.dockerClient

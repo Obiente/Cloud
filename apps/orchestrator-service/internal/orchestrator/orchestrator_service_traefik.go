@@ -41,10 +41,25 @@ func (os *OrchestratorService) updateMicroserviceTraefikLabels() {
 	}
 
 	// Get node metadata to check for subdomain configuration
+	// Try to find by node ID first, then fall back to hostname if not found
 	var node database.NodeMetadata
-	if err := database.DB.Where("id = ?", nodeID).First(&node).Error; err != nil {
-		logger.Debug("[Orchestrator] Node %s not found in database, skipping Traefik label sync: %v", nodeID, err)
-		return
+	err := database.DB.Where("id = ?", nodeID).First(&node).Error
+	if err != nil {
+		// Node ID not found - try to find by hostname as fallback
+		// This handles cases where the node ID in the database doesn't match Docker Swarm node ID
+		nodeHostname := os.deploymentManager.GetNodeHostname()
+		if nodeHostname != "" {
+			logger.Debug("[Orchestrator] Node %s not found by ID, trying to find by hostname %s", nodeID, nodeHostname)
+			err = database.DB.Where("hostname = ?", nodeHostname).First(&node).Error
+			if err != nil {
+				logger.Debug("[Orchestrator] Node not found by ID %s or hostname %s, skipping Traefik label sync: %v", nodeID, nodeHostname, err)
+				return
+			}
+			logger.Info("[Orchestrator] Found node by hostname %s (ID: %s, database ID: %s)", nodeHostname, nodeID, node.ID)
+		} else {
+			logger.Debug("[Orchestrator] Node %s not found in database, skipping Traefik label sync: %v", nodeID, err)
+			return
+		}
 	}
 
 	// Get environment configuration (for global settings)
@@ -66,16 +81,32 @@ func (os *OrchestratorService) updateMicroserviceTraefikLabels() {
 		var labels map[string]interface{}
 		if err := json.Unmarshal([]byte(node.Labels), &labels); err == nil {
 			// Check for node-specific domain settings in database
-			if useNodeSpecific, ok := labels["obiente.use_node_specific_domains"].(bool); ok {
-				if useNodeSpecific {
-					useNodeSpecificDomains = "true"
-				} else {
-					useNodeSpecificDomains = "false"
+			// Handle both boolean and string values for robustness
+			if val, exists := labels["obiente.use_node_specific_domains"]; exists {
+				switch v := val.(type) {
+				case bool:
+					if v {
+						useNodeSpecificDomains = "true"
+					} else {
+						useNodeSpecificDomains = "false"
+					}
+				case string:
+					// Handle string values like "true", "false", "1", "0"
+					useNodeSpecificDomains = strings.ToLower(v)
+				case float64:
+					// Handle JSON numbers (1 = true, 0 = false)
+					if v == 1 {
+						useNodeSpecificDomains = "true"
+					} else {
+						useNodeSpecificDomains = "false"
+					}
 				}
 			}
 			if pattern, ok := labels["obiente.service_domain_pattern"].(string); ok && pattern != "" {
 				domainPattern = pattern
 			}
+		} else {
+			logger.Warn("[Orchestrator] Failed to parse node labels for node %s: %v", nodeID, err)
 		}
 	}
 
@@ -91,6 +122,10 @@ func (os *OrchestratorService) updateMicroserviceTraefikLabels() {
 	nodeSubdomain := os.getNodeSubdomain(&node)
 	enableNodeSpecific := (useNodeSpecificDomains == "true" || useNodeSpecificDomains == "1") && nodeSubdomain != ""
 	useNodeSubdomainPattern := domainPattern == "service-node"
+
+	// Log node subdomain configuration
+	logger.Info("[Orchestrator] Node %s subdomain config: subdomain=%s, useNodeSpecificDomains=%s, domainPattern=%s, enableNodeSpecific=%v",
+		nodeID, nodeSubdomain, useNodeSpecificDomains, domainPattern, enableNodeSpecific)
 
 	// Define all microservices that need Traefik labels
 	// IMPORTANT: api-gateway and dashboard ALWAYS use shared domains (no node subdomains)
@@ -111,6 +146,8 @@ func (os *OrchestratorService) updateMicroserviceTraefikLabels() {
 	}
 
 	// Update labels for each microservice
+	// Note: Only Swarm services are updated dynamically. For compose deployments,
+	// node subdomain configuration should be set via environment variables.
 	for _, svc := range microservices {
 		// API Gateway ALWAYS uses shared domain (api.DOMAIN) for load balancing
 		// Dashboard is handled separately in docker-compose with static labels
@@ -144,44 +181,42 @@ func (os *OrchestratorService) updateServiceTraefikLabels(svc MicroserviceConfig
 			// Pattern: node-service-name.domain (e.g., "node1-auth-service.obiente.cloud")
 			serviceDomain = fmt.Sprintf("%s-%s.%s", sanitizedNode, svc.BaseHost, domain)
 		}
+		logger.Debug("[Orchestrator] Using node-specific domain for %s: %s (subdomain: %s, pattern: %v)",
+			svc.Name, serviceDomain, nodeSubdomain, useNodeSubdomainPattern)
 	} else {
 		// Standard domain (e.g., "auth-service.obiente.cloud")
 		serviceDomain = fmt.Sprintf("%s.%s", svc.BaseHost, domain)
+		logger.Debug("[Orchestrator] Using shared domain for %s: %s", svc.Name, serviceDomain)
 	}
 
 	// Generate Traefik labels
 	labels := os.generateMicroserviceTraefikLabels(svc.Name, serviceDomain, svc.Port)
 
-	// Update Docker Swarm service labels
-	// In Swarm mode, we need to use docker service update
-	// Note: --label-add will add or update existing labels
-	// --label-rm will remove labels (ignored if label doesn't exist)
+	// Try to update as Swarm service first
 	updateArgs := []string{"service", "update"}
-
-	// Add/update all labels
 	for k, v := range labels {
 		updateArgs = append(updateArgs, "--label-add", fmt.Sprintf("%s=%s", k, v))
 	}
-
-	// Note: We don't need to explicitly remove old labels because --label-add will overwrite them
-	// However, if the domain pattern changed, old router rules might still exist
-	// Docker Swarm will handle this - new labels with same key will replace old ones
-
 	updateArgs = append(updateArgs, svc.Name)
 
-	// Execute docker service update
 	cmd := exec.CommandContext(ctx, "docker", updateArgs...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// Check if service doesn't exist (that's OK - it might not be deployed yet)
-		if strings.Contains(string(output), "service not found") || strings.Contains(string(output), "No such service") {
-			logger.Debug("[Orchestrator] Service %s not found, skipping label update", svc.Name)
+		outputStr := string(output)
+		// Check if service doesn't exist - might be a regular container instead
+		if strings.Contains(outputStr, "service not found") ||
+			strings.Contains(outputStr, "No such service") ||
+			strings.Contains(outputStr, "not found") {
+			// Service not found - might be a compose deployment
+			// For compose deployments, node subdomain should be configured via environment variables
+			logger.Debug("[Orchestrator] Service %s not found as Swarm service (may be compose deployment)", svc.Name)
+			logger.Debug("[Orchestrator] For compose deployments, configure node subdomain via NODE_SUBDOMAIN environment variable")
 			return nil
 		}
-		return fmt.Errorf("failed to update service labels: %v, output: %s", err, string(output))
+		return fmt.Errorf("failed to update service labels: %v, output: %s", err, outputStr)
 	}
 
-	logger.Debug("[Orchestrator] Updated Traefik labels for %s: %s", svc.Name, serviceDomain)
+	logger.Info("[Orchestrator] Updated Traefik labels for Swarm service %s: %s", svc.Name, serviceDomain)
 	return nil
 }
 

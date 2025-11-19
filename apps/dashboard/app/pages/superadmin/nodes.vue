@@ -48,18 +48,28 @@
     </template>
     <template #cell-config="{ value, row }">
       <div class="text-sm space-y-1">
-        <div v-if="row.config?.subdomain" class="text-text-secondary">
-          Subdomain: <span class="font-mono">{{ row.config.subdomain }}</span>
-        </div>
-        <div v-if="row.config?.useNodeSpecificDomains !== undefined" class="text-text-secondary">
-          Node-specific domains: {{ row.config.useNodeSpecificDomains ? 'Enabled' : 'Disabled' }}
-        </div>
-        <div v-if="row.config?.serviceDomainPattern" class="text-text-secondary">
-          Pattern: <span class="font-mono">{{ row.config.serviceDomainPattern }}</span>
-        </div>
-        <div v-if="!row.config?.subdomain && row.config?.useNodeSpecificDomains === undefined" class="text-text-muted text-xs">
-          Using defaults
-        </div>
+        <template v-if="isSwarmNode(row)">
+          <div v-if="row.config?.subdomain" class="text-text-secondary">
+            Subdomain: <span class="font-mono">{{ row.config.subdomain }}</span>
+          </div>
+          <div v-if="row.config?.useNodeSpecificDomains !== undefined" class="text-text-secondary">
+            Node-specific domains: {{ row.config.useNodeSpecificDomains ? 'Enabled' : 'Disabled' }}
+          </div>
+          <div v-if="row.config?.serviceDomainPattern" class="text-text-secondary">
+            Pattern: <span class="font-mono">{{ row.config.serviceDomainPattern }}</span>
+          </div>
+          <div v-if="!row.config?.subdomain && row.config?.useNodeSpecificDomains === undefined" class="text-text-muted text-xs">
+            Using defaults
+          </div>
+        </template>
+        <template v-else>
+          <div class="text-text-muted text-xs">
+            Compose deployment
+          </div>
+          <div class="text-text-muted text-xs mt-1">
+            Configure via env vars: NODE_SUBDOMAIN, USE_NODE_SPECIFIC_DOMAINS
+          </div>
+        </template>
       </div>
     </template>
     <template #cell-actions="{ row }">
@@ -71,39 +81,60 @@
   <OuiDialog v-model:open="editNodeDialogOpen" :title="`Configure Node: ${editingNode?.hostname || ''}`">
     <OuiStack gap="lg" v-if="editingNode">
       <OuiStack gap="md">
-        <OuiStack gap="xs">
-          <OuiText size="sm" weight="medium">Node Subdomain</OuiText>
-          <OuiText size="xs" color="muted">
-            Identifier for this node (e.g., "node1", "us-east-1"). Used for node-specific domains.
-          </OuiText>
-          <OuiInput
-            v-model="editNodeForm.subdomain"
-            type="text"
-            placeholder="node1"
-          />
-        </OuiStack>
+        <!-- Node subdomain configuration - only for Swarm stack services -->
+        <template v-if="isSwarmNode(editingNode)">
+          <OuiStack gap="xs">
+            <OuiText size="sm" weight="medium">Node Subdomain</OuiText>
+            <OuiText size="xs" color="muted">
+              Identifier for this node (e.g., "node1", "us-east-1"). Used for node-specific domains in Swarm deployments.
+            </OuiText>
+            <OuiInput
+              v-model="editNodeForm.subdomain"
+              type="text"
+              placeholder="node1"
+            />
+          </OuiStack>
 
-        <OuiStack gap="xs">
-          <OuiText size="sm" weight="medium">Use Node-Specific Domains</OuiText>
-          <OuiText size="xs" color="muted">
-            When enabled, microservices on this node use node-specific subdomains (e.g., "node1-auth-service.domain").
-          </OuiText>
-          <OuiSwitch
-            v-model="editNodeForm.useNodeSpecificDomains"
-            label="Enable node-specific domains"
-          />
-        </OuiStack>
+          <OuiStack gap="xs">
+            <OuiText size="sm" weight="medium">Use Node-Specific Domains</OuiText>
+            <OuiText size="xs" color="muted">
+              When enabled, microservices on this node use node-specific subdomains (e.g., "node1-auth-service.domain").
+              Only applies to Swarm stack services.
+            </OuiText>
+            <OuiSwitch
+              v-model="editNodeForm.useNodeSpecificDomains"
+              label="Enable node-specific domains"
+            />
+          </OuiStack>
 
-        <OuiStack gap="xs" v-if="editNodeForm.useNodeSpecificDomains">
-          <OuiText size="sm" weight="medium">Service Domain Pattern</OuiText>
-          <OuiText size="xs" color="muted">
-            Pattern for constructing node-specific domains.
-          </OuiText>
-          <OuiSelect
-            v-model="editNodeForm.serviceDomainPattern"
-            :items="domainPatternOptions"
-          />
-        </OuiStack>
+          <OuiStack gap="xs" v-if="editNodeForm.useNodeSpecificDomains">
+            <OuiText size="sm" weight="medium">Service Domain Pattern</OuiText>
+            <OuiText size="xs" color="muted">
+              Pattern for constructing node-specific domains.
+            </OuiText>
+            <OuiSelect
+              v-model="editNodeForm.serviceDomainPattern"
+              :items="domainPatternOptions"
+            />
+          </OuiStack>
+        </template>
+        <template v-else>
+          <OuiStack gap="xs">
+            <OuiText size="sm" weight="medium" color="muted">Node Subdomain Configuration</OuiText>
+            <OuiText size="xs" color="muted">
+              Node subdomain configuration is only available for Swarm stack services.
+              For compose deployments, configure via environment variables in your docker-compose file.
+            </OuiText>
+            <div class="mt-2 p-3 bg-surface-secondary rounded-md">
+              <OuiText size="xs" weight="medium" class="mb-2">Required Environment Variables:</OuiText>
+              <div class="space-y-1 font-mono text-xs">
+                <div><span class="text-text-secondary">NODE_SUBDOMAIN</span>=<span class="text-text-primary">node1</span></div>
+                <div><span class="text-text-secondary">USE_NODE_SPECIFIC_DOMAINS</span>=<span class="text-text-primary">true</span></div>
+                <div><span class="text-text-secondary">SERVICE_DOMAIN_PATTERN</span>=<span class="text-text-primary">node-service</span></div>
+              </div>
+            </div>
+          </OuiStack>
+        </template>
 
         <OuiStack gap="xs">
           <OuiText size="sm" weight="medium">Region</OuiText>
@@ -262,6 +293,12 @@ const tableRows = computed(() => {
   return filtered;
 });
 
+// Check if node is a Swarm node (not a compose deployment)
+// Swarm nodes have node IDs that don't start with "local-"
+const isSwarmNode = (node: any) => {
+  return node?.id && !node.id.startsWith("local-");
+};
+
 const getNodeActions = (node: any) => {
   return [
     {
@@ -289,11 +326,13 @@ const saveNodeConfig = async () => {
 
   isSaving.value = true;
   try {
+    // Only send subdomain config for Swarm nodes
+    const isSwarm = isSwarmNode(editingNode.value);
     await superAdmin.updateNodeConfig({
       nodeId: editingNode.value.id,
-      subdomain: editNodeForm.value.subdomain || undefined,
-      useNodeSpecificDomains: editNodeForm.value.useNodeSpecificDomains || undefined,
-      serviceDomainPattern: editNodeForm.value.serviceDomainPattern || undefined,
+      subdomain: isSwarm ? (editNodeForm.value.subdomain || undefined) : undefined,
+      useNodeSpecificDomains: isSwarm ? (editNodeForm.value.useNodeSpecificDomains || undefined) : undefined,
+      serviceDomainPattern: isSwarm ? (editNodeForm.value.serviceDomainPattern || undefined) : undefined,
       region: editNodeForm.value.region || undefined,
       maxDeployments: editNodeForm.value.maxDeployments ? parseInt(editNodeForm.value.maxDeployments, 10) : undefined,
     });
