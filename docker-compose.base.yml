@@ -6,10 +6,6 @@
 # (Docker Compose v2.20+). This allows YAML anchors to work across files.
 
 x-common-database: &common-database
-  # Database host configuration
-  # - Docker Swarm: Use service name (e.g., "postgres")
-  # - Netbird VPN: Use Netbird internal domain (e.g., "postgres.example.netbird")
-  # - Custom: Set DB_HOST environment variable to override
   DB_HOST: ${DB_HOST:-postgres}
   DB_PORT: ${DB_PORT:-5432}
   DB_USER: ${POSTGRES_USER:-obiente_postgres}
@@ -17,10 +13,6 @@ x-common-database: &common-database
   DB_NAME: ${POSTGRES_DB:-obiente}
 
 x-common-metrics-db: &common-metrics-db
-  # Metrics database host configuration
-  # - Docker Swarm: Use service name (e.g., "timescaledb")
-  # - Netbird VPN: Use Netbird internal domain (e.g., "timescaledb.example.netbird")
-  # - Custom: Set METRICS_DB_HOST environment variable to override
   METRICS_DB_HOST: ${METRICS_DB_HOST:-timescaledb}
   METRICS_DB_PORT: ${METRICS_DB_PORT:-5432}
   METRICS_DB_USER: ${METRICS_DB_USER:-obiente_postgres}
@@ -63,26 +55,21 @@ x-common-stripe: &common-stripe
   STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
 
 x-common-redis: &common-redis
-  # Redis host configuration
-  # - Docker Swarm: Use service name (e.g., "redis")
-  # - Netbird VPN: Use Netbird internal domain (e.g., "redis.example.netbird")
-  # - Custom: Set REDIS_HOST environment variable to override
   REDIS_HOST: ${REDIS_HOST:-redis}
   REDIS_PORT: ${REDIS_PORT:-6379}
   REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-  # REDIS_URL is constructed from REDIS_HOST, REDIS_PORT, and REDIS_PASSWORD if not explicitly set
-  # The application code will construct the URL with password if REDIS_PASSWORD is set
-  # Format: redis://:password@host:port (if password set) or redis://host:port (if no password)
   REDIS_URL: ${REDIS_URL:-}
 
 x-common-api-gateway: &common-api-gateway
   DOMAIN: ${DOMAIN:-localhost}
-  USE_TRAEFIK_ROUTING: ${USE_TRAEFIK_ROUTING:-false}
+  USE_TRAEFIK_ROUTING: ${USE_TRAEFIK_ROUTING:-true}
+  USE_DOMAIN_ROUTING: ${USE_DOMAIN_ROUTING:-true}
+  USE_NODE_SPECIFIC_DOMAINS: ${USE_NODE_SPECIFIC_DOMAINS:-false}
+  NODE_SUBDOMAIN: ${NODE_SUBDOMAIN:-}
+  SERVICE_DOMAIN_PATTERN: ${SERVICE_DOMAIN_PATTERN:-node-service}
 
 x-common-orchestrator: &common-orchestrator
   DOMAIN: ${DOMAIN:-localhost}
-  # Service routing mode: "internal" (default, direct service-to-service) or "traefik" (via Traefik with HTTPS)
-  # When USE_TRAEFIK_ROUTING=true, API gateway routes to services via Traefik using HTTPS
   ACME_EMAIL: ${ACME_EMAIL:-}
   REGISTRY_URL: ${REGISTRY_URL:-}
   REGISTRY_USERNAME: ${REGISTRY_USERNAME:-}
@@ -92,6 +79,7 @@ x-common-orchestrator: &common-orchestrator
   API_BASE_URL: ${API_BASE_URL:-http://api-gateway:3001}
   DEPLOYMENT_STRATEGY: ${DEPLOYMENT_STRATEGY:-least-loaded}
   MAX_DEPLOYMENTS_PER_NODE: ${MAX_DEPLOYMENTS_PER_NODE:-50}
+  USE_DOMAIN_ROUTING: ${USE_DOMAIN_ROUTING:-true}
 
 x-common-vps: &common-vps
   VPS_REGIONS: ${VPS_REGIONS:-}
