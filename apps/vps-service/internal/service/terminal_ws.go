@@ -18,7 +18,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
-	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
+	vpsorch "vps-service/orchestrator"
 
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
@@ -249,14 +249,14 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Get Proxmox client
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
+	proxmoxConfig, err := vpsorch.GetProxmoxConfig()
 	if err != nil {
 		sendError("Failed to get Proxmox config")
 		conn.Close(websocket.StatusInternalError, "Proxmox config error")
 		return
 	}
 
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
 	if err != nil {
 		sendError("Failed to create Proxmox client")
 		conn.Close(websocket.StatusInternalError, "Proxmox client error")
@@ -295,7 +295,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 
 	// Try SSH with web terminal key or password fallback
 	var sshConn *SSHConnection
-	vpsManager, err := orchestrator.NewVPSManager()
+	vpsManager, err := vpsorch.NewVPSManager()
 	if err == nil {
 		defer vpsManager.Close()
 		ipv4, _, err := vpsManager.GetVPSIPAddresses(ctx, initMsg.VPSID)
@@ -502,9 +502,9 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 func (s *Service) handleProxmoxTermProxy(
 	ctx context.Context,
 	clientConn *websocket.Conn,
-	termProxyInfo *orchestrator.TermProxyInfo,
-	proxmoxClient *orchestrator.ProxmoxClient,
-	proxmoxConfig *orchestrator.ProxmoxConfig,
+	termProxyInfo *vpsorch.TermProxyInfo,
+	proxmoxClient *vpsorch.ProxmoxClient,
+	proxmoxConfig *vpsorch.ProxmoxConfig,
 	nodeName string,
 	vmID int,
 	vps *database.VPSInstance,
@@ -762,7 +762,7 @@ func (s *Service) handleProxmoxTermProxy(
 
 // createSSHClientViaGateway creates an SSH client connection to a VPS via the gateway
 func (s *Service) createSSHClientViaGateway(ctx context.Context, vpsID, vpsIP string, sshConfig *ssh.ClientConfig) (*ssh.Client, error) {
-	vpsManager, err := orchestrator.NewVPSManager()
+	vpsManager, err := vpsorch.NewVPSManager()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create VPS manager: %w", err)
 	}
@@ -927,12 +927,12 @@ func (s *Service) getVPSRootPassword(ctx context.Context, vpsID string) (string,
 		return "", fmt.Errorf("VPS has no instance ID")
 	}
 
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
+	proxmoxConfig, err := vpsorch.GetProxmoxConfig()
 	if err != nil {
 		return "", fmt.Errorf("failed to get Proxmox config: %w", err)
 	}
 
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
 	if err != nil {
 		return "", fmt.Errorf("failed to create Proxmox client: %w", err)
 	}

@@ -51,7 +51,7 @@ func (m *LiveMetric) GameServerID() string {
 // MetricsStreamer handles live metrics streaming and periodic storage
 type MetricsStreamer struct {
 	serviceRegistry *registry.ServiceRegistry
-	previousStats   map[string]*containerStats
+	previousStats   map[string]*ContainerStats
 	statsMutex      sync.RWMutex
 
 	// Live metrics cache: deploymentID -> []LiveMetric (last N minutes)
@@ -96,7 +96,7 @@ func NewMetricsStreamer(serviceRegistry *registry.ServiceRegistry) *MetricsStrea
 	
 	return &MetricsStreamer{
 		serviceRegistry:          serviceRegistry,
-		previousStats:            make(map[string]*containerStats),
+		previousStats:            make(map[string]*ContainerStats),
 		liveMetrics:              make(map[string][]LiveMetric),
 		subscribers:              make(map[string][]*subscriberChannel),
 		ctx:                      ctx,
@@ -390,7 +390,7 @@ func (ms *MetricsStreamer) collectDeploymentStatsParallel(locations []database.D
 				}
 
 				// Use circuit breaker and retry for Docker API calls
-				var currentStats *containerStats
+				var currentStats *ContainerStats
 				var err error
 				
 				err = ms.circuitBreaker.Call(func() error {
@@ -553,7 +553,7 @@ func (ms *MetricsStreamer) collectGameServerStatsParallel(locations []database.G
 }
 
 // getContainerStatsWithRetry retrieves container stats with exponential backoff retry
-func (ms *MetricsStreamer) getContainerStatsWithRetry(containerID string) (*containerStats, error) {
+func (ms *MetricsStreamer) getContainerStatsWithRetry(containerID string) (*ContainerStats, error) {
 	var lastErr error
 	backoff := ms.config.DockerAPIRetryInitialBackoff
 	
@@ -579,7 +579,7 @@ func (ms *MetricsStreamer) getContainerStatsWithRetry(containerID string) (*cont
 }
 
 // getContainerStats retrieves stats from Docker
-func (ms *MetricsStreamer) getContainerStats(containerID string) (*containerStats, error) {
+func (ms *MetricsStreamer) getContainerStats(containerID string) (*ContainerStats, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), ms.config.DockerAPITimeout)
 	defer cancel()
 
@@ -655,7 +655,7 @@ func (ms *MetricsStreamer) getContainerStats(containerID string) (*containerStat
 		}
 	}
 
-	return &containerStats{
+	return &ContainerStats{
 		CPUUsage:       cpuUsage,
 		MemoryUsage:    int64(statsJSON.MemoryStats.Usage),
 		NetworkRxBytes: networkRx,

@@ -8,7 +8,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
-	githubclient "github.com/obiente/cloud/apps/shared/pkg/services/github"
+	githubclient "deployments-service/internal/github"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
 

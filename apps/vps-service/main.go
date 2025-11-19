@@ -17,7 +17,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
-	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
+	vpsorch "vps-service/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
 	vpssvc "vps-service/internal/service"
 
@@ -71,9 +71,9 @@ func main() {
 
 	// Initialize VPS manager
 	// Create VPS manager directly (orchestrator service doesn't manage VPS manager)
-	var vpsManager *orchestrator.VPSManager
+	var vpsManager *vpsorch.VPSManager
 	var err error
-	vpsManager, err = orchestrator.NewVPSManager()
+	vpsManager, err = vpsorch.NewVPSManager()
 	if err != nil {
 		logger.Warn("⚠️  Failed to create VPS manager: %v", err)
 		logger.Warn("⚠️  VPS operations will not work until Proxmox is configured")

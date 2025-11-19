@@ -222,9 +222,18 @@ func InitDatabase() error {
 	logger.Info("Deployment tracking initialized")
 
 	// Initialize metrics database (separate connection for metrics)
-	if err := InitMetricsDatabase(); err != nil {
-		logger.Warn("Metrics database initialization failed: %v. Metrics may not work correctly.", err)
-		// Don't fail main initialization if metrics DB fails
+	// Only initialize if explicitly requested via METRICS_DB_NAME or if service needs it
+	// This prevents services that don't need metrics from trying to connect to metrics DB
+	metricsDBName := os.Getenv("METRICS_DB_NAME")
+	shouldInitMetrics := metricsDBName != "" || os.Getenv("INIT_METRICS_DB") == "true"
+	
+	if shouldInitMetrics {
+		if err := InitMetricsDatabase(); err != nil {
+			logger.Warn("Metrics database initialization failed: %v. Metrics may not work correctly.", err)
+			// Don't fail main initialization if metrics DB fails
+		}
+	} else {
+		logger.Debug("Skipping metrics database initialization (not required for this service)")
 	}
 
 	return nil

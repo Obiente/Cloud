@@ -14,11 +14,11 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/pricing"
 	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
-	vpsservice "github.com/obiente/cloud/apps/shared/pkg/services/vps"
 	"github.com/obiente/cloud/apps/shared/pkg/stripe"
+	vpsorch "github.com/obiente/cloud/apps/vps-service/orchestrator"
+	vpsservice "github.com/obiente/cloud/apps/vps-service/pkg/service"
 
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 	billingv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/billing/v1"
@@ -3110,13 +3110,13 @@ func (s *Service) SuperadminResizeVPS(ctx context.Context, req *connect.Request[
 	}
 
 	// Get Proxmox configuration
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
+	proxmoxConfig, err := vpsorch.GetProxmoxConfig()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
 	}
 
 	// Create Proxmox client
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
 	}
@@ -3212,7 +3212,7 @@ func (s *Service) SuperadminResizeVPS(ctx context.Context, req *connect.Request[
 			cloudInitConfig, err := configService.LoadCloudInitConfig(ctx, &vps)
 			if err != nil {
 				logger.Warn("[SuperAdmin] Failed to load cloud-init config: %v, using default", err)
-				cloudInitConfig = &orchestrator.CloudInitConfig{
+				cloudInitConfig = &vpsorch.CloudInitConfig{
 					PackageUpdate:    boolPtr(true),
 					PackageUpgrade:   boolPtr(false),
 					SSHInstallServer: boolPtr(true),
@@ -3485,7 +3485,7 @@ func (s *Service) SuperadminForceStopVPS(ctx context.Context, req *connect.Reque
 	}
 
 	// Get VPS manager and force stop
-	vpsManager, err := orchestrator.NewVPSManager()
+	vpsManager, err := vpsorch.NewVPSManager()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS manager: %w", err))
 	}
@@ -3535,7 +3535,7 @@ func (s *Service) SuperadminForceDeleteVPS(ctx context.Context, req *connect.Req
 	}
 
 	// Get VPS manager
-	vpsManager, err := orchestrator.NewVPSManager()
+	vpsManager, err := vpsorch.NewVPSManager()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create VPS manager: %w", err))
 	}
@@ -3582,21 +3582,21 @@ func formatBytes(bytes int64) string {
 }
 
 // protoToCloudInitConfigForSuperadmin converts proto CloudInitConfig to orchestrator format
-func protoToCloudInitConfigForSuperadmin(proto *vpsv1.CloudInitConfig) *orchestrator.CloudInitConfig {
+func protoToCloudInitConfigForSuperadmin(proto *vpsv1.CloudInitConfig) *vpsorch.CloudInitConfig {
 	if proto == nil {
 		return nil
 	}
 
-	config := &orchestrator.CloudInitConfig{
-		Users:      make([]orchestrator.CloudInitUser, 0, len(proto.Users)),
+	config := &vpsorch.CloudInitConfig{
+		Users:      make([]vpsorch.CloudInitUser, 0, len(proto.Users)),
 		Packages:   proto.Packages,
 		Runcmd:     proto.Runcmd,
-		WriteFiles: make([]orchestrator.CloudInitWriteFile, 0, len(proto.WriteFiles)),
+		WriteFiles: make([]vpsorch.CloudInitWriteFile, 0, len(proto.WriteFiles)),
 	}
 
 	// Convert users
 	for _, userProto := range proto.Users {
-		user := orchestrator.CloudInitUser{
+		user := vpsorch.CloudInitUser{
 			Name:              userProto.GetName(),
 			SSHAuthorizedKeys: userProto.SshAuthorizedKeys,
 			Groups:            userProto.Groups,
@@ -3666,7 +3666,7 @@ func protoToCloudInitConfigForSuperadmin(proto *vpsv1.CloudInitConfig) *orchestr
 
 	// Convert write files
 	for _, fileProto := range proto.WriteFiles {
-		file := orchestrator.CloudInitWriteFile{
+		file := vpsorch.CloudInitWriteFile{
 			Path:    fileProto.GetPath(),
 			Content: fileProto.GetContent(),
 		}

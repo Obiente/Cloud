@@ -10,7 +10,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
+	vpsorch "vps-service/orchestrator"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
@@ -112,7 +112,7 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 	vpsID := fmt.Sprintf("vps-%d", time.Now().UnixNano())
 
 	// Convert proto to VPSConfig
-	config := &orchestrator.VPSConfig{
+	config := &vpsorch.VPSConfig{
 		VPSID:          vpsID,
 		Name:           req.Msg.GetName(),
 		Description:    req.Msg.Description,
@@ -140,16 +140,16 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 	// Convert cloud-init configuration from proto
 	if req.Msg.CloudInit != nil {
 		cloudInitProto := req.Msg.GetCloudInit()
-		cloudInit := &orchestrator.CloudInitConfig{
-			Users:            make([]orchestrator.CloudInitUser, 0, len(cloudInitProto.Users)),
+		cloudInit := &vpsorch.CloudInitConfig{
+			Users:            make([]vpsorch.CloudInitUser, 0, len(cloudInitProto.Users)),
 			Packages:         cloudInitProto.Packages,
 			Runcmd:           cloudInitProto.Runcmd,
-			WriteFiles:       make([]orchestrator.CloudInitWriteFile, 0, len(cloudInitProto.WriteFiles)),
+			WriteFiles:       make([]vpsorch.CloudInitWriteFile, 0, len(cloudInitProto.WriteFiles)),
 		}
 		
 		// Convert users
 		for _, userProto := range cloudInitProto.Users {
-			user := orchestrator.CloudInitUser{
+			user := vpsorch.CloudInitUser{
 				Name:              userProto.GetName(),
 				SSHAuthorizedKeys: userProto.SshAuthorizedKeys,
 			}
@@ -219,7 +219,7 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 		
 		// Convert write files
 		for _, fileProto := range cloudInitProto.WriteFiles {
-			file := orchestrator.CloudInitWriteFile{
+			file := vpsorch.CloudInitWriteFile{
 				Path:    fileProto.GetPath(),
 				Content: fileProto.GetContent(),
 			}
@@ -329,9 +329,9 @@ func (s *Service) GetVPS(ctx context.Context, req *connect.Request[vpsv1.GetVPSR
 
 	// If VPS has an instance ID, try to fetch latest disk size and IP addresses from Proxmox
 	if vps.InstanceID != nil {
-		proxmoxConfig, err := orchestrator.GetProxmoxConfig()
+		proxmoxConfig, err := vpsorch.GetProxmoxConfig()
 		if err == nil {
-			proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+			proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
 			if err == nil {
 				vmIDInt := 0
 				fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)

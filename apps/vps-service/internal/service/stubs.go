@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
-	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
+	vpsorch "vps-service/orchestrator"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
@@ -107,12 +107,12 @@ func (s *Service) GetVPSMetrics(ctx context.Context, req *connect.Request[vpsv1.
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no instance ID"))
 	}
 
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
+	proxmoxConfig, err := vpsorch.GetProxmoxConfig()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
 	}
 
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
 	}
