@@ -85,143 +85,121 @@ func CORS(config *CORSConfig) func(http.Handler) http.Handler {
 		config = DefaultCORSConfig()
 	}
 
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			origin := r.Header.Get("Origin")
+		return func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				origin := r.Header.Get("Origin")
+				isPreflight := r.Method == http.MethodOptions
 
-			// Check if origin is allowed
-			allowedOrigin := ""
+				// Check if origin is allowed
+				allowedOrigin := ""
+				isWildcard := len(config.AllowedOrigins) == 1 && config.AllowedOrigins[0] == "*"
 
-			// Check if wildcard is configured
-			isWildcard := len(config.AllowedOrigins) == 1 && config.AllowedOrigins[0] == "*"
-			
-			if isWildcard {
-				// When credentials are enabled, we MUST echo the origin, not use "*"
-				// Browsers reject "Access-Control-Allow-Origin: *" with credentials
-				if config.AllowCredentials && origin != "" {
-					// Always echo the origin when wildcard is configured and credentials are enabled
-					allowedOrigin = origin
-					logger.Debug("[CORS] Wildcard mode with credentials: echoing origin %s", origin)
-				} else if !config.AllowCredentials {
-					allowedOrigin = "*"
-					logger.Debug("[CORS] Wildcard mode without credentials: using *")
-				} else if origin == "" {
-					// No origin header - might be same-origin request
-					// For streaming endpoints, we should still allow the request
-					// Note: Cannot use "*" with credentials, but since there's no origin header,
-					// this might be a same-origin request, so we'll allow it
-					allowedOrigin = "*"
-					logger.Debug("[CORS] Wildcard mode: no origin header, allowing with *")
+				// CORS Best Practice: Never use wildcard (*) with credentials
+				// If wildcard is configured but credentials are enabled, treat as invalid config
+				if isWildcard && config.AllowCredentials {
+					logger.Warn("[CORS] Invalid configuration: wildcard (*) cannot be used with credentials. Ignoring wildcard.")
+					isWildcard = false
+					// Don't allow any origin - this is a configuration error
 				}
-			} else if origin != "" {
-				// Check if the specific origin is in the allowed list
-				for _, allowed := range config.AllowedOrigins {
-					// Normalize origins for comparison (trim trailing slashes)
-					normalizedOrigin := strings.TrimSuffix(origin, "/")
-					normalizedAllowed := strings.TrimSuffix(allowed, "/")
-					
-					if normalizedAllowed == normalizedOrigin || allowed == "*" {
-						allowedOrigin = origin
-						logger.Debug("[CORS] Origin %s matched allowed origin %s", origin, allowed)
-						break
+
+				// Determine if origin is allowed
+				if origin != "" {
+					// Cross-origin request - must validate origin
+					if isWildcard {
+						// Wildcard allows all origins (but only without credentials)
+						allowedOrigin = "*"
+						logger.Debug("[CORS] Wildcard mode: allowing origin %s", origin)
+					} else {
+						// Check if the specific origin is in the allowed list
+						for _, allowed := range config.AllowedOrigins {
+							// Normalize origins for comparison (trim trailing slashes and whitespace)
+							normalizedOrigin := strings.TrimSpace(strings.TrimSuffix(origin, "/"))
+							normalizedAllowed := strings.TrimSpace(strings.TrimSuffix(allowed, "/"))
+							
+							if normalizedAllowed == normalizedOrigin {
+								// Echo the exact origin (CORS best practice)
+								allowedOrigin = origin
+								logger.Debug("[CORS] Origin %s matched allowed origin %s", origin, allowed)
+								break
+							}
+						}
+						
+						if allowedOrigin == "" {
+							logger.Debug("[CORS] Origin %s NOT in allowed list: %v", origin, config.AllowedOrigins)
+							// CORS Best Practice: Do NOT set CORS headers for disallowed origins
+							// This prevents browsers from reading the response
+							
+							// Handle preflight request with disallowed origin
+							if isPreflight {
+								// CORS Best Practice: Return 403 Forbidden for preflight requests with disallowed origins
+								w.WriteHeader(http.StatusForbidden)
+								return
+							}
+							// For non-preflight requests, continue without CORS headers
+							// Browser will block the response, which is correct
+							next.ServeHTTP(w, r)
+							return
+						}
+					}
+				} else {
+					// No Origin header - might be same-origin request
+					// CORS Best Practice: Same-origin requests don't need CORS headers
+					// Only set CORS headers for cross-origin requests
+					// If wildcard is configured without credentials, allow it
+					if isWildcard && !config.AllowCredentials {
+						allowedOrigin = "*"
 					}
 				}
-				
-				if allowedOrigin == "" {
-					logger.Debug("[CORS] Origin %s NOT in allowed list: %v", origin, config.AllowedOrigins)
-				}
-			} else {
-				// No Origin header - might be same-origin request or browser didn't send it
-				// For streaming endpoints and API calls, we should still allow if wildcard is configured
-				if isWildcard && !config.AllowCredentials {
-					allowedOrigin = "*"
-					logger.Debug("[CORS] No origin header but wildcard configured, allowing")
-				} else if !isWildcard && len(config.AllowedOrigins) > 0 {
-					// With specific origins configured, if there's no origin header, it might be same-origin
-					// For error responses (like 504), we should still set CORS headers to allow the browser
-					// to read the error. Use the first allowed origin as a fallback.
-					// Note: This is a best-effort approach - ideally we'd know the actual origin
-					allowedOrigin = config.AllowedOrigins[0]
-					logger.Debug("[CORS] No origin header but specific origins configured, using first allowed origin: %s", allowedOrigin)
-				} else if r.Method == http.MethodOptions {
-					logger.Debug("[CORS] OPTIONS request with no Origin header")
-				}
-			}
 
-			// Set CORS headers if origin is allowed
-			// Always set headers when we have an allowed origin to ensure CORS headers
-			// are present even on error responses (like 504 timeouts)
-			if allowedOrigin != "" {
-				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
-
-				// Vary header is important when echoing origin
-				if allowedOrigin != "*" {
-					w.Header().Add("Vary", "Origin")
-				}
-
-				if config.AllowCredentials {
-					w.Header().Set("Access-Control-Allow-Credentials", "true")
-				}
-
-				if len(config.AllowedMethods) > 0 {
-					w.Header().Set("Access-Control-Allow-Methods", strings.Join(config.AllowedMethods, ", "))
-				}
-
-				if len(config.AllowedHeaders) > 0 {
-					w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowedHeaders, ", "))
-				}
-
-				if len(config.ExposedHeaders) > 0 {
-					w.Header().Set("Access-Control-Expose-Headers", strings.Join(config.ExposedHeaders, ", "))
-				}
-
-				if config.MaxAge != "" {
-					w.Header().Set("Access-Control-Max-Age", config.MaxAge)
-				}
-			} else if isWildcard {
-				// Wildcard is configured but no origin header - still set headers for same-origin requests
-				// This ensures CORS headers are present on all responses (including errors)
-				w.Header().Set("Access-Control-Allow-Origin", "*")
-				if len(config.AllowedMethods) > 0 {
-					w.Header().Set("Access-Control-Allow-Methods", strings.Join(config.AllowedMethods, ", "))
-				}
-				if len(config.AllowedHeaders) > 0 {
-					w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowedHeaders, ", "))
-				}
-				logger.Debug("[CORS] Wildcard configured, setting CORS headers without origin header")
-			} else if origin != "" {
-				// Origin was provided but didn't match - still set headers for error responses
-				// This allows browsers to read error messages even if origin doesn't match
-				// Use the first allowed origin as a fallback
-				if len(config.AllowedOrigins) > 0 {
-					allowedOrigin = config.AllowedOrigins[0]
+				// Set CORS headers only if origin is allowed
+				if allowedOrigin != "" {
+					// CORS Best Practice: Echo the exact origin (not "*" when credentials are enabled)
 					w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
-					w.Header().Add("Vary", "Origin")
+					
+					// CORS Best Practice: Always set Vary: Origin when echoing specific origins
+					if allowedOrigin != "*" {
+						w.Header().Add("Vary", "Origin")
+					}
+					
 					if config.AllowCredentials {
 						w.Header().Set("Access-Control-Allow-Credentials", "true")
 					}
+					
+					// Set other CORS headers
 					if len(config.AllowedMethods) > 0 {
 						w.Header().Set("Access-Control-Allow-Methods", strings.Join(config.AllowedMethods, ", "))
 					}
+					
 					if len(config.AllowedHeaders) > 0 {
 						w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowedHeaders, ", "))
 					}
-					logger.Debug("[CORS] Origin %s not in allowed list, but setting CORS headers with first allowed origin for error responses", origin)
-				} else {
-					logger.Debug("[CORS] Origin %s not allowed, not setting CORS headers", origin)
+					
+					if len(config.ExposedHeaders) > 0 {
+						w.Header().Set("Access-Control-Expose-Headers", strings.Join(config.ExposedHeaders, ", "))
+					}
+					
+					if config.MaxAge != "" {
+						w.Header().Set("Access-Control-Max-Age", config.MaxAge)
+					}
 				}
-			}
 
-			// Handle preflight OPTIONS request
-			if r.Method == http.MethodOptions {
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
+				// Handle preflight OPTIONS request
+				if isPreflight {
+					// CORS Best Practice: For preflight, return 204 No Content if origin is allowed
+					if allowedOrigin != "" {
+						w.WriteHeader(http.StatusNoContent)
+						return
+					} else {
+						// Origin not allowed for preflight
+						w.WriteHeader(http.StatusForbidden)
+						return
+					}
+				}
 
-			// Continue to next handler
-			next.ServeHTTP(w, r)
-		})
-	}
+				// Continue to next handler
+				next.ServeHTTP(w, r)
+			})
+		}
 }
 
 // CORSHandler wraps an http.Handler with CORS middleware

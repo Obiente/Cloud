@@ -78,7 +78,6 @@ x-common-redis: &common-redis
 x-common-api-gateway: &common-api-gateway
   DOMAIN: ${DOMAIN:-localhost}
   USE_TRAEFIK_ROUTING: ${USE_TRAEFIK_ROUTING:-false}
-  SKIP_TLS_VERIFY: ${SKIP_TLS_VERIFY:-false}
 
 x-common-orchestrator: &common-orchestrator
   DOMAIN: ${DOMAIN:-localhost}
