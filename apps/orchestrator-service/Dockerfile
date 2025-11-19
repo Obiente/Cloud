@@ -44,8 +44,9 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
 # Final stage
 FROM alpine:latest
 
-# Install CA certificates, curl, and netcat for health checks
-RUN apk --no-cache add ca-certificates curl netcat-openbsd
+# Install CA certificates, curl, netcat for health checks, and Docker CLI
+# Docker CLI is needed for network operations and Traefik label updates
+RUN apk --no-cache add ca-certificates curl netcat-openbsd docker-cli
 
 WORKDIR /app
 
