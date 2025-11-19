@@ -4,13 +4,28 @@ This guide explains how to enable IPv6 support for Traefik in Docker Swarm, whic
 
 ## Prerequisites
 
-1. **Docker must have IPv6 enabled** in the daemon configuration
+1. **ALL Docker Swarm nodes (managers and workers) must have IPv6 enabled** in the daemon configuration
 2. **Host must have IPv6 connectivity** configured
 3. **Firewall must allow IPv6 traffic** on ports 80 and 443
 
-## Step 1: Enable IPv6 in Docker Daemon
+## Step 1: Enable IPv6 in Docker Daemon on ALL Nodes
 
-Edit `/etc/docker/daemon.json` (create if it doesn't exist):
+**IMPORTANT**: You must enable IPv6 on **ALL nodes** in your Docker Swarm cluster (both managers and workers). If any node doesn't have IPv6 enabled, you'll get "networkallocator: could not find local network state" errors.
+
+### Option A: Use the Setup Script (Recommended)
+
+Run the setup script on each node:
+
+```bash
+# On each node (manager or worker)
+./scripts/setup-all-nodes.sh
+```
+
+This script will automatically configure IPv6 in Docker daemon.
+
+### Option B: Manual Configuration
+
+On **each node**, edit `/etc/docker/daemon.json` (create if it doesn't exist):
 
 ```json
 {
@@ -21,18 +36,21 @@ Edit `/etc/docker/daemon.json` (create if it doesn't exist):
 
 **Note**: This uses the Obiente Cloud IPv6 subnet `fd00:0b1e:c10d::/64` (ULA - Unique Local Address range).
 
-Restart Docker:
+On **each node**, restart Docker:
 ```bash
 sudo systemctl restart docker
 ```
 
-## Step 2: Verify Docker IPv6 Support
+## Step 2: Verify Docker IPv6 Support on ALL Nodes
+
+**IMPORTANT**: Check IPv6 on **every node** in your cluster:
 
 ```bash
+# On each node
 docker info | grep -i ipv6
 ```
 
-You should see IPv6-related information if IPv6 is enabled.
+You should see IPv6-related information if IPv6 is enabled. If any node doesn't show IPv6, that node cannot participate in the overlay network and will cause allocation errors.
 
 ## Step 3: Configure Docker Swarm Network
 
@@ -98,6 +116,27 @@ sudo ip6tables -A INPUT -p tcp --dport 443 -j ACCEPT
 ```
 
 ## Troubleshooting
+
+### Issue: "networkallocator: could not find local network state" errors
+
+This error occurs when a Docker Swarm node doesn't have IPv6 enabled but the overlay network requires it.
+
+**Solution**:
+1. **Check which node is failing**: Look at the error message for `node.id=...`
+2. **Find the node**: `docker node ls` to see all nodes
+3. **Check IPv6 on that node**: SSH to the node and run `docker info | grep -i ipv6`
+4. **Enable IPv6**: If IPv6 is not enabled, configure `/etc/docker/daemon.json` and restart Docker
+5. **Verify**: After restarting Docker, verify IPv6 is enabled
+
+**Quick check on all nodes**:
+```bash
+# From manager node, check all nodes
+for node in $(docker node ls -q); do
+    echo "Node: $node"
+    docker node inspect $node --format '{{.Description.Hostname}}'
+    # SSH to node and check: docker info | grep -i ipv6
+done
+```
 
 ### Issue: IPv6 connectivity fails
 
