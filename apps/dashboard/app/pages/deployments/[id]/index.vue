@@ -324,6 +324,7 @@
               </template>
               <template #build-logs>
                 <DeploymentBuildLogs
+                  :key="`build-logs-${id}`"
                   ref="buildLogsRef"
                   :deployment-id="id"
                   :organization-id="orgId"
@@ -470,7 +471,7 @@
   const {
     data: deploymentData,
     pending,
-    refresh: refreshDeployment,
+    refresh: refreshDeploymentBase,
     error: fetchError,
   } = useClientFetch(
     `deployment-${id.value}`,
@@ -506,6 +507,50 @@
       watch: [orgId, id],
     }
   );
+
+  // Custom refresh function that doesn't set pending state (for polling)
+  // This prevents UI jumps during background updates
+  const refreshDeployment = async (silent = false) => {
+    if (silent) {
+      // Silent refresh: update data without triggering pending state
+      try {
+        if (!orgId.value) {
+          return;
+        }
+        const response = await client.getDeployment({
+          organizationId: orgId.value,
+          deploymentId: id.value,
+        });
+        // Directly update the data without going through the composable
+        // This prevents the pending state from being set
+        if (response.deployment) {
+          deploymentData.value = response.deployment;
+          accessError.value = null;
+        }
+      } catch (err) {
+        // Only handle errors silently - don't update state on error during polling
+        // The next non-silent refresh will handle errors properly
+        if (err instanceof ConnectError) {
+          if (
+            err.code === Code.PermissionDenied ||
+            err.code === Code.NotFound
+          ) {
+            // Only set access error if it's a new error (not during polling)
+            if (!silent) {
+              accessError.value = err;
+            }
+          }
+        }
+        // Don't throw during silent refresh to prevent breaking the UI
+        if (!silent) {
+          throw err;
+        }
+      }
+    } else {
+      // Normal refresh: use the base refresh function
+      return refreshDeploymentBase();
+    }
+  };
 
   // Watch for fetch errors and handle access errors
   watch(fetchError, (err) => {
@@ -814,13 +859,25 @@
       }
 
       // Refresh both deployment and containers
+      // Use a flag to prevent concurrent refreshes
+      if (isRefreshing.value) {
+        return; // Skip if already refreshing
+      }
+      
       try {
-        await refreshDeployment();
-        await loadContainers();
+        isRefreshing.value = true;
+        // Use silent refresh to prevent UI jumps - this doesn't set pending state
+        // Use Promise.allSettled to prevent one failure from stopping the other
+        await Promise.allSettled([
+          refreshDeployment(true), // silent = true to prevent pending state
+          loadContainers(),
+        ]);
       } catch (error) {
         console.error("Failed to poll deployment status:", error);
+      } finally {
+        isRefreshing.value = false;
       }
-    }, 2000); // Poll every 2 seconds
+    }, 3000); // Poll every 3 seconds (reduced from 2 to minimize revalidation impact)
   };
 
   const stopPolling = () => {

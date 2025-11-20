@@ -88,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, shallowRef } from "vue";
 import { ArrowPathIcon, ArrowTopRightOnSquareIcon } from "@heroicons/vue/24/outline";
 import { useConnectClient } from "~/lib/connect-client";
 import { DeploymentService, BuildStatus, type Build } from "@obiente/proto";
@@ -113,13 +113,16 @@ const effectiveOrgId = computed(
 );
 
 const client = useConnectClient(DeploymentService);
-const logs = ref<LogLine[]>([]);
+// Use shallowRef for logs to prevent deep reactivity issues during revalidation
+const logs = shallowRef<LogLine[]>([]);
 const isFollowing = ref(false);
 const isStreaming = ref(false);
 const isLoading = ref(false);
 const showTimestamps = ref(true);
 const latestBuild = ref<Build | null>(null);
 let streamController: AbortController | null = null;
+// Track if we're in the middle of streaming to prevent restart during revalidation
+const isStreamingInternal = ref(false);
 
 interface LogLine {
   line: string;
@@ -176,10 +179,13 @@ const toggleFollow = () => {
 };
 
 const startStream = async () => {
-  if (isFollowing.value) return;
+  // Prevent starting a new stream if we're already streaming (e.g., during revalidation)
+  if (isFollowing.value || isStreamingInternal.value) return;
+  
   isFollowing.value = true;
   isLoading.value = true;
   isStreaming.value = true;
+  isStreamingInternal.value = true;
 
   let hasReceivedLogs = false;
 
@@ -196,9 +202,16 @@ const startStream = async () => {
     isLoading.value = false;
 
     for await (const update of stream) {
+      // Check if stream was aborted (e.g., during revalidation)
+      if (streamController?.signal.aborted) {
+        break;
+      }
+      
       if (update.line) {
         hasReceivedLogs = true;
-        logs.value.push({
+        // Create a new array to trigger reactivity without deep watching
+        const newLogs = [...logs.value];
+        newLogs.push({
           line: update.line,
           timestamp: update.timestamp
             ? new Date(
@@ -209,6 +222,7 @@ const startStream = async () => {
           stderr: update.stderr || false,
           logLevel: update.logLevel || undefined, // Include log level from proto
         });
+        logs.value = newLogs;
       }
     }
   } catch (error: any) {
@@ -245,6 +259,7 @@ const startStream = async () => {
     isLoading.value = false;
     isFollowing.value = false;
     isStreaming.value = false;
+    isStreamingInternal.value = false;
   }
 };
 
@@ -255,6 +270,7 @@ const stopStream = () => {
   }
   isFollowing.value = false;
   isStreaming.value = false;
+  isStreamingInternal.value = false;
 };
 
 const restartStream = () => {
@@ -273,8 +289,8 @@ defineExpose({
 const loadLatestBuildLogs = async () => {
   if (!effectiveOrgId.value || !props.deploymentId) return;
   
-  // Don't load if we're streaming (active build)
-  if (isStreaming.value || props.autoStart) return;
+  // Don't load if we're streaming (active build) - this prevents reset during revalidation
+  if (isStreaming.value || isStreamingInternal.value || props.autoStart) return;
   
   isLoading.value = true;
   try {
@@ -355,6 +371,9 @@ const getBuildStatusLabel = (status: BuildStatus): string => {
 };
 
 onMounted(() => {
+  // Only start if we're not already streaming (prevents restart during revalidation)
+  if (isStreamingInternal.value) return;
+  
   // Auto-start following if autoStart is enabled
   if (props.autoStart) {
     startStream();
