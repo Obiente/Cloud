@@ -91,8 +91,8 @@ DOMAIN=yourdomain.com
 # Authentication
 ZITADEL_URL=https://auth.yourdomain.com
 
-# DNS (required for deployments)
-TRAEFIK_IPS="us-east-1:1.2.3.4"
+# DNS (required for deployments and game servers)
+NODE_IPS="us-east-1:1.2.3.4"
 ```
 
 ## Verifying Configuration
@@ -158,6 +158,6 @@ The deploy script handles comments (lines starting with `#`) automatically.
 For multi-line values, use quotes:
 
 ```bash
-TRAEFIK_IPS="region1:ip1,ip2;region2:ip3,ip4"
+NODE_IPS="region1:ip1,ip2;region2:ip3,ip4"
 ```
 

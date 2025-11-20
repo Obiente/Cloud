@@ -48,11 +48,11 @@ ns3.my.obiente.cloud.    IN    A    <NODE_3_IP>
 
 The DNS servers are configured via environment variables in `docker-compose.swarm.yml`:
 
-- `TRAEFIK_IPS`: Traefik IPs per region (format: `"region1:ip1,ip2;region2:ip3,ip4"`)
+- `NODE_IPS`: Node IPs per region (format: `"region1:ip1,ip2;region2:ip3,ip4"`)
 
 Example:
 ```bash
-TRAEFIK_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"
+NODE_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"
 ```
 
 ### Step 4: Verify DNS Resolution

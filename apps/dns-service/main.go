@@ -26,24 +26,24 @@ const (
 )
 
 type DNSServer struct {
-	db           *gorm.DB
-	traefikIPMap map[string][]string
-	redisCache   *database.RedisCache
+	db         *gorm.DB
+	nodeIPMap  map[string][]string
+	redisCache *database.RedisCache
 }
 
 func NewDNSServer() (*DNSServer, error) {
 	s := &DNSServer{}
 
-	// Parse Traefik IPs from environment
-	traefikIPsEnv := os.Getenv("TRAEFIK_IPS")
-	if traefikIPsEnv == "" {
-		return nil, fmt.Errorf("TRAEFIK_IPS environment variable is required")
+	// Parse node IPs from environment
+	nodeIPsEnv := os.Getenv("NODE_IPS")
+	if nodeIPsEnv == "" {
+		return nil, fmt.Errorf("NODE_IPS environment variable is required")
 	}
 
 	var err error
-	s.traefikIPMap, err = database.ParseTraefikIPsFromEnv(traefikIPsEnv)
+	s.nodeIPMap, err = database.ParseNodeIPsFromEnv(nodeIPsEnv)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse TRAEFIK_IPS: %w", err)
+		return nil, fmt.Errorf("failed to parse NODE_IPS: %w", err)
 	}
 
 	// DNS_IPS is optional - used for documentation/deployment purposes
@@ -509,7 +509,7 @@ func (s *DNSServer) handleDeploymentAQuery(ctx context.Context, msg *dns.Msg, do
 	}
 
 	// Query database for deployment location using shared database functions
-	ips, err := database.GetDeploymentTraefikIP(deploymentID, s.traefikIPMap)
+	ips, err := database.GetDeploymentNodeIP(deploymentID, s.nodeIPMap)
 	if err != nil {
 		log.Printf("[DNS] Failed to resolve deployment %s locally: %v", deploymentID, err)
 		return false
@@ -887,7 +887,7 @@ func handlePushDNSRecords(w http.ResponseWriter, r *http.Request) {
 }
 
 // startDNSPusher starts a goroutine that periodically pushes DNS records to the production API
-func startDNSPusher(productionAPIURL, apiKey, sourceAPI string, pushInterval time.Duration, ttl int64, traefikIPMap map[string][]string) {
+func startDNSPusher(productionAPIURL, apiKey, sourceAPI string, pushInterval time.Duration, ttl int64, nodeIPMap map[string][]string) {
 	// Normalize production API URL (ensure it ends with /dns/push/batch)
 	baseURL := strings.TrimSuffix(productionAPIURL, "/")
 	pushURL := baseURL + "/dns/push/batch"
@@ -910,19 +910,19 @@ func startDNSPusher(productionAPIURL, apiKey, sourceAPI string, pushInterval tim
 	}
 
 	// Initial push immediately
-	pushDNSRecords(client, pushURL, apiKey, sourceAPI, ttl, traefikIPMap)
+	pushDNSRecords(client, pushURL, apiKey, sourceAPI, ttl, nodeIPMap)
 
 	// Then push at regular intervals
 	ticker := time.NewTicker(pushInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		pushDNSRecords(client, pushURL, apiKey, sourceAPI, ttl, traefikIPMap)
+		pushDNSRecords(client, pushURL, apiKey, sourceAPI, ttl, nodeIPMap)
 	}
 }
 
 // pushDNSRecords collects all DNS records and pushes them to the production API
-func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl int64, traefikIPMap map[string][]string) {
+func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl int64, nodeIPMap map[string][]string) {
 	ctx := context.Background()
 	records := make([]map[string]interface{}, 0)
 
@@ -955,8 +955,8 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 		}
 		// Process each deployment
 		for _, row := range deploymentRows {
-			// Get Traefik IPs for this deployment
-			ips, err := database.GetDeploymentTraefikIP(row.DeploymentID, traefikIPMap)
+			// Get node IPs for this deployment
+			ips, err := database.GetDeploymentNodeIP(row.DeploymentID, nodeIPMap)
 			if err != nil {
 				log.Printf("[DNS Pusher] Failed to get Traefik IP for deployment %s: %v", row.DeploymentID, err)
 				continue
@@ -989,19 +989,19 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 			}
 			gameServerMap[loc.GameServerID] = true
 
-			// Get IP for this game server
-			nodeIP, _, err := database.GetGameServerLocation(loc.GameServerID)
+			// Get node IPs for this game server (same as deployments - use node IPs from config)
+			ips, err := database.GetGameServerNodeIP(loc.GameServerID, nodeIPMap)
 			if err != nil {
-				log.Printf("[DNS Pusher] Failed to get IP for game server %s: %v", loc.GameServerID, err)
+				log.Printf("[DNS Pusher] Failed to get node IP for game server %s: %v", loc.GameServerID, err)
 				continue
 			}
 
-			if nodeIP != "" {
+			if len(ips) > 0 {
 				domain := fmt.Sprintf("%s.my.obiente.cloud", loc.GameServerID)
 				records = append(records, map[string]interface{}{
 					"domain":      domain,
 					"record_type": "A",
-					"records":     []string{nodeIP},
+					"records":     ips,
 					"ttl":         ttl,
 				})
 
@@ -1272,18 +1272,18 @@ func main() {
 		}
 		ttl := int64(ttlDuration.Seconds())
 
-		// Parse Traefik IPs for deployments
-		traefikIPsEnv := os.Getenv("TRAEFIK_IPS")
-		var traefikIPMap map[string][]string
-		if traefikIPsEnv != "" {
+		// Parse node IPs for deployments and game servers
+		nodeIPsEnv := os.Getenv("NODE_IPS")
+		var nodeIPMap map[string][]string
+		if nodeIPsEnv != "" {
 			var err error
-			traefikIPMap, err = database.ParseTraefikIPsFromEnv(traefikIPsEnv)
+			nodeIPMap, err = database.ParseNodeIPsFromEnv(nodeIPsEnv)
 			if err != nil {
-				log.Printf("[DNS Pusher] Warning: Failed to parse TRAEFIK_IPS: %v", err)
-				traefikIPMap = make(map[string][]string)
+				log.Printf("[DNS Pusher] Warning: Failed to parse NODE_IPS: %v", err)
+				nodeIPMap = make(map[string][]string)
 			}
 		} else {
-			traefikIPMap = make(map[string][]string)
+			nodeIPMap = make(map[string][]string)
 		}
 
 		// Get source API URL (for X-Source-API header)
@@ -1301,7 +1301,7 @@ func main() {
 		log.Printf("[DNS Pusher] TTL: %d seconds", ttl)
 
 		// Start DNS pusher goroutine
-		go startDNSPusher(productionAPIURL, apiKey, sourceAPI, pushInterval, ttl, traefikIPMap)
+		go startDNSPusher(productionAPIURL, apiKey, sourceAPI, pushInterval, ttl, nodeIPMap)
 	} else {
 		if productionAPIURL == "" {
 			log.Printf("[DNS Pusher] DNS pusher not configured: DNS_DELEGATION_PRODUCTION_API_URL is not set")
@@ -1329,7 +1329,7 @@ func main() {
 	}
 
 	log.Printf("[DNS] Starting DNS server for my.obiente.cloud zone")
-	log.Printf("[DNS] Traefik IPs configured for regions: %v", server.traefikIPMap)
+	log.Printf("[DNS] Node IPs configured for regions: %v", server.nodeIPMap)
 
 	// Get DNS port from environment (default to 53)
 	dnsPort := os.Getenv("DNS_PORT")

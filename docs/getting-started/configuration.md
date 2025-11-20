@@ -49,9 +49,9 @@ ACME_EMAIL=admin@obiente.cloud
 ### DNS Configuration
 
 ```bash
-# Traefik IPs per region (required)
+# Node IPs per region (required)
 # Format: "region1:ip1,ip2;region2:ip3,ip4"
-TRAEFIK_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"
+NODE_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"
 
 # DNS server IPs (optional, for nameserver configuration)
 # Comma-separated list of public IPs where DNS servers run

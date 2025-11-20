@@ -1,5 +1,5 @@
 # DNS Server for my.obiente.cloud
-# Resolves *.my.obiente.cloud domains to Traefik IPs based on deployment locations
+# Resolves *.my.obiente.cloud domains to node IPs based on deployment and game server locations
 
 ## Deployment Modes
 
@@ -24,10 +24,10 @@ The DNS server works in both **single-node** and **multi-node HA** deployments:
 # - DB_USER: PostgreSQL user
 # - DB_PASSWORD: PostgreSQL password
 # - DB_NAME: PostgreSQL database name
-# - TRAEFIK_IPS: Traefik IPs per region (format: "region1:ip1,ip2;region2:ip3,ip4")
+# - NODE_IPS: Node IPs per region (format: "region1:ip1,ip2;region2:ip3,ip4")
 
 ## Example Configuration:
-# TRAEFIK_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"
+# NODE_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"
 
 ## Nameserver Configuration
 

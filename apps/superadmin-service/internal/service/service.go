@@ -259,22 +259,22 @@ func (s *Service) QueryDNS(ctx context.Context, req *connect.Request[superadminv
 	deploymentID := resourceID
 
 	// Get Traefik IPs from environment
-	traefikIPsEnv := os.Getenv("TRAEFIK_IPS")
-	logger.Debug("[SuperAdmin] QueryDNS - TRAEFIK_IPS env value: %q", traefikIPsEnv)
-	if traefikIPsEnv == "" {
-		logger.Error("[SuperAdmin] QueryDNS - TRAEFIK_IPS environment variable is empty")
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("TRAEFIK_IPS not configured"))
+	nodeIPsEnv := os.Getenv("NODE_IPS")
+	logger.Debug("[SuperAdmin] QueryDNS - NODE_IPS env value: %q", nodeIPsEnv)
+	if nodeIPsEnv == "" {
+		logger.Error("[SuperAdmin] QueryDNS - NODE_IPS environment variable is empty")
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("NODE_IPS not configured"))
 	}
 
-	traefikIPMap, err := database.ParseTraefikIPsFromEnv(traefikIPsEnv)
+	nodeIPMap, err := database.ParseNodeIPsFromEnv(nodeIPsEnv)
 	if err != nil {
-		logger.Error("[SuperAdmin] QueryDNS - Failed to parse TRAEFIK_IPS: %v", err)
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to parse TRAEFIK_IPS: %w", err))
+		logger.Error("[SuperAdmin] QueryDNS - Failed to parse NODE_IPS: %v", err)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to parse NODE_IPS: %w", err))
 	}
-	logger.Debug("[SuperAdmin] QueryDNS - Parsed TRAEFIK_IPS: %+v", traefikIPMap)
+	logger.Debug("[SuperAdmin] QueryDNS - Parsed NODE_IPS: %+v", nodeIPMap)
 
 	// Query database for deployment location
-	ips, err := database.GetDeploymentTraefikIP(deploymentID, traefikIPMap)
+		ips, err := database.GetDeploymentNodeIP(deploymentID, nodeIPMap)
 	if err != nil {
 		return connect.NewResponse(&superadminv1.QueryDNSResponse{
 			Domain:     domain,
@@ -303,14 +303,14 @@ func (s *Service) ListDNSRecords(ctx context.Context, req *connect.Request[super
 	}
 
 	// Get Traefik IPs from environment
-	traefikIPsEnv := os.Getenv("TRAEFIK_IPS")
-	if traefikIPsEnv == "" {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("TRAEFIK_IPS not configured"))
+	nodeIPsEnv := os.Getenv("NODE_IPS")
+	if nodeIPsEnv == "" {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("NODE_IPS not configured"))
 	}
 
-	traefikIPMap, err := database.ParseTraefikIPsFromEnv(traefikIPsEnv)
+	nodeIPMap, err := database.ParseNodeIPsFromEnv(nodeIPsEnv)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to parse TRAEFIK_IPS: %w", err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to parse NODE_IPS: %w", err))
 	}
 
 	recordTypeFilter := strings.ToUpper(strings.TrimSpace(req.Msg.GetRecordType()))
@@ -319,7 +319,7 @@ func (s *Service) ListDNSRecords(ctx context.Context, req *connect.Request[super
 
 	// Fetch deployment A records if filter allows
 	if recordTypeFilter == "" || recordTypeFilter == "A" {
-		deploymentRecords, err := s.listDeploymentDNSRecords(req, traefikIPMap, now)
+		deploymentRecords, err := s.listDeploymentDNSRecords(req, nodeIPMap, now)
 		if err != nil {
 			return nil, err
 		}
@@ -345,7 +345,7 @@ func (s *Service) ListDNSRecords(ctx context.Context, req *connect.Request[super
 }
 
 // listDeploymentDNSRecords lists DNS A records for deployments
-func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.ListDNSRecordsRequest], traefikIPMap map[string][]string, now time.Time) ([]*superadminv1.DNSRecord, error) {
+func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.ListDNSRecordsRequest], nodeIPMap map[string][]string, now time.Time) ([]*superadminv1.DNSRecord, error) {
 	// Build query
 	query := database.DB.Table("deployments d").
 		Select(`
@@ -397,7 +397,7 @@ func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.Lis
 		// First, try to get IPs from the region in the query result
 		if row.Region != nil && *row.Region != "" {
 			region = *row.Region
-			if regionIPs, ok := traefikIPMap[region]; ok && len(regionIPs) > 0 {
+			if regionIPs, ok := nodeIPMap[region]; ok && len(regionIPs) > 0 {
 				ips = regionIPs
 			}
 		}
@@ -405,7 +405,7 @@ func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.Lis
 		// If no IPs from region, try to get IPs using the database function
 		// This handles cases where the region wasn't in the JOIN or the region name doesn't match
 		if len(ips) == 0 {
-			if resolvedIPs, err := database.GetDeploymentTraefikIP(row.DeploymentID, traefikIPMap); err == nil && len(resolvedIPs) > 0 {
+			if resolvedIPs, err := database.GetDeploymentNodeIP(row.DeploymentID, nodeIPMap); err == nil && len(resolvedIPs) > 0 {
 				ips = resolvedIPs
 				// Update region if we got it from the function
 				if region == "" {
@@ -418,24 +418,24 @@ func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.Lis
 			}
 		}
 
-		// Final fallback: if still no IPs, try to use any available Traefik IPs
+		// Final fallback: if still no IPs, try to use any available node IPs
 		// This handles cases where nodes don't have regions configured
 		if len(ips) == 0 {
 			// Try "default" region first
-			if defaultIPs, ok := traefikIPMap["default"]; ok && len(defaultIPs) > 0 {
+			if defaultIPs, ok := nodeIPMap["default"]; ok && len(defaultIPs) > 0 {
 				ips = defaultIPs
 				if region == "" {
 					region = "default"
 				}
 			} else {
 				// Use the first available region's IPs as fallback
-				for reg, regIPs := range traefikIPMap {
+				for reg, regIPs := range nodeIPMap {
 					if len(regIPs) > 0 {
 						ips = regIPs
 						if region == "" {
 							region = reg
 						}
-						logger.Debug("[SuperAdmin] Using fallback Traefik IPs from region %s for deployment %s", reg, row.DeploymentID)
+						logger.Debug("[SuperAdmin] Using fallback node IPs from region %s for deployment %s", reg, row.DeploymentID)
 						break
 					}
 				}
@@ -737,22 +737,22 @@ func (s *Service) GetDNSConfig(ctx context.Context, _ *connect.Request[superadmi
 		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 	}
 
-	// Get Traefik IPs from environment
-	traefikIPsEnv := os.Getenv("TRAEFIK_IPS")
-	logger.Debug("[SuperAdmin] TRAEFIK_IPS env value: %q", traefikIPsEnv)
-	traefikIPMap, err := database.ParseTraefikIPsFromEnv(traefikIPsEnv)
+	// Get node IPs from environment
+	nodeIPsEnv := os.Getenv("NODE_IPS")
+	logger.Debug("[SuperAdmin] NODE_IPS env value: %q", nodeIPsEnv)
+	nodeIPMap, err := database.ParseNodeIPsFromEnv(nodeIPsEnv)
 	if err != nil {
-		logger.Error("[SuperAdmin] Failed to parse TRAEFIK_IPS: %v", err)
+		logger.Error("[SuperAdmin] Failed to parse NODE_IPS: %v", err)
 		// Don't fail, just return empty map
-		traefikIPMap = make(map[string][]string)
+		nodeIPMap = make(map[string][]string)
 	} else {
-		logger.Debug("[SuperAdmin] Parsed TRAEFIK_IPS: %+v", traefikIPMap)
+		logger.Debug("[SuperAdmin] Parsed NODE_IPS: %+v", nodeIPMap)
 	}
 
 	// Collect all unique IPs
 	allIPs := make(map[string]struct{})
 	traefikIPsByRegion := make(map[string]*superadminv1.TraefikIPs)
-	for region, ips := range traefikIPMap {
+	for region, ips := range nodeIPMap {
 		for _, ip := range ips {
 			allIPs[ip] = struct{}{}
 		}

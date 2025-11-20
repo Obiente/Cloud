@@ -20,7 +20,7 @@ See shared configuration in `docker-compose.yml` for common variables.
 
 ### Service-Specific Variables
 
-- `TRAEFIK_IPS` - Traefik IP addresses by region (required)
+- `NODE_IPS` - Node IP addresses by region (required, used for DNS resolution of deployments and game servers)
 - `DNS_IPS` - DNS server IP addresses (optional, for documentation)
 - `DNS_PORT` - DNS server port (default: 53)
 - `REDIS_URL` - Redis connection URL (for caching)

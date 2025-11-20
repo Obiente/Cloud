@@ -51,7 +51,7 @@ func (s *Service) ListVPSSizes(ctx context.Context, req *connect.Request[vpsv1.L
 
 // ListVPSRegions returns available VPS regions/locations from environment variables
 func (s *Service) ListVPSRegions(ctx context.Context, req *connect.Request[vpsv1.ListVPSRegionsRequest]) (*connect.Response[vpsv1.ListVPSRegionsResponse], error) {
-	// Get regions from environment variable (similar to TRAEFIK_IPS)
+	// Get regions from environment variable (similar to NODE_IPS)
 	envRegions, err := database.GetVPSRegionsFromEnv()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to parse VPS regions from environment: %w", err))

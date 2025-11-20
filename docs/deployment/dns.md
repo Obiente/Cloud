@@ -1,24 +1,25 @@
 # DNS Configuration
 
-The DNS server resolves `*.my.obiente.cloud` domains to Traefik IP addresses based on where deployments are actually running.
+The DNS server resolves `*.my.obiente.cloud` domains to node IP addresses based on where deployments and game servers are actually running.
 
 ## Overview
 
-The DNS server is integrated into the API service and runs alongside it. It queries the database to determine which region a deployment is running in, then returns the appropriate Traefik IP addresses for that region.
+The DNS server is integrated into the API service and runs alongside it. It queries the database to determine which region a deployment or game server is running in, then returns the appropriate node IP addresses for that region.
 
 ## Environment Variables
 
 ### Required
 
-- **`TRAEFIK_IPS`**: Traefik IPs per region
+- **`NODE_IPS`**: Node IPs per region
   - **Multi-region format**: `"region1:ip1,ip2;region2:ip3,ip4"`
   - **Simple format**: `"ip1,ip2"` (defaults to "default" region)
   - **Examples**:
-    - Simple: `TRAEFIK_IPS="1.2.3.4"` or `TRAEFIK_IPS="1.2.3.4,1.2.3.5"`
-    - Multi-region: `TRAEFIK_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"`
-  - Maps regions to Traefik IP addresses
+    - Simple: `NODE_IPS="1.2.3.4"` or `NODE_IPS="1.2.3.4,1.2.3.5"`
+    - Multi-region: `NODE_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"`
+  - Maps regions to node IP addresses
+  - Used for DNS resolution of both deployments and game servers
   - Multiple IPs per region enable load balancing
-  - If using simple format, deployments will use the "default" region
+  - If using simple format, deployments and game servers will use the "default" region
 
 ### Optional
 
@@ -53,7 +54,7 @@ The DNS server uses the same database configuration as the API:
 **Example `.env`:**
 
 ```bash
-TRAEFIK_IPS="default:1.2.3.4"
+NODE_IPS="default:1.2.3.4"
 DNS_IPS="1.2.3.4"
 ```
 
@@ -68,7 +69,7 @@ DNS_IPS="1.2.3.4"
 **Example `.env`:**
 
 ```bash
-TRAEFIK_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"
+NODE_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"
 DNS_IPS="1.2.3.4,5.6.7.8,9.10.11.12"
 ```
 
@@ -220,9 +221,9 @@ sudo systemctl restart systemd-resolved
    docker service logs dns
    ```
 
-3. **Verify TRAEFIK_IPS is set:**
+3. **Verify NODE_IPS is set:**
    ```bash
-   docker service inspect dns --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' | grep TRAEFIK_IPS
+   docker service inspect dns --format '{{range .Spec.TaskTemplate.ContainerSpec.Env}}{{println .}}{{end}}' | grep NODE_IPS
    ```
 
 4. **Test DNS resolution directly:**
@@ -238,8 +239,8 @@ sudo systemctl restart systemd-resolved
 
 ### Wrong IP returned
 
-- Verify `TRAEFIK_IPS` matches your actual Traefik IPs
-- Check deployment region matches Traefik IP region mapping
+- Verify `NODE_IPS` matches your actual node IPs
+- Check deployment/game server region matches node IP region mapping
 - Ensure node has correct region set in `node_metadata` table
 
 ---

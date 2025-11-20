@@ -790,7 +790,7 @@ ACME_EMAIL=admin@obiente.cloud
 
 | Variable      | Type   | Default | Required | Description                                                                                |
 | ------------- | ------ | ------- | -------- | ------------------------------------------------------------------------------------------ |
-| `TRAEFIK_IPS` | string | -       | ✅       | Traefik IPs per region (format: `"region1:ip1,ip2;region2:ip3,ip4"` or simple `"ip1,ip2"`) |
+| `NODE_IPS` | string | -       | ✅       | Node IPs per region (format: `"region1:ip1,ip2;region2:ip3,ip4"` or simple `"ip1,ip2"`). Used for DNS resolution of deployments and game servers. |
 | `DNS_IPS`     | string | -       | ❌       | DNS server IPs (comma-separated) for nameserver configuration                              |
 | `DNS_PORT`    | number | `53`    | ❌       | DNS server port (use different port if 53 is in use)                                       |
 
@@ -866,7 +866,7 @@ These environment variables are used by the `vps-gateway` service itself (not th
 | `GATEWAY_DHCP_INTERFACE`   | string | -       | ✅       | Network interface name for DHCP (e.g., `eth0`, `eth1`)                                                                                                                                                                 |
 | `LOG_LEVEL`                | string | `info`  | ❌       | Logging level (`debug`, `info`, `warn`, `error`)                                                                                                                                                                       |
 
-**TRAEFIK_IPS Format:**
+**NODE_IPS Format:**
 
 Two formats are supported:
 
@@ -886,19 +886,19 @@ region1:ip1,ip2;region2:ip3,ip4
 
 ```bash
 # Simple format (single IP, defaults to "default" region)
-TRAEFIK_IPS="1.2.3.4"
+NODE_IPS="1.2.3.4"
 
 # Simple format (multiple IPs, defaults to "default" region)
-TRAEFIK_IPS="1.2.3.4,1.2.3.5"
+NODE_IPS="1.2.3.4,1.2.3.5"
 
 # Single region
-TRAEFIK_IPS="us-east-1:1.2.3.4,1.2.3.5"
+NODE_IPS="us-east-1:1.2.3.4,1.2.3.5"
 
 # Multiple regions
-TRAEFIK_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"
+NODE_IPS="us-east-1:1.2.3.4,1.2.3.5;eu-west-1:5.6.7.8,5.6.7.9"
 
 # Explicit default region
-TRAEFIK_IPS="default:1.2.3.4"
+NODE_IPS="default:1.2.3.4"
 ```
 
 **DNS_IPS Format:**
