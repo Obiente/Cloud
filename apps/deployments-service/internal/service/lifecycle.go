@@ -65,8 +65,10 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		buildStartTime := time.Now()
 
 		// Get or create build log streamer
+		// Note: We do NOT close the streamer here because it should persist across builds
+		// for the same deployment. Closing it would disconnect all active subscribers.
+		// The streamer will be cleaned up when the deployment is deleted or the service shuts down.
 		streamer := GetBuildLogStreamer(deploymentID)
-		defer streamer.Close()
 
 		// Create build record
 		buildID := uuid.New().String()

@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/docker"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
@@ -524,10 +524,17 @@ func (s *Service) StreamBuildLogs(ctx context.Context, req *connect.Request[depl
 	// Get or create build log streamer
 	buildStreamer := GetBuildLogStreamer(deploymentID)
 
-	// Send buffered logs first
+	// Subscribe FIRST to avoid race conditions where logs are written
+	// between getting buffered logs and subscribing
+	logChan := buildStreamer.Subscribe()
+	defer func() {
+		// Unsubscribe when done
+		buildStreamer.Unsubscribe(logChan)
+	}()
+
+	// Check if we need to load logs from database (for builds happening on other nodes)
+	// Only do this if there are no buffered logs in memory
 	bufferedLogs := buildStreamer.GetLogs()
-	
-	// If no buffered logs, try to load from database (for builds happening on other nodes)
 	if len(bufferedLogs) == 0 {
 		// Get latest active build for this deployment
 		builds, _, err := s.buildHistoryRepo.ListBuilds(ctx, deploymentID, orgID, 1, 0)
@@ -538,9 +545,14 @@ func (s *Service) StreamBuildLogs(ctx context.Context, req *connect.Request[depl
 				// Load logs from database for this build
 				buildLogsRepo := database.NewBuildLogsRepository(database.MetricsDB)
 				dbLogs, _, err := buildLogsRepo.GetBuildLogs(ctx, build.ID, 10000, 0)
-				if err == nil {
-					// Convert database logs to proto format
+				if err == nil && len(dbLogs) > 0 {
+					// Convert database logs to proto format and send them
+					// These are logs from a build on another node, so they won't be in the buffer
 					for _, logEntry := range dbLogs {
+						// Check context before sending
+						if ctx.Err() != nil {
+							return nil
+						}
 						logLine := &deploymentsv1.DeploymentLogLine{
 							DeploymentId: deploymentID,
 							Line:         logEntry.Line,
@@ -548,35 +560,21 @@ func (s *Service) StreamBuildLogs(ctx context.Context, req *connect.Request[depl
 							Stderr:       logEntry.Stderr,
 							LogLevel:     commonv1.LogLevel_LOG_LEVEL_INFO,
 						}
-						bufferedLogs = append(bufferedLogs, logLine)
+						if err := stream.Send(logLine); err != nil {
+							// If context is cancelled, return nil for proper closure
+							if ctx.Err() != nil {
+								return nil
+							}
+							// For other errors, still return nil to ensure proper stream closure
+							return nil
+						}
 					}
 				}
 			}
 		}
 	}
-
-	// Send buffered logs
-	for _, logLine := range bufferedLogs {
-		// Check context before sending
-		if ctx.Err() != nil {
-			return nil
-		}
-		if err := stream.Send(logLine); err != nil {
-			// If context is cancelled, return nil for proper closure
-			if ctx.Err() != nil {
-				return nil
-			}
-			// For other errors, still return nil to ensure proper stream closure
-			return nil
-		}
-	}
-
-	// Subscribe to build logs for real-time updates
-	logChan := buildStreamer.Subscribe()
-	defer func() {
-		// Unsubscribe when done
-		buildStreamer.Unsubscribe(logChan)
-	}()
+	// Note: Buffered logs from the current node are handled by the Subscribe() method
+	// which sends them in a goroutine. We don't send them here to avoid duplicates.
 
 	// Stream new logs to client
 	for {

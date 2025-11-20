@@ -21,27 +21,27 @@ import (
 
 // BuildLogStreamer manages streaming of build logs for a deployment
 type BuildLogStreamer struct {
-	deploymentID string
-	buildID      string // Optional: ID of the build record in database
+	deploymentID  string
+	buildID       string                        // Optional: ID of the build record in database
 	buildLogsRepo *database.BuildLogsRepository // Repository for saving logs to TimescaleDB
-	subscribers  map[chan *deploymentsv1.DeploymentLogLine]struct{}
-	mu           sync.RWMutex
-	logs         []*deploymentsv1.DeploymentLogLine
-	maxLogs      int
-	lineNumber   int32 // Sequential line number for database storage
-	
+	subscribers   map[chan *deploymentsv1.DeploymentLogLine]struct{}
+	mu            sync.RWMutex
+	logs          []*deploymentsv1.DeploymentLogLine
+	maxLogs       int
+	lineNumber    int32 // Sequential line number for database storage
+
 	// Batching for TimescaleDB
 	pendingLogs []struct {
-		Line      string
-		Stderr    bool
+		Line       string
+		Stderr     bool
 		LineNumber int32
-		Timestamp time.Time
+		Timestamp  time.Time
 	}
-	batchMutex  sync.Mutex
-	batchTimer  *time.Timer
+	batchMutex   sync.Mutex
+	batchTimer   *time.Timer
 	stopBatching chan struct{}
-	closed      bool // Track if Close() has been called
-	closeMutex  sync.Mutex // Protect close operation
+	closed       bool       // Track if Close() has been called
+	closeMutex   sync.Mutex // Protect close operation
 }
 
 // BuildLogStreamerRegistry manages build log streamers for all deployments
@@ -65,23 +65,23 @@ func GetBuildLogStreamer(deploymentID string) *BuildLogStreamer {
 
 	// Use TimescaleDB for build logs (MetricsDB connection)
 	buildLogsRepo := database.NewBuildLogsRepository(database.MetricsDB)
-	
+
 	streamer := &BuildLogStreamer{
-		deploymentID:     deploymentID,
-		buildLogsRepo:    buildLogsRepo,
-		subscribers:      make(map[chan *deploymentsv1.DeploymentLogLine]struct{}),
-		logs:             make([]*deploymentsv1.DeploymentLogLine, 0),
-		maxLogs:          10000, // Keep last 10k lines
-		lineNumber:       0,
-		pendingLogs:      make([]struct {
-			Line      string
-			Stderr    bool
+		deploymentID:  deploymentID,
+		buildLogsRepo: buildLogsRepo,
+		subscribers:   make(map[chan *deploymentsv1.DeploymentLogLine]struct{}),
+		logs:          make([]*deploymentsv1.DeploymentLogLine, 0),
+		maxLogs:       10000, // Keep last 10k lines
+		lineNumber:    0,
+		pendingLogs: make([]struct {
+			Line       string
+			Stderr     bool
 			LineNumber int32
-			Timestamp time.Time
+			Timestamp  time.Time
 		}, 0, 100), // Pre-allocate with capacity for batching
 		stopBatching: make(chan struct{}),
 	}
-	
+
 	// Start batch flusher
 	go streamer.startBatchFlusher()
 	globalBuildLogRegistry.streamers[deploymentID] = streamer
@@ -89,9 +89,19 @@ func GetBuildLogStreamer(deploymentID string) *BuildLogStreamer {
 }
 
 // SetBuildID sets the build ID for database persistence
+// If the build ID changes, clears the logs buffer to prevent mixing old and new build logs
 func (s *BuildLogStreamer) SetBuildID(buildID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// If this is a different build ID, clear the logs buffer
+	// This prevents old build logs from being mixed with new ones
+	if s.buildID != "" && s.buildID != buildID {
+		// Clear logs buffer for new build
+		s.logs = make([]*deploymentsv1.DeploymentLogLine, 0)
+		logger.Debug("[BuildLogStreamer] Cleared logs buffer for new build (old: %s, new: %s)", s.buildID, buildID)
+	}
+
 	s.buildID = buildID
 	s.lineNumber = 0 // Reset line number for new build
 }
@@ -112,25 +122,25 @@ func (s *BuildLogStreamer) WriteStderr(p []byte) (n int, err error) {
 func detectLogLevel(line string, isStderr bool) commonv1.LogLevel {
 	// Use shared detection function (duplicated here to avoid circular imports)
 	lineLower := strings.ToLower(strings.TrimSpace(line))
-	
+
 	// Check for explicit log level markers (case-insensitive)
 	if strings.Contains(lineLower, "[error]") || strings.Contains(lineLower, "error:") ||
 		strings.Contains(lineLower, "fatal:") || strings.Contains(lineLower, "failed") ||
 		strings.HasPrefix(lineLower, "error") || strings.Contains(lineLower, " ❌ ") {
 		return commonv1.LogLevel_LOG_LEVEL_ERROR
 	}
-	
+
 	if strings.Contains(lineLower, "[warn]") || strings.Contains(lineLower, "[warning]") ||
 		strings.Contains(lineLower, "warning:") || strings.Contains(lineLower, "⚠️") ||
 		strings.HasPrefix(lineLower, "warn") {
 		return commonv1.LogLevel_LOG_LEVEL_WARN
 	}
-	
+
 	if strings.Contains(lineLower, "[debug]") || strings.Contains(lineLower, "[trace]") ||
 		strings.HasPrefix(lineLower, "debug") || strings.HasPrefix(lineLower, "trace") {
 		return commonv1.LogLevel_LOG_LEVEL_DEBUG
 	}
-	
+
 	// Nixpacks/Railpack specific patterns - these are INFO even if on stderr
 	// Nixpacks writes progress to stderr but it's informational
 	if strings.Contains(lineLower, "nixpacks") || strings.Contains(lineLower, "railpack") ||
@@ -144,14 +154,14 @@ func detectLogLevel(line string, isStderr bool) commonv1.LogLevel {
 		strings.Contains(lineLower, "metadata") {
 		return commonv1.LogLevel_LOG_LEVEL_INFO
 	}
-	
+
 	// Docker build output patterns - usually INFO
 	if strings.Contains(lineLower, "[") && strings.Contains(lineLower, "]") &&
 		(strings.Contains(lineLower, "step") || strings.Contains(lineLower, "from") ||
-		strings.Contains(lineLower, "running") || strings.Contains(lineLower, "executing")) {
+			strings.Contains(lineLower, "running") || strings.Contains(lineLower, "executing")) {
 		return commonv1.LogLevel_LOG_LEVEL_INFO
 	}
-	
+
 	// Default: if stderr is true and no pattern matched, it might be an error
 	// But for build tools, stderr is often just progress, so default to INFO
 	if isStderr {
@@ -162,7 +172,7 @@ func detectLogLevel(line string, isStderr bool) commonv1.LogLevel {
 		}
 		return commonv1.LogLevel_LOG_LEVEL_INFO
 	}
-	
+
 	// Default to INFO for stdout
 	return commonv1.LogLevel_LOG_LEVEL_INFO
 }
@@ -192,7 +202,7 @@ func (s *BuildLogStreamer) writeLine(line string, stderr bool) (int, error) {
 	for _, l := range lines {
 		// Detect log level from content
 		logLevel := detectLogLevel(l, stderr)
-		
+
 		logLine := &deploymentsv1.DeploymentLogLine{
 			DeploymentId: s.deploymentID,
 			Line:         l,
@@ -239,26 +249,30 @@ func (s *BuildLogStreamer) writeLine(line string, stderr bool) (int, error) {
 
 // Subscribe creates a new subscription channel for build logs
 func (s *BuildLogStreamer) Subscribe() chan *deploymentsv1.DeploymentLogLine {
-	ch := make(chan *deploymentsv1.DeploymentLogLine, 100) // Buffered to avoid blocking
+	// Use a large buffer to handle both buffered logs and new logs without blocking
+	ch := make(chan *deploymentsv1.DeploymentLogLine, 5000)
 
+	// Get a snapshot of buffered logs and add to subscribers atomically
+	// This ensures we have a consistent view and don't miss new logs
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
+	bufferedLogs := make([]*deploymentsv1.DeploymentLogLine, len(s.logs))
+	copy(bufferedLogs, s.logs)
+	// Add to subscribers immediately so we don't miss new logs
 	s.subscribers[ch] = struct{}{}
+	s.mu.Unlock()
 
-	// Send buffered logs to new subscriber
+	// Send buffered logs in a goroutine (non-blocking)
+	// The large buffer ensures this won't block even if client is reading slowly
 	go func() {
-		s.mu.RLock()
-		bufferedLogs := make([]*deploymentsv1.DeploymentLogLine, len(s.logs))
-		copy(bufferedLogs, s.logs)
-		s.mu.RUnlock()
-
 		for _, logLine := range bufferedLogs {
 			select {
 			case ch <- logLine:
-			case <-time.After(1 * time.Second):
-				logger.Debug("[BuildLogStreamer] Timeout sending buffered log to subscriber")
-				return
+				// Successfully sent buffered log
+			case <-time.After(10 * time.Second):
+				// Very long timeout - we don't want to drop historical logs
+				// If client is this slow, they'll get new logs but might miss some old ones
+				logger.Debug("[BuildLogStreamer] Timeout sending buffered log to subscriber (client may be slow)")
+				// Continue to next log instead of returning - we want to send as many as possible
 			}
 		}
 	}()
@@ -270,15 +284,15 @@ func (s *BuildLogStreamer) Subscribe() chan *deploymentsv1.DeploymentLogLine {
 func (s *BuildLogStreamer) Unsubscribe(ch chan *deploymentsv1.DeploymentLogLine) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	// Check if channel is still in subscribers (not already unsubscribed/closed)
 	if _, exists := s.subscribers[ch]; !exists {
 		// Already unsubscribed, ignore
 		return
 	}
-	
+
 	delete(s.subscribers, ch)
-	
+
 	// Safely close channel with recover to handle already-closed channels
 	func() {
 		defer func() {
@@ -387,15 +401,15 @@ func (s *BuildLogStreamer) addToBatch(line string, stderr bool, lineNumber int32
 
 	// Add to pending batch
 	s.pendingLogs = append(s.pendingLogs, struct {
-		Line      string
-		Stderr    bool
+		Line       string
+		Stderr     bool
 		LineNumber int32
-		Timestamp time.Time
+		Timestamp  time.Time
 	}{
-		Line:      line,
-		Stderr:    stderr,
+		Line:       line,
+		Stderr:     stderr,
 		LineNumber: lineNumber,
-		Timestamp: time.Now(),
+		Timestamp:  time.Now(),
 	})
 
 	// Get buildID and repo safely (need to check if buildID is set)
@@ -440,10 +454,10 @@ func (s *BuildLogStreamer) flushBatch(buildID string, repo *database.BuildLogsRe
 
 	// Copy batch for async write
 	batch := make([]struct {
-		Line      string
-		Stderr    bool
+		Line       string
+		Stderr     bool
 		LineNumber int32
-		Timestamp time.Time
+		Timestamp  time.Time
 	}, len(s.pendingLogs))
 	copy(batch, s.pendingLogs)
 	s.pendingLogs = s.pendingLogs[:0] // Clear batch
@@ -470,7 +484,7 @@ func (s *BuildLogStreamer) startBatchFlusher() {
 			buildID := s.buildID
 			repo := s.buildLogsRepo
 			s.mu.RUnlock()
-			
+
 			s.batchMutex.Lock()
 			pendingCount := len(s.pendingLogs)
 			s.batchMutex.Unlock()
@@ -486,7 +500,7 @@ func (s *BuildLogStreamer) startBatchFlusher() {
 			buildID := s.buildID
 			repo := s.buildLogsRepo
 			s.mu.RUnlock()
-			
+
 			s.batchMutex.Lock()
 			if buildID != "" && repo != nil && len(s.pendingLogs) > 0 {
 				s.flushBatch(buildID, repo)
@@ -502,27 +516,27 @@ func (s *BuildLogStreamer) startBatchFlusher() {
 func (s *BuildLogStreamer) Close() {
 	s.closeMutex.Lock()
 	defer s.closeMutex.Unlock()
-	
+
 	// Check if already closed
 	if s.closed {
 		logger.Debug("[BuildLogStreamer] Close() called on already-closed streamer, ignoring")
 		return
 	}
-	
+
 	s.closed = true
-	
+
 	// Stop batch flusher and do final flush
 	// Safe to close - we've checked that we haven't closed before
 	close(s.stopBatching)
-	
+
 	s.mu.RLock()
 	buildID := s.buildID
 	s.mu.RUnlock()
-	
+
 	s.mu.RLock()
 	repo := s.buildLogsRepo
 	s.mu.RUnlock()
-	
+
 	s.batchMutex.Lock()
 	if buildID != "" && repo != nil && len(s.pendingLogs) > 0 {
 		s.flushBatch(buildID, repo)

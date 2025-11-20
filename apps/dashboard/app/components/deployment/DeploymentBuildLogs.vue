@@ -187,6 +187,10 @@ const startStream = async () => {
   isStreaming.value = true;
   isStreamingInternal.value = true;
 
+  // Clear existing logs when starting a new stream to prevent mixing old and new logs
+  logs.value = [];
+  latestBuild.value = null;
+
   let hasReceivedLogs = false;
 
   try {
