@@ -342,6 +342,8 @@ type ReverseProxy struct {
 	baseServiceAddrs  map[string]string // Routing URL -> base service address (for health checks)
 	healthStatus      map[string]*ServiceHealth // Tracks health status of each backend service and its replicas
 	healthMutex       sync.RWMutex
+	httpClient        *http.Client // Shared HTTP client with connection pooling
+	httpClientOnce    sync.Once    // Ensures client is initialized once
 }
 
 // initHealthChecker starts background health checks for all backend services
@@ -660,6 +662,36 @@ func (p *ReverseProxy) isServiceHealthy(targetURL string) bool {
 	return true
 }
 
+// getHTTPClient returns a shared HTTP client with proper connection pooling and timeouts
+func (p *ReverseProxy) getHTTPClient() *http.Client {
+	p.httpClientOnce.Do(func() {
+		skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
+		shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
+
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: shouldSkipVerify,
+			},
+			DialContext: (&net.Dialer{
+				Timeout:   10 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   10,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			ResponseHeaderTimeout: 30 * time.Second,
+		}
+
+		p.httpClient = &http.Client{
+			Transport: transport,
+			Timeout:   30 * time.Second,
+		}
+	})
+	return p.httpClient
+}
+
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upgradeHeader := r.Header.Get("Upgrade")
 	connectionHeader := r.Header.Get("Connection")
@@ -743,19 +775,8 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	proxyURL.Scheme = target.Scheme
 	proxyURL.Host = target.Host
 
-	skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
-	shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
-
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: shouldSkipVerify, // Skip TLS verification for internal Traefik certs
-		},
-	}
-
-	client := &http.Client{
-		Transport: transport,
-		Timeout:   30 * time.Second,
-	}
+	// Get or create shared HTTP client with connection pooling
+	client := p.getHTTPClient()
 
 	req, err := http.NewRequestWithContext(r.Context(), r.Method, proxyURL.String(), r.Body)
 	if err != nil {
@@ -795,8 +816,27 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Forward request
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Error("[API Gateway] Failed to forward request to %s: %v", targetURL, err)
-		http.Error(w, fmt.Sprintf("Service Unavailable: %v", err), http.StatusServiceUnavailable)
+		// Check if context was cancelled (client disconnected)
+		if r.Context().Err() != nil {
+			logger.Debug("[API Gateway] Request cancelled by client: %v", r.Context().Err())
+			return
+		}
+		
+		// Log detailed error for debugging
+		logger.Error("[API Gateway] Failed to forward request to %s: %v (method=%s, path=%s)", 
+			targetURL, err, r.Method, r.URL.Path)
+		
+		// Provide more specific error messages
+		errMsg := "Service Unavailable"
+		if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline") {
+			errMsg = "Request timeout - backend service did not respond in time"
+		} else if strings.Contains(err.Error(), "no such host") || strings.Contains(err.Error(), "DNS") {
+			errMsg = "DNS resolution failed - service hostname not found"
+		} else if strings.Contains(err.Error(), "connection refused") {
+			errMsg = "Connection refused - backend service may be down"
+		}
+		
+		http.Error(w, fmt.Sprintf("%s: %v", errMsg, err), http.StatusServiceUnavailable)
 		return
 	}
 	defer resp.Body.Close()
