@@ -55,20 +55,38 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 	}
 
 	// Prepare origin patterns for WebSocket library
-	// Check if wildcard CORS is configured - if so, allow all origins
+	// The websocket library needs all allowed origins, not just the validated one
 	acceptOptions := &websocket.AcceptOptions{}
 	corsConfig := middleware.DefaultCORSConfig()
 	isWildcard := len(corsConfig.AllowedOrigins) == 1 && corsConfig.AllowedOrigins[0] == "*"
 	
+	log.Printf("[Terminal WS] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s", 
+		isWildcard, corsConfig.AllowedOrigins, origin)
+	
 	if isWildcard {
-		// Wildcard CORS configured - allow all origins in WebSocket library
-		acceptOptions.OriginPatterns = []string{"*"}
-	} else if origin != "" {
-		// Specific origins configured - use the validated origin
-		acceptOptions.OriginPatterns = []string{origin}
+		// Wildcard CORS configured - disable origin checking in WebSocket library
+		// Setting to nil completely disables origin validation (allows all origins)
+		acceptOptions.OriginPatterns = nil
+		log.Printf("[Terminal WS] Using wildcard origin pattern (nil = allow all)")
 	} else {
-		// Empty origin - might be same-origin request, allow all
-		acceptOptions.OriginPatterns = []string{"*"}
+		// Use all allowed origins from CORS config for WebSocket validation
+		// This ensures the websocket library can properly validate against all configured origins
+		acceptOptions.OriginPatterns = make([]string, len(corsConfig.AllowedOrigins))
+		copy(acceptOptions.OriginPatterns, corsConfig.AllowedOrigins)
+		
+		// Also add the current origin if it's not already in the list (for same-origin requests)
+		if origin != "" {
+			originInList := false
+			for _, allowed := range corsConfig.AllowedOrigins {
+				if allowed == origin {
+					originInList = true
+					break
+				}
+			}
+			if !originInList {
+				acceptOptions.OriginPatterns = append(acceptOptions.OriginPatterns, origin)
+			}
+		}
 	}
 
 	conn, err := websocket.Accept(w, r, acceptOptions)
@@ -550,20 +568,38 @@ func (s *Service) forwardTerminalWebSocket(ctx context.Context, w http.ResponseW
 	}
 
 	// Prepare origin patterns for WebSocket library
-	// Check if wildcard CORS is configured - if so, allow all origins
+	// The websocket library needs all allowed origins, not just the validated one
 	acceptOptions := &websocket.AcceptOptions{}
 	corsConfig := middleware.DefaultCORSConfig()
 	isWildcard := len(corsConfig.AllowedOrigins) == 1 && corsConfig.AllowedOrigins[0] == "*"
 	
+	log.Printf("[Terminal WS] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s", 
+		isWildcard, corsConfig.AllowedOrigins, origin)
+	
 	if isWildcard {
-		// Wildcard CORS configured - allow all origins in WebSocket library
-		acceptOptions.OriginPatterns = []string{"*"}
-	} else if origin != "" {
-		// Specific origins configured - use the validated origin
-		acceptOptions.OriginPatterns = []string{origin}
+		// Wildcard CORS configured - disable origin checking in WebSocket library
+		// Setting to nil completely disables origin validation (allows all origins)
+		acceptOptions.OriginPatterns = nil
+		log.Printf("[Terminal WS] Using wildcard origin pattern (nil = allow all)")
 	} else {
-		// Empty origin - might be same-origin request, allow all
-		acceptOptions.OriginPatterns = []string{"*"}
+		// Use all allowed origins from CORS config for WebSocket validation
+		// This ensures the websocket library can properly validate against all configured origins
+		acceptOptions.OriginPatterns = make([]string, len(corsConfig.AllowedOrigins))
+		copy(acceptOptions.OriginPatterns, corsConfig.AllowedOrigins)
+		
+		// Also add the current origin if it's not already in the list (for same-origin requests)
+		if origin != "" {
+			originInList := false
+			for _, allowed := range corsConfig.AllowedOrigins {
+				if allowed == origin {
+					originInList = true
+					break
+				}
+			}
+			if !originInList {
+				acceptOptions.OriginPatterns = append(acceptOptions.OriginPatterns, origin)
+			}
+		}
 	}
 
 	// Get the original WebSocket connection from the client

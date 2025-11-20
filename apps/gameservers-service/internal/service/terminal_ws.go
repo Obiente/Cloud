@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -52,21 +53,58 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// When requests come through the API gateway, the Host header is set to the internal service name
+	// (e.g., "gameservers-service:3006"), but the Origin header is from the original client (e.g., "localhost:3000").
+	// The websocket library validates Origin against Host, so we need to fix the Host header to match
+	// the Origin's hostname when behind a gateway/proxy.
+	// Extract hostname from Origin if available, otherwise keep original Host
+	originalHost := r.Host
+	if origin != "" {
+		originURL, err := url.Parse(origin)
+		if err == nil && originURL.Host != "" {
+			// Use the hostname from Origin for Host header validation
+			// This allows the websocket library to properly validate when behind a gateway
+			r.Host = originURL.Host
+			log.Printf("[GameServer Terminal WS] Adjusted Host header: %s -> %s (from Origin)", originalHost, r.Host)
+		}
+	}
+
 	// Prepare origin patterns for WebSocket library
-	// Check if wildcard CORS is configured - if so, allow all origins
 	acceptOptions := &websocket.AcceptOptions{}
 	corsConfig := middleware.DefaultCORSConfig()
 	isWildcard := len(corsConfig.AllowedOrigins) == 1 && corsConfig.AllowedOrigins[0] == "*"
 	
+	log.Printf("[GameServer Terminal WS] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s, host=%s", 
+		isWildcard, corsConfig.AllowedOrigins, origin, r.Host)
+	
 	if isWildcard {
-		// Wildcard CORS configured - allow all origins in WebSocket library
-		acceptOptions.OriginPatterns = []string{"*"}
-	} else if origin != "" {
-		// Specific origins configured - use the validated origin
-		acceptOptions.OriginPatterns = []string{origin}
+		// Wildcard CORS configured - disable origin checking in WebSocket library
+		// Setting to nil completely disables origin validation (allows all origins)
+		// This is necessary when requests come through a gateway/proxy where Host != Origin
+		acceptOptions.OriginPatterns = nil
+		log.Printf("[GameServer Terminal WS] Using wildcard origin pattern (nil = allow all)")
 	} else {
-		// Empty origin - might be same-origin request, allow all
-		acceptOptions.OriginPatterns = []string{"*"}
+		// Use all allowed origins from CORS config for WebSocket validation
+		// This ensures the websocket library can properly validate against all configured origins
+		// even when the Host header doesn't match (e.g., when behind a gateway)
+		acceptOptions.OriginPatterns = make([]string, len(corsConfig.AllowedOrigins))
+		copy(acceptOptions.OriginPatterns, corsConfig.AllowedOrigins)
+		
+		// Also add the current origin if it's not already in the list
+		if origin != "" {
+			originInList := false
+			for _, allowed := range corsConfig.AllowedOrigins {
+				if allowed == origin {
+					originInList = true
+					break
+				}
+			}
+			if !originInList {
+				acceptOptions.OriginPatterns = append(acceptOptions.OriginPatterns, origin)
+				log.Printf("[GameServer Terminal WS] Added origin %s to OriginPatterns (not in allowed list)", origin)
+			}
+		}
+		log.Printf("[GameServer Terminal WS] Using OriginPatterns: %v", acceptOptions.OriginPatterns)
 	}
 
 	conn, err := websocket.Accept(w, r, acceptOptions)

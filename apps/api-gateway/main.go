@@ -43,6 +43,7 @@ var baseServiceRoutes = map[string]string{
 	"/obiente.cloud.deployments.v1.DeploymentService/":     "deployments-service:3005",
 	"/obiente.cloud.gameservers.v1.GameServerService/":     "gameservers-service:3006",
 	"/obiente.cloud.vps.v1.VPSService/":                    "vps-service:3008",
+	"/obiente.cloud.vps.v1.VPSConfigService/":              "vps-service:3008",
 	"/obiente.cloud.superadmin.v1.SuperadminService/":      "superadmin-service:3011",
 	"/obiente.cloud.support.v1.SupportService/":            "support-service:3009",
 	"/obiente.cloud.audit.v1.AuditService/":                "audit-service:3010",
@@ -771,7 +772,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if isWebSocket {
 		logger.Debug("[API Gateway] WebSocket upgrade detected for %s -> %s", r.URL.Path, targetURL)
-		p.handleWebSocket(w, r, target)
+		p.handleWebSocket(w, r, target, matchedPath)
 		return
 	}
 
@@ -889,8 +890,8 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleWebSocket handles WebSocket upgrade requests by proxying the connection
-func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL) {
-	logger.Info("[API Gateway] Handling WebSocket upgrade: %s -> %s", r.URL.Path, target.String())
+func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL, matchedPath string) {
+	logger.Info("[API Gateway] Handling WebSocket upgrade: %s -> %s (matched: %s)", r.URL.Path, target.String(), matchedPath)
 
 	// Hijack the connection
 	hijacker, ok := w.(http.Hijacker)
@@ -950,9 +951,22 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 	}
 	defer backendConn.Close()
 
+	// Transform the path: strip the matched route prefix for certain routes
+	// For /gameservers/terminal/ws, strip /gameservers to get /terminal/ws
+	// For /terminal/ws, keep as is
+	// For /vps/..., keep as is (it's already the correct path)
+	backendPath := r.URL.Path
+	if matchedPath == "/gameservers/terminal/ws" {
+		// Strip /gameservers prefix
+		backendPath = strings.TrimPrefix(r.URL.Path, "/gameservers")
+		logger.Debug("[API Gateway] Rewriting path: %s -> %s", r.URL.Path, backendPath)
+	}
+	// For /terminal/ws and /vps/..., no transformation needed
+
 	proxyURL := *r.URL
 	proxyURL.Scheme = target.Scheme
 	proxyURL.Host = target.Host
+	proxyURL.Path = backendPath
 
 	reqStr := fmt.Sprintf("%s %s HTTP/1.1\r\n", r.Method, proxyURL.RequestURI())
 	if _, err := backendConn.Write([]byte(reqStr)); err != nil {
