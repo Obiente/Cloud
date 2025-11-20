@@ -251,10 +251,11 @@ onMounted(() => {
   initializeColumnWidths();
 });
 
-// Re-initialize when columns change
-watch(() => props.columns, () => {
+// Re-initialize when columns change (watch for meaningful changes only)
+// Watch column keys to detect when columns are replaced, not deep property changes
+watch(() => props.columns.map(c => c.key).join(','), () => {
   initializeColumnWidths();
-}, { deep: true });
+}, { flush: 'post' }); // Use 'post' flush to batch updates and avoid excessive re-renders
 
 // Column style computation
 const getColumnStyle = (column: TableColumn, index: number): Record<string, string> => {

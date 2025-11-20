@@ -87,10 +87,10 @@ const emit = defineEmits<{
 }>();
 
 const searchModel = ref(props.search);
-
-// Sync search model with external changes
 watch(() => props.search, (newValue) => {
-  searchModel.value = newValue;
+  if (searchModel.value !== newValue) {
+    searchModel.value = newValue;
+  }
 });
 
 const handleSearchUpdate = (value: string) => {

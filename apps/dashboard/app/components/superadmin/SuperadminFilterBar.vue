@@ -88,9 +88,10 @@ props.filters.forEach((filter) => {
   filterValues.value[filter.key] = defaultItem?.value || filter.items[0]?.value || "";
 });
 
-// Watch for external search changes
 watch(() => props.search, (newValue) => {
-  searchValue.value = newValue;
+  if (searchValue.value !== newValue) {
+    searchValue.value = newValue;
+  }
 });
 
 const handleSearchChange = (value: string) => {
