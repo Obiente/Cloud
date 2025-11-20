@@ -769,6 +769,7 @@ func handlePushDNSRecords(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method != http.MethodPost {
+		log.Printf("[DNS Delegation] Rejected non-POST request: method=%s", r.Method)
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -864,6 +865,7 @@ func handlePushDNSRecords(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := database.UpsertDelegatedDNSRecordWithAPIKey(domain, recordType, string(recordsJSON), sourceAPI, apiKeyInfo.ID, apiKeyInfo.OrganizationID, ttl); err != nil {
+			log.Printf("[DNS Delegation] Failed to upsert record %s: %v", domain, err)
 			metrics.RecordDNSDelegationPushError(apiKeyInfo.OrganizationID, apiKeyInfo.ID, "upsert_failed")
 			errors = append(errors, fmt.Sprintf("Failed to store %s: %v", domain, err))
 			continue
@@ -925,19 +927,32 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 	records := make([]map[string]interface{}, 0)
 
 	// Get all running deployments
-	// Join with deployments table to ensure deployment status is RUNNING (3)
-	// and deployment_location status is "running"
+	// Trust deployment_locations.status = 'running' as the source of truth
+	// Only filter out soft-deleted deployments
 	type deploymentDNSRow struct {
 		DeploymentID string
 	}
 	var deploymentRows []deploymentDNSRow
+	
+	// Try case-insensitive status check first
 	if err := database.DB.Table("deployment_locations dl").
 		Select("DISTINCT dl.deployment_id").
 		Joins("INNER JOIN deployments d ON d.id = dl.deployment_id AND d.deleted_at IS NULL").
-		Where("dl.status = ? AND d.status = ?", "running", 3). // 3 = RUNNING status
+		Where("LOWER(dl.status) = ?", "running"). // Case-insensitive check
 		Scan(&deploymentRows).Error; err != nil {
 		log.Printf("[DNS Pusher] Failed to query deployment locations: %v", err)
 	} else {
+		// If no results, try fallback: check deployment status instead
+		if len(deploymentRows) == 0 {
+			var fallbackRows []deploymentDNSRow
+			if err := database.DB.Table("deployments d").
+				Select("DISTINCT d.id as deployment_id").
+				Joins("LEFT JOIN deployment_locations dl ON dl.deployment_id = d.id").
+				Where("d.deleted_at IS NULL AND d.status = ? AND dl.id IS NOT NULL", 3). // 3 = RUNNING
+				Scan(&fallbackRows).Error; err == nil && len(fallbackRows) > 0 {
+				deploymentRows = fallbackRows
+			}
+		}
 		// Process each deployment
 		for _, row := range deploymentRows {
 			// Get Traefik IPs for this deployment
@@ -955,6 +970,8 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 					"records":     ips,
 					"ttl":         ttl,
 				})
+			} else {
+				log.Printf("[DNS Pusher] Deployment %s has no Traefik IPs configured", row.DeploymentID)
 			}
 		}
 	}
@@ -1079,17 +1096,84 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 	}
 
 	// Parse response
+	bodyBytes, _ := io.ReadAll(resp.Body)
 	var response map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+	if err := json.Unmarshal(bodyBytes, &response); err != nil {
 		log.Printf("[DNS Pusher] Failed to parse response: %v", err)
 		return
 	}
 
-	successCount, _ := response["success_count"].(float64)
+	// Try both success_count and success fields (response format might vary)
+	var successCount float64
+	if sc, ok := response["success_count"].(float64); ok {
+		successCount = sc
+	} else if sc, ok := response["success"].(float64); ok {
+		successCount = sc
+	} else if sc, ok := response["success"].(bool); ok && sc {
+		// If success is boolean true, assume all records succeeded
+		if total, ok := response["total"].(float64); ok {
+			successCount = total
+		}
+	}
+	
+	totalCount, _ := response["total"].(float64)
+	errors, _ := response["errors"].([]interface{})
+	
 	if successCount > 0 {
-		log.Printf("[DNS Pusher] Successfully pushed %d DNS records", int(successCount))
+		// Store records locally so they appear in the dashboard
+		// Use the production API URL as the source_api to indicate these were pushed to production
+		// Remove /dns/push/batch suffix to get base URL
+		localSourceAPI := strings.TrimSuffix(pushURL, "/dns/push/batch")
+		for _, record := range records {
+			domain, _ := record["domain"].(string)
+			recordType, _ := record["record_type"].(string)
+			if recordType == "" {
+				recordType = "A"
+			}
+			
+			// Handle records array - could be []string or []interface{} from JSON
+			var recordsArray []string
+			if recs, ok := record["records"].([]string); ok {
+				recordsArray = recs
+			} else if recs, ok := record["records"].([]interface{}); ok {
+				recordsArray = make([]string, 0, len(recs))
+				for _, r := range recs {
+					if str, ok := r.(string); ok {
+						recordsArray = append(recordsArray, str)
+					}
+				}
+			}
+			
+			recordTTL, _ := record["ttl"].(int64)
+			if recordTTL == 0 {
+				recordTTL = ttl
+			}
+			
+			if domain == "" || len(recordsArray) == 0 {
+				continue
+			}
+			
+			// Convert records to JSON
+			recordsJSON, err := json.Marshal(recordsArray)
+			if err != nil {
+				log.Printf("[DNS Pusher] Failed to marshal records for local storage %s: %v", domain, err)
+				continue
+			}
+			
+			// Store locally with empty organization_id and api_key_id (these are local records we pushed)
+			if err := database.UpsertDelegatedDNSRecordWithAPIKey(domain, recordType, string(recordsJSON), localSourceAPI, "", "", recordTTL); err != nil {
+				log.Printf("[DNS Pusher] Failed to store record locally %s: %v", domain, err)
+			}
+		}
+		
+		if len(errors) > 0 {
+			log.Printf("[DNS Pusher] Note: Some errors occurred: %v", errors)
+		}
 	} else {
-		log.Printf("[DNS Pusher] Push completed but no records were successful")
+		log.Printf("[DNS Pusher] WARNING: Push completed but no records were successful (total: %d, success_count: %v)", int(totalCount), successCount)
+		if len(errors) > 0 {
+			log.Printf("[DNS Pusher] Push errors: %v", errors)
+		}
 	}
 }
 

@@ -1015,7 +1015,7 @@
   });
 
   const tableRows = computed(() => {
-    return filteredRecords.value.map((record) => {
+    const rows = filteredRecords.value.map((record) => {
       // Ensure status is converted to string if it's a number or string number
       let status: string;
       if (typeof record.status === "number") {
@@ -1045,6 +1045,7 @@
         region: record.region || "",
       };
     });
+    return rows;
   });
 
   function convertStatusNumberToString(status: number): string {
@@ -1128,11 +1129,10 @@
           organizationId: response.organizationId,
           apiKeyId: response.apiKeyId,
         };
-        // Auto-filter to user's organization (only for non-superadmin users)
-        // Superadmins should see all records by default
-        // Note: This page requires superadmin access, so users here are always superadmins
-        // But if they have delegated DNS, we still auto-filter to their org for convenience
-        delegatedRecordsOrgFilter.value = response.organizationId;
+        // For superadmins, don't auto-filter by organization - show all records by default
+        // This allows them to see records pushed by any organization
+        // They can manually filter if needed
+        delegatedRecordsOrgFilter.value = null;
       } else {
         // For superadmins without delegated DNS, don't filter by default
         // They can manually filter if needed

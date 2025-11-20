@@ -335,17 +335,9 @@ func (s *Service) ListDNSRecords(ctx context.Context, req *connect.Request[super
 		records = append(records, gameServerRecords...)
 	}
 
-	// Fetch delegated DNS records if filter allows
-	// Include delegated records in the main view for superadmins
-	if recordTypeFilter == "" || recordTypeFilter == "A" || recordTypeFilter == "SRV" {
-		delegatedRecords, err := s.listDelegatedDNSRecordsAsDNSRecords(req, recordTypeFilter, now)
-		if err != nil {
-			// Log error but don't fail the entire request
-			logger.Warn("[SuperAdmin] Failed to fetch delegated DNS records: %v", err)
-		} else {
-			records = append(records, delegatedRecords...)
-		}
-	}
+	// Note: Delegated DNS records are NOT included in the main DNS records view
+	// They are shown separately in the delegated DNS records section to avoid duplicates
+	// This prevents records from appearing twice (once in main view, once in delegated view)
 
 	return connect.NewResponse(&superadminv1.ListDNSRecordsResponse{
 		Records: records,
@@ -871,12 +863,29 @@ func (s *Service) ListDelegatedDNSRecords(ctx context.Context, req *connect.Requ
 	apiKeyID := req.Msg.GetApiKeyId()
 	recordType := req.Msg.GetRecordType()
 
+	// Debug logging
+	logger.Debug("[SuperAdmin] Querying delegated DNS records: organizationID=%q, apiKeyID=%q, recordType=%q", organizationID, apiKeyID, recordType)
+
+	// Debug: Check database connection and table existence
+	var tableExists bool
+	database.DB.Raw("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'delegated_dns_records')").Scan(&tableExists)
+	logger.Info("[SuperAdmin] delegated_dns_records table exists: %v", tableExists)
+	
+	// Debug: Check if we can query the table directly
+	var directCount int64
+	if tableExists {
+		database.DB.Table("delegated_dns_records").Count(&directCount)
+		logger.Info("[SuperAdmin] Direct query count from delegated_dns_records table: %d", directCount)
+	}
+
 	// Query delegated DNS records
 	dbRecords, err := database.ListDelegatedDNSRecords(organizationID, apiKeyID, recordType)
 	if err != nil {
 		logger.Error("[SuperAdmin] Failed to list delegated DNS records: %v", err)
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to list delegated DNS records: %w", err))
 	}
+
+	logger.Debug("[SuperAdmin] Found %d delegated DNS records", len(dbRecords))
 
 	// Convert to proto records
 	records := make([]*superadminv1.DelegatedDNSRecord, 0, len(dbRecords))

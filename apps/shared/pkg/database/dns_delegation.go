@@ -109,7 +109,12 @@ func UpsertDelegatedDNSRecordWithAPIKey(domain, recordType, recordsJSON, sourceA
 				"last_updated":    now,
 				"updated_at":      now,
 			}
-			return tx.Model(&existing).Updates(updateData).Error
+			err := tx.Model(&existing).Updates(updateData).Error
+			if err != nil {
+				logger.Error("[Database] Failed to update delegated DNS record %s: %v", domainNormalized, err)
+				return err
+			}
+			return nil
 		} else if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			// Record doesn't exist - create new one
 			record := DelegatedDNSRecord{
@@ -142,9 +147,15 @@ func UpsertDelegatedDNSRecordWithAPIKey(domain, recordType, recordsJSON, sourceA
 							"last_updated":    now,
 							"updated_at":      now,
 						}
-						return tx.Model(&raceRecord).Updates(updateData).Error
+						updateErr := tx.Model(&raceRecord).Updates(updateData).Error
+						if updateErr != nil {
+							logger.Error("[Database] Failed to update race condition record %s: %v", domainNormalized, updateErr)
+							return updateErr
+						}
+						return nil
 					}
 				}
+				logger.Error("[Database] Failed to create delegated DNS record %s: %v", domainNormalized, err)
 				return err
 			}
 			return nil
@@ -318,7 +329,9 @@ func ListDNSDelegationAPIKeys(organizationID string) ([]DNSDelegationAPIKey, err
 // ListDelegatedDNSRecords lists delegated DNS records with optional filters
 func ListDelegatedDNSRecords(organizationID, apiKeyID, recordType string) ([]DelegatedDNSRecord, error) {
 	var records []DelegatedDNSRecord
-	query := DB.Model(&DelegatedDNSRecord{}).Where("expires_at > ?", time.Now()).Order("created_at DESC")
+	now := time.Now()
+
+	query := DB.Model(&DelegatedDNSRecord{}).Where("expires_at > ?", now).Order("created_at DESC")
 
 	if organizationID != "" {
 		query = query.Where("organization_id = ?", organizationID)
@@ -332,7 +345,10 @@ func ListDelegatedDNSRecords(organizationID, apiKeyID, recordType string) ([]Del
 		query = query.Where("record_type = ?", recordType)
 	}
 
+	// Note: We can't easily get SQL from GORM v2, but the query structure is clear from the logs above
+
 	if err := query.Find(&records).Error; err != nil {
+		logger.Error("[Database] Query error: %v", err)
 		return nil, err
 	}
 
