@@ -46,7 +46,7 @@
           <OuiFlex align="center" justify="between">
             <OuiText size="sm" weight="medium" color="primary">Bandwidth</OuiText>
             <OuiText size="xs" color="muted">
-              <OuiByte :value="Number(usageData.current.bandwidthRxBytes) + Number(usageData.current.bandwidthTxBytes)" unit-display="short" />
+              <OuiByte :value="Number(usageData.current.bandwidthRxBytes) + Number(usageData.current.bandwidthTxBytes)" unit-display="short" base="decimal" />
             </OuiText>
           </OuiFlex>
           <OuiText size="xs" color="muted">

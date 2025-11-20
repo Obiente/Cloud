@@ -94,7 +94,7 @@
               </OuiBadge>
             </OuiFlex>
             <OuiText size="2xl" weight="bold">
-              <OuiByte :value="currentNetworkRx" unit-display="short" />
+              <OuiByte :value="currentNetworkRx" unit-display="short" base="decimal" />
             </OuiText>
             <OuiText size="xs" color="muted">
               {{ latestMetric ? "Total received" : "No data" }}
@@ -118,7 +118,7 @@
               </OuiBadge>
             </OuiFlex>
             <OuiText size="2xl" weight="bold">
-              <OuiByte :value="currentNetworkTx" unit-display="short" />
+              <OuiByte :value="currentNetworkTx" unit-display="short" base="decimal" />
             </OuiText>
             <OuiText size="xs" color="muted">
               {{ latestMetric ? "Total sent" : "No data" }}

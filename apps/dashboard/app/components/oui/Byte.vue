@@ -1,30 +1,28 @@
 <template>
-  <Format.Byte
-    :value="byteValue"
-    :unit="unit"
-    :unit-display="unitDisplay"
-    :locale="locale"
-  />
+  {{ formattedValue }}
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Format } from '@ark-ui/vue/format'
+import { formatBytes } from '~/utils/common'
 
 type UnitDisplay = 'narrow' | 'short' | 'long'
 type ByteUnit = 'bit' | 'byte'
+type ByteBase = 'binary' | 'decimal'
 
 interface Props {
   value: number | bigint | string | null | undefined
   unit?: ByteUnit
   unitDisplay?: UnitDisplay
   locale?: string | string[]
+  base?: ByteBase
 }
 
 const props = withDefaults(defineProps<Props>(), {
   unit: 'byte' as ByteUnit,
   unitDisplay: 'short' as UnitDisplay,
   locale: undefined,
+  base: 'binary' as ByteBase,
 })
 
 const byteValue = computed<number>(() => {
@@ -36,6 +34,12 @@ const byteValue = computed<number>(() => {
     return Number.isNaN(parsed) ? 0 : parsed
   }
   return 0
+})
+
+const formattedValue = computed(() => {
+  // Convert bits to bytes if needed
+  const bytes = props.unit === 'bit' ? byteValue.value / 8 : byteValue.value
+  return formatBytes(bytes, props.base)
 })
 </script>
 

@@ -82,18 +82,24 @@ export function formatDateOnly(timestamp: any): string {
 /**
  * Formats bytes to a human-readable string
  * @param bytes - Number of bytes (can be number, bigint, null, or undefined)
+ * @param base - Base for calculation: 'binary' (1024) or 'decimal' (1000). Defaults to 'binary'
  * @returns Formatted string (e.g., "1.5 MB")
  */
-export function formatBytes(bytes: number | bigint | null | undefined): string {
+export function formatBytes(bytes: number | bigint | null | undefined, base: 'binary' | 'decimal' = 'binary'): string {
   if (bytes === null || bytes === undefined) return "0 B";
   const numBytes = typeof bytes === "bigint" ? Number(bytes) : bytes;
   if (numBytes === 0 || !Number.isFinite(numBytes) || numBytes < 0) return "0 B";
   
-  const k = 1024;
+  const k = base === 'binary' ? 1024 : 1000;
   const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(numBytes) / Math.log(k));
   
-  return Math.round((numBytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
+  const value = numBytes / Math.pow(k, i);
+  // Format to 2 decimal places, but remove trailing zeros
+  const formatted = Math.round(value * 100) / 100;
+  const formattedString = formatted % 1 === 0 ? formatted.toString() : formatted.toFixed(2);
+  
+  return formattedString + " " + sizes[i];
 }
 
 /**
