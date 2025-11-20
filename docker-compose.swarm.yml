@@ -753,17 +753,6 @@ services:
     environment:
       <<: [*common-database, *common-redis, *common-swarm-orchestrator, *common-dns, *common-dns-delegation]
       HTTP_PORT: ${DNS_HTTP_PORT:-8053}
-    labels:
-      - "cloud.obiente.service=dns-service"
-      - "cloud.obiente.traefik=true"
-      - "traefik.enable=true"
-      - "traefik.http.routers.dns-service.rule=Host(`dns-service.${DOMAIN:-localhost}`)"
-      - "traefik.http.routers.dns-service.entrypoints=web"
-      - "traefik.http.services.dns-service.loadbalancer.server.port=8053"
-      - "traefik.http.routers.dns-service-secure.rule=Host(`dns-service.${DOMAIN:-localhost}`)"
-      - "traefik.http.routers.dns-service-secure.entrypoints=websecure"
-      - "traefik.http.routers.dns-service-secure.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.dns-service-secure.service=dns-service"
     ports:
       # Use host mode publishing to expose DNS port directly on the host
       # DNS only runs on nodes labeled with dns.enabled=true
@@ -800,6 +789,18 @@ services:
         reservations:
           cpus: "0.1"
           memory: 128M
+      labels:
+        - "cloud.obiente.service=dns-service"
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.dns-service.rule=Host(`dns-service.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.dns-service.entrypoints=web"
+        - "traefik.http.services.dns-service.loadbalancer.server.port=8053"
+        - "traefik.http.routers.dns-service-secure.rule=Host(`dns-service.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.dns-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.dns-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.dns-service-secure.service=dns-service"
+        - "traefik.docker.network=obiente_obiente-network"  # Use overlay network IP, not ingress network
     healthcheck:
       # Check HTTP port (8053) instead of DNS port (53) since HTTP server always runs
       # even when ENABLE_DNS=false, and this is what Traefik routes to

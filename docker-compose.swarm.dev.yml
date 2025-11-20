@@ -768,16 +768,6 @@ services:
     environment:
       <<: [*common-database, *common-redis, *common-orchestrator, *common-dns]
       HTTP_PORT: ${DNS_HTTP_PORT:-8053}
-    labels:
-      - "cloud.obiente.traefik=true"
-      - "traefik.enable=true"
-      - "traefik.http.routers.dns-service.rule=Host(`dns-service.${DOMAIN:-localhost}`)"
-      - "traefik.http.routers.dns-service.entrypoints=web"
-      - "traefik.http.services.dns-service.loadbalancer.server.port=8053"
-      - "traefik.http.routers.dns-service-secure.rule=Host(`dns-service.${DOMAIN:-localhost}`)"
-      - "traefik.http.routers.dns-service-secure.entrypoints=websecure"
-      - "traefik.http.routers.dns-service-secure.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.dns-service-secure.service=dns-service"
     ports:
       # Use host mode publishing to expose DNS port directly on the host
       # DNS only runs on nodes labeled with dns.enabled=true
@@ -814,6 +804,18 @@ services:
         reservations:
           cpus: "0.1"
           memory: 128M
+      labels:
+        - "cloud.obiente.service=dns-service"
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.dns-service.rule=Host(`dns-service.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.dns-service.entrypoints=web"
+        - "traefik.http.services.dns-service.loadbalancer.server.port=8053"
+        - "traefik.http.routers.dns-service-secure.rule=Host(`dns-service.${DOMAIN:-localhost}`)"
+        - "traefik.http.routers.dns-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.dns-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.dns-service-secure.service=dns-service"
+        - "traefik.docker.network=obiente_obiente-network"  # Use overlay network IP, not ingress network
     healthcheck:
       test: ["CMD-SHELL", "if command -v nc >/dev/null 2>&1; then nc -z localhost ${DNS_PORT:-53} || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost ${DNS_PORT:-53} || exit 1; fi"]
       interval: 30s
