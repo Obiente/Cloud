@@ -281,6 +281,23 @@ const initEditor = async () => {
   try {
     // Lazy load Monaco Editor
     if (!monaco) {
+      // Set up MonacoEnvironment.getWorker before importing Monaco
+      // This only runs when Monaco is actually needed (lazy loading)
+      // Monaco can use a single default worker for all languages
+      if (typeof window !== "undefined" && !window.MonacoEnvironment) {
+        // Load the default editor worker - this handles all languages
+        const EditorWorker = await import("monaco-editor/esm/vs/editor/editor.worker?worker");
+        const WorkerClass = (EditorWorker as { default: new () => Worker }).default;
+
+        // Set up MonacoEnvironment with a simple default worker
+        // Monaco will use this for all languages - it handles language-specific features internally
+        window.MonacoEnvironment = {
+          getWorker() {
+            return new WorkerClass();
+          },
+        };
+      }
+
       const monacoModule = await import("monaco-editor");
       monaco = monacoModule;
 

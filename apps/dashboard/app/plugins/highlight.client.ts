@@ -60,31 +60,23 @@ export default defineNuxtPlugin({
       });
     };
 
-    // Highlight on initial load
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", highlightCodeBlocks);
-    } else {
-      // Use nextTick to ensure DOM is ready
-      setTimeout(highlightCodeBlocks, 0);
+    // Highlight on initial load - defer until after hydration
+    if (import.meta.client) {
+      // Use double requestAnimationFrame to ensure hydration is complete
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", highlightCodeBlocks);
+          } else {
+            highlightCodeBlocks();
+          }
+        });
+      });
     }
 
-    // Re-apply theme when colors might change (e.g., theme switch)
-    const observer = new MutationObserver(() => {
-      applyOUIThemeToHighlightJS();
-      
-      // Re-highlight code blocks when DOM changes (for docs pages)
-      setTimeout(highlightCodeBlocks, 100);
-    });
-    
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["style", "class"],
-      childList: true,
-      subtree: true,
-    });
-
-    // Also watch for route changes in Nuxt (for docs pages)
-    // Use useRouter composable when available
+    // Watch for route changes in Nuxt (for docs pages)
+    // MutationObserver removed as it was causing performance issues (freezing on Chrome)
+    // Route-based highlighting is sufficient for most use cases
     try {
       const { useRouter } = await import("#app");
       const router = useRouter();
@@ -94,7 +86,7 @@ export default defineNuxtPlugin({
         });
       }
     } catch {
-      // Fallback: if router isn't available, just rely on MutationObserver
+      // Router not available, skip route watching
     }
   },
 });
