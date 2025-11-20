@@ -20,17 +20,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.0.1",
-    "drizzle-orm": "^0.44.5",
+    "@neondatabase/serverless": "^1.0.2",
+    "drizzle-orm": "^0.44.7",
     "postgres": "^3.4.7"
   },
   "devDependencies": {
     "@obiente/config": "workspace:*",
     "@obiente/types": "workspace:*",
-    "@types/node": "^24.5.1",
-    "@types/pg": "^8.15.5",
-    "drizzle-kit": "^0.31.4",
-    "tsx": "^4.20.5",
-    "typescript": "^5.9.2"
+    "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.6",
+    "drizzle-kit": "^0.31.7",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
   }
 }
