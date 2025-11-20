@@ -335,6 +335,18 @@ func (s *Service) ListDNSRecords(ctx context.Context, req *connect.Request[super
 		records = append(records, gameServerRecords...)
 	}
 
+	// Fetch delegated DNS records if filter allows
+	// Include delegated records in the main view for superadmins
+	if recordTypeFilter == "" || recordTypeFilter == "A" || recordTypeFilter == "SRV" {
+		delegatedRecords, err := s.listDelegatedDNSRecordsAsDNSRecords(req, recordTypeFilter, now)
+		if err != nil {
+			// Log error but don't fail the entire request
+			logger.Warn("[SuperAdmin] Failed to fetch delegated DNS records: %v", err)
+		} else {
+			records = append(records, delegatedRecords...)
+		}
+	}
+
 	return connect.NewResponse(&superadminv1.ListDNSRecordsResponse{
 		Records: records,
 	}), nil
@@ -598,6 +610,129 @@ func (s *Service) listGameServerDNSRecords(req *connect.Request[superadminv1.Lis
 	}
 
 	return records, nil
+}
+
+// listDelegatedDNSRecordsAsDNSRecords converts delegated DNS records to regular DNS record format
+// This allows delegated records to appear in the main DNS records view for superadmins
+func (s *Service) listDelegatedDNSRecordsAsDNSRecords(req *connect.Request[superadminv1.ListDNSRecordsRequest], recordTypeFilter string, now time.Time) ([]*superadminv1.DNSRecord, error) {
+	// Get all delegated DNS records (no organization filter for superadmins)
+	// We'll filter by record type if specified
+	var recordType string
+	if recordTypeFilter != "" {
+		recordType = recordTypeFilter
+	}
+	
+	dbRecords, err := database.ListDelegatedDNSRecords("", "", recordType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list delegated DNS records: %w", err)
+	}
+
+	records := make([]*superadminv1.DNSRecord, 0, len(dbRecords))
+	
+	for _, dbRecord := range dbRecords {
+		// Apply organization filter if specified
+		if orgID := req.Msg.GetOrganizationId(); orgID != "" {
+			if dbRecord.OrganizationID != orgID {
+				continue
+			}
+		}
+
+		// Parse records JSON
+		var recordValues []string
+		if err := json.Unmarshal([]byte(dbRecord.Records), &recordValues); err != nil {
+			logger.Warn("[SuperAdmin] Failed to parse records JSON for %s: %v", dbRecord.Domain, err)
+			continue
+		}
+
+		// Extract deployment ID or game server ID from domain
+		// Format: {id}.my.obiente.cloud or _service._protocol.{id}.my.obiente.cloud
+		domainParts := strings.Split(strings.TrimSuffix(dbRecord.Domain, ".my.obiente.cloud"), ".")
+		var resourceID string
+		if len(domainParts) > 0 {
+			// For SRV records, the ID is the last part before .my.obiente.cloud
+			// For A records, it's the first part
+			if dbRecord.RecordType == "SRV" && len(domainParts) >= 3 {
+				resourceID = domainParts[len(domainParts)-1]
+			} else {
+				resourceID = domainParts[0]
+			}
+		}
+
+		if dbRecord.RecordType == "A" {
+			// A record - could be for deployment or game server
+			// Try to determine by checking if it matches a deployment or game server pattern
+			// For now, we'll treat it as a deployment if it doesn't start with "gs-"
+			var deploymentID, gameServerID string
+			if strings.HasPrefix(resourceID, "gs-") {
+				gameServerID = resourceID
+			} else {
+				deploymentID = resourceID
+			}
+
+			record := &superadminv1.DNSRecord{
+				RecordType:     "A",
+				Domain:         dbRecord.Domain,
+				IpAddresses:    recordValues,
+				OrganizationId: dbRecord.OrganizationID,
+				Status:         "DELEGATED", // Mark as delegated
+				LastResolved:   timestamppb.New(dbRecord.LastUpdated),
+			}
+
+			if deploymentID != "" {
+				record.DeploymentId = deploymentID
+			}
+			if gameServerID != "" {
+				record.GameServerId = gameServerID
+			}
+
+			records = append(records, record)
+		} else if dbRecord.RecordType == "SRV" {
+			// SRV record - parse the SRV record format: "priority weight port target"
+			// Example: "0 0 25565 gs-123.my.obiente.cloud"
+			var port int32
+			var target string
+			if len(recordValues) > 0 {
+				// Parse SRV record format
+				parts := strings.Fields(recordValues[0])
+				if len(parts) >= 4 {
+					// parts[2] is the port
+					if portNum, err := parseInt32(parts[2]); err == nil {
+						port = portNum
+					}
+					// parts[3] is the target
+					target = parts[3]
+				}
+			}
+
+			record := &superadminv1.DNSRecord{
+				RecordType:     "SRV",
+				Domain:         dbRecord.Domain,
+				Target:         target,
+				Port:           port,
+				GameServerId:   resourceID, // SRV records are typically for game servers
+				OrganizationId: dbRecord.OrganizationID,
+				Status:         "DELEGATED", // Mark as delegated
+				LastResolved:   timestamppb.New(dbRecord.LastUpdated),
+			}
+
+			records = append(records, record)
+		}
+	}
+
+	return records, nil
+}
+
+// parseInt32 safely parses a string to int32
+func parseInt32(s string) (int32, error) {
+	var result int64
+	_, err := fmt.Sscanf(s, "%d", &result)
+	if err != nil {
+		return 0, err
+	}
+	if result > math.MaxInt32 || result < math.MinInt32 {
+		return 0, fmt.Errorf("value %d out of int32 range", result)
+	}
+	return int32(result), nil
 }
 
 // GetDNSConfig returns DNS server configuration

@@ -636,6 +636,15 @@ func (s *DNSServer) handleGameServerAQuery(msg *dns.Msg, domain string, q dns.Qu
 
 // handlePushDNSRecord handles DNS record push requests from remote APIs
 func handlePushDNSRecord(w http.ResponseWriter, r *http.Request) {
+	// Handle CORS preflight requests
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Source-API")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -750,6 +759,15 @@ func handlePushDNSRecord(w http.ResponseWriter, r *http.Request) {
 
 // handlePushDNSRecords handles batch DNS record push requests
 func handlePushDNSRecords(w http.ResponseWriter, r *http.Request) {
+	// Handle CORS preflight requests
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Source-API")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -907,27 +925,30 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 	records := make([]map[string]interface{}, 0)
 
 	// Get all running deployments
-	var deploymentLocations []database.DeploymentLocation
-	if err := database.DB.Where("status = ?", "running").Find(&deploymentLocations).Error; err != nil {
+	// Join with deployments table to ensure deployment status is RUNNING (3)
+	// and deployment_location status is "running"
+	type deploymentDNSRow struct {
+		DeploymentID string
+	}
+	var deploymentRows []deploymentDNSRow
+	if err := database.DB.Table("deployment_locations dl").
+		Select("DISTINCT dl.deployment_id").
+		Joins("INNER JOIN deployments d ON d.id = dl.deployment_id AND d.deleted_at IS NULL").
+		Where("dl.status = ? AND d.status = ?", "running", 3). // 3 = RUNNING status
+		Scan(&deploymentRows).Error; err != nil {
 		log.Printf("[DNS Pusher] Failed to query deployment locations: %v", err)
 	} else {
-		// Group by deployment ID to get unique deployments
-		deploymentMap := make(map[string]bool)
-		for _, loc := range deploymentLocations {
-			if deploymentMap[loc.DeploymentID] {
-				continue // Already processed this deployment
-			}
-			deploymentMap[loc.DeploymentID] = true
-
+		// Process each deployment
+		for _, row := range deploymentRows {
 			// Get Traefik IPs for this deployment
-			ips, err := database.GetDeploymentTraefikIP(loc.DeploymentID, traefikIPMap)
+			ips, err := database.GetDeploymentTraefikIP(row.DeploymentID, traefikIPMap)
 			if err != nil {
-				log.Printf("[DNS Pusher] Failed to get Traefik IP for deployment %s: %v", loc.DeploymentID, err)
+				log.Printf("[DNS Pusher] Failed to get Traefik IP for deployment %s: %v", row.DeploymentID, err)
 				continue
 			}
 
 			if len(ips) > 0 {
-				domain := fmt.Sprintf("%s.my.obiente.cloud", loc.DeploymentID)
+				domain := fmt.Sprintf("%s.my.obiente.cloud", row.DeploymentID)
 				records = append(records, map[string]interface{}{
 					"domain":      domain,
 					"record_type": "A",
