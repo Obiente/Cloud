@@ -218,7 +218,9 @@ message GameServerStatusUpdate {
 message GetGameServerLogsRequest {
   string game_server_id = 1;
   optional int32 limit = 2;          // Max number of lines to return
-  optional google.protobuf.Timestamp since = 3; // Get logs since this timestamp
+  optional google.protobuf.Timestamp since = 3; // Get logs since this timestamp (for pagination)
+  optional google.protobuf.Timestamp until = 4; // Get logs until this timestamp (for historical loading)
+  optional string search_query = 5;   // Search query to filter logs (case-insensitive substring match)
 }
 
 message GetGameServerLogsResponse {
