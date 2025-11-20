@@ -2,6 +2,7 @@ package gameservers
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
@@ -252,19 +253,39 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// If container is stopped, send helpful message
-	currentSession = getSession()
-	if currentSession == nil {
-		stoppedMsg := "Game server is stopped. Type 'start' to start the server first.\r\n"
-		data := make([]int, len(stoppedMsg))
-		for i, b := range []byte(stoppedMsg) {
-			data[i] = int(b)
-		}
-		_ = writeJSON(gameServerTerminalWSOutput{Type: "output", Data: data})
-	}
-
 	outputCtx, outputCancel := context.WithCancel(ctx)
 	outputDone := make(chan struct{})
+
+	// Check game server status and handle accordingly
+	currentSession = getSession()
+	if currentSession == nil {
+		// Status 2 = STARTING, 3 = RUNNING, 5 = STOPPED
+		if gameServer.Status == 2 { // STARTING
+			// If container exists, stream logs during startup
+			if gameServer.ContainerID != nil {
+				// Stream container logs during startup
+				go s.streamStartingLogs(ctx, initMsg.GameServerID, *gameServer.ContainerID, writeJSON, getSession, setSession, outputCancel)
+			} else {
+				// Container not created yet, show starting message
+				startingMsg := "Starting game server...\r\n"
+				data := make([]int, len(startingMsg))
+				for i, b := range []byte(startingMsg) {
+					data[i] = int(b)
+				}
+				_ = writeJSON(gameServerTerminalWSOutput{Type: "output", Data: data})
+				// Poll for container creation and then stream logs
+				go s.pollForContainerAndStreamLogs(ctx, initMsg.GameServerID, writeJSON, getSession, setSession, outputCancel)
+			}
+		} else {
+			// Container is stopped
+			stoppedMsg := "Game server is stopped. Type 'start' to start the server first.\r\n"
+			data := make([]int, len(stoppedMsg))
+			for i, b := range []byte(stoppedMsg) {
+				data[i] = int(b)
+			}
+			_ = writeJSON(gameServerTerminalWSOutput{Type: "output", Data: data})
+		}
+	}
 
 	// Buffer for accumulating command input when container is stopped
 	var commandBuffer strings.Builder
@@ -876,6 +897,169 @@ func (s *Service) HandleTerminalWebSocket(w http.ResponseWriter, r *http.Request
 			_ = writeJSON(map[string]string{"type": "pong"})
 		default:
 			sendError("Unknown message type")
+		}
+	}
+}
+
+// streamStartingLogs streams container logs during startup
+func (s *Service) streamStartingLogs(ctx context.Context, gameServerID string, containerID string, writeJSON func(interface{}) error, getSession func() *TerminalSession, setSession func(*TerminalSession, func()), cancel context.CancelFunc) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[GameServer Terminal WS] Panic in streamStartingLogs: %v", r)
+		}
+	}()
+
+	manager, err := s.getGameServerManager()
+	if err != nil {
+		log.Printf("[GameServer Terminal WS] Failed to get manager for starting logs: %v", err)
+		return
+	}
+
+	// Get logs from container (last 100 lines, then follow)
+	logsReader, err := manager.GetGameServerLogs(ctx, gameServerID, "100", true, nil, nil)
+	if err != nil {
+		log.Printf("[GameServer Terminal WS] Failed to get starting logs: %v", err)
+		return
+	}
+	defer logsReader.Close()
+
+	// Parse Docker multiplexed log format and stream to client
+	// Docker logs format: [8-byte header][payload]
+	// Header: [stream_type(1)][reserved(3)][size(4 bytes, big-endian)]
+	// stream_type: 1=stdout, 2=stderr
+	header := make([]byte, 8)
+	buf := make([]byte, 4096)
+	
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		// Read 8-byte header
+		_, err := io.ReadFull(logsReader, header)
+		if err == io.EOF {
+			// Check if container is now running and we can attach terminal
+			// Poll for terminal session availability
+			go s.pollForTerminalSession(ctx, containerID, getSession, setSession, cancel)
+			return
+		}
+		if err != nil {
+			log.Printf("[GameServer Terminal WS] Error reading log header: %v", err)
+			return
+		}
+
+		// Extract payload size from header (bytes 4-7, big-endian)
+		payloadSize := int(binary.BigEndian.Uint32(header[4:8]))
+		if payloadSize <= 0 || payloadSize > len(buf) {
+			// Invalid size, skip this entry
+			continue
+		}
+
+		// Read payload
+		payload := buf[:payloadSize]
+		n, err := io.ReadFull(logsReader, payload)
+		if err != nil {
+			log.Printf("[GameServer Terminal WS] Error reading log payload: %v", err)
+			return
+		}
+
+		if n > 0 {
+			// Convert bytes to int array for JSON output
+			data := make([]int, n)
+			for i := 0; i < n; i++ {
+				data[i] = int(payload[i])
+			}
+			_ = writeJSON(gameServerTerminalWSOutput{Type: "output", Data: data})
+		}
+	}
+}
+
+// pollForContainerAndStreamLogs polls for container creation and streams logs once available
+func (s *Service) pollForContainerAndStreamLogs(ctx context.Context, gameServerID string, writeJSON func(interface{}) error, getSession func() *TerminalSession, setSession func(*TerminalSession, func()), cancel context.CancelFunc) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[GameServer Terminal WS] Panic in pollForContainerAndStreamLogs: %v", r)
+		}
+	}()
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	maxAttempts := 120 // 2 minutes max
+	attempts := 0
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			attempts++
+			if attempts > maxAttempts {
+				timeoutMsg := "Timeout waiting for container to be created.\r\n"
+				data := make([]int, len(timeoutMsg))
+				for i, b := range []byte(timeoutMsg) {
+					data[i] = int(b)
+				}
+				_ = writeJSON(gameServerTerminalWSOutput{Type: "output", Data: data})
+				return
+			}
+
+			// Refresh game server to check for container ID
+			gameServer, err := s.repo.GetByID(ctx, gameServerID)
+			if err != nil {
+				continue
+			}
+
+			// Check if container was created
+			if gameServer.ContainerID != nil {
+				// Container exists, start streaming logs
+				go s.streamStartingLogs(ctx, gameServerID, *gameServer.ContainerID, writeJSON, getSession, setSession, cancel)
+				return
+			}
+
+			// Check if status changed from STARTING
+			if gameServer.Status != 2 { // Not STARTING anymore
+				return
+			}
+		}
+	}
+}
+
+// pollForTerminalSession polls for terminal session availability once container is running
+func (s *Service) pollForTerminalSession(ctx context.Context, containerID string, getSession func() *TerminalSession, setSession func(*TerminalSession, func()), cancel context.CancelFunc) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[GameServer Terminal WS] Panic in pollForTerminalSession: %v", r)
+		}
+	}()
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	maxAttempts := 30 // 1 minute max
+	attempts := 0
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			attempts++
+			if attempts > maxAttempts {
+				return
+			}
+
+			// Check if terminal session is now available
+			currentSession := getSession()
+			if currentSession != nil {
+				// Terminal session is available, we're done
+				return
+			}
+
+			// Try to create terminal session
+			// This will be handled by the main input loop when it detects the container is running
 		}
 	}
 }

@@ -10,12 +10,15 @@ import (
 	"syscall"
 	"time"
 
+	gameserversvc "gameservers-service/internal/service"
+
+	gameserverorchestrator "gameservers-service/internal/orchestrator"
+
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
-	gameserversvc "gameservers-service/internal/service"
 
 	gameserversv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1/gameserversv1connect"
 
@@ -79,9 +82,20 @@ func main() {
 	// Create audit interceptor
 	auditInterceptor := middleware.AuditLogInterceptor()
 
+	// Initialize game server manager
+	manager, err := gameserverorchestrator.NewGameServerManager("least-loaded", 50)
+	if err != nil {
+		logger.Warn("⚠️  Failed to create game server manager: %v", err)
+		logger.Warn("⚠️  Game servers will not work until Docker is accessible")
+		logger.Warn("⚠️  Please check Docker connection and ensure Docker daemon is running")
+		manager = nil
+	} else {
+		logger.Info("✓ Created game server manager")
+	}
+
 	// Create repositories and services
 	gameServerRepo := database.NewGameServerRepository(database.DB, database.RedisClient)
-	gameServerService := gameserversvc.NewService(gameServerRepo)
+	gameServerService := gameserversvc.NewService(gameServerRepo, manager)
 
 	// Register game servers service
 	gameServersPath, gameServersHandler := gameserversv1connect.NewGameServerServiceHandler(

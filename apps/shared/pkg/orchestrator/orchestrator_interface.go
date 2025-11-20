@@ -7,5 +7,4 @@ type OrchestratorServiceInterface interface {
 	GetServiceRegistry() interface{} // *registry.ServiceRegistry - using interface{} to avoid circular dependency
 	GetHealthChecker() interface{}   // *registry.HealthChecker
 	GetMetricsStreamer() *MetricsStreamer
-	GetGameServerManager() *GameServerManager
 }

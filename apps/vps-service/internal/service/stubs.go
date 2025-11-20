@@ -5,8 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/obiente/cloud/apps/shared/pkg/database"
 	vpsorch "vps-service/orchestrator"
+
+	"github.com/obiente/cloud/apps/shared/pkg/database"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"

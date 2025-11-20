@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"gameservers-service/internal/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
-	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 
 	gameserversv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1/gameserversv1connect"
@@ -18,26 +18,23 @@ type Service struct {
 	gameserversv1connect.UnimplementedGameServerServiceHandler
 	repo              *database.GameServerRepository
 	permissionChecker *auth.PermissionChecker
+	manager           *orchestrator.GameServerManager // Manager created directly in gameservers-service
 }
 
-func NewService(repo *database.GameServerRepository) *Service {
+func NewService(repo *database.GameServerRepository, manager *orchestrator.GameServerManager) *Service {
 	return &Service{
 		repo:              repo,
 		permissionChecker: auth.NewPermissionChecker(),
+		manager:           manager,
 	}
 }
 
-// getGameServerManager returns the game server manager from the orchestrator service
+// getGameServerManager returns the game server manager
 func (s *Service) getGameServerManager() (*orchestrator.GameServerManager, error) {
-	orchestratorService := orchestrator.GetGlobalOrchestratorService()
-	if orchestratorService == nil {
-		return nil, fmt.Errorf("orchestrator service not initialized")
-	}
-	manager := orchestratorService.GetGameServerManager()
-	if manager == nil {
+	if s.manager == nil {
 		return nil, fmt.Errorf("game server manager not initialized")
 	}
-	return manager, nil
+	return s.manager, nil
 }
 
 // ensureAuthenticated ensures the user is authenticated for streaming RPCs.

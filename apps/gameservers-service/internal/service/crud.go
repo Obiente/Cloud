@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	gameserverorchestrator "gameservers-service/internal/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 
@@ -195,7 +195,7 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 		// Log error but don't fail - container can be created later when starting
 		logger.Warn("[GameServerService] Failed to get game server manager during creation: %v", err)
 	} else {
-		config := &orchestrator.GameServerConfig{
+		config := &gameserverorchestrator.GameServerConfig{
 			GameServerID: id,
 			Image:        dockerImage,
 			Port:         port,
@@ -238,6 +238,9 @@ func (s *Service) CreateGameServer(ctx context.Context, req *connect.Request[gam
 // GetGameServer retrieves a game server by ID
 func (s *Service) GetGameServer(ctx context.Context, req *connect.Request[gameserversv1.GetGameServerRequest]) (*connect.Response[gameserversv1.GetGameServerResponse], error) {
 	gameServerID := req.Msg.GetGameServerId()
+	if gameServerID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("game server ID is required"))
+	}
 	if err := s.checkGameServerPermission(ctx, gameServerID, "view"); err != nil {
 		return nil, err
 	}

@@ -49,6 +49,9 @@ func (s *Service) StreamGameServerStatus(ctx context.Context, req *connect.Reque
 // GetGameServerLogs retrieves logs for a game server
 func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[gameserversv1.GetGameServerLogsRequest]) (*connect.Response[gameserversv1.GetGameServerLogsResponse], error) {
 	gameServerID := req.Msg.GetGameServerId()
+	if gameServerID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("game server ID is required"))
+	}
 	if err := s.checkGameServerPermission(ctx, gameServerID, "view"); err != nil {
 		return nil, err
 	}

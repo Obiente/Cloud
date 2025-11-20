@@ -17,7 +17,6 @@ import (
 
 type OrchestratorService struct {
 	deploymentManager *shared.DeploymentManager
-	gameServerManager *shared.GameServerManager
 	serviceRegistry   *registry.ServiceRegistry
 	healthChecker     *registry.HealthChecker
 	metricsStreamer   *shared.MetricsStreamer
@@ -37,13 +36,6 @@ type MicroserviceConfig struct {
 
 func NewOrchestratorService(strategy string, maxDeploymentsPerNode int, syncInterval time.Duration) (*OrchestratorService, error) {
 	deploymentManager, err := shared.NewDeploymentManager(strategy, maxDeploymentsPerNode)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create game server manager (using same strategy and max deployments for now)
-	// TODO: Consider separate configuration for game servers
-	gameServerManager, err := shared.NewGameServerManager(strategy, maxDeploymentsPerNode)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +62,6 @@ func NewOrchestratorService(strategy string, maxDeploymentsPerNode int, syncInte
 
 	service := &OrchestratorService{
 		deploymentManager: deploymentManager,
-		gameServerManager: gameServerManager,
 		serviceRegistry:   serviceRegistry,
 		healthChecker:     healthChecker,
 		metricsStreamer:   metricsStreamer,
@@ -212,10 +203,6 @@ func (os *OrchestratorService) GetHealthChecker() interface{} {
 
 func (os *OrchestratorService) GetMetricsStreamer() *shared.MetricsStreamer {
 	return os.metricsStreamer
-}
-
-func (os *OrchestratorService) GetGameServerManager() *shared.GameServerManager {
-	return os.gameServerManager
 }
 
 func (os *OrchestratorService) getEnvOrDefault(key string, defaultValue string) string {
