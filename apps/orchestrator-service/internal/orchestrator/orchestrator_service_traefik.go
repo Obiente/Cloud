@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/moby/moby/client"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 )
@@ -33,6 +34,12 @@ func (os *OrchestratorService) syncMicroserviceTraefikLabels() {
 }
 
 func (os *OrchestratorService) updateMicroserviceTraefikLabels() {
+	// Check if this node is a manager node - only manager nodes can update service labels
+	if !os.isManagerNode() {
+		logger.Debug("[Orchestrator] Node is not a manager, skipping Traefik label sync (only manager nodes can update service labels)")
+		return
+	}
+
 	// Get node configuration
 	nodeID := os.deploymentManager.GetNodeID()
 	if nodeID == "" {
@@ -305,4 +312,39 @@ func (os *OrchestratorService) getNodeSubdomain(node *database.NodeMetadata) str
 	}
 
 	return ""
+}
+
+// isManagerNode checks if the current node is a Docker Swarm manager node
+// Only manager nodes can update service labels in Docker Swarm
+func (os *OrchestratorService) isManagerNode() bool {
+	// Get Docker client from deployment manager
+	dockerClient := os.deploymentManager.GetDockerClient()
+	if dockerClient == nil {
+		logger.Debug("[Orchestrator] Docker client not available, assuming non-manager node")
+		return false
+	}
+
+	// Type assert to client.APIClient
+	cli, ok := dockerClient.(client.APIClient)
+	if !ok {
+		logger.Debug("[Orchestrator] Docker client type assertion failed, assuming non-manager node")
+		return false
+	}
+
+	// Get Docker info to check if this node is a manager
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	info, err := cli.Info(ctx)
+	if err != nil {
+		logger.Debug("[Orchestrator] Failed to get Docker info to check manager status: %v", err)
+		return false
+	}
+
+	// Check if Swarm is enabled and if this node has control (is a manager)
+	isManager := info.Swarm.ControlAvailable
+	if !isManager {
+		logger.Debug("[Orchestrator] Node is not a Swarm manager (ControlAvailable=false)")
+	}
+	return isManager
 }

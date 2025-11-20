@@ -187,13 +187,21 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 						continue
 					}
 
+					hostname := nodeInfo.Description.Hostname
+					nodeID := node.ID
+
+					// Check if a node with this hostname already exists (might have different ID after Swarm reset)
+					var existingNode database.NodeMetadata
+					err = database.DB.Where("hostname = ?", hostname).First(&existingNode).Error
+					hostnameExists := err == nil
+
 					// Calculate resources
 					totalCPU := int(nodeInfo.Description.Resources.NanoCPUs / 1e9)
 					totalMemory := nodeInfo.Description.Resources.MemoryBytes
 
 					// Get current resource usage by aggregating container stats
-					deploymentCount := ns.getNodeDeploymentCount(ctx, node.ID)
-					usedCPU, usedMemory := ns.calculateNodeResourceUsage(ctx, node.ID, totalCPU)
+					deploymentCount := ns.getNodeDeploymentCount(ctx, nodeID)
+					usedCPU, usedMemory := ns.calculateNodeResourceUsage(ctx, nodeID, totalCPU)
 
 					// Update or create node metadata
 					labelsJSON := "{}"
@@ -203,27 +211,58 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 							labelsJSON = string(labelsBytes)
 						}
 					}
-					
-					metadata := &database.NodeMetadata{
-						ID:              node.ID,
-						Hostname:        nodeInfo.Description.Hostname,
-						Role:            string(node.Spec.Role),
-						Availability:    string(node.Spec.Availability),
-						Status:          string(node.Status.State),
-						TotalCPU:        totalCPU,
-						TotalMemory:     totalMemory,
-						UsedCPU:         usedCPU,
-						UsedMemory:      usedMemory,
-						DeploymentCount: deploymentCount,
-						MaxDeployments:  ns.maxDeploymentsPerNode,
-						Labels:          labelsJSON,
+
+					var metadata *database.NodeMetadata
+					if hostnameExists && existingNode.ID != nodeID {
+						// Node with same hostname but different ID exists - update it to use new ID
+						// This handles Swarm resets where nodes get new IDs but same hostnames
+						log.Printf("[NodeSelector] Node with hostname %s exists with ID %s, updating to use ID %s (Swarm reset detected)", hostname, existingNode.ID, nodeID)
+						oldID := existingNode.ID
+						
+						// Update the existing node's ID and other fields
+						existingNode.ID = nodeID
+						existingNode.Hostname = hostname
+						existingNode.Role = string(node.Spec.Role)
+						existingNode.Availability = string(node.Spec.Availability)
+						existingNode.Status = string(node.Status.State)
+						existingNode.TotalCPU = totalCPU
+						existingNode.TotalMemory = totalMemory
+						existingNode.UsedCPU = usedCPU
+						existingNode.UsedMemory = usedMemory
+						existingNode.DeploymentCount = deploymentCount
+						existingNode.MaxDeployments = ns.maxDeploymentsPerNode
+						existingNode.Labels = labelsJSON
+						existingNode.UpdatedAt = time.Now()
+
+						// Delete old record and create new one with correct ID
+						// We need to delete first to avoid hostname constraint violation
+						if err := database.DB.Delete(&database.NodeMetadata{}, "id = ?", oldID).Error; err != nil {
+							log.Printf("[NodeSelector] WARNING: Failed to delete old node %s: %v", oldID, err)
+						}
+						metadata = &existingNode
+					} else {
+						// Create new metadata (either new node or existing node with same ID)
+						metadata = &database.NodeMetadata{
+							ID:              nodeID,
+							Hostname:        hostname,
+							Role:            string(node.Spec.Role),
+							Availability:    string(node.Spec.Availability),
+							Status:          string(node.Status.State),
+							TotalCPU:        totalCPU,
+							TotalMemory:     totalMemory,
+							UsedCPU:         usedCPU,
+							UsedMemory:      usedMemory,
+							DeploymentCount: deploymentCount,
+							MaxDeployments:  ns.maxDeploymentsPerNode,
+							Labels:          labelsJSON,
+						}
 					}
 
 					// Save to database
 					database.DB.Save(metadata)
 					
 					// Also update metrics separately to ensure last_heartbeat is updated
-					database.UpdateNodeMetrics(node.ID, usedCPU, usedMemory)
+					database.UpdateNodeMetrics(nodeID, usedCPU, usedMemory)
 				}
 				// Successfully synced all nodes, return
 				return nil
@@ -246,9 +285,13 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 	// Get Swarm field
 	swarmField := v.FieldByName("Swarm")
 	var swarmNodeID string
+	var controlAvailable bool
 	if swarmField.IsValid() {
 		if nodeIDField := swarmField.FieldByName("NodeID"); nodeIDField.IsValid() {
 			swarmNodeID = nodeIDField.String()
+		}
+		if controlField := swarmField.FieldByName("ControlAvailable"); controlField.IsValid() {
+			controlAvailable = controlField.Bool()
 		}
 	}
 	
@@ -271,6 +314,33 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 	memTotal := int64(0)
 	if memTotalField.IsValid() {
 		memTotal = memTotalField.Int()
+	}
+
+	// Determine role and availability from Swarm info if available
+	// For worker nodes registering themselves, try to get info from Swarm
+	var role string = "worker" // Default
+	var availability string = "active" // Default
+	var status string = "ready" // Default
+	
+	if swarmNodeID != "" && utils.IsSwarmModeEnabled() {
+		// Try to get node info from Swarm to get actual role/availability
+		// This works even on worker nodes if they can query their own info
+		nodeInfo, _, err := ns.dockerClient.NodeInspectWithRaw(ctx, swarmNodeID)
+		if err == nil {
+			// Successfully got node info - use actual values
+			role = string(nodeInfo.Spec.Role)
+			availability = string(nodeInfo.Spec.Availability)
+			status = string(nodeInfo.Status.State)
+			log.Printf("[NodeSelector] Got role=%s, availability=%s, status=%s from Swarm for node %s", role, availability, status, swarmNodeID)
+		} else {
+			// Can't get node info (might be worker node) - infer from ControlAvailable
+			if controlAvailable {
+				role = "manager"
+			} else {
+				role = "worker"
+			}
+			log.Printf("[NodeSelector] Could not get node info from Swarm, using inferred role=%s (ControlAvailable=%v)", role, controlAvailable)
+		}
 	}
 
 	if swarmNodeID == "" {
@@ -315,9 +385,9 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 		
 		// Update the existing node's ID and other fields
 		existingNode.ID = nodeID
-		existingNode.Role = "worker"
-		existingNode.Availability = "active"
-		existingNode.Status = "ready"
+		existingNode.Role = role
+		existingNode.Availability = availability
+		existingNode.Status = status
 		existingNode.TotalCPU = totalCPU
 		existingNode.TotalMemory = totalMemory
 		existingNode.UsedCPU = usedCPU
@@ -342,9 +412,9 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 		metadata = &database.NodeMetadata{
 		ID:              nodeID,
 		Hostname:        name,
-		Role:            "worker",
-		Availability:    "active",
-		Status:          "ready",
+		Role:            role,
+		Availability:    availability,
+		Status:          status,
 		TotalCPU:        totalCPU,
 		TotalMemory:     totalMemory,
 		UsedCPU:         usedCPU,
@@ -359,9 +429,9 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 	} else {
 		// Node exists with same hostname and ID - just update it
 		metadata = &existingNode
-		metadata.Role = "worker"
-		metadata.Availability = "active"
-		metadata.Status = "ready"
+		metadata.Role = role
+		metadata.Availability = availability
+		metadata.Status = status
 		metadata.TotalCPU = totalCPU
 		metadata.TotalMemory = totalMemory
 		metadata.DeploymentCount = deploymentCount

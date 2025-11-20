@@ -29,11 +29,18 @@
         :status-map="roleStatusMap"
       />
     </template>
-    <template #cell-status="{ value }">
-      <SuperadminStatusBadge
-        :status="value?.toLowerCase()"
-        :status-map="nodeStatusMap"
-      />
+    <template #cell-status="{ value, row }">
+      <div class="space-y-1">
+        <SuperadminStatusBadge
+          :status="value?.toLowerCase()"
+          :status-map="nodeStatusMap"
+        />
+        <SuperadminStatusBadge
+          v-if="row.availability"
+          :status="row.availability?.toLowerCase()"
+          :status-map="availabilityStatusMap"
+        />
+      </div>
     </template>
     <template #cell-resources="{ value, row }">
       <div class="text-sm">
@@ -226,6 +233,14 @@ const roleStatusMap: Record<string, { label: string; variant: BadgeVariant }> = 
 const nodeStatusMap: Record<string, { label: string; variant: BadgeVariant }> = {
   ready: { label: "Ready", variant: "success" },
   down: { label: "Down", variant: "danger" },
+  disconnected: { label: "Disconnected", variant: "warning" },
+  unknown: { label: "Unknown", variant: "secondary" },
+};
+
+const availabilityStatusMap: Record<string, { label: string; variant: BadgeVariant }> = {
+  active: { label: "Active", variant: "success" },
+  pause: { label: "Pause", variant: "warning" },
+  drain: { label: "Drain", variant: "danger" },
 };
 
 const filterConfigs: FilterConfig[] = [
@@ -255,6 +270,8 @@ const filterConfigs: FilterConfig[] = [
       { key: "", value: "", label: "All" },
       { key: "ready", value: "ready", label: "Ready" },
       { key: "down", value: "down", label: "Down" },
+      { key: "disconnected", value: "disconnected", label: "Disconnected" },
+      { key: "unknown", value: "unknown", label: "Unknown" },
     ],
   },
 ];
