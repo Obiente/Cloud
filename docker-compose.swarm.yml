@@ -744,7 +744,7 @@ services:
     environment:
       <<: [*common-database, *common-redis, *common-swarm-orchestrator, *common-dns, *common-dns-delegation]
       HTTP_PORT: ${DNS_HTTP_PORT:-8053}
-      labels:
+    labels:
       - "cloud.obiente.service=dns-service"
       - "cloud.obiente.traefik=true"
       - "traefik.enable=true"
