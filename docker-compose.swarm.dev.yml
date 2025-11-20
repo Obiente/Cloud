@@ -238,8 +238,9 @@ services:
         - "traefik.http.services.api-gateway.loadbalancer.server.port=3001"
         - "traefik.http.services.api-gateway.loadbalancer.passHostHeader=true"
         - "traefik.http.services.api-gateway.loadbalancer.healthcheck.path=/health"
-        - "traefik.http.services.api-gateway.loadbalancer.healthcheck.interval=30s"
-        - "traefik.http.services.api-gateway.loadbalancer.healthcheck.timeout=10s"
+        - "traefik.http.services.api-gateway.loadbalancer.healthcheck.interval=10s"
+        - "traefik.http.services.api-gateway.loadbalancer.healthcheck.timeout=3s"
+        - "traefik.http.services.api-gateway.loadbalancer.healthcheck.scheme=http"
         - "traefik.http.routers.api-gateway-secure.rule=Host(`api.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.api-gateway-secure.entrypoints=websecure"
         - "traefik.http.routers.api-gateway-secure.tls.certresolver=letsencrypt"
@@ -865,7 +866,12 @@ services:
       - --providers.swarm=true  # Use Swarm provider for Docker Swarm mode (v3.0)
       - --providers.swarm.exposedbydefault=false
       - --providers.swarm.watch=true  # Watch for service changes
+      - --providers.swarm.refreshSeconds=5  # Poll Docker Swarm every 5 seconds for faster service discovery
       - --providers.swarm.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
+      # Timeout configuration to fail faster on unreachable backends
+      - --serversTransport.forwardingTimeouts.dialTimeout=5s
+      - --serversTransport.forwardingTimeouts.responseHeaderTimeout=10s
+      - --serversTransport.forwardingTimeouts.idleConnTimeout=90s
       - --entryPoints.web.address=:80
       - --entryPoints.web.forwardedHeaders.trustedIPs=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
       - --entryPoints.websecure.address=:443
