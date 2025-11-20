@@ -278,8 +278,16 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 					}
 				}
 
+				// Get the actual Swarm network name dynamically (supports any stack name)
+				// This will find networks matching the pattern *_obiente-network
+				swarmNetworkName, err := dm.getSwarmNetworkName(context.Background())
+				if err != nil {
+					logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
+					swarmNetworkName = "obiente_obiente-network"
+				}
+
 				// Generate Traefik labels for this service
-				traefikLabels := generateTraefikLabels(deploymentID, serviceName, routings, servicePort)
+				traefikLabels := generateTraefikLabels(deploymentID, serviceName, routings, servicePort, swarmNetworkName)
 
 				// When Traefik handles routing, we should not expose ports to the host
 				// Convert ports to expose (internal network only) if Traefik labels are present
@@ -632,7 +640,7 @@ func (dm *DeploymentManager) injectTraefikLabelsIntoCompose(composeYaml string, 
 	return string(labeledYaml), nil
 }
 
-func generateTraefikLabels(deploymentID string, serviceName string, routings []database.DeploymentRouting, servicePort *int) map[string]string {
+func generateTraefikLabels(deploymentID string, serviceName string, routings []database.DeploymentRouting, servicePort *int, networkName string) map[string]string {
 	labels := make(map[string]string)
 
 	// Filter routings for this service name
@@ -654,6 +662,11 @@ func generateTraefikLabels(deploymentID string, serviceName string, routings []d
 	// Enable Traefik only when we have routing rules
 	labels["traefik.enable"] = "true"
 	labels["cloud.obiente.traefik"] = "true" // Required for Traefik to discover this container
+
+	// Specify which network Traefik should use (prevents using ingress network IPs)
+	if networkName != "" {
+		labels["traefik.docker.network"] = networkName
+	}
 
 	// Generate labels for each routing rule
 	for idx, routing := range serviceRoutings {

@@ -249,10 +249,11 @@ services:
         # Circuit breaker is applied to backend services, not the gateway itself
         - "traefik.http.routers.api-gateway.middlewares=api-gateway-retry"
         - "traefik.http.services.api-gateway.loadbalancer.server.port=3001"
+        - "traefik.docker.network=obiente_obiente-network"  # Use overlay network IP, not ingress network
         - "traefik.http.services.api-gateway.loadbalancer.passHostHeader=true"
         - "traefik.http.services.api-gateway.loadbalancer.healthcheck.path=/health"
         - "traefik.http.services.api-gateway.loadbalancer.healthcheck.interval=10s"
-        - "traefik.http.services.api-gateway.loadbalancer.healthcheck.timeout=3s"
+        - "traefik.http.services.api-gateway.loadbalancer.healthcheck.timeout=8s"
         - "traefik.http.services.api-gateway.loadbalancer.healthcheck.scheme=http"
         - "traefik.http.services.api-gateway.loadbalancer.healthcheck.followRedirects=true"
         - "traefik.http.routers.api-gateway-secure.rule=Host(`api.${DOMAIN:-localhost}`)"
@@ -819,7 +820,7 @@ services:
       - --providers.swarm=true  # Use Swarm provider for Docker Swarm mode (v3.0)
       - --providers.swarm.exposedbydefault=false
       - --providers.swarm.watch=true  # Watch for service changes
-      - --providers.swarm.refreshSeconds=5  # Poll Docker Swarm every 5 seconds for faster service discovery
+      - --providers.swarm.refreshSeconds=45  # Poll Docker Swarm every 5 seconds for faster service discovery
       - --providers.swarm.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
       # Timeout configuration to fail faster on unreachable backends
       # dialTimeout: time to establish connection (increased to 10s to handle network delays)
@@ -1093,9 +1094,6 @@ networks:
         - subnet: 10.15.3.0/24
     # Docker Swarm will automatically create this network when the stack is deployed
     # Network name will be: {stack-name}_obiente-network (e.g., obiente_obiente-network)
-    # Services on this network can resolve each other by service name (e.g., "postgres")
-    # IMPORTANT: Do NOT use external: true - it breaks DNS resolution in Swarm
-    # The embedded DNS server (127.0.0.11) only works properly when the network is created BY THE STACK
 
 configs:
   # Custom pg_hba.conf file

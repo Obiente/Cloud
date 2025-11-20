@@ -724,7 +724,7 @@ services:
         - "traefik.http.services.api-gateway.loadbalancer.passHostHeader=true"
         - "traefik.http.services.api-gateway.loadbalancer.healthcheck.path=/health"
         - "traefik.http.services.api-gateway.loadbalancer.healthcheck.interval=10s"
-        - "traefik.http.services.api-gateway.loadbalancer.healthcheck.timeout=3s"
+        - "traefik.http.services.api-gateway.loadbalancer.healthcheck.timeout=8s"
         - "traefik.http.services.api-gateway.loadbalancer.healthcheck.scheme=http"
         - "traefik.http.services.api-gateway.loadbalancer.healthcheck.followRedirects=true"
         - "traefik.http.routers.api-gateway-secure.rule=Host(`api.${DOMAIN}`)"
@@ -1393,7 +1393,8 @@ networks:
     attachable: true
     driver_opts:
       encrypted: "true"
+    ipam:
+      config:
+        - subnet: 10.15.3.0/24
     # Docker Swarm will automatically create this network when the stack is deployed
     # Network name will be: {stack-name}_obiente-network (e.g., obiente_obiente-network)
-    # Services on this network can resolve each other by service name (e.g., "postgres")
-    # IMPORTANT: Do NOT use external: true - it breaks DNS resolution in Swarm

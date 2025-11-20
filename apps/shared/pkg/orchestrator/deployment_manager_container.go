@@ -35,10 +35,17 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		"cloud.obiente.replica":       strconv.Itoa(replicaIndex),
 	}
 
+	// Get the actual Swarm network name (may be prefixed with stack name)
+	swarmNetworkName, err := dm.getSwarmNetworkName(ctx)
+	if err != nil {
+		logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
+		swarmNetworkName = "obiente_obiente-network" // Fallback to common name
+	}
+
 	// Generate Traefik labels from routing rules
 	// Use config.Port for service port (which should be from routing target port if available)
 	servicePort := config.Port
-	traefikLabels := generateTraefikLabels(config.DeploymentID, serviceName, routings, &servicePort)
+	traefikLabels := generateTraefikLabels(config.DeploymentID, serviceName, routings, &servicePort, swarmNetworkName)
 	for k, v := range traefikLabels {
 		labels[k] = v
 	}
@@ -278,9 +285,16 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 		"cloud.obiente.replica":       strconv.Itoa(replicaIndex),
 	}
 
+	// Get the actual Swarm network name (may be prefixed with stack name)
+	swarmNetworkName, err := dm.getSwarmNetworkName(ctx)
+	if err != nil {
+		logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
+		swarmNetworkName = "obiente_obiente-network" // Fallback to common name
+	}
+
 	// Generate Traefik labels from routing rules
 	servicePort := config.Port
-	traefikLabels := generateTraefikLabels(config.DeploymentID, serviceName, routings, &servicePort)
+	traefikLabels := generateTraefikLabels(config.DeploymentID, serviceName, routings, &servicePort, swarmNetworkName)
 	for k, v := range traefikLabels {
 		labels[k] = v
 	}
@@ -349,13 +363,6 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	swarmServiceName := fmt.Sprintf("deploy-%s-%s", config.DeploymentID, serviceName)
 	if replicaIndex > 0 {
 		swarmServiceName = fmt.Sprintf("deploy-%s-%s-replica-%d", config.DeploymentID, serviceName, replicaIndex)
-	}
-
-	// Get the actual Swarm network name (may be prefixed with stack name)
-	swarmNetworkName, err := dm.getSwarmNetworkName(ctx)
-	if err != nil {
-		logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
-		swarmNetworkName = "obiente_obiente-network" // Fallback to common name
 	}
 
 	// Build docker service create command

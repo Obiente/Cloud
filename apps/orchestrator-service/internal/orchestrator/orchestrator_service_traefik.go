@@ -242,6 +242,15 @@ func (os *OrchestratorService) generateMicroserviceTraefikLabels(serviceName str
 
 	// Service definition
 	labels["traefik.http.services."+routerName+".loadbalancer.server.port"] = fmt.Sprintf("%d", port)
+	labels["traefik.http.services."+routerName+".loadbalancer.passHostHeader"] = "true"
+
+	// Health check configuration
+	// Traefik automatically respects Docker Swarm health checks for service discovery
+	// Additionally, we configure HTTP health checks via labels for better reliability
+	labels["traefik.http.services."+routerName+".loadbalancer.healthcheck.path"] = "/health"
+	labels["traefik.http.services."+routerName+".loadbalancer.healthcheck.interval"] = "30s"
+	labels["traefik.http.services."+routerName+".loadbalancer.healthcheck.timeout"] = "5s"
+	labels["traefik.http.services."+routerName+".loadbalancer.healthcheck.scheme"] = "http"
 
 	// Load balancing configuration
 	// Traefik automatically load balances when multiple services have the same router rule
