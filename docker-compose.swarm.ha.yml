@@ -428,8 +428,11 @@ services:
       - --providers.swarm.refreshSeconds=5  # Poll Docker Swarm every 5 seconds for faster service discovery
       - --providers.swarm.constraints=Label(`cloud.obiente.traefik`,`true`)  # Only discover services with this label
       # Timeout configuration to fail faster on unreachable backends
-      - --serversTransport.forwardingTimeouts.dialTimeout=5s
-      - --serversTransport.forwardingTimeouts.responseHeaderTimeout=10s
+      # dialTimeout: time to establish connection (increased to 10s to handle network delays)
+      - --serversTransport.forwardingTimeouts.dialTimeout=10s
+      # responseHeaderTimeout: time to wait for response headers
+      - --serversTransport.forwardingTimeouts.responseHeaderTimeout=15s
+      # idleConnTimeout: time to keep idle connections open
       - --serversTransport.forwardingTimeouts.idleConnTimeout=90s
       - --providers.etcd.endpoints=etcd:2379
       - --providers.etcd.rootkey=traefik
@@ -712,16 +715,23 @@ services:
         - "traefik.http.routers.api-gateway.rule=Host(`api.${DOMAIN}`)"
         - "traefik.http.routers.api-gateway.entrypoints=web"
         - "traefik.http.routers.api-gateway.service=api-gateway"
+        # Retry middleware for transient failures
+        - "traefik.http.middlewares.api-gateway-retry.retry.attempts=3"
+        - "traefik.http.middlewares.api-gateway-retry.retry.initialInterval=100ms"
+        # Circuit breaker removed from API gateway - gateway should always be accessible
+        - "traefik.http.routers.api-gateway.middlewares=api-gateway-retry"
         - "traefik.http.services.api-gateway.loadbalancer.server.port=3001"
         - "traefik.http.services.api-gateway.loadbalancer.passHostHeader=true"
         - "traefik.http.services.api-gateway.loadbalancer.healthcheck.path=/health"
         - "traefik.http.services.api-gateway.loadbalancer.healthcheck.interval=10s"
         - "traefik.http.services.api-gateway.loadbalancer.healthcheck.timeout=3s"
         - "traefik.http.services.api-gateway.loadbalancer.healthcheck.scheme=http"
+        - "traefik.http.services.api-gateway.loadbalancer.healthcheck.followRedirects=true"
         - "traefik.http.routers.api-gateway-secure.rule=Host(`api.${DOMAIN}`)"
         - "traefik.http.routers.api-gateway-secure.entrypoints=websecure"
         - "traefik.http.routers.api-gateway-secure.tls.certresolver=letsencrypt"
         - "traefik.http.routers.api-gateway-secure.service=api-gateway"
+        - "traefik.http.routers.api-gateway-secure.middlewares=api-gateway-retry"
         # SSH TCP routing through Traefik (handled by api-gateway)
         - "traefik.tcp.routers.ssh.rule=HostSNI(`*`)"
         - "traefik.tcp.routers.ssh.entrypoints=ssh"
