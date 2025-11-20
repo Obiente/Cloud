@@ -668,21 +668,25 @@ func (p *ReverseProxy) getHTTPClient() *http.Client {
 		skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
 		shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
 
-		transport := &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: shouldSkipVerify,
-			},
-			DialContext: (&net.Dialer{
-				Timeout:   10 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
-			MaxIdleConns:          100,
-			MaxIdleConnsPerHost:   10,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second,
-		}
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: shouldSkipVerify,
+		},
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   10,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		DisableKeepAlives:     false,
+		ForceAttemptHTTP2:     false, // Disable forced HTTP/2 - let it negotiate naturally
+		WriteBufferSize:       4096,
+		ReadBufferSize:        4096,
+	}
 
 		p.httpClient = &http.Client{
 			Transport: transport,
@@ -826,6 +830,16 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logger.Error("[API Gateway] Failed to forward request to %s: %v (method=%s, path=%s)", 
 			targetURL, err, r.Method, r.URL.Path)
 		
+		// Close idle connections if we get connection errors to force new connections
+		if strings.Contains(err.Error(), "timeout") || 
+		   strings.Contains(err.Error(), "connection") ||
+		   strings.Contains(err.Error(), "EOF") {
+			// Force close idle connections for this host to avoid reusing bad connections
+			if transport, ok := client.Transport.(*http.Transport); ok {
+				transport.CloseIdleConnections()
+			}
+		}
+		
 		// Provide more specific error messages
 		errMsg := "Service Unavailable"
 		if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline") {
@@ -862,8 +876,15 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(resp.StatusCode)
 
+	// Copy response body to client
+	// Must fully consume body for HTTP/1.1 keep-alive connection reuse
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		logger.Error("[API Gateway] Failed to copy response body: %v", err)
+		// If copy fails, close idle connections to prevent reuse of bad connection
+		if transport, ok := client.Transport.(*http.Transport); ok {
+			transport.CloseIdleConnections()
+		}
+		return
 	}
 }
 
