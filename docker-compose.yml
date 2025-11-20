@@ -244,6 +244,7 @@ services:
       - obiente-network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/obiente/volumes:/var/lib/obiente/volumes
     labels:
       - "cloud.obiente.service=gameservers-service"
       - "cloud.obiente.traefik=true"

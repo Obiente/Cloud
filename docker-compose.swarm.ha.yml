@@ -951,6 +951,7 @@ services:
       METRICS_DB_HOST: metrics-pgpool
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/obiente/volumes:/var/lib/obiente/volumes
     deploy:
       mode: replicated
       replicas: 3

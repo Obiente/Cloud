@@ -476,6 +476,7 @@ services:
       <<: [*common-database, *common-metrics-db, *common-auth]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/obiente/volumes:/var/lib/obiente/volumes
     deploy:
       mode: replicated
       replicas: 1
