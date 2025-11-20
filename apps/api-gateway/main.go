@@ -34,7 +34,6 @@ const (
 	gracefulShutdownMessage = "shutting down server"
 )
 
-// Service routing configuration
 // Base service routes (internal service names)
 var baseServiceRoutes = map[string]string{
 	"/obiente.cloud.auth.v1.AuthService/":                  "auth-service:3002",
@@ -66,10 +65,9 @@ var serviceDomains = map[string]string{
 	"superadmin-service:3011":    "superadmin-service",
 	"support-service:3009":       "support-service",
 	"audit-service:3010":         "audit-service",
-	"dns-service:8053":           "dns-service", // Note: DNS service may need special handling
+	"dns-service:8053":           "dns-service",
 }
 
-// buildServiceRoutes constructs the service routes based on routing mode
 func buildServiceRoutes() map[string]string {
 	useTraefik := os.Getenv("USE_TRAEFIK_ROUTING")
 	domain := os.Getenv("DOMAIN")
@@ -81,21 +79,16 @@ func buildServiceRoutes() map[string]string {
 
 	for path, serviceAddr := range baseServiceRoutes {
 		if useTraefik == "true" || useTraefik == "1" {
-			// Use Traefik routing with HTTPS
 			serviceDomain, ok := serviceDomains[serviceAddr]
 			if !ok {
-				// Fallback: extract service name from address
 				parts := strings.Split(serviceAddr, ":")
 				serviceDomain = parts[0]
 			}
 
-			// Always use shared domain (no node subdomains)
-			// This ensures proper load balancing across all nodes/clusters
+			// Always use shared domain (no node subdomains) for proper load balancing
 			targetDomain := fmt.Sprintf("%s.%s", serviceDomain, domain)
-
 			routes[path] = fmt.Sprintf("https://%s", targetDomain)
 		} else {
-			// Use internal routing (default)
 			routes[path] = fmt.Sprintf("http://%s", serviceAddr)
 		}
 	}
@@ -103,12 +96,36 @@ func buildServiceRoutes() map[string]string {
 	return routes
 }
 
+// buildHealthCheckURLs creates a mapping from routing URLs to health check URLs
+// When using Traefik routing, health checks bypass Traefik and go directly to services
+// This ensures health checks are independent of Traefik's routing decisions
+func buildHealthCheckURLs(routingURLs map[string]string, baseRoutes map[string]string) (map[string]string, map[string]string) {
+	healthCheckURLs := make(map[string]string)
+	baseServiceAddrs := make(map[string]string)
+	useTraefik := os.Getenv("USE_TRAEFIK_ROUTING")
+
+	for path, routingURL := range routingURLs {
+		baseAddr, exists := baseRoutes[path]
+		if !exists {
+			continue
+		}
+
+		baseServiceAddrs[routingURL] = baseAddr
+
+		if useTraefik == "true" || useTraefik == "1" {
+			// Health check directly to service (bypasses Traefik) for independent status
+			healthCheckURLs[routingURL] = fmt.Sprintf("http://%s", baseAddr)
+		} else {
+			healthCheckURLs[routingURL] = routingURL
+		}
+	}
+
+	return healthCheckURLs, baseServiceAddrs
+}
+
 func main() {
-	// Set log output and flags
 	log.SetOutput(os.Stdout)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
-
-	// Initialize logger
 	logger.Init()
 
 	logger.Info("=== API Gateway Starting ===")
@@ -119,7 +136,6 @@ func main() {
 		port = "3001"
 	}
 
-	// Build service routes based on routing mode
 	serviceRoutes := buildServiceRoutes()
 	useTraefik := os.Getenv("USE_TRAEFIK_ROUTING")
 	if useTraefik == "true" || useTraefik == "1" {
@@ -128,48 +144,56 @@ func main() {
 		logger.Info("Routing mode: Internal (HTTP)")
 	}
 
-	// Create HTTP mux
-	mux := http.NewServeMux()
+	// Health checks bypass Traefik when using Traefik routing to prevent feedback loops
+	healthCheckURLs, baseServiceAddrs := buildHealthCheckURLs(serviceRoutes, baseServiceRoutes)
 
-	// Create reverse proxy handler
+	mux := http.NewServeMux()
 	proxy := &ReverseProxy{
-		routes: serviceRoutes,
+		routes:           serviceRoutes,
+		healthCheckURLs: healthCheckURLs,
+		baseServiceAddrs: baseServiceAddrs,
 	}
 
-	// Initialize health checker for backend services
 	proxy.initHealthChecker()
 	logger.Info("✓ Health checker initialized for backend services")
+	
+	if useTraefik == "true" || useTraefik == "1" {
+		logger.Info("✓ Health checks use direct service addresses (bypassing Traefik) for independent status")
+	} else {
+		logger.Info("✓ Health checks use same URLs as routing")
+	}
 
-	// Register all service routes
 	for path, targetURL := range serviceRoutes {
 		mux.Handle(path, proxy)
 		logger.Info("✓ Route registered: %s -> %s", path, targetURL)
 	}
 
-	// Health check endpoint - always returns healthy so Docker doesn't restart the gateway
-	// The gateway itself is healthy as long as it's running, even if backends are unhealthy
-	// Backend health is monitored but does not block routing (allows degraded services to still receive traffic)
+	// Verify terminal/ws route is registered
+	if terminalRoute, ok := serviceRoutes["/terminal/ws"]; ok {
+		logger.Info("✓ Terminal WebSocket route verified: /terminal/ws -> %s", terminalRoute)
+	} else {
+		logger.Error("✗ Terminal WebSocket route NOT FOUND in serviceRoutes!")
+	}
+
+	// Health check endpoint - always returns healthy (gateway health independent of backends)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
 
-		// Always return healthy - gateway health is independent of backend health
-		// Backend health is tracked separately and only affects routing decisions, not gateway health
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"healthy","service":"api-gateway"}`))
 	})
 
-	// Detailed health endpoint - shows backend service health status (for monitoring/debugging)
+	// Detailed health endpoint for monitoring/debugging
 	mux.HandleFunc("/health/detailed", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
 
-		// Check health of all backend services
 		proxy.healthMutex.RLock()
 		allHealthy := true
 		unhealthyServices := []string{}
@@ -196,14 +220,12 @@ func main() {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		// If we haven't checked any services yet (startup), show that
 		if checkedCount == 0 {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"status":"healthy","service":"api-gateway","message":"health checks not yet initialized","backends_checked":0}`))
 			return
 		}
 
-		// Format service lists as JSON arrays
 		unhealthyList := "["
 		for i, svc := range unhealthyServices {
 			if i > 0 {
@@ -227,7 +249,6 @@ func main() {
 			statusCode = http.StatusServiceUnavailable
 		}
 
-		// Build response with service details
 		response := map[string]interface{}{
 			"status":               map[bool]string{true: "healthy", false: "degraded"}[allHealthy],
 			"service":              "api-gateway",
@@ -242,10 +263,8 @@ func main() {
 		json.NewEncoder(w).Encode(response)
 	})
 
-	// Root endpoint
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
-			// Try to find matching route
 			for path := range serviceRoutes {
 				if strings.HasPrefix(r.URL.Path, path) {
 					proxy.ServeHTTP(w, r)
@@ -259,16 +278,12 @@ func main() {
 		_, _ = w.Write([]byte("api-gateway"))
 	})
 
-	// Wrap with h2c for HTTP/2
 	h2cHandler := h2c.NewHandler(mux, &http2.Server{})
 
-	// Apply middleware
 	var handler http.Handler = h2cHandler
 	handler = middleware.CORSHandler(handler)
 	handler = middleware.RequestLogger(handler)
-	// Note: Auth interceptor is applied per-route in the proxy
 
-	// Create HTTP server
 	httpServer := &http.Server{
 		Addr:              ":" + port,
 		Handler:           handler,
@@ -277,11 +292,9 @@ func main() {
 		IdleTimeout:       idleTimeout,
 	}
 
-	// Set up graceful shutdown
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Start server in a goroutine
 	serverErr := make(chan error, 1)
 	go func() {
 		logger.Info("=== API Gateway Ready - Listening on %s ===", httpServer.Addr)
@@ -290,7 +303,6 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt or server error
 	select {
 	case err := <-serverErr:
 		logger.Fatalf("server failed: %v", err)
@@ -324,21 +336,30 @@ type ServiceHealth struct {
 
 // ReverseProxy handles routing requests to backend services
 type ReverseProxy struct {
-	routes       map[string]string
-	healthStatus map[string]*ServiceHealth // Tracks health status of each backend service and its replicas
-	healthMutex  sync.RWMutex
+	routes            map[string]string // Path -> routing URL (may go through Traefik)
+	healthCheckURLs   map[string]string // Routing URL -> health check URL (always direct to service)
+	baseServiceAddrs  map[string]string // Routing URL -> base service address (for health checks)
+	healthStatus      map[string]*ServiceHealth // Tracks health status of each backend service and its replicas
+	healthMutex       sync.RWMutex
 }
 
 // initHealthChecker starts background health checks for all backend services
+// Health checks use direct service addresses (bypassing Traefik when using Traefik routing)
+// This ensures health status is independent of Traefik's routing decisions
 func (p *ReverseProxy) initHealthChecker() {
 	p.healthStatus = make(map[string]*ServiceHealth)
+	if p.healthCheckURLs == nil {
+		p.healthCheckURLs = make(map[string]string)
+	}
+	if p.baseServiceAddrs == nil {
+		p.baseServiceAddrs = make(map[string]string)
+	}
 
-	// Start health checking goroutine
 	go func() {
-		ticker := time.NewTicker(10 * time.Second) // Check every 10 seconds
+		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
 
-		// Cleanup goroutine: remove stale replicas (not seen for 2 minutes)
+		// Remove stale replicas (not seen for 2 minutes)
 		cleanupTicker := time.NewTicker(30 * time.Second)
 		defer cleanupTicker.Stop()
 
@@ -352,23 +373,29 @@ func (p *ReverseProxy) initHealthChecker() {
 		}
 	}()
 
-	// Do initial health check
 	p.checkAllServicesHealth()
 }
 
 // checkAllServicesHealth checks health of all backend services
 // Tracks individual replica IDs to determine actual replica count
+// Uses direct service addresses for health checks (bypassing Traefik when using Traefik routing)
+// This ensures health checks are independent of Traefik's routing decisions
 func (p *ReverseProxy) checkAllServicesHealth() {
-	for _, targetURL := range p.routes {
-		// Extract service URL (e.g., "http://auth-service:3002" -> "http://auth-service:3002/health")
-		target, err := url.Parse(targetURL)
+	for _, routingURL := range p.routes {
+		healthCheckURL, exists := p.healthCheckURLs[routingURL]
+		if !exists {
+			healthCheckURL = routingURL
+		}
+
+		target, err := url.Parse(healthCheckURL)
 		if err != nil {
+			logger.Warn("[API Gateway] Failed to parse health check URL %s: %v", healthCheckURL, err)
 			continue
 		}
 
 		healthURL := fmt.Sprintf("%s://%s/health", target.Scheme, target.Host)
-		// Check service health and collect replica IDs
-		p.checkServiceHealthWithReplicas(healthURL, targetURL)
+		logger.Debug("[API Gateway] Health checking service: routing=%s, health_check=%s", routingURL, healthURL)
+		p.checkServiceHealthWithReplicas(healthURL, routingURL)
 	}
 }
 
@@ -388,9 +415,7 @@ func (p *ReverseProxy) cleanupStaleReplicas() {
 				delete(serviceHealth.Replicas, replicaID)
 			}
 		}
-		// Update replica count
 		serviceHealth.ReplicaCount = len(serviceHealth.Replicas)
-		// Update service health: healthy if at least one replica is healthy
 		serviceHealth.Healthy = false
 		for _, replica := range serviceHealth.Replicas {
 			if replica.Healthy {
@@ -414,8 +439,7 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 	}
 	p.healthMutex.RUnlock()
 
-	// Determine number of checks: use known count + 2 to discover new replicas
-	// Minimum 3 checks to ensure we sample replicas, maximum 10 to avoid excessive checks
+	// Sample known count + 2 to discover new replicas (min 3, max 10)
 	numChecks := knownReplicaCount + 2
 	if numChecks < 3 {
 		numChecks = 3
@@ -444,7 +468,6 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 		successfulChecks++
 
 		if replicaID != "" {
-			// Track this replica
 			if _, exists := discoveredReplicas[replicaID]; !exists {
 				discoveredReplicas[replicaID] = &ReplicaHealth{
 					ReplicaID: replicaID,
@@ -457,8 +480,7 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 				discoveredReplicas[replicaID].LastSeen = time.Now()
 			}
 		} else if healthy {
-			// Health check succeeded but no replica ID (backwards compatibility)
-			// Create a temporary replica ID based on the check attempt
+			// Backwards compatibility: no replica ID returned
 			tempID := fmt.Sprintf("unknown-%d", i)
 			if _, exists := discoveredReplicas[tempID]; !exists {
 				discoveredReplicas[tempID] = &ReplicaHealth{
@@ -469,13 +491,12 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 			}
 		}
 
-		// Small delay between checks to increase chance of hitting different replicas
+		// Small delay to increase chance of hitting different replicas
 		if i < numChecks-1 {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
 
-	// Update service health status
 	p.healthMutex.Lock()
 	defer p.healthMutex.Unlock()
 
@@ -487,9 +508,7 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 
 	serviceHealth = p.healthStatus[serviceURL]
 
-	// Merge discovered replicas with existing ones
 	for replicaID, replica := range discoveredReplicas {
-		// Update or add replica
 		if existing, exists := serviceHealth.Replicas[replicaID]; exists {
 			existing.Healthy = replica.Healthy
 			existing.LastSeen = replica.LastSeen
@@ -499,34 +518,26 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 		}
 	}
 
-	// Update replica count and service health
 	serviceHealth.ReplicaCount = len(serviceHealth.Replicas)
 	serviceHealth.Healthy = false
 
-	// Service is healthy if:
-	// 1. We have at least one healthy replica, OR
-	// 2. We had successful health checks but no replicas tracked yet (initial state)
 	if successfulChecks > 0 {
-		// Check if any tracked replica is healthy
 		for _, replica := range serviceHealth.Replicas {
 			if replica.Healthy {
 				serviceHealth.Healthy = true
 				break
 			}
 		}
-		// If we had successful checks but no healthy replicas tracked, still mark as healthy
-		// This handles the case where health checks succeed but replica IDs aren't being returned yet
+		// Backwards compatibility: successful checks but no replica IDs
 		if !serviceHealth.Healthy && successfulChecks > 0 && len(discoveredReplicas) == 0 {
 			logger.Debug("[API Gateway] Service %s had successful health checks but no replica IDs, assuming healthy", serviceURL)
 			serviceHealth.Healthy = true
 		}
 	} else {
-		// All checks failed - keep existing health status if we have tracked replicas
-		// Only mark as unhealthy if we have no tracked replicas at all
+		// All checks failed - keep existing status if we have tracked replicas
 		if serviceHealth.ReplicaCount == 0 {
 			serviceHealth.Healthy = false
 		} else {
-			// We have tracked replicas, check if any are still healthy
 			for _, replica := range serviceHealth.Replicas {
 				if replica.Healthy {
 					serviceHealth.Healthy = true
@@ -551,8 +562,9 @@ type HealthResponse struct {
 	Extra     map[string]interface{} `json:"extra,omitempty"`
 }
 
-// checkServiceHealth checks if a service is healthy by calling its /health endpoint
-// Returns (isHealthy, replicaID, error)
+// checkServiceHealth checks service health. Returns (isHealthy, replicaID, error).
+// Health checks are informational and don't block routing. When using Traefik routing,
+// health checks bypass Traefik to ensure independent status.
 func (p *ReverseProxy) checkServiceHealth(healthURL string) (bool, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -562,14 +574,29 @@ func (p *ReverseProxy) checkServiceHealth(healthURL string) (bool, string, error
 		return false, "", fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Configure TLS for HTTPS health checks (Traefik routing)
-	skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
-	shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
+	targetURL, err := url.Parse(healthURL)
+	if err != nil {
+		return false, "", fmt.Errorf("failed to parse health URL: %w", err)
+	}
 
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: shouldSkipVerify, // Skip TLS verification for internal Traefik certs
-		},
+	var transport *http.Transport
+	if targetURL.Scheme == "https" {
+		skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
+		shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
+		transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: shouldSkipVerify,
+			},
+			DialContext: (&net.Dialer{
+				Timeout: 2 * time.Second,
+			}).DialContext,
+		}
+	} else {
+		transport = &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: 2 * time.Second,
+			}).DialContext,
+		}
 	}
 
 	client := &http.Client{
@@ -583,50 +610,53 @@ func (p *ReverseProxy) checkServiceHealth(healthURL string) (bool, string, error
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return false, "", fmt.Errorf("unexpected status code: %d (expected 200)", resp.StatusCode)
+	// Accept both 200 and 503 as valid responses
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusServiceUnavailable {
+		return false, "", fmt.Errorf("unexpected status code: %d (expected 200 or 503)", resp.StatusCode)
 	}
 
-	// Parse health response to extract replica ID
 	var healthResp HealthResponse
 	if err := json.NewDecoder(resp.Body).Decode(&healthResp); err != nil {
-		// If response doesn't have replica_id, that's okay (backwards compatibility)
-		return true, "", nil
+		// Backwards compatibility: no JSON response
+		isHealthy := resp.StatusCode == http.StatusOK
+		return isHealthy, "", nil
 	}
 
 	isHealthy := healthResp.Status == "healthy"
 	return isHealthy, healthResp.ReplicaID, nil
 }
 
-// isServiceHealthy checks if a service is currently healthy
+// isServiceHealthy checks if a service is currently healthy (informational only, doesn't block routing)
 func (p *ReverseProxy) isServiceHealthy(targetURL string) bool {
 	p.healthMutex.RLock()
 	defer p.healthMutex.RUnlock()
 
-	// Default to healthy if we haven't checked yet (optimistic)
-	// This allows routing to work immediately on startup before health checks complete
+	// Optimistic: default to healthy to allow routing on startup
 	if serviceHealth, exists := p.healthStatus[targetURL]; exists && serviceHealth != nil {
-		// If we have tracked replicas, use their health status
 		if serviceHealth.ReplicaCount > 0 {
 			return serviceHealth.Healthy
 		}
-		// If we have no tracked replicas but service exists, assume healthy
-		// This handles cases where health checks are failing temporarily
-		// but the service is actually running (network issues, etc.)
 		return true
 	}
-	// No health status tracked yet - assume healthy (optimistic)
 	return true
 }
 
 func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Find matching route
-	// Check longer/more specific paths first to ensure correct routing
-	// (e.g., /dns/push/batch should match before /dns/push)
+	upgradeHeader := r.Header.Get("Upgrade")
+	connectionHeader := r.Header.Get("Connection")
+	isWebSocketRequest := upgradeHeader != "" || strings.Contains(strings.ToLower(connectionHeader), "upgrade")
+
+	if isWebSocketRequest {
+		logger.Info("[API Gateway] WebSocket request: method=%s, path=%s, Upgrade=%s, Connection=%s, routes_count=%d",
+			r.Method, r.URL.Path, upgradeHeader, connectionHeader, len(p.routes))
+	} else {
+		logger.Debug("[API Gateway] Request: method=%s, path=%s", r.Method, r.URL.Path)
+	}
+
+	// Match longer/more specific paths first (e.g., /dns/push/batch before /dns/push)
 	var targetURL string
 	var matchedPath string
-	
-	// Sort paths by length (longest first) to match more specific routes first
+
 	type routeEntry struct {
 		path   string
 		target string
@@ -635,8 +665,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for path, target := range p.routes {
 		routes = append(routes, routeEntry{path, target})
 	}
-	
-	// Sort by path length (descending) so longer/more specific paths are checked first
+
 	for i := 0; i < len(routes); i++ {
 		for j := i + 1; j < len(routes); j++ {
 			if len(routes[i].path) < len(routes[j].path) {
@@ -644,36 +673,37 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	
-	// Check routes in order (longest first)
+
+	logger.Debug("[API Gateway] Checking routes for path: %s (total routes: %d)", r.URL.Path, len(routes))
 	for _, route := range routes {
-		if strings.HasPrefix(r.URL.Path, route.path) {
+		matches := strings.HasPrefix(r.URL.Path, route.path)
+		logger.Debug("[API Gateway] Checking route: %s -> %s (matches: %v)", route.path, route.target, matches)
+		if matches {
 			targetURL = route.target
 			matchedPath = route.path
+			logger.Debug("[API Gateway] Route matched: %s -> %s", route.path, route.target)
 			break
 		}
 	}
 
 	if targetURL == "" {
+		logger.Warn("[API Gateway] No route found for path: %s (checked %d routes)", r.URL.Path, len(routes))
+		availableRoutes := make([]string, 0, len(routes))
+		for _, route := range routes {
+			availableRoutes = append(availableRoutes, route.path)
+		}
+		logger.Debug("[API Gateway] Available routes: %v", availableRoutes)
 		http.NotFound(w, r)
 		return
 	}
-	
+
 	logger.Debug("[API Gateway] Routing %s -> %s (matched path: %s)", r.URL.Path, targetURL, matchedPath)
 
-	// Check if service has at least one healthy replica
-	// We sample multiple replicas in health checks - if at least one is healthy, service is considered healthy
-	// When routing, Docker Swarm's internal load balancer will automatically route to healthy replicas only
-	// This ensures we only route to services that have at least one working replica
+	// Health status is informational - Traefik handles routing decisions
 	if !p.isServiceHealthy(targetURL) {
-		logger.Warn("[API Gateway] Service %s has no healthy replicas, returning 503", targetURL)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_, _ = w.Write([]byte(`{"error":"service_unavailable","message":"All service replicas are unhealthy"}`))
-		return
+		logger.Warn("[API Gateway] Service %s appears unhealthy, but routing anyway - Traefik will handle load balancing", targetURL)
 	}
 
-	// Parse target URL
 	target, err := url.Parse(targetURL)
 	if err != nil {
 		logger.Error("[API Gateway] Invalid target URL %s: %v", targetURL, err)
@@ -681,18 +711,22 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if this is a WebSocket upgrade request
-	if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+	// Check for WebSocket upgrade
+	upgradeHeaderValue := strings.ToLower(r.Header.Get("Upgrade"))
+	connectionHeaderValue := strings.ToLower(r.Header.Get("Connection"))
+	isWebSocket := upgradeHeaderValue == "websocket" &&
+		(strings.Contains(connectionHeaderValue, "upgrade") || connectionHeaderValue == "upgrade")
+
+	if isWebSocket {
+		logger.Debug("[API Gateway] WebSocket upgrade detected for %s -> %s", r.URL.Path, targetURL)
 		p.handleWebSocket(w, r, target)
 		return
 	}
 
-	// Create reverse proxy request
 	proxyURL := *r.URL
 	proxyURL.Scheme = target.Scheme
 	proxyURL.Host = target.Host
 
-	// Create HTTP client with TLS configuration for HTTPS (Traefik routing)
 	skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
 	shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
 
@@ -707,7 +741,6 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Timeout:   30 * time.Second,
 	}
 
-	// Create request
 	req, err := http.NewRequestWithContext(r.Context(), r.Method, proxyURL.String(), r.Body)
 	if err != nil {
 		logger.Error("[API Gateway] Failed to create request: %v", err)
@@ -715,7 +748,6 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Copy headers, but skip certain headers that should not be forwarded
 	skipHeaders := map[string]bool{
 		"Connection":        true,
 		"Upgrade":           true,
@@ -725,24 +757,19 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for key, values := range r.Header {
-		// Skip headers that should not be forwarded
 		if skipHeaders[key] {
 			continue
 		}
-		// Host header should be set by the target URL, not copied
 		if strings.EqualFold(key, "Host") {
 			continue
 		}
-		// Copy all other headers
 		for _, value := range values {
 			req.Header.Add(key, value)
 		}
 	}
 
-	// Explicitly set Host header to target host
 	req.Host = target.Host
 
-	// Log Authorization header presence for debugging (without logging the actual token)
 	if authHeader := req.Header.Get("Authorization"); authHeader != "" {
 		logger.Debug("[API Gateway] Forwarding request to %s with Authorization header present", targetURL)
 	} else {
@@ -758,7 +785,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	// Copy response headers, but preserve CORS headers set by the gateway middleware
+	// Skip CORS headers from backend - gateway middleware handles these
 	corsHeaders := map[string]bool{
 		"Access-Control-Allow-Origin":      true,
 		"Access-Control-Allow-Methods":     true,
@@ -769,7 +796,6 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for key, values := range resp.Header {
-		// Skip CORS headers from backend - gateway middleware handles these
 		if corsHeaders[key] {
 			continue
 		}
@@ -778,10 +804,8 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Set status code
 	w.WriteHeader(resp.StatusCode)
 
-	// Copy response body
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		logger.Error("[API Gateway] Failed to copy response body: %v", err)
 	}
@@ -789,6 +813,8 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // handleWebSocket handles WebSocket upgrade requests by proxying the connection
 func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL) {
+	logger.Info("[API Gateway] Handling WebSocket upgrade: %s -> %s", r.URL.Path, target.String())
+
 	// Hijack the connection
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
@@ -804,10 +830,10 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 	}
 	defer clientConn.Close()
 
-	// Connect to backend service
+	logger.Debug("[API Gateway] Connection hijacked, connecting to backend: %s", target.Host)
+
 	backendAddr := target.Host
 	if !strings.Contains(backendAddr, ":") {
-		// Default port based on scheme
 		if target.Scheme == "https" {
 			backendAddr += ":443"
 		} else {
@@ -815,10 +841,8 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 		}
 	}
 
-	// For HTTPS (domain-based routing), we need to handle TLS
 	var backendConn net.Conn
 	if target.Scheme == "https" {
-		// Use TLS connection for HTTPS
 		skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
 		shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
 
@@ -829,7 +853,6 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 			return
 		}
 
-		// Extract hostname (without port) for TLS ServerName
 		hostname := target.Host
 		if idx := strings.Index(hostname, ":"); idx != -1 {
 			hostname = hostname[:idx]
@@ -841,7 +864,6 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 		}
 		backendConn = tls.Client(tcpConn, tlsConfig)
 	} else {
-		// Plain TCP connection for HTTP
 		backendConn, err = net.DialTimeout("tcp", backendAddr, 10*time.Second)
 		if err != nil {
 			logger.Error("[API Gateway] Failed to connect to backend %s: %v", backendAddr, err)
@@ -851,29 +873,61 @@ func (p *ReverseProxy) handleWebSocket(w http.ResponseWriter, r *http.Request, t
 	}
 	defer backendConn.Close()
 
-	// Rewrite the request to point to backend
 	proxyURL := *r.URL
 	proxyURL.Scheme = target.Scheme
 	proxyURL.Host = target.Host
 
-	// Write the request to backend
 	reqStr := fmt.Sprintf("%s %s HTTP/1.1\r\n", r.Method, proxyURL.RequestURI())
-	backendConn.Write([]byte(reqStr))
+	if _, err := backendConn.Write([]byte(reqStr)); err != nil {
+		logger.Error("[API Gateway] Failed to write request line: %v", err)
+		clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
+		return
+	}
 
-	// Copy headers
+	hostHeaderSet := false
 	for key, values := range r.Header {
-		for _, value := range values {
-			backendConn.Write([]byte(fmt.Sprintf("%s: %s\r\n", key, value)))
+		if strings.EqualFold(key, "Host") {
+			backendConn.Write([]byte(fmt.Sprintf("Host: %s\r\n", target.Host)))
+			hostHeaderSet = true
+			continue
 		}
+		for _, value := range values {
+			if _, err := backendConn.Write([]byte(fmt.Sprintf("%s: %s\r\n", key, value))); err != nil {
+				logger.Error("[API Gateway] Failed to write header %s: %v", key, err)
+				clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
+				return
+			}
+		}
+	}
+	if !hostHeaderSet {
+		backendConn.Write([]byte(fmt.Sprintf("Host: %s\r\n", target.Host)))
 	}
 	backendConn.Write([]byte("\r\n"))
 
-	// Copy request body if present
 	if r.Body != nil {
-		io.Copy(backendConn, r.Body)
+		if _, err := io.Copy(backendConn, r.Body); err != nil {
+			logger.Error("[API Gateway] Failed to copy request body: %v", err)
+			clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
+			return
+		}
 	}
 
-	// Bidirectionally copy data between client and backend
+	// Forward WebSocket handshake response to client
+	buf := make([]byte, 4096)
+	n, err := backendConn.Read(buf)
+	if err != nil && err != io.EOF {
+		logger.Error("[API Gateway] Failed to read WebSocket handshake response: %v", err)
+		clientConn.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
+		return
+	}
+
+	if n > 0 {
+		if _, err := clientConn.Write(buf[:n]); err != nil {
+			logger.Error("[API Gateway] Failed to forward WebSocket handshake response: %v", err)
+			return
+		}
+	}
+
 	go func() {
 		io.Copy(backendConn, clientConn)
 		backendConn.Close()
