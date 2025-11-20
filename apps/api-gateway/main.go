@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -376,11 +377,13 @@ func (p *ReverseProxy) initHealthChecker() {
 	p.checkAllServicesHealth()
 }
 
-// checkAllServicesHealth checks health of all backend services
+// checkAllServicesHealth checks health of all backend services in parallel
 // Tracks individual replica IDs to determine actual replica count
 // Uses direct service addresses for health checks (bypassing Traefik when using Traefik routing)
 // This ensures health checks are independent of Traefik's routing decisions
 func (p *ReverseProxy) checkAllServicesHealth() {
+	var wg sync.WaitGroup
+
 	for _, routingURL := range p.routes {
 		healthCheckURL, exists := p.healthCheckURLs[routingURL]
 		if !exists {
@@ -395,8 +398,15 @@ func (p *ReverseProxy) checkAllServicesHealth() {
 
 		healthURL := fmt.Sprintf("%s://%s/health", target.Scheme, target.Host)
 		logger.Debug("[API Gateway] Health checking service: routing=%s, health_check=%s", routingURL, healthURL)
-		p.checkServiceHealthWithReplicas(healthURL, routingURL)
+
+		wg.Add(1)
+		go func(url, routing string) {
+			defer wg.Done()
+			p.checkServiceHealthWithReplicas(url, routing)
+		}(healthURL, routingURL)
 	}
+
+	wg.Wait()
 }
 
 // cleanupStaleReplicas removes replicas that haven't been seen recently
@@ -456,46 +466,55 @@ func (p *ReverseProxy) checkServiceHealthWithReplicas(healthURL string, serviceU
 	discoveredReplicas := make(map[string]*ReplicaHealth)
 	var lastError error
 	successfulChecks := 0
+	var replicaMutex sync.Mutex
+
+	// Run health checks in parallel to discover replicas faster
+	var checkWg sync.WaitGroup
+	checkWg.Add(numChecks)
 
 	for i := 0; i < numChecks; i++ {
-		healthy, replicaID, err := p.checkServiceHealth(healthURL)
-		if err != nil {
-			lastError = err
-			logger.Debug("[API Gateway] Health check failed for %s (attempt %d/%d): %v", healthURL, i+1, numChecks, err)
-			continue
-		}
+		go func(attempt int) {
+			defer checkWg.Done()
 
-		successfulChecks++
-
-		if replicaID != "" {
-			if _, exists := discoveredReplicas[replicaID]; !exists {
-				discoveredReplicas[replicaID] = &ReplicaHealth{
-					ReplicaID: replicaID,
-					Healthy:   healthy,
-					LastSeen:  time.Now(),
-				}
-			} else {
-				// Update existing replica
-				discoveredReplicas[replicaID].Healthy = healthy
-				discoveredReplicas[replicaID].LastSeen = time.Now()
+			healthy, replicaID, err := p.checkServiceHealth(healthURL)
+			if err != nil {
+				replicaMutex.Lock()
+				lastError = err
+				replicaMutex.Unlock()
+				logger.Debug("[API Gateway] Health check failed for %s (attempt %d/%d): %v", healthURL, attempt+1, numChecks, err)
+				return
 			}
-		} else if healthy {
-			// Backwards compatibility: no replica ID returned
-			tempID := fmt.Sprintf("unknown-%d", i)
-			if _, exists := discoveredReplicas[tempID]; !exists {
-				discoveredReplicas[tempID] = &ReplicaHealth{
-					ReplicaID: tempID,
-					Healthy:   true,
-					LastSeen:  time.Now(),
+
+			replicaMutex.Lock()
+			successfulChecks++
+
+			if replicaID != "" {
+				if _, exists := discoveredReplicas[replicaID]; !exists {
+					discoveredReplicas[replicaID] = &ReplicaHealth{
+						ReplicaID: replicaID,
+						Healthy:   healthy,
+						LastSeen:  time.Now(),
+					}
+				} else {
+					discoveredReplicas[replicaID].Healthy = healthy
+					discoveredReplicas[replicaID].LastSeen = time.Now()
+				}
+			} else if healthy {
+				// Backwards compatibility: no replica ID returned
+				tempID := fmt.Sprintf("unknown-%d", attempt)
+				if _, exists := discoveredReplicas[tempID]; !exists {
+					discoveredReplicas[tempID] = &ReplicaHealth{
+						ReplicaID: tempID,
+						Healthy:   true,
+						LastSeen:  time.Now(),
+					}
 				}
 			}
-		}
-
-		// Small delay to increase chance of hitting different replicas
-		if i < numChecks-1 {
-			time.Sleep(100 * time.Millisecond)
-		}
+			replicaMutex.Unlock()
+		}(i)
 	}
+
+	checkWg.Wait()
 
 	p.healthMutex.Lock()
 	defer p.healthMutex.Unlock()
@@ -666,13 +685,10 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		routes = append(routes, routeEntry{path, target})
 	}
 
-	for i := 0; i < len(routes); i++ {
-		for j := i + 1; j < len(routes); j++ {
-			if len(routes[i].path) < len(routes[j].path) {
-				routes[i], routes[j] = routes[j], routes[i]
-			}
-		}
-	}
+	// Sort by path length (descending) to match longer/more specific paths first
+	sort.Slice(routes, func(i, j int) bool {
+		return len(routes[i].path) > len(routes[j].path)
+	})
 
 	logger.Debug("[API Gateway] Checking routes for path: %s (total routes: %d)", r.URL.Path, len(routes))
 	for _, route := range routes {
