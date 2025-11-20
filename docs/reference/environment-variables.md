@@ -367,8 +367,12 @@ Node-specific domains are configured using node labels stored in the database:
 **Important Notes:**
 
 - **API Gateway and Dashboard ALWAYS use shared domains** (`api.${DOMAIN}` and `${DOMAIN}`) for load balancing, regardless of node-specific domain settings
-- **Node subdomain detection**: Extracted from node labels (`obiente.subdomain` or `subdomain`) or hostname if not configured
-- **Configuration**: Use the Superadmin dashboard to configure node-specific domains per node
+- **Node subdomain detection**: 
+  - **Swarm deployments**: Extracted from node labels (`obiente.subdomain` or `subdomain`) configured via Superadmin dashboard, or hostname if not configured
+  - **Compose deployments**: Use `NODE_SUBDOMAIN` environment variable
+- **Configuration**: 
+  - **Swarm deployments**: Use the Superadmin dashboard to configure node-specific domains per node
+  - **Compose deployments**: Use environment variables `NODE_SUBDOMAIN`, `USE_NODE_SPECIFIC_DOMAINS`, and `SERVICE_DOMAIN_PATTERN`
 
 **Examples:**
 
@@ -385,12 +389,13 @@ DOMAIN=obiente.cloud
 SKIP_TLS_VERIFY=true
 # Routes: https://auth-service.obiente.cloud (load balanced across all nodes)
 
-# Traefik routing with node-specific domains (configured via node labels)
+# Traefik routing with node-specific domains
 USE_TRAEFIK_ROUTING=true
 USE_DOMAIN_ROUTING=true
 DOMAIN=obiente.cloud
 SKIP_TLS_VERIFY=true
-# Node labels: obiente.subdomain=node1, obiente.use_node_specific_domains=true, obiente.service_domain_pattern=node-service
+# For Swarm: Configure via node labels (obiente.subdomain=node1, obiente.use_node_specific_domains=true, obiente.service_domain_pattern=node-service)
+# For Compose: Use environment variables (NODE_SUBDOMAIN=node1, USE_NODE_SPECIFIC_DOMAINS=true, SERVICE_DOMAIN_PATTERN=node-service)
 # Routes: https://node1-auth-service.obiente.cloud (specific node)
 ```
 
@@ -495,6 +500,9 @@ The API uses `DASHBOARD_URL` to build links in transactional emails and billing 
 | `MAX_DEPLOYMENTS_PER_NODE` | number  | `50`           | ❌       | Maximum number of deployments allowed per node                                                                                                |
 | `API_BASE_URL`             | string  | `http://api-gateway:3001` | ❌   | Base URL for API service communication. Automatically uses domain-based URL (`https://api.${DOMAIN}`) when `USE_DOMAIN_ROUTING=true`.         |
 | `USE_DOMAIN_ROUTING`       | boolean | `true`         | ❌       | Use domain-based routing for service-to-service communication. When `true`, services use domain-based URLs (works across nodes/networks).    |
+| `NODE_SUBDOMAIN`           | string  | -              | ❌       | Node subdomain identifier for compose deployments (e.g., `node1`, `us-east-1`). Used for node-specific domains when `USE_NODE_SPECIFIC_DOMAINS=true`. For Swarm deployments, configure via Superadmin dashboard instead. |
+| `USE_NODE_SPECIFIC_DOMAINS`| boolean | `false`        | ❌       | Enable node-specific domains for compose deployments. When `true`, microservices use node-specific subdomains (e.g., `node1-auth-service.domain`). For Swarm deployments, configure via Superadmin dashboard instead. |
+| `SERVICE_DOMAIN_PATTERN`   | string  | `node-service` | ❌       | Domain pattern for node-specific domains (`node-service` or `service-node`). For Swarm deployments, configure via Superadmin dashboard instead. |
 
 **Deployment Strategies:**
 
@@ -527,6 +535,25 @@ DOMAIN=obiente.cloud
 API_BASE_URL=https://api.example.com
 # Services connect via: https://api.example.com
 ```
+
+**Node-Specific Domain Configuration (Compose Deployments):**
+
+For non-Swarm (compose) deployments, node-specific domains are configured via environment variables:
+
+```bash
+# Enable node-specific domains for compose deployment
+NODE_SUBDOMAIN=node1
+USE_NODE_SPECIFIC_DOMAINS=true
+SERVICE_DOMAIN_PATTERN=node-service
+DOMAIN=obiente.cloud
+# Results in: node1-auth-service.obiente.cloud
+
+# Alternative pattern (service-node)
+SERVICE_DOMAIN_PATTERN=service-node
+# Results in: auth-service.node1.obiente.cloud
+```
+
+**Note:** For Swarm deployments, node-specific domains are configured via the Superadmin dashboard (node labels), not environment variables.
 
 ### Metrics Database Configuration
 
