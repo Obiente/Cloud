@@ -237,6 +237,9 @@
           status = amountCents > 0 ? "Paid" : "Refunded";
         }
         
+        // Determine if transaction was paid via credits balance
+        const paidViaCredits = t.type === "usage"; // Usage transactions are deductions from credits for bills
+        
         return {
           id: t.id,
           number: `#${t.id.substring(0, 8).toUpperCase()}`,
@@ -247,6 +250,7 @@
           transaction: t,
           balanceAfter,
           note: t.note || "",
+          paidViaCredits,
         };
       });
   });
@@ -2160,7 +2164,17 @@
                   >
                     <template #cell-transaction="{ row }">
                       <OuiStack gap="xs" class="min-w-0">
-                        <OuiText size="sm" weight="medium" class="truncate">{{ row.number }}</OuiText>
+                        <OuiFlex gap="sm" align="center" wrap="wrap">
+                          <OuiText size="sm" weight="medium" class="truncate">{{ row.number }}</OuiText>
+                          <OuiBadge
+                            v-if="row.paidViaCredits"
+                            variant="secondary"
+                            tone="soft"
+                            size="xs"
+                          >
+                            Paid via Credits
+                          </OuiBadge>
+                        </OuiFlex>
                         <OuiText v-if="row.note" size="xs" color="muted" class="truncate">
                           {{ row.note }}
                         </OuiText>
