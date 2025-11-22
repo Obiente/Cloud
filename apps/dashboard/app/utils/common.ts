@@ -108,8 +108,20 @@ export function formatBytes(bytes: number | bigint | null | undefined, base: 'bi
  * @param currency - Currency code (default: "USD")
  * @returns Formatted currency string
  */
-export function formatCurrency(cents: number | bigint, currency: string = "USD"): string {
-  const amount = typeof cents === "bigint" ? Number(cents) : cents;
+export function formatCurrency(cents: number | bigint | null | undefined, currency: string = "USD"): string {
+  if (cents === null || cents === undefined) {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+    }).format(0);
+  }
+  const amount = Number(cents);
+  if (!Number.isFinite(amount)) {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+    }).format(0);
+  }
   const dollars = amount / 100;
   return new Intl.NumberFormat("en-US", {
     style: "currency",

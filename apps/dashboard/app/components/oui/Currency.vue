@@ -7,7 +7,7 @@ import { computed } from "vue";
 import { formatCurrency } from "~/utils/common";
 
 interface Props {
-  value: number | bigint; // Amount in cents
+  value: number | bigint | null | undefined; // Amount in cents
   currency?: string; // Currency code (default: "USD")
 }
 

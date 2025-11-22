@@ -34,7 +34,9 @@
             />
           </template>
           <template #cell-credits="{ value, row }">
-            <span class="font-mono"><OuiCurrency :value="value" /></span>
+            <span class="font-mono">
+              <OuiCurrency :value="Number(value || 0)" />
+            </span>
           </template>
           <template #cell-actions="{ row }">
             <SuperadminActionsCell :actions="getOrgActions(row)" />
@@ -120,6 +122,7 @@ import { computed, ref } from "vue";
 import { useOrganizationsStore } from "~/stores/organizations";
 import { OrganizationService } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
+import { useToast } from "~/composables/useToast";
 import SuperadminPageLayout from "~/components/superadmin/SuperadminPageLayout.vue";
 import SuperadminResourceCell from "~/components/superadmin/SuperadminResourceCell.vue";
 import SuperadminStatusBadge from "~/components/superadmin/SuperadminStatusBadge.vue";
@@ -337,21 +340,23 @@ async function manageCredits() {
   }
   
   manageCreditsLoading.value = true;
+  const { toast } = useToast();
   try {
-    const amountCents = Math.round(amount * 100);
+    const amountCents = BigInt(Math.round(amount * 100));
     if (manageCreditsAction.value === "add") {
-      // Note: Proto files need to be generated
-      await (orgClient as any).adminAddCredits({
+      await orgClient.adminAddCredits({
         organizationId: manageCreditsOrgId.value,
         amountCents,
         note: manageCreditsNote.value || undefined,
       });
+      toast.success(`Successfully added ${formatCurrency(Number(amountCents))} in credits`);
     } else {
-      await (orgClient as any).adminRemoveCredits({
+      await orgClient.adminRemoveCredits({
         organizationId: manageCreditsOrgId.value,
         amountCents,
         note: manageCreditsNote.value || undefined,
       });
+      toast.success(`Successfully removed ${formatCurrency(Number(amountCents))} in credits`);
     }
     manageCreditsDialogOpen.value = false;
     manageCreditsAmount.value = "";
@@ -359,6 +364,7 @@ async function manageCredits() {
     await refresh(); // Refresh to get updated credits
   } catch (err: any) {
     console.error("Failed to manage credits:", err);
+    toast.error(err?.message || "Failed to manage credits");
   } finally {
     manageCreditsLoading.value = false;
   }
