@@ -12,16 +12,36 @@
     @update:search="search = $event"
     @filter-change="handleFilterChange"
     @refresh="refresh"
+    @row-click="(row) => viewOrganization(row.id)"
   >
           <template #cell-organization="{ value, row }">
-            <SuperadminResourceCell
-              :name="row.name || row.slug"
-              :subtitle="row.slug ? undefined : 'No slug'"
-              :id="row.id"
-              :domain="row.domain"
-            />
-            <div v-if="row.ownerName" class="text-xs text-text-muted mt-0.5">
-              Owner: {{ row.ownerName }}
+            <div>
+              <NuxtLink
+                :to="`/superadmin/organizations/${row.id}`"
+                class="font-medium text-text-primary hover:text-primary transition-colors cursor-pointer"
+                @click.stop
+              >
+                {{ row.name || row.slug || "—" }}
+              </NuxtLink>
+              <div v-if="row.slug" class="text-xs text-text-muted mt-0.5">{{ row.slug }}</div>
+              <NuxtLink
+                :to="`/superadmin/organizations/${row.id}`"
+                class="text-xs font-mono text-text-tertiary mt-0.5 hover:text-primary transition-colors cursor-pointer"
+                @click.stop
+              >
+                {{ row.id }}
+              </NuxtLink>
+              <div v-if="row.domain" class="text-xs text-text-muted mt-0.5">{{ row.domain }}</div>
+            </div>
+            <div v-if="organizationOwners.get(row.id)" class="text-xs text-text-muted mt-1">
+              Owner: 
+              <NuxtLink
+                :to="`/superadmin/users/${organizationOwners.get(row.id)?.userId}`"
+                class="text-primary hover:underline"
+                @click.stop
+              >
+                {{ organizationOwners.get(row.id)?.name }}
+              </NuxtLink>
             </div>
           </template>
           <template #cell-plan="{ value }">
@@ -130,16 +150,13 @@ import SuperadminActionsCell, { type Action } from "~/components/superadmin/Supe
 import type { FilterConfig } from "~/components/superadmin/SuperadminFilterBar.vue";
 import type { BadgeVariant } from "~/components/oui/Badge.vue";
 
-const superAdmin = useSuperAdmin();
-// Use client-side fetching for non-blocking navigation
-useClientFetch("superadmin-organizations-overview", () => superAdmin.fetchOverview(true));
-
 const search = ref("");
 const planFilter = ref<string>("all");
 const statusFilter = ref<string>("all");
 const router = useRouter();
 const organizationsStore = useOrganizationsStore();
 const orgClient = useConnectClient(OrganizationService);
+const isLoading = ref(false);
 
 const planOptions = computed(() => {
   const plans = new Set<string>();
@@ -194,18 +211,72 @@ const manageCreditsAction = ref<"add" | "remove">("add");
 const manageCreditsNote = ref("");
 const manageCreditsLoading = ref(false);
 
+// Fetch organizations using listOrganizations endpoint
+const { data: organizationsData, refresh: refreshOrganizations } = await useClientFetch(
+  "superadmin-organizations-list",
+  async () => {
+    const response = await orgClient.listOrganizations({
+      onlyMine: false, // Superadmin gets all organizations
+    });
+    return response.organizations || [];
+  }
+);
+
+const organizations = computed(() => organizationsData.value || []);
+
+// Store owner information for organizations (map of orgId -> { name, userId })
+const organizationOwners = ref<Map<string, { name: string; userId: string }>>(new Map());
+const loadingOwners = ref<Set<string>>(new Set());
+
+// Fetch owner for an organization
+async function fetchOwner(orgId: string): Promise<void> {
+  if (organizationOwners.value.has(orgId) || loadingOwners.value.has(orgId)) {
+    return;
+  }
+
+  loadingOwners.value.add(orgId);
+  try {
+    const res = await orgClient.listMembers({ organizationId: orgId });
+    const owner = res.members?.find((m) => m.role === "owner");
+    if (owner?.user) {
+      const ownerName = owner.user.name || owner.user.email || owner.user.id || "Unknown";
+      const userId = owner.user.id || "";
+      if (userId) {
+        organizationOwners.value.set(orgId, { name: ownerName, userId });
+      }
+    }
+  } catch (error) {
+    console.error(`Failed to fetch owner for org ${orgId}:`, error);
+  } finally {
+    loadingOwners.value.delete(orgId);
+  }
+}
+
+// Fetch owners for all organizations
+async function loadOwners() {
+  if (!organizations.value.length) return;
+  const promises = organizations.value.map((org) => fetchOwner(org.id));
+  await Promise.all(promises);
+}
+
+// Watch for organizations changes and load owners
+watch(organizations, () => {
+  organizationOwners.value.clear();
+  loadingOwners.value.clear();
+  if (organizations.value.length > 0) {
+    loadOwners();
+  }
+}, { immediate: true });
+
 const openManageCredits = (orgId: string, currentBalance: number | bigint) => {
   manageCreditsOrgId.value = orgId;
-  manageCreditsCurrentBalance.value = Number(currentBalance);
+  const balance = typeof currentBalance === 'bigint' ? currentBalance : BigInt(Number(currentBalance) || 0);
+  manageCreditsCurrentBalance.value = Number(balance);
   manageCreditsAmount.value = "";
   manageCreditsAction.value = "add";
   manageCreditsNote.value = "";
   manageCreditsDialogOpen.value = true;
 };
-
-const overview = computed(() => superAdmin.overview.value);
-const organizations = computed(() => overview.value?.organizations ?? []);
-const isLoading = computed(() => superAdmin.loading.value);
 
 const filteredOrganizations = computed(() => {
   const term = search.value.trim().toLowerCase();
@@ -244,8 +315,6 @@ const tableColumns = computed(() => [
   { key: "plan", label: "Plan", defaultWidth: 120, minWidth: 80 },
   { key: "status", label: "Status", defaultWidth: 100, minWidth: 70 },
   { key: "credits", label: "Credits", defaultWidth: 120, minWidth: 100 },
-  { key: "memberCount", label: "Members", defaultWidth: 100, minWidth: 80 },
-  { key: "deploymentCount", label: "Deployments", defaultWidth: 120, minWidth: 100 },
   { key: "createdAt", label: "Created", defaultWidth: 150, minWidth: 120 },
   { key: "actions", label: "Actions", defaultWidth: 200, minWidth: 150, resizable: false },
 ]);
@@ -253,14 +322,15 @@ const tableColumns = computed(() => [
 const tableRows = computed(() => {
   return (filteredOrganizations.value || []).map((org) => ({
     ...org,
-    memberCount: formatNumber(org.memberCount),
-    deploymentCount: formatNumber(org.deploymentCount),
     createdAt: formatDate(org.createdAt),
+    credits: org.credits ?? BigInt(0),
+    owner: organizationOwners.value.get(org.id) || null,
   }));
 });
 
-function refresh() {
-  superAdmin.fetchOverview(true).catch(() => null);
+async function refresh() {
+  await refreshOrganizations();
+  await loadOwners();
 }
 
 function switchToOrg(orgId: string) {
@@ -287,6 +357,10 @@ function openDeployments(orgId: string) {
   });
 }
 
+function viewOrganization(orgId: string) {
+  router.push(`/superadmin/organizations/${orgId}`);
+}
+
 const numberFormatter = new Intl.NumberFormat();
 const { formatDate, formatCurrency } = useUtils();
 
@@ -311,7 +385,7 @@ const getOrgActions = (row: any): Action[] => {
     {
       key: "credits",
       label: "Credits",
-      onClick: () => openManageCredits(row.id, row.credits || 0),
+      onClick: () => openManageCredits(row.id, row.credits ?? BigInt(0)),
     },
     {
       key: "members",
@@ -343,25 +417,27 @@ async function manageCredits() {
   const { toast } = useToast();
   try {
     const amountCents = BigInt(Math.round(amount * 100));
+    let response;
     if (manageCreditsAction.value === "add") {
-      await orgClient.adminAddCredits({
+      response = await orgClient.adminAddCredits({
         organizationId: manageCreditsOrgId.value,
         amountCents,
         note: manageCreditsNote.value || undefined,
       });
       toast.success(`Successfully added ${formatCurrency(Number(amountCents))} in credits`);
     } else {
-      await orgClient.adminRemoveCredits({
+      response = await orgClient.adminRemoveCredits({
         organizationId: manageCreditsOrgId.value,
         amountCents,
         note: manageCreditsNote.value || undefined,
       });
       toast.success(`Successfully removed ${formatCurrency(Number(amountCents))} in credits`);
     }
+    
     manageCreditsDialogOpen.value = false;
     manageCreditsAmount.value = "";
     manageCreditsNote.value = "";
-    await refresh(); // Refresh to get updated credits
+    await refresh(); // Refresh to get updated organizations with credits
   } catch (err: any) {
     console.error("Failed to manage credits:", err);
     toast.error(err?.message || "Failed to manage credits");

@@ -122,7 +122,12 @@
               @row-click="(row) => viewOrganization(row.organizationId)"
             >
               <template #cell-organization="{ row }">
-                <OuiText weight="medium">{{ row.organizationName }}</OuiText>
+                <NuxtLink
+                  :to="`/organizations?organizationId=${row.organizationId}`"
+                  class="font-medium text-text-primary hover:text-primary transition-colors cursor-pointer"
+                >
+                  {{ row.organizationName }}
+                </NuxtLink>
                 <OuiText color="muted" size="xs" class="font-mono">
                   {{ row.organizationId }}
                 </OuiText>
@@ -196,7 +201,10 @@ const orgColumns = [
 const tableOrgs = computed(() => organizations.value);
 
 function viewOrganization(orgId: string) {
-  router.push(`/superadmin/organizations/${orgId}`);
+  router.push({
+    path: "/organizations",
+    query: { organizationId: orgId },
+  });
 }
 
 async function loadUser() {
