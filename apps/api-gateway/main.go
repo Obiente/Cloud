@@ -818,8 +818,41 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logger.Debug("[API Gateway] Forwarding request to %s without Authorization header", targetURL)
 	}
 
-	// Forward request
-	resp, err := client.Do(req)
+	// Check if this is a streaming request (server streaming RPC)
+	// Connect-RPC server streaming endpoints typically have "Stream" in the path
+	isStreamingRequest := strings.Contains(r.URL.Path, "Stream") || 
+		strings.Contains(r.URL.Path, "stream")
+	
+	// For streaming requests, use a client without timeout or with a very long timeout
+	var streamingClient *http.Client
+	if isStreamingRequest {
+		logger.Debug("[API Gateway] Detected streaming request, using long-lived client for: %s", r.URL.Path)
+		// Create a client with no timeout for streaming (or very long timeout)
+		streamingTransport := &http.Transport{
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   10,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			ResponseHeaderTimeout: 0, // No timeout for response headers in streaming
+			DisableKeepAlives:     false,
+			ForceAttemptHTTP2:     false,
+			WriteBufferSize:       4096,
+			ReadBufferSize:        4096,
+		}
+		streamingClient = &http.Client{
+			Transport: streamingTransport,
+			Timeout:   0, // No timeout for streaming requests
+		}
+	}
+
+	// Forward request - use streaming client if this is a streaming request
+	requestClient := client
+	if isStreamingRequest && streamingClient != nil {
+		requestClient = streamingClient
+	}
+	
+	resp, err := requestClient.Do(req)
 	if err != nil {
 		// Check if context was cancelled (client disconnected)
 		if r.Context().Err() != nil {
@@ -843,15 +876,54 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		
 		// Provide more specific error messages
 		errMsg := "Service Unavailable"
+		statusCode := http.StatusServiceUnavailable
 		if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline") {
 			errMsg = "Request timeout - backend service did not respond in time"
+			statusCode = http.StatusGatewayTimeout
 		} else if strings.Contains(err.Error(), "no such host") || strings.Contains(err.Error(), "DNS") {
 			errMsg = "DNS resolution failed - service hostname not found"
+			statusCode = http.StatusBadGateway
 		} else if strings.Contains(err.Error(), "connection refused") {
 			errMsg = "Connection refused - backend service may be down"
+			statusCode = http.StatusBadGateway
 		}
 		
-		http.Error(w, fmt.Sprintf("%s: %v", errMsg, err), http.StatusServiceUnavailable)
+		// Set CORS headers before writing error response
+		// The CORS middleware won't run on direct http.Error() calls, so we need to add headers manually
+		origin := r.Header.Get("Origin")
+		corsConfig := middleware.DefaultCORSConfig()
+		
+		// Determine allowed origin
+		var allowedOrigin string
+		if len(corsConfig.AllowedOrigins) == 1 && corsConfig.AllowedOrigins[0] == "*" {
+			// Wildcard CORS - allow all origins
+			allowedOrigin = "*"
+		} else if origin != "" && middleware.IsOriginAllowed(origin) {
+			// Specific origin is allowed
+			allowedOrigin = origin
+		}
+		
+		// Set CORS headers if origin is allowed
+		if allowedOrigin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+			if allowedOrigin != "*" {
+				w.Header().Add("Vary", "Origin")
+			}
+			if corsConfig.AllowCredentials {
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
+			// Add other CORS headers for preflight compatibility
+			if len(corsConfig.AllowedMethods) > 0 {
+				w.Header().Set("Access-Control-Allow-Methods", strings.Join(corsConfig.AllowedMethods, ", "))
+			}
+			if len(corsConfig.AllowedHeaders) > 0 {
+				w.Header().Set("Access-Control-Allow-Headers", strings.Join(corsConfig.AllowedHeaders, ", "))
+			}
+		}
+		
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(statusCode)
+		w.Write([]byte(fmt.Sprintf("%s: %v", errMsg, err)))
 		return
 	}
 	defer resp.Body.Close()
@@ -861,13 +933,23 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"Access-Control-Allow-Origin":      true,
 		"Access-Control-Allow-Methods":     true,
 		"Access-Control-Allow-Headers":     true,
-		"Access-Control-Allow-Credentials": true,
+		"Access-Control-Allow-Credentials":  true,
 		"Access-Control-Expose-Headers":    true,
 		"Access-Control-Max-Age":           true,
 	}
 
+	// For streaming requests, preserve all headers including Content-Type
+	// Connect-RPC requires specific content types like "application/connect+json" for streaming
 	for key, values := range resp.Header {
 		if corsHeaders[key] {
+			continue
+		}
+		// Preserve Content-Type header especially for streaming (application/connect+json)
+		if strings.EqualFold(key, "Content-Type") && isStreamingRequest {
+			// Set (not Add) to ensure we use the backend's content type
+			if len(values) > 0 {
+				w.Header().Set(key, values[0])
+			}
 			continue
 		}
 		for _, value := range values {
@@ -875,17 +957,183 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.WriteHeader(resp.StatusCode)
-
-	// Copy response body to client
-	// Must fully consume body for HTTP/1.1 keep-alive connection reuse
-	if _, err := io.Copy(w, resp.Body); err != nil {
-		logger.Error("[API Gateway] Failed to copy response body: %v", err)
-		// If copy fails, close idle connections to prevent reuse of bad connection
-		if transport, ok := client.Transport.(*http.Transport); ok {
-			transport.CloseIdleConnections()
+	// Always set CORS headers on responses (including error responses from backend)
+	// This ensures CORS headers are present even when backend returns 502 or other errors
+	origin := r.Header.Get("Origin")
+	corsConfig := middleware.DefaultCORSConfig()
+	
+	// Determine allowed origin
+	var allowedOrigin string
+	if len(corsConfig.AllowedOrigins) == 1 && corsConfig.AllowedOrigins[0] == "*" {
+		// Wildcard CORS - allow all origins
+		allowedOrigin = "*"
+	} else if origin != "" && middleware.IsOriginAllowed(origin) {
+		// Specific origin is allowed
+		allowedOrigin = origin
+	}
+	
+	// Set CORS headers if origin is allowed
+	if allowedOrigin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+		if allowedOrigin != "*" {
+			w.Header().Add("Vary", "Origin")
 		}
-		return
+		if corsConfig.AllowCredentials {
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+		}
+		// Add other CORS headers for preflight compatibility
+		if len(corsConfig.AllowedMethods) > 0 {
+			w.Header().Set("Access-Control-Allow-Methods", strings.Join(corsConfig.AllowedMethods, ", "))
+		}
+		if len(corsConfig.AllowedHeaders) > 0 {
+			w.Header().Set("Access-Control-Allow-Headers", strings.Join(corsConfig.AllowedHeaders, ", "))
+		}
+		if len(corsConfig.ExposedHeaders) > 0 {
+			w.Header().Set("Access-Control-Expose-Headers", strings.Join(corsConfig.ExposedHeaders, ", "))
+		}
+	}
+
+	// For streaming responses, we need to handle them differently
+	// Write headers first, then stream the body
+	if isStreamingRequest {
+		logger.Info("[API Gateway] Streaming response for: %s (Content-Type: %s)", r.URL.Path, resp.Header.Get("Content-Type"))
+		
+		// For streaming requests, we need to extend the write deadline to prevent timeout
+		// The server's WriteTimeout will close the connection if no data is written for 30s
+		// We'll use a ResponseWriter that extends the deadline on each write
+		if conn, ok := w.(interface{ SetWriteDeadline(time.Time) error }); ok {
+			// Set a very long write deadline (1 hour) for streaming connections
+			// This will be extended on each write/flush
+			conn.SetWriteDeadline(time.Now().Add(1 * time.Hour))
+		}
+		
+		// Write status code and headers
+		w.WriteHeader(resp.StatusCode)
+		
+		// Get flusher if available
+		flusher, hasFlusher := w.(http.Flusher)
+		if hasFlusher {
+			// Flush headers immediately
+			flusher.Flush()
+		}
+		
+		// Stream the response body chunk by chunk
+		// Read and forward immediately without buffering
+		buf := make([]byte, 8192) // 8KB chunks
+		totalWritten := int64(0)
+		
+		// Stream in a goroutine to handle both client disconnect and stream completion
+		streamDone := make(chan error, 1)
+		
+		// Start keepalive goroutine to extend write deadline periodically
+		// This prevents the server's WriteTimeout from closing the connection
+		keepaliveTicker := time.NewTicker(15 * time.Second) // Extend deadline every 15s
+		keepaliveDone := make(chan struct{})
+		keepaliveClosed := false
+		var keepaliveMutex sync.Mutex
+		
+		closeKeepalive := func() {
+			keepaliveMutex.Lock()
+			defer keepaliveMutex.Unlock()
+			if !keepaliveClosed {
+				close(keepaliveDone)
+				keepaliveClosed = true
+			}
+		}
+		
+		go func() {
+			defer closeKeepalive()
+			for {
+				select {
+				case <-keepaliveTicker.C:
+					// Extend write deadline periodically to prevent timeout
+					// This ensures the connection stays open even during gaps in metrics
+					if conn, ok := w.(interface{ SetWriteDeadline(time.Time) error }); ok {
+						conn.SetWriteDeadline(time.Now().Add(1 * time.Hour))
+					}
+					// Send a keepalive by flushing (even if no new data)
+					if hasFlusher {
+						flusher.Flush()
+					}
+				case <-keepaliveDone:
+					return
+				}
+			}
+		}()
+		
+		// Stream the response body
+		go func() {
+			defer close(streamDone)
+			defer keepaliveTicker.Stop()
+			defer closeKeepalive()
+			
+			for {
+				n, err := resp.Body.Read(buf)
+				if n > 0 {
+					written, writeErr := w.Write(buf[:n])
+					totalWritten += int64(written)
+					if writeErr != nil {
+						streamDone <- writeErr
+						return
+					}
+					// Extend write deadline on each successful write
+					if conn, ok := w.(interface{ SetWriteDeadline(time.Time) error }); ok {
+						conn.SetWriteDeadline(time.Now().Add(1 * time.Hour))
+					}
+					// Flush after each chunk for real-time streaming
+					if hasFlusher {
+						flusher.Flush()
+					}
+				}
+				if err == io.EOF {
+					streamDone <- nil
+					return
+				}
+				if err != nil {
+					streamDone <- err
+					return
+				}
+			}
+		}()
+		
+		// Wait for streaming to complete or client to disconnect
+		select {
+		case err := <-streamDone:
+			if err != nil {
+				logger.Debug("[API Gateway] Streaming error: %v (written: %d bytes)", err, totalWritten)
+			} else {
+				logger.Debug("[API Gateway] Stream completed successfully (total: %d bytes)", totalWritten)
+			}
+		case <-r.Context().Done():
+			logger.Debug("[API Gateway] Client disconnected during streaming (written: %d bytes)", totalWritten)
+			// Close the response body to stop reading from backend
+			resp.Body.Close()
+			// Wait a bit for the goroutine to finish, but don't block forever
+			select {
+			case <-streamDone:
+			case <-time.After(1 * time.Second):
+				logger.Debug("[API Gateway] Stream goroutine did not finish within timeout")
+			}
+		}
+		
+		// Final flush
+		if hasFlusher {
+			flusher.Flush()
+		}
+	} else {
+		// For non-streaming requests, write headers and copy body normally
+		w.WriteHeader(resp.StatusCode)
+		
+		// Copy response body to client
+		// Must fully consume body for HTTP/1.1 keep-alive connection reuse
+		if _, err := io.Copy(w, resp.Body); err != nil {
+			logger.Error("[API Gateway] Failed to copy response body: %v", err)
+			// If copy fails, close idle connections to prevent reuse of bad connection
+			if transport, ok := client.Transport.(*http.Transport); ok {
+				transport.CloseIdleConnections()
+			}
+			return
+		}
 	}
 }
 
