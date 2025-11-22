@@ -406,7 +406,7 @@ const billingAccordionItems = [
         <li><strong>Bandwidth Cost:</strong> Cost from data transfer</li>
         <li><strong>Storage Cost:</strong> Cost from storage usage</li>
       </ul>
-      <p class="text-sm text-secondary mt-3">Costs are shown in cents and converted to dollars for display. View detailed breakdowns in the Organizations section under Billing.</p>
+      <p class="text-sm text-secondary mt-3">Costs are shown in cents and converted to dollars for display. View detailed breakdowns on the Billing page.</p>
     `,
   },
   {
@@ -416,9 +416,8 @@ const billingAccordionItems = [
     content: `
       <p class="text-sm text-secondary mb-3">View usage and costs:</p>
       <ol class="list-decimal list-inside space-y-1 text-sm text-secondary">
-        <li>Navigate to Organizations in the sidebar</li>
+        <li>Navigate to Billing in the sidebar</li>
         <li>Select your organization</li>
-        <li>Go to the Billing tab</li>
         <li>View current month usage, estimated costs, and quota limits</li>
       </ol>
       <p class="text-sm text-secondary mt-3">Usage data is updated in real-time as resources are used. Historical usage data is available for past months.</p>

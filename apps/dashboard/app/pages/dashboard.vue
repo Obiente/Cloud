@@ -159,7 +159,7 @@
               variant="ghost"
               size="sm"
               class="w-full sm:w-auto"
-              @click="navigateTo('/organizations?tab=billing')"
+              @click="navigateTo('/billing')"
             >
               View Details
             </OuiButton>
@@ -409,7 +409,7 @@
                   variant="ghost"
                   size="sm"
                   class="self-start mt-2"
-                  @click="navigateTo('/organizations?tab=billing')"
+                  @click="navigateTo('/billing')"
                 >
                   View billing details →
                 </OuiButton>
@@ -1137,7 +1137,7 @@
         icon: CreditCardIcon,
         iconBg: "bg-warning/10",
         iconColor: "text-warning",
-        href: "/organizations?tab=billing",
+        href: "/billing",
       },
     ];
   });
