@@ -204,9 +204,8 @@
     const transactions = creditLogData.value?.transactions || [];
     return transactions
       .filter((t) => {
-        // Include all payment transactions (from Stripe or otherwise)
-        // This includes both credit purchases and other payments
-        return t.type === "payment";
+        // Include payment transactions (credit purchases) and usage transactions (bill payments)
+        return t.type === "payment" || t.type === "usage";
       })
       .map((t) => {
         let dateStr = "";
@@ -222,14 +221,32 @@
         }
         const amountCents = typeof t.amountCents === 'bigint' ? Number(t.amountCents) : Number(t.amountCents || 0);
         const balanceAfter = typeof t.balanceAfter === 'bigint' ? Number(t.balanceAfter) : Number(t.balanceAfter || 0);
+        
+        // Determine status and label based on transaction type
+        let status: string;
+        let statusVariant: "success" | "warning" | "danger" | "secondary" = "success";
+        if (t.type === "usage") {
+          // Usage transactions are negative (deductions for bills) - these are successful payments
+          status = "Paid";
+          statusVariant = "success";
+        } else if (t.type === "payment") {
+          // Payment transactions are positive (credit purchases)
+          status = amountCents > 0 ? "Credit Purchase" : "Refunded";
+          statusVariant = amountCents > 0 ? "success" : "danger";
+        } else {
+          status = amountCents > 0 ? "Paid" : "Refunded";
+        }
+        
         return {
           id: t.id,
           number: `#${t.id.substring(0, 8).toUpperCase()}`,
           date: dateStr,
           amount: formatCurrency(Math.abs(amountCents)), // Show absolute value for display
-          status: amountCents > 0 ? "Paid" : "Refunded",
+          status,
+          statusVariant,
           transaction: t,
           balanceAfter,
+          note: t.note || "",
         };
       });
   });
@@ -411,6 +428,33 @@
   const bills = ref<any[]>([]);
   const billsLoading = ref(false);
   const payBillLoading = ref(false);
+  const generateBillLoading = ref(false);
+
+  // Table columns
+  const billsColumns = [
+    { key: 'billId', label: 'Bill ID' },
+    { key: 'period', label: 'Period' },
+    { key: 'amount', label: 'Amount' },
+    { key: 'dueDate', label: 'Due Date' },
+    { key: 'status', label: 'Status' },
+    { key: 'actions', label: 'Actions' },
+  ];
+
+  const invoicesColumns = [
+    { key: 'invoice', label: 'Invoice' },
+    { key: 'date', label: 'Date' },
+    { key: 'amount', label: 'Amount' },
+    { key: 'status', label: 'Status' },
+    { key: 'actions', label: 'Actions' },
+  ];
+
+  const transactionHistoryColumns = [
+    { key: 'transaction', label: 'Transaction' },
+    { key: 'date', label: 'Date' },
+    { key: 'amount', label: 'Amount' },
+    { key: 'status', label: 'Status' },
+    { key: 'balance', label: 'Balance' },
+  ];
 
   async function addCredits() {
     if (!selectedOrg.value || !addCreditsAmount.value) return;
@@ -949,6 +993,32 @@
       useToast().toast.error(error.value);
     } finally {
       payBillLoading.value = false;
+    }
+  }
+
+  async function generateCurrentBill() {
+    if (!selectedOrg.value) return;
+    generateBillLoading.value = true;
+    error.value = "";
+    try {
+      const res = await (billingClient as any).generateCurrentBill({
+        organizationId: selectedOrg.value,
+      });
+      if (res.success) {
+        if (res.alreadyExists) {
+          useToast().toast.info(res.message || "Bill already exists for the current period");
+        } else {
+          useToast().toast.success(res.message || "Bill generated successfully");
+        }
+        await loadBills();
+      } else {
+        throw new Error(res.message || "Failed to generate bill");
+      }
+    } catch (err: any) {
+      error.value = err.message || "Failed to generate bill";
+      useToast().toast.error(error.value);
+    } finally {
+      generateBillLoading.value = false;
     }
   }
 
@@ -1795,87 +1865,83 @@
             <OuiStack gap="lg" v-if="currentUserIsOwner">
               <OuiFlex justify="between" align="center">
                 <OuiText size="2xl" weight="bold">Monthly Bills</OuiText>
-                <OuiButton 
-                  variant="outline" 
-                  size="sm"
-                  @click="refreshBills"
-                >
-                  Refresh
-                </OuiButton>
+                <OuiFlex gap="sm">
+                  <OuiButton 
+                    variant="outline" 
+                    size="sm"
+                    @click="generateCurrentBill"
+                    :disabled="generateBillLoading || billsLoading"
+                  >
+                    {{ generateBillLoading ? "Generating..." : "Generate Current Bill" }}
+                  </OuiButton>
+                  <OuiButton 
+                    variant="outline" 
+                    size="sm"
+                    @click="refreshBills"
+                    :disabled="billsLoading"
+                  >
+                    Refresh
+                  </OuiButton>
+                </OuiFlex>
               </OuiFlex>
 
               <OuiCard>
                 <OuiCardBody class="p-0">
-                  <OuiStack>
-                    <!-- Table Header -->
-                    <OuiBox p="md" borderBottom="1" borderColor="muted">
-                      <OuiGrid cols="6" gap="md">
-                        <OuiText size="sm" weight="medium" color="muted">Bill ID</OuiText>
-                        <OuiText size="sm" weight="medium" color="muted">Period</OuiText>
-                        <OuiText size="sm" weight="medium" color="muted">Amount</OuiText>
-                        <OuiText size="sm" weight="medium" color="muted">Due Date</OuiText>
-                        <OuiText size="sm" weight="medium" color="muted">Status</OuiText>
-                        <OuiText size="sm" weight="medium" color="muted">Actions</OuiText>
-                      </OuiGrid>
-                    </OuiBox>
-
-                    <!-- Table Rows -->
-                    <OuiStack>
-                      <template v-if="billsLoading">
-                        <OuiBox p="md">
-                          <OuiText size="sm" color="muted" align="center">Loading bills...</OuiText>
-                        </OuiBox>
-                      </template>
-                      <template v-else-if="bills.length === 0">
-                        <OuiBox p="md">
-                          <OuiStack gap="sm" align="center">
-                            <DocumentTextIcon class="h-8 w-8 text-muted" />
-                            <OuiText size="sm" color="muted" align="center">
-                              No monthly bills yet. Bills will appear here after your first billing cycle.
-                            </OuiText>
-                          </OuiStack>
-                        </OuiBox>
-                      </template>
-                      <OuiBox
-                        v-for="bill in bills"
-                        :key="bill.id"
-                        p="md"
-                        borderBottom="1"
-                        borderColor="muted"
-                        :class="{ 'last:border-b-0': bill === bills[bills.length - 1] }"
-                      >
-                        <OuiGrid cols="6" gap="md" align="center">
-                          <OuiText size="sm" weight="medium">{{ bill.id.substring(0, 12) }}...</OuiText>
-                          <OuiText size="sm" color="muted">
-                            {{ formatBillDate(bill.billingPeriodStart) }} - {{ formatBillDate(bill.billingPeriodEnd) }}
-                          </OuiText>
-                          <OuiText size="sm" weight="medium">
-                            {{ formatCurrency(bill.amountCents ?? 0) }}
-                          </OuiText>
-                          <OuiText size="sm" color="muted">
-                            {{ formatBillDate(bill.dueDate) }}
-                          </OuiText>
-                          <OuiBadge :variant="bill.status === 'PAID' ? 'success' : bill.status === 'PENDING' ? 'warning' : 'danger'">
-                            {{ bill.status }}
-                          </OuiBadge>
-                          <OuiFlex gap="sm">
-                            <OuiButton
-                              v-if="bill.status === 'PENDING'"
-                              variant="ghost"
-                              size="sm"
-                              @click="payBill(bill.id)"
-                              :disabled="payBillLoading || creditsBalance < (bill.amountCents ?? 0)"
-                            >
-                              {{ payBillLoading ? "Processing..." : "Pay Now" }}
-                            </OuiButton>
-                            <OuiText v-else size="xs" color="muted">
-                              {{ bill.status === 'PAID' ? 'Paid' : '—' }}
-                            </OuiText>
-                          </OuiFlex>
-                        </OuiGrid>
-                      </OuiBox>
-                    </OuiStack>
-                  </OuiStack>
+                  <OuiTable
+                    :columns="billsColumns"
+                    :rows="bills"
+                    :loading="billsLoading"
+                    :empty-text="'No monthly bills yet. Bills will appear here after your first billing cycle, or you can generate your current bill early.'"
+                    row-key="id"
+                  >
+                    <template #empty>
+                      <OuiStack gap="sm" align="center" class="py-8">
+                        <DocumentTextIcon class="h-8 w-8 text-muted" />
+                        <OuiText size="sm" color="muted" align="center">
+                          No monthly bills yet. Bills will appear here after your first billing cycle, or you can generate your current bill early.
+                        </OuiText>
+                      </OuiStack>
+                    </template>
+                    <template #cell-billId="{ row }">
+                      <OuiText size="sm" weight="medium" class="truncate" :title="row.id">{{ row.id }}</OuiText>
+                    </template>
+                    <template #cell-period="{ row }">
+                      <OuiText size="sm" color="muted">
+                        {{ formatBillDate(row.billingPeriodStart) }} - {{ formatBillDate(row.billingPeriodEnd) }}
+                      </OuiText>
+                    </template>
+                    <template #cell-amount="{ row }">
+                      <OuiText size="sm" weight="medium">
+                        {{ formatCurrency(row.amountCents ?? 0) }}
+                      </OuiText>
+                    </template>
+                    <template #cell-dueDate="{ row }">
+                      <OuiText size="sm" color="muted">
+                        {{ formatBillDate(row.dueDate) }}
+                      </OuiText>
+                    </template>
+                    <template #cell-status="{ row }">
+                      <OuiBadge :variant="row.status === 'PAID' ? 'success' : row.status === 'PENDING' ? 'warning' : 'danger'">
+                        {{ row.status }}
+                      </OuiBadge>
+                    </template>
+                    <template #cell-actions="{ row }">
+                      <OuiFlex gap="sm">
+                        <OuiButton
+                          v-if="row.status === 'PENDING'"
+                          variant="ghost"
+                          size="sm"
+                          @click="payBill(row.id)"
+                          :disabled="payBillLoading || creditsBalance < (row.amountCents ?? 0)"
+                        >
+                          {{ payBillLoading ? "Processing..." : "Pay Now" }}
+                        </OuiButton>
+                        <OuiText v-else size="xs" color="muted">
+                          {{ row.status === 'PAID' ? 'Paid' : '—' }}
+                        </OuiText>
+                      </OuiFlex>
+                    </template>
+                  </OuiTable>
                 </OuiCardBody>
               </OuiCard>
             </OuiStack>
@@ -1995,123 +2061,84 @@
 
               <OuiCard>
                 <OuiCardBody class="p-0">
-                  <OuiStack>
-                    <!-- Table Header -->
-                    <OuiBox p="md" borderBottom="1" borderColor="muted">
-                      <OuiGrid cols="5" gap="md">
-                        <OuiText size="sm" weight="medium" color="muted">Invoice</OuiText>
-                        <OuiText size="sm" weight="medium" color="muted">Date</OuiText>
-                        <OuiText size="sm" weight="medium" color="muted">Amount</OuiText>
-                        <OuiText size="sm" weight="medium" color="muted">Status</OuiText>
-                        <OuiText size="sm" weight="medium" color="muted">Actions</OuiText>
-                      </OuiGrid>
-                    </OuiBox>
-
-                    <!-- Table Rows -->
-                    <OuiStack>
-                      <template v-if="isLoadingBillingAccount || isLoadingInvoices">
-                        <OuiBox
-                          v-for="i in 3"
-                          :key="i"
-                          p="md"
-                          borderBottom="1"
-                          borderColor="muted"
-                        >
-                          <OuiGrid cols="5" gap="md" align="center">
-                            <OuiStack gap="xs">
-                              <OuiSkeleton width="8rem" height="1rem" variant="text" />
-                              <OuiSkeleton width="12rem" height="0.875rem" variant="text" />
-                            </OuiStack>
-                            <OuiSkeleton width="6rem" height="1rem" variant="text" />
-                            <OuiSkeleton width="5rem" height="1rem" variant="text" />
-                            <OuiSkeleton width="4rem" height="1.5rem" variant="rectangle" rounded />
-                            <OuiFlex gap="sm">
-                              <OuiSkeleton width="4rem" height="2rem" variant="rectangle" rounded />
-                              <OuiSkeleton width="4rem" height="2rem" variant="rectangle" rounded />
-                            </OuiFlex>
-                          </OuiGrid>
-                        </OuiBox>
-                      </template>
-                      <template v-else-if="!billingAccount?.stripeCustomerId">
-                        <OuiBox p="md">
-                          <OuiStack gap="sm" align="center">
-                            <DocumentTextIcon class="h-8 w-8 text-muted" />
-                            <OuiText size="sm" color="muted" align="center">
-                              No invoices available. Add credits to create a Stripe customer account.
-                            </OuiText>
-                          </OuiStack>
-                        </OuiBox>
-                      </template>
-                      <template v-else-if="invoices.length === 0">
-                        <OuiBox p="md">
-                          <OuiStack gap="sm" align="center">
-                            <DocumentTextIcon class="h-8 w-8 text-muted" />
-                            <OuiText size="sm" color="muted" align="center">
-                              No invoices found. Invoices will appear here after purchases.
-                            </OuiText>
-                          </OuiStack>
-                        </OuiBox>
-                      </template>
-                      <OuiBox
-                        v-for="invoice in invoices"
-                        :key="invoice.id"
-                        p="md"
-                        borderBottom="1"
-                        borderColor="muted"
-                        :class="{ 'last:border-b-0': invoice === invoices[invoices.length - 1] }"
-                      >
-                        <OuiGrid cols="5" gap="md" align="center">
-                          <OuiStack gap="xs">
-                            <OuiText size="sm" weight="medium">{{ invoice.number || `#${invoice.id.substring(0, 8).toUpperCase()}` }}</OuiText>
-                            <OuiText size="xs" color="muted" v-if="invoice.description">
-                              {{ invoice.description }}
-                            </OuiText>
-                          </OuiStack>
-                          <OuiText size="sm" color="muted">
-                            {{ formatInvoiceDate(invoice.date) }}
-                          </OuiText>
-                          <OuiText size="sm" weight="medium">
-                            {{ formatCurrency(invoice.amountDue ?? 0) }}
-                            <span v-if="invoice.currency && invoice.currency.toLowerCase() !== 'usd'" class="text-xs text-muted">
-                              {{ invoice.currency.toUpperCase() }}
-                            </span>
-                          </OuiText>
-                          <OuiBadge v-if="invoice.status && invoice.status.trim()" :variant="getInvoiceStatusVariant(invoice.status)">
-                            {{ invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1) }}
-                          </OuiBadge>
-                          <OuiText v-else size="sm" color="muted">—</OuiText>
-                          <OuiFlex gap="sm">
-                            <OuiButton
-                              v-if="invoice.hostedInvoiceUrl"
-                              variant="ghost"
-                              size="sm"
-                              @click="openInvoiceUrl(invoice.hostedInvoiceUrl!)"
-                            >
-                              <DocumentTextIcon class="h-4 w-4 mr-1" />
-                              View
-                            </OuiButton>
-                            <OuiButton
-                              v-if="invoice.invoicePdf"
-                              variant="ghost"
-                              size="sm"
-                              @click="openInvoiceUrl(invoice.invoicePdf!)"
-                            >
-                              <ArrowDownTrayIcon class="h-4 w-4 mr-1" />
-                              PDF
-                            </OuiButton>
-                            <OuiText v-if="!invoice.hostedInvoiceUrl && !invoice.invoicePdf" size="xs" color="muted">
-                              No actions
-                            </OuiText>
-                          </OuiFlex>
-                        </OuiGrid>
-                      </OuiBox>
-                      <OuiBox v-if="hasMoreInvoices" p="md" borderTop="1" borderColor="muted">
+                  <OuiTable
+                    :columns="invoicesColumns"
+                    :rows="invoices"
+                    :loading="isLoadingBillingAccount || isLoadingInvoices"
+                    :empty-text="!billingAccount?.stripeCustomerId ? 'No invoices available. Add credits to create a Stripe customer account.' : 'No invoices found. Invoices will appear here after purchases.'"
+                    row-key="id"
+                  >
+                    <template #empty>
+                      <OuiStack gap="sm" align="center" class="py-8">
+                        <DocumentTextIcon class="h-8 w-8 text-muted" />
                         <OuiText size="sm" color="muted" align="center">
-                          More invoices available. Visit the Stripe Customer Portal to view all invoices.
+                          <template v-if="!billingAccount?.stripeCustomerId">
+                            No invoices available. Add credits to create a Stripe customer account.
+                          </template>
+                          <template v-else>
+                            No invoices found. Invoices will appear here after purchases.
+                          </template>
                         </OuiText>
-                      </OuiBox>
-                    </OuiStack>
-                  </OuiStack>
+                      </OuiStack>
+                    </template>
+                    <template #cell-invoice="{ row }">
+                      <OuiStack gap="xs">
+                        <OuiText size="sm" weight="medium">{{ row.number || `#${row.id.substring(0, 8).toUpperCase()}` }}</OuiText>
+                        <OuiText size="xs" color="muted" v-if="row.description">
+                          {{ row.description }}
+                        </OuiText>
+                      </OuiStack>
+                    </template>
+                    <template #cell-date="{ row }">
+                      <OuiText size="sm" color="muted">
+                        {{ formatInvoiceDate(row.date) }}
+                      </OuiText>
+                    </template>
+                    <template #cell-amount="{ row }">
+                      <OuiText size="sm" weight="medium">
+                        {{ formatCurrency(row.amountDue ?? 0) }}
+                        <span v-if="row.currency && row.currency.toLowerCase() !== 'usd'" class="text-xs text-muted">
+                          {{ row.currency.toUpperCase() }}
+                        </span>
+                      </OuiText>
+                    </template>
+                    <template #cell-status="{ row }">
+                      <OuiBadge v-if="row.status && row.status.trim()" :variant="getInvoiceStatusVariant(row.status)">
+                        {{ row.status.charAt(0).toUpperCase() + row.status.slice(1) }}
+                      </OuiBadge>
+                      <OuiText v-else size="sm" color="muted">—</OuiText>
+                    </template>
+                    <template #cell-actions="{ row }">
+                      <OuiFlex gap="sm">
+                        <OuiButton
+                          v-if="row.hostedInvoiceUrl"
+                          variant="ghost"
+                          size="sm"
+                          @click="openInvoiceUrl(row.hostedInvoiceUrl!)"
+                        >
+                          <DocumentTextIcon class="h-4 w-4 mr-1" />
+                          View
+                        </OuiButton>
+                        <OuiButton
+                          v-if="row.invoicePdf"
+                          variant="ghost"
+                          size="sm"
+                          @click="openInvoiceUrl(row.invoicePdf!)"
+                        >
+                          <ArrowDownTrayIcon class="h-4 w-4 mr-1" />
+                          PDF
+                        </OuiButton>
+                        <OuiText v-if="!row.hostedInvoiceUrl && !row.invoicePdf" size="xs" color="muted">
+                          No actions
+                        </OuiText>
+                      </OuiFlex>
+                    </template>
+                  </OuiTable>
+                  <OuiBox v-if="hasMoreInvoices" p="md" borderTop="1" borderColor="muted">
+                    <OuiText size="sm" color="muted" align="center">
+                      More invoices available. Visit the Stripe Customer Portal to view all invoices.
+                    </OuiText>
+                  </OuiBox>
                 </OuiCardBody>
               </OuiCard>
             </OuiStack>
@@ -2124,63 +2151,36 @@
 
               <OuiCard>
                 <OuiCardBody class="p-0">
-                  <OuiStack>
-                    <!-- Table Header -->
-                    <OuiBox p="md" borderBottom="1" borderColor="muted">
-                      <OuiGrid cols="5" gap="md">
-                        <OuiText size="sm" weight="medium" color="muted">Transaction</OuiText>
-                        <OuiText size="sm" weight="medium" color="muted">Date</OuiText>
-                        <OuiText size="sm" weight="medium" color="muted">Amount</OuiText>
-                        <OuiText size="sm" weight="medium" color="muted">Type</OuiText>
-                        <OuiText size="sm" weight="medium" color="muted">Balance</OuiText>
-                      </OuiGrid>
-                    </OuiBox>
-
-                    <!-- Table Rows -->
-                    <OuiStack>
-                      <template v-if="isLoadingCreditLog">
-                        <OuiBox
-                          v-for="i in 3"
-                          :key="i"
-                          p="md"
-                          borderBottom="1"
-                          borderColor="muted"
-                        >
-                          <OuiGrid cols="5" gap="md" align="center">
-                            <OuiSkeleton width="8rem" height="1rem" variant="text" />
-                            <OuiSkeleton width="6rem" height="1rem" variant="text" />
-                            <OuiSkeleton width="5rem" height="1rem" variant="text" />
-                            <OuiSkeleton width="4rem" height="1.5rem" variant="rectangle" rounded />
-                            <OuiSkeleton width="6rem" height="1rem" variant="text" />
-                          </OuiGrid>
-                        </OuiBox>
-                      </template>
-                      <template v-else-if="billingHistory.length === 0">
-                        <OuiBox p="md">
-                          <OuiText size="sm" color="muted" align="center">
-                            No payment transactions yet. Add credits to see transaction history.
-                          </OuiText>
-                        </OuiBox>
-                      </template>
-                      <OuiBox
-                        v-for="transaction in billingHistory"
-                        :key="transaction.id"
-                        p="md"
-                        borderBottom="1"
-                        borderColor="muted"
-                      >
-                        <OuiGrid cols="5" gap="md" align="center">
-                          <OuiText size="sm" weight="medium">{{ transaction.number }}</OuiText>
-                          <OuiText size="sm" color="muted">{{ transaction.date }}</OuiText>
-                          <OuiText size="sm" weight="medium">{{ transaction.amount }}</OuiText>
-                          <OuiBadge variant="success">{{ transaction.status }}</OuiBadge>
-                          <OuiText size="sm" color="muted">
-                            {{ formatCurrency(transaction.balanceAfter ?? 0) }}
-                          </OuiText>
-                        </OuiGrid>
-                      </OuiBox>
-                    </OuiStack>
-                  </OuiStack>
+                  <OuiTable
+                    :columns="transactionHistoryColumns"
+                    :rows="billingHistory"
+                    :loading="isLoadingCreditLog"
+                    empty-text="No transactions yet. Add credits or pay bills to see transaction history."
+                    row-key="id"
+                  >
+                    <template #cell-transaction="{ row }">
+                      <OuiStack gap="xs" class="min-w-0">
+                        <OuiText size="sm" weight="medium" class="truncate">{{ row.number }}</OuiText>
+                        <OuiText v-if="row.note" size="xs" color="muted" class="truncate">
+                          {{ row.note }}
+                        </OuiText>
+                      </OuiStack>
+                    </template>
+                    <template #cell-date="{ row }">
+                      <OuiText size="sm" color="muted">{{ row.date }}</OuiText>
+                    </template>
+                    <template #cell-amount="{ row }">
+                      <OuiText size="sm" weight="medium">{{ row.amount }}</OuiText>
+                    </template>
+                    <template #cell-status="{ row }">
+                      <OuiBadge :variant="row.statusVariant || 'success'">{{ row.status }}</OuiBadge>
+                    </template>
+                    <template #cell-balance="{ row }">
+                      <OuiText size="sm" color="muted">
+                        {{ formatCurrency(row.balanceAfter ?? 0) }}
+                      </OuiText>
+                    </template>
+                  </OuiTable>
                 </OuiCardBody>
               </OuiCard>
             </OuiStack>
