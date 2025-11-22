@@ -272,6 +272,171 @@ func processOrganizationBilling(orgID string, billingDate time.Time) error {
 	return nil
 }
 
+// GenerateCurrentBillEarly generates a bill for the current billing period ending at the current date/time
+// This allows users to create and pay bills before their scheduled billing date
+func GenerateCurrentBillEarly(orgID string) (*database.MonthlyBill, bool, error) {
+	now := time.Now()
+	
+	// Get the billing account to find the billing date
+	var billingAccount database.BillingAccount
+	if err := database.DB.Where("organization_id = ?", orgID).First(&billingAccount).Error; err != nil {
+		return nil, false, fmt.Errorf("billing account not found: %w", err)
+	}
+
+	if billingAccount.BillingDate == nil {
+		return nil, false, fmt.Errorf("billing date not set for organization %s", orgID)
+	}
+
+	billingDay := *billingAccount.BillingDate
+
+	// Calculate billing period
+	var org database.Organization
+	if err := database.DB.First(&org, "id = ?", orgID).Error; err != nil {
+		return nil, false, fmt.Errorf("organization not found: %w", err)
+	}
+
+	// Find the last bill to determine the start of this billing period
+	var lastBill database.MonthlyBill
+	var billingPeriodStart time.Time
+	var billingPeriodEnd time.Time
+
+	if err := database.DB.Where("organization_id = ? AND status IN ?", orgID, []string{"PAID", "PENDING"}).
+		Order("billing_period_end DESC").First(&lastBill).Error; err == nil {
+		// Use the end of the last billing period as the start of this one
+		billingPeriodStart = lastBill.BillingPeriodEnd
+	} else {
+		// First bill: start from org creation date
+		billingPeriodStart = org.CreatedAt.UTC().Truncate(24 * time.Hour)
+	}
+
+	// Calculate the next billing date
+	nextBillingDate := time.Date(now.Year(), now.Month(), billingDay, 0, 0, 0, 0, time.UTC)
+	if nextBillingDate.Before(now) || nextBillingDate.Equal(now) {
+		// If the billing date has passed this month, use next month
+		nextBillingDate = nextBillingDate.AddDate(0, 1, 0)
+	}
+
+	// Use the earlier of: now or next billing date
+	// This ensures we don't create bills for future periods
+	if now.Before(nextBillingDate) {
+		billingPeriodEnd = now.UTC().Truncate(time.Hour) // Round to hour for consistency
+	} else {
+		billingPeriodEnd = nextBillingDate
+	}
+
+	// Check if a bill already exists for this period (or overlapping period)
+	var existingBill database.MonthlyBill
+	if err := database.DB.Where("organization_id = ? AND billing_period_start = ? AND billing_period_end = ?",
+		orgID, billingPeriodStart, billingPeriodEnd).First(&existingBill).Error; err == nil {
+		log.Printf("[Generate Current Bill] Bill already exists for org %s for period %s to %s", orgID,
+			billingPeriodStart.Format("2006-01-02"), billingPeriodEnd.Format("2006-01-02"))
+		return &existingBill, true, nil
+	}
+
+	// Also check if there's a bill that covers this period (e.g., if billing date already passed)
+	var overlappingBill database.MonthlyBill
+	if err := database.DB.Where("organization_id = ? AND billing_period_start <= ? AND billing_period_end >= ?",
+		orgID, billingPeriodStart, billingPeriodEnd).First(&overlappingBill).Error; err == nil {
+		log.Printf("[Generate Current Bill] Overlapping bill exists for org %s", orgID)
+		return &overlappingBill, true, nil
+	}
+
+	// Calculate usage for the billing period
+	metricsDB := database.GetMetricsDB()
+	if metricsDB == nil {
+		return nil, false, fmt.Errorf("metrics database not available")
+	}
+
+	// Get usage from hourly aggregates for the billing period
+	var hourlyUsage struct {
+		CPUCoreSeconds    int64
+		MemoryByteSeconds int64
+		BandwidthRxBytes  int64
+		BandwidthTxBytes  int64
+	}
+	metricsDB.Table("deployment_usage_hourly duh").
+		Select(`
+			COALESCE(CAST(SUM((duh.avg_cpu_usage / 100.0) * 3600) AS BIGINT), 0) as cpu_core_seconds,
+			COALESCE(CAST(SUM(duh.avg_memory_usage * 3600) AS BIGINT), 0) as memory_byte_seconds,
+			COALESCE(SUM(duh.bandwidth_rx_bytes), 0) as bandwidth_rx_bytes,
+			COALESCE(SUM(duh.bandwidth_tx_bytes), 0) as bandwidth_tx_bytes
+		`).
+		Where("duh.organization_id = ? AND duh.hour >= ? AND duh.hour < ?", orgID, billingPeriodStart, billingPeriodEnd).
+		Scan(&hourlyUsage)
+
+	// Get storage bytes (snapshot from deployments table)
+	var storageSum struct {
+		StorageBytes int64
+	}
+	database.DB.Table("deployments d").
+		Select("COALESCE(SUM(d.storage_bytes), 0) as storage_bytes").
+		Where("d.organization_id = ?", orgID).
+		Scan(&storageSum)
+
+	// Calculate costs using pricing model
+	pricingModel := pricing.GetPricing()
+	
+	var cpuCost, memoryCost, bandwidthCost, storageCost int64
+	
+	cpuCost = pricingModel.CalculateCPUCost(hourlyUsage.CPUCoreSeconds)
+	memoryCost = pricingModel.CalculateMemoryCost(hourlyUsage.MemoryByteSeconds)
+	bandwidthBytes := hourlyUsage.BandwidthRxBytes + hourlyUsage.BandwidthTxBytes
+	bandwidthCost = pricingModel.CalculateBandwidthCost(bandwidthBytes)
+	// Storage is monthly cost, prorate based on billing period duration
+	storageCostFullMonth := pricingModel.CalculateStorageCost(storageSum.StorageBytes)
+	periodDuration := billingPeriodEnd.Sub(billingPeriodStart)
+	daysInMonth := float64(time.Date(billingPeriodEnd.Year(), billingPeriodEnd.Month()+1, 0, 0, 0, 0, 0, time.UTC).Day())
+	daysInPeriod := periodDuration.Hours() / 24.0
+	if daysInPeriod > 0 && daysInMonth > 0 {
+		storageCost = int64(float64(storageCostFullMonth) * (daysInPeriod / daysInMonth))
+	} else {
+		storageCost = storageCostFullMonth
+	}
+
+	totalCostCents := cpuCost + memoryCost + bandwidthCost + storageCost
+
+	// Create usage breakdown
+	breakdown := UsageBreakdown{
+		CPUCostCents:       cpuCost,
+		MemoryCostCents:    memoryCost,
+		BandwidthCostCents: bandwidthCost,
+		StorageCostCents:   storageCost,
+		TotalCostCents:     totalCostCents,
+	}
+
+	breakdownJSON, err := json.Marshal(breakdown)
+	if err != nil {
+		return nil, false, fmt.Errorf("marshal breakdown: %w", err)
+	}
+
+	// Create the bill
+	billID := fmt.Sprintf("bill-%d", time.Now().UnixNano())
+	dueDate := billingPeriodEnd.AddDate(0, 0, 7) // Due 7 days after billing period ends
+
+	bill := &database.MonthlyBill{
+		ID:                billID,
+		OrganizationID:    orgID,
+		BillingPeriodStart: billingPeriodStart,
+		BillingPeriodEnd:   billingPeriodEnd,
+		AmountCents:       totalCostCents,
+		Status:            "PENDING",
+		DueDate:           dueDate,
+		UsageBreakdown:    string(breakdownJSON),
+		CreatedAt:         time.Now(),
+		UpdatedAt:         time.Now(),
+	}
+
+	// Create the bill (but don't auto-pay - let user pay it manually)
+	if err := database.DB.Create(bill).Error; err != nil {
+		return nil, false, fmt.Errorf("create bill: %w", err)
+	}
+
+	log.Printf("[Generate Current Bill] Created bill %s for org %s: %d cents (period %s to %s)",
+		billID, orgID, totalCostCents, billingPeriodStart.Format("2006-01-02"), billingPeriodEnd.Format("2006-01-02"))
+
+	return bill, false, nil
+}
+
 // PayBillPrematurely allows paying a pending bill before its due date
 func PayBillPrematurely(billID string, orgID string) error {
 	return database.DB.Transaction(func(tx *gorm.DB) error {

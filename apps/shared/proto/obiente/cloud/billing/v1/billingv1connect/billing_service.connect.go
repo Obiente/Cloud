@@ -92,6 +92,9 @@ const (
 	// BillingServiceListBillsProcedure is the fully-qualified name of the BillingService's ListBills
 	// RPC.
 	BillingServiceListBillsProcedure = "/obiente.cloud.billing.v1.BillingService/ListBills"
+	// BillingServiceGenerateCurrentBillProcedure is the fully-qualified name of the BillingService's
+	// GenerateCurrentBill RPC.
+	BillingServiceGenerateCurrentBillProcedure = "/obiente.cloud.billing.v1.BillingService/GenerateCurrentBill"
 )
 
 // BillingServiceClient is a client for the obiente.cloud.billing.v1.BillingService service.
@@ -136,6 +139,9 @@ type BillingServiceClient interface {
 	PayBill(context.Context, *connect.Request[v1.PayBillRequest]) (*connect.Response[v1.PayBillResponse], error)
 	// List monthly bills for an organization
 	ListBills(context.Context, *connect.Request[v1.ListBillsRequest]) (*connect.Response[v1.ListBillsResponse], error)
+	// Generate the current bill early (before billing date)
+	// This allows users to create and pay their current bill before their scheduled billing date
+	GenerateCurrentBill(context.Context, *connect.Request[v1.GenerateCurrentBillRequest]) (*connect.Response[v1.GenerateCurrentBillResponse], error)
 }
 
 // NewBillingServiceClient constructs a client for the obiente.cloud.billing.v1.BillingService
@@ -269,6 +275,12 @@ func NewBillingServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(billingServiceMethods.ByName("ListBills")),
 			connect.WithClientOptions(opts...),
 		),
+		generateCurrentBill: connect.NewClient[v1.GenerateCurrentBillRequest, v1.GenerateCurrentBillResponse](
+			httpClient,
+			baseURL+BillingServiceGenerateCurrentBillProcedure,
+			connect.WithSchema(billingServiceMethods.ByName("GenerateCurrentBill")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -294,6 +306,7 @@ type billingServiceClient struct {
 	cancelSubscription                      *connect.Client[v1.CancelSubscriptionRequest, v1.CancelSubscriptionResponse]
 	payBill                                 *connect.Client[v1.PayBillRequest, v1.PayBillResponse]
 	listBills                               *connect.Client[v1.ListBillsRequest, v1.ListBillsResponse]
+	generateCurrentBill                     *connect.Client[v1.GenerateCurrentBillRequest, v1.GenerateCurrentBillResponse]
 }
 
 // CreateCheckoutSession calls obiente.cloud.billing.v1.BillingService.CreateCheckoutSession.
@@ -400,6 +413,11 @@ func (c *billingServiceClient) ListBills(ctx context.Context, req *connect.Reque
 	return c.listBills.CallUnary(ctx, req)
 }
 
+// GenerateCurrentBill calls obiente.cloud.billing.v1.BillingService.GenerateCurrentBill.
+func (c *billingServiceClient) GenerateCurrentBill(ctx context.Context, req *connect.Request[v1.GenerateCurrentBillRequest]) (*connect.Response[v1.GenerateCurrentBillResponse], error) {
+	return c.generateCurrentBill.CallUnary(ctx, req)
+}
+
 // BillingServiceHandler is an implementation of the obiente.cloud.billing.v1.BillingService
 // service.
 type BillingServiceHandler interface {
@@ -443,6 +461,9 @@ type BillingServiceHandler interface {
 	PayBill(context.Context, *connect.Request[v1.PayBillRequest]) (*connect.Response[v1.PayBillResponse], error)
 	// List monthly bills for an organization
 	ListBills(context.Context, *connect.Request[v1.ListBillsRequest]) (*connect.Response[v1.ListBillsResponse], error)
+	// Generate the current bill early (before billing date)
+	// This allows users to create and pay their current bill before their scheduled billing date
+	GenerateCurrentBill(context.Context, *connect.Request[v1.GenerateCurrentBillRequest]) (*connect.Response[v1.GenerateCurrentBillResponse], error)
 }
 
 // NewBillingServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -572,6 +593,12 @@ func NewBillingServiceHandler(svc BillingServiceHandler, opts ...connect.Handler
 		connect.WithSchema(billingServiceMethods.ByName("ListBills")),
 		connect.WithHandlerOptions(opts...),
 	)
+	billingServiceGenerateCurrentBillHandler := connect.NewUnaryHandler(
+		BillingServiceGenerateCurrentBillProcedure,
+		svc.GenerateCurrentBill,
+		connect.WithSchema(billingServiceMethods.ByName("GenerateCurrentBill")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.billing.v1.BillingService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case BillingServiceCreateCheckoutSessionProcedure:
@@ -614,6 +641,8 @@ func NewBillingServiceHandler(svc BillingServiceHandler, opts ...connect.Handler
 			billingServicePayBillHandler.ServeHTTP(w, r)
 		case BillingServiceListBillsProcedure:
 			billingServiceListBillsHandler.ServeHTTP(w, r)
+		case BillingServiceGenerateCurrentBillProcedure:
+			billingServiceGenerateCurrentBillHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -701,4 +730,8 @@ func (UnimplementedBillingServiceHandler) PayBill(context.Context, *connect.Requ
 
 func (UnimplementedBillingServiceHandler) ListBills(context.Context, *connect.Request[v1.ListBillsRequest]) (*connect.Response[v1.ListBillsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.billing.v1.BillingService.ListBills is not implemented"))
+}
+
+func (UnimplementedBillingServiceHandler) GenerateCurrentBill(context.Context, *connect.Request[v1.GenerateCurrentBillRequest]) (*connect.Response[v1.GenerateCurrentBillResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.billing.v1.BillingService.GenerateCurrentBill is not implemented"))
 }

@@ -394,6 +394,21 @@ func (s *Service) UpdateBillingAccount(ctx context.Context, req *connect.Request
 		if billingDate < 1 || billingDate > 31 {
 			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("billing_date must be between 1 and 31"))
 		}
+		
+		// Prevent changing billing date if there are any unpaid (PENDING) bills
+		// This prevents users from "cheesing" the billing date to avoid payment
+		var pendingBillCount int64
+		if err := database.DB.Model(&database.MonthlyBill{}).
+			Where("organization_id = ? AND status = ?", orgID, "PENDING").
+			Count(&pendingBillCount).Error; err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check pending bills: %w", err))
+		}
+		
+		if pendingBillCount > 0 {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, 
+				fmt.Errorf("cannot change billing date: you have %d unpaid bill(s). Please pay all pending bills before changing your billing date", pendingBillCount))
+		}
+		
 		billingAccount.BillingDate = &billingDate
 	}
 
@@ -1778,6 +1793,49 @@ func (s *Service) ListBills(ctx context.Context, req *connect.Request[billingv1.
 	return connect.NewResponse(&billingv1.ListBillsResponse{
 		Bills:    protoBills,
 		HasMore:  hasMore,
+	}), nil
+}
+
+func (s *Service) GenerateCurrentBill(ctx context.Context, req *connect.Request[billingv1.GenerateCurrentBillRequest]) (*connect.Response[billingv1.GenerateCurrentBillResponse], error) {
+	if err := s.checkBillingEnabled(); err != nil {
+		return nil, err
+	}
+	
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	orgID := strings.TrimSpace(req.Msg.GetOrganizationId())
+	if orgID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required"))
+	}
+
+	// Verify user has access to this organization
+	if err := common.AuthorizeOrgAdmin(ctx, orgID, user); err != nil {
+		return nil, err
+	}
+
+	// Generate the bill
+	bill, alreadyExists, err := GenerateCurrentBillEarly(orgID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("generate bill: %w", err))
+	}
+
+	protoBill := monthlyBillToProto(bill)
+	
+	var message string
+	if alreadyExists {
+		message = "Bill already exists for the current period"
+	} else {
+		message = "Bill generated successfully. You can now pay it."
+	}
+
+	return connect.NewResponse(&billingv1.GenerateCurrentBillResponse{
+		Success:      true,
+		Message:      message,
+		Bill:         protoBill,
+		AlreadyExists: alreadyExists,
 	}), nil
 }
 

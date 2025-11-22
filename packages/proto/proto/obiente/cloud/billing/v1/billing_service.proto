@@ -66,6 +66,10 @@ service BillingService {
 
   // List monthly bills for an organization
   rpc ListBills(ListBillsRequest) returns (ListBillsResponse);
+
+  // Generate the current bill early (before billing date)
+  // This allows users to create and pay their current bill before their scheduled billing date
+  rpc GenerateCurrentBill(GenerateCurrentBillRequest) returns (GenerateCurrentBillResponse);
 }
 
 message CreateCheckoutSessionRequest {
@@ -388,6 +392,17 @@ message MonthlyBill {
   optional string note = 10;
   google.protobuf.Timestamp created_at = 11;
   google.protobuf.Timestamp updated_at = 12;
+}
+
+message GenerateCurrentBillRequest {
+  string organization_id = 1;
+}
+
+message GenerateCurrentBillResponse {
+  bool success = 1;
+  string message = 2; // Status message
+  MonthlyBill bill = 3; // The generated bill (or existing bill if one already exists)
+  bool already_exists = 4; // Whether the bill already existed
 }
 
 
