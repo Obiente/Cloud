@@ -25,7 +25,7 @@ import type {
   WriteGameServerFileRequest,
 } from "@obiente/proto";
 import { create } from "@bufbuild/protobuf";
-import type { ExplorerNode } from "../components/deployment/fileExplorerTypes";
+import type { ExplorerNode } from "../components/shared/fileExplorerTypes";
 
 interface SourceState {
   type: "container" | "volume";

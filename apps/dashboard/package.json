@@ -34,6 +34,7 @@
     "chroma-js": "^3.1.2",
     "echarts": "^6.0.0",
     "highlight.js": "^11.11.1",
+    "jszip": "^3.10.1",
     "jwt-decode": "^4.0.0",
     "monaco-editor": "^0.54.0",
     "nuxt": "^4.2.1",
