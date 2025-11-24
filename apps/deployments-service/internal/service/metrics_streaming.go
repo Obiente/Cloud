@@ -2,6 +2,8 @@ package deployments
 
 import (
 	"context"
+	"log"
+	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 
@@ -99,16 +101,34 @@ func (s *Service) streamLiveMetrics(
 	}
 
 	// Stream new metrics as they arrive
+	// Add a heartbeat ticker to detect when metrics aren't being received
+	// This prevents the stream from appearing to hang when metrics collection is slow
+	heartbeatInterval := 30 * time.Second
+	heartbeatTicker := time.NewTicker(heartbeatInterval)
+	defer heartbeatTicker.Stop()
+	
+	lastMetricTime := time.Now()
+	
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-heartbeatTicker.C:
+			// Check if we haven't received metrics in a while
+			timeSinceLastMetric := time.Since(lastMetricTime)
+			if timeSinceLastMetric > 2*heartbeatInterval {
+				// No metrics received for 60 seconds - log a warning
+				// Note: We don't send a heartbeat for deployments as they may legitimately have no activity
+				log.Printf("[streamLiveMetrics] No metrics received for %v for deployment %s", timeSinceLastMetric, deploymentID)
+			}
 		case liveMetric, ok := <-metricChan:
 			if !ok {
 				// Channel closed
 				return nil
 			}
 
+			lastMetricTime = time.Now() // Update last metric time
+			
 			// Apply container filter
 			if targetContainerID != "" && liveMetric.ContainerID != targetContainerID {
 				continue

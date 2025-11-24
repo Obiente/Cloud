@@ -170,10 +170,39 @@ func (s *Service) streamLiveGameServerMetrics(
 	}
 
 	// Stream new metrics as they arrive
+	// Add a heartbeat ticker to detect when metrics aren't being received
+	// This prevents the stream from appearing to hang when metrics collection is slow
+	heartbeatInterval := 30 * time.Second
+	heartbeatTicker := time.NewTicker(heartbeatInterval)
+	defer heartbeatTicker.Stop()
+	
+	lastMetricTime := time.Now()
+	
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-heartbeatTicker.C:
+			// Check if we haven't received metrics in a while
+			timeSinceLastMetric := time.Since(lastMetricTime)
+			if timeSinceLastMetric > 2*heartbeatInterval {
+				// No metrics received for 60 seconds - send a heartbeat to keep connection alive
+				// and log a warning
+				logger.Warn("[StreamGameServerMetrics] No metrics received for %v for game server %s, sending heartbeat", timeSinceLastMetric, gameServerID)
+				// Send a zero-value metric as a heartbeat to keep the connection alive
+				zeroCPU := 0.0
+				zeroMemory := int64(0)
+				heartbeatMetric := &gameserversv1.GameServerMetric{
+					GameServerId:     gameServerID,
+					Timestamp:        timestamppb.Now(),
+					CpuUsagePercent:  &zeroCPU,
+					MemoryUsageBytes: &zeroMemory,
+				}
+				if err := stream.Send(heartbeatMetric); err != nil {
+					logger.Error("[StreamGameServerMetrics] Failed to send heartbeat: %v", err)
+					return err
+				}
+			}
 		case liveMetric, ok := <-metricChan:
 			if !ok {
 				// Channel closed
@@ -185,6 +214,8 @@ func (s *Service) streamLiveGameServerMetrics(
 				continue
 			}
 
+			lastMetricTime = time.Now() // Update last metric time
+			
 			cpuUsage := liveMetric.CPUUsage
 			memoryBytes := liveMetric.MemoryUsage
 			diskReadBytes := liveMetric.DiskReadBytes
