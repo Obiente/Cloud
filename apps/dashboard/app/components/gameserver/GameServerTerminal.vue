@@ -45,6 +45,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useAuth } from "~/composables/useAuth";
 import { useOrganizationsStore } from "~/stores/organizations";
+import { stripAnsiAndTimestamps } from "~/utils/ansi";
 
 interface Props {
   gameServerId: string;
@@ -209,12 +210,8 @@ const handleTabCompletionOutput = (outputData: number[]) => {
     const output = new Uint8Array(outputData);
     const text = new TextDecoder().decode(output);
     
-    // Remove ANSI escape codes (including cursor movement codes)
-    const ansiRegex = /\x1b\[[0-9;]*[a-zA-Z]/g;
-    let cleanText = text.replace(ansiRegex, "");
-    
-    // Also remove control characters except newlines
-    cleanText = cleanText.replace(/[\x00-\x08\x0B-\x1F\x7F]/g, "");
+    // Strip ANSI escape codes, terminal control sequences, and timestamps
+    let cleanText = stripAnsiAndTimestamps(text);
     
     // Get the prefix we had before Tab
     const prefix = commandBeforeTab.value.trim();
@@ -380,9 +377,10 @@ const connectTerminal = async () => {
             try {
               const outputBytes = new Uint8Array(message.data);
               const outputText = new TextDecoder().decode(outputBytes);
-              console.log("[GameServer Terminal] Received output:", outputText.length, "chars, first 100:", outputText.substring(0, 100));
-              // Emit log output to parent component
-              emit("log-output", outputText);
+              // Strip ANSI escape codes, terminal control sequences, and timestamps before emitting
+              const cleanedText = stripAnsiAndTimestamps(outputText);
+              // Emit cleaned log output to parent component
+              emit("log-output", cleanedText);
             } catch (err) {
               console.error("Error decoding output:", err);
             }
