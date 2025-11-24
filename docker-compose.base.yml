@@ -111,6 +111,7 @@ x-common-dns: &common-dns
   DNS_PORT: ${DNS_PORT:-53}
   DNS_HTTP_PORT: ${DNS_HTTP_PORT:-8053}
   ENABLE_DNS: ${ENABLE_DNS:-true}
+  NODE_IPS: ${NODE_IPS:-127.0.0.1}
 
 x-common-security: &common-security
   SECRET: ${SECRET:-}
