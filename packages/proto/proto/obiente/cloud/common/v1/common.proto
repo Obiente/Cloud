@@ -41,3 +41,34 @@ message VPSSize {
   optional google.protobuf.Timestamp updated_at = 12;
 }
 
+// ExtractServerFileRequest is a shared request message for extracting zip files
+// Resource-specific services should embed or reference this in their own request types
+message ExtractServerFileRequest {
+  string zip_path = 1; // Path to the zip file to extract
+  string destination_path = 2; // Directory path where files should be extracted
+  optional string volume_name = 3; // If specified, extract to this volume instead of container filesystem
+}
+
+// ExtractServerFileResponse is a shared response message for extracting zip files
+message ExtractServerFileResponse {
+  bool success = 1;
+  optional string error = 2;
+  int32 files_extracted = 3; // Number of files successfully extracted
+}
+
+// CreateServerFileArchiveRequest is a shared request message for creating zip archives
+// Resource-specific services should embed or reference this in their own request types
+message CreateServerFileArchiveRequest {
+  repeated string source_paths = 1; // Paths to files/folders to zip
+  string destination_path = 2; // Path where the zip file should be created
+  bool include_parent_folder = 3; // If true, zip includes the parent folder; if false, zip contains files directly
+}
+
+// CreateServerFileArchiveResponse is a shared response message for creating zip archives
+message CreateServerFileArchiveResponse {
+  bool success = 1;
+  optional string error = 2;
+  string archive_path = 3; // Path to the created zip file
+  int32 files_archived = 4; // Number of files archived
+}
+

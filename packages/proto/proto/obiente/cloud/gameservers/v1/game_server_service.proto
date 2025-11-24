@@ -86,6 +86,9 @@ service GameServerService {
   // List files in a game server container or volume
   rpc ListGameServerFiles(ListGameServerFilesRequest) returns (ListGameServerFilesResponse);
   
+  // Search for files in a game server container or volume (recursive search)
+  rpc SearchGameServerFiles(SearchGameServerFilesRequest) returns (SearchGameServerFilesResponse);
+  
   // Get file contents from a game server container or volume
   rpc GetGameServerFile(GetGameServerFileRequest) returns (GetGameServerFileResponse);
   
@@ -103,6 +106,12 @@ service GameServerService {
   
   // Rename a file or directory in a game server
   rpc RenameGameServerEntry(RenameGameServerEntryRequest) returns (RenameGameServerEntryResponse);
+  
+  // Extract a zip file to a destination directory
+  rpc ExtractGameServerFile(ExtractGameServerFileRequest) returns (ExtractGameServerFileResponse);
+  
+  // Create a zip archive from files or folders
+  rpc CreateGameServerFileArchive(CreateGameServerFileArchiveRequest) returns (CreateGameServerFileArchiveResponse);
   
   // Minecraft player lookup (proxies Mojang API to avoid CORS)
   // Get player UUID from username
@@ -387,6 +396,23 @@ message ListGameServerFilesResponse {
   optional string next_cursor = 7;
 }
 
+message SearchGameServerFilesRequest {
+  string game_server_id = 1;
+  string query = 2; // Search query (searches in file and directory names, case-insensitive)
+  optional string root_path = 3; // Root path to search from (default: "/")
+  optional string volume_name = 4; // If specified, search in this volume instead of container filesystem
+  optional int32 max_results = 5; // Maximum number of results to return (default: 100)
+  optional bool files_only = 6; // If true, only return files (exclude directories)
+  optional bool directories_only = 7; // If true, only return directories (exclude files)
+}
+
+message SearchGameServerFilesResponse {
+  repeated GameServerFile results = 1; // Matching files and directories
+  int32 total_found = 2; // Total number of matches found
+  bool has_more = 3; // Whether there are more results beyond max_results
+  bool container_running = 4; // Whether the container is currently running
+}
+
 message GetGameServerFileRequest {
   string game_server_id = 1;
   string path = 2; // File path
@@ -493,6 +519,29 @@ message WriteGameServerFileResponse {
   bool success = 1;
   optional GameServerFile entry = 2;
   optional string error = 3;
+}
+
+message ExtractGameServerFileRequest {
+  string game_server_id = 1;
+  string zip_path = 2; // Path to the zip file to extract (from common.ExtractServerFileRequest)
+  string destination_path = 3; // Directory path where files should be extracted (from common.ExtractServerFileRequest)
+  optional string volume_name = 4; // If specified, extract to this volume instead of container filesystem (from common.ExtractServerFileRequest)
+}
+
+message ExtractGameServerFileResponse {
+  bool success = 1; // From common.ExtractServerFileResponse
+  optional string error = 2; // From common.ExtractServerFileResponse
+  int32 files_extracted = 3; // Number of files successfully extracted (from common.ExtractServerFileResponse)
+}
+
+message CreateGameServerFileArchiveRequest {
+  string game_server_id = 1;
+  obiente.cloud.common.v1.CreateServerFileArchiveRequest archive_request = 2; // Shared archive request
+  optional string volume_name = 3; // If specified, create archive in this volume instead of container filesystem
+}
+
+message CreateGameServerFileArchiveResponse {
+  obiente.cloud.common.v1.CreateServerFileArchiveResponse archive_response = 1; // Shared archive response
 }
 
 // Minecraft player lookup messages
