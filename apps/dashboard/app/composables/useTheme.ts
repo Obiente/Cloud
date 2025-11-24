@@ -1,7 +1,7 @@
 import { computed, watch } from "vue";
 import { usePreferencesStore } from "~/stores/preferences";
 
-export type Theme = "dark" | "dark-purple";
+export type Theme = "dark" | "dark-purple" | "extra-dark";
 
 const THEME_COOKIE_KEY = "obiente_theme";
 const THEME_STORAGE_KEY = "obiente_theme";
@@ -25,7 +25,7 @@ export function useTheme() {
   // Get theme from cookie (SSR-compatible), preferences store, or localStorage
   const currentTheme = computed<Theme>(() => {
     // Cookie is source of truth for SSR
-    if (themeCookie.value && (themeCookie.value === "dark" || themeCookie.value === "dark-purple")) {
+    if (themeCookie.value && (themeCookie.value === "dark" || themeCookie.value === "dark-purple" || themeCookie.value === "extra-dark")) {
       return themeCookie.value;
     }
 
@@ -42,7 +42,7 @@ export function useTheme() {
     // Fallback to localStorage
     try {
       const stored = localStorage.getItem(THEME_STORAGE_KEY);
-      if (stored && (stored === "dark" || stored === "dark-purple")) {
+      if (stored && (stored === "dark" || stored === "dark-purple" || stored === "extra-dark")) {
         return stored as Theme;
       }
     } catch (error) {
@@ -137,7 +137,7 @@ export function useTheme() {
         // Also sync localStorage to cookie if needed
         try {
           const stored = localStorage.getItem(THEME_STORAGE_KEY);
-          if (stored && (stored === "dark" || stored === "dark-purple")) {
+          if (stored && (stored === "dark" || stored === "dark-purple" || stored === "extra-dark")) {
             if (!cookieTheme || cookieTheme !== stored) {
               themeCookie.value = stored as Theme;
             }
@@ -153,7 +153,7 @@ export function useTheme() {
     currentTheme,
     setTheme,
     initializeTheme,
-    themes: ["dark", "dark-purple"] as const,
+    themes: ["dark", "dark-purple", "extra-dark"] as const,
   };
 }
 

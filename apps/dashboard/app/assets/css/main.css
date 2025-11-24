@@ -74,8 +74,8 @@
   --oui-interactive-focus: #818cf8; /* calm indigo focus ring */
 }
 
-/* Dark Theme (minimal dark mode) */
-:root[data-theme="dark"] {
+/* Extra Dark Theme (minimal dark mode - very muted) */
+:root[data-theme="extra-dark"] {
   --oui-background: #0a0a0a; /* pure black */
   --oui-foreground: #fafafa; /* pure white */
   --oui-surface-base: #111111; /* dark grey base */
@@ -92,21 +92,53 @@
   --oui-border-muted: #262626; /* very subdued border */
   --oui-border-strong: #404040; /* stronger accents */
 
-  /* Minimal accents */
-  --oui-accent-primary: #e5e7eb; /* calm white */
+  /* Minimal accents - toned down with subtle color hints */
+  --oui-accent-primary: #d1d5db; /* muted grey-white */
+  --oui-accent-secondary: #7c7c8c; /* muted grey with subtle purple hint */
+  --oui-accent-success: #6b7c6b; /* muted grey with subtle green hint */
+  --oui-accent-warning: #8b7d6b; /* muted brown-grey with subtle amber hint */
+  --oui-accent-danger: #8b5a5a; /* muted grey with subtle red hint */
+  --oui-accent-info: #5b6b7c; /* muted grey with subtle blue hint */
+
+  --oui-interactive-hover: #1f1f1f; /* hover lifts */
+  --oui-interactive-active: #262626; /* active press */
+  --oui-interactive-disabled: #2a2a2a; /* disabled controls */
+  --oui-interactive-focus: #9ca3af; /* muted grey focus ring */
+}
+
+/* Extra Dark theme: Make text dark on white primary buttons */
+:root[data-theme="extra-dark"] [data-variant="solid"][data-color="primary"] {
+  color: #0a0a0a !important; /* dark text on white buttons */
+}
+
+/* Dark Theme (normal dark mode with more life) */
+:root[data-theme="dark"] {
+  --oui-background: #0f0f0f; /* near-black */
+  --oui-foreground: #f5f5f5; /* off-white */
+  --oui-surface-base: #1a1a1a; /* dark grey base */
+  --oui-surface-raised: #242424; /* slightly lifted panel */
+  --oui-surface-overlay: #2d2d2d; /* overlays/menus */
+  --oui-surface-muted: #363636; /* muted blocks, chips */
+
+  --oui-text-primary: #f5f5f5;
+  --oui-text-secondary: #d4d4d4; /* light grey */
+  --oui-text-tertiary: #a3a3a3; /* medium grey */
+  --oui-text-disabled: #525252; /* dark grey */
+
+  --oui-border-default: #404040; /* subtle grey border */
+  --oui-border-muted: #2d2d2d; /* very subdued border */
+  --oui-border-strong: #525252; /* stronger accents */
+
+  /* Accents with more color and life */
+  --oui-accent-primary: #c084fc; /* neon vibrant purple */
   --oui-accent-secondary: #8b5cf6; /* purple */
   --oui-accent-success: #10b981; /* green */
   --oui-accent-warning: #f59e0b; /* amber */
   --oui-accent-danger: #ef4444; /* red */
   --oui-accent-info: #06b6d4; /* cyan */
 
-  --oui-interactive-hover: #1f1f1f; /* hover lifts */
-  --oui-interactive-active: #262626; /* active press */
-  --oui-interactive-disabled: #2a2a2a; /* disabled controls */
-  --oui-interactive-focus: #e5e7eb; /* calm white focus ring */
-}
-
-/* Dark theme: Make text dark on white primary buttons */
-:root[data-theme="dark"] [data-variant="solid"][data-color="primary"] {
-  color: #0a0a0a !important; /* dark text on white buttons */
+  --oui-interactive-hover: #262626; /* hover lifts */
+  --oui-interactive-active: #2d2d2d; /* active press */
+  --oui-interactive-disabled: #363636; /* disabled controls */
+  --oui-interactive-focus: #c084fc; /* neon vibrant purple focus ring */
 }

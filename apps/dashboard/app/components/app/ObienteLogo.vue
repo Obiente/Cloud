@@ -38,15 +38,15 @@ const props = withDefaults(defineProps<Props>(), {
 
 const { currentTheme } = useTheme();
 
-// Use dark text for dark theme (white background), light text for dark-purple theme
+// Use light text for dark and dark-purple themes (colored backgrounds), dark text for extra-dark (white background)
 const textColorClass = computed(() => {
-  return currentTheme.value === "dark" ? "" : "text-primary";
+  return currentTheme.value === "extra-dark" ? "" : "text-primary";
 });
 
 const textColorStyle = computed(() => {
-  // In dark theme, use dark text (#0a0a0a) on white background
-  // In dark-purple theme, use light text (text-primary)
-  if (currentTheme.value === "dark") {
+  // In extra-dark theme, use dark text (#0a0a0a) on white/grey background
+  // In dark and dark-purple themes, use light text (text-primary) on colored background
+  if (currentTheme.value === "extra-dark") {
     return { color: "#0a0a0a" };
   }
   return {};

@@ -24,10 +24,22 @@
       >
         <OuiFlex align="center" gap="sm" justify="between" class="w-full">
           <OuiFlex align="center" gap="sm">
-            <div class="w-4 h-4 rounded border border-border-default bg-surface-base" />
+            <div class="w-4 h-4 rounded border border-border-default" style="background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 50%, #c084fc 100%);" />
             <OuiText size="sm">Dark</OuiText>
           </OuiFlex>
           <CheckIcon v-if="currentTheme === 'dark'" class="h-4 w-4 text-primary" />
+        </OuiFlex>
+      </OuiMenuItem>
+      <OuiMenuItem
+        value="extra-dark"
+        @select="() => setTheme('extra-dark')"
+      >
+        <OuiFlex align="center" gap="sm" justify="between" class="w-full">
+          <OuiFlex align="center" gap="sm">
+            <div class="w-4 h-4 rounded border border-border-default bg-surface-base" />
+            <OuiText size="sm">Extra Dark</OuiText>
+          </OuiFlex>
+          <CheckIcon v-if="currentTheme === 'extra-dark'" class="h-4 w-4 text-primary" />
         </OuiFlex>
       </OuiMenuItem>
     </template>

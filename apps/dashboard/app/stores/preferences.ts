@@ -24,7 +24,7 @@ interface Preferences {
   envVarsViewMode: "list" | "file";
   editor: EditorPreferences;
   metrics: MetricsPreferences;
-  theme?: "dark" | "dark-purple";
+  theme?: "dark" | "dark-purple" | "extra-dark";
   // Add more preferences here as needed
 }
 
@@ -191,7 +191,7 @@ export const usePreferencesStore = defineStore("preferences", () => {
     persist();
   }
 
-  function setTheme(theme: "dark" | "dark-purple") {
+  function setTheme(theme: "dark" | "dark-purple" | "extra-dark") {
     preferences.value.theme = theme;
     persist();
   }
