@@ -300,6 +300,17 @@
     }
   );
 
+  // Explicitly refresh organizations when user becomes authenticated
+  // This ensures organizations are loaded immediately after login
+  watch(() => user.isAuthenticated, (isAuthenticated, wasAuthenticated) => {
+    if (isAuthenticated && !wasAuthenticated) {
+      // User just logged in - refresh organizations immediately
+      refreshOrganizations().catch((err) => {
+        console.error("Failed to refresh organizations after login:", err);
+      });
+    }
+  });
+
   const switchOrganization = async (
     organizationId: string | string[] | undefined
   ) => {
