@@ -694,3 +694,48 @@ type VPSBastionKey struct {
 func (VPSBastionKey) TableName() string {
 	return "vps_bastion_keys"
 }
+
+// Notification represents a notification in the database
+type Notification struct {
+	ID             string     `gorm:"primaryKey;column:id" json:"id"`
+	UserID         string     `gorm:"column:user_id;index;not null" json:"user_id"`
+	OrganizationID *string    `gorm:"column:organization_id;index" json:"organization_id,omitempty"`
+	Type           string     `gorm:"column:type;not null;default:'INFO'" json:"type"` // INFO, SUCCESS, WARNING, ERROR, DEPLOYMENT, BILLING, QUOTA, INVITE, SYSTEM
+	Severity       string     `gorm:"column:severity;not null;default:'MEDIUM'" json:"severity"` // LOW, MEDIUM, HIGH, CRITICAL
+	Title          string     `gorm:"column:title;not null" json:"title"`
+	Message        string     `gorm:"column:message;type:text;not null" json:"message"`
+	Read           bool       `gorm:"column:read;default:false;index" json:"read"`
+	ReadAt         *time.Time `gorm:"column:read_at" json:"read_at,omitempty"`
+	ActionURL      *string    `gorm:"column:action_url" json:"action_url,omitempty"`
+	ActionLabel    *string    `gorm:"column:action_label" json:"action_label,omitempty"`
+	Metadata       string     `gorm:"column:metadata;type:jsonb;default:'{}'" json:"metadata"` // Additional data stored as JSON
+	ClientOnly     bool       `gorm:"column:client_only;default:false" json:"client_only"` // If true, only stored client-side
+	CreatedAt      time.Time  `gorm:"column:created_at;index" json:"created_at"`
+	UpdatedAt      time.Time  `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (Notification) TableName() string {
+	return "notifications"
+}
+
+// BeforeCreate hook to set timestamps
+func (n *Notification) BeforeCreate(tx *gorm.DB) error {
+	now := time.Now()
+	if n.CreatedAt.IsZero() {
+		n.CreatedAt = now
+	}
+	if n.UpdatedAt.IsZero() {
+		n.UpdatedAt = now
+	}
+	return nil
+}
+
+// BeforeUpdate hook to set updated timestamp
+func (n *Notification) BeforeUpdate(tx *gorm.DB) error {
+	n.UpdatedAt = time.Now()
+	if n.Read && n.ReadAt == nil {
+		now := time.Now()
+		n.ReadAt = &now
+	}
+	return nil
+}

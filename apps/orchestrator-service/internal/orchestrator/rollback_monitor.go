@@ -2,17 +2,19 @@ package orchestrator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
 
-	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/email"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
+	notificationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1"
 )
 
 // RollbackMonitor monitors Docker Swarm services for rollback events
@@ -212,6 +214,7 @@ func (rm *RollbackMonitor) checkServiceRollback(ctx context.Context, serviceName
 		// Send notification
 		logger.Info("[RollbackMonitor] Detected rollback for deployment %s, service %s", deploymentID, displayServiceName)
 		rm.sendRollbackNotification(ctx, deploymentID, displayServiceName, serviceName, updateMessage)
+		rm.sendRollbackInAppNotification(ctx, deploymentID, displayServiceName, serviceName, updateMessage)
 	}
 }
 
@@ -338,5 +341,154 @@ func (rm *RollbackMonitor) sendRollbackNotification(ctx context.Context, deploym
 		logger.Warn("[RollbackMonitor] Failed to send rollback notification for deployment %s: %v", deploymentID, err)
 	} else {
 		logger.Info("[RollbackMonitor] Sent rollback notification to %d recipient(s) for deployment %s", len(emails), deploymentID)
+	}
+}
+
+// sendRollbackInAppNotification creates in-app notifications for deployment rollbacks
+func (rm *RollbackMonitor) sendRollbackInAppNotification(ctx context.Context, deploymentID, serviceName, swarmServiceName, reason string) {
+	// Get deployment details
+	var deployment database.Deployment
+	if err := database.DB.Where("id = ?", deploymentID).First(&deployment).Error; err != nil {
+		logger.Warn("[RollbackMonitor] Failed to get deployment %s for in-app notification: %v", deploymentID, err)
+		return
+	}
+
+	// Get deployment name
+	deploymentName := deploymentID
+	if deployment.Name != "" {
+		deploymentName = deployment.Name
+	}
+
+	// Create notification for organization members
+	actionURL := fmt.Sprintf("/deployments/%s", deploymentID)
+	actionLabel := "View Deployment"
+	metadata := map[string]string{
+		"deployment_id": deploymentID,
+		"service_name":   serviceName,
+		"reason":         reason,
+	}
+
+	// Use the helper function from notifications service
+	// Note: We need to import the service package or create notifications directly
+	err := createNotificationForOrganization(
+		ctx,
+		deployment.OrganizationID,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_DEPLOYMENT,
+		notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_HIGH,
+		fmt.Sprintf("Deployment Rollback: %s", deploymentName),
+		fmt.Sprintf("Your deployment '%s' was automatically rolled back due to: %s", deploymentName, reason),
+		&actionURL,
+		&actionLabel,
+		metadata,
+		[]string{"owner", "admin"}, // Only notify owners and admins
+	)
+
+	if err != nil {
+		logger.Warn("[RollbackMonitor] Failed to create in-app notification for deployment %s: %v", deploymentID, err)
+	} else {
+		logger.Info("[RollbackMonitor] Created in-app notification for deployment %s", deploymentID)
+	}
+}
+
+// createNotificationForOrganization is a helper to create notifications
+// This should ideally be in a shared package, but for now we'll define it here
+func createNotificationForOrganization(ctx context.Context, orgID string, notificationType notificationsv1.NotificationType, severity notificationsv1.NotificationSeverity, title, message string, actionURL, actionLabel *string, metadata map[string]string, roles []string) error {
+	// Get organization members
+	var members []database.OrganizationMember
+	query := database.DB.Where("organization_id = ? AND status = ?", orgID, "active")
+	
+	// Filter by roles if specified
+	if len(roles) > 0 {
+		query = query.Where("role IN ?", roles)
+	}
+	
+	if err := query.Find(&members).Error; err != nil {
+		return fmt.Errorf("get organization members: %w", err)
+	}
+
+	// Create notifications for each member
+	for _, member := range members {
+		// Skip pending invites
+		if member.UserID == "" || len(member.UserID) < 7 || member.UserID[0:7] == "pending" {
+			continue
+		}
+
+		notification := &database.Notification{
+			ID:             fmt.Sprintf("notif-%d", time.Now().UnixNano()),
+			UserID:         member.UserID,
+			OrganizationID: &orgID,
+			Type:           notificationTypeToString(notificationType),
+			Severity:       notificationSeverityToString(severity),
+			Title:          title,
+			Message:        message,
+			Read:           false,
+			ClientOnly:     false,
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
+		}
+
+		if actionURL != nil {
+			notification.ActionURL = actionURL
+		}
+		if actionLabel != nil {
+			notification.ActionLabel = actionLabel
+		}
+
+		// Convert metadata map to JSON
+		if len(metadata) > 0 {
+			metadataJSON, err := json.Marshal(metadata)
+			if err != nil {
+				logger.Warn("[RollbackMonitor] Failed to marshal metadata: %v", err)
+			} else {
+				notification.Metadata = string(metadataJSON)
+			}
+		}
+
+		if err := database.DB.Create(notification).Error; err != nil {
+			logger.Warn("[RollbackMonitor] Failed to create notification for user %s: %v", member.UserID, err)
+			// Continue with other members
+		}
+	}
+
+	return nil
+}
+
+func notificationTypeToString(t notificationsv1.NotificationType) string {
+	switch t {
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_INFO:
+		return "INFO"
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_SUCCESS:
+		return "SUCCESS"
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_WARNING:
+		return "WARNING"
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_ERROR:
+		return "ERROR"
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_DEPLOYMENT:
+		return "DEPLOYMENT"
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_BILLING:
+		return "BILLING"
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_QUOTA:
+		return "QUOTA"
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_INVITE:
+		return "INVITE"
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_SYSTEM:
+		return "SYSTEM"
+	default:
+		return "INFO"
+	}
+}
+
+func notificationSeverityToString(s notificationsv1.NotificationSeverity) string {
+	switch s {
+	case notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_LOW:
+		return "LOW"
+	case notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_MEDIUM:
+		return "MEDIUM"
+	case notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_HIGH:
+		return "HIGH"
+	case notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_CRITICAL:
+		return "CRITICAL"
+	default:
+		return "MEDIUM"
 	}
 }

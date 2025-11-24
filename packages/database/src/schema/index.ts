@@ -52,6 +52,23 @@ export const subscriptionStatusEnum = pgEnum("subscription_status", [
   "CANCELLED",
   "UNPAID",
 ]);
+export const notificationTypeEnum = pgEnum("notification_type", [
+  "INFO",
+  "SUCCESS",
+  "WARNING",
+  "ERROR",
+  "DEPLOYMENT",
+  "BILLING",
+  "QUOTA",
+  "INVITE",
+  "SYSTEM",
+]);
+export const notificationSeverityEnum = pgEnum("notification_severity", [
+  "LOW",
+  "MEDIUM",
+  "HIGH",
+  "CRITICAL",
+]);
 
 // Organizations table
 export const organizations = pgTable("organizations", {
@@ -209,6 +226,29 @@ export const usageRecords = pgTable("usage_records", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Notifications table
+export const notifications = pgTable("notifications", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  organizationId: uuid("organization_id").references(() => organizations.id, {
+    onDelete: "cascade",
+  }), // Optional - some notifications are user-specific, others org-specific
+  type: notificationTypeEnum("type").notNull().default("INFO"),
+  severity: notificationSeverityEnum("severity").notNull().default("MEDIUM"),
+  title: varchar("title", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  read: boolean("read").notNull().default(false),
+  readAt: timestamp("read_at"),
+  actionUrl: varchar("action_url", { length: 500 }), // Optional URL to navigate to when clicked
+  actionLabel: varchar("action_label", { length: 100 }), // Optional label for action button
+  metadata: jsonb("metadata").default({}), // Additional data (deployment ID, billing info, etc.)
+  clientOnly: boolean("client_only").notNull().default(false), // If true, only stored client-side
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Relations
 export const organizationsRelations = relations(organizations, ({ many }) => ({
   memberships: many(organizationMemberships),
@@ -305,6 +345,17 @@ export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
 export const usageRecordsRelations = relations(usageRecords, ({ one }) => ({
   organization: one(organizations, {
     fields: [usageRecords.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+  organization: one(organizations, {
+    fields: [notifications.organizationId],
     references: [organizations.id],
   }),
 }));
