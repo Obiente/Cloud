@@ -229,7 +229,22 @@
                 <GameServerMetrics
                   :game-server-id="gameServerId"
                   :organization-id="gameServer?.organizationId || ''"
-                  :game-server-status="gameServer?.status !== undefined ? Number(gameServer.status) : undefined"
+                  :game-server-status="(() => {
+                    const status = gameServerData?.status;
+                    if (status === undefined || status === null) return undefined;
+                    if (typeof status === 'number') return status;
+                    // If it's a string, try to map it back to number
+                    const statusMap: Record<string, number> = {
+                      'CREATED': 1,
+                      'STARTING': 2,
+                      'RUNNING': 3,
+                      'STOPPING': 4,
+                      'STOPPED': 5,
+                      'FAILED': 6,
+                      'RESTARTING': 7,
+                    };
+                    return statusMap[status as string] ?? undefined;
+                  })()"
                 />
               </template>
             <template #files>
@@ -272,8 +287,262 @@
         </OuiStack>
       </template>
       
-      <!-- Loading or Not Found State -->
-      <template v-else-if="!accessError">
+      <!-- Loading State -->
+      <template v-else-if="showLoadingSkeleton">
+        <!-- Header Skeleton -->
+        <OuiCard variant="outline" class="border-border-default/50">
+          <OuiCardBody>
+            <OuiFlex justify="between" align="start" wrap="wrap" gap="lg">
+              <OuiStack gap="md" class="flex-1 min-w-0">
+                <OuiFlex align="center" gap="md" wrap="wrap">
+                  <OuiSkeleton width="3rem" height="3rem" variant="rectangle" :rounded="true" class="rounded-xl shrink-0" />
+                  <OuiStack gap="none" class="min-w-0 flex-1">
+                    <OuiFlex align="center" gap="md">
+                      <OuiSkeleton width="16rem" height="2rem" variant="text" />
+                      <OuiSkeleton width="5rem" height="1.5rem" variant="rectangle" rounded />
+                    </OuiFlex>
+                    <OuiSkeleton width="12rem" height="1rem" variant="text" class="mt-1" />
+                  </OuiStack>
+                  <OuiFlex gap="sm" wrap="wrap" class="shrink-0">
+                    <OuiSkeleton width="5rem" height="2rem" variant="rectangle" rounded />
+                    <OuiSkeleton width="5rem" height="2rem" variant="rectangle" rounded />
+                    <OuiSkeleton width="5rem" height="2rem" variant="rectangle" rounded />
+                    <OuiSkeleton width="5rem" height="2rem" variant="rectangle" rounded />
+                  </OuiFlex>
+                </OuiFlex>
+              </OuiStack>
+            </OuiFlex>
+          </OuiCardBody>
+        </OuiCard>
+
+        <!-- Overview Cards Skeleton -->
+        <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="lg">
+          <OuiCard variant="default">
+            <OuiCardBody>
+              <OuiStack gap="sm">
+                <OuiFlex align="center" gap="sm">
+                  <OuiSkeleton width="1.25rem" height="1.25rem" variant="circle" />
+                  <OuiSkeleton width="8rem" height="1rem" variant="text" />
+                </OuiFlex>
+                <OuiSkeleton width="4rem" height="2rem" variant="text" />
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+          <OuiCard variant="default">
+            <OuiCardBody>
+              <OuiStack gap="sm">
+                <OuiFlex align="center" gap="sm">
+                  <OuiSkeleton width="1.25rem" height="1.25rem" variant="circle" />
+                  <OuiSkeleton width="8rem" height="1rem" variant="text" />
+                </OuiFlex>
+                <OuiSkeleton width="5rem" height="2rem" variant="text" />
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+          <OuiCard variant="default">
+            <OuiCardBody>
+              <OuiStack gap="sm">
+                <OuiFlex align="center" gap="sm">
+                  <OuiSkeleton width="1.25rem" height="1.25rem" variant="circle" />
+                  <OuiSkeleton width="4rem" height="1rem" variant="text" />
+                </OuiFlex>
+                <OuiSkeleton width="3rem" height="2rem" variant="text" />
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+          <OuiCard variant="default">
+            <OuiCardBody>
+              <OuiStack gap="sm">
+                <OuiFlex align="center" gap="sm">
+                  <OuiSkeleton width="1.25rem" height="1.25rem" variant="circle" />
+                  <OuiSkeleton width="8rem" height="1rem" variant="text" />
+                </OuiFlex>
+                <OuiSkeleton width="6rem" height="2rem" variant="text" />
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+        </OuiGrid>
+
+        <!-- Tabs Skeleton -->
+        <OuiStack gap="md">
+          <!-- Tab Navigation Skeleton (outside card, matching actual structure) -->
+          <OuiFlex gap="sm" wrap="wrap" class="px-1">
+            <OuiSkeleton width="6rem" height="2.5rem" variant="rectangle" rounded />
+            <OuiSkeleton width="5rem" height="2.5rem" variant="rectangle" rounded />
+            <OuiSkeleton width="6rem" height="2.5rem" variant="rectangle" rounded />
+            <OuiSkeleton width="5rem" height="2.5rem" variant="rectangle" rounded />
+            <OuiSkeleton width="6rem" height="2.5rem" variant="rectangle" rounded />
+          </OuiFlex>
+          <!-- Tab Content Skeleton (Overview tab structure) -->
+          <OuiCard variant="default">
+            <OuiCardBody>
+              <OuiStack gap="xl">
+                <!-- Key Metrics Grid Skeleton -->
+                <OuiGrid cols="1" cols-md="2" cols-lg="3" cols-xl="4" gap="md">
+                  <OuiCard>
+                    <OuiCardBody>
+                      <OuiStack gap="sm">
+                        <OuiSkeleton width="4rem" height="0.75rem" variant="text" />
+                        <OuiFlex align="center" gap="sm">
+                          <OuiSkeleton width="1.25rem" height="1.25rem" variant="circle" />
+                          <OuiSkeleton width="3rem" height="1.5rem" variant="text" />
+                        </OuiFlex>
+                        <OuiSkeleton width="8rem" height="0.75rem" variant="text" />
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+                  <OuiCard>
+                    <OuiCardBody>
+                      <OuiStack gap="sm">
+                        <OuiSkeleton width="5rem" height="0.75rem" variant="text" />
+                        <OuiFlex align="center" gap="sm">
+                          <OuiSkeleton width="1.25rem" height="1.25rem" variant="circle" />
+                          <OuiSkeleton width="3rem" height="1.5rem" variant="text" />
+                        </OuiFlex>
+                        <OuiSkeleton width="10rem" height="0.75rem" variant="text" />
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+                  <OuiCard>
+                    <OuiCardBody>
+                      <OuiStack gap="sm">
+                        <OuiSkeleton width="5rem" height="0.75rem" variant="text" />
+                        <OuiFlex align="center" gap="sm">
+                          <OuiSkeleton width="1.25rem" height="1.25rem" variant="circle" />
+                          <OuiSkeleton width="4rem" height="1.5rem" variant="text" />
+                        </OuiFlex>
+                        <OuiSkeleton width="8rem" height="0.75rem" variant="text" />
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+                  <OuiCard>
+                    <OuiCardBody>
+                      <OuiStack gap="sm">
+                        <OuiSkeleton width="6rem" height="0.75rem" variant="text" />
+                        <OuiFlex align="center" gap="sm">
+                          <OuiSkeleton width="1.25rem" height="1.25rem" variant="circle" />
+                          <OuiSkeleton width="4rem" height="1.5rem" variant="text" />
+                        </OuiFlex>
+                        <OuiSkeleton width="10rem" height="0.75rem" variant="text" />
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+                </OuiGrid>
+
+                <!-- Usage Statistics Skeleton -->
+                <OuiCard>
+                  <OuiCardHeader>
+                    <OuiSkeleton width="12rem" height="1.5rem" variant="text" />
+                  </OuiCardHeader>
+                  <OuiCardBody>
+                    <OuiStack gap="md">
+                      <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="md">
+                        <OuiSkeleton width="100%" height="4rem" variant="rectangle" rounded />
+                        <OuiSkeleton width="100%" height="4rem" variant="rectangle" rounded />
+                        <OuiSkeleton width="100%" height="4rem" variant="rectangle" rounded />
+                        <OuiSkeleton width="100%" height="4rem" variant="rectangle" rounded />
+                      </OuiGrid>
+                      <OuiSkeleton width="100%" height="8rem" variant="rectangle" rounded />
+                    </OuiStack>
+                  </OuiCardBody>
+                </OuiCard>
+
+                <!-- Cost Breakdown Skeleton -->
+                <OuiCard>
+                  <OuiCardHeader>
+                    <OuiSkeleton width="10rem" height="1.5rem" variant="text" />
+                  </OuiCardHeader>
+                  <OuiCardBody>
+                    <OuiStack gap="md">
+                      <OuiSkeleton width="100%" height="6rem" variant="rectangle" rounded />
+                      <OuiGrid cols="1" cols-md="2" gap="md">
+                        <OuiSkeleton width="100%" height="4rem" variant="rectangle" rounded />
+                        <OuiSkeleton width="100%" height="4rem" variant="rectangle" rounded />
+                      </OuiGrid>
+                    </OuiStack>
+                  </OuiCardBody>
+                </OuiCard>
+
+                <!-- Live Metrics Skeleton -->
+                <OuiCard>
+                  <OuiCardHeader>
+                    <OuiSkeleton width="8rem" height="1.5rem" variant="text" />
+                  </OuiCardHeader>
+                  <OuiCardBody>
+                    <OuiGrid cols="1" cols-md="2" cols-lg="4" gap="md">
+                      <OuiSkeleton width="100%" height="6rem" variant="rectangle" rounded />
+                      <OuiSkeleton width="100%" height="6rem" variant="rectangle" rounded />
+                      <OuiSkeleton width="100%" height="6rem" variant="rectangle" rounded />
+                      <OuiSkeleton width="100%" height="6rem" variant="rectangle" rounded />
+                    </OuiGrid>
+                  </OuiCardBody>
+                </OuiCard>
+
+                <!-- Main Information Grid Skeleton -->
+                <OuiGrid cols="1" cols-lg="2" gap="lg">
+                  <!-- Game Server Details Skeleton -->
+                  <OuiCard>
+                    <OuiCardHeader>
+                      <OuiSkeleton width="10rem" height="1.5rem" variant="text" />
+                    </OuiCardHeader>
+                    <OuiCardBody>
+                      <OuiStack gap="md">
+                        <div class="flex items-start justify-between gap-4 py-2 border-b border-border-default">
+                          <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
+                            <OuiSkeleton width="1rem" height="1rem" variant="circle" />
+                            <OuiStack gap="xs" class="flex-1">
+                              <OuiSkeleton width="5rem" height="0.75rem" variant="text" />
+                              <OuiSkeleton width="8rem" height="1rem" variant="text" />
+                            </OuiStack>
+                          </OuiFlex>
+                        </div>
+                        <div class="flex items-start justify-between gap-4 py-2 border-b border-border-default">
+                          <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
+                            <OuiSkeleton width="1rem" height="1rem" variant="circle" />
+                            <OuiStack gap="xs" class="flex-1">
+                              <OuiSkeleton width="4rem" height="0.75rem" variant="text" />
+                              <OuiSkeleton width="6rem" height="1rem" variant="text" />
+                            </OuiStack>
+                          </OuiFlex>
+                        </div>
+                        <div class="flex items-start justify-between gap-4 py-2 border-b border-border-default">
+                          <OuiFlex align="center" gap="sm" class="min-w-0 flex-1">
+                            <OuiSkeleton width="1rem" height="1rem" variant="circle" />
+                            <OuiStack gap="xs" class="flex-1">
+                              <OuiSkeleton width="6rem" height="0.75rem" variant="text" />
+                              <OuiSkeleton width="10rem" height="1rem" variant="text" />
+                            </OuiStack>
+                          </OuiFlex>
+                        </div>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+
+                  <!-- Connection Info Skeleton -->
+                  <OuiCard>
+                    <OuiCardHeader>
+                      <OuiSkeleton width="12rem" height="1.5rem" variant="text" />
+                    </OuiCardHeader>
+                    <OuiCardBody>
+                      <OuiStack gap="md">
+                        <OuiSkeleton width="100%" height="4rem" variant="rectangle" rounded />
+                        <OuiSkeleton width="100%" height="4rem" variant="rectangle" rounded />
+                        <OuiStack gap="sm">
+                          <OuiSkeleton width="8rem" height="1rem" variant="text" />
+                          <OuiSkeleton width="100%" height="3rem" variant="rectangle" rounded />
+                        </OuiStack>
+                      </OuiStack>
+                    </OuiCardBody>
+                  </OuiCard>
+                </OuiGrid>
+              </OuiStack>
+            </OuiCardBody>
+          </OuiCard>
+        </OuiStack>
+      </template>
+      
+      <!-- Not Found State (only show when not loading, no data, and no access error) -->
+      <template v-else-if="!pending && !gameServerData && !accessError">
         <OuiStack align="center" gap="lg" class="text-center py-20">
           <OuiBox
             class="inline-flex items-center justify-center w-20 h-20 rounded-xl bg-surface-muted/50 ring-1 ring-border-muted"
@@ -387,7 +656,7 @@ const errorHint = computed(() => {
 });
 
 // Fetch game server data
-const { data: gameServerData, refresh: refreshGameServer, error: fetchError } = useClientFetch(
+const { data: gameServerData, pending, refresh: refreshGameServer, error: fetchError } = useClientFetch(
   () => `game-server-${gameServerId.value}`,
   async () => {
     try {
@@ -396,7 +665,16 @@ const { data: gameServerData, refresh: refreshGameServer, error: fetchError } = 
       });
       // Clear any previous errors on success
       accessError.value = null;
-      return res.gameServer ?? null;
+      
+      // If response is successful but gameServer is null/undefined, treat as not found
+      if (!res.gameServer) {
+        const notFoundError = new Error("Game server not found") as any;
+        notFoundError.code = "not_found";
+        accessError.value = notFoundError;
+        return null;
+      }
+      
+      return res.gameServer;
     } catch (err: any) {
       // Check if it's a permission denied or not found error
       if (err.code === "permission_denied" || err.code === "not_found") {
@@ -411,6 +689,13 @@ const { data: gameServerData, refresh: refreshGameServer, error: fetchError } = 
     watch: [gameServerId],
   }
 );
+
+// Computed property to determine if we should show loading skeleton
+// This helps prevent stuck loading states by ensuring we don't show skeleton
+// when we have data, an error, or when pending is false
+const showLoadingSkeleton = computed(() => {
+  return pending.value && !gameServerData.value && !accessError.value && !fetchError.value;
+});
 
 // Watch for fetch errors and handle access errors
 watch(fetchError, (err) => {
