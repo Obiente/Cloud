@@ -190,6 +190,32 @@
       <OuiFlex justify="between" align="center" wrap="wrap" gap="md">
         <OuiText size="xl" weight="bold">Real-time Metrics</OuiText>
         <OuiFlex gap="sm" align="center" wrap="wrap">
+          <!-- Timeframe Selector -->
+          <OuiFlex gap="xs" align="center">
+            <OuiText size="sm" color="muted">Timeframe:</OuiText>
+            <OuiSelect
+              v-model="selectedTimeframe"
+              :items="timeframeOptions"
+              placeholder="Select timeframe"
+              style="min-width: 160px"
+            />
+          </OuiFlex>
+
+          <!-- Custom Date Range Picker -->
+          <OuiFlex
+            v-if="selectedTimeframe === 'custom'"
+            gap="xs"
+            align="center"
+            class="ml-2"
+          >
+            <OuiDatePicker
+              v-model="customDateRange"
+              selection-mode="range"
+              start-placeholder="Start date"
+              end-placeholder="End date"
+            />
+          </OuiFlex>
+
           <OuiBadge :variant="streaming ? 'success' : 'secondary'">
             <span
               class="inline-flex h-1.5 w-1.5 rounded-full mr-1"
@@ -281,7 +307,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from "vue";
 import * as echarts from "echarts/core";
 import { LineChart } from "echarts/charts";
 import {
@@ -301,6 +327,7 @@ import {
 } from "~/utils/echarts-theme";
 import { CubeIcon } from "@heroicons/vue/24/outline";
 import OuiByte from "~/components/oui/Byte.vue";
+import { usePreferencesStore } from "~/stores/preferences";
 
 // Register ECharts components
 echarts.use([
@@ -321,6 +348,79 @@ interface Props {
 
 const props = defineProps<Props>();
 const client = useConnectClient(GameServerService);
+const preferencesStore = usePreferencesStore();
+
+// Timeframe selection - sync with preferences store (following DeploymentMetrics pattern)
+type TimeframeOption = "10m" | "1h" | "24h" | "7d" | "30d" | "custom";
+const selectedTimeframe = computed({
+  get: () => {
+    const value = preferencesStore.metricsPreferences?.timeframe;
+    // Return default value if undefined to ensure select always has a valid value
+    return value ?? "24h";
+  },
+  set: (value: TimeframeOption) => {
+    preferencesStore.setMetricsPreference("timeframe", value);
+    if (value !== "custom") {
+      customDateRange.value = [];
+      loadHistoricalMetrics();
+    } else {
+      loadCustomDateRangeFromPreferences();
+    }
+  },
+});
+
+const customDateRange = ref<any[]>([]);
+
+// Watch metricsPreferences to track changes
+watch(
+  () => preferencesStore.metricsPreferences,
+  async (newMetrics, oldMetrics) => {
+    // When store hydrates and timeframe is restored from storage, ensure proper initialization
+    // Only handle hydration case (when oldMetrics is undefined/null) to avoid duplicate calls
+    // when user changes timeframe (which is handled by the setter)
+    if (preferencesStore.hydrated && newMetrics?.timeframe && !oldMetrics?.timeframe) {
+      const timeframe = newMetrics.timeframe;
+      // If restored timeframe is custom, load the custom date range
+      if (timeframe === "custom") {
+        await loadCustomDateRangeFromPreferences();
+        loadHistoricalMetrics();
+      }
+    }
+  },
+  { deep: true, immediate: true }
+);
+
+// Watch customDateRange for changes and save to preferences
+watch(
+  customDateRange,
+  async (newRange) => {
+    if (!import.meta.client) return;
+    if (!newRange || newRange.length !== 2) return;
+
+    await nextTick();
+
+    const start = dateValueToDate(newRange[0]);
+    const end = dateValueToDate(newRange[1]);
+    if (!start || !end || start >= end) return;
+
+    preferencesStore.setMetricsPreference("customDateRange", {
+      start: start.toISOString(),
+      end: end.toISOString(),
+    });
+
+    loadHistoricalMetrics();
+  },
+  { deep: true }
+);
+
+const timeframeOptions = [
+  { value: "10m", label: "Last 10 Minutes" },
+  { value: "1h", label: "Last Hour" },
+  { value: "24h", label: "Last 24 Hours" },
+  { value: "7d", label: "Last 7 Days" },
+  { value: "30d", label: "Last 30 Days" },
+  { value: "custom", label: "Custom Range" },
+];
 
 // Track if we have metrics data
 const hasMetricsData = computed(() => {
@@ -351,6 +451,10 @@ let diskChart: echarts.ECharts | null = null;
 // Streaming state
 const streaming = ref(false);
 let streamController: AbortController | null = null;
+let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY = 2000;
+let reconnectAttempts = 0;
 
 // Metrics data
 const metricsData = ref<{
@@ -670,13 +774,134 @@ const updateCharts = () => {
   }
 };
 
+// Helper to convert DateValue to Date
+const dateValueToDate = (dateValue: any): Date | null => {
+  if (!dateValue) return null;
+  // DateValue from @internationalized/date can be CalendarDate, CalendarDateTime, etc.
+  // Try to get year, month, day, hour, minute, second
+  if (typeof dateValue === "object" && dateValue.year !== undefined) {
+    // Handle CalendarDate (date only) or CalendarDateTime (with time)
+    const year = dateValue.year;
+    const month = dateValue.month || 1;
+    const day = dateValue.day || 1;
+    const hour = dateValue.hour || 0;
+    const minute = dateValue.minute || 0;
+    const second = dateValue.second || 0;
+
+    return new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  }
+
+  // If it has a toDate method (some date libraries), use it
+  if (typeof dateValue.toDate === "function") {
+    return dateValue.toDate();
+  }
+
+  return null;
+};
+
+// Calculate start and end times based on selected timeframe
+const getTimeRange = (): { startTime: Date; endTime: Date } => {
+  let endTime = new Date();
+  let startTime = new Date();
+
+  if (selectedTimeframe.value === "custom") {
+    if (customDateRange.value && customDateRange.value.length === 2) {
+      const start = dateValueToDate(customDateRange.value[0]);
+      const end = dateValueToDate(customDateRange.value[1]);
+      if (start && end) {
+        startTime = start;
+        endTime = end;
+      } else {
+        // Fallback to last 24 hours if dates not valid
+        startTime = new Date(endTime.getTime() - 24 * 60 * 60 * 1000);
+      }
+    } else {
+      // Fallback to last 24 hours if custom dates not set
+      startTime = new Date(endTime.getTime() - 24 * 60 * 60 * 1000);
+    }
+  } else {
+    switch (selectedTimeframe.value) {
+      case "10m":
+        startTime = new Date(endTime.getTime() - 10 * 60 * 1000);
+        break;
+      case "1h":
+        startTime = new Date(endTime.getTime() - 60 * 60 * 1000);
+        break;
+      case "24h":
+        startTime = new Date(endTime.getTime() - 24 * 60 * 60 * 1000);
+        break;
+      case "7d":
+        startTime = new Date(endTime.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case "30d":
+        startTime = new Date(endTime.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        startTime = new Date(endTime.getTime() - 24 * 60 * 60 * 1000);
+    }
+  }
+
+  return { startTime, endTime };
+};
+
+// Load custom date range from preferences
+const loadCustomDateRangeFromPreferences = async () => {
+  const savedRange = preferencesStore.metricsPreferences?.customDateRange;
+  if (!savedRange?.start || !savedRange?.end) {
+    customDateRange.value = [];
+    return;
+  }
+
+  const dateUtils = await import("@internationalized/date" as any).catch(
+    () => null
+  );
+  if (!dateUtils) {
+    customDateRange.value = [];
+    return;
+  }
+
+  const { parseDateTime, parseDate } = dateUtils;
+
+  try {
+    let startStr = savedRange.start
+      .replace("T", " ")
+      .replace(/\.\d{3}Z?$/, "")
+      .replace("Z", "")
+      .trim();
+    let endStr = savedRange.end
+      .replace("T", " ")
+      .replace(/\.\d{3}Z?$/, "")
+      .replace("Z", "")
+      .trim();
+
+    if (!startStr.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/)) {
+      startStr += ":00";
+    }
+    if (!endStr.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/)) {
+      endStr += ":00";
+    }
+
+    const startDateValue = parseDateTime(startStr);
+    const endDateValue = parseDateTime(endStr);
+    customDateRange.value = [startDateValue, endDateValue];
+  } catch {
+    try {
+      const startDateValue = parseDate(savedRange.start.slice(0, 10));
+      const endDateValue = parseDate(savedRange.end.slice(0, 10));
+      customDateRange.value = [startDateValue, endDateValue];
+    } catch {
+      customDateRange.value = [];
+    }
+  }
+};
+
 // Load historical metrics
 const loadHistoricalMetrics = async () => {
   try {
-    const endTime = new Date();
-    const startTime = new Date(endTime.getTime() - 24 * 60 * 60 * 1000); // Last 24 hours
+    const { startTime, endTime } = getTimeRange();
 
     console.log("[GameServerMetrics] Loading metrics for game server:", props.gameServerId);
+    console.log("[GameServerMetrics] Time range:", { startTime, endTime });
     const res = await client.getGameServerMetrics({
       gameServerId: props.gameServerId,
       startTime: {
@@ -768,40 +993,169 @@ const addMetricPoint = async (metric: any) => {
   }
 };
 
+// Schedule reconnect for metrics stream
+const scheduleReconnect = () => {
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+  }
+
+  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    console.error("[GameServerMetrics] Max reconnect attempts reached, stopping stream");
+    streaming.value = false;
+    return;
+  }
+
+  reconnectAttempts++;
+  const delay = Math.min(
+    RECONNECT_DELAY * Math.pow(2, reconnectAttempts - 1),
+    30000
+  );
+
+  reconnectTimeout = setTimeout(async () => {
+    if (!streaming.value || props.gameServerStatus !== 3) {
+      return;
+    }
+    console.log(
+      `[GameServerMetrics] Attempting to reconnect stream (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`
+    );
+    await startStreaming();
+  }, delay);
+};
+
 // Start streaming metrics
 const startStreaming = async () => {
-  if (streaming.value || streamController) return;
+  if (streaming.value && streamController && !streamController.signal.aborted) {
+    return; // Already streaming
+  }
+
+  // Clear any existing reconnect timeout
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+    reconnectTimeout = null;
+  }
 
   streaming.value = true;
   streamController = new AbortController();
 
   try {
     console.log("[GameServerMetrics] Starting metrics stream for game server:", props.gameServerId);
-    const stream = await client.streamGameServerMetrics({
-      gameServerId: props.gameServerId,
-    });
+    
+    // Call the stream method - Connect-RPC server streaming methods return async iterables
+    const stream = await (client as any).streamGameServerMetrics(
+      {
+        gameServerId: props.gameServerId,
+      },
+      {
+        signal: streamController.signal,
+      }
+    );
 
     console.log("[GameServerMetrics] Stream started, listening for metrics...");
+    console.log("[GameServerMetrics] Current game server status:", props.gameServerStatus, "type:", typeof props.gameServerStatus);
+    reconnectAttempts = 0; // Reset on successful connection
+    
+    // Iterate over the stream
     for await (const metric of stream) {
-      if (streamController?.signal.aborted) break;
+      if (streamController?.signal.aborted) {
+        console.log("[GameServerMetrics] Stream aborted, stopping...");
+        break;
+      }
+      
+      // Only process metrics if we're still supposed to be streaming
+      if (!streaming.value) {
+        console.log("[GameServerMetrics] Streaming disabled, stopping...");
+        break;
+      }
+      
+      // Only process if game server is still running
+      // GameServerStatus.RUNNING = 3
+      // Check status - if undefined, assume it's still running (might be loading)
+      // Only stop if status is explicitly set and not RUNNING
+      const currentStatus = props.gameServerStatus;
+      if (currentStatus !== undefined && currentStatus !== null && currentStatus !== 3) {
+        console.log("[GameServerMetrics] Game server not running (status:", currentStatus, "type:", typeof currentStatus, "), stopping stream...");
+        break;
+      }
+      // If status is undefined/null, continue streaming (data might still be loading)
+      
       console.log("[GameServerMetrics] Received metric:", metric);
       addMetricPoint(metric);
     }
+    
+    console.log("[GameServerMetrics] Stream ended");
+    
+    // If we're still supposed to be streaming and server is running, reconnect
+    if (streaming.value && props.gameServerStatus === 3 && !streamController?.signal.aborted) {
+      scheduleReconnect();
+    }
   } catch (err: any) {
-    if (err.name !== "AbortError") {
+    if (err.name === "AbortError" || streamController?.signal.aborted) {
+      // User intentionally cancelled
+      console.log("[GameServerMetrics] Stream aborted");
+      streaming.value = false;
+      streamController = null;
+      return;
+    }
+
+    // Suppress "missing trailer" errors if we successfully received metrics
+    const isMissingTrailerError =
+      err.message?.toLowerCase().includes("missing trailer") ||
+      err.message?.toLowerCase().includes("trailer") ||
+      err.message?.toLowerCase().includes("missing endstreamresponse") ||
+      err.message?.toLowerCase().includes("endstreamresponse") ||
+      err.message?.toLowerCase().includes("unimplemented") ||
+      err.message?.toLowerCase().includes("not fully implemented") ||
+      err.code === "unknown";
+
+    if (!isMissingTrailerError) {
       console.error("[GameServerMetrics] Failed to stream metrics:", err);
       if (err instanceof Error) {
         console.error("[GameServerMetrics] Stream error details:", err.message, err.stack);
       }
+      
+      // Check if it's a network/connection error (502, 503, etc.)
+      const isNetworkError =
+        err.message?.toLowerCase().includes("networkerror") ||
+        err.message?.toLowerCase().includes("failed to fetch") ||
+        err.message?.toLowerCase().includes("502") ||
+        err.message?.toLowerCase().includes("503") ||
+        err.message?.toLowerCase().includes("504") ||
+        err.code === "ECONNREFUSED" ||
+        err.code === "ETIMEDOUT";
+      
+      if (isNetworkError) {
+        console.warn("[GameServerMetrics] Network error detected - backend service may be unavailable");
+        // Still try to reconnect, but with a longer delay
+        if (streaming.value && props.gameServerStatus === 3) {
+          // Use a longer delay for network errors
+          reconnectAttempts = Math.min(reconnectAttempts, MAX_RECONNECT_ATTEMPTS - 1);
+          scheduleReconnect();
+        } else {
+          streaming.value = false;
+          streamController = null;
+        }
+        return;
+      }
     }
-  } finally {
-    streaming.value = false;
-    streamController = null;
+    
+    // If we're still supposed to be streaming and server is running, reconnect
+    if (streaming.value && props.gameServerStatus === 3) {
+      scheduleReconnect();
+    } else {
+      streaming.value = false;
+      streamController = null;
+    }
   }
 };
 
 // Stop streaming
 const stopStreaming = () => {
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+    reconnectTimeout = null;
+  }
+  reconnectAttempts = 0;
+  
   if (streamController) {
     streamController.abort();
     streamController = null;
@@ -842,16 +1196,32 @@ const handleResize = () => {
   diskChart?.resize();
 };
 
+// Watch game server status and start/stop streaming accordingly
+watch(
+  () => props.gameServerStatus,
+  (status) => {
+    // GameServerStatus.RUNNING = 3
+    if (status === 3 && !streaming.value) {
+      startStreaming();
+    } else if (status !== 3 && streaming.value) {
+      stopStreaming();
+    }
+  },
+  { immediate: true }
+);
+
 onMounted(async () => {
   if (!import.meta.client) return;
+
+  if (selectedTimeframe.value === "custom") {
+    await loadCustomDateRangeFromPreferences();
+  }
+
   await refreshUsage();
   // Always initialize charts (they'll show empty state initially)
   await initCharts();
   window.addEventListener("resize", handleResize);
-  // Only start streaming if server is running
-  if (props.gameServerStatus === 3) {
-    startStreaming();
-  }
+  // Streaming will be started by the watch if server is running
 });
 
 onBeforeUnmount(() => {
