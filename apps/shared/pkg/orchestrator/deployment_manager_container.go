@@ -219,6 +219,13 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		containerConfig.Cmd = []string{"sh", "-c", *config.StartCommand}
 	}
 
+	// Convert CPU shares to NanoCPUs for hard CPU limit
+	// CPUShares is in units where 1024 = 1 CPU core
+	// NanoCPUs: 1 CPU = 1,000,000,000 nanoseconds (1e9)
+	// This sets an absolute CPU limit, not just relative priority
+	cpuCores := float64(config.CPUShares) / 1024.0
+	nanoCPUs := int64(cpuCores * 1e9)
+
 	// Host configuration
 	// SECURITY: No volumes or bind mounts are configured here by default
 	// If volumes are needed in the future, they MUST be sanitized through ComposeSanitizer
@@ -230,7 +237,8 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		},
 		Resources: container.Resources{
 			Memory:    config.Memory,
-			CPUShares: config.CPUShares,
+			CPUShares: config.CPUShares, // Relative priority (for scheduling)
+			NanoCPUs:  nanoCPUs,         // Hard CPU limit (prevents exceeding allocated CPUs)
 		},
 		// SECURITY: Explicitly set network mode to bridge (default) to prevent host network access
 		NetworkMode: container.NetworkMode(dm.networkName),

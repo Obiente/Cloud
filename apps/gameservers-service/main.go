@@ -148,6 +148,14 @@ func main() {
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Start health monitor in a background goroutine
+	// Check every 30 seconds to sync game server status with Docker container status
+	healthMonitorCtx, healthMonitorCancel := context.WithCancel(shutdownCtx)
+	defer healthMonitorCancel()
+	go func() {
+		gameServerService.StartHealthMonitor(healthMonitorCtx, 30*time.Second)
+	}()
+
 	// Start server in a goroutine
 	serverErr := make(chan error, 1)
 	go func() {

@@ -834,9 +834,14 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 		containerConfig.Cmd = []string{"sh", "-c", "exec " + *config.StartCommand}
 	}
 
-	// Convert CPU cores to CPU shares (Docker uses shares, not cores)
+	// Convert CPU cores to CPU shares (Docker uses shares for relative priority)
 	// 1024 shares = 1 CPU core, so multiply by 1024
 	cpuShares := int64(config.CPUCores) * 1024
+	
+	// Convert CPU cores to NanoCPUs for hard CPU limit
+	// 1 CPU = 1,000,000,000 nanoseconds (1e9)
+	// This sets an absolute CPU limit, not just relative priority
+	nanoCPUs := int64(float64(config.CPUCores) * 1e9)
 
 	// Create or get volume for game server data persistence
 	// Most game server images (especially itzg/minecraft-server) require /data mount
@@ -864,7 +869,8 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 		},
 		Resources: container.Resources{
 			Memory:    config.MemoryBytes,
-			CPUShares: cpuShares,
+			CPUShares: cpuShares,  // Relative priority (for scheduling)
+			NanoCPUs:  nanoCPUs,   // Hard CPU limit (prevents exceeding allocated CPUs)
 		},
 		NetworkMode: container.NetworkMode(gsm.networkName),
 		Privileged:  false, // Never run game servers in privileged mode

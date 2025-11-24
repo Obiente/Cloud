@@ -391,9 +391,8 @@ func (ms *MetricsStreamer) collectDeploymentStatsParallel(locations []database.D
 
 				// Use circuit breaker and retry for Docker API calls
 				var currentStats *ContainerStats
-				var err error
 				
-				err = ms.circuitBreaker.Call(func() error {
+				err := ms.circuitBreaker.Call(func() error {
 					stats, e := ms.getContainerStatsWithRetry(job.location.ContainerID)
 					if e != nil {
 						return e
@@ -590,6 +589,8 @@ func (ms *MetricsStreamer) getContainerStats(containerID string) (*ContainerStat
 	defer statsResp.Body.Close()
 
 	// Decode stats JSON response
+	// Note: JSON decoding should be fast, but if it hangs, the context timeout will cancel it
+	// We check context before and after decoding to ensure we respect the timeout
 	var statsJSON struct {
 		CPUStats struct {
 			CPUUsage struct {
@@ -622,17 +623,65 @@ func (ms *MetricsStreamer) getContainerStats(containerID string) (*ContainerStat
 			} `json:"io_service_bytes_recursive"`
 		} `json:"blkio_stats"`
 	}
+	
+	// Check context before decoding
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("context cancelled before decoding: %w", ctx.Err())
+	}
+	
 	if err := json.NewDecoder(statsResp.Body).Decode(&statsJSON); err != nil {
+		// Check if context was cancelled during decoding
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("timeout while decoding container stats: %w", ctx.Err())
+		}
 		return nil, fmt.Errorf("failed to decode stats: %w", err)
+	}
+	
+	// Check context after decoding
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("context cancelled after decoding: %w", ctx.Err())
 	}
 
 	// Calculate CPU usage percentage
+	// Docker CPU stats are in nanoseconds. We need to validate the deltas to prevent division by tiny numbers
 	cpuUsage := 0.0
 	if statsJSON.PreCPUStats.SystemUsage > 0 && statsJSON.CPUStats.SystemUsage > statsJSON.PreCPUStats.SystemUsage {
-		cpuDelta := float64(statsJSON.CPUStats.CPUUsage.TotalUsage - statsJSON.PreCPUStats.CPUUsage.TotalUsage)
-		systemDelta := float64(statsJSON.CPUStats.SystemUsage - statsJSON.PreCPUStats.SystemUsage)
-		if systemDelta > 0 && statsJSON.CPUStats.OnlineCPUs > 0 {
-			cpuUsage = (cpuDelta / systemDelta) * float64(statsJSON.CPUStats.OnlineCPUs) * 100.0
+		cpuDelta := int64(statsJSON.CPUStats.CPUUsage.TotalUsage - statsJSON.PreCPUStats.CPUUsage.TotalUsage)
+		systemDelta := int64(statsJSON.CPUStats.SystemUsage - statsJSON.PreCPUStats.SystemUsage)
+		
+		// Validate deltas to prevent invalid calculations
+		// Minimum systemDelta: 1 millisecond (1,000,000 nanoseconds) to prevent division by tiny numbers
+		// This ensures we have at least 1ms of time between measurements
+		const minSystemDelta = 1_000_000 // 1ms in nanoseconds
+		
+		if systemDelta >= minSystemDelta && statsJSON.CPUStats.OnlineCPUs > 0 {
+			// Handle counter wraparound (uint64 overflow) - if cpuDelta is negative, counters wrapped
+			if cpuDelta < 0 {
+				// Counter wraparound detected - skip this calculation
+				log.Printf("[getContainerStats] CPU counter wraparound detected for container %s (cpuDelta: %d, systemDelta: %d), skipping", containerID[:12], cpuDelta, systemDelta)
+				cpuUsage = 0.0
+			} else {
+				// Calculate CPU usage: (cpuDelta / systemDelta) * numCPUs * 100
+				// cpuDelta and systemDelta are both in nanoseconds, so the ratio is dimensionless
+				// Multiplying by OnlineCPUs gives us the effective CPU usage across all cores
+				cpuUsage = (float64(cpuDelta) / float64(systemDelta)) * float64(statsJSON.CPUStats.OnlineCPUs) * 100.0
+				
+				// Validate the result is physically reasonable
+				// Maximum possible CPU usage: OnlineCPUs * 100% (all cores at 100%)
+				maxReasonableCPU := float64(statsJSON.CPUStats.OnlineCPUs) * 100.0
+				if cpuUsage < 0 {
+					cpuUsage = 0.0
+				} else if cpuUsage > maxReasonableCPU {
+					// Log detailed error for debugging
+					log.Printf("[getContainerStats] Invalid CPU usage %.2f%% (max reasonable: %.2f%%) for container %s - cpuDelta: %d, systemDelta: %d, OnlineCPUs: %d. Skipping this measurement.",
+						cpuUsage, maxReasonableCPU, containerID[:12], cpuDelta, systemDelta, statsJSON.CPUStats.OnlineCPUs)
+					cpuUsage = 0.0 // Set to 0 instead of clamping to prevent cost calculation errors
+				}
+			}
+		} else if systemDelta > 0 && systemDelta < minSystemDelta {
+			// systemDelta too small - likely measurement error or very short time window
+			log.Printf("[getContainerStats] systemDelta too small (%d ns < %d ns) for container %s, skipping CPU calculation", systemDelta, minSystemDelta, containerID[:12])
+			cpuUsage = 0.0
 		}
 	}
 
@@ -744,11 +793,20 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 							sumErrorCount += m.ErrorCount
 						}
 
+						// Validate and clamp CPU usage to prevent invalid values
+						validatedDeploymentCPU := avgCPU
+						if validatedDeploymentCPU < 0 {
+							validatedDeploymentCPU = 0.0
+						} else if validatedDeploymentCPU > 10000.0 {
+							log.Printf("[MetricsStreamer] Clamping invalid CPU usage %.2f%% to 10000%% for deployment %s", avgCPU, resourceID)
+							validatedDeploymentCPU = 10000.0
+						}
+						
 						deploymentMetricsToStore = append(deploymentMetricsToStore, database.DeploymentMetrics{
 							DeploymentID:   resourceID,
 							ContainerID:    containerID,
 							NodeID:         containerMetricsSlice[0].NodeID,
-							CPUUsage:       avgCPU,
+							CPUUsage:       validatedDeploymentCPU,
 							MemoryUsage:    avgMemory,
 							NetworkRxBytes: sumNetworkRx,
 							NetworkTxBytes: sumNetworkTx,
@@ -759,10 +817,10 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 							Timestamp:      latestTimestamp,
 						})
 
-						// Record Prometheus metrics for this deployment
+						// Record Prometheus metrics for this deployment (use validated CPU)
 						metrics.RecordDeploymentMetrics(
 							resourceID,
-							avgCPU,
+							validatedDeploymentCPU,
 							avgMemory,
 							sumNetworkRx,
 							sumNetworkTx,
@@ -787,11 +845,20 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 							deploymentMetricsToStore = deploymentMetricsToStore[:0]
 						}
 					} else if resourceType == "gameserver" {
+						// Validate and clamp CPU usage to prevent invalid values
+						validatedCPU := avgCPU
+						if validatedCPU < 0 {
+							validatedCPU = 0.0
+						} else if validatedCPU > 10000.0 {
+							log.Printf("[MetricsStreamer] Clamping invalid CPU usage %.2f%% to 10000%% for game server %s", avgCPU, resourceID)
+							validatedCPU = 10000.0
+						}
+						
 						gameServerMetricsToStore = append(gameServerMetricsToStore, database.GameServerMetrics{
 							GameServerID:   resourceID,
 							ContainerID:    containerID,
 							NodeID:         containerMetricsSlice[0].NodeID,
-							CPUUsage:       avgCPU,
+							CPUUsage:       validatedCPU,
 							MemoryUsage:    avgMemory,
 							NetworkRxBytes: sumNetworkRx,
 							NetworkTxBytes: sumNetworkTx,
@@ -800,10 +867,10 @@ func (ms *MetricsStreamer) storeMetricsBatch() {
 							Timestamp:      latestTimestamp,
 						})
 
-						// Record Prometheus metrics for this game server
+						// Record Prometheus metrics for this game server (use validated CPU)
 						metrics.RecordGameServerMetrics(
 							resourceID,
-							avgCPU,
+							validatedCPU,
 							avgMemory,
 							sumNetworkRx,
 							sumNetworkTx,

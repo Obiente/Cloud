@@ -573,12 +573,34 @@ func (ns *NodeSelector) calculateNodeResourceUsage(ctx context.Context, nodeID s
 		cancel() // Cancel after we're done with the stats
 
 		// Calculate CPU usage percentage
+		// Docker CPU stats are in nanoseconds. We need to validate the deltas to prevent division by tiny numbers
 		cpuUsage := 0.0
 		if statsJSON.PreCPUStats.SystemUsage > 0 && statsJSON.CPUStats.SystemUsage > statsJSON.PreCPUStats.SystemUsage {
-			cpuDelta := float64(statsJSON.CPUStats.CPUUsage.TotalUsage - statsJSON.PreCPUStats.CPUUsage.TotalUsage)
-			systemDelta := float64(statsJSON.CPUStats.SystemUsage - statsJSON.PreCPUStats.SystemUsage)
-			if systemDelta > 0 && statsJSON.CPUStats.OnlineCPUs > 0 {
-				cpuUsage = (cpuDelta / systemDelta) * float64(statsJSON.CPUStats.OnlineCPUs) * 100.0
+			cpuDelta := int64(statsJSON.CPUStats.CPUUsage.TotalUsage - statsJSON.PreCPUStats.CPUUsage.TotalUsage)
+			systemDelta := int64(statsJSON.CPUStats.SystemUsage - statsJSON.PreCPUStats.SystemUsage)
+			
+			// Validate deltas to prevent invalid calculations
+			// Minimum systemDelta: 1 millisecond (1,000,000 nanoseconds) to prevent division by tiny numbers
+			const minSystemDelta = 1_000_000 // 1ms in nanoseconds
+			
+			if systemDelta >= minSystemDelta && statsJSON.CPUStats.OnlineCPUs > 0 {
+				// Handle counter wraparound (uint64 overflow)
+				if cpuDelta < 0 {
+					// Counter wraparound detected - skip this calculation
+					log.Printf("[NodeSelector] CPU counter wraparound detected for container %s, skipping", container.ID[:12])
+					cpuUsage = 0.0
+				} else {
+					cpuUsage = (float64(cpuDelta) / float64(systemDelta)) * float64(statsJSON.CPUStats.OnlineCPUs) * 100.0
+					
+					// Validate the result is physically reasonable
+					maxReasonableCPU := float64(statsJSON.CPUStats.OnlineCPUs) * 100.0
+					if cpuUsage < 0 || cpuUsage > maxReasonableCPU {
+						cpuUsage = 0.0 // Skip invalid measurements
+					}
+				}
+			} else if systemDelta > 0 && systemDelta < minSystemDelta {
+				// systemDelta too small - skip calculation
+				cpuUsage = 0.0
 			}
 		}
 

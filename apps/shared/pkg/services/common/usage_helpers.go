@@ -71,6 +71,12 @@ func CalculateUsageFromHourlyAndRaw(
 			rawTableName = "game_server_metrics"
 		}
 
+		// Determine upper bound for raw metrics: should not exceed current time or month end
+		rawMetricsEnd := now
+		if rawMetricsEnd.After(monthEnd) {
+			rawMetricsEnd = monthEnd
+		}
+
 		// Calculate CPU and Memory from raw metrics (grouped by timestamp)
 		type metricTimestamp struct {
 			CPUUsage  float64
@@ -84,9 +90,10 @@ func CalculateUsageFromHourlyAndRaw(
 				SUM(dm.memory_usage) as memory_sum,
 				dm.timestamp as timestamp
 			`).
-			Where("dm."+idColumn+" = ? AND dm.timestamp >= ?", resourceID, rawCutoff).
+			Where("dm."+idColumn+" = ? AND dm.timestamp >= ? AND dm.timestamp <= ? AND dm.cpu_usage >= 0 AND dm.cpu_usage <= 10000", resourceID, rawCutoff, rawMetricsEnd).
 			Group("dm.timestamp").
-			Order("dm.timestamp ASC")
+			Order("dm.timestamp ASC").
+			Limit(10000) // Safety limit to prevent excessive queries
 
 		if err := rawQuery.Scan(&metricTimestamps).Error; err != nil {
 			return metrics, err
@@ -106,7 +113,10 @@ func CalculateUsageFromHourlyAndRaw(
 			} else if firstInterval > 3600 {
 				firstInterval = metricInterval // Sanity check
 			}
-			recentCPUCoreSeconds += int64((metricTimestamps[0].CPUUsage / 100.0) * float64(firstInterval))
+			// Validate CPU usage before calculating (should already be filtered by query, but double-check)
+			if metricTimestamps[0].CPUUsage >= 0 && metricTimestamps[0].CPUUsage <= 10000 {
+				recentCPUCoreSeconds += int64((metricTimestamps[0].CPUUsage / 100.0) * float64(firstInterval))
+			}
 			recentMemoryByteSeconds += metricTimestamps[0].MemorySum * firstInterval
 
 			// Subsequent timestamps: use actual interval between timestamps
@@ -116,13 +126,29 @@ func CalculateUsageFromHourlyAndRaw(
 				if intervalSeconds > 0 && intervalSeconds <= 3600 {
 					interval = intervalSeconds
 				}
-				// Use memory from the PREVIOUS timestamp for this interval
-				recentCPUCoreSeconds += int64((metricTimestamps[i-1].CPUUsage / 100.0) * float64(interval))
+				// Validate CPU usage before calculating (should already be filtered by query, but double-check)
+				if metricTimestamps[i-1].CPUUsage >= 0 && metricTimestamps[i-1].CPUUsage <= 10000 {
+					recentCPUCoreSeconds += int64((metricTimestamps[i-1].CPUUsage / 100.0) * float64(interval))
+				}
 				recentMemoryByteSeconds += metricTimestamps[i-1].MemorySum * interval
+			}
+
+			// Calculate usage for the period from last metric timestamp to now (or monthEnd)
+			lastTimestamp := metricTimestamps[len(metricTimestamps)-1].Timestamp
+			lastInterval := int64(rawMetricsEnd.Sub(lastTimestamp).Seconds())
+			if lastInterval > 0 && lastInterval <= 3600 {
+				// Use the last metric's CPU and memory for the remaining time
+				lastCPUUsage := metricTimestamps[len(metricTimestamps)-1].CPUUsage
+				lastMemorySum := metricTimestamps[len(metricTimestamps)-1].MemorySum
+				// Validate CPU usage before calculating
+				if lastCPUUsage >= 0 && lastCPUUsage <= 10000 {
+					recentCPUCoreSeconds += int64((lastCPUUsage / 100.0) * float64(lastInterval))
+				}
+				recentMemoryByteSeconds += lastMemorySum * lastInterval
 			}
 		}
 
-		// Get bandwidth from raw metrics
+		// Get bandwidth from raw metrics (bandwidth is cumulative, so we sum all bytes)
 		var recentBandwidth struct {
 			BandwidthRxBytes int64
 			BandwidthTxBytes int64
@@ -132,7 +158,7 @@ func CalculateUsageFromHourlyAndRaw(
 				COALESCE(SUM(dm.network_rx_bytes), 0) as bandwidth_rx_bytes,
 				COALESCE(SUM(dm.network_tx_bytes), 0) as bandwidth_tx_bytes
 			`).
-			Where("dm."+idColumn+" = ? AND dm.timestamp >= ?", resourceID, rawCutoff).
+			Where("dm."+idColumn+" = ? AND dm.timestamp >= ? AND dm.timestamp <= ?", resourceID, rawCutoff, rawMetricsEnd).
 			Scan(&recentBandwidth)
 
 		// Combine: hourly aggregates (older) + raw metrics (recent)

@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	shared "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	shared "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 )
 
 // Metrics operations for orchestrator service
@@ -362,7 +362,10 @@ func (os *OrchestratorService) aggregateGameServerMetrics(gameServerID string, a
 						interval = 5 // Default 5-second interval
 					}
 
-					cpuCoreSeconds += (timestamps[i].CPUUsage / 100.0) * float64(interval)
+					// Validate CPU usage before calculating (filter out invalid values)
+					if timestamps[i].CPUUsage >= 0 && timestamps[i].CPUUsage <= 10000 {
+						cpuCoreSeconds += (timestamps[i].CPUUsage / 100.0) * float64(interval)
+					}
 					memoryByteSeconds += timestamps[i].MemorySum * interval
 				}
 
@@ -373,7 +376,10 @@ func (os *OrchestratorService) aggregateGameServerMetrics(gameServerID string, a
 					if timeRemaining > 0 && timeRemaining <= 3600 {
 						lastCPU := timestamps[len(timestamps)-1].CPUUsage
 						lastMemory := timestamps[len(timestamps)-1].MemorySum
-						cpuCoreSeconds += (lastCPU / 100.0) * float64(timeRemaining)
+						// Validate CPU usage before calculating
+						if lastCPU >= 0 && lastCPU <= 10000 {
+							cpuCoreSeconds += (lastCPU / 100.0) * float64(timeRemaining)
+						}
 						memoryByteSeconds += lastMemory * timeRemaining
 					}
 				}
@@ -1061,12 +1067,45 @@ func (os *OrchestratorService) getContainerStats(containerID string) (*shared.Co
 	}
 
 	// Calculate CPU usage percentage
+	// Docker CPU stats are in nanoseconds. We need to validate the deltas to prevent division by tiny numbers
 	cpuUsage := 0.0
 	if statsJSON.PreCPUStats.SystemUsage > 0 && statsJSON.CPUStats.SystemUsage > statsJSON.PreCPUStats.SystemUsage {
-		cpuDelta := float64(statsJSON.CPUStats.CPUUsage.TotalUsage - statsJSON.PreCPUStats.CPUUsage.TotalUsage)
-		systemDelta := float64(statsJSON.CPUStats.SystemUsage - statsJSON.PreCPUStats.SystemUsage)
-		if systemDelta > 0 && statsJSON.CPUStats.OnlineCPUs > 0 {
-			cpuUsage = (cpuDelta / systemDelta) * float64(statsJSON.CPUStats.OnlineCPUs) * 100.0
+		cpuDelta := int64(statsJSON.CPUStats.CPUUsage.TotalUsage - statsJSON.PreCPUStats.CPUUsage.TotalUsage)
+		systemDelta := int64(statsJSON.CPUStats.SystemUsage - statsJSON.PreCPUStats.SystemUsage)
+		
+		// Validate deltas to prevent invalid calculations
+		// Minimum systemDelta: 1 millisecond (1,000,000 nanoseconds) to prevent division by tiny numbers
+		// This ensures we have at least 1ms of time between measurements
+		const minSystemDelta = 1_000_000 // 1ms in nanoseconds
+		
+		if systemDelta >= minSystemDelta && statsJSON.CPUStats.OnlineCPUs > 0 {
+			// Handle counter wraparound (uint64 overflow) - if cpuDelta is negative, counters wrapped
+			if cpuDelta < 0 {
+				// Counter wraparound detected - skip this calculation
+				logger.Warn("[getContainerStats] CPU counter wraparound detected for container %s (cpuDelta: %d, systemDelta: %d), skipping", containerID[:12], cpuDelta, systemDelta)
+				cpuUsage = 0.0
+			} else {
+				// Calculate CPU usage: (cpuDelta / systemDelta) * numCPUs * 100
+				// cpuDelta and systemDelta are both in nanoseconds, so the ratio is dimensionless
+				// Multiplying by OnlineCPUs gives us the effective CPU usage across all cores
+				cpuUsage = (float64(cpuDelta) / float64(systemDelta)) * float64(statsJSON.CPUStats.OnlineCPUs) * 100.0
+				
+				// Validate the result is physically reasonable
+				// Maximum possible CPU usage: OnlineCPUs * 100% (all cores at 100%)
+				maxReasonableCPU := float64(statsJSON.CPUStats.OnlineCPUs) * 100.0
+				if cpuUsage < 0 {
+					cpuUsage = 0.0
+				} else if cpuUsage > maxReasonableCPU {
+					// Log detailed error for debugging
+					logger.Warn("[getContainerStats] Invalid CPU usage %.2f%% (max reasonable: %.2f%%) for container %s - cpuDelta: %d, systemDelta: %d, OnlineCPUs: %d. Skipping this measurement.",
+						cpuUsage, maxReasonableCPU, containerID[:12], cpuDelta, systemDelta, statsJSON.CPUStats.OnlineCPUs)
+					cpuUsage = 0.0 // Set to 0 instead of clamping to prevent cost calculation errors
+				}
+			}
+		} else if systemDelta > 0 && systemDelta < minSystemDelta {
+			// systemDelta too small - likely measurement error or very short time window
+			logger.Debug("[getContainerStats] systemDelta too small (%d ns < %d ns) for container %s, skipping CPU calculation", systemDelta, minSystemDelta, containerID[:12])
+			cpuUsage = 0.0
 		}
 	}
 
