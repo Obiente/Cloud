@@ -85,7 +85,7 @@ import {
   PencilIcon,
   TrashIcon,
 } from "@heroicons/vue/24/outline";
-import type { ExplorerNode } from "~/components/deployment/fileExplorerTypes";
+import type { ExplorerNode } from "~/components/shared/fileExplorerTypes";
 
 interface Props {
   currentNode: ExplorerNode | null;

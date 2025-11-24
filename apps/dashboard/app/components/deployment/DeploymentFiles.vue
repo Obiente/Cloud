@@ -105,142 +105,34 @@
     <div
       class="flex flex-col lg:grid lg:grid-cols-[260px_1fr] gap-3 lg:gap-4 h-[calc(100vh-220px)] min-h-[400px] lg:min-h-[calc(100vh-220px)] max-h-[calc(100vh-220px)] overflow-hidden"
     >
-      <aside
-        class="flex flex-col border border-border-default rounded-[10px] bg-surface-base overflow-hidden order-2 lg:order-1"
-        aria-label="File tree"
-        :class="showSidebarOnMobile ? 'h-64 lg:h-auto' : 'hidden lg:flex'"
-      >
-        <div class="p-3 border-b border-border-default">
-          <OuiFlex justify="between" align="center" class="mb-2">
-            <OuiText
-              size="xs"
-              weight="semibold"
-              class="uppercase tracking-[0.08em] text-[11px]"
-              >Sources</OuiText
-            >
-            <OuiButton
-              variant="ghost"
-              size="xs"
-              class="lg:hidden p-1"
-              @click="showSidebarOnMobile = !showSidebarOnMobile"
-              :aria-expanded="showSidebarOnMobile"
-            >
-              <XMarkIcon v-if="showSidebarOnMobile" class="h-4 w-4" />
-              <span v-else class="text-xs">Show</span>
-            </OuiButton>
-          </OuiFlex>
-          <nav class="flex flex-col gap-1.5">
-            <button
-              class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[13px] text-left transition-colors duration-150 text-text-secondary border-none bg-transparent cursor-pointer hover:bg-surface-hover hover:text-text-primary disabled:opacity-60 disabled:cursor-not-allowed"
-              :class="{
-                'bg-surface-selected text-text-primary':
-                  source.type === 'container',
-              }"
-              :disabled="!containerRunning"
-              @click="handleSwitchSource('container')"
-            >
-              <ServerIcon class="h-4 w-4" />
-              <span>Container filesystem</span>
-            </button>
-            <button
-              v-for="volume in volumes"
-              :key="volume.name"
-              class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[13px] text-left transition-colors duration-150 text-text-secondary border-none bg-transparent cursor-pointer hover:bg-surface-hover hover:text-text-primary"
-              :class="{
-                'bg-surface-selected text-text-primary':
-                  source.type === 'volume' && source.volumeName === volume.name,
-              }"
-              @click="handleSwitchSource('volume', volume.name || '')"
-            >
-              <CubeIcon class="h-4 w-4" />
-              <span>{{ volume.name }}</span>
-              <span class="ml-auto text-[11px] text-text-tertiary">{{
-                volume.mountPoint
-              }}</span>
-            </button>
-          </nav>
-        </div>
-
-        <div class="flex-1 overflow-y-auto font-mono" role="tree">
-          <div class="p-2">
-            <div
-              v-if="errorMessage"
-              class="mb-2 p-2 rounded-xl bg-danger/10 border border-danger/30"
-            >
-              <div class="flex items-start gap-2">
-                <ExclamationTriangleIcon
-                  class="h-4 w-4 text-danger shrink-0 mt-0.5"
-                />
-                <div class="flex-1 min-w-0">
-                  <OuiText
-                    size="xs"
-                    weight="semibold"
-                    color="danger"
-                    class="block mb-0.5"
-                  >
-                    Error loading files
-                  </OuiText>
-                  <OuiText size="xs" color="secondary" class="wrap-break-word">
-                    {{ parseTreeError(errorMessage) }}
-                  </OuiText>
-                </div>
-                <OuiButton
-                  variant="ghost"
-                  size="xs"
-                  class="shrink-0 -mt-1 -mr-1"
-                  @click="errorMessage = null"
-                >
-                  <XMarkIcon class="h-3.5 w-3.5" />
-                </OuiButton>
-              </div>
-            </div>
-            <template v-if="root.children.length === 0 && isLoadingTree">
-              <OuiFlex
-                direction="col"
-                align="center"
-                gap="sm"
-                class="tree-empty"
-              >
-                <ArrowPathIcon class="h-5 w-5 animate-spin" />
-                <OuiText size="sm" color="secondary">Loading files…</OuiText>
-              </OuiFlex>
-            </template>
-            <template v-else-if="root.children.length === 0">
-              <OuiFlex
-                direction="col"
-                align="center"
-                gap="sm"
-                class="tree-empty"
-              >
-                <OuiText size="sm" color="secondary">No files found</OuiText>
-              </OuiFlex>
-            </template>
-            <template v-else>
-              <TreeView.Root
-                :collection="treeCollection"
-                selection-mode="single"
-                :selected-value="selectedPath ? [selectedPath] : []"
-                class="file-tree-root"
-              >
-                <TreeView.Tree>
-                  <TreeNode
-                    v-for="(child, idx) in root.children"
-                    :key="child.id"
-                    :node="child"
-                    :indexPath="[idx]"
-                    :selectedPath="selectedPath"
-                    :allowEditing="true"
-                    @toggle="(node, open) => handleToggle(node, open)"
-                    @open="(node, options) => handleOpen(node, options)"
-                    @action="handleContextAction"
-                    @load-more="handleLoadMore"
-                  />
-                </TreeView.Tree>
-              </TreeView.Root>
-            </template>
-          </div>
-        </div>
-      </aside>
+        <FileBrowserSidebar
+          :source="source"
+          :volumes="volumes"
+          :root="root"
+          :selectedPath="selectedPath"
+          :treeCollection="treeCollection"
+          :errorMessage="errorMessage"
+          :isLoadingTree="isLoadingTree"
+          :containerRunning="containerRunning"
+          :showMobileToggle="true"
+          :showMobileSidebar="showSidebarOnMobile"
+          mobileClass="order-2 lg:order-1"
+          :getVolumeLabel="(volume) => volume.name || ''"
+          :getVolumeSecondaryLabel="(volume) => volume.mountPoint || null"
+          :parseError="parseTreeError"
+          :selectedNodes="selectedNodes"
+          @switch-source="handleSwitchSource"
+          @toggle="handleToggle"
+          @open="handleOpen"
+          @select="handleNodeSelect"
+          @action="handleContextAction"
+          @load-more="handleLoadMore"
+          @drop-files="handleDropFiles"
+          @root-drop="handleRootDropFiles"
+          @source-drop="handleSourceDropFiles"
+          @toggle-mobile="showSidebarOnMobile = !showSidebarOnMobile"
+          @clear-error="errorMessage = null"
+        />
 
       <section
         class="flex flex-col border border-border-default rounded-[10px] bg-surface-base overflow-hidden min-h-0 order-1 lg:order-2 flex-1"
@@ -388,7 +280,8 @@
                 filePreviewType !== 'image' &&
                 filePreviewType !== 'video' &&
                 filePreviewType !== 'audio' &&
-                filePreviewType !== 'pdf'
+                filePreviewType !== 'pdf' &&
+                filePreviewType !== 'zip'
               "
               variant="solid"
               size="sm"
@@ -419,7 +312,18 @@
               @refresh="handleRefreshSelection"
               @rename="(node) => queueRename(node)"
               @delete="(node) => queueDelete([node.path])"
-            />
+            >
+              <template #items="{ currentNode: node }">
+                <OuiMenuItem
+                  v-if="node && (node.type === 'directory' || node.type === 'file')"
+                  value="create-archive"
+                  @select="() => handleCreateArchive(node)"
+                >
+                  <ArchiveBoxIcon class="h-4 w-4 mr-2" />
+                  Create Archive
+                </OuiMenuItem>
+              </template>
+            </FileActionsMenu>
           </OuiFlex>
         </header>
 
@@ -498,6 +402,7 @@
                 !fileError &&
                 filePreviewType &&
                 filePreviewType !== 'text' &&
+                filePreviewType !== 'zip' &&
                 fileBlobUrl
               "
               class="h-full flex items-center justify-center p-8 bg-surface-base"
@@ -577,6 +482,23 @@
                 </div>
               </div>
             </div>
+            <!-- Zip Preview -->
+            <ZipPreview
+              v-else-if="
+                selectedPath &&
+                currentNode?.type === 'file' &&
+                !fileError &&
+                filePreviewType === 'zip'
+              "
+              :fileName="currentNode?.name"
+              :contents="zipContents"
+              :loading="zipLoading"
+              :current-path="currentZipPath"
+              @navigate-folder="navigateZipFolder"
+              @navigate-up="navigateZipUp"
+              @entry-drag-start="handleZipEntryDragStart"
+              @entry-drag-end="handleZipEntryDragEnd"
+            />
             <!-- Text Editor -->
             <OuiFileEditor
               v-else-if="
@@ -624,26 +546,35 @@
     XCircleIcon,
     DocumentArrowDownIcon,
     FolderIcon,
+    ArchiveBoxIcon,
   } from "@heroicons/vue/24/outline";
   import { TreeView } from "@ark-ui/vue/tree-view";
   import {
     createTreeCollection,
     type TreeNode as ArkTreeNode,
   } from "@ark-ui/vue/collection";
-  import TreeNode from "./TreeNode.vue";
+  import FileBrowserSidebar from "../shared/FileBrowserSidebar.vue";
   import FileUploader from "./FileUploader.vue";
 import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
+  import OuiMenuItem from "~/components/oui/MenuItem.vue";
   import { useFileExplorer } from "~/composables/useFileExplorer";
   import { useDeploymentContainerQuery } from "~/composables/useDeploymentContainerQuery";
   import { useConnectClient } from "~/lib/connect-client";
   import { DeploymentService } from "@obiente/proto";
-  import type { ExplorerNode } from "./fileExplorerTypes";
+  import type { ExplorerNode } from "../shared/fileExplorerTypes";
+  import { useOrganizationsStore } from "~/stores/organizations";
   import type { CreateContainerEntryRequest } from "@obiente/proto";
   import { ContainerEntryType } from "@obiente/proto";
+  import { useDeploymentFileBrowserClient } from "~/composables/useDeploymentFileBrowserClient";
   import OuiFileEditor from "~/components/oui/FileEditor.vue";
   import OuiCombobox from "~/components/oui/Combobox.vue";
   import OuiSelect from "~/components/oui/Select.vue";
   import { useDialog } from "~/composables/useDialog";
+  import { useToast } from "~/composables/useToast";
+  import { useZipFile } from "~/composables/useZipFile";
+  import { detectFilePreviewType } from "~/composables/useFilePreview";
+  import ZipPreview from "~/components/shared/ZipPreview.vue";
+  import { useMultiSelect } from "~/composables/useMultiSelect";
 
   const props = defineProps<{
     deploymentId: string;
@@ -671,9 +602,21 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
   } | null>(null);
   const fileBlobUrl = ref<string | null>(null);
   const filePreviewType = ref<
-    "text" | "image" | "video" | "audio" | "pdf" | "binary" | null
+    "text" | "image" | "video" | "audio" | "pdf" | "zip" | "binary" | null
   >(null);
   const editorRefreshKey = ref(0); // Force editor refresh when reloading file
+  const {
+    zipContents,
+    zipLoading,
+    currentZipPath,
+    parseZipFile,
+    handleZipEntryDragStart,
+    handleZipEntryDragEnd,
+    extractZipEntryOnDrop,
+    navigateZipFolder,
+    navigateZipUp,
+    clearZip,
+  } = useZipFile();
 
   // Track if file has unsaved changes
   const hasUnsavedChanges = computed(() => {
@@ -893,8 +836,14 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
     });
   });
 
-  const explorerClient = useConnectClient(DeploymentService);
+  const fileBrowserClient = useDeploymentFileBrowserClient(
+    props.deploymentId,
+    () => getOrgId()
+  );
   const dialog = useDialog();
+  const { toast } = useToast();
+  const orgsStore = useOrganizationsStore();
+  const organizationId = computed(() => orgsStore.currentOrgId || "");
 
   const isSaving = ref(false);
   const saveStatus = ref<"idle" | "saving" | "success" | "error">("idle");
@@ -967,27 +916,57 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
     loadChildren(node, node.nextCursor ?? undefined);
   }
 
-  function handleContextAction(action: string, node: ExplorerNode) {
+  function handleContextAction(action: string, node: ExplorerNode, selectedPaths?: string[]) {
+    // If multiple nodes are selected, use them; otherwise use the clicked node
+    const pathsToUse = selectedPaths && selectedPaths.length > 1 
+      ? selectedPaths.filter(p => p !== "/")
+      : [node.path];
+    
+    // Resolve paths to nodes
+    const nodesToUse = pathsToUse
+      .map(path => findNode(path))
+      .filter((n): n is ExplorerNode => n !== null);
+
+    if (nodesToUse.length === 0) {
+      // Fallback to clicked node if we can't find any
+      nodesToUse.push(node);
+    }
+
     switch (action) {
       case "open":
-        handleOpen(node, { ensureExpanded: node.type === "directory" });
+        if (nodesToUse.length === 1 && nodesToUse[0]) {
+          handleOpen(nodesToUse[0], { ensureExpanded: nodesToUse[0].type === "directory" });
+        }
         break;
       case "open-editor":
-        handleLoadFile(node);
+        if (nodesToUse.length === 1 && nodesToUse[0]) {
+          handleLoadFile(nodesToUse[0]);
+        }
         break;
       case "refresh":
-        loadChildren(node);
+        if (nodesToUse.length === 1 && nodesToUse[0]) {
+          loadChildren(nodesToUse[0]);
+        }
         break;
       case "delete":
-        queueDelete([node.path]);
+        queueDelete(pathsToUse);
         break;
       case "rename":
-        queueRename(node);
+        if (nodesToUse.length === 1 && nodesToUse[0]) {
+          queueRename(nodesToUse[0]);
+        }
         break;
       case "copy-path":
-        navigator.clipboard
-          ?.writeText(node.path)
-          .catch((err) => console.error("copy path", err));
+        if (nodesToUse.length === 1 && nodesToUse[0]) {
+          navigator.clipboard
+            ?.writeText(nodesToUse[0].path)
+            .catch((err) => console.error("copy path", err));
+        } else {
+          // Copy all paths, one per line
+          navigator.clipboard
+            ?.writeText(pathsToUse.join("\n"))
+            .catch((err) => console.error("copy paths", err));
+        }
         break;
       case "new-file":
         handleCreate("file");
@@ -997,6 +976,9 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
         break;
       case "new-symlink":
         handleCreate("symlink");
+        break;
+      case "create-archive":
+        handleCreateArchive(nodesToUse.length === 1 && nodesToUse[0] ? nodesToUse[0] : undefined);
         break;
     }
   }
@@ -1342,6 +1324,7 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
     }
     filePreviewType.value = null;
     fileMetadata.value = null;
+    clearZip(); // Clear zip contents when switching files
 
     // Check if file is likely unviewable before attempting to load
     const unviewableCheck = isLikelyUnviewableFile(node.path);
@@ -1387,9 +1370,7 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
       // Store the request path to verify it's still the current file after load
       const requestPath = node.path;
 
-      const res = await explorerClient.getContainerFile({
-        organizationId: getOrgId(),
-        deploymentId: props.deploymentId,
+      const res = await fileBrowserClient.getFile({
         path: node.path,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
         containerId:
@@ -1420,7 +1401,7 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
       // Determine preview type based on MIME type or file extension
       const mimeType = res.metadata?.mimeType || "";
       const fileSize = Number(res.size || 0);
-      const previewType = detectPreviewType(node.path, mimeType, fileSize);
+      const previewType = detectFilePreviewType(node.path, mimeType, fileSize);
       filePreviewType.value = previewType;
 
       if (previewType === "text") {
@@ -1430,6 +1411,25 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
         originalFileContent.value = content; // Store original content
         editorRefreshKey.value++; // Force editor to refresh with new content
         fileLanguage.value = detectLanguage(node.path);
+        // Clean up any existing blob URL
+        if (fileBlobUrl.value) {
+          URL.revokeObjectURL(fileBlobUrl.value);
+          fileBlobUrl.value = null;
+        }
+        clearZip(); // Clear zip contents when loading text file
+      } else if (previewType === "zip") {
+        // Zip file - parse and show contents
+        fileContent.value = ""; // Clear text content
+        fileLanguage.value = "plaintext";
+
+        try {
+          await parseZipFile(res.content, res.encoding || "base64");
+        } catch (err) {
+          console.error("Failed to parse zip file:", err);
+          fileError.value = "Failed to parse zip file. It may be corrupted.";
+          filePreviewType.value = "binary";
+        }
+
         // Clean up any existing blob URL
         if (fileBlobUrl.value) {
           URL.revokeObjectURL(fileBlobUrl.value);
@@ -1493,177 +1493,6 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
     }
   }
 
-  function detectPreviewType(
-    path: string,
-    mimeType?: string,
-    fileSize: number = 0
-  ): "text" | "image" | "video" | "audio" | "pdf" | "binary" {
-    // Empty files (0 bytes) should default to text unless they have a known binary extension
-    if (fileSize === 0) {
-      // Check if it has a known binary extension
-      const ext = path.split(".").pop()?.toLowerCase() || "";
-      const binaryExts = [
-        "exe",
-        "dll",
-        "so",
-        "dylib",
-        "bin",
-        "app",
-        "deb",
-        "rpm",
-        "pkg",
-        "dmg",
-        "iso",
-        "img",
-      ];
-      if (binaryExts.includes(ext)) {
-        return "binary";
-      }
-      // Default empty files to text so they can be edited
-      return "text";
-    }
-
-    // Check MIME type first (most reliable)
-    if (mimeType) {
-      if (mimeType.startsWith("image/")) return "image";
-      if (mimeType.startsWith("video/")) return "video";
-      if (mimeType.startsWith("audio/")) return "audio";
-      if (mimeType === "application/pdf") return "pdf";
-      // Text MIME types
-      if (
-        mimeType.startsWith("text/") ||
-        mimeType.includes("json") ||
-        mimeType.includes("xml") ||
-        mimeType.includes("javascript") ||
-        mimeType.includes("css") ||
-        mimeType.includes("html")
-      ) {
-        return "text";
-      }
-      // If it's a binary MIME type, return binary
-      if (
-        mimeType.startsWith("application/") &&
-        !mimeType.includes("json") &&
-        !mimeType.includes("xml") &&
-        mimeType !== "application/pdf"
-      ) {
-        return "binary";
-      }
-    }
-
-    // Fallback to file extension
-    const ext = path.split(".").pop()?.toLowerCase() || "";
-    const imageExts = [
-      "jpg",
-      "jpeg",
-      "png",
-      "gif",
-      "webp",
-      "svg",
-      "bmp",
-      "ico",
-      "tiff",
-      "tif",
-    ];
-    const videoExts = ["mp4", "webm", "ogg", "mov", "avi", "mkv", "flv", "wmv"];
-    const audioExts = [
-      "mp3",
-      "wav",
-      "ogg",
-      "aac",
-      "flac",
-      "m4a",
-      "wma",
-      "opus",
-    ];
-    // Common text file paths (especially system files without extensions)
-    const commonTextPaths = [
-      "/etc/",
-      "/etc/profile",
-      "/etc/passwd",
-      "/etc/group",
-      "/etc/hosts",
-      "/etc/fstab",
-      "/etc/resolv.conf",
-      "/etc/ssh/",
-      "/etc/nginx/",
-      "/etc/apache/",
-      "/var/log/",
-      "/home/",
-      "/root/",
-      "/opt/",
-      "/usr/local/",
-      ".env",
-      ".gitignore",
-      ".dockerignore",
-      "Dockerfile",
-      "docker-compose",
-      "Makefile",
-      "README",
-      "CHANGELOG",
-      "LICENSE",
-    ];
-
-    // Check if path matches common text file patterns
-    const lowerPath = path.toLowerCase();
-    if (
-      commonTextPaths.some((pattern) =>
-        lowerPath.includes(pattern.toLowerCase())
-      )
-    ) {
-      return "text";
-    }
-
-    const textExts = [
-      "txt",
-      "md",
-      "json",
-      "yaml",
-      "yml",
-      "xml",
-      "html",
-      "htm",
-      "css",
-      "js",
-      "jsx",
-      "ts",
-      "tsx",
-      "py",
-      "go",
-      "rs",
-      "java",
-      "c",
-      "cpp",
-      "h",
-      "hpp",
-      "sh",
-      "bash",
-      "zsh",
-      "fish",
-      "sql",
-      "log",
-      "conf",
-      "config",
-      "ini",
-      "env",
-      "dockerfile",
-      "makefile",
-      "gitignore",
-      "gitattributes",
-      "editorconfig",
-      "prettierrc",
-      "eslintrc",
-    ];
-
-    if (imageExts.includes(ext)) return "image";
-    if (videoExts.includes(ext)) return "video";
-    if (audioExts.includes(ext)) return "audio";
-    if (ext === "pdf") return "pdf";
-    if (textExts.includes(ext)) return "text";
-
-    // Default to binary for unknown types
-    return "binary";
-  }
 
   function handlePreviewError() {
     // If preview fails, show error and allow download
@@ -2057,9 +1886,7 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
 
     try {
       // Fetch file content
-      const res = await explorerClient.getContainerFile({
-        organizationId: getOrgId(),
-        deploymentId: props.deploymentId,
+      const res = await fileBrowserClient.getFile({
         path: currentNode.value.path,
         volumeName: source.type === "volume" ? source.volumeName : undefined,
         containerId:
@@ -2119,6 +1946,282 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
     }
   }
 
+  // Multi-select state
+  const selectedNodes = ref<Set<string>>(new Set());
+  const lastSelectedIndex = ref<number | null>(null);
+  const visibleNodes = ref<ExplorerNode[]>([]);
+
+  // Initialize multi-select composable
+  const multiSelect = useMultiSelect({
+    selectedNodes,
+    lastSelectedIndex,
+    visibleNodes,
+  });
+
+  // Update visible nodes when tree changes
+  watch(
+    () => root,
+    () => {
+      visibleNodes.value = multiSelect.getAllVisibleNodes(root.children || []);
+    },
+    { deep: true, immediate: true }
+  );
+
+  // Handle node selection
+  function handleNodeSelect(node: ExplorerNode, event: MouseEvent) {
+    console.log("[DeploymentFiles] handleNodeSelect called", {
+      path: node.path,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+    });
+    
+    multiSelect.handleNodeClick(node, event, (selectedPaths) => {
+      console.log("[DeploymentFiles] Selection changed callback", {
+        selectedPaths,
+        selectedCount: selectedPaths.length,
+      });
+      
+      // Update selectedPath to the last selected if single selection
+      if (selectedPaths.length === 1 && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+        selectedPath.value = selectedPaths[0] || null;
+      } else if (selectedPaths.length === 0) {
+        selectedPath.value = null;
+      }
+    });
+  }
+
+  async function handleCreateArchive(node?: ExplorerNode) {
+    // Determine which nodes to archive
+    const nodesToArchive: ExplorerNode[] = [];
+    const isMultiSelect = selectedNodes.value.size > 1;
+    
+    if (isMultiSelect) {
+      // Multi-select mode: archive all selected nodes (ignore the clicked node)
+      for (const path of selectedNodes.value) {
+        const foundNode = findNode(path);
+        if (foundNode && foundNode.path !== "/") {
+          nodesToArchive.push(foundNode);
+        }
+      }
+      if (nodesToArchive.length === 0) {
+        toast.error("No Selection", "Please select files or folders to archive");
+        return;
+      }
+    } else if (node) {
+      // Single node from context menu or action menu
+      nodesToArchive.push(node);
+    } else if (currentNode.value) {
+      // Use currently selected node
+      nodesToArchive.push(currentNode.value);
+    } else {
+      toast.error("No Selection", "Please select a file or folder to archive");
+      return;
+    }
+
+    // Get default zip name
+    let defaultZipName = "archive.zip";
+    const firstNode = nodesToArchive[0];
+    if (nodesToArchive.length === 1 && firstNode && !isMultiSelect) {
+      // Single file/folder: use its name
+      defaultZipName = (firstNode.name || "archive") + ".zip";
+    } else if (nodesToArchive.length > 1) {
+      // Multiple files - use common parent directory name or "archive"
+      const paths = nodesToArchive.map(n => n?.path).filter((p): p is string => !!p);
+      if (paths.length > 0) {
+        const pathParts = paths.map(p => p.split("/").filter(Boolean));
+        if (pathParts.length > 0 && pathParts[0]) {
+          const minLength = Math.min(...pathParts.map(p => p.length));
+          let commonParts: string[] = [];
+          for (let i = 0; i < minLength - 1; i++) {
+            const part: string | undefined = pathParts[0][i];
+            if (part && pathParts.every(p => p[i] === part)) {
+              commonParts.push(part);
+            } else {
+              break;
+            }
+          }
+          if (commonParts.length > 0) {
+            const parentName = commonParts[commonParts.length - 1] || "archive";
+            defaultZipName = parentName + ".zip";
+          }
+        }
+      }
+    }
+    
+    // Get parent directory for destination (use common parent if multiple)
+    let parentPath = "/";
+    if (nodesToArchive.length === 1 && nodesToArchive[0]) {
+      parentPath = nodesToArchive[0].path.split("/").slice(0, -1).join("/") || "/";
+    } else if (nodesToArchive.length > 0) {
+      // Find common parent path
+      const paths = nodesToArchive.map(n => n?.path).filter((p): p is string => !!p);
+      if (paths.length > 0) {
+        const pathParts = paths.map(p => p.split("/").filter(Boolean));
+        const minLength = Math.min(...pathParts.map(p => p.length));
+        let commonParts: string[] = [];
+        for (let i = 0; i < minLength - 1; i++) {
+          const part = pathParts[0]?.[i];
+          if (part && pathParts.every(p => p[i] === part)) {
+            commonParts.push(part);
+          } else {
+            break;
+          }
+        }
+        parentPath = "/" + commonParts.join("/");
+      }
+    }
+
+    // Show dialog to get zip file name
+    const zipName = await dialog.showPrompt({
+      title: "Create Archive",
+      message: nodesToArchive.length > 1 
+        ? `Enter name for the zip file (archiving ${nodesToArchive.length} items):`
+        : "Enter name for the zip file:",
+      defaultValue: defaultZipName,
+      placeholder: "archive.zip",
+      confirmLabel: "Next",
+      cancelLabel: "Cancel",
+    });
+
+    if (!zipName || !zipName.trim()) return;
+
+    const trimmedZipName = zipName.trim();
+    if (!trimmedZipName.endsWith(".zip")) {
+      await dialog.showAlert({
+        title: "Invalid Name",
+        message: "Zip file name must end with .zip",
+      });
+      return;
+    }
+
+    // Show dialog for archive options
+    const archiveFirstNode = nodesToArchive[0];
+    let archiveMessage = "";
+    if (nodesToArchive.length > 1) {
+      archiveMessage = "How should the archive be structured?\n\n• Include Folders: Each selected item will be wrapped in a folder with its name (e.g., 'folder1/file.txt', 'folder2/file.txt')\n• Contents Only: All files from all selected items will be placed directly in the zip root (no parent folders)";
+    } else if (archiveFirstNode?.type === "directory") {
+      archiveMessage = `How should the archive be structured?\n\n• Include Folder: The zip will contain a folder named '${archiveFirstNode.name || "folder"}' with all its contents inside\n• Contents Only: Files will be extracted directly to the zip root (no parent folder)`;
+    } else {
+      archiveMessage = `How should the archive be structured?\n\n• Include Folder: The zip will contain a folder named '${archiveFirstNode?.name || "file"}' with the file inside\n• Contents Only: The file will be placed directly in the zip root`;
+    }
+    
+    const includeParent = await dialog.showConfirm({
+      title: "Archive Structure",
+      message: archiveMessage,
+      confirmLabel: nodesToArchive.length > 1 ? "Include Folders" : "Include Folder",
+      cancelLabel: "Contents Only",
+      variant: "default",
+    });
+
+    try {
+      const destinationPath = parentPath === "/" ? `/${trimmedZipName}` : `${parentPath}/${trimmedZipName}`;
+      const sourcePaths = nodesToArchive.map(n => n?.path).filter((p): p is string => !!p);
+
+      const response = await fileBrowserClient.createArchive({
+        sourcePaths: sourcePaths,
+        destinationPath: destinationPath,
+        includeParentFolder: includeParent,
+        volumeName: source.type === "volume" ? source.volumeName : undefined,
+        containerId:
+          source.type === "container" && selectedContainerId.value
+            ? selectedContainerId.value
+            : undefined,
+        serviceName:
+          source.type === "container" && selectedServiceName.value
+            ? selectedServiceName.value
+            : undefined,
+      });
+
+      if (response.success) {
+        toast.success("Archive Created", `Archive created at ${response.archivePath} with ${response.filesArchived} file(s)`);
+        // Clear multi-select after successful archive
+        multiSelect.clearSelection();
+        // Refresh the parent directory to show the new zip file
+        const parentNode = findNode(parentPath);
+        if (parentNode && parentNode.type === "directory") {
+          await loadChildren(parentNode);
+        } else {
+          await refreshRoot();
+        }
+      } else {
+        toast.error("Archive Creation Failed", response.error || "Failed to create archive");
+      }
+    } catch (err: any) {
+      console.error("Failed to create archive:", err);
+      toast.error("Archive Error", err?.message || "Failed to create archive");
+    }
+  }
+
+  async function handleExtractZip() {
+    if (!currentNode.value || currentNode.value.type !== "file") return;
+
+    // Get default folder name from zip file name (without extension)
+    const zipFileName = currentNode.value.name || currentNode.value.path.split("/").pop() || "extracted";
+    const defaultFolderName = zipFileName.replace(/\.(zip|jar|war|ear)$/i, "");
+
+    // Show dialog to get folder name
+    const folderName = await dialog.showPrompt({
+      title: "Extract Archive",
+      message: "Enter folder name for extracted files:",
+      defaultValue: defaultFolderName,
+      placeholder: "Folder name",
+      confirmLabel: "Extract",
+      cancelLabel: "Cancel",
+    });
+
+    if (!folderName || !folderName.trim()) return;
+
+    const trimmedFolderName = folderName.trim();
+
+    // Validate folder name
+    if (trimmedFolderName.includes("/") || trimmedFolderName.includes("\\")) {
+      await dialog.showAlert({
+        title: "Invalid Folder Name",
+        message: "Folder name cannot contain path separators.",
+      });
+      return;
+    }
+
+    try {
+      // Get the parent directory of the zip file
+      const zipPath = currentNode.value.path;
+      const parentPath = zipPath.split("/").slice(0, -1).join("/") || "/";
+      const destinationPath = parentPath === "/" ? `/${trimmedFolderName}` : `${parentPath}/${trimmedFolderName}`;
+
+      // Call extract endpoint
+      const response = await fileBrowserClient.extractArchive({
+        sourcePath: zipPath,
+        destinationPath: destinationPath,
+        volumeName: source.type === "volume" ? source.volumeName : undefined,
+        containerId:
+          source.type === "container" && selectedContainerId.value
+            ? selectedContainerId.value
+            : undefined,
+        serviceName:
+          source.type === "container" && selectedServiceName.value
+            ? selectedServiceName.value
+            : undefined,
+      });
+
+      if (response.success) {
+        toast.success("Archive Extracted", `Files extracted to ${destinationPath}`);
+        // Refresh the parent directory to show the new folder
+        const parentNode = findNode(parentPath);
+        if (parentNode && parentNode.type === "directory") {
+          await loadChildren(parentNode);
+        } else {
+          await refreshRoot();
+        }
+      } else {
+        toast.error("Extraction Failed", response.error || "Failed to extract archive");
+      }
+    } catch (err: any) {
+      console.error("Failed to extract zip:", err);
+      toast.error("Extraction Error", err?.message || "Failed to extract archive");
+    }
+  }
+
   function formatDatetime(value?: string) {
     if (!value) return "";
     return new Intl.DateTimeFormat(undefined, {
@@ -2138,6 +2241,169 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
     } else {
       // Fallback to root if directory not found
       await refreshRoot();
+    }
+  }
+
+  async function handleRootDropFiles(files: File[], event?: DragEvent) {
+    // Create a root node object for handleDropFiles
+    const rootNode: ExplorerNode = {
+      ...root,
+      parentPath: root.parentPath || '/',
+      nextCursor: root.nextCursor || null,
+    };
+    // Upload to root directory
+    await handleDropFiles(rootNode, files, event);
+  }
+
+  async function handleSourceDropFiles(sourceName: string, files: File[], event?: DragEvent) {
+    // Switch to the source first if not already on it
+    if (sourceName === 'container' && source.type !== 'container') {
+      handleSwitchSource('container');
+      // Wait a bit for the source to switch
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } else if (sourceName !== 'container' && (source.type !== 'volume' || source.volumeName !== sourceName)) {
+      handleSwitchSource('volume', sourceName);
+      // Wait a bit for the source to switch
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    // Upload to root directory of the selected source
+    const rootNode: ExplorerNode = {
+      ...root,
+      parentPath: root.parentPath || '/',
+      nextCursor: root.nextCursor || null,
+    };
+    await handleDropFiles(rootNode, files, event);
+  }
+
+  // Helper to create a simple tar archive from files
+  async function createTarArchive(files: File[]): Promise<Uint8Array> {
+    const tarData: Uint8Array[] = [];
+    
+    for (const file of files) {
+      const name = file.name;
+      const content = await file.arrayBuffer();
+      const fileBytes = new Uint8Array(content);
+      
+      // Tar header: 512 bytes
+      const header = new Uint8Array(512);
+      
+      // Write file name (100 bytes)
+      const nameBytes = new TextEncoder().encode(name);
+      header.set(nameBytes.slice(0, 100), 0);
+      
+      // Write file mode (8 bytes) - 0644
+      header.set(new TextEncoder().encode("0000644"), 100);
+      
+      // Write UID (8 bytes) - 0
+      header.set(new TextEncoder().encode("0000000"), 108);
+      
+      // Write GID (8 bytes) - 0
+      header.set(new TextEncoder().encode("0000000"), 116);
+      
+      // Write size (12 bytes) - octal
+      const sizeStr = fileBytes.length.toString(8).padStart(11, "0") + " ";
+      header.set(new TextEncoder().encode(sizeStr), 124);
+      
+      // Write mtime (12 bytes) - current time in octal
+      const mtime = Math.floor(Date.now() / 1000).toString(8).padStart(11, "0") + " ";
+      header.set(new TextEncoder().encode(mtime), 136);
+      
+      // Write typeflag (1 byte) - regular file (0)
+      header[156] = 48; // '0'
+      
+      // Write magic (6 bytes)
+      header.set(new TextEncoder().encode("ustar "), 257);
+      
+      // Write version (2 bytes)
+      header.set(new TextEncoder().encode(" "), 263);
+      
+      // Calculate checksum
+      let checksum = 256; // Sum of all header bytes with checksum field as spaces
+      for (let i = 0; i < 512; i++) {
+        if (i >= 148 && i < 156) continue; // Skip checksum field
+        checksum += header[i] ?? 0;
+      }
+      const checksumStr = checksum.toString(8).padStart(6, "0") + "\0 ";
+      header.set(new TextEncoder().encode(checksumStr), 148);
+      
+      tarData.push(header);
+      tarData.push(fileBytes);
+      
+      // Pad to 512-byte boundary
+      const padding = 512 - (fileBytes.length % 512);
+      if (padding < 512) {
+        tarData.push(new Uint8Array(padding));
+      }
+    }
+    
+    // Two empty blocks to mark end of archive
+    tarData.push(new Uint8Array(512));
+    tarData.push(new Uint8Array(512));
+    
+    // Concatenate all parts
+    const totalLength = tarData.reduce((sum, arr) => sum + arr.length, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const arr of tarData) {
+      result.set(arr, offset);
+      offset += arr.length;
+    }
+    
+    return result;
+  }
+
+  async function handleDropFiles(node: ExplorerNode, files: File[], event?: DragEvent) {
+    if (node.type !== "directory") return;
+    
+    // Check if any files are from zip archive
+    let filesToUpload = files;
+    if (event) {
+      const zipFiles = await extractZipEntryOnDrop(event);
+      if (zipFiles) {
+        filesToUpload = zipFiles;
+      }
+    }
+    
+    if (filesToUpload.length === 0) return;
+
+    const destinationPath = node.path || "/";
+    
+    try {
+      // Create tar archive
+      const tarData = await createTarArchive(filesToUpload);
+      
+      // Call the upload using the client adapter
+      const response = await fileBrowserClient.uploadFiles({
+        destinationPath: destinationPath,
+        tarData: new Uint8Array(tarData),
+        files: filesToUpload.map((f: File) => ({
+          name: f.name,
+          size: f.size,
+          isDirectory: false,
+          path: f.name,
+        })),
+        volumeName: source.type === 'volume' ? source.volumeName : undefined,
+        containerId: source.type === 'container' && selectedContainerId.value ? selectedContainerId.value : undefined,
+        serviceName: source.type === 'container' && selectedServiceName.value ? selectedServiceName.value : undefined,
+      });
+
+      if (response.success) {
+        // Refresh the directory where files were uploaded
+        const dirNode = findNode(destinationPath);
+        if (dirNode && dirNode.type === "directory") {
+          await loadChildren(dirNode);
+        } else {
+          // Fallback to root if directory not found
+          await refreshRoot();
+        }
+        toast.success("Files uploaded successfully", `${filesToUpload.length} file(s) uploaded to ${destinationPath}`);
+      } else {
+        toast.error("Upload Failed", response.error || "Failed to upload files");
+      }
+    } catch (error: any) {
+      console.error("Upload error:", error);
+      toast.error("Upload Error", error.message || "Failed to upload files");
     }
   }
 
@@ -2220,18 +2486,35 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
     // Find the node in the tree
     const node = findNode(filePath);
     if (node && node.type === "file") {
+      // Ensure parent directories are expanded
+      const pathParts = filePath.split("/").filter(Boolean);
+      let currentPath = "";
+      for (const part of pathParts.slice(0, -1)) {
+        currentPath = currentPath + "/" + part;
+        const dirNode = findNode(currentPath || "/");
+        if (dirNode && dirNode.type === "directory" && !dirNode.isExpanded) {
+          dirNode.isExpanded = true;
+        }
+      }
       await handleLoadFile(node);
     } else {
       // If node not found, try loading parent directories recursively
       const pathParts = filePath.split("/").filter(Boolean);
       let currentPath = "";
 
-      // Load all parent directories up to the file's parent
+      // Load and expand all parent directories up to the file's parent
       for (const part of pathParts.slice(0, -1)) {
         currentPath = currentPath + "/" + part;
         const dirNode = findNode(currentPath || "/");
-        if (dirNode && dirNode.type === "directory" && !dirNode.hasLoaded) {
-          await loadChildren(dirNode);
+        if (dirNode && dirNode.type === "directory") {
+          // Load children if not already loaded
+          if (!dirNode.hasLoaded) {
+            await loadChildren(dirNode);
+          }
+          // Expand the directory so it's visible in the tree
+          if (!dirNode.isExpanded) {
+            dirNode.isExpanded = true;
+          }
         }
       }
 
