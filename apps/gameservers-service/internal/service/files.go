@@ -2,11 +2,13 @@ package gameservers
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -17,6 +19,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
 
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
+	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/proto"
@@ -220,6 +223,116 @@ func (s *Service) ListGameServerFiles(ctx context.Context, req *connect.Request[
 	return connect.NewResponse(resp), nil
 }
 
+// SearchGameServerFiles searches for files matching a query in a game server container or volume
+func (s *Service) SearchGameServerFiles(ctx context.Context, req *connect.Request[gameserversv1.SearchGameServerFilesRequest]) (*connect.Response[gameserversv1.SearchGameServerFilesResponse], error) {
+	gameServerID := req.Msg.GetGameServerId()
+	query := strings.TrimSpace(req.Msg.GetQuery())
+
+	if query == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("search query is required"))
+	}
+
+	// Check permissions
+	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.view"); err != nil {
+		return nil, err
+	}
+
+	dcli, err := docker.New()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
+	}
+	defer dcli.Close()
+
+	containerID, err := s.findContainerForGameServer(ctx, gameServerID, dcli)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	containerInfo, err := dcli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to inspect container: %w", err))
+	}
+	isRunning := containerInfo.State.Running
+
+	rootPath := req.Msg.GetRootPath()
+	if rootPath == "" {
+		rootPath = "/"
+	}
+
+	// Sanitize root path
+	rootPath = strings.TrimSpace(rootPath)
+	rootPath = strings.Trim(rootPath, "\x00\r\n")
+	if !strings.HasPrefix(rootPath, "/") {
+		rootPath = "/" + rootPath
+	}
+	rootPath = filepath.ToSlash(filepath.Clean(rootPath))
+	if !strings.HasPrefix(rootPath, "/") {
+		rootPath = "/" + rootPath
+	}
+
+	maxResults := int(req.Msg.GetMaxResults())
+	if maxResults <= 0 {
+		maxResults = 100
+	}
+	if maxResults > 1000 {
+		maxResults = 1000 // Cap at 1000 results
+	}
+
+	filesOnly := req.Msg.GetFilesOnly()
+	directoriesOnly := req.Msg.GetDirectoriesOnly()
+
+	volumeName := req.Msg.GetVolumeName()
+	var fileInfos []docker.FileInfo
+
+	if volumeName != "" {
+		// Search in volume
+		volumes, err := dcli.GetContainerVolumes(ctx, containerID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to get volumes: %w", err))
+		}
+
+		var targetVolume *docker.VolumeMount
+		for _, vol := range volumes {
+			if vol.Name == volumeName {
+				targetVolume = &vol
+				break
+			}
+		}
+
+		if targetVolume == nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("volume not found: %s", volumeName))
+		}
+
+		fileInfos, err = dcli.SearchVolumeFiles(targetVolume.Source, rootPath, query, maxResults, filesOnly, directoriesOnly)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to search volume files: %w", err))
+		}
+	} else {
+		// Search in container
+		fileInfos, err = dcli.SearchContainerFiles(ctx, containerID, rootPath, query, maxResults, filesOnly, directoriesOnly)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to search container files: %w", err))
+		}
+	}
+
+	// Convert to proto
+	files := make([]*gameserversv1.GameServerFile, 0, len(fileInfos))
+	for _, fi := range fileInfos {
+		files = append(files, fileInfoToProto(fi, volumeName))
+	}
+
+	hasMore := len(fileInfos) >= maxResults
+
+	resp := &gameserversv1.SearchGameServerFilesResponse{
+		Results:         files,
+		TotalFound:      int32(len(files)),
+		HasMore:         hasMore,
+		ContainerRunning: isRunning,
+	}
+
+	return connect.NewResponse(resp), nil
+}
+
 // GetGameServerFile reads a file from a game server container or volume
 func (s *Service) GetGameServerFile(ctx context.Context, req *connect.Request[gameserversv1.GetGameServerFileRequest]) (*connect.Response[gameserversv1.GetGameServerFileResponse], error) {
 	gameServerID := req.Msg.GetGameServerId()
@@ -296,19 +409,25 @@ func (s *Service) GetGameServerFile(ctx context.Context, req *connect.Request[ga
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read volume file: %w", err))
 		}
 
-		fileInfo, err := dcli.StatVolumeFile(targetVolume.Source, path)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to stat volume file: %w", err))
+		// Check if content is valid UTF-8
+		encoding := "text"
+		if !utf8.Valid(content) {
+			// Invalid UTF-8 - encode as base64
+			encoding = "base64"
+			content = []byte(base64.StdEncoding.EncodeToString(content))
 		}
-
-		metadata := fileInfoToProto(fileInfo, volumeName)
 
 		resp := &gameserversv1.GetGameServerFileResponse{
 			Content:   string(content),
-			Encoding:  "text",
+			Encoding:  encoding,
 			Size:      int64(len(content)),
-			Metadata:  metadata,
 			Truncated: proto.Bool(false),
+		}
+
+		fileInfo, err := dcli.StatVolumeFile(targetVolume.Source, path)
+		if err == nil {
+			// Don't fail if stat fails - we can still return the content
+			resp.Metadata = fileInfoToProto(fileInfo, volumeName)
 		}
 
 		return connect.NewResponse(resp), nil
@@ -410,7 +529,23 @@ func (s *Service) UploadGameServerFiles(ctx context.Context, req *connect.Reques
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read file from tar: %w", err))
 		}
 
-		files[hdr.Name] = content
+		// Check if file is a zip archive and extract it
+		if isZipFile(hdr.Name) {
+			extractedFiles, err := extractZipArchive(content, hdr.Name, destPath)
+			if err != nil {
+				// Log error but continue - upload the zip file as-is if extraction fails
+				log.Printf("Failed to extract zip file %s: %v", hdr.Name, err)
+				files[hdr.Name] = content
+			} else {
+				// Add extracted files to the files map
+				for extractedPath, extractedContent := range extractedFiles {
+					files[extractedPath] = extractedContent
+				}
+				// Don't include the zip file itself
+			}
+		} else {
+			files[hdr.Name] = content
+		}
 	}
 
 	containerID, err := s.findContainerForGameServer(ctx, gameServerID, dcli)
@@ -462,6 +597,709 @@ func (s *Service) UploadGameServerFiles(ctx context.Context, req *connect.Reques
 		Success:       true,
 		FilesUploaded: int32(len(files)),
 	}), nil
+}
+
+// isZipFile checks if a file is a zip archive based on its name
+func isZipFile(filename string) bool {
+	name := strings.ToLower(filename)
+	return strings.HasSuffix(name, ".zip")
+}
+
+// extractZipArchive extracts files from a zip archive and returns them as a map
+// The map keys are relative paths from the destination path
+func extractZipArchive(zipData []byte, zipFileName, destPath string) (map[string][]byte, error) {
+	zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open zip: %w", err)
+	}
+
+	extractedFiles := make(map[string][]byte)
+	zipBaseName := strings.TrimSuffix(filepath.Base(zipFileName), filepath.Ext(zipFileName))
+
+	for _, file := range zipReader.File {
+		// Skip directories
+		if file.FileInfo().IsDir() {
+			continue
+		}
+
+		// Open the file from the zip
+		rc, err := file.Open()
+		if err != nil {
+			log.Printf("Failed to open file %s from zip: %v", file.Name, err)
+			continue
+		}
+
+		// Read file content
+		content, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			log.Printf("Failed to read file %s from zip: %v", file.Name, err)
+			continue
+		}
+
+		// Construct the relative path
+		// If zip contains a single root directory, extract files relative to that
+		// Otherwise, extract files relative to the zip file's base name
+		var relativePath string
+		if strings.Contains(file.Name, "/") {
+			// File has a path, use it as-is but relative to destPath
+			relativePath = file.Name
+		} else {
+			// File is at root of zip, place it relative to zip name
+			relativePath = filepath.Join(zipBaseName, file.Name)
+		}
+
+		// Clean the path to avoid issues
+		relativePath = filepath.Clean(relativePath)
+		// Remove leading slash if present
+		relativePath = strings.TrimPrefix(relativePath, "/")
+
+		extractedFiles[relativePath] = content
+	}
+
+	return extractedFiles, nil
+}
+
+// ExtractGameServerFile extracts a zip file to a destination directory
+func (s *Service) ExtractGameServerFile(ctx context.Context, req *connect.Request[gameserversv1.ExtractGameServerFileRequest]) (*connect.Response[gameserversv1.ExtractGameServerFileResponse], error) {
+	gameServerID := req.Msg.GetGameServerId()
+	zipPath := req.Msg.GetZipPath()
+	destPath := req.Msg.GetDestinationPath()
+
+	if zipPath == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("zip_path is required"))
+	}
+	if destPath == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("destination_path is required"))
+	}
+
+	// Check permissions
+	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.update"); err != nil {
+		return nil, err
+	}
+
+	dcli, err := docker.New()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
+	}
+	defer dcli.Close()
+
+	containerID, err := s.findContainerForGameServer(ctx, gameServerID, dcli)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	// Read the zip file
+	var zipData []byte
+	volumeName := req.Msg.GetVolumeName()
+	if volumeName != "" {
+		// Read from volume
+		volumes, err := dcli.GetContainerVolumes(ctx, containerID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to get volumes: %w", err))
+		}
+
+		var targetVolume *docker.VolumeMount
+		for _, vol := range volumes {
+			if vol.Name == volumeName {
+				targetVolume = &vol
+				break
+			}
+		}
+
+		if targetVolume == nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("volume not found: %s", volumeName))
+		}
+
+		zipData, err = dcli.ReadVolumeFile(targetVolume.Source, zipPath)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read zip file: %w", err))
+		}
+	} else {
+		// Read from container filesystem
+		containerInfo, err := dcli.ContainerInspect(ctx, containerID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to inspect container: %w", err))
+		}
+
+		if !containerInfo.State.Running {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running. Use volume_name parameter to read files from persistent volumes"))
+		}
+
+		zipData, err = dcli.ContainerReadFile(ctx, containerID, zipPath)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read zip file: %w", err))
+		}
+	}
+
+	// Extract zip archive
+	extractedFiles, err := extractZipArchiveToPath(zipData, destPath)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to extract zip: %w", err))
+	}
+
+	// Upload extracted files
+	if volumeName != "" {
+		volumes, err := dcli.GetContainerVolumes(ctx, containerID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to get volumes: %w", err))
+		}
+
+		var targetVolume *docker.VolumeMount
+		for _, vol := range volumes {
+			if vol.Name == volumeName {
+				targetVolume = &vol
+				break
+			}
+		}
+
+		if targetVolume == nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("volume not found: %s", volumeName))
+		}
+
+		err = dcli.UploadVolumeFiles(targetVolume.Source, extractedFiles)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to upload extracted files: %w", err))
+		}
+	} else {
+		// Upload to container filesystem
+		containerInfo, err := dcli.ContainerInspect(ctx, containerID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to inspect container: %w", err))
+		}
+
+		if !containerInfo.State.Running {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running"))
+		}
+
+		// Upload files to container
+		err = dcli.ContainerUploadFiles(ctx, containerID, destPath, extractedFiles)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to upload extracted files: %w", err))
+		}
+	}
+
+	return connect.NewResponse(&gameserversv1.ExtractGameServerFileResponse{
+		Success:       true,
+		FilesExtracted: int32(len(extractedFiles)),
+	}), nil
+}
+
+// extractZipArchiveToPath extracts files from a zip archive and returns them as a map
+// The map keys are full paths relative to the destination path
+func extractZipArchiveToPath(zipData []byte, destPath string) (map[string][]byte, error) {
+	zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open zip: %w", err)
+	}
+
+	extractedFiles := make(map[string][]byte)
+
+	for _, file := range zipReader.File {
+		// Skip directories
+		if file.FileInfo().IsDir() {
+			continue
+		}
+
+		// Open the file from the zip
+		rc, err := file.Open()
+		if err != nil {
+			log.Printf("Failed to open file %s from zip: %v", file.Name, err)
+			continue
+		}
+
+		// Read file content
+		content, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			log.Printf("Failed to read file %s from zip: %v", file.Name, err)
+			continue
+		}
+
+		// Construct the full path relative to destination
+		// Clean the file path to avoid directory traversal
+		filePath := filepath.Clean(file.Name)
+		// Remove leading slash if present
+		filePath = strings.TrimPrefix(filePath, "/")
+		// Join with destination path
+		fullPath := filepath.Join(destPath, filePath)
+		// Normalize to use forward slashes for consistency
+		fullPath = filepath.ToSlash(fullPath)
+		// Ensure it starts with /
+		if !strings.HasPrefix(fullPath, "/") {
+			fullPath = "/" + fullPath
+		}
+
+		extractedFiles[fullPath] = content
+	}
+
+	return extractedFiles, nil
+}
+
+// CreateGameServerFileArchive creates a zip archive from files or folders
+func (s *Service) CreateGameServerFileArchive(ctx context.Context, req *connect.Request[gameserversv1.CreateGameServerFileArchiveRequest]) (*connect.Response[gameserversv1.CreateGameServerFileArchiveResponse], error) {
+	gameServerID := req.Msg.GetGameServerId()
+	archiveReq := req.Msg.GetArchiveRequest()
+	if archiveReq == nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("archive_request is required"))
+	}
+	
+	sourcePaths := archiveReq.GetSourcePaths()
+	destPath := archiveReq.GetDestinationPath()
+	includeParentFolder := archiveReq.GetIncludeParentFolder()
+
+	if len(sourcePaths) == 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("source_paths are required"))
+	}
+	if destPath == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("destination_path is required"))
+	}
+
+	// Check permissions
+	if err := s.checkGameServerPermission(ctx, gameServerID, "gameservers.update"); err != nil {
+		return nil, err
+	}
+
+	dcli, err := docker.New()
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("docker client: %w", err))
+	}
+	defer dcli.Close()
+
+	containerID, err := s.findContainerForGameServer(ctx, gameServerID, dcli)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	volumeName := req.Msg.GetVolumeName()
+
+	// Collect all files to archive
+	filesToArchive := make(map[string][]byte)
+	var filesArchived int32
+
+	for _, sourcePath := range sourcePaths {
+		if sourcePath == "" {
+			continue
+		}
+
+		var collectedFiles map[string][]byte
+		var count int32
+		var err error
+
+		if volumeName != "" {
+			collectedFiles, count, err = collectFilesFromVolume(dcli, ctx, containerID, volumeName, sourcePath, includeParentFolder)
+		} else {
+			collectedFiles, count, err = collectFilesFromContainer(dcli, ctx, containerID, sourcePath, includeParentFolder)
+		}
+
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to collect files from %s: %w", sourcePath, err))
+		}
+
+		// Merge collected files into the archive map
+		for path, content := range collectedFiles {
+			filesToArchive[path] = content
+		}
+		filesArchived += count
+	}
+
+	if len(filesToArchive) == 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("no files found to archive"))
+	}
+
+	// Create zip archive
+	zipData, err := createZipArchive(filesToArchive)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create zip archive: %w", err))
+	}
+
+	// Determine zip file name from destination path
+	zipFileName := filepath.Base(destPath)
+	if !strings.HasSuffix(strings.ToLower(zipFileName), ".zip") {
+		// If destination doesn't end with .zip, append it
+		if destPath == "/" || strings.HasSuffix(destPath, "/") {
+			// If destination is a directory, use first source path name
+			if len(sourcePaths) > 0 && sourcePaths[0] != "" {
+				baseName := filepath.Base(sourcePaths[0])
+				if baseName == "" || baseName == "/" {
+					baseName = "archive"
+				}
+				zipFileName = baseName + ".zip"
+			} else {
+				zipFileName = "archive.zip"
+			}
+			destPath = filepath.Join(destPath, zipFileName)
+		} else {
+			zipFileName = destPath + ".zip"
+			destPath = zipFileName
+		}
+	} else {
+		zipFileName = destPath
+	}
+
+	// Ensure destination path is absolute
+	if !strings.HasPrefix(destPath, "/") {
+		destPath = "/" + destPath
+	}
+
+	// Write zip file
+	if volumeName != "" {
+		volumes, err := dcli.GetContainerVolumes(ctx, containerID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to get volumes: %w", err))
+		}
+
+		var targetVolume *docker.VolumeMount
+		for _, vol := range volumes {
+			if vol.Name == volumeName {
+				targetVolume = &vol
+				break
+			}
+		}
+
+		if targetVolume == nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("volume not found: %s", volumeName))
+		}
+
+		// Write zip file to volume
+		err = writeVolumeFile(filepath.Join(targetVolume.Source, strings.TrimPrefix(destPath, "/")), zipData, 0o644, true)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to write zip file: %w", err))
+		}
+	} else {
+		// Write to container filesystem
+		containerInfo, err := dcli.ContainerInspect(ctx, containerID)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("failed to inspect container: %w", err))
+		}
+
+		if !containerInfo.State.Running {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("container is not running"))
+		}
+
+		err = dcli.ContainerWriteFile(ctx, containerID, destPath, zipData, 0o644)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to write zip file: %w", err))
+		}
+	}
+
+	return connect.NewResponse(&gameserversv1.CreateGameServerFileArchiveResponse{
+		ArchiveResponse: &commonv1.CreateServerFileArchiveResponse{
+			Success:       true,
+			ArchivePath:   destPath,
+			FilesArchived: filesArchived,
+		},
+	}), nil
+}
+
+// collectFilesFromVolume recursively collects files from a volume path
+func collectFilesFromVolume(dcli *docker.Client, ctx context.Context, containerID, volumeName, sourcePath string, includeParentFolder bool) (map[string][]byte, int32, error) {
+	volumes, err := dcli.GetContainerVolumes(ctx, containerID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get volumes: %w", err)
+	}
+
+	var targetVolume *docker.VolumeMount
+	for _, vol := range volumes {
+		if vol.Name == volumeName {
+			targetVolume = &vol
+			break
+		}
+	}
+
+	if targetVolume == nil {
+		return nil, 0, fmt.Errorf("volume not found: %s", volumeName)
+	}
+
+	files := make(map[string][]byte)
+	var count int32
+
+	// Get the base name for the archive entry
+	baseName := filepath.Base(sourcePath)
+	if baseName == "" || baseName == "/" {
+		baseName = "archive"
+	}
+
+	// Resolve the actual path within the volume
+	resolvedPath, err := resolvePathWithinVolume(targetVolume.Source, sourcePath)
+	if err != nil {
+		return nil, 0, fmt.Errorf("invalid path: %w", err)
+	}
+
+	// Check if it's a file or directory
+	info, err := os.Lstat(resolvedPath)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to stat path: %w", err)
+	}
+
+	if info.IsDir() {
+		// Recursively collect files from directory
+		err = collectFilesFromVolumeDir(targetVolume.Source, resolvedPath, sourcePath, files, &count, includeParentFolder, baseName)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to collect files from directory: %w", err)
+		}
+	} else {
+		// Single file
+		content, err := dcli.ReadVolumeFile(targetVolume.Source, sourcePath)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to read file: %w", err)
+		}
+
+		archivePath := filepath.Base(sourcePath)
+		if includeParentFolder {
+			archivePath = filepath.Join(baseName, archivePath)
+		}
+		files[archivePath] = content
+		count = 1
+	}
+
+	return files, count, nil
+}
+
+// collectFilesFromVolumeDir recursively collects files from a directory in a volume
+func collectFilesFromVolumeDir(volumePath, resolvedPath, sourcePath string, files map[string][]byte, count *int32, includeParentFolder bool, baseName string) error {
+	entries, err := os.ReadDir(resolvedPath)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		entryPath := filepath.Join(resolvedPath, entry.Name())
+		relativePath := strings.TrimPrefix(entryPath, volumePath)
+		if !strings.HasPrefix(relativePath, "/") {
+			relativePath = "/" + relativePath
+		}
+
+		// Validate path is within volume
+		if _, err := resolvePathWithinVolume(volumePath, relativePath); err != nil {
+			continue
+		}
+
+		info, err := os.Lstat(entryPath)
+		if err != nil {
+			continue
+		}
+
+		if info.IsDir() {
+			// Recursively process subdirectory
+			err = collectFilesFromVolumeDir(volumePath, entryPath, relativePath, files, count, includeParentFolder, baseName)
+			if err != nil {
+				continue
+			}
+		} else {
+			// Read file content
+			content, err := os.ReadFile(entryPath)
+			if err != nil {
+				continue
+			}
+
+			// Determine archive path
+			// Remove the source path prefix to get relative path within the source
+			archivePath := strings.TrimPrefix(relativePath, sourcePath)
+			archivePath = strings.TrimPrefix(archivePath, "/")
+			
+			// If includeParentFolder is true, prepend the base name
+			// If false and archivePath is empty, it means this is the root file
+			if includeParentFolder {
+				if archivePath == "" {
+					// Root file, use base name
+					archivePath = baseName
+				} else {
+					archivePath = filepath.Join(baseName, archivePath)
+				}
+			}
+
+			// Normalize path separators
+			archivePath = filepath.ToSlash(archivePath)
+			files[archivePath] = content
+			*count++
+		}
+	}
+
+	return nil
+}
+
+// collectFilesFromContainer recursively collects files from a container path
+func collectFilesFromContainer(dcli *docker.Client, ctx context.Context, containerID, sourcePath string, includeParentFolder bool) (map[string][]byte, int32, error) {
+	containerInfo, err := dcli.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	if !containerInfo.State.Running {
+		return nil, 0, fmt.Errorf("container is not running")
+	}
+
+	files := make(map[string][]byte)
+	var count int32
+
+	// Get file info to determine if it's a directory
+	// First, try to list the parent directory to see if sourcePath is a file or directory
+	parentPath := filepath.Dir(sourcePath)
+	if parentPath == "." || parentPath == "/" {
+		parentPath = "/"
+	}
+
+	fileList, err := dcli.ContainerListFiles(ctx, containerID, parentPath)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list files: %w", err)
+	}
+
+	// Check if source is a directory or a single file
+	isDirectory := false
+	for _, file := range fileList {
+		if file.Path == sourcePath {
+			isDirectory = file.IsDirectory
+			break
+		}
+	}
+
+	// If not found in parent listing, try listing the path itself (might be a directory)
+	if !isDirectory {
+		dirList, err := dcli.ContainerListFiles(ctx, containerID, sourcePath)
+		if err == nil && len(dirList) > 0 {
+			// If we can list it and get results, it's a directory
+			isDirectory = true
+		}
+	}
+
+	baseName := filepath.Base(sourcePath)
+	if baseName == "" || baseName == "/" {
+		baseName = "archive"
+	}
+
+	if isDirectory {
+		// Recursively collect files from directory
+		err = collectFilesFromContainerDir(dcli, ctx, containerID, sourcePath, sourcePath, files, &count, includeParentFolder, baseName)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to collect files from directory: %w", err)
+		}
+	} else {
+		// Single file
+		content, err := dcli.ContainerReadFile(ctx, containerID, sourcePath)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to read file: %w", err)
+		}
+
+		archivePath := filepath.Base(sourcePath)
+		if includeParentFolder {
+			archivePath = filepath.Join(baseName, archivePath)
+		}
+		files[archivePath] = content
+		count = 1
+	}
+
+	return files, count, nil
+}
+
+// collectFilesFromContainerDir recursively collects files from a directory in a container
+func collectFilesFromContainerDir(dcli *docker.Client, ctx context.Context, containerID, rootPath, currentPath string, files map[string][]byte, count *int32, includeParentFolder bool, baseName string) error {
+	fileList, err := dcli.ContainerListFiles(ctx, containerID, currentPath)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range fileList {
+		if file.Path == currentPath {
+			// Skip the directory itself
+			continue
+		}
+
+		if file.IsDirectory {
+			// Recursively process subdirectory
+			err = collectFilesFromContainerDir(dcli, ctx, containerID, rootPath, file.Path, files, count, includeParentFolder, baseName)
+			if err != nil {
+				continue
+			}
+		} else {
+			// Read file content
+			content, err := dcli.ContainerReadFile(ctx, containerID, file.Path)
+			if err != nil {
+				continue
+			}
+
+			// Determine archive path
+			// Remove the root path prefix to get relative path within the source
+			archivePath := strings.TrimPrefix(file.Path, rootPath)
+			archivePath = strings.TrimPrefix(archivePath, "/")
+			
+			// If includeParentFolder is true, prepend the base name
+			// If false and archivePath is empty, it means this is the root file
+			if includeParentFolder {
+				if archivePath == "" {
+					// Root file, use base name
+					archivePath = baseName
+				} else {
+					archivePath = filepath.Join(baseName, archivePath)
+				}
+			}
+
+			// Normalize path separators
+			archivePath = filepath.ToSlash(archivePath)
+			files[archivePath] = content
+			*count++
+		}
+	}
+
+	return nil
+}
+
+// createZipArchive creates a zip archive from a map of file paths to content
+func createZipArchive(files map[string][]byte) ([]byte, error) {
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+
+	for archivePath, content := range files {
+		// Ensure path uses forward slashes
+		archivePath = filepath.ToSlash(archivePath)
+		// Remove leading slash
+		archivePath = strings.TrimPrefix(archivePath, "/")
+
+		writer, err := zipWriter.Create(archivePath)
+		if err != nil {
+			zipWriter.Close()
+			return nil, fmt.Errorf("failed to create zip entry %s: %w", archivePath, err)
+		}
+
+		_, err = writer.Write(content)
+		if err != nil {
+			zipWriter.Close()
+			return nil, fmt.Errorf("failed to write zip entry %s: %w", archivePath, err)
+		}
+	}
+
+	err := zipWriter.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to close zip writer: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// resolvePathWithinVolume is a helper to resolve paths within volume boundaries
+// This should match the function in docker/client.go, but we'll define it here for now
+func resolvePathWithinVolume(volumePath, requested string) (string, error) {
+	absVolumePath, err := filepath.Abs(volumePath)
+	if err != nil {
+		return "", fmt.Errorf("invalid volume path: %w", err)
+	}
+
+	trimmed := strings.TrimPrefix(requested, "/")
+	if trimmed == "" {
+		return absVolumePath, nil
+	}
+
+	joined := filepath.Join(absVolumePath, trimmed)
+	absRequested, err := filepath.Abs(joined)
+	if err != nil {
+		return "", fmt.Errorf("invalid path: %w", err)
+	}
+
+	if absRequested != absVolumePath && !strings.HasPrefix(absRequested+string(os.PathSeparator), absVolumePath+string(os.PathSeparator)) {
+		return "", fmt.Errorf("path escapes volume boundary: %s (volume: %s)", absRequested, absVolumePath)
+	}
+
+	return absRequested, nil
 }
 
 // DeleteGameServerEntries removes files or directories from a game server
