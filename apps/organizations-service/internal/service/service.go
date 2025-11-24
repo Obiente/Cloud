@@ -12,8 +12,10 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/email"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/notifications"
 	"github.com/obiente/cloud/apps/shared/pkg/pricing"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
+	notificationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1"
 
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
@@ -424,13 +426,39 @@ func (s *Service) ListMyInvites(ctx context.Context, req *connect.Request[organi
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list invites: %w", err))
 	}
 
-	// Get organization details for each invite
+	// Get organization details for each invite and create notifications
 	invites := make([]*organizationsv1.PendingInvite, 0, len(members))
 	for _, member := range members {
 		var org database.Organization
 		if err := database.DB.First(&org, "id = ?", member.OrganizationID).Error; err != nil {
 			log.Printf("[Organizations] failed to load organization %s for invite: %v", member.OrganizationID, err)
 			continue
+		}
+
+		// Create notification for this invite if it doesn't already exist
+		// Check if notification already exists for this invite
+		var existingNotification database.Notification
+		notificationExists := database.DB.Where("user_id = ? AND organization_id = ? AND type = ? AND metadata->>'invite_id' = ?", 
+			user.Id, org.ID, "INVITE", member.ID).First(&existingNotification).Error == nil
+
+		if !notificationExists {
+			actionURL := fmt.Sprintf("/organizations/%s/invites", org.ID)
+			actionLabel := "View Invite"
+			metadata := map[string]string{
+				"invite_id":        member.ID,
+				"organization_id":  org.ID,
+				"organization_name": org.Name,
+				"role":             member.Role,
+			}
+			if err := notifications.CreateNotificationForUser(ctx, user.Id, &org.ID, 
+				notificationsv1.NotificationType_NOTIFICATION_TYPE_INVITE, 
+				notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_MEDIUM,
+				fmt.Sprintf("Invitation to %s", org.Name),
+				fmt.Sprintf("You've been invited to join %s as a %s.", org.Name, member.Role),
+				&actionURL, &actionLabel, metadata); err != nil {
+				log.Printf("[Organizations] failed to create notification for invite %s: %v", member.ID, err)
+				// Continue - don't fail the request if notification creation fails
+			}
 		}
 
 		invites = append(invites, &organizationsv1.PendingInvite{

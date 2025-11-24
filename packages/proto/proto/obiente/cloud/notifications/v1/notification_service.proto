@@ -1,0 +1,180 @@
+syntax = "proto3";
+
+package obiente.cloud.notifications.v1;
+
+option go_package = "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1;notificationsv1";
+
+import "google/protobuf/timestamp.proto";
+import "obiente/cloud/common/v1/common.proto";
+
+service NotificationService {
+  // List notifications for the current user
+  rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse);
+  
+  // Get a specific notification
+  rpc GetNotification(GetNotificationRequest) returns (GetNotificationResponse);
+  
+  // Mark notification as read
+  rpc MarkAsRead(MarkAsReadRequest) returns (MarkAsReadResponse);
+  
+  // Mark all notifications as read
+  rpc MarkAllAsRead(MarkAllAsReadRequest) returns (MarkAllAsReadResponse);
+  
+  // Delete a notification
+  rpc DeleteNotification(DeleteNotificationRequest) returns (DeleteNotificationResponse);
+  
+  // Delete all notifications
+  rpc DeleteAllNotifications(DeleteAllNotificationsRequest) returns (DeleteAllNotificationsResponse);
+  
+  // Get unread count
+  rpc GetUnreadCount(GetUnreadCountRequest) returns (GetUnreadCountResponse);
+  
+  // Create a notification (internal/admin use)
+  rpc CreateNotification(CreateNotificationRequest) returns (CreateNotificationResponse);
+  
+  // Create notifications for organization members
+  rpc CreateOrganizationNotification(CreateOrganizationNotificationRequest) returns (CreateOrganizationNotificationResponse);
+}
+
+message ListNotificationsRequest {
+  // Optional filters
+  optional bool unread_only = 1;
+  optional NotificationType type = 2;
+  optional NotificationSeverity severity = 3;
+  // Pagination
+  int32 page = 4;
+  int32 per_page = 5;
+}
+
+message ListNotificationsResponse {
+  repeated Notification notifications = 1;
+  obiente.cloud.common.v1.Pagination pagination = 2;
+}
+
+message GetNotificationRequest {
+  string notification_id = 1;
+}
+
+message GetNotificationResponse {
+  Notification notification = 1;
+}
+
+message MarkAsReadRequest {
+  string notification_id = 1;
+}
+
+message MarkAsReadResponse {
+  Notification notification = 1;
+}
+
+message MarkAllAsReadRequest {
+  // Optional filters
+  optional NotificationType type = 1;
+  optional NotificationSeverity severity = 2;
+}
+
+message MarkAllAsReadResponse {
+  int32 marked_count = 1;
+}
+
+message DeleteNotificationRequest {
+  string notification_id = 1;
+}
+
+message DeleteNotificationResponse {
+  bool success = 1;
+}
+
+message DeleteAllNotificationsRequest {
+  // Optional filters
+  optional bool read_only = 1;
+  optional NotificationType type = 2;
+}
+
+message DeleteAllNotificationsResponse {
+  int32 deleted_count = 1;
+}
+
+message GetUnreadCountRequest {
+  // Optional filters
+  optional NotificationType type = 1;
+  optional NotificationSeverity min_severity = 2;
+}
+
+message GetUnreadCountResponse {
+  int32 count = 1;
+}
+
+message CreateNotificationRequest {
+  string user_id = 1;
+  optional string organization_id = 2;
+  NotificationType type = 3;
+  NotificationSeverity severity = 4;
+  string title = 5;
+  string message = 6;
+  optional string action_url = 7;
+  optional string action_label = 8;
+  map<string, string> metadata = 9;
+}
+
+message CreateNotificationResponse {
+  Notification notification = 1;
+}
+
+message CreateOrganizationNotificationRequest {
+  string organization_id = 1;
+  NotificationType type = 2;
+  NotificationSeverity severity = 3;
+  string title = 4;
+  string message = 5;
+  optional string action_url = 6;
+  optional string action_label = 7;
+  map<string, string> metadata = 8;
+  // Optional: only notify specific roles (empty = all members)
+  repeated string roles = 9;
+}
+
+message CreateOrganizationNotificationResponse {
+  int32 created_count = 1;
+  repeated Notification notifications = 2;
+}
+
+message Notification {
+  string id = 1;
+  string user_id = 2;
+  optional string organization_id = 3;
+  NotificationType type = 4;
+  NotificationSeverity severity = 5;
+  string title = 6;
+  string message = 7;
+  bool read = 8;
+  optional google.protobuf.Timestamp read_at = 9;
+  optional string action_url = 10;
+  optional string action_label = 11;
+  map<string, string> metadata = 12;
+  bool client_only = 13;
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp updated_at = 15;
+}
+
+enum NotificationType {
+  NOTIFICATION_TYPE_UNSPECIFIED = 0;
+  NOTIFICATION_TYPE_INFO = 1;
+  NOTIFICATION_TYPE_SUCCESS = 2;
+  NOTIFICATION_TYPE_WARNING = 3;
+  NOTIFICATION_TYPE_ERROR = 4;
+  NOTIFICATION_TYPE_DEPLOYMENT = 5;
+  NOTIFICATION_TYPE_BILLING = 6;
+  NOTIFICATION_TYPE_QUOTA = 7;
+  NOTIFICATION_TYPE_INVITE = 8;
+  NOTIFICATION_TYPE_SYSTEM = 9;
+}
+
+enum NotificationSeverity {
+  NOTIFICATION_SEVERITY_UNSPECIFIED = 0;
+  NOTIFICATION_SEVERITY_LOW = 1;
+  NOTIFICATION_SEVERITY_MEDIUM = 2;
+  NOTIFICATION_SEVERITY_HIGH = 3;
+  NOTIFICATION_SEVERITY_CRITICAL = 4;
+}
+

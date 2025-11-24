@@ -6,6 +6,7 @@ export * from "./generated/obiente/cloud/admin/v1/admin_service_pb.js";
 export * from "./generated/obiente/cloud/billing/v1/billing_service_pb.js";
 export * from "./generated/obiente/cloud/support/v1/support_service_pb.js";
 export * from "./generated/obiente/cloud/audit/v1/audit_service_pb.js";
+export * from "./generated/obiente/cloud/notifications/v1/notification_service_pb.js";
 export * from "./generated/google/protobuf/timestamp_pb.js";
 export * from "./generated/obiente/cloud/common/v1/common_pb.js";
 export * from "./generated/obiente/cloud/superadmin/v1/superadmin_service_pb.js";

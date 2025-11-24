@@ -13,10 +13,12 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/notifications"
 	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
+	notificationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1"
 
 	"connectrpc.com/connect"
 	"github.com/google/uuid"
@@ -258,10 +260,68 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		streamer.Write([]byte(fmt.Sprintf("📦 Using build strategy: %s\n", strategy.Name())))
 
 		// Helper function to update build status and calculate build time
+		// Also creates notifications when build completes (success or failure)
 		updateBuildStatus := func(status int32, errorMsg *string) {
+			// Get current build to check previous status
+			var currentBuild database.BuildHistory
+			previousStatus := int32(0)
+			if err := database.DB.Where("id = ?", buildID).First(&currentBuild).Error; err == nil {
+				previousStatus = currentBuild.Status
+			}
+
 			buildTime := int32(time.Since(buildStartTime).Seconds())
 			if err := s.buildHistoryRepo.UpdateBuildStatus(buildCtx, buildID, status, buildTime, errorMsg); err != nil {
 				logger.Warn("[TriggerDeployment] Failed to update build status: %v", err)
+				return
+			}
+
+			// Create notifications when build status changes from building/pending to success/failed
+			if (previousStatus == 1 || previousStatus == 2) && (status == 3 || status == 4) {
+				deploymentName := dbDeployment.Name
+				if deploymentName == "" {
+					deploymentName = dbDeployment.Domain
+				}
+				if deploymentName == "" {
+					deploymentName = deploymentID
+				}
+
+				actionURL := fmt.Sprintf("/deployments/%s/builds/%s", deploymentID, buildID)
+				actionLabel := "View Build"
+
+				if status == 3 { // BUILD_SUCCESS
+					metadata := map[string]string{
+						"deployment_id": deploymentID,
+						"build_id":       buildID,
+						"build_number":   fmt.Sprintf("%d", buildNumber),
+					}
+					if err := notifications.CreateNotificationForOrganization(buildCtx, dbDeployment.OrganizationID,
+						notificationsv1.NotificationType_NOTIFICATION_TYPE_DEPLOYMENT,
+						notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_MEDIUM,
+						"Build Completed Successfully",
+						fmt.Sprintf("Build #%d for %s completed successfully.", buildNumber, deploymentName),
+						&actionURL, &actionLabel, metadata, nil); err != nil {
+						logger.Warn("[TriggerDeployment] Failed to create build success notification: %v", err)
+					}
+				} else if status == 4 { // BUILD_FAILED
+					errorMessage := "Build failed"
+					if errorMsg != nil {
+						errorMessage = *errorMsg
+					}
+					metadata := map[string]string{
+						"deployment_id": deploymentID,
+						"build_id":       buildID,
+						"build_number":   fmt.Sprintf("%d", buildNumber),
+						"error":          errorMessage,
+					}
+					if err := notifications.CreateNotificationForOrganization(buildCtx, dbDeployment.OrganizationID,
+						notificationsv1.NotificationType_NOTIFICATION_TYPE_DEPLOYMENT,
+						notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_HIGH,
+						"Build Failed",
+						fmt.Sprintf("Build #%d for %s failed. %s", buildNumber, deploymentName, errorMessage),
+						&actionURL, &actionLabel, metadata, nil); err != nil {
+						logger.Warn("[TriggerDeployment] Failed to create build failure notification: %v", err)
+					}
+				}
 			}
 		}
 
@@ -500,6 +560,31 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			streamer.WriteStderr([]byte(fmt.Sprintf("⚠️  Warning: %v\n", err)))
 			// Don't mark build as failed - build itself succeeded, just container verification failed
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
+			
+			// Create notification for deployment failure
+			deploymentName := dbDeployment.Name
+			if deploymentName == "" {
+				deploymentName = dbDeployment.Domain
+			}
+			if deploymentName == "" {
+				deploymentName = deploymentID
+			}
+			actionURL := fmt.Sprintf("/deployments/%s", deploymentID)
+			actionLabel := "View Deployment"
+			metadata := map[string]string{
+				"deployment_id": deploymentID,
+				"build_id":       buildID,
+				"build_number":   fmt.Sprintf("%d", buildNumber),
+				"error":          err.Error(),
+			}
+			if err := notifications.CreateNotificationForOrganization(buildCtx, dbDeployment.OrganizationID,
+				notificationsv1.NotificationType_NOTIFICATION_TYPE_DEPLOYMENT,
+				notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_HIGH,
+				"Deployment Failed",
+				fmt.Sprintf("Deployment failed for %s after successful build. %s", deploymentName, err.Error()),
+				&actionURL, &actionLabel, metadata, nil); err != nil {
+				logger.Warn("[TriggerDeployment] Failed to create deployment failure notification: %v", err)
+			}
 		} else {
 			streamer.Write([]byte("✅ Deployment completed successfully!\n"))
 			
