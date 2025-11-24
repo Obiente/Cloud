@@ -448,11 +448,69 @@ func (s *DNSServer) handleAQuery(ctx context.Context, msg *dns.Msg, domain strin
 
 // handleDeploymentAQuery handles A record queries for deployments
 func (s *DNSServer) handleDeploymentAQuery(ctx context.Context, msg *dns.Msg, domain string, q dns.Question, deploymentID string) bool {
-	// Check for delegated DNS records FIRST - if a self-hosted instance is pushing records,
-	// those should take precedence over local database entries
-	// Normalize domain by removing trailing dot for database lookup
+	// When DNS is enabled locally, prioritize local database records over delegated records
+	// Local records are the source of truth for the local DNS server
+	// Delegated records are only used as a fallback when local records don't exist
+
+	// Check cache for local records first
+	if ips, ok := s.getCached(ctx, deploymentID); ok {
+		for _, ip := range ips {
+			rr := &dns.A{
+				Hdr: dns.RR_Header{
+					Name:   q.Name,
+					Rrtype: dns.TypeA,
+					Class:  dns.ClassINET,
+					Ttl:    uint32(cacheTTL.Seconds()),
+				},
+				A: net.ParseIP(ip),
+			}
+			if rr.A == nil {
+				log.Printf("[DNS] Failed to parse IP: %s", ip)
+				continue
+			}
+			msg.Answer = append(msg.Answer, rr)
+		}
+		if len(msg.Answer) > 0 {
+			log.Printf("[DNS] Resolved deployment %s via cache: %v", deploymentID, ips)
+			return true
+		}
+	}
+
+	// Query database for deployment location using shared database functions
+	ips, err := database.GetDeploymentNodeIP(deploymentID, s.nodeIPMap)
+	if err == nil && len(ips) > 0 {
+		// Cache the result
+		s.setCache(ctx, deploymentID, ips)
+
+		// Return A records for all Traefik IPs (for load balancing)
+		for _, ip := range ips {
+			rr := &dns.A{
+				Hdr: dns.RR_Header{
+					Name:   q.Name,
+					Rrtype: dns.TypeA,
+					Class:  dns.ClassINET,
+					Ttl:    uint32(cacheTTL.Seconds()),
+				},
+				A: net.ParseIP(ip),
+			}
+			if rr.A == nil {
+				log.Printf("[DNS] Failed to parse IP: %s", ip)
+				continue
+			}
+			msg.Answer = append(msg.Answer, rr)
+		}
+		if len(msg.Answer) > 0 {
+			log.Printf("[DNS] Resolved deployment %s via local database: %v", deploymentID, ips)
+			return true
+		}
+	} else if err != nil {
+		log.Printf("[DNS] Failed to resolve deployment %s locally: %v", deploymentID, err)
+	}
+
+	// Fallback to delegated DNS records if local database lookup failed
+	// This allows self-hosted instances to push records that take precedence when local records don't exist
 	domainNormalized := strings.TrimSuffix(domain, ".")
-	log.Printf("[DNS] Looking up delegated record for deployment %s: original domain=%q, normalized domain=%q", deploymentID, domain, domainNormalized)
+	log.Printf("[DNS] Looking up delegated record for deployment %s (fallback): original domain=%q, normalized domain=%q", deploymentID, domain, domainNormalized)
 	delegatedRecord, delegationErr := database.GetDelegatedDNSRecord(domainNormalized, "A")
 	if delegationErr == nil && delegatedRecord != nil {
 		// Parse JSON records
@@ -477,63 +535,12 @@ func (s *DNSServer) handleDeploymentAQuery(ctx context.Context, msg *dns.Msg, do
 				msg.Answer = append(msg.Answer, rr)
 			}
 			if len(msg.Answer) > 0 {
-				log.Printf("[DNS] Resolved deployment %s via delegated record: %v", deploymentID, recordIPs)
+				log.Printf("[DNS] Resolved deployment %s via delegated record (fallback): %v", deploymentID, recordIPs)
 				return true
 			}
 		} else {
 			log.Printf("[DNS] Failed to parse delegated DNS record for %s: %v", deploymentID, err)
 		}
-	}
-
-	// Check cache for local records
-	if ips, ok := s.getCached(ctx, deploymentID); ok {
-		for _, ip := range ips {
-			rr := &dns.A{
-				Hdr: dns.RR_Header{
-					Name:   q.Name,
-					Rrtype: dns.TypeA,
-					Class:  dns.ClassINET,
-					Ttl:    uint32(cacheTTL.Seconds()),
-				},
-				A: net.ParseIP(ip),
-			}
-			if rr.A == nil {
-				log.Printf("[DNS] Failed to parse IP: %s", ip)
-				continue
-			}
-			msg.Answer = append(msg.Answer, rr)
-		}
-		if len(msg.Answer) > 0 {
-			return true
-		}
-	}
-
-	// Query database for deployment location using shared database functions
-	ips, err := database.GetDeploymentNodeIP(deploymentID, s.nodeIPMap)
-	if err != nil {
-		log.Printf("[DNS] Failed to resolve deployment %s locally: %v", deploymentID, err)
-		return false
-	}
-
-	// Cache the result
-	s.setCache(ctx, deploymentID, ips)
-
-	// Return A records for all Traefik IPs (for load balancing)
-	for _, ip := range ips {
-		rr := &dns.A{
-			Hdr: dns.RR_Header{
-				Name:   q.Name,
-				Rrtype: dns.TypeA,
-				Class:  dns.ClassINET,
-				Ttl:    uint32(cacheTTL.Seconds()),
-			},
-			A: net.ParseIP(ip),
-		}
-		if rr.A == nil {
-			log.Printf("[DNS] Failed to parse IP: %s", ip)
-			continue
-		}
-		msg.Answer = append(msg.Answer, rr)
 	}
 
 	return len(msg.Answer) > 0
