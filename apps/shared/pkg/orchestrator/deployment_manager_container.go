@@ -55,30 +55,44 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	}
 
 	// Determine health check port - ALWAYS use routing target port if available
-	// Never use config.Port as it may be a default value
+	// Priority: 1) Matching service routing, 2) First routing (if routings exist), 3) config.Port (only if no routings)
 	healthCheckPort := 0
 	if len(routings) > 0 {
-		// Find routing for this service
+		// First, try to find a routing that matches the service name
 		for _, routing := range routings {
-			if routing.ServiceName == serviceName || (serviceName == "default" && (routing.ServiceName == "" || routing.ServiceName == "default")) {
+			serviceMatches := routing.ServiceName == serviceName ||
+				(serviceName == "default" && (routing.ServiceName == "" || routing.ServiceName == "default")) ||
+				(routing.ServiceName == "default" && serviceName == "")
+			
+			if serviceMatches && routing.TargetPort > 0 {
+				healthCheckPort = routing.TargetPort
+				logger.Info("[DeploymentManager] Using routing target port %d for health check (service: %s, routing service: %s)", healthCheckPort, serviceName, routing.ServiceName)
+				break
+			}
+		}
+		
+		// If no exact match found but routings exist, use the first routing's target port
+		// This ensures we always use routing port over config.Port when routings are available
+		if healthCheckPort == 0 {
+			for _, routing := range routings {
 				if routing.TargetPort > 0 {
 					healthCheckPort = routing.TargetPort
-					logger.Debug("[DeploymentManager] Using routing target port %d for health check (service: %s)", healthCheckPort, serviceName)
+					logger.Info("[DeploymentManager] Using first available routing target port %d for health check (service: %s, routing service: %s) - no exact service match found", healthCheckPort, serviceName, routing.ServiceName)
 					break
 				}
 			}
 		}
-		// If no exact match, use first routing's target port
-		if healthCheckPort == 0 && len(routings) > 0 && routings[0].TargetPort > 0 {
-			healthCheckPort = routings[0].TargetPort
-			logger.Debug("[DeploymentManager] Using first routing target port %d for health check (service: %s)", healthCheckPort, serviceName)
-		}
 	}
-
-	// Fallback to config.Port only if no routing found and config.Port is set
-	if healthCheckPort == 0 && config.Port > 0 {
-		healthCheckPort = config.Port
-		logger.Debug("[DeploymentManager] Using config port %d for health check (no routing found)", healthCheckPort)
+	
+	// Only fall back to config.Port if NO routings exist at all
+	// This prevents using a default port (like 8080) when routing is configured
+	if healthCheckPort == 0 {
+		if config.Port > 0 {
+			healthCheckPort = config.Port
+			logger.Warn("[DeploymentManager] No routing found, using config port %d for health check (service: %s) - this may be incorrect if routing should exist", healthCheckPort, serviceName)
+		} else {
+			logger.Warn("[DeploymentManager] Cannot determine health check port for service %s - no routing target port or config port available", serviceName)
+		}
 	}
 
 	// If still no port, we can't add health check
@@ -312,39 +326,48 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	}
 
 	// Determine health check port - ALWAYS use routing target port if available
+	// Priority: 1) Matching service routing, 2) First routing (if routings exist), 3) config.Port (only if no routings)
 	healthCheckPort := 0
 	if len(routings) > 0 {
+		// First, try to find a routing that matches the service name
 		for _, routing := range routings {
-			if routing.ServiceName == serviceName || (serviceName == "default" && (routing.ServiceName == "" || routing.ServiceName == "default")) {
+			serviceMatches := routing.ServiceName == serviceName ||
+				(serviceName == "default" && (routing.ServiceName == "" || routing.ServiceName == "default")) ||
+				(routing.ServiceName == "default" && serviceName == "")
+			
+			if serviceMatches && routing.TargetPort > 0 {
+				healthCheckPort = routing.TargetPort
+				logger.Info("[DeploymentManager] Using routing target port %d for health check (service: %s, routing service: %s)", healthCheckPort, serviceName, routing.ServiceName)
+				break
+			}
+		}
+		
+		// If no exact match found but routings exist, use the first routing's target port
+		// This ensures we always use routing port over config.Port when routings are available
+		if healthCheckPort == 0 {
+			for _, routing := range routings {
 				if routing.TargetPort > 0 {
 					healthCheckPort = routing.TargetPort
+					logger.Info("[DeploymentManager] Using first available routing target port %d for health check (service: %s, routing service: %s) - no exact service match found", healthCheckPort, serviceName, routing.ServiceName)
 					break
 				}
 			}
 		}
-		if healthCheckPort == 0 && len(routings) > 0 && routings[0].TargetPort > 0 {
-			healthCheckPort = routings[0].TargetPort
-		}
 	}
-	if healthCheckPort == 0 && config.Port > 0 {
-		healthCheckPort = config.Port
+	
+	// Only fall back to config.Port if NO routings exist at all
+	// This prevents using a default port (like 8080) when routing is configured
+	if healthCheckPort == 0 {
+		if config.Port > 0 {
+			healthCheckPort = config.Port
+			logger.Warn("[DeploymentManager] No routing found, using config port %d for health check (service: %s) - this may be incorrect if routing should exist", healthCheckPort, serviceName)
+		} else {
+			logger.Warn("[DeploymentManager] Cannot determine health check port for service %s - no routing target port or config port available", serviceName)
+		}
 	}
 
-	// Determine container port
-	containerPortNum := config.Port
-	if len(routings) > 0 {
-		for _, routing := range routings {
-			if routing.ServiceName == serviceName || (serviceName == "default" && (routing.ServiceName == "" || routing.ServiceName == "default")) {
-				if routing.TargetPort > 0 {
-					containerPortNum = routing.TargetPort
-					break
-				}
-			}
-		}
-		if containerPortNum == config.Port && len(routings) > 0 && routings[0].TargetPort > 0 {
-			containerPortNum = routings[0].TargetPort
-		}
-	}
+	// Note: For Swarm services, we don't need to determine container port for port bindings
+	// as Swarm handles networking internally. The health check port is determined above.
 
 	// Add custom labels
 	for k, v := range config.Labels {
