@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/acarl005/stripansi"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	v1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1" // Import with v1 alias to match generated code
 	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 
@@ -75,20 +77,75 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 		sinceTime = &since
 	}
 
-	// For lazy loading (scrolling up), we want logs BEFORE the since timestamp
-	// Docker's "until" parameter gets logs before a timestamp
+	// Parse until timestamp if provided (for historical loading)
 	var untilTime *time.Time
-	if sinceTime != nil {
+	if req.Msg.Until != nil {
+		until := req.Msg.Until.AsTime()
+		untilTime = &until
+	} else if sinceTime != nil {
+		// For lazy loading (scrolling up), we want logs BEFORE the since timestamp
+		// Docker's "until" parameter gets logs before a timestamp
 		// Use until to get logs before the since timestamp
 		untilTime = sinceTime
 		sinceTime = nil // Clear since when using until
 	}
 
-	logsReader, err := manager.GetGameServerLogs(ctx, gameServerID, fmt.Sprintf("%d", *limit), false, sinceTime, untilTime)
+	// Get search query if provided
+	searchQuery := ""
+	if req.Msg.SearchQuery != nil && *req.Msg.SearchQuery != "" {
+		searchQuery = strings.ToLower(strings.TrimSpace(*req.Msg.SearchQuery))
+	}
+	
+	// Log the request for debugging
+	logger.Info("[GetGameServerLogs] Request received for game server %s (limit=%d, since=%v, until=%v, search=%s)", 
+		gameServerID, 
+		func() int32 { if limit != nil { return *limit } else { return 0 } }(),
+		sinceTime,
+		untilTime,
+		func() string { if searchQuery != "" { return searchQuery } else { return "none" } }())
+
+	// For proper pagination, always use a reasonable limit
+	// When using until for historical loading, we want to fetch in chunks
+	// If search is active, we may need to fetch more to account for filtering
+	dockerTailLimit := *limit
+	if searchQuery != "" {
+		// When searching, fetch more logs to account for filtering
+		// But cap it at a reasonable maximum to prevent timeouts
+		dockerTailLimit = *limit * 5
+		if dockerTailLimit > 1000 {
+			dockerTailLimit = 1000 // Cap at 1000 to prevent timeouts
+		}
+	} else if untilTime != nil {
+		// For historical loading without search, use the requested limit
+		// This ensures proper pagination - we get exactly what was requested
+		dockerTailLimit = *limit
+	}
+	
+	// Add a timeout to the Docker API call itself to prevent hanging
+	// Docker API calls can hang if the daemon is slow or the container is in a bad state
+	dockerCtx, dockerCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer dockerCancel()
+	
+	// Use dockerTailLimit for Docker query
+	logger.Debug("[GetGameServerLogs] Calling Docker API for game server %s (tail=%d, since=%v, until=%v)", 
+		gameServerID, dockerTailLimit, sinceTime, untilTime)
+	logsReader, err := manager.GetGameServerLogs(dockerCtx, gameServerID, fmt.Sprintf("%d", dockerTailLimit), false, sinceTime, untilTime)
 	if err != nil {
+		// Check if it's a timeout
+		if dockerCtx.Err() == context.DeadlineExceeded {
+			logger.Error("[GetGameServerLogs] Docker API call timed out after 10 seconds for game server %s: %v", gameServerID, err)
+			return nil, connect.NewError(connect.CodeDeadlineExceeded, fmt.Errorf("docker API call timed out after 10 seconds: %w", err))
+		}
+		logger.Error("[GetGameServerLogs] Failed to get game server logs for %s: %v", gameServerID, err)
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get game server logs: %w", err))
 	}
 	defer logsReader.Close()
+	logger.Debug("[GetGameServerLogs] Successfully obtained logs reader for game server %s", gameServerID)
+
+	// Add a timeout to prevent indefinite blocking on reads
+	// For non-following logs, Docker should return quickly, but we add a safety timeout
+	readCtx, readCancel := context.WithTimeout(ctx, 10*time.Second)
+	defer readCancel()
 
 	// Parse Docker multiplexed log format
 	// Docker logs format: [8-byte header][payload]
@@ -97,16 +154,38 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 	var logLines []*gameserversv1.GameServerLogLine
 	header := make([]byte, 8)
 	
+	// Create a channel to signal when read completes
+	type readResult struct {
+		n   int
+		err error
+	}
+	
 	for {
 		// Check if context is cancelled
 		select {
+		case <-readCtx.Done():
+			// Timeout or cancellation - return what we have
+			goto done
 		case <-ctx.Done():
-			break
+			goto done
 		default:
 		}
 
-		// Read 8-byte header
-		_, err := io.ReadFull(logsReader, header)
+		// Read 8-byte header with timeout
+		headerChan := make(chan readResult, 1)
+		go func() {
+			n, err := io.ReadFull(logsReader, header)
+			headerChan <- readResult{n: n, err: err}
+		}()
+		
+		var err error
+		select {
+		case <-readCtx.Done():
+			// Timeout - return what we have
+			goto done
+		case result := <-headerChan:
+			err = result.err
+		}
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				// EOF means we've read all available logs
@@ -123,14 +202,31 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 			continue
 		}
 
-		// Read payload
+		// Read payload with timeout
 		payload := make([]byte, payloadLength)
-		_, err = io.ReadFull(logsReader, payload)
+		payloadChan := make(chan readResult, 1)
+		go func() {
+			n, err := io.ReadFull(logsReader, payload)
+			payloadChan <- readResult{n: n, err: err}
+		}()
+		
+		select {
+		case <-readCtx.Done():
+			// Timeout - return what we have
+			goto done
+		case result := <-payloadChan:
+			err = result.err
+		}
+		
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				// Partial payload, process what we have
 				if len(payload) > 0 {
-					sanitizedLine := stripTimestampFromLine(strings.ToValidUTF8(string(payload), ""))
+					// Strip ANSI sequences from raw payload first
+					rawText := strings.ToValidUTF8(string(payload), "")
+					rawText = stripansi.Strip(rawText)
+					rawText = stripAnsiEscapeSequences(rawText) // Additional cleanup for edge cases
+					sanitizedLine := stripTimestampFromLine(rawText)
 					if sanitizedLine != "" {
 						logLevel := detectLogLevelFromContent(sanitizedLine, streamType == 2)
 						line := &gameserversv1.GameServerLogLine{
@@ -146,11 +242,24 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read log payload: %w", err))
 		}
 
-		// Sanitize to valid UTF-8
-		sanitizedLine := strings.ToValidUTF8(string(payload), "")
+		// Extract timestamp from original payload before processing
+		// Docker logs with timestamps have format: 2025-01-01T12:00:00.123456789Z <log content>
+		var logTimestamp *timestamppb.Timestamp
+		timestampRegex := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z)\s+`)
+		originalPayloadText := strings.ToValidUTF8(string(payload), "")
+		if matches := timestampRegex.FindStringSubmatch(originalPayloadText); len(matches) > 1 {
+			if parsedTime, err := time.Parse(time.RFC3339Nano, matches[1]); err == nil {
+				logTimestamp = timestamppb.New(parsedTime)
+			}
+		}
+
+		// Sanitize to valid UTF-8 and strip ANSI sequences from raw payload
+		rawText := originalPayloadText
+		rawText = stripansi.Strip(rawText) // Use library to strip ANSI
+		rawText = stripAnsiEscapeSequences(rawText) // Additional cleanup for edge cases
 		
 		// Split by newlines to handle multiple lines in one payload
-		lines := strings.Split(sanitizedLine, "\n")
+		lines := strings.Split(rawText, "\n")
 		for _, lineText := range lines {
 			lineText = strings.TrimRight(lineText, "\r")
 			if lineText == "" {
@@ -163,17 +272,6 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 			// Detect log level from content
 			logLevel := detectLogLevelFromContent(lineText, streamType == 2)
 			
-			// Try to extract timestamp from Docker log line if timestamps are enabled
-			// Docker logs with timestamps have format: 2025-01-01T12:00:00.123456789Z <log content>
-			var logTimestamp *timestamppb.Timestamp
-			timestampRegex := regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z)\s+`)
-			// Check the original payload before stripping timestamps
-			if matches := timestampRegex.FindStringSubmatch(string(payload)); len(matches) > 1 {
-				if parsedTime, err := time.Parse(time.RFC3339Nano, matches[1]); err == nil {
-					logTimestamp = timestamppb.New(parsedTime)
-				}
-			}
-			
 			// If no timestamp extracted, use current time
 			if logTimestamp == nil {
 				logTimestamp = timestamppb.Now()
@@ -184,19 +282,38 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 				Timestamp: logTimestamp,
 				Level:     &logLevel,
 			}
-			logLines = append(logLines, line)
 			
-			// Limit the number of lines returned
-			if len(logLines) >= int(*limit) {
-				break
+			// Apply search filter if provided
+			if searchQuery == "" || strings.Contains(strings.ToLower(lineText), searchQuery) {
+				logLines = append(logLines, line)
+				
+				// If we have enough matching lines, we can stop early
+				if len(logLines) >= int(*limit) {
+					goto done
+				}
 			}
 		}
 		
-		if len(logLines) >= int(*limit) {
+		// Stop if we've processed enough raw lines (accounting for filtering)
+		// Count all processed lines, not just matching ones
+		if len(logLines) >= int(dockerTailLimit) {
 			break
 		}
 	}
+	
+done:
+	// When using until parameter, Docker returns logs in chronological order (oldest to newest)
+	// up to the until timestamp. For historical loading, we want the MOST RECENT logs before
+	// that timestamp, so we need to take the last N lines, not the first N.
+	if untilTime != nil && len(logLines) > int(*limit) {
+		// Take the last N lines (most recent before until timestamp)
+		logLines = logLines[len(logLines)-int(*limit):]
+	} else if len(logLines) > int(*limit) {
+		// For normal queries (no until), take the first N lines
+		logLines = logLines[:int(*limit)]
+	}
 
+	logger.Info("[GetGameServerLogs] Returning %d log lines for game server %s", len(logLines), gameServerID)
 	res := connect.NewResponse(&gameserversv1.GetGameServerLogsResponse{
 		Lines: logLines,
 	})
@@ -205,21 +322,26 @@ func (s *Service) GetGameServerLogs(ctx context.Context, req *connect.Request[ga
 
 // StreamGameServerLogs streams logs for a game server
 func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request[gameserversv1.StreamGameServerLogsRequest], stream *connect.ServerStream[gameserversv1.GameServerLogLine]) error {
+	logger.Info("[StreamGameServerLogs] Request received")
 	// Ensure authenticated - use the returned context
 	var err error
 	ctx, err = s.ensureAuthenticated(ctx, req)
 	if err != nil {
+		logger.Error("[StreamGameServerLogs] Authentication failed: %v", err)
 		return err
 	}
 
 	gameServerID := req.Msg.GetGameServerId()
+	logger.Info("[StreamGameServerLogs] Request for game server %s", gameServerID)
 	if err := s.checkGameServerPermission(ctx, gameServerID, "view"); err != nil {
+		logger.Error("[StreamGameServerLogs] Permission check failed for game server %s: %v", gameServerID, err)
 		return err
 	}
 
 	// Get logs from Docker container
 	manager, err := s.getGameServerManager()
 	if err != nil {
+		logger.Error("[StreamGameServerLogs] Failed to get game server manager: %v", err)
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get game server manager: %w", err))
 	}
 
@@ -293,7 +415,11 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				// Partial payload, send what we have
 				if len(payload) > 0 {
-					sanitizedLine := stripTimestampFromLine(strings.ToValidUTF8(string(payload), ""))
+					// Strip ANSI sequences from raw payload first
+					rawText := strings.ToValidUTF8(string(payload), "")
+					rawText = stripansi.Strip(rawText)
+					rawText = stripAnsiEscapeSequences(rawText) // Additional cleanup for edge cases
+					sanitizedLine := stripTimestampFromLine(rawText)
 					if sanitizedLine != "" {
 						logLevel := detectLogLevelFromContent(sanitizedLine, streamType == 2)
 						line := &gameserversv1.GameServerLogLine{
@@ -328,11 +454,13 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 			return connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read log payload: %w", err))
 		}
 
-		// Sanitize to valid UTF-8
-		sanitizedLine := strings.ToValidUTF8(string(payload), "")
+		// Sanitize to valid UTF-8 and strip ANSI sequences from raw payload
+		rawText := strings.ToValidUTF8(string(payload), "")
+		rawText = stripansi.Strip(rawText) // Use library to strip ANSI
+		rawText = stripAnsiEscapeSequences(rawText) // Additional cleanup for edge cases
 		
 		// Split by newlines to handle multiple lines in one payload
-		lines := strings.Split(sanitizedLine, "\n")
+		lines := strings.Split(rawText, "\n")
 		for _, lineText := range lines {
 			lineText = strings.TrimRight(lineText, "\r")
 			if lineText == "" {
@@ -363,9 +491,72 @@ func (s *Service) StreamGameServerLogs(ctx context.Context, req *connect.Request
 	}
 }
 
+// stripAnsiEscapeSequences removes ANSI escape sequences from log lines
+// These sequences are used for terminal formatting (colors, cursor control, etc.)
+func stripAnsiEscapeSequences(line string) string {
+	// Comprehensive ANSI escape sequence removal
+	// Pattern 1: Standard ANSI escape sequences with ESC prefix (\x1b or \033)
+	// Matches: ESC[ followed by parameters and command letter
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]|\x1b[=<>]|\033\[[0-9;?]*[a-zA-Z]|\033[=<>]`)
+	line = ansiRegex.ReplaceAllString(line, "")
+	
+	// Pattern 2: CSI sequences that may appear without ESC prefix (common in malformed logs)
+	// These sequences can appear concatenated like [?1h[=[?2004h
+	// We need to be careful not to match valid log content like [INFO] or [21:45:50]
+	
+	// Iteratively remove escape sequences until no more changes occur
+	// This handles cases where sequences are concatenated without spaces
+	for {
+		original := line
+		
+		// Remove terminal mode sequences: [?1h, [?2004h, etc.
+		line = regexp.MustCompile(`\[\?[0-9]+[hHlLmM]`).ReplaceAllString(line, "")
+		
+		// Remove application keypad mode sequences: [=, [>, [<
+		line = regexp.MustCompile(`\[[=<>]`).ReplaceAllString(line, "")
+		
+		// Remove single-character CSI sequences: [K (clear to end of line), [H (cursor home), etc.
+		// Common CSI single-letter commands: A-H, J, K, m, s, u
+		// Match [K specifically first since it's very common
+		line = regexp.MustCompile(`\[K`).ReplaceAllString(line, "")
+		line = regexp.MustCompile(`\[[A-HJmsu]`).ReplaceAllString(line, "")
+		
+		// Remove formatting codes: [0m, [1m, [4m, [3m, [30m, etc.
+		// Match [ followed by digits and 'm' (SGR - Select Graphic Rendition)
+		// But exclude timestamps like [21:45:50] by requiring the 'm' suffix
+		line = regexp.MustCompile(`\[[0-9;]+m`).ReplaceAllString(line, "")
+		
+		// Remove prompt continuation indicators like ">...." anywhere in the line
+		// These can appear at the start or after escape sequences
+		line = regexp.MustCompile(`>\.+`).ReplaceAllString(line, "")
+		
+		// Remove any remaining malformed escape patterns
+		line = regexp.MustCompile(`\[=[?0-9]*`).ReplaceAllString(line, "")
+		
+		// If no changes were made, we're done
+		if line == original {
+			break
+		}
+	}
+	
+	// Final pass: remove any remaining control sequences that might have been missed
+	// This is a more aggressive pass that catches edge cases
+	// Remove patterns like [ followed by non-alphanumeric characters that aren't part of valid log content
+	// But be very careful not to remove valid log brackets like [INFO] or [21:45:50]
+	// We only remove if it's clearly an escape sequence pattern
+	line = regexp.MustCompile(`^\[\?[0-9]*[hHlLmM]?`).ReplaceAllString(line, "") // At start of line
+	line = regexp.MustCompile(`\[K$`).ReplaceAllString(line, "")                // At end of line
+	line = regexp.MustCompile(`\[K\s`).ReplaceAllString(line, " ")              // Before whitespace
+	
+	return strings.TrimSpace(line)
+}
+
 // stripTimestampFromLine removes embedded timestamps from log lines
 // Examples: [01:57:06] or 2025-11-05T01:57:06.052Z
 func stripTimestampFromLine(line string) string {
+	// First strip ANSI escape sequences
+	line = stripAnsiEscapeSequences(line)
+	
 	// Remove Minecraft-style timestamps: [HH:MM:SS]
 	line = regexp.MustCompile(`^\[\d{2}:\d{2}:\d{2}\]\s*`).ReplaceAllString(line, "")
 	

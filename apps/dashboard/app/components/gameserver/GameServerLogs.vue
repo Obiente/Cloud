@@ -9,7 +9,19 @@
           Real-time logs from your game server
         </OuiText>
       </OuiStack>
-      <OuiFlex gap="sm">
+      <OuiFlex gap="sm" align="center">
+        <!-- Search Input -->
+        <OuiInput
+          v-model="searchQuery"
+          placeholder="Search logs..."
+          size="sm"
+          style="width: 200px"
+          @update:model-value="handleSearch"
+        >
+          <template #prefix>
+            <MagnifyingGlassIcon class="h-4 w-4" />
+          </template>
+        </OuiInput>
         <OuiButton
           variant="ghost"
           size="sm"
@@ -78,6 +90,22 @@
       </OuiFlex>
     </div>
 
+    <!-- Search indicator -->
+    <div v-if="searchQuery && !isSearching" class="logs-search-indicator">
+      <OuiFlex align="center" justify="between" gap="sm">
+        <OuiText size="xs" color="muted">
+          Showing {{ logs.length }} result{{ logs.length !== 1 ? 's' : '' }} for "{{ searchQuery }}"
+        </OuiText>
+        <OuiButton
+          variant="ghost"
+          size="xs"
+          @click="searchQuery = ''; handleSearch()"
+        >
+          Clear
+        </OuiButton>
+      </OuiFlex>
+    </div>
+
     <!-- No more logs indicator -->
     <div v-if="hasLoadedAllLogs && logs.length > 0" class="logs-end-indicator">
       <OuiText size="xs" color="muted" align="center">
@@ -93,11 +121,11 @@
       <OuiLogs
         ref="logsComponent"
         :logs="formattedLogs"
-        :is-loading="isLoading"
+        :is-loading="isLoading || isSearching"
         :show-timestamps="showTimestamps"
         :show-tail-controls="false"
-        :enable-ansi="true"
-        :auto-scroll="true"
+        :enable-ansi="false"
+        :auto-scroll="!searchQuery"
         empty-message="No logs available. Start following to see real-time logs."
         loading-message="Connecting..."
       >
@@ -123,7 +151,11 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
-import { ArrowPathIcon, EllipsisVerticalIcon } from "@heroicons/vue/24/outline";
+import {
+  ArrowPathIcon,
+  EllipsisVerticalIcon,
+  MagnifyingGlassIcon,
+} from "@heroicons/vue/24/outline";
 import { useConnectClient } from "~/lib/connect-client";
 import { GameServerService } from "@obiente/proto";
 import { timestamp } from "@obiente/proto/utils";
@@ -131,6 +163,7 @@ import { useOrganizationsStore } from "~/stores/organizations";
 import { useAuth } from "~/composables/useAuth";
 import type { LogEntry } from "~/components/oui/Logs.vue";
 import GameServerTerminal from "~/components/gameserver/GameServerTerminal.vue";
+import { stripAnsiAndTimestamps } from "~/utils/ansi";
 
 interface Props {
   gameServerId: string;
@@ -156,6 +189,8 @@ const error = ref<string | null>(null);
 const showTimestamps = ref(true);
 const tailLines = ref(100);
 const hasLoadedAllLogs = ref(false);
+const searchQuery = ref("");
+const isSearching = ref(false);
 
 let logStream: any = null;
 let streamController: AbortController | null = null;
@@ -212,7 +247,8 @@ const handleScroll = () => {
   if (
     !logsContainer.value ||
     isLoadingOlderLogs.value ||
-    hasLoadedAllLogs.value
+    hasLoadedAllLogs.value ||
+    searchQuery.value // Don't load older logs when searching
   )
     return;
 
@@ -258,14 +294,17 @@ const loadOlderLogs = async () => {
     }
 
     // Convert timestamp to protobuf Timestamp format
+    // Subtract 1ms to ensure we don't get duplicate logs (until is inclusive)
     const oldestDate = new Date(oldestLog.timestamp);
-    const sinceTimestamp = timestamp(oldestDate);
+    oldestDate.setMilliseconds(oldestDate.getMilliseconds() - 1);
+    const untilTimestamp = timestamp(oldestDate);
 
-    // Fetch logs before this timestamp
+    // Fetch logs before this timestamp (using until parameter for historical loading)
     const response = await client.getGameServerLogs({
       gameServerId: props.gameServerId,
-      limit: 500, // Load 500 older lines at a time
-      since: sinceTimestamp,
+      limit: 100, // Load 100 older lines at a time for proper pagination
+      until: untilTimestamp,
+      searchQuery: searchQuery.value || undefined,
     });
 
     if (response.lines && response.lines.length > 0) {
@@ -301,8 +340,17 @@ const loadOlderLogs = async () => {
           };
         });
 
+      // Filter out any duplicate logs based on line content and timestamp
+      // Docker's until parameter is inclusive, so we might get the same log
+      const existingLogKeys = new Set(
+        logs.value.map((l) => `${l.timestamp}|${l.line}`)
+      );
+      const uniqueOlderLogs = olderLogs.filter(
+        (log) => !existingLogKeys.has(`${log.timestamp}|${log.line}`)
+      );
+
       // Prepend older logs (they should be in chronological order, oldest first)
-      logs.value = [...olderLogs, ...logs.value];
+      logs.value = [...uniqueOlderLogs, ...logs.value];
 
       // Restore scroll position after DOM update
       await nextTick();
@@ -313,7 +361,7 @@ const loadOlderLogs = async () => {
       }
 
       // If we got fewer logs than requested, we've reached the beginning
-      if (response.lines.length < 500) {
+      if (response.lines.length < 100) {
         hasLoadedAllLogs.value = true;
       }
     } else {
@@ -400,23 +448,21 @@ const startFollowing = async () => {
       throw new Error("Authentication required. Please log in.");
     }
 
-    // Get recent logs first (only on initial connection or reconnection)
-    if (logs.value.length === 0 || reconnectAttempts > 0) {
+    // Get recent logs first (only on initial connection, not on reconnection)
+    // On reconnection, preserve existing logs and let the stream fill in gaps
+    if (logs.value.length === 0) {
       try {
         const response = await client.getGameServerLogs({
           gameServerId: props.gameServerId,
-          limit: tailLines.value,
+          limit: Math.max(tailLines.value, 100), // Load at least 100 lines initially
+          searchQuery: searchQuery.value || undefined,
         });
 
         if (response.lines && response.lines.length > 0) {
-          const existingLogs = logs.value.map((l) => l.line);
           const newLogs = response.lines
             .filter((line) => {
               const lineText = line.line || "";
-              return (
-                !isEmptyOrWhitespace(lineText) &&
-                !existingLogs.includes(lineText)
-              );
+              return !isEmptyOrWhitespace(lineText);
             })
             .map((line) => {
               let timestamp: string;
@@ -449,6 +495,8 @@ const startFollowing = async () => {
         console.warn("Failed to fetch initial logs:", err);
       }
     }
+    // On reconnection, don't fetch initial logs - preserve existing logs
+    // The stream will continue from where it left off
 
     // Start streaming logs
     streamController = new AbortController();
@@ -489,11 +537,19 @@ const startFollowing = async () => {
 
       const line = logLine.line || "";
       if (!isEmptyOrWhitespace(line)) {
-        logs.value.push({
-          line: line,
-          timestamp,
-          level: logLine.level,
-        });
+        // Check for duplicates based on line content and timestamp to avoid duplicates on reconnection
+        const logKey = `${timestamp}|${line}`;
+        const existingKeys = new Set(
+          logs.value.map((l) => `${l.timestamp}|${l.line}`)
+        );
+        
+        if (!existingKeys.has(logKey)) {
+          logs.value.push({
+            line: line,
+            timestamp,
+            level: logLine.level,
+          });
+        }
       }
 
       // Keep only last 10000 lines
@@ -574,6 +630,62 @@ const clearLogs = () => {
   }
 };
 
+// Handle search - reload logs with search query
+const handleSearch = async () => {
+  if (isSearching.value) return;
+
+  isSearching.value = true;
+  hasLoadedAllLogs.value = false;
+  logs.value = [];
+
+  try {
+    const response = await client.getGameServerLogs({
+      gameServerId: props.gameServerId,
+      limit: searchQuery.value ? 1000 : tailLines.value, // Fetch more when searching
+      searchQuery: searchQuery.value || undefined,
+    });
+
+    if (response.lines && response.lines.length > 0) {
+      const newLogs = response.lines
+        .filter((line) => {
+          const lineText = line.line || "";
+          return !isEmptyOrWhitespace(lineText);
+        })
+        .map((line) => {
+          let timestamp: string;
+          try {
+            if (line.timestamp) {
+              const ts =
+                typeof line.timestamp === "string"
+                  ? line.timestamp
+                  : (line.timestamp as any)?.seconds
+                  ? new Date(
+                      Number((line.timestamp as any).seconds) * 1000
+                    ).toISOString()
+                  : new Date(line.timestamp as any).toISOString();
+              timestamp = ts;
+            } else {
+              timestamp = new Date().toISOString();
+            }
+          } catch (err) {
+            timestamp = new Date().toISOString();
+          }
+          return {
+            line: line.line || "",
+            timestamp,
+            level: line.level,
+          };
+        });
+      logs.value = newLogs;
+    }
+  } catch (err: any) {
+    console.error("Failed to search logs:", err);
+    error.value = err.message || "Failed to search logs";
+  } finally {
+    isSearching.value = false;
+  }
+};
+
 const handleTailChange = (value: string) => {
   const num = parseInt(value, 10);
   if (!isNaN(num) && num >= 10 && num <= 10000) {
@@ -585,41 +697,74 @@ const handleTailChange = (value: string) => {
 const handleTerminalOutput = (text: string) => {
   if (!text) return;
 
+  // Add raw text to buffer first for efficient line splitting
   terminalOutputBuffer += text;
 
+  // Split by newlines to process complete lines
   const lines = terminalOutputBuffer.split(/\r?\n/);
 
+  // Check if last line is complete (ends with newline)
   if (
     terminalOutputBuffer.endsWith("\n") ||
     terminalOutputBuffer.endsWith("\r")
   ) {
     terminalOutputBuffer = "";
   } else {
+    // Keep incomplete line in buffer for next chunk
     terminalOutputBuffer = lines.pop() || "";
   }
 
+  // Process all complete lines at once (text is already cleaned in GameServerTerminal)
+  // Only do minimal per-line cleanup if needed
+  const newLogs: Array<{ line: string; timestamp: string; level?: number }> = [];
+  const now = new Date().toISOString();
+
   for (const line of lines) {
+    // Skip empty lines
     if (isEmptyOrWhitespace(line)) {
       continue;
     }
 
-    logs.value.push({
-      line: line,
-      timestamp: new Date().toISOString(),
-      level: undefined,
-    });
+    // Text is already cleaned by GameServerTerminal, but do a quick pass
+    // to catch any edge cases (like plugin prefixes that might have been missed)
+    let cleanedLine = line;
+    // Quick cleanup: remove plugin prefixes if present
+    cleanedLine = cleanedLine.replace(/^[a-zA-Z0-9_-]+\]\s*/, "");
+    cleanedLine = cleanedLine.replace(/^\[[a-zA-Z0-9_-]+\]\s*/, "");
 
+    if (!isEmptyOrWhitespace(cleanedLine)) {
+      newLogs.push({
+        line: cleanedLine,
+        timestamp: now,
+        level: undefined,
+      });
+    }
+  }
+
+  // Batch add all new logs at once for better performance
+  // Direct push for immediate display (Vue 3 reactivity handles batching efficiently)
+  if (newLogs.length > 0) {
+    logs.value.push(...newLogs);
+
+    // Keep only last 10000 lines
     if (logs.value.length > 10000) {
       logs.value = logs.value.slice(-10000);
     }
   }
 
+  // Handle very long incomplete lines (force flush if buffer gets too large)
   if (terminalOutputBuffer.length > 1000) {
-    logs.value.push({
-      line: terminalOutputBuffer,
-      timestamp: new Date().toISOString(),
-      level: undefined,
-    });
+    let cleanedBuffer = terminalOutputBuffer;
+    cleanedBuffer = cleanedBuffer.replace(/^[a-zA-Z0-9_-]+\]\s*/, "");
+    cleanedBuffer = cleanedBuffer.replace(/^\[[a-zA-Z0-9_-]+\]\s*/, "");
+
+    if (!isEmptyOrWhitespace(cleanedBuffer)) {
+      logs.value.push({
+        line: cleanedBuffer,
+        timestamp: now,
+        level: undefined,
+      });
+    }
     terminalOutputBuffer = "";
 
     if (logs.value.length > 10000) {
@@ -665,6 +810,13 @@ watch(
 }
 
 .logs-end-indicator {
+  padding: 0.5rem;
+  background: var(--oui-surface-muted, rgba(255, 255, 255, 0.05));
+  border-radius: 0.375rem;
+  margin-bottom: 0.5rem;
+}
+
+.logs-search-indicator {
   padding: 0.5rem;
   background: var(--oui-surface-muted, rgba(255, 255, 255, 0.05));
   border-radius: 0.375rem;
