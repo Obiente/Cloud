@@ -35,7 +35,6 @@ export const useSuperAdmin = () => {
       state.value.overview = response;
       state.value.allowed = true;
       state.value.error = null;
-      console.log("[SuperAdmin] Access granted, overview loaded successfully");
       return response;
     } catch (err) {
       console.error("[SuperAdmin] Failed to fetch overview:", err);
@@ -43,7 +42,6 @@ export const useSuperAdmin = () => {
       if (err instanceof ConnectError) {
         // Handle unauthenticated errors (no token on server side)
         if (err.code === Code.Unauthenticated) {
-          console.log("[SuperAdmin] Unauthenticated - skipping check on server side");
           // On server side, we can't check auth, so don't set allowed to false
           // This will be checked again on client side
           if (import.meta.server) {
@@ -61,7 +59,6 @@ export const useSuperAdmin = () => {
         
         if (err.code === Code.PermissionDenied) {
           // User is not a superadmin
-          console.log("[SuperAdmin] Permission denied - user is not a superadmin");
           state.value.allowed = false;
           state.value.overview = null;
           state.value.error = null;

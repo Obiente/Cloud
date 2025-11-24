@@ -21,18 +21,14 @@ export const useAuth = () => {
   );
   const isLoading = ref(false);
 
-  console.log("[useAuth] Initializing orgStore");
   const orgStore = useOrganizationsStore();
   // Don't call hydrate() here - the store auto-hydrates after hydration completes
   // Calling it here would access localStorage during plugin initialization, causing Chrome freeze
-  console.log("[useAuth] orgStore initialized (hydration deferred by store)");
 
   // Get current user session
   const fetch = async () => {
-    console.log("[useAuth] fetch() started");
     try {
       isLoading.value = true;
-      console.log("[useAuth] Calling useRequestFetch('/auth/session')");
       sessionState.value = await useRequestFetch()<UserSession>(
         "/auth/session",
         {
@@ -42,18 +38,15 @@ export const useAuth = () => {
           retry: false,
         }
       ).catch(() => null);
-      console.log("[useAuth] useRequestFetch completed, sessionState:", sessionState.value ? "has session" : "no session");
 
       if (!authReadyState.value) {
         authReadyState.value = true;
-        console.log("[useAuth] authReadyState set to true");
       }
     } catch (error) {
       console.error("[useAuth] Failed to get current user:", error);
       sessionState.value = null;
     } finally {
       isLoading.value = false;
-      console.log("[useAuth] fetch() completed");
     }
   };
 
@@ -90,8 +83,6 @@ export const useAuth = () => {
       // Use requestHost from config to ensure consistency across environments
       const homepageUrl = config.public.requestHost || window.location.origin;
       
-      console.log("[Auth] Logging out - redirect URI:", homepageUrl);
-      
       // Get the end_session endpoint
       // Zitadel's end_session endpoint is at /oidc/v1/end_session
       // According to OIDC spec: https://openid.net/specs/openid-connect-rpinitiated-1_0.html
@@ -115,9 +106,6 @@ export const useAuth = () => {
       // This is recommended but optional - client_id can be used instead
       if (idToken) {
         params.set("id_token_hint", idToken);
-        console.log("[Auth] Using id_token_hint for logout");
-      } else {
-        console.log("[Auth] No id_token available, using client_id for logout");
       }
       
       // Optional: state parameter for CSRF protection
@@ -127,7 +115,6 @@ export const useAuth = () => {
       sessionStorage.setItem("logout_state", state);
       
       const logoutUrl = `${endSessionEndpoint}?${params.toString()}`;
-      console.log("[Auth] Redirecting to Zitadel logout:", logoutUrl);
       
       // Redirect to Zitadel's end_session endpoint
       // Zitadel will clear the session and redirect back to post_logout_redirect_uri
@@ -140,17 +127,13 @@ export const useAuth = () => {
   const trySilentAuth = async (): Promise<boolean> => {
     if (import.meta.server) return false;
 
-    console.log("[trySilentAuth] Starting silent auth");
-
     // Check if we just logged out (prevent silent auth for 1 minute after logout)
     if (import.meta.client) {
-      console.log("[trySilentAuth] Checking sessionStorage");
       const logoutTime = sessionStorage.getItem("obiente_logout_time");
       if (logoutTime) {
         const timeSinceLogout = Date.now() - parseInt(logoutTime as string, 10);
         // Prevent silent auth for 1 minute after logout
         if (timeSinceLogout < 60000) {
-          console.log("[trySilentAuth] Skipped - recent logout");
           return false;
         }
         // Clear the flag after timeout
@@ -160,7 +143,6 @@ export const useAuth = () => {
 
     // Ensure document.body is ready (critical for Chrome during hydration)
     if (import.meta.client && !document.body) {
-      console.log("[trySilentAuth] document.body not ready, waiting...");
       await new Promise<void>((resolve) => {
         if (document.body) {
           resolve();
@@ -175,11 +157,9 @@ export const useAuth = () => {
           requestAnimationFrame(checkBody);
         }
       });
-      console.log("[trySilentAuth] document.body is ready");
     }
 
     return new Promise((resolve) => {
-      console.log("[trySilentAuth] Creating iframe");
       const iframe = document.createElement("iframe");
       iframe.style.display = "none";
       iframe.style.width = "0";
@@ -192,20 +172,17 @@ export const useAuth = () => {
       const cleanup = () => {
         if (resolved) return;
         resolved = true;
-        console.log("[trySilentAuth] Cleaning up iframe");
         try {
           if (iframe.parentNode) {
             document.body.removeChild(iframe);
           }
         } catch (e) {
           // Iframe might already be removed
-          console.log("[trySilentAuth] Cleanup error (ignored):", e);
         }
         window.removeEventListener("message", messageHandler);
       };
 
       const timeout = setTimeout(() => {
-        console.log("[trySilentAuth] Timeout reached");
         cleanup();
         resolve(false);
       }, 5000); // 5 second timeout for iframe
@@ -214,148 +191,29 @@ export const useAuth = () => {
         if (resolved) return;
         if (e.origin !== window.location.origin) return;
 
-        console.log("[trySilentAuth] Message received:", e.data?.type);
         if (e.data?.type === "silent-auth-success") {
           cleanup();
           clearTimeout(timeout);
           // Refresh session after successful silent auth
-          console.log("[trySilentAuth] Success, refreshing session");
           fetch().then(() => {
-            console.log("[trySilentAuth] Session refreshed, resolving true");
             resolve(true);
           });
         } else if (e.data?.type === "silent-auth-error") {
           cleanup();
           clearTimeout(timeout);
-          console.log("[trySilentAuth] Error, resolving false");
           resolve(false);
         }
       };
 
-      console.log("[trySilentAuth] Adding message listener");
       window.addEventListener("message", messageHandler);
       
       // Append iframe first without src to avoid blocking during hydration
-      console.log("[trySilentAuth] Appending iframe to body (without src)");
       document.body.appendChild(iframe);
-      console.log("[trySilentAuth] Iframe appended to body");
       
       // Defer setting src until after the next frame to avoid blocking hydration
       // This prevents Chrome from freezing during hydration
       requestAnimationFrame(() => {
-        console.log("[trySilentAuth] Setting iframe src (deferred)");
         iframe.src = "/auth/silent-check";
-        console.log("[trySilentAuth] Iframe src set");
-      });
-    });
-    if (import.meta.server) return false;
-
-    console.log("[trySilentAuth] Starting silent auth");
-
-    // Check if we just logged out (prevent silent auth for 1 minute after logout)
-    if (import.meta.client) {
-      console.log("[trySilentAuth] Checking sessionStorage");
-      const logoutTime = sessionStorage.getItem("obiente_logout_time");
-      if (logoutTime) {
-        const timeSinceLogout = Date.now() - parseInt(logoutTime as string, 10);
-        // Prevent silent auth for 1 minute after logout
-        if (timeSinceLogout < 60000) {
-          console.log("[trySilentAuth] Skipped - recent logout");
-          return false;
-        }
-        // Clear the flag after timeout
-        sessionStorage.removeItem("obiente_logout_time");
-      }
-    }
-
-    // Ensure document.body is ready (critical for Chrome during hydration)
-    if (import.meta.client && !document.body) {
-      console.log("[trySilentAuth] document.body not ready, waiting...");
-      await new Promise<void>((resolve) => {
-        if (document.body) {
-          resolve();
-        } else {
-          const checkBody = () => {
-            if (document.body) {
-              resolve();
-            } else {
-              requestAnimationFrame(checkBody);
-            }
-          };
-          requestAnimationFrame(checkBody);
-        }
-      });
-      console.log("[trySilentAuth] document.body is ready");
-    }
-
-    return new Promise((resolve) => {
-      console.log("[trySilentAuth] Creating iframe");
-      const iframe = document.createElement("iframe");
-      iframe.style.display = "none";
-      iframe.style.width = "0";
-      iframe.style.height = "0";
-      iframe.style.border = "none";
-      iframe.style.position = "absolute";
-      iframe.style.visibility = "hidden";
-
-      let resolved = false;
-      const cleanup = () => {
-        if (resolved) return;
-        resolved = true;
-        console.log("[trySilentAuth] Cleaning up iframe");
-        try {
-          if (iframe.parentNode) {
-            document.body.removeChild(iframe);
-          }
-        } catch (e) {
-          // Iframe might already be removed
-          console.log("[trySilentAuth] Cleanup error (ignored):", e);
-        }
-        window.removeEventListener("message", messageHandler);
-      };
-
-      const timeout = setTimeout(() => {
-        console.log("[trySilentAuth] Timeout reached");
-        cleanup();
-        resolve(false);
-      }, 5000); // 5 second timeout for iframe
-
-      const messageHandler = (e: MessageEvent) => {
-        if (resolved) return;
-        if (e.origin !== window.location.origin) return;
-
-        console.log("[trySilentAuth] Message received:", e.data?.type);
-        if (e.data?.type === "silent-auth-success") {
-          cleanup();
-          clearTimeout(timeout);
-          // Refresh session after successful silent auth
-          console.log("[trySilentAuth] Success, refreshing session");
-          fetch().then(() => {
-            console.log("[trySilentAuth] Session refreshed, resolving true");
-            resolve(true);
-          });
-        } else if (e.data?.type === "silent-auth-error") {
-          cleanup();
-          clearTimeout(timeout);
-          console.log("[trySilentAuth] Error, resolving false");
-          resolve(false);
-        }
-      };
-
-      console.log("[trySilentAuth] Adding message listener");
-      window.addEventListener("message", messageHandler);
-      
-      // Append iframe first without src to avoid blocking during hydration
-      console.log("[trySilentAuth] Appending iframe to body (without src)");
-      document.body.appendChild(iframe);
-      console.log("[trySilentAuth] Iframe appended to body");
-      
-      // Defer setting src until after the next frame to avoid blocking hydration
-      // This prevents Chrome from freezing during hydration
-      requestAnimationFrame(() => {
-        console.log("[trySilentAuth] Setting iframe src (deferred)");
-        iframe.src = "/auth/silent-check";
-        console.log("[trySilentAuth] Iframe src set");
       });
     });
   };
@@ -380,7 +238,6 @@ export const useAuth = () => {
     if (e.origin !== window.location.origin) return;
     
     if (e.data?.type === "oauth-error") {
-      console.log("[Auth] OAuth error from popup:", e.data.error);
       // Only handle popup errors, not silent auth iframe errors
       // Silent auth errors are handled in trySilentAuth message handler
       if (e.data.error === "login_required" || e.data.error === "interaction_required" || e.data.error === "no_session") {
@@ -393,7 +250,6 @@ export const useAuth = () => {
         popupLogin("/auth/oauth-login");
       }
     } else if (e.data?.type === "signup-success") {
-      console.log("[Auth] Signup successful:", e.data.message);
       // Signup completed - user needs to login manually
       // Refresh the page to show login options
       // Clean up listener after use
@@ -467,7 +323,6 @@ export const useAuth = () => {
       popupListenerActive = true;
     }
 
-    console.log("[Auth] Opening signup popup to:", route);
     const popup = window.open(
       route,
       "zitadel-signup",
@@ -488,8 +343,6 @@ export const useAuth = () => {
       }
       return;
     }
-    
-    console.log("[Auth] Signup popup opened successfully");
   };
 
   // Get the current access token with caching to prevent excessive fetches
@@ -593,16 +446,8 @@ export const useAuth = () => {
   watch(
     () => sessionState.value,
     async (newSession, oldSession) => {
-      console.log("[useAuth] sessionState watcher triggered", { 
-        hasNewSession: !!newSession, 
-        hasOldSession: !!oldSession,
-        isClient: import.meta.client,
-        fetchInProgress: tokenFetchInProgress
-      });
-      
       // Prevent concurrent token fetches
       if (tokenFetchInProgress) {
-        console.log("[useAuth] Token fetch already in progress, skipping");
         return;
       }
       
@@ -612,12 +457,10 @@ export const useAuth = () => {
         // Check if session actually changed (compare user sub to avoid unnecessary updates)
         const newUserSub = newSession?.user?.sub;
         const oldUserSub = oldSession?.user?.sub;
-        console.log("[useAuth] Session changed, comparing user sub", { newUserSub, oldUserSub, hasToken: !!accessToken.value });
         
         // If user sub is the same and we have a token, skip
         if (newUserSub && oldUserSub && newUserSub === oldUserSub && accessToken.value) {
           // Session object reference changed but user is the same - skip
-          console.log("[useAuth] Session user unchanged, skipping token fetch");
           return;
         }
         
@@ -629,37 +472,30 @@ export const useAuth = () => {
               (tokenExpiry.value && Date.now() >= tokenExpiry.value)
             ) {
               // Defer token fetch to avoid blocking during hydration
-              console.log("[useAuth] Scheduling token fetch (deferred)");
               tokenFetchInProgress = true;
               
               // Use requestAnimationFrame to defer until after hydration
               requestAnimationFrame(() => {
                 requestAnimationFrame(async () => {
                   try {
-                    console.log("[useAuth] Fetching token from /auth/token (deferred)");
                     const response = await $fetch<{
                       accessToken: string;
                       expiresIn?: number;
                     }>("/auth/token");
-                    console.log("[useAuth] Token fetch completed", { hasToken: !!response.accessToken });
                     if (response.accessToken) {
                       accessToken.value = response.accessToken;
                       if (response.expiresIn) {
                         tokenExpiry.value =
                           Date.now() + response.expiresIn * 1000 - 30000;
                       }
-                      console.log("[useAuth] Token set in state");
                     }
                   } catch (e) {
                     console.error("[useAuth] Failed to fetch token after session update:", e);
                   } finally {
                     tokenFetchInProgress = false;
-                    console.log("[useAuth] Token fetch completed, flag cleared");
                   }
                 });
               });
-            } else {
-              console.log("[useAuth] Token already valid, skipping fetch");
             }
           }
         } catch (e) {
@@ -668,25 +504,20 @@ export const useAuth = () => {
         }
       } else if (!newSession && oldSession) {
         // Session was cleared
-        console.log("[useAuth] Session cleared, removing token");
         accessToken.value = null;
         tokenExpiry.value = null;
       }
-      console.log("[useAuth] sessionState watcher completed");
     },
     { immediate: false } // Don't run immediately - let onMounted handle initial fetch
   );
 
   // Initialize auth - defer heavy operations until after hydration to prevent Chrome freeze
   // Use getCurrentInstance safely (may be null during hydration)
-  console.log("[useAuth] Starting initialization", { isServer: import.meta.server, isClient: import.meta.client });
   let instance: ReturnType<typeof getCurrentInstance> | null = null;
   try {
     instance = getCurrentInstance();
-    console.log("[useAuth] getCurrentInstance result:", instance ? "found" : "null");
   } catch (e) {
     // getCurrentInstance may fail during hydration - treat as non-component context
-    console.log("[useAuth] getCurrentInstance failed:", e);
     instance = null;
   }
   
@@ -694,86 +525,63 @@ export const useAuth = () => {
   let tokenCheckInterval: ReturnType<typeof setInterval> | null = null;
   
   const initializeAuth = () => {
-    console.log("[useAuth] initializeAuth called", { isClient: import.meta.client });
     if (import.meta.client) {
       // Defer fetch() to avoid blocking during hydration
       // Use multiple requestAnimationFrame calls to ensure hydration is fully complete
-      console.log("[useAuth] Scheduling fetch() with double RAF");
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          console.log("[useAuth] Double RAF completed, calling fetch()");
           fetch().then(() => {
-            console.log("[useAuth] fetch() promise resolved");
+            // fetch completed
           }).catch((err) => {
             console.error("[useAuth] fetch() error:", err);
           });
-          console.log("[useAuth] fetch() called (non-blocking)");
 
           // Try silent auth first if no session exists (defer to avoid blocking hydration)
           if (!sessionState.value || !user.value) {
-            console.log("[useAuth] Scheduling trySilentAuth");
             // Use multiple deferrals to ensure hydration is complete
             // requestAnimationFrame ensures DOM is ready, then setTimeout gives extra time
             setTimeout(() => {
-              console.log("[useAuth] trySilentAuth timeout fired (after RAF + timeout)");
               trySilentAuth().then((success) => {
-                console.log("[useAuth] trySilentAuth completed:", success);
-                console.log("[useAuth] trySilentAuth .then() callback executing");
                 if (!success) {
                   // Silent auth failed, but don't auto-open popup here
                   // Let the middleware handle it if needed
-                  console.log("[useAuth] trySilentAuth failed, no action taken");
                 }
-                console.log("[useAuth] trySilentAuth .then() callback completed");
               }).catch((err) => {
                 console.error("[useAuth] trySilentAuth error:", err);
               });
-              console.log("[useAuth] trySilentAuth promise chain set up");
             }, 500); // Increased delay to ensure hydration completes
           }
 
-          console.log("[useAuth] Setting up token check interval");
           tokenCheckInterval = setInterval(() => {
             if (tokenExpiry.value && Date.now() >= tokenExpiry.value) {
               refreshAccessToken(true).catch(console.error);
             }
           }, 60 * 1000);
-          console.log("[useAuth] Token check interval set up");
         });
       });
     } else {
       // Server-side: just fetch
-      console.log("[useAuth] Server-side: calling fetch()");
       fetch();
-      console.log("[useAuth] Server-side fetch() completed");
     }
-    console.log("[useAuth] initializeAuth completed (scheduled)");
   };
   
   if (instance) {
     // We're in a component context - use lifecycle hooks
-    console.log("[useAuth] Component context detected, using onMounted");
     onMounted(() => {
-      console.log("[useAuth] onMounted called");
       // Defer initialization until after hydration using multiple deferrals
       // Use queueMicrotask to get out of the current execution context (microtask queue)
       queueMicrotask(() => {
-        console.log("[useAuth] queueMicrotask fired");
         // Then use setTimeout to get to the next macrotask
         setTimeout(() => {
-          console.log("[useAuth] setTimeout(0) fired");
           // Then use requestAnimationFrame to ensure DOM is ready
           requestAnimationFrame(() => {
-            console.log("[useAuth] requestAnimationFrame callback in onMounted");
             // One more requestAnimationFrame to ensure hydration is fully complete
             requestAnimationFrame(() => {
-              console.log("[useAuth] Double RAF completed, calling initializeAuth");
               initializeAuth();
             });
           });
         }, 0);
       });
-      console.log("[useAuth] onMounted completed (deferrals scheduled)");
     });
     
     onUnmounted(() => {
@@ -793,41 +601,29 @@ export const useAuth = () => {
     });
   } else {
     // Not in component context (e.g., called from plugin) - defer initialization
-    console.log("[useAuth] Non-component context, deferring initialization");
     if (import.meta.client) {
       // Use requestAnimationFrame to defer until after hydration
-      console.log("[useAuth] Scheduling requestAnimationFrame for non-component context");
       requestAnimationFrame(() => {
-        console.log("[useAuth] requestAnimationFrame callback (non-component)");
         nextTick(() => {
-          console.log("[useAuth] nextTick callback (non-component)");
           initializeAuth();
         });
       });
     } else {
       // Server-side: initialize immediately
-      console.log("[useAuth] Server-side: initializing immediately");
       initializeAuth();
     }
   }
   
-  console.log("[useAuth] Initialization setup completed, creating reactive object");
-  
   // Create computed properties lazily to avoid triggering during initialization
   const currentOrganization = computed(() => {
-    console.log("[useAuth] currentOrganization computed accessed");
     return orgStore.currentOrg;
   });
   const organizations = computed(() => {
-    console.log("[useAuth] organizations computed accessed");
     return orgStore.orgs;
   });
   const currentOrganizationId = computed(() => {
-    console.log("[useAuth] currentOrganizationId computed accessed");
     return orgStore.currentOrgId;
   });
-  
-  console.log("[useAuth] Computed properties created, creating reactive object");
   
   const authObject = reactive({
     user: user,
@@ -853,6 +649,5 @@ export const useAuth = () => {
     refreshAccessToken,
   });
   
-  console.log("[useAuth] Reactive object created, returning");
   return authObject;
 };
