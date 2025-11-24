@@ -537,7 +537,12 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	}
 
 	// Execute docker service create
-	cmd := exec.CommandContext(ctx, "docker", args...)
+	// Use a longer timeout context for Docker operations to prevent cancellation
+	// Docker service create can take time, especially when pulling images on worker nodes
+	dockerCtx, dockerCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer dockerCancel()
+	
+	cmd := exec.CommandContext(dockerCtx, "docker", args...)
 	var stderr bytes.Buffer
 	var stdout bytes.Buffer
 	cmd.Stderr = &stderr
@@ -546,6 +551,14 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	if err := cmd.Run(); err != nil {
 		errorOutput := stderr.String()
 		stdOutput := stdout.String()
+		// Check if the error is due to context cancellation
+		if dockerCtx.Err() == context.DeadlineExceeded {
+			logger.Error("[DeploymentManager] Docker service create timed out after 5 minutes for %s", swarmServiceName)
+			return "", "", fmt.Errorf("failed to create Swarm service: operation timed out after 5 minutes. This may indicate slow image pulls or Swarm cluster issues")
+		} else if dockerCtx.Err() == context.Canceled {
+			logger.Error("[DeploymentManager] Docker service create was canceled for %s", swarmServiceName)
+			return "", "", fmt.Errorf("failed to create Swarm service: operation was canceled")
+		}
 		logger.Error("[DeploymentManager] Failed to create Swarm service %s: %v\nStderr: %s\nStdout: %s", swarmServiceName, err, errorOutput, stdOutput)
 		return "", "", fmt.Errorf("failed to create Swarm service: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
 	}
@@ -555,8 +568,9 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	logger.Info("[DeploymentManager] Service image: %s, start command: %v", config.Image, config.StartCommand)
 
 	// Verify the service exists immediately (before rollback can remove it)
+	// Use the same extended timeout context for verification
 	verifyArgs := []string{"service", "inspect", swarmServiceName, "--format", "{{.ID}}"}
-	verifyCmd := exec.CommandContext(ctx, "docker", verifyArgs...)
+	verifyCmd := exec.CommandContext(dockerCtx, "docker", verifyArgs...)
 	var verifyStderr bytes.Buffer
 	verifyCmd.Stderr = &verifyStderr
 	if err := verifyCmd.Run(); err != nil {
