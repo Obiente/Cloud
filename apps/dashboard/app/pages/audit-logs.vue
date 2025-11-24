@@ -8,7 +8,7 @@
             Audit Logs
           </OuiText>
           <OuiText color="secondary">
-            View audit logs for your organization. Accessible to admins and superadmins.
+            View audit logs for your organization. Accessible to organization Admins and Owners.
           </OuiText>
         </OuiStack>
       </OuiFlex>

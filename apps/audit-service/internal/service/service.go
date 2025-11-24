@@ -7,6 +7,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
 
 	auditv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/audit/v1"
@@ -44,17 +45,27 @@ func (s *Service) ListAuditLogs(ctx context.Context, req *connect.Request[auditv
 	}
 
 	// Check if user has permission to view audit logs
-	// Only superadmins and admins can view audit logs
-	hasPermission := false
+	// Superadmins and global admins can view all audit logs
+	// Org admins and owners can view audit logs for their organizations
+	isSuperAdminOrAdmin := false
 	for _, role := range userInfo.Roles {
 		if role == auth.RoleSuperAdmin || role == auth.RoleAdmin {
-			hasPermission = true
+			isSuperAdminOrAdmin = true
 			break
 		}
 	}
 
-	if !hasPermission {
-		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: only admins and superadmins can view audit logs"))
+	// If not superadmin/admin, check if user is org admin/owner for the requested organization
+	if !isSuperAdminOrAdmin {
+		// If OrganizationId is provided, verify the user is admin/owner of that org
+		if req.Msg.OrganizationId != nil && *req.Msg.OrganizationId != "" {
+			if err := common.AuthorizeOrgAdmin(ctx, *req.Msg.OrganizationId, userInfo); err != nil {
+				return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: only organization admins and owners can view audit logs for their organization"))
+			}
+		} else {
+			// If no OrganizationId provided, org admins/owners must specify one
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("organization_id is required for organization admins and owners"))
+		}
 	}
 
 	// Use MetricsDB (TimescaleDB) for querying audit logs - no fallback to main DB
@@ -83,6 +94,7 @@ func (s *Service) ListAuditLogs(ctx context.Context, req *connect.Request[auditv
 	// Apply filters to both queries
 	// Note: If OrganizationId is not provided, all audit logs from all organizations are returned
 	// This allows superadmins/admins to view global audit logs
+	// Org admins/owners must provide OrganizationId (enforced above)
 	if req.Msg.OrganizationId != nil && *req.Msg.OrganizationId != "" {
 		countQuery = countQuery.Where("organization_id = ?", *req.Msg.OrganizationId)
 		query = query.Where("organization_id = ?", *req.Msg.OrganizationId)
@@ -192,16 +204,14 @@ func (s *Service) GetAuditLog(ctx context.Context, req *connect.Request[auditv1.
 	}
 
 	// Check if user has permission to view audit logs
-	hasPermission := false
+	// Superadmins and global admins can view all audit logs
+	// Org admins and owners can view audit logs for their organizations
+	isSuperAdminOrAdmin := false
 	for _, role := range userInfo.Roles {
 		if role == auth.RoleSuperAdmin || role == auth.RoleAdmin {
-			hasPermission = true
+			isSuperAdminOrAdmin = true
 			break
 		}
-	}
-
-	if !hasPermission {
-		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: only admins and superadmins can view audit logs"))
 	}
 
 	// Use MetricsDB (TimescaleDB) for querying audit logs - no fallback to main DB
@@ -216,6 +226,17 @@ func (s *Service) GetAuditLog(ctx context.Context, req *connect.Request[auditv1.
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("audit log not found"))
 		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to query audit log: %w", err))
+	}
+
+	// If not superadmin/admin, verify the user is admin/owner of the audit log's organization
+	if !isSuperAdminOrAdmin {
+		if auditLog.OrganizationID == nil || *auditLog.OrganizationID == "" {
+			// Audit log has no organization (global log), only superadmins/admins can view
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: only admins and superadmins can view global audit logs"))
+		}
+		if err := common.AuthorizeOrgAdmin(ctx, *auditLog.OrganizationID, userInfo); err != nil {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("permission denied: only organization admins and owners can view audit logs for their organization"))
+		}
 	}
 
 	return connect.NewResponse(&auditv1.GetAuditLogResponse{
