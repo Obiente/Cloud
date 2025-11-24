@@ -139,6 +139,14 @@ func (c *Client) ContainerLogs(ctx context.Context, containerID string, tail str
 	}
 	if until != nil {
 		opts.Until = until.Format(time.RFC3339Nano)
+		// When using until for historical loading, we want to fetch a reasonable chunk at a time
+		// Using "all" would try to read all logs before the timestamp, which is very slow
+		// So we limit to a reasonable number (default 500 if not specified)
+		if opts.Tail == "all" || opts.Tail == "" {
+			// Use 500 as default for historical loading - this is a good balance
+			// between getting enough logs and not timing out
+			opts.Tail = "500"
+		}
 	}
 	logs, err := c.api.ContainerLogs(ctx, containerID, opts)
 	if err != nil {
@@ -1180,6 +1188,197 @@ func (c *Client) ListVolumeFiles(volumePath, path string) ([]FileInfo, error) {
 	}
 
 	return files, nil
+}
+
+// SearchVolumeFiles recursively searches for files matching the query in a volume
+func (c *Client) SearchVolumeFiles(volumePath, rootPath, query string, maxResults int, filesOnly, directoriesOnly bool) ([]FileInfo, error) {
+	// Verify the volume path exists first
+	if _, err := os.Stat(volumePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("volume path does not exist: %s", volumePath)
+	}
+
+	// Resolve and validate the root path
+	resolvedRoot, err := resolvePathWithinVolume(volumePath, rootPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid root path: %w", err)
+	}
+
+	queryLower := strings.ToLower(query)
+	var results []FileInfo
+
+	// Use filepath.WalkDir for recursive search
+	err = filepath.WalkDir(resolvedRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			// Skip directories we can't access
+			return nil
+		}
+
+		// Check if we've reached max results
+		if len(results) >= maxResults {
+			return filepath.SkipAll
+		}
+
+		// Validate path stays within volume boundary
+		if _, err := resolvePathWithinVolume(volumePath, path); err != nil {
+			return nil // Skip this entry
+		}
+
+		// Check if name matches query (case-insensitive)
+		name := d.Name()
+		if !strings.Contains(strings.ToLower(name), queryLower) {
+			return nil // Continue searching
+		}
+
+		// Apply filters
+		if filesOnly && d.IsDir() {
+			return nil // Skip directories
+		}
+		if directoriesOnly && !d.IsDir() {
+			return nil // Skip files
+		}
+
+		// Get file info
+		info, err := os.Lstat(path)
+		if err != nil {
+			return nil // Skip if we can't stat
+		}
+
+		// Calculate relative path from volume root
+		relativePath := strings.TrimPrefix(path, volumePath)
+		if relativePath == "" {
+			relativePath = "/"
+		}
+		filePath := "/" + strings.TrimPrefix(relativePath, "/")
+
+		owner := ""
+		group := ""
+		mode := permissionsToMode(info.Mode().String())
+		if stat, ok := info.Sys().(*syscall.Stat_t); ok {
+			owner = strconv.FormatUint(uint64(stat.Uid), 10)
+			group = strconv.FormatUint(uint64(stat.Gid), 10)
+			mode = uint32(stat.Mode & 0o777)
+		}
+
+		isSymlink := info.Mode()&os.ModeSymlink != 0
+		symlinkTarget := ""
+		if isSymlink {
+			if target, err := os.Readlink(path); err == nil {
+				symlinkTarget = target
+			}
+		}
+
+		results = append(results, FileInfo{
+			Name:          name,
+			Path:          filePath,
+			IsDirectory:   info.IsDir(),
+			Size:          info.Size(),
+			Permissions:   info.Mode().String(),
+			Owner:         owner,
+			Group:         group,
+			Mode:          mode,
+			ModifiedAt:    info.ModTime(),
+			IsSymlink:     isSymlink,
+			SymlinkTarget: symlinkTarget,
+		})
+
+		return nil
+	})
+
+	return results, err
+}
+
+// SearchContainerFiles recursively searches for files matching the query in a container
+func (c *Client) SearchContainerFiles(ctx context.Context, containerID, rootPath, query string, maxResults int, filesOnly, directoriesOnly bool) ([]FileInfo, error) {
+	// Check if container is running
+	containerInfo, err := c.api.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return nil, fmt.Errorf("inspect container: %w", err)
+	}
+
+	wasRunning := containerInfo.State.Running
+	wasStarted := false
+
+	// If stopped, temporarily start it
+	if !wasRunning {
+		if err := c.StartContainer(ctx, containerID); err != nil {
+			return nil, fmt.Errorf("container is stopped and cannot be started automatically for file search: %w", err)
+		}
+		wasStarted = true
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// Ensure we stop the container if we started it
+	defer func() {
+		if wasStarted && !wasRunning {
+			time.Sleep(100 * time.Millisecond)
+			_ = c.StopContainer(ctx, containerID, 5*time.Second)
+		}
+	}()
+
+	// Use find command to search recursively
+	// Escape special characters in query for shell safety
+	queryEscaped := strings.ReplaceAll(query, `\`, `\\`)
+	queryEscaped = strings.ReplaceAll(queryEscaped, `"`, `\"`)
+	queryEscaped = strings.ReplaceAll(queryEscaped, `'`, `\'`)
+	queryEscaped = strings.ReplaceAll(queryEscaped, `$`, `\$`)
+	queryEscaped = strings.ReplaceAll(queryEscaped, "`", "\\`")
+	
+	// Build find command
+	var findCmd []string
+	if filesOnly {
+		findCmd = []string{"find", rootPath, "-name", fmt.Sprintf("*%s*", queryEscaped), "-type", "f"}
+	} else if directoriesOnly {
+		findCmd = []string{"find", rootPath, "-name", fmt.Sprintf("*%s*", queryEscaped), "-type", "d"}
+	} else {
+		findCmd = []string{"find", rootPath, "-name", fmt.Sprintf("*%s*", queryEscaped)}
+	}
+
+	// Run find command
+	output, err := c.ContainerExecRun(ctx, containerID, findCmd)
+	if err != nil {
+		// If find command fails, return empty results rather than error
+		// (might be permission issues or path doesn't exist)
+		return []FileInfo{}, nil
+	}
+
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	var results []FileInfo
+	queryLower := strings.ToLower(query)
+
+	for _, line := range lines {
+		if len(results) >= maxResults {
+			break
+		}
+
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Verify the path matches (case-insensitive) - double check
+		fileName := filepath.Base(line)
+		if !strings.Contains(strings.ToLower(fileName), queryLower) {
+			continue
+		}
+
+		// Get file info using stat
+		stat, err := c.ContainerStat(ctx, containerID, line)
+		if err != nil {
+			continue // Skip if we can't stat
+		}
+
+		// Apply filters
+		if filesOnly && stat.IsDirectory {
+			continue
+		}
+		if directoriesOnly && !stat.IsDirectory {
+			continue
+		}
+
+		results = append(results, *stat)
+	}
+
+	return results, nil
 }
 
 // resolvePathWithinVolume ensures a path stays within the volume boundary
