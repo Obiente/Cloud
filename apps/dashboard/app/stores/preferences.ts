@@ -24,6 +24,7 @@ interface Preferences {
   envVarsViewMode: "list" | "file";
   editor: EditorPreferences;
   metrics: MetricsPreferences;
+  theme?: "dark" | "dark-purple";
   // Add more preferences here as needed
 }
 
@@ -97,6 +98,9 @@ export const usePreferencesStore = defineStore("preferences", () => {
         // Merge top-level properties
         if (parsed.envVarsViewMode) {
           preferences.value.envVarsViewMode = parsed.envVarsViewMode;
+        }
+        if (parsed.theme) {
+          preferences.value.theme = parsed.theme;
         }
         // Ensure nested objects are merged correctly (always merge to preserve defaults)
         preferences.value.metrics = {
@@ -187,6 +191,11 @@ export const usePreferencesStore = defineStore("preferences", () => {
     persist();
   }
 
+  function setTheme(theme: "dark" | "dark-purple") {
+    preferences.value.theme = theme;
+    persist();
+  }
+
   // Set up watcher to persist changes (only after hydration to avoid infinite loops)
   let unwatch: (() => void) | null = null;
   
@@ -236,6 +245,7 @@ export const usePreferencesStore = defineStore("preferences", () => {
     setEditorPreferences,
     setMetricsPreference,
     setMetricsPreferences,
+    setTheme,
     hydrate,
   };
 });

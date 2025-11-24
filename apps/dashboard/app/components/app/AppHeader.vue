@@ -19,6 +19,9 @@
 
       <!-- Actions -->
       <OuiFlex align="center" gap="sm" class="shrink-0 md:gap-4">
+        <!-- Theme Switcher -->
+        <OuiThemeSwitcher />
+
         <!-- Notifications -->
         <OuiButton
           ref="notificationButtonRef"
@@ -53,6 +56,7 @@
 import { ref } from "vue";
 import { BellIcon } from "@heroicons/vue/24/outline";
 import OuiText from "../oui/Text.vue";
+import OuiThemeSwitcher from "../oui/ThemeSwitcher.vue";
 
 interface Props {
   title?: string;

@@ -8,16 +8,23 @@
     ]"
   >
     <OuiFlex align="center" justify="center" class="h-full">
-      <OuiText :size="textSize[size]" weight="bold" color="primary">O</OuiText>
+      <OuiText 
+        :size="textSize[size]" 
+        weight="bold" 
+        :class="textColorClass"
+        :style="textColorStyle"
+      >O</OuiText>
     </OuiFlex>
   </OuiBox>
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import OuiBox from "../oui/Box.vue";
 import OuiFlex from "../oui/Flex.vue";
 import OuiText from "../oui/Text.vue";
 import type { OUISize } from "../oui/types";
+import { useTheme } from "~/composables/useTheme";
 
 type LogoSize = "sm" | "md" | "lg" | "xl";
 
@@ -27,6 +34,22 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   size: "md",
+});
+
+const { currentTheme } = useTheme();
+
+// Use dark text for dark theme (white background), light text for dark-purple theme
+const textColorClass = computed(() => {
+  return currentTheme.value === "dark" ? "" : "text-primary";
+});
+
+const textColorStyle = computed(() => {
+  // In dark theme, use dark text (#0a0a0a) on white background
+  // In dark-purple theme, use light text (text-primary)
+  if (currentTheme.value === "dark") {
+    return { color: "#0a0a0a" };
+  }
+  return {};
 });
 
 const sizeClasses: Record<LogoSize, string> = {

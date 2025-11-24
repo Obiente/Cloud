@@ -38,7 +38,11 @@
   --oui-radius-base: 1;
   --oui-typography-base: 1;
   --oui-elevation-base: 1;
+}
 
+/* Dark Purple Neon Theme (default) */
+:root,
+:root[data-theme="dark-purple"] {
   /* Dark Black Purple Neon Theme */
   --oui-background: #0b0b12; /* near-black with a hint of purple */
   --oui-foreground: #f5f3ff; /* soft off-white with lilac tint */
@@ -67,5 +71,42 @@
   --oui-interactive-hover: #241d47; /* hover lifts with purple tint */
   --oui-interactive-active: #2e2663; /* active press */
   --oui-interactive-disabled: #3f3a66; /* disabled controls */
-  --oui-interactive-focus: #d946ef; /* fuchsia focus ring */
+  --oui-interactive-focus: #818cf8; /* calm indigo focus ring */
+}
+
+/* Dark Theme (minimal dark mode) */
+:root[data-theme="dark"] {
+  --oui-background: #0a0a0a; /* pure black */
+  --oui-foreground: #fafafa; /* pure white */
+  --oui-surface-base: #111111; /* dark grey base */
+  --oui-surface-raised: #1a1a1a; /* slightly lifted panel */
+  --oui-surface-overlay: #222222; /* overlays/menus */
+  --oui-surface-muted: #2a2a2a; /* muted blocks, chips */
+
+  --oui-text-primary: #fafafa;
+  --oui-text-secondary: #b3b3b3; /* light grey */
+  --oui-text-tertiary: #808080; /* medium grey */
+  --oui-text-disabled: #4a4a4a; /* dark grey */
+
+  --oui-border-default: #333333; /* subtle grey border */
+  --oui-border-muted: #262626; /* very subdued border */
+  --oui-border-strong: #404040; /* stronger accents */
+
+  /* Minimal accents */
+  --oui-accent-primary: #e5e7eb; /* calm white */
+  --oui-accent-secondary: #8b5cf6; /* purple */
+  --oui-accent-success: #10b981; /* green */
+  --oui-accent-warning: #f59e0b; /* amber */
+  --oui-accent-danger: #ef4444; /* red */
+  --oui-accent-info: #06b6d4; /* cyan */
+
+  --oui-interactive-hover: #1f1f1f; /* hover lifts */
+  --oui-interactive-active: #262626; /* active press */
+  --oui-interactive-disabled: #2a2a2a; /* disabled controls */
+  --oui-interactive-focus: #e5e7eb; /* calm white focus ring */
+}
+
+/* Dark theme: Make text dark on white primary buttons */
+:root[data-theme="dark"] [data-variant="solid"][data-color="primary"] {
+  color: #0a0a0a !important; /* dark text on white buttons */
 }
