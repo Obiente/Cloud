@@ -156,6 +156,12 @@ const (
 	// DeploymentServiceWriteContainerFileProcedure is the fully-qualified name of the
 	// DeploymentService's WriteContainerFile RPC.
 	DeploymentServiceWriteContainerFileProcedure = "/obiente.cloud.deployments.v1.DeploymentService/WriteContainerFile"
+	// DeploymentServiceExtractDeploymentFileProcedure is the fully-qualified name of the
+	// DeploymentService's ExtractDeploymentFile RPC.
+	DeploymentServiceExtractDeploymentFileProcedure = "/obiente.cloud.deployments.v1.DeploymentService/ExtractDeploymentFile"
+	// DeploymentServiceCreateDeploymentFileArchiveProcedure is the fully-qualified name of the
+	// DeploymentService's CreateDeploymentFileArchive RPC.
+	DeploymentServiceCreateDeploymentFileArchiveProcedure = "/obiente.cloud.deployments.v1.DeploymentService/CreateDeploymentFileArchive"
 	// DeploymentServiceGetDeploymentRoutingsProcedure is the fully-qualified name of the
 	// DeploymentService's GetDeploymentRoutings RPC.
 	DeploymentServiceGetDeploymentRoutingsProcedure = "/obiente.cloud.deployments.v1.DeploymentService/GetDeploymentRoutings"
@@ -281,6 +287,10 @@ type DeploymentServiceClient interface {
 	CreateContainerEntry(context.Context, *connect.Request[v1.CreateContainerEntryRequest]) (*connect.Response[v1.CreateContainerEntryResponse], error)
 	// Write/update file contents in a deployment container
 	WriteContainerFile(context.Context, *connect.Request[v1.WriteContainerFileRequest]) (*connect.Response[v1.WriteContainerFileResponse], error)
+	// Extract a zip file to a destination directory
+	ExtractDeploymentFile(context.Context, *connect.Request[v1.ExtractDeploymentFileRequest]) (*connect.Response[v1.ExtractDeploymentFileResponse], error)
+	// Create a zip archive from files or folders
+	CreateDeploymentFileArchive(context.Context, *connect.Request[v1.CreateDeploymentFileArchiveRequest]) (*connect.Response[v1.CreateDeploymentFileArchiveResponse], error)
 	// Routing configuration
 	// Get all routing rules for a deployment
 	GetDeploymentRoutings(context.Context, *connect.Request[v1.GetDeploymentRoutingsRequest]) (*connect.Response[v1.GetDeploymentRoutingsResponse], error)
@@ -563,6 +573,18 @@ func NewDeploymentServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(deploymentServiceMethods.ByName("WriteContainerFile")),
 			connect.WithClientOptions(opts...),
 		),
+		extractDeploymentFile: connect.NewClient[v1.ExtractDeploymentFileRequest, v1.ExtractDeploymentFileResponse](
+			httpClient,
+			baseURL+DeploymentServiceExtractDeploymentFileProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("ExtractDeploymentFile")),
+			connect.WithClientOptions(opts...),
+		),
+		createDeploymentFileArchive: connect.NewClient[v1.CreateDeploymentFileArchiveRequest, v1.CreateDeploymentFileArchiveResponse](
+			httpClient,
+			baseURL+DeploymentServiceCreateDeploymentFileArchiveProcedure,
+			connect.WithSchema(deploymentServiceMethods.ByName("CreateDeploymentFileArchive")),
+			connect.WithClientOptions(opts...),
+		),
 		getDeploymentRoutings: connect.NewClient[v1.GetDeploymentRoutingsRequest, v1.GetDeploymentRoutingsResponse](
 			httpClient,
 			baseURL+DeploymentServiceGetDeploymentRoutingsProcedure,
@@ -669,6 +691,8 @@ type deploymentServiceClient struct {
 	renameContainerEntry            *connect.Client[v1.RenameContainerEntryRequest, v1.RenameContainerEntryResponse]
 	createContainerEntry            *connect.Client[v1.CreateContainerEntryRequest, v1.CreateContainerEntryResponse]
 	writeContainerFile              *connect.Client[v1.WriteContainerFileRequest, v1.WriteContainerFileResponse]
+	extractDeploymentFile           *connect.Client[v1.ExtractDeploymentFileRequest, v1.ExtractDeploymentFileResponse]
+	createDeploymentFileArchive     *connect.Client[v1.CreateDeploymentFileArchiveRequest, v1.CreateDeploymentFileArchiveResponse]
 	getDeploymentRoutings           *connect.Client[v1.GetDeploymentRoutingsRequest, v1.GetDeploymentRoutingsResponse]
 	updateDeploymentRoutings        *connect.Client[v1.UpdateDeploymentRoutingsRequest, v1.UpdateDeploymentRoutingsResponse]
 	getDeploymentServiceNames       *connect.Client[v1.GetDeploymentServiceNamesRequest, v1.GetDeploymentServiceNamesResponse]
@@ -893,6 +917,17 @@ func (c *deploymentServiceClient) WriteContainerFile(ctx context.Context, req *c
 	return c.writeContainerFile.CallUnary(ctx, req)
 }
 
+// ExtractDeploymentFile calls obiente.cloud.deployments.v1.DeploymentService.ExtractDeploymentFile.
+func (c *deploymentServiceClient) ExtractDeploymentFile(ctx context.Context, req *connect.Request[v1.ExtractDeploymentFileRequest]) (*connect.Response[v1.ExtractDeploymentFileResponse], error) {
+	return c.extractDeploymentFile.CallUnary(ctx, req)
+}
+
+// CreateDeploymentFileArchive calls
+// obiente.cloud.deployments.v1.DeploymentService.CreateDeploymentFileArchive.
+func (c *deploymentServiceClient) CreateDeploymentFileArchive(ctx context.Context, req *connect.Request[v1.CreateDeploymentFileArchiveRequest]) (*connect.Response[v1.CreateDeploymentFileArchiveResponse], error) {
+	return c.createDeploymentFileArchive.CallUnary(ctx, req)
+}
+
 // GetDeploymentRoutings calls obiente.cloud.deployments.v1.DeploymentService.GetDeploymentRoutings.
 func (c *deploymentServiceClient) GetDeploymentRoutings(ctx context.Context, req *connect.Request[v1.GetDeploymentRoutingsRequest]) (*connect.Response[v1.GetDeploymentRoutingsResponse], error) {
 	return c.getDeploymentRoutings.CallUnary(ctx, req)
@@ -1040,6 +1075,10 @@ type DeploymentServiceHandler interface {
 	CreateContainerEntry(context.Context, *connect.Request[v1.CreateContainerEntryRequest]) (*connect.Response[v1.CreateContainerEntryResponse], error)
 	// Write/update file contents in a deployment container
 	WriteContainerFile(context.Context, *connect.Request[v1.WriteContainerFileRequest]) (*connect.Response[v1.WriteContainerFileResponse], error)
+	// Extract a zip file to a destination directory
+	ExtractDeploymentFile(context.Context, *connect.Request[v1.ExtractDeploymentFileRequest]) (*connect.Response[v1.ExtractDeploymentFileResponse], error)
+	// Create a zip archive from files or folders
+	CreateDeploymentFileArchive(context.Context, *connect.Request[v1.CreateDeploymentFileArchiveRequest]) (*connect.Response[v1.CreateDeploymentFileArchiveResponse], error)
 	// Routing configuration
 	// Get all routing rules for a deployment
 	GetDeploymentRoutings(context.Context, *connect.Request[v1.GetDeploymentRoutingsRequest]) (*connect.Response[v1.GetDeploymentRoutingsResponse], error)
@@ -1317,6 +1356,18 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 		connect.WithSchema(deploymentServiceMethods.ByName("WriteContainerFile")),
 		connect.WithHandlerOptions(opts...),
 	)
+	deploymentServiceExtractDeploymentFileHandler := connect.NewUnaryHandler(
+		DeploymentServiceExtractDeploymentFileProcedure,
+		svc.ExtractDeploymentFile,
+		connect.WithSchema(deploymentServiceMethods.ByName("ExtractDeploymentFile")),
+		connect.WithHandlerOptions(opts...),
+	)
+	deploymentServiceCreateDeploymentFileArchiveHandler := connect.NewUnaryHandler(
+		DeploymentServiceCreateDeploymentFileArchiveProcedure,
+		svc.CreateDeploymentFileArchive,
+		connect.WithSchema(deploymentServiceMethods.ByName("CreateDeploymentFileArchive")),
+		connect.WithHandlerOptions(opts...),
+	)
 	deploymentServiceGetDeploymentRoutingsHandler := connect.NewUnaryHandler(
 		DeploymentServiceGetDeploymentRoutingsProcedure,
 		svc.GetDeploymentRoutings,
@@ -1461,6 +1512,10 @@ func NewDeploymentServiceHandler(svc DeploymentServiceHandler, opts ...connect.H
 			deploymentServiceCreateContainerEntryHandler.ServeHTTP(w, r)
 		case DeploymentServiceWriteContainerFileProcedure:
 			deploymentServiceWriteContainerFileHandler.ServeHTTP(w, r)
+		case DeploymentServiceExtractDeploymentFileProcedure:
+			deploymentServiceExtractDeploymentFileHandler.ServeHTTP(w, r)
+		case DeploymentServiceCreateDeploymentFileArchiveProcedure:
+			deploymentServiceCreateDeploymentFileArchiveHandler.ServeHTTP(w, r)
 		case DeploymentServiceGetDeploymentRoutingsProcedure:
 			deploymentServiceGetDeploymentRoutingsHandler.ServeHTTP(w, r)
 		case DeploymentServiceUpdateDeploymentRoutingsProcedure:
@@ -1652,6 +1707,14 @@ func (UnimplementedDeploymentServiceHandler) CreateContainerEntry(context.Contex
 
 func (UnimplementedDeploymentServiceHandler) WriteContainerFile(context.Context, *connect.Request[v1.WriteContainerFileRequest]) (*connect.Response[v1.WriteContainerFileResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.WriteContainerFile is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) ExtractDeploymentFile(context.Context, *connect.Request[v1.ExtractDeploymentFileRequest]) (*connect.Response[v1.ExtractDeploymentFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.ExtractDeploymentFile is not implemented"))
+}
+
+func (UnimplementedDeploymentServiceHandler) CreateDeploymentFileArchive(context.Context, *connect.Request[v1.CreateDeploymentFileArchiveRequest]) (*connect.Response[v1.CreateDeploymentFileArchiveResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.deployments.v1.DeploymentService.CreateDeploymentFileArchive is not implemented"))
 }
 
 func (UnimplementedDeploymentServiceHandler) GetDeploymentRoutings(context.Context, *connect.Request[v1.GetDeploymentRoutingsRequest]) (*connect.Response[v1.GetDeploymentRoutingsResponse], error) {

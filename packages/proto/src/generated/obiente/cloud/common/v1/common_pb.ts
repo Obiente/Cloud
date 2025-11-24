@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/common/v1/common.proto.
  */
 export const file_obiente_cloud_common_v1_common: GenFile = /*@__PURE__*/
-  fileDesc("CiRvYmllbnRlL2Nsb3VkL2NvbW1vbi92MS9jb21tb24ucHJvdG8SF29iaWVudGUuY2xvdWQuY29tbW9uLnYxIlAKClBhZ2luYXRpb24SDAoEcGFnZRgBIAEoBRIQCghwZXJfcGFnZRgCIAEoBRINCgV0b3RhbBgDIAEoBRITCgt0b3RhbF9wYWdlcxgEIAEoBSLzAgoHVlBTU2l6ZRIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEhgKC2Rlc2NyaXB0aW9uGAMgASgJSACIAQESEQoJY3B1X2NvcmVzGAQgASgFEhQKDG1lbW9yeV9ieXRlcxgFIAEoAxISCgpkaXNrX2J5dGVzGAYgASgDEh0KFWJhbmR3aWR0aF9ieXRlc19tb250aBgHIAEoAxIdChVtaW5pbXVtX3BheW1lbnRfY2VudHMYCCABKAMSEQoJYXZhaWxhYmxlGAkgASgIEg4KBnJlZ2lvbhgKIAEoCRIzCgpjcmVhdGVkX2F0GAsgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgBiAEBEjMKCnVwZGF0ZWRfYXQYDCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAKIAQFCDgoMX2Rlc2NyaXB0aW9uQg0KC19jcmVhdGVkX2F0Qg0KC191cGRhdGVkX2F0KowBCghMb2dMZXZlbBIZChVMT0dfTEVWRUxfVU5TUEVDSUZJRUQQABITCg9MT0dfTEVWRUxfVFJBQ0UQARITCg9MT0dfTEVWRUxfREVCVUcQAhISCg5MT0dfTEVWRUxfSU5GTxADEhIKDkxPR19MRVZFTF9XQVJOEAQSEwoPTE9HX0xFVkVMX0VSUk9SEAVCTVpLZ2l0aHViLmNvbS9vYmllbnRlL2Nsb3VkL2FwcHMvc2hhcmVkL3Byb3RvL29iaWVudGUvY2xvdWQvY29tbW9uL3YxO2NvbW1vbnYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("CiRvYmllbnRlL2Nsb3VkL2NvbW1vbi92MS9jb21tb24ucHJvdG8SF29iaWVudGUuY2xvdWQuY29tbW9uLnYxIlAKClBhZ2luYXRpb24SDAoEcGFnZRgBIAEoBRIQCghwZXJfcGFnZRgCIAEoBRINCgV0b3RhbBgDIAEoBRITCgt0b3RhbF9wYWdlcxgEIAEoBSLzAgoHVlBTU2l6ZRIKCgJpZBgBIAEoCRIMCgRuYW1lGAIgASgJEhgKC2Rlc2NyaXB0aW9uGAMgASgJSACIAQESEQoJY3B1X2NvcmVzGAQgASgFEhQKDG1lbW9yeV9ieXRlcxgFIAEoAxISCgpkaXNrX2J5dGVzGAYgASgDEh0KFWJhbmR3aWR0aF9ieXRlc19tb250aBgHIAEoAxIdChVtaW5pbXVtX3BheW1lbnRfY2VudHMYCCABKAMSEQoJYXZhaWxhYmxlGAkgASgIEg4KBnJlZ2lvbhgKIAEoCRIzCgpjcmVhdGVkX2F0GAsgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEgBiAEBEjMKCnVwZGF0ZWRfYXQYDCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wSAKIAQFCDgoMX2Rlc2NyaXB0aW9uQg0KC19jcmVhdGVkX2F0Qg0KC191cGRhdGVkX2F0InAKGEV4dHJhY3RTZXJ2ZXJGaWxlUmVxdWVzdBIQCgh6aXBfcGF0aBgBIAEoCRIYChBkZXN0aW5hdGlvbl9wYXRoGAIgASgJEhgKC3ZvbHVtZV9uYW1lGAMgASgJSACIAQFCDgoMX3ZvbHVtZV9uYW1lImMKGUV4dHJhY3RTZXJ2ZXJGaWxlUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBISCgVlcnJvchgCIAEoCUgAiAEBEhcKD2ZpbGVzX2V4dHJhY3RlZBgDIAEoBUIICgZfZXJyb3IibwoeQ3JlYXRlU2VydmVyRmlsZUFyY2hpdmVSZXF1ZXN0EhQKDHNvdXJjZV9wYXRocxgBIAMoCRIYChBkZXN0aW5hdGlvbl9wYXRoGAIgASgJEh0KFWluY2x1ZGVfcGFyZW50X2ZvbGRlchgDIAEoCCJ+Ch9DcmVhdGVTZXJ2ZXJGaWxlQXJjaGl2ZVJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgSEgoFZXJyb3IYAiABKAlIAIgBARIUCgxhcmNoaXZlX3BhdGgYAyABKAkSFgoOZmlsZXNfYXJjaGl2ZWQYBCABKAVCCAoGX2Vycm9yKowBCghMb2dMZXZlbBIZChVMT0dfTEVWRUxfVU5TUEVDSUZJRUQQABITCg9MT0dfTEVWRUxfVFJBQ0UQARITCg9MT0dfTEVWRUxfREVCVUcQAhISCg5MT0dfTEVWRUxfSU5GTxADEhIKDkxPR19MRVZFTF9XQVJOEAQSEwoPTE9HX0xFVkVMX0VSUk9SEAVCTVpLZ2l0aHViLmNvbS9vYmllbnRlL2Nsb3VkL2FwcHMvc2hhcmVkL3Byb3RvL29iaWVudGUvY2xvdWQvY29tbW9uL3YxO2NvbW1vbnYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * Pagination represents pagination information for list responses
@@ -150,6 +150,147 @@ export type VPSSize = Message<"obiente.cloud.common.v1.VPSSize"> & {
  */
 export const VPSSizeSchema: GenMessage<VPSSize> = /*@__PURE__*/
   messageDesc(file_obiente_cloud_common_v1_common, 1);
+
+/**
+ * ExtractServerFileRequest is a shared request message for extracting zip files
+ * Resource-specific services should embed or reference this in their own request types
+ *
+ * @generated from message obiente.cloud.common.v1.ExtractServerFileRequest
+ */
+export type ExtractServerFileRequest = Message<"obiente.cloud.common.v1.ExtractServerFileRequest"> & {
+  /**
+   * Path to the zip file to extract
+   *
+   * @generated from field: string zip_path = 1;
+   */
+  zipPath: string;
+
+  /**
+   * Directory path where files should be extracted
+   *
+   * @generated from field: string destination_path = 2;
+   */
+  destinationPath: string;
+
+  /**
+   * If specified, extract to this volume instead of container filesystem
+   *
+   * @generated from field: optional string volume_name = 3;
+   */
+  volumeName?: string;
+};
+
+/**
+ * Describes the message obiente.cloud.common.v1.ExtractServerFileRequest.
+ * Use `create(ExtractServerFileRequestSchema)` to create a new message.
+ */
+export const ExtractServerFileRequestSchema: GenMessage<ExtractServerFileRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_common_v1_common, 2);
+
+/**
+ * ExtractServerFileResponse is a shared response message for extracting zip files
+ *
+ * @generated from message obiente.cloud.common.v1.ExtractServerFileResponse
+ */
+export type ExtractServerFileResponse = Message<"obiente.cloud.common.v1.ExtractServerFileResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * @generated from field: optional string error = 2;
+   */
+  error?: string;
+
+  /**
+   * Number of files successfully extracted
+   *
+   * @generated from field: int32 files_extracted = 3;
+   */
+  filesExtracted: number;
+};
+
+/**
+ * Describes the message obiente.cloud.common.v1.ExtractServerFileResponse.
+ * Use `create(ExtractServerFileResponseSchema)` to create a new message.
+ */
+export const ExtractServerFileResponseSchema: GenMessage<ExtractServerFileResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_common_v1_common, 3);
+
+/**
+ * CreateServerFileArchiveRequest is a shared request message for creating zip archives
+ * Resource-specific services should embed or reference this in their own request types
+ *
+ * @generated from message obiente.cloud.common.v1.CreateServerFileArchiveRequest
+ */
+export type CreateServerFileArchiveRequest = Message<"obiente.cloud.common.v1.CreateServerFileArchiveRequest"> & {
+  /**
+   * Paths to files/folders to zip
+   *
+   * @generated from field: repeated string source_paths = 1;
+   */
+  sourcePaths: string[];
+
+  /**
+   * Path where the zip file should be created
+   *
+   * @generated from field: string destination_path = 2;
+   */
+  destinationPath: string;
+
+  /**
+   * If true, zip includes the parent folder; if false, zip contains files directly
+   *
+   * @generated from field: bool include_parent_folder = 3;
+   */
+  includeParentFolder: boolean;
+};
+
+/**
+ * Describes the message obiente.cloud.common.v1.CreateServerFileArchiveRequest.
+ * Use `create(CreateServerFileArchiveRequestSchema)` to create a new message.
+ */
+export const CreateServerFileArchiveRequestSchema: GenMessage<CreateServerFileArchiveRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_common_v1_common, 4);
+
+/**
+ * CreateServerFileArchiveResponse is a shared response message for creating zip archives
+ *
+ * @generated from message obiente.cloud.common.v1.CreateServerFileArchiveResponse
+ */
+export type CreateServerFileArchiveResponse = Message<"obiente.cloud.common.v1.CreateServerFileArchiveResponse"> & {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * @generated from field: optional string error = 2;
+   */
+  error?: string;
+
+  /**
+   * Path to the created zip file
+   *
+   * @generated from field: string archive_path = 3;
+   */
+  archivePath: string;
+
+  /**
+   * Number of files archived
+   *
+   * @generated from field: int32 files_archived = 4;
+   */
+  filesArchived: number;
+};
+
+/**
+ * Describes the message obiente.cloud.common.v1.CreateServerFileArchiveResponse.
+ * Use `create(CreateServerFileArchiveResponseSchema)` to create a new message.
+ */
+export const CreateServerFileArchiveResponseSchema: GenMessage<CreateServerFileArchiveResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_common_v1_common, 5);
 
 /**
  * LogLevel represents the severity/type of a log line

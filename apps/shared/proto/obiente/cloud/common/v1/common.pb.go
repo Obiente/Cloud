@@ -284,6 +284,260 @@ func (x *VPSSize) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+// ExtractServerFileRequest is a shared request message for extracting zip files
+// Resource-specific services should embed or reference this in their own request types
+type ExtractServerFileRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ZipPath         string                 `protobuf:"bytes,1,opt,name=zip_path,json=zipPath,proto3" json:"zip_path,omitempty"`                         // Path to the zip file to extract
+	DestinationPath string                 `protobuf:"bytes,2,opt,name=destination_path,json=destinationPath,proto3" json:"destination_path,omitempty"` // Directory path where files should be extracted
+	VolumeName      *string                `protobuf:"bytes,3,opt,name=volume_name,json=volumeName,proto3,oneof" json:"volume_name,omitempty"`          // If specified, extract to this volume instead of container filesystem
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ExtractServerFileRequest) Reset() {
+	*x = ExtractServerFileRequest{}
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExtractServerFileRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExtractServerFileRequest) ProtoMessage() {}
+
+func (x *ExtractServerFileRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExtractServerFileRequest.ProtoReflect.Descriptor instead.
+func (*ExtractServerFileRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_common_v1_common_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ExtractServerFileRequest) GetZipPath() string {
+	if x != nil {
+		return x.ZipPath
+	}
+	return ""
+}
+
+func (x *ExtractServerFileRequest) GetDestinationPath() string {
+	if x != nil {
+		return x.DestinationPath
+	}
+	return ""
+}
+
+func (x *ExtractServerFileRequest) GetVolumeName() string {
+	if x != nil && x.VolumeName != nil {
+		return *x.VolumeName
+	}
+	return ""
+}
+
+// ExtractServerFileResponse is a shared response message for extracting zip files
+type ExtractServerFileResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Success        bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Error          *string                `protobuf:"bytes,2,opt,name=error,proto3,oneof" json:"error,omitempty"`
+	FilesExtracted int32                  `protobuf:"varint,3,opt,name=files_extracted,json=filesExtracted,proto3" json:"files_extracted,omitempty"` // Number of files successfully extracted
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ExtractServerFileResponse) Reset() {
+	*x = ExtractServerFileResponse{}
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExtractServerFileResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExtractServerFileResponse) ProtoMessage() {}
+
+func (x *ExtractServerFileResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExtractServerFileResponse.ProtoReflect.Descriptor instead.
+func (*ExtractServerFileResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_common_v1_common_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ExtractServerFileResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *ExtractServerFileResponse) GetError() string {
+	if x != nil && x.Error != nil {
+		return *x.Error
+	}
+	return ""
+}
+
+func (x *ExtractServerFileResponse) GetFilesExtracted() int32 {
+	if x != nil {
+		return x.FilesExtracted
+	}
+	return 0
+}
+
+// CreateServerFileArchiveRequest is a shared request message for creating zip archives
+// Resource-specific services should embed or reference this in their own request types
+type CreateServerFileArchiveRequest struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	SourcePaths         []string               `protobuf:"bytes,1,rep,name=source_paths,json=sourcePaths,proto3" json:"source_paths,omitempty"`                            // Paths to files/folders to zip
+	DestinationPath     string                 `protobuf:"bytes,2,opt,name=destination_path,json=destinationPath,proto3" json:"destination_path,omitempty"`                // Path where the zip file should be created
+	IncludeParentFolder bool                   `protobuf:"varint,3,opt,name=include_parent_folder,json=includeParentFolder,proto3" json:"include_parent_folder,omitempty"` // If true, zip includes the parent folder; if false, zip contains files directly
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *CreateServerFileArchiveRequest) Reset() {
+	*x = CreateServerFileArchiveRequest{}
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateServerFileArchiveRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateServerFileArchiveRequest) ProtoMessage() {}
+
+func (x *CreateServerFileArchiveRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateServerFileArchiveRequest.ProtoReflect.Descriptor instead.
+func (*CreateServerFileArchiveRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_common_v1_common_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *CreateServerFileArchiveRequest) GetSourcePaths() []string {
+	if x != nil {
+		return x.SourcePaths
+	}
+	return nil
+}
+
+func (x *CreateServerFileArchiveRequest) GetDestinationPath() string {
+	if x != nil {
+		return x.DestinationPath
+	}
+	return ""
+}
+
+func (x *CreateServerFileArchiveRequest) GetIncludeParentFolder() bool {
+	if x != nil {
+		return x.IncludeParentFolder
+	}
+	return false
+}
+
+// CreateServerFileArchiveResponse is a shared response message for creating zip archives
+type CreateServerFileArchiveResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Error         *string                `protobuf:"bytes,2,opt,name=error,proto3,oneof" json:"error,omitempty"`
+	ArchivePath   string                 `protobuf:"bytes,3,opt,name=archive_path,json=archivePath,proto3" json:"archive_path,omitempty"`        // Path to the created zip file
+	FilesArchived int32                  `protobuf:"varint,4,opt,name=files_archived,json=filesArchived,proto3" json:"files_archived,omitempty"` // Number of files archived
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateServerFileArchiveResponse) Reset() {
+	*x = CreateServerFileArchiveResponse{}
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateServerFileArchiveResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateServerFileArchiveResponse) ProtoMessage() {}
+
+func (x *CreateServerFileArchiveResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_common_v1_common_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateServerFileArchiveResponse.ProtoReflect.Descriptor instead.
+func (*CreateServerFileArchiveResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_common_v1_common_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *CreateServerFileArchiveResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *CreateServerFileArchiveResponse) GetError() string {
+	if x != nil && x.Error != nil {
+		return *x.Error
+	}
+	return ""
+}
+
+func (x *CreateServerFileArchiveResponse) GetArchivePath() string {
+	if x != nil {
+		return x.ArchivePath
+	}
+	return ""
+}
+
+func (x *CreateServerFileArchiveResponse) GetFilesArchived() int32 {
+	if x != nil {
+		return x.FilesArchived
+	}
+	return 0
+}
+
 var File_obiente_cloud_common_v1_common_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_common_v1_common_proto_rawDesc = "" +
@@ -315,7 +569,28 @@ const file_obiente_cloud_common_v1_common_proto_rawDesc = "" +
 	"updated_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampH\x02R\tupdatedAt\x88\x01\x01B\x0e\n" +
 	"\f_descriptionB\r\n" +
 	"\v_created_atB\r\n" +
-	"\v_updated_at*\x8c\x01\n" +
+	"\v_updated_at\"\x96\x01\n" +
+	"\x18ExtractServerFileRequest\x12\x19\n" +
+	"\bzip_path\x18\x01 \x01(\tR\azipPath\x12)\n" +
+	"\x10destination_path\x18\x02 \x01(\tR\x0fdestinationPath\x12$\n" +
+	"\vvolume_name\x18\x03 \x01(\tH\x00R\n" +
+	"volumeName\x88\x01\x01B\x0e\n" +
+	"\f_volume_name\"\x83\x01\n" +
+	"\x19ExtractServerFileResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x19\n" +
+	"\x05error\x18\x02 \x01(\tH\x00R\x05error\x88\x01\x01\x12'\n" +
+	"\x0ffiles_extracted\x18\x03 \x01(\x05R\x0efilesExtractedB\b\n" +
+	"\x06_error\"\xa2\x01\n" +
+	"\x1eCreateServerFileArchiveRequest\x12!\n" +
+	"\fsource_paths\x18\x01 \x03(\tR\vsourcePaths\x12)\n" +
+	"\x10destination_path\x18\x02 \x01(\tR\x0fdestinationPath\x122\n" +
+	"\x15include_parent_folder\x18\x03 \x01(\bR\x13includeParentFolder\"\xaa\x01\n" +
+	"\x1fCreateServerFileArchiveResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x19\n" +
+	"\x05error\x18\x02 \x01(\tH\x00R\x05error\x88\x01\x01\x12!\n" +
+	"\farchive_path\x18\x03 \x01(\tR\varchivePath\x12%\n" +
+	"\x0efiles_archived\x18\x04 \x01(\x05R\rfilesArchivedB\b\n" +
+	"\x06_error*\x8c\x01\n" +
 	"\bLogLevel\x12\x19\n" +
 	"\x15LOG_LEVEL_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fLOG_LEVEL_TRACE\x10\x01\x12\x13\n" +
@@ -337,16 +612,20 @@ func file_obiente_cloud_common_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_obiente_cloud_common_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_obiente_cloud_common_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_obiente_cloud_common_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_obiente_cloud_common_v1_common_proto_goTypes = []any{
-	(LogLevel)(0),                 // 0: obiente.cloud.common.v1.LogLevel
-	(*Pagination)(nil),            // 1: obiente.cloud.common.v1.Pagination
-	(*VPSSize)(nil),               // 2: obiente.cloud.common.v1.VPSSize
-	(*timestamppb.Timestamp)(nil), // 3: google.protobuf.Timestamp
+	(LogLevel)(0),                           // 0: obiente.cloud.common.v1.LogLevel
+	(*Pagination)(nil),                      // 1: obiente.cloud.common.v1.Pagination
+	(*VPSSize)(nil),                         // 2: obiente.cloud.common.v1.VPSSize
+	(*ExtractServerFileRequest)(nil),        // 3: obiente.cloud.common.v1.ExtractServerFileRequest
+	(*ExtractServerFileResponse)(nil),       // 4: obiente.cloud.common.v1.ExtractServerFileResponse
+	(*CreateServerFileArchiveRequest)(nil),  // 5: obiente.cloud.common.v1.CreateServerFileArchiveRequest
+	(*CreateServerFileArchiveResponse)(nil), // 6: obiente.cloud.common.v1.CreateServerFileArchiveResponse
+	(*timestamppb.Timestamp)(nil),           // 7: google.protobuf.Timestamp
 }
 var file_obiente_cloud_common_v1_common_proto_depIdxs = []int32{
-	3, // 0: obiente.cloud.common.v1.VPSSize.created_at:type_name -> google.protobuf.Timestamp
-	3, // 1: obiente.cloud.common.v1.VPSSize.updated_at:type_name -> google.protobuf.Timestamp
+	7, // 0: obiente.cloud.common.v1.VPSSize.created_at:type_name -> google.protobuf.Timestamp
+	7, // 1: obiente.cloud.common.v1.VPSSize.updated_at:type_name -> google.protobuf.Timestamp
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
@@ -360,13 +639,16 @@ func file_obiente_cloud_common_v1_common_proto_init() {
 		return
 	}
 	file_obiente_cloud_common_v1_common_proto_msgTypes[1].OneofWrappers = []any{}
+	file_obiente_cloud_common_v1_common_proto_msgTypes[2].OneofWrappers = []any{}
+	file_obiente_cloud_common_v1_common_proto_msgTypes[3].OneofWrappers = []any{}
+	file_obiente_cloud_common_v1_common_proto_msgTypes[5].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_common_v1_common_proto_rawDesc), len(file_obiente_cloud_common_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   2,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
