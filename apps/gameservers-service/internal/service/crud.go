@@ -7,6 +7,7 @@ import (
 	"time"
 
 	gameserverorchestrator "gameservers-service/internal/orchestrator"
+
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
@@ -15,6 +16,9 @@ import (
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 )
 
 // Helper function to resolve user's default organization ID
@@ -270,15 +274,24 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 		return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("game server %s not found", gameServerID))
 	}
 
+	// Track if CPU or memory changed (for updating running container)
+	var cpuChanged, memoryChanged bool
+	var oldMemoryBytes int64
+	var oldCPUCores int32
+
 	// Update fields if provided
 	if req.Msg.Name != nil {
 		dbGameServer.Name = *req.Msg.Name
 	}
 	if req.Msg.MemoryBytes != nil {
+		oldMemoryBytes = dbGameServer.MemoryBytes
 		dbGameServer.MemoryBytes = *req.Msg.MemoryBytes
+		memoryChanged = oldMemoryBytes != *req.Msg.MemoryBytes
 	}
 	if req.Msg.CpuCores != nil {
+		oldCPUCores = dbGameServer.CPUCores
 		dbGameServer.CPUCores = *req.Msg.CpuCores
+		cpuChanged = oldCPUCores != *req.Msg.CpuCores
 	}
 	if req.Msg.StartCommand != nil {
 		dbGameServer.StartCommand = req.Msg.StartCommand
@@ -295,6 +308,26 @@ func (s *Service) UpdateGameServer(ctx context.Context, req *connect.Request[gam
 
 	if err := s.repo.Update(ctx, dbGameServer); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update game server: %w", err))
+	}
+
+	// If CPU or memory changed and container is running, update container resource limits
+	if (cpuChanged || memoryChanged) && dbGameServer.ContainerID != nil && *dbGameServer.ContainerID != "" {
+		// Check if container is actually running
+		manager, err := s.getGameServerManager()
+		if err == nil && manager != nil {
+			// Update container resource limits in background (non-blocking)
+			go func() {
+				updateCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				
+				if err := s.updateContainerResourceLimits(updateCtx, *dbGameServer.ContainerID, dbGameServer.MemoryBytes, dbGameServer.CPUCores); err != nil {
+					logger.Warn("[UpdateGameServer] Failed to update container resource limits for game server %s: %v", gameServerID, err)
+				} else {
+					logger.Info("[UpdateGameServer] Successfully updated container resource limits for game server %s (Memory: %d bytes, CPU: %d cores)", 
+						gameServerID, dbGameServer.MemoryBytes, dbGameServer.CPUCores)
+				}
+			}()
+		}
 	}
 
 	// Fetch updated game server
@@ -593,4 +626,36 @@ func addGameSpecificEnvVars(envVars map[string]string, gameType gameserversv1.Ga
 		// cm2network/tf2 may require SRCDS_TOKEN for Steam authentication
 		// Similar to CS2, users should configure this if needed
 	}
+}
+
+// updateContainerResourceLimits updates the resource limits of a running container
+func (s *Service) updateContainerResourceLimits(ctx context.Context, containerID string, memoryBytes int64, cpuCores int32) error {
+	// Create Docker client
+	dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return fmt.Errorf("failed to create Docker client: %w", err)
+	}
+	defer dockerClient.Close()
+
+	// Convert CPU cores to NanoCPUs (1 CPU = 1e9 nanoseconds)
+	nanoCPUs := int64(float64(cpuCores) * 1e9)
+	
+	// Convert CPU cores to CPU shares (1024 shares = 1 core)
+	cpuShares := int64(cpuCores) * 1024
+
+	// Update container resources
+	updateConfig := container.UpdateConfig{
+		Resources: container.Resources{
+			Memory:    memoryBytes,
+			CPUShares: cpuShares,  // Relative priority
+			NanoCPUs:  nanoCPUs,   // Hard CPU limit
+		},
+	}
+
+	_, err = dockerClient.ContainerUpdate(ctx, containerID, updateConfig)
+	if err != nil {
+		return fmt.Errorf("failed to update container %s: %w", containerID[:12], err)
+	}
+
+	return nil
 }
