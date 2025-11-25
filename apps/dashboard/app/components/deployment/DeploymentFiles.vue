@@ -4,7 +4,7 @@
       justify="between"
       align="center"
       wrap="wrap"
-      class="flex-col sm:flex-row gap-2 sm:gap-0"
+      class="flex-col sm:flex-row gap-2 sm:gap-0 relative"
     >
       <OuiFlex gap="sm" align="center" class="min-w-0 flex-1">
         <OuiBreadcrumbs class="min-w-0">
@@ -27,6 +27,13 @@
           </template>
         </OuiBreadcrumbs>
       </OuiFlex>
+
+      <!-- File Browser Search -->
+      <FileBrowserSearch
+        :file-browser-client="fileBrowserClient"
+        :source="source"
+        @result-click="handleSearchResultClick"
+      />
 
       <OuiFlex
         gap="sm"
@@ -562,6 +569,7 @@
     type TreeNode as ArkTreeNode,
   } from "@ark-ui/vue/collection";
   import FileBrowserSidebar from "../shared/FileBrowserSidebar.vue";
+  import FileBrowserSearch from "../shared/FileBrowserSearch.vue";
   import FileUploader from "./FileUploader.vue";
 import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
   import OuiMenuItem from "~/components/oui/MenuItem.vue";
@@ -1315,6 +1323,14 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
     }
 
     return { unviewable: false };
+  }
+
+  function handleSearchResultClick(result: ExplorerNode) {
+    if (result.type === "file") {
+      handleLoadFile(result);
+    } else if (result.type === "directory") {
+      handleOpen(result, { ensureExpanded: true });
+    }
   }
 
   async function handleLoadFile(node: ExplorerNode) {
