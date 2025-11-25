@@ -1,5 +1,9 @@
 FROM golang:1.25-alpine AS builder
 
+# Accept build arguments for multi-arch support
+ARG TARGETARCH
+ARG TARGETOS=linux
+
 WORKDIR /build
 
 # Install build dependencies
@@ -25,7 +29,7 @@ COPY apps/vps-gateway/ ./apps/vps-gateway/
 
 # Build the application
 WORKDIR /build/apps/vps-gateway
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o vps-gateway ./main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -installsuffix cgo -o vps-gateway ./main.go
 
 # Final stage
 FROM alpine:latest

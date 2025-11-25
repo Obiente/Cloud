@@ -1,6 +1,10 @@
 # Build stage for Deployments Service
 FROM golang:1.25-alpine AS go-builder
 
+# Accept build arguments for multi-arch support
+ARG TARGETARCH
+ARG TARGETOS=linux
+
 # Install build dependencies
 RUN apk add --no-cache git make
 
@@ -36,7 +40,7 @@ COPY apps/deployments-service/ ./apps/deployments-service/
 WORKDIR /build/apps/deployments-service
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -trimpath \
     -ldflags="-w -s -extldflags '-static'" \
     -o /build/deployments-service .
@@ -81,8 +85,10 @@ ENV DOCKER_CLI_PLUGIN_PATH=/root/.docker/cli-plugins \
 # Install docker-buildx plugin from Docker's official releases
 # BuildKit requires buildx for advanced build features (faster builds, better caching)
 # This layer will be cached unless BUILDX_VERSION changes
+# Use TARGETARCH to download the correct buildx binary for the target architecture
 RUN mkdir -p /root/.docker/cli-plugins && \
-    curl -fsSL "https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-amd64" -o /tmp/docker-buildx && \
+    ARCH=$(echo ${TARGETARCH} | sed 's/arm64/aarch64/') && \
+    curl -fsSL "https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-${ARCH}" -o /tmp/docker-buildx && \
     chmod +x /tmp/docker-buildx && \
     mv /tmp/docker-buildx /root/.docker/cli-plugins/docker-buildx && \
     rm -f /tmp/docker-buildx

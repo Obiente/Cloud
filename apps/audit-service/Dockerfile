@@ -1,6 +1,10 @@
 # Build stage for Audit Service
 FROM golang:1.25-alpine AS go-builder
 
+# Accept build arguments for multi-arch support
+ARG TARGETARCH
+ARG TARGETOS=linux
+
 # Install build dependencies
 RUN apk add --no-cache git make
 
@@ -36,7 +40,7 @@ COPY apps/audit-service/ ./apps/audit-service/
 WORKDIR /build/apps/audit-service
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -trimpath \
     -ldflags="-w -s -extldflags '-static'" \
     -o /build/audit-service .
