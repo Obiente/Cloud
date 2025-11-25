@@ -282,6 +282,120 @@ template_exists() {
     qm list | grep -q "$template_name" 2>/dev/null
 }
 
+# Check if template has linked clones (VMs using the template's base volume)
+check_linked_clones() {
+    local template_vmid="$1"
+    local linked_vms=()
+    
+    # Get all VMs and check if they reference the template's base volume
+    # Linked clones will have disk references like "local:9001/base-9001-disk-0.raw/300/vm-300-disk-0.qcow2"
+    # or for LVM: "local-lvmthin:base-9001-disk-0,backing=local-lvmthin:base-9001-disk-0"
+    while IFS= read -r line; do
+        local vmid=$(echo "$line" | awk '{print $1}')
+        if [ -z "$vmid" ] || ! [[ "$vmid" =~ ^[0-9]+$ ]]; then
+            continue
+        fi
+        
+        # Skip the template itself
+        if [ "$vmid" = "$template_vmid" ]; then
+            continue
+        fi
+        
+        # Get VM config and check for references to template's base volume
+        local config=$(qm config "$vmid" 2>/dev/null)
+        if echo "$config" | grep -q "base-$template_vmid-disk-0"; then
+            local vm_name=$(echo "$line" | awk '{print $2}')
+            linked_vms+=("$vmid:$vm_name")
+        fi
+    done < <(qm list 2>/dev/null | tail -n +2)
+    
+    echo "${linked_vms[@]}"
+}
+
+# Convert linked clone to full clone
+convert_to_full_clone() {
+    local vm_id="$1"
+    local vm_name="$2"
+    local template_vmid="$3"
+    
+    print_info "Converting VM $vm_id ($vm_name) from linked clone to full clone..."
+    
+    # Get VM config to find the disk
+    local config=$(qm config "$vm_id" 2>/dev/null)
+    local disk_key=""
+    local disk_value=""
+    local storage=""
+    
+    # Find the disk that references the template
+    for key in scsi0 virtio0 sata0 ide0; do
+        local disk=$(echo "$config" | grep "^$key:" | cut -d' ' -f2- | tr -d ' ')
+        if [ -n "$disk" ] && echo "$disk" | grep -q "base-$template_vmid-disk-0"; then
+            disk_key="$key"
+            disk_value="$disk"
+            
+            # Extract storage from disk value
+            # Format: storage:path or storage:vm-XXX-disk-0
+            if echo "$disk" | grep -q ":"; then
+                storage=$(echo "$disk" | cut -d':' -f1)
+            fi
+            break
+        fi
+    done
+    
+    if [ -z "$disk_key" ] || [ -z "$storage" ]; then
+        print_error "Could not determine disk or storage for VM $vm_id"
+        return 1
+    fi
+    
+    # Stop VM if it's running (required for disk conversion)
+    local vm_status=$(qm status "$vm_id" 2>/dev/null | awk '{print $2}')
+    local was_running=false
+    if [ "$vm_status" = "running" ]; then
+        print_info "Stopping VM $vm_id (required for disk conversion)..."
+        qm shutdown "$vm_id" 2>/dev/null || true
+        # Wait for VM to stop (max 30 seconds)
+        local wait_count=0
+        while [ $wait_count -lt 30 ]; do
+            sleep 1
+            vm_status=$(qm status "$vm_id" 2>/dev/null | awk '{print $2}')
+            if [ "$vm_status" != "running" ]; then
+                break
+            fi
+            ((wait_count++))
+        done
+        
+        # Force stop if still running
+        if [ "$vm_status" = "running" ]; then
+            print_info "Force stopping VM $vm_id..."
+            qm stop "$vm_id" 2>/dev/null || true
+            sleep 2
+        fi
+        was_running=true
+    fi
+    
+    # Convert linked clone to full clone by moving disk to same storage
+    # This forces Proxmox to create a full copy, breaking the link to the template
+    print_info "Converting disk $disk_key to full clone (moving to same storage: $storage)..."
+    if qm disk move "$vm_id" "$disk_key" --storage "$storage" 2>/dev/null; then
+        print_success "Successfully converted VM $vm_id to full clone"
+        
+        # Restart VM if it was running
+        if [ "$was_running" = true ]; then
+            print_info "Restarting VM $vm_id..."
+            qm start "$vm_id" 2>/dev/null || true
+        fi
+        return 0
+    else
+        print_error "Failed to convert VM $vm_id to full clone"
+        # Try to restart VM if it was running
+        if [ "$was_running" = true ]; then
+            print_info "Attempting to restart VM $vm_id..."
+            qm start "$vm_id" 2>/dev/null || true
+        fi
+        return 1
+    fi
+}
+
 # Create or update template
 create_or_update_template() {
     local template_name="$1"
@@ -326,10 +440,71 @@ create_or_update_template() {
                 fi
             fi
             
-            # Delete existing template
+            # Check for linked clones before deleting template
+            print_info "Checking for VMs using this template (linked clones)..."
+            local linked_clones=($(check_linked_clones "$existing_vmid"))
+            
+            if [ ${#linked_clones[@]} -gt 0 ]; then
+                print_warning "Found ${#linked_clones[@]} VM(s) using this template as linked clones:"
+                for linked_vm in "${linked_clones[@]}"; do
+                    local vm_id=$(echo "$linked_vm" | cut -d':' -f1)
+                    local vm_name=$(echo "$linked_vm" | cut -d':' -f2)
+                    print_warning "  - VM $vm_id: $vm_name"
+                done
+                
+                if [ "$skip_prompts" = true ]; then
+                    print_info "Auto-converting linked clones to full clones (--recreate-all mode)..."
+                else
+                    echo ""
+                    echo -n "Convert these VMs to full clones to proceed? [Y/n]: "
+                    # Read from terminal if available, otherwise stdin
+                    if [ -t 0 ]; then
+                        read -r convert_vms || convert_vms="Y"
+                    elif [ -c /dev/tty ]; then
+                        read -r convert_vms < /dev/tty || convert_vms="Y"
+                    else
+                        read -r convert_vms || convert_vms="Y"
+                    fi
+                    convert_vms=${convert_vms:-Y}
+                    
+                    if [[ ! "$convert_vms" =~ ^[Yy]$ ]]; then
+                        print_warning "Cannot update template while linked clones exist"
+                        print_info "Skipping template: $template_name"
+                        return 1
+                    fi
+                fi
+                
+                # Convert each linked clone to full clone
+                local convert_success=true
+                for linked_vm in "${linked_clones[@]}"; do
+                    local vm_id=$(echo "$linked_vm" | cut -d':' -f1)
+                    local vm_name=$(echo "$linked_vm" | cut -d':' -f2)
+                    if ! convert_to_full_clone "$vm_id" "$vm_name" "$existing_vmid"; then
+                        convert_success=false
+                    fi
+                done
+                
+                if [ "$convert_success" != true ]; then
+                    print_error "Failed to convert some linked clones to full clones"
+                    print_info "Skipping template: $template_name"
+                    return 1
+                fi
+                
+                # Wait a moment for disk operations to complete
+                sleep 2
+                
+                print_success "All linked clones converted to full clones"
+            fi
+            
+            # Delete existing template (only if no linked clones exist)
             print_info "Deleting existing template..."
-            qm destroy "$existing_vmid" --purge 2>/dev/null || true
-            print_success "Deleted existing template"
+            if qm destroy "$existing_vmid" --purge 2>/dev/null; then
+                print_success "Deleted existing template"
+            else
+                print_error "Failed to delete template (may still be in use)"
+                print_info "Skipping template: $template_name"
+                return 1
+            fi
         fi
     fi
     
@@ -452,11 +627,11 @@ create_or_update_template() {
     qm set "$vmid" --serial0 socket --vga serial0
     qm set "$vmid" --agent enabled=1
     
-    # Set kernel boot arguments to use device names instead of UUIDs
-    # This prevents boot failures when cloning (cloned VMs have different disk UUIDs)
-    # We use /dev/sda1 for scsi0 disks (cloud images typically use scsi0)
-    print_info "Setting kernel boot arguments to use device names (fixes UUID issues on clone)..."
-    qm set "$vmid" --args "root=/dev/sda1 rootdelay=10"
+    # Note: We do NOT set kernel boot arguments (args) in the template
+    # Kernel args can conflict with cloud-init ISO generation when cloning
+    # Instead, the cloud-init userData snippet includes a script that fixes
+    # /etc/fstab and GRUB to use device names (/dev/sda1, /dev/vda1) instead of UUIDs
+    # This approach works better with cloud-init and avoids QEMU errors
     
     # Verify disk is attached
     print_info "Verifying disk attachment..."
