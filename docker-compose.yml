@@ -42,6 +42,42 @@ services:
       retries: 3
       start_period: 40s
 
+  # Notifications Service - Microservice for user notifications
+  notifications-service:
+    image: obiente/notifications-service:latest
+    build:
+      context: .
+      dockerfile: apps/notifications-service/Dockerfile
+    container_name: obiente-notifications-service
+    environment:
+      PORT: 3012
+      <<: [*common-database, *common-metrics-db, *common-auth]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    dns_search: []
+    networks:
+      - obiente-network
+    labels:
+      - "cloud.obiente.service=notifications-service"
+      - "cloud.obiente.traefik=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.notifications-service.rule=Host(`notifications-service.${DOMAIN:-localhost}`) || Host(`notifications-service.localhost`)"
+      - "traefik.http.routers.notifications-service.entrypoints=web"
+      - "traefik.http.services.notifications-service.loadbalancer.server.port=3012"
+      - "traefik.http.routers.notifications-service-secure.rule=Host(`notifications-service.${DOMAIN:-localhost}`) || Host(`notifications-service.localhost`)"
+      - "traefik.http.routers.notifications-service-secure.entrypoints=websecure"
+      - "traefik.http.routers.notifications-service-secure.service=notifications-service"
+      - "traefik.http.routers.notifications-service-secure.tls=true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3012/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   # Support Service - Microservice for support ticket management
   support-service:
     image: obiente/support-service:latest

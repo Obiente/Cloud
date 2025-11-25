@@ -1181,6 +1181,52 @@ services:
     networks:
       - obiente-network
 
+  notifications-service:
+    image: ghcr.io/obiente/cloud-notifications-service:latest
+    environment:
+      PORT: 3012
+      <<: [*common-database, *common-metrics-db, *common-auth]
+      DB_HOST: pgpool
+      METRICS_DB_HOST: metrics-pgpool
+    deploy:
+      mode: replicated
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 10
+        window: 60s
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+      labels:
+        - "cloud.obiente.traefik=true"
+        - "traefik.enable=true"
+        - "traefik.http.routers.notifications-service.rule=Host(`notifications-service.${DOMAIN}`)"
+        - "traefik.http.routers.notifications-service.entrypoints=web"
+        - "traefik.http.services.notifications-service.loadbalancer.server.port=3012"
+        - "traefik.http.routers.notifications-service-secure.rule=Host(`notifications-service.${DOMAIN}`)"
+        - "traefik.http.routers.notifications-service-secure.entrypoints=websecure"
+        - "traefik.http.routers.notifications-service-secure.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.notifications-service-secure.service=notifications-service"
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost 3012 || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost 3012 || exit 1; fi'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    dns_search: []
+    networks:
+      - obiente-network
+
   # Superadmin Service - Microservice for superadmin operations
   superadmin-service:
     image: ghcr.io/obiente/cloud-superadmin-service:latest
