@@ -242,16 +242,39 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 	}
 
 	// Verify VM actually exists before creating VPS record
-	// If GetVMStatus fails with "does not exist", the VM creation failed
-	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodeName, vmIDInt)
-	if err != nil {
-		errorMsg := err.Error()
-		// Check if the error indicates the VM config doesn't exist (VM creation failed)
-		if strings.Contains(errorMsg, "does not exist") || strings.Contains(errorMsg, "Configuration file") {
-			return nil, "", fmt.Errorf("VM creation failed: VM %d does not exist in Proxmox. The VM may not have been created properly: %w", vmIDInt, err)
+	// Proxmox may need a moment to create the VM configuration file, so we retry with backoff
+	var proxmoxStatus string
+	maxRetries := 10
+	retryDelay := 500 * time.Millisecond
+	
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		status, statusErr := proxmoxClient.GetVMStatus(ctx, nodeName, vmIDInt)
+		if statusErr == nil {
+			// Successfully got VM status
+			proxmoxStatus = status
+			break
 		}
-		// For other errors, still fail - we need to verify the VM exists
-		return nil, "", fmt.Errorf("failed to verify VM exists after creation: %w", err)
+		
+		errorMsg := statusErr.Error()
+		// If the error indicates the VM config doesn't exist, retry (Proxmox might still be creating it)
+		if strings.Contains(errorMsg, "does not exist") || strings.Contains(errorMsg, "Configuration file") {
+			if attempt < maxRetries-1 {
+				// Not the last attempt, wait and retry
+				logger.Debug("[VPSManager] VM %d config not yet available (attempt %d/%d), retrying in %v...", vmIDInt, attempt+1, maxRetries, retryDelay)
+				time.Sleep(retryDelay)
+				retryDelay = time.Duration(float64(retryDelay) * 1.5) // Exponential backoff, max ~19 seconds total
+				continue
+			}
+			// Last attempt failed - VM creation likely failed
+			return nil, "", fmt.Errorf("VM creation failed: VM %d does not exist in Proxmox after %d attempts. The VM may not have been created properly: %w", vmIDInt, maxRetries, statusErr)
+		}
+		
+		// For other errors, fail immediately (not a timing issue)
+		return nil, "", fmt.Errorf("failed to verify VM exists after creation: %w", statusErr)
+	}
+	
+	if proxmoxStatus == "" {
+		return nil, "", fmt.Errorf("failed to get VM status after %d attempts", maxRetries)
 	}
 
 	// Map Proxmox status to our VPSStatus enum
