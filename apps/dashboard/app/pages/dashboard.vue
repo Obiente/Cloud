@@ -43,7 +43,7 @@
               class="h-4 w-4"
               :class="{ 'animate-spin': isLoading }"
             />
-            <span class="hidden sm:inline">Refresh</span>
+            <OuiText as="span" size="sm" class="hidden sm:inline">Refresh</OuiText>
           </OuiButton>
           <OuiButton
             color="primary"
@@ -52,8 +52,8 @@
             @click="navigateTo('/deployments')"
           >
             <RocketLaunchIcon class="h-4 w-4" />
-            <span class="hidden sm:inline">New Deployment</span>
-            <span class="sm:hidden">New</span>
+            <OuiText as="span" size="sm" class="hidden sm:inline">New Deployment</OuiText>
+            <OuiText as="span" size="sm" class="sm:hidden">New</OuiText>
           </OuiButton>
         </OuiFlex>
       </OuiFlex>

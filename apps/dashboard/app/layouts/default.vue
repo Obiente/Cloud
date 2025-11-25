@@ -111,6 +111,7 @@
         <AppNotifications
           v-model="isNotificationsOpen"
           :items="Array.from(notifications)"
+          :is-loading="isLoading"
           :anchor-element="notificationButtonElement"
           @update:items="
             (val) => {
@@ -244,7 +245,7 @@
   // Show superadmin sidebar if allowed is explicitly true (not null or false)
   const showSuperAdmin = computed(() => superAdmin.allowed.value === true);
   // Notifications state
-  const { notifications, unreadCount } = useNotifications();
+  const { notifications, unreadCount, isLoading } = useNotifications();
   const isNotificationsOpen = ref(false);
   const headerRef = ref<ComponentPublicInstance<typeof AppHeader> | null>(null);
   const notificationButtonElement = computed(() => {

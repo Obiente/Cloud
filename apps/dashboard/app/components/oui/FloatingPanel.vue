@@ -18,6 +18,7 @@
             'fixed',
             contentClass
           ]"
+          v-bind="$attrs"
         >
           <FloatingPanel.DragTrigger v-if="draggable">
             <FloatingPanel.Header

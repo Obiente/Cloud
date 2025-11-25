@@ -106,9 +106,10 @@
   --oui-interactive-focus: #9ca3af; /* muted grey focus ring */
 }
 
-/* Extra Dark theme: Make text dark on white primary buttons */
-:root[data-theme="extra-dark"] [data-variant="solid"][data-color="primary"] {
-  color: #0a0a0a !important; /* dark text on white buttons */
+/* Extra Dark theme: Make text dark on light primary buttons */
+:root[data-theme="extra-dark"] [data-variant="solid"][data-color="primary"],
+:root[data-theme="extra-dark"] [data-variant="solid"][data-color="primary"] * {
+  color: #0a0a0a !important; /* dark text on light buttons */
 }
 
 /* Dark Theme (normal dark mode with more life) */
@@ -141,4 +142,101 @@
   --oui-interactive-active: #2d2d2d; /* active press */
   --oui-interactive-disabled: #363636; /* disabled controls */
   --oui-interactive-focus: #c084fc; /* neon vibrant purple focus ring */
+}
+
+/* Ensure buttons use correct accent colors - override Tailwind bg-* classes */
+/* Use !important and high specificity to override any Tailwind generated classes */
+.oui-btn-base[data-variant="solid"][data-color="primary"],
+.oui-btn-base.bg-primary[data-variant="solid"],
+.oui-btn-base.bg-primary,
+button.oui-btn-base.bg-primary,
+button[data-variant="solid"][data-color="primary"],
+[data-variant="solid"][data-color="primary"].oui-btn-base,
+[data-variant="solid"][data-color="primary"].bg-primary,
+.bg-primary.oui-btn-base {
+  background-color: var(--oui-accent-primary) !important;
+}
+
+.oui-btn-base[data-variant="solid"][data-color="secondary"],
+.oui-btn-base.bg-secondary[data-variant="solid"],
+.oui-btn-base.bg-secondary,
+button.oui-btn-base.bg-secondary,
+button[data-variant="solid"][data-color="secondary"],
+[data-variant="solid"][data-color="secondary"].oui-btn-base,
+.bg-secondary.oui-btn-base {
+  background-color: var(--oui-accent-secondary) !important;
+}
+
+.oui-btn-base[data-variant="solid"][data-color="success"],
+.oui-btn-base.bg-success[data-variant="solid"],
+.oui-btn-base.bg-success,
+button.oui-btn-base.bg-success,
+button[data-variant="solid"][data-color="success"],
+[data-variant="solid"][data-color="success"].oui-btn-base,
+.bg-success.oui-btn-base {
+  background-color: var(--oui-accent-success) !important;
+}
+
+.oui-btn-base[data-variant="solid"][data-color="warning"],
+.oui-btn-base.bg-warning[data-variant="solid"],
+.oui-btn-base.bg-warning,
+button.oui-btn-base.bg-warning,
+button[data-variant="solid"][data-color="warning"],
+[data-variant="solid"][data-color="warning"].oui-btn-base,
+.bg-warning.oui-btn-base {
+  background-color: var(--oui-accent-warning) !important;
+}
+
+.oui-btn-base[data-variant="solid"][data-color="danger"],
+.oui-btn-base.bg-danger[data-variant="solid"],
+.oui-btn-base.bg-danger,
+button.oui-btn-base.bg-danger,
+button[data-variant="solid"][data-color="danger"],
+[data-variant="solid"][data-color="danger"].oui-btn-base,
+.bg-danger.oui-btn-base {
+  background-color: var(--oui-accent-danger) !important;
+}
+
+.oui-btn-base[data-variant="solid"][data-color="info"],
+.oui-btn-base.bg-info[data-variant="solid"],
+.oui-btn-base.bg-info,
+button.oui-btn-base.bg-info,
+button[data-variant="solid"][data-color="info"],
+[data-variant="solid"][data-color="info"].oui-btn-base,
+.bg-info.oui-btn-base {
+  background-color: var(--oui-accent-info) !important;
+}
+
+/* Also override hover states */
+.oui-btn-base[data-variant="solid"][data-color="primary"]:hover,
+.oui-btn-base.bg-primary:hover,
+button.oui-btn-base.bg-primary:hover,
+.bg-primary.oui-btn-base:hover {
+  background-color: color-mix(in srgb, var(--oui-accent-primary) 90%, transparent) !important;
+}
+
+/* Ensure badges use correct accent colors */
+.oui-badge-tone-solid.oui-badge-primary {
+  background-color: var(--oui-accent-primary) !important;
+  border-color: color-mix(in srgb, var(--oui-accent-primary) 70%, transparent) !important;
+}
+
+.oui-badge-tone-solid.oui-badge-success {
+  background-color: var(--oui-accent-success) !important;
+  border-color: color-mix(in srgb, var(--oui-accent-success) 70%, transparent) !important;
+}
+
+.oui-badge-tone-solid.oui-badge-warning {
+  background-color: var(--oui-accent-warning) !important;
+  border-color: color-mix(in srgb, var(--oui-accent-warning) 70%, transparent) !important;
+}
+
+.oui-badge-tone-solid.oui-badge-danger {
+  background-color: var(--oui-accent-danger) !important;
+  border-color: color-mix(in srgb, var(--oui-accent-danger) 70%, transparent) !important;
+}
+
+/* Fix text color for solid badges in extra-dark theme (light background needs dark text) */
+:root[data-theme="extra-dark"] .oui-badge-tone-solid.oui-badge-primary {
+  color: #0a0a0a !important; /* dark text on light background */
 }

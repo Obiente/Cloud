@@ -55,8 +55,8 @@
         <OuiMenu>
           <template #trigger>
             <OuiButton variant="ghost" size="sm" class="flex-1 sm:flex-initial">
-              <span class="hidden sm:inline">New</span>
-              <span class="sm:hidden">+</span>
+              <OuiText as="span" size="sm" class="hidden sm:inline">New</OuiText>
+              <OuiText as="span" size="sm" class="sm:hidden">+</OuiText>
             </OuiButton>
           </template>
           <template #default>
@@ -88,7 +88,7 @@
             class="h-4 w-4 sm:mr-1.5"
             :class="{ 'animate-spin': isLoadingTree }"
           />
-          <span class="hidden sm:inline">Refresh</span>
+          <OuiText as="span" size="sm" class="hidden sm:inline">Refresh</OuiText>
         </OuiButton>
         <OuiButton
           variant="ghost"
@@ -96,8 +96,8 @@
           @click="showUpload = !showUpload"
           class="flex-1 sm:flex-initial"
         >
-          <span class="hidden sm:inline">Upload</span>
-          <span class="sm:hidden">↑</span>
+          <OuiText as="span" size="sm" class="hidden sm:inline">Upload</OuiText>
+          <OuiText as="span" size="sm" class="sm:hidden">↑</OuiText>
         </OuiButton>
       </OuiFlex>
     </OuiFlex>
@@ -290,10 +290,10 @@
               class="flex-1 sm:flex-initial shrink-0 min-w-fit"
             >
               <DocumentArrowDownIcon class="h-4 w-4 sm:mr-1.5" />
-              <span class="hidden sm:inline">{{
+              <OuiText as="span" size="sm" class="hidden sm:inline">{{
                 isSaving ? "Saving..." : "Save"
-              }}</span>
-              <span class="sm:hidden">{{ isSaving ? "..." : "Save" }}</span>
+              }}</OuiText>
+              <OuiText as="span" size="sm" class="sm:hidden">{{ isSaving ? "..." : "Save" }}</OuiText>
             </OuiButton>
             <OuiButton
               variant="ghost"
@@ -303,7 +303,7 @@
               class="flex-1 sm:flex-initial shrink-0 min-w-fit"
               title="Download"
             >
-              <span class="hidden sm:inline">Download</span>
+              <OuiText as="span" size="sm" class="hidden sm:inline">Download</OuiText>
               <DocumentArrowDownIcon class="h-4 w-4 sm:hidden" />
             </OuiButton>
             <FileActionsMenu
@@ -516,8 +516,16 @@
               class="absolute inset-0"
               @save="handleSaveFile"
             />
+            <!-- Folder Overview -->
+            <FolderOverview
+              v-else-if="currentNode && currentNode.type === 'directory'"
+              :node="currentNode"
+              :loading="currentNode.isLoading"
+              @select-item="handleLoadFile"
+              @load-more="handleLoadMore"
+            />
             <div
-              v-else
+              v-else-if="!selectedPath || !currentNode"
               class="h-full flex items-center justify-center text-text-tertiary"
             >
               <OuiText size="sm" color="secondary"
@@ -574,6 +582,7 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
   import { useZipFile } from "~/composables/useZipFile";
   import { detectFilePreviewType } from "~/composables/useFilePreview";
   import ZipPreview from "~/components/shared/ZipPreview.vue";
+  import FolderOverview from "~/components/shared/FolderOverview.vue";
   import { useMultiSelect } from "~/composables/useMultiSelect";
 
   const props = defineProps<{
@@ -903,6 +912,14 @@ import FileActionsMenu from "~/components/shared/FileActionsMenu.vue";
   ) {
     selectedPath.value = node.path;
     if (node.type === "directory") {
+      // Ensure folder is loaded when selected
+      if (!node.hasLoaded || node.hasMore) {
+        await loadChildren(
+          node,
+          node.hasMore ? node.nextCursor ?? undefined : undefined
+        );
+        node.hasLoaded = true;
+      }
       if (options?.ensureExpanded && !node.isExpanded) {
         await handleToggle(node, true);
       }

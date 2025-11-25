@@ -6,18 +6,19 @@
       :description="description || `${unreadCount} unread`"
       :default-position="clientPosition"
       :persist-rect="true"
-      content-class="max-w-[600px] w-full"
-      @close="handleClose"
+      content-class="max-w-[600px] w-full h-[80vh] max-h-[800px] min-h-[500px] flex flex-col"
+      body-class="flex-1 flex flex-col min-h-0 overflow-hidden p-0"
       role="dialog"
       aria-labelledby="notifications-title"
       aria-describedby="notifications-description"
+      @close="handleClose"
     >
-      <div class="w-full" role="list" aria-label="Notifications list">
-        <!-- Header with filters and actions -->
-        <div class="sticky top-0 z-10 bg-surface-base/95 backdrop-blur-sm border-b border-border-muted pb-3 mb-4 -mx-4 px-4 pt-2">
+      <div class="flex flex-col h-full min-h-0" role="list" aria-label="Notifications list">
+        <!-- Header with filters and actions - fixed at top -->
+        <div class="bg-surface-base border-b border-border-muted px-4 pt-4 pb-3 flex-shrink-0">
           <OuiFlex justify="between" align="center" gap="sm" class="mb-3">
             <!-- Filter tabs -->
-            <OuiFlex gap="xs" class="flex-1 overflow-x-auto">
+            <OuiFlex gap="xs" class="flex-1 overflow-x-auto min-w-0">
               <OuiButton
                 v-for="filter in filters"
                 :key="filter.key"
@@ -25,7 +26,7 @@
                 :color="activeFilter === filter.key ? 'primary' : 'neutral'"
                 size="xs"
                 @click="activeFilter = filter.key"
-                class="whitespace-nowrap"
+                class="whitespace-nowrap flex-shrink-0"
                 :aria-label="`Filter by ${filter.label}`"
               >
                 {{ filter.label }}
@@ -40,7 +41,7 @@
           </OuiFlex>
 
           <!-- Action buttons -->
-          <OuiFlex justify="end" align="center" gap="xs">
+          <OuiFlex justify="end" align="center" gap="xs" class="flex-shrink-0">
             <OuiButton
               variant="ghost"
               size="xs"
@@ -48,7 +49,7 @@
               :disabled="unreadCount === 0 || isLoading"
               :loading="isMarkingAllRead"
               aria-label="Mark all notifications as read"
-              class="text-xs"
+              class="text-xs whitespace-nowrap"
             >
               Mark all read
             </OuiButton>
@@ -60,54 +61,56 @@
               :disabled="filteredItems.length === 0 || isLoading"
               :loading="isClearingAll"
               aria-label="Clear all notifications"
-              class="text-xs"
+              class="text-xs whitespace-nowrap"
             >
               Clear
             </OuiButton>
           </OuiFlex>
         </div>
 
-        <!-- Loading state -->
-        <div v-if="isLoading && filteredItems.length === 0" class="py-12">
-          <OuiStack gap="md" align="center">
-            <div class="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
-            <OuiText color="secondary" size="sm">Loading notifications...</OuiText>
-          </OuiStack>
-        </div>
-
-        <!-- Empty state -->
-        <div
-          v-else-if="filteredItems.length === 0"
-          class="py-12 text-center"
-          role="status"
-          aria-live="polite"
-        >
-          <OuiStack gap="sm" align="center">
-            <div class="w-16 h-16 rounded-full bg-surface-muted flex items-center justify-center">
-              <BellIcon class="w-8 h-8 text-foreground-muted" />
-            </div>
-            <OuiStack gap="xs" align="center">
-              <OuiText size="lg" weight="medium" color="primary">
-                {{ activeFilter === 'all' ? "You're all caught up!" : `No ${filterLabels[activeFilter]} notifications` }}
-              </OuiText>
-              <OuiText size="sm" color="secondary" class="max-w-sm">
-                {{ activeFilter === 'all' 
-                  ? "You don't have any notifications right now. We'll notify you when something important happens." 
-                  : `You don't have any ${filterLabels[activeFilter]} notifications.` }}
-              </OuiText>
+        <!-- Scrollable content area -->
+        <div class="flex-1 min-h-0 overflow-y-auto px-4">
+          <!-- Loading state -->
+          <div v-if="isLoading && filteredItems.length === 0" class="py-12">
+            <OuiStack gap="md" align="center">
+              <div class="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
+              <OuiText color="secondary" size="sm">Loading notifications...</OuiText>
             </OuiStack>
-          </OuiStack>
-        </div>
+          </div>
 
-        <!-- Notifications list with grouping -->
-        <OuiStack v-else gap="md" class="max-h-[600px] overflow-y-auto">
-          <template v-for="(group, groupIndex) in groupedNotifications" :key="group.date">
-            <!-- Date group header -->
-            <div v-if="group.date" class="sticky top-0 z-10 -mx-2 px-2 py-1 bg-surface-base/95 backdrop-blur-sm">
-              <OuiText size="xs" weight="semibold" color="secondary" class="uppercase tracking-wide">
-                {{ group.date }}
-              </OuiText>
-            </div>
+          <!-- Empty state -->
+          <div
+            v-else-if="filteredItems.length === 0"
+            class="py-12 text-center"
+            role="status"
+            aria-live="polite"
+          >
+            <OuiStack gap="sm" align="center">
+              <div class="w-16 h-16 rounded-full bg-surface-muted flex items-center justify-center">
+                <BellIcon class="w-8 h-8 text-foreground-muted" />
+              </div>
+              <OuiStack gap="xs" align="center">
+                <OuiText size="lg" weight="medium" color="primary">
+                  {{ activeFilter === 'all' ? "You're all caught up!" : `No ${filterLabels[activeFilter]} notifications` }}
+                </OuiText>
+                <OuiText size="sm" color="secondary" class="max-w-sm">
+                  {{ activeFilter === 'all' 
+                    ? "You don't have any notifications right now. We'll notify you when something important happens." 
+                    : `You don't have any ${filterLabels[activeFilter]} notifications.` }}
+                </OuiText>
+              </OuiStack>
+            </OuiStack>
+          </div>
+
+          <!-- Notifications list with grouping -->
+          <OuiStack v-else gap="md" class="py-4">
+            <template v-for="(group, groupIndex) in groupedNotifications" :key="group.date">
+              <!-- Date group header -->
+              <div v-if="group.date" class="sticky top-0 z-10 py-1 bg-surface-base/95 backdrop-blur-sm -mx-2 px-2">
+                <OuiText size="xs" weight="semibold" color="secondary" class="uppercase tracking-wide">
+                  {{ group.date }}
+                </OuiText>
+              </div>
 
             <!-- Notifications in this group -->
             <TransitionGroup
@@ -252,7 +255,8 @@
               </OuiCard>
             </TransitionGroup>
           </template>
-        </OuiStack>
+          </OuiStack>
+        </div>
       </div>
     </OuiFloatingPanel>
   </ClientOnly>
@@ -592,13 +596,13 @@ const getSeverityBadgeClasses = (severity: string) => {
   }
 };
 
-// Calculate default position underneath the notification button
-const defaultPosition = ref<{ x: number; y: number }>({ x: 100, y: 80 });
+// Calculate default position on the far right
+const defaultPosition = ref<{ x: number; y: number }>({ x: 0, y: 80 });
 const clientPosition = computed(() => {
   if (import.meta.client) {
     return defaultPosition.value;
   }
-  return { x: 100, y: 80 };
+  return { x: 0, y: 80 };
 });
 
 // Update position when anchor element changes or on mount
@@ -606,17 +610,21 @@ const updatePosition = () => {
   if (!import.meta.client) return;
 
   try {
-    const anchor = props.anchorElement;
-    if (anchor && window) {
-      const rect = anchor.getBoundingClientRect();
+    if (window && window.innerWidth) {
       const panelWidth = 600;
-      const xPos = Math.max(16, rect.right - panelWidth);
-      defaultPosition.value = {
-        x: xPos,
-        y: rect.bottom + 8,
-      };
-    } else if (window && window.innerWidth) {
-      defaultPosition.value = { x: window.innerWidth - 620, y: 80 };
+      const padding = 16;
+      // Position on the far right with padding
+      const xPos = window.innerWidth - panelWidth - padding;
+      
+      // Get Y position from anchor if available, otherwise use default
+      let yPos = 80;
+      const anchor = props.anchorElement;
+      if (anchor) {
+        const rect = anchor.getBoundingClientRect();
+        yPos = rect.bottom + 8;
+      }
+      
+      defaultPosition.value = { x: xPos, y: yPos };
     }
   } catch (e) {
     console.debug("Could not set notification panel position:", e);

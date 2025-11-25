@@ -120,6 +120,15 @@
   background-color: var(--oui-accent-primary);
 }
 
+/* Override bg-* utilities for buttons to ensure correct accent colors */
+@utility bg-primary {
+  background-color: var(--oui-accent-primary);
+}
+
+@utility bg-secondary {
+  background-color: var(--oui-accent-secondary);
+}
+
 @utility bg-accent-secondary {
   background-color: var(--oui-accent-secondary);
 }
