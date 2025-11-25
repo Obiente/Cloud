@@ -569,6 +569,30 @@
           </OuiButton>
         </OuiStack>
       </template>
+      
+      <!-- Fallback: Show loading if we have an ID but none of the above conditions matched -->
+      <!-- This prevents blank pages during navigation when pending might be false briefly -->
+      <template v-else-if="gameServerId && !gameServerData && !accessError">
+        <!-- Use the same loading skeleton as above -->
+        <OuiCard variant="outline" class="border-border-default/50">
+          <OuiCardBody>
+            <OuiFlex justify="between" align="start" wrap="wrap" gap="lg">
+              <OuiStack gap="md" class="flex-1 min-w-0">
+                <OuiFlex align="center" gap="md" wrap="wrap">
+                  <OuiSkeleton width="3rem" height="3rem" variant="rectangle" :rounded="true" class="rounded-xl shrink-0" />
+                  <OuiStack gap="none" class="min-w-0 flex-1">
+                    <OuiFlex align="center" gap="md">
+                      <OuiSkeleton width="16rem" height="2rem" variant="text" />
+                      <OuiSkeleton width="5rem" height="1.5rem" variant="rectangle" rounded />
+                    </OuiFlex>
+                    <OuiSkeleton width="12rem" height="1rem" variant="text" class="mt-1" />
+                  </OuiStack>
+                </OuiFlex>
+              </OuiStack>
+            </OuiFlex>
+          </OuiCardBody>
+        </OuiCard>
+      </template>
     </OuiStack>
 
     <!-- Delete Confirmation Dialog -->
@@ -656,6 +680,7 @@ const errorHint = computed(() => {
 });
 
 // Fetch game server data
+// Use immediate: true to ensure fetch starts immediately when route changes
 const { data: gameServerData, pending, refresh: refreshGameServer, error: fetchError } = useClientFetch(
   () => `game-server-${gameServerId.value}`,
   async () => {
@@ -677,7 +702,7 @@ const { data: gameServerData, pending, refresh: refreshGameServer, error: fetchE
       return res.gameServer;
     } catch (err: any) {
       // Check if it's a permission denied or not found error
-      if (err.code === "permission_denied" || err.code === "not_found") {
+      if (err && (err.code === "permission_denied" || err.code === "not_found")) {
         accessError.value = err;
         return null;
       }
@@ -687,20 +712,39 @@ const { data: gameServerData, pending, refresh: refreshGameServer, error: fetchE
   },
   {
     watch: [gameServerId],
+    immediate: true, // Ensure fetch starts immediately when gameServerId changes
   }
 );
 
 // Computed property to determine if we should show loading skeleton
-// This helps prevent stuck loading states by ensuring we don't show skeleton
-// when we have data, an error, or when pending is false
+// Show skeleton when we're actively fetching
+// This prevents blank pages during navigation
 const showLoadingSkeleton = computed(() => {
-  return pending.value && !gameServerData.value && !accessError.value && !fetchError.value;
+  const hasError = Boolean(accessError.value || fetchError.value);
+  const hasData = Boolean(gameServerData.value);
+  
+  // Don't show loading if we have an error or data
+  if (hasError || hasData) {
+    return false;
+  }
+  
+  // Show loading if we're actively pending
+  // With lazy loading, pending should be true when a fetch is in progress
+  return pending.value;
 });
 
 // Watch for fetch errors and handle access errors
 watch(fetchError, (err) => {
-  if (err && (err as any).code === "permission_denied" || (err as any).code === "not_found") {
+  if (err && ((err as any)?.code === "permission_denied" || (err as any)?.code === "not_found")) {
     accessError.value = err as Error;
+  }
+});
+
+// Watch for route changes and clear stale errors
+watch(gameServerId, (newId, oldId) => {
+  if (newId !== oldId && newId) {
+    // Clear any previous errors when navigating to a new game server
+    accessError.value = null;
   }
 });
 
@@ -1038,7 +1082,8 @@ watch(() => gameServer.value, (newValue) => {
 
 // Start streaming metrics
 const startStreaming = async () => {
-  if (isStreaming.value || streamController.value || !gameServer.value?.id) {
+  // Don't start if already streaming, no game server ID, or no game server data
+  if (isStreaming.value || streamController.value || !gameServerId.value || !gameServer.value?.id) {
     return;
   }
 
@@ -1057,16 +1102,25 @@ const startStreaming = async () => {
       latestMetric.value = metric;
     }
   } catch (err: any) {
-    if (err.name === "AbortError") {
+    // Handle abort errors silently
+    if (err?.name === "AbortError" || err?.code === "aborted") {
       return;
     }
-    // Suppress "missing trailer" errors
-    const isMissingTrailerError =
-      err.message?.toLowerCase().includes("missing trailer") ||
-      err.message?.toLowerCase().includes("trailer") ||
-      err.code === "unknown";
+    
+    // Suppress common stream errors that are expected/non-critical
+    const errorMessage = err?.message?.toLowerCase() || "";
+    const errorCode = err?.code || "";
+    const isExpectedError =
+      errorMessage.includes("missing trailer") ||
+      errorMessage.includes("trailer") ||
+      errorMessage.includes("error in input stream") ||
+      errorMessage.includes("input stream") ||
+      errorCode === "unknown" ||
+      errorCode === "cancelled" ||
+      errorCode === "aborted";
 
-    if (!isMissingTrailerError) {
+    // Only log unexpected errors
+    if (!isExpectedError && err) {
       console.error("Failed to stream metrics:", err);
     }
   } finally {
@@ -1087,7 +1141,10 @@ const stopStreaming = () => {
 // Start streaming when component mounts if server is running
 onMounted(() => {
   if (gameServer.value?.status === "RUNNING") {
-    startStreaming();
+    startStreaming().catch((err) => {
+      // Silently handle streaming errors on mount - they're non-critical
+      // The error is already handled in startStreaming
+    });
   }
 });
 
@@ -1096,7 +1153,10 @@ watch(
   () => gameServer.value?.status,
   (status) => {
     if (status === "RUNNING" && !isStreaming.value) {
-      startStreaming();
+      startStreaming().catch((err) => {
+        // Silently handle streaming errors - they're non-critical
+        // The error is already handled in startStreaming
+      });
     } else if (status !== "RUNNING" && isStreaming.value) {
       stopStreaming();
     }
