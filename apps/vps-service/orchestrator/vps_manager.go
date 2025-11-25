@@ -222,6 +222,7 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 
 		vmID := createResult.VMID
 		rootPassword := createResult.Password
+		nodeName := createResult.NodeName
 
 		// Get actual VM status from Proxmox and map to our status enum
 		vmIDInt := 0
@@ -230,10 +231,14 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 			return nil, "", fmt.Errorf("invalid VM ID: %s", vmID)
 		}
 
-		// Find the actual node where the VM was created (may differ from nodes[0] in multi-node clusters)
-		nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to find Proxmox node for VM %d: %w", vmIDInt, err)
+		// Use the node name returned from CreateVM (more reliable than searching)
+		if nodeName == "" {
+			// Fallback: find the node if not returned (shouldn't happen, but be safe)
+			var err error
+			nodeName, err = proxmoxClient.FindVMNode(ctx, vmIDInt)
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to find Proxmox node for VM %d: %w", vmIDInt, err)
+			}
 		}
 
 	// Verify VM actually exists before creating VPS record
@@ -895,6 +900,7 @@ func (vm *VPSManager) ReinitializeVPS(ctx context.Context, vpsID string) (*datab
 
 	newVMID := createResult.VMID
 	rootPassword := createResult.Password
+	newNodeName := createResult.NodeName
 
 	// Update VPS instance with new VM ID
 	vmIDIntNew := 0
@@ -903,9 +909,14 @@ func (vm *VPSManager) ReinitializeVPS(ctx context.Context, vpsID string) (*datab
 		return nil, "", fmt.Errorf("invalid new VM ID: %s", newVMID)
 	}
 
+	// Use the node name from CreateVM result, or fallback to the one we found earlier
+	if newNodeName == "" {
+		newNodeName = nodeName
+	}
+
 	vmIDStr := newVMID
 	vps.InstanceID = &vmIDStr
-	vps.NodeID = &nodeName
+	vps.NodeID = &newNodeName
 	vps.Status = 1 // CREATING
 	vps.UpdatedAt = time.Now()
 	if err := database.DB.Save(&vps).Error; err != nil {

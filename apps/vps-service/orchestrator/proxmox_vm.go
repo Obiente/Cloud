@@ -21,6 +21,7 @@ import (
 type CreateVMResult struct {
 	VMID     string
 	Password string // Root password for the VM
+	NodeName string // Node where the VM was created
 }
 
 // buildVPSDescription builds a comprehensive description for VPS notes in Proxmox
@@ -1278,6 +1279,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 	return &CreateVMResult{
 		VMID:     fmt.Sprintf("%d", vmID),
 		Password: rootPassword,
+		NodeName: nodeName,
 	}, nil
 }
 
