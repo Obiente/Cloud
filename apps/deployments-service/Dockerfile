@@ -2,7 +2,7 @@
 FROM golang:1.25-alpine AS go-builder
 
 # Accept build arguments for multi-arch support
-ARG TARGETARCH
+ARG TARGETARCH=amd64
 ARG TARGETOS=linux
 
 # Install build dependencies
@@ -60,6 +60,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # Final stage
 FROM alpine:latest
 
+# Accept build arguments for multi-arch support
+ARG TARGETARCH=amd64
+ARG TARGETOS=linux
+
 # Install CA certificates for HTTPS requests
 # Install docker CLI and docker-compose for deployment management
 # Install git and curl for repository cloning and downloading buildx
@@ -86,8 +90,10 @@ ENV DOCKER_CLI_PLUGIN_PATH=/root/.docker/cli-plugins \
 # BuildKit requires buildx for advanced build features (faster builds, better caching)
 # This layer will be cached unless BUILDX_VERSION changes
 # Use TARGETARCH to download the correct buildx binary for the target architecture
+# Map architecture names: amd64 -> amd64, arm64 -> aarch64
 RUN mkdir -p /root/.docker/cli-plugins && \
-    ARCH=$(echo ${TARGETARCH} | sed 's/arm64/aarch64/') && \
+    ARCH=${TARGETARCH:-amd64} && \
+    if [ "$ARCH" = "arm64" ]; then ARCH="aarch64"; fi && \
     curl -fsSL "https://github.com/docker/buildx/releases/download/v${BUILDX_VERSION}/buildx-v${BUILDX_VERSION}.linux-${ARCH}" -o /tmp/docker-buildx && \
     chmod +x /tmp/docker-buildx && \
     mv /tmp/docker-buildx /root/.docker/cli-plugins/docker-buildx && \

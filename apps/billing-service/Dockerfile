@@ -2,7 +2,7 @@
 FROM golang:1.25-alpine AS go-builder
 
 # Accept build arguments for multi-arch support
-ARG TARGETARCH
+ARG TARGETARCH=amd64
 ARG TARGETOS=linux
 
 # Install build dependencies
