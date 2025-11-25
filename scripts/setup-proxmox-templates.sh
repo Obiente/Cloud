@@ -627,18 +627,10 @@ create_or_update_template() {
     qm set "$vmid" --serial0 socket --vga serial0
     qm set "$vmid" --agent enabled=1
     
-    # Set generic kernel boot arguments to override GRUB's root=LABEL=cloudimg-rootfs
-    # Ubuntu cloud images have root=LABEL=cloudimg-rootfs in GRUB, which fails on cloned disks
-    # By setting args here, we override GRUB and use a generic device name that works
-    # We use root=/dev/sda1 as a fallback - cloud-init will fix this on first boot if needed
-    # Note: This is better than leaving GRUB's label, which definitely won't work on clones
-    print_info "Setting generic kernel boot arguments to override GRUB label..."
-    if ! qm set "$vmid" --args "root=/dev/sda1" 2>/dev/null; then
-        print_warning "Could not set args parameter (may require root permissions)"
-        print_warning "Template may have boot issues if GRUB has root=LABEL=cloudimg-rootfs"
-    else
-        print_success "Set generic kernel boot arguments (root=/dev/sda1)"
-    fi
+    # Note: We do NOT set args parameter
+    # Proxmox validates args during cloud-init ISO generation, causing errors if the device doesn't exist on the host
+    # Instead, we'll fix GRUB in the template to not use root=LABEL=cloudimg-rootfs
+    # The cloud-init bootcmd script will also handle device detection on first boot
     
     # Verify disk is attached
     print_info "Verifying disk attachment..."
@@ -652,6 +644,8 @@ create_or_update_template() {
     print_success "Disk attached: $disk_config"
     
     # Convert to template
+    # Note: GRUB may have root=LABEL=cloudimg-rootfs which will fail on cloned VMs
+    # The cloud-init bootcmd script will fix this on first boot
     print_info "Converting VM to template..."
     if ! qm template "$vmid"; then
         print_error "Failed to convert VM to template"
