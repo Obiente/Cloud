@@ -8,7 +8,7 @@ services:
   
   # Audit Service - Microservice for audit log management
   audit-service:
-    image: ghcr.io/obiente/obiente/audit-service:latest
+    image: ghcr.io/obiente/cloud-audit-service:latest
     build:
       context: .
       dockerfile: apps/audit-service/Dockerfile
@@ -44,7 +44,7 @@ services:
 
   # Notifications Service - Microservice for user notifications
   notifications-service:
-    image: ghcr.io/obiente/obiente/notifications-service:latest
+    image: ghcr.io/obiente/cloud-notifications-service:latest
     build:
       context: .
       dockerfile: apps/notifications-service/Dockerfile
@@ -80,7 +80,7 @@ services:
 
   # Support Service - Microservice for support ticket management
   support-service:
-    image: ghcr.io/obiente/obiente/support-service:latest
+    image: ghcr.io/obiente/cloud-support-service:latest
     build:
       context: .
       dockerfile: apps/support-service/Dockerfile
@@ -114,7 +114,7 @@ services:
 
   # Auth Service - Microservice for authentication
   auth-service:
-    image: ghcr.io/obiente/obiente/auth-service:latest
+    image: ghcr.io/obiente/cloud-auth-service:latest
     build:
       context: .
       dockerfile: apps/auth-service/Dockerfile
@@ -150,7 +150,7 @@ services:
 
   # Organizations Service - Microservice for organization management
   organizations-service:
-    image: ghcr.io/obiente/obiente/organizations-service:latest
+    image: ghcr.io/obiente/cloud-organizations-service:latest
     build:
       context: .
       dockerfile: apps/organizations-service/Dockerfile
@@ -186,7 +186,7 @@ services:
 
   # Billing Service - Microservice for billing and Stripe integration
   billing-service:
-    image: ghcr.io/obiente/obiente/billing-service:latest
+    image: ghcr.io/obiente/cloud-billing-service:latest
     build:
       context: .
       dockerfile: apps/billing-service/Dockerfile
@@ -222,7 +222,7 @@ services:
 
   # Deployments Service - Microservice for deployment management
   deployments-service:
-    image: ghcr.io/obiente/obiente/deployments-service:latest
+    image: ghcr.io/obiente/cloud-deployments-service:latest
     build:
       context: .
       dockerfile: apps/deployments-service/Dockerfile
@@ -262,7 +262,7 @@ services:
 
   # Game Servers Service - Microservice for game server management
   gameservers-service:
-    image: ghcr.io/obiente/obiente/gameservers-service:latest
+    image: ghcr.io/obiente/cloud-gameservers-service:latest
     build:
       context: .
       dockerfile: apps/gameservers-service/Dockerfile
@@ -301,7 +301,7 @@ services:
 
   # Orchestrator Service - Microservice for container orchestration and metrics
   orchestrator-service:
-    image: ghcr.io/obiente/obiente/orchestrator-service:latest
+    image: ghcr.io/obiente/cloud-orchestrator-service:latest
     build:
       context: .
       dockerfile: apps/orchestrator-service/Dockerfile
@@ -342,7 +342,7 @@ services:
 
   # VPS Service - Microservice for VPS management
   vps-service:
-    image: ghcr.io/obiente/obiente/vps-service:latest
+    image: ghcr.io/obiente/cloud-vps-service:latest
     build:
       context: .
       dockerfile: apps/vps-service/Dockerfile
@@ -376,7 +376,7 @@ services:
 
   # Superadmin Service - Microservice for superadmin operations
   superadmin-service:
-    image: ghcr.io/obiente/obiente/superadmin-service:latest
+    image: ghcr.io/obiente/cloud-superadmin-service:latest
     build:
       context: .
       dockerfile: apps/superadmin-service/Dockerfile
@@ -414,7 +414,7 @@ services:
   # Set ENABLE_DNS=false to disable this service when using DNS delegation
   # When disabled, the service will exit gracefully (container will stop)
   dns-service:
-    image: ghcr.io/obiente/obiente/dns-service:latest
+    image: ghcr.io/obiente/cloud-dns-service:latest
     build:
       context: .
       dockerfile: apps/dns-service/Dockerfile
@@ -452,7 +452,7 @@ services:
 
   # API Gateway - Routes requests to all microservices
   api-gateway:
-    image: ghcr.io/obiente/obiente/api-gateway:latest
+    image: ghcr.io/obiente/cloud-api-gateway:latest
     build:
       context: .
       dockerfile: apps/api-gateway/Dockerfile
@@ -484,7 +484,7 @@ services:
       start_period: 40s
 
   postgres:
-    image: ghcr.io/obiente/postgres:16-alpine
+    image: postgres:16-alpine
     container_name: obiente-postgres
     ports:
       - "127.0.0.1:5433:5432"
@@ -503,7 +503,7 @@ services:
       - obiente-network
 
   timescaledb:
-    image: ghcr.io/obiente/timescale/timescaledb:latest-pg16
+    image: timescale/timescaledb:latest-pg16
     container_name: obiente-timescaledb
     ports:
       - "127.0.0.1:5434:5432"
@@ -522,7 +522,7 @@ services:
       - obiente-network
 
   redis:
-    image: ghcr.io/obiente/redis:8-alpine
+    image: redis:8-alpine
     container_name: obiente-redis
     command: redis-server --appendonly yes
     volumes:
@@ -536,7 +536,7 @@ services:
       - obiente-network
 
   traefik:
-    image: ghcr.io/obiente/traefik:v3.6.1
+    image: traefik:v3.6.1
     command:
       - --api.dashboard=true
       - --api.insecure=true
