@@ -59,6 +59,18 @@ PROXMOX_STORAGE_POOL=nfs-storage  # NFS storage
 - `local-zfs` - ZFS storage pool (if ZFS is configured)
 - Custom storage pools you've created
 
+**Template-Based VMs (Linked Clones):**
+
+⚠️ **Important Limitation:** For VMs created from templates (linked clones), `PROXMOX_STORAGE_POOL` does **not** affect the cloned disk. Linked clones inherit the template's storage pool and cannot be changed during cloning. The `PROXMOX_STORAGE_POOL` setting only applies to:
+
+1. **VMs created without templates** (ISO installation) - uses the specified storage pool
+2. **New disks created when templates have no disk** - uses the specified storage pool
+3. **Additional disks** beyond what's cloned from the template - uses the specified storage pool
+
+**To use a different storage pool for template-based VMs:**
+- Create your template on the desired storage pool before cloning
+- The cloned VMs will inherit the template's storage pool
+
 **Checking Available Storage Pools:**
 
 To see available storage pools in your Proxmox installation:

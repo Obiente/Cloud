@@ -974,6 +974,8 @@ PROXMOX_STORAGE_POOL=local-zfs  # ZFS pool
 PROXMOX_STORAGE_POOL=ceph-pool  # Ceph storage
 ```
 
+⚠️ **Important:** For template-based VMs (linked clones), `PROXMOX_STORAGE_POOL` does **not** affect the cloned disk. Linked clones inherit the template's storage pool. This setting only applies to VMs created without templates (ISO installation), new disks created when templates have no disk, or additional disks. To use a different storage pool for cloned VMs, create your template on the desired storage pool.
+
 ## Related Documentation
 
 - [VPS Gateway Setup Guide](vps-gateway-setup.md) - Detailed guide for setting up the vps-gateway service
