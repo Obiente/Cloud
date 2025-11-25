@@ -627,11 +627,18 @@ create_or_update_template() {
     qm set "$vmid" --serial0 socket --vga serial0
     qm set "$vmid" --agent enabled=1
     
-    # Note: We do NOT set kernel boot arguments (args) in the template
-    # Kernel args can conflict with cloud-init ISO generation when cloning
-    # Instead, the cloud-init userData snippet includes a script that fixes
-    # /etc/fstab and GRUB to use device names (/dev/sda1, /dev/vda1) instead of UUIDs
-    # This approach works better with cloud-init and avoids QEMU errors
+    # Set generic kernel boot arguments to override GRUB's root=LABEL=cloudimg-rootfs
+    # Ubuntu cloud images have root=LABEL=cloudimg-rootfs in GRUB, which fails on cloned disks
+    # By setting args here, we override GRUB and use a generic device name that works
+    # We use root=/dev/sda1 as a fallback - cloud-init will fix this on first boot if needed
+    # Note: This is better than leaving GRUB's label, which definitely won't work on clones
+    print_info "Setting generic kernel boot arguments to override GRUB label..."
+    if ! qm set "$vmid" --args "root=/dev/sda1" 2>/dev/null; then
+        print_warning "Could not set args parameter (may require root permissions)"
+        print_warning "Template may have boot issues if GRUB has root=LABEL=cloudimg-rootfs"
+    else
+        print_success "Set generic kernel boot arguments (root=/dev/sda1)"
+    fi
     
     # Verify disk is attached
     print_info "Verifying disk attachment..."
