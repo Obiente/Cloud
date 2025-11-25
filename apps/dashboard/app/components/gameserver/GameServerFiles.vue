@@ -22,15 +22,13 @@
         </OuiBreadcrumbs>
       </OuiFlex>
 
-      <!-- Centered Search Input - morphs into overlay -->
+      <!-- Centered Search Input - shown in header when modal is closed -->
       <div
-        ref="headerSearchContainerRef"
-        class="absolute left-1/2 -translate-x-1/2 z-10 transition-opacity duration-300"
-        :class="{ 'opacity-0 pointer-events-none': isSearchModalOpen && !isMorphing }"
-        :style="headerSearchStyle"
+        v-if="!isSearchModalOpen"
+        class="absolute left-1/2 -translate-x-1/2 z-10"
       >
         <OuiInput
-          ref="headerSearchRef"
+          ref="searchInputRef"
           v-model="searchQueryModel"
           placeholder="Search files..."
           size="sm"
@@ -501,9 +499,8 @@
     <!-- Search Results Modal/Overlay -->
     <Teleport to="body">
       <Transition
-        name="overlay-slide"
-        @enter="handleOverlayEnter"
-        @leave="handleOverlayLeave"
+        name="fade"
+        @after-enter="handleModalEnter"
       >
         <div
           v-if="isSearchModalOpen"
@@ -530,19 +527,16 @@
               </span>
             </OuiText>
             
-            <!-- Search Input in Overlay Header - morphs from header -->
-            <div
-              ref="overlaySearchContainerRef"
-              class="flex-1 max-w-md mx-auto"
-              :style="overlaySearchStyle"
-            >
+            <!-- Search Input in Overlay Header - same input instance -->
+            <div class="flex-1 max-w-md mx-auto">
               <OuiInput
-                ref="overlaySearchRef"
+                ref="searchInputRef"
                 v-model="searchQueryModel"
                 placeholder="Search files..."
                 size="sm"
                 clearable
                 class="w-full"
+                autofocus
                 @update:model-value="searchState.handleSearch"
                 @keyup.enter="searchState.handleSearch"
               >
@@ -709,14 +703,7 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
   const isLoadingFile = ref(false); // Track if a file load is in progress
   const searchModalRef = ref<HTMLElement | null>(null);
   const searchResultsRef = ref<HTMLElement | null>(null);
-  const headerSearchRef = ref<HTMLElement | null>(null);
-  const overlaySearchRef = ref<HTMLElement | null>(null);
-  const headerSearchContainerRef = ref<HTMLElement | null>(null);
-  const overlaySearchContainerRef = ref<HTMLElement | null>(null);
-  const headerSearchInitialRect = ref<DOMRect | null>(null);
-  const overlaySearchStyle = ref<Record<string, string>>({});
-  const headerSearchStyle = ref<Record<string, string>>({});
-  const isMorphing = ref<boolean>(false);
+  const searchInputRef = ref<HTMLElement | null>(null);
   const focusedResultIndex = ref<number>(-1);
   let previousActiveElement: HTMLElement | null = null;
   let focusTrapCleanup: (() => void) | null = null;
@@ -2677,254 +2664,95 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
     focusedResultIndex.value = -1;
   }
 
-  // Search bar morph handlers - FLIP animation for element-to-element transition
-  function handleSearchBeforeEnter(el: Element) {
-    const element = el as HTMLElement;
-    const headerContainer = headerSearchContainerRef.value;
-    const overlayContainer = overlaySearchContainerRef.value;
-    
-    if (!headerContainer) return;
-    
-    // Capture header position
-    const headerRect = headerContainer.getBoundingClientRect();
-    
-    if (overlayContainer && isSearchModalOpen.value) {
-      // This is the overlay search entering - position it at header location
-      element.style.position = "fixed";
-      element.style.left = `${headerRect.left}px`;
-      element.style.top = `${headerRect.top}px`;
-      element.style.width = `${headerRect.width}px`;
-      element.style.transform = "translate(0, 0) scale(1)";
-      element.style.transformOrigin = "top left";
-    }
-  }
-
-
-  // Overlay animation - backdrop and modal appear from search bar position
-  function handleOverlayEnter(el: Element, done: () => void) {
-    const element = el as HTMLElement;
-    const headerContainer = headerSearchContainerRef.value;
-    
-    if (!headerContainer) {
-      done();
-      return;
-    }
-
-    isMorphing.value = true;
-
-    // Capture header position BEFORE anything changes
-    const headerRect = headerContainer.getBoundingClientRect();
-    headerSearchInitialRect.value = headerRect;
-    
-    // Calculate initial position - start from search bar center
-    const initialX = headerRect.left + headerRect.width / 2;
-    const initialY = headerRect.top + headerRect.height / 2;
-    
-    // Get viewport center for final position (accounting for scroll)
-    const viewportCenterX = window.innerWidth / 2;
-    const viewportCenterY = Math.min(window.innerHeight / 2, window.innerHeight * 0.2 + 80); // Adjust for small screens
-    
-    // Calculate transform to move from search bar to center
-    const deltaX = viewportCenterX - initialX;
-    const deltaY = viewportCenterY - initialY;
-    const initialScale = 0.01; // Start very small
-    
-    // Set initial state - overlay starts at search bar position, tiny scale
-    element.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${initialScale})`;
-    element.style.transformOrigin = `${initialX}px ${initialY}px`;
-    element.style.opacity = "0";
-    element.style.backdropFilter = "blur(0px)";
-    
-    // Force reflow
-    void element.offsetHeight;
-    
-    // Animate overlay expanding from search bar position to full size
-    requestAnimationFrame(() => {
-      element.style.transition = "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
-      element.style.transform = "translate(0, 0) scale(1)";
-      element.style.transformOrigin = "center center";
-      element.style.opacity = "1";
-      element.style.backdropFilter = "blur(8px)";
+  // Helper function to focus the search input
+  function focusSearchInput() {
+    // Use multiple strategies to find and focus the input
+    const tryFocus = (attempt = 0): boolean => {
+      let actualInput: HTMLInputElement | null = null;
       
-      // Morph the search bar simultaneously
-      morphSearchBarToOverlay(() => {
-        isMorphing.value = false;
-        done();
-      });
-    });
-  }
-
-  function handleOverlayLeave(el: Element, done: () => void) {
-    const element = el as HTMLElement;
-    const headerContainer = headerSearchContainerRef.value;
-    
-    if (!headerContainer) {
-      done();
-      return;
-    }
-    
-    isMorphing.value = true;
-    
-    // First morph search bar back to header
-    morphSearchBarToHeader(() => {
-      // Then shrink overlay back to search bar position
-      const headerRect = headerContainer.getBoundingClientRect();
-      const viewportCenterX = window.innerWidth / 2;
-      const viewportCenterY = Math.min(window.innerHeight / 2, window.innerHeight * 0.2 + 80);
+      // Strategy 1: Use the ref if available
+      if (searchInputRef.value) {
+        // OuiInput wraps Field.Input, which renders an actual input element
+        actualInput = searchInputRef.value.querySelector('input') as HTMLInputElement;
+      }
       
-      const initialX = headerRect.left + headerRect.width / 2;
-      const initialY = headerRect.top + headerRect.height / 2;
+      // Strategy 2: Search in the modal
+      if (!actualInput && searchModalRef.value) {
+        actualInput = searchModalRef.value.querySelector('input[type="text"], input:not([type])') as HTMLInputElement;
+      }
       
-      const deltaX = initialX - viewportCenterX;
-      const deltaY = initialY - viewportCenterY;
+      // Strategy 3: Search in the document (fallback)
+      if (!actualInput) {
+        const modal = document.querySelector('[role="dialog"][aria-modal="true"]');
+        if (modal) {
+          actualInput = modal.querySelector('input[type="text"], input:not([type])') as HTMLInputElement;
+        }
+      }
       
-      requestAnimationFrame(() => {
-        element.style.transition = "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.3s cubic-bezier(0.4, 0, 0.2, 1)";
-        element.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.01)`;
-        element.style.transformOrigin = `${initialX}px ${initialY}px`;
-        element.style.opacity = "0";
-        element.style.backdropFilter = "blur(0px)";
-        
-        element.addEventListener("transitionend", () => {
-          isMorphing.value = false;
-          done();
-        }, { once: true });
-      });
-    });
-  }
-
-  // Morph search bar from header to overlay position
-  function morphSearchBarToOverlay(onComplete: () => void) {
-    const headerContainer = headerSearchContainerRef.value;
-    const overlayContainer = overlaySearchContainerRef.value;
-    const initialRect = headerSearchInitialRect.value;
-    
-    if (!headerContainer || !overlayContainer || !initialRect) {
-      onComplete();
-      return;
-    }
-    
-    nextTick(() => {
-      const overlayRect = overlayContainer.getBoundingClientRect();
+      if (actualInput) {
+        // Check if element is actually focusable
+        if (actualInput.offsetParent !== null) {
+          try {
+            actualInput.focus({ preventScroll: false });
+            // Select all text if there's a query
+            if (searchQueryModel.value) {
+              // Small delay to ensure focus happened first
+              setTimeout(() => {
+                actualInput?.select();
+              }, 10);
+            }
+            return true;
+          } catch (e) {
+            console.warn('Failed to focus input:', e);
+          }
+        }
+      }
       
-      // Calculate transform needed to move from header to overlay
-      const deltaX = overlayRect.left - initialRect.left;
-      const deltaY = overlayRect.top - initialRect.top;
-      const scaleX = overlayRect.width / initialRect.width;
+      // Retry up to 5 times with increasing delays
+      if (attempt < 5) {
+        setTimeout(() => {
+          tryFocus(attempt + 1);
+        }, 50 * (attempt + 1));
+      }
       
-      // Start overlay search at header position (invisible)
-      overlaySearchStyle.value = {
-        position: "fixed",
-        left: `${initialRect.left}px`,
-        top: `${initialRect.top}px`,
-        width: `${initialRect.width}px`,
-        transform: "translate(0, 0) scale(1)",
-        opacity: "0",
-        zIndex: "100",
-        pointerEvents: "none",
-        transition: "none",
-      };
-      
-      // Fade out header search simultaneously
-      headerSearchStyle.value = {
-        opacity: "0",
-        transform: "scale(0.95)",
-        transition: "opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-      };
-      
-      // Force reflow
-      void overlayContainer.offsetHeight;
-      void headerContainer.offsetHeight;
-      
-      // Now animate to final position
-      requestAnimationFrame(() => {
-        overlaySearchStyle.value = {
-          position: "fixed",
-          left: `${overlayRect.left}px`,
-          top: `${overlayRect.top}px`,
-          width: `${overlayRect.width}px`,
-          transform: "translate(0, 0) scale(1)",
-          opacity: "1",
-          zIndex: "100",
-          pointerEvents: "auto",
-          transition: "all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
-        };
-        
-        overlayContainer.addEventListener("transitionend", () => {
-          // Reset to normal positioning
-          overlaySearchStyle.value = {};
-          headerSearchStyle.value = {};
-          onComplete();
-        }, { once: true });
-      });
-    });
-  }
-
-  // Morph search bar from overlay back to header position
-  function morphSearchBarToHeader(onComplete: () => void) {
-    const headerContainer = headerSearchContainerRef.value;
-    const overlayContainer = overlaySearchContainerRef.value;
-    
-    if (!headerContainer || !overlayContainer) {
-      onComplete();
-      return;
-    }
-    
-    const overlayRect = overlayContainer.getBoundingClientRect();
-    const headerRect = headerContainer.getBoundingClientRect();
-    
-    // Start header search invisible and scaled down
-    headerSearchStyle.value = {
-      opacity: "0",
-      transform: "scale(0.95)",
-      transition: "none",
+      return false;
     };
     
-    // Animate overlay search back to header position
-    overlaySearchStyle.value = {
-      position: "fixed",
-      left: `${overlayRect.left}px`,
-      top: `${overlayRect.top}px`,
-      width: `${overlayRect.width}px`,
-      transform: "translate(0, 0) scale(1)",
-      opacity: "1",
-      zIndex: "100",
-      pointerEvents: "none",
-      transition: "none",
-    };
-    
-    // Force reflow
-    void overlayContainer.offsetHeight;
-    void headerContainer.offsetHeight;
-    
-    requestAnimationFrame(() => {
-      // Animate overlay search to header position and fade out
-      overlaySearchStyle.value = {
-        position: "fixed",
-        left: `${headerRect.left}px`,
-        top: `${headerRect.top}px`,
-        width: `${headerRect.width}px`,
-        transform: "translate(0, 0) scale(1)",
-        opacity: "0",
-        zIndex: "100",
-        pointerEvents: "none",
-        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-      };
-      
-      // Fade in header search simultaneously
-      headerSearchStyle.value = {
-        opacity: "1",
-        transform: "scale(1)",
-        transition: "opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-      };
-      
-      overlayContainer.addEventListener("transitionend", () => {
-        overlaySearchStyle.value = {};
-        headerSearchStyle.value = {};
-        onComplete();
-      }, { once: true });
-    });
+    // Start trying to focus
+    tryFocus();
   }
+
+  // Handle modal enter transition - focus input after transition completes
+  function handleModalEnter() {
+    focusSearchInput();
+  }
+
+  // Auto-focus search input when modal opens
+  watch(isSearchModalOpen, (isOpen) => {
+    if (isOpen) {
+      // Setup focus trap
+      if (focusTrapCleanup) {
+        focusTrapCleanup();
+      }
+      focusTrapCleanup = setupFocusTrap();
+
+      // Reset focused index
+      focusedResultIndex.value = -1;
+      
+      // Try to focus immediately, and also after transition
+      nextTick(() => {
+        requestAnimationFrame(() => {
+          focusSearchInput();
+        });
+      });
+    } else {
+      // Cleanup focus trap when modal closes
+      if (focusTrapCleanup) {
+        focusTrapCleanup();
+        focusTrapCleanup = null;
+      }
+    }
+  });
 
 
 
@@ -3065,50 +2893,6 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
       previousActiveElement = null;
     };
   }
-
-  // Watch for modal state to capture header position before transition
-  watch(
-    isSearchModalOpen,
-    (isOpen) => {
-      if (isOpen) {
-        // Capture header position BEFORE it's removed from DOM
-        const headerContainer = headerSearchContainerRef.value;
-        if (headerContainer) {
-          headerSearchInitialRect.value = headerContainer.getBoundingClientRect();
-        }
-        
-        nextTick(() => {
-          // Setup focus trap
-          if (focusTrapCleanup) {
-            focusTrapCleanup();
-          }
-          focusTrapCleanup = setupFocusTrap();
-
-          // Reset focused index
-          focusedResultIndex.value = -1;
-          // If there are results, focus the first one
-          if (searchResultsArray.value.length > 0) {
-            focusedResultIndex.value = 0;
-            nextTick(() => {
-              const firstResult = document.getElementById("search-result-0");
-              firstResult?.focus();
-            });
-          } else {
-            // Focus the close button if no results
-            const closeButton = searchModalRef.value?.querySelector('button[aria-label="Close search results"]') as HTMLElement;
-            closeButton?.focus();
-          }
-        });
-      } else {
-        // Cleanup focus trap
-        if (focusTrapCleanup) {
-          focusTrapCleanup();
-          focusTrapCleanup = null;
-        }
-        focusedResultIndex.value = -1;
-      }
-    }
-  );
 
   // Cleanup on unmount
   onUnmounted(() => {
