@@ -130,7 +130,7 @@ export function getOUIEChartsColors() {
   }
   
   return {
-    background: colors.editorBackground || colors.background || "#121022",
+    background: colors.editorBackground || colors.background || "#171521",
     textPrimary: colors.foreground || colors.editorForeground || "#f5f3ff",
     textSecondary: colors.lineNumberForeground || "#9e8cff",
     textTertiary: colors.lineNumberForeground || "#6b6396",
@@ -138,7 +138,7 @@ export function getOUIEChartsColors() {
     gridBorder,
     
     // Accent colors
-    primary: colors.accentPrimary || "#a855f7",
+    primary: colors.accentPrimary || "#8b5cf6",
     secondary: colors.accentSecondary || "#22d3ee",
     success: colors.accentSuccess || "#22c55e",
     warning: colors.accentWarning || "#f59e0b",
@@ -146,7 +146,7 @@ export function getOUIEChartsColors() {
     info: colors.accentInfo || "#60a5fa",
     
     // Tooltip colors
-    tooltipBg: colors.editorWidgetBackground || colors.dropdownBackground || "#201b3f",
+    tooltipBg: colors.editorWidgetBackground || colors.dropdownBackground || "#242030",
     tooltipBorder: colors.editorWidgetBorder || colors.borderDefault || "#3a2f5c",
     tooltipText: colors.editorWidgetForeground || colors.foreground || "#f5f3ff",
   };

@@ -40,38 +40,38 @@
   --oui-elevation-base: 1;
 }
 
-/* Dark Purple Neon Theme (default) */
+/* Modern Dark Theme (default) - Dark with subtle purple lean for Obiente branding */
 :root,
 :root[data-theme="dark-purple"] {
-  /* Dark Black Purple Neon Theme */
-  --oui-background: #0b0b12; /* near-black with a hint of purple */
-  --oui-foreground: #f5f3ff; /* soft off-white with lilac tint */
-  --oui-surface-base: #121022; /* deep indigo base */
-  --oui-surface-raised: #181533; /* slightly lifted panel */
-  --oui-surface-overlay: #201b3f; /* overlays/menus */
-  --oui-surface-muted: #2a2450; /* muted blocks, chips */
+  /* Modern dark theme with subtle purple tints - balanced and vibrant */
+  --oui-background: #0f0e15; /* balanced dark with subtle purple undertone */
+  --oui-foreground: #f5f3ff; /* crisp off-white with lavender tint */
+  --oui-surface-base: #171521; /* gentle step up from background */
+  --oui-surface-raised: #1d1a29; /* slightly lifted panel */
+  --oui-surface-overlay: #242030; /* overlays/menus - balanced contrast */
+  --oui-surface-muted: #2d2642; /* muted blocks, chips */
 
   --oui-text-primary: #f5f3ff;
-  --oui-text-secondary: #c7b8ff; /* lavender */
-  --oui-text-tertiary: #9e8cff; /* dimmer lavender */
-  --oui-text-disabled: #6b6396; /* muted purple-grey */
+  --oui-text-secondary: #c4b5fd; /* vibrant light lavender */
+  --oui-text-tertiary: #a78bfa; /* medium purple */
+  --oui-text-disabled: #6b5b95; /* muted purple-grey */
 
-  --oui-border-default: #3a2f5c; /* subtle purple border */
-  --oui-border-muted: #2a2347; /* very subdued border */
-  --oui-border-strong: #5b4a8f; /* stronger accents */
+  --oui-border-default: #3d3552; /* defined purple border */
+  --oui-border-muted: #2d2642; /* subdued border */
+  --oui-border-strong: #4c3f6b; /* stronger accents */
 
-  /* Neon-ish accents */
-  --oui-accent-primary: #a855f7; /* electric purple */
-  --oui-accent-secondary: #22d3ee; /* neon cyan */
-  --oui-accent-success: #22c55e; /* vivid green */
+  /* Modern purple accents for Obiente branding */
+  --oui-accent-primary: #8b5cf6; /* vibrant purple */
+  --oui-accent-secondary: #a78bfa; /* lighter purple */
+  --oui-accent-success: #22c55e; /* green */
   --oui-accent-warning: #f59e0b; /* amber */
-  --oui-accent-danger: #f43f5e; /* hot rose */
-  --oui-accent-info: #60a5fa; /* bright blue */
+  --oui-accent-danger: #f43f5e; /* red */
+  --oui-accent-info: #6366f1; /* indigo */
 
-  --oui-interactive-hover: #241d47; /* hover lifts with purple tint */
-  --oui-interactive-active: #2e2663; /* active press */
-  --oui-interactive-disabled: #3f3a66; /* disabled controls */
-  --oui-interactive-focus: #818cf8; /* calm indigo focus ring */
+  --oui-interactive-hover: #1d1a29; /* hover lifts */
+  --oui-interactive-active: #242030; /* active press */
+  --oui-interactive-disabled: #2d2642; /* disabled controls */
+  --oui-interactive-focus: #8b5cf6; /* purple focus ring */
 }
 
 /* Extra Dark Theme (minimal dark mode - very muted) */

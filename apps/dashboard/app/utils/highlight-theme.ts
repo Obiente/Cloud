@@ -84,7 +84,7 @@ export function applyOUIThemeToHighlightJS() {
       display: block;
       overflow-x: auto;
       padding: 0;
-      background: ${colors.background || "#121022"};
+      background: ${colors.background || "#171521"};
       color: ${colors.foreground || "#f5f3ff"};
     }
 
@@ -97,7 +97,7 @@ export function applyOUIThemeToHighlightJS() {
     .hljs-keyword,
     .hljs-selector-tag,
     .hljs-subst {
-      color: ${colors.accentPrimary || "#a855f7"};
+      color: ${colors.accentPrimary || "#8b5cf6"};
       font-weight: bold;
     }
 
@@ -129,7 +129,7 @@ export function applyOUIThemeToHighlightJS() {
     .hljs-tag,
     .hljs-name,
     .hljs-attribute {
-      color: ${colors.accentPrimary || "#a855f7"};
+      color: ${colors.accentPrimary || "#8b5cf6"};
       font-weight: normal;
     }
 

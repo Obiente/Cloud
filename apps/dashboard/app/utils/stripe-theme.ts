@@ -48,14 +48,14 @@ function hexToRgba(hex: string, alpha: number = 1): string {
  */
 export function getStripeAppearance(): any {
   // Get Oui theme colors
-  const surfaceBase = getCSSVariable('--oui-surface-base') || '#121022';
-  const surfaceRaised = getCSSVariable('--oui-surface-raised') || '#181533';
+  const surfaceBase = getCSSVariable('--oui-surface-base') || '#171521';
+  const surfaceRaised = getCSSVariable('--oui-surface-raised') || '#1d1a29';
   const textPrimary = getCSSVariable('--oui-text-primary') || '#f5f3ff';
   const textSecondary = getCSSVariable('--oui-text-secondary') || '#c7b8ff';
   const textTertiary = getCSSVariable('--oui-text-tertiary') || '#9e8cff';
   const borderDefault = getCSSVariable('--oui-border-default') || '#3a2f5c';
   const borderStrong = getCSSVariable('--oui-border-strong') || '#5b4a8f';
-  const accentPrimary = getCSSVariable('--oui-accent-primary') || '#a855f7';
+  const accentPrimary = getCSSVariable('--oui-accent-primary') || '#8b5cf6';
   const accentDanger = getCSSVariable('--oui-accent-danger') || '#f43f5e';
   const interactiveHover = getCSSVariable('--oui-interactive-hover') || '#241d47';
   const interactiveFocus = getCSSVariable('--oui-interactive-focus') || '#d946ef';

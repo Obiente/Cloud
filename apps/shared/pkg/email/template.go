@@ -99,7 +99,7 @@ var categoryDefaults = map[Category]struct {
 	Accent string
 	Label  string
 }{
-	CategoryOnboarding:   {Accent: "#a855f7", Label: "Onboarding"},   // OUI primary purple
+	CategoryOnboarding:   {Accent: "#8b5cf6", Label: "Onboarding"},   // OUI primary purple
 	CategoryInvite:       {Accent: "#22d3ee", Label: "Invitation"},     // OUI secondary cyan
 	CategoryNotification: {Accent: "#60a5fa", Label: "Notification"},   // OUI info blue
 	CategoryBilling:      {Accent: "#f59e0b", Label: "Billing"},         // OUI warning amber
@@ -238,7 +238,7 @@ func buildViewModel(data TemplateData) viewModel {
 		accent = defaults.Accent
 	}
 	if accent == "" {
-		accent = "#a855f7" // OUI primary purple
+		accent = "#8b5cf6" // OUI primary purple
 	}
 
 	categoryLabel := defaults.Label

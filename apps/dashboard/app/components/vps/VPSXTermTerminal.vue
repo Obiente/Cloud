@@ -564,7 +564,7 @@
     gap: 1rem;
     background: color-mix(
       in srgb,
-      var(--oui-surface-overlay, #201b3f) 25%,
+      var(--oui-surface-overlay, #242030) 25%,
       transparent
     );
     backdrop-filter: blur(8px) saturate(180%);
@@ -579,7 +579,7 @@
     border-radius: 50%;
     border: 4px solid
       color-mix(in srgb, var(--oui-text-primary, #f5f3ff) 20%, transparent);
-    border-top-color: var(--oui-accent-primary, #a855f7);
+    border-top-color: var(--oui-accent-primary, #8b5cf6);
     animation: terminal-spin 0.8s linear infinite;
     flex-shrink: 0;
   }
