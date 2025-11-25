@@ -842,6 +842,7 @@ TRAEFIK_DASHBOARD_PORT=9090
 | `PROXMOX_SSH_USER`       | string | `obiente-cloud` | ❌       | SSH user for snippet writing. Defaults to `obiente-cloud` if not set. See [Proxmox SSH User Setup Guide](../guides/proxmox-ssh-user-setup.md) for setup instructions.                                                                                                                                                                                  |
 | `PROXMOX_SSH_KEY_PATH`   | string | -           | ❌       | Path to SSH private key file for snippet writing. Either this or `PROXMOX_SSH_KEY_DATA` must be set if using SSH method.                                                                                                                                                                                                                                  |
 | `PROXMOX_SSH_KEY_DATA`   | string | -           | ❌       | SSH private key content (alternative to `PROXMOX_SSH_KEY_PATH`). Supports both raw key data and base64-encoded keys. Useful when using secrets managers. Either this or `PROXMOX_SSH_KEY_PATH` must be set if using SSH method.                                                                                                                                                                              |
+| `PROXMOX_REGION_NODES`   | string | -           | ❌       | Maps VPS regions to specific Proxmox cluster nodes. Format: `"region1:node1;region2:node2"`. When creating a VPS in a region, the system will use the mapped node if available. If not configured or the mapped node doesn't exist, it falls back to the first available node. Useful for multi-node Proxmox clusters where you want to control which node hosts VMs for each region. |
 | `SSH_PROXY_PORT`         | number | `2222`      | ❌       | SSH proxy port for VPS access                                                                                                                                                                                                                                                                                                                           |
 | `VPS_GATEWAY_API_SECRET` | string | -           | ❌       | Shared secret for authenticating with vps-gateway service. Must match `GATEWAY_API_SECRET` configured in vps-gateway. Required when using gateway service.                                                                                                                                                                                              |
 | `VPS_GATEWAY_URL`        | string | -           | ❌       | Gateway gRPC server URL (e.g., `http://gateway-public-ip:1537`). API instances connect to this URL to communicate with the gateway. Port 1537 = OCG (Obiente Cloud Gateway).                                                                                                                                                                            |
@@ -987,6 +988,11 @@ PROXMOX_SSH_USER=obiente-cloud
 PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
 # Or use key data from secrets manager:
 # PROXMOX_SSH_KEY_DATA="-----BEGIN OPENSSH PRIVATE KEY-----\n..."
+
+# Optional: Map VPS regions to specific Proxmox nodes (for multi-node clusters)
+# Format: "region1:node1;region2:node2"
+# Example: Map us-east-1 region to "customer" node, us-west-1 to "west" node
+PROXMOX_REGION_NODES="us-east-1:customer;us-west-1:west"
 ```
 
 **Note:** The storage pool specified in `PROXMOX_STORAGE_POOL` must exist in your Proxmox installation and support VM disk images. Common values are `local-lvm` (default), `local`, `local-zfs`, or custom storage pools. If the storage pool doesn't exist, VPS creation will fail with a clear error message listing available storage pools.

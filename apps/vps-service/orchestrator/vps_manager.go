@@ -230,14 +230,15 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 			return nil, "", fmt.Errorf("invalid VM ID: %s", vmID)
 		}
 
-		nodes, err := proxmoxClient.ListNodes(ctx)
-		if err != nil || len(nodes) == 0 {
-			return nil, "", fmt.Errorf("failed to find Proxmox node: %w", err)
+		// Find the actual node where the VM was created (may differ from nodes[0] in multi-node clusters)
+		nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to find Proxmox node for VM %d: %w", vmIDInt, err)
 		}
 
 	// Verify VM actually exists before creating VPS record
 	// If GetVMStatus fails with "does not exist", the VM creation failed
-	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodes[0], vmIDInt)
+	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodeName, vmIDInt)
 	if err != nil {
 		errorMsg := err.Error()
 		// Check if the error indicates the VM config doesn't exist (VM creation failed)

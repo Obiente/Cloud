@@ -69,6 +69,45 @@ func getMapKeys(m map[string]interface{}) []string {
 	return keys
 }
 
+// parseRegionNodeMapping parses the PROXMOX_REGION_NODES environment variable
+// Format: "region1:node1;region2:node2" or "region1:node1,node2" (multiple nodes per region)
+// Returns a map of region -> preferred node name
+func parseRegionNodeMapping() map[string]string {
+	mapping := make(map[string]string)
+	envValue := os.Getenv("PROXMOX_REGION_NODES")
+	if envValue == "" {
+		return mapping
+	}
+
+	// Parse semicolon-separated region mappings
+	regionStrings := strings.Split(envValue, ";")
+	for _, regionStr := range regionStrings {
+		regionStr = strings.TrimSpace(regionStr)
+		if regionStr == "" {
+			continue
+		}
+
+		// Parse "regionID:nodeName" format
+		if strings.Contains(regionStr, ":") {
+			parts := strings.SplitN(regionStr, ":", 2)
+			if len(parts) == 2 {
+				regionID := strings.TrimSpace(parts[0])
+				nodeName := strings.TrimSpace(parts[1])
+				// If multiple nodes are specified (comma-separated), use the first one
+				if strings.Contains(nodeName, ",") {
+					nodeName = strings.Split(nodeName, ",")[0]
+					nodeName = strings.TrimSpace(nodeName)
+				}
+				if regionID != "" && nodeName != "" {
+					mapping[regionID] = nodeName
+				}
+			}
+		}
+	}
+
+	return mapping
+}
+
 func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowInterVM bool) (*CreateVMResult, error) {
 	// Declare rootPassword at function scope so it can be returned
 	var rootPassword string
@@ -79,7 +118,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		return nil, fmt.Errorf("failed to get next VM ID: %w", err)
 	}
 
-	// Select node (use first available for now)
+	// List all available nodes
 	nodes, err := pc.ListNodes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list Proxmox nodes: %w", err)
@@ -87,7 +126,27 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 	if len(nodes) == 0 {
 		return nil, fmt.Errorf("no Proxmox nodes available")
 	}
+
+	// Select node based on region mapping if configured, otherwise use first available
 	nodeName := nodes[0]
+	if config.Region != "" {
+		regionNodeMap := parseRegionNodeMapping()
+		if mappedNode, ok := regionNodeMap[config.Region]; ok {
+			// Verify the mapped node exists in the cluster
+			nodeExists := false
+			for _, node := range nodes {
+				if node == mappedNode {
+					nodeExists = true
+					nodeName = mappedNode
+					logger.Info("[ProxmoxClient] Using mapped node %s for region %s", nodeName, config.Region)
+					break
+				}
+			}
+			if !nodeExists {
+				logger.Warn("[ProxmoxClient] Mapped node %s for region %s not found in cluster, using first available node %s", mappedNode, config.Region, nodeName)
+			}
+		}
+	}
 
 	// Get storage pool (default to local-lvm)
 	storage := "local-lvm"
