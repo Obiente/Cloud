@@ -347,6 +347,7 @@ message SuspiciousOrganization {
 message SuspiciousActivity {
   string id = 1;
   string organization_id = 2;
+  string organization_name = 7; // Organization name for display
   string activity_type = 3; // "rapid_creation", "failed_payments", "unusual_usage", etc.
   string description = 4;
   int64 severity = 5; // 0-100

@@ -98,13 +98,18 @@
             </OuiBadge>
           </template>
           <template #cell-organization="{ value, row }">
-            <OuiButton
-              variant="ghost"
-              size="xs"
-              @click="viewOrganization(row.organizationId)"
-            >
-              {{ value }}
-            </OuiButton>
+            <div>
+              <OuiButton
+                variant="ghost"
+                size="xs"
+                @click="viewOrganization(row.organizationId)"
+              >
+                {{ value }}
+              </OuiButton>
+              <div v-if="row.organizationId && row.organizationId !== 'unknown'" class="text-xs font-mono text-text-tertiary mt-0.5">
+                {{ row.organizationId }}
+              </div>
+            </div>
           </template>
         </OuiTable>
       </OuiCardBody>
@@ -226,6 +231,7 @@ const suspiciousActivities = computed(() => {
     abuseData.value?.suspiciousActivities?.map((act: any) => ({
       id: act.id,
       organizationId: act.organizationId,
+      organization: act.organizationName || act.organizationId || "Unknown",
       activityType: act.activityType || "—",
       activityTypeLabel: formatActivityType(act.activityType),
       description: act.description || "—",

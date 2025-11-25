@@ -247,12 +247,13 @@ func detectRapidResourceCreation(twentyFourHoursAgo time.Time) ([]*superadminv1.
 		var org database.Organization
 		if err := database.DB.First(&org, "id = ?", rc.OrganizationID).Error; err == nil {
 			activities = append(activities, &superadminv1.SuspiciousActivity{
-				Id:            fmt.Sprintf("rapid-%s", rc.OrganizationID),
-				OrganizationId: rc.OrganizationID,
-				ActivityType:  "rapid_creation",
-				Description:   fmt.Sprintf("Created %d resources in 24 hours", rc.Count),
-				Severity:      50,
-				OccurredAt:    timestamppb.New(time.Now()),
+				Id:              fmt.Sprintf("rapid-%s", rc.OrganizationID),
+				OrganizationId:   rc.OrganizationID,
+				OrganizationName: org.Name,
+				ActivityType:    "rapid_creation",
+				Description:     fmt.Sprintf("Created %d resources in 24 hours", rc.Count),
+				Severity:        50,
+				OccurredAt:      timestamppb.New(time.Now()),
 			})
 		}
 	}
@@ -290,12 +291,13 @@ func detectFailedPayments(twentyFourHoursAgo time.Time) ([]*superadminv1.Suspici
 		var org database.Organization
 		if err := database.DB.First(&org, "id = ?", fp.OrganizationID).Error; err == nil {
 			activities = append(activities, &superadminv1.SuspiciousActivity{
-				Id:            fmt.Sprintf("payment-%s", fp.OrganizationID),
-				OrganizationId: fp.OrganizationID,
-				ActivityType:  "failed_payments",
-				Description:   fmt.Sprintf("%d failed payment attempts in 24 hours", fp.Count),
-				Severity:      70,
-				OccurredAt:    timestamppb.New(time.Now()),
+				Id:              fmt.Sprintf("payment-%s", fp.OrganizationID),
+				OrganizationId:   fp.OrganizationID,
+				OrganizationName: org.Name,
+				ActivityType:    "failed_payments",
+				Description:     fmt.Sprintf("%d failed payment attempts in 24 hours", fp.Count),
+				Severity:        70,
+				OccurredAt:      timestamppb.New(time.Now()),
 			})
 		}
 	}
@@ -552,12 +554,13 @@ func detectDNSDelegationAbuse(twentyFourHoursAgo time.Time) ([]*superadminv1.Sus
 			var org database.Organization
 			if err := database.DB.First(&org, "id = ?", dns.OrganizationID).Error; err == nil {
 				activities = append(activities, &superadminv1.SuspiciousActivity{
-					Id:            fmt.Sprintf("dns-%s", dns.OrganizationID),
-					OrganizationId: dns.OrganizationID,
-					ActivityType:  "dns_delegation_abuse",
-					Description:   fmt.Sprintf("Created %d DNS delegation API keys in 24 hours", dns.Count),
-					Severity:      55,
-					OccurredAt:    timestamppb.New(time.Now()),
+					Id:              fmt.Sprintf("dns-%s", dns.OrganizationID),
+					OrganizationId:   dns.OrganizationID,
+					OrganizationName: org.Name,
+					ActivityType:    "dns_delegation_abuse",
+					Description:     fmt.Sprintf("Created %d DNS delegation API keys in 24 hours", dns.Count),
+					Severity:        55,
+					OccurredAt:      timestamppb.New(time.Now()),
 				})
 			}
 		}
@@ -666,17 +669,24 @@ func detectUsageSpikes(ctx context.Context, twentyFourHoursAgo time.Time) ([]*su
 
 		if hasSpike {
 			orgID := "unknown"
+			orgName := "Unknown"
 			if r.OrganizationID != "" {
 				orgID = r.OrganizationID
+				// Fetch organization name
+				var org database.Organization
+				if err := database.DB.First(&org, "id = ?", r.OrganizationID).Error; err == nil {
+					orgName = org.Name
+				}
 			}
 
 			activities = append(activities, &superadminv1.SuspiciousActivity{
-				Id:            fmt.Sprintf("usage-spike-%s", r.DeploymentID),
-				OrganizationId: orgID,
-				ActivityType:  "usage_spike",
-				Description:   fmt.Sprintf("Deployment %s: Unusual usage spike - %s", r.DeploymentID, strings.Join(spikeDesc, ", ")),
-				Severity:      50,
-				OccurredAt:    timestamppb.New(time.Now()),
+				Id:              fmt.Sprintf("usage-spike-%s", r.DeploymentID),
+				OrganizationId:   orgID,
+				OrganizationName: orgName,
+				ActivityType:    "usage_spike",
+				Description:     fmt.Sprintf("Deployment %s: Unusual usage spike - %s", r.DeploymentID, strings.Join(spikeDesc, ", ")),
+				Severity:        50,
+				OccurredAt:      timestamppb.New(time.Now()),
 			})
 		}
 	}

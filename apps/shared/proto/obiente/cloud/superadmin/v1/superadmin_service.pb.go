@@ -2411,15 +2411,16 @@ func (x *SuspiciousOrganization) GetLastActivity() *timestamppb.Timestamp {
 
 // Suspicious Activity
 type SuspiciousActivity struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	OrganizationId string                 `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
-	ActivityType   string                 `protobuf:"bytes,3,opt,name=activity_type,json=activityType,proto3" json:"activity_type,omitempty"` // "rapid_creation", "failed_payments", "unusual_usage", etc.
-	Description    string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
-	Severity       int64                  `protobuf:"varint,5,opt,name=severity,proto3" json:"severity,omitempty"` // 0-100
-	OccurredAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OrganizationId   string                 `protobuf:"bytes,2,opt,name=organization_id,json=organizationId,proto3" json:"organization_id,omitempty"`
+	OrganizationName string                 `protobuf:"bytes,7,opt,name=organization_name,json=organizationName,proto3" json:"organization_name,omitempty"` // Organization name for display
+	ActivityType     string                 `protobuf:"bytes,3,opt,name=activity_type,json=activityType,proto3" json:"activity_type,omitempty"`             // "rapid_creation", "failed_payments", "unusual_usage", etc.
+	Description      string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	Severity         int64                  `protobuf:"varint,5,opt,name=severity,proto3" json:"severity,omitempty"` // 0-100
+	OccurredAt       *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=occurred_at,json=occurredAt,proto3" json:"occurred_at,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *SuspiciousActivity) Reset() {
@@ -2462,6 +2463,13 @@ func (x *SuspiciousActivity) GetId() string {
 func (x *SuspiciousActivity) GetOrganizationId() string {
 	if x != nil {
 		return x.OrganizationId
+	}
+	return ""
+}
+
+func (x *SuspiciousActivity) GetOrganizationName() string {
+	if x != nil {
+		return x.OrganizationName
 	}
 	return ""
 }
@@ -7145,10 +7153,11 @@ const file_obiente_cloud_superadmin_v1_superadmin_service_proto_rawDesc = "" +
 	"\x13total_credits_spent\x18\a \x01(\x03R\x11totalCreditsSpent\x129\n" +
 	"\n" +
 	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12?\n" +
-	"\rlast_activity\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\flastActivity\"\xed\x01\n" +
+	"\rlast_activity\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\flastActivity\"\x9a\x02\n" +
 	"\x12SuspiciousActivity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12'\n" +
-	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12#\n" +
+	"\x0forganization_id\x18\x02 \x01(\tR\x0eorganizationId\x12+\n" +
+	"\x11organization_name\x18\a \x01(\tR\x10organizationName\x12#\n" +
 	"\ractivity_type\x18\x03 \x01(\tR\factivityType\x12 \n" +
 	"\vdescription\x18\x04 \x01(\tR\vdescription\x12\x1a\n" +
 	"\bseverity\x18\x05 \x01(\x03R\bseverity\x12;\n" +
