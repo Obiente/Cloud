@@ -47,6 +47,7 @@ var baseServiceRoutes = map[string]string{
 	"/obiente.cloud.superadmin.v1.SuperadminService/":      "superadmin-service:3011",
 	"/obiente.cloud.support.v1.SupportService/":            "support-service:3009",
 	"/obiente.cloud.audit.v1.AuditService/":                "audit-service:3010",
+	"/obiente.cloud.notifications.v1.NotificationService/": "notifications-service:3012",
 	"/webhooks/stripe":                                     "billing-service:3004",
 	"/dns/push":                                            "dns-service:8053",         // DNS delegation push endpoint
 	"/dns/push/batch":                                      "dns-service:8053",         // DNS delegation batch push endpoint
@@ -67,6 +68,7 @@ var serviceDomains = map[string]string{
 	"superadmin-service:3011":    "superadmin-service",
 	"support-service:3009":       "support-service",
 	"audit-service:3010":         "audit-service",
+	"notifications-service:3012": "notifications-service",
 	"dns-service:8053":           "dns-service",
 }
 
@@ -152,13 +154,13 @@ func main() {
 	mux := http.NewServeMux()
 	proxy := &ReverseProxy{
 		routes:           serviceRoutes,
-		healthCheckURLs: healthCheckURLs,
+		healthCheckURLs:  healthCheckURLs,
 		baseServiceAddrs: baseServiceAddrs,
 	}
 
 	proxy.initHealthChecker()
 	logger.Info("✓ Health checker initialized for backend services")
-	
+
 	if useTraefik == "true" || useTraefik == "1" {
 		logger.Info("✓ Health checks use direct service addresses (bypassing Traefik) for independent status")
 	} else {
@@ -338,13 +340,13 @@ type ServiceHealth struct {
 
 // ReverseProxy handles routing requests to backend services
 type ReverseProxy struct {
-	routes            map[string]string // Path -> routing URL (may go through Traefik)
-	healthCheckURLs   map[string]string // Routing URL -> health check URL (always direct to service)
-	baseServiceAddrs  map[string]string // Routing URL -> base service address (for health checks)
-	healthStatus      map[string]*ServiceHealth // Tracks health status of each backend service and its replicas
-	healthMutex       sync.RWMutex
-	httpClient        *http.Client // Shared HTTP client with connection pooling
-	httpClientOnce    sync.Once    // Ensures client is initialized once
+	routes           map[string]string         // Path -> routing URL (may go through Traefik)
+	healthCheckURLs  map[string]string         // Routing URL -> health check URL (always direct to service)
+	baseServiceAddrs map[string]string         // Routing URL -> base service address (for health checks)
+	healthStatus     map[string]*ServiceHealth // Tracks health status of each backend service and its replicas
+	healthMutex      sync.RWMutex
+	httpClient       *http.Client // Shared HTTP client with connection pooling
+	httpClientOnce   sync.Once    // Ensures client is initialized once
 }
 
 // initHealthChecker starts background health checks for all backend services
@@ -669,25 +671,25 @@ func (p *ReverseProxy) getHTTPClient() *http.Client {
 		skipTLSVerify := os.Getenv("SKIP_TLS_VERIFY")
 		shouldSkipVerify := skipTLSVerify == "true" || skipTLSVerify == "1"
 
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: shouldSkipVerify,
-		},
-		DialContext: (&net.Dialer{
-			Timeout:   10 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   10,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
-		DisableKeepAlives:     false,
-		ForceAttemptHTTP2:     false, // Disable forced HTTP/2 - let it negotiate naturally
-		WriteBufferSize:       4096,
-		ReadBufferSize:        4096,
-	}
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: shouldSkipVerify,
+			},
+			DialContext: (&net.Dialer{
+				Timeout:   10 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   10,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			ResponseHeaderTimeout: 30 * time.Second,
+			DisableKeepAlives:     false,
+			ForceAttemptHTTP2:     false, // Disable forced HTTP/2 - let it negotiate naturally
+			WriteBufferSize:       4096,
+			ReadBufferSize:        4096,
+		}
 
 		p.httpClient = &http.Client{
 			Transport: transport,
@@ -820,9 +822,9 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Check if this is a streaming request (server streaming RPC)
 	// Connect-RPC server streaming endpoints typically have "Stream" in the path
-	isStreamingRequest := strings.Contains(r.URL.Path, "Stream") || 
+	isStreamingRequest := strings.Contains(r.URL.Path, "Stream") ||
 		strings.Contains(r.URL.Path, "stream")
-	
+
 	// For streaming requests, use a client without timeout or with a very long timeout
 	var streamingClient *http.Client
 	if isStreamingRequest {
@@ -851,7 +853,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if isStreamingRequest && streamingClient != nil {
 		requestClient = streamingClient
 	}
-	
+
 	resp, err := requestClient.Do(req)
 	if err != nil {
 		// Check if context was cancelled (client disconnected)
@@ -859,21 +861,21 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			logger.Debug("[API Gateway] Request cancelled by client: %v", r.Context().Err())
 			return
 		}
-		
+
 		// Log detailed error for debugging
-		logger.Error("[API Gateway] Failed to forward request to %s: %v (method=%s, path=%s)", 
+		logger.Error("[API Gateway] Failed to forward request to %s: %v (method=%s, path=%s)",
 			targetURL, err, r.Method, r.URL.Path)
-		
+
 		// Close idle connections if we get connection errors to force new connections
-		if strings.Contains(err.Error(), "timeout") || 
-		   strings.Contains(err.Error(), "connection") ||
-		   strings.Contains(err.Error(), "EOF") {
+		if strings.Contains(err.Error(), "timeout") ||
+			strings.Contains(err.Error(), "connection") ||
+			strings.Contains(err.Error(), "EOF") {
 			// Force close idle connections for this host to avoid reusing bad connections
 			if transport, ok := client.Transport.(*http.Transport); ok {
 				transport.CloseIdleConnections()
 			}
 		}
-		
+
 		// Provide more specific error messages
 		errMsg := "Service Unavailable"
 		statusCode := http.StatusServiceUnavailable
@@ -887,12 +889,12 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			errMsg = "Connection refused - backend service may be down"
 			statusCode = http.StatusBadGateway
 		}
-		
+
 		// Set CORS headers before writing error response
 		// The CORS middleware won't run on direct http.Error() calls, so we need to add headers manually
 		origin := r.Header.Get("Origin")
 		corsConfig := middleware.DefaultCORSConfig()
-		
+
 		// Determine allowed origin
 		var allowedOrigin string
 		if len(corsConfig.AllowedOrigins) == 1 && corsConfig.AllowedOrigins[0] == "*" {
@@ -902,7 +904,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Specific origin is allowed
 			allowedOrigin = origin
 		}
-		
+
 		// Set CORS headers if origin is allowed
 		if allowedOrigin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
@@ -920,7 +922,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Access-Control-Allow-Headers", strings.Join(corsConfig.AllowedHeaders, ", "))
 			}
 		}
-		
+
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(statusCode)
 		w.Write([]byte(fmt.Sprintf("%s: %v", errMsg, err)))
@@ -933,7 +935,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"Access-Control-Allow-Origin":      true,
 		"Access-Control-Allow-Methods":     true,
 		"Access-Control-Allow-Headers":     true,
-		"Access-Control-Allow-Credentials":  true,
+		"Access-Control-Allow-Credentials": true,
 		"Access-Control-Expose-Headers":    true,
 		"Access-Control-Max-Age":           true,
 	}
@@ -961,7 +963,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// This ensures CORS headers are present even when backend returns 502 or other errors
 	origin := r.Header.Get("Origin")
 	corsConfig := middleware.DefaultCORSConfig()
-	
+
 	// Determine allowed origin
 	var allowedOrigin string
 	if len(corsConfig.AllowedOrigins) == 1 && corsConfig.AllowedOrigins[0] == "*" {
@@ -971,7 +973,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Specific origin is allowed
 		allowedOrigin = origin
 	}
-	
+
 	// Set CORS headers if origin is allowed
 	if allowedOrigin != "" {
 		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
@@ -997,7 +999,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Write headers first, then stream the body
 	if isStreamingRequest {
 		logger.Info("[API Gateway] Streaming response for: %s (Content-Type: %s)", r.URL.Path, resp.Header.Get("Content-Type"))
-		
+
 		// For streaming requests, we need to extend the write deadline to prevent timeout
 		// The server's WriteTimeout will close the connection if no data is written for 30s
 		// We'll use a ResponseWriter that extends the deadline on each write
@@ -1006,32 +1008,32 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// This will be extended on each write/flush
 			conn.SetWriteDeadline(time.Now().Add(1 * time.Hour))
 		}
-		
+
 		// Write status code and headers
 		w.WriteHeader(resp.StatusCode)
-		
+
 		// Get flusher if available
 		flusher, hasFlusher := w.(http.Flusher)
 		if hasFlusher {
 			// Flush headers immediately
 			flusher.Flush()
 		}
-		
+
 		// Stream the response body chunk by chunk
 		// Read and forward immediately without buffering
 		buf := make([]byte, 8192) // 8KB chunks
 		totalWritten := int64(0)
-		
+
 		// Stream in a goroutine to handle both client disconnect and stream completion
 		streamDone := make(chan error, 1)
-		
+
 		// Start keepalive goroutine to extend write deadline periodically
 		// This prevents the server's WriteTimeout from closing the connection
 		keepaliveTicker := time.NewTicker(15 * time.Second) // Extend deadline every 15s
 		keepaliveDone := make(chan struct{})
 		keepaliveClosed := false
 		var keepaliveMutex sync.Mutex
-		
+
 		closeKeepalive := func() {
 			keepaliveMutex.Lock()
 			defer keepaliveMutex.Unlock()
@@ -1040,7 +1042,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				keepaliveClosed = true
 			}
 		}
-		
+
 		go func() {
 			defer closeKeepalive()
 			for {
@@ -1060,13 +1062,13 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}()
-		
+
 		// Stream the response body
 		go func() {
 			defer close(streamDone)
 			defer keepaliveTicker.Stop()
 			defer closeKeepalive()
-			
+
 			for {
 				n, err := resp.Body.Read(buf)
 				if n > 0 {
@@ -1095,7 +1097,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}()
-		
+
 		// Wait for streaming to complete or client to disconnect
 		select {
 		case err := <-streamDone:
@@ -1115,7 +1117,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				logger.Debug("[API Gateway] Stream goroutine did not finish within timeout")
 			}
 		}
-		
+
 		// Final flush
 		if hasFlusher {
 			flusher.Flush()
@@ -1123,7 +1125,7 @@ func (p *ReverseProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// For non-streaming requests, write headers and copy body normally
 		w.WriteHeader(resp.StatusCode)
-		
+
 		// Copy response body to client
 		// Must fully consume body for HTTP/1.1 keep-alive connection reuse
 		if _, err := io.Copy(w, resp.Body); err != nil {

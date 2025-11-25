@@ -202,6 +202,7 @@ func InitDatabase() error {
 		&SSHKey{},
 		&VPSTerminalKey{},
 		&VPSBastionKey{},
+		&Notification{},
 	); err != nil {
 		return fmt.Errorf("failed to auto-migrate: %w", err)
 	}

@@ -53,7 +53,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "3010"
+		port = "3012"
 	}
 
 	// Create HTTP mux
@@ -141,4 +141,3 @@ func main() {
 		}
 	}
 }
-
