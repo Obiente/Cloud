@@ -17,7 +17,7 @@ import (
 
 // VPSManager manages the lifecycle of VPS instances via Proxmox
 type VPSManager struct {
-	dockerClient   client.APIClient
+	dockerClient  client.APIClient
 	gatewayClient *VPSGatewayClient
 }
 
@@ -62,7 +62,7 @@ func GetProxmoxConfig() (*ProxmoxConfig, error) {
 	}
 	config.SSHKeyPath = os.Getenv("PROXMOX_SSH_KEY_PATH")
 	config.SSHKeyData = os.Getenv("PROXMOX_SSH_KEY_DATA")
-	
+
 	// If SSH host is not set, try to extract from APIURL
 	if config.SSHHost == "" && config.APIURL != "" {
 		// Extract hostname from APIURL (e.g., "https://proxmox.example.com:8006" -> "proxmox.example.com")
@@ -91,12 +91,12 @@ type ProxmoxConfig struct {
 	Password string
 	TokenID  string // Alternative: use API token instead of password
 	Secret   string // Token secret
-	
+
 	// SSH configuration for writing snippet files directly to Proxmox storage
-	SSHHost     string // Proxmox node hostname/IP (defaults to APIURL host if not set)
-	SSHUser     string // SSH user for snippet writing (e.g., "obiente-cloud")
-	SSHKeyPath  string // Path to SSH private key file (e.g., "/path/to/id_rsa")
-	SSHKeyData  string // SSH private key content (alternative to SSHKeyPath)
+	SSHHost    string // Proxmox node hostname/IP (defaults to APIURL host if not set)
+	SSHUser    string // SSH user for snippet writing (e.g., "obiente-cloud")
+	SSHKeyPath string // Path to SSH private key file (e.g., "/path/to/id_rsa")
+	SSHKeyData string // SSH private key content (alternative to SSHKeyPath)
 }
 
 // NewVPSManager creates a new VPS manager
@@ -115,7 +115,7 @@ func NewVPSManager() (*VPSManager, error) {
 	}
 
 	return &VPSManager{
-		dockerClient:   cli,
+		dockerClient:  cli,
 		gatewayClient: gatewayClient,
 	}, nil
 }
@@ -131,13 +131,13 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 	if err := database.DB.Where("id = ?", config.OrganizationID).First(&org).Error; err != nil {
 		return nil, "", fmt.Errorf("failed to get organization: %w", err)
 	}
-	
+
 	// Fetch organization name if not provided
 	if config.OrganizationName == nil {
 		orgName := org.Name
 		config.OrganizationName = &orgName
 	}
-	
+
 	// Fetch organization owner if not provided
 	if config.OwnerID == nil || config.OwnerName == nil {
 		var ownerMember database.OrganizationMember
@@ -165,14 +165,14 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 		return nil, "", fmt.Errorf("failed to create bastion SSH key: %w", err)
 	}
 	logger.Info("[VPSManager] Generated bastion SSH key for VPS %s (fingerprint: %s)", config.VPSID, bastionKey.Fingerprint)
-	
+
 	// Generate web terminal SSH key pair for this VPS (optional, can be removed to disable web terminal)
 	terminalKey, err := database.CreateVPSTerminalKey(config.VPSID, config.OrganizationID)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to create terminal SSH key: %w", err)
 	}
 	logger.Info("[VPSManager] Generated web terminal SSH key for VPS %s (fingerprint: %s)", config.VPSID, terminalKey.Fingerprint)
-	
+
 	// Track if we need to clean up keys on failure
 	cleanupBastionKey := true
 	cleanupTerminalKey := true
@@ -196,7 +196,7 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 		// Generate MAC address for the VM (Proxmox will assign one, but we need it for DHCP)
 		// Format: 00:16:3e:XX:XX:XX (QEMU/KVM standard prefix)
 		macAddress = generateMACAddress()
-		
+
 		// Request IP allocation from gateway
 		allocResp, err := vm.gatewayClient.AllocateIP(ctx, config.VPSID, config.OrganizationID, macAddress)
 		if err != nil {
@@ -210,36 +210,36 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 
 	// Provision VM via Proxmox API
 	createResult, err := proxmoxClient.CreateVM(ctx, config, org.AllowInterVMCommunication)
+	if err != nil {
+		// If VM creation fails, release the allocated IP
+		if vm.gatewayClient != nil && allocatedIP != "" {
+			if releaseErr := vm.gatewayClient.ReleaseIP(ctx, config.VPSID); releaseErr != nil {
+				logger.Warn("[VPSManager] Failed to release IP %s after VM creation failure: %v", allocatedIP, releaseErr)
+			}
+		}
+		return nil, "", fmt.Errorf("failed to provision VM via Proxmox: %w", err)
+	}
+
+	vmID := createResult.VMID
+	rootPassword := createResult.Password
+	nodeName := createResult.NodeName
+
+	// Get actual VM status from Proxmox and map to our status enum
+	vmIDInt := 0
+	fmt.Sscanf(vmID, "%d", &vmIDInt)
+	if vmIDInt == 0 {
+		return nil, "", fmt.Errorf("invalid VM ID: %s", vmID)
+	}
+
+	// Use the node name returned from CreateVM (more reliable than searching)
+	if nodeName == "" {
+		// Fallback: find the node if not returned (shouldn't happen, but be safe)
+		var err error
+		nodeName, err = proxmoxClient.FindVMNode(ctx, vmIDInt)
 		if err != nil {
-			// If VM creation fails, release the allocated IP
-			if vm.gatewayClient != nil && allocatedIP != "" {
-				if releaseErr := vm.gatewayClient.ReleaseIP(ctx, config.VPSID); releaseErr != nil {
-					logger.Warn("[VPSManager] Failed to release IP %s after VM creation failure: %v", allocatedIP, releaseErr)
-				}
-			}
-			return nil, "", fmt.Errorf("failed to provision VM via Proxmox: %w", err)
+			return nil, "", fmt.Errorf("failed to find Proxmox node for VM %d: %w", vmIDInt, err)
 		}
-
-		vmID := createResult.VMID
-		rootPassword := createResult.Password
-		nodeName := createResult.NodeName
-
-		// Get actual VM status from Proxmox and map to our status enum
-		vmIDInt := 0
-		fmt.Sscanf(vmID, "%d", &vmIDInt)
-		if vmIDInt == 0 {
-			return nil, "", fmt.Errorf("invalid VM ID: %s", vmID)
-		}
-
-		// Use the node name returned from CreateVM (more reliable than searching)
-		if nodeName == "" {
-			// Fallback: find the node if not returned (shouldn't happen, but be safe)
-			var err error
-			nodeName, err = proxmoxClient.FindVMNode(ctx, vmIDInt)
-			if err != nil {
-				return nil, "", fmt.Errorf("failed to find Proxmox node for VM %d: %w", vmIDInt, err)
-			}
-		}
+	}
 
 	// Verify VM actually exists before creating VPS record
 	// If GetVMStatus fails with "does not exist", the VM creation failed
@@ -278,7 +278,7 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
-	
+
 	// NOTE: Root password is NOT stored in database for security
 	// Password is only returned once in CreateVPS response, then discarded
 
@@ -354,16 +354,16 @@ type VPSConfig struct {
 	IPv6Addresses  []string
 	OrganizationID string
 	CreatedBy      string
-	
+
 	// Optional metadata for VPS notes (organization and user names)
 	OrganizationName *string // Organization name (optional, fetched if not provided)
 	CreatorName      *string // Creator user name (optional, fetched if not provided)
 	OwnerID          *string // Organization owner ID (optional, fetched if not provided)
 	OwnerName        *string // Organization owner name (optional, fetched if not provided)
-	
+
 	// Cloud-init configuration
-	CloudInit      *CloudInitConfig
-	RootPassword   *string // Custom root password (optional, auto-generated if not provided)
+	CloudInit    *CloudInitConfig
+	RootPassword *string // Custom root password (optional, auto-generated if not provided)
 }
 
 // CloudInitConfig contains cloud-init configuration options
