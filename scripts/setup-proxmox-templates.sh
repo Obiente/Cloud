@@ -11,6 +11,15 @@
 #     git clone https://github.com/obiente/cloud.git
 #     cd cloud
 #     ./scripts/setup-proxmox-templates.sh
+#
+# Options:
+#   --recreate-all, -y, --yes    Automatically recreate all templates without prompts
+#                                 (uses cached images if available, skips all confirmations)
+#   --help, -h                    Show help message
+#
+# Examples:
+#   ./scripts/setup-proxmox-templates.sh              # Interactive mode
+#   ./scripts/setup-proxmox-templates.sh --recreate-all # Auto-recreate all templates
 
 set -e  # Exit on error
 
@@ -281,6 +290,7 @@ create_or_update_template() {
     local image_filename="$4"
     local storage="$5"
     local storage_type="$6"
+    local skip_prompts="${7:-false}"  # Optional: skip all prompts (default: false)
     
     print_info "Processing template: $template_name (VMID: $vmid)"
     
@@ -293,22 +303,27 @@ create_or_update_template() {
         if [ -n "$existing_vmid" ]; then
             exists=true
             print_warning "Template '$template_name' already exists (VMID: $existing_vmid)"
-            echo -n "Update existing template? [Y/n]: "
-            # Read from terminal if available, otherwise stdin
-            # Use || true to prevent read failure from exiting script (set -e)
-            if [ -t 0 ]; then
-                read -r update || update="Y"
-            elif [ -c /dev/tty ]; then
-                read -r update < /dev/tty || update="Y"
-            else
-                # Fallback: try stdin anyway (might work in some environments)
-                read -r update || update="Y"
-            fi
-            update=${update:-Y}
             
-            if [[ ! "$update" =~ ^[Yy]$ ]]; then
-                print_info "Skipping template: $template_name"
-                return 0
+            if [ "$skip_prompts" = true ]; then
+                print_info "Auto-updating existing template (--recreate-all mode)"
+            else
+                echo -n "Update existing template? [Y/n]: "
+                # Read from terminal if available, otherwise stdin
+                # Use || true to prevent read failure from exiting script (set -e)
+                if [ -t 0 ]; then
+                    read -r update || update="Y"
+                elif [ -c /dev/tty ]; then
+                    read -r update < /dev/tty || update="Y"
+                else
+                    # Fallback: try stdin anyway (might work in some environments)
+                    read -r update || update="Y"
+                fi
+                update=${update:-Y}
+                
+                if [[ ! "$update" =~ ^[Yy]$ ]]; then
+                    print_info "Skipping template: $template_name"
+                    return 0
+                fi
             fi
             
             # Delete existing template
@@ -318,20 +333,51 @@ create_or_update_template() {
         fi
     fi
     
-    # Create temporary directory for downloads
-    local tmp_dir=$(mktemp -d)
-    trap "rm -rf $tmp_dir" EXIT
+    # Use cache directory for images (persists across runs)
+    # Default to /tmp/proxmox-images, but allow override via PROXMOX_IMAGE_CACHE env var
+    local cache_dir="${PROXMOX_IMAGE_CACHE:-/tmp/proxmox-images}"
+    mkdir -p "$cache_dir"
     
-    # Download image
-    print_info "Downloading cloud image..."
-    local image_path="$tmp_dir/$image_filename"
+    local image_path="$cache_dir/$image_filename"
+    local need_download=true
     
-    if ! wget -q --show-progress -O "$image_path" "$image_url"; then
-        print_error "Failed to download image from $image_url"
-        return 1
+    # Check if image already exists in cache
+    if [ -f "$image_path" ]; then
+        print_info "Found cached image: $image_filename ($(du -h "$image_path" | cut -f1))"
+        
+        if [ "$skip_prompts" = true ]; then
+            need_download=false
+            print_info "Using cached image (--recreate-all mode): $image_path"
+        else
+            echo -n "Use cached image? [Y/n]: " >&2
+            if [ -t 0 ]; then
+                read -r use_cached || use_cached="Y"
+            elif [ -c /dev/tty ]; then
+                read -r use_cached < /dev/tty || use_cached="Y"
+            else
+                read -r use_cached || use_cached="Y"
+            fi
+            use_cached=${use_cached:-Y}
+            
+            if [[ "$use_cached" =~ ^[Yy]$ ]]; then
+                need_download=false
+                print_info "Using cached image: $image_path"
+            else
+                print_info "Re-downloading image..."
+                rm -f "$image_path"
+            fi
+        fi
     fi
     
-    print_success "Downloaded image: $image_filename"
+    # Download image if needed
+    if [ "$need_download" = true ]; then
+        print_info "Downloading cloud image from $image_url..."
+        if ! wget -q --show-progress -O "$image_path" "$image_url"; then
+            print_error "Failed to download image from $image_url"
+            return 1
+        fi
+        print_success "Downloaded and cached image: $image_filename ($(du -h "$image_path" | cut -f1))"
+    fi
     
     # Create VM
     print_info "Creating VM $vmid..."
@@ -406,6 +452,12 @@ create_or_update_template() {
     qm set "$vmid" --serial0 socket --vga serial0
     qm set "$vmid" --agent enabled=1
     
+    # Set kernel boot arguments to use device names instead of UUIDs
+    # This prevents boot failures when cloning (cloned VMs have different disk UUIDs)
+    # We use /dev/sda1 for scsi0 disks (cloud images typically use scsi0)
+    print_info "Setting kernel boot arguments to use device names (fixes UUID issues on clone)..."
+    qm set "$vmid" --args "root=/dev/sda1 rootdelay=10"
+    
     # Verify disk is attached
     print_info "Verifying disk attachment..."
     local disk_config=$(qm config "$vmid" | grep "^scsi0:" || echo "")
@@ -431,10 +483,47 @@ create_or_update_template() {
 
 # Main function
 main() {
+    # Parse command-line arguments
+    local recreate_all=false
+    local skip_cache_prompt=false
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --recreate-all|-y|--yes)
+                recreate_all=true
+                skip_cache_prompt=true
+                shift
+                ;;
+            --help|-h)
+                echo "Usage: $0 [OPTIONS]"
+                echo ""
+                echo "Options:"
+                echo "  --recreate-all, -y, --yes    Automatically recreate all templates without prompts"
+                echo "                                (uses cached images if available, skips all confirmations)"
+                echo "  --help, -h                    Show this help message"
+                echo ""
+                echo "Examples:"
+                echo "  $0                           Interactive mode (prompts for each template)"
+                echo "  $0 --recreate-all            Recreate all templates automatically"
+                exit 0
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                echo "Use --help for usage information"
+                exit 1
+                ;;
+        esac
+    done
+    
     echo "=========================================="
     echo "  Proxmox VM Template Setup Script"
     echo "=========================================="
     echo ""
+    
+    if [ "$recreate_all" = true ]; then
+        print_info "Auto-recreate mode: All templates will be recreated automatically"
+        echo ""
+    fi
     
     # Check prerequisites
     check_prerequisites
@@ -461,31 +550,33 @@ main() {
     print_info "Selected storage: $storage (type: $storage_type)"
     echo ""
     
-    # Confirm
-    echo "This will create/update the following templates:"
-    for template_name in "${!TEMPLATES[@]}"; do
-        echo "  - $template_name"
-    done
-    echo ""
-    echo -n "Continue? [Y/n]: "
-    # Read from terminal if available, otherwise stdin
-    # Use || true to prevent read failure from exiting script (set -e)
-    if [ -t 0 ]; then
-        read -r confirm || confirm="Y"
-    elif [ -c /dev/tty ]; then
-        read -r confirm < /dev/tty || confirm="Y"
-    else
-        # Fallback: try stdin anyway (might work in some environments)
-        read -r confirm || confirm="Y"
+    # Confirm (skip if recreate_all is true)
+    if [ "$recreate_all" != true ]; then
+        echo "This will create/update the following templates:"
+        for template_name in "${!TEMPLATES[@]}"; do
+            echo "  - $template_name"
+        done
+        echo ""
+        echo -n "Continue? [Y/n]: "
+        # Read from terminal if available, otherwise stdin
+        # Use || true to prevent read failure from exiting script (set -e)
+        if [ -t 0 ]; then
+            read -r confirm || confirm="Y"
+        elif [ -c /dev/tty ]; then
+            read -r confirm < /dev/tty || confirm="Y"
+        else
+            # Fallback: try stdin anyway (might work in some environments)
+            read -r confirm || confirm="Y"
+        fi
+        confirm=${confirm:-Y}
+        
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            print_info "Aborted by user"
+            exit 0
+        fi
+        
+        echo ""
     fi
-    confirm=${confirm:-Y}
-    
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        print_info "Aborted by user"
-        exit 0
-    fi
-    
-    echo ""
     
     # Process each template
     local success_count=0
@@ -506,7 +597,7 @@ main() {
         print_info "=========================================="
         echo ""
         
-        if create_or_update_template "$template_name" "$vmid" "$image_url" "$image_filename" "$storage" "$storage_type"; then
+        if create_or_update_template "$template_name" "$vmid" "$image_url" "$image_filename" "$storage" "$storage_type" "$recreate_all"; then
             ((success_count++))
             print_success "Successfully processed: $template_name"
         else
