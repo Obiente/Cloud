@@ -1,6 +1,6 @@
 <template>
   <OuiStack gap="md">
-    <OuiFlex justify="between" align="center">
+    <OuiFlex justify="between" align="center" class="relative">
       <OuiFlex gap="sm" align="center">
         <OuiBreadcrumbs>
           <OuiBreadcrumbItem>
@@ -22,20 +22,29 @@
         </OuiBreadcrumbs>
       </OuiFlex>
 
-      <OuiFlex gap="sm" align="center" wrap="wrap">
+      <!-- Centered Search Input - morphs into overlay -->
+      <div
+        ref="headerSearchContainerRef"
+        class="absolute left-1/2 -translate-x-1/2 z-10 transition-opacity duration-300"
+        :class="{ 'opacity-0 pointer-events-none': isSearchModalOpen && !isMorphing }"
+        :style="headerSearchStyle"
+      >
         <OuiInput
-          v-model="searchQuery"
+          ref="headerSearchRef"
+          v-model="searchQueryModel"
           placeholder="Search files..."
           size="sm"
           clearable
           class="w-64"
-          @update:model-value="handleSearch"
-          @keyup.enter="handleSearch"
+          @keyup.enter="searchState.handleSearch"
         >
           <template #prefix>
             <MagnifyingGlassIcon class="h-4 w-4 text-text-secondary" />
           </template>
         </OuiInput>
+      </div>
+
+      <OuiFlex gap="sm" align="center" wrap="wrap">
         <OuiMenu>
           <template #trigger>
             <OuiButton variant="ghost" size="sm"> New </OuiButton>
@@ -468,8 +477,16 @@
               class="absolute inset-0"
               @save="handleSaveFile"
             />
+            <!-- Folder Overview -->
+            <FolderOverview
+              v-else-if="currentNode && currentNode.type === 'directory'"
+              :node="currentNode"
+              :loading="currentNode.isLoading"
+              @select-item="handleLoadFile"
+              @load-more="handleLoadMore"
+            />
             <div
-              v-else-if="!selectedPath || !currentNode || currentNode.type !== 'file'"
+              v-else-if="!selectedPath || !currentNode"
               class="h-full flex items-center justify-center text-text-tertiary"
             >
               <OuiText size="sm" color="secondary"
@@ -483,34 +500,63 @@
 
     <!-- Search Results Modal/Overlay -->
     <Teleport to="body">
-      <div
-        v-if="searchQuery.trim() && (searchResults.length > 0 || isSearching || searchError)"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="search-results-title"
-        aria-describedby="search-results-description"
-        class="fixed inset-0 z-50 flex items-start justify-center pt-20 pb-8 px-4 bg-black/50 backdrop-blur-sm"
-        @click.self="closeSearchModal"
-        @keydown.esc="closeSearchModal"
-        @keydown="handleSearchModalKeydown"
+      <Transition
+        name="overlay-slide"
+        @enter="handleOverlayEnter"
+        @leave="handleOverlayLeave"
       >
+        <div
+          v-if="isSearchModalOpen"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="search-results-title"
+          aria-describedby="search-results-description"
+          class="fixed inset-0 z-50 flex items-start justify-center pt-4 sm:pt-20 pb-4 sm:pb-8 px-4 bg-black/50 backdrop-blur-sm overflow-y-auto"
+          @click.self="closeSearchModal"
+          @keydown.esc="closeSearchModal"
+          @keydown="handleSearchModalKeydown"
+        >
         <div
           ref="searchModalRef"
           tabindex="-1"
-          class="w-full max-w-4xl max-h-[calc(100vh-8rem)] bg-surface-base border border-border-default rounded-lg shadow-xl flex flex-col overflow-hidden focus:outline-none"
+          class="w-full max-w-4xl max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-8rem)] bg-surface-base border border-border-default rounded-lg shadow-xl flex flex-col overflow-hidden focus:outline-none my-auto"
           @click.stop
         >
-          <div class="flex items-center justify-between p-4 border-b border-border-default">
-            <OuiText id="search-results-title" size="lg" weight="semibold" as="h2">
+          <div class="flex items-center justify-between p-4 border-b border-border-default gap-4">
+            <OuiText id="search-results-title" size="lg" weight="semibold" as="h2" class="shrink-0">
               Search Results
-              <span v-if="searchResults.length > 0" class="text-text-secondary font-normal">
-                ({{ searchResults.length }} found)
+              <span v-if="searchResultsArray.length > 0" class="text-text-secondary font-normal">
+                ({{ searchResultsArray.length }} found)
               </span>
             </OuiText>
+            
+            <!-- Search Input in Overlay Header - morphs from header -->
+            <div
+              ref="overlaySearchContainerRef"
+              class="flex-1 max-w-md mx-auto"
+              :style="overlaySearchStyle"
+            >
+              <OuiInput
+                ref="overlaySearchRef"
+                v-model="searchQueryModel"
+                placeholder="Search files..."
+                size="sm"
+                clearable
+                class="w-full"
+                @update:model-value="searchState.handleSearch"
+                @keyup.enter="searchState.handleSearch"
+              >
+                <template #prefix>
+                  <MagnifyingGlassIcon class="h-4 w-4 text-text-secondary" />
+                </template>
+              </OuiInput>
+            </div>
+
             <OuiButton
               variant="ghost"
               size="sm"
               aria-label="Close search results"
+              class="shrink-0"
               @click="closeSearchModal"
             >
               <XMarkIcon class="h-5 w-5" />
@@ -518,10 +564,10 @@
           </div>
           <!-- Screen reader announcement -->
           <div class="sr-only" role="status" aria-live="polite" aria-atomic="true">
-            <span v-if="isSearching">Searching for files...</span>
-            <span v-else-if="searchError">Search error: {{ searchError }}</span>
-            <span v-else-if="searchResults.length === 0">No files found matching your search</span>
-            <span v-else>{{ searchResults.length }} file{{ searchResults.length === 1 ? '' : 's' }} found. Use arrow keys to navigate, Enter to open.</span>
+            <span v-if="isSearchingState">Searching for files...</span>
+            <span v-else-if="searchErrorState">Search error: {{ searchErrorState }}</span>
+            <span v-else-if="searchResultsArray.length === 0">No files found matching your search</span>
+            <span v-else>{{ searchResultsArray.length }} file{{ searchResultsArray.length === 1 ? '' : 's' }} found. Use arrow keys to navigate, Enter to open.</span>
           </div>
 
           <div
@@ -532,26 +578,26 @@
             tabindex="0"
             @keydown="handleResultsKeydown"
           >
-            <div v-if="isSearching" class="flex items-center justify-center py-8" role="status" aria-live="polite">
+            <div v-if="isSearchingState" class="flex items-center justify-center py-8" role="status" aria-live="polite">
               <ArrowPathIcon class="h-6 w-6 animate-spin text-primary" aria-hidden="true" />
               <OuiText size="sm" color="secondary" class="ml-2">Searching...</OuiText>
             </div>
 
-            <div v-else-if="searchError" class="flex flex-col items-center justify-center py-8" role="alert">
+            <div v-else-if="searchErrorState" class="flex flex-col items-center justify-center py-8" role="alert">
               <ExclamationTriangleIcon class="h-8 w-8 text-danger mb-2" aria-hidden="true" />
-              <OuiText size="sm" color="danger">{{ searchError }}</OuiText>
+              <OuiText size="sm" color="danger">{{ searchErrorState }}</OuiText>
             </div>
 
-            <div v-else-if="searchResults.length === 0" class="flex flex-col items-center justify-center py-8" role="status">
+            <div v-else-if="searchResultsArray.length === 0" class="flex flex-col items-center justify-center py-8" role="status">
               <MagnifyingGlassIcon class="h-8 w-8 text-text-tertiary mb-2" aria-hidden="true" />
               <OuiText id="search-results-description" size="sm" color="secondary">
-                No files found matching "{{ searchQuery }}"
+                No files found matching "{{ searchQueryModel }}"
               </OuiText>
             </div>
 
             <div v-else class="space-y-1" role="group">
               <button
-                v-for="(result, index) in searchResults"
+                v-for="(result, index) in searchResultsArray"
                 :key="result.path"
                 :id="`search-result-${index}`"
                 type="button"
@@ -595,6 +641,7 @@
           </div>
         </div>
       </div>
+      </Transition>
     </Teleport>
   </OuiStack>
 </template>
@@ -645,7 +692,9 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
   import { useZipFile } from "~/composables/useZipFile";
   import { detectFilePreviewType } from "~/composables/useFilePreview";
   import ZipPreview from "~/components/shared/ZipPreview.vue";
+  import FolderOverview from "~/components/shared/FolderOverview.vue";
   import { useMultiSelect } from "~/composables/useMultiSelect";
+  import { useFileBrowserSearch } from "~/composables/useFileBrowserSearch";
 
   const props = defineProps<{
     gameServerId: string;
@@ -658,12 +707,16 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
   const hasMounted = ref(false);
   const isInitializingFromQuery = ref(false); // Flag to prevent circular updates during query param initialization
   const isLoadingFile = ref(false); // Track if a file load is in progress
-  const searchQuery = ref("");
-  const searchResults = ref<ExplorerNode[]>([]);
-  const isSearching = ref(false);
-  const searchError = ref<string | null>(null);
   const searchModalRef = ref<HTMLElement | null>(null);
   const searchResultsRef = ref<HTMLElement | null>(null);
+  const headerSearchRef = ref<HTMLElement | null>(null);
+  const overlaySearchRef = ref<HTMLElement | null>(null);
+  const headerSearchContainerRef = ref<HTMLElement | null>(null);
+  const overlaySearchContainerRef = ref<HTMLElement | null>(null);
+  const headerSearchInitialRect = ref<DOMRect | null>(null);
+  const overlaySearchStyle = ref<Record<string, string>>({});
+  const headerSearchStyle = ref<Record<string, string>>({});
+  const isMorphing = ref<boolean>(false);
   const focusedResultIndex = ref<number>(-1);
   let previousActiveElement: HTMLElement | null = null;
   let focusTrapCleanup: (() => void) | null = null;
@@ -926,6 +979,26 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
   const dialog = useDialog();
   const { toast } = useToast();
 
+  // Use shared search composable - convert reactive source to ref
+  const sourceRef = computed(() => ({
+    type: source.type,
+    volumeName: source.volumeName,
+  }));
+  const searchState = useFileBrowserSearch(fileBrowserClient, sourceRef);
+
+  // Create computed properties for template use
+  const searchQueryModel = computed({
+    get: () => searchState.searchQuery.value,
+    set: (val: string) => {
+      searchState.searchQuery.value = val;
+    },
+  });
+
+  const searchResultsArray = computed(() => searchState.searchResults.value);
+  const isSearchingState = computed(() => searchState.isSearching.value);
+  const searchErrorState = computed(() => searchState.searchError.value);
+  const isSearchModalOpen = computed(() => searchState.isSearchModalOpen.value);
+
   const isSaving = ref(false);
   const saveStatus = ref<"idle" | "saving" | "success" | "error">("idle");
   const saveErrorMessage = ref<string | null>(null);
@@ -984,6 +1057,14 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
   ) {
     selectedPath.value = node.path;
     if (node.type === "directory") {
+      // Ensure folder is loaded when selected
+      if (!node.hasLoaded || node.hasMore) {
+        await loadChildren(
+          node,
+          node.hasMore ? node.nextCursor ?? undefined : undefined
+        );
+        node.hasLoaded = true;
+      }
       if (options?.ensureExpanded && !node.isExpanded) {
         await handleToggle(node, true);
       }
@@ -2592,9 +2673,260 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
 
   // Search functionality
   function closeSearchModal() {
-    searchQuery.value = "";
+    searchState.closeSearchModal();
     focusedResultIndex.value = -1;
   }
+
+  // Search bar morph handlers - FLIP animation for element-to-element transition
+  function handleSearchBeforeEnter(el: Element) {
+    const element = el as HTMLElement;
+    const headerContainer = headerSearchContainerRef.value;
+    const overlayContainer = overlaySearchContainerRef.value;
+    
+    if (!headerContainer) return;
+    
+    // Capture header position
+    const headerRect = headerContainer.getBoundingClientRect();
+    
+    if (overlayContainer && isSearchModalOpen.value) {
+      // This is the overlay search entering - position it at header location
+      element.style.position = "fixed";
+      element.style.left = `${headerRect.left}px`;
+      element.style.top = `${headerRect.top}px`;
+      element.style.width = `${headerRect.width}px`;
+      element.style.transform = "translate(0, 0) scale(1)";
+      element.style.transformOrigin = "top left";
+    }
+  }
+
+
+  // Overlay animation - backdrop and modal appear from search bar position
+  function handleOverlayEnter(el: Element, done: () => void) {
+    const element = el as HTMLElement;
+    const headerContainer = headerSearchContainerRef.value;
+    
+    if (!headerContainer) {
+      done();
+      return;
+    }
+
+    isMorphing.value = true;
+
+    // Capture header position BEFORE anything changes
+    const headerRect = headerContainer.getBoundingClientRect();
+    headerSearchInitialRect.value = headerRect;
+    
+    // Calculate initial position - start from search bar center
+    const initialX = headerRect.left + headerRect.width / 2;
+    const initialY = headerRect.top + headerRect.height / 2;
+    
+    // Get viewport center for final position (accounting for scroll)
+    const viewportCenterX = window.innerWidth / 2;
+    const viewportCenterY = Math.min(window.innerHeight / 2, window.innerHeight * 0.2 + 80); // Adjust for small screens
+    
+    // Calculate transform to move from search bar to center
+    const deltaX = viewportCenterX - initialX;
+    const deltaY = viewportCenterY - initialY;
+    const initialScale = 0.01; // Start very small
+    
+    // Set initial state - overlay starts at search bar position, tiny scale
+    element.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${initialScale})`;
+    element.style.transformOrigin = `${initialX}px ${initialY}px`;
+    element.style.opacity = "0";
+    element.style.backdropFilter = "blur(0px)";
+    
+    // Force reflow
+    void element.offsetHeight;
+    
+    // Animate overlay expanding from search bar position to full size
+    requestAnimationFrame(() => {
+      element.style.transition = "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
+      element.style.transform = "translate(0, 0) scale(1)";
+      element.style.transformOrigin = "center center";
+      element.style.opacity = "1";
+      element.style.backdropFilter = "blur(8px)";
+      
+      // Morph the search bar simultaneously
+      morphSearchBarToOverlay(() => {
+        isMorphing.value = false;
+        done();
+      });
+    });
+  }
+
+  function handleOverlayLeave(el: Element, done: () => void) {
+    const element = el as HTMLElement;
+    const headerContainer = headerSearchContainerRef.value;
+    
+    if (!headerContainer) {
+      done();
+      return;
+    }
+    
+    isMorphing.value = true;
+    
+    // First morph search bar back to header
+    morphSearchBarToHeader(() => {
+      // Then shrink overlay back to search bar position
+      const headerRect = headerContainer.getBoundingClientRect();
+      const viewportCenterX = window.innerWidth / 2;
+      const viewportCenterY = Math.min(window.innerHeight / 2, window.innerHeight * 0.2 + 80);
+      
+      const initialX = headerRect.left + headerRect.width / 2;
+      const initialY = headerRect.top + headerRect.height / 2;
+      
+      const deltaX = initialX - viewportCenterX;
+      const deltaY = initialY - viewportCenterY;
+      
+      requestAnimationFrame(() => {
+        element.style.transition = "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.3s cubic-bezier(0.4, 0, 0.2, 1)";
+        element.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(0.01)`;
+        element.style.transformOrigin = `${initialX}px ${initialY}px`;
+        element.style.opacity = "0";
+        element.style.backdropFilter = "blur(0px)";
+        
+        element.addEventListener("transitionend", () => {
+          isMorphing.value = false;
+          done();
+        }, { once: true });
+      });
+    });
+  }
+
+  // Morph search bar from header to overlay position
+  function morphSearchBarToOverlay(onComplete: () => void) {
+    const headerContainer = headerSearchContainerRef.value;
+    const overlayContainer = overlaySearchContainerRef.value;
+    const initialRect = headerSearchInitialRect.value;
+    
+    if (!headerContainer || !overlayContainer || !initialRect) {
+      onComplete();
+      return;
+    }
+    
+    nextTick(() => {
+      const overlayRect = overlayContainer.getBoundingClientRect();
+      
+      // Calculate transform needed to move from header to overlay
+      const deltaX = overlayRect.left - initialRect.left;
+      const deltaY = overlayRect.top - initialRect.top;
+      const scaleX = overlayRect.width / initialRect.width;
+      
+      // Start overlay search at header position (invisible)
+      overlaySearchStyle.value = {
+        position: "fixed",
+        left: `${initialRect.left}px`,
+        top: `${initialRect.top}px`,
+        width: `${initialRect.width}px`,
+        transform: "translate(0, 0) scale(1)",
+        opacity: "0",
+        zIndex: "100",
+        pointerEvents: "none",
+        transition: "none",
+      };
+      
+      // Fade out header search simultaneously
+      headerSearchStyle.value = {
+        opacity: "0",
+        transform: "scale(0.95)",
+        transition: "opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+      };
+      
+      // Force reflow
+      void overlayContainer.offsetHeight;
+      void headerContainer.offsetHeight;
+      
+      // Now animate to final position
+      requestAnimationFrame(() => {
+        overlaySearchStyle.value = {
+          position: "fixed",
+          left: `${overlayRect.left}px`,
+          top: `${overlayRect.top}px`,
+          width: `${overlayRect.width}px`,
+          transform: "translate(0, 0) scale(1)",
+          opacity: "1",
+          zIndex: "100",
+          pointerEvents: "auto",
+          transition: "all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
+        };
+        
+        overlayContainer.addEventListener("transitionend", () => {
+          // Reset to normal positioning
+          overlaySearchStyle.value = {};
+          headerSearchStyle.value = {};
+          onComplete();
+        }, { once: true });
+      });
+    });
+  }
+
+  // Morph search bar from overlay back to header position
+  function morphSearchBarToHeader(onComplete: () => void) {
+    const headerContainer = headerSearchContainerRef.value;
+    const overlayContainer = overlaySearchContainerRef.value;
+    
+    if (!headerContainer || !overlayContainer) {
+      onComplete();
+      return;
+    }
+    
+    const overlayRect = overlayContainer.getBoundingClientRect();
+    const headerRect = headerContainer.getBoundingClientRect();
+    
+    // Start header search invisible and scaled down
+    headerSearchStyle.value = {
+      opacity: "0",
+      transform: "scale(0.95)",
+      transition: "none",
+    };
+    
+    // Animate overlay search back to header position
+    overlaySearchStyle.value = {
+      position: "fixed",
+      left: `${overlayRect.left}px`,
+      top: `${overlayRect.top}px`,
+      width: `${overlayRect.width}px`,
+      transform: "translate(0, 0) scale(1)",
+      opacity: "1",
+      zIndex: "100",
+      pointerEvents: "none",
+      transition: "none",
+    };
+    
+    // Force reflow
+    void overlayContainer.offsetHeight;
+    void headerContainer.offsetHeight;
+    
+    requestAnimationFrame(() => {
+      // Animate overlay search to header position and fade out
+      overlaySearchStyle.value = {
+        position: "fixed",
+        left: `${headerRect.left}px`,
+        top: `${headerRect.top}px`,
+        width: `${headerRect.width}px`,
+        transform: "translate(0, 0) scale(1)",
+        opacity: "0",
+        zIndex: "100",
+        pointerEvents: "none",
+        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+      };
+      
+      // Fade in header search simultaneously
+      headerSearchStyle.value = {
+        opacity: "1",
+        transform: "scale(1)",
+        transition: "opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+      };
+      
+      overlayContainer.addEventListener("transitionend", () => {
+        overlaySearchStyle.value = {};
+        headerSearchStyle.value = {};
+        onComplete();
+      }, { once: true });
+    });
+  }
+
+
 
   function handleSearchResultClick(result: ExplorerNode) {
     closeSearchModal();
@@ -2613,14 +2945,14 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
   }
 
   function handleResultsKeydown(event: KeyboardEvent) {
-    if (searchResults.value.length === 0) return;
+    if (searchState.searchResults.value.length === 0) return;
 
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
         focusedResultIndex.value = Math.min(
           focusedResultIndex.value + 1,
-          searchResults.value.length - 1
+          searchResultsArray.value.length - 1
         );
         // Scroll into view
         nextTick(() => {
@@ -2654,7 +2986,7 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
         break;
       case "End":
         event.preventDefault();
-        focusedResultIndex.value = searchResults.value.length - 1;
+        focusedResultIndex.value = searchResultsArray.value.length - 1;
         nextTick(() => {
           const focusedElement = document.getElementById(
             `search-result-${focusedResultIndex.value}`
@@ -2666,63 +2998,6 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
     }
   }
 
-  async function handleSearch() {
-    const query = searchQuery.value.trim();
-    
-    if (!query) {
-      searchResults.value = [];
-      searchError.value = null;
-      return;
-    }
-
-    if (!fileBrowserClient.searchFiles) {
-      searchError.value = "Search is not available";
-      return;
-    }
-
-    isSearching.value = true;
-    searchError.value = null;
-
-    try {
-      const response = await fileBrowserClient.searchFiles({
-        query,
-        rootPath: "/",
-        volumeName: source.type === "volume" ? source.volumeName : undefined,
-        maxResults: 100,
-      });
-
-      searchResults.value = response.results;
-      if (response.hasMore) {
-        // Could show a message that there are more results
-      }
-    } catch (err: any) {
-      console.error("Search failed:", err);
-      searchError.value = err?.message || "Failed to search files";
-      searchResults.value = [];
-    } finally {
-      isSearching.value = false;
-    }
-  }
-
-  // Watch for search query changes with debounce
-  let searchTimeout: ReturnType<typeof setTimeout> | null = null;
-  watch(searchQuery, (newQuery) => {
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-    
-    if (!newQuery.trim()) {
-      searchResults.value = [];
-      searchError.value = null;
-      focusedResultIndex.value = -1;
-      return;
-    }
-
-    // Debounce search by 500ms
-    searchTimeout = setTimeout(() => {
-      handleSearch();
-    }, 500);
-  });
 
   // Focus trap and modal focus management
   function setupFocusTrap(): (() => void) | null {
@@ -2791,11 +3066,17 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
     };
   }
 
-  // Focus the modal when it opens
+  // Watch for modal state to capture header position before transition
   watch(
-    () => searchQuery.value.trim() && (searchResults.value.length > 0 || isSearching.value || searchError.value),
+    isSearchModalOpen,
     (isOpen) => {
       if (isOpen) {
+        // Capture header position BEFORE it's removed from DOM
+        const headerContainer = headerSearchContainerRef.value;
+        if (headerContainer) {
+          headerSearchInitialRect.value = headerContainer.getBoundingClientRect();
+        }
+        
         nextTick(() => {
           // Setup focus trap
           if (focusTrapCleanup) {
@@ -2806,7 +3087,7 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
           // Reset focused index
           focusedResultIndex.value = -1;
           // If there are results, focus the first one
-          if (searchResults.value.length > 0) {
+          if (searchResultsArray.value.length > 0) {
             focusedResultIndex.value = 0;
             nextTick(() => {
               const firstResult = document.getElementById("search-result-0");
@@ -2861,4 +3142,6 @@ import MinecraftBannedPlayersEditor from "./MinecraftBannedPlayersEditor.vue";
       opacity: 1;
     }
   }
+
+  /* Search Morph Transition - handled by JavaScript hooks for precise FLIP animation */
 </style>

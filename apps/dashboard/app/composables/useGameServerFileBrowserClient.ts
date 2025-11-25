@@ -95,10 +95,28 @@ export function useGameServerFileBrowserClient(gameServerId: string): FileBrowse
         filesOnly: params.filesOnly,
         directoriesOnly: params.directoriesOnly,
       });
+      
+      // Helper to convert timestamp to ISO string (matches useFileExplorer implementation)
+      const timestampToIso = (value: any): string | undefined => {
+        if (!value) return undefined;
+        if (typeof value === "string") return value;
+        if (value instanceof Date) return value.toISOString();
+        if (typeof value === "object") {
+          if (typeof value.toDate === "function") {
+            return value.toDate().toISOString();
+          }
+          if (value.seconds !== undefined) {
+            const millis = Number(value.seconds) * 1000 + Math.floor((value.nanos ?? 0) / 1e6);
+            return new Date(millis).toISOString();
+          }
+        }
+        return undefined;
+      };
+      
       return {
         results: (response.results || []).map(f => {
-          const isDirectory = f.type === "DIRECTORY";
-          const isSymlink = f.type === "SYMLINK";
+          const isDirectory = Boolean(f.isDirectory);
+          const isSymlink = Boolean(f.isSymlink);
           const type: "directory" | "file" | "symlink" = isDirectory
             ? "directory"
             : isSymlink
@@ -115,10 +133,10 @@ export function useGameServerFileBrowserClient(gameServerId: string): FileBrowse
             size: f.size !== undefined && f.size !== null ? Number(f.size) : undefined,
             owner: f.owner || undefined,
             group: f.group || undefined,
-            mode: f.mode ? Number(f.mode) : undefined,
+            mode: f.modeOctal ? Number(f.modeOctal) : undefined,
             mimeType: f.mimeType || undefined,
-            modifiedTime: f.modifiedTime || undefined,
-            createdTime: f.createdTime || undefined,
+            modifiedTime: timestampToIso(f.modifiedTime),
+            createdTime: timestampToIso(f.createdTime),
             volumeName: params.volumeName,
             children: [],
             isLoading: false,

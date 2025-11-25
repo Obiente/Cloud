@@ -7,8 +7,8 @@
         :class="buttonClass"
         :disabled="disabled"
       >
-        <span v-if="showLabel" class="hidden sm:inline">{{ label }}</span>
-        <span v-else>{{ label }}</span>
+        <OuiText v-if="showLabel" as="span" size="sm" class="hidden sm:inline">{{ label }}</OuiText>
+        <OuiText v-else as="span" size="sm">{{ label }}</OuiText>
         <EllipsisVerticalIcon v-if="showIcon" class="h-4 w-4 sm:hidden" />
       </OuiButton>
     </template>
