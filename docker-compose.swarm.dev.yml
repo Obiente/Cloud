@@ -766,7 +766,7 @@ services:
       dockerfile: apps/superadmin-service/Dockerfile
     environment:
       PORT: 3011
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-orchestrator]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-orchestrator, *common-vps]
     deploy:
       mode: replicated
       replicas: 1

@@ -383,7 +383,7 @@ services:
     container_name: obiente-superadmin-service
     environment:
       PORT: 3011
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-orchestrator]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-orchestrator, *common-vps]
     depends_on:
       postgres:
         condition: service_healthy
