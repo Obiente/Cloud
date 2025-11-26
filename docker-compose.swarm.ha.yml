@@ -1047,7 +1047,7 @@ services:
     image: ghcr.io/obiente/cloud-vps-service:latest
     environment:
       PORT: 3008
-      <<: [*common-database, *common-auth, *common-orchestrator, *common-vps]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-orchestrator, *common-vps]
       DB_HOST: pgpool
     deploy:
       mode: replicated
@@ -1093,7 +1093,7 @@ services:
     image: ghcr.io/obiente/cloud-support-service:latest
     environment:
       PORT: 3009
-      <<: [*common-database, *common-auth]
+      <<: [*common-database, *common-metrics-db, *common-auth]
       DB_HOST: pgpool
     deploy:
       mode: replicated

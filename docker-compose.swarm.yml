@@ -470,7 +470,7 @@ services:
     image: ghcr.io/obiente/cloud-gameservers-service:latest
     environment:
       PORT: 3006
-      <<: [*common-database, *common-metrics-db, *common-auth]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-swarm-orchestrator]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/obiente/volumes:/var/lib/obiente/volumes
