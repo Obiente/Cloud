@@ -27,6 +27,8 @@ var (
 	registeredModelTypeSet = make(map[reflect.Type]struct{})
 )
 
+const migrationAdvisoryLockID int64 = 0x6f62696e7465 // "obinte" hex
+
 // RegisterModels allows services to register the GORM models they depend on so
 // they can be migrated when the service initializes its database connection.
 // This keeps migrations service-scoped, ensuring we only create the tables
@@ -66,6 +68,28 @@ func getRegisteredModels() []interface{} {
 	out := make([]interface{}, len(registeredModels))
 	copy(out, registeredModels)
 	return out
+}
+
+func acquireMigrationLock(db *gorm.DB) (func(), error) {
+	logger.Debug("Acquiring advisory lock %d for database migrations...", migrationAdvisoryLockID)
+	if err := db.Exec("SELECT pg_advisory_lock(?)", migrationAdvisoryLockID).Error; err != nil {
+		return nil, err
+	}
+
+	released := false
+	release := func() {
+		if released {
+			return
+		}
+		released = true
+		if err := db.Exec("SELECT pg_advisory_unlock(?)", migrationAdvisoryLockID).Error; err != nil {
+			logger.Warn("Failed to release migration advisory lock: %v", err)
+		} else {
+			logger.Debug("Released advisory lock %d after migrations", migrationAdvisoryLockID)
+		}
+	}
+
+	return release, nil
 }
 
 // customGormLogger is a GORM logger that filters out "record not found" errors at warn level
@@ -216,6 +240,12 @@ func InitDatabase() error {
 
 	DB = db
 	logger.Info("Database connection established")
+
+	releaseLock, err := acquireMigrationLock(db)
+	if err != nil {
+		return fmt.Errorf("failed to acquire migration lock: %w", err)
+	}
+	defer releaseLock()
 
 	// Pre-create groups column if it doesn't exist to avoid GORM AutoMigrate syntax issues
 	// This prevents GORM from trying to add it with incorrect default value syntax
