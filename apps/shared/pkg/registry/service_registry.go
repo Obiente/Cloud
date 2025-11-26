@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
 	"github.com/moby/moby/api/types/filters"
@@ -91,7 +91,7 @@ func (sr *ServiceRegistry) RegisterDeployment(ctx context.Context, location *dat
 	// Update cache
 	sr.updateCache(location.DeploymentID)
 
-	log.Printf("[Registry] Registered deployment %s on node %s (container: %s)",
+	logger.Info("[Registry] Registered deployment %s on node %s (container: %s)",
 		location.DeploymentID, location.NodeID, location.ContainerID)
 
 	return nil
@@ -118,7 +118,7 @@ func (sr *ServiceRegistry) UnregisterDeployment(ctx context.Context, containerID
 	// Update cache
 	sr.updateCache(deploymentID)
 
-	log.Printf("[Registry] Unregistered deployment %s from node %s (container: %s)",
+	logger.Info("[Registry] Unregistered deployment %s from node %s (container: %s)",
 		deploymentID, location.NodeID, containerID)
 
 	return nil
@@ -207,7 +207,7 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 
-	log.Println("[Registry] Starting sync with Docker...")
+	logger.Debug("[Registry] Starting sync with Docker...")
 
 	// Get all containers managed by Obiente
 	filterArgs := filters.NewArgs()
@@ -228,17 +228,39 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 	}
 
 	// Get all locations from database for this node
+	// Only clean up locations that belong to this node to avoid removing records
+	// for containers running on other nodes in Swarm mode
 	var dbLocations []database.DeploymentLocation
 	if err := database.DB.Where("node_id = ?", sr.nodeID).Find(&dbLocations).Error; err != nil {
 		return fmt.Errorf("failed to query database: %w", err)
 	}
 
 	// Check for containers that exist in DB but not in Docker (cleanup needed)
+	// Only remove if the location's node_id matches our node_id (defensive check)
 	for _, location := range dbLocations {
+		// Double-check that this location belongs to our node before removing
+		if location.NodeID != sr.nodeID {
+			logger.Debug("[Registry] Skipping location %s - belongs to different node (%s != %s)", location.ContainerID[:12], location.NodeID, sr.nodeID)
+			continue
+		}
+
 		if _, exists := actualIndex[location.ContainerID]; !exists {
-			log.Printf("[Registry] Container %s no longer exists, removing from registry", location.ContainerID)
-			if err := database.RemoveDeploymentLocation(location.ContainerID); err != nil {
-				log.Printf("[Registry] Error removing stale location: %v", err)
+			// Verify container doesn't exist by attempting to inspect it
+			// This prevents race conditions where container is temporarily unavailable
+			_, inspectErr := sr.dockerClient.ContainerInspect(ctx, location.ContainerID)
+			if inspectErr != nil {
+				// Container truly doesn't exist - safe to remove
+				logger.Info("[Registry] Container %s no longer exists on node %s, removing from registry", location.ContainerID[:12], sr.nodeID)
+				if err := database.RemoveDeploymentLocation(location.ContainerID); err != nil {
+					logger.Warn("[Registry] Error removing stale location: %v", err)
+				}
+			} else {
+				// Container exists but wasn't in our list - might be a timing issue
+				// Update status instead of removing
+				logger.Debug("[Registry] Container %s exists but wasn't in list, updating status", location.ContainerID[:12])
+				database.DB.Model(&database.DeploymentLocation{}).
+					Where("container_id = ?", location.ContainerID).
+					Update("status", "unknown")
 			}
 		}
 	}
@@ -258,7 +280,7 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 				continue
 			}
 
-			log.Printf("[Registry] Found unregistered container %s, registering...", containerID)
+			logger.Info("[Registry] Found unregistered container %s, registering...", containerID)
 
 			// Create location record
 			location := &database.DeploymentLocation{
@@ -277,7 +299,7 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 			}
 
 			if err := database.RecordDeploymentLocation(location); err != nil {
-				log.Printf("[Registry] Error registering container: %v", err)
+				logger.Warn("[Registry] Error registering container: %v", err)
 			}
 		} else {
 			// Update status for existing containers
@@ -292,7 +314,7 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 		}
 	}
 
-	log.Printf("[Registry] Sync completed. Found %d containers", len(containers))
+	logger.Debug("[Registry] Sync completed. Found %d containers", len(containers))
 	return nil
 }
 
@@ -388,7 +410,7 @@ func (sr *ServiceRegistry) ExportRegistry() ([]byte, error) {
 func (sr *ServiceRegistry) updateCache(deploymentID string) {
 	locations, err := database.GetDeploymentLocations(deploymentID)
 	if err != nil {
-		log.Printf("[Registry] Failed to update cache for deployment %s: %v", deploymentID, err)
+		logger.Warn("[Registry] Failed to update cache for deployment %s: %v", deploymentID, err)
 		return
 	}
 
@@ -407,7 +429,7 @@ func (sr *ServiceRegistry) StartPeriodicSync(ctx context.Context, interval time.
 			select {
 			case <-ticker.C:
 				if err := sr.SyncWithDocker(ctx); err != nil {
-					log.Printf("[Registry] Periodic sync failed: %v", err)
+					logger.Warn("[Registry] Periodic sync failed: %v", err)
 				}
 			case <-ctx.Done():
 				ticker.Stop()

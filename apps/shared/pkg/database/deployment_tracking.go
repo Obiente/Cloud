@@ -325,13 +325,17 @@ func ValidateAndRefreshLocations(deploymentID string) ([]DeploymentLocation, err
 		// Try to inspect the container to verify it exists
 		_, err := mobyClient.ContainerInspect(context.Background(), loc.ContainerID)
 		if err != nil {
-			// Container doesn't exist - remove from DB
-			logger.Debug("[ValidateAndRefreshLocations] Container %s no longer exists, removing stale location", loc.ContainerID[:12])
-			if removeErr := RemoveDeploymentLocation(loc.ContainerID); removeErr != nil {
-				logger.Warn("[ValidateAndRefreshLocations] Failed to remove stale location: %v", removeErr)
-			}
+			// Container doesn't exist on this node
+			// In Swarm mode, container might be on a different node, so be conservative
+			// Don't remove the location record - it might be running on another node
+			// The periodic sync on the correct node will handle cleanup
+			// Only include in validLocations if we can verify it exists locally
+			logger.Debug("[ValidateAndRefreshLocations] Container %s not found on local node (location node: %s), preserving record for DNS", loc.ContainerID[:12], loc.NodeID)
+			// Don't include in validLocations since we can't verify it exists
+			// But don't remove it either - let the sync on the correct node handle it
 			continue
 		}
+		// Container exists on this node - include it
 		validLocations = append(validLocations, loc)
 	}
 
