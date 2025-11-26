@@ -44,6 +44,20 @@ func main() {
 	logger.Info("=== Superadmin Service Starting ===")
 	logger.Debug("LOG_LEVEL: %s", os.Getenv("LOG_LEVEL"))
 
+	database.RegisterModels(
+		&database.Organization{},
+		&database.OrganizationMember{},
+		&database.OrgRole{},
+		&database.OrgRoleBinding{},
+		&database.BillingAccount{},
+		&database.CreditTransaction{},
+		&database.StripeWebhookEvent{},
+		&database.SupportTicket{},
+		&database.TicketComment{},
+		&database.GameServer{},
+		&database.GitHubIntegration{},
+	)
+
 	// Initialize database
 	if err := database.InitDatabase(); err != nil {
 		logger.Fatalf("failed to initialize database: %v", err)
@@ -147,4 +161,3 @@ func main() {
 		}
 	}
 }
-

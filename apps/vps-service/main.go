@@ -17,9 +17,9 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
-	vpsorch "vps-service/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
 	vpssvc "vps-service/internal/service"
+	vpsorch "vps-service/orchestrator"
 
 	vpsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1/vpsv1connect"
 
@@ -47,6 +47,11 @@ func main() {
 
 	logger.Info("=== VPS Service Starting ===")
 	logger.Debug("LOG_LEVEL: %s", os.Getenv("LOG_LEVEL"))
+
+	database.RegisterModels(
+		&database.Organization{},
+		&database.OrganizationMember{},
+	)
 
 	// Initialize database
 	if err := database.InitDatabase(); err != nil {
@@ -215,4 +220,3 @@ func main() {
 		}
 	}
 }
-

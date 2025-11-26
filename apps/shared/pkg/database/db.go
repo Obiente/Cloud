@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -19,6 +21,53 @@ import (
 var DB *gorm.DB
 var RedisClient *RedisCache
 
+var (
+	registeredModelsMu     sync.RWMutex
+	registeredModels       []interface{}
+	registeredModelTypeSet = make(map[reflect.Type]struct{})
+)
+
+// RegisterModels allows services to register the GORM models they depend on so
+// they can be migrated when the service initializes its database connection.
+// This keeps migrations service-scoped, ensuring we only create the tables
+// needed by the binaries that actually run.
+func RegisterModels(models ...interface{}) {
+	registeredModelsMu.Lock()
+	defer registeredModelsMu.Unlock()
+
+	for _, model := range models {
+		if model == nil {
+			continue
+		}
+
+		modelType := reflect.TypeOf(model)
+		if modelType.Kind() != reflect.Pointer {
+			logger.Warn("RegisterModels expects pointer types, got %T", model)
+			continue
+		}
+
+		if _, exists := registeredModelTypeSet[modelType]; exists {
+			continue
+		}
+
+		registeredModelTypeSet[modelType] = struct{}{}
+		registeredModels = append(registeredModels, model)
+	}
+}
+
+func getRegisteredModels() []interface{} {
+	registeredModelsMu.RLock()
+	defer registeredModelsMu.RUnlock()
+
+	if len(registeredModels) == 0 {
+		return nil
+	}
+
+	out := make([]interface{}, len(registeredModels))
+	copy(out, registeredModels)
+	return out
+}
+
 // customGormLogger is a GORM logger that filters out "record not found" errors at warn level
 type customGormLogger struct {
 	gormlogger.Interface
@@ -28,7 +77,7 @@ type customGormLogger struct {
 func (l *customGormLogger) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
 	return &customGormLogger{
 		Interface: l.Interface.LogMode(level),
-		logLevel: l.logLevel,
+		logLevel:  l.logLevel,
 	}
 }
 
@@ -58,7 +107,7 @@ func getGormLogger() gormlogger.Interface {
 	} else {
 		dbLogLevel = strings.ToLower(strings.TrimSpace(dbLogLevel))
 	}
-	
+
 	var gormLevel gormlogger.LogLevel
 	switch dbLogLevel {
 	case "error":
@@ -72,9 +121,9 @@ func getGormLogger() gormlogger.Interface {
 	default:
 		gormLevel = gormlogger.Error // Default to error to suppress SQL queries
 	}
-	
+
 	logger.Debug("[DB] Database logging level: %s (GORM level: %v)", dbLogLevel, gormLevel)
-	
+
 	// Create custom logger that filters out "record not found" at warn level
 	return &customGormLogger{
 		Interface: gormlogger.Default.LogMode(gormLevel),
@@ -113,7 +162,7 @@ func InitDatabase() error {
 		host, port, user, password, dbname)
 
 	logger.Info("Attempting to connect to database at %s:%s (database: %s, user: %s)", host, port, dbname, user)
-	
+
 	// Diagnostic: Log network information for troubleshooting worker node connectivity
 	if host != "localhost" && host != "127.0.0.1" {
 		logger.Debug("[DB] Resolving database hostname: %s", host)
@@ -130,14 +179,14 @@ func InitDatabase() error {
 	retryDelay := 2 * time.Second
 	var db *gorm.DB
 	var err error
-	
+
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		// Note: gorm.Open doesn't accept context directly, but the underlying driver
 		// will respect the connect_timeout in the DSN (set to 60s above)
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
 			Logger: getGormLogger(),
 		})
-		
+
 		if err == nil {
 			// Configure sql.DB connection pool settings for better reliability
 			sqlDB, err := db.DB()
@@ -150,7 +199,7 @@ func InitDatabase() error {
 			}
 			break
 		}
-		
+
 		if attempt < maxRetries {
 			logger.Warn("Database connection attempt %d/%d failed: %v. Retrying in %v...", attempt, maxRetries, err, retryDelay)
 			time.Sleep(retryDelay)
@@ -160,7 +209,7 @@ func InitDatabase() error {
 			}
 		}
 	}
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to connect to database after %d attempts: %w", maxRetries, err)
 	}
@@ -207,6 +256,13 @@ func InitDatabase() error {
 		return fmt.Errorf("failed to auto-migrate: %w", err)
 	}
 
+	if extraModels := getRegisteredModels(); len(extraModels) > 0 {
+		logger.Debug("Auto-migrating %d service-registered models", len(extraModels))
+		if err := db.AutoMigrate(extraModels...); err != nil {
+			return fmt.Errorf("failed to auto-migrate registered models: %w", err)
+		}
+	}
+
 	// Initialize VPS catalog with default sizes and regions
 	if err := InitVPSCatalog(); err != nil {
 		logger.Warn("Failed to initialize VPS catalog: %v", err)
@@ -227,7 +283,7 @@ func InitDatabase() error {
 	// This prevents services that don't need metrics from trying to connect to metrics DB
 	metricsDBName := os.Getenv("METRICS_DB_NAME")
 	shouldInitMetrics := metricsDBName != "" || os.Getenv("INIT_METRICS_DB") == "true"
-	
+
 	if shouldInitMetrics {
 		if err := InitMetricsDatabase(); err != nil {
 			logger.Warn("Metrics database initialization failed: %v. Metrics may not work correctly.", err)
@@ -388,7 +444,7 @@ func InitRedis() error {
 	// Check if Redis is configured - either via REDIS_URL or REDIS_HOST
 	redisURL := os.Getenv("REDIS_URL")
 	redisHost := os.Getenv("REDIS_HOST")
-	
+
 	// If neither REDIS_URL nor REDIS_HOST is set, Redis is not configured
 	if redisURL == "" && redisHost == "" {
 		logger.Info("Redis not configured, running without cache")

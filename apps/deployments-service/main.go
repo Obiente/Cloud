@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	deploymentsvc "deployments-service/internal/service"
+
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/health"
@@ -17,7 +19,6 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
-	deploymentsvc "deployments-service/internal/service"
 
 	deploymentsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1/deploymentsv1connect"
 
@@ -45,6 +46,12 @@ func main() {
 
 	logger.Info("=== Deployments Service Starting ===")
 	logger.Debug("LOG_LEVEL: %s", os.Getenv("LOG_LEVEL"))
+
+	database.RegisterModels(
+		&database.Organization{},
+		&database.OrganizationMember{},
+		&database.GitHubIntegration{},
+	)
 
 	// Initialize database
 	if err := database.InitDatabase(); err != nil {

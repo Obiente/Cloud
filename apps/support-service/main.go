@@ -44,6 +44,11 @@ func main() {
 	logger.Info("=== Support Service Starting ===")
 	logger.Debug("LOG_LEVEL: %s", os.Getenv("LOG_LEVEL"))
 
+	database.RegisterModels(
+		&database.SupportTicket{},
+		&database.TicketComment{},
+	)
+
 	// Initialize database
 	if err := database.InitDatabase(); err != nil {
 		logger.Fatalf("failed to initialize database: %v", err)
@@ -106,8 +111,8 @@ func main() {
 		Addr:              ":" + port,
 		Handler:           handler,
 		ReadHeaderTimeout: readHeaderTimeout,
-		WriteTimeout:     writeTimeout,
-		IdleTimeout:      idleTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 
 	// Set up graceful shutdown
@@ -140,4 +145,3 @@ func main() {
 		}
 	}
 }
-

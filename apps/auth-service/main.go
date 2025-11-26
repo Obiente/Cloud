@@ -15,7 +15,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
-	
+
 	authsvc "auth-service/internal/service"
 
 	authv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1/authv1connect"
@@ -44,6 +44,12 @@ func main() {
 
 	logger.Info("=== Auth Service Starting ===")
 	logger.Debug("LOG_LEVEL: %s", os.Getenv("LOG_LEVEL"))
+
+	database.RegisterModels(
+		&database.Organization{},
+		&database.OrganizationMember{},
+		&database.GitHubIntegration{},
+	)
 
 	// Initialize database
 	if err := database.InitDatabase(); err != nil {
@@ -109,8 +115,8 @@ func main() {
 		Addr:              ":" + port,
 		Handler:           handler,
 		ReadHeaderTimeout: readHeaderTimeout,
-		WriteTimeout:     writeTimeout,
-		IdleTimeout:      idleTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 
 	// Set up graceful shutdown
@@ -143,4 +149,3 @@ func main() {
 		}
 	}
 }
-

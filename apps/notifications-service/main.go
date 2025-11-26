@@ -45,6 +45,11 @@ func main() {
 	logger.Info("=== Notifications Service Starting ===")
 	logger.Debug("LOG_LEVEL: %s", os.Getenv("LOG_LEVEL"))
 
+	database.RegisterModels(
+		&database.Organization{},
+		&database.OrganizationMember{},
+	)
+
 	// Initialize database
 	if err := database.InitDatabase(); err != nil {
 		logger.Fatalf("failed to initialize database: %v", err)

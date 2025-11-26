@@ -212,10 +212,13 @@ type auditLogData struct {
 }
 
 func createAuditLog(ctx context.Context, data auditLogData) error {
-	// Use MetricsDB (TimescaleDB) for audit logs - no fallback to main DB
-	// This ensures audit logs are always stored in TimescaleDB for optimal performance
+	// Use MetricsDB (TimescaleDB) for audit logs - gracefully skip if not available
+	// This ensures audit logs are stored in TimescaleDB for optimal performance when available
+	// But doesn't break services that don't have TimescaleDB configured
 	if database.MetricsDB == nil {
-		return fmt.Errorf("metrics database (TimescaleDB) not initialized - audit logs require TimescaleDB")
+		// Log a debug message instead of an error - this is expected for services without TimescaleDB
+		logger.Debug("[Audit] Skipping audit log for %s/%s: metrics database (TimescaleDB) not initialized", data.Service, data.Action)
+		return nil // Return nil to indicate graceful skip, not an error
 	}
 
 	db := database.MetricsDB

@@ -10,12 +10,12 @@ import (
 	"syscall"
 	"time"
 
+	"billing-service/internal/service"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/health"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
-	"billing-service/internal/service"
 	"github.com/obiente/cloud/apps/shared/pkg/stripe"
 
 	billingv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/billing/v1/billingv1connect"
@@ -44,6 +44,14 @@ func main() {
 
 	logger.Info("=== Billing Service Starting ===")
 	logger.Debug("LOG_LEVEL: %s", os.Getenv("LOG_LEVEL"))
+
+	database.RegisterModels(
+		&database.Organization{},
+		&database.OrganizationMember{},
+		&database.BillingAccount{},
+		&database.CreditTransaction{},
+		&database.StripeWebhookEvent{},
+	)
 
 	// Initialize database
 	if err := database.InitDatabase(); err != nil {
@@ -231,4 +239,3 @@ func startMonthlyCreditsService(ctx context.Context) {
 		}
 	}
 }
-

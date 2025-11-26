@@ -46,6 +46,13 @@ func main() {
 	logger.Info("=== Organizations Service Starting ===")
 	logger.Debug("LOG_LEVEL: %s", os.Getenv("LOG_LEVEL"))
 
+	database.RegisterModels(
+		&database.Organization{},
+		&database.OrganizationMember{},
+		&database.OrgRole{},
+		&database.OrgRoleBinding{},
+	)
+
 	// Initialize database
 	if err := database.InitDatabase(); err != nil {
 		logger.Fatalf("failed to initialize database: %v", err)
