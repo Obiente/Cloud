@@ -44,13 +44,16 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
       }
     }
 
-    // Try silent auth first (background iframe)
-    // If it fails, don't show popup - let user login normally on the page
-    const silentAuthSuccess = await user.trySilentAuth();
-    if (!silentAuthSuccess) {
-      // Silent auth failed silently in iframe - allow page to load normally
-      // User can click login button to authenticate
-      return;
+    // Try silent auth in the background (non-blocking)
+    // Start the iframe auth process but don't wait for it - let the page load normally
+    // The silent auth will update the session when it completes
+    if (import.meta.client) {
+      user.trySilentAuth().catch(() => {
+        // Silent auth failed silently in iframe - allow page to load normally
+        // User can click login button to authenticate
+      });
     }
+    // Allow page to load immediately without waiting for silent auth
+    return;
   }
 });
