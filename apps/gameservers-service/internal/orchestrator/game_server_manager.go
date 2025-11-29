@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -15,10 +16,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	sharedorchestrator "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
-
-	"github.com/docker/go-connections/nat"
 	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 )
@@ -58,10 +56,11 @@ func NewGameServerManager(strategy string, maxGameServersPerNode int) (*GameServ
 	}
 
 	// Get node info
-	info, err := cli.Info(context.Background())
+	infoResult, err := cli.Info(context.Background(), client.InfoOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Docker info: %w", err)
 	}
+	info := infoResult.Info
 
 	helper, err := docker.New()
 	if err != nil {
@@ -265,7 +264,8 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 	}
 
 	// Check if container exists and is stopped
-	containerInfo, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
+	containerInfoResult, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
+	var containerInfo container.InspectResponse
 	if err != nil {
 		// Container doesn't exist - try to recreate it with existing volumes
 		logger.Warn("[GameServerManager] Container %s doesn't exist, attempting to recreate it with existing volumes", *gameServer.ContainerID)
@@ -314,10 +314,13 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 		logger.Info("[GameServerManager] Successfully recreated container %s for game server %s", (*gameServer.ContainerID)[:12], gameServerID)
 
 		// Re-inspect the new container (use the NEW container ID)
-		containerInfo, err = gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
+		containerInfoResult, err = gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to inspect recreated container %s: %w", (*gameServer.ContainerID)[:12], err)
 		}
+		containerInfo = containerInfoResult.Container
+	} else {
+		containerInfo = containerInfoResult.Container
 	}
 
 	// Only start if not already running
@@ -408,10 +411,11 @@ func (gsm *GameServerManager) StartGameServer(ctx context.Context, gameServerID 
 		time.Sleep(2 * time.Second)
 
 		// Re-inspect to check if container is still running
-		containerInfo, err = gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
+		containerInfoResult, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to inspect container after start: %w", err)
 		}
+		containerInfo := containerInfoResult.Container
 
 		// If container exited, check why and update status accordingly
 		if !containerInfo.State.Running {
@@ -495,10 +499,11 @@ func (gsm *GameServerManager) StopGameServer(ctx context.Context, gameServerID s
 	}
 
 	// Check if container exists and is running
-	containerInfo, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
+	containerInfoResult, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to inspect container: %w", err)
 	}
+	containerInfo := containerInfoResult.Container
 
 	// Only stop if running
 	if containerInfo.State.Running {
@@ -543,12 +548,13 @@ func (gsm *GameServerManager) RestartGameServer(ctx context.Context, gameServerI
 	}
 
 	// Check if container exists
-	containerInfo, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
+	containerInfoResult, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
 	if err != nil {
 		// Container doesn't exist - try to start the game server (which will recreate the container)
 		logger.Warn("[GameServerManager] Container %s doesn't exist, starting game server instead (will recreate container)", (*gameServer.ContainerID)[:12])
 		return gsm.StartGameServer(ctx, gameServerID)
 	}
+	containerInfo := containerInfoResult.Container
 
 	// If container is not running, just start it instead of restarting
 	if !containerInfo.State.Running {
@@ -612,10 +618,11 @@ func (gsm *GameServerManager) DeleteGameServer(ctx context.Context, gameServerID
 	}
 
 	// SECURITY: Verify container was created by our API before deletion
-	containerInfo, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
+	containerInfoResult, err := gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
 	if err != nil {
 		logger.Warn("[GameServerManager] Container %s not found (may already be deleted): %v", (*gameServer.ContainerID)[:12], err)
 	} else {
+		containerInfo := containerInfoResult.Container
 		// Verify container has our management label
 		if containerInfo.Config.Labels["cloud.obiente.managed"] != "true" {
 			logger.Error("[GameServerManager] SECURITY: Refusing to delete container %s: not managed by Obiente Cloud (missing cloud.obiente.managed=true label)", (*gameServer.ContainerID)[:12])
@@ -654,7 +661,7 @@ func (gsm *GameServerManager) GetGameServerLogs(ctx context.Context, gameServerI
 	}
 
 	// Check if container exists before trying to get logs
-	_, err = gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
+	_, err = gsm.dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("container %s not found (may have been deleted): %w", (*gameServer.ContainerID)[:12], err)
 	}
@@ -703,13 +710,13 @@ func (gsm *GameServerManager) ensureNetwork(ctx context.Context) error {
 	// Reuse the same network as deployments
 	// Check if network exists
 	networks, err := gsm.dockerClient.NetworkList(ctx, client.NetworkListOptions{
-		Filters: filters.NewArgs(filters.Arg("name", gsm.networkName)),
+		Filters: func() client.Filters { f := make(client.Filters); f.Add("name", gsm.networkName); return f }(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list networks: %w", err)
 	}
 
-	if len(networks) > 0 {
+	if len(networks.Items) > 0 {
 		logger.Debug("[GameServerManager] Network %s already exists", gsm.networkName)
 		return nil
 	}
@@ -738,8 +745,9 @@ func (gsm *GameServerManager) removeContainerByName(ctx context.Context, contain
 	containerNameWithoutSlash := strings.TrimPrefix(containerName, "/")
 
 	for _, nameToTry := range []string{containerNameWithSlash, containerNameWithoutSlash} {
-		containerInfo, err := gsm.dockerClient.ContainerInspect(ctx, nameToTry)
+		containerInfoResult, err := gsm.dockerClient.ContainerInspect(ctx, nameToTry, client.ContainerInspectOptions{})
 		if err == nil {
+			containerInfo := containerInfoResult.Container
 			// SECURITY: Verify container was created by our API
 			if containerInfo.Config.Labels["cloud.obiente.managed"] != "true" {
 				return fmt.Errorf("refusing to delete container %s: not managed by Obiente Cloud (missing cloud.obiente.managed=true label)", containerName)
@@ -805,13 +813,17 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 	}
 
 	// Port configuration
-	exposedPorts := nat.PortSet{}
-	portBindings := nat.PortMap{}
-	containerPort := nat.Port(fmt.Sprintf("%d/tcp", config.Port))
+	exposedPorts := network.PortSet{}
+	portBindings := network.PortMap{}
+	containerPort, err := network.ParsePort(fmt.Sprintf("%d/tcp", config.Port))
+	if err != nil {
+		return "", fmt.Errorf("invalid port: %w", err)
+	}
 	exposedPorts[containerPort] = struct{}{}
-	portBindings[containerPort] = []nat.PortBinding{
+	hostIP, _ := netip.ParseAddr("0.0.0.0")
+	portBindings[containerPort] = []network.PortBinding{
 		{
-			HostIP:   "0.0.0.0",
+			HostIP:   hostIP,
 			HostPort: strconv.Itoa(int(config.Port)),
 		},
 	}
@@ -884,12 +896,17 @@ func (gsm *GameServerManager) createContainer(ctx context.Context, config *GameS
 	}
 
 	// Create container
-	resp, err := gsm.dockerClient.ContainerCreate(ctx, containerConfig, hostConfig, networkConfig, nil, name)
+	createResp, err := gsm.dockerClient.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Config:           containerConfig,
+		HostConfig:       hostConfig,
+		NetworkingConfig: networkConfig,
+		Name:             name,
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create container: %w", err)
 	}
 
-	return resp.ID, nil
+	return createResp.ID, nil
 }
 
 // ensureVolume ensures the volume directory exists in /var/lib/obiente/volumes
@@ -923,15 +940,15 @@ func (gsm *GameServerManager) ensureImage(ctx context.Context, imageName string)
 	defer cancel()
 
 	// Check if image exists locally
-	images, err := gsm.dockerClient.ImageList(imageCtx, client.ImageListOptions{
-		Filters: filters.NewArgs(filters.Arg("reference", imageName)),
+	imagesResult, err := gsm.dockerClient.ImageList(imageCtx, client.ImageListOptions{
+		Filters: func() client.Filters { f := make(client.Filters); f.Add("reference", imageName); return f }(),
 	})
 	if err != nil {
 		logger.Warn("[GameServerManager] Failed to check for local image %s: %v", imageName, err)
 		// Continue to try pulling anyway
 	}
 
-	if len(images) > 0 {
+	if len(imagesResult.Items) > 0 {
 		logger.Debug("[GameServerManager] Image %s already exists locally", imageName)
 		return nil
 	}

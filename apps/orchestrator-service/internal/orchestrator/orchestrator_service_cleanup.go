@@ -12,7 +12,6 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
 	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/client"
 )
 
@@ -204,7 +203,7 @@ func (os *OrchestratorService) runStrayContainerCleanup() {
 	nodeID := os.deploymentManager.GetNodeID()
 
 	// Get all containers managed by Obiente
-	filterArgs := filters.NewArgs()
+	filterArgs := make(client.Filters)
 	filterArgs.Add("label", "cloud.obiente.managed=true")
 
 	dockerClient, ok := os.deploymentManager.GetDockerClient().(client.APIClient)
@@ -239,20 +238,21 @@ func (os *OrchestratorService) runStrayContainerCleanup() {
 	}
 
 	// Find stray containers (running but not in DB)
-	// ContainerList returns []container.Summary
+	// ContainerList returns client.ContainerListResult
 	var strayContainers []container.Summary
-	for _, container := range containers {
+	for _, container := range containers.Items {
 		// Verify container has cloud.obiente.managed=true (should already be filtered, but double-check)
 		if container.Labels["cloud.obiente.managed"] != "true" {
 			continue
 		}
 
 		// Check if container is running
-		containerInfo, err := dockerClient.ContainerInspect(ctx, container.ID)
+		containerInfoResult, err := dockerClient.ContainerInspect(ctx, container.ID, client.ContainerInspectOptions{})
 		if err != nil {
 			logger.Debug("[Orchestrator] Failed to inspect container %s: %v", container.ID[:12], err)
 			continue
 		}
+		containerInfo := containerInfoResult.Container
 
 		// Only process running containers
 		if !containerInfo.State.Running {
@@ -328,13 +328,16 @@ func (os *OrchestratorService) runStrayContainerCleanup() {
 		// Verify container has cloud.obiente tags before deleting volumes
 		// Check container labels to ensure it's an Obiente-managed container
 		// Even though container might be gone, we can check if volumes are Obiente volumes
-		containerInfo, err := dockerClient.ContainerInspect(ctx, stray.ContainerID)
+		containerInfoResult, err := dockerClient.ContainerInspect(ctx, stray.ContainerID, client.ContainerInspectOptions{})
 		hasObienteTags := false
 		containerExists := err == nil
-		if containerExists && containerInfo.Config != nil && containerInfo.Config.Labels != nil {
-			// Container still exists - verify it has cloud.obiente tags
-			if containerInfo.Config.Labels["cloud.obiente.managed"] == "true" {
-				hasObienteTags = true
+		if containerExists {
+			containerInfo := containerInfoResult.Container
+			if containerInfo.Config != nil && containerInfo.Config.Labels != nil {
+				// Container still exists - verify it has cloud.obiente tags
+				if containerInfo.Config.Labels["cloud.obiente.managed"] == "true" {
+					hasObienteTags = true
+				}
 			}
 		} else {
 			// Container is gone - we can only verify by checking volume paths
@@ -372,9 +375,11 @@ func (os *OrchestratorService) runStrayContainerCleanup() {
 			} else if volume.IsNamed {
 				// For Docker named volumes, only delete if container still exists and has cloud.obiente tags
 				// This is safer - we don't want to delete volumes from containers that might not be Obiente-managed
-				if containerExists && containerInfo.Config != nil && containerInfo.Config.Labels != nil {
-					if containerInfo.Config.Labels["cloud.obiente.managed"] == "true" {
-						logger.Info("[Orchestrator] Removing Docker volume %s (container has cloud.obiente tags)", volume.Name)
+				if containerExists {
+					containerInfo := containerInfoResult.Container
+					if containerInfo.Config != nil && containerInfo.Config.Labels != nil {
+						if containerInfo.Config.Labels["cloud.obiente.managed"] == "true" {
+							logger.Info("[Orchestrator] Removing Docker volume %s (container has cloud.obiente tags)", volume.Name)
 						// Extract volume name from mount name if needed
 						volumeName := volume.Name
 						if volumeName == "" {
@@ -387,14 +392,15 @@ func (os *OrchestratorService) runStrayContainerCleanup() {
 							}
 						}
 						if volumeName != "" {
-							if err := dockerClient.VolumeRemove(ctx, volumeName, false); err != nil {
+							if _, err := dockerClient.VolumeRemove(ctx, volumeName, client.VolumeRemoveOptions{}); err != nil {
 								logger.Warn("[Orchestrator] Failed to remove Docker volume %s: %v", volumeName, err)
 							} else {
 								logger.Info("[Orchestrator] Removed Docker volume %s", volumeName)
 							}
 						}
-					} else {
-						logger.Debug("[Orchestrator] Skipping Docker volume %s - container missing cloud.obiente tags", volume.Name)
+						} else {
+							logger.Debug("[Orchestrator] Skipping Docker volume %s - container missing cloud.obiente tags", volume.Name)
+						}
 					}
 				} else {
 					logger.Debug("[Orchestrator] Skipping Docker volume %s - container no longer exists (cannot verify tags)", volume.Name)

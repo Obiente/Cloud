@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/netip"
 	"os"
 	"os/exec"
 	"strconv"
@@ -13,9 +14,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
-	"github.com/docker/go-connections/nat"
 	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 )
@@ -157,20 +156,24 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	// Prepare port bindings
 	// When Traefik handles routing, we should NOT expose ports to the host
 	// Only expose ports internally (no host binding) when Traefik labels are present
-	exposedPorts := nat.PortSet{}
-	portBindings := nat.PortMap{}
+	exposedPorts := network.PortSet{}
+	portBindings := network.PortMap{}
 
 	if containerPortNum > 0 {
-		containerPort := nat.Port(fmt.Sprintf("%d/tcp", containerPortNum))
+		containerPort, err := network.ParsePort(fmt.Sprintf("%d/tcp", containerPortNum))
+		if err != nil {
+			return "", fmt.Errorf("invalid port %d: %w", containerPortNum, err)
+		}
 		exposedPorts[containerPort] = struct{}{}
 
 		// Only bind to host if Traefik is NOT handling routing
 		// If Traefik labels exist, don't expose to host (Traefik will route internally)
 		if len(traefikLabels) == 0 {
 			// No Traefik routing - expose to host with random port for security
-			portBindings[containerPort] = []nat.PortBinding{
+			hostIP, _ := netip.ParseAddr("0.0.0.0")
+			portBindings[containerPort] = []network.PortBinding{
 				{
-					HostIP:   "0.0.0.0",
+					HostIP:   hostIP,
 					HostPort: "0", // SECURITY: Docker assigns random port - users cannot bind to specific host ports
 				},
 			}
@@ -268,7 +271,12 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 	}
 
 	// Create container
-	resp, err := dm.dockerClient.ContainerCreate(ctx, containerConfig, hostConfig, networkConfig, nil, name)
+	createResp, err := dm.dockerClient.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Config:           containerConfig,
+		HostConfig:      hostConfig,
+		NetworkingConfig: networkConfig,
+		Name:            name,
+	})
 	if err != nil {
 		// Check for name conflict error - if container was created by another process
 		if strings.Contains(err.Error(), "is already in use") || strings.Contains(err.Error(), "already exists") {
@@ -282,7 +290,12 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 
 			// Retry container creation once
 			logger.Info("[DeploymentManager] Retrying container creation for %s after removing conflicting container", name)
-			resp, err = dm.dockerClient.ContainerCreate(ctx, containerConfig, hostConfig, networkConfig, nil, name)
+			createResp, err = dm.dockerClient.ContainerCreate(ctx, client.ContainerCreateOptions{
+				Config:           containerConfig,
+				HostConfig:      hostConfig,
+				NetworkingConfig: networkConfig,
+				Name:            name,
+			})
 			if err != nil {
 				return "", fmt.Errorf("failed to create container after removing conflicting container: %w", err)
 			}
@@ -291,7 +304,7 @@ func (dm *DeploymentManager) createContainer(ctx context.Context, config *Deploy
 		}
 	}
 
-	return resp.ID, nil
+	return createResp.ID, nil
 }
 
 func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int) (string, string, error) {
@@ -893,14 +906,14 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	if containerID == "" {
 		logger.Warn("[DeploymentManager] Could not get container ID from Swarm service %s tasks - will look up later", swarmServiceName)
 		// Try to find container by service label
-		filterArgs := filters.NewArgs()
+		filterArgs := make(client.Filters)
 		filterArgs.Add("label", fmt.Sprintf("com.docker.swarm.service.name=%s", swarmServiceName))
-		containers, _ := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+		containersResult, _ := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 			All:     true,
 			Filters: filterArgs,
 		})
-		if len(containers) > 0 {
-			containerID = containers[0].ID
+		if len(containersResult.Items) > 0 {
+			containerID = containersResult.Items[0].ID
 		}
 	}
 
@@ -910,10 +923,11 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 // removeContainerByName removes a container by name (used for cleanup before creating new containers)
 func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containerName string) error {
 	// Try to find container by name
-	containers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+	containersResult, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
-		Filters: filters.NewArgs(filters.Arg("name", containerName)),
+		Filters: func() client.Filters { f := make(client.Filters); f.Add("name", containerName); return f }(),
 	})
+	containers := containersResult.Items
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
 	}

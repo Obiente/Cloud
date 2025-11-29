@@ -11,7 +11,6 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
-	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/client"
 )
 
@@ -39,18 +38,20 @@ func NewServiceRegistry() (*ServiceRegistry, error) {
 	}
 
 	// Get current node information
-	info, err := cli.Info(context.Background())
+	infoResult, err := cli.Info(context.Background(), client.InfoOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Docker info: %w", err)
 	}
+	info := infoResult.Info
 
 	// Determine node ID - respect ENABLE_SWARM environment variable
 	// If ENABLE_SWARM=false, always use local- prefix even if Swarm is enabled in Docker
 	var nodeID string
 	if utils.IsSwarmModeEnabled() {
 		// Swarm mode enabled - use Swarm node ID if available
-		nodeID = info.Swarm.NodeID
-		if nodeID == "" {
+		if info.Swarm.NodeID != "" {
+			nodeID = info.Swarm.NodeID
+		} else {
 			// Swarm enabled but not in Swarm - use synthetic ID
 			nodeID = info.Name
 			if nodeID == "" {
@@ -210,16 +211,17 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 	logger.Debug("[Registry] Starting sync with Docker...")
 
 	// Get all containers managed by Obiente
-	filterArgs := filters.NewArgs()
+	filterArgs := make(client.Filters)
 	filterArgs.Add("label", "cloud.obiente.managed=true")
 
-	containers, err := sr.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+	containersResult, err := sr.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
 		Filters: filterArgs,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
 	}
+	containers := containersResult.Items
 
 	// Build fast-lookup index of actual containers by ID
 	actualIndex := make(map[string]int, len(containers))
@@ -247,7 +249,7 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 		if _, exists := actualIndex[location.ContainerID]; !exists {
 			// Verify container doesn't exist by attempting to inspect it
 			// This prevents race conditions where container is temporarily unavailable
-			_, inspectErr := sr.dockerClient.ContainerInspect(ctx, location.ContainerID)
+			_, inspectErr := sr.dockerClient.ContainerInspect(ctx, location.ContainerID, client.ContainerInspectOptions{})
 			if inspectErr != nil {
 				// Container truly doesn't exist - safe to remove
 				logger.Info("[Registry] Container %s no longer exists on node %s, removing from registry", location.ContainerID[:12], sr.nodeID)
@@ -289,7 +291,7 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 				NodeID:       sr.nodeID,
 				NodeHostname: sr.nodeHostname,
 				ContainerID:  containerID,
-				Status:       c.State,
+				Status:       string(c.State),
 				Domain:       c.Labels["cloud.obiente.domain"],
 			}
 
@@ -304,8 +306,8 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 		} else {
 			// Update status for existing containers
 			status := "running"
-			if c.State != "running" {
-				status = c.State
+			if string(c.State) != "running" {
+				status = string(c.State)
 			}
 
 			database.DB.Model(&database.DeploymentLocation{}).

@@ -20,10 +20,11 @@ COPY apps/shared/go.mod apps/shared/go.sum ./apps/shared/
 COPY apps/vps-service/go.mod apps/vps-service/go.sum ./apps/vps-service/
 
 # Download dependencies for shared module
+# Run go mod tidy to ensure go.sum is complete and up-to-date
 WORKDIR /build/apps/shared
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go mod download
+    go mod tidy && go mod download
 
 # Download dependencies for service module
 WORKDIR /build/apps/vps-service
@@ -35,6 +36,12 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
 WORKDIR /build
 COPY apps/shared/ ./apps/shared/
 COPY apps/vps-service/ ./apps/vps-service/
+
+# Ensure go.sum is complete for shared module (regenerate if needed)
+WORKDIR /build/apps/shared
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go mod tidy
 
 # Build the service from its own module directory
 WORKDIR /build/apps/vps-service

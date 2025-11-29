@@ -44,15 +44,15 @@ func (h *Handler) ListContainersAsDeployments(ctx context.Context) ([]*deploymen
 		return nil, fmt.Errorf("docker client not initialized")
 	}
 
-	containers, err := h.client.ContainerList(ctx, client.ContainerListOptions{
+	containersResult, err := h.client.ContainerList(ctx, client.ContainerListOptions{
 		All: true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list containers: %w", err)
 	}
 
-	deployments := make([]*deploymentsv1.Deployment, 0, len(containers))
-	for _, ctr := range containers {
+	deployments := make([]*deploymentsv1.Deployment, 0, len(containersResult.Items))
+	for _, ctr := range containersResult.Items {
 		name := "unknown"
 		if len(ctr.Names) > 0 {
 			name = ctr.Names[0]

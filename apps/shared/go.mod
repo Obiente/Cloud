@@ -4,14 +4,13 @@ go 1.25
 
 require (
 	connectrpc.com/connect v1.19.1
-	github.com/docker/go-connections v0.6.0
 	github.com/google/uuid v1.6.0
-	github.com/moby/moby/api v1.52.0-beta.1
-	github.com/moby/moby/client v0.1.0-beta.0
+	github.com/moby/moby/api v1.52.0
+	github.com/moby/moby/client v0.2.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.16.0
+	github.com/stripe/stripe-go/v83 v83.2.1
 	golang.org/x/crypto v0.41.0
-	golang.org/x/net v0.43.0
 	google.golang.org/protobuf v1.36.9
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/postgres v1.6.0
@@ -27,6 +26,7 @@ require (
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/distribution/reference v0.6.0 // indirect
+	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
@@ -54,3 +54,19 @@ require (
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 )
+
+exclude github.com/moby/moby v28.5.1+incompatible
+
+exclude github.com/moby/moby v28.4.0+incompatible
+
+exclude github.com/moby/moby v28.5.0+incompatible
+
+exclude github.com/moby/moby v28.5.2+incompatible
+
+exclude github.com/docker/docker v28.4.0+incompatible
+
+exclude github.com/docker/docker v28.5.0+incompatible
+
+exclude github.com/docker/docker v28.5.1+incompatible
+
+exclude github.com/docker/docker v28.5.2+incompatible

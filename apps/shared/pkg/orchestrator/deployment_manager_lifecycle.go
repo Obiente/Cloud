@@ -14,7 +14,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
-	"github.com/moby/moby/api/types/filters"
+	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 )
 
@@ -118,14 +118,14 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 					// Wait a bit more for task to be created
 					time.Sleep(2 * time.Second)
 					// Try to find container by service name label
-					filterArgs := filters.NewArgs()
+					filterArgs := make(client.Filters)
 					filterArgs.Add("label", fmt.Sprintf("com.docker.swarm.service.name=%s", swarmServiceName))
-					containers, listErr := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+					containersResult, listErr := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 						All:     true,
 						Filters: filterArgs,
 					})
-					if listErr == nil && len(containers) > 0 {
-						containerID = containers[0].ID
+					if listErr == nil && len(containersResult.Items) > 0 {
+						containerID = containersResult.Items[0].ID
 					}
 				}
 
@@ -156,7 +156,11 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 			// Get container details (if containerID is valid, not a placeholder)
 			var publicPort int
 			if !strings.HasPrefix(containerID, "swarm-service-") {
-				info, err := dm.dockerClient.ContainerInspect(ctx, containerID)
+				infoResult, err := dm.dockerClient.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
+				if err != nil {
+					continue
+				}
+				info := infoResult.Container
 				if err == nil {
 					// Determine the public port (find port for this service from routing)
 					publicPort = config.Port
@@ -400,7 +404,8 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 		}
 
 		// Check if container exists and is stopped
-		containerInfo, err := dm.dockerClient.ContainerInspect(ctx, location.ContainerID)
+		var containerInfo container.InspectResponse
+		containerInfoResult, err := dm.dockerClient.ContainerInspect(ctx, location.ContainerID, client.ContainerInspectOptions{})
 		if err != nil {
 			// Container doesn't exist - try to recreate it
 			logger.Warn("[DeploymentManager] Container %s doesn't exist, attempting to recreate deployment", location.ContainerID[:12])
@@ -519,16 +524,19 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				}
 
 				// Re-inspect the new container
-				containerInfo, err = dm.dockerClient.ContainerInspect(ctx, location.ContainerID)
+				containerInfoResult, err := dm.dockerClient.ContainerInspect(ctx, location.ContainerID, client.ContainerInspectOptions{})
 				if err != nil {
 					logger.Warn("[DeploymentManager] Failed to inspect recreated container: %v", err)
 					continue
 				}
+				containerInfo = containerInfoResult.Container
 			} else {
 				// Compose-based deployment - skip this container
 				logger.Warn("[DeploymentManager] Container %s doesn't exist for compose deployment %s, skipping", location.ContainerID[:12], deploymentID)
 				continue
 			}
+		} else {
+			containerInfo = containerInfoResult.Container
 		}
 
 		// Only start if not already running
@@ -641,11 +649,12 @@ func (dm *DeploymentManager) DeleteDeployment(ctx context.Context, deploymentID 
 		}
 
 		// SECURITY: Verify container was created by our API before deletion
-		containerInfo, err := dm.dockerClient.ContainerInspect(ctx, location.ContainerID)
+		containerInfoResult, err := dm.dockerClient.ContainerInspect(ctx, location.ContainerID, client.ContainerInspectOptions{})
 		if err != nil {
 			logger.Warn("[DeploymentManager] Container %s not found (may already be deleted): %v", location.ContainerID[:12], err)
 			continue
 		}
+		containerInfo := containerInfoResult.Container
 
 		// Verify container has our management label
 		if containerInfo.Config.Labels["cloud.obiente.managed"] != "true" {
@@ -712,7 +721,7 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 		}
 
 		// Check if container exists
-		_, err := dm.dockerClient.ContainerInspect(ctx, location.ContainerID)
+		_, err := dm.dockerClient.ContainerInspect(ctx, location.ContainerID, client.ContainerInspectOptions{})
 		if err != nil {
 			logger.Debug("[DeploymentManager] Container %s doesn't exist, skipping removal", location.ContainerID[:12])
 			continue

@@ -395,7 +395,7 @@ func (s *Service) ListDeploymentContainers(ctx context.Context, req *connect.Req
 			}
 		}
 
-		status := containerInfo.State.Status
+		status := string(containerInfo.State.Status)
 		if containerInfo.State.Running {
 			status = "running"
 		}

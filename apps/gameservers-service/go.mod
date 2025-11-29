@@ -4,7 +4,11 @@ go 1.25
 
 require (
 	connectrpc.com/connect v1.19.1
+	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
+	github.com/docker/go-connections v0.6.0
 	github.com/joho/godotenv v1.5.1
+	github.com/moby/moby/api v1.52.0
+	github.com/moby/moby/client v0.2.1
 	github.com/obiente/cloud/apps/shared v0.0.0
 	golang.org/x/net v0.43.0
 	google.golang.org/protobuf v1.36.9
@@ -13,14 +17,12 @@ require (
 
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/distribution/reference v0.6.0 // indirect
-	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -33,8 +35,6 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
-	github.com/moby/moby/api v1.52.0-beta.1 // indirect
-	github.com/moby/moby/client v0.1.0-beta.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
@@ -57,5 +57,33 @@ require (
 	gorm.io/driver/postgres v1.6.0 // indirect
 	gorm.io/gorm v1.31.0 // indirect
 )
+
+exclude github.com/moby/moby v28.3.1+incompatible
+
+exclude github.com/moby/moby v28.3.2+incompatible
+
+exclude github.com/moby/moby v28.3.3+incompatible
+
+exclude github.com/moby/moby v28.4.0+incompatible
+
+exclude github.com/moby/moby v28.5.0+incompatible
+
+exclude github.com/moby/moby v28.5.1+incompatible
+
+exclude github.com/moby/moby v28.5.2+incompatible
+
+exclude github.com/docker/docker v28.3.1+incompatible
+
+exclude github.com/docker/docker v28.3.2+incompatible
+
+exclude github.com/docker/docker v28.3.3+incompatible
+
+exclude github.com/docker/docker v28.4.0+incompatible
+
+exclude github.com/docker/docker v28.5.0+incompatible
+
+exclude github.com/docker/docker v28.5.1+incompatible
+
+exclude github.com/docker/docker v28.5.2+incompatible
 
 replace github.com/obiente/cloud/apps/shared => ../shared

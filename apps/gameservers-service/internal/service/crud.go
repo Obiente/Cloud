@@ -644,15 +644,14 @@ func (s *Service) updateContainerResourceLimits(ctx context.Context, containerID
 	cpuShares := int64(cpuCores) * 1024
 
 	// Update container resources
-	updateConfig := container.UpdateConfig{
-		Resources: container.Resources{
+
+	_, err = dockerClient.ContainerUpdate(ctx, containerID, client.ContainerUpdateOptions{
+		Resources: &container.Resources{
 			Memory:    memoryBytes,
 			CPUShares: cpuShares,  // Relative priority
 			NanoCPUs:  nanoCPUs,   // Hard CPU limit
 		},
-	}
-
-	_, err = dockerClient.ContainerUpdate(ctx, containerID, updateConfig)
+	})
 	if err != nil {
 		return fmt.Errorf("failed to update container %s: %w", containerID[:12], err)
 	}

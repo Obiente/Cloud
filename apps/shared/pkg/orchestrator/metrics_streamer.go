@@ -13,6 +13,8 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/metrics"
 	"github.com/obiente/cloud/apps/shared/pkg/registry"
+
+	"github.com/moby/moby/client"
 )
 
 // LiveMetric represents a live metric in memory
@@ -371,7 +373,7 @@ func (ms *MetricsStreamer) collectDeploymentStatsParallel(locations []database.D
 				}
 				
 				// Verify container actually exists before trying to get stats
-				_, inspectErr := ms.serviceRegistry.DockerClient().ContainerInspect(context.Background(), job.location.ContainerID)
+				_, inspectErr := ms.serviceRegistry.DockerClient().ContainerInspect(context.Background(), job.location.ContainerID, client.ContainerInspectOptions{})
 				if inspectErr != nil {
 					// Container doesn't exist - update status in database and skip
 					if strings.Contains(job.location.DeploymentID, "gs-") {
@@ -582,7 +584,7 @@ func (ms *MetricsStreamer) getContainerStats(containerID string) (*ContainerStat
 	ctx, cancel := context.WithTimeout(context.Background(), ms.config.DockerAPITimeout)
 	defer cancel()
 
-	statsResp, err := ms.serviceRegistry.DockerClient().ContainerStats(ctx, containerID, false)
+	statsResp, err := ms.serviceRegistry.DockerClient().ContainerStats(ctx, containerID, client.ContainerStatsOptions{Stream: false})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get container stats: %w", err)
 	}

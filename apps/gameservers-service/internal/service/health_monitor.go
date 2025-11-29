@@ -54,7 +54,7 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 		}
 
 		// Inspect container to get actual status
-		containerInfo, err := dockerClient.ContainerInspect(ctx, *gameServer.ContainerID)
+		containerInfo, err := dockerClient.ContainerInspect(ctx, *gameServer.ContainerID, client.ContainerInspectOptions{})
 		if err != nil {
 			// Container doesn't exist - update status to STOPPED
 			containerIDShort := *gameServer.ContainerID
@@ -80,7 +80,7 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 		}
 
 		// Check if container is actually running
-		isRunning := containerInfo.State.Running
+		isRunning := containerInfo.Container.State.Running
 		currentStatus := int32(gameServer.Status)
 
 		// Sync status based on actual container state
@@ -105,7 +105,7 @@ func (s *Service) checkAndSyncGameServerStatus(ctx context.Context) {
 			}
 		} else {
 			// Container is not running - check exit code to determine status
-			exitCode := containerInfo.State.ExitCode
+			exitCode := containerInfo.Container.State.ExitCode
 			if exitCode == 0 {
 				// Container stopped normally - update to STOPPED
 				if currentStatus != int32(gameserversv1.GameServerStatus_STOPPED) {

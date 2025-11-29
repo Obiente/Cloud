@@ -6,7 +6,7 @@ require (
 	connectrpc.com/connect v1.19.1
 	github.com/joho/godotenv v1.5.1
 	github.com/obiente/cloud/apps/shared v0.0.0
-	github.com/stripe/stripe-go/v83 v83.1.0
+	github.com/stripe/stripe-go/v83 v83.2.1
 	golang.org/x/net v0.43.0
 	google.golang.org/protobuf v1.36.9
 	gorm.io/gorm v1.31.0
@@ -32,8 +32,8 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
-	github.com/moby/moby/api v1.52.0-beta.1 // indirect
-	github.com/moby/moby/client v0.1.0-beta.0 // indirect
+	github.com/moby/moby/api v1.52.0 // indirect
+	github.com/moby/moby/client v0.2.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect

@@ -15,7 +15,6 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
-	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/client"
 	"gopkg.in/yaml.v3"
 )
@@ -361,29 +360,31 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 
 	// containers will be initialized from ContainerList - type inferred from return value
 	// We initialize with an empty list to establish the type, then reassign in branches
-	containers, _ := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: filters.NewArgs()})
+	containersResult, _ := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: make(client.Filters)})
+	containers := containersResult.Items
 	containers = containers[:0] // Clear the list but keep the type
 
 	if isSwarmMode {
 		// In Swarm mode, containers are created by services in the stack
 		// List containers with the deployment ID label (set by our Traefik label injection)
-		filterArgs := filters.NewArgs()
+		filterArgs := make(client.Filters)
 		filterArgs.Add("label", fmt.Sprintf("cloud.obiente.deployment_id=%s", deploymentID))
 
 		// Assign to containers - type already established
-		containers, _ = dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+		containersResult, _ := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 			All:     true,
 			Filters: filterArgs,
 		})
+		containers = containersResult.Items
 
 		// Fallback: try listing containers by stack name
 		if len(containers) == 0 {
 			logger.Info("[DeploymentManager] No containers found with deployment ID label, trying stack name %s", projectName)
 			// In Swarm, containers have com.docker.swarm.service.name label
 			// Service names are in format: {stack}_{service}
-			allContainers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{All: true})
+			allContainersResult, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{All: true})
 			if err == nil {
-				for _, cnt := range allContainers {
+				for _, cnt := range allContainersResult.Items {
 					serviceName := cnt.Labels["com.docker.swarm.service.name"]
 					if strings.HasPrefix(serviceName, projectName+"_") || strings.HasPrefix(serviceName, strings.ToLower(projectName)+"_") {
 						containers = append(containers, cnt)
@@ -394,27 +395,31 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 	} else {
 		// In non-Swarm mode, list containers with the compose project label
 		// Note: Docker Compose may normalize the project name (e.g., lowercase), so we try both
-		filterArgs := filters.NewArgs()
+		filterArgs := make(client.Filters)
 		filterArgs.Add("label", fmt.Sprintf("com.docker.compose.project=%s", projectName))
 
-		containers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+		containersResult, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 			All:     true,
 			Filters: filterArgs,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to list compose containers: %w", err)
 		}
+		containers = containersResult.Items
 
 		// If no containers found with exact project name, try lowercase version (Docker Compose normalization)
 		if len(containers) == 0 {
 			logger.Info("[DeploymentManager] No containers found with project name %s, trying lowercase version", projectName)
-			filterArgsLower := filters.NewArgs()
+			filterArgsLower := make(client.Filters)
 			filterArgsLower.Add("label", fmt.Sprintf("com.docker.compose.project=%s", strings.ToLower(projectName)))
 
-			containers, err = dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+			containersResult, err = dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 				All:     true,
 				Filters: filterArgsLower,
 			})
+			if err == nil {
+				containers = containersResult.Items
+			}
 			if err != nil {
 				logger.Info("[DeploymentManager] Failed to list containers with lowercase project name: %v", err)
 			}
@@ -424,16 +429,16 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 	// Also try listing all containers with compose labels and filter manually (fallback)
 	if len(containers) == 0 {
 		logger.Info("[DeploymentManager] Still no containers found, listing all containers with compose labels")
-		allFilterArgs := filters.NewArgs()
+		allFilterArgs := make(client.Filters)
 		allFilterArgs.Add("label", "com.docker.compose.project")
 
-		allContainers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+		allContainersResult, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 			All:     true,
 			Filters: allFilterArgs,
 		})
 		if err == nil {
 			// Filter manually by checking labels
-			for _, cnt := range allContainers {
+			for _, cnt := range allContainersResult.Items {
 				if projectLabel := cnt.Labels["com.docker.compose.project"]; projectLabel == projectName || projectLabel == strings.ToLower(projectName) {
 					containers = append(containers, cnt)
 					logger.Info("[DeploymentManager] Found container %s with project label: %s", cnt.ID[:12], projectLabel)
@@ -447,10 +452,10 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 			"This might indicate the compose file failed to create containers. Checking all containers...", projectName, deploymentID)
 
 		// Last resort: list all containers to see what exists
-		allContainers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{All: true})
+		allContainersResult, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{All: true})
 		if err == nil {
-			logger.Info("[DeploymentManager] Total containers on system: %d", len(allContainers))
-			for i, cnt := range allContainers {
+			logger.Info("[DeploymentManager] Total containers on system: %d", len(allContainersResult.Items))
+			for i, cnt := range allContainersResult.Items {
 				if i < 5 { // Log first 5 containers for debugging
 					projectLabel := cnt.Labels["com.docker.compose.project"]
 					logger.Info("[DeploymentManager] Container %s: compose project label = '%s'", cnt.ID[:12], projectLabel)
@@ -469,11 +474,12 @@ func (dm *DeploymentManager) registerComposeContainers(ctx context.Context, depl
 	var runningCount int
 	for _, cnt := range containers {
 		// Verify container is actually running by inspecting it
-		containerInfo, err := dm.dockerClient.ContainerInspect(ctx, cnt.ID)
+		containerInfoResult, err := dm.dockerClient.ContainerInspect(ctx, cnt.ID, client.ContainerInspectOptions{})
 		if err != nil {
 			logger.Warn("[DeploymentManager] Failed to inspect container %s: %v", cnt.ID[:12], err)
 			continue
 		}
+		containerInfo := containerInfoResult.Container
 
 		// Determine actual container status
 		containerStatus := "stopped"
@@ -628,13 +634,14 @@ func (dm *DeploymentManager) StopComposeDeployment(ctx context.Context, deployme
 
 // stopComposeContainersByLabel stops containers by compose project label (fallback method)
 func (dm *DeploymentManager) stopComposeContainersByLabel(ctx context.Context, projectName string) error {
-	filterArgs := filters.NewArgs()
+	filterArgs := make(client.Filters)
 	filterArgs.Add("label", fmt.Sprintf("com.docker.compose.project=%s", projectName))
 
-	containers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+	containersResult, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
 		Filters: filterArgs,
 	})
+	containers := containersResult.Items
 	if err != nil {
 		return fmt.Errorf("failed to list compose containers: %w", err)
 	}
@@ -663,13 +670,14 @@ func (dm *DeploymentManager) RemoveComposeDeployment(ctx context.Context, deploy
 	projectName := fmt.Sprintf("deploy-%s", deploymentID)
 
 	// Find containers by project label
-	filterArgs := filters.NewArgs()
+	filterArgs := make(client.Filters)
 	filterArgs.Add("label", fmt.Sprintf("com.docker.compose.project=%s", projectName))
 
-	containers, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+	containersResult, err := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
 		Filters: filterArgs,
 	})
+	containers := containersResult.Items
 	if err != nil {
 		return fmt.Errorf("failed to list compose containers: %w", err)
 	}

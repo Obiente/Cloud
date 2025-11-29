@@ -66,10 +66,11 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 	}
 
 	// Get node info
-	info, err := cli.Info(context.Background())
+	infoResult, err := cli.Info(context.Background(), client.InfoOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Docker info: %w", err)
 	}
+	info := infoResult.Info
 
 	helper, err := docker.New()
 	if err != nil {
@@ -81,8 +82,9 @@ func NewDeploymentManager(strategy string, maxDeploymentsPerNode int) (*Deployme
 	var nodeID string
 	if utils.IsSwarmModeEnabled() {
 		// Swarm mode enabled - use Swarm node ID if available
-		nodeID = info.Swarm.NodeID
-		if nodeID == "" {
+		if info.Swarm.NodeID != "" {
+			nodeID = info.Swarm.NodeID
+		} else {
 			// Swarm enabled but not in Swarm - use synthetic ID
 			nodeID = "local-" + info.Name
 		}

@@ -19,7 +19,6 @@ import (
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/events"
-	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/client"
 )
 
@@ -63,7 +62,7 @@ func (c *Client) StartContainer(ctx context.Context, containerID string) error {
 		return ErrUninitialized
 	}
 
-	if err := c.api.ContainerStart(ctx, containerID, client.ContainerStartOptions{}); err != nil {
+	if _, err := c.api.ContainerStart(ctx, containerID, client.ContainerStartOptions{}); err != nil {
 		return fmt.Errorf("docker: start container %s: %w", containerID, err)
 	}
 
@@ -83,7 +82,7 @@ func (c *Client) StopContainer(ctx context.Context, containerID string, timeout 
 		timeoutSeconds = &secs
 	}
 
-	if err := c.api.ContainerStop(ctx, containerID, client.ContainerStopOptions{Timeout: timeoutSeconds}); err != nil {
+	if _, err := c.api.ContainerStop(ctx, containerID, client.ContainerStopOptions{Timeout: timeoutSeconds}); err != nil {
 		return fmt.Errorf("docker: stop container %s: %w", containerID, err)
 	}
 
@@ -98,7 +97,7 @@ func (c *Client) RemoveContainer(ctx context.Context, containerID string, force 
 	if c == nil || c.api == nil {
 		return ErrUninitialized
 	}
-	if err := c.api.ContainerRemove(ctx, containerID, client.ContainerRemoveOptions{Force: force}); err != nil {
+	if _, err := c.api.ContainerRemove(ctx, containerID, client.ContainerRemoveOptions{Force: force}); err != nil {
 		return fmt.Errorf("docker: remove container %s: %w", containerID, err)
 	}
 	return nil
@@ -114,7 +113,7 @@ func (c *Client) RestartContainer(ctx context.Context, containerID string, timeo
 		secs := int(timeout.Round(time.Second) / time.Second)
 		timeoutSeconds = &secs
 	}
-	if err := c.api.ContainerRestart(ctx, containerID, client.ContainerStopOptions{Timeout: timeoutSeconds}); err != nil {
+	if _, err := c.api.ContainerRestart(ctx, containerID, client.ContainerRestartOptions{Timeout: timeoutSeconds}); err != nil {
 		return fmt.Errorf("docker: restart container %s: %w", containerID, err)
 	}
 	return nil
@@ -165,25 +164,24 @@ func (c *Client) ContainerExec(ctx context.Context, containerID string, cols, ro
 
 	// Create exec configuration for interactive TTY session
 	// Use interactive shell (-i) to ensure prompt is shown
-	execConfig := container.ExecOptions{
+	execConfig := client.ExecCreateOptions{
 		Cmd:          []string{"/bin/sh", "-i"}, // Interactive shell to show prompt
 		AttachStdin:  true,
 		AttachStdout: true,
 		AttachStderr: true,
-		Tty:          true,
+		TTY:          true,
 		Env:          []string{"TERM=xterm-256color"},
 	}
 
 	// Create exec instance
-	execIDResp, err := c.api.ContainerExecCreate(ctx, containerID, execConfig)
+	execIDResp, err := c.api.ExecCreate(ctx, containerID, execConfig)
 	if err != nil {
 		return nil, fmt.Errorf("create exec: %w", err)
 	}
 
 	// Attach to exec with TTY support
-	attachResp, err := c.api.ContainerExecAttach(ctx, execIDResp.ID, container.ExecAttachOptions{
-		Detach: false,
-		Tty:    true,
+	attachResp, err := c.api.ExecAttach(ctx, execIDResp.ID, client.ExecAttachOptions{
+		TTY: true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("attach exec: %w", err)
@@ -193,9 +191,9 @@ func (c *Client) ContainerExec(ctx context.Context, containerID string, cols, ro
 	// - Write to Conn to send input to the container
 	// - Read from Conn to receive output from the container (raw, no headers in TTY mode)
 	// Start the exec instance - this makes the connection active
-	if err := c.api.ContainerExecStart(ctx, execIDResp.ID, container.ExecStartOptions{
+	if _, err := c.api.ExecStart(ctx, execIDResp.ID, client.ExecStartOptions{
 		Detach: false,
-		Tty:    true,
+		TTY:    true,
 	}); err != nil {
 		attachResp.Close()
 		return nil, fmt.Errorf("start exec: %w", err)
@@ -302,20 +300,20 @@ func (c *Client) ContainerExecRun(ctx context.Context, containerID string, cmd [
 	}
 
 	// Create exec configuration
-	execConfig := container.ExecOptions{
+	execConfig := client.ExecCreateOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
 		AttachStderr: true,
 	}
 
 	// Create exec instance
-	execIDResp, err := c.api.ContainerExecCreate(ctx, containerID, execConfig)
+	execIDResp, err := c.api.ExecCreate(ctx, containerID, execConfig)
 	if err != nil {
 		return "", fmt.Errorf("create exec: %w", err)
 	}
 
 	// Attach to exec to get output
-	attachResp, err := c.api.ContainerExecAttach(ctx, execIDResp.ID, container.ExecAttachOptions{})
+	attachResp, err := c.api.ExecAttach(ctx, execIDResp.ID, client.ExecAttachOptions{})
 	if err != nil {
 		return "", fmt.Errorf("attach exec: %w", err)
 	}
@@ -381,8 +379,7 @@ func (c *Client) ContainerExecRun(ctx context.Context, containerID string, cmd [
 	}()
 
 	// Start the exec
-	err = c.api.ContainerExecStart(ctx, execIDResp.ID, container.ExecStartOptions{})
-	if err != nil {
+	if _, err := c.api.ExecStart(ctx, execIDResp.ID, client.ExecStartOptions{Detach: false}); err != nil {
 		attachResp.Close()
 		return "", fmt.Errorf("start exec: %w", err)
 	}
@@ -392,7 +389,7 @@ func (c *Client) ContainerExecRun(ctx context.Context, containerID string, cmd [
 		return "", fmt.Errorf("read output: %w", err)
 	}
 
-	inspect, err := c.api.ContainerExecInspect(ctx, execIDResp.ID)
+	inspect, err := c.api.ExecInspect(ctx, execIDResp.ID, client.ExecInspectOptions{})
 	if err != nil {
 		return "", fmt.Errorf("inspect exec: %w", err)
 	}
@@ -411,12 +408,12 @@ func (c *Client) ContainerExecRun(ctx context.Context, containerID string, cmd [
 // If container is stopped, it temporarily starts it, performs the operation, then stops it again
 func (c *Client) ContainerListFiles(ctx context.Context, containerID, path string) ([]FileInfo, error) {
 	// Check if container is running
-	containerInfo, err := c.api.ContainerInspect(ctx, containerID)
+	containerInfo, err := c.api.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("inspect container: %w", err)
 	}
 
-	wasRunning := containerInfo.State.Running
+	wasRunning := containerInfo.Container.State.Running
 	wasStarted := false
 
 	// If stopped, temporarily start it
@@ -495,12 +492,12 @@ func (c *Client) ContainerReadFile(ctx context.Context, containerID, filePath st
 	}
 	
 	// Check if container is running
-	containerInfo, err := c.api.ContainerInspect(ctx, containerID)
+	containerInfo, err := c.api.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("inspect container: %w", err)
 	}
 
-	wasRunning := containerInfo.State.Running
+	wasRunning := containerInfo.Container.State.Running
 	wasStarted := false
 
 	// If stopped, temporarily start it
@@ -561,7 +558,11 @@ func (c *Client) ContainerInspect(ctx context.Context, containerID string) (cont
 		return container.InspectResponse{}, ErrUninitialized
 	}
 	
-	return c.api.ContainerInspect(ctx, containerID)
+	result, err := c.api.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
+	if err != nil {
+		return container.InspectResponse{}, err
+	}
+	return result.Container, nil
 }
 
 // ContainerResize resizes the TTY for a container
@@ -571,10 +572,11 @@ func (c *Client) ContainerResize(ctx context.Context, containerID string, height
 		return ErrUninitialized
 	}
 	
-	return c.api.ContainerResize(ctx, containerID, client.ContainerResizeOptions{
+	_, err := c.api.ContainerResize(ctx, containerID, client.ContainerResizeOptions{
 		Height: uint(height),
 		Width:  uint(width),
 	})
+	return err
 }
 
 // ContainerUploadFiles uploads files to a container directory using Docker Copy API
@@ -610,7 +612,10 @@ func (c *Client) ContainerUploadFiles(ctx context.Context, containerID, destPath
 		return fmt.Errorf("close tar writer: %w", err)
 	}
 
-	if err := c.api.CopyToContainer(ctx, containerID, destPath, &buf, client.CopyToContainerOptions{}); err != nil {
+	if _, err := c.api.CopyToContainer(ctx, containerID, client.CopyToContainerOptions{
+		DestinationPath: destPath,
+		Content:         &buf,
+	}); err != nil {
 		return fmt.Errorf("copy to container: %w", err)
 	}
 
@@ -702,7 +707,11 @@ func (c *Client) ContainerWriteFile(ctx context.Context, containerID, filePath s
 	if err := tarWriter.Close(); err != nil {
 		return fmt.Errorf("close tar writer: %w", err)
 	}
-	if err := c.api.CopyToContainer(ctx, containerID, destDir, &buf, client.CopyToContainerOptions{AllowOverwriteDirWithFile: true}); err != nil {
+	if _, err := c.api.CopyToContainer(ctx, containerID, client.CopyToContainerOptions{
+		DestinationPath:           destDir,
+		Content:                   &buf,
+		AllowOverwriteDirWithFile: true,
+	}); err != nil {
 		return fmt.Errorf("copy to container: %w", err)
 	}
 	return nil
@@ -957,15 +966,15 @@ func permissionsToMode(perms string) uint32 {
 
 // GetContainerVolumes returns information about persistent volumes mounted in the container
 func (c *Client) GetContainerVolumes(ctx context.Context, containerID string) ([]VolumeMount, error) {
-	containerInfo, err := c.api.ContainerInspect(ctx, containerID)
+	containerInfo, err := c.api.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("inspect container: %w", err)
 	}
 
 	var volumes []VolumeMount
-	log.Printf("[GetContainerVolumes] Inspecting container %s, found %d mounts", containerID, len(containerInfo.Mounts))
+	log.Printf("[GetContainerVolumes] Inspecting container %s, found %d mounts", containerID, len(containerInfo.Container.Mounts))
 	
-	for i, mount := range containerInfo.Mounts {
+	for i, mount := range containerInfo.Container.Mounts {
 		log.Printf("[GetContainerVolumes] Mount %d: Type=%s, Name=%s, Source=%s, Destination=%s", i, mount.Type, mount.Name, mount.Source, mount.Destination)
 		
 		// Include Docker volumes (Type="volume") and Obiente Cloud bind mounts
@@ -1290,12 +1299,12 @@ func (c *Client) SearchVolumeFiles(volumePath, rootPath, query string, maxResult
 // SearchContainerFiles recursively searches for files matching the query in a container
 func (c *Client) SearchContainerFiles(ctx context.Context, containerID, rootPath, query string, maxResults int, filesOnly, directoriesOnly bool) ([]FileInfo, error) {
 	// Check if container is running
-	containerInfo, err := c.api.ContainerInspect(ctx, containerID)
+	containerInfo, err := c.api.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("inspect container: %w", err)
 	}
 
-	wasRunning := containerInfo.State.Running
+	wasRunning := containerInfo.Container.State.Running
 	wasStarted := false
 
 	// If stopped, temporarily start it
@@ -1535,19 +1544,21 @@ func (c *Client) Events(ctx context.Context, filterMap map[string][]string) (<-c
 	}
 
 	// Build event options
-	// Convert map[string][]string to filters.Args
-	filterArgs := filters.NewArgs()
+	// Convert map[string][]string to client.Filters
+	filterArgs := make(client.Filters)
 	for key, values := range filterMap {
 		for _, value := range values {
 			filterArgs.Add(key, value)
 		}
 	}
 	
-	eventChan, errChan := c.api.Events(ctx, client.EventsListOptions{
+	eventsResult := c.api.Events(ctx, client.EventsListOptions{
 		Since:   "",
 		Until:   "",
 		Filters: filterArgs,
 	})
+	eventChan := eventsResult.Messages
+	errChan := eventsResult.Err
 
 	// Return cleanup function
 	cleanup := func() {

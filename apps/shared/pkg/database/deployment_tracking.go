@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/client"
 	"gorm.io/gorm"
 
@@ -323,7 +322,7 @@ func ValidateAndRefreshLocations(deploymentID string) ([]DeploymentLocation, err
 	var validLocations []DeploymentLocation
 	for _, loc := range locations {
 		// Try to inspect the container to verify it exists
-		_, err := mobyClient.ContainerInspect(context.Background(), loc.ContainerID)
+		_, err := mobyClient.ContainerInspect(context.Background(), loc.ContainerID, client.ContainerInspectOptions{})
 		if err != nil {
 			// Container doesn't exist on this node
 			// In Swarm mode, container might be on a different node, so be conservative
@@ -344,23 +343,24 @@ func ValidateAndRefreshLocations(deploymentID string) ([]DeploymentLocation, err
 		logger.Info("[ValidateAndRefreshLocations] All containers were stale, attempting to discover actual containers for deployment %s", deploymentID)
 
 		// Look for containers with deployment label using moby filters
-		filterArgs := filters.NewArgs()
+		filterArgs := make(client.Filters)
 		filterArgs.Add("label", fmt.Sprintf("cloud.obiente.deployment_id=%s", deploymentID))
 
-		containers, listErr := mobyClient.ContainerList(context.Background(), client.ContainerListOptions{
+		containersResult, listErr := mobyClient.ContainerList(context.Background(), client.ContainerListOptions{
 			All:     true,
 			Filters: filterArgs,
 		})
 
-		if listErr == nil && len(containers) > 0 {
-			logger.Info("[ValidateAndRefreshLocations] Found %d actual containers for deployment %s", len(containers), deploymentID)
+		if listErr == nil && len(containersResult.Items) > 0 {
+			logger.Info("[ValidateAndRefreshLocations] Found %d actual containers for deployment %s", len(containersResult.Items), deploymentID)
 			// Register the actual containers
-			for _, c := range containers {
+			for _, c := range containersResult.Items {
 				// Get container details to extract full info
-				info, infoErr := mobyClient.ContainerInspect(context.Background(), c.ID)
+				infoResult, infoErr := mobyClient.ContainerInspect(context.Background(), c.ID, client.ContainerInspectOptions{})
 				if infoErr != nil {
 					continue
 				}
+				info := infoResult.Container
 
 				// Extract deployment ID from labels
 				var containerDeploymentID string
@@ -390,7 +390,7 @@ func ValidateAndRefreshLocations(deploymentID string) ([]DeploymentLocation, err
 					NodeID:       nodeID,
 					NodeHostname: nodeHostname,
 					ContainerID:  c.ID,
-					Status:       c.State,
+					Status:       string(c.State),
 					Domain:       domain,
 				}
 

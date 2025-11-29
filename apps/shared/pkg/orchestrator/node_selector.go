@@ -14,7 +14,6 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/utils"
 
 	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/client"
 )
 
@@ -147,18 +146,20 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 	if !utils.IsSwarmModeEnabled() {
 		// Swarm explicitly disabled - treat as non-swarm mode
 		log.Printf("[NodeSelector] Swarm features disabled via ENABLE_SWARM=false, registering local Docker daemon as node")
-		info, err := ns.dockerClient.Info(ctx)
+		infoResult, err := ns.dockerClient.Info(ctx, client.InfoOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to get Docker info: %w", err)
 		}
+		info := infoResult.Info
 		return ns.registerLocalNode(ctx, info)
 	}
 
 	// Get Docker info to check if Swarm is enabled
-	info, err := ns.dockerClient.Info(ctx)
+	infoResult, err := ns.dockerClient.Info(ctx, client.InfoOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to get Docker info: %w", err)
 	}
+	info := infoResult.Info
 
 	// If Swarm is enabled, sync from Swarm nodes (but only if we're a manager)
 	if info.Swarm.NodeID != "" {
@@ -169,7 +170,7 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 			// Fall through to register local node
 		} else {
 			// We're a manager - can list all nodes
-			nodes, err := ns.dockerClient.NodeList(ctx, client.NodeListOptions{})
+			nodesResult, err := ns.dockerClient.NodeList(ctx, client.NodeListOptions{})
 			if err != nil {
 				// If NodeList fails (e.g., permission denied), fall back to local node
 				if strings.Contains(err.Error(), "swarm manager") || strings.Contains(err.Error(), "not a swarm manager") {
@@ -180,10 +181,17 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 				}
 			} else {
 				// Successfully got nodes - sync them
-				for _, node := range nodes {
+				for _, node := range nodesResult.Items {
 					// Get node info
-					nodeInfo, _, err := ns.dockerClient.NodeInspectWithRaw(ctx, node.ID)
+					nodeInfoResult, err := ns.dockerClient.NodeInspect(ctx, node.ID, client.NodeInspectOptions{})
+				if err != nil {
+					continue
+				}
+				nodeInfo := nodeInfoResult.Node
 					if err != nil {
+				if err != nil {
+					continue
+				}
 						continue
 					}
 
@@ -325,9 +333,10 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 	if swarmNodeID != "" && utils.IsSwarmModeEnabled() {
 		// Try to get node info from Swarm to get actual role/availability
 		// This works even on worker nodes if they can query their own info
-		nodeInfo, _, err := ns.dockerClient.NodeInspectWithRaw(ctx, swarmNodeID)
+		nodeInfoResult, err := ns.dockerClient.NodeInspect(ctx, swarmNodeID, client.NodeInspectOptions{})
 		if err == nil {
 			// Successfully got node info - use actual values
+			nodeInfo := nodeInfoResult.Node
 			role = string(nodeInfo.Spec.Role)
 			availability = string(nodeInfo.Spec.Availability)
 			status = string(nodeInfo.Status.State)
@@ -473,41 +482,48 @@ func (ns *NodeSelector) registerLocalNode(ctx context.Context, info interface{})
 func (ns *NodeSelector) calculateNodeResourceUsage(ctx context.Context, nodeID string, totalCPU int) (float64, int64) {
 	// Get all containers on this node
 	var containers []container.Summary
-	var err error
+	// err will be used below
 
 	// For Swarm nodes, try filtering by node ID label first
 	if !strings.HasPrefix(nodeID, "local-") {
-		filterArgs := filters.NewArgs()
+		filterArgs := make(client.Filters)
 		filterArgs.Add("label", fmt.Sprintf("com.docker.swarm.node.id=%s", nodeID))
 		filterArgs.Add("status", "running")
 
-		containers, err = ns.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+		containersResult, err := ns.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 			Filters: filterArgs,
 		})
 		if err != nil {
 			log.Printf("[NodeSelector] Failed to list containers for node %s: %v", nodeID, err)
 			return 0.0, 0
 		}
+		containers = containersResult.Items
 
 		// If no containers found with Swarm label, fall back to all running containers
 		// This handles cases where containers are from compose deployments on a Swarm node
 		if len(containers) == 0 {
 			log.Printf("[NodeSelector] No containers found with Swarm node ID label for %s, trying all running containers", nodeID)
-			containers, err = ns.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+			containersResult, err = ns.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 				All:     false,
-				Filters: filters.NewArgs(filters.Arg("status", "running")),
+				Filters: func() client.Filters { f := make(client.Filters); f.Add("status", "running"); return f }(),
 			})
 			if err != nil {
 				log.Printf("[NodeSelector] Failed to list all running containers: %v", err)
 				return 0.0, 0
 			}
+			containers = containersResult.Items
 		}
 	} else {
 		// For local nodes (explicitly local- prefix), get all running containers (we're on the local node)
-		containers, err = ns.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+		containersResult, err := ns.dockerClient.ContainerList(ctx, client.ContainerListOptions{
 			All:     false,
-			Filters: filters.NewArgs(filters.Arg("status", "running")),
+			Filters: func() client.Filters { f := make(client.Filters); f.Add("status", "running"); return f }(),
 		})
+		if err != nil {
+			log.Printf("[NodeSelector] Failed to list all running containers: %v", err)
+			return 0.0, 0
+		}
+		containers = containersResult.Items
 		if err != nil {
 			log.Printf("[NodeSelector] Failed to list containers for local node: %v", err)
 			return 0.0, 0
@@ -529,7 +545,7 @@ func (ns *NodeSelector) calculateNodeResourceUsage(ctx context.Context, nodeID s
 		// Get container stats with a timeout to prevent hanging
 		// Use a shorter timeout for stats (they should be quick)
 		statsCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		stats, err := ns.dockerClient.ContainerStats(statsCtx, container.ID, false)
+		stats, err := ns.dockerClient.ContainerStats(statsCtx, container.ID, client.ContainerStatsOptions{Stream: false})
 		if err != nil {
 			cancel()
 			// Ignore context canceled errors - they're not critical for resource calculation
