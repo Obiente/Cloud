@@ -347,6 +347,8 @@ func (s *Service) ListDNSRecords(ctx context.Context, req *connect.Request[super
 // listDeploymentDNSRecords lists DNS A records for deployments
 func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.ListDNSRecordsRequest], nodeIPMap map[string][]string, now time.Time) ([]*superadminv1.DNSRecord, error) {
 	// Build query
+	// Match DNS service logic: include all non-stopped statuses (running, starting, restarting, created, etc.)
+	// This ensures the dashboard shows deployments that are active, even if not fully "running" yet
 	query := database.DB.Table("deployments d").
 		Select(`
 			d.id as deployment_id,
@@ -356,7 +358,7 @@ func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.Lis
 			dl.node_id,
 			nm.region
 		`).
-		Joins("LEFT JOIN deployment_locations dl ON dl.deployment_id = d.id AND dl.status = 'running'").
+		Joins("LEFT JOIN deployment_locations dl ON dl.deployment_id = d.id AND dl.status NOT IN ('stopped', 'exited', 'dead', 'removing')").
 		Joins("LEFT JOIN node_metadata nm ON nm.id = dl.node_id")
 
 	// Apply filters
@@ -461,6 +463,7 @@ func (s *Service) listDeploymentDNSRecords(req *connect.Request[superadminv1.Lis
 // listGameServerDNSRecords lists DNS SRV records for game servers
 func (s *Service) listGameServerDNSRecords(req *connect.Request[superadminv1.ListDNSRecordsRequest], now time.Time) ([]*superadminv1.DNSRecord, error) {
 	// Build query for game servers
+	// Match DNS service logic: include all non-stopped statuses (running, starting, restarting, created, etc.)
 	query := database.DB.Table("game_servers gs").
 		Select(`
 			gs.id as game_server_id,
@@ -473,7 +476,7 @@ func (s *Service) listGameServerDNSRecords(req *connect.Request[superadminv1.Lis
 			gsl.node_ip,
 			nm.region
 		`).
-		Joins("LEFT JOIN game_server_locations gsl ON gsl.game_server_id = gs.id AND gsl.status = 'running'").
+		Joins("LEFT JOIN game_server_locations gsl ON gsl.game_server_id = gs.id AND gsl.status NOT IN ('stopped', 'exited', 'dead', 'removing')").
 		Joins("LEFT JOIN node_metadata nm ON nm.id = gsl.node_id")
 
 	// Apply filters
@@ -3350,8 +3353,7 @@ func (s *Service) SuperadminResizeVPS(ctx context.Context, req *connect.Request[
 
 		// If cloud-init should be applied, update it to grow the filesystem
 		if applyCloudInit {
-			// Use VPS config service to load existing config
-			// Create a minimal ConfigService instance (VPSManager not needed for these operations)
+			// Load existing cloud-init config
 			configService := vpsservice.NewConfigService(nil)
 			cloudInitConfig, err := configService.LoadCloudInitConfig(ctx, &vps)
 			if err != nil {
@@ -3388,7 +3390,7 @@ func (s *Service) SuperadminResizeVPS(ctx context.Context, req *connect.Request[
 				cloudInitConfig.Runcmd = append([]string{resizeFsCmd}, cloudInitConfig.Runcmd...)
 			}
 
-			// Save cloud-init config using ConfigService
+			// Save cloud-init config
 			if err := configService.SaveCloudInitConfig(ctx, &vps, cloudInitConfig); err != nil {
 				logger.Warn("[SuperAdmin] Failed to update cloud-init config: %v", err)
 			} else {
@@ -3580,8 +3582,7 @@ func (s *Service) SuperadminUpdateVPSCloudInit(ctx context.Context, req *connect
 	// Convert proto to orchestrator format
 	cloudInitConfig := protoToCloudInitConfigForSuperadmin(cloudInitProto)
 
-	// Use VPS config service to save cloud-init config
-	// Create a minimal ConfigService instance (VPSManager not needed for these operations)
+	// Save cloud-init config
 	configService := vpsservice.NewConfigService(nil)
 	if err := configService.SaveCloudInitConfig(ctx, &vps, cloudInitConfig); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to update cloud-init config: %w", err))
