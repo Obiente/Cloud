@@ -18,8 +18,8 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/docker"
 
-	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
+	gameserversv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/proto"
@@ -45,6 +45,25 @@ func (s *Service) findContainerForGameServer(ctx context.Context, gameServerID s
 	}
 
 	return *gameServer.ContainerID, nil
+}
+
+// handleContainerError checks if an error is related to container state and returns an appropriate error
+func handleContainerError(err error, useVolumeHint bool) error {
+	if err == nil {
+		return nil
+	}
+	errStr := err.Error()
+
+	if strings.Contains(errStr, "container is restarting") ||
+		strings.Contains(errStr, "is restarting, wait until the container is running") {
+		hint := "please wait and try again"
+		if useVolumeHint {
+			hint += ". Use volume_name parameter to access persistent volumes (volumes are accessible even when containers are restarting)"
+		}
+		return fmt.Errorf("container is restarting, %s", hint)
+	}
+
+	return err
 }
 
 // ListGameServerFiles lists files in a game server container or volume
@@ -186,6 +205,10 @@ func (s *Service) ListGameServerFiles(ctx context.Context, req *connect.Request[
 	// Try to list files - ContainerListFiles will handle stopped containers by temporarily starting them
 	fileInfos, err := dcli.ContainerListFiles(ctx, containerID, path)
 	if err != nil {
+		if restartErr := handleContainerError(err, true); restartErr != nil && restartErr != err {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, restartErr)
+		}
+
 		errStr := err.Error()
 		if strings.Contains(errStr, "container is stopped") ||
 			strings.Contains(errStr, "cannot be started automatically") ||
@@ -324,9 +347,9 @@ func (s *Service) SearchGameServerFiles(ctx context.Context, req *connect.Reques
 	hasMore := len(fileInfos) >= maxResults
 
 	resp := &gameserversv1.SearchGameServerFilesResponse{
-		Results:         files,
-		TotalFound:      int32(len(files)),
-		HasMore:         hasMore,
+		Results:          files,
+		TotalFound:       int32(len(files)),
+		HasMore:          hasMore,
 		ContainerRunning: isRunning,
 	}
 
@@ -446,6 +469,9 @@ func (s *Service) GetGameServerFile(ctx context.Context, req *connect.Request[ga
 	// Read file using Docker exec (container must be running)
 	content, err := dcli.ContainerReadFile(ctx, containerID, path)
 	if err != nil {
+		if restartErr := handleContainerError(err, true); restartErr != nil && restartErr != err {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, restartErr)
+		}
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to read file: %w", err))
 	}
 
@@ -780,7 +806,7 @@ func (s *Service) ExtractGameServerFile(ctx context.Context, req *connect.Reques
 	}
 
 	return connect.NewResponse(&gameserversv1.ExtractGameServerFileResponse{
-		Success:       true,
+		Success:        true,
 		FilesExtracted: int32(len(extractedFiles)),
 	}), nil
 }
@@ -843,7 +869,7 @@ func (s *Service) CreateGameServerFileArchive(ctx context.Context, req *connect.
 	if archiveReq == nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("archive_request is required"))
 	}
-	
+
 	sourcePaths := archiveReq.GetSourcePaths()
 	destPath := archiveReq.GetDestinationPath()
 	includeParentFolder := archiveReq.GetIncludeParentFolder()
@@ -1097,7 +1123,7 @@ func collectFilesFromVolumeDir(volumePath, resolvedPath, sourcePath string, file
 			// Remove the source path prefix to get relative path within the source
 			archivePath := strings.TrimPrefix(relativePath, sourcePath)
 			archivePath = strings.TrimPrefix(archivePath, "/")
-			
+
 			// If includeParentFolder is true, prepend the base name
 			// If false and archivePath is empty, it means this is the root file
 			if includeParentFolder {
@@ -1222,7 +1248,7 @@ func collectFilesFromContainerDir(dcli *docker.Client, ctx context.Context, cont
 			// Remove the root path prefix to get relative path within the source
 			archivePath := strings.TrimPrefix(file.Path, rootPath)
 			archivePath = strings.TrimPrefix(archivePath, "/")
-			
+
 			// If includeParentFolder is true, prepend the base name
 			// If false and archivePath is empty, it means this is the root file
 			if includeParentFolder {
@@ -2041,4 +2067,3 @@ func writeVolumeFile(path string, content []byte, mode os.FileMode, create bool)
 
 	return nil
 }
-

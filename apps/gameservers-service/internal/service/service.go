@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"gameservers-service/internal/catalog/modrinth"
 	"gameservers-service/internal/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -19,6 +20,7 @@ type Service struct {
 	repo              *database.GameServerRepository
 	permissionChecker *auth.PermissionChecker
 	manager           *orchestrator.GameServerManager // Manager created directly in gameservers-service
+	modClient         *modrinth.Client
 }
 
 func NewService(repo *database.GameServerRepository, manager *orchestrator.GameServerManager) *Service {
@@ -26,6 +28,7 @@ func NewService(repo *database.GameServerRepository, manager *orchestrator.GameS
 		repo:              repo,
 		permissionChecker: auth.NewPermissionChecker(),
 		manager:           manager,
+		modClient:         modrinth.NewClient(nil),
 	}
 }
 
@@ -75,4 +78,3 @@ func (s *Service) checkGameServerPermission(ctx context.Context, gameServerID st
 
 	return nil
 }
-
