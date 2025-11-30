@@ -335,14 +335,14 @@ func (os *OrchestratorService) isManagerNode() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	info, err := cli.Info(ctx)
+	info, err := cli.Info(ctx, client.InfoOptions{})
 	if err != nil {
 		logger.Debug("[Orchestrator] Failed to get Docker info to check manager status: %v", err)
 		return false
 	}
 
 	// Check if Swarm is enabled and if this node has control (is a manager)
-	isManager := info.Swarm.ControlAvailable
+	isManager := info.Info.Swarm.ControlAvailable
 	if !isManager {
 		logger.Debug("[Orchestrator] Node is not a Swarm manager (ControlAvailable=false)")
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	shared "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
+	dockerclient "github.com/moby/moby/client"
 )
 
 // Metrics operations for orchestrator service
@@ -1023,7 +1024,7 @@ func (os *OrchestratorService) getContainerStats(containerID string) (*shared.Co
 	defer cancel()
 
 	// Get container stats (stream=false means get one snapshot)
-	statsResp, err := os.serviceRegistry.DockerClient().ContainerStats(ctx, containerID, false)
+	statsResp, err := os.serviceRegistry.DockerClient().ContainerStats(ctx, containerID, dockerclient.ContainerStatsOptions{Stream: false})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get container stats: %w", err)
 	}
