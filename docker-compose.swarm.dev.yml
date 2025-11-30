@@ -59,7 +59,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == manager
+          - node.labels.postgres.enabled == true
       resources:
         limits:
           cpus: "2"
@@ -123,7 +123,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == manager
+          - node.labels.metrics.enabled == true
       resources:
         limits:
           cpus: "2"
@@ -177,7 +177,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.role == manager
+          - node.labels.redis.enabled == true
       resources:
         limits:
           cpus: "1"
