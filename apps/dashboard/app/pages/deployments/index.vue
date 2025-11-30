@@ -129,6 +129,7 @@
           v-for="deployment in filteredDeployments"
           :key="deployment.id"
           :deployment="deployment"
+          :organization-id="organizationId"
           :progress-value="progressValues[deployment.id] ?? 0"
           :progress-phase="progressPhases[deployment.id]"
           @refresh="refreshDeployments"
