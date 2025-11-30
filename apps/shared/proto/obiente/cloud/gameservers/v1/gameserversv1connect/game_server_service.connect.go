@@ -111,6 +111,18 @@ const (
 	// GameServerServiceGetMinecraftPlayerProfileProcedure is the fully-qualified name of the
 	// GameServerService's GetMinecraftPlayerProfile RPC.
 	GameServerServiceGetMinecraftPlayerProfileProcedure = "/obiente.cloud.gameservers.v1.GameServerService/GetMinecraftPlayerProfile"
+	// GameServerServiceListMinecraftProjectsProcedure is the fully-qualified name of the
+	// GameServerService's ListMinecraftProjects RPC.
+	GameServerServiceListMinecraftProjectsProcedure = "/obiente.cloud.gameservers.v1.GameServerService/ListMinecraftProjects"
+	// GameServerServiceGetMinecraftProjectVersionsProcedure is the fully-qualified name of the
+	// GameServerService's GetMinecraftProjectVersions RPC.
+	GameServerServiceGetMinecraftProjectVersionsProcedure = "/obiente.cloud.gameservers.v1.GameServerService/GetMinecraftProjectVersions"
+	// GameServerServiceGetMinecraftProjectProcedure is the fully-qualified name of the
+	// GameServerService's GetMinecraftProject RPC.
+	GameServerServiceGetMinecraftProjectProcedure = "/obiente.cloud.gameservers.v1.GameServerService/GetMinecraftProject"
+	// GameServerServiceInstallMinecraftProjectFileProcedure is the fully-qualified name of the
+	// GameServerService's InstallMinecraftProjectFile RPC.
+	GameServerServiceInstallMinecraftProjectFileProcedure = "/obiente.cloud.gameservers.v1.GameServerService/InstallMinecraftProjectFile"
 )
 
 // GameServerServiceClient is a client for the obiente.cloud.gameservers.v1.GameServerService
@@ -170,6 +182,13 @@ type GameServerServiceClient interface {
 	GetMinecraftPlayerUUID(context.Context, *connect.Request[v1.GetMinecraftPlayerUUIDRequest]) (*connect.Response[v1.GetMinecraftPlayerUUIDResponse], error)
 	// Get player profile (name, UUID) from UUID
 	GetMinecraftPlayerProfile(context.Context, *connect.Request[v1.GetMinecraftPlayerProfileRequest]) (*connect.Response[v1.GetMinecraftPlayerProfileResponse], error)
+	// Minecraft content catalog (Modrinth integration)
+	ListMinecraftProjects(context.Context, *connect.Request[v1.ListMinecraftProjectsRequest]) (*connect.Response[v1.ListMinecraftProjectsResponse], error)
+	// Retrieve available versions/files for a specific project
+	GetMinecraftProjectVersions(context.Context, *connect.Request[v1.GetMinecraftProjectVersionsRequest]) (*connect.Response[v1.GetMinecraftProjectVersionsResponse], error)
+	GetMinecraftProject(context.Context, *connect.Request[v1.GetMinecraftProjectRequest]) (*connect.Response[v1.GetMinecraftProjectResponse], error)
+	// Download and install a Minecraft mod/plugin directly onto the server
+	InstallMinecraftProjectFile(context.Context, *connect.Request[v1.InstallMinecraftProjectFileRequest]) (*connect.Response[v1.InstallMinecraftProjectFileResponse], error)
 }
 
 // NewGameServerServiceClient constructs a client for the
@@ -340,6 +359,30 @@ func NewGameServerServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(gameServerServiceMethods.ByName("GetMinecraftPlayerProfile")),
 			connect.WithClientOptions(opts...),
 		),
+		listMinecraftProjects: connect.NewClient[v1.ListMinecraftProjectsRequest, v1.ListMinecraftProjectsResponse](
+			httpClient,
+			baseURL+GameServerServiceListMinecraftProjectsProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("ListMinecraftProjects")),
+			connect.WithClientOptions(opts...),
+		),
+		getMinecraftProjectVersions: connect.NewClient[v1.GetMinecraftProjectVersionsRequest, v1.GetMinecraftProjectVersionsResponse](
+			httpClient,
+			baseURL+GameServerServiceGetMinecraftProjectVersionsProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("GetMinecraftProjectVersions")),
+			connect.WithClientOptions(opts...),
+		),
+		getMinecraftProject: connect.NewClient[v1.GetMinecraftProjectRequest, v1.GetMinecraftProjectResponse](
+			httpClient,
+			baseURL+GameServerServiceGetMinecraftProjectProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("GetMinecraftProject")),
+			connect.WithClientOptions(opts...),
+		),
+		installMinecraftProjectFile: connect.NewClient[v1.InstallMinecraftProjectFileRequest, v1.InstallMinecraftProjectFileResponse](
+			httpClient,
+			baseURL+GameServerServiceInstallMinecraftProjectFileProcedure,
+			connect.WithSchema(gameServerServiceMethods.ByName("InstallMinecraftProjectFile")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -371,6 +414,10 @@ type gameServerServiceClient struct {
 	createGameServerFileArchive *connect.Client[v1.CreateGameServerFileArchiveRequest, v1.CreateGameServerFileArchiveResponse]
 	getMinecraftPlayerUUID      *connect.Client[v1.GetMinecraftPlayerUUIDRequest, v1.GetMinecraftPlayerUUIDResponse]
 	getMinecraftPlayerProfile   *connect.Client[v1.GetMinecraftPlayerProfileRequest, v1.GetMinecraftPlayerProfileResponse]
+	listMinecraftProjects       *connect.Client[v1.ListMinecraftProjectsRequest, v1.ListMinecraftProjectsResponse]
+	getMinecraftProjectVersions *connect.Client[v1.GetMinecraftProjectVersionsRequest, v1.GetMinecraftProjectVersionsResponse]
+	getMinecraftProject         *connect.Client[v1.GetMinecraftProjectRequest, v1.GetMinecraftProjectResponse]
+	installMinecraftProjectFile *connect.Client[v1.InstallMinecraftProjectFileRequest, v1.InstallMinecraftProjectFileResponse]
 }
 
 // ListGameServers calls obiente.cloud.gameservers.v1.GameServerService.ListGameServers.
@@ -509,6 +556,28 @@ func (c *gameServerServiceClient) GetMinecraftPlayerProfile(ctx context.Context,
 	return c.getMinecraftPlayerProfile.CallUnary(ctx, req)
 }
 
+// ListMinecraftProjects calls obiente.cloud.gameservers.v1.GameServerService.ListMinecraftProjects.
+func (c *gameServerServiceClient) ListMinecraftProjects(ctx context.Context, req *connect.Request[v1.ListMinecraftProjectsRequest]) (*connect.Response[v1.ListMinecraftProjectsResponse], error) {
+	return c.listMinecraftProjects.CallUnary(ctx, req)
+}
+
+// GetMinecraftProjectVersions calls
+// obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProjectVersions.
+func (c *gameServerServiceClient) GetMinecraftProjectVersions(ctx context.Context, req *connect.Request[v1.GetMinecraftProjectVersionsRequest]) (*connect.Response[v1.GetMinecraftProjectVersionsResponse], error) {
+	return c.getMinecraftProjectVersions.CallUnary(ctx, req)
+}
+
+// GetMinecraftProject calls obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProject.
+func (c *gameServerServiceClient) GetMinecraftProject(ctx context.Context, req *connect.Request[v1.GetMinecraftProjectRequest]) (*connect.Response[v1.GetMinecraftProjectResponse], error) {
+	return c.getMinecraftProject.CallUnary(ctx, req)
+}
+
+// InstallMinecraftProjectFile calls
+// obiente.cloud.gameservers.v1.GameServerService.InstallMinecraftProjectFile.
+func (c *gameServerServiceClient) InstallMinecraftProjectFile(ctx context.Context, req *connect.Request[v1.InstallMinecraftProjectFileRequest]) (*connect.Response[v1.InstallMinecraftProjectFileResponse], error) {
+	return c.installMinecraftProjectFile.CallUnary(ctx, req)
+}
+
 // GameServerServiceHandler is an implementation of the
 // obiente.cloud.gameservers.v1.GameServerService service.
 type GameServerServiceHandler interface {
@@ -566,6 +635,13 @@ type GameServerServiceHandler interface {
 	GetMinecraftPlayerUUID(context.Context, *connect.Request[v1.GetMinecraftPlayerUUIDRequest]) (*connect.Response[v1.GetMinecraftPlayerUUIDResponse], error)
 	// Get player profile (name, UUID) from UUID
 	GetMinecraftPlayerProfile(context.Context, *connect.Request[v1.GetMinecraftPlayerProfileRequest]) (*connect.Response[v1.GetMinecraftPlayerProfileResponse], error)
+	// Minecraft content catalog (Modrinth integration)
+	ListMinecraftProjects(context.Context, *connect.Request[v1.ListMinecraftProjectsRequest]) (*connect.Response[v1.ListMinecraftProjectsResponse], error)
+	// Retrieve available versions/files for a specific project
+	GetMinecraftProjectVersions(context.Context, *connect.Request[v1.GetMinecraftProjectVersionsRequest]) (*connect.Response[v1.GetMinecraftProjectVersionsResponse], error)
+	GetMinecraftProject(context.Context, *connect.Request[v1.GetMinecraftProjectRequest]) (*connect.Response[v1.GetMinecraftProjectResponse], error)
+	// Download and install a Minecraft mod/plugin directly onto the server
+	InstallMinecraftProjectFile(context.Context, *connect.Request[v1.InstallMinecraftProjectFileRequest]) (*connect.Response[v1.InstallMinecraftProjectFileResponse], error)
 }
 
 // NewGameServerServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -731,6 +807,30 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 		connect.WithSchema(gameServerServiceMethods.ByName("GetMinecraftPlayerProfile")),
 		connect.WithHandlerOptions(opts...),
 	)
+	gameServerServiceListMinecraftProjectsHandler := connect.NewUnaryHandler(
+		GameServerServiceListMinecraftProjectsProcedure,
+		svc.ListMinecraftProjects,
+		connect.WithSchema(gameServerServiceMethods.ByName("ListMinecraftProjects")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceGetMinecraftProjectVersionsHandler := connect.NewUnaryHandler(
+		GameServerServiceGetMinecraftProjectVersionsProcedure,
+		svc.GetMinecraftProjectVersions,
+		connect.WithSchema(gameServerServiceMethods.ByName("GetMinecraftProjectVersions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceGetMinecraftProjectHandler := connect.NewUnaryHandler(
+		GameServerServiceGetMinecraftProjectProcedure,
+		svc.GetMinecraftProject,
+		connect.WithSchema(gameServerServiceMethods.ByName("GetMinecraftProject")),
+		connect.WithHandlerOptions(opts...),
+	)
+	gameServerServiceInstallMinecraftProjectFileHandler := connect.NewUnaryHandler(
+		GameServerServiceInstallMinecraftProjectFileProcedure,
+		svc.InstallMinecraftProjectFile,
+		connect.WithSchema(gameServerServiceMethods.ByName("InstallMinecraftProjectFile")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.gameservers.v1.GameServerService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case GameServerServiceListGameServersProcedure:
@@ -785,6 +885,14 @@ func NewGameServerServiceHandler(svc GameServerServiceHandler, opts ...connect.H
 			gameServerServiceGetMinecraftPlayerUUIDHandler.ServeHTTP(w, r)
 		case GameServerServiceGetMinecraftPlayerProfileProcedure:
 			gameServerServiceGetMinecraftPlayerProfileHandler.ServeHTTP(w, r)
+		case GameServerServiceListMinecraftProjectsProcedure:
+			gameServerServiceListMinecraftProjectsHandler.ServeHTTP(w, r)
+		case GameServerServiceGetMinecraftProjectVersionsProcedure:
+			gameServerServiceGetMinecraftProjectVersionsHandler.ServeHTTP(w, r)
+		case GameServerServiceGetMinecraftProjectProcedure:
+			gameServerServiceGetMinecraftProjectHandler.ServeHTTP(w, r)
+		case GameServerServiceInstallMinecraftProjectFileProcedure:
+			gameServerServiceInstallMinecraftProjectFileHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -896,4 +1004,20 @@ func (UnimplementedGameServerServiceHandler) GetMinecraftPlayerUUID(context.Cont
 
 func (UnimplementedGameServerServiceHandler) GetMinecraftPlayerProfile(context.Context, *connect.Request[v1.GetMinecraftPlayerProfileRequest]) (*connect.Response[v1.GetMinecraftPlayerProfileResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerProfile is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) ListMinecraftProjects(context.Context, *connect.Request[v1.ListMinecraftProjectsRequest]) (*connect.Response[v1.ListMinecraftProjectsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.ListMinecraftProjects is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) GetMinecraftProjectVersions(context.Context, *connect.Request[v1.GetMinecraftProjectVersionsRequest]) (*connect.Response[v1.GetMinecraftProjectVersionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProjectVersions is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) GetMinecraftProject(context.Context, *connect.Request[v1.GetMinecraftProjectRequest]) (*connect.Response[v1.GetMinecraftProjectResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProject is not implemented"))
+}
+
+func (UnimplementedGameServerServiceHandler) InstallMinecraftProjectFile(context.Context, *connect.Request[v1.InstallMinecraftProjectFileRequest]) (*connect.Response[v1.InstallMinecraftProjectFileResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.gameservers.v1.GameServerService.InstallMinecraftProjectFile is not implemented"))
 }

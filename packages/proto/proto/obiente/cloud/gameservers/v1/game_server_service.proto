@@ -119,6 +119,17 @@ service GameServerService {
   
   // Get player profile (name, UUID) from UUID
   rpc GetMinecraftPlayerProfile(GetMinecraftPlayerProfileRequest) returns (GetMinecraftPlayerProfileResponse);
+
+  // Minecraft content catalog (Modrinth integration)
+  rpc ListMinecraftProjects(ListMinecraftProjectsRequest) returns (ListMinecraftProjectsResponse);
+
+  // Retrieve available versions/files for a specific project
+  rpc GetMinecraftProjectVersions(GetMinecraftProjectVersionsRequest) returns (GetMinecraftProjectVersionsResponse);
+
+  rpc GetMinecraftProject(GetMinecraftProjectRequest) returns (GetMinecraftProjectResponse);
+
+  // Download and install a Minecraft mod/plugin directly onto the server
+  rpc InstallMinecraftProjectFile(InstallMinecraftProjectFileRequest) returns (InstallMinecraftProjectFileResponse);
 }
 
 // Request/Response messages
@@ -562,5 +573,108 @@ message GetMinecraftPlayerProfileResponse {
   optional string uuid = 1; // Player UUID (dashed format)
   optional string name = 2; // Current username
   optional string avatar_url = 3; // Avatar URL (from Crafatar)
+}
+
+// Minecraft catalog messages
+enum MinecraftProjectType {
+  MINECRAFT_PROJECT_TYPE_UNSPECIFIED = 0;
+  MINECRAFT_PROJECT_TYPE_MOD = 1;
+  MINECRAFT_PROJECT_TYPE_PLUGIN = 2;
+}
+
+message MinecraftProject {
+  string id = 1;
+  string slug = 2;
+  string title = 3;
+  string description = 4;
+  MinecraftProjectType project_type = 5;
+  string icon_url = 6;
+  repeated string categories = 7;
+  repeated string loaders = 8;
+  repeated string game_versions = 9;
+  repeated string authors = 10;
+  int64 downloads = 11;
+  double rating = 12;
+  optional string latest_version_id = 13;
+  optional string project_url = 14;
+  optional string source_url = 15;
+  optional string issues_url = 16;
+  optional string body = 17; // Full body/description with markdown
+  repeated string gallery = 18; // Screenshot/image URLs
+}
+
+message ListMinecraftProjectsRequest {
+  string game_server_id = 1;
+  optional string query = 2;
+  repeated string game_versions = 3;
+  repeated string loaders = 4;
+  repeated string categories = 5;
+  optional string cursor = 6;
+  optional int32 limit = 7;
+  MinecraftProjectType project_type = 8;
+}
+
+message ListMinecraftProjectsResponse {
+  repeated MinecraftProject projects = 1;
+  bool has_more = 2;
+  optional string next_cursor = 3;
+}
+
+message MinecraftProjectFile {
+  string filename = 1;
+  string url = 2;
+  int64 size_bytes = 3;
+  map<string, string> hashes = 4;
+  bool primary = 5;
+}
+
+message MinecraftProjectVersion {
+  string id = 1;
+  string name = 2;
+  string version_number = 3;
+  repeated string game_versions = 4;
+  repeated string loaders = 5;
+  bool server_side_supported = 6;
+  bool client_side_supported = 7;
+  optional google.protobuf.Timestamp published_at = 8;
+  optional string changelog = 9;
+  repeated MinecraftProjectFile files = 10;
+}
+
+message GetMinecraftProjectVersionsRequest {
+  string game_server_id = 1;
+  string project_id = 2;
+  repeated string game_versions = 3;
+  repeated string loaders = 4;
+  MinecraftProjectType project_type = 5;
+  optional int32 limit = 6;
+}
+
+message GetMinecraftProjectVersionsResponse {
+  repeated MinecraftProjectVersion versions = 1;
+}
+
+message GetMinecraftProjectRequest {
+  string game_server_id = 1;
+  string project_id = 2;
+}
+
+message GetMinecraftProjectResponse {
+  MinecraftProject project = 1;
+}
+
+message InstallMinecraftProjectFileRequest {
+  string game_server_id = 1;
+  string project_id = 2;
+  string version_id = 3;
+  MinecraftProjectType project_type = 4;
+}
+
+message InstallMinecraftProjectFileResponse {
+  bool success = 1;
+  string filename = 2;
+  string installed_path = 3;
+  bool restart_required = 4;
+  optional string message = 5;
 }
 

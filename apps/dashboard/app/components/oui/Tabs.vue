@@ -1,13 +1,16 @@
 <template>
   <Tabs.Root v-model="modelValue" :defaultValue="defaultValue" class="flex flex-col gap-0">
-    <div v-if="!contentOnly" class="flex items-end gap-0 relative border-b border-border-default mb-0 overflow-hidden min-w-0">
-      <!-- Left scroll button - always reserved space to prevent layout shift -->
-      <div class="w-[2.05rem] h-[2.75rem] flex items-center justify-center shrink-0">
+    <div
+      v-if="!contentOnly"
+      class="flex items-center gap-0 relative border-b border-border-default mb-0 overflow-hidden min-w-0"
+    >
+      <!-- Left scroll button -->
+      <div class="px-1 h-[2.75rem] flex items-center justify-center shrink-0">
         <Transition name="fade-scale">
           <button
             v-show="canScrollLeft"
             type="button"
-            class="inline-flex items-center justify-center w-[2.05rem] h-[2.05rem] rounded-full border border-[rgba(121,99,196,0.26)] bg-[rgba(22,16,44,0.78)] text-text-secondary shadow-[0_6px_16px_rgba(5,2,15,0.42)] transition-all duration-[0.18s] hover:border-[rgba(168,85,247,0.48)] hover:text-text-primary hover:bg-[rgba(40,27,76,0.9)]"
+            class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-muted bg-transparent text-text-secondary transition-colors duration-150 hover:text-text-primary hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40"
             @click="scrollTabs('left')"
             aria-label="Scroll tabs left"
           >
@@ -16,13 +19,13 @@
         </Transition>
       </div>
 
-      <div class="relative flex-1 min-w-0 overflow-hidden flex items-end">
+      <div class="relative flex-1 min-w-0 overflow-hidden flex items-center">
         <ScrollArea.Root class="w-full overflow-hidden group">
           <ScrollArea.Viewport
             ref="scrollViewport"
             class="overflow-x-auto overflow-y-hidden scroll-smooth p-0 overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
           >
-            <Tabs.List class="flex items-end gap-0 min-w-max h-full w-fit" :class="listClass">
+            <Tabs.List :class="['flex items-center gap-1 min-w-max h-full w-fit', listClass]">
               <Tabs.Trigger
                 v-for="tab in tabs"
                 :key="tab.id"
@@ -30,7 +33,7 @@
                 :value="tab.id"
                 :disabled="tab.disabled"
                 :class="[
-                  'relative inline-flex items-center gap-2 py-3 px-4 text-[0.9rem] md:py-[0.55rem] md:px-[1.1rem] md:text-[0.96rem] font-medium text-text-secondary bg-transparent border-none border-b-2 border-b-transparent transition-all duration-200 min-h-[2.75rem] cursor-pointer whitespace-nowrap -mb-px hover:text-text-primary hover:bg-[rgba(255,255,255,0.02)] data-state-active:text-primary data-state-active:border-b-primary data-state-active:bg-transparent data-disabled:opacity-40 data-disabled:cursor-not-allowed data-disabled:hover:text-text-secondary data-disabled:hover:bg-transparent [&::after]:hidden',
+                  'relative inline-flex items-center gap-2 py-2 px-4 text-[0.9rem] font-medium text-text-secondary/80 bg-transparent border border-transparent rounded-lg transition-all duration-150 min-h-[2.75rem] whitespace-nowrap hover:text-text-primary hover:bg-surface-muted/60 data-state-active:text-text-primary data-state-active:bg-surface-muted data-state-active:border-border-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 data-disabled:opacity-40 data-disabled:cursor-not-allowed cursor-pointer',
                   triggerClass,
                   tab.triggerClass,
                 ]"
@@ -57,19 +60,19 @@
               </Tabs.Trigger>
             </Tabs.List>
           </ScrollArea.Viewport>
-          <ScrollArea.Scrollbar orientation="horizontal" class="h-1.5 mt-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
-            <ScrollArea.Thumb class="bg-gradient-to-r from-[rgba(142,88,245,0.45)] to-[rgba(86,122,255,0.45)] rounded-full" />
+          <ScrollArea.Scrollbar orientation="horizontal" class="h-1 mt-1 opacity-0 transition-opacity duration-200 group-hover:opacity-80 group-focus-within:opacity-80">
+            <ScrollArea.Thumb class="bg-border-muted rounded-full" />
           </ScrollArea.Scrollbar>
         </ScrollArea.Root>
       </div>
 
-      <!-- Right scroll button - always reserved space to prevent layout shift -->
-      <div class="w-[2.05rem] h-[2.75rem] flex items-center justify-center shrink-0">
+      <!-- Right scroll button -->
+      <div class="px-1 h-[2.75rem] flex items-center justify-center shrink-0">
         <Transition name="fade-scale">
           <button
             v-show="canScrollRight"
             type="button"
-            class="inline-flex items-center justify-center w-[2.05rem] h-[2.05rem] rounded-full border border-[rgba(121,99,196,0.26)] bg-[rgba(22,16,44,0.78)] text-text-secondary shadow-[0_6px_16px_rgba(5,2,15,0.42)] transition-all duration-[0.18s] hover:border-[rgba(168,85,247,0.48)] hover:text-text-primary hover:bg-[rgba(40,27,76,0.9)]"
+            class="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border-muted bg-transparent text-text-secondary transition-colors duration-150 hover:text-text-primary hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-40"
             @click="scrollTabs('right')"
             aria-label="Scroll tabs right"
           >

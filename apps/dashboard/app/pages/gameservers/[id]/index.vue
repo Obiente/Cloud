@@ -204,9 +204,9 @@
 
         <!-- Tabs -->
         <OuiStack gap="md">
-          <OuiTabs v-model="activeTab" :tabs="tabs" />
+          <OuiTabs v-model="activeTab" :tabs="tabs" :key="`tabs-${tabs.length}-${tabs.map(t => t.id).join('-')}`" />
           <OuiCard variant="default">
-            <OuiTabs v-model="activeTab" :tabs="tabs" :content-only="true">
+            <OuiTabs v-model="activeTab" :tabs="tabs" :content-only="true" :key="`tabs-content-${tabs.length}-${tabs.map(t => t.id).join('-')}`">
               <template #overview>
               <GameServerOverview
                 :game-server="gameServer"
@@ -249,6 +249,13 @@
               </template>
             <template #files>
               <GameServerFiles :game-server-id="gameServerId" />
+            </template>
+            <template #mods>
+              <MinecraftModsBrowser
+                :game-server-id="gameServerId"
+                :server-type="gameServer?.envVars?.TYPE"
+                :server-version="gameServer?.serverVersion"
+              />
             </template>
             <template #eula>
               <MinecraftFileEditor
@@ -634,6 +641,7 @@ import {
   UserGroupIcon,
   UserMinusIcon,
   ShieldCheckIcon,
+  PuzzlePieceIcon,
 } from "@heroicons/vue/24/outline";
 
 import type { TabItem } from "~/components/oui/Tabs.vue";
@@ -651,6 +659,7 @@ const MinecraftEULAEditor = defineAsyncComponent(() => import("~/components/game
 const MinecraftServerPropertiesEditor = defineAsyncComponent(() => import("~/components/gameserver/MinecraftServerPropertiesEditor.vue"));
 const MinecraftUsersEditor = defineAsyncComponent(() => import("~/components/gameserver/MinecraftUsersEditor.vue"));
 const AuditLogs = defineAsyncComponent(() => import("~/components/audit/AuditLogs.vue"));
+const MinecraftModsBrowser = defineAsyncComponent(() => import("~/components/gameserver/MinecraftModsBrowser.vue"));
 import { date } from "@obiente/proto/utils";
 import { useToast } from "~/composables/useToast";
 import { useConnectClient } from "~/lib/connect-client";
@@ -824,6 +833,43 @@ const isMinecraft = computed(() => {
   return false;
 });
 
+const isPluginServer = computed(() => {
+  const serverType = (gameServer.value?.envVars?.TYPE || "").toUpperCase();
+  return ["PAPER", "PURPUR", "SPIGOT", "BUKKIT", "FOLIA", "VELOCITY", "WATERFALL"].includes(serverType);
+});
+
+const isVanillaServer = computed(() => {
+  // If not a Minecraft server, it can't be vanilla
+  if (!isMinecraft.value) {
+    return false;
+  }
+  
+  // If envVars doesn't exist or is empty, treat as vanilla (default for Minecraft)
+  if (!gameServer.value?.envVars || Object.keys(gameServer.value.envVars).length === 0) {
+    return true;
+  }
+  
+  const serverType = (gameServer.value.envVars.TYPE || "").toUpperCase().trim();
+  const isVanilla = serverType === "VANILLA" || serverType === "";
+  
+  // Debug logging (remove after fixing)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[isVanillaServer]', {
+      serverType,
+      envVars: gameServer.value.envVars,
+      isVanilla,
+      hasEnvVars: !!gameServer.value?.envVars,
+      envVarsKeys: gameServer.value?.envVars ? Object.keys(gameServer.value.envVars) : [],
+      gameServer: gameServer.value
+    });
+  }
+  return isVanilla;
+});
+
+const modsPluginsTabLabel = computed(() => {
+  return isPluginServer.value ? "Plugins" : "Mods";
+});
+
 const tabs = computed<TabItem[]>(() => {
   const baseTabs: TabItem[] = [
     { id: "overview", label: "Overview", icon: CubeIcon },
@@ -832,8 +878,24 @@ const tabs = computed<TabItem[]>(() => {
     { id: "files", label: "Files", icon: FolderIcon },
   ];
 
-  // Add Minecraft-specific tabs
+  // Add Minecraft-specific tabs (but not mods/plugins for vanilla servers)
   if (isMinecraft.value) {
+    // Only show mods/plugins tab for non-vanilla servers
+    // Explicitly check isVanillaServer to ensure reactivity
+    const vanilla = isVanillaServer.value;
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[tabs computed]', {
+        isMinecraft: isMinecraft.value,
+        isVanillaServer: vanilla,
+        willShowModsTab: !vanilla,
+        gameServer: gameServer.value
+      });
+    }
+    if (!vanilla) {
+      baseTabs.push(
+        { id: "mods", label: modsPluginsTabLabel.value, icon: PuzzlePieceIcon }
+      );
+    }
     baseTabs.push(
       { id: "server-properties", label: "Server Properties", icon: Cog6ToothIcon },
       { id: "users", label: "Users", icon: UserGroupIcon }
@@ -857,6 +919,22 @@ const tabs = computed<TabItem[]>(() => {
 
 // Use composable for tab query parameter management
 const activeTab = useTabQuery(tabs);
+
+// Watch tabs to ensure we switch away from mods tab if it's removed (e.g., for vanilla servers)
+watch(tabs, (newTabs) => {
+  const tabIds = newTabs.map(t => t.id);
+  if (activeTab.value === "mods" && !tabIds.includes("mods")) {
+    // Mods tab was removed, switch to overview
+    activeTab.value = "overview";
+  }
+}, { immediate: true });
+
+// Also watch gameServer to ensure tabs update when server type changes
+watch(() => gameServer.value?.envVars?.TYPE, () => {
+  // Trigger tabs recomputation by accessing it
+  // The tabs computed will automatically update, and the watch above will handle switching
+  void tabs.value;
+});
 
 // Status metadata helper
 const statusMeta = computed(() => {

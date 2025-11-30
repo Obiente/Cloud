@@ -227,6 +227,56 @@ func (GameServerEntryType) EnumDescriptor() ([]byte, []int) {
 	return file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescGZIP(), []int{2}
 }
 
+// Minecraft catalog messages
+type MinecraftProjectType int32
+
+const (
+	MinecraftProjectType_MINECRAFT_PROJECT_TYPE_UNSPECIFIED MinecraftProjectType = 0
+	MinecraftProjectType_MINECRAFT_PROJECT_TYPE_MOD         MinecraftProjectType = 1
+	MinecraftProjectType_MINECRAFT_PROJECT_TYPE_PLUGIN      MinecraftProjectType = 2
+)
+
+// Enum value maps for MinecraftProjectType.
+var (
+	MinecraftProjectType_name = map[int32]string{
+		0: "MINECRAFT_PROJECT_TYPE_UNSPECIFIED",
+		1: "MINECRAFT_PROJECT_TYPE_MOD",
+		2: "MINECRAFT_PROJECT_TYPE_PLUGIN",
+	}
+	MinecraftProjectType_value = map[string]int32{
+		"MINECRAFT_PROJECT_TYPE_UNSPECIFIED": 0,
+		"MINECRAFT_PROJECT_TYPE_MOD":         1,
+		"MINECRAFT_PROJECT_TYPE_PLUGIN":      2,
+	}
+)
+
+func (x MinecraftProjectType) Enum() *MinecraftProjectType {
+	p := new(MinecraftProjectType)
+	*p = x
+	return p
+}
+
+func (x MinecraftProjectType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (MinecraftProjectType) Descriptor() protoreflect.EnumDescriptor {
+	return file_obiente_cloud_gameservers_v1_game_server_service_proto_enumTypes[3].Descriptor()
+}
+
+func (MinecraftProjectType) Type() protoreflect.EnumType {
+	return &file_obiente_cloud_gameservers_v1_game_server_service_proto_enumTypes[3]
+}
+
+func (x MinecraftProjectType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use MinecraftProjectType.Descriptor instead.
+func (MinecraftProjectType) EnumDescriptor() ([]byte, []int) {
+	return file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescGZIP(), []int{3}
+}
+
 // Request/Response messages
 type ListGameServersRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -4171,6 +4221,906 @@ func (x *GetMinecraftPlayerProfileResponse) GetAvatarUrl() string {
 	return ""
 }
 
+type MinecraftProject struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Slug            string                 `protobuf:"bytes,2,opt,name=slug,proto3" json:"slug,omitempty"`
+	Title           string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	Description     string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	ProjectType     MinecraftProjectType   `protobuf:"varint,5,opt,name=project_type,json=projectType,proto3,enum=obiente.cloud.gameservers.v1.MinecraftProjectType" json:"project_type,omitempty"`
+	IconUrl         string                 `protobuf:"bytes,6,opt,name=icon_url,json=iconUrl,proto3" json:"icon_url,omitempty"`
+	Categories      []string               `protobuf:"bytes,7,rep,name=categories,proto3" json:"categories,omitempty"`
+	Loaders         []string               `protobuf:"bytes,8,rep,name=loaders,proto3" json:"loaders,omitempty"`
+	GameVersions    []string               `protobuf:"bytes,9,rep,name=game_versions,json=gameVersions,proto3" json:"game_versions,omitempty"`
+	Authors         []string               `protobuf:"bytes,10,rep,name=authors,proto3" json:"authors,omitempty"`
+	Downloads       int64                  `protobuf:"varint,11,opt,name=downloads,proto3" json:"downloads,omitempty"`
+	Rating          float64                `protobuf:"fixed64,12,opt,name=rating,proto3" json:"rating,omitempty"`
+	LatestVersionId *string                `protobuf:"bytes,13,opt,name=latest_version_id,json=latestVersionId,proto3,oneof" json:"latest_version_id,omitempty"`
+	ProjectUrl      *string                `protobuf:"bytes,14,opt,name=project_url,json=projectUrl,proto3,oneof" json:"project_url,omitempty"`
+	SourceUrl       *string                `protobuf:"bytes,15,opt,name=source_url,json=sourceUrl,proto3,oneof" json:"source_url,omitempty"`
+	IssuesUrl       *string                `protobuf:"bytes,16,opt,name=issues_url,json=issuesUrl,proto3,oneof" json:"issues_url,omitempty"`
+	Body            *string                `protobuf:"bytes,17,opt,name=body,proto3,oneof" json:"body,omitempty"` // Full body/description with markdown
+	Gallery         []string               `protobuf:"bytes,18,rep,name=gallery,proto3" json:"gallery,omitempty"` // Screenshot/image URLs
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MinecraftProject) Reset() {
+	*x = MinecraftProject{}
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MinecraftProject) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MinecraftProject) ProtoMessage() {}
+
+func (x *MinecraftProject) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MinecraftProject.ProtoReflect.Descriptor instead.
+func (*MinecraftProject) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *MinecraftProject) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *MinecraftProject) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+func (x *MinecraftProject) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *MinecraftProject) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *MinecraftProject) GetProjectType() MinecraftProjectType {
+	if x != nil {
+		return x.ProjectType
+	}
+	return MinecraftProjectType_MINECRAFT_PROJECT_TYPE_UNSPECIFIED
+}
+
+func (x *MinecraftProject) GetIconUrl() string {
+	if x != nil {
+		return x.IconUrl
+	}
+	return ""
+}
+
+func (x *MinecraftProject) GetCategories() []string {
+	if x != nil {
+		return x.Categories
+	}
+	return nil
+}
+
+func (x *MinecraftProject) GetLoaders() []string {
+	if x != nil {
+		return x.Loaders
+	}
+	return nil
+}
+
+func (x *MinecraftProject) GetGameVersions() []string {
+	if x != nil {
+		return x.GameVersions
+	}
+	return nil
+}
+
+func (x *MinecraftProject) GetAuthors() []string {
+	if x != nil {
+		return x.Authors
+	}
+	return nil
+}
+
+func (x *MinecraftProject) GetDownloads() int64 {
+	if x != nil {
+		return x.Downloads
+	}
+	return 0
+}
+
+func (x *MinecraftProject) GetRating() float64 {
+	if x != nil {
+		return x.Rating
+	}
+	return 0
+}
+
+func (x *MinecraftProject) GetLatestVersionId() string {
+	if x != nil && x.LatestVersionId != nil {
+		return *x.LatestVersionId
+	}
+	return ""
+}
+
+func (x *MinecraftProject) GetProjectUrl() string {
+	if x != nil && x.ProjectUrl != nil {
+		return *x.ProjectUrl
+	}
+	return ""
+}
+
+func (x *MinecraftProject) GetSourceUrl() string {
+	if x != nil && x.SourceUrl != nil {
+		return *x.SourceUrl
+	}
+	return ""
+}
+
+func (x *MinecraftProject) GetIssuesUrl() string {
+	if x != nil && x.IssuesUrl != nil {
+		return *x.IssuesUrl
+	}
+	return ""
+}
+
+func (x *MinecraftProject) GetBody() string {
+	if x != nil && x.Body != nil {
+		return *x.Body
+	}
+	return ""
+}
+
+func (x *MinecraftProject) GetGallery() []string {
+	if x != nil {
+		return x.Gallery
+	}
+	return nil
+}
+
+type ListMinecraftProjectsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GameServerId  string                 `protobuf:"bytes,1,opt,name=game_server_id,json=gameServerId,proto3" json:"game_server_id,omitempty"`
+	Query         *string                `protobuf:"bytes,2,opt,name=query,proto3,oneof" json:"query,omitempty"`
+	GameVersions  []string               `protobuf:"bytes,3,rep,name=game_versions,json=gameVersions,proto3" json:"game_versions,omitempty"`
+	Loaders       []string               `protobuf:"bytes,4,rep,name=loaders,proto3" json:"loaders,omitempty"`
+	Categories    []string               `protobuf:"bytes,5,rep,name=categories,proto3" json:"categories,omitempty"`
+	Cursor        *string                `protobuf:"bytes,6,opt,name=cursor,proto3,oneof" json:"cursor,omitempty"`
+	Limit         *int32                 `protobuf:"varint,7,opt,name=limit,proto3,oneof" json:"limit,omitempty"`
+	ProjectType   MinecraftProjectType   `protobuf:"varint,8,opt,name=project_type,json=projectType,proto3,enum=obiente.cloud.gameservers.v1.MinecraftProjectType" json:"project_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMinecraftProjectsRequest) Reset() {
+	*x = ListMinecraftProjectsRequest{}
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMinecraftProjectsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMinecraftProjectsRequest) ProtoMessage() {}
+
+func (x *ListMinecraftProjectsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMinecraftProjectsRequest.ProtoReflect.Descriptor instead.
+func (*ListMinecraftProjectsRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *ListMinecraftProjectsRequest) GetGameServerId() string {
+	if x != nil {
+		return x.GameServerId
+	}
+	return ""
+}
+
+func (x *ListMinecraftProjectsRequest) GetQuery() string {
+	if x != nil && x.Query != nil {
+		return *x.Query
+	}
+	return ""
+}
+
+func (x *ListMinecraftProjectsRequest) GetGameVersions() []string {
+	if x != nil {
+		return x.GameVersions
+	}
+	return nil
+}
+
+func (x *ListMinecraftProjectsRequest) GetLoaders() []string {
+	if x != nil {
+		return x.Loaders
+	}
+	return nil
+}
+
+func (x *ListMinecraftProjectsRequest) GetCategories() []string {
+	if x != nil {
+		return x.Categories
+	}
+	return nil
+}
+
+func (x *ListMinecraftProjectsRequest) GetCursor() string {
+	if x != nil && x.Cursor != nil {
+		return *x.Cursor
+	}
+	return ""
+}
+
+func (x *ListMinecraftProjectsRequest) GetLimit() int32 {
+	if x != nil && x.Limit != nil {
+		return *x.Limit
+	}
+	return 0
+}
+
+func (x *ListMinecraftProjectsRequest) GetProjectType() MinecraftProjectType {
+	if x != nil {
+		return x.ProjectType
+	}
+	return MinecraftProjectType_MINECRAFT_PROJECT_TYPE_UNSPECIFIED
+}
+
+type ListMinecraftProjectsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Projects      []*MinecraftProject    `protobuf:"bytes,1,rep,name=projects,proto3" json:"projects,omitempty"`
+	HasMore       bool                   `protobuf:"varint,2,opt,name=has_more,json=hasMore,proto3" json:"has_more,omitempty"`
+	NextCursor    *string                `protobuf:"bytes,3,opt,name=next_cursor,json=nextCursor,proto3,oneof" json:"next_cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMinecraftProjectsResponse) Reset() {
+	*x = ListMinecraftProjectsResponse{}
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMinecraftProjectsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMinecraftProjectsResponse) ProtoMessage() {}
+
+func (x *ListMinecraftProjectsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMinecraftProjectsResponse.ProtoReflect.Descriptor instead.
+func (*ListMinecraftProjectsResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *ListMinecraftProjectsResponse) GetProjects() []*MinecraftProject {
+	if x != nil {
+		return x.Projects
+	}
+	return nil
+}
+
+func (x *ListMinecraftProjectsResponse) GetHasMore() bool {
+	if x != nil {
+		return x.HasMore
+	}
+	return false
+}
+
+func (x *ListMinecraftProjectsResponse) GetNextCursor() string {
+	if x != nil && x.NextCursor != nil {
+		return *x.NextCursor
+	}
+	return ""
+}
+
+type MinecraftProjectFile struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Filename      string                 `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
+	Url           string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
+	SizeBytes     int64                  `protobuf:"varint,3,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	Hashes        map[string]string      `protobuf:"bytes,4,rep,name=hashes,proto3" json:"hashes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Primary       bool                   `protobuf:"varint,5,opt,name=primary,proto3" json:"primary,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MinecraftProjectFile) Reset() {
+	*x = MinecraftProjectFile{}
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MinecraftProjectFile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MinecraftProjectFile) ProtoMessage() {}
+
+func (x *MinecraftProjectFile) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MinecraftProjectFile.ProtoReflect.Descriptor instead.
+func (*MinecraftProjectFile) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *MinecraftProjectFile) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+
+func (x *MinecraftProjectFile) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *MinecraftProjectFile) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *MinecraftProjectFile) GetHashes() map[string]string {
+	if x != nil {
+		return x.Hashes
+	}
+	return nil
+}
+
+func (x *MinecraftProjectFile) GetPrimary() bool {
+	if x != nil {
+		return x.Primary
+	}
+	return false
+}
+
+type MinecraftProjectVersion struct {
+	state               protoimpl.MessageState  `protogen:"open.v1"`
+	Id                  string                  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name                string                  `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	VersionNumber       string                  `protobuf:"bytes,3,opt,name=version_number,json=versionNumber,proto3" json:"version_number,omitempty"`
+	GameVersions        []string                `protobuf:"bytes,4,rep,name=game_versions,json=gameVersions,proto3" json:"game_versions,omitempty"`
+	Loaders             []string                `protobuf:"bytes,5,rep,name=loaders,proto3" json:"loaders,omitempty"`
+	ServerSideSupported bool                    `protobuf:"varint,6,opt,name=server_side_supported,json=serverSideSupported,proto3" json:"server_side_supported,omitempty"`
+	ClientSideSupported bool                    `protobuf:"varint,7,opt,name=client_side_supported,json=clientSideSupported,proto3" json:"client_side_supported,omitempty"`
+	PublishedAt         *timestamppb.Timestamp  `protobuf:"bytes,8,opt,name=published_at,json=publishedAt,proto3,oneof" json:"published_at,omitempty"`
+	Changelog           *string                 `protobuf:"bytes,9,opt,name=changelog,proto3,oneof" json:"changelog,omitempty"`
+	Files               []*MinecraftProjectFile `protobuf:"bytes,10,rep,name=files,proto3" json:"files,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *MinecraftProjectVersion) Reset() {
+	*x = MinecraftProjectVersion{}
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MinecraftProjectVersion) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MinecraftProjectVersion) ProtoMessage() {}
+
+func (x *MinecraftProjectVersion) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MinecraftProjectVersion.ProtoReflect.Descriptor instead.
+func (*MinecraftProjectVersion) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescGZIP(), []int{63}
+}
+
+func (x *MinecraftProjectVersion) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *MinecraftProjectVersion) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *MinecraftProjectVersion) GetVersionNumber() string {
+	if x != nil {
+		return x.VersionNumber
+	}
+	return ""
+}
+
+func (x *MinecraftProjectVersion) GetGameVersions() []string {
+	if x != nil {
+		return x.GameVersions
+	}
+	return nil
+}
+
+func (x *MinecraftProjectVersion) GetLoaders() []string {
+	if x != nil {
+		return x.Loaders
+	}
+	return nil
+}
+
+func (x *MinecraftProjectVersion) GetServerSideSupported() bool {
+	if x != nil {
+		return x.ServerSideSupported
+	}
+	return false
+}
+
+func (x *MinecraftProjectVersion) GetClientSideSupported() bool {
+	if x != nil {
+		return x.ClientSideSupported
+	}
+	return false
+}
+
+func (x *MinecraftProjectVersion) GetPublishedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PublishedAt
+	}
+	return nil
+}
+
+func (x *MinecraftProjectVersion) GetChangelog() string {
+	if x != nil && x.Changelog != nil {
+		return *x.Changelog
+	}
+	return ""
+}
+
+func (x *MinecraftProjectVersion) GetFiles() []*MinecraftProjectFile {
+	if x != nil {
+		return x.Files
+	}
+	return nil
+}
+
+type GetMinecraftProjectVersionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GameServerId  string                 `protobuf:"bytes,1,opt,name=game_server_id,json=gameServerId,proto3" json:"game_server_id,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	GameVersions  []string               `protobuf:"bytes,3,rep,name=game_versions,json=gameVersions,proto3" json:"game_versions,omitempty"`
+	Loaders       []string               `protobuf:"bytes,4,rep,name=loaders,proto3" json:"loaders,omitempty"`
+	ProjectType   MinecraftProjectType   `protobuf:"varint,5,opt,name=project_type,json=projectType,proto3,enum=obiente.cloud.gameservers.v1.MinecraftProjectType" json:"project_type,omitempty"`
+	Limit         *int32                 `protobuf:"varint,6,opt,name=limit,proto3,oneof" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMinecraftProjectVersionsRequest) Reset() {
+	*x = GetMinecraftProjectVersionsRequest{}
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[64]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMinecraftProjectVersionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMinecraftProjectVersionsRequest) ProtoMessage() {}
+
+func (x *GetMinecraftProjectVersionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[64]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMinecraftProjectVersionsRequest.ProtoReflect.Descriptor instead.
+func (*GetMinecraftProjectVersionsRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescGZIP(), []int{64}
+}
+
+func (x *GetMinecraftProjectVersionsRequest) GetGameServerId() string {
+	if x != nil {
+		return x.GameServerId
+	}
+	return ""
+}
+
+func (x *GetMinecraftProjectVersionsRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *GetMinecraftProjectVersionsRequest) GetGameVersions() []string {
+	if x != nil {
+		return x.GameVersions
+	}
+	return nil
+}
+
+func (x *GetMinecraftProjectVersionsRequest) GetLoaders() []string {
+	if x != nil {
+		return x.Loaders
+	}
+	return nil
+}
+
+func (x *GetMinecraftProjectVersionsRequest) GetProjectType() MinecraftProjectType {
+	if x != nil {
+		return x.ProjectType
+	}
+	return MinecraftProjectType_MINECRAFT_PROJECT_TYPE_UNSPECIFIED
+}
+
+func (x *GetMinecraftProjectVersionsRequest) GetLimit() int32 {
+	if x != nil && x.Limit != nil {
+		return *x.Limit
+	}
+	return 0
+}
+
+type GetMinecraftProjectVersionsResponse struct {
+	state         protoimpl.MessageState     `protogen:"open.v1"`
+	Versions      []*MinecraftProjectVersion `protobuf:"bytes,1,rep,name=versions,proto3" json:"versions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMinecraftProjectVersionsResponse) Reset() {
+	*x = GetMinecraftProjectVersionsResponse{}
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMinecraftProjectVersionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMinecraftProjectVersionsResponse) ProtoMessage() {}
+
+func (x *GetMinecraftProjectVersionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMinecraftProjectVersionsResponse.ProtoReflect.Descriptor instead.
+func (*GetMinecraftProjectVersionsResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *GetMinecraftProjectVersionsResponse) GetVersions() []*MinecraftProjectVersion {
+	if x != nil {
+		return x.Versions
+	}
+	return nil
+}
+
+type GetMinecraftProjectRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GameServerId  string                 `protobuf:"bytes,1,opt,name=game_server_id,json=gameServerId,proto3" json:"game_server_id,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMinecraftProjectRequest) Reset() {
+	*x = GetMinecraftProjectRequest{}
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMinecraftProjectRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMinecraftProjectRequest) ProtoMessage() {}
+
+func (x *GetMinecraftProjectRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMinecraftProjectRequest.ProtoReflect.Descriptor instead.
+func (*GetMinecraftProjectRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *GetMinecraftProjectRequest) GetGameServerId() string {
+	if x != nil {
+		return x.GameServerId
+	}
+	return ""
+}
+
+func (x *GetMinecraftProjectRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+type GetMinecraftProjectResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Project       *MinecraftProject      `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetMinecraftProjectResponse) Reset() {
+	*x = GetMinecraftProjectResponse{}
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetMinecraftProjectResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetMinecraftProjectResponse) ProtoMessage() {}
+
+func (x *GetMinecraftProjectResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetMinecraftProjectResponse.ProtoReflect.Descriptor instead.
+func (*GetMinecraftProjectResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *GetMinecraftProjectResponse) GetProject() *MinecraftProject {
+	if x != nil {
+		return x.Project
+	}
+	return nil
+}
+
+type InstallMinecraftProjectFileRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	GameServerId  string                 `protobuf:"bytes,1,opt,name=game_server_id,json=gameServerId,proto3" json:"game_server_id,omitempty"`
+	ProjectId     string                 `protobuf:"bytes,2,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	VersionId     string                 `protobuf:"bytes,3,opt,name=version_id,json=versionId,proto3" json:"version_id,omitempty"`
+	ProjectType   MinecraftProjectType   `protobuf:"varint,4,opt,name=project_type,json=projectType,proto3,enum=obiente.cloud.gameservers.v1.MinecraftProjectType" json:"project_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InstallMinecraftProjectFileRequest) Reset() {
+	*x = InstallMinecraftProjectFileRequest{}
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InstallMinecraftProjectFileRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InstallMinecraftProjectFileRequest) ProtoMessage() {}
+
+func (x *InstallMinecraftProjectFileRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InstallMinecraftProjectFileRequest.ProtoReflect.Descriptor instead.
+func (*InstallMinecraftProjectFileRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *InstallMinecraftProjectFileRequest) GetGameServerId() string {
+	if x != nil {
+		return x.GameServerId
+	}
+	return ""
+}
+
+func (x *InstallMinecraftProjectFileRequest) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *InstallMinecraftProjectFileRequest) GetVersionId() string {
+	if x != nil {
+		return x.VersionId
+	}
+	return ""
+}
+
+func (x *InstallMinecraftProjectFileRequest) GetProjectType() MinecraftProjectType {
+	if x != nil {
+		return x.ProjectType
+	}
+	return MinecraftProjectType_MINECRAFT_PROJECT_TYPE_UNSPECIFIED
+}
+
+type InstallMinecraftProjectFileResponse struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Success         bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Filename        string                 `protobuf:"bytes,2,opt,name=filename,proto3" json:"filename,omitempty"`
+	InstalledPath   string                 `protobuf:"bytes,3,opt,name=installed_path,json=installedPath,proto3" json:"installed_path,omitempty"`
+	RestartRequired bool                   `protobuf:"varint,4,opt,name=restart_required,json=restartRequired,proto3" json:"restart_required,omitempty"`
+	Message         *string                `protobuf:"bytes,5,opt,name=message,proto3,oneof" json:"message,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *InstallMinecraftProjectFileResponse) Reset() {
+	*x = InstallMinecraftProjectFileResponse{}
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[69]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InstallMinecraftProjectFileResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InstallMinecraftProjectFileResponse) ProtoMessage() {}
+
+func (x *InstallMinecraftProjectFileResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[69]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InstallMinecraftProjectFileResponse.ProtoReflect.Descriptor instead.
+func (*InstallMinecraftProjectFileResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescGZIP(), []int{69}
+}
+
+func (x *InstallMinecraftProjectFileResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *InstallMinecraftProjectFileResponse) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+
+func (x *InstallMinecraftProjectFileResponse) GetInstalledPath() string {
+	if x != nil {
+		return x.InstalledPath
+	}
+	return ""
+}
+
+func (x *InstallMinecraftProjectFileResponse) GetRestartRequired() bool {
+	if x != nil {
+		return x.RestartRequired
+	}
+	return false
+}
+
+func (x *InstallMinecraftProjectFileResponse) GetMessage() string {
+	if x != nil && x.Message != nil {
+		return *x.Message
+	}
+	return ""
+}
+
 var File_obiente_cloud_gameservers_v1_game_server_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
@@ -4607,7 +5557,114 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"avatar_url\x18\x03 \x01(\tH\x02R\tavatarUrl\x88\x01\x01B\a\n" +
 	"\x05_uuidB\a\n" +
 	"\x05_nameB\r\n" +
-	"\v_avatar_url*\xe9\x01\n" +
+	"\v_avatar_url\"\xae\x05\n" +
+	"\x10MinecraftProject\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04slug\x18\x02 \x01(\tR\x04slug\x12\x14\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\x12 \n" +
+	"\vdescription\x18\x04 \x01(\tR\vdescription\x12U\n" +
+	"\fproject_type\x18\x05 \x01(\x0e22.obiente.cloud.gameservers.v1.MinecraftProjectTypeR\vprojectType\x12\x19\n" +
+	"\bicon_url\x18\x06 \x01(\tR\aiconUrl\x12\x1e\n" +
+	"\n" +
+	"categories\x18\a \x03(\tR\n" +
+	"categories\x12\x18\n" +
+	"\aloaders\x18\b \x03(\tR\aloaders\x12#\n" +
+	"\rgame_versions\x18\t \x03(\tR\fgameVersions\x12\x18\n" +
+	"\aauthors\x18\n" +
+	" \x03(\tR\aauthors\x12\x1c\n" +
+	"\tdownloads\x18\v \x01(\x03R\tdownloads\x12\x16\n" +
+	"\x06rating\x18\f \x01(\x01R\x06rating\x12/\n" +
+	"\x11latest_version_id\x18\r \x01(\tH\x00R\x0flatestVersionId\x88\x01\x01\x12$\n" +
+	"\vproject_url\x18\x0e \x01(\tH\x01R\n" +
+	"projectUrl\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"source_url\x18\x0f \x01(\tH\x02R\tsourceUrl\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"issues_url\x18\x10 \x01(\tH\x03R\tissuesUrl\x88\x01\x01\x12\x17\n" +
+	"\x04body\x18\x11 \x01(\tH\x04R\x04body\x88\x01\x01\x12\x18\n" +
+	"\agallery\x18\x12 \x03(\tR\agalleryB\x14\n" +
+	"\x12_latest_version_idB\x0e\n" +
+	"\f_project_urlB\r\n" +
+	"\v_source_urlB\r\n" +
+	"\v_issues_urlB\a\n" +
+	"\x05_body\"\xec\x02\n" +
+	"\x1cListMinecraftProjectsRequest\x12$\n" +
+	"\x0egame_server_id\x18\x01 \x01(\tR\fgameServerId\x12\x19\n" +
+	"\x05query\x18\x02 \x01(\tH\x00R\x05query\x88\x01\x01\x12#\n" +
+	"\rgame_versions\x18\x03 \x03(\tR\fgameVersions\x12\x18\n" +
+	"\aloaders\x18\x04 \x03(\tR\aloaders\x12\x1e\n" +
+	"\n" +
+	"categories\x18\x05 \x03(\tR\n" +
+	"categories\x12\x1b\n" +
+	"\x06cursor\x18\x06 \x01(\tH\x01R\x06cursor\x88\x01\x01\x12\x19\n" +
+	"\x05limit\x18\a \x01(\x05H\x02R\x05limit\x88\x01\x01\x12U\n" +
+	"\fproject_type\x18\b \x01(\x0e22.obiente.cloud.gameservers.v1.MinecraftProjectTypeR\vprojectTypeB\b\n" +
+	"\x06_queryB\t\n" +
+	"\a_cursorB\b\n" +
+	"\x06_limit\"\xbc\x01\n" +
+	"\x1dListMinecraftProjectsResponse\x12J\n" +
+	"\bprojects\x18\x01 \x03(\v2..obiente.cloud.gameservers.v1.MinecraftProjectR\bprojects\x12\x19\n" +
+	"\bhas_more\x18\x02 \x01(\bR\ahasMore\x12$\n" +
+	"\vnext_cursor\x18\x03 \x01(\tH\x00R\n" +
+	"nextCursor\x88\x01\x01B\x0e\n" +
+	"\f_next_cursor\"\x90\x02\n" +
+	"\x14MinecraftProjectFile\x12\x1a\n" +
+	"\bfilename\x18\x01 \x01(\tR\bfilename\x12\x10\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x03 \x01(\x03R\tsizeBytes\x12V\n" +
+	"\x06hashes\x18\x04 \x03(\v2>.obiente.cloud.gameservers.v1.MinecraftProjectFile.HashesEntryR\x06hashes\x12\x18\n" +
+	"\aprimary\x18\x05 \x01(\bR\aprimary\x1a9\n" +
+	"\vHashesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xdb\x03\n" +
+	"\x17MinecraftProjectVersion\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12%\n" +
+	"\x0eversion_number\x18\x03 \x01(\tR\rversionNumber\x12#\n" +
+	"\rgame_versions\x18\x04 \x03(\tR\fgameVersions\x12\x18\n" +
+	"\aloaders\x18\x05 \x03(\tR\aloaders\x122\n" +
+	"\x15server_side_supported\x18\x06 \x01(\bR\x13serverSideSupported\x122\n" +
+	"\x15client_side_supported\x18\a \x01(\bR\x13clientSideSupported\x12B\n" +
+	"\fpublished_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampH\x00R\vpublishedAt\x88\x01\x01\x12!\n" +
+	"\tchangelog\x18\t \x01(\tH\x01R\tchangelog\x88\x01\x01\x12H\n" +
+	"\x05files\x18\n" +
+	" \x03(\v22.obiente.cloud.gameservers.v1.MinecraftProjectFileR\x05filesB\x0f\n" +
+	"\r_published_atB\f\n" +
+	"\n" +
+	"_changelog\"\xa4\x02\n" +
+	"\"GetMinecraftProjectVersionsRequest\x12$\n" +
+	"\x0egame_server_id\x18\x01 \x01(\tR\fgameServerId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12#\n" +
+	"\rgame_versions\x18\x03 \x03(\tR\fgameVersions\x12\x18\n" +
+	"\aloaders\x18\x04 \x03(\tR\aloaders\x12U\n" +
+	"\fproject_type\x18\x05 \x01(\x0e22.obiente.cloud.gameservers.v1.MinecraftProjectTypeR\vprojectType\x12\x19\n" +
+	"\x05limit\x18\x06 \x01(\x05H\x00R\x05limit\x88\x01\x01B\b\n" +
+	"\x06_limit\"x\n" +
+	"#GetMinecraftProjectVersionsResponse\x12Q\n" +
+	"\bversions\x18\x01 \x03(\v25.obiente.cloud.gameservers.v1.MinecraftProjectVersionR\bversions\"a\n" +
+	"\x1aGetMinecraftProjectRequest\x12$\n" +
+	"\x0egame_server_id\x18\x01 \x01(\tR\fgameServerId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\"g\n" +
+	"\x1bGetMinecraftProjectResponse\x12H\n" +
+	"\aproject\x18\x01 \x01(\v2..obiente.cloud.gameservers.v1.MinecraftProjectR\aproject\"\xdf\x01\n" +
+	"\"InstallMinecraftProjectFileRequest\x12$\n" +
+	"\x0egame_server_id\x18\x01 \x01(\tR\fgameServerId\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x02 \x01(\tR\tprojectId\x12\x1d\n" +
+	"\n" +
+	"version_id\x18\x03 \x01(\tR\tversionId\x12U\n" +
+	"\fproject_type\x18\x04 \x01(\x0e22.obiente.cloud.gameservers.v1.MinecraftProjectTypeR\vprojectType\"\xd8\x01\n" +
+	"#InstallMinecraftProjectFileResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1a\n" +
+	"\bfilename\x18\x02 \x01(\tR\bfilename\x12%\n" +
+	"\x0einstalled_path\x18\x03 \x01(\tR\rinstalledPath\x12)\n" +
+	"\x10restart_required\x18\x04 \x01(\bR\x0frestartRequired\x12\x1d\n" +
+	"\amessage\x18\x05 \x01(\tH\x00R\amessage\x88\x01\x01B\n" +
+	"\n" +
+	"\b_message*\xe9\x01\n" +
 	"\bGameType\x12\x19\n" +
 	"\x15GAME_TYPE_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tMINECRAFT\x10\x01\x12\x12\n" +
@@ -4641,7 +5698,11 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\"GAME_SERVER_ENTRY_TYPE_UNSPECIFIED\x10\x00\x12\x1f\n" +
 	"\x1bGAME_SERVER_ENTRY_TYPE_FILE\x10\x01\x12$\n" +
 	" GAME_SERVER_ENTRY_TYPE_DIRECTORY\x10\x02\x12\"\n" +
-	"\x1eGAME_SERVER_ENTRY_TYPE_SYMLINK\x10\x032\xd4\x1c\n" +
+	"\x1eGAME_SERVER_ENTRY_TYPE_SYMLINK\x10\x03*\x81\x01\n" +
+	"\x14MinecraftProjectType\x12&\n" +
+	"\"MINECRAFT_PROJECT_TYPE_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aMINECRAFT_PROJECT_TYPE_MOD\x10\x01\x12!\n" +
+	"\x1dMINECRAFT_PROJECT_TYPE_PLUGIN\x10\x022\xbe!\n" +
 	"\x11GameServerService\x12~\n" +
 	"\x0fListGameServers\x124.obiente.cloud.gameservers.v1.ListGameServersRequest\x1a5.obiente.cloud.gameservers.v1.ListGameServersResponse\x12\x81\x01\n" +
 	"\x10CreateGameServer\x125.obiente.cloud.gameservers.v1.CreateGameServerRequest\x1a6.obiente.cloud.gameservers.v1.CreateGameServerResponse\x12x\n" +
@@ -4668,7 +5729,11 @@ const file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc = "" +
 	"\x15ExtractGameServerFile\x12:.obiente.cloud.gameservers.v1.ExtractGameServerFileRequest\x1a;.obiente.cloud.gameservers.v1.ExtractGameServerFileResponse\x12\xa2\x01\n" +
 	"\x1bCreateGameServerFileArchive\x12@.obiente.cloud.gameservers.v1.CreateGameServerFileArchiveRequest\x1aA.obiente.cloud.gameservers.v1.CreateGameServerFileArchiveResponse\x12\x93\x01\n" +
 	"\x16GetMinecraftPlayerUUID\x12;.obiente.cloud.gameservers.v1.GetMinecraftPlayerUUIDRequest\x1a<.obiente.cloud.gameservers.v1.GetMinecraftPlayerUUIDResponse\x12\x9c\x01\n" +
-	"\x19GetMinecraftPlayerProfile\x12>.obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileRequest\x1a?.obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileResponseBWZUgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1;gameserversv1b\x06proto3"
+	"\x19GetMinecraftPlayerProfile\x12>.obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileRequest\x1a?.obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileResponse\x12\x90\x01\n" +
+	"\x15ListMinecraftProjects\x12:.obiente.cloud.gameservers.v1.ListMinecraftProjectsRequest\x1a;.obiente.cloud.gameservers.v1.ListMinecraftProjectsResponse\x12\xa2\x01\n" +
+	"\x1bGetMinecraftProjectVersions\x12@.obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsRequest\x1aA.obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsResponse\x12\x8a\x01\n" +
+	"\x13GetMinecraftProject\x128.obiente.cloud.gameservers.v1.GetMinecraftProjectRequest\x1a9.obiente.cloud.gameservers.v1.GetMinecraftProjectResponse\x12\xa2\x01\n" +
+	"\x1bInstallMinecraftProjectFile\x12@.obiente.cloud.gameservers.v1.InstallMinecraftProjectFileRequest\x1aA.obiente.cloud.gameservers.v1.InstallMinecraftProjectFileResponseBWZUgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/gameservers/v1;gameserversv1b\x06proto3"
 
 var (
 	file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescOnce sync.Once
@@ -4682,182 +5747,213 @@ func file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescGZIP() [
 	return file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDescData
 }
 
-var file_obiente_cloud_gameservers_v1_game_server_service_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes = make([]protoimpl.MessageInfo, 62)
+var file_obiente_cloud_gameservers_v1_game_server_service_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes = make([]protoimpl.MessageInfo, 74)
 var file_obiente_cloud_gameservers_v1_game_server_service_proto_goTypes = []any{
 	(GameType)(0),                               // 0: obiente.cloud.gameservers.v1.GameType
 	(GameServerStatus)(0),                       // 1: obiente.cloud.gameservers.v1.GameServerStatus
 	(GameServerEntryType)(0),                    // 2: obiente.cloud.gameservers.v1.GameServerEntryType
-	(*ListGameServersRequest)(nil),              // 3: obiente.cloud.gameservers.v1.ListGameServersRequest
-	(*ListGameServersResponse)(nil),             // 4: obiente.cloud.gameservers.v1.ListGameServersResponse
-	(*CreateGameServerRequest)(nil),             // 5: obiente.cloud.gameservers.v1.CreateGameServerRequest
-	(*CreateGameServerResponse)(nil),            // 6: obiente.cloud.gameservers.v1.CreateGameServerResponse
-	(*GetGameServerRequest)(nil),                // 7: obiente.cloud.gameservers.v1.GetGameServerRequest
-	(*GetGameServerResponse)(nil),               // 8: obiente.cloud.gameservers.v1.GetGameServerResponse
-	(*UpdateGameServerRequest)(nil),             // 9: obiente.cloud.gameservers.v1.UpdateGameServerRequest
-	(*UpdateGameServerResponse)(nil),            // 10: obiente.cloud.gameservers.v1.UpdateGameServerResponse
-	(*DeleteGameServerRequest)(nil),             // 11: obiente.cloud.gameservers.v1.DeleteGameServerRequest
-	(*DeleteGameServerResponse)(nil),            // 12: obiente.cloud.gameservers.v1.DeleteGameServerResponse
-	(*StartGameServerRequest)(nil),              // 13: obiente.cloud.gameservers.v1.StartGameServerRequest
-	(*StartGameServerResponse)(nil),             // 14: obiente.cloud.gameservers.v1.StartGameServerResponse
-	(*StopGameServerRequest)(nil),               // 15: obiente.cloud.gameservers.v1.StopGameServerRequest
-	(*StopGameServerResponse)(nil),              // 16: obiente.cloud.gameservers.v1.StopGameServerResponse
-	(*RestartGameServerRequest)(nil),            // 17: obiente.cloud.gameservers.v1.RestartGameServerRequest
-	(*RestartGameServerResponse)(nil),           // 18: obiente.cloud.gameservers.v1.RestartGameServerResponse
-	(*StreamGameServerStatusRequest)(nil),       // 19: obiente.cloud.gameservers.v1.StreamGameServerStatusRequest
-	(*GameServerStatusUpdate)(nil),              // 20: obiente.cloud.gameservers.v1.GameServerStatusUpdate
-	(*GetGameServerLogsRequest)(nil),            // 21: obiente.cloud.gameservers.v1.GetGameServerLogsRequest
-	(*GetGameServerLogsResponse)(nil),           // 22: obiente.cloud.gameservers.v1.GetGameServerLogsResponse
-	(*StreamGameServerLogsRequest)(nil),         // 23: obiente.cloud.gameservers.v1.StreamGameServerLogsRequest
-	(*GameServerLogLine)(nil),                   // 24: obiente.cloud.gameservers.v1.GameServerLogLine
-	(*GetGameServerMetricsRequest)(nil),         // 25: obiente.cloud.gameservers.v1.GetGameServerMetricsRequest
-	(*GetGameServerMetricsResponse)(nil),        // 26: obiente.cloud.gameservers.v1.GetGameServerMetricsResponse
-	(*StreamGameServerMetricsRequest)(nil),      // 27: obiente.cloud.gameservers.v1.StreamGameServerMetricsRequest
-	(*GameServerMetric)(nil),                    // 28: obiente.cloud.gameservers.v1.GameServerMetric
-	(*GetGameServerUsageRequest)(nil),           // 29: obiente.cloud.gameservers.v1.GetGameServerUsageRequest
-	(*GetGameServerUsageResponse)(nil),          // 30: obiente.cloud.gameservers.v1.GetGameServerUsageResponse
-	(*GameServerUsageMetrics)(nil),              // 31: obiente.cloud.gameservers.v1.GameServerUsageMetrics
-	(*GameServer)(nil),                          // 32: obiente.cloud.gameservers.v1.GameServer
-	(*GameServerFile)(nil),                      // 33: obiente.cloud.gameservers.v1.GameServerFile
-	(*GameServerVolumeInfo)(nil),                // 34: obiente.cloud.gameservers.v1.GameServerVolumeInfo
-	(*ListGameServerFilesRequest)(nil),          // 35: obiente.cloud.gameservers.v1.ListGameServerFilesRequest
-	(*ListGameServerFilesResponse)(nil),         // 36: obiente.cloud.gameservers.v1.ListGameServerFilesResponse
-	(*SearchGameServerFilesRequest)(nil),        // 37: obiente.cloud.gameservers.v1.SearchGameServerFilesRequest
-	(*SearchGameServerFilesResponse)(nil),       // 38: obiente.cloud.gameservers.v1.SearchGameServerFilesResponse
-	(*GetGameServerFileRequest)(nil),            // 39: obiente.cloud.gameservers.v1.GetGameServerFileRequest
-	(*GetGameServerFileResponse)(nil),           // 40: obiente.cloud.gameservers.v1.GetGameServerFileResponse
-	(*UploadGameServerFilesRequest)(nil),        // 41: obiente.cloud.gameservers.v1.UploadGameServerFilesRequest
-	(*UploadGameServerFilesMetadata)(nil),       // 42: obiente.cloud.gameservers.v1.UploadGameServerFilesMetadata
-	(*GameServerFileMetadata)(nil),              // 43: obiente.cloud.gameservers.v1.GameServerFileMetadata
-	(*UploadGameServerFilesResponse)(nil),       // 44: obiente.cloud.gameservers.v1.UploadGameServerFilesResponse
-	(*DeleteGameServerEntriesRequest)(nil),      // 45: obiente.cloud.gameservers.v1.DeleteGameServerEntriesRequest
-	(*DeleteGameServerEntriesError)(nil),        // 46: obiente.cloud.gameservers.v1.DeleteGameServerEntriesError
-	(*DeleteGameServerEntriesResponse)(nil),     // 47: obiente.cloud.gameservers.v1.DeleteGameServerEntriesResponse
-	(*RenameGameServerEntryRequest)(nil),        // 48: obiente.cloud.gameservers.v1.RenameGameServerEntryRequest
-	(*RenameGameServerEntryResponse)(nil),       // 49: obiente.cloud.gameservers.v1.RenameGameServerEntryResponse
-	(*CreateGameServerEntryRequest)(nil),        // 50: obiente.cloud.gameservers.v1.CreateGameServerEntryRequest
-	(*CreateGameServerEntryResponse)(nil),       // 51: obiente.cloud.gameservers.v1.CreateGameServerEntryResponse
-	(*WriteGameServerFileRequest)(nil),          // 52: obiente.cloud.gameservers.v1.WriteGameServerFileRequest
-	(*WriteGameServerFileResponse)(nil),         // 53: obiente.cloud.gameservers.v1.WriteGameServerFileResponse
-	(*ExtractGameServerFileRequest)(nil),        // 54: obiente.cloud.gameservers.v1.ExtractGameServerFileRequest
-	(*ExtractGameServerFileResponse)(nil),       // 55: obiente.cloud.gameservers.v1.ExtractGameServerFileResponse
-	(*CreateGameServerFileArchiveRequest)(nil),  // 56: obiente.cloud.gameservers.v1.CreateGameServerFileArchiveRequest
-	(*CreateGameServerFileArchiveResponse)(nil), // 57: obiente.cloud.gameservers.v1.CreateGameServerFileArchiveResponse
-	(*GetMinecraftPlayerUUIDRequest)(nil),       // 58: obiente.cloud.gameservers.v1.GetMinecraftPlayerUUIDRequest
-	(*GetMinecraftPlayerUUIDResponse)(nil),      // 59: obiente.cloud.gameservers.v1.GetMinecraftPlayerUUIDResponse
-	(*GetMinecraftPlayerProfileRequest)(nil),    // 60: obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileRequest
-	(*GetMinecraftPlayerProfileResponse)(nil),   // 61: obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileResponse
-	nil,                           // 62: obiente.cloud.gameservers.v1.CreateGameServerRequest.EnvVarsEntry
-	nil,                           // 63: obiente.cloud.gameservers.v1.UpdateGameServerRequest.EnvVarsEntry
-	nil,                           // 64: obiente.cloud.gameservers.v1.GameServer.EnvVarsEntry
-	(*timestamppb.Timestamp)(nil), // 65: google.protobuf.Timestamp
-	(v1.LogLevel)(0),              // 66: obiente.cloud.common.v1.LogLevel
-	(*v1.CreateServerFileArchiveRequest)(nil),  // 67: obiente.cloud.common.v1.CreateServerFileArchiveRequest
-	(*v1.CreateServerFileArchiveResponse)(nil), // 68: obiente.cloud.common.v1.CreateServerFileArchiveResponse
+	(MinecraftProjectType)(0),                   // 3: obiente.cloud.gameservers.v1.MinecraftProjectType
+	(*ListGameServersRequest)(nil),              // 4: obiente.cloud.gameservers.v1.ListGameServersRequest
+	(*ListGameServersResponse)(nil),             // 5: obiente.cloud.gameservers.v1.ListGameServersResponse
+	(*CreateGameServerRequest)(nil),             // 6: obiente.cloud.gameservers.v1.CreateGameServerRequest
+	(*CreateGameServerResponse)(nil),            // 7: obiente.cloud.gameservers.v1.CreateGameServerResponse
+	(*GetGameServerRequest)(nil),                // 8: obiente.cloud.gameservers.v1.GetGameServerRequest
+	(*GetGameServerResponse)(nil),               // 9: obiente.cloud.gameservers.v1.GetGameServerResponse
+	(*UpdateGameServerRequest)(nil),             // 10: obiente.cloud.gameservers.v1.UpdateGameServerRequest
+	(*UpdateGameServerResponse)(nil),            // 11: obiente.cloud.gameservers.v1.UpdateGameServerResponse
+	(*DeleteGameServerRequest)(nil),             // 12: obiente.cloud.gameservers.v1.DeleteGameServerRequest
+	(*DeleteGameServerResponse)(nil),            // 13: obiente.cloud.gameservers.v1.DeleteGameServerResponse
+	(*StartGameServerRequest)(nil),              // 14: obiente.cloud.gameservers.v1.StartGameServerRequest
+	(*StartGameServerResponse)(nil),             // 15: obiente.cloud.gameservers.v1.StartGameServerResponse
+	(*StopGameServerRequest)(nil),               // 16: obiente.cloud.gameservers.v1.StopGameServerRequest
+	(*StopGameServerResponse)(nil),              // 17: obiente.cloud.gameservers.v1.StopGameServerResponse
+	(*RestartGameServerRequest)(nil),            // 18: obiente.cloud.gameservers.v1.RestartGameServerRequest
+	(*RestartGameServerResponse)(nil),           // 19: obiente.cloud.gameservers.v1.RestartGameServerResponse
+	(*StreamGameServerStatusRequest)(nil),       // 20: obiente.cloud.gameservers.v1.StreamGameServerStatusRequest
+	(*GameServerStatusUpdate)(nil),              // 21: obiente.cloud.gameservers.v1.GameServerStatusUpdate
+	(*GetGameServerLogsRequest)(nil),            // 22: obiente.cloud.gameservers.v1.GetGameServerLogsRequest
+	(*GetGameServerLogsResponse)(nil),           // 23: obiente.cloud.gameservers.v1.GetGameServerLogsResponse
+	(*StreamGameServerLogsRequest)(nil),         // 24: obiente.cloud.gameservers.v1.StreamGameServerLogsRequest
+	(*GameServerLogLine)(nil),                   // 25: obiente.cloud.gameservers.v1.GameServerLogLine
+	(*GetGameServerMetricsRequest)(nil),         // 26: obiente.cloud.gameservers.v1.GetGameServerMetricsRequest
+	(*GetGameServerMetricsResponse)(nil),        // 27: obiente.cloud.gameservers.v1.GetGameServerMetricsResponse
+	(*StreamGameServerMetricsRequest)(nil),      // 28: obiente.cloud.gameservers.v1.StreamGameServerMetricsRequest
+	(*GameServerMetric)(nil),                    // 29: obiente.cloud.gameservers.v1.GameServerMetric
+	(*GetGameServerUsageRequest)(nil),           // 30: obiente.cloud.gameservers.v1.GetGameServerUsageRequest
+	(*GetGameServerUsageResponse)(nil),          // 31: obiente.cloud.gameservers.v1.GetGameServerUsageResponse
+	(*GameServerUsageMetrics)(nil),              // 32: obiente.cloud.gameservers.v1.GameServerUsageMetrics
+	(*GameServer)(nil),                          // 33: obiente.cloud.gameservers.v1.GameServer
+	(*GameServerFile)(nil),                      // 34: obiente.cloud.gameservers.v1.GameServerFile
+	(*GameServerVolumeInfo)(nil),                // 35: obiente.cloud.gameservers.v1.GameServerVolumeInfo
+	(*ListGameServerFilesRequest)(nil),          // 36: obiente.cloud.gameservers.v1.ListGameServerFilesRequest
+	(*ListGameServerFilesResponse)(nil),         // 37: obiente.cloud.gameservers.v1.ListGameServerFilesResponse
+	(*SearchGameServerFilesRequest)(nil),        // 38: obiente.cloud.gameservers.v1.SearchGameServerFilesRequest
+	(*SearchGameServerFilesResponse)(nil),       // 39: obiente.cloud.gameservers.v1.SearchGameServerFilesResponse
+	(*GetGameServerFileRequest)(nil),            // 40: obiente.cloud.gameservers.v1.GetGameServerFileRequest
+	(*GetGameServerFileResponse)(nil),           // 41: obiente.cloud.gameservers.v1.GetGameServerFileResponse
+	(*UploadGameServerFilesRequest)(nil),        // 42: obiente.cloud.gameservers.v1.UploadGameServerFilesRequest
+	(*UploadGameServerFilesMetadata)(nil),       // 43: obiente.cloud.gameservers.v1.UploadGameServerFilesMetadata
+	(*GameServerFileMetadata)(nil),              // 44: obiente.cloud.gameservers.v1.GameServerFileMetadata
+	(*UploadGameServerFilesResponse)(nil),       // 45: obiente.cloud.gameservers.v1.UploadGameServerFilesResponse
+	(*DeleteGameServerEntriesRequest)(nil),      // 46: obiente.cloud.gameservers.v1.DeleteGameServerEntriesRequest
+	(*DeleteGameServerEntriesError)(nil),        // 47: obiente.cloud.gameservers.v1.DeleteGameServerEntriesError
+	(*DeleteGameServerEntriesResponse)(nil),     // 48: obiente.cloud.gameservers.v1.DeleteGameServerEntriesResponse
+	(*RenameGameServerEntryRequest)(nil),        // 49: obiente.cloud.gameservers.v1.RenameGameServerEntryRequest
+	(*RenameGameServerEntryResponse)(nil),       // 50: obiente.cloud.gameservers.v1.RenameGameServerEntryResponse
+	(*CreateGameServerEntryRequest)(nil),        // 51: obiente.cloud.gameservers.v1.CreateGameServerEntryRequest
+	(*CreateGameServerEntryResponse)(nil),       // 52: obiente.cloud.gameservers.v1.CreateGameServerEntryResponse
+	(*WriteGameServerFileRequest)(nil),          // 53: obiente.cloud.gameservers.v1.WriteGameServerFileRequest
+	(*WriteGameServerFileResponse)(nil),         // 54: obiente.cloud.gameservers.v1.WriteGameServerFileResponse
+	(*ExtractGameServerFileRequest)(nil),        // 55: obiente.cloud.gameservers.v1.ExtractGameServerFileRequest
+	(*ExtractGameServerFileResponse)(nil),       // 56: obiente.cloud.gameservers.v1.ExtractGameServerFileResponse
+	(*CreateGameServerFileArchiveRequest)(nil),  // 57: obiente.cloud.gameservers.v1.CreateGameServerFileArchiveRequest
+	(*CreateGameServerFileArchiveResponse)(nil), // 58: obiente.cloud.gameservers.v1.CreateGameServerFileArchiveResponse
+	(*GetMinecraftPlayerUUIDRequest)(nil),       // 59: obiente.cloud.gameservers.v1.GetMinecraftPlayerUUIDRequest
+	(*GetMinecraftPlayerUUIDResponse)(nil),      // 60: obiente.cloud.gameservers.v1.GetMinecraftPlayerUUIDResponse
+	(*GetMinecraftPlayerProfileRequest)(nil),    // 61: obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileRequest
+	(*GetMinecraftPlayerProfileResponse)(nil),   // 62: obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileResponse
+	(*MinecraftProject)(nil),                    // 63: obiente.cloud.gameservers.v1.MinecraftProject
+	(*ListMinecraftProjectsRequest)(nil),        // 64: obiente.cloud.gameservers.v1.ListMinecraftProjectsRequest
+	(*ListMinecraftProjectsResponse)(nil),       // 65: obiente.cloud.gameservers.v1.ListMinecraftProjectsResponse
+	(*MinecraftProjectFile)(nil),                // 66: obiente.cloud.gameservers.v1.MinecraftProjectFile
+	(*MinecraftProjectVersion)(nil),             // 67: obiente.cloud.gameservers.v1.MinecraftProjectVersion
+	(*GetMinecraftProjectVersionsRequest)(nil),  // 68: obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsRequest
+	(*GetMinecraftProjectVersionsResponse)(nil), // 69: obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsResponse
+	(*GetMinecraftProjectRequest)(nil),          // 70: obiente.cloud.gameservers.v1.GetMinecraftProjectRequest
+	(*GetMinecraftProjectResponse)(nil),         // 71: obiente.cloud.gameservers.v1.GetMinecraftProjectResponse
+	(*InstallMinecraftProjectFileRequest)(nil),  // 72: obiente.cloud.gameservers.v1.InstallMinecraftProjectFileRequest
+	(*InstallMinecraftProjectFileResponse)(nil), // 73: obiente.cloud.gameservers.v1.InstallMinecraftProjectFileResponse
+	nil,                           // 74: obiente.cloud.gameservers.v1.CreateGameServerRequest.EnvVarsEntry
+	nil,                           // 75: obiente.cloud.gameservers.v1.UpdateGameServerRequest.EnvVarsEntry
+	nil,                           // 76: obiente.cloud.gameservers.v1.GameServer.EnvVarsEntry
+	nil,                           // 77: obiente.cloud.gameservers.v1.MinecraftProjectFile.HashesEntry
+	(*timestamppb.Timestamp)(nil), // 78: google.protobuf.Timestamp
+	(v1.LogLevel)(0),              // 79: obiente.cloud.common.v1.LogLevel
+	(*v1.CreateServerFileArchiveRequest)(nil),  // 80: obiente.cloud.common.v1.CreateServerFileArchiveRequest
+	(*v1.CreateServerFileArchiveResponse)(nil), // 81: obiente.cloud.common.v1.CreateServerFileArchiveResponse
 }
 var file_obiente_cloud_gameservers_v1_game_server_service_proto_depIdxs = []int32{
 	1,  // 0: obiente.cloud.gameservers.v1.ListGameServersRequest.status:type_name -> obiente.cloud.gameservers.v1.GameServerStatus
-	32, // 1: obiente.cloud.gameservers.v1.ListGameServersResponse.game_servers:type_name -> obiente.cloud.gameservers.v1.GameServer
+	33, // 1: obiente.cloud.gameservers.v1.ListGameServersResponse.game_servers:type_name -> obiente.cloud.gameservers.v1.GameServer
 	0,  // 2: obiente.cloud.gameservers.v1.CreateGameServerRequest.game_type:type_name -> obiente.cloud.gameservers.v1.GameType
-	62, // 3: obiente.cloud.gameservers.v1.CreateGameServerRequest.env_vars:type_name -> obiente.cloud.gameservers.v1.CreateGameServerRequest.EnvVarsEntry
-	32, // 4: obiente.cloud.gameservers.v1.CreateGameServerResponse.game_server:type_name -> obiente.cloud.gameservers.v1.GameServer
-	32, // 5: obiente.cloud.gameservers.v1.GetGameServerResponse.game_server:type_name -> obiente.cloud.gameservers.v1.GameServer
-	63, // 6: obiente.cloud.gameservers.v1.UpdateGameServerRequest.env_vars:type_name -> obiente.cloud.gameservers.v1.UpdateGameServerRequest.EnvVarsEntry
-	32, // 7: obiente.cloud.gameservers.v1.UpdateGameServerResponse.game_server:type_name -> obiente.cloud.gameservers.v1.GameServer
-	32, // 8: obiente.cloud.gameservers.v1.StartGameServerResponse.game_server:type_name -> obiente.cloud.gameservers.v1.GameServer
-	32, // 9: obiente.cloud.gameservers.v1.StopGameServerResponse.game_server:type_name -> obiente.cloud.gameservers.v1.GameServer
-	32, // 10: obiente.cloud.gameservers.v1.RestartGameServerResponse.game_server:type_name -> obiente.cloud.gameservers.v1.GameServer
+	74, // 3: obiente.cloud.gameservers.v1.CreateGameServerRequest.env_vars:type_name -> obiente.cloud.gameservers.v1.CreateGameServerRequest.EnvVarsEntry
+	33, // 4: obiente.cloud.gameservers.v1.CreateGameServerResponse.game_server:type_name -> obiente.cloud.gameservers.v1.GameServer
+	33, // 5: obiente.cloud.gameservers.v1.GetGameServerResponse.game_server:type_name -> obiente.cloud.gameservers.v1.GameServer
+	75, // 6: obiente.cloud.gameservers.v1.UpdateGameServerRequest.env_vars:type_name -> obiente.cloud.gameservers.v1.UpdateGameServerRequest.EnvVarsEntry
+	33, // 7: obiente.cloud.gameservers.v1.UpdateGameServerResponse.game_server:type_name -> obiente.cloud.gameservers.v1.GameServer
+	33, // 8: obiente.cloud.gameservers.v1.StartGameServerResponse.game_server:type_name -> obiente.cloud.gameservers.v1.GameServer
+	33, // 9: obiente.cloud.gameservers.v1.StopGameServerResponse.game_server:type_name -> obiente.cloud.gameservers.v1.GameServer
+	33, // 10: obiente.cloud.gameservers.v1.RestartGameServerResponse.game_server:type_name -> obiente.cloud.gameservers.v1.GameServer
 	1,  // 11: obiente.cloud.gameservers.v1.GameServerStatusUpdate.status:type_name -> obiente.cloud.gameservers.v1.GameServerStatus
-	65, // 12: obiente.cloud.gameservers.v1.GameServerStatusUpdate.timestamp:type_name -> google.protobuf.Timestamp
-	65, // 13: obiente.cloud.gameservers.v1.GetGameServerLogsRequest.since:type_name -> google.protobuf.Timestamp
-	65, // 14: obiente.cloud.gameservers.v1.GetGameServerLogsRequest.until:type_name -> google.protobuf.Timestamp
-	24, // 15: obiente.cloud.gameservers.v1.GetGameServerLogsResponse.lines:type_name -> obiente.cloud.gameservers.v1.GameServerLogLine
-	65, // 16: obiente.cloud.gameservers.v1.GameServerLogLine.timestamp:type_name -> google.protobuf.Timestamp
-	66, // 17: obiente.cloud.gameservers.v1.GameServerLogLine.level:type_name -> obiente.cloud.common.v1.LogLevel
-	65, // 18: obiente.cloud.gameservers.v1.GetGameServerMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
-	65, // 19: obiente.cloud.gameservers.v1.GetGameServerMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
-	28, // 20: obiente.cloud.gameservers.v1.GetGameServerMetricsResponse.metrics:type_name -> obiente.cloud.gameservers.v1.GameServerMetric
-	65, // 21: obiente.cloud.gameservers.v1.GameServerMetric.timestamp:type_name -> google.protobuf.Timestamp
-	31, // 22: obiente.cloud.gameservers.v1.GetGameServerUsageResponse.current:type_name -> obiente.cloud.gameservers.v1.GameServerUsageMetrics
-	31, // 23: obiente.cloud.gameservers.v1.GetGameServerUsageResponse.estimated_monthly:type_name -> obiente.cloud.gameservers.v1.GameServerUsageMetrics
+	78, // 12: obiente.cloud.gameservers.v1.GameServerStatusUpdate.timestamp:type_name -> google.protobuf.Timestamp
+	78, // 13: obiente.cloud.gameservers.v1.GetGameServerLogsRequest.since:type_name -> google.protobuf.Timestamp
+	78, // 14: obiente.cloud.gameservers.v1.GetGameServerLogsRequest.until:type_name -> google.protobuf.Timestamp
+	25, // 15: obiente.cloud.gameservers.v1.GetGameServerLogsResponse.lines:type_name -> obiente.cloud.gameservers.v1.GameServerLogLine
+	78, // 16: obiente.cloud.gameservers.v1.GameServerLogLine.timestamp:type_name -> google.protobuf.Timestamp
+	79, // 17: obiente.cloud.gameservers.v1.GameServerLogLine.level:type_name -> obiente.cloud.common.v1.LogLevel
+	78, // 18: obiente.cloud.gameservers.v1.GetGameServerMetricsRequest.start_time:type_name -> google.protobuf.Timestamp
+	78, // 19: obiente.cloud.gameservers.v1.GetGameServerMetricsRequest.end_time:type_name -> google.protobuf.Timestamp
+	29, // 20: obiente.cloud.gameservers.v1.GetGameServerMetricsResponse.metrics:type_name -> obiente.cloud.gameservers.v1.GameServerMetric
+	78, // 21: obiente.cloud.gameservers.v1.GameServerMetric.timestamp:type_name -> google.protobuf.Timestamp
+	32, // 22: obiente.cloud.gameservers.v1.GetGameServerUsageResponse.current:type_name -> obiente.cloud.gameservers.v1.GameServerUsageMetrics
+	32, // 23: obiente.cloud.gameservers.v1.GetGameServerUsageResponse.estimated_monthly:type_name -> obiente.cloud.gameservers.v1.GameServerUsageMetrics
 	0,  // 24: obiente.cloud.gameservers.v1.GameServer.game_type:type_name -> obiente.cloud.gameservers.v1.GameType
 	1,  // 25: obiente.cloud.gameservers.v1.GameServer.status:type_name -> obiente.cloud.gameservers.v1.GameServerStatus
-	64, // 26: obiente.cloud.gameservers.v1.GameServer.env_vars:type_name -> obiente.cloud.gameservers.v1.GameServer.EnvVarsEntry
-	65, // 27: obiente.cloud.gameservers.v1.GameServer.created_at:type_name -> google.protobuf.Timestamp
-	65, // 28: obiente.cloud.gameservers.v1.GameServer.updated_at:type_name -> google.protobuf.Timestamp
-	65, // 29: obiente.cloud.gameservers.v1.GameServer.last_started_at:type_name -> google.protobuf.Timestamp
-	65, // 30: obiente.cloud.gameservers.v1.GameServerFile.modified_time:type_name -> google.protobuf.Timestamp
-	65, // 31: obiente.cloud.gameservers.v1.GameServerFile.created_time:type_name -> google.protobuf.Timestamp
-	33, // 32: obiente.cloud.gameservers.v1.ListGameServerFilesResponse.files:type_name -> obiente.cloud.gameservers.v1.GameServerFile
-	34, // 33: obiente.cloud.gameservers.v1.ListGameServerFilesResponse.volumes:type_name -> obiente.cloud.gameservers.v1.GameServerVolumeInfo
-	33, // 34: obiente.cloud.gameservers.v1.SearchGameServerFilesResponse.results:type_name -> obiente.cloud.gameservers.v1.GameServerFile
-	33, // 35: obiente.cloud.gameservers.v1.GetGameServerFileResponse.metadata:type_name -> obiente.cloud.gameservers.v1.GameServerFile
-	42, // 36: obiente.cloud.gameservers.v1.UploadGameServerFilesRequest.metadata:type_name -> obiente.cloud.gameservers.v1.UploadGameServerFilesMetadata
-	43, // 37: obiente.cloud.gameservers.v1.UploadGameServerFilesMetadata.files:type_name -> obiente.cloud.gameservers.v1.GameServerFileMetadata
-	46, // 38: obiente.cloud.gameservers.v1.DeleteGameServerEntriesResponse.errors:type_name -> obiente.cloud.gameservers.v1.DeleteGameServerEntriesError
-	33, // 39: obiente.cloud.gameservers.v1.RenameGameServerEntryResponse.entry:type_name -> obiente.cloud.gameservers.v1.GameServerFile
+	76, // 26: obiente.cloud.gameservers.v1.GameServer.env_vars:type_name -> obiente.cloud.gameservers.v1.GameServer.EnvVarsEntry
+	78, // 27: obiente.cloud.gameservers.v1.GameServer.created_at:type_name -> google.protobuf.Timestamp
+	78, // 28: obiente.cloud.gameservers.v1.GameServer.updated_at:type_name -> google.protobuf.Timestamp
+	78, // 29: obiente.cloud.gameservers.v1.GameServer.last_started_at:type_name -> google.protobuf.Timestamp
+	78, // 30: obiente.cloud.gameservers.v1.GameServerFile.modified_time:type_name -> google.protobuf.Timestamp
+	78, // 31: obiente.cloud.gameservers.v1.GameServerFile.created_time:type_name -> google.protobuf.Timestamp
+	34, // 32: obiente.cloud.gameservers.v1.ListGameServerFilesResponse.files:type_name -> obiente.cloud.gameservers.v1.GameServerFile
+	35, // 33: obiente.cloud.gameservers.v1.ListGameServerFilesResponse.volumes:type_name -> obiente.cloud.gameservers.v1.GameServerVolumeInfo
+	34, // 34: obiente.cloud.gameservers.v1.SearchGameServerFilesResponse.results:type_name -> obiente.cloud.gameservers.v1.GameServerFile
+	34, // 35: obiente.cloud.gameservers.v1.GetGameServerFileResponse.metadata:type_name -> obiente.cloud.gameservers.v1.GameServerFile
+	43, // 36: obiente.cloud.gameservers.v1.UploadGameServerFilesRequest.metadata:type_name -> obiente.cloud.gameservers.v1.UploadGameServerFilesMetadata
+	44, // 37: obiente.cloud.gameservers.v1.UploadGameServerFilesMetadata.files:type_name -> obiente.cloud.gameservers.v1.GameServerFileMetadata
+	47, // 38: obiente.cloud.gameservers.v1.DeleteGameServerEntriesResponse.errors:type_name -> obiente.cloud.gameservers.v1.DeleteGameServerEntriesError
+	34, // 39: obiente.cloud.gameservers.v1.RenameGameServerEntryResponse.entry:type_name -> obiente.cloud.gameservers.v1.GameServerFile
 	2,  // 40: obiente.cloud.gameservers.v1.CreateGameServerEntryRequest.type:type_name -> obiente.cloud.gameservers.v1.GameServerEntryType
-	33, // 41: obiente.cloud.gameservers.v1.CreateGameServerEntryResponse.entry:type_name -> obiente.cloud.gameservers.v1.GameServerFile
-	33, // 42: obiente.cloud.gameservers.v1.WriteGameServerFileResponse.entry:type_name -> obiente.cloud.gameservers.v1.GameServerFile
-	67, // 43: obiente.cloud.gameservers.v1.CreateGameServerFileArchiveRequest.archive_request:type_name -> obiente.cloud.common.v1.CreateServerFileArchiveRequest
-	68, // 44: obiente.cloud.gameservers.v1.CreateGameServerFileArchiveResponse.archive_response:type_name -> obiente.cloud.common.v1.CreateServerFileArchiveResponse
-	3,  // 45: obiente.cloud.gameservers.v1.GameServerService.ListGameServers:input_type -> obiente.cloud.gameservers.v1.ListGameServersRequest
-	5,  // 46: obiente.cloud.gameservers.v1.GameServerService.CreateGameServer:input_type -> obiente.cloud.gameservers.v1.CreateGameServerRequest
-	7,  // 47: obiente.cloud.gameservers.v1.GameServerService.GetGameServer:input_type -> obiente.cloud.gameservers.v1.GetGameServerRequest
-	9,  // 48: obiente.cloud.gameservers.v1.GameServerService.UpdateGameServer:input_type -> obiente.cloud.gameservers.v1.UpdateGameServerRequest
-	11, // 49: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServer:input_type -> obiente.cloud.gameservers.v1.DeleteGameServerRequest
-	13, // 50: obiente.cloud.gameservers.v1.GameServerService.StartGameServer:input_type -> obiente.cloud.gameservers.v1.StartGameServerRequest
-	15, // 51: obiente.cloud.gameservers.v1.GameServerService.StopGameServer:input_type -> obiente.cloud.gameservers.v1.StopGameServerRequest
-	17, // 52: obiente.cloud.gameservers.v1.GameServerService.RestartGameServer:input_type -> obiente.cloud.gameservers.v1.RestartGameServerRequest
-	19, // 53: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerStatus:input_type -> obiente.cloud.gameservers.v1.StreamGameServerStatusRequest
-	21, // 54: obiente.cloud.gameservers.v1.GameServerService.GetGameServerLogs:input_type -> obiente.cloud.gameservers.v1.GetGameServerLogsRequest
-	23, // 55: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerLogs:input_type -> obiente.cloud.gameservers.v1.StreamGameServerLogsRequest
-	25, // 56: obiente.cloud.gameservers.v1.GameServerService.GetGameServerMetrics:input_type -> obiente.cloud.gameservers.v1.GetGameServerMetricsRequest
-	27, // 57: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerMetrics:input_type -> obiente.cloud.gameservers.v1.StreamGameServerMetricsRequest
-	29, // 58: obiente.cloud.gameservers.v1.GameServerService.GetGameServerUsage:input_type -> obiente.cloud.gameservers.v1.GetGameServerUsageRequest
-	35, // 59: obiente.cloud.gameservers.v1.GameServerService.ListGameServerFiles:input_type -> obiente.cloud.gameservers.v1.ListGameServerFilesRequest
-	37, // 60: obiente.cloud.gameservers.v1.GameServerService.SearchGameServerFiles:input_type -> obiente.cloud.gameservers.v1.SearchGameServerFilesRequest
-	39, // 61: obiente.cloud.gameservers.v1.GameServerService.GetGameServerFile:input_type -> obiente.cloud.gameservers.v1.GetGameServerFileRequest
-	41, // 62: obiente.cloud.gameservers.v1.GameServerService.UploadGameServerFiles:input_type -> obiente.cloud.gameservers.v1.UploadGameServerFilesRequest
-	45, // 63: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerEntries:input_type -> obiente.cloud.gameservers.v1.DeleteGameServerEntriesRequest
-	50, // 64: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerEntry:input_type -> obiente.cloud.gameservers.v1.CreateGameServerEntryRequest
-	52, // 65: obiente.cloud.gameservers.v1.GameServerService.WriteGameServerFile:input_type -> obiente.cloud.gameservers.v1.WriteGameServerFileRequest
-	48, // 66: obiente.cloud.gameservers.v1.GameServerService.RenameGameServerEntry:input_type -> obiente.cloud.gameservers.v1.RenameGameServerEntryRequest
-	54, // 67: obiente.cloud.gameservers.v1.GameServerService.ExtractGameServerFile:input_type -> obiente.cloud.gameservers.v1.ExtractGameServerFileRequest
-	56, // 68: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileArchive:input_type -> obiente.cloud.gameservers.v1.CreateGameServerFileArchiveRequest
-	58, // 69: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerUUID:input_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerUUIDRequest
-	60, // 70: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerProfile:input_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileRequest
-	4,  // 71: obiente.cloud.gameservers.v1.GameServerService.ListGameServers:output_type -> obiente.cloud.gameservers.v1.ListGameServersResponse
-	6,  // 72: obiente.cloud.gameservers.v1.GameServerService.CreateGameServer:output_type -> obiente.cloud.gameservers.v1.CreateGameServerResponse
-	8,  // 73: obiente.cloud.gameservers.v1.GameServerService.GetGameServer:output_type -> obiente.cloud.gameservers.v1.GetGameServerResponse
-	10, // 74: obiente.cloud.gameservers.v1.GameServerService.UpdateGameServer:output_type -> obiente.cloud.gameservers.v1.UpdateGameServerResponse
-	12, // 75: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServer:output_type -> obiente.cloud.gameservers.v1.DeleteGameServerResponse
-	14, // 76: obiente.cloud.gameservers.v1.GameServerService.StartGameServer:output_type -> obiente.cloud.gameservers.v1.StartGameServerResponse
-	16, // 77: obiente.cloud.gameservers.v1.GameServerService.StopGameServer:output_type -> obiente.cloud.gameservers.v1.StopGameServerResponse
-	18, // 78: obiente.cloud.gameservers.v1.GameServerService.RestartGameServer:output_type -> obiente.cloud.gameservers.v1.RestartGameServerResponse
-	20, // 79: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerStatus:output_type -> obiente.cloud.gameservers.v1.GameServerStatusUpdate
-	22, // 80: obiente.cloud.gameservers.v1.GameServerService.GetGameServerLogs:output_type -> obiente.cloud.gameservers.v1.GetGameServerLogsResponse
-	24, // 81: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerLogs:output_type -> obiente.cloud.gameservers.v1.GameServerLogLine
-	26, // 82: obiente.cloud.gameservers.v1.GameServerService.GetGameServerMetrics:output_type -> obiente.cloud.gameservers.v1.GetGameServerMetricsResponse
-	28, // 83: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerMetrics:output_type -> obiente.cloud.gameservers.v1.GameServerMetric
-	30, // 84: obiente.cloud.gameservers.v1.GameServerService.GetGameServerUsage:output_type -> obiente.cloud.gameservers.v1.GetGameServerUsageResponse
-	36, // 85: obiente.cloud.gameservers.v1.GameServerService.ListGameServerFiles:output_type -> obiente.cloud.gameservers.v1.ListGameServerFilesResponse
-	38, // 86: obiente.cloud.gameservers.v1.GameServerService.SearchGameServerFiles:output_type -> obiente.cloud.gameservers.v1.SearchGameServerFilesResponse
-	40, // 87: obiente.cloud.gameservers.v1.GameServerService.GetGameServerFile:output_type -> obiente.cloud.gameservers.v1.GetGameServerFileResponse
-	44, // 88: obiente.cloud.gameservers.v1.GameServerService.UploadGameServerFiles:output_type -> obiente.cloud.gameservers.v1.UploadGameServerFilesResponse
-	47, // 89: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerEntries:output_type -> obiente.cloud.gameservers.v1.DeleteGameServerEntriesResponse
-	51, // 90: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerEntry:output_type -> obiente.cloud.gameservers.v1.CreateGameServerEntryResponse
-	53, // 91: obiente.cloud.gameservers.v1.GameServerService.WriteGameServerFile:output_type -> obiente.cloud.gameservers.v1.WriteGameServerFileResponse
-	49, // 92: obiente.cloud.gameservers.v1.GameServerService.RenameGameServerEntry:output_type -> obiente.cloud.gameservers.v1.RenameGameServerEntryResponse
-	55, // 93: obiente.cloud.gameservers.v1.GameServerService.ExtractGameServerFile:output_type -> obiente.cloud.gameservers.v1.ExtractGameServerFileResponse
-	57, // 94: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileArchive:output_type -> obiente.cloud.gameservers.v1.CreateGameServerFileArchiveResponse
-	59, // 95: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerUUID:output_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerUUIDResponse
-	61, // 96: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerProfile:output_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileResponse
-	71, // [71:97] is the sub-list for method output_type
-	45, // [45:71] is the sub-list for method input_type
-	45, // [45:45] is the sub-list for extension type_name
-	45, // [45:45] is the sub-list for extension extendee
-	0,  // [0:45] is the sub-list for field type_name
+	34, // 41: obiente.cloud.gameservers.v1.CreateGameServerEntryResponse.entry:type_name -> obiente.cloud.gameservers.v1.GameServerFile
+	34, // 42: obiente.cloud.gameservers.v1.WriteGameServerFileResponse.entry:type_name -> obiente.cloud.gameservers.v1.GameServerFile
+	80, // 43: obiente.cloud.gameservers.v1.CreateGameServerFileArchiveRequest.archive_request:type_name -> obiente.cloud.common.v1.CreateServerFileArchiveRequest
+	81, // 44: obiente.cloud.gameservers.v1.CreateGameServerFileArchiveResponse.archive_response:type_name -> obiente.cloud.common.v1.CreateServerFileArchiveResponse
+	3,  // 45: obiente.cloud.gameservers.v1.MinecraftProject.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
+	3,  // 46: obiente.cloud.gameservers.v1.ListMinecraftProjectsRequest.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
+	63, // 47: obiente.cloud.gameservers.v1.ListMinecraftProjectsResponse.projects:type_name -> obiente.cloud.gameservers.v1.MinecraftProject
+	77, // 48: obiente.cloud.gameservers.v1.MinecraftProjectFile.hashes:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectFile.HashesEntry
+	78, // 49: obiente.cloud.gameservers.v1.MinecraftProjectVersion.published_at:type_name -> google.protobuf.Timestamp
+	66, // 50: obiente.cloud.gameservers.v1.MinecraftProjectVersion.files:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectFile
+	3,  // 51: obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsRequest.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
+	67, // 52: obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsResponse.versions:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectVersion
+	63, // 53: obiente.cloud.gameservers.v1.GetMinecraftProjectResponse.project:type_name -> obiente.cloud.gameservers.v1.MinecraftProject
+	3,  // 54: obiente.cloud.gameservers.v1.InstallMinecraftProjectFileRequest.project_type:type_name -> obiente.cloud.gameservers.v1.MinecraftProjectType
+	4,  // 55: obiente.cloud.gameservers.v1.GameServerService.ListGameServers:input_type -> obiente.cloud.gameservers.v1.ListGameServersRequest
+	6,  // 56: obiente.cloud.gameservers.v1.GameServerService.CreateGameServer:input_type -> obiente.cloud.gameservers.v1.CreateGameServerRequest
+	8,  // 57: obiente.cloud.gameservers.v1.GameServerService.GetGameServer:input_type -> obiente.cloud.gameservers.v1.GetGameServerRequest
+	10, // 58: obiente.cloud.gameservers.v1.GameServerService.UpdateGameServer:input_type -> obiente.cloud.gameservers.v1.UpdateGameServerRequest
+	12, // 59: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServer:input_type -> obiente.cloud.gameservers.v1.DeleteGameServerRequest
+	14, // 60: obiente.cloud.gameservers.v1.GameServerService.StartGameServer:input_type -> obiente.cloud.gameservers.v1.StartGameServerRequest
+	16, // 61: obiente.cloud.gameservers.v1.GameServerService.StopGameServer:input_type -> obiente.cloud.gameservers.v1.StopGameServerRequest
+	18, // 62: obiente.cloud.gameservers.v1.GameServerService.RestartGameServer:input_type -> obiente.cloud.gameservers.v1.RestartGameServerRequest
+	20, // 63: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerStatus:input_type -> obiente.cloud.gameservers.v1.StreamGameServerStatusRequest
+	22, // 64: obiente.cloud.gameservers.v1.GameServerService.GetGameServerLogs:input_type -> obiente.cloud.gameservers.v1.GetGameServerLogsRequest
+	24, // 65: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerLogs:input_type -> obiente.cloud.gameservers.v1.StreamGameServerLogsRequest
+	26, // 66: obiente.cloud.gameservers.v1.GameServerService.GetGameServerMetrics:input_type -> obiente.cloud.gameservers.v1.GetGameServerMetricsRequest
+	28, // 67: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerMetrics:input_type -> obiente.cloud.gameservers.v1.StreamGameServerMetricsRequest
+	30, // 68: obiente.cloud.gameservers.v1.GameServerService.GetGameServerUsage:input_type -> obiente.cloud.gameservers.v1.GetGameServerUsageRequest
+	36, // 69: obiente.cloud.gameservers.v1.GameServerService.ListGameServerFiles:input_type -> obiente.cloud.gameservers.v1.ListGameServerFilesRequest
+	38, // 70: obiente.cloud.gameservers.v1.GameServerService.SearchGameServerFiles:input_type -> obiente.cloud.gameservers.v1.SearchGameServerFilesRequest
+	40, // 71: obiente.cloud.gameservers.v1.GameServerService.GetGameServerFile:input_type -> obiente.cloud.gameservers.v1.GetGameServerFileRequest
+	42, // 72: obiente.cloud.gameservers.v1.GameServerService.UploadGameServerFiles:input_type -> obiente.cloud.gameservers.v1.UploadGameServerFilesRequest
+	46, // 73: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerEntries:input_type -> obiente.cloud.gameservers.v1.DeleteGameServerEntriesRequest
+	51, // 74: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerEntry:input_type -> obiente.cloud.gameservers.v1.CreateGameServerEntryRequest
+	53, // 75: obiente.cloud.gameservers.v1.GameServerService.WriteGameServerFile:input_type -> obiente.cloud.gameservers.v1.WriteGameServerFileRequest
+	49, // 76: obiente.cloud.gameservers.v1.GameServerService.RenameGameServerEntry:input_type -> obiente.cloud.gameservers.v1.RenameGameServerEntryRequest
+	55, // 77: obiente.cloud.gameservers.v1.GameServerService.ExtractGameServerFile:input_type -> obiente.cloud.gameservers.v1.ExtractGameServerFileRequest
+	57, // 78: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileArchive:input_type -> obiente.cloud.gameservers.v1.CreateGameServerFileArchiveRequest
+	59, // 79: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerUUID:input_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerUUIDRequest
+	61, // 80: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerProfile:input_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileRequest
+	64, // 81: obiente.cloud.gameservers.v1.GameServerService.ListMinecraftProjects:input_type -> obiente.cloud.gameservers.v1.ListMinecraftProjectsRequest
+	68, // 82: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProjectVersions:input_type -> obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsRequest
+	70, // 83: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProject:input_type -> obiente.cloud.gameservers.v1.GetMinecraftProjectRequest
+	72, // 84: obiente.cloud.gameservers.v1.GameServerService.InstallMinecraftProjectFile:input_type -> obiente.cloud.gameservers.v1.InstallMinecraftProjectFileRequest
+	5,  // 85: obiente.cloud.gameservers.v1.GameServerService.ListGameServers:output_type -> obiente.cloud.gameservers.v1.ListGameServersResponse
+	7,  // 86: obiente.cloud.gameservers.v1.GameServerService.CreateGameServer:output_type -> obiente.cloud.gameservers.v1.CreateGameServerResponse
+	9,  // 87: obiente.cloud.gameservers.v1.GameServerService.GetGameServer:output_type -> obiente.cloud.gameservers.v1.GetGameServerResponse
+	11, // 88: obiente.cloud.gameservers.v1.GameServerService.UpdateGameServer:output_type -> obiente.cloud.gameservers.v1.UpdateGameServerResponse
+	13, // 89: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServer:output_type -> obiente.cloud.gameservers.v1.DeleteGameServerResponse
+	15, // 90: obiente.cloud.gameservers.v1.GameServerService.StartGameServer:output_type -> obiente.cloud.gameservers.v1.StartGameServerResponse
+	17, // 91: obiente.cloud.gameservers.v1.GameServerService.StopGameServer:output_type -> obiente.cloud.gameservers.v1.StopGameServerResponse
+	19, // 92: obiente.cloud.gameservers.v1.GameServerService.RestartGameServer:output_type -> obiente.cloud.gameservers.v1.RestartGameServerResponse
+	21, // 93: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerStatus:output_type -> obiente.cloud.gameservers.v1.GameServerStatusUpdate
+	23, // 94: obiente.cloud.gameservers.v1.GameServerService.GetGameServerLogs:output_type -> obiente.cloud.gameservers.v1.GetGameServerLogsResponse
+	25, // 95: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerLogs:output_type -> obiente.cloud.gameservers.v1.GameServerLogLine
+	27, // 96: obiente.cloud.gameservers.v1.GameServerService.GetGameServerMetrics:output_type -> obiente.cloud.gameservers.v1.GetGameServerMetricsResponse
+	29, // 97: obiente.cloud.gameservers.v1.GameServerService.StreamGameServerMetrics:output_type -> obiente.cloud.gameservers.v1.GameServerMetric
+	31, // 98: obiente.cloud.gameservers.v1.GameServerService.GetGameServerUsage:output_type -> obiente.cloud.gameservers.v1.GetGameServerUsageResponse
+	37, // 99: obiente.cloud.gameservers.v1.GameServerService.ListGameServerFiles:output_type -> obiente.cloud.gameservers.v1.ListGameServerFilesResponse
+	39, // 100: obiente.cloud.gameservers.v1.GameServerService.SearchGameServerFiles:output_type -> obiente.cloud.gameservers.v1.SearchGameServerFilesResponse
+	41, // 101: obiente.cloud.gameservers.v1.GameServerService.GetGameServerFile:output_type -> obiente.cloud.gameservers.v1.GetGameServerFileResponse
+	45, // 102: obiente.cloud.gameservers.v1.GameServerService.UploadGameServerFiles:output_type -> obiente.cloud.gameservers.v1.UploadGameServerFilesResponse
+	48, // 103: obiente.cloud.gameservers.v1.GameServerService.DeleteGameServerEntries:output_type -> obiente.cloud.gameservers.v1.DeleteGameServerEntriesResponse
+	52, // 104: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerEntry:output_type -> obiente.cloud.gameservers.v1.CreateGameServerEntryResponse
+	54, // 105: obiente.cloud.gameservers.v1.GameServerService.WriteGameServerFile:output_type -> obiente.cloud.gameservers.v1.WriteGameServerFileResponse
+	50, // 106: obiente.cloud.gameservers.v1.GameServerService.RenameGameServerEntry:output_type -> obiente.cloud.gameservers.v1.RenameGameServerEntryResponse
+	56, // 107: obiente.cloud.gameservers.v1.GameServerService.ExtractGameServerFile:output_type -> obiente.cloud.gameservers.v1.ExtractGameServerFileResponse
+	58, // 108: obiente.cloud.gameservers.v1.GameServerService.CreateGameServerFileArchive:output_type -> obiente.cloud.gameservers.v1.CreateGameServerFileArchiveResponse
+	60, // 109: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerUUID:output_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerUUIDResponse
+	62, // 110: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftPlayerProfile:output_type -> obiente.cloud.gameservers.v1.GetMinecraftPlayerProfileResponse
+	65, // 111: obiente.cloud.gameservers.v1.GameServerService.ListMinecraftProjects:output_type -> obiente.cloud.gameservers.v1.ListMinecraftProjectsResponse
+	69, // 112: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProjectVersions:output_type -> obiente.cloud.gameservers.v1.GetMinecraftProjectVersionsResponse
+	71, // 113: obiente.cloud.gameservers.v1.GameServerService.GetMinecraftProject:output_type -> obiente.cloud.gameservers.v1.GetMinecraftProjectResponse
+	73, // 114: obiente.cloud.gameservers.v1.GameServerService.InstallMinecraftProjectFile:output_type -> obiente.cloud.gameservers.v1.InstallMinecraftProjectFileResponse
+	85, // [85:115] is the sub-list for method output_type
+	55, // [55:85] is the sub-list for method input_type
+	55, // [55:55] is the sub-list for extension type_name
+	55, // [55:55] is the sub-list for extension extendee
+	0,  // [0:55] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_gameservers_v1_game_server_service_proto_init() }
@@ -4896,13 +5992,19 @@ func file_obiente_cloud_gameservers_v1_game_server_service_proto_init() {
 	file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[53].OneofWrappers = []any{}
 	file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[56].OneofWrappers = []any{}
 	file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[58].OneofWrappers = []any{}
+	file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[59].OneofWrappers = []any{}
+	file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[60].OneofWrappers = []any{}
+	file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[61].OneofWrappers = []any{}
+	file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[63].OneofWrappers = []any{}
+	file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[64].OneofWrappers = []any{}
+	file_obiente_cloud_gameservers_v1_game_server_service_proto_msgTypes[69].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc), len(file_obiente_cloud_gameservers_v1_game_server_service_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   62,
+			NumEnums:      4,
+			NumMessages:   74,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
