@@ -105,6 +105,47 @@ for node in manager-1 worker-1 worker-2; do
 done
 ```
 
+### 4.5. Configure Node Labels (Required for Non-HA)
+
+For non-HA deployments, you must label nodes to specify where database services should run. This gives you control over which nodes host PostgreSQL, TimescaleDB, and Redis.
+
+**Label a node for PostgreSQL:**
+```bash
+# Find your node name or ID
+docker node ls
+
+# Label a node to run PostgreSQL
+docker node update --label-add postgres.enabled=true <node-name-or-id>
+```
+
+**Label a node for TimescaleDB (metrics database):**
+```bash
+docker node update --label-add metrics.enabled=true <node-name-or-id>
+```
+
+**Label a node for Redis:**
+```bash
+docker node update --label-add redis.enabled=true <node-name-or-id>
+```
+
+**Example: Label a single node for all databases:**
+```bash
+# Get node name
+NODE_NAME=$(docker node ls --format "{{.Hostname}}" | head -n 1)
+
+# Label the node for all database services
+docker node update --label-add postgres.enabled=true $NODE_NAME
+docker node update --label-add metrics.enabled=true $NODE_NAME
+docker node update --label-add redis.enabled=true $NODE_NAME
+```
+
+**Verify labels:**
+```bash
+docker node inspect <node-name-or-id> --pretty
+```
+
+**Note:** You can use the same node for all database services, or distribute them across different nodes. The labels allow you to control placement precisely.
+
 ### 5. Deploy the Stack
 
 Deploy to the Swarm cluster:

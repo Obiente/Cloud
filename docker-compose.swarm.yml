@@ -924,13 +924,13 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
     deploy:
-      mode: replicated  # Use replicated mode with ingress for proper Swarm load balancing
-      replicas: 1
+      mode: global  # Run one instance on each manager node
       update_config:
         parallelism: 1
         order: start-first
       placement:
         constraints:
+          - node.role == manager  # Only run on manager nodes
           - node.labels.traefik.exclude != true  # Exclude nodes labeled with traefik.exclude=true
       resources:
         limits:
