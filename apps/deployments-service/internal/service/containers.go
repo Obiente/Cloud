@@ -9,9 +9,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/docker"
 	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
 
 	deploymentsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/deployments/v1"
@@ -71,7 +71,7 @@ func (s *Service) attemptAutomaticRedeployment(ctx context.Context, deploymentID
 			if dbDep.Image != nil {
 				image = *dbDep.Image
 			}
-			
+
 			// If no image is configured, check if deployment needs to be built
 			if image == "" {
 				// Check if deployment has a repository URL or build strategy that requires building
@@ -84,34 +84,12 @@ func (s *Service) attemptAutomaticRedeployment(ctx context.Context, deploymentID
 				log.Printf("[attemptAutomaticRedeployment] Deployment %s has no image configured", deploymentID)
 				return fmt.Errorf("deployment has no image configured")
 			}
-			
-			// Get port from routing configuration if available, otherwise use deployment port
-			port := 8080
-			if dbDep.Port != nil {
-				port = int(*dbDep.Port)
+
+			port := determineDeploymentPort(deploymentID, dbDep)
+			if port == 0 {
+				log.Printf("[attemptAutomaticRedeployment] Deployment %s has no exposed port configured; continuing without health checks", deploymentID)
 			}
-			
-			// Check routing configuration for target port (takes precedence)
-			routings, err := database.GetDeploymentRoutings(deploymentID)
-			if err == nil && len(routings) > 0 {
-				// Track if we found a routing rule
-				foundRouting := false
-				// Find routing rule for "default" service (or first one if no service name specified)
-				for _, routing := range routings {
-					if routing.ServiceName == "" || routing.ServiceName == "default" {
-						port = routing.TargetPort
-						log.Printf("[attemptAutomaticRedeployment] Using target port %d from routing configuration (default service) for deployment %s", port, deploymentID)
-						foundRouting = true
-						break
-					}
-				}
-				// If no default service routing found, use first routing's target port
-				if !foundRouting {
-					port = routings[0].TargetPort
-					log.Printf("[attemptAutomaticRedeployment] Using target port %d from first routing rule for deployment %s", port, deploymentID)
-				}
-			}
-			
+
 			memory := int64(256 * 1024 * 1024) // Default 256MB
 			if dbDep.MemoryBytes != nil {
 				memory = *dbDep.MemoryBytes
@@ -145,18 +123,18 @@ func (s *Service) attemptAutomaticRedeployment(ctx context.Context, deploymentID
 					latestBuild, buildErr := s.buildHistoryRepo.GetLatestSuccessfulBuild(ctx, deploymentID)
 					if buildErr == nil && latestBuild != nil {
 						log.Printf("[attemptAutomaticRedeployment] Image %s not found but found successful build #%d, triggering automatic rebuild", image, latestBuild.BuildNumber)
-						
+
 						// Trigger rebuild asynchronously
 						go func() {
 							// Create a system context with admin user to bypass permission checks
 							systemCtx := s.createSystemContext()
-							
+
 							// Create a request with organization ID from deployment
 							req := connect.NewRequest(&deploymentsv1.TriggerDeploymentRequest{
 								DeploymentId:   deploymentID,
 								OrganizationId: dbDep.OrganizationID,
 							})
-							
+
 							// Trigger the deployment (this will handle the build asynchronously)
 							_, triggerErr := s.TriggerDeployment(systemCtx, req)
 							if triggerErr != nil {
@@ -165,10 +143,10 @@ func (s *Service) attemptAutomaticRedeployment(ctx context.Context, deploymentID
 								log.Printf("[attemptAutomaticRedeployment] Successfully triggered automatic rebuild for deployment %s", deploymentID)
 							}
 						}()
-						
+
 						return fmt.Errorf("image %s not found - automatically triggered rebuild based on latest successful build #%d. Please wait for the build to complete", image, latestBuild.BuildNumber)
 					}
-					
+
 					// No successful build found
 					return fmt.Errorf("image %s not found - deployment needs to be built. Please trigger a deployment build first", image)
 				}
@@ -222,10 +200,10 @@ func (s *Service) findContainerForDeployment(ctx context.Context, deploymentID, 
 		locations, err = database.ValidateAndRefreshLocations(deploymentID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to validate locations after redeployment: %w", err)
-	}
+		}
 
-	if len(locations) == 0 {
-		return nil, fmt.Errorf("no containers for deployment")
+		if len(locations) == 0 {
+			return nil, fmt.Errorf("no containers for deployment")
 		}
 	}
 
@@ -509,7 +487,7 @@ func (s *Service) getDeploymentHealthStatus(ctx context.Context, deploymentID st
 		if containerInfo.State != nil && containerInfo.State.Health != nil {
 			hasHealthCheck = true
 			healthStatus := containerInfo.State.Health.Status
-			
+
 			switch healthStatus {
 			case "unhealthy":
 				hasUnhealthy = true
@@ -529,7 +507,7 @@ func (s *Service) getDeploymentHealthStatus(ctx context.Context, deploymentID st
 	if !hasHealthCheck {
 		return "", nil // No health checks configured
 	}
-	
+
 	if hasUnhealthy {
 		return "unhealthy", nil
 	}
@@ -539,7 +517,7 @@ func (s *Service) getDeploymentHealthStatus(ctx context.Context, deploymentID st
 	if allHealthy {
 		return "healthy", nil
 	}
-	
+
 	return "unknown", nil
 }
 

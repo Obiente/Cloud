@@ -344,13 +344,9 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 			}
 
 			// Fallback to deployment port only if no routing found
-			if port == 0 {
-				if deployment.Port != nil && *deployment.Port > 0 {
-					port = int(*deployment.Port)
-					logger.Info("[StartDeployment] Using deployment port %d (no routing found) for deployment %s", port, deploymentID)
-				} else {
-					return fmt.Errorf("deployment %s has no port configured in routing rules or deployment settings", deploymentID)
-				}
+			if port == 0 && deployment.Port != nil && *deployment.Port > 0 {
+				port = int(*deployment.Port)
+				logger.Info("[StartDeployment] Using deployment port %d (no routing found) for deployment %s", port, deploymentID)
 			}
 
 			memory := int64(256 * 1024 * 1024) // Default 256MB
@@ -364,6 +360,10 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 			replicas := 1 // Default
 			if deployment.Replicas != nil {
 				replicas = int(*deployment.Replicas)
+			}
+
+			if port == 0 {
+				logger.Info("[StartDeployment] Deployment %s has no exposed port configured; continuing without Traefik/health checks", deploymentID)
 			}
 
 			config := &DeploymentConfig{
@@ -458,14 +458,12 @@ func (dm *DeploymentManager) StartDeployment(ctx context.Context, deploymentID s
 				}
 
 				// Fallback to deployment port only if no routing found
+				if port == 0 && deployment.Port != nil && *deployment.Port > 0 {
+					port = int(*deployment.Port)
+					logger.Info("[StartDeployment] Using deployment port %d (no routing found) for deployment %s (recreate)", port, deploymentID)
+				}
 				if port == 0 {
-					if deployment.Port != nil && *deployment.Port > 0 {
-						port = int(*deployment.Port)
-						logger.Info("[StartDeployment] Using deployment port %d (no routing found) for deployment %s (recreate)", port, deploymentID)
-					} else {
-						logger.Warn("[StartDeployment] Deployment %s has no port configured, skipping recreation", deploymentID)
-						continue
-					}
+					logger.Info("[StartDeployment] Deployment %s still has no exposed port after recreation lookup; continuing without health checks", deploymentID)
 				}
 
 				memory := int64(256 * 1024 * 1024) // Default 256MB
@@ -784,13 +782,12 @@ func (dm *DeploymentManager) RestartDeployment(ctx context.Context, deploymentID
 	}
 
 	// Fallback to deployment port only if no routing found
+	if port == 0 && deployment.Port != nil && *deployment.Port > 0 {
+		port = int(*deployment.Port)
+		logger.Info("[DeploymentManager] Using deployment port %d (no routing found) for restart", port)
+	}
 	if port == 0 {
-		if deployment.Port != nil && *deployment.Port > 0 {
-			port = int(*deployment.Port)
-			logger.Info("[DeploymentManager] Using deployment port %d (no routing found) for restart", port)
-		} else {
-			return fmt.Errorf("deployment %s has no port configured in routing rules or deployment settings", deploymentID)
-		}
+		logger.Info("[DeploymentManager] Deployment %s restarting without an exposed port", deploymentID)
 	}
 
 	// Get resource limits

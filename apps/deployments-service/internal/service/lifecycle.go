@@ -186,10 +186,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		}
 
 		// Set defaults for optional fields
-		port := 8080
-		if dbDeployment.Port != nil {
-			port = int(*dbDeployment.Port)
-		}
+		port := determineDeploymentPort(deploymentID, dbDeployment)
 		memoryBytes := int64(512 * 1024 * 1024) // 512MB default
 		if dbDeployment.MemoryBytes != nil {
 			memoryBytes = *dbDeployment.MemoryBytes
@@ -291,8 +288,8 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				if status == 3 { // BUILD_SUCCESS
 					metadata := map[string]string{
 						"deployment_id": deploymentID,
-						"build_id":       buildID,
-						"build_number":   fmt.Sprintf("%d", buildNumber),
+						"build_id":      buildID,
+						"build_number":  fmt.Sprintf("%d", buildNumber),
 					}
 					if err := notifications.CreateNotificationForOrganization(buildCtx, dbDeployment.OrganizationID,
 						notificationsv1.NotificationType_NOTIFICATION_TYPE_DEPLOYMENT,
@@ -309,9 +306,9 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 					}
 					metadata := map[string]string{
 						"deployment_id": deploymentID,
-						"build_id":       buildID,
-						"build_number":   fmt.Sprintf("%d", buildNumber),
-						"error":          errorMessage,
+						"build_id":      buildID,
+						"build_number":  fmt.Sprintf("%d", buildNumber),
+						"error":         errorMessage,
 					}
 					if err := notifications.CreateNotificationForOrganization(buildCtx, dbDeployment.OrganizationID,
 						notificationsv1.NotificationType_NOTIFICATION_TYPE_DEPLOYMENT,
@@ -364,7 +361,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			buildResult = result
 
 			streamer.Write([]byte("✅ Build completed successfully\n"))
-			
+
 			// Update deployment start command if it was modified by the build strategy
 			// (e.g., for Astro projects that need "pnpm build && pnpm preview --host")
 			// Also update if start command was extracted from image (e.g., railpack images)
@@ -374,7 +371,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 					logger.Info("[TriggerDeployment] Updated start command to: %s", buildConfig.StartCommand)
 				}
 			}
-			
+
 			// Detect port from build logs (prioritize over repo detection)
 			// Build logs are more accurate as they show what the app actually started on
 			logPort := streamer.DetectPortFromLogs(200) // Check first 200 log lines for better coverage
@@ -387,7 +384,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				// But prefer to use repo detection result which should already be set
 				logger.Debug("[TriggerDeployment] No port detected from logs, using build result port: %d", result.Port)
 			}
-			
+
 			// If in Swarm mode, push image to local registry
 			if result.ImageName != "" {
 				// Check if we're in Swarm mode
@@ -402,7 +399,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 						isSwarmMode = lower == "true" || lower == "1" || lower == "yes" || lower == "on"
 					}
 				}
-				
+
 				if isSwarmMode {
 					registryURL := os.Getenv("REGISTRY_URL")
 					if registryURL == "" {
@@ -422,13 +419,13 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 							registryURL = strings.ReplaceAll(registryURL, "${DOMAIN}", domain)
 						}
 					}
-					
+
 					// Strip protocol from registry URL for image name (Docker doesn't use protocols in image names)
 					registryHost := strings.TrimPrefix(registryURL, "https://")
 					registryHost = strings.TrimPrefix(registryHost, "http://")
 					registryImageName := fmt.Sprintf("%s/%s", registryHost, result.ImageName)
 					streamer.Write([]byte(fmt.Sprintf("📤 Pushing image to registry: %s\n", registryImageName)))
-					
+
 					registryUsername := os.Getenv("REGISTRY_USERNAME")
 					registryPassword := os.Getenv("REGISTRY_PASSWORD")
 					if registryUsername == "" {
@@ -451,7 +448,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 						logger.Warn("[TriggerDeployment] REGISTRY_PASSWORD not set - pushing without authentication")
 						streamer.WriteStderr([]byte("⚠️  Warning: REGISTRY_PASSWORD not set - pushing without authentication\n"))
 					}
-					
+
 					tagCmd := exec.CommandContext(buildCtx, "docker", "tag", result.ImageName, registryImageName)
 					if err := tagCmd.Run(); err != nil {
 						logger.Warn("[TriggerDeployment] Failed to tag image %s as %s: %v", result.ImageName, registryImageName, err)
@@ -476,7 +473,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 					}
 				}
 			}
-			
+
 			streamer.Write([]byte("🚀 Deploying to orchestrator...\n"))
 
 			// Update build with build results
@@ -509,7 +506,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 					logger.Debug("[TriggerDeployment] Manager was nil, retrieved from global orchestrator service")
 				}
 			}
-			
+
 			// If still nil, try to create a new one as last resort
 			if manager == nil {
 				logger.Warn("[TriggerDeployment] WARNING: Creating deployment manager as last resort...")
@@ -525,7 +522,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 				}
 				logger.Info("[TriggerDeployment] Successfully created deployment manager as last resort")
 			}
-			
+
 			if err := deployResultToOrchestrator(buildCtx, manager, dbDeployment, result); err != nil {
 				logger.Error("[TriggerDeployment] Deployment failed: %v", err)
 				streamer.WriteStderr([]byte(fmt.Sprintf("❌ Deployment failed: %v\n", err)))
@@ -552,7 +549,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 		// Update build status in build history as successful (build completed)
 		// buildTime is calculated inside updateBuildStatus
 		updateBuildStatus(3, nil) // BUILD_SUCCESS = 3
-		
+
 		// Verify containers are running
 		streamer.Write([]byte("🔍 Verifying containers are running...\n"))
 		if err := s.verifyContainersRunning(buildCtx, deploymentID); err != nil {
@@ -560,7 +557,7 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			streamer.WriteStderr([]byte(fmt.Sprintf("⚠️  Warning: %v\n", err)))
 			// Don't mark build as failed - build itself succeeded, just container verification failed
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_FAILED))
-			
+
 			// Create notification for deployment failure
 			deploymentName := dbDeployment.Name
 			if deploymentName == "" {
@@ -573,9 +570,9 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			actionLabel := "View Deployment"
 			metadata := map[string]string{
 				"deployment_id": deploymentID,
-				"build_id":       buildID,
-				"build_number":   fmt.Sprintf("%d", buildNumber),
-				"error":          err.Error(),
+				"build_id":      buildID,
+				"build_number":  fmt.Sprintf("%d", buildNumber),
+				"error":         err.Error(),
 			}
 			if err := notifications.CreateNotificationForOrganization(buildCtx, dbDeployment.OrganizationID,
 				notificationsv1.NotificationType_NOTIFICATION_TYPE_DEPLOYMENT,
@@ -587,14 +584,14 @@ func (s *Service) TriggerDeployment(ctx context.Context, req *connect.Request[de
 			}
 		} else {
 			streamer.Write([]byte("✅ Deployment completed successfully!\n"))
-			
+
 			// Calculate and update storage usage
 			streamer.Write([]byte("📊 Calculating storage usage...\n"))
 			if err := s.updateDeploymentStorage(buildCtx, deploymentID, buildResult); err != nil {
 				logger.Warn("[TriggerDeployment] Warning: Failed to update storage: %v", err)
 				// Don't fail deployment if storage calculation fails
 			}
-			
+
 			_ = s.repo.UpdateStatus(buildCtx, deploymentID, int32(deploymentsv1.DeploymentStatus_RUNNING))
 		}
 	}()
@@ -687,33 +684,11 @@ func (s *Service) StartDeployment(ctx context.Context, req *connect.Request[depl
 				if dbDep.Image != nil {
 					image = *dbDep.Image
 				}
-				// Get port from routing configuration if available, otherwise use deployment port
-				port := 8080
-				if dbDep.Port != nil {
-					port = int(*dbDep.Port)
+				port := determineDeploymentPort(deploymentID, dbDep)
+				if port == 0 {
+					logger.Info("[StartDeployment] Deployment %s has no routing/port configured; proceeding without health checks", deploymentID)
 				}
-				
-				// Check routing configuration for target port (takes precedence)
-				routings, err := database.GetDeploymentRoutings(deploymentID)
-				if err == nil && len(routings) > 0 {
-					// Track if we found a routing rule
-					foundRouting := false
-					// Find routing rule for "default" service (or first one if no service name specified)
-					for _, routing := range routings {
-						if routing.ServiceName == "" || routing.ServiceName == "default" {
-							port = routing.TargetPort
-							logger.Info("[StartDeployment] Using target port %d from routing configuration (default service) for deployment %s", port, deploymentID)
-							foundRouting = true
-							break
-						}
-					}
-					// If no default service routing found, use first routing's target port
-					if !foundRouting {
-						port = routings[0].TargetPort
-						logger.Info("[StartDeployment] Using target port %d from first routing rule for deployment %s", port, deploymentID)
-					}
-				}
-				
+
 				memory := int64(512 * 1024 * 1024) // Default 512MB
 				if dbDep.MemoryBytes != nil {
 					memory = *dbDep.MemoryBytes

@@ -15,14 +15,33 @@ import (
 func GetDeploymentNodeIP(deploymentID string, nodeIPMap map[string][]string) ([]string, error) {
 	// Get deployment locations (where deployment is actually running)
 	var locations []DeploymentLocation
-	result := DB.Where("deployment_id = ? AND status = ?", deploymentID, "running").
+	preferredStatuses := []string{"running", "restarting", "starting", "created"}
+	result := DB.Where("deployment_id = ? AND status IN ?", deploymentID, preferredStatuses).
 		Find(&locations)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to query deployment locations: %w", result.Error)
 	}
 
 	if len(locations) == 0 {
-		return nil, fmt.Errorf("no running deployment found for deployment_id: %s", deploymentID)
+		// Fallback: allow any status (deployments might still be starting/recovering)
+		result = DB.Where("deployment_id = ?", deploymentID).
+			Order("updated_at DESC").
+			Find(&locations)
+		if result.Error != nil {
+			return nil, fmt.Errorf("failed to query deployment locations (fallback): %w", result.Error)
+		}
+		if len(locations) == 0 {
+			return nil, fmt.Errorf("no deployment locations found for deployment_id: %s", deploymentID)
+		}
+		// Prefer the first non-stopped location if available
+		for i, loc := range locations {
+			if !isStoppedStatus(loc.Status) {
+				if i != 0 {
+					locations[0], locations[i] = locations[i], locations[0]
+				}
+				break
+			}
+		}
 	}
 
 	// Get the first location's node to determine region
@@ -84,14 +103,31 @@ func GetDeploymentNodeIP(deploymentID string, nodeIPMap map[string][]string) ([]
 func GetGameServerNodeIP(gameServerID string, nodeIPMap map[string][]string) ([]string, error) {
 	// Get game server locations (where game server is actually running)
 	var locations []GameServerLocation
-	result := DB.Where("game_server_id = ? AND status = ?", gameServerID, "running").
+	preferredStatuses := []string{"running", "restarting", "starting", "created"}
+	result := DB.Where("game_server_id = ? AND status IN ?", gameServerID, preferredStatuses).
 		Find(&locations)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to query game server locations: %w", result.Error)
 	}
 
 	if len(locations) == 0 {
-		return nil, fmt.Errorf("no running game server found for game_server_id: %s", gameServerID)
+		result = DB.Where("game_server_id = ?", gameServerID).
+			Order("updated_at DESC").
+			Find(&locations)
+		if result.Error != nil {
+			return nil, fmt.Errorf("failed to query game server locations (fallback): %w", result.Error)
+		}
+		if len(locations) == 0 {
+			return nil, fmt.Errorf("no game server locations found for game_server_id: %s", gameServerID)
+		}
+		for i, loc := range locations {
+			if !isStoppedStatus(loc.Status) {
+				if i != 0 {
+					locations[0], locations[i] = locations[i], locations[0]
+				}
+				break
+			}
+		}
 	}
 
 	// Get the first location's node to determine region
@@ -377,4 +413,13 @@ func GetGameServerType(gameServerID string) (int32, error) {
 func GetGameServerIP(gameServerID string) (string, error) {
 	nodeIP, _, err := GetGameServerLocation(gameServerID)
 	return nodeIP, err
+}
+
+func isStoppedStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "stopped", "exited", "dead", "removing":
+		return true
+	default:
+		return false
+	}
 }
