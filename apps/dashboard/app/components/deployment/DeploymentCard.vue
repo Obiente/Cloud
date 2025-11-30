@@ -1,7 +1,7 @@
  <template>
   <ResourceCard
     :title="deployment?.name || ''"
-    :subtitle="deployment?.domain"
+    :subtitle="primaryDomain"
     :status-meta="statusMeta"
     :created-at="lastDeployedAtDate"
     :detail-url="deployment ? `/deployments/${deployment.id}` : undefined"
@@ -12,14 +12,14 @@
     <template #subtitle>
       <OuiStack gap="xs">
         <a
-          v-if="!loading && deployment?.domain"
-          :href="`https://${deployment.domain}`"
+          v-if="!loading && primaryDomain"
+          :href="`https://${primaryDomain}`"
           target="_blank"
           rel="noopener noreferrer"
           class="inline-flex items-center gap-1.5 text-sm text-secondary hover:text-primary transition-colors"
           @click.stop
         >
-          <span class="truncate">{{ deployment.domain }}</span>
+          <span class="truncate">{{ primaryDomain }}</span>
           <ArrowTopRightOnSquareIcon class="h-3.5 w-3.5" />
         </a>
       </OuiStack>
@@ -342,6 +342,7 @@
     DeploymentType,
     DeploymentStatus,
     Environment as EnvEnum,
+    DeploymentService,
   } from "@obiente/proto";
   import { date } from "@obiente/proto/utils";
   import { useDeploymentActions } from "~/composables/useDeploymentActions";
@@ -350,12 +351,15 @@
   import OuiByte from "~/components/oui/Byte.vue";
   import { useSkeletonVariations, randomTextWidthByType, randomIconVariation } from "~/composables/useSkeletonVariations";
   import OuiSkeleton from "~/components/oui/Skeleton.vue";
+  import { useConnectClient } from "~/lib/connect-client";
+  import { useOrganizationId } from "~/composables/useOrganizationId";
 
   interface Props {
     deployment?: Deployment;
     progressValue?: number;
     progressPhase?: string;
     loading?: boolean;
+    organizationId?: string;
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -370,6 +374,71 @@
 
   const { startDeployment, stopDeployment, redeployDeployment } = useDeploymentActions();
   const isActioning = ref(false);
+  const client = useConnectClient(DeploymentService);
+  const organizationIdFromComposable = useOrganizationId();
+
+  // Get organizationId from prop or composable
+  const organizationId = computed(() => props.organizationId || organizationIdFromComposable.value || "");
+
+  // Fetch routing rules to get the primary domain
+  const { data: routingData } = await useClientFetch(
+    () => `deployment-routings-${props.deployment?.id}`,
+    async () => {
+      if (!props.deployment?.id || !organizationId.value) return null;
+      try {
+        const res = await client.getDeploymentRoutings({
+          deploymentId: props.deployment.id,
+          organizationId: organizationId.value,
+        });
+        return res;
+      } catch (err) {
+        console.error("Failed to fetch routing rules:", err);
+        return null;
+      }
+    },
+    { 
+      watch: [() => props.deployment?.id, () => organizationId.value], 
+      server: false 
+    }
+  );
+
+  // Computed property to get the primary domain from routing rules
+  // Prefers custom domains over deploy-XXX.my.obiente.cloud domains
+  const primaryDomain = computed(() => {
+    if (!props.deployment) return "";
+    
+    const rules = routingData.value?.rules || [];
+    if (rules.length === 0) {
+      // Fallback to deployment.domain if no routing rules
+      return props.deployment.domain || "";
+    }
+
+    // Get the first routing rule's domain
+    const firstRuleDomain = rules[0]?.domain || "";
+    
+    // If the first rule has a custom domain (not deploy-XXX.my.obiente.cloud), use it
+    if (firstRuleDomain && !firstRuleDomain.match(/^deploy-\d+\.my\.obiente\.cloud$/)) {
+      return firstRuleDomain;
+    }
+
+    // If first rule is deploy-XXX.my.obiente.cloud, look for a custom domain in other rules
+    const customDomain = rules.find(
+      (rule) => rule.domain && !rule.domain.match(/^deploy-\d+\.my\.obiente\.cloud$/)
+    );
+    
+    if (customDomain?.domain) {
+      return customDomain.domain;
+    }
+
+    // If no custom domain found, use the first rule's domain (even if it's deploy-XXX.my.obiente.cloud)
+    // Only if it's actually routed (has a domain set)
+    if (firstRuleDomain) {
+      return firstRuleDomain;
+    }
+
+    // Final fallback to deployment.domain
+    return props.deployment.domain || "";
+  });
 
   // Generate random variations for skeleton (consistent per instance)
   const skeletonVars = useSkeletonVariations();

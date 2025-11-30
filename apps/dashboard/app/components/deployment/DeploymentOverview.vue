@@ -280,7 +280,7 @@
                       Domain
                     </OuiText>
                     <OuiText size="sm" weight="medium" truncate>
-                      {{ deployment.domain }}
+                      {{ primaryDomain }}
                     </OuiText>
                   </OuiStack>
                 </OuiFlex>
@@ -288,7 +288,7 @@
                   variant="ghost"
                   size="xs"
                   @click="openDomain"
-                  :disabled="!deployment.domain"
+                  :disabled="!primaryDomain"
                 >
                   <ArrowTopRightOnSquareIcon class="h-3 w-3" />
                 </OuiButton>
@@ -654,6 +654,61 @@ const { data: usageData } = await useClientFetch(
   { watch: [() => props.deployment.id, () => props.organizationId], server: false }
 );
 
+// Fetch routing rules to get the primary domain
+const { data: routingData } = await useClientFetch(
+  () => `deployment-routings-${props.deployment.id}`,
+  async () => {
+    if (!props.deployment?.id || !props.organizationId) return null;
+    try {
+      const res = await client.getDeploymentRoutings({
+        deploymentId: props.deployment.id,
+        organizationId: props.organizationId,
+      });
+      return res;
+    } catch (err) {
+      console.error("Failed to fetch routing rules:", err);
+      return null;
+    }
+  },
+  { watch: [() => props.deployment.id, () => props.organizationId], server: false }
+);
+
+// Computed property to get the primary domain from routing rules
+// Prefers custom domains over deploy-XXX.my.obiente.cloud domains
+const primaryDomain = computed(() => {
+  const rules = routingData.value?.rules || [];
+  if (rules.length === 0) {
+    // Fallback to deployment.domain if no routing rules
+    return props.deployment.domain || "";
+  }
+
+  // Get the first routing rule's domain
+  const firstRuleDomain = rules[0]?.domain || "";
+  
+  // If the first rule has a custom domain (not deploy-XXX.my.obiente.cloud), use it
+  if (firstRuleDomain && !firstRuleDomain.match(/^deploy-\d+\.my\.obiente\.cloud$/)) {
+    return firstRuleDomain;
+  }
+
+  // If first rule is deploy-XXX.my.obiente.cloud, look for a custom domain in other rules
+  const customDomain = rules.find(
+    (rule) => rule.domain && !rule.domain.match(/^deploy-\d+\.my\.obiente\.cloud$/)
+  );
+  
+  if (customDomain?.domain) {
+    return customDomain.domain;
+  }
+
+  // If no custom domain found, use the first rule's domain (even if it's deploy-XXX.my.obiente.cloud)
+  // Only if it's actually routed (has a domain set)
+  if (firstRuleDomain) {
+    return firstRuleDomain;
+  }
+
+  // Final fallback to deployment.domain
+  return props.deployment.domain || "";
+});
+
 // Live metrics state
 const isStreaming = ref(false);
 const latestMetric = ref<any>(null);
@@ -1010,8 +1065,8 @@ const formatDate = (timestamp: any) => {
 };
 
 const openDomain = () => {
-  if (props.deployment.domain) {
-    window.open(`https://${props.deployment.domain}`, "_blank");
+  if (primaryDomain.value) {
+    window.open(`https://${primaryDomain.value}`, "_blank");
   }
 };
 
