@@ -1,14 +1,8 @@
 import { ref, computed, nextTick, type Ref } from "vue";
 import { detectFilePreviewType, type FilePreviewType } from "./useFilePreview";
-import { useZipFile } from "./useZipFile";
+import { useZipFile, type FileMetadata } from "./useZipFile";
 import { useDialog } from "./useDialog";
 import type { ExplorerNode } from "../components/shared/fileExplorerTypes";
-
-export interface FileMetadata {
-  mimeType?: string;
-  encoding?: string;
-  size?: number;
-}
 
 export interface FileLoadResponse {
   content: string;

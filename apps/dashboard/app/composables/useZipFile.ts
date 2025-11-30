@@ -1,5 +1,5 @@
 import { ref, type Ref } from "vue";
-import JSZip from "jszip";
+import type JSZip from "jszip";
 
 export interface ZipEntry {
   name: string;
@@ -47,6 +47,10 @@ export function useZipFile() {
         zipData = encoder.encode(content);
       }
 
+      // Dynamically load JSZip to reduce initial bundle size
+      const JSZipModule = await import("jszip");
+      const JSZip = JSZipModule.default;
+      
       // Parse zip file
       const zip = await JSZip.loadAsync(zipData);
       zipInstance.value = zip;

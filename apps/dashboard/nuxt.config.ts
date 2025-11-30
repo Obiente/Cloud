@@ -45,9 +45,25 @@ export default defineNuxtConfig({
           manualChunks: (id) => {
             // Split large, independent dependencies into separate chunks
             if (id.includes("node_modules")) {
-              // Monaco Editor - very large editor dependency
+              // Monaco Editor - very large editor dependency (~2MB)
               if (id.includes("monaco-editor")) {
                 return "monaco";
+              }
+              // ECharts - large charting library (~500KB+)
+              if (id.includes("echarts") || id.includes("vue-echarts")) {
+                return "echarts";
+              }
+              // XTerm - terminal emulator (~200KB+)
+              if (id.includes("@xterm")) {
+                return "xterm";
+              }
+              // Highlight.js - syntax highlighting (~300KB+)
+              if (id.includes("highlight.js")) {
+                return "highlight";
+              }
+              // JSZip - file compression library
+              if (id.includes("jszip")) {
+                return "jszip";
               }
               // Connect RPC - API client library
               if (id.includes("@connectrpc") || id.includes("@bufbuild")) {
@@ -60,6 +76,14 @@ export default defineNuxtConfig({
               // VueUse - utility library
               if (id.includes("@vueuse")) {
                 return "vueuse";
+              }
+              // Ark UI - component library
+              if (id.includes("@ark-ui")) {
+                return "ark-ui";
+              }
+              // Zod - validation library
+              if (id.includes("zod")) {
+                return "zod";
               }
               // Keep vendor chunks reasonable - group smaller deps
               if (id.includes("node_modules")) {
@@ -126,6 +150,14 @@ export default defineNuxtConfig({
   // Type checking can be done separately via `pnpm typecheck` or in CI
   typescript: {
     typeCheck: process.env.SKIP_TYPE_CHECK !== "true",
+    tsConfig: {
+      compilerOptions: {
+        module: "ESNext",
+        moduleResolution: "bundler",
+        target: "ES2022",
+        skipLibCheck: true,
+      },
+    },
   },
 
   // Runtime config

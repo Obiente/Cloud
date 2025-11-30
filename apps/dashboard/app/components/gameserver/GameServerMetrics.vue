@@ -308,16 +308,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from "vue";
-import * as echarts from "echarts/core";
-import { LineChart } from "echarts/charts";
-import {
-  TitleComponent,
-  TooltipComponent,
-  GridComponent,
-  LegendComponent,
-  DataZoomComponent,
-} from "echarts/components";
-import { CanvasRenderer } from "echarts/renderers";
 import { useConnectClient } from "~/lib/connect-client";
 import { GameServerService } from "@obiente/proto";
 import {
@@ -328,17 +318,9 @@ import {
 import { CubeIcon } from "@heroicons/vue/24/outline";
 import OuiByte from "~/components/oui/Byte.vue";
 import { usePreferencesStore } from "~/stores/preferences";
+import type { ECharts } from "echarts/core";
 
-// Register ECharts components
-echarts.use([
-  LineChart,
-  TitleComponent,
-  TooltipComponent,
-  GridComponent,
-  LegendComponent,
-  DataZoomComponent,
-  CanvasRenderer,
-]);
+// ECharts will be loaded dynamically to reduce initial bundle size
 
 interface Props {
   gameServerId: string;
@@ -443,10 +425,10 @@ const networkChartRef = ref<HTMLElement | null>(null);
 const diskChartRef = ref<HTMLElement | null>(null);
 
 // Chart instances
-let cpuChart: echarts.ECharts | null = null;
-let memoryChart: echarts.ECharts | null = null;
-let networkChart: echarts.ECharts | null = null;
-let diskChart: echarts.ECharts | null = null;
+let cpuChart: ECharts | null = null;
+let memoryChart: ECharts | null = null;
+let networkChart: ECharts | null = null;
+let diskChart: ECharts | null = null;
 
 // Streaming state
 const streaming = ref(false);
@@ -572,6 +554,39 @@ const initCharts = async () => {
     return;
   }
 
+  // Dynamically load ECharts to reduce initial bundle size
+  const [
+    echartsModule,
+    { LineChart },
+    {
+      TitleComponent,
+      TooltipComponent,
+      GridComponent,
+      LegendComponent,
+      DataZoomComponent,
+    },
+    { CanvasRenderer },
+  ] = await Promise.all([
+    import("echarts/core"),
+    import("echarts/charts"),
+    import("echarts/components"),
+    import("echarts/renderers"),
+  ]);
+  
+  // ECharts uses namespace exports, so the module itself is the echarts object
+  const echarts = echartsModule as typeof import("echarts/core");
+
+  // Register ECharts components
+  echarts.use([
+    LineChart,
+    TitleComponent,
+    TooltipComponent,
+    GridComponent,
+    LegendComponent,
+    DataZoomComponent,
+    CanvasRenderer,
+  ]);
+
   await registerOUIEChartsTheme(echarts);
   const colors = getOUIEChartsColors();
 
@@ -579,6 +594,7 @@ const initCharts = async () => {
   if (!cpuChart) {
     cpuChart = echarts.init(cpuChartRef.value, "oui");
   }
+  if (!cpuChart) return;
   cpuChart.setOption({
     title: { text: "CPU Usage (%)", left: "center" },
     tooltip: {
@@ -610,6 +626,7 @@ const initCharts = async () => {
   if (!memoryChart) {
     memoryChart = echarts.init(memoryChartRef.value, "oui");
   }
+  if (!memoryChart) return;
   memoryChart.setOption({
     title: { text: "Memory Usage", left: "center" },
     tooltip: {
@@ -643,6 +660,7 @@ const initCharts = async () => {
   if (!networkChart) {
     networkChart = echarts.init(networkChartRef.value, "oui");
   }
+  if (!networkChart) return;
   networkChart.setOption({
     title: { text: "Network I/O", left: "center" },
     tooltip: {
@@ -692,6 +710,7 @@ const initCharts = async () => {
   if (!diskChart) {
     diskChart = echarts.init(diskChartRef.value, "oui");
   }
+  if (!diskChart) return;
   diskChart.setOption({
     title: { text: "Disk I/O", left: "center" },
     tooltip: {

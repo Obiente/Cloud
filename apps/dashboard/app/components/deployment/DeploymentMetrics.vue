@@ -317,16 +317,6 @@
     nextTick,
     watch,
   } from "vue";
-  import * as echarts from "echarts/core";
-  import { LineChart } from "echarts/charts";
-  import {
-    TitleComponent,
-    TooltipComponent,
-    GridComponent,
-    LegendComponent,
-    DataZoomComponent,
-  } from "echarts/components";
-  import { CanvasRenderer } from "echarts/renderers";
   import { useConnectClient } from "~/lib/connect-client";
   import { DeploymentService } from "@obiente/proto";
   import {
@@ -335,19 +325,9 @@
     createAreaGradient,
   } from "~/utils/echarts-theme";
   import { usePreferencesStore } from "~/stores/preferences";
+  import type { ECharts } from "echarts/core";
 
-  // Register ECharts components
-  echarts.use([
-    LineChart,
-    TitleComponent,
-    TooltipComponent,
-    GridComponent,
-    LegendComponent,
-    DataZoomComponent,
-    CanvasRenderer,
-  ]);
-
-  // Theme will be registered when charts are initialized
+  // ECharts will be loaded dynamically to reduce initial bundle size
 
   interface Props {
     deploymentId: string;
@@ -470,10 +450,10 @@
   const diskChartRef = ref<HTMLElement | null>(null);
 
   // Chart instances
-  let cpuChart: echarts.ECharts | null = null;
-  let memoryChart: echarts.ECharts | null = null;
-  let networkChart: echarts.ECharts | null = null;
-  let diskChart: echarts.ECharts | null = null;
+  let cpuChart: ECharts | null = null;
+  let memoryChart: ECharts | null = null;
+  let networkChart: ECharts | null = null;
+  let diskChart: ECharts | null = null;
 
   // Streaming state
   const streaming = ref(false);
@@ -741,6 +721,39 @@
       return;
     }
 
+    // Dynamically load ECharts to reduce initial bundle size
+    const [
+      echartsModule,
+      { LineChart },
+      {
+        TitleComponent,
+        TooltipComponent,
+        GridComponent,
+        LegendComponent,
+        DataZoomComponent,
+      },
+      { CanvasRenderer },
+    ] = await Promise.all([
+      import("echarts/core"),
+      import("echarts/charts"),
+      import("echarts/components"),
+      import("echarts/renderers"),
+    ]);
+    
+    // ECharts uses namespace exports, so the module itself is the echarts object
+    const echarts = echartsModule as typeof import("echarts/core");
+
+    // Register ECharts components
+    echarts.use([
+      LineChart,
+      TitleComponent,
+      TooltipComponent,
+      GridComponent,
+      LegendComponent,
+      DataZoomComponent,
+      CanvasRenderer,
+    ]);
+
     // Ensure theme is registered and chroma is loaded
     await registerOUIEChartsTheme(echarts);
 
@@ -748,6 +761,7 @@
 
     // CPU Chart
     cpuChart = echarts.init(cpuChartRef.value, "oui");
+    if (!cpuChart) return;
 
     // Calculate dynamic max for CPU chart (allow values > 100%)
     // Use max of: actual max value * 1.2, or 100, whichever is higher
@@ -822,6 +836,7 @@
 
     // Memory Chart
     memoryChart = echarts.init(memoryChartRef.value, "oui");
+    if (!memoryChart) return;
     memoryChart.setOption({
       title: {
         text: "Memory Usage",
@@ -885,6 +900,7 @@
 
     // Network Chart
     networkChart = echarts.init(networkChartRef.value, "oui");
+    if (!networkChart) return;
     networkChart.setOption({
       title: {
         text: "Network I/O",
@@ -967,6 +983,7 @@
 
     // Disk Chart
     diskChart = echarts.init(diskChartRef.value, "oui");
+    if (!diskChart) return;
     diskChart.setOption({
       title: {
         text: "Disk I/O",
