@@ -3,7 +3,7 @@
     :invalid="!!error"
     :required="required"
     :disabled="disabled"
-    class="oui-field space-y-1 w-full"
+    class="oui-field space-y-1"
   >
     <Field.Label v-if="label" class="block text-sm font-medium text-primary">
       {{ label }}
