@@ -16,11 +16,12 @@ import (
 
 // ServiceRegistry tracks all deployments across the cluster
 type ServiceRegistry struct {
-    dockerClient client.APIClient
-	cache        sync.Map // In-memory cache for fast lookups
-	mu           sync.RWMutex
-	nodeID       string
-	nodeHostname string
+	dockerClient   client.APIClient
+	cache          sync.Map // In-memory cache for fast lookups
+	mu             sync.RWMutex
+	nodeID         string
+	nodeHostname   string
+	isSwarmManager bool
 }
 
 // DeploymentInfo holds information about a deployment's location and status
@@ -71,9 +72,10 @@ func NewServiceRegistry() (*ServiceRegistry, error) {
 	}
 
 	registry := &ServiceRegistry{
-		dockerClient: cli,
-		nodeID:       nodeID,
-		nodeHostname: info.Name,
+		dockerClient:   cli,
+		nodeID:         nodeID,
+		nodeHostname:   info.Name,
+		isSwarmManager: info.Swarm.ControlAvailable,
 	}
 
 	return registry, nil
@@ -316,8 +318,129 @@ func (sr *ServiceRegistry) SyncWithDocker(ctx context.Context) error {
 		}
 	}
 
+	if err := sr.syncSwarmServices(ctx); err != nil {
+		logger.Warn("[Registry] Failed to sync swarm services: %v", err)
+	}
+
 	logger.Debug("[Registry] Sync completed. Found %d containers", len(containers))
 	return nil
+}
+
+// syncSwarmServices ensures deployments running as Swarm services get registered even
+// when the service is scheduled on remote nodes. This allows DNS/API lookups to work
+// even if the registry is only running on a manager node.
+func (sr *ServiceRegistry) syncSwarmServices(ctx context.Context) error {
+	if !utils.IsSwarmModeEnabled() || !sr.isSwarmManager {
+		// Workers (or non-swarm nodes) can only see their local containers, which are
+		// already handled in the main sync logic above.
+		return nil
+	}
+
+	servicesResult, err := sr.dockerClient.ServiceList(ctx, client.ServiceListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list swarm services: %w", err)
+	}
+
+	// Get all tasks once (more efficient than calling per service)
+	tasksResult, err := sr.dockerClient.TaskList(ctx, client.TaskListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list swarm tasks: %w", err)
+	}
+
+	for _, svc := range servicesResult.Items {
+		if svc.Spec.Labels["cloud.obiente.managed"] != "true" {
+			continue
+		}
+
+		deploymentID := svc.Spec.Labels["cloud.obiente.deployment_id"]
+		if deploymentID == "" {
+			continue
+		}
+
+		domain := svc.Spec.Labels["cloud.obiente.domain"]
+
+		activeContainers := make(map[string]bool)
+
+		for _, task := range tasksResult.Items {
+			if task.ServiceID != svc.ID {
+				continue
+			}
+			if !isTaskActive(string(task.Status.State)) {
+				continue
+			}
+			if task.Status.ContainerStatus == nil || task.Status.ContainerStatus.ContainerID == "" {
+				continue
+			}
+
+			containerID := task.Status.ContainerStatus.ContainerID
+			activeContainers[containerID] = true
+
+			location := &database.DeploymentLocation{
+				ID:              fmt.Sprintf("loc-%s-%s", deploymentID, containerID[:12]),
+				DeploymentID:    deploymentID,
+				NodeID:          task.NodeID,
+				ContainerID:     containerID,
+				ServiceID:       svc.ID,
+				TaskID:          task.ID,
+				Status:          string(task.Status.State),
+				Domain:          domain,
+				NodeHostname:    task.NodeID,
+				NodeIP:          "",
+				UpdatedAt:       time.Now(),
+				CreatedAt:       time.Now(),
+				HealthStatus:    "unknown",
+				LastHealthCheck: time.Now(),
+			}
+
+			// Populate node metadata if available
+			if task.NodeID != "" {
+				if nodeResult, err := sr.dockerClient.NodeInspect(ctx, task.NodeID, client.NodeInspectOptions{}); err == nil {
+					location.NodeHostname = nodeResult.Node.Description.Hostname
+					location.NodeIP = nodeResult.Node.Status.Addr
+				}
+			}
+
+			if err := database.RecordDeploymentLocation(location); err != nil {
+				logger.Warn("[Registry] Failed to upsert swarm location for %s: %v", containerID[:12], err)
+			} else {
+				sr.updateCache(deploymentID)
+			}
+		}
+
+		// Remove stale locations for this service (tasks that no longer exist)
+		var existing []database.DeploymentLocation
+		if err := database.DB.Where("deployment_id = ? AND service_id = ?", deploymentID, svc.ID).
+			Find(&existing).Error; err == nil {
+			for _, loc := range existing {
+				if !activeContainers[loc.ContainerID] {
+					if err := database.RemoveDeploymentLocation(loc.ContainerID); err != nil {
+						logger.Warn("[Registry] Failed to remove stale swarm location %s: %v", loc.ContainerID[:12], err)
+					} else {
+						sr.updateCache(deploymentID)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func isTaskActive(state string) bool {
+	switch state {
+	case "new",
+		"allocated",
+		"pending",
+		"assigned",
+		"accepted",
+		"preparing",
+		"ready",
+		"starting",
+		"running":
+		return true
+	default:
+		return false
+	}
 }
 
 // GetClusterStats returns overall cluster statistics
