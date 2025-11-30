@@ -413,12 +413,6 @@
             <span v-if="displaySize" class="tree-trigger__meta">
               {{ displaySize }}
             </span>
-            <span v-if="modeString" class="tree-trigger__meta">
-              {{ modeString }}
-            </span>
-            <span v-if="node.owner" class="tree-trigger__meta">
-              {{ node.owner }}
-            </span>
           </span>
           <span class="tree-trigger__actions">
             <ArrowPathIcon v-if="node.isLoading" class="action-icon animate-spin" />
@@ -531,12 +525,6 @@
             </span>
             <span v-if="displaySize" class="tree-trigger__meta">
               {{ displaySize }}
-            </span>
-            <span v-if="modeString" class="tree-trigger__meta">
-              {{ modeString }}
-            </span>
-            <span v-if="node.owner" class="tree-trigger__meta">
-              {{ node.owner }}
             </span>
           </span>
           <span class="tree-trigger__actions">
