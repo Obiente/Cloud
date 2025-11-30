@@ -181,6 +181,9 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 				}
 			} else {
 				// Successfully got nodes - sync them
+				// Track all Swarm node IDs to identify nodes that should be removed
+				swarmNodeIDs := make(map[string]bool)
+				
 				for _, node := range nodesResult.Items {
 					// Get node info
 					nodeInfoResult, err := ns.dockerClient.NodeInspect(ctx, node.ID, client.NodeInspectOptions{})
@@ -197,6 +200,9 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 
 					hostname := nodeInfo.Description.Hostname
 					nodeID := node.ID
+					
+					// Track this node ID as existing in Swarm
+					swarmNodeIDs[nodeID] = true
 
 					// Check if a node with this hostname already exists (might have different ID after Swarm reset)
 					var existingNode database.NodeMetadata
@@ -272,6 +278,24 @@ func (ns *NodeSelector) syncNodeMetadata(ctx context.Context) error {
 					// Also update metrics separately to ensure last_heartbeat is updated
 					database.UpdateNodeMetrics(nodeID, usedCPU, usedMemory)
 				}
+				
+				// Clean up nodes that are no longer in the Swarm
+				// Only remove Swarm nodes (those that don't start with "local-")
+				var allDBNodes []database.NodeMetadata
+				if err := database.DB.Find(&allDBNodes).Error; err == nil {
+					for _, dbNode := range allDBNodes {
+						// Only remove Swarm nodes (not local compose nodes)
+						if !strings.HasPrefix(dbNode.ID, "local-") {
+							if !swarmNodeIDs[dbNode.ID] {
+								log.Printf("[NodeSelector] Removing node %s (%s) from database - no longer in Swarm", dbNode.ID, dbNode.Hostname)
+								if err := database.DB.Delete(&database.NodeMetadata{}, "id = ?", dbNode.ID).Error; err != nil {
+									log.Printf("[NodeSelector] WARNING: Failed to remove node %s from database: %v", dbNode.ID, err)
+								}
+							}
+						}
+					}
+				}
+				
 				// Successfully synced all nodes, return
 				return nil
 			}
