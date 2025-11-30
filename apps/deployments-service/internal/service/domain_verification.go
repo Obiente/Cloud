@@ -514,11 +514,74 @@ func (s *Service) ValidateCustomDomains(ctx context.Context, deploymentID string
 	return nil
 }
 
-// lookupTXT performs a DNS TXT record lookup using the standard library
+var dnsFallbackResolvers = []string{"1.1.1.1:53", "8.8.8.8:53"}
+
+// lookupTXT performs a DNS TXT record lookup with fallbacks to public resolvers
+// Docker's embedded DNS (127.0.0.11) sometimes refuses external names that
+// contain characters like "_" (our verification prefix). To avoid false
+// negatives we fall back to well-known public resolvers or a custom list.
 func lookupTXT(name string) ([]string, error) {
-	txtRecords, err := net.LookupTXT(name)
-	if err != nil {
-		return nil, fmt.Errorf("DNS lookup failed: %w", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if records, err := net.DefaultResolver.LookupTXT(ctx, name); err == nil {
+		return records, nil
+	} else {
+		// Keep the original error but keep trying with fallbacks.
+		log.Printf("[lookupTXT] default resolver failed: %v", err)
 	}
-	return txtRecords, nil
+
+	resolvers := append(fallbackResolversFromEnv(), dnsFallbackResolvers...)
+	var lastErr error
+
+	for _, addr := range resolvers {
+		resolver := customResolver(addr)
+		if resolver == nil {
+			continue
+		}
+
+		records, err := resolver.LookupTXT(ctx, name)
+		if err == nil {
+			return records, nil
+		}
+		lastErr = err
+		log.Printf("[lookupTXT] resolver %s failed: %v", addr, err)
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no resolvers available")
+	}
+
+	return nil, fmt.Errorf("DNS lookup failed (all resolvers): %w", lastErr)
+}
+
+func fallbackResolversFromEnv() []string {
+	env := strings.TrimSpace(os.Getenv("OBIENTE_DNS_RESOLVERS"))
+	if env == "" {
+		return nil
+	}
+
+	parts := strings.Split(env, ",")
+	resolvers := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if !strings.Contains(p, ":") {
+			p = fmt.Sprintf("%s:53", p)
+		}
+		resolvers = append(resolvers, p)
+	}
+	return resolvers
+}
+
+func customResolver(addr string) *net.Resolver {
+	dialer := &net.Dialer{Timeout: 2 * time.Second}
+	return &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return dialer.DialContext(ctx, network, addr)
+		},
+	}
 }
