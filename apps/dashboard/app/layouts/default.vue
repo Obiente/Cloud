@@ -113,14 +113,8 @@
           :items="Array.from(notifications)"
           :is-loading="isLoading"
           :anchor-element="notificationButtonElement"
-          @update:items="
-            (val) => {
-              const notify = useNotifications();
-              val.forEach(n => {
-                if (n.read) notify.markAsRead(n.id);
-              });
-            }
-          "
+          @update:items="(val) => val.forEach((n) => n.read && markNotificationAsRead(n.id))"
+          @clear="clearAllNotifications"
           @close="isNotificationsOpen = false"
         />
 
@@ -245,7 +239,13 @@
   // Show superadmin sidebar if allowed is explicitly true (not null or false)
   const showSuperAdmin = computed(() => superAdmin.allowed.value === true);
   // Notifications state
-  const { notifications, unreadCount, isLoading } = useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    isLoading,
+    clearAll: clearAllNotifications,
+    markAsRead: markNotificationAsRead,
+  } = useNotifications();
   const isNotificationsOpen = ref(false);
   const headerRef = ref<ComponentPublicInstance<typeof AppHeader> | null>(null);
   const notificationButtonElement = computed(() => {

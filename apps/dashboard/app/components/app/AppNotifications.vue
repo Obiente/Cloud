@@ -281,6 +281,7 @@ const emit = defineEmits<{
   "update:modelValue": [value: boolean];
   close: [];
   "update:items": [items: NotificationItem[]];
+  clear: [];
 }>();
 
 const open = computed({
@@ -597,6 +598,7 @@ async function markAllRead() {
 async function clearAll() {
   isClearingAll.value = true;
   try {
+    emit("clear");
     emit("update:items", []);
   } finally {
     isClearingAll.value = false;
