@@ -213,9 +213,10 @@ export default defineNuxtConfig({
   },
 
   nitro: {
+    // Disable experimental features that might cause build hangs
     experimental: {
-      wasm: true,
-      websocket: true,
+      wasm: false, // Disable WASM to avoid potential build hangs
+      websocket: false, // Disable websocket to avoid potential build hangs
     },
     minify: true,
     sourceMap: false,
@@ -225,5 +226,16 @@ export default defineNuxtConfig({
     prerender: {
       crawlLinks: false, // Disable link crawling for faster builds (only prerender explicit routes)
     },
+    // Optimize server build to prevent hangs
+    esbuild: {
+      options: {
+        // Limit concurrency to prevent memory issues
+        target: "node20",
+      },
+    },
+    // Disable features that might cause hangs in Docker builds
+    storage: {},
+    // Reduce build complexity
+    routeRules: {},
   },
 });

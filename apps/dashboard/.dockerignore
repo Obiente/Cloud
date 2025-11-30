@@ -51,5 +51,52 @@ Thumbs.db
 *.tsbuildinfo
 tsconfig.tsbuildinfo
 
+# Exclude source files from packages during dependency install phase
+# These will be copied later when needed for build
+# Only exclude source files, keep package.json and config files
+packages/*/src
+packages/*/lib
+packages/*/dist
+packages/*/build
+packages/*/__tests__
+packages/*/test
+packages/*/tests
+packages/*/*.test.*
+packages/*/*.spec.*
+packages/*/.turbo
+
+# Exclude source files from tools during dependency install phase
+tools/*/src
+tools/*/lib
+tools/*/dist
+tools/*/build
+tools/*/__tests__
+tools/*/test
+tools/*/tests
+tools/*/*.test.*
+tools/*/*.spec.*
+
+# Exclude other apps (not needed for dashboard build)
+apps/api
+apps/*/dist
+apps/*/build
+apps/*/.nuxt
+apps/*/.nitro
+apps/*/.output
+
+# Exclude Go files (not needed for dashboard)
+**/*.go
+**/go.mod
+**/go.sum
+
+# Exclude documentation and examples
+**/README.md
+**/CHANGELOG.md
+**/LICENSE
+**/examples
+**/example
+**/docs
+**/documentation
+
 # Note: We DO NOT exclude packages/proto/src here because dashboard needs it
 # The root .dockerignore excludes it, but we'll use --ignorefile to override
