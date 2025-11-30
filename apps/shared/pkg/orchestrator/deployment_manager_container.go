@@ -920,6 +920,240 @@ func (dm *DeploymentManager) createSwarmService(ctx context.Context, config *Dep
 	return serviceID, containerID, nil
 }
 
+// updateSwarmService updates an existing Swarm service with new configuration
+// This enables zero-downtime deployments by using docker service update with start-first strategy
+func (dm *DeploymentManager) updateSwarmService(ctx context.Context, config *DeploymentConfig, serviceName string, replicaIndex int, swarmServiceName string) (string, string, error) {
+	// Get routing rules for this deployment
+	routings, _ := database.GetDeploymentRoutings(config.DeploymentID)
+
+	// Prepare labels
+	labels := map[string]string{
+		"cloud.obiente.managed":       "true",
+		"cloud.obiente.deployment_id": config.DeploymentID,
+		"cloud.obiente.domain":        config.Domain,
+		"cloud.obiente.service_name":  serviceName,
+		"cloud.obiente.replica":       strconv.Itoa(replicaIndex),
+	}
+
+	// Get the actual Swarm network name (may be prefixed with stack name)
+	swarmNetworkName, err := dm.getSwarmNetworkName(ctx)
+	if err != nil {
+		logger.Warn("[DeploymentManager] Failed to get Swarm network name, using fallback: %v", err)
+		swarmNetworkName = "obiente_obiente-network" // Fallback to common name
+	}
+
+	// Generate Traefik labels from routing rules
+	servicePort := config.Port
+	traefikLabels := generateTraefikLabels(config.DeploymentID, serviceName, routings, &servicePort, swarmNetworkName)
+	for k, v := range traefikLabels {
+		labels[k] = v
+	}
+	// Only set cloud.obiente.traefik if we actually generated Traefik labels
+	if len(traefikLabels) > 0 {
+		labels["cloud.obiente.traefik"] = "true" // Required for Traefik discovery
+	}
+
+	// Determine health check port - same logic as createSwarmService
+	healthCheckPort := 0
+	if len(routings) > 0 {
+		for _, routing := range routings {
+			serviceMatches := routing.ServiceName == serviceName ||
+				(serviceName == "default" && (routing.ServiceName == "" || routing.ServiceName == "default")) ||
+				(routing.ServiceName == "default" && serviceName == "")
+			
+			if serviceMatches && routing.TargetPort > 0 {
+				healthCheckPort = routing.TargetPort
+				break
+			}
+		}
+		if healthCheckPort == 0 {
+			for _, routing := range routings {
+				if routing.TargetPort > 0 {
+					healthCheckPort = routing.TargetPort
+					break
+				}
+			}
+		}
+	}
+	if healthCheckPort == 0 && config.Port > 0 {
+		healthCheckPort = config.Port
+	}
+
+	// Add custom labels
+	for k, v := range config.Labels {
+		labels[k] = v
+	}
+
+	// Prepare environment variables
+	env := []string{}
+	for k, v := range config.EnvVars {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	// Ensure netcat is available for health checks
+	if healthCheckPort > 0 {
+		if _, exists := config.EnvVars["NIXPACKS_APT_PKGS"]; !exists {
+			env = append(env, "NIXPACKS_APT_PKGS=netcat-openbsd")
+		}
+		if _, exists := config.EnvVars["RAILPACK_DEPLOY_APT_PACKAGES"]; !exists {
+			env = append(env, "RAILPACK_DEPLOY_APT_PACKAGES=netcat-openbsd")
+		}
+	}
+
+	// Build docker service update command
+	args := []string{"service", "update",
+		"--with-registry-auth=true", // Enable registry auth for private images
+	}
+
+	// Update labels - Docker service update will merge labels
+	// We add/update labels, and they'll replace any existing ones with the same key
+	for k, v := range labels {
+		args = append(args, "--label-add", fmt.Sprintf("%s=%s", k, v))
+	}
+
+	// Update environment variables
+	// Remove all existing env vars first (we'll add them back)
+	// Note: docker service update doesn't have a direct way to remove all env vars,
+	// so we'll add the new ones and they'll replace the old ones
+	for _, e := range env {
+		args = append(args, "--env-add", e)
+	}
+
+	// Update health check if we have a port
+	if healthCheckPort > 0 {
+		healthCheckCmd := fmt.Sprintf(`sh -c 'if command -v nc >/dev/null 2>&1; then nc -z localhost %d || exit 1; else (apk add --no-cache netcat-openbsd >/dev/null 2>&1 || apt-get update -qq && apt-get install -y -qq netcat-openbsd >/dev/null 2>&1 || yum install -y -q nc >/dev/null 2>&1) && nc -z localhost %d || exit 1; fi'`, healthCheckPort, healthCheckPort)
+		args = append(args,
+			"--health-cmd", healthCheckCmd,
+			"--health-interval", "30s",
+			"--health-timeout", "10s",
+			"--health-retries", "3",
+			"--health-start-period", "40s",
+		)
+	}
+
+	// Update resource limits
+	args = append(args, "--limit-memory", fmt.Sprintf("%d", config.Memory))
+
+	// CPU: Docker Swarm expects CPU cores, not CPU shares
+	cpuCores := float64(config.CPUShares) / 1024.0
+	args = append(args, "--limit-cpu", fmt.Sprintf("%.2f", cpuCores))
+
+	// Update resource reservations
+	reserveMemory := config.Memory / 4
+	if reserveMemory < 32*1024*1024 {
+		reserveMemory = 32 * 1024 * 1024
+	}
+	args = append(args, "--reserve-memory", fmt.Sprintf("%d", reserveMemory))
+
+	reserveCPU := cpuCores / 4.0
+	if reserveCPU < 0.01 {
+		reserveCPU = 0.01
+	}
+	args = append(args, "--reserve-cpu", fmt.Sprintf("%.2f", reserveCPU))
+
+	// Update restart policy
+	args = append(args, "--restart-condition", "any")
+
+	// Update config with start-first strategy (ensures zero-downtime)
+	args = append(args,
+		"--update-failure-action", "rollback",
+		"--update-monitor", "60s",
+		"--update-parallelism", "1",
+		"--update-delay", "10s",
+		"--update-order", "start-first",
+	)
+
+	// Update rollback config
+	args = append(args,
+		"--rollback-parallelism", "1",
+		"--rollback-delay", "10s",
+		"--rollback-order", "start-first",
+	)
+
+	// Update image
+	args = append(args, "--image", config.Image)
+
+	// Note: Docker service update doesn't support changing the command directly.
+	// If the start command needs to change, the service would need to be recreated.
+	// For zero-downtime deployments, image and config updates are the primary concern.
+
+	// Add service name
+	args = append(args, swarmServiceName)
+
+	// Execute docker service update
+	// Use a longer timeout context for Docker operations
+	dockerCtx, dockerCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer dockerCancel()
+	
+	cmd := exec.CommandContext(dockerCtx, "docker", args...)
+	var stderr bytes.Buffer
+	var stdout bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.Stdout = &stdout
+
+	logger.Info("[DeploymentManager] Updating Swarm service %s with zero-downtime strategy (start-first)", swarmServiceName)
+	if err := cmd.Run(); err != nil {
+		errorOutput := stderr.String()
+		stdOutput := stdout.String()
+		if dockerCtx.Err() == context.DeadlineExceeded {
+			logger.Error("[DeploymentManager] Docker service update timed out after 5 minutes for %s", swarmServiceName)
+			return "", "", fmt.Errorf("failed to update Swarm service: operation timed out after 5 minutes")
+		} else if dockerCtx.Err() == context.Canceled {
+			logger.Error("[DeploymentManager] Docker service update was canceled for %s", swarmServiceName)
+			return "", "", fmt.Errorf("failed to update Swarm service: operation was canceled")
+		}
+		logger.Error("[DeploymentManager] Failed to update Swarm service %s: %v\nStderr: %s\nStdout: %s", swarmServiceName, err, errorOutput, stdOutput)
+		return "", "", fmt.Errorf("failed to update Swarm service: %w\nStderr: %s\nStdout: %s", err, errorOutput, stdOutput)
+	}
+
+	serviceID := strings.TrimSpace(stdout.String())
+	logger.Info("[DeploymentManager] Updated Swarm service %s (ID: %s) - new tasks will start before old ones stop", swarmServiceName, serviceID)
+
+	// Wait a moment for the update to propagate
+	time.Sleep(2 * time.Second)
+
+	// Get container ID from service tasks (will be the new task once it starts)
+	taskArgs := []string{"service", "ps", swarmServiceName, "--format", "{{.ID}}", "--no-trunc", "--filter", "desired-state=running"}
+	taskCmd := exec.CommandContext(ctx, "docker", taskArgs...)
+	var taskStdout bytes.Buffer
+	taskCmd.Stdout = &taskStdout
+	var containerID string
+	if err := taskCmd.Run(); err == nil {
+		taskIDs := strings.TrimSpace(taskStdout.String())
+		if taskIDs != "" {
+			taskIDList := strings.Split(taskIDs, "\n")
+			// Get the first running task (should be the new one with start-first)
+			if len(taskIDList) > 0 {
+				taskID := strings.TrimSpace(taskIDList[0])
+				if taskID != "" {
+					taskInspectArgs := []string{"inspect", taskID, "--format", "{{.Status.ContainerStatus.ContainerID}}"}
+					taskInspectCmd := exec.CommandContext(ctx, "docker", taskInspectArgs...)
+					var taskInspectStdout bytes.Buffer
+					if err := taskInspectCmd.Run(); err == nil {
+						containerID = strings.TrimSpace(taskInspectStdout.String())
+					}
+				}
+			}
+		}
+	}
+
+	// If we couldn't get container ID from task, try to find by service label
+	if containerID == "" {
+		filterArgs := make(client.Filters)
+		filterArgs.Add("label", fmt.Sprintf("com.docker.swarm.service.name=%s", swarmServiceName))
+		containersResult, _ := dm.dockerClient.ContainerList(ctx, client.ContainerListOptions{
+			All:     true,
+			Filters: filterArgs,
+		})
+		if len(containersResult.Items) > 0 {
+			// Get the most recently created container (should be the new one)
+			containerID = containersResult.Items[0].ID
+		}
+	}
+
+	return serviceID, containerID, nil
+}
+
 // removeContainerByName removes a container by name (used for cleanup before creating new containers)
 func (dm *DeploymentManager) removeContainerByName(ctx context.Context, containerName string) error {
 	// Try to find container by name

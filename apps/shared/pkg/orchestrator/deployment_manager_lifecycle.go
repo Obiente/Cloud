@@ -93,24 +93,32 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 
 			if isSwarmMode {
 				// In Swarm mode, create Swarm services instead of plain containers
-				logger.Info("[DeploymentManager] Creating Swarm service for deployment %s (service: %s, replica: %d)", config.DeploymentID, serviceName, i)
-
-				// Remove existing service if it exists
 				swarmServiceName := fmt.Sprintf("deploy-%s-%s", config.DeploymentID, serviceName)
 				if i > 0 {
 					swarmServiceName = fmt.Sprintf("deploy-%s-%s-replica-%d", config.DeploymentID, serviceName, i)
 				}
-				rmArgs := []string{"service", "rm", swarmServiceName}
-				rmCmd := exec.CommandContext(ctx, "docker", rmArgs...)
-				rmCmd.Run() // Ignore errors - service might not exist
 
-				// Wait a moment for service removal
-				time.Sleep(1 * time.Second)
+				// Check if service already exists
+				checkArgs := []string{"service", "inspect", swarmServiceName, "--format", "{{.ID}}"}
+				checkCmd := exec.CommandContext(ctx, "docker", checkArgs...)
+				var checkStderr bytes.Buffer
+				checkCmd.Stderr = &checkStderr
+				serviceExists := checkCmd.Run() == nil
 
-				// Create Swarm service
-				_, containerID, err = dm.createSwarmService(ctx, config, serviceName, i)
-				if err != nil {
-					return fmt.Errorf("failed to create Swarm service: %w", err)
+				if serviceExists {
+					// Service exists - update it for zero-downtime deployment
+					logger.Info("[DeploymentManager] Swarm service %s already exists - updating with zero-downtime strategy (start-first)", swarmServiceName)
+					_, containerID, err = dm.updateSwarmService(ctx, config, serviceName, i, swarmServiceName)
+					if err != nil {
+						return fmt.Errorf("failed to update Swarm service: %w", err)
+					}
+				} else {
+					// Service doesn't exist - create it
+					logger.Info("[DeploymentManager] Creating new Swarm service for deployment %s (service: %s, replica: %d)", config.DeploymentID, serviceName, i)
+					_, containerID, err = dm.createSwarmService(ctx, config, serviceName, i)
+					if err != nil {
+						return fmt.Errorf("failed to create Swarm service: %w", err)
+					}
 				}
 
 				// For Swarm services, containerID might be empty initially - try to get it from service tasks
@@ -161,31 +169,20 @@ func (dm *DeploymentManager) CreateDeployment(ctx context.Context, config *Deplo
 					continue
 				}
 				info := infoResult.Container
-				if err == nil {
-					// Determine the public port (find port for this service from routing)
-					publicPort = config.Port
-					for _, routing := range routings {
-						if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
-							publicPort = routing.TargetPort
-							break
-						}
+				// Determine the public port (find port for this service from routing)
+				publicPort = config.Port
+				for _, routing := range routings {
+					if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
+						publicPort = routing.TargetPort
+						break
 					}
-					if len(info.NetworkSettings.Ports) > 0 {
-						for _, bindings := range info.NetworkSettings.Ports {
-							if len(bindings) > 0 {
-								if port, err := strconv.Atoi(bindings[0].HostPort); err == nil {
-									publicPort = port
-								}
+				}
+				if len(info.NetworkSettings.Ports) > 0 {
+					for _, bindings := range info.NetworkSettings.Ports {
+						if len(bindings) > 0 {
+							if port, err := strconv.Atoi(bindings[0].HostPort); err == nil {
+								publicPort = port
 							}
-						}
-					}
-				} else {
-					logger.Warn("[DeploymentManager] Failed to inspect container %s: %v", containerID, err)
-					publicPort = config.Port
-					for _, routing := range routings {
-						if routing.ServiceName == serviceName || (serviceName == "default" && routing.ServiceName == "") {
-							publicPort = routing.TargetPort
-							break
 						}
 					}
 				}
