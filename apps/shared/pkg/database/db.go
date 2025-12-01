@@ -28,9 +28,14 @@ var (
 	registeredModelTypeSet = make(map[reflect.Type]struct{})
 )
 
-const migrationAdvisoryLockID int64 = 0x6f62696e7465 // "obinte" hex
-const migrationLockMaxAge = 10 * time.Minute        // Consider lock stuck if held for > 10 minutes
-const migrationLockIdleMaxAge = 2 * time.Minute     // Consider lock stuck if held by idle connection for > 2 minutes
+// Use two-parameter advisory lock to avoid uint32 overflow in pg_locks.objid
+// Split "obiente" (0x6f6269656e7465) into two 32-bit parts:
+// classid: 0x006f6269 (first 3 bytes "obi", padded to 4) = 7302761
+// objid: 0x656e7465 (last 4 bytes "ente") = 1702258789
+const migrationAdvisoryLockClassID int32 = 0x006f6269 // "obi" - first 3 bytes (padded to 4 bytes)
+const migrationAdvisoryLockObjID int32 = 0x656e7465  // "ente" - last 4 bytes
+const migrationLockMaxAge = 10 * time.Minute           // Consider lock stuck if held for > 10 minutes
+const migrationLockIdleMaxAge = 2 * time.Minute        // Consider lock stuck if held by idle connection for > 2 minutes
 
 // RegisterModels allows services to register the GORM models they depend on so
 // they can be migrated when the service initializes its database connection.
@@ -82,10 +87,11 @@ func checkAndReleaseStuckLock(db *gorm.DB) bool {
 		SELECT l.pid
 		FROM pg_locks l
 		WHERE l.locktype = 'advisory' 
-		AND l.objid = $1
+		AND l.classid = $1
+		AND l.objid = $2
 		AND l.granted = true
 		LIMIT 1
-	`, migrationAdvisoryLockID).Scan(&lockHolderPID).Error
+	`, migrationAdvisoryLockClassID, migrationAdvisoryLockObjID).Scan(&lockHolderPID).Error
 	
 	if err != nil || lockHolderPID == nil {
 		// Lock is not held or query failed
@@ -107,9 +113,9 @@ func checkAndReleaseStuckLock(db *gorm.DB) bool {
 		return false
 	}
 	
-	if !backendActive {
-		logger.Warn("Migration lock %d is held by dead backend PID %d, attempting to terminate...", 
-			migrationAdvisoryLockID, *lockHolderPID)
+		if !backendActive {
+		logger.Warn("Migration lock (%d, %d) is held by dead backend PID %d, attempting to terminate...", 
+			migrationAdvisoryLockClassID, migrationAdvisoryLockObjID, *lockHolderPID)
 		// Try to terminate the dead backend (requires appropriate privileges)
 		if err := db.Exec("SELECT pg_terminate_backend($1)", *lockHolderPID).Error; err != nil {
 			logger.Warn("Failed to terminate dead backend %d: %v (may require superuser privileges)", *lockHolderPID, err)
@@ -162,8 +168,8 @@ func checkAndReleaseStuckLock(db *gorm.DB) bool {
 	
 	// If connection is idle for too long, it's definitely stuck
 	if (info.State == "idle" || info.State == "idle in transaction") && stateAge > migrationLockIdleMaxAge {
-		logger.Warn("Migration lock %d is held by idle backend PID %d (idle for %v), terminating...", 
-			migrationAdvisoryLockID, *lockHolderPID, stateAge)
+		logger.Warn("Migration lock (%d, %d) is held by idle backend PID %d (idle for %v), terminating...", 
+			migrationAdvisoryLockClassID, migrationAdvisoryLockObjID, *lockHolderPID, stateAge)
 		if err := db.Exec("SELECT pg_terminate_backend($1)", *lockHolderPID).Error; err != nil {
 			logger.Warn("Failed to terminate idle backend %d: %v", *lockHolderPID, err)
 			return false
@@ -175,8 +181,8 @@ func checkAndReleaseStuckLock(db *gorm.DB) bool {
 	
 	// If actively running for too long, also consider it stuck (migrations shouldn't take > 10 minutes)
 	if info.State != "idle" && info.State != "idle in transaction" && stateAge > migrationLockMaxAge {
-		logger.Warn("Migration lock %d has been held for %v by backend PID %d (state: %s), may be stuck. Terminating...", 
-			migrationAdvisoryLockID, stateAge, *lockHolderPID, info.State)
+		logger.Warn("Migration lock (%d, %d) has been held for %v by backend PID %d (state: %s), may be stuck. Terminating...", 
+			migrationAdvisoryLockClassID, migrationAdvisoryLockObjID, stateAge, *lockHolderPID, info.State)
 		if err := db.Exec("SELECT pg_terminate_backend($1)", *lockHolderPID).Error; err != nil {
 			logger.Warn("Failed to terminate long-running backend %d: %v", *lockHolderPID, err)
 			return false
@@ -188,8 +194,8 @@ func checkAndReleaseStuckLock(db *gorm.DB) bool {
 	
 	// Lock is legitimately held by an active, recent operation
 	if referenceTime != nil {
-		logger.Debug("Migration lock %d is held by backend PID %d (state: %s, age: %v)", 
-			migrationAdvisoryLockID, *lockHolderPID, info.State, stateAge)
+		logger.Debug("Migration lock (%d, %d) is held by backend PID %d (state: %s, age: %v)", 
+			migrationAdvisoryLockClassID, migrationAdvisoryLockObjID, *lockHolderPID, info.State, stateAge)
 	}
 	
 	return false
@@ -203,7 +209,7 @@ func ReleaseStuckMigrationLock(db *gorm.DB) bool {
 }
 
 func acquireMigrationLock(db *gorm.DB) (func(), error) {
-	logger.Debug("Acquiring advisory lock %d for database migrations...", migrationAdvisoryLockID)
+	logger.Debug("Acquiring advisory lock (%d, %d) for database migrations...", migrationAdvisoryLockClassID, migrationAdvisoryLockObjID)
 	
 	// Get a single connection from the pool to ensure we use the same connection
 	// for both acquire and release, since PostgreSQL advisory locks are session-scoped
@@ -228,14 +234,14 @@ func acquireMigrationLock(db *gorm.DB) (func(), error) {
 	
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		var result bool
-		if err := conn.QueryRowContext(context.Background(), "SELECT pg_try_advisory_lock($1)", migrationAdvisoryLockID).Scan(&result); err != nil {
+		if err := conn.QueryRowContext(context.Background(), "SELECT pg_try_advisory_lock($1, $2)", migrationAdvisoryLockClassID, migrationAdvisoryLockObjID).Scan(&result); err != nil {
 			conn.Close()
 			return nil, fmt.Errorf("failed to try advisory lock: %w", err)
 		}
 		
 		if result {
 			acquired = true
-			logger.Debug("Successfully acquired advisory lock %d on attempt %d", migrationAdvisoryLockID, attempt)
+			logger.Debug("Successfully acquired advisory lock (%d, %d) on attempt %d", migrationAdvisoryLockClassID, migrationAdvisoryLockObjID, attempt)
 			break
 		}
 		
@@ -249,8 +255,8 @@ func acquireMigrationLock(db *gorm.DB) (func(), error) {
 		}
 		
 		if attempt < maxRetries {
-			logger.Debug("Advisory lock %d is held by another process, retrying in %v (attempt %d/%d)...", 
-				migrationAdvisoryLockID, retryDelay, attempt, maxRetries)
+			logger.Debug("Advisory lock (%d, %d) is held by another process, retrying in %v (attempt %d/%d)...", 
+				migrationAdvisoryLockClassID, migrationAdvisoryLockObjID, retryDelay, attempt, maxRetries)
 			time.Sleep(retryDelay)
 			// Exponential backoff, max 5 seconds
 			retryDelay = time.Duration(float64(retryDelay) * 1.5)
@@ -276,10 +282,11 @@ func acquireMigrationLock(db *gorm.DB) (func(), error) {
 			FROM pg_locks l
 			LEFT JOIN pg_stat_activity a ON l.pid = a.pid
 			WHERE l.locktype = 'advisory' 
-			AND l.objid = $1
+			AND l.classid = $1
+			AND l.objid = $2
 			AND l.granted = true
 			LIMIT 1
-		`, migrationAdvisoryLockID).Scan(&info).Error
+		`, migrationAdvisoryLockClassID, migrationAdvisoryLockObjID).Scan(&info).Error
 		
 		if err == nil && info.PID != nil {
 			// Calculate how long lock has been held
@@ -296,14 +303,14 @@ func acquireMigrationLock(db *gorm.DB) (func(), error) {
 			
 			// If held for > 1 minute, terminate it (we've already waited long enough)
 			if lockAge > 1*time.Minute {
-				logger.Warn("After %d failed attempts, migration lock %d has been held for %v by backend PID %d (state: %s). Force terminating...", 
-					maxRetries, migrationAdvisoryLockID, lockAge, *info.PID, info.State)
+				logger.Warn("After %d failed attempts, migration lock (%d, %d) has been held for %v by backend PID %d (state: %s). Force terminating...", 
+					maxRetries, migrationAdvisoryLockClassID, migrationAdvisoryLockObjID, lockAge, *info.PID, info.State)
 				if err := db.Exec("SELECT pg_terminate_backend($1)", *info.PID).Error; err == nil {
 					logger.Info("Force terminated backend %d holding migration lock", *info.PID)
 					time.Sleep(1 * time.Second)
 					// Try one more time
 					var result bool
-					if err := conn.QueryRowContext(context.Background(), "SELECT pg_try_advisory_lock($1)", migrationAdvisoryLockID).Scan(&result); err == nil && result {
+					if err := conn.QueryRowContext(context.Background(), "SELECT pg_try_advisory_lock($1, $2)", migrationAdvisoryLockClassID, migrationAdvisoryLockObjID).Scan(&result); err == nil && result {
 						acquired = true
 						logger.Info("Acquired migration lock after force-terminating stuck lock")
 					}
@@ -317,7 +324,7 @@ func acquireMigrationLock(db *gorm.DB) (func(), error) {
 		if !acquired && checkAndReleaseStuckLock(db) {
 			// Try one more time
 			var result bool
-			if err := conn.QueryRowContext(context.Background(), "SELECT pg_try_advisory_lock($1)", migrationAdvisoryLockID).Scan(&result); err == nil && result {
+			if err := conn.QueryRowContext(context.Background(), "SELECT pg_try_advisory_lock($1, $2)", migrationAdvisoryLockClassID, migrationAdvisoryLockObjID).Scan(&result); err == nil && result {
 				acquired = true
 				logger.Info("Acquired migration lock after releasing stuck lock")
 			}
@@ -325,9 +332,9 @@ func acquireMigrationLock(db *gorm.DB) (func(), error) {
 		
 		if !acquired {
 			conn.Close()
-			return nil, fmt.Errorf("failed to acquire advisory lock %d after %d attempts. "+
+			return nil, fmt.Errorf("failed to acquire advisory lock (%d, %d) after %d attempts. "+
 				"The lock may be held by an active migration. If it's truly stuck, the system will automatically release it on the next attempt", 
-				migrationAdvisoryLockID, maxRetries)
+				migrationAdvisoryLockClassID, migrationAdvisoryLockObjID, maxRetries)
 		}
 	}
 
@@ -338,10 +345,10 @@ func acquireMigrationLock(db *gorm.DB) (func(), error) {
 		}
 		released = true
 		// Use the same connection for unlock to ensure we own the lock
-		if _, err := conn.ExecContext(context.Background(), "SELECT pg_advisory_unlock($1)", migrationAdvisoryLockID); err != nil {
+		if _, err := conn.ExecContext(context.Background(), "SELECT pg_advisory_unlock($1, $2)", migrationAdvisoryLockClassID, migrationAdvisoryLockObjID); err != nil {
 			logger.Warn("Failed to release migration advisory lock: %v", err)
 		} else {
-			logger.Debug("Released advisory lock %d after migrations", migrationAdvisoryLockID)
+			logger.Debug("Released advisory lock (%d, %d) after migrations", migrationAdvisoryLockClassID, migrationAdvisoryLockObjID)
 		}
 		// Return the connection to the pool
 		conn.Close()
