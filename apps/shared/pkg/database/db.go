@@ -72,8 +72,40 @@ func getRegisteredModels() []interface{} {
 
 func acquireMigrationLock(db *gorm.DB) (func(), error) {
 	logger.Debug("Acquiring advisory lock %d for database migrations...", migrationAdvisoryLockID)
-	if err := db.Exec("SELECT pg_advisory_lock(?)", migrationAdvisoryLockID).Error; err != nil {
-		return nil, err
+	
+	// Use pg_try_advisory_lock instead of pg_advisory_lock to avoid blocking
+	// and being canceled by statement_timeout. Retry with exponential backoff.
+	maxRetries := 30
+	retryDelay := 1 * time.Second
+	var acquired bool
+	
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		var result bool
+		if err := db.Raw("SELECT pg_try_advisory_lock(?)", migrationAdvisoryLockID).Scan(&result).Error; err != nil {
+			return nil, fmt.Errorf("failed to try advisory lock: %w", err)
+		}
+		
+		if result {
+			acquired = true
+			logger.Debug("Successfully acquired advisory lock %d on attempt %d", migrationAdvisoryLockID, attempt)
+			break
+		}
+		
+		if attempt < maxRetries {
+			logger.Debug("Advisory lock %d is held by another process, retrying in %v (attempt %d/%d)...", 
+				migrationAdvisoryLockID, retryDelay, attempt, maxRetries)
+			time.Sleep(retryDelay)
+			// Exponential backoff, max 5 seconds
+			retryDelay = time.Duration(float64(retryDelay) * 1.5)
+			if retryDelay > 5*time.Second {
+				retryDelay = 5 * time.Second
+			}
+		}
+	}
+	
+	if !acquired {
+		return nil, fmt.Errorf("failed to acquire advisory lock %d after %d attempts (lock may be held by another process)", 
+			migrationAdvisoryLockID, maxRetries)
 	}
 
 	released := false
