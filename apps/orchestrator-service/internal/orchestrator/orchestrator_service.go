@@ -105,6 +105,10 @@ func (os *OrchestratorService) Start() {
 	go os.aggregateUsage()
 	logger.Debug("[Orchestrator] Started usage aggregation")
 
+	// Start VPS metrics collection (every 5 minutes)
+	go os.collectVPSMetrics()
+	logger.Debug("[Orchestrator] Started VPS metrics collection")
+
 	// Start storage updates (every 5 minutes)
 	go os.updateStoragePeriodically()
 	logger.Debug("[Orchestrator] Started periodic storage updates")

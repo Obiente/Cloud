@@ -15,12 +15,19 @@ WORKDIR /build
 ENV GOCACHE=/root/.cache/go-build
 ENV GOMODCACHE=/root/go/pkg/mod
 
-# Copy go mod files for shared and service
+# Copy go mod files for shared, vps-service, and service
 COPY apps/shared/go.mod apps/shared/go.sum ./apps/shared/
+COPY apps/vps-service/go.mod apps/vps-service/go.sum ./apps/vps-service/
 COPY apps/orchestrator-service/go.mod apps/orchestrator-service/go.sum ./apps/orchestrator-service/
 
 # Download dependencies for shared module
 WORKDIR /build/apps/shared
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go mod download
+
+# Download dependencies for vps-service module
+WORKDIR /build/apps/vps-service
 RUN --mount=type=cache,target=/root/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go mod download
@@ -34,6 +41,7 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
 # Copy all source code
 WORKDIR /build
 COPY apps/shared/ ./apps/shared/
+COPY apps/vps-service/ ./apps/vps-service/
 COPY apps/orchestrator-service/ ./apps/orchestrator-service/
 
 # Build the service from its own module directory

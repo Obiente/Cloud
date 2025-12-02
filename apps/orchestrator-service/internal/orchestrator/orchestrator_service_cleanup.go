@@ -45,13 +45,19 @@ func (os *OrchestratorService) cleanupTasks() {
 				Where("timestamp < ?", aggregateCutoff).
 				Pluck("game_server_id", &gameServerIDs)
 
-			if len(deploymentIDs) == 0 && len(gameServerIDs) == 0 {
+			var vpsIDs []string
+			metricsDB.Table("vps_metrics").
+				Select("DISTINCT vps_instance_id").
+				Where("timestamp < ?", aggregateCutoff).
+				Pluck("vps_instance_id", &vpsIDs)
+
+			if len(deploymentIDs) == 0 && len(gameServerIDs) == 0 && len(vpsIDs) == 0 {
 				logger.Debug("[Orchestrator] No old metrics to aggregate")
 				logger.Debug("[Orchestrator] Cleanup tasks completed")
 				continue
 			}
 
-			logger.Debug("[Orchestrator] Aggregating metrics for %d deployments, %d game servers", len(deploymentIDs), len(gameServerIDs))
+			logger.Debug("[Orchestrator] Aggregating metrics for %d deployments, %d game servers, %d VPS instances", len(deploymentIDs), len(gameServerIDs), len(vpsIDs))
 
 			// Process deployments and game servers in parallel batches
 			const batchSize = 10 // Process 10 resources concurrently
@@ -105,6 +111,31 @@ func (os *OrchestratorService) cleanupTasks() {
 							aggMutex.Unlock()
 						}
 					}(gameServerID)
+				}
+				wg.Wait()
+			}
+
+			// Process VPS instances in batches
+			for i := 0; i < len(vpsIDs); i += batchSize {
+				end := i + batchSize
+				if end > len(vpsIDs) {
+					end = len(vpsIDs)
+				}
+				batch := vpsIDs[i:end]
+
+				var wg sync.WaitGroup
+				for _, vpsID := range batch {
+					wg.Add(1)
+					go func(vID string) {
+						defer wg.Done()
+						aggregated, deleted := os.aggregateVPSMetrics(vID, aggregateCutoff)
+						if aggregated > 0 || deleted > 0 {
+							aggMutex.Lock()
+							totalAggregated += aggregated
+							totalDeleted += deleted
+							aggMutex.Unlock()
+						}
+					}(vpsID)
 				}
 				wg.Wait()
 			}

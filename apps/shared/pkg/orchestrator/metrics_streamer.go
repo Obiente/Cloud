@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"github.com/obiente/cloud/apps/shared/pkg/metrics"
 	"github.com/obiente/cloud/apps/shared/pkg/registry"
 
@@ -19,9 +20,9 @@ import (
 
 // LiveMetric represents a live metric in memory
 type LiveMetric struct {
-	ResourceType   string    // "deployment" or "gameserver"
-	ResourceID     string    // DeploymentID or GameServerID
-	ContainerID    string    `json:"container_id"`
+	ResourceType   string    // "deployment", "gameserver", or "vps"
+	ResourceID     string    // DeploymentID, GameServerID, or VPSInstanceID
+	ContainerID    string    `json:"container_id"` // For VPS, this is the instance_id (VM ID)
 	NodeID         string    `json:"node_id"`
 	CPUUsage       float64   `json:"cpu_usage"`
 	MemoryUsage    int64     `json:"memory_usage"`
@@ -256,6 +257,13 @@ func (ms *MetricsStreamer) collectLiveMetrics() {
 				// Collect stats using the same Docker container logic as deployments
 				gameServerMetrics, failed := ms.collectGameServerStatsParallel(gameServerLocations, false)
 				allMetrics = append(allMetrics, gameServerMetrics...)
+				containersFailed += failed
+			}
+
+			// Collect VPS metrics (if VPS orchestrator is available)
+			vpsMetrics, failed := ms.collectVPSMetricsOnce()
+			if vpsMetrics != nil {
+				allMetrics = append(allMetrics, vpsMetrics...)
 				containersFailed += failed
 			}
 
@@ -551,6 +559,83 @@ func (ms *MetricsStreamer) collectGameServerStatsParallel(locations []database.G
 	}
 	
 	return gameServerMetrics, failed
+}
+
+// collectVPSMetricsOnce collects VPS metrics from Proxmox
+// Returns nil if VPS orchestrator is not available (graceful degradation)
+func (ms *MetricsStreamer) collectVPSMetricsOnce() ([]LiveMetric, int) {
+	// Try to import and use VPS orchestrator dynamically
+	// If not available, return nil (graceful degradation)
+	// This avoids circular dependencies by making VPS collection optional
+	
+	// Use reflection or a build tag approach, but for now, let's use a simpler approach:
+	// We'll add a method that can be called from outside to publish VPS metrics
+	// For now, return nil - VPS metrics will be published via AddVPSMetrics method
+	return nil, 0
+}
+
+// AddVPSMetrics adds VPS metrics to the live cache and streams to subscribers
+// This is called from the orchestrator-service after collecting VPS metrics from Proxmox
+func (ms *MetricsStreamer) AddVPSMetrics(vpsID string, instanceID string, nodeID string, cpuUsage float64, memoryUsed int64, memoryTotal int64, networkRxBytes int64, networkTxBytes int64, diskReadBytes int64, diskWriteBytes int64) {
+	now := time.Now()
+	metric := LiveMetric{
+		ResourceType:   "vps",
+		ResourceID:     vpsID,
+		ContainerID:    instanceID, // Store VM ID in ContainerID field
+		NodeID:         nodeID,
+		CPUUsage:       cpuUsage,
+		MemoryUsage:    memoryUsed,
+		NetworkRxBytes: networkRxBytes,
+		NetworkTxBytes: networkTxBytes,
+		DiskReadBytes:  diskReadBytes,
+		DiskWriteBytes: diskWriteBytes,
+		RequestCount:   0, // Not applicable for VPS
+		ErrorCount:     0, // Not applicable for VPS
+		Timestamp:      now,
+	}
+
+	// Add to live cache (keyed by resource ID)
+	ms.liveMetricsMutex.Lock()
+	if ms.liveMetrics[vpsID] == nil {
+		ms.liveMetrics[vpsID] = make([]LiveMetric, 0)
+	}
+	ms.liveMetrics[vpsID] = append(ms.liveMetrics[vpsID], metric)
+
+	// Trim old metrics (keep only last N minutes or max size)
+	retentionCutoff := now.Add(-ms.config.LiveRetention)
+	trimmed := ms.liveMetrics[vpsID][:0]
+	for _, m := range ms.liveMetrics[vpsID] {
+		if m.Timestamp.After(retentionCutoff) {
+			trimmed = append(trimmed, m)
+		}
+	}
+	// Enforce max size per resource
+	if len(trimmed) > ms.config.MaxLiveMetricsPerDeployment {
+		// Keep only the most recent metrics
+		startIdx := len(trimmed) - ms.config.MaxLiveMetricsPerDeployment
+		trimmed = trimmed[startIdx:]
+	}
+	ms.liveMetrics[vpsID] = trimmed
+	ms.liveMetricsMutex.Unlock()
+
+	// Stream to subscribers (non-blocking with backpressure detection)
+	ms.subscribersMutex.RLock()
+	subs := ms.subscribers[vpsID]
+	ms.subscribersMutex.RUnlock()
+
+	for _, sub := range subs {
+		select {
+		case sub.ch <- metric:
+			sub.lastSendTime = now
+		default:
+			// Channel full - backpressure detected
+			sub.overflowCount++
+			// Log warning if overflow is significant
+			if sub.overflowCount%10 == 0 {
+				logger.Warn("[MetricsStreamer] VPS metrics channel overflow for %s (count: %d)", vpsID, sub.overflowCount)
+			}
+		}
+	}
 }
 
 // getContainerStatsWithRetry retrieves container stats with exponential backoff retry

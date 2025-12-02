@@ -64,7 +64,7 @@
           <OuiFlex align="center" justify="between">
             <OuiText size="sm" weight="medium" color="primary">Storage</OuiText>
             <OuiText size="xs" color="muted">
-              <OuiByte :value="Number(usageData.current.storageBytes)" unit-display="short" />
+              <OuiByte :value="Number(usageData.current.storageBytes || usageData.current.diskBytes || 0)" unit-display="short" />
             </OuiText>
           </OuiFlex>
           <OuiText size="xs" color="muted">

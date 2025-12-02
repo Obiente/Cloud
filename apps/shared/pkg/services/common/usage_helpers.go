@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -18,10 +19,10 @@ type ContainerUsageMetrics struct {
 }
 
 // CalculateUsageFromHourlyAndRaw calculates usage metrics from hourly aggregates and raw metrics
-// This is a shared function that can be used by both deployments and gameservers
+// This is a shared function that can be used by deployments, gameservers, and VPS instances
 func CalculateUsageFromHourlyAndRaw(
 	resourceID string,
-	resourceType string, // "deployment" or "gameserver"
+	resourceType string, // "deployment", "gameserver", or "vps"
 	monthStart time.Time,
 	monthEnd time.Time,
 	rawCutoff time.Time,
@@ -50,6 +51,9 @@ func CalculateUsageFromHourlyAndRaw(
 		if resourceType == "gameserver" {
 			tableName = "game_server_usage_hourly"
 			idColumn = "game_server_id"
+		} else if resourceType == "vps" {
+			tableName = "vps_usage_hourly"
+			idColumn = "vps_instance_id"
 		}
 
 		query := metricsDB.Table(tableName + " duh").
@@ -69,6 +73,8 @@ func CalculateUsageFromHourlyAndRaw(
 		rawTableName := "deployment_metrics"
 		if resourceType == "gameserver" {
 			rawTableName = "game_server_metrics"
+		} else if resourceType == "vps" {
+			rawTableName = "vps_metrics"
 		}
 
 		// Determine upper bound for raw metrics: should not exceed current time or month end
@@ -84,12 +90,17 @@ func CalculateUsageFromHourlyAndRaw(
 			Timestamp time.Time
 		}
 		var metricTimestamps []metricTimestamp
+		// VPS uses memory_used, deployments/gameservers use memory_usage
+		memoryColumn := "memory_usage"
+		if resourceType == "vps" {
+			memoryColumn = "memory_used"
+		}
 		rawQuery := metricsDB.Table(rawTableName + " dm").
-			Select(`
+			Select(fmt.Sprintf(`
 				AVG(dm.cpu_usage) as cpu_usage,
-				SUM(dm.memory_usage) as memory_sum,
+				SUM(dm.%s) as memory_sum,
 				dm.timestamp as timestamp
-			`).
+			`, memoryColumn)).
 			Where("dm."+idColumn+" = ? AND dm.timestamp >= ? AND dm.timestamp <= ? AND dm.cpu_usage >= 0 AND dm.cpu_usage <= 10000", resourceID, rawCutoff, rawMetricsEnd).
 			Group("dm.timestamp").
 			Order("dm.timestamp ASC").
@@ -173,6 +184,9 @@ func CalculateUsageFromHourlyAndRaw(
 		if resourceType == "gameserver" {
 			tableName = "game_server_usage_hourly"
 			idColumn = "game_server_id"
+		} else if resourceType == "vps" {
+			tableName = "vps_usage_hourly"
+			idColumn = "vps_instance_id"
 		}
 
 		var hourlyUsage struct {

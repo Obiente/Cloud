@@ -7,6 +7,7 @@ require (
 	github.com/moby/moby/api v1.52.0
 	github.com/moby/moby/client v0.2.1
 	github.com/obiente/cloud/apps/shared v0.0.0
+	github.com/obiente/cloud/apps/vps-service v0.0.0
 )
 
 require (
@@ -46,6 +47,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.38.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/crypto v0.41.0 // indirect
+	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
@@ -73,3 +75,5 @@ exclude github.com/docker/docker v28.5.1+incompatible
 exclude github.com/docker/docker v28.5.2+incompatible
 
 replace github.com/obiente/cloud/apps/shared => ../shared
+
+replace github.com/obiente/cloud/apps/vps-service => ../vps-service

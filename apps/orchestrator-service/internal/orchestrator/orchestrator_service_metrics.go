@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
+	dockerclient "github.com/moby/moby/client"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	shared "github.com/obiente/cloud/apps/shared/pkg/orchestrator"
-	dockerclient "github.com/moby/moby/client"
 )
 
 // Metrics operations for orchestrator service
@@ -456,6 +456,235 @@ func (os *OrchestratorService) aggregateGameServerMetrics(gameServerID string, a
 	}
 
 	return aggregatedCount, deletedInGameServer
+}
+
+func (os *OrchestratorService) aggregateVPSMetrics(vpsID string, aggregateCutoff time.Time) (aggregated int, deleted int64) {
+	// Get org ID once
+	var orgID string
+	database.DB.Table("vps_instances").
+		Select("organization_id").
+		Where("id = ?", vpsID).
+		Pluck("organization_id", &orgID)
+
+	if orgID == "" {
+		return 0, 0
+	}
+
+	// Find the oldest metric for this VPS
+	var oldestTime time.Time
+	metricsDB := database.GetMetricsDB()
+	metricsDB.Table("vps_metrics").
+		Select("MIN(timestamp)").
+		Where("vps_instance_id = ? AND timestamp < ?", vpsID, aggregateCutoff).
+		Scan(&oldestTime)
+
+	if oldestTime.IsZero() {
+		return 0, 0
+	}
+
+	// Aggregate hour by hour
+	currentHour := oldestTime.Truncate(time.Hour)
+	deletedInVPS := int64(0)
+	aggregatedCount := 0
+
+	for currentHour.Before(aggregateCutoff) {
+		nextHour := currentHour.Add(1 * time.Hour)
+
+		// Check if hourly aggregate already exists
+		var existingHourly database.VPSUsageHourly
+		err := metricsDB.Where("vps_instance_id = ? AND hour = ?", vpsID, currentHour).
+			First(&existingHourly).Error
+
+		// Check if raw metrics still exist for this hour (if not, we can't recalculate)
+		var rawMetricsCount int64
+		metricsDB.Table("vps_metrics").
+			Where("vps_instance_id = ? AND timestamp >= ? AND timestamp < ?", vpsID, currentHour, nextHour).
+			Count(&rawMetricsCount)
+
+		// Only create/recalculate if raw metrics exist
+		if rawMetricsCount > 0 {
+			// Delete existing aggregate if present (to allow recalculation)
+			if err == nil {
+				metricsDB.Where("vps_instance_id = ? AND hour = ?", vpsID, currentHour).
+					Delete(&database.VPSUsageHourly{})
+			}
+
+			// Aggregate metrics for this hour
+			type hourlyAgg struct {
+				AvgCPUUsage    float64
+				SumMemoryUsage float64
+				AvgMemoryUsage float64
+				SumNetworkRx    int64
+				SumNetworkTx    int64
+				SumDiskRead     int64
+				SumDiskWrite    int64
+				Count           int64
+				TimestampCount  int64
+			}
+			var agg hourlyAgg
+
+			err := metricsDB.Table("vps_metrics").
+				Select(`
+					AVG(cpu_usage) as avg_cpu_usage,
+					AVG(memory_used) as avg_memory_usage,
+					SUM(memory_used) as sum_memory_usage,
+					COALESCE(SUM(network_rx_bytes), 0) as sum_network_rx,
+					COALESCE(SUM(network_tx_bytes), 0) as sum_network_tx,
+					COALESCE(SUM(disk_read_bytes), 0) as sum_disk_read,
+					COALESCE(SUM(disk_write_bytes), 0) as sum_disk_write,
+					COUNT(*) as count,
+					COUNT(DISTINCT timestamp) as timestamp_count
+				`).
+				Where("vps_instance_id = ? AND timestamp >= ? AND timestamp < ?",
+					vpsID, currentHour, nextHour).
+				Scan(&agg).Error
+
+			if err != nil {
+				logger.Warn("[Orchestrator] Failed to query VPS metrics for %s at %s: %v", vpsID, currentHour, err)
+				currentHour = nextHour
+				continue
+			}
+
+			if agg.Count == 0 {
+				currentHour = nextHour
+				continue
+			}
+
+			// Calculate CPU core-seconds and memory byte-seconds using actual timestamp intervals
+			type metricTimestamp struct {
+				CPUUsage  float64
+				MemorySum int64
+				Timestamp time.Time
+			}
+			var timestamps []metricTimestamp
+
+			err = metricsDB.Table("vps_metrics").
+				Select("cpu_usage, memory_used, timestamp").
+				Where("vps_instance_id = ? AND timestamp >= ? AND timestamp < ?",
+					vpsID, currentHour, nextHour).
+				Order("timestamp ASC").
+				Scan(&timestamps).Error
+
+			var cpuCoreSeconds float64
+			var memoryByteSeconds int64
+
+			if err == nil && len(timestamps) > 1 {
+				// Calculate intervals between timestamps
+				for i := 0; i < len(timestamps)-1; i++ {
+					interval := int64(timestamps[i+1].Timestamp.Sub(timestamps[i].Timestamp).Seconds())
+					if interval <= 0 {
+						interval = 5 // Default 5-second interval
+					}
+
+					// Validate CPU usage before calculating (filter out invalid values)
+					if timestamps[i].CPUUsage >= 0 && timestamps[i].CPUUsage <= 10000 {
+						cpuCoreSeconds += (timestamps[i].CPUUsage / 100.0) * float64(interval)
+					}
+					memoryByteSeconds += timestamps[i].MemorySum * interval
+				}
+
+				// Handle last timestamp: if it's not at the end of the hour, use remaining time
+				if len(timestamps) > 0 {
+					lastTimestamp := timestamps[len(timestamps)-1]
+					remainingSeconds := int64(nextHour.Sub(lastTimestamp.Timestamp).Seconds())
+					if remainingSeconds > 0 && remainingSeconds <= 3600 {
+						if lastTimestamp.CPUUsage >= 0 && lastTimestamp.CPUUsage <= 10000 {
+							cpuCoreSeconds += (lastTimestamp.CPUUsage / 100.0) * float64(remainingSeconds)
+						}
+						memoryByteSeconds += lastTimestamp.MemorySum * remainingSeconds
+					}
+				}
+			} else {
+				// Fallback: use average CPU and memory with estimated intervals
+				metricInterval := int64(5) // Default 5-second interval
+				if agg.TimestampCount > 0 {
+					estimatedIntervals := float64(agg.TimestampCount) * float64(metricInterval)
+					cpuCoreSeconds = (agg.AvgCPUUsage / 100.0) * estimatedIntervals
+					memoryByteSeconds = int64(agg.AvgMemoryUsage * estimatedIntervals)
+				} else if agg.Count > 0 {
+					estimatedIntervals := float64(agg.Count) * float64(metricInterval)
+					cpuCoreSeconds = (agg.AvgCPUUsage / 100.0) * estimatedIntervals
+					memoryByteSeconds = int64(agg.AvgMemoryUsage * estimatedIntervals)
+				}
+			}
+
+			// Calculate average memory usage (byte-seconds per hour / 3600)
+			if cpuCoreSeconds > 0 || memoryByteSeconds > 0 {
+				agg.AvgMemoryUsage = float64(memoryByteSeconds) / 3600.0
+			} else {
+				// Fallback calculation
+				if agg.TimestampCount > 0 {
+					avgMemoryBytes := agg.SumMemoryUsage / float64(agg.TimestampCount)
+					metricInterval := int64(5)
+					fallbackByteSeconds := int64(avgMemoryBytes * float64(metricInterval) * float64(agg.TimestampCount))
+					agg.AvgMemoryUsage = float64(fallbackByteSeconds) / 3600.0
+				} else if agg.Count > 0 {
+					avgMemoryBytes := agg.SumMemoryUsage / float64(agg.Count)
+					metricInterval := int64(5)
+					estimatedTimestamps := float64(agg.Count) / 1.0
+					fallbackByteSeconds := int64(avgMemoryBytes * float64(metricInterval) * estimatedTimestamps)
+					agg.AvgMemoryUsage = float64(fallbackByteSeconds) / 3600.0
+				} else {
+					agg.AvgMemoryUsage = 0
+				}
+			}
+
+			// Calculate uptime seconds (sum of intervals)
+			uptimeSeconds := int64(0)
+			if len(timestamps) > 1 {
+				for i := 0; i < len(timestamps)-1; i++ {
+					interval := int64(timestamps[i+1].Timestamp.Sub(timestamps[i].Timestamp).Seconds())
+					if interval <= 0 {
+						interval = 5
+					}
+					uptimeSeconds += interval
+				}
+				if len(timestamps) > 0 {
+					lastTimestamp := timestamps[len(timestamps)-1]
+					remainingSeconds := int64(nextHour.Sub(lastTimestamp.Timestamp).Seconds())
+					if remainingSeconds > 0 && remainingSeconds <= 3600 {
+						uptimeSeconds += remainingSeconds
+					}
+				}
+			} else if agg.Count > 0 {
+				// Fallback: estimate uptime
+				uptimeSeconds = int64(agg.Count * 5) // Assume 5-second intervals
+			}
+
+			hourlyUsage := database.VPSUsageHourly{
+				VPSInstanceID:   vpsID,
+				OrganizationID:  orgID,
+				Hour:            currentHour,
+				AvgCPUUsage:     agg.AvgCPUUsage,
+				AvgMemoryUsage:  agg.AvgMemoryUsage,
+				BandwidthRxBytes: agg.SumNetworkRx,
+				BandwidthTxBytes: agg.SumNetworkTx,
+				DiskReadBytes:    agg.SumDiskRead,
+				DiskWriteBytes:   agg.SumDiskWrite,
+				UptimeSeconds:   uptimeSeconds,
+				SampleCount:     agg.Count,
+			}
+
+			if err := metricsDB.Create(&hourlyUsage).Error; err != nil {
+				logger.Warn("[Orchestrator] Failed to create hourly aggregate for VPS %s at %s: %v", vpsID, currentHour, err)
+			} else {
+				aggregatedCount++
+
+				// Delete the raw metrics for this hour in batch
+				result := metricsDB.Where("vps_instance_id = ? AND timestamp >= ? AND timestamp < ?",
+					vpsID, currentHour, nextHour).
+					Delete(&database.VPSMetrics{})
+
+				if result.Error == nil {
+					deletedInVPS += result.RowsAffected
+				}
+			}
+		}
+
+		currentHour = nextHour
+	}
+
+	return aggregatedCount, deletedInVPS
 }
 
 func (os *OrchestratorService) aggregateDeploymentMetrics(deploymentID string, aggregateCutoff time.Time) (aggregated int, deleted int64) {

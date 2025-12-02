@@ -10,7 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"billing-service/internal/service"
+	billing "billing-service/internal/service"
+
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/health"

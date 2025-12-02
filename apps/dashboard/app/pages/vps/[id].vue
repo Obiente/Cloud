@@ -361,6 +361,12 @@
                     </OuiCard>
                   </ResourceDetailsGrid>
 
+                  <!-- Usage Statistics Section -->
+                  <UsageStatistics v-if="usageData" :usage-data="usageData" />
+
+                  <!-- Cost Breakdown -->
+                  <CostBreakdown v-if="usageData" :usage-data="usageData" />
+
                   <!-- Connection Information -->
                   <OuiCard v-if="vps.status === VPSStatus.RUNNING" variant="default">
                     <OuiCardHeader>
@@ -462,6 +468,14 @@
                   </OuiCard>
 
                 </OuiStack>
+              </template>
+              <template #metrics>
+                <VPSMetrics
+                  v-if="vps && orgId"
+                  :vps-id="vpsId"
+                  :organization-id="orgId"
+                  :vps-status="vps.status"
+                />
               </template>
               <template #terminal>
                 <VPSXTermTerminal
@@ -1508,6 +1522,7 @@ import {
   PlusIcon,
   CheckIcon,
   XMarkIcon,
+  ChartBarIcon,
 } from "@heroicons/vue/24/outline";
 import { VPSService, VPSConfigService, SuperadminService, VPSStatus, VPSImage, type VPSInstance } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
@@ -1521,8 +1536,11 @@ import OuiDate from "~/components/oui/Date.vue";
 import OuiRelativeTime from "~/components/oui/RelativeTime.vue";
 import ErrorAlert from "~/components/ErrorAlert.vue";
 import OuiSkeleton from "~/components/oui/Skeleton.vue";
+import UsageStatistics from "~/components/shared/UsageStatistics.vue";
+import CostBreakdown from "~/components/shared/CostBreakdown.vue";
 // Lazy load tab components for better performance
 const VPSFirewall = defineAsyncComponent(() => import("~/components/vps/VPSFirewall.vue"));
+const VPSMetrics = defineAsyncComponent(() => import("~/components/vps/VPSMetrics.vue"));
 const VPSXTermTerminal = defineAsyncComponent(() => import("~/components/vps/VPSXTermTerminal.vue"));
 const VPSUsersManagement = defineAsyncComponent(() => import("~/components/vps/VPSUsersManagement.vue"));
 const VPSCloudInitSettings = defineAsyncComponent(() => import("~/components/vps/VPSCloudInitSettings.vue"));
@@ -1658,6 +1676,28 @@ const {
 );
 
 const vps = computed(() => vpsData.value);
+
+// Fetch VPS usage data
+const { data: usageData } = await useClientFetch(
+  () => `vps-usage-${vpsId.value}-${orgId.value}`,
+  async () => {
+    if (!vps.value?.id || !orgId.value) return null;
+    try {
+      const month = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const res = await client.getVPSUsage({
+        vpsId: vps.value.id,
+        organizationId: orgId.value,
+        month,
+      });
+      return res;
+    } catch (err) {
+      console.error("Failed to fetch VPS usage:", err);
+      // Don't show error toast for usage - it's optional
+      return null;
+    }
+  },
+  { watch: [() => vps.value?.id, orgId], server: false }
+);
 
 // Settings form data
 const vpsName = ref("");
@@ -2673,6 +2713,7 @@ async function handleDelete() {
 // Tabs configuration
 const tabs = computed<TabItem[]>(() => [
   { id: "overview", label: "Overview", icon: InformationCircleIcon },
+  { id: "metrics", label: "Metrics", icon: ChartBarIcon },
   { id: "terminal", label: "Terminal", icon: CommandLineIcon },
   { id: "firewall", label: "Firewall", icon: ShieldExclamationIcon },
   { id: "users", label: "Users", icon: UserIcon },
