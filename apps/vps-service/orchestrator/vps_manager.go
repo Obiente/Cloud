@@ -15,6 +15,11 @@ import (
 	"github.com/moby/moby/client"
 )
 
+// LogWriter is an interface for writing provisioning logs
+type LogWriter interface {
+	WriteLine(line string, stderr bool)
+}
+
 // VPSManager manages the lifecycle of VPS instances via Proxmox
 type VPSManager struct {
 	dockerClient  client.APIClient
@@ -123,8 +128,17 @@ func NewVPSManager() (*VPSManager, error) {
 // CreateVPS provisions a new VPS instance via Proxmox
 // CreateVPS creates a new VPS instance
 // Returns: VPS instance, root password (one-time only, not stored), error
-func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*database.VPSInstance, string, error) {
+func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWriter LogWriter) (*database.VPSInstance, string, error) {
 	logger.Info("[VPSManager] Creating VPS instance %s", config.VPSID)
+	
+	// Helper to write log lines
+	writeLog := func(line string, stderr bool) {
+		if logWriter != nil {
+			logWriter.WriteLine(line, stderr)
+		}
+	}
+	
+	writeLog("Starting server setup...", false)
 
 	// Get organization settings to check if inter-VM communication is allowed
 	var org database.Organization
@@ -159,6 +173,8 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 		return nil, "", fmt.Errorf("failed to create Proxmox client: %w", err)
 	}
 
+	writeLog("Setting up secure access...", false)
+	
 	// Generate bastion SSH key pair for this VPS (required for SSH access)
 	bastionKey, err := database.CreateVPSBastionKey(config.VPSID, config.OrganizationID)
 	if err != nil {
@@ -172,6 +188,7 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 		return nil, "", fmt.Errorf("failed to create terminal SSH key: %w", err)
 	}
 	logger.Info("[VPSManager] Generated web terminal SSH key for VPS %s (fingerprint: %s)", config.VPSID, terminalKey.Fingerprint)
+	writeLog("Secure access configured", false)
 
 	// Track if we need to clean up keys on failure
 	cleanupBastionKey := true
@@ -189,10 +206,49 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 		}
 	}()
 
+	// Create VPS instance record in database with CREATING status first
+	// This allows the frontend to show progress immediately
+	earlyVPSInstance := &database.VPSInstance{
+		ID:             config.VPSID,
+		Name:           config.Name,
+		Description:    config.Description,
+		Status:         1, // CREATING
+		Region:         config.Region,
+		Image:          int32(config.Image),
+		ImageID:        config.ImageID,
+		Size:           config.Size,
+		CPUCores:       config.CPUCores,
+		MemoryBytes:    config.MemoryBytes,
+		DiskBytes:      config.DiskBytes,
+		OrganizationID: config.OrganizationID,
+		CreatedBy:      config.CreatedBy,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+		Metadata:       "{}",
+		IPv4Addresses: "[]",
+		IPv6Addresses: "[]",
+	}
+	
+	// Store metadata as JSON if provided
+	if len(config.Metadata) > 0 {
+		metadataJSON, err := json.Marshal(config.Metadata)
+		if err == nil {
+			earlyVPSInstance.Metadata = string(metadataJSON)
+		}
+	}
+	
+	// Create the VPS record in database with CREATING status
+	// This allows the frontend to immediately show the VPS card with progress
+	if err := database.DB.Create(earlyVPSInstance).Error; err != nil {
+		// If it already exists (e.g., from a previous failed attempt), log and continue
+		logger.Warn("[VPSManager] VPS record %s already exists, will update it: %v", config.VPSID, err)
+	}
+
 	// Allocate IP address from gateway if available
 	var allocatedIP string
 	var macAddress string
 	if vm.gatewayClient != nil {
+		writeLog("Assigning network address...", false)
 		// Generate MAC address for the VM (Proxmox will assign one, but we need it for DHCP)
 		// Format: 00:16:3e:XX:XX:XX (QEMU/KVM standard prefix)
 		macAddress = generateMACAddress()
@@ -206,20 +262,25 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 		allocResp, err := vm.gatewayClient.AllocateIP(allocCtx, config.VPSID, config.OrganizationID, macAddress)
 		if err != nil {
 			logger.Warn("[VPSManager] Failed to allocate IP from gateway for VPS %s: %v (continuing without gateway IP)", config.VPSID, err)
+			writeLog("Network address will be assigned automatically", false)
 			// Continue without gateway IP - VM will use DHCP or static IP from Proxmox
 		} else {
 			allocatedIP = allocResp.IpAddress
 			logger.Info("[VPSManager] Allocated IP %s for VPS %s from gateway", allocatedIP, config.VPSID)
+			writeLog(fmt.Sprintf("Network address assigned: %s", allocatedIP), false)
 		}
 	} else {
 		logger.Debug("[VPSManager] Gateway client not available, skipping IP allocation")
 	}
 
 	// Provision VM via Proxmox API
+	writeLog("Creating server...", false)
 	logger.Info("[VPSManager] Starting VM provisioning via Proxmox for VPS %s", config.VPSID)
-	createResult, err := proxmoxClient.CreateVM(ctx, config, org.AllowInterVMCommunication)
+	var createResult *CreateVMResult
+	createResult, err = proxmoxClient.CreateVM(ctx, config, org.AllowInterVMCommunication, logWriter)
 	if err != nil {
-		// If VM creation fails, release the allocated IP
+		// If VM creation fails, update VPS status to FAILED and release the allocated IP
+		database.DB.Model(&database.VPSInstance{}).Where("id = ?", config.VPSID).Update("status", 7) // FAILED
 		if vm.gatewayClient != nil && allocatedIP != "" {
 			if releaseErr := vm.gatewayClient.ReleaseIP(ctx, config.VPSID); releaseErr != nil {
 				logger.Warn("[VPSManager] Failed to release IP %s after VM creation failure: %v", allocatedIP, releaseErr)
@@ -287,6 +348,8 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 
 	// Map Proxmox status to our VPSStatus enum
 	vpsStatus := mapProxmoxStatusToVPSStatus(proxmoxStatus)
+	
+	writeLog("Server setup complete!", false)
 
 	// Create VPS instance record in database
 	vpsInstance := &database.VPSInstance{
@@ -350,9 +413,12 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 		vpsInstance.IPv6Addresses = "[]" // Empty array for JSONB, not empty string
 	}
 
-	// Save to database
-	if err := database.DB.Create(vpsInstance).Error; err != nil {
-		return nil, "", fmt.Errorf("failed to create VPS instance record: %w", err)
+	// Update existing VPS record (created early with CREATING status)
+	if err := database.DB.Where("id = ?", config.VPSID).Save(vpsInstance).Error; err != nil {
+		// If save fails, try create (in case record was deleted)
+		if err := database.DB.Create(vpsInstance).Error; err != nil {
+			return nil, "", fmt.Errorf("failed to save VPS instance record: %w", err)
+		}
 	}
 
 	// VPS created successfully, don't clean up keys
@@ -1008,7 +1074,7 @@ func (vm *VPSManager) ReinitializeVPS(ctx context.Context, vpsID string) (*datab
 	}
 
 	// Create new VM via Proxmox
-	createResult, err := proxmoxClient.CreateVM(ctx, recreateConfig, org.AllowInterVMCommunication)
+	createResult, err := proxmoxClient.CreateVM(ctx, recreateConfig, org.AllowInterVMCommunication, nil)
 	if err != nil {
 		// If VM creation fails, release the allocated IP
 		if vm.gatewayClient != nil && allocatedIP != "" {

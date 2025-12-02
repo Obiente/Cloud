@@ -1,7 +1,9 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 )
@@ -109,9 +113,16 @@ func parseRegionNodeMapping() map[string]string {
 	return mapping
 }
 
-func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowInterVM bool) (*CreateVMResult, error) {
+func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowInterVM bool, logWriter LogWriter) (*CreateVMResult, error) {
 	// Declare rootPassword at function scope so it can be returned
 	var rootPassword string
+
+	// Helper to write log lines
+	writeLog := func(line string, stderr bool) {
+		if logWriter != nil {
+			logWriter.WriteLine(line, stderr)
+		}
+	}
 
 	// Get next available VM ID
 	vmID, err := pc.getNextVMID(ctx)
@@ -119,6 +130,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		return nil, fmt.Errorf("failed to get next VM ID: %w", err)
 	}
 
+	writeLog("Selecting server location...", false)
 	// List all available nodes
 	nodes, err := pc.ListNodes(ctx)
 	if err != nil {
@@ -148,7 +160,9 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 			}
 		}
 	}
+	writeLog("Server location selected", false)
 
+	writeLog("Preparing storage...", false)
 	// Get storage pool for VM disks (default to local-lvm)
 	storage := "local-lvm"
 	if storagePool := os.Getenv("PROXMOX_STORAGE_POOL"); storagePool != "" {
@@ -162,6 +176,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		snippetStorage = snippetStoragePool
 		logger.Info("[ProxmoxClient] Using storage '%s' for VM disks and '%s' for cloud-init snippets", storage, snippetStorage)
 	}
+	writeLog("Storage ready", false)
 
 	// Validate storage pool exists and get storage type
 	availableStorages, err := pc.listStorages(ctx, nodeName)
@@ -341,6 +356,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 				}
 
 				// Clone from template
+				writeLog("Setting up operating system...", false)
 				// Proxmox API expects form-encoded data for clone operations
 				// Note: For linked clones (full=0), the storage parameter is not allowed
 				// The disk will be cloned to the same storage as the template
@@ -368,11 +384,10 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 					if resp.StatusCode == http.StatusOK {
 						logger.Info("[ProxmoxClient] Cloned template %s to VM %d", imageTemplate, vmID)
 
-						// Wait a moment for the clone to complete and disk to be available
-						time.Sleep(2 * time.Second)
+					// Wait a moment for the clone to complete and disk to be available
+					time.Sleep(2 * time.Second)
 
-						// Template boot configuration is handled by the setup-proxmox-templates.sh script
-						// which fixes fstab and GRUB to use device names instead of UUID/PARTUUID
+					// Template boot configuration uses device names (handled by setup script)
 
 						// Reuse template config we already retrieved (no need to fetch again)
 						// templateDiskValue and templateStorage were already determined before cloning
@@ -1778,14 +1793,18 @@ func (pc *ProxmoxClient) MoveDisk(ctx context.Context, nodeName string, vmID int
 }
 
 func (pc *ProxmoxClient) moveDisk(ctx context.Context, nodeName string, vmID int, disk string, targetStorage string, deleteSource bool) error {
-	// Proxmox API endpoint: POST /nodes/{node}/qemu/{vmid}/move_disk
-	// Reference: https://pve.proxmox.com/pve-docs/api-viewer/index.html#/nodes/{node}/qemu/{vmid}/move_disk
-	// Parameters:
-	//   - disk: The disk identifier (e.g., "scsi0", "virtio0")
-	//   - storage: The target storage pool
-	//   - delete: Boolean, delete source disk after move (optional, default: false)
-	//   - format: Target disk format (optional)
-	//   - bwlimit: Bandwidth limit in KiB/s (optional)
+	// Use qemu-img convert for LVM thin storage to prevent partition table corruption
+	storageInfo, err := pc.getStorageInfo(ctx, nodeName, targetStorage)
+	if err == nil && storageInfo != nil {
+		if storageType, ok := storageInfo["type"].(string); ok {
+			if storageType == "lvmthin" || storageType == "lvm-thin" {
+				logger.Info("[ProxmoxClient] Using qemu-img convert for LVM thin storage to preserve partition table")
+				return pc.moveDiskWithQemuImg(ctx, nodeName, vmID, disk, targetStorage, deleteSource)
+			}
+		}
+	}
+
+	// Use Proxmox's native move_disk API for other storage types
 	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/move_disk", nodeName, vmID)
 	formData := url.Values{}
 	formData.Set("disk", disk)
@@ -1810,6 +1829,294 @@ func (pc *ProxmoxClient) moveDisk(ctx context.Context, nodeName string, vmID int
 	}
 
 	logger.Info("[ProxmoxClient] Successfully moved disk %s for VM %d to storage %s", disk, vmID, targetStorage)
+	return nil
+}
+
+// moveDiskWithQemuImg moves a disk using qemu-img convert to preserve partition table integrity on LVM thin storage
+func (pc *ProxmoxClient) moveDiskWithQemuImg(ctx context.Context, nodeName string, vmID int, disk string, targetStorage string, deleteSource bool) error {
+	// Check if SSH is configured (required for this operation)
+	if pc.config.SSHHost == "" || pc.config.SSHUser == "" {
+		return fmt.Errorf("SSH not configured, cannot move disk with qemu-img convert. Please configure PROXMOX_SSH_HOST and PROXMOX_SSH_USER")
+	}
+
+	logger.Info("[ProxmoxClient] Moving disk %s for VM %d to LVM thin storage %s using qemu-img convert", disk, vmID, targetStorage)
+
+	// Get VM config to find source disk volume ID
+	vmConfig, err := pc.GetVMConfig(ctx, nodeName, vmID)
+	if err != nil {
+		return fmt.Errorf("failed to get VM config: %w", err)
+	}
+
+	// Extract source disk volume ID from config (e.g., "local-lvm:vm-301-disk-0")
+	var sourceDiskVolumeID string
+	if diskConfig, ok := vmConfig[disk].(string); ok && diskConfig != "" {
+		// Parse volume ID from disk config
+		// Format: "storage:volume,size=XXG" or "storage:volume"
+		parts := strings.Split(diskConfig, ":")
+		if len(parts) >= 2 {
+			volumePart := parts[1]
+			// Remove size parameter and other options
+			if idx := strings.Index(volumePart, ","); idx != -1 {
+				volumePart = volumePart[:idx]
+			}
+			sourceDiskVolumeID = fmt.Sprintf("%s:%s", parts[0], volumePart)
+		}
+	}
+
+	if sourceDiskVolumeID == "" {
+		return fmt.Errorf("could not determine source disk volume ID from VM config")
+	}
+
+	// Stop VM if running (required for disk move)
+	vmStatus, err := pc.GetVMStatus(ctx, nodeName, vmID)
+	if err != nil {
+		return fmt.Errorf("failed to get VM status: %w", err)
+	}
+
+	wasRunning := vmStatus == "running"
+	if wasRunning {
+		logger.Info("[ProxmoxClient] Stopping VM %d for disk move", vmID)
+		if err := pc.StopVM(ctx, nodeName, vmID); err != nil {
+			return fmt.Errorf("failed to stop VM: %w", err)
+		}
+		if err := pc.waitForVMStatus(ctx, nodeName, vmID, "stopped", 30*time.Second); err != nil {
+			return fmt.Errorf("VM did not stop within timeout: %w", err)
+		}
+	}
+
+	defer func() {
+		if wasRunning {
+			logger.Info("[ProxmoxClient] Restarting VM %d", vmID)
+			if startErr := pc.startVM(ctx, nodeName, vmID); startErr != nil {
+				logger.Warn("[ProxmoxClient] Failed to restart VM %d: %v", vmID, startErr)
+			}
+		}
+	}()
+
+	// Use SSH to perform the disk move with qemu-img convert
+	if err := pc.moveDiskWithQemuImgViaSSH(ctx, nodeName, vmID, disk, sourceDiskVolumeID, targetStorage, deleteSource); err != nil {
+		return fmt.Errorf("failed to move disk with qemu-img convert: %w", err)
+	}
+
+	logger.Info("[ProxmoxClient] Successfully moved disk %s for VM %d to LVM thin storage %s using qemu-img convert", disk, vmID, targetStorage)
+	return nil
+}
+
+// moveDiskWithQemuImgViaSSH uses SSH to execute qemu-img convert to move disk while preserving partition table
+func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName string, vmID int, disk string, sourceDiskVolumeID string, targetStorage string, deleteSource bool) error {
+	// Load SSH private key (same pattern as writeSnippetViaSSH)
+	var signer ssh.Signer
+	var err error
+
+	if pc.config.SSHKeyData != "" {
+		keyData := []byte(pc.config.SSHKeyData)
+		if decoded, err := base64.StdEncoding.DecodeString(pc.config.SSHKeyData); err == nil {
+			if strings.Contains(string(decoded), "BEGIN") || strings.Contains(string(decoded), "PRIVATE KEY") {
+				keyData = decoded
+			}
+		}
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return fmt.Errorf("failed to parse SSH key data: %w", err)
+		}
+	} else if pc.config.SSHKeyPath != "" {
+		keyData, err := os.ReadFile(pc.config.SSHKeyPath)
+		if err != nil {
+			return fmt.Errorf("failed to read SSH key file: %w", err)
+		}
+		signer, err = ssh.ParsePrivateKey(keyData)
+		if err != nil {
+			return fmt.Errorf("failed to parse SSH key: %w", err)
+		}
+	} else {
+		return fmt.Errorf("SSH key not configured")
+	}
+
+	// Create SSH client config
+	sshConfig := &ssh.ClientConfig{
+		User:            pc.config.SSHUser,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         10 * time.Second,
+	}
+
+	// Connect to Proxmox node via SSH
+	sshHost := pc.config.SSHHost
+	sshPort := "22"
+	if strings.Contains(sshHost, ":") {
+		parts := strings.Split(sshHost, ":")
+		sshHost = parts[0]
+		sshPort = parts[1]
+	}
+
+	conn, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", sshHost, sshPort), sshConfig)
+	if err != nil {
+		return fmt.Errorf("failed to connect to Proxmox node via SSH: %w", err)
+	}
+	defer conn.Close()
+
+	// Get source disk path using pvesm
+	session1, err := conn.NewSession()
+	if err != nil {
+		return fmt.Errorf("failed to create SSH session: %w", err)
+	}
+	defer session1.Close()
+
+	var stderr1 bytes.Buffer
+	session1.Stderr = &stderr1
+
+	cmd1 := fmt.Sprintf("pvesm path %s", sourceDiskVolumeID)
+	output1, err := session1.Output(cmd1)
+	if err != nil {
+		return fmt.Errorf("failed to get source disk path: %w (stderr: %s)", err, stderr1.String())
+	}
+	sourceDiskPath := strings.TrimSpace(string(output1))
+	if sourceDiskPath == "" {
+		return fmt.Errorf("empty source disk path returned from pvesm")
+	}
+
+	logger.Info("[ProxmoxClient] Source disk path: %s", sourceDiskPath)
+
+	// Determine source disk format
+	session2, err := conn.NewSession()
+	if err != nil {
+		return fmt.Errorf("failed to create SSH session for format check: %w", err)
+	}
+	defer session2.Close()
+
+	var stderr2 bytes.Buffer
+	session2.Stderr = &stderr2
+
+	checkFormatCmd := fmt.Sprintf("qemu-img info %s 2>/dev/null | grep 'file format' | awk '{print $3}' || echo 'raw'", sourceDiskPath)
+	formatOutput, err := session2.Output(checkFormatCmd)
+	sourceFormat := strings.TrimSpace(string(formatOutput))
+	if sourceFormat == "" {
+		sourceFormat = "raw"
+	}
+
+	logger.Info("[ProxmoxClient] Source disk format: %s", sourceFormat)
+
+	// Create target disk volume on target storage
+	// For LVM thin, we need to create the volume first
+	targetDiskVolumeID := fmt.Sprintf("%s:vm-%d-disk-0", targetStorage, vmID)
+	
+	// Get disk size from source
+	session3, err := conn.NewSession()
+	if err != nil {
+		return fmt.Errorf("failed to create SSH session for size check: %w", err)
+	}
+	defer session3.Close()
+
+	var stderr3 bytes.Buffer
+	session3.Stderr = &stderr3
+
+	getSizeCmd := fmt.Sprintf("qemu-img info %s 2>/dev/null | grep 'virtual size' | awk '{print $3$4}' || qemu-img info %s 2>/dev/null | grep 'disk size' | awk '{print $3$4}'", sourceDiskPath, sourceDiskPath)
+	sizeOutput, err := session3.Output(getSizeCmd)
+	diskSize := strings.TrimSpace(string(sizeOutput))
+	if diskSize == "" {
+		// Try to get size from VM config
+		vmConfig, err := pc.GetVMConfig(ctx, nodeName, vmID)
+		if err == nil {
+			if diskConfig, ok := vmConfig[disk].(string); ok && strings.Contains(diskConfig, "size=") {
+				sizePart := strings.Split(diskConfig, "size=")
+				if len(sizePart) > 1 {
+					sizeStr := strings.TrimSpace(sizePart[1])
+					if idx := strings.Index(sizeStr, ","); idx != -1 {
+						sizeStr = sizeStr[:idx]
+					}
+					diskSize = sizeStr
+				}
+			}
+		}
+		if diskSize == "" {
+			return fmt.Errorf("could not determine disk size")
+		}
+	}
+
+	logger.Info("[ProxmoxClient] Disk size: %s, creating target volume: %s", diskSize, targetDiskVolumeID)
+
+	// Create target volume via Proxmox storage content API
+	logger.Info("[ProxmoxClient] Creating target volume")
+	contentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, targetStorage)
+	contentFormData := url.Values{}
+	contentFormData.Set("vmid", fmt.Sprintf("%d", vmID))
+	contentFormData.Set("filename", fmt.Sprintf("vm-%d-disk-0", vmID))
+	contentFormData.Set("size", diskSize)
+	contentFormData.Set("format", "raw") // LVM thin uses raw format
+
+	contentResp, contentErr := pc.apiRequestForm(ctx, "POST", contentEndpoint, contentFormData)
+	if contentErr != nil {
+		return fmt.Errorf("failed to create target volume: %w", contentErr)
+	}
+	defer contentResp.Body.Close()
+
+	if contentResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(contentResp.Body)
+		return fmt.Errorf("failed to create target volume: %s (status: %d)", string(body), contentResp.StatusCode)
+	}
+
+	// Get target path
+	session4, err := conn.NewSession()
+	if err != nil {
+		return fmt.Errorf("failed to create SSH session for target path: %w", err)
+	}
+	defer session4.Close()
+
+	targetPathCmd := fmt.Sprintf("pvesm path %s", targetDiskVolumeID)
+	targetPathOutput, err := session4.Output(targetPathCmd)
+	if err != nil {
+		return fmt.Errorf("failed to get target disk path: %w", err)
+	}
+	targetDiskPath := strings.TrimSpace(string(targetPathOutput))
+	if targetDiskPath == "" {
+		return fmt.Errorf("empty target disk path returned from pvesm")
+	}
+
+	logger.Info("[ProxmoxClient] Converting disk with qemu-img (preserves partition table)")
+	session5, err := conn.NewSession()
+	if err != nil {
+		return fmt.Errorf("failed to create SSH session for convert: %w", err)
+	}
+	defer session5.Close()
+
+	var stderr5 bytes.Buffer
+	session5.Stderr = &stderr5
+
+	convertCmd := fmt.Sprintf("qemu-img convert -f %s -O raw %s %s", sourceFormat, sourceDiskPath, targetDiskPath)
+	if err := session5.Run(convertCmd); err != nil {
+		return fmt.Errorf("failed to convert disk: %w (stderr: %s)", err, stderr5.String())
+	}
+
+	logger.Info("[ProxmoxClient] Successfully converted disk, updating VM config")
+
+	// Update VM config to point to new disk
+	vmConfigUpdate := map[string]interface{}{
+		disk: targetDiskVolumeID,
+	}
+	if err := pc.UpdateVMConfig(ctx, nodeName, vmID, vmConfigUpdate); err != nil {
+		// Clean up target disk on error
+		if cleanupSession, cleanupErr := conn.NewSession(); cleanupErr == nil {
+			cleanupSession.Run(fmt.Sprintf("rm -f %s", targetDiskPath))
+			cleanupSession.Close()
+		}
+		return fmt.Errorf("failed to update VM config: %w", err)
+	}
+
+	// Delete source disk if requested
+	if deleteSource {
+		logger.Info("[ProxmoxClient] Deleting source disk: %s", sourceDiskVolumeID)
+		// Delete via Proxmox storage content API
+		deleteEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content/%s", nodeName, strings.Split(sourceDiskVolumeID, ":")[0], strings.Split(sourceDiskVolumeID, ":")[1])
+		deleteResp, deleteErr := pc.apiRequest(ctx, "DELETE", deleteEndpoint, nil)
+		if deleteErr == nil && deleteResp != nil {
+			deleteResp.Body.Close()
+		}
+		if deleteErr != nil {
+			logger.Warn("[ProxmoxClient] Failed to delete source disk (non-fatal): %v", deleteErr)
+		}
+	}
+
+	logger.Info("[ProxmoxClient] Successfully moved disk using qemu-img convert")
 	return nil
 }
 

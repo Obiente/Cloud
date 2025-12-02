@@ -104,6 +104,9 @@ service VPSService {
   // This will delete all data on the VPS and reinstall the operating system
   // The VPS will be reconfigured with the same cloud-init settings
   rpc ReinitializeVPS(ReinitializeVPSRequest) returns (ReinitializeVPSResponse);
+  
+  // Stream VPS provisioning logs
+  rpc StreamVPSLogs(StreamVPSLogsRequest) returns (stream VPSLogLine);
 }
 
 message ListVPSRequest {
@@ -315,6 +318,13 @@ message VPSUsageMetrics {
   int64 bandwidth_tx_bytes = 4;
   int64 disk_bytes = 5;
   int64 uptime_seconds = 6; // Total uptime in seconds for the period
+  // Estimated cost in cents
+  int64 estimated_cost_cents = 7;
+  // Per-resource cost breakdown in cents
+  optional int64 cpu_cost_cents = 8;
+  optional int64 memory_cost_cents = 9;
+  optional int64 bandwidth_cost_cents = 10;
+  optional int64 storage_cost_cents = 11;
 }
 
 message ListAvailableVPSSizesRequest {
@@ -608,5 +618,18 @@ message ReinitializeVPSResponse {
   VPSInstance vps = 1;
   optional string root_password = 2; // Generated password (shown once, never stored)
   string message = 3; // Information message
+}
+
+// VPS log streaming messages
+message StreamVPSLogsRequest {
+  string organization_id = 1;
+  string vps_id = 2;
+}
+
+message VPSLogLine {
+  string line = 1;                    // Log line content
+  bool stderr = 2;                    // Whether this is stderr output
+  int32 line_number = 3;               // Sequential line number
+  google.protobuf.Timestamp timestamp = 4; // Timestamp when log was written
 }
 

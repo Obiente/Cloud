@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
-	orchestrator "vps-service/orchestrator"
+	vpsorch "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/orchestrator"
+	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
@@ -78,10 +82,265 @@ func (s *Service) StreamVPSStatus(ctx context.Context, req *connect.Request[vpsv
 	return connect.NewError(connect.CodeUnimplemented, fmt.Errorf("not implemented"))
 }
 
+// StreamVPSLogs streams VPS provisioning logs
+func (s *Service) StreamVPSLogs(ctx context.Context, req *connect.Request[vpsv1.StreamVPSLogsRequest], stream *connect.ServerStream[vpsv1.VPSLogLine]) error {
+	ctx, err := s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.view"); err != nil {
+		return err
+	}
+
+	// Get or create log streamer
+	logStreamer := GetVPSLogStreamer(vpsID)
+
+	// Subscribe to log updates
+	logChan := logStreamer.Subscribe()
+	defer logStreamer.Unsubscribe(logChan)
+
+	// Send buffered logs first
+	bufferedLogs := logStreamer.GetLogs()
+	for _, logLine := range bufferedLogs {
+		// Check context before sending
+		if ctx.Err() != nil {
+			return nil
+		}
+		if err := stream.Send(logLine); err != nil {
+			// Check if context was cancelled
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+	}
+
+	// Start keepalive ticker to prevent connection timeout
+	// Send a heartbeat every 15 seconds to keep the connection alive
+	keepaliveTicker := time.NewTicker(15 * time.Second)
+	defer keepaliveTicker.Stop()
+
+	// Stream new logs as they arrive
+	for {
+		select {
+		case <-ctx.Done():
+			// Context cancelled (client disconnected or timeout)
+			return nil
+		case <-keepaliveTicker.C:
+			// Send keepalive heartbeat to prevent connection timeout
+			// Use an empty log line to keep the connection alive
+			// The frontend can ignore empty lines or use them to detect connection health
+			heartbeat := &vpsv1.VPSLogLine{
+				Line:       "", // Empty line for keepalive (frontend will ignore)
+				Stderr:     false,
+				LineNumber: 0, // Keepalive doesn't increment line number
+				Timestamp:  timestamppb.Now(),
+			}
+			if err := stream.Send(heartbeat); err != nil {
+				// If send fails, check if context was cancelled
+				if ctx.Err() != nil {
+					return nil
+				}
+				// For other errors, return nil to ensure proper stream closure
+				return nil
+			}
+		case logLine, ok := <-logChan:
+			if !ok {
+				// Channel closed, stream ended normally
+				return nil
+			}
+			if err := stream.Send(logLine); err != nil {
+				// Check if context was cancelled
+				if ctx.Err() != nil {
+					return nil
+				}
+				// For other errors, return nil to ensure proper stream closure
+				return nil
+			}
+		}
+	}
+}
+
 // StreamVPSMetrics streams real-time VPS metrics
 func (s *Service) StreamVPSMetrics(ctx context.Context, req *connect.Request[vpsv1.StreamVPSMetricsRequest], stream *connect.ServerStream[vpsv1.VPSMetric]) error {
-	// TODO: Implement metrics streaming
-	return connect.NewError(connect.CodeUnimplemented, fmt.Errorf("not implemented"))
+	ctx, err := s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.view"); err != nil {
+		return err
+	}
+
+	metricsStreamer := orchestrator.GetGlobalMetricsStreamer()
+	if metricsStreamer != nil {
+		return s.streamLiveVPSMetrics(ctx, stream, vpsID)
+	}
+
+	// Fallback to database polling if streamer is not available
+	intervalSeconds := 5 // Default 5 seconds
+	ticker := time.NewTicker(time.Duration(intervalSeconds) * time.Second)
+	defer ticker.Stop()
+
+	var lastSentTimestamp time.Time
+	firstRun := true
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			// Get latest metric from database
+			var vpsMetric database.VPSMetrics
+			query := database.GetMetricsDB().Where("vps_instance_id = ?", vpsID).
+				Order("timestamp DESC").
+				Limit(1)
+			
+			if !firstRun {
+				query = query.Where("timestamp > ?", lastSentTimestamp)
+			}
+
+			if err := query.First(&vpsMetric).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) && firstRun {
+					// No metrics yet, continue waiting
+					firstRun = false
+					continue
+				}
+				// Error or no new metrics, continue
+				continue
+			}
+
+			firstRun = false
+			lastSentTimestamp = vpsMetric.Timestamp
+
+			metric := &vpsv1.VPSMetric{
+				VpsId:            vpsID,
+				Timestamp:        timestamppb.New(vpsMetric.Timestamp),
+				CpuUsagePercent:  vpsMetric.CPUUsage,
+				MemoryUsedBytes:  vpsMetric.MemoryUsed,
+				MemoryTotalBytes: vpsMetric.MemoryTotal,
+				DiskUsedBytes:    vpsMetric.DiskUsed,
+				DiskTotalBytes:   vpsMetric.DiskTotal,
+				NetworkRxBytes:   vpsMetric.NetworkRxBytes,
+				NetworkTxBytes:   vpsMetric.NetworkTxBytes,
+				DiskReadIops:     vpsMetric.DiskReadIOPS,
+				DiskWriteIops:    vpsMetric.DiskWriteIOPS,
+			}
+
+			if err := stream.Send(metric); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+// streamLiveVPSMetrics streams metrics directly from the live metrics streamer
+func (s *Service) streamLiveVPSMetrics(
+	ctx context.Context,
+	stream *connect.ServerStream[vpsv1.VPSMetric],
+	vpsID string,
+) error {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("[StreamVPSMetrics] Panic in streamLiveVPSMetrics: %v", r)
+		}
+	}()
+
+	metricsStreamer := orchestrator.GetGlobalMetricsStreamer()
+	if metricsStreamer == nil {
+		return connect.NewError(connect.CodeInternal, fmt.Errorf("metrics streamer not available"))
+	}
+
+	// Subscribe to live metrics for this VPS
+	metricChan := metricsStreamer.Subscribe(vpsID)
+	defer metricsStreamer.Unsubscribe(vpsID, metricChan)
+
+	// Send initial metric from latest live cache
+	latestMetrics := metricsStreamer.GetLatestMetrics(vpsID)
+	if len(latestMetrics) > 0 {
+		// Get the most recent metric(s) - filter for VPS type
+		for i := len(latestMetrics) - 1; i >= 0; i-- {
+			latest := latestMetrics[i]
+			if latest.ResourceType == "vps" && latest.ResourceID == vpsID {
+				cpuUsage := latest.CPUUsage
+				memoryUsedBytes := latest.MemoryUsage
+			diskReadIops := 0.0
+			diskWriteIops := 0.0
+			metric := &vpsv1.VPSMetric{
+				VpsId:            vpsID,
+				Timestamp:        timestamppb.New(latest.Timestamp),
+				CpuUsagePercent:  cpuUsage,
+				MemoryUsedBytes:  memoryUsedBytes,
+				NetworkRxBytes:   latest.NetworkRxBytes,
+				NetworkTxBytes:   latest.NetworkTxBytes,
+				DiskReadIops:     diskReadIops,
+				DiskWriteIops:    diskWriteIops,
+			}
+				if err := stream.Send(metric); err != nil {
+					logger.Error("[StreamVPSMetrics] Failed to send initial metric: %v", err)
+					return err
+				}
+				break
+			}
+		}
+	}
+
+	// Stream new metrics as they arrive
+	heartbeatInterval := 30 * time.Second
+	heartbeatTicker := time.NewTicker(heartbeatInterval)
+	defer heartbeatTicker.Stop()
+
+	lastMetricTime := time.Now()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-heartbeatTicker.C:
+			// Check if we're receiving metrics regularly
+			if time.Since(lastMetricTime) > 2*heartbeatInterval {
+				logger.Warn("[StreamVPSMetrics] No metrics received for %v, stream may be stale", time.Since(lastMetricTime))
+			}
+		case liveMetric, ok := <-metricChan:
+			if !ok {
+				// Channel closed
+				return nil
+			}
+
+			// Filter for VPS type and matching ID
+			if liveMetric.ResourceType != "vps" || liveMetric.ResourceID != vpsID {
+				continue
+			}
+
+			lastMetricTime = time.Now()
+
+			cpuUsage := liveMetric.CPUUsage
+			memoryUsedBytes := liveMetric.MemoryUsage
+			networkRxBytes := liveMetric.NetworkRxBytes
+			networkTxBytes := liveMetric.NetworkTxBytes
+
+			diskReadIops := 0.0
+			diskWriteIops := 0.0
+			metric := &vpsv1.VPSMetric{
+				VpsId:            vpsID,
+				Timestamp:        timestamppb.New(liveMetric.Timestamp),
+				CpuUsagePercent:  cpuUsage,
+				MemoryUsedBytes:  memoryUsedBytes,
+				NetworkRxBytes:   networkRxBytes,
+				NetworkTxBytes:   networkTxBytes,
+				DiskReadIops:     diskReadIops,
+				DiskWriteIops:    diskWriteIops,
+			}
+
+			if err := stream.Send(metric); err != nil {
+				logger.Error("[StreamVPSMetrics] Failed to send metric: %v", err)
+				return err
+			}
+		}
+	}
 }
 
 // GetVPSMetrics retrieves VPS instance metrics (real-time or historical)
@@ -104,96 +363,316 @@ func (s *Service) GetVPSMetrics(ctx context.Context, req *connect.Request[vpsv1.
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
 	}
 
-	if vps.InstanceID == nil {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no instance ID"))
+	// Parse time range
+	startTime := time.Now().Add(-24 * time.Hour) // Default to last 24 hours
+	endTime := time.Now()
+
+	if req.Msg.GetStartTime() != nil {
+		startTime = req.Msg.GetStartTime().AsTime()
+	}
+	if req.Msg.GetEndTime() != nil {
+		endTime = req.Msg.GetEndTime().AsTime()
 	}
 
-	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
+	// Keep last 24 hours of raw metrics, older data is aggregated hourly
+	cutoffForRaw := time.Now().Add(-24 * time.Hour)
+
+	var dbMetrics []database.VPSMetrics
+	metricsDB := database.GetMetricsDB()
+
+	// Query raw metrics (last 24 hours)
+	rawStartTime := startTime
+	rawEndTime := endTime
+	if rawStartTime.Before(cutoffForRaw) {
+		rawStartTime = cutoffForRaw
+	}
+	if rawStartTime.Before(rawEndTime) && metricsDB != nil {
+		query := metricsDB.Where("vps_instance_id = ? AND timestamp >= ? AND timestamp <= ?", vpsID, rawStartTime, rawEndTime)
+		query = query.Order("timestamp ASC").Limit(10000)
+
+		if err := query.Find(&dbMetrics).Error; err != nil {
+			logger.Warn("[GetVPSMetrics] Failed to query raw metrics: %v", err)
+		}
 	}
 
-	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
+	// Query hourly aggregates (older than 24 hours)
+	var hourlyAggregates []database.VPSUsageHourly
+	if startTime.Before(cutoffForRaw) && metricsDB != nil {
+		hourlyStart := startTime.Truncate(time.Hour)
+		hourlyEnd := cutoffForRaw.Truncate(time.Hour)
+		if hourlyStart.Before(hourlyEnd) {
+			if err := metricsDB.Where("vps_instance_id = ? AND hour >= ? AND hour < ?", vpsID, hourlyStart, hourlyEnd).
+				Order("hour ASC").
+				Find(&hourlyAggregates).Error; err != nil {
+				logger.Warn("[GetVPSMetrics] Failed to query hourly aggregates: %v", err)
+			}
+		}
 	}
 
-	vmIDInt := 0
-	fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
-	if vmIDInt == 0 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid VM ID: %s", *vps.InstanceID))
+	// Convert to proto
+	metrics := make([]*vpsv1.VPSMetric, 0, len(dbMetrics)+len(hourlyAggregates))
+
+	// Convert raw metrics
+	for _, m := range dbMetrics {
+		metrics = append(metrics, &vpsv1.VPSMetric{
+			VpsId:            vpsID,
+			Timestamp:        timestamppb.New(m.Timestamp),
+			CpuUsagePercent:  m.CPUUsage,
+			MemoryUsedBytes:  m.MemoryUsed,
+			MemoryTotalBytes: m.MemoryTotal,
+			DiskUsedBytes:    m.DiskUsed,
+			DiskTotalBytes:   m.DiskTotal,
+			NetworkRxBytes:   m.NetworkRxBytes,
+			NetworkTxBytes:   m.NetworkTxBytes,
+			DiskReadIops:     m.DiskReadIOPS,
+			DiskWriteIops:    m.DiskWriteIOPS,
+		})
 	}
 
-	nodes, err := proxmoxClient.ListNodes(ctx)
-	if err != nil || len(nodes) == 0 {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to find Proxmox node: %w", err))
+	// Convert hourly aggregates (use hour start time as timestamp)
+	for _, h := range hourlyAggregates {
+		cpuUsage := h.AvgCPUUsage
+		memoryBytes := int64(h.AvgMemoryUsage)
+		metrics = append(metrics, &vpsv1.VPSMetric{
+			VpsId:            vpsID,
+			Timestamp:        timestamppb.New(h.Hour),
+			CpuUsagePercent:  cpuUsage,
+			MemoryUsedBytes:  memoryBytes,
+			MemoryTotalBytes: memoryBytes, // Use average as total for hourly aggregates
+			NetworkRxBytes:   h.BandwidthRxBytes,
+			NetworkTxBytes:   h.BandwidthTxBytes,
+			DiskReadIops:     0, // Not available in hourly aggregates
+			DiskWriteIops:    0, // Not available in hourly aggregates
+		})
 	}
 
-	// Get current metrics from Proxmox
-	metrics, err := proxmoxClient.GetVMMetrics(ctx, nodes[0], vmIDInt)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VM metrics: %w", err))
-	}
+	// If no time range specified or end time is recent, also get current metric from Proxmox
+	if req.Msg.GetStartTime() == nil || req.Msg.GetEndTime() == nil || endTime.After(time.Now().Add(-5*time.Minute)) {
+		if vps.InstanceID != nil {
+			proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+			if err == nil {
+				proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+				if err == nil {
+					vmIDInt := 0
+					fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
+					if vmIDInt > 0 {
+						nodes, err := proxmoxClient.ListNodes(ctx)
+						if err == nil && len(nodes) > 0 {
+							// Get current metrics from Proxmox
+							proxmoxMetrics, err := proxmoxClient.GetVMMetrics(ctx, nodes[0], vmIDInt)
+							if err == nil {
+								// Get disk size from VM config (fallback to database value)
+								diskTotalBytes := vps.DiskBytes
+								if diskSize, err := proxmoxClient.GetVMDiskSize(ctx, nodes[0], vmIDInt); err == nil {
+									diskTotalBytes = diskSize
+								}
 
-	// Get disk size from VM config (fallback to database value)
-	diskTotalBytes := vps.DiskBytes
-	if diskSize, err := proxmoxClient.GetVMDiskSize(ctx, nodes[0], vmIDInt); err == nil {
-		diskTotalBytes = diskSize
-	}
+								// Parse metrics from Proxmox response
+								cpuUsagePercent := 0.0
+								if cpu, ok := proxmoxMetrics["cpu"].(float64); ok {
+									cpuUsagePercent = cpu * 100 // Proxmox returns CPU as fraction (0.0-1.0)
+								}
 
-	// Parse metrics from Proxmox response
-	cpuUsagePercent := 0.0
-	if cpu, ok := metrics["cpu"].(float64); ok {
-		cpuUsagePercent = cpu * 100 // Proxmox returns CPU as fraction (0.0-1.0)
-	}
+								memoryUsedBytes := int64(0)
+								memoryTotalBytes := vps.MemoryBytes
+								if mem, ok := proxmoxMetrics["mem"].(float64); ok {
+									memoryUsedBytes = int64(mem)
+								}
+								if maxmem, ok := proxmoxMetrics["maxmem"].(float64); ok {
+									memoryTotalBytes = int64(maxmem)
+								}
 
-	memoryUsedBytes := int64(0)
-	memoryTotalBytes := vps.MemoryBytes
-	if mem, ok := metrics["mem"].(float64); ok {
-		memoryUsedBytes = int64(mem)
-	}
-	if maxmem, ok := metrics["maxmem"].(float64); ok {
-		memoryTotalBytes = int64(maxmem)
-	}
+								diskUsedBytes := int64(0)
+								if diskUsed, ok := proxmoxMetrics["disk"].(float64); ok {
+									diskUsedBytes = int64(diskUsed)
+								}
 
-	// Get disk used from guest agent if available, otherwise use 0
-	diskUsedBytes := int64(0)
-	if diskUsed, ok := metrics["disk"].(float64); ok {
-		diskUsedBytes = int64(diskUsed)
-	}
+								networkRxBytes := int64(0)
+								networkTxBytes := int64(0)
+								if netin, ok := proxmoxMetrics["netin"].(float64); ok {
+									networkRxBytes = int64(netin)
+								}
+								if netout, ok := proxmoxMetrics["netout"].(float64); ok {
+									networkTxBytes = int64(netout)
+								}
 
-	// Network stats (if available)
-	networkRxBytes := int64(0)
-	networkTxBytes := int64(0)
-	if netin, ok := metrics["netin"].(float64); ok {
-		networkRxBytes = int64(netin)
-	}
-	if netout, ok := metrics["netout"].(float64); ok {
-		networkTxBytes = int64(netout)
-	}
-
-	// Create metric
-	metric := &vpsv1.VPSMetric{
-		VpsId:            vpsID,
-		Timestamp:        timestamppb.Now(),
-		CpuUsagePercent:  cpuUsagePercent,
-		MemoryUsedBytes:  memoryUsedBytes,
-		MemoryTotalBytes: memoryTotalBytes,
-		DiskUsedBytes:    diskUsedBytes,
-		DiskTotalBytes:   diskTotalBytes,
-		NetworkRxBytes:   networkRxBytes,
-		NetworkTxBytes:   networkTxBytes,
-		DiskReadIops:     0, // Not available from current endpoint
-		DiskWriteIops:    0, // Not available from current endpoint
+								// Add current metric
+								metrics = append(metrics, &vpsv1.VPSMetric{
+									VpsId:            vpsID,
+									Timestamp:        timestamppb.Now(),
+									CpuUsagePercent:  cpuUsagePercent,
+									MemoryUsedBytes:  memoryUsedBytes,
+									MemoryTotalBytes: memoryTotalBytes,
+									DiskUsedBytes:    diskUsedBytes,
+									DiskTotalBytes:   diskTotalBytes,
+									NetworkRxBytes:   networkRxBytes,
+									NetworkTxBytes:   networkTxBytes,
+									DiskReadIops:     0, // Not available from current endpoint
+									DiskWriteIops:    0, // Not available from current endpoint
+								})
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
 	return connect.NewResponse(&vpsv1.GetVPSMetricsResponse{
-		Metrics: []*vpsv1.VPSMetric{metric},
+		Metrics: metrics,
 	}), nil
 }
 
 // GetVPSUsage retrieves aggregated usage for a VPS instance
 func (s *Service) GetVPSUsage(ctx context.Context, req *connect.Request[vpsv1.GetVPSUsageRequest]) (*connect.Response[vpsv1.GetVPSUsageResponse], error) {
-	// TODO: Implement usage retrieval
-	return nil, connect.NewError(connect.CodeUnimplemented, fmt.Errorf("not implemented"))
+	ctx, err := s.ensureAuthenticated(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	vpsID := req.Msg.GetVpsId()
+	orgID := req.Msg.GetOrganizationId()
+
+	// Check permissions
+	if err := s.checkVPSPermission(ctx, vpsID, "vps.view"); err != nil {
+		return nil, err
+	}
+
+	// Get VPS to verify organization and get storage
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VPS instance %s not found", vpsID))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get VPS: %w", err))
+	}
+
+	if vps.OrganizationID != orgID {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("VPS does not belong to organization"))
+	}
+
+	// Determine month (default to current month)
+	month := req.Msg.GetMonth()
+	if month == "" {
+		month = time.Now().UTC().Format("2006-01")
+	}
+
+	// Calculate estimated monthly usage based on current month progress
+	now := time.Now().UTC()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := monthStart.AddDate(0, 1, 0).Add(-time.Second)
+
+	// Parse requested month for historical queries
+	requestedMonthStart := monthStart
+	if month != now.Format("2006-01") {
+		// Parse historical month
+		t, err := time.Parse("2006-01", month)
+		if err == nil {
+			requestedMonthStart = time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+			monthEnd = requestedMonthStart.AddDate(0, 1, 0).Add(-time.Second)
+		}
+	}
+
+	// Calculate usage from hourly aggregates and raw metrics using shared helper
+	rawCutoff := time.Now().Add(-24 * time.Hour)
+	if rawCutoff.Before(monthStart) {
+		rawCutoff = monthStart
+	}
+
+	currentMetrics, err := common.CalculateUsageFromHourlyAndRaw(
+		vpsID,
+		"vps",
+		requestedMonthStart,
+		monthEnd,
+		rawCutoff,
+		vps.DiskBytes,
+	)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to calculate usage: %w", err))
+	}
+
+	// Calculate uptime from vps_usage_hourly
+	var uptime struct {
+		UptimeSeconds int64
+	}
+	metricsDB := database.GetMetricsDB()
+	if metricsDB != nil {
+		metricsDB.Table("vps_usage_hourly vuh").
+			Select("COALESCE(SUM(vuh.uptime_seconds), 0) as uptime_seconds").
+			Where("vuh.vps_instance_id = ? AND vuh.hour >= ? AND vuh.hour <= ?", vpsID, requestedMonthStart, monthEnd).
+			Scan(&uptime)
+	}
+	currentMetrics.UptimeSeconds = uptime.UptimeSeconds
+
+	// Calculate estimated monthly usage
+	var estimatedMonthly common.ContainerUsageMetrics
+	if month == now.Format("2006-01") {
+		estimatedMonthly = common.CalculateEstimatedMonthly(currentMetrics, monthStart, monthEnd)
+	} else {
+		// Historical month: estimated equals current (already full month)
+		estimatedMonthly = currentMetrics
+	}
+
+	// Calculate costs
+	isCurrentMonth := month == now.Format("2006-01")
+	currCPUCost, currMemoryCost, currBandwidthCost, currStorageCost, currTotalCost := common.CalculateCosts(
+		currentMetrics,
+		isCurrentMonth,
+		monthStart,
+		monthEnd,
+	)
+
+	estCPUCost, estMemoryCost, estBandwidthCost, estStorageCost, estTotalCost := common.CalculateCosts(
+		estimatedMonthly,
+		false, // Estimated is always full month
+		monthStart,
+		monthEnd,
+	)
+
+	// Build response
+	currCPUCostPtr := int64(currCPUCost)
+	currMemoryCostPtr := int64(currMemoryCost)
+	currBandwidthCostPtr := int64(currBandwidthCost)
+	currStorageCostPtr := int64(currStorageCost)
+	currentUsageMetrics := &vpsv1.VPSUsageMetrics{
+		CpuCoreSeconds:     currentMetrics.CPUCoreSeconds,
+		MemoryByteSeconds:  currentMetrics.MemoryByteSeconds,
+		BandwidthRxBytes:   currentMetrics.BandwidthRxBytes,
+		BandwidthTxBytes:   currentMetrics.BandwidthTxBytes,
+		DiskBytes:          currentMetrics.StorageBytes,
+		UptimeSeconds:      currentMetrics.UptimeSeconds,
+		EstimatedCostCents: currTotalCost,
+		CpuCostCents:       &currCPUCostPtr,
+		MemoryCostCents:   &currMemoryCostPtr,
+		BandwidthCostCents: &currBandwidthCostPtr,
+		StorageCostCents:  &currStorageCostPtr,
+	}
+
+	estCPUCostPtr := int64(estCPUCost)
+	estMemoryCostPtr := int64(estMemoryCost)
+	estBandwidthCostPtr := int64(estBandwidthCost)
+	estStorageCostPtr := int64(estStorageCost)
+	estimatedUsageMetrics := &vpsv1.VPSUsageMetrics{
+		CpuCoreSeconds:     estimatedMonthly.CPUCoreSeconds,
+		MemoryByteSeconds:  estimatedMonthly.MemoryByteSeconds,
+		BandwidthRxBytes:   estimatedMonthly.BandwidthRxBytes,
+		BandwidthTxBytes:   estimatedMonthly.BandwidthTxBytes,
+		DiskBytes:          estimatedMonthly.StorageBytes,
+		UptimeSeconds:      estimatedMonthly.UptimeSeconds,
+		EstimatedCostCents: estTotalCost,
+		CpuCostCents:       &estCPUCostPtr,
+		MemoryCostCents:    &estMemoryCostPtr,
+		BandwidthCostCents: &estBandwidthCostPtr,
+		StorageCostCents:   &estStorageCostPtr,
+	}
+
+	response := &vpsv1.GetVPSUsageResponse{
+		VpsId:             vpsID,
+		Month:             month,
+		Current:           currentUsageMetrics,
+		EstimatedMonthly:  estimatedUsageMetrics,
+		EstimatedCostCents: estTotalCost,
+	}
+
+	return connect.NewResponse(response), nil
 }

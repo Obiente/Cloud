@@ -53,46 +53,93 @@
     </template>
 
     <template #info>
-        <!-- IP Addresses Skeleton -->
-        <OuiStack v-if="loading" gap="xs">
-          <OuiText size="xs" weight="medium" color="secondary" class="opacity-50">IP Addresses</OuiText>
-          <OuiFlex gap="xs" wrap="wrap">
-            <OuiBadge variant="secondary" size="xs" class="opacity-30">
-              <OuiSkeleton :width="randomTextWidthByType('short')" height="0.875rem" variant="text" class="bg-transparent" />
-            </OuiBadge>
-            <OuiBadge variant="secondary" size="xs" class="opacity-30">
-              <OuiSkeleton :width="randomTextWidthByType('short')" height="0.875rem" variant="text" class="bg-transparent" />
-            </OuiBadge>
+      <!-- Provisioning Progress Status -->
+      <OuiBox
+        v-if="showProgress"
+        p="md"
+        rounded="xl"
+        class="border backdrop-blur-sm"
+        :class="progressClass"
+      >
+        <OuiStack gap="sm">
+          <OuiFlex
+            align="center"
+            gap="sm"
+            class="text-xs font-bold uppercase tracking-wider"
+            :class="progressTextClass"
+          >
+            <Cog6ToothIcon
+              v-if="!isProgressFailed"
+              class="h-4 w-4 animate-spin"
+            />
+            <ExclamationTriangleIcon
+              v-else
+              class="h-4 w-4 text-danger"
+            />
+            <span :class="progressTextClass">
+              {{ progressPhase || "Starting server setup..." }}
+            </span>
           </OuiFlex>
+          <div
+            class="relative h-2 w-full overflow-hidden rounded-full"
+            :class="progressBarBgClass"
+          >
+            <div
+              v-if="isProgressFailed"
+              class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
+              :class="progressBarFillClass"
+              :style="{ width: '100%' }"
+            />
+            <div
+              v-else
+              class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
+              :class="progressBarFillClass"
+              :style="{ width: `${progressValue || 0}%` }"
+            />
+          </div>
         </OuiStack>
-        
-        <!-- IP Addresses Actual -->
-        <OuiStack v-else-if="ipAddresses.length > 0" gap="xs">
-          <OuiText size="xs" weight="medium" color="secondary">IP Addresses</OuiText>
-          <OuiFlex gap="xs" wrap="wrap">
-            <OuiBadge
-              v-for="ip in ipAddresses.slice(0, 2)"
-              :key="ip"
-              variant="secondary"
-              size="xs"
-            >
-              {{ ip }}
-            </OuiBadge>
-            <OuiBadge
-              v-if="ipAddresses.length > 2"
-              variant="secondary"
-              size="xs"
-            >
-              +{{ ipAddresses.length - 2 }}
-            </OuiBadge>
-          </OuiFlex>
-        </OuiStack>
+      </OuiBox>
+      
+      <!-- IP Addresses Skeleton -->
+      <OuiStack v-else-if="loading" gap="xs">
+        <OuiText size="xs" weight="medium" color="secondary" class="opacity-50">IP Addresses</OuiText>
+        <OuiFlex gap="xs" wrap="wrap">
+          <OuiBadge variant="secondary" size="xs" class="opacity-30">
+            <OuiSkeleton :width="randomTextWidthByType('short')" height="0.875rem" variant="text" class="bg-transparent" />
+          </OuiBadge>
+          <OuiBadge variant="secondary" size="xs" class="opacity-30">
+            <OuiSkeleton :width="randomTextWidthByType('short')" height="0.875rem" variant="text" class="bg-transparent" />
+          </OuiBadge>
+        </OuiFlex>
+      </OuiStack>
+      
+      <!-- IP Addresses Actual -->
+      <OuiStack v-else-if="ipAddresses.length > 0" gap="xs">
+        <OuiText size="xs" weight="medium" color="secondary">IP Addresses</OuiText>
+        <OuiFlex gap="xs" wrap="wrap">
+          <OuiBadge
+            v-for="ip in ipAddresses.slice(0, 2)"
+            :key="ip"
+            variant="secondary"
+            size="xs"
+          >
+            {{ ip }}
+          </OuiBadge>
+          <OuiBadge
+            v-if="ipAddresses.length > 2"
+            variant="secondary"
+            size="xs"
+          >
+            +{{ ipAddresses.length - 2 }}
+          </OuiBadge>
+        </OuiFlex>
+      </OuiStack>
     </template>
   </ResourceCard>
 </template>
 
 <script setup lang="ts">
-  import { computed, ref } from "vue";
+  import { computed, ref, watch, onMounted, onBeforeUnmount, type ComputedRef } from "vue";
   import {
     ServerIcon,
     PlayIcon,
@@ -100,6 +147,8 @@
     ArrowPathIcon,
     TrashIcon,
     CircleStackIcon,
+    Cog6ToothIcon,
+    ExclamationTriangleIcon,
   } from "@heroicons/vue/24/outline";
   import { VPSStatus, type VPSInstance } from "@obiente/proto";
   import { date } from "@obiente/proto/utils";
@@ -110,7 +159,12 @@
   import ResourceCard from "~/components/shared/ResourceCard.vue";
   import OuiSkeleton from "~/components/oui/Skeleton.vue";
   import OuiBadge from "~/components/oui/Badge.vue";
+  import OuiBox from "~/components/oui/Box.vue";
+  import OuiStack from "~/components/oui/Stack.vue";
+  import OuiFlex from "~/components/oui/Flex.vue";
+  import OuiText from "~/components/oui/Text.vue";
   import { randomTextWidthByType, randomIconVariation } from "~/composables/useSkeletonVariations";
+  import { useVPSProgress } from "~/composables/useVPSProgress";
 
   interface Props {
     vps?: VPSInstance;
@@ -132,6 +186,114 @@
 
   // Generate random variations for skeleton icons
   const iconVar = randomIconVariation();
+
+  // VPS progress tracking - initialize with placeholder values
+  const vpsProgress = ref<ReturnType<typeof useVPSProgress> | null>(null);
+
+  // Show progress when VPS is creating, starting, or recently created (within last 2 minutes)
+  const showProgress = computed(() => {
+    if (!props.vps || props.loading) return false;
+    const status = props.vps.status as VPSStatus;
+    
+    // Show progress for CREATING or STARTING status
+    if (status === VPSStatus.CREATING || status === VPSStatus.STARTING) {
+      return true;
+    }
+    
+    // Also show progress for RUNNING VPS that was just created (within last 2 minutes)
+    // This handles cases where provisioning completes quickly and VPS is already RUNNING
+    if (status === VPSStatus.RUNNING && props.vps.createdAt) {
+      const createdAt = date(props.vps.createdAt);
+      const twoMinutesAgo = Date.now() - 2 * 60 * 1000;
+      if (createdAt.getTime() > twoMinutesAgo) {
+        return true;
+      }
+    }
+    
+    return false;
+  });
+
+  // Progress values - access computed refs correctly
+  const progressValue = computed(() => {
+    if (!vpsProgress.value) return 0;
+    // TypeScript auto-unwraps computed refs in some contexts, so we need to access .value
+    const prog = vpsProgress.value.progress;
+    // Check if it's already unwrapped (number) or still a ComputedRef
+    if (typeof prog === 'number') return prog;
+    return (prog as unknown as ComputedRef<number>).value;
+  });
+
+  const progressPhase = computed(() => {
+    if (!vpsProgress.value) return "Starting server setup...";
+    const phase = vpsProgress.value.currentPhase;
+    if (typeof phase === 'string') return phase;
+    return (phase as unknown as ComputedRef<string>).value;
+  });
+
+  const isProgressFailed = computed(() => {
+    if (!vpsProgress.value) return false;
+    const failed = vpsProgress.value.isFailed;
+    if (typeof failed === 'boolean') return failed;
+    return (failed as unknown as ComputedRef<boolean>).value;
+  });
+
+  // Progress styling
+  const progressClass = computed(() => {
+    if (isProgressFailed.value) {
+      return "border-danger/20 bg-danger/5";
+    }
+    return "border-warning/20 bg-warning/5";
+  });
+
+  const progressTextClass = computed(() => {
+    if (isProgressFailed.value) {
+      return "text-danger";
+    }
+    return "text-warning";
+  });
+
+  const progressBarBgClass = computed(() => {
+    if (isProgressFailed.value) {
+      return "bg-danger/10";
+    }
+    return "bg-warning/10";
+  });
+
+  const progressBarFillClass = computed(() => {
+    if (isProgressFailed.value) {
+      return "bg-danger";
+    }
+    return "bg-warning";
+  });
+
+  // Initialize and manage progress tracking
+  watch(
+    () => [showProgress.value, props.vps?.id, organizationId.value],
+    ([shouldShow, vpsId, orgId]) => {
+      // Clean up previous progress tracker
+      if (vpsProgress.value) {
+        vpsProgress.value.stopStreaming();
+        vpsProgress.value = null;
+      }
+
+      // Initialize new progress tracker if needed
+      if (shouldShow && vpsId && orgId) {
+        const progress = useVPSProgress({
+          vpsId: vpsId as string,
+          organizationId: orgId as string,
+        });
+        vpsProgress.value = progress;
+        progress.startStreaming();
+      }
+    },
+    { immediate: true }
+  );
+
+  onBeforeUnmount(() => {
+    if (vpsProgress.value) {
+      vpsProgress.value.stopStreaming();
+    }
+  });
 
   const STATUS_META = {
     [VPSStatus.RUNNING]: {
