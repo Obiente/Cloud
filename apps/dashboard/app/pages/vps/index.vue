@@ -172,6 +172,8 @@
     { label: "Stopping", value: String(VPSStatus.STOPPING) },
     { label: "Rebooting", value: String(VPSStatus.REBOOTING) },
     { label: "Failed", value: String(VPSStatus.FAILED) },
+    { label: "Deleting", value: String(VPSStatus.DELETING) },
+    { label: "Deleted", value: String(VPSStatus.DELETED) },
   ];
 
   const regionOptions = ref<Array<{ label: string; value: string }>>([]);

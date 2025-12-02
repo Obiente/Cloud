@@ -2413,6 +2413,18 @@ const getStatusMeta = (status: number) => {
         label: "Failed",
         dotClass: "bg-danger",
       };
+    case VPSStatus.DELETING:
+      return {
+        badge: "warning" as const,
+        label: "Deleting",
+        dotClass: "bg-warning",
+      };
+    case VPSStatus.DELETED:
+      return {
+        badge: "secondary" as const,
+        label: "Deleted",
+        dotClass: "bg-secondary",
+      };
     default:
       return {
         badge: "secondary" as const,

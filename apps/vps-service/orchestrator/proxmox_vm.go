@@ -149,10 +149,18 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		}
 	}
 
-	// Get storage pool (default to local-lvm)
+	// Get storage pool for VM disks (default to local-lvm)
 	storage := "local-lvm"
 	if storagePool := os.Getenv("PROXMOX_STORAGE_POOL"); storagePool != "" {
 		storage = storagePool
+	}
+
+	// Get storage pool for cloud-init snippets (defaults to VM disk storage, but can be separate)
+	// Snippets require directory-type storage (dir, nfs, cifs), not block storage (lvm, zfs)
+	snippetStorage := storage
+	if snippetStoragePool := os.Getenv("PROXMOX_SNIPPET_STORAGE"); snippetStoragePool != "" {
+		snippetStorage = snippetStoragePool
+		logger.Info("[ProxmoxClient] Using storage '%s' for VM disks and '%s' for cloud-init snippets", storage, snippetStorage)
 	}
 
 	// Validate storage pool exists and get storage type
@@ -285,39 +293,91 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 			logger.Warn("[ProxmoxClient] Template %s not found, falling back to ISO installation: %v", imageTemplate, err)
 			useCloudInit = false
 		} else {
-			// Clone from template
-			// Proxmox API expects form-encoded data for clone operations
-			// Note: For linked clones (full=0), the storage parameter is not allowed
-			// The disk will be cloned to the same storage as the template
-			// For full clones (full=1), you can specify storage
-			cloneEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/clone", nodeName, templateVMID)
-			cloneFormData := url.Values{}
-			cloneFormData.Set("newid", fmt.Sprintf("%d", vmID))
-			cloneFormData.Set("name", config.VPSID) // Use VPS ID as VM name for uniqueness
-			cloneFormData.Set("target", nodeName)
-			cloneFormData.Set("full", "0") // Linked clone (faster)
-			// Note: storage parameter is only allowed for full clones, not linked clones
-			// Linked clones use the same storage as the template
-			logger.Info("[ProxmoxClient] Cloning template %s (VMID %d) to VM %d (linked clone)", imageTemplate, templateVMID, vmID)
-
-			resp, err := pc.apiRequestForm(ctx, "POST", cloneEndpoint, cloneFormData)
+			// Get template config first to determine template storage
+			templateConfig, err := pc.GetVMConfig(ctx, nodeName, templateVMID)
 			if err != nil {
-				logger.Warn("[ProxmoxClient] Failed to clone template, falling back to ISO: %v", err)
+				logger.Warn("[ProxmoxClient] Failed to get template config, falling back to ISO: %v", err)
 				useCloudInit = false
 			} else {
-				defer resp.Body.Close()
-				if resp.StatusCode == http.StatusOK {
-					logger.Info("[ProxmoxClient] Cloned template %s to VM %d", imageTemplate, vmID)
+				// Find template disk to determine template storage
+				var templateDiskValue string
+				var templateStorage string
+				var templateStorageType string
+				for _, diskKey := range []string{"scsi0", "virtio0", "sata0", "ide0"} {
+					if disk, ok := templateConfig[diskKey].(string); ok && disk != "" {
+						templateDiskValue = disk
+						// Extract storage from disk value (format: storage:path or storage:vmID/path)
+						parts := strings.Split(disk, ":")
+						if len(parts) >= 1 {
+							templateStorage = parts[0]
+							// Get template storage type
+							if storageInfo, err := pc.getStorageInfo(ctx, nodeName, templateStorage); err == nil && storageInfo != nil {
+								if st, ok := storageInfo["type"].(string); ok {
+									templateStorageType = st
+								}
+							}
+						}
+						break
+					}
+				}
 
-					// Wait a moment for the clone to complete and disk to be available
-					time.Sleep(2 * time.Second)
+				// Determine if we need a full clone or can use a linked clone
+				// Linked clones only work safely when:
+				// 1. Template storage matches desired storage (linked clones inherit template storage)
+				// 2. Template storage type supports linked clones (directory storage only, not lvmthin/lvm/zfs)
+				// For cross-storage clones (e.g. template on 'local', VM on 'local-lvmthin'),
+				// let Proxmox handle a full clone directly to the target storage instead of
+				// doing a linked clone + manual disk move. This ensures the disk contents and
+				// partition table are copied correctly and avoids empty/invalid disks.
+				useFullClone := false
+				if templateStorage != "" && templateStorage != storage {
+					// Template storage doesn't match desired storage - need full clone
+					useFullClone = true
+					logger.Info("[ProxmoxClient] Template storage '%s' differs from desired storage '%s', using full clone", templateStorage, storage)
+				} else if templateStorageType == "lvmthin" || templateStorageType == "lvm" || templateStorageType == "zfs" {
+					// Template storage type doesn't support linked clones - need full clone
+					useFullClone = true
+					logger.Info("[ProxmoxClient] Template storage type '%s' does not support linked clones, using full clone", templateStorageType)
+				}
 
-					// Get template config to see what disk type it uses
-					templateConfig, err := pc.GetVMConfig(ctx, nodeName, templateVMID)
-					var templateDiskKey string
-					var templateDiskValue string
-					if err == nil {
-						// Find the disk key used by the template
+				// Clone from template
+				// Proxmox API expects form-encoded data for clone operations
+				// Note: For linked clones (full=0), the storage parameter is not allowed
+				// The disk will be cloned to the same storage as the template
+				// For full clones (full=1), you can specify storage
+				cloneEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/clone", nodeName, templateVMID)
+				cloneFormData := url.Values{}
+				cloneFormData.Set("newid", fmt.Sprintf("%d", vmID))
+				cloneFormData.Set("name", config.VPSID) // Use VPS ID as VM name for uniqueness
+				cloneFormData.Set("target", nodeName)
+				if useFullClone {
+					cloneFormData.Set("full", "1") // Full clone (allows storage specification)
+					cloneFormData.Set("storage", storage) // Specify target storage for full clone
+					logger.Info("[ProxmoxClient] Cloning template %s (VMID %d) to VM %d (full clone to storage %s)", imageTemplate, templateVMID, vmID, storage)
+				} else {
+					cloneFormData.Set("full", "0") // Linked clone (faster, inherits template storage)
+					logger.Info("[ProxmoxClient] Cloning template %s (VMID %d) to VM %d (linked clone on storage %s)", imageTemplate, templateVMID, vmID, templateStorage)
+				}
+
+				resp, err := pc.apiRequestForm(ctx, "POST", cloneEndpoint, cloneFormData)
+				if err != nil {
+					logger.Warn("[ProxmoxClient] Failed to clone template, falling back to ISO: %v", err)
+					useCloudInit = false
+				} else {
+					defer resp.Body.Close()
+					if resp.StatusCode == http.StatusOK {
+						logger.Info("[ProxmoxClient] Cloned template %s to VM %d", imageTemplate, vmID)
+
+						// Wait a moment for the clone to complete and disk to be available
+						time.Sleep(2 * time.Second)
+
+						// Template boot configuration is handled by the setup-proxmox-templates.sh script
+						// which fixes fstab and GRUB to use device names instead of UUID/PARTUUID
+
+						// Reuse template config we already retrieved (no need to fetch again)
+						// templateDiskValue and templateStorage were already determined before cloning
+						var templateDiskKey string
+						// Find the disk key used by the template (we already have templateConfig from before cloning)
 						for _, diskKey := range []string{"scsi0", "virtio0", "sata0", "ide0"} {
 							if disk, ok := templateConfig[diskKey].(string); ok && disk != "" {
 								templateDiskKey = diskKey
@@ -329,8 +389,12 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 						if templateDiskKey == "" {
 							// Template has no disk in config - check if there are any disk volumes in storage
 							logger.Warn("[ProxmoxClient] Template %s (VMID %d) does not have disk in config. Checking storage for disk volumes...", imageTemplate, templateVMID)
-							// Check storage for template disk volumes
-							storageContentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, storage)
+							// Check storage for template disk volumes - use template storage if we found it, otherwise use desired storage
+							storageToSearch := storage
+							if templateStorage != "" {
+								storageToSearch = templateStorage
+							}
+							storageContentEndpoint := fmt.Sprintf("/nodes/%s/storage/%s/content", nodeName, storageToSearch)
 							contentResp, contentErr := pc.apiRequest(ctx, "GET", storageContentEndpoint, nil)
 							if contentErr == nil && contentResp != nil && contentResp.StatusCode == http.StatusOK {
 								defer contentResp.Body.Close()
@@ -374,20 +438,16 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 								return nil, fmt.Errorf("template %s (VMID %d) does not have a disk configured - cannot clone VM without disk. Please configure a disk for the template first", imageTemplate, templateVMID)
 							}
 						}
-					} else {
-						logger.Error("[ProxmoxClient] Failed to get template config: %v", err)
-						return nil, fmt.Errorf("failed to get template config: %w", err)
-					}
 
-					// Wait a bit longer for clone to fully complete
-					time.Sleep(3 * time.Second)
+						// Wait a bit longer for clone to fully complete
+						time.Sleep(3 * time.Second)
 
-					// Verify disk exists in cloned VM and determine which disk key to use
-					vmConfigCheck, err := pc.GetVMConfig(ctx, nodeName, vmID)
-					var actualDiskKey string
-					if err != nil {
-						logger.Warn("[ProxmoxClient] Failed to get VM config after clone: %v", err)
-					} else {
+						// Verify disk exists in cloned VM and determine which disk key to use
+						vmConfigCheck, err := pc.GetVMConfig(ctx, nodeName, vmID)
+						var actualDiskKey string
+						if err != nil {
+							logger.Warn("[ProxmoxClient] Failed to get VM config after clone: %v", err)
+						} else {
 						// Check for disk - prefer the same type as template, but check all types
 						diskKeysToCheck := []string{}
 						if templateDiskKey != "" {
@@ -724,10 +784,10 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 						}
 					}
 
-					// Resize disk after cloning to match the plan's disk size
-					// For linked clones, the disk inherits the template size, so we need to resize it
-					// If we just created a new disk, it should already be the correct size, but verify anyway
-					if actualDiskKey != "" {
+						// Resize disk after cloning to match the plan's disk size
+						// For linked clones, the disk inherits the template size, so we need to resize it
+						// If we just created a new disk, it should already be the correct size, but verify anyway
+						if actualDiskKey != "" {
 						vmConfigAfter, err := pc.GetVMConfig(ctx, nodeName, vmID)
 						if err == nil {
 							if disk, ok := vmConfigAfter[actualDiskKey].(string); ok && disk != "" {
@@ -775,13 +835,14 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 						} else {
 							logger.Warn("[ProxmoxClient] Failed to get VM config after clone for resize check: %v", err)
 						}
+						} else {
+							logger.Warn("[ProxmoxClient] No disk key found for VM %d after clone - cannot resize", vmID)
+						}
 					} else {
-						logger.Warn("[ProxmoxClient] No disk key found for VM %d after clone - cannot resize", vmID)
+						body, _ := io.ReadAll(resp.Body)
+						logger.Warn("[ProxmoxClient] Failed to clone template (status %d): %s, falling back to ISO", resp.StatusCode, string(body))
+						useCloudInit = false
 					}
-				} else {
-					body, _ := io.ReadAll(resp.Body)
-					logger.Warn("[ProxmoxClient] Failed to clone template (status %d): %s, falling back to ISO", resp.StatusCode, string(body))
-					useCloudInit = false
 				}
 			}
 		}
@@ -819,6 +880,10 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		// Specifying interface name can cause issues if the interface name doesn't match
 		vmConfig["ipconfig0"] = "ip=dhcp"
 		vmConfig["ciuser"] = "root"
+		// CRITICAL: Set up cloud-init drive on directory storage (snippetStorage)
+		// When cloning templates to LVM/ZFS storage, the cloud-init drive must be on directory storage
+		// Without this, cloud-init won't have configuration and the VM will hang waiting for metadata
+		vmConfig["ide2"] = fmt.Sprintf("%s:cloudinit", snippetStorage)
 
 		// Root password: use custom if provided, otherwise auto-generate
 		if config.RootPassword != nil && *config.RootPassword != "" {
@@ -839,8 +904,8 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		// The userData includes: SSH server installation, guest agent installation, root password, SSH keys, etc.
 		userData := GenerateCloudInitUserData(config)
 		if userData != "" {
-			// Create snippet file in Proxmox storage
-			snippetPath, err := pc.CreateCloudInitSnippet(ctx, nodeName, storage, vmID, userData)
+			// Create snippet file in Proxmox storage (use snippetStorage, not VM disk storage)
+			snippetPath, err := pc.CreateCloudInitSnippet(ctx, nodeName, snippetStorage, vmID, userData)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create cloud-init snippet for VM %d: %w. Snippets are required to ensure guest agent and SSH are properly configured. Ensure SSH is configured (PROXMOX_SSH_USER, PROXMOX_SSH_KEY_PATH or PROXMOX_SSH_KEY_DATA) and the storage supports snippets. See https://docs.obiente.cloud/guides/proxmox-ssh-user-setup for setup instructions", vmID, err)
 			}
@@ -910,6 +975,10 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 				}
 				continue
 			}
+			// Skip args parameter - preserve any template configuration
+			if key == "args" {
+				continue
+			}
 			// Special handling for sshkeys - Proxmox v8.4 requires double-encoding
 			if key == "sshkeys" {
 				if strValue, ok := value.(string); ok && strValue != "" {
@@ -948,6 +1017,8 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 			logger.Warn("[ProxmoxClient] Form data does NOT include sshkeys parameter")
 		}
 
+
+		// Now update the config with all other parameters
 		resp, err := pc.apiRequestForm(ctx, "PUT", updateEndpoint, formData)
 		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
 			resp.Body.Close()
@@ -1122,8 +1193,16 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		} else {
 			// Config update failed, but VM was already cloned successfully
 			// Retry with just cloud-init config (smaller update, more likely to succeed)
-			body, _ := io.ReadAll(resp.Body)
-			logger.Warn("[ProxmoxClient] Initial config update failed for VM %d: %v. Response: %s. Retrying with cloud-init config only...", vmID, err, string(body))
+			var body []byte
+			if resp != nil && resp.Body != nil {
+				body, _ = io.ReadAll(resp.Body)
+				resp.Body.Close()
+			}
+			bodyStr := ""
+			if len(body) > 0 {
+				bodyStr = string(body)
+			}
+			logger.Warn("[ProxmoxClient] Initial config update failed for VM %d: %v. Response: %s. Retrying with cloud-init config only...", vmID, err, bodyStr)
 
 			// Get the actual disk key from the cloned VM to use in boot order
 			vmConfigCheck, err := pc.GetVMConfig(ctx, nodeName, vmID)
@@ -1161,7 +1240,12 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 			retryFormData := url.Values{}
 			retryFormData.Set("ipconfig0", "ip=dhcp")
 			retryFormData.Set("ciuser", "root")
-			retryFormData.Set("cipassword", vmConfig["cipassword"].(string))
+			// Safely get cipassword - it might not exist if using snippets
+			if cipasswordVal, ok := vmConfig["cipassword"]; ok && cipasswordVal != nil {
+				if cipasswordStr, ok := cipasswordVal.(string); ok && cipasswordStr != "" {
+					retryFormData.Set("cipassword", cipasswordStr)
+				}
+			}
 			// Include SSH keys in retry if they exist
 			if sshKeysVal, ok := vmConfig["sshkeys"]; ok {
 				if sshKeysStr, ok := sshKeysVal.(string); ok && sshKeysStr != "" {
@@ -1173,6 +1257,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 			retryFormData.Set("bootdisk", actualDiskKey) // Set bootdisk parameter (required for Proxmox)
 			logger.Info("[ProxmoxClient] Retrying with boot order %s and bootdisk %s for VM %d", actualDiskKey, actualDiskKey, vmID)
 
+			// Now update the config with retry parameters
 			retryResp, retryErr := pc.apiRequestForm(ctx, "PUT", updateEndpoint, retryFormData)
 			if retryErr == nil && retryResp != nil && retryResp.StatusCode == http.StatusOK {
 				retryResp.Body.Close()
@@ -1253,13 +1338,19 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 	logger.Info("[ProxmoxClient] Created VM %d on node %s", vmID, nodeName)
 
 	// Configure firewall rules for inter-VM communication
-	if err := pc.configureVMFirewall(ctx, nodeName, vmID, config.OrganizationID, allowInterVM); err != nil {
+	// Use separate context to avoid parent context cancellation
+	firewallCtx, firewallCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer firewallCancel()
+	if err := pc.configureVMFirewall(firewallCtx, nodeName, vmID, config.OrganizationID, allowInterVM); err != nil {
 		logger.Warn("[ProxmoxClient] Failed to configure firewall for VM %d: %v", vmID, err)
 		// Continue anyway - VM is created, firewall can be configured manually
 	}
 
 	// Start the VM
-	if err := pc.startVM(ctx, nodeName, vmID); err != nil {
+	// Use separate context to avoid parent context cancellation
+	startCtx, startCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer startCancel()
+	if err := pc.startVM(startCtx, nodeName, vmID); err != nil {
 		logger.Warn("[ProxmoxClient] Failed to start VM %d: %v", vmID, err)
 		// Continue anyway - VM is created
 	}
@@ -1287,18 +1378,57 @@ func (pc *ProxmoxClient) StartVM(ctx context.Context, nodeName string, vmID int)
 	return pc.startVM(ctx, nodeName, vmID)
 }
 
+// isVMDeletedError checks if an error indicates the VM was deleted from Proxmox
+func (pc *ProxmoxClient) isVMDeletedError(err error, statusCode int, bodyStr string) bool {
+	if err == nil && statusCode == 0 && bodyStr == "" {
+		return false
+	}
+	
+	// Check error message
+	if err != nil {
+		errStr := err.Error()
+		if strings.Contains(errStr, "unable to find configuration file") ||
+			strings.Contains(errStr, "does not exist") ||
+			strings.Contains(errStr, "not found on any node") {
+			return true
+		}
+	}
+	
+	// Check response body and status code
+	if statusCode == 500 || statusCode == 404 {
+		if strings.Contains(bodyStr, "unable to find configuration file") ||
+			strings.Contains(bodyStr, "does not exist") ||
+			strings.Contains(bodyStr, "not found") {
+			return true
+		}
+	}
+	
+	return false
+}
+
 func (pc *ProxmoxClient) startVM(ctx context.Context, nodeName string, vmID int) error {
 	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/status/start", nodeName, vmID)
 	// Proxmox API expects form-encoded data for POST requests, even if empty
 	resp, err := pc.apiRequestForm(ctx, "POST", endpoint, url.Values{})
 	if err != nil {
+		// Check if error indicates VM was deleted
+		if pc.isVMDeletedError(err, 0, "") {
+			return fmt.Errorf("VM %d has been deleted from Proxmox", vmID)
+		}
 		return fmt.Errorf("failed to start VM: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to start VM: %s (status: %d)", string(body), resp.StatusCode)
+		bodyStr := string(body)
+		
+		// Check if VM was deleted (configuration file not found)
+		if pc.isVMDeletedError(nil, resp.StatusCode, bodyStr) {
+			return fmt.Errorf("VM %d has been deleted from Proxmox", vmID)
+		}
+		
+		return fmt.Errorf("failed to start VM: %s (status: %d)", bodyStr, resp.StatusCode)
 	}
 
 	return nil
@@ -1310,13 +1440,24 @@ func (pc *ProxmoxClient) StopVM(ctx context.Context, nodeName string, vmID int) 
 	// /status/stop forces an immediate shutdown (not graceful)
 	resp, err := pc.apiRequestForm(ctx, "POST", endpoint, url.Values{})
 	if err != nil {
+		// Check if error indicates VM was deleted
+		if pc.isVMDeletedError(err, 0, "") {
+			return fmt.Errorf("VM %d has been deleted from Proxmox", vmID)
+		}
 		return fmt.Errorf("failed to stop VM: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to stop VM: %s (status: %d)", string(body), resp.StatusCode)
+		bodyStr := string(body)
+		
+		// Check if VM was deleted (configuration file not found)
+		if pc.isVMDeletedError(nil, resp.StatusCode, bodyStr) {
+			return fmt.Errorf("VM %d has been deleted from Proxmox", vmID)
+		}
+		
+		return fmt.Errorf("failed to stop VM: %s (status: %d)", bodyStr, resp.StatusCode)
 	}
 
 	return nil
@@ -1328,43 +1469,85 @@ func (pc *ProxmoxClient) DeleteVM(ctx context.Context, nodeName string, vmID int
 	configEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
 	resp, err := pc.apiRequest(ctx, "GET", configEndpoint, nil)
 	if err != nil {
-		return fmt.Errorf("failed to get VM config for validation: %w", err)
+		// Network/connection error - try to proceed with deletion anyway if we can find the VM
+		logger.Warn("[ProxmoxClient] Failed to get VM config for validation (network error): %v. Will attempt deletion anyway.", err)
+		// Try to find VM on other nodes or proceed with deletion
+	} else {
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			errorMsg := string(body)
+
+			// If VM config doesn't exist, the VM is already deleted
+			if resp.StatusCode == 500 && strings.Contains(errorMsg, "does not exist") {
+				logger.Info("[ProxmoxClient] VM %d config does not exist - VM is already deleted", vmID)
+				return nil // VM already deleted, nothing to do
+			}
+
+			// Handle unusual status codes (like 596) - might be Proxmox-specific errors
+			// If it's a 4xx or 5xx that's not a standard error, try to proceed with deletion
+			if resp.StatusCode >= 400 && resp.StatusCode < 600 {
+				// Check if VM exists by trying to find it on other nodes
+				logger.Warn("[ProxmoxClient] Got unusual status %d when getting VM config: %s. Will attempt to find VM on other nodes or proceed with deletion.", resp.StatusCode, errorMsg)
+				
+				// Try to find VM on other nodes
+				allNodes, listErr := pc.ListNodes(ctx)
+				if listErr == nil {
+					for _, otherNode := range allNodes {
+						if otherNode == nodeName {
+							continue // Skip the node we already tried
+						}
+						otherConfigEndpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", otherNode, vmID)
+						otherResp, otherErr := pc.apiRequest(ctx, "GET", otherConfigEndpoint, nil)
+						if otherErr == nil && otherResp.StatusCode == http.StatusOK {
+							otherResp.Body.Close()
+							logger.Info("[ProxmoxClient] Found VM %d on node %s instead of %s", vmID, otherNode, nodeName)
+							nodeName = otherNode // Update node name for deletion
+							goto skipValidation // Skip validation since we found it on another node
+						}
+						if otherResp != nil {
+							otherResp.Body.Close()
+						}
+					}
+				}
+				
+				// If we can't validate, log warning but proceed with deletion attempt
+				// This handles cases where Proxmox API is having issues but VM still exists
+				logger.Warn("[ProxmoxClient] Cannot validate VM %d ownership due to API error (status %d), but will attempt deletion. This may be unsafe if VM name doesn't match VPS ID.", vmID, resp.StatusCode)
+				goto skipValidation
+			}
+
+			return fmt.Errorf("failed to get VM config: %s (status: %d)", errorMsg, resp.StatusCode)
+		}
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		errorMsg := string(body)
-
-		// If VM config doesn't exist, the VM is already deleted
-		if resp.StatusCode == 500 && strings.Contains(errorMsg, "does not exist") {
-			logger.Info("[ProxmoxClient] VM %d config does not exist - VM is already deleted", vmID)
-			return nil // VM already deleted, nothing to do
+	// Validate VM ownership by checking name matches VPS ID (only if we got a valid response)
+	if resp != nil {
+		var configResp struct {
+			Data map[string]interface{} `json:"data"`
 		}
 
-		return fmt.Errorf("failed to get VM config: %s (status: %d)", errorMsg, resp.StatusCode)
+		if err := json.NewDecoder(resp.Body).Decode(&configResp); err != nil {
+			logger.Warn("[ProxmoxClient] Failed to decode VM config: %v. Will attempt deletion anyway.", err)
+			goto skipValidation
+		}
+
+		// Check if VM name matches VPS ID (this is how we identify our VMs)
+		vmName, ok := configResp.Data["name"].(string)
+		if !ok || vmName == "" {
+			return fmt.Errorf("refusing to delete VM %d: VM name is missing or empty", vmID)
+		}
+
+		if vmName != vpsID {
+			return fmt.Errorf("refusing to delete VM %d: VM name '%s' does not match VPS ID '%s'", vmID, vmName, vpsID)
+		}
+
+		logger.Info("[ProxmoxClient] VM %d verified as Obiente Cloud managed (name matches VPS ID: %s)", vmID, vpsID)
 	}
 
-	var configResp struct {
-		Data map[string]interface{} `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&configResp); err != nil {
-		return fmt.Errorf("failed to decode VM config: %w", err)
-	}
-
-	// Check if VM name matches VPS ID (this is how we identify our VMs)
-	vmName, ok := configResp.Data["name"].(string)
-	if !ok || vmName == "" {
-		return fmt.Errorf("refusing to delete VM %d: VM name is missing or empty", vmID)
-	}
-
-	if vmName != vpsID {
-		return fmt.Errorf("refusing to delete VM %d: VM name '%s' does not match VPS ID '%s'", vmID, vmName, vpsID)
-	}
-
-	logger.Info("[ProxmoxClient] VM %d verified as Obiente Cloud managed (name matches VPS ID: %s)", vmID, vpsID)
-
+skipValidation:
+	// Proceed with VM deletion (validation may have been skipped due to API errors)
 	// Check VM status and force stop it if running (Proxmox requires VM to be stopped before deletion)
 	// We use force stop (/status/stop) not graceful shutdown to ensure immediate stop
 	status, err := pc.GetVMStatus(ctx, nodeName, vmID)
@@ -1428,7 +1611,12 @@ func (pc *ProxmoxClient) GetVMStatus(ctx context.Context, nodeName string, vmID 
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("failed to get VM status: %s (status: %d)", string(body), resp.StatusCode)
+		bodyStr := string(body)
+		// Check if VM was deleted (404 or 500 with "does not exist" message)
+		if resp.StatusCode == 404 || (resp.StatusCode == 500 && strings.Contains(bodyStr, "does not exist")) {
+			return "", fmt.Errorf("VM does not exist (status: %d)", resp.StatusCode)
+		}
+		return "", fmt.Errorf("failed to get VM status: %s (status: %d)", bodyStr, resp.StatusCode)
 	}
 
 	var statusResp struct {
@@ -1580,6 +1768,51 @@ func (pc *ProxmoxClient) resizeDisk(ctx context.Context, nodeName string, vmID i
 	return nil
 }
 
+// MoveDisk moves a disk from one storage to another
+// disk should be the disk identifier (e.g., "scsi0", "virtio0")
+// targetStorage is the destination storage pool
+// deleteSource: if true, deletes the source disk after move (default: true)
+// Reference: https://pve.proxmox.com/pve-docs/api-viewer/index.html#/nodes/{node}/qemu/{vmid}/move_disk
+func (pc *ProxmoxClient) MoveDisk(ctx context.Context, nodeName string, vmID int, disk string, targetStorage string, deleteSource bool) error {
+	return pc.moveDisk(ctx, nodeName, vmID, disk, targetStorage, deleteSource)
+}
+
+func (pc *ProxmoxClient) moveDisk(ctx context.Context, nodeName string, vmID int, disk string, targetStorage string, deleteSource bool) error {
+	// Proxmox API endpoint: POST /nodes/{node}/qemu/{vmid}/move_disk
+	// Reference: https://pve.proxmox.com/pve-docs/api-viewer/index.html#/nodes/{node}/qemu/{vmid}/move_disk
+	// Parameters:
+	//   - disk: The disk identifier (e.g., "scsi0", "virtio0")
+	//   - storage: The target storage pool
+	//   - delete: Boolean, delete source disk after move (optional, default: false)
+	//   - format: Target disk format (optional)
+	//   - bwlimit: Bandwidth limit in KiB/s (optional)
+	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/move_disk", nodeName, vmID)
+	formData := url.Values{}
+	formData.Set("disk", disk)
+	formData.Set("storage", targetStorage)
+	if deleteSource {
+		formData.Set("delete", "1")
+	} else {
+		formData.Set("delete", "0")
+	}
+
+	logger.Info("[ProxmoxClient] Moving disk %s for VM %d from current storage to %s (delete source: %v)", disk, vmID, targetStorage, deleteSource)
+	
+	resp, err := pc.apiRequestForm(ctx, "POST", endpoint, formData)
+	if err != nil {
+		return fmt.Errorf("failed to move disk: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to move disk: %s (status: %d)", string(body), resp.StatusCode)
+	}
+
+	logger.Info("[ProxmoxClient] Successfully moved disk %s for VM %d to storage %s", disk, vmID, targetStorage)
+	return nil
+}
+
 func (pc *ProxmoxClient) UpdateVMConfig(ctx context.Context, nodeName string, vmID int, config map[string]interface{}) error {
 	endpoint := fmt.Sprintf("/nodes/%s/qemu/%d/config", nodeName, vmID)
 	formData := url.Values{}
@@ -1637,7 +1870,14 @@ func (pc *ProxmoxClient) RebootVM(ctx context.Context, nodeName string, vmID int
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to reboot VM: %s (status: %d)", string(body), resp.StatusCode)
+		bodyStr := string(body)
+		
+		// Check if VM was deleted (configuration file not found)
+		if pc.isVMDeletedError(nil, resp.StatusCode, bodyStr) {
+			return fmt.Errorf("VM %d has been deleted from Proxmox", vmID)
+		}
+		
+		return fmt.Errorf("failed to reboot VM: %s (status: %d)", bodyStr, resp.StatusCode)
 	}
 
 	return nil

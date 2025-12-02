@@ -7,7 +7,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jedib0t/go-pretty/v6 v6.7.1
 	github.com/joho/godotenv v1.5.1
-	github.com/moby/moby/api v1.52.0
 	github.com/moby/moby/client v0.2.1
 	github.com/obiente/cloud/apps/shared v0.0.0
 	golang.org/x/crypto v0.41.0
@@ -38,6 +37,7 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
+	github.com/moby/moby/api v1.52.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/redis/go-redis/v9 v9.16.0 // indirect
@@ -54,18 +54,31 @@ require (
 )
 
 exclude github.com/moby/moby v28.3.1+incompatible
+
 exclude github.com/moby/moby v28.3.2+incompatible
+
 exclude github.com/moby/moby v28.3.3+incompatible
+
 exclude github.com/moby/moby v28.4.0+incompatible
+
 exclude github.com/moby/moby v28.5.0+incompatible
+
 exclude github.com/moby/moby v28.5.1+incompatible
+
 exclude github.com/moby/moby v28.5.2+incompatible
+
 exclude github.com/docker/docker v28.3.1+incompatible
+
 exclude github.com/docker/docker v28.3.2+incompatible
+
 exclude github.com/docker/docker v28.3.3+incompatible
+
 exclude github.com/docker/docker v28.4.0+incompatible
+
 exclude github.com/docker/docker v28.5.0+incompatible
+
 exclude github.com/docker/docker v28.5.1+incompatible
+
 exclude github.com/docker/docker v28.5.2+incompatible
 
 replace github.com/obiente/cloud/apps/shared => ../shared

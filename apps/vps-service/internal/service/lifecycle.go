@@ -20,13 +20,29 @@ import (
 // syncVPSStatusFromProxmox syncs the VPS status from Proxmox to the database
 // This ensures we have the current status before performing actions
 func (s *Service) syncVPSStatusFromProxmox(ctx context.Context, vpsID string) error {
+	// Get current status before sync for notification purposes
+	var vpsBefore database.VPSInstance
+	oldStatus := int32(0)
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vpsBefore).Error; err == nil {
+		oldStatus = vpsBefore.Status
+	}
+
 	// Try to sync status from Proxmox, but don't fail if it errors
 	// This is best-effort to keep status accurate
 	if err := s.vpsManager.SyncVPSStatusFromProxmox(ctx, vpsID); err != nil {
 		// Log warning but don't fail - we'll still try to perform the action
 		// The action itself will update the status after completion
 		logger.Warn("[VPS Service] Failed to sync VPS %s status from Proxmox before action: %v", vpsID, err)
+		return nil
 	}
+
+	// Get updated status after sync and check for changes
+	var vpsAfter database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vpsAfter).Error; err == nil {
+		// Send notifications for status changes
+		s.handleVPSStatusChange(ctx, &vpsAfter, oldStatus, vpsAfter.Status)
+	}
+
 	return nil
 }
 
@@ -54,8 +70,21 @@ func (s *Service) StartVPS(ctx context.Context, req *connect.Request[vpsv1.Start
 	// This prevents issues where VPS is stuck in REBOOTING or other transitional states
 	s.syncVPSStatusFromProxmox(ctx, vpsID)
 
+	// Check if VPS was marked as DELETED during sync
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err == nil {
+		if vps.Status == 9 { // DELETED
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VM has been deleted from Proxmox"))
+		}
+	}
+
 	// Start VM via Proxmox
 	if err := s.vpsManager.StartVPS(ctx, vpsID); err != nil {
+		// Check if VM was deleted - provide user-friendly error message
+		if strings.Contains(err.Error(), "has been deleted from Proxmox") || strings.Contains(err.Error(), "VM has been deleted") {
+			// Don't send notification here - syncVPSStatusFromProxmox already sent it if needed
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VM has been deleted from Proxmox"))
+		}
+		// For other errors, don't change status or send notifications
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to start VPS: %w", err))
 	}
 
@@ -63,6 +92,9 @@ func (s *Service) StartVPS(ctx context.Context, req *connect.Request[vpsv1.Start
 	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to refresh VPS: %w", err))
 	}
+
+	// Send notification for VPS started
+	s.notifyVPSStarted(ctx, &vps)
 
 	return connect.NewResponse(&vpsv1.StartVPSResponse{
 		Vps: vpsToProto(&vps),
@@ -93,8 +125,21 @@ func (s *Service) StopVPS(ctx context.Context, req *connect.Request[vpsv1.StopVP
 	// This prevents issues where VPS is stuck in REBOOTING or other transitional states
 	s.syncVPSStatusFromProxmox(ctx, vpsID)
 
+	// Check if VPS was marked as DELETED during sync
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err == nil {
+		if vps.Status == 9 { // DELETED
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VM has been deleted from Proxmox"))
+		}
+	}
+
 	// Stop VM via Proxmox
 	if err := s.vpsManager.StopVPS(ctx, vpsID, false); err != nil {
+		// Check if VM was deleted - provide user-friendly error message
+		if strings.Contains(err.Error(), "has been deleted from Proxmox") || strings.Contains(err.Error(), "VM has been deleted") {
+			// Don't send notification here - syncVPSStatusFromProxmox already sent it if needed
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VM has been deleted from Proxmox"))
+		}
+		// For other errors, don't change status or send notifications
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to stop VPS: %w", err))
 	}
 
@@ -102,6 +147,9 @@ func (s *Service) StopVPS(ctx context.Context, req *connect.Request[vpsv1.StopVP
 	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to refresh VPS: %w", err))
 	}
+
+	// Send notification for VPS stopped
+	s.notifyVPSStopped(ctx, &vps)
 
 	return connect.NewResponse(&vpsv1.StopVPSResponse{
 		Vps: vpsToProto(&vps),
@@ -132,8 +180,21 @@ func (s *Service) RebootVPS(ctx context.Context, req *connect.Request[vpsv1.Rebo
 	// This prevents issues where VPS is stuck in REBOOTING or other transitional states
 	s.syncVPSStatusFromProxmox(ctx, vpsID)
 
+	// Check if VPS was marked as DELETED during sync
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err == nil {
+		if vps.Status == 9 { // DELETED
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VM has been deleted from Proxmox"))
+		}
+	}
+
 	// Reboot VM via Proxmox
 	if err := s.vpsManager.RebootVPS(ctx, vpsID); err != nil {
+		// Check if VM was deleted - provide user-friendly error message
+		if strings.Contains(err.Error(), "has been deleted from Proxmox") || strings.Contains(err.Error(), "VM has been deleted") {
+			// Don't send notification here - syncVPSStatusFromProxmox already sent it if needed
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("VM has been deleted from Proxmox"))
+		}
+		// For other errors, don't change status or send notifications
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to reboot VPS: %w", err))
 	}
 
@@ -141,6 +202,9 @@ func (s *Service) RebootVPS(ctx context.Context, req *connect.Request[vpsv1.Rebo
 	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to refresh VPS: %w", err))
 	}
+
+	// Send notification for VPS rebooted
+	s.notifyVPSRebooted(ctx, &vps)
 
 	return connect.NewResponse(&vpsv1.RebootVPSResponse{
 		Vps: vpsToProto(&vps),

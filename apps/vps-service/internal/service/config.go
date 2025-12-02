@@ -10,7 +10,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	vpsorch "vps-service/orchestrator"
+	orchestrator "vps-service/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
@@ -27,10 +27,10 @@ import (
 type ConfigService struct {
 	vpsv1connect.UnimplementedVPSConfigServiceHandler
 	permissionChecker *auth.PermissionChecker
-	vpsManager        *vpsorch.VPSManager
+	vpsManager        *orchestrator.VPSManager
 }
 
-func NewConfigService(vpsManager *vpsorch.VPSManager) *ConfigService {
+func NewConfigService(vpsManager *orchestrator.VPSManager) *ConfigService {
 	return &ConfigService{
 		permissionChecker: auth.NewPermissionChecker(),
 		vpsManager:        vpsManager,
@@ -137,12 +137,12 @@ func (s *ConfigService) GetCloudInitUserData(ctx context.Context, req *connect.R
 	}
 
 	// Generate the actual cloud-init userData (includes bastion/terminal keys)
-	vpsConfig := &vpsorch.VPSConfig{
+	vpsConfig := &orchestrator.VPSConfig{
 		VPSID:          vps.ID,
 		OrganizationID: vps.OrganizationID,
 		CloudInit:      cloudInitConfig,
 	}
-	userData := vpsorch.GenerateCloudInitUserData(vpsConfig)
+	userData := orchestrator.GenerateCloudInitUserData(vpsConfig)
 
 	return connect.NewResponse(&vpsv1.GetCloudInitUserDataResponse{
 		UserData: userData,
@@ -273,7 +273,7 @@ func (s *ConfigService) CreateVPSUser(ctx context.Context, req *connect.Request[
 	}
 
 	// Create new user
-	newUser := vpsorch.CloudInitUser{
+	newUser := orchestrator.CloudInitUser{
 		Name:              username,
 		SSHAuthorizedKeys: sshKeys,
 		Groups:            req.Msg.Groups,
@@ -531,7 +531,7 @@ func (s *ConfigService) SetUserPassword(ctx context.Context, req *connect.Reques
 
 	if userIndex == -1 {
 		// If user doesn't exist, create it
-		newUser := vpsorch.CloudInitUser{
+		newUser := orchestrator.CloudInitUser{
 			Name:     username,
 			Password: &password,
 		}
@@ -591,7 +591,7 @@ func (s *ConfigService) UpdateUserSSHKeys(ctx context.Context, req *connect.Requ
 
 	if userIndex == -1 {
 		// If user doesn't exist, create it
-		newUser := vpsorch.CloudInitUser{
+		newUser := orchestrator.CloudInitUser{
 			Name:              username,
 			SSHAuthorizedKeys: sshKeys,
 		}
@@ -630,7 +630,7 @@ func (s *ConfigService) UpdateUserSSHKeys(ctx context.Context, req *connect.Requ
 
 // Helper functions
 
-func (s *ConfigService) getCloudInitConfigForVPS(ctx context.Context, vpsID string) (*vpsorch.CloudInitConfig, error) {
+func (s *ConfigService) getCloudInitConfigForVPS(ctx context.Context, vpsID string) (*orchestrator.CloudInitConfig, error) {
 	var vps database.VPSInstance
 	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
 		return nil, err
@@ -638,7 +638,7 @@ func (s *ConfigService) getCloudInitConfigForVPS(ctx context.Context, vpsID stri
 	return s.loadCloudInitConfig(ctx, &vps)
 }
 
-func (s *ConfigService) saveCloudInitConfigForVPS(ctx context.Context, vpsID string, config *vpsorch.CloudInitConfig) error {
+func (s *ConfigService) saveCloudInitConfigForVPS(ctx context.Context, vpsID string, config *orchestrator.CloudInitConfig) error {
 	var vps database.VPSInstance
 	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
 		return err
@@ -647,15 +647,15 @@ func (s *ConfigService) saveCloudInitConfigForVPS(ctx context.Context, vpsID str
 }
 
 // LoadCloudInitConfig loads cloud-init configuration for a VPS (public method for superadmin use)
-func (s *ConfigService) LoadCloudInitConfig(ctx context.Context, vps *database.VPSInstance) (*vpsorch.CloudInitConfig, error) {
+func (s *ConfigService) LoadCloudInitConfig(ctx context.Context, vps *database.VPSInstance) (*orchestrator.CloudInitConfig, error) {
 	return s.loadCloudInitConfig(ctx, vps)
 }
 
-func (s *ConfigService) loadCloudInitConfig(ctx context.Context, vps *database.VPSInstance) (*vpsorch.CloudInitConfig, error) {
+func (s *ConfigService) loadCloudInitConfig(ctx context.Context, vps *database.VPSInstance) (*orchestrator.CloudInitConfig, error) {
 	// If VPS is not provisioned yet, return empty config
 	if vps.InstanceID == nil {
-		return &vpsorch.CloudInitConfig{
-			Users:            []vpsorch.CloudInitUser{},
+		return &orchestrator.CloudInitConfig{
+			Users:            []orchestrator.CloudInitUser{},
 			PackageUpdate:    boolPtr(true),
 			PackageUpgrade:   boolPtr(false),
 			SSHInstallServer: boolPtr(true),
@@ -671,13 +671,13 @@ func (s *ConfigService) loadCloudInitConfig(ctx context.Context, vps *database.V
 	}
 
 	// Get Proxmox configuration
-	proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Proxmox config: %w", err)
 	}
 
 	// Create Proxmox client
-	proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Proxmox client: %w", err)
 	}
@@ -693,8 +693,8 @@ func (s *ConfigService) loadCloudInitConfig(ctx context.Context, vps *database.V
 	vmConfig, err := proxmoxClient.GetVMConfig(ctx, nodeName, vmIDInt)
 	if err != nil {
 		logger.Warn("[VPSConfigService] Failed to get VM config for VPS %s: %v. Returning default config.", vps.ID, err)
-		return &vpsorch.CloudInitConfig{
-			Users:            []vpsorch.CloudInitUser{},
+		return &orchestrator.CloudInitConfig{
+			Users:            []orchestrator.CloudInitUser{},
 			PackageUpdate:    boolPtr(true),
 			PackageUpgrade:   boolPtr(false),
 			SSHInstallServer: boolPtr(true),
@@ -706,8 +706,8 @@ func (s *ConfigService) loadCloudInitConfig(ctx context.Context, vps *database.V
 	cicustom, _ := vmConfig["cicustom"].(string)
 	if cicustom == "" {
 		// No custom cloud-init, return default config
-		return &vpsorch.CloudInitConfig{
-			Users:            []vpsorch.CloudInitUser{},
+		return &orchestrator.CloudInitConfig{
+			Users:            []orchestrator.CloudInitUser{},
 			PackageUpdate:    boolPtr(true),
 			PackageUpgrade:   boolPtr(false),
 			SSHInstallServer: boolPtr(true),
@@ -734,8 +734,8 @@ func (s *ConfigService) loadCloudInitConfig(ctx context.Context, vps *database.V
 
 	if storage == "" || filename == "" {
 		logger.Warn("[VPSConfigService] Failed to parse cicustom parameter '%s' for VPS %s. Returning default config.", cicustom, vps.ID)
-		return &vpsorch.CloudInitConfig{
-			Users:            []vpsorch.CloudInitUser{},
+		return &orchestrator.CloudInitConfig{
+			Users:            []orchestrator.CloudInitUser{},
 			PackageUpdate:    boolPtr(true),
 			PackageUpgrade:   boolPtr(false),
 			SSHInstallServer: boolPtr(true),
@@ -747,8 +747,8 @@ func (s *ConfigService) loadCloudInitConfig(ctx context.Context, vps *database.V
 	userData, err := proxmoxClient.ReadSnippetViaSSH(ctx, nodeName, storage, filename)
 	if err != nil {
 		logger.Warn("[VPSConfigService] Failed to read cloud-init snippet for VPS %s: %v. Returning default config.", vps.ID, err)
-		return &vpsorch.CloudInitConfig{
-			Users:            []vpsorch.CloudInitUser{},
+		return &orchestrator.CloudInitConfig{
+			Users:            []orchestrator.CloudInitUser{},
 			PackageUpdate:    boolPtr(true),
 			PackageUpgrade:   boolPtr(false),
 			SSHInstallServer: boolPtr(true),
@@ -761,8 +761,8 @@ func (s *ConfigService) loadCloudInitConfig(ctx context.Context, vps *database.V
 	if err != nil {
 		logger.Warn("[VPSConfigService] Failed to parse cloud-init YAML for VPS %s: %v. This may indicate malformed YAML in the snippet. Returning default config. Note: Bastion and terminal keys will still be included when regenerating cloud-init.", vps.ID, err)
 		// Return default config - GenerateCloudInitUserData will still add bastion/terminal keys from DB
-		return &vpsorch.CloudInitConfig{
-			Users:            []vpsorch.CloudInitUser{},
+		return &orchestrator.CloudInitConfig{
+			Users:            []orchestrator.CloudInitUser{},
 			PackageUpdate:    boolPtr(true),
 			PackageUpgrade:   boolPtr(false),
 			SSHInstallServer: boolPtr(true),
@@ -775,11 +775,11 @@ func (s *ConfigService) loadCloudInitConfig(ctx context.Context, vps *database.V
 }
 
 // SaveCloudInitConfig saves cloud-init configuration for a VPS (public method for superadmin use)
-func (s *ConfigService) SaveCloudInitConfig(ctx context.Context, vps *database.VPSInstance, config *vpsorch.CloudInitConfig) error {
+func (s *ConfigService) SaveCloudInitConfig(ctx context.Context, vps *database.VPSInstance, config *orchestrator.CloudInitConfig) error {
 	return s.saveCloudInitConfig(ctx, vps, config)
 }
 
-func (s *ConfigService) saveCloudInitConfig(ctx context.Context, vps *database.VPSInstance, config *vpsorch.CloudInitConfig) error {
+func (s *ConfigService) saveCloudInitConfig(ctx context.Context, vps *database.VPSInstance, config *orchestrator.CloudInitConfig) error {
 	if vps.InstanceID == nil {
 		return fmt.Errorf("VPS has no instance ID (not provisioned yet)")
 	}
@@ -792,13 +792,13 @@ func (s *ConfigService) saveCloudInitConfig(ctx context.Context, vps *database.V
 	}
 
 	// Get Proxmox configuration
-	proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 	if err != nil {
 		return fmt.Errorf("failed to get Proxmox config: %w", err)
 	}
 
 	// Create Proxmox client
-	proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create Proxmox client: %w", err)
 	}
@@ -813,21 +813,21 @@ func (s *ConfigService) saveCloudInitConfig(ctx context.Context, vps *database.V
 	existingConfig, err := s.loadCloudInitConfig(ctx, vps)
 	if err != nil {
 		logger.Warn("[VPSConfigService] Failed to load existing cloud-init config for VPS %s: %v. Using new config only.", vps.ID, err)
-		existingConfig = &vpsorch.CloudInitConfig{}
+		existingConfig = &orchestrator.CloudInitConfig{}
 	}
 
 	// Merge configs (new config takes precedence, but preserve fields not in new config)
 	mergedConfig := mergeCloudInitConfig(existingConfig, config)
 
 	// Create VPSConfig for cloud-init generation
-	vpsConfig := &vpsorch.VPSConfig{
+	vpsConfig := &orchestrator.VPSConfig{
 		VPSID:          vps.ID,
 		OrganizationID: vps.OrganizationID,
 		CloudInit:      mergedConfig,
 	}
 
 	// Generate cloud-init userData
-	userData := vpsorch.GenerateCloudInitUserData(vpsConfig)
+	userData := orchestrator.GenerateCloudInitUserData(vpsConfig)
 	
 	// Log bastion key inclusion for debugging
 	bastionKey, err := database.GetVPSBastionKey(vps.ID)
@@ -893,7 +893,7 @@ func (s *ConfigService) resolveSSHKeyIDs(ctx context.Context, orgID, vpsID strin
 }
 
 // parseCloudInitYAML parses cloud-init YAML userData into CloudInitConfig
-func parseCloudInitYAML(userData string) (*vpsorch.CloudInitConfig, error) {
+func parseCloudInitYAML(userData string) (*orchestrator.CloudInitConfig, error) {
 	// Remove #cloud-config header if present
 	content := userData
 	if strings.HasPrefix(content, "#cloud-config") {
@@ -973,8 +973,8 @@ func parseCloudInitYAML(userData string) (*vpsorch.CloudInitConfig, error) {
 		return nil, fmt.Errorf("failed to parse YAML (this may indicate corrupted or malformed cloud-init snippet): %w", err)
 	}
 
-	config := &vpsorch.CloudInitConfig{
-		Users:            []vpsorch.CloudInitUser{},
+	config := &orchestrator.CloudInitConfig{
+		Users:            []orchestrator.CloudInitUser{},
 		PackageUpdate:    boolPtr(true),
 		PackageUpgrade:   boolPtr(false),
 		SSHInstallServer: boolPtr(true),
@@ -1035,7 +1035,7 @@ func parseCloudInitYAML(userData string) (*vpsorch.CloudInitConfig, error) {
 					continue
 				}
 
-				user := vpsorch.CloudInitUser{Name: name}
+				user := orchestrator.CloudInitUser{Name: name}
 				if passwd, ok := userMap["passwd"].(string); ok {
 					user.Password = &passwd
 				}
@@ -1099,10 +1099,10 @@ func parseCloudInitYAML(userData string) (*vpsorch.CloudInitConfig, error) {
 
 	// Parse write_files
 	if writeFiles, ok := yamlData["write_files"].([]interface{}); ok {
-		config.WriteFiles = make([]vpsorch.CloudInitWriteFile, 0, len(writeFiles))
+		config.WriteFiles = make([]orchestrator.CloudInitWriteFile, 0, len(writeFiles))
 		for _, fileVal := range writeFiles {
 			if fileMap, ok := fileVal.(map[string]interface{}); ok {
-				file := vpsorch.CloudInitWriteFile{}
+				file := orchestrator.CloudInitWriteFile{}
 				if path, ok := fileMap["path"].(string); ok {
 					file.Path = path
 				}
@@ -1132,8 +1132,8 @@ func parseCloudInitYAML(userData string) (*vpsorch.CloudInitConfig, error) {
 }
 
 // mergeCloudInitConfig merges existing config with new config
-func mergeCloudInitConfig(existing, new *vpsorch.CloudInitConfig) *vpsorch.CloudInitConfig {
-	merged := &vpsorch.CloudInitConfig{}
+func mergeCloudInitConfig(existing, new *orchestrator.CloudInitConfig) *orchestrator.CloudInitConfig {
+	merged := &orchestrator.CloudInitConfig{}
 	if new.Hostname != nil {
 		merged.Hostname = new.Hostname
 	} else {
@@ -1193,21 +1193,21 @@ func mergeCloudInitConfig(existing, new *vpsorch.CloudInitConfig) *vpsorch.Cloud
 }
 // Conversion helpers
 
-func protoToCloudInitConfig(proto *vpsv1.CloudInitConfig) *vpsorch.CloudInitConfig {
+func protoToCloudInitConfig(proto *vpsv1.CloudInitConfig) *orchestrator.CloudInitConfig {
 	if proto == nil {
 		return nil
 	}
 
-	config := &vpsorch.CloudInitConfig{
-		Users:      make([]vpsorch.CloudInitUser, 0, len(proto.Users)),
+	config := &orchestrator.CloudInitConfig{
+		Users:      make([]orchestrator.CloudInitUser, 0, len(proto.Users)),
 		Packages:   proto.Packages,
 		Runcmd:     proto.Runcmd,
-		WriteFiles: make([]vpsorch.CloudInitWriteFile, 0, len(proto.WriteFiles)),
+		WriteFiles: make([]orchestrator.CloudInitWriteFile, 0, len(proto.WriteFiles)),
 	}
 
 	// Convert users
 	for _, userProto := range proto.Users {
-		user := vpsorch.CloudInitUser{
+		user := orchestrator.CloudInitUser{
 			Name:              userProto.GetName(),
 			SSHAuthorizedKeys: userProto.SshAuthorizedKeys,
 			Groups:            userProto.Groups,
@@ -1277,7 +1277,7 @@ func protoToCloudInitConfig(proto *vpsv1.CloudInitConfig) *vpsorch.CloudInitConf
 
 	// Convert write files
 	for _, fileProto := range proto.WriteFiles {
-		file := vpsorch.CloudInitWriteFile{
+		file := orchestrator.CloudInitWriteFile{
 			Path:    fileProto.GetPath(),
 			Content: fileProto.GetContent(),
 		}
@@ -1305,7 +1305,7 @@ func protoToCloudInitConfig(proto *vpsv1.CloudInitConfig) *vpsorch.CloudInitConf
 	return config
 }
 
-func cloudInitConfigToProto(config *vpsorch.CloudInitConfig) *vpsv1.CloudInitConfig {
+func cloudInitConfigToProto(config *orchestrator.CloudInitConfig) *vpsv1.CloudInitConfig {
 	if config == nil {
 		return nil
 	}

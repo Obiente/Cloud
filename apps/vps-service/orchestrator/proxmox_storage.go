@@ -136,7 +136,13 @@ func (pc *ProxmoxClient) FindVMNode(ctx context.Context, vmID int) (string, erro
 
 		if err := json.NewDecoder(resp.Body).Decode(&vmsResp); err != nil {
 			resp.Body.Close()
-			logger.Warn("[ProxmoxClient] Failed to decode VMs on node %s: %v", nodeName, err)
+			// EOF errors often indicate the node is unavailable or not responding properly
+			// Log as debug for EOF (common with unavailable nodes) and warn for other errors
+			if err == io.EOF || strings.Contains(err.Error(), "EOF") {
+				logger.Debug("[ProxmoxClient] Node %s returned empty response (node may be unavailable): %v", nodeName, err)
+			} else {
+				logger.Warn("[ProxmoxClient] Failed to decode VMs on node %s: %v", nodeName, err)
+			}
 			continue
 		}
 		resp.Body.Close()

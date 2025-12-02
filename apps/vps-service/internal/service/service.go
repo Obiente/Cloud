@@ -7,7 +7,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
-	vpsorch "vps-service/orchestrator"
+	orchestrator "vps-service/orchestrator"
 	"github.com/obiente/cloud/apps/shared/pkg/quota"
 	"github.com/obiente/cloud/apps/shared/pkg/services/common"
 
@@ -21,10 +21,10 @@ type Service struct {
 	vpsv1connect.UnimplementedVPSServiceHandler
 	permissionChecker *auth.PermissionChecker
 	quotaChecker      *quota.Checker
-	vpsManager        *vpsorch.VPSManager
+	vpsManager        *orchestrator.VPSManager
 }
 
-func NewService(vpsManager *vpsorch.VPSManager, qc *quota.Checker) *Service {
+func NewService(vpsManager *orchestrator.VPSManager, qc *quota.Checker) *Service {
 	return &Service{
 		permissionChecker: auth.NewPermissionChecker(),
 		quotaChecker:      qc,

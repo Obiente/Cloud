@@ -18,7 +18,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	vpsorch "vps-service/orchestrator"
+	orchestrator "vps-service/orchestrator"
 
 	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/text"
@@ -198,7 +198,7 @@ type SSHProxyServer struct {
 	hostKey       ssh.Signer
 	port          int
 	vpsService    *Service
-	gatewayClient *vpsorch.VPSGatewayClient
+	gatewayClient *orchestrator.VPSGatewayClient
 	
 	// Connection tracking for graceful shutdown
 	activeConnections sync.WaitGroup
@@ -216,7 +216,7 @@ func NewSSHProxyServer(port int, vpsService *Service) (*SSHProxyServer, error) {
 		return nil, fmt.Errorf("failed to get host key: %w", err)
 	}
 
-	gatewayClient, err := vpsorch.NewVPSGatewayClient("")
+	gatewayClient, err := orchestrator.NewVPSGatewayClient("")
 	if err != nil {
 		logger.Warn("[SSHProxy] Failed to initialize VPS gateway client: %v", err)
 		gatewayClient = nil
@@ -676,10 +676,10 @@ func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context
 			fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
 			if vmIDInt > 0 {
 				// Get Proxmox configuration
-		proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+		proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 		if err == nil {
 					// Create Proxmox client
-			proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+			proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
 			if err == nil {
 						// Find the node where the VM is running
 					nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
@@ -687,14 +687,14 @@ func (s *SSHProxyServer) connectSSHToVPSForChannelForwarding(ctx context.Context
 							// Update cloud-init config to include the new bastion key
 							// We need to load current config, which will automatically include the new key
 							// when GenerateCloudInitUserData is called
-							vpsConfig := &vpsorch.VPSConfig{
+							vpsConfig := &orchestrator.VPSConfig{
 								VPSID:          vps.ID,
 								OrganizationID: vps.OrganizationID,
 								CloudInit:      nil, // Use default/current config
 							}
 							
 							// Generate cloud-init userData (will include the new bastion key)
-							userData := vpsorch.GenerateCloudInitUserData(vpsConfig)
+							userData := orchestrator.GenerateCloudInitUserData(vpsConfig)
 							
 							// Get storage for snippets
 							storage := "local"
@@ -1603,7 +1603,7 @@ func (s *SSHProxyServer) getVPSIP(ctx context.Context, vpsID string) (string, er
 
 	var actualVPSIP string
 	logger.Info("[SSHProxy] Attempting to get actual IP address for VPS %s", vpsID)
-	vpsManager, err := vpsorch.NewVPSManager()
+	vpsManager, err := orchestrator.NewVPSManager()
 	if err == nil {
 		defer vpsManager.Close()
 		ipv4, _, err := vpsManager.GetVPSIPAddresses(ctx, vpsID)
@@ -1619,9 +1619,9 @@ func (s *SSHProxyServer) getVPSIP(ctx context.Context, vpsID string) (string, er
 
 	if actualVPSIP == "" {
 		logger.Info("[SSHProxy] No IP from VPS manager, trying to get internal IP from Proxmox for VPS %s", vpsID)
-		proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+		proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 		if err == nil {
-			proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+			proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
 			if err == nil {
 				vmIDInt := 0
 				if vps.InstanceID != nil {

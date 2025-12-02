@@ -354,7 +354,7 @@
         <OuiText size="sm" weight="medium">Root Password</OuiText>
         <OuiBox p="md" rounded="md" class="bg-surface-muted font-mono text-sm">
           <OuiFlex justify="between" align="center" gap="sm">
-            <OuiText class="select-all">{{ createdPassword || "" }}</OuiText>
+            <OuiText class="select-all">{{ createdPassword ?? "" }}</OuiText>
             <OuiButton
               variant="ghost"
               size="xs"
@@ -562,8 +562,11 @@
       };
       errors.value = {};
       error.value = null;
+      // Don't clear password if we're about to show the password dialog
+      // The password dialog's close handler will clear it
+      if (!showPasswordDialog.value) {
       createdPassword.value = null;
-      showPasswordDialog.value = false;
+      }
       showAdvancedConfig.value = false;
     }
   };
@@ -805,10 +808,18 @@
       // Connect RPC returns the response message directly
       const vps = response.vps;
       
+      // Use a replacer to handle BigInt values (convert to string) for JSON serialization
+      const bigIntReplacer = (key: string, value: any) => {
+        if (typeof value === 'bigint') {
+          return value.toString();
+        }
+        return value;
+      };
+      
       // Try multiple ways to access the password (defensive approach)
       let password: string | undefined = undefined;
       
-      // Method 1: Direct access (camelCase - TypeScript convention)
+      // Method 1: Direct access (camelCase - TypeScript convention) - try first as it's most direct
       if (vps?.rootPassword !== undefined && vps?.rootPassword !== null) {
         const pwd = vps.rootPassword;
         if (typeof pwd === "string" && pwd.trim() !== "") {
@@ -840,20 +851,23 @@
         }
       }
       
-      // Use a replacer to handle BigInt values (convert to string) for JSON serialization
-      const bigIntReplacer = (key: string, value: any) => {
-        if (typeof value === 'bigint') {
-          return value.toString();
-        }
-        return value;
-      };
-      
-      // Method 4: Deep search in response (last resort)
+      // Method 4: Deep search in response (last resort - most reliable for Connect RPC)
+      // This catches the password regardless of how it's serialized
       if (!password) {
         const responseStr = JSON.stringify(response, bigIntReplacer);
-        const passwordMatch = responseStr.match(/"root[_-]?password"\s*:\s*"([^"]+)"/i);
-        if (passwordMatch && passwordMatch[1]) {
-          password = passwordMatch[1].trim();
+        // Try multiple regex patterns to catch different serialization formats
+        const patterns = [
+          /"rootPassword"\s*:\s*"([^"]+)"/,  // camelCase (most common)
+          /"root_password"\s*:\s*"([^"]+)"/,  // snake_case
+          /"root[_-]?password"\s*:\s*"([^"]+)"/i,  // Flexible format
+        ];
+        
+        for (const pattern of patterns) {
+          const match = responseStr.match(pattern);
+          if (match && match[1]) {
+            password = match[1].trim();
+            break;
+          }
         }
       }
       
@@ -871,10 +885,19 @@
       });
       
       if (password && password.length > 0) {
+        // Set password first
         createdPassword.value = password;
-        updateOpen(false);
-        await nextTick();
+        console.log("[CreateVPSDialog] Password set to createdPassword:", {
+          passwordLength: password.length,
+          createdPasswordValue: createdPassword.value ? "***" : null,
+          createdPasswordLength: createdPassword.value?.length,
+        });
+        // Set showPasswordDialog BEFORE closing the create dialog
+        // This prevents the watch from clearing the password when the dialog closes
         showPasswordDialog.value = true;
+        console.log("[CreateVPSDialog] Showing password dialog with password length:", createdPassword.value.length);
+        // Close the create dialog after setting showPasswordDialog
+        updateOpen(false);
       } else {
         // No password returned - log for debugging
         console.warn("[CreateVPSDialog] No root password found in CreateVPS response", {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	vpsorch "vps-service/orchestrator"
+	orchestrator "vps-service/orchestrator"
 
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 
@@ -46,9 +46,9 @@ func (s *Service) ListSSHKeys(ctx context.Context, req *connect.Request[vpsv1.Li
 
 		// Seed SSH keys from Proxmox if VPS has an instance ID
 		if vps.InstanceID != nil {
-			proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+			proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 			if err == nil {
-				proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+				proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
 				if err == nil {
 					vmIDInt := 0
 					fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)

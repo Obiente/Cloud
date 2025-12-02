@@ -17,6 +17,10 @@
 #                                 (uses cached images if available, skips all confirmations)
 #   --help, -h                    Show help message
 #
+# IMPORTANT: Use directory-based storage (e.g., 'local') for templates, NOT lvmthin!
+# Templates on lvmthin may cause PARTUUID boot issues when cloned.
+# VMs can still be cloned TO lvmthin storage - Proxmox handles the conversion.
+#
 # Examples:
 #   ./scripts/setup-proxmox-templates.sh              # Interactive mode
 #   ./scripts/setup-proxmox-templates.sh --recreate-all # Auto-recreate all templates
@@ -31,11 +35,13 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Template configurations
+# Using the same image URLs as Proxmox community helper scripts (tteck/community-scripts)
+# These are tested and known to work with UEFI boot
 declare -A TEMPLATES=(
-    ["ubuntu-22.04-standard"]="9000|https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img|ubuntu-22.04-server-cloudimg-amd64.img"
-    ["ubuntu-24.04-standard"]="9001|https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img|ubuntu-24.04-server-cloudimg-amd64.img"
-    ["debian-12-standard"]="9002|https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2|debian-12-generic-amd64.qcow2"
-    ["debian-13-standard"]="9003|https://cloud.debian.org/images/cloud/trixie/latest/debian-13-generic-amd64.qcow2|debian-13-generic-amd64.qcow2"
+    ["ubuntu-22.04-standard"]="9000|https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img|jammy-server-cloudimg-amd64.img"
+    ["ubuntu-24.04-standard"]="9001|https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img|noble-server-cloudimg-amd64.img"
+    ["debian-12-standard"]="9002|https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2|debian-12-genericcloud-amd64.qcow2"
+    ["debian-13-standard"]="9003|https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2|debian-13-genericcloud-amd64.qcow2"
     ["rockylinux-9-standard"]="9004|https://download.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2|Rocky-9-GenericCloud-Base.latest.x86_64.qcow2"
     ["almalinux-9-standard"]="9005|https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2|AlmaLinux-9-GenericCloud-latest.x86_64.qcow2"
 )
@@ -137,7 +143,11 @@ detect_storage_type() {
         *dir*|*directory*)
             echo "dir"
             ;;
-        *lvm*|*lvm-thin*)
+        *lvmthin*)
+            # LVM thin-provisioning - NOT recommended for templates (PARTUUID issues)
+            echo "lvmthin"
+            ;;
+        *lvm*)
             echo "lvm"
             ;;
         *zfs*|*zfspool*)
@@ -147,6 +157,8 @@ detect_storage_type() {
             # Default detection based on storage name
             if [ "$storage" = "local" ]; then
                 echo "dir"
+            elif [[ "$storage" == *"lvmthin"* ]]; then
+                echo "lvmthin"
             elif [[ "$storage" == *"lvm"* ]]; then
                 echo "lvm"
             elif [[ "$storage" == *"zfs"* ]]; then
@@ -156,6 +168,284 @@ detect_storage_type() {
             fi
             ;;
     esac
+}
+
+# Fix boot configuration for lvmthin compatibility
+# Cloud images use PARTUUID which changes when cloned to lvmthin
+# This function modifies the disk to use /dev/sda1 instead
+fix_boot_config_for_lvmthin() {
+    local vmid="$1"
+    local storage_type="$2"
+    local volume_id="$3"
+    
+    local disk_path
+    disk_path=$(get_volume_path "$volume_id")
+    
+    if [ -z "$disk_path" ]; then
+        print_warning "Unable to resolve disk path for volume '$volume_id'"
+        return 0
+    fi
+    
+    local mount_point="/tmp/fix-boot-$$"
+    local root_part=""
+    local cleanup_cmd=""
+    
+    if { [ "$storage_type" = "lvmthin" ] || [ "$storage_type" = "lvm" ]; } && [ -b "$disk_path" ]; then
+        print_info "Fixing boot config on block device: $disk_path"
+        
+        if ! command -v kpartx >/dev/null 2>&1; then
+            print_warning "kpartx not available; skipping boot fix on $disk_path"
+            return 0
+        fi
+        
+        local kpartx_output
+        kpartx_output=$(kpartx -av "$disk_path" 2>&1)
+        if [ $? -ne 0 ]; then
+            print_warning "kpartx failed: $kpartx_output"
+            return 0
+        fi
+        
+        print_info "kpartx output: $kpartx_output"
+        sleep 1
+        
+        local mapper_name
+        mapper_name=$(echo "$disk_path" | sed 's|/dev/||; s|-|--|g; s|/|-|g')
+        root_part="/dev/mapper/${mapper_name}p1"
+        
+        if [ ! -b "$root_part" ]; then
+            print_warning "Could not find mapper partition for $disk_path"
+            ls -la /dev/mapper/ | grep -E "(vm|base).*$vmid" || true
+            kpartx -dv "$disk_path" 2>/dev/null || true
+            return 0
+        fi
+        
+        cleanup_cmd="kpartx -dv $disk_path"
+        
+    elif [ "$storage_type" = "dir" ] && [ -f "$disk_path" ]; then
+        print_info "Fixing boot config on image file: $disk_path"
+        local disk_format="${disk_path##*.}"
+        
+        if [ "$disk_format" = "$disk_path" ]; then
+            disk_format="raw"
+        fi
+        
+        if [ "$disk_format" = "raw" ]; then
+            local loop_device
+            loop_device=$(losetup -fP --show "$disk_path" 2>&1)
+            if [ $? -ne 0 ] || [ -z "$loop_device" ]; then
+                print_warning "losetup failed: $loop_device"
+                return 0
+            fi
+            sleep 1
+            partprobe "$loop_device" 2>/dev/null || true
+            sleep 1
+            root_part="${loop_device}p1"
+            if [ ! -b "$root_part" ]; then
+                print_warning "Could not detect partition on $loop_device"
+                losetup -d "$loop_device" 2>/dev/null || true
+                return 0
+            fi
+            cleanup_cmd="losetup -d $loop_device"
+        else
+            if ! command -v qemu-nbd >/dev/null 2>&1; then
+                print_warning "qemu-nbd not available; cannot fix $disk_path"
+                return 0
+            fi
+            modprobe nbd max_part=16 2>/dev/null || true
+            sleep 1
+            local nbd_device=""
+            for i in $(seq 0 15); do
+                if [ ! -e "/sys/block/nbd${i}/pid" ] || [ ! -s "/sys/block/nbd${i}/pid" ]; then
+                    nbd_device="/dev/nbd${i}"
+                    break
+                fi
+            done
+            if [ -z "$nbd_device" ]; then
+                print_warning "No free NBD device found"
+                return 0
+            fi
+            local nbd_output
+            nbd_output=$(qemu-nbd --connect="$nbd_device" --format="$disk_format" "$disk_path" 2>&1)
+            if [ $? -ne 0 ]; then
+                print_warning "Failed to connect $disk_path via NBD: $nbd_output"
+                return 0
+            fi
+            sleep 2
+            partprobe "$nbd_device" 2>/dev/null || true
+            sleep 1
+            root_part="${nbd_device}p1"
+            if [ ! -b "$root_part" ]; then
+                print_warning "Could not find partition on $nbd_device"
+                qemu-nbd --disconnect "$nbd_device" 2>/dev/null || true
+                return 0
+            fi
+            cleanup_cmd="qemu-nbd --disconnect $nbd_device"
+        fi
+    else
+        print_warning "Unsupported storage type '$storage_type' or invalid disk path '$disk_path'"
+        return 0
+    fi
+    
+    print_info "Found root partition: $root_part"
+    
+    # Create mount point and mount
+    mkdir -p "$mount_point"
+    
+    local mount_output
+    mount_output=$(mount "$root_part" "$mount_point" 2>&1)
+    if [ $? -ne 0 ]; then
+        print_warning "Failed to mount $root_part: $mount_output"
+        eval "$cleanup_cmd" 2>/dev/null || true
+        rmdir "$mount_point" 2>/dev/null || true
+        return 0
+    fi
+    
+    print_info "Mounted root partition at $mount_point"
+    
+    local fixed_something=false
+    
+    # Fix /etc/fstab if it uses PARTUUID or LABEL, and remove /boot/efi (we use BIOS)
+    if [ -f "$mount_point/etc/fstab" ]; then
+        if grep -q "PARTUUID=" "$mount_point/etc/fstab" 2>/dev/null; then
+            print_info "Fixing /etc/fstab..."
+            # Replace PARTUUID=xxx with /dev/sda1 for root
+            sed -i 's|PARTUUID=[^ \t]*|/dev/sda1|g' "$mount_point/etc/fstab"
+            fixed_something=true
+        fi
+        # Also fix LABEL=cloudimg-rootfs which some images use
+        if grep -q "LABEL=cloudimg-rootfs" "$mount_point/etc/fstab" 2>/dev/null; then
+            print_info "Fixing LABEL=cloudimg-rootfs in /etc/fstab..."
+            sed -i 's|LABEL=cloudimg-rootfs|/dev/sda1|g' "$mount_point/etc/fstab"
+            fixed_something=true
+        fi
+        # Many cloud images ship a /boot/efi entry even when booting in BIOS mode.
+        # On Proxmox with SeaBIOS, there is no EFI system partition, so this mount fails
+        # and drops the system into emergency mode. Safest is to comment out /boot/efi.
+        if grep -q "[[:space:]]/boot/efi[[:space:]]" "$mount_point/etc/fstab" 2>/dev/null; then
+            print_info "Commenting out /boot/efi entry in /etc/fstab (no EFI partition in BIOS VMs)..."
+            # Comment any non-comment line that mounts /boot/efi
+            sed -i 's/^\([^#].*[[:space:]]\/boot\/efi[[:space:]].*\)$/#\1/' "$mount_point/etc/fstab"
+            fixed_something=true
+        fi
+    fi
+    
+    # Fix GRUB configuration
+    local grub_cfg="$mount_point/boot/grub/grub.cfg"
+    if [ -f "$grub_cfg" ]; then
+        if grep -q "PARTUUID=" "$grub_cfg" 2>/dev/null; then
+            print_info "Fixing GRUB configuration (PARTUUID -> /dev/sda1)..."
+            sed -i 's|root=PARTUUID=[^ ]*|root=/dev/sda1|g' "$grub_cfg"
+            fixed_something=true
+        fi
+        # Some images (e.g. Ubuntu cloud) use LABEL=cloudimg-rootfs in GRUB
+        if grep -q "LABEL=cloudimg-rootfs" "$grub_cfg" 2>/dev/null; then
+            print_info "Fixing GRUB configuration (LABEL=cloudimg-rootfs -> /dev/sda1)..."
+            sed -i 's|root=LABEL=[^ ]*|root=/dev/sda1|g' "$grub_cfg"
+            fixed_something=true
+        fi
+    fi
+    
+    # Also fix /etc/default/grub for future kernel updates
+    local grub_default="$mount_point/etc/default/grub"
+    if [ -f "$grub_default" ]; then
+        if grep -q "PARTUUID=" "$grub_default" 2>/dev/null; then
+            print_info "Fixing /etc/default/grub (PARTUUID -> /dev/sda1)..."
+            sed -i 's|PARTUUID=[^ "]*|/dev/sda1|g' "$grub_default"
+            fixed_something=true
+        fi
+        # Handle LABEL=cloudimg-rootfs or other LABEL-based roots in GRUB_CMDLINE_LINUX
+        if grep -q "LABEL=cloudimg-rootfs" "$grub_default" 2>/dev/null; then
+            print_info "Fixing /etc/default/grub (LABEL=cloudimg-rootfs -> /dev/sda1)..."
+            sed -i 's|LABEL=cloudimg-rootfs|/dev/sda1|g' "$grub_default"
+            fixed_something=true
+        fi
+    fi
+
+    # Also fix any additional GRUB config snippets (Ubuntu cloud images often use /etc/default/grub.d)
+    local grub_d_dir="$mount_point/etc/default/grub.d"
+    if [ -d "$grub_d_dir" ]; then
+        for cfg in "$grub_d_dir"/*.cfg; do
+            [ -f "$cfg" ] || continue
+            if grep -q "PARTUUID=" "$cfg" 2>/dev/null; then
+                print_info "Fixing GRUB snippet $(basename "$cfg") (PARTUUID -> /dev/sda1)..."
+                sed -i 's|PARTUUID=[^ "]*|/dev/sda1|g' "$cfg"
+                fixed_something=true
+            fi
+            if grep -q "LABEL=cloudimg-rootfs" "$cfg" 2>/dev/null; then
+                print_info "Fixing GRUB snippet $(basename "$cfg") (LABEL=cloudimg-rootfs -> /dev/sda1)..."
+                sed -i 's|LABEL=cloudimg-rootfs|/dev/sda1|g' "$cfg"
+                fixed_something=true
+            fi
+        done
+    fi
+    
+    # Sync and unmount
+    sync
+    umount "$mount_point" 2>/dev/null || true
+    rmdir "$mount_point" 2>/dev/null || true
+    
+    # Cleanup (disconnect loop device or NBD)
+    eval "$cleanup_cmd" 2>/dev/null || true
+    
+    if [ "$fixed_something" = true ]; then
+        print_success "Boot configuration fixed for lvmthin compatibility"
+    else
+        print_info "No PARTUUID references found (already using device names or labels)"
+    fi
+    
+    return 0
+}
+
+# Resolve Proxmox volume ID (e.g., local-lvmthin:vm-100-disk-0) to an absolute path
+get_volume_path() {
+    local volume_id="$1"
+    if command -v pvesm >/dev/null 2>&1; then
+        pvesm path "$volume_id" 2>/dev/null || true
+    else
+        echo ""
+    fi
+}
+
+# Ensure block-based storages (LVM/LVM-thin) have a valid GPT partition table
+ensure_partition_table() {
+    local storage_type="$1"
+    local volume_id="$2"
+
+    if [ "$storage_type" != "lvmthin" ] && [ "$storage_type" != "lvm" ]; then
+        return 0
+    fi
+
+    local disk_path
+    disk_path=$(get_volume_path "$volume_id")
+    if [ -z "$disk_path" ] || [ ! -b "$disk_path" ]; then
+        print_warning "Unable to resolve block device for volume '$volume_id'"
+        return 0
+    fi
+
+    # Check whether a partition entry already exists (skip protective MBR only disks)
+    local partition_lines
+    partition_lines=$(sgdisk -p "$disk_path" 2>/dev/null | grep -E "^\s+[0-9]+\s")
+    if [ -n "$partition_lines" ]; then
+        print_info "Disk $disk_path already has a GPT partition table"
+        return 0
+    fi
+
+    print_warning "Disk $disk_path is missing GPT partitions; recreating single root partition (1MiB-start)"
+
+    if ! sgdisk --zap-all "$disk_path" >/dev/null 2>&1; then
+        print_warning "Failed to wipe existing partition data on $disk_path"
+        return 0
+    fi
+
+    if ! sgdisk --new=1:1MiB:0 --typecode=1:8300 --change-name=1:cloudimg-rootfs "$disk_path" >/dev/null 2>&1; then
+        print_warning "Failed to create new partition on $disk_path"
+        return 0
+    fi
+
+    partprobe "$disk_path" 2>/dev/null || true
+    sleep 1
+    print_success "Recreated GPT with single root partition on $disk_path"
+    return 0
 }
 
 # Prompt for storage selection
@@ -186,10 +476,13 @@ prompt_storage() {
             
             case "$storage_type" in
                 dir)
-                    type_display="Directory (files)"
+                    type_display="Directory (files) - RECOMMENDED for templates"
                     ;;
                 lvm)
                     type_display="LVM (block device)"
+                    ;;
+                lvmthin)
+                    type_display="LVM-thin (block device) - NOT recommended for templates"
                     ;;
                 zfs)
                     type_display="ZFS (block device)"
@@ -199,15 +492,21 @@ prompt_storage() {
                     ;;
             esac
             
-            # Auto-detect: prefer local-lvm or local-zfs, fallback to first available
-            if [ -z "$detected_storage" ]; then
-                if [ "$storage" = "local-lvm" ] || [ "$storage" = "local-zfs" ]; then
-                    detected_storage="$storage"
-                    detected_type="$storage_type"
-                elif [ "$index" -eq 1 ]; then
-                    detected_storage="$storage"
-                    detected_type="$storage_type"
-                fi
+            # Auto-detect: prefer 'local' (directory storage) for templates
+            # Directory storage preserves PARTUUID correctly when VMs are cloned
+            # Priority: 1) local dir, 2) any dir, 3) lvm/zfs (never unknown/lvmthin)
+            if [ "$storage" = "local" ] && [ "$storage_type" = "dir" ]; then
+                # Best choice: local directory storage
+                detected_storage="$storage"
+                detected_type="$storage_type"
+            elif [ -z "$detected_storage" ] && [ "$storage_type" = "dir" ]; then
+                # Fallback: any directory storage
+                detected_storage="$storage"
+                detected_type="$storage_type"
+            elif [ -z "$detected_storage" ] && [ "$storage_type" != "unknown" ] && [ "$storage_type" != "lvmthin" ]; then
+                # Last resort: lvm or zfs (but not unknown or lvmthin)
+                detected_storage="$storage"
+                detected_type="$storage_type"
             fi
             
             echo "  [$index] $storage ($type_display)" >&2
@@ -219,6 +518,13 @@ prompt_storage() {
     
     if [ -n "$detected_storage" ]; then
         print_info "Auto-detected storage: $detected_storage (type: $detected_type)" >&2
+        
+        # Warn about lvmthin
+        if [ "$detected_type" = "lvmthin" ]; then
+            print_warning "LVM-thin storage is NOT recommended for templates!" >&2
+            print_warning "Consider using 'local' (directory) storage instead." >&2
+        fi
+        
         echo -n "Use detected storage? [Y/n]: " >&2
         # Read from terminal if available, otherwise stdin
         # Use || true to prevent read failure from exiting script (set -e)
@@ -258,6 +564,26 @@ prompt_storage() {
     
     local selected_storage="${storage_array[$((selection-1))]}"
     local selected_type=$(detect_storage_type "$selected_storage" "$node_name")
+    
+    # Warn about lvmthin for templates
+    if [ "$selected_type" = "lvmthin" ]; then
+        print_warning "LVM-thin storage is NOT recommended for templates!" >&2
+        print_warning "VMs cloned from lvmthin templates may have boot issues (PARTUUID mismatch)." >&2
+        print_warning "Consider using directory storage (e.g., 'local') for templates instead." >&2
+        echo -n "Continue anyway? [y/N]: " >&2
+        local continue_anyway=""
+        if [ -t 0 ]; then
+            read -r continue_anyway || continue_anyway="N"
+        elif [ -c /dev/tty ]; then
+            read -r continue_anyway < /dev/tty || continue_anyway="N"
+        else
+            read -r continue_anyway || continue_anyway="N"
+        fi
+        if [[ ! "$continue_anyway" =~ ^[Yy]$ ]]; then
+            print_error "Aborted. Please select a different storage." >&2
+            exit 1
+        fi
+    fi
     
     # Output result to stdout
     echo "$selected_storage|$selected_type"
@@ -554,16 +880,22 @@ create_or_update_template() {
         print_success "Downloaded and cached image: $image_filename ($(du -h "$image_path" | cut -f1))"
     fi
     
-    # Create VM
+    # Create VM with SeaBIOS (standard BIOS - cloud images are designed for this)
     print_info "Creating VM $vmid..."
-    if ! qm create "$vmid" --name "$template_name" --memory 2048 --net0 virtio,bridge=vmbr0 2>/dev/null; then
+    if ! qm create "$vmid" --name "$template_name" --memory 2048 --cores 2 \
+        --net0 virtio,bridge=vmbr0 \
+        --ostype l26 \
+        --scsihw virtio-scsi-pci --agent 1 2>/dev/null; then
         print_error "Failed to create VM $vmid (may already exist)"
         # Try to destroy and recreate
         qm destroy "$vmid" --purge 2>/dev/null || true
-        qm create "$vmid" --name "$template_name" --memory 2048 --net0 virtio,bridge=vmbr0
+        qm create "$vmid" --name "$template_name" --memory 2048 --cores 2 \
+            --net0 virtio,bridge=vmbr0 \
+            --ostype l26 \
+            --scsihw virtio-scsi-pci --agent 1
     fi
     
-    # Import disk
+    # Import the cloud image disk
     print_info "Importing disk to storage: $storage..."
     if ! qm importdisk "$vmid" "$image_path" "$storage"; then
         print_error "Failed to import disk"
@@ -571,81 +903,51 @@ create_or_update_template() {
         return 1
     fi
     
-    # Get the actual imported disk path
-    # qm importdisk creates an unused disk (unused0) that we need to find
-    print_info "Detecting imported disk..."
-    local disk_path=""
+    # Find the imported disk from VM config
+    local imported_disk=$(qm config "$vmid" 2>/dev/null | grep "^unused" | head -1 | sed 's/unused[0-9]*:[[:space:]]*//' | tr -d ' ')
     
-    # Get the unused disk from VM config (qm importdisk creates unused0)
-    local unused_disk=$(qm config "$vmid" 2>/dev/null | grep "^unused0:" | sed 's/unused0:[[:space:]]*//' | sed 's/[[:space:]]*$//' || echo "")
-    
-    if [ -n "$unused_disk" ]; then
-        # Use the actual imported disk path
-        disk_path="$unused_disk"
-        print_info "Found imported disk: $disk_path"
-    else
-        # Fallback: construct path based on storage type
-        if [ "$storage_type" = "dir" ]; then
-            # For directory storage, check both .raw and .qcow2
-            # Try .raw first (common for Debian images)
-            local raw_path="$storage:$vmid/vm-$vmid-disk-0.raw"
-            local qcow2_path="$storage:$vmid/vm-$vmid-disk-0.qcow2"
-            
-            # Check which file actually exists on disk
-            local storage_path=$(pvesm path "$raw_path" 2>/dev/null || echo "")
-            if [ -n "$storage_path" ] && [ -f "$storage_path" ]; then
-                disk_path="$raw_path"
-            else
-                storage_path=$(pvesm path "$qcow2_path" 2>/dev/null || echo "")
-                if [ -n "$storage_path" ] && [ -f "$storage_path" ]; then
-                    disk_path="$qcow2_path"
-                else
-                    # Last resort: try raw (most common for cloud images)
-                    disk_path="$raw_path"
-                fi
-            fi
-        else
-            # For LVM/ZFS, format is storage:vm-vmid-disk-0
-            disk_path="$storage:vm-$vmid-disk-0"
-        fi
-        print_warning "Could not find unused0 in config, using constructed path: $disk_path"
-    fi
-    
-    if [ -z "$disk_path" ]; then
-        print_error "Could not detect imported disk path"
+    if [ -z "$imported_disk" ]; then
+        print_error "Could not find imported disk in VM config"
         qm destroy "$vmid" --purge 2>/dev/null || true
         return 1
     fi
+    print_info "Found imported disk: $imported_disk"
     
-    print_info "Using disk: $disk_path"
-    
-    # Configure VM
+    # Configure VM with SeaBIOS
     print_info "Configuring VM..."
-    qm set "$vmid" --scsihw virtio-scsi-pci --scsi0 "$disk_path"
-    qm set "$vmid" --ide2 "$storage:cloudinit"
-    qm set "$vmid" --boot c --bootdisk scsi0
-    qm set "$vmid" --serial0 socket --vga serial0
-    qm set "$vmid" --agent enabled=1
-    
-    # Note: We do NOT set args parameter
-    # Proxmox validates args during cloud-init ISO generation, causing errors if the device doesn't exist on the host
-    # Instead, we'll fix GRUB in the template to not use root=LABEL=cloudimg-rootfs
-    # The cloud-init bootcmd script will also handle device detection on first boot
+    qm set "$vmid" \
+        --scsi0 "${imported_disk},discard=on,ssd=1" \
+        --ide2 "${storage}:cloudinit" \
+        --boot c --bootdisk scsi0 \
+        --serial0 socket --vga std
     
     # Verify disk is attached
     print_info "Verifying disk attachment..."
-    local disk_config=$(qm config "$vmid" | grep "^scsi0:" || echo "")
-    if [ -z "$disk_config" ]; then
-        print_error "Disk not attached correctly!"
+    local scsi0_config=$(qm config "$vmid" | grep "^scsi0:" || echo "")
+    local cloudinit_config=$(qm config "$vmid" | grep "^ide2:" || echo "")
+    
+    if [ -z "$scsi0_config" ]; then
+        print_error "Main disk (scsi0) not attached correctly!"
+        print_info "Full VM config:"
+        qm config "$vmid"
         qm destroy "$vmid" --purge 2>/dev/null || true
         return 1
     fi
     
-    print_success "Disk attached: $disk_config"
+    print_success "Main disk: $scsi0_config"
+    [ -n "$cloudinit_config" ] && print_success "Cloud-init: $cloudinit_config"
+    
+    # Ensure GPT exists on block-based storage (lvm/lvmthin) before touching boot config
+    ensure_partition_table "$storage_type" "$imported_disk"
+    
+    # CRITICAL: Fix GRUB configuration to use /dev/sda1 instead of PARTUUID
+    # Cloud images use PARTUUID for root filesystem, but when cloned to lvmthin,
+    # the PARTUUID changes and the VM fails to boot. We fix this by modifying
+    # the disk image to use /dev/sda1 (which is stable across clones).
+    print_info "Fixing boot configuration for lvmthin compatibility..."
+    fix_boot_config_for_lvmthin "$vmid" "$storage_type" "$imported_disk"
     
     # Convert to template
-    # Note: GRUB may have root=LABEL=cloudimg-rootfs which will fail on cloned VMs
-    # The cloud-init bootcmd script will fix this on first boot
     print_info "Converting VM to template..."
     if ! qm template "$vmid"; then
         print_error "Failed to convert VM to template"

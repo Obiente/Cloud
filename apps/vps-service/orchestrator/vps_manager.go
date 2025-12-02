@@ -197,8 +197,13 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 		// Format: 00:16:3e:XX:XX:XX (QEMU/KVM standard prefix)
 		macAddress = generateMACAddress()
 
-		// Request IP allocation from gateway
-		allocResp, err := vm.gatewayClient.AllocateIP(ctx, config.VPSID, config.OrganizationID, macAddress)
+		// Request IP allocation from gateway with timeout
+		// Use a separate context with timeout to prevent hanging
+		allocCtx, allocCancel := context.WithTimeout(ctx, 10*time.Second)
+		defer allocCancel()
+		
+		logger.Info("[VPSManager] Requesting IP allocation from gateway for VPS %s (MAC: %s)", config.VPSID, macAddress)
+		allocResp, err := vm.gatewayClient.AllocateIP(allocCtx, config.VPSID, config.OrganizationID, macAddress)
 		if err != nil {
 			logger.Warn("[VPSManager] Failed to allocate IP from gateway for VPS %s: %v (continuing without gateway IP)", config.VPSID, err)
 			// Continue without gateway IP - VM will use DHCP or static IP from Proxmox
@@ -206,9 +211,12 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig) (*databa
 			allocatedIP = allocResp.IpAddress
 			logger.Info("[VPSManager] Allocated IP %s for VPS %s from gateway", allocatedIP, config.VPSID)
 		}
+	} else {
+		logger.Debug("[VPSManager] Gateway client not available, skipping IP allocation")
 	}
 
 	// Provision VM via Proxmox API
+	logger.Info("[VPSManager] Starting VM provisioning via Proxmox for VPS %s", config.VPSID)
 	createResult, err := proxmoxClient.CreateVM(ctx, config, org.AllowInterVMCommunication)
 	if err != nil {
 		// If VM creation fails, release the allocated IP
@@ -462,12 +470,32 @@ func (vm *VPSManager) StartVPS(ctx context.Context, vpsID string) error {
 	}
 
 	if err := proxmoxClient.startVM(ctx, nodes[0], vmIDInt); err != nil {
+		// Check if VM was deleted from Proxmox
+		if strings.Contains(err.Error(), "has been deleted from Proxmox") {
+			logger.Info("[VPSManager] VM %d has been deleted from Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
+			vps.Status = 9 // DELETED
+			vps.UpdatedAt = time.Now()
+			if err := database.DB.Save(&vps).Error; err != nil {
+				logger.Warn("[VPSManager] Failed to update VPS status to DELETED: %v", err)
+			}
+			return fmt.Errorf("VM has been deleted from Proxmox")
+		}
 		return fmt.Errorf("failed to start VM: %w", err)
 	}
 
 	// Get actual status from Proxmox and update
 	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodes[0], vmIDInt)
 	if err != nil {
+		// Check if VM was deleted from Proxmox
+		if strings.Contains(err.Error(), "does not exist") {
+			logger.Info("[VPSManager] VM %d does not exist in Proxmox after start - marking VPS %s as DELETED", vmIDInt, vpsID)
+			vps.Status = 9 // DELETED
+			vps.UpdatedAt = time.Now()
+			if err := database.DB.Save(&vps).Error; err != nil {
+				logger.Warn("[VPSManager] Failed to update VPS status to DELETED: %v", err)
+			}
+			return fmt.Errorf("VM has been deleted from Proxmox")
+		}
 		logger.Warn("[VPSManager] Failed to get VM status after start, defaulting to RUNNING: %v", err)
 		vps.Status = 3 // RUNNING
 	} else {
@@ -514,12 +542,32 @@ func (vm *VPSManager) StopVPS(ctx context.Context, vpsID string, force bool) err
 	}
 
 	if err := proxmoxClient.StopVM(ctx, nodes[0], vmIDInt); err != nil {
+		// Check if VM was deleted from Proxmox
+		if strings.Contains(err.Error(), "has been deleted from Proxmox") {
+			logger.Info("[VPSManager] VM %d has been deleted from Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
+			vps.Status = 9 // DELETED
+			vps.UpdatedAt = time.Now()
+			if err := database.DB.Save(&vps).Error; err != nil {
+				logger.Warn("[VPSManager] Failed to update VPS status to DELETED: %v", err)
+			}
+			return fmt.Errorf("VM has been deleted from Proxmox")
+		}
 		return fmt.Errorf("failed to stop VM: %w", err)
 	}
 
 	// Get actual status from Proxmox and update
 	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodes[0], vmIDInt)
 	if err != nil {
+		// Check if VM was deleted from Proxmox
+		if strings.Contains(err.Error(), "does not exist") {
+			logger.Info("[VPSManager] VM %d does not exist in Proxmox after stop - marking VPS %s as DELETED", vmIDInt, vpsID)
+			vps.Status = 9 // DELETED
+			vps.UpdatedAt = time.Now()
+			if err := database.DB.Save(&vps).Error; err != nil {
+				logger.Warn("[VPSManager] Failed to update VPS status to DELETED: %v", err)
+			}
+			return fmt.Errorf("VM has been deleted from Proxmox")
+		}
 		logger.Warn("[VPSManager] Failed to get VM status after stop, defaulting to STOPPED: %v", err)
 		vps.Status = 5 // STOPPED
 	} else {
@@ -566,6 +614,16 @@ func (vm *VPSManager) RebootVPS(ctx context.Context, vpsID string) error {
 	}
 
 	if err := proxmoxClient.RebootVM(ctx, nodes[0], vmIDInt); err != nil {
+		// Check if VM was deleted from Proxmox
+		if strings.Contains(err.Error(), "has been deleted from Proxmox") {
+			logger.Info("[VPSManager] VM %d has been deleted from Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
+			vps.Status = 9 // DELETED
+			vps.UpdatedAt = time.Now()
+			if err := database.DB.Save(&vps).Error; err != nil {
+				logger.Warn("[VPSManager] Failed to update VPS status to DELETED: %v", err)
+			}
+			return fmt.Errorf("VM has been deleted from Proxmox")
+		}
 		return fmt.Errorf("failed to reboot VM: %w", err)
 	}
 
@@ -573,6 +631,16 @@ func (vm *VPSManager) RebootVPS(ctx context.Context, vpsID string) error {
 	// Note: Reboot is async, so status might be "running" or transitioning
 	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodes[0], vmIDInt)
 	if err != nil {
+		// Check if VM was deleted from Proxmox
+		if strings.Contains(err.Error(), "does not exist") {
+			logger.Info("[VPSManager] VM %d does not exist in Proxmox after reboot - marking VPS %s as DELETED", vmIDInt, vpsID)
+			vps.Status = 9 // DELETED
+			vps.UpdatedAt = time.Now()
+			if err := database.DB.Save(&vps).Error; err != nil {
+				logger.Warn("[VPSManager] Failed to update VPS status to DELETED: %v", err)
+			}
+			return fmt.Errorf("VM has been deleted from Proxmox")
+		}
 		logger.Warn("[VPSManager] Failed to get VM status after reboot, defaulting to REBOOTING: %v", err)
 		vps.Status = 6 // REBOOTING
 	} else {
@@ -715,12 +783,16 @@ func (vm *VPSManager) DeleteVPS(ctx context.Context, vpsID string) error {
 	}
 
 	// Delete snippet file if it exists
-	storage := os.Getenv("PROXMOX_STORAGE")
-	if storage == "" {
-		storage = "local"
+	// Use PROXMOX_SNIPPET_STORAGE if set, otherwise fallback to PROXMOX_STORAGE_POOL, then default to "local"
+	snippetStorage := os.Getenv("PROXMOX_SNIPPET_STORAGE")
+	if snippetStorage == "" {
+		snippetStorage = os.Getenv("PROXMOX_STORAGE_POOL")
+		if snippetStorage == "" {
+			snippetStorage = "local"
+		}
 	}
 	snippetFilename := fmt.Sprintf("vm-%d-user-data", vmIDInt)
-	if err := proxmoxClient.deleteSnippetViaSSH(ctx, nodes[0], storage, snippetFilename); err != nil {
+	if err := proxmoxClient.deleteSnippetViaSSH(ctx, nodes[0], snippetStorage, snippetFilename); err != nil {
 		logger.Warn("[VPSManager] Failed to delete snippet file for VPS %s: %v (continuing with VM deletion)", vpsID, err)
 		// Continue with VM deletion even if snippet deletion fails
 	} else {
@@ -736,9 +808,39 @@ func (vm *VPSManager) DeleteVPS(ctx context.Context, vpsID string) error {
 	}
 
 	// DeleteVM will validate that the VM was created by our API by checking VM name matches VPS ID
-	if err := proxmoxClient.DeleteVM(ctx, nodes[0], vmIDInt, vpsID); err != nil {
+	// Try to find the VM on the correct node first
+	nodeName := nodes[0]
+	allNodes, err := proxmoxClient.ListNodes(ctx)
+	if err == nil {
+		// Try to find which node the VM is actually on
+		for _, node := range allNodes {
+			status, statusErr := proxmoxClient.GetVMStatus(ctx, node, vmIDInt)
+			if statusErr == nil && status != "" {
+				nodeName = node
+				logger.Info("[VPSManager] Found VM %d on node %s", vmIDInt, nodeName)
+				break
+			}
+		}
+	}
+	
+	if err := proxmoxClient.DeleteVM(ctx, nodeName, vmIDInt, vpsID); err != nil {
+		// If deletion fails, try other nodes as fallback
+		if len(allNodes) > 1 {
+			logger.Warn("[VPSManager] Failed to delete VM %d from node %s: %v. Trying other nodes...", vmIDInt, nodeName, err)
+			for _, otherNode := range allNodes {
+				if otherNode == nodeName {
+					continue
+				}
+				if delErr := proxmoxClient.DeleteVM(ctx, otherNode, vmIDInt, vpsID); delErr == nil {
+					logger.Info("[VPSManager] Successfully deleted VM %d from node %s", vmIDInt, otherNode)
+					goto deletionSuccess
+				}
+			}
+		}
 		return fmt.Errorf("failed to delete VM: %w", err)
 	}
+	
+deletionSuccess:
 
 	logger.Info("[VPSManager] Successfully deleted VPS %s (VM ID: %d)", vpsID, vmIDInt)
 	return nil
@@ -996,12 +1098,35 @@ func (vm *VPSManager) SyncVPSStatusFromProxmox(ctx context.Context, vpsID string
 	// Find the node where the VM is running (for multi-node clusters)
 	nodeName, err := proxmoxClient.FindVMNode(ctx, vmIDInt)
 	if err != nil {
+		// Check if VM was deleted from Proxmox directly
+		// FindVMNode returns "VM X not found on any node" when VM doesn't exist
+		if strings.Contains(err.Error(), "not found on any node") {
+			logger.Info("[VPSManager] VM %d not found in Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
+			vps.Status = 9 // DELETED
+			vps.UpdatedAt = time.Now()
+			if err := database.DB.Save(&vps).Error; err != nil {
+				return fmt.Errorf("failed to update VPS status to DELETED: %w", err)
+			}
+			return nil
+		}
 		return fmt.Errorf("failed to find VM node: %w", err)
 	}
 
 	// Get actual status from Proxmox
 	proxmoxStatus, err := proxmoxClient.GetVMStatus(ctx, nodeName, vmIDInt)
 	if err != nil {
+		// Check if VM was deleted from Proxmox directly
+		// GetVMStatus returns "VM does not exist" when VM was deleted
+		errStr := err.Error()
+		if strings.Contains(errStr, "does not exist") {
+			logger.Info("[VPSManager] VM %d does not exist in Proxmox - marking VPS %s as DELETED", vmIDInt, vpsID)
+			vps.Status = 9 // DELETED
+			vps.UpdatedAt = time.Now()
+			if err := database.DB.Save(&vps).Error; err != nil {
+				return fmt.Errorf("failed to update VPS status to DELETED: %w", err)
+			}
+			return nil
+		}
 		return fmt.Errorf("failed to get VM status: %w", err)
 	}
 

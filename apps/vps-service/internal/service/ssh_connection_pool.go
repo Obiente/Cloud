@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	vpsorch "vps-service/orchestrator"
+	orchestrator "vps-service/orchestrator"
 
 	vpsgatewayv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
 
@@ -21,7 +21,7 @@ import (
 type SSHConnectionPool struct {
 	connections map[string]*PooledSSHConnection // key: "vpsID:keyID" or "vpsID" if no key
 	mu          sync.RWMutex
-	gatewayClient *vpsorch.VPSGatewayClient
+	gatewayClient *orchestrator.VPSGatewayClient
 	idleTimeout   time.Duration
 	cleanupTicker  *time.Ticker
 	stopCleanup    chan struct{}
@@ -47,7 +47,7 @@ type ForwardedChannel struct {
 }
 
 // NewSSHConnectionPool creates a new SSH connection pool
-func NewSSHConnectionPool(gatewayClient *vpsorch.VPSGatewayClient) *SSHConnectionPool {
+func NewSSHConnectionPool(gatewayClient *orchestrator.VPSGatewayClient) *SSHConnectionPool {
 	pool := &SSHConnectionPool{
 		connections:   make(map[string]*PooledSSHConnection),
 		gatewayClient: gatewayClient,

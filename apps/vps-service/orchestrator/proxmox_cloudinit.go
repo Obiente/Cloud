@@ -1,18 +1,19 @@
 package orchestrator
 
 import (
-"bytes"
-"context"
-"crypto/rand"
-"encoding/base64"
-"fmt"
-"math/big"
-"os"
-"strings"
-"time"
-"github.com/obiente/cloud/apps/shared/pkg/database"
-"github.com/obiente/cloud/apps/shared/pkg/logger"
-"golang.org/x/crypto/ssh"
+	"bytes"
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"math/big"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"golang.org/x/crypto/ssh"
 )
 
 // Cloud-init operations
@@ -544,14 +545,42 @@ func generateCloudInitUserData(config *VPSConfig) string {
 		userData += "\n"
 	}
 
-	// Runcmd
+	// Runcmd - install SSH + guest agent and run any user commands
 	userData += "runcmd:\n"
 
 	// Default commands (always include)
-	userData += "  - apt-get update || yum update || dnf update || true\n"
-	userData += "  - apt-get install -y openssh-server qemu-guest-agent || yum install -y openssh-server qemu-guest-agent || dnf install -y openssh-server qemu-guest-agent || true\n"
-	userData += "  - systemctl enable ssh || systemctl enable sshd || true\n"
-	userData += "  - systemctl start ssh || systemctl start sshd || true\n"
+	// Update package lists - this is critical for package installation
+	userData += "  - |\n"
+	userData += "    set -e\n"
+	userData += "    echo \"Updating package lists...\"\n"
+	userData += "    apt-get update || yum update || dnf update || true\n"
+	userData += "  \n"
+	
+	// Install SSH server and guest agent with proper error handling
+	userData += "  - |\n"
+	userData += "    set -e\n"
+	userData += "    echo \"Installing openssh-server and qemu-guest-agent...\"\n"
+	userData += "    if command -v apt-get >/dev/null 2>&1; then\n"
+	userData += "      apt-get install -y openssh-server qemu-guest-agent\n"
+	userData += "    elif command -v yum >/dev/null 2>&1; then\n"
+	userData += "      yum install -y openssh-server qemu-guest-agent\n"
+	userData += "    elif command -v dnf >/dev/null 2>&1; then\n"
+	userData += "      dnf install -y openssh-server qemu-guest-agent\n"
+	userData += "    else\n"
+	userData += "      echo \"ERROR: No package manager found (apt-get, yum, or dnf)\"\n"
+	userData += "      exit 1\n"
+	userData += "    fi\n"
+	userData += "    echo \"Successfully installed openssh-server and qemu-guest-agent\"\n"
+	userData += "  \n"
+	
+	// Enable and start SSH
+	userData += "  - |\n"
+	userData += "    set -e\n"
+	userData += "    echo \"Enabling and starting SSH...\"\n"
+	userData += "    systemctl enable ssh || systemctl enable sshd || true\n"
+	userData += "    systemctl start ssh || systemctl start sshd || true\n"
+	userData += "    echo \"SSH service started\"\n"
+	userData += "  \n"
 
 	// Restart SSH to apply AcceptEnv configuration for real IP forwarding
 	// Only restart if we added/modified the SSH config
@@ -559,8 +588,29 @@ func generateCloudInitUserData(config *VPSConfig) string {
 		userData += "  - systemctl restart sshd || systemctl restart ssh || service ssh restart || service sshd restart || true\n"
 	}
 
-	userData += "  - systemctl enable qemu-guest-agent || true\n"
-	userData += "  - systemctl start qemu-guest-agent || true\n"
+	// Enable and start guest agent with verification
+	userData += "  - |\n"
+	userData += "    set -e\n"
+	userData += "    echo \"Enabling and starting qemu-guest-agent...\"\n"
+	userData += "    # Verify package is installed\n"
+	userData += "    if ! command -v qemu-ga >/dev/null 2>&1 && ! systemctl list-unit-files | grep -q qemu-guest-agent; then\n"
+	userData += "      echo \"WARNING: qemu-guest-agent package not found, attempting to reinstall...\"\n"
+	userData += "      apt-get install -y qemu-guest-agent || yum install -y qemu-guest-agent || dnf install -y qemu-guest-agent || true\n"
+	userData += "    fi\n"
+	userData += "    # Enable and start the service\n"
+	userData += "    systemctl enable qemu-guest-agent || true\n"
+	userData += "    systemctl start qemu-guest-agent || true\n"
+	userData += "    # Verify it's running\n"
+	userData += "    if systemctl is-active --quiet qemu-guest-agent; then\n"
+	userData += "      echo \"qemu-guest-agent is running\"\n"
+	userData += "    else\n"
+	userData += "      echo \"WARNING: qemu-guest-agent failed to start, checking status...\"\n"
+	userData += "      systemctl status qemu-guest-agent || true\n"
+	userData += "      # Try to start it again after a short delay\n"
+	userData += "      sleep 2\n"
+	userData += "      systemctl start qemu-guest-agent || true\n"
+	userData += "    fi\n"
+	userData += "  \n"
 
 	// Custom runcmd commands
 	if config.CloudInit != nil && len(config.CloudInit.Runcmd) > 0 {
@@ -596,7 +646,7 @@ func (pc *ProxmoxClient) createCloudInitSnippet(ctx context.Context, nodeName st
 				storageType == "nfs" || storageType == "cifs" || storageType == "glusterfs"
 
 			if !supportsSnippets {
-				return "", fmt.Errorf("storage '%s' (type: %s) does not support snippets. Snippets require directory-type storage (dir, nfs, cifs). Please set PROXMOX_STORAGE to a directory-type storage pool", storage, storageType)
+				return "", fmt.Errorf("storage '%s' (type: %s) does not support snippets. Snippets require directory-type storage (dir, nfs, cifs). Please set PROXMOX_SNIPPET_STORAGE to a directory-type storage pool (e.g., 'local'). You can use PROXMOX_STORAGE_POOL for VM disks and PROXMOX_SNIPPET_STORAGE for snippets separately", storage, storageType)
 			}
 
 			// Check if storage has "snippets" in its content types

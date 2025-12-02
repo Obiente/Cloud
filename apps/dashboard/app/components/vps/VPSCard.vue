@@ -41,7 +41,7 @@
               <ArrowPathIcon class="h-4 w-4" />
             </OuiButton>
             <OuiButton
-              v-if="!loading && vps"
+              v-if="!loading && vps && vps.status !== VPSStatus.DELETED && vps.status !== VPSStatus.DELETING"
               variant="ghost"
               size="sm"
               icon-only
@@ -204,6 +204,25 @@
       icon: ServerIcon,
       iconClass: "text-danger",
     },
+    [VPSStatus.DELETING]: {
+      badge: "warning",
+      label: "Deleting",
+      cardClass: "hover:ring-1 hover:ring-warning/30",
+      beforeGradient:
+        "before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-gradient-to-br before:from-warning/20 before:via-warning/10 before:to-transparent before:opacity-0 before:transition-opacity before:duration-300 hover:before:opacity-100",
+      barClass: "bg-gradient-to-r from-warning to-warning/60 animate-pulse",
+      icon: TrashIcon,
+      iconClass: "text-warning",
+    },
+    [VPSStatus.DELETED]: {
+      badge: "secondary",
+      label: "Deleted",
+      cardClass: "hover:ring-1 hover:ring-secondary/30 opacity-60",
+      beforeGradient: "",
+      barClass: "bg-gradient-to-r from-secondary to-secondary/60",
+      icon: ServerIcon,
+      iconClass: "text-secondary",
+    },
   } as const;
 
   const statusMeta = computed(() => {
@@ -215,7 +234,7 @@
     if (status in STATUS_META) {
       return STATUS_META[status as keyof typeof STATUS_META];
     }
-    // Default fallback for DELETING, DELETED, VPS_STATUS_UNSPECIFIED, etc.
+    // Default fallback for VPS_STATUS_UNSPECIFIED, etc.
     return STATUS_META[VPSStatus.STOPPED];
   });
 
@@ -229,9 +248,18 @@
     return [...(props.vps.ipv4Addresses || []), ...(props.vps.ipv6Addresses || [])];
   });
 
-  const canStart = computed(() => !props.loading && props.vps?.status === VPSStatus.STOPPED);
-  const canStop = computed(() => !props.loading && props.vps?.status === VPSStatus.RUNNING);
-  const canReboot = computed(() => !props.loading && props.vps?.status === VPSStatus.RUNNING);
+  const canStart = computed(() => {
+    if (props.loading || !props.vps) return false;
+    return props.vps.status === VPSStatus.STOPPED;
+  });
+  const canStop = computed(() => {
+    if (props.loading || !props.vps) return false;
+    return props.vps.status === VPSStatus.RUNNING;
+  });
+  const canReboot = computed(() => {
+    if (props.loading || !props.vps) return false;
+    return props.vps.status === VPSStatus.RUNNING;
+  });
 
   const formatMemory = (bytes: bigint | number | undefined) => {
     if (!bytes) return "0 GB";

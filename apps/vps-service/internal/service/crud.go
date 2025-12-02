@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	vpsorch "vps-service/orchestrator"
+	orchestrator "vps-service/orchestrator"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
@@ -112,7 +113,7 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 	vpsID := fmt.Sprintf("vps-%d", time.Now().UnixNano())
 
 	// Convert proto to VPSConfig
-	config := &vpsorch.VPSConfig{
+	config := &orchestrator.VPSConfig{
 		VPSID:          vpsID,
 		Name:           req.Msg.GetName(),
 		Description:    req.Msg.Description,
@@ -140,16 +141,16 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 	// Convert cloud-init configuration from proto
 	if req.Msg.CloudInit != nil {
 		cloudInitProto := req.Msg.GetCloudInit()
-		cloudInit := &vpsorch.CloudInitConfig{
-			Users:            make([]vpsorch.CloudInitUser, 0, len(cloudInitProto.Users)),
+		cloudInit := &orchestrator.CloudInitConfig{
+			Users:            make([]orchestrator.CloudInitUser, 0, len(cloudInitProto.Users)),
 			Packages:         cloudInitProto.Packages,
 			Runcmd:           cloudInitProto.Runcmd,
-			WriteFiles:       make([]vpsorch.CloudInitWriteFile, 0, len(cloudInitProto.WriteFiles)),
+			WriteFiles:       make([]orchestrator.CloudInitWriteFile, 0, len(cloudInitProto.WriteFiles)),
 		}
 		
 		// Convert users
 		for _, userProto := range cloudInitProto.Users {
-			user := vpsorch.CloudInitUser{
+			user := orchestrator.CloudInitUser{
 				Name:              userProto.GetName(),
 				SSHAuthorizedKeys: userProto.SshAuthorizedKeys,
 			}
@@ -219,7 +220,7 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 		
 		// Convert write files
 		for _, fileProto := range cloudInitProto.WriteFiles {
-			file := vpsorch.CloudInitWriteFile{
+			file := orchestrator.CloudInitWriteFile{
 				Path:    fileProto.GetPath(),
 				Content: fileProto.GetContent(),
 			}
@@ -291,6 +292,9 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 		logger.Warn("[VPS Service] WARNING: rootPassword is empty for VPS %s - password will not be returned", vpsInstance.ID)
 	}
 
+	// Send notification for VPS creation
+	s.notifyVPSCreated(ctx, vpsInstance)
+
 	return connect.NewResponse(&vpsv1.CreateVPSResponse{
 		Vps: protoVPS,
 	}), nil
@@ -329,9 +333,9 @@ func (s *Service) GetVPS(ctx context.Context, req *connect.Request[vpsv1.GetVPSR
 
 	// If VPS has an instance ID, try to fetch latest disk size and IP addresses from Proxmox
 	if vps.InstanceID != nil {
-		proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+		proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 		if err == nil {
-			proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+			proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
 			if err == nil {
 				vmIDInt := 0
 				fmt.Sscanf(*vps.InstanceID, "%d", &vmIDInt)
@@ -454,11 +458,33 @@ func (s *Service) DeleteVPS(ctx context.Context, req *connect.Request[vpsv1.Dele
 
 	// Always delete from Proxmox if InstanceID exists (VM was provisioned)
 	// This ensures the VM is removed from Proxmox when deleted from the dashboard
+	// For VPS in CREATING status, we still attempt deletion but don't fail if it errors
+	// (VM might not be fully created yet or might be in a transitional state)
 	if vps.InstanceID != nil {
 		if err := s.vpsManager.DeleteVPS(ctx, vpsID); err != nil {
-			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete VPS from Proxmox: %w", err))
+			// If VPS is in CREATING status, log warning but continue with database deletion
+			// The VM might not be fully created yet or might be in a bad state
+			// Also allow deletion to proceed if VM doesn't exist (already deleted or never created)
+			errStr := err.Error()
+			isVMNotFound := strings.Contains(errStr, "does not exist") ||
+				strings.Contains(errStr, "not found") ||
+				strings.Contains(errStr, "already deleted")
+			
+			if vps.Status == 1 || isVMNotFound { // CREATING or VM not found
+				if vps.Status == 1 {
+					logger.Warn("[VPS Service] Failed to delete VPS %s from Proxmox (status: CREATING): %v. Continuing with database deletion.", vpsID, err)
+				} else {
+					logger.Info("[VPS Service] VM for VPS %s does not exist in Proxmox (may have been deleted already). Continuing with database deletion.", vpsID)
+				}
+			} else {
+				// For other statuses and errors, return error to prevent orphaned VMs
+				return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to delete VPS from Proxmox: %w", err))
+			}
 		}
 	}
+
+	// Send notification before deletion
+	s.notifyVPSDeleted(ctx, &vps)
 
 	// Delete from database (hard delete)
 	if err := database.DB.Delete(&vps).Error; err != nil {

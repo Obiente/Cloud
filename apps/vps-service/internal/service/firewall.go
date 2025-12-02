@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strconv"
 
-	vpsorch "vps-service/orchestrator"
+	orchestrator "vps-service/orchestrator"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 
@@ -53,12 +53,12 @@ func (s *Service) ListFirewallRules(ctx context.Context, req *connect.Request[vp
 	}
 
 	// Get Proxmox client
-	proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
 	}
 
-	proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
 	}
@@ -126,12 +126,12 @@ func (s *Service) GetFirewallRule(ctx context.Context, req *connect.Request[vpsv
 	}
 
 	// Get Proxmox client
-	proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
 	}
 
-	proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
 	}
@@ -193,12 +193,12 @@ func (s *Service) CreateFirewallRule(ctx context.Context, req *connect.Request[v
 	}
 
 	// Get Proxmox client
-	proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
 	}
 
-	proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
 	}
@@ -289,12 +289,12 @@ func (s *Service) UpdateFirewallRule(ctx context.Context, req *connect.Request[v
 	}
 
 	// Get Proxmox client
-	proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
 	}
 
-	proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
 	}
@@ -364,12 +364,12 @@ func (s *Service) DeleteFirewallRule(ctx context.Context, req *connect.Request[v
 	}
 
 	// Get Proxmox client
-	proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
 	}
 
-	proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
 	}
@@ -430,12 +430,12 @@ func (s *Service) GetFirewallOptions(ctx context.Context, req *connect.Request[v
 	}
 
 	// Get Proxmox client
-	proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
 	}
 
-	proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
 	}
@@ -497,12 +497,12 @@ func (s *Service) UpdateFirewallOptions(ctx context.Context, req *connect.Reques
 	}
 
 	// Get Proxmox client
-	proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
 	}
 
-	proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
 	}

@@ -9,7 +9,7 @@ import (
 	"os"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
-	"github.com/obiente/cloud/apps/vps-service/orchestrator"
+	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
 )
 
 // ConfigService provides endpoints for managing VPS configuration
@@ -27,7 +27,6 @@ func NewConfigService(vpsManager *orchestrator.VPSManager) *ConfigService {
 }
 
 // LoadCloudInitConfig loads cloud-init configuration for a VPS
-// This is a simplified version that reads from Proxmox
 func (s *ConfigService) LoadCloudInitConfig(ctx context.Context, vps *database.VPSInstance) (*orchestrator.CloudInitConfig, error) {
 	// If VPS is not provisioned yet, return default config
 	if vps.InstanceID == nil {
@@ -111,7 +110,6 @@ func (s *ConfigService) LoadCloudInitConfig(ctx context.Context, vps *database.V
 }
 
 // SaveCloudInitConfig saves cloud-init configuration for a VPS
-// This is a simplified version that saves to Proxmox
 func (s *ConfigService) SaveCloudInitConfig(ctx context.Context, vps *database.VPSInstance, config *orchestrator.CloudInitConfig) error {
 	if config == nil {
 		return nil
@@ -156,8 +154,8 @@ func (s *ConfigService) SaveCloudInitConfig(ctx context.Context, vps *database.V
 
 	// Generate cloud-init user data
 	userData := orchestrator.GenerateCloudInitUserData(&orchestrator.VPSConfig{
-		VPSID:       vps.ID,
-		CloudInit:   config,
+		VPSID:     vps.ID,
+		CloudInit: config,
 	})
 
 	// Get storage (default to "local" or from environment)

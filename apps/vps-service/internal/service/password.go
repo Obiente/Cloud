@@ -7,7 +7,7 @@ import (
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	vpsorch "vps-service/orchestrator"
+	orchestrator "vps-service/orchestrator"
 
 	vpsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vps/v1"
 
@@ -43,13 +43,13 @@ func (s *Service) ResetVPSPassword(ctx context.Context, req *connect.Request[vps
 	}
 
 	// Get Proxmox configuration
-	proxmoxConfig, err := vpsorch.GetProxmoxConfig()
+	proxmoxConfig, err := orchestrator.GetProxmoxConfig()
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to get Proxmox config: %w", err))
 	}
 
 	// Create Proxmox client
-	proxmoxClient, err := vpsorch.NewProxmoxClient(proxmoxConfig)
+	proxmoxClient, err := orchestrator.NewProxmoxClient(proxmoxConfig)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to create Proxmox client: %w", err))
 	}
@@ -68,7 +68,7 @@ func (s *Service) ResetVPSPassword(ctx context.Context, req *connect.Request[vps
 	}
 
 	// Generate new random password
-	newPassword := vpsorch.GenerateRandomPassword(16)
+	newPassword := orchestrator.GenerateRandomPassword(16)
 
 	// Update password in Proxmox cloud-init configuration
 	if err := proxmoxClient.UpdateVMCloudInitPassword(ctx, nodeName, vmIDInt, newPassword); err != nil {
