@@ -356,6 +356,13 @@ func extractResourceInfo(req connect.AnyRequest, procedure string) (resourceType
 						orgID = lookedUpOrgID
 					}
 				}
+
+				// If we have a game server ID but no org ID, try to look it up from the game server
+				if orgID == nil && resourceType != nil && *resourceType == "game_server" && resourceID != nil && *resourceID != "" {
+					if lookedUpOrgID := lookupGameServerOrgID(*resourceID); lookedUpOrgID != nil {
+						orgID = lookedUpOrgID
+					}
+				}
 			}
 		}
 	}
@@ -394,6 +401,27 @@ func lookupVPSOrgID(vpsID string) *string {
 	if err := database.DB.Table("vps_instances").
 		Select("organization_id").
 		Where("id = ? AND deleted_at IS NULL", vpsID).
+		Pluck("organization_id", &orgID).Error; err != nil {
+		return nil
+	}
+
+	if orgID == "" {
+		return nil
+	}
+
+	return &orgID
+}
+
+// lookupGameServerOrgID looks up the organization ID for a game server from the database
+func lookupGameServerOrgID(gameServerID string) *string {
+	if database.DB == nil {
+		return nil
+	}
+
+	var orgID string
+	if err := database.DB.Table("game_servers").
+		Select("organization_id").
+		Where("id = ? AND deleted_at IS NULL", gameServerID).
 		Pluck("organization_id", &orgID).Error; err != nil {
 		return nil
 	}
