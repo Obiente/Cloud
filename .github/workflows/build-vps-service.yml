@@ -75,7 +75,43 @@ jobs:
           echo "$COMMIT_MSG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Build and push VPS Service Docker image
+      - name: Build and push VPS Service Docker image (attempt 1)
+        id: build-attempt-1
+        uses: docker/build-push-action@v5
+        continue-on-error: true
+        with:
+          context: .
+          file: ./apps/${{ env.SERVICE_NAME }}/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            COMMIT=${{ github.sha }}
+            COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Build and push VPS Service Docker image (attempt 2)
+        if: steps.build-attempt-1.outcome == 'failure'
+        id: build-attempt-2
+        uses: docker/build-push-action@v5
+        continue-on-error: true
+        with:
+          context: .
+          file: ./apps/${{ env.SERVICE_NAME }}/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            COMMIT=${{ github.sha }}
+            COMMIT_MESSAGE=${{ steps.commit-msg.outputs.message }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Build and push VPS Service Docker image (attempt 3)
+        if: steps.build-attempt-2.outcome == 'failure'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -89,5 +125,4 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
-          retry: 3
 
