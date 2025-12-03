@@ -207,6 +207,16 @@ const metrics = computed(() => {
       value: (activityCounts["multiple_accounts"] || 0).toString(),
       color: "warning" as const,
     },
+    {
+      label: "DNS Abuse",
+      value: (activityCounts["dns_delegation_abuse"] || 0).toString(),
+      color: "warning" as const,
+    },
+    {
+      label: "Game Server Abuse",
+      value: (activityCounts["game_server_abuse"] || 0).toString(),
+      color: "warning" as const,
+    },
   ];
 });
 
@@ -296,6 +306,7 @@ function formatActivityType(type?: string): string {
     multiple_accounts: "Multiple Account Creation",
     dns_delegation_abuse: "DNS Delegation Abuse",
     usage_spike: "Usage Spike",
+    game_server_abuse: "Game Server Abuse",
   };
   return typeMap[type] || type.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }

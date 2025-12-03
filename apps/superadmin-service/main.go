@@ -135,6 +135,10 @@ func main() {
 	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Start periodic abuse detection (runs every hour and on startup after 1 minute)
+	go startAbuseDetectionService(shutdownCtx)
+	logger.Info("✓ Abuse detection service started")
+
 	// Start server in a goroutine
 	serverErr := make(chan error, 1)
 	go func() {
@@ -158,6 +162,55 @@ func main() {
 			logger.Warn("Error during server shutdown: %v", err)
 		} else {
 			logger.Info(gracefulShutdownMessage)
+		}
+	}
+}
+
+// startAbuseDetectionService runs abuse detection periodically and on startup
+// This ensures abuse is detected even if no one is actively monitoring the dashboard
+func startAbuseDetectionService(ctx context.Context) {
+	// Run once on startup after a short delay to ensure DB is ready
+	time.Sleep(1 * time.Minute)
+	logger.Info("[AbuseDetection] Running initial abuse detection on startup...")
+	runAbuseDetection(ctx)
+
+	// Then run every hour
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("[AbuseDetection] Abuse detection service stopped")
+			return
+		case <-ticker.C:
+			logger.Info("[AbuseDetection] Running periodic abuse detection...")
+			runAbuseDetection(ctx)
+		}
+	}
+}
+
+// runAbuseDetection executes the abuse detection and handles errors
+// DetectAbuse will automatically send notifications if abuse is found
+func runAbuseDetection(ctx context.Context) {
+	// Use background context with timeout to avoid blocking
+	bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	logger.Info("[AbuseDetection] Starting abuse detection scan...")
+	
+	// Call DetectAbuse directly from the superadmin package
+	// It will automatically send notifications to superadmins if abuse is detected
+	result, err := superadminsvc.DetectAbuse(bgCtx)
+	if err != nil {
+		logger.Warn("[AbuseDetection] Failed to run abuse detection: %v", err)
+	} else {
+		totalOrgs := len(result.SuspiciousOrganizations)
+		totalActivities := len(result.SuspiciousActivities)
+		logger.Info("[AbuseDetection] Abuse detection completed: %d suspicious orgs, %d suspicious activities", totalOrgs, totalActivities)
+		
+		if totalOrgs > 0 || totalActivities > 0 {
+			logger.Info("[AbuseDetection] Abuse detected! Triggering notification to superadmins (in background goroutine).")
 		}
 	}
 }

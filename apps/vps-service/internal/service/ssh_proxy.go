@@ -18,7 +18,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
-	orchestrator "vps-service/orchestrator"
+	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
 	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/text"
@@ -501,6 +501,15 @@ func (s *SSHProxyServer) handleConnection(ctx context.Context, clientConn net.Co
 			}
 		}
 		
+		// Extract client IP for audit logging
+		clientIP := extractRealClientIP(clientConn)
+		if realIP != "" {
+			clientIP = realIP
+		}
+
+		// Create audit log for failed SSH connection
+		go createFailedSSHAuditLog(vpsID, username, err, clientIP)
+
 		// Send formatted error message to client before closing
 		if vpsID != "" {
 			errorMsg := s.formatConnectionError(err, vpsID)
@@ -1718,7 +1727,7 @@ func getOrGenerateHostKey() (ssh.Signer, error) {
 	return signer, nil
 }
 
-// createSSHAuditLog creates an audit log entry for an SSH connection
+// createSSHAuditLog creates an audit log entry for a successful SSH connection
 func createSSHAuditLog(vpsID, targetUser string, authInfo *clientAuthInfo, clientIP string) {
 	// Recover from any panics
 	defer func() {
@@ -1764,7 +1773,7 @@ func createSSHAuditLog(vpsID, targetUser string, authInfo *clientAuthInfo, clien
 			vpsID, targetUser, authInfo.authMethod, authInfo.hasAgentForwarding)
 	}
 
-	// Create audit log entry
+	// Create audit log entry for successful connection
 	auditLog := database.AuditLog{
 		ID:             uuid.New().String(),
 		UserID:         userID,
@@ -1786,6 +1795,85 @@ func createSSHAuditLog(vpsID, targetUser string, authInfo *clientAuthInfo, clien
 		logger.Warn("[SSHProxy] Failed to create audit log for SSH connection: %v", err)
 	} else {
 		logger.Debug("[SSHProxy] Created audit log for SSH connection: user=%s, vps=%s, ip=%s", userID, vpsID, clientIP)
+	}
+}
+
+// createFailedSSHAuditLog creates an audit log entry for a failed SSH connection attempt
+func createFailedSSHAuditLog(vpsID, username string, err error, clientIP string) {
+	// Recover from any panics
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("[SSHProxy] Panic creating audit log for failed SSH connection: %v", r)
+		}
+	}()
+
+	// Use background context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Use MetricsDB (TimescaleDB) for audit logs
+	if database.MetricsDB == nil {
+		logger.Warn("[SSHProxy] Metrics database not available, skipping audit log for failed SSH connection")
+		return
+	}
+
+	// Extract VPS ID from username if not provided
+	if vpsID == "" && username != "" {
+		vpsIdentifier, _ := parseUsername(username)
+		if resolvedID, resolveErr := resolveVPSID(vpsIdentifier); resolveErr == nil {
+			vpsID = resolvedID
+		} else {
+			vpsID = vpsIdentifier // Use identifier as-is if resolution fails
+		}
+	}
+
+	// Try to get organization ID from VPS if we have a valid VPS ID
+	var orgID *string
+	if vpsID != "" && strings.HasPrefix(vpsID, "vps-") {
+		var vps database.VPSInstance
+		if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err == nil {
+			orgID = &vps.OrganizationID
+		}
+	}
+
+	// Determine error status code based on error type
+	errorStatus := int32(401) // Default to unauthorized
+	errorMsg := err.Error()
+	if strings.Contains(errorMsg, "not found") || strings.Contains(errorMsg, "VPS not found") {
+		errorStatus = 404 // Not found
+	} else if strings.Contains(errorMsg, "timeout") || strings.Contains(errorMsg, "i/o timeout") {
+		errorStatus = 408 // Request timeout
+	} else if strings.Contains(errorMsg, "connection refused") {
+		errorStatus = 503 // Service unavailable
+	} else if strings.Contains(errorMsg, "authentication") || strings.Contains(errorMsg, "unable to authenticate") {
+		errorStatus = 401 // Unauthorized
+	}
+
+	// Create request data
+	requestData := fmt.Sprintf(`{"vps_id":"%s","username":"%s","error_type":"%s"}`, vpsID, username, errorMsg)
+
+	// Create audit log entry for failed connection
+	auditLog := database.AuditLog{
+		ID:             uuid.New().String(),
+		UserID:         "unknown", // Failed connections don't have authenticated user
+		OrganizationID: orgID,
+		Action:         "SSHConnect",
+		Service:        "SSHProxyService",
+		ResourceType:   stringPtr("vps"),
+		ResourceID:     stringPtr(vpsID),
+		IPAddress:      clientIP,
+		UserAgent:      "SSH/unknown",
+		RequestData:    requestData,
+		ResponseStatus: errorStatus,
+		ErrorMessage:   &errorMsg,
+		DurationMs:     0,
+		CreatedAt:      time.Now(),
+	}
+
+	if err := database.MetricsDB.WithContext(ctx).Create(&auditLog).Error; err != nil {
+		logger.Warn("[SSHProxy] Failed to create audit log for failed SSH connection: %v", err)
+	} else {
+		logger.Debug("[SSHProxy] Created audit log for failed SSH connection: vps=%s, ip=%s, error=%s", vpsID, clientIP, errorMsg)
 	}
 }
 
