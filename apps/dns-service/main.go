@@ -704,9 +704,13 @@ func handlePushDNSRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate domain format
-	if !strings.HasSuffix(strings.ToLower(domain), ".my.obiente.cloud") {
-		http.Error(w, "Domain must be a *.my.obiente.cloud domain", http.StatusBadRequest)
+	// Validate domain format - allow my.obiente.cloud domains or verified custom domains
+	domainLower := strings.ToLower(domain)
+	isMyObienteCloud := strings.HasSuffix(domainLower, ".my.obiente.cloud")
+	isVerifiedCustomDomain := isVerifiedCustomDomain(domain)
+	
+	if !isMyObienteCloud && !isVerifiedCustomDomain {
+		http.Error(w, "Domain must be a *.my.obiente.cloud domain or a verified custom domain", http.StatusBadRequest)
 		return
 	}
 
@@ -850,8 +854,13 @@ func handlePushDNSRecords(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if !strings.HasSuffix(strings.ToLower(domain), ".my.obiente.cloud") {
-			errors = append(errors, fmt.Sprintf("Invalid domain format: %s", domain))
+		// Validate domain format - allow my.obiente.cloud domains or verified custom domains
+		domainLower := strings.ToLower(domain)
+		isMyObienteCloud := strings.HasSuffix(domainLower, ".my.obiente.cloud")
+		isVerifiedCustomDomain := isVerifiedCustomDomain(domain)
+		
+		if !isMyObienteCloud && !isVerifiedCustomDomain {
+			errors = append(errors, fmt.Sprintf("Invalid domain format: %s (must be *.my.obiente.cloud or a verified custom domain)", domain))
 			continue
 		}
 
@@ -891,6 +900,47 @@ func handlePushDNSRecords(w http.ResponseWriter, r *http.Request) {
 		"total":         len(req.Records),
 		"success_count": successCount,
 	})
+}
+
+// extractDomainFromCustomDomainEntry extracts the domain name from a custom domain entry
+// Entry format: "domain.com" or "domain.com:verified" or "domain.com:token:abc123:pending"
+func extractDomainFromCustomDomainEntry(entry string) string {
+	parts := strings.Split(entry, ":")
+	return parts[0]
+}
+
+// isVerifiedCustomDomain checks if a domain is a verified custom domain in any deployment
+func isVerifiedCustomDomain(domain string) bool {
+	domain = strings.ToLower(strings.TrimSuffix(domain, "."))
+	
+	// Query all deployments to check for verified custom domains
+	var deployments []database.Deployment
+	if err := database.DB.Find(&deployments).Error; err != nil {
+		log.Printf("[DNS] Failed to query deployments for custom domain check: %v", err)
+		return false
+	}
+
+	for _, dep := range deployments {
+		if dep.CustomDomains != "" && dep.CustomDomains != "[]" {
+			var customDomains []string
+			if err := json.Unmarshal([]byte(dep.CustomDomains), &customDomains); err == nil {
+				for _, customDomainEntry := range customDomains {
+					// Extract domain name from entry
+					entryDomain := extractDomainFromCustomDomainEntry(customDomainEntry)
+					
+					// Check if this is the domain we're looking for and if it's verified
+					if strings.ToLower(strings.TrimSuffix(entryDomain, ".")) == domain {
+						// Check if domain is verified
+						if strings.Contains(customDomainEntry, ":verified") {
+							return true
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	return false
 }
 
 // startDNSPusher starts a goroutine that periodically pushes DNS records to the production API
@@ -938,12 +988,13 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 	// Only filter out soft-deleted deployments
 	type deploymentDNSRow struct {
 		DeploymentID string
+		CustomDomains string
 	}
 	var deploymentRows []deploymentDNSRow
 	
 	// Try case-insensitive status check first
 	if err := database.DB.Table("deployment_locations dl").
-		Select("DISTINCT dl.deployment_id").
+		Select("DISTINCT dl.deployment_id, d.custom_domains").
 		Joins("INNER JOIN deployments d ON d.id = dl.deployment_id AND d.deleted_at IS NULL").
 		Where("LOWER(dl.status) = ?", "running"). // Case-insensitive check
 		Scan(&deploymentRows).Error; err != nil {
@@ -953,7 +1004,7 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 		if len(deploymentRows) == 0 {
 			var fallbackRows []deploymentDNSRow
 			if err := database.DB.Table("deployments d").
-				Select("DISTINCT d.id as deployment_id").
+				Select("DISTINCT d.id as deployment_id, d.custom_domains").
 				Joins("LEFT JOIN deployment_locations dl ON dl.deployment_id = d.id").
 				Where("d.deleted_at IS NULL AND d.status = ? AND dl.id IS NOT NULL", 3). // 3 = RUNNING
 				Scan(&fallbackRows).Error; err == nil && len(fallbackRows) > 0 {
@@ -970,13 +1021,38 @@ func pushDNSRecords(client *http.Client, pushURL, apiKey, sourceAPI string, ttl 
 			}
 
 			if len(ips) > 0 {
-				domain := fmt.Sprintf("%s.my.obiente.cloud", row.DeploymentID)
+				// Always create DNS record for the default my.obiente.cloud domain
+				defaultDomain := fmt.Sprintf("%s.my.obiente.cloud", row.DeploymentID)
 				records = append(records, map[string]interface{}{
-					"domain":      domain,
+					"domain":      defaultDomain,
 					"record_type": "A",
 					"records":     ips,
 					"ttl":         ttl,
 				})
+
+				// Also create DNS records for verified custom domains
+				if row.CustomDomains != "" && row.CustomDomains != "[]" {
+					var customDomains []string
+					if err := json.Unmarshal([]byte(row.CustomDomains), &customDomains); err == nil {
+						for _, customDomainEntry := range customDomains {
+							// Extract domain name from entry (format: "domain.com" or "domain.com:verified" or "domain.com:token:abc123:verified")
+							domainName := extractDomainFromCustomDomainEntry(customDomainEntry)
+							
+							// Only create DNS records for verified domains
+							if strings.Contains(customDomainEntry, ":verified") {
+								records = append(records, map[string]interface{}{
+									"domain":      domainName,
+									"record_type": "A",
+									"records":     ips,
+									"ttl":         ttl,
+								})
+								log.Printf("[DNS Pusher] Added DNS record for verified custom domain %s (deployment %s)", domainName, row.DeploymentID)
+							}
+						}
+					} else {
+						log.Printf("[DNS Pusher] Failed to parse custom domains for deployment %s: %v", row.DeploymentID, err)
+					}
+				}
 			} else {
 				log.Printf("[DNS Pusher] Deployment %s has no Traefik IPs configured", row.DeploymentID)
 			}
