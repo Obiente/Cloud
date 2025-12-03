@@ -240,6 +240,17 @@ func MiddlewareInterceptor(config *AuthConfig) connect.UnaryInterceptorFunc {
 				return next(ctx, req)
 			}
 
+			// Check if this is an internal service call (by checking for internal service secret header)
+			// Internal service calls should be authenticated by the internal service auth interceptor
+			// which runs after this one, so we check the header directly here
+			internalServiceSecret := req.Header().Get("x-internal-service-secret")
+			if internalServiceSecret != "" {
+				// This is an internal service call - skip user authentication
+				// The internal service auth interceptor will validate the secret
+				logger.Debug("[Auth] Skipping user authentication for internal service call: %s", procedure)
+				return next(ctx, req)
+			}
+
 			// Extract token from Authorization header
 			authHeader := req.Header().Get(AuthorizationHeader)
 			hasAuthHeader := authHeader != "" && strings.HasPrefix(authHeader, BearerPrefix)

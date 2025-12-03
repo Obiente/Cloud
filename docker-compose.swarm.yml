@@ -327,7 +327,7 @@ services:
     image: ghcr.io/obiente/cloud-organizations-service:latest
     environment:
       PORT: 3003
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard, *common-notifications]
     deploy:
       mode: replicated
       replicas: 2
@@ -373,7 +373,7 @@ services:
     image: ghcr.io/obiente/cloud-billing-service:latest
     environment:
       PORT: 3004
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-dashboard]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-dashboard, *common-notifications]
     deploy:
       mode: replicated
       replicas: 2
@@ -419,7 +419,7 @@ services:
     image: ghcr.io/obiente/cloud-deployments-service:latest
     environment:
       PORT: 3005
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-swarm-orchestrator, *common-dns-delegation]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-swarm-orchestrator, *common-dns-delegation, *common-notifications]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/obiente:/var/lib/obiente
@@ -470,7 +470,7 @@ services:
     image: ghcr.io/obiente/cloud-gameservers-service:latest
     environment:
       PORT: 3006
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-swarm-orchestrator]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-swarm-orchestrator, *common-notifications]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/obiente/volumes:/var/lib/obiente/volumes
@@ -519,7 +519,7 @@ services:
     image: ghcr.io/obiente/cloud-orchestrator-service:latest
     environment:
       PORT: 3007
-      <<: [*common-database, *common-metrics-db, *common-redis, *common-swarm-orchestrator, *common-vps, *common-dns-delegation]
+      <<: [*common-database, *common-metrics-db, *common-redis, *common-swarm-orchestrator, *common-vps, *common-dns-delegation, *common-notifications]
       ORCHESTRATOR_SYNC_INTERVAL: ${ORCHESTRATOR_SYNC_INTERVAL:-30s}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -568,7 +568,7 @@ services:
     image: ghcr.io/obiente/cloud-vps-service:latest
     environment:
       PORT: 3008
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-swarm-orchestrator, *common-vps]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-swarm-orchestrator, *common-vps, *common-notifications]
     deploy:
       mode: replicated
       replicas: 2
@@ -705,7 +705,7 @@ services:
     image: ghcr.io/obiente/cloud-notifications-service:latest
     environment:
       PORT: 3012
-      <<: [*common-database, *common-metrics-db, *common-auth]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard, *common-notifications]
     deploy:
       mode: replicated
       replicas: 2
@@ -751,7 +751,7 @@ services:
     image: ghcr.io/obiente/cloud-superadmin-service:latest
     environment:
       PORT: 3011
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-swarm-orchestrator, *common-vps]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-swarm-orchestrator, *common-vps, *common-notifications]
     deploy:
       mode: replicated
       replicas: 1

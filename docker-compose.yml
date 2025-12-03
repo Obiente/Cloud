@@ -51,7 +51,7 @@ services:
     container_name: obiente-notifications-service
     environment:
       PORT: 3012
-      <<: [*common-database, *common-metrics-db, *common-auth]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard, *common-notifications]
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,7 +87,7 @@ services:
     container_name: obiente-support-service
     environment:
       PORT: 3009
-      <<: [*common-database, *common-auth]
+      <<: [*common-database, *common-metrics-db, *common-auth]
     depends_on:
       postgres:
         condition: service_healthy
@@ -157,7 +157,7 @@ services:
     container_name: obiente-organizations-service
     environment:
       PORT: 3003
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard, *common-notifications]
     depends_on:
       postgres:
         condition: service_healthy
@@ -193,7 +193,7 @@ services:
     container_name: obiente-billing-service
     environment:
       PORT: 3004
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-dashboard]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-dashboard, *common-notifications]
     depends_on:
       postgres:
         condition: service_healthy
@@ -229,7 +229,7 @@ services:
     container_name: obiente-deployments-service
     environment:
       PORT: 3005
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-orchestrator, *common-dns-delegation]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-orchestrator, *common-dns-delegation, *common-notifications]
     depends_on:
       postgres:
         condition: service_healthy
@@ -269,7 +269,7 @@ services:
     container_name: obiente-gameservers-service
     environment:
       PORT: 3006
-      <<: [*common-database, *common-metrics-db, *common-auth]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-notifications]
     depends_on:
       postgres:
         condition: service_healthy
@@ -308,7 +308,7 @@ services:
     container_name: obiente-orchestrator-service
     environment:
       PORT: 3007
-      <<: [*common-database, *common-metrics-db, *common-redis, *common-orchestrator, *common-vps, *common-dns-delegation]
+      <<: [*common-database, *common-metrics-db, *common-redis, *common-orchestrator, *common-vps, *common-dns-delegation, *common-notifications]
       ORCHESTRATOR_SYNC_INTERVAL: ${ORCHESTRATOR_SYNC_INTERVAL:-30s}
     depends_on:
       postgres:
@@ -349,7 +349,7 @@ services:
     container_name: obiente-vps-service
     environment:
       PORT: 3008
-      <<: [*common-database, *common-auth, *common-orchestrator, *common-vps]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-orchestrator, *common-vps, *common-notifications]
     depends_on:
       postgres:
         condition: service_healthy
@@ -383,7 +383,7 @@ services:
     container_name: obiente-superadmin-service
     environment:
       PORT: 3011
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-orchestrator, *common-vps]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-orchestrator, *common-vps, *common-notifications]
     depends_on:
       postgres:
         condition: service_healthy

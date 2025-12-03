@@ -1030,6 +1030,73 @@ See the [VPS Provisioning Guide](../guides/vps-provisioning.md#3-configure-api-t
 | `RATE_LIMIT_WINDOW_MS` | number | `60000` | ❌       |
 | `RATE_LIMIT_MAX`       | number | `100`   | ❌       |
 
+### Notifications Service Configuration
+
+| Variable                        | Type     | Default                              | Required | Description                                                                                                                                    |
+| ------------------------------- | -------- | ------------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INTERNAL_SERVICE_SECRET`       | string   | -                                    | ✅       | Shared secret for authenticating service-to-service calls to the notifications service. Must be set for services that create notifications.   |
+| `NOTIFICATIONS_SERVICE_URL`     | string   | `http://notifications-service:3012`  | ❌       | URL of the notifications service for internal service-to-service communication. Defaults to Docker service name.                              |
+| `NOTIFICATIONS_RETRY_MAX_ATTEMPTS` | number | `3`                                | ❌       | Maximum number of retry attempts for failed notification creation requests.                                                                   |
+| `NOTIFICATIONS_RETRY_INITIAL_BACKOFF` | duration | `1s`                            | ❌       | Initial backoff delay before first retry. Uses exponential backoff (doubles each attempt).                                                    |
+| `NOTIFICATIONS_RETRY_MAX_BACKOFF` | duration | `10s`                            | ❌       | Maximum backoff delay between retry attempts. Exponential backoff will not exceed this value.                                                |
+
+**Internal Service Authentication:**
+
+The `INTERNAL_SERVICE_SECRET` is used to secure the notifications service endpoints (`CreateNotification` and `CreateOrganizationNotification`). Services that need to create notifications must provide this secret in the `x-internal-service-secret` header when calling the notifications service.
+
+**Retry Configuration:**
+
+The notifications package automatically retries failed requests with exponential backoff for transient errors (connection refused, service unavailable, timeouts, etc.). Non-retryable errors (authentication failures, invalid arguments, etc.) are not retried.
+
+**Retryable Errors:**
+- Connection refused
+- Service unavailable
+- Network timeouts
+- DNS resolution failures
+- Temporary network failures
+
+**Non-Retryable Errors:**
+- Authentication failures
+- Invalid arguments
+- Permission denied
+- Not found errors
+
+**Examples:**
+
+```bash
+# Generate a secure secret
+openssl rand -base64 32
+
+# Set in all services that need to create notifications
+INTERNAL_SERVICE_SECRET=<generated_secret>
+
+# Optional: Override notifications service URL (for custom deployments)
+NOTIFICATIONS_SERVICE_URL=http://notifications-service:3012
+
+# Optional: Configure retry behavior (uses defaults if not set)
+NOTIFICATIONS_RETRY_MAX_ATTEMPTS=3
+NOTIFICATIONS_RETRY_INITIAL_BACKOFF=1s
+NOTIFICATIONS_RETRY_MAX_BACKOFF=10s
+```
+
+**Retry Behavior:**
+
+With default settings (3 attempts, 1s initial backoff, 10s max backoff):
+- Attempt 1: Immediate
+- Attempt 2: After 1s (if first attempt fails)
+- Attempt 3: After 2s (if second attempt fails)
+- Total max wait time: ~3 seconds
+
+**Note:** The `INTERNAL_SERVICE_SECRET` must be identical across all services that communicate with the notifications service. This includes:
+- notifications-service (needs the secret to validate incoming requests)
+- vps-service
+- organizations-service
+- deployments-service
+- gameservers-service
+- orchestrator-service
+- superadmin-service
+- billing-service
+
 **Generate Secrets:**
 
 ```bash
@@ -1221,6 +1288,8 @@ ZITADEL_URL=https://auth.obiente.cloud
 DOMAIN=obiente.cloud
 ACME_EMAIL=admin@obiente.cloud
 SECRET=<generated_secret>
+# Notifications service configuration
+INTERNAL_SERVICE_SECRET=<generated_secret>
 # Stripe configuration (required for billing)
 STRIPE_SECRET_KEY=sk_live_...
 STRIPE_WEBHOOK_SECRET=whsec_...
