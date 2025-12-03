@@ -130,6 +130,9 @@
           </OuiStack>
         </OuiCardBody>
       </OuiCard>
+
+      <!-- Notification Preferences -->
+      <SettingsNotificationPreferences />
     </OuiStack>
   </div>
 </template>
@@ -141,6 +144,7 @@
   import OuiInput from "~/components/oui/Input.vue";
   import OuiSwitch from "~/components/oui/Switch.vue";
   import OuiGrid from "~/components/oui/Grid.vue";
+  import SettingsNotificationPreferences from "./SettingsNotificationPreferences.vue";
 
   const preferencesStore = usePreferencesStore();
 

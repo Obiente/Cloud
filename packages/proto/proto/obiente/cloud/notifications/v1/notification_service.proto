@@ -34,6 +34,15 @@ service NotificationService {
   
   // Create notifications for organization members
   rpc CreateOrganizationNotification(CreateOrganizationNotificationRequest) returns (CreateOrganizationNotificationResponse);
+  
+  // Get available notification types
+  rpc GetNotificationTypes(GetNotificationTypesRequest) returns (GetNotificationTypesResponse);
+  
+  // Get user's notification preferences
+  rpc GetNotificationPreferences(GetNotificationPreferencesRequest) returns (GetNotificationPreferencesResponse);
+  
+  // Update user's notification preferences
+  rpc UpdateNotificationPreferences(UpdateNotificationPreferencesRequest) returns (UpdateNotificationPreferencesResponse);
 }
 
 message ListNotificationsRequest {
@@ -176,5 +185,50 @@ enum NotificationSeverity {
   NOTIFICATION_SEVERITY_MEDIUM = 2;
   NOTIFICATION_SEVERITY_HIGH = 3;
   NOTIFICATION_SEVERITY_CRITICAL = 4;
+}
+
+message GetNotificationTypesRequest {}
+
+message GetNotificationTypesResponse {
+  repeated NotificationTypeInfo types = 1;
+}
+
+message NotificationTypeInfo {
+  NotificationType type = 1;
+  string name = 2;
+  string description = 3;
+  bool default_email_enabled = 4;
+  bool default_in_app_enabled = 5;
+  NotificationSeverity default_min_severity = 6;
+}
+
+message GetNotificationPreferencesRequest {}
+
+message GetNotificationPreferencesResponse {
+  repeated NotificationPreference preferences = 1;
+}
+
+message UpdateNotificationPreferencesRequest {
+  repeated NotificationPreference preferences = 1;
+}
+
+message UpdateNotificationPreferencesResponse {
+  repeated NotificationPreference preferences = 1;
+}
+
+message NotificationPreference {
+  NotificationType notification_type = 1;
+  bool email_enabled = 2;
+  bool in_app_enabled = 3;
+  NotificationFrequency frequency = 4;
+  NotificationSeverity min_severity = 5;
+}
+
+enum NotificationFrequency {
+  NOTIFICATION_FREQUENCY_UNSPECIFIED = 0;
+  NOTIFICATION_FREQUENCY_IMMEDIATE = 1;
+  NOTIFICATION_FREQUENCY_DAILY = 2;
+  NOTIFICATION_FREQUENCY_WEEKLY = 3;
+  NOTIFICATION_FREQUENCY_NEVER = 4;
 }
 

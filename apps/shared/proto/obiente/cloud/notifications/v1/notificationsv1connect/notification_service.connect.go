@@ -60,6 +60,15 @@ const (
 	// NotificationServiceCreateOrganizationNotificationProcedure is the fully-qualified name of the
 	// NotificationService's CreateOrganizationNotification RPC.
 	NotificationServiceCreateOrganizationNotificationProcedure = "/obiente.cloud.notifications.v1.NotificationService/CreateOrganizationNotification"
+	// NotificationServiceGetNotificationTypesProcedure is the fully-qualified name of the
+	// NotificationService's GetNotificationTypes RPC.
+	NotificationServiceGetNotificationTypesProcedure = "/obiente.cloud.notifications.v1.NotificationService/GetNotificationTypes"
+	// NotificationServiceGetNotificationPreferencesProcedure is the fully-qualified name of the
+	// NotificationService's GetNotificationPreferences RPC.
+	NotificationServiceGetNotificationPreferencesProcedure = "/obiente.cloud.notifications.v1.NotificationService/GetNotificationPreferences"
+	// NotificationServiceUpdateNotificationPreferencesProcedure is the fully-qualified name of the
+	// NotificationService's UpdateNotificationPreferences RPC.
+	NotificationServiceUpdateNotificationPreferencesProcedure = "/obiente.cloud.notifications.v1.NotificationService/UpdateNotificationPreferences"
 )
 
 // NotificationServiceClient is a client for the obiente.cloud.notifications.v1.NotificationService
@@ -83,6 +92,12 @@ type NotificationServiceClient interface {
 	CreateNotification(context.Context, *connect.Request[v1.CreateNotificationRequest]) (*connect.Response[v1.CreateNotificationResponse], error)
 	// Create notifications for organization members
 	CreateOrganizationNotification(context.Context, *connect.Request[v1.CreateOrganizationNotificationRequest]) (*connect.Response[v1.CreateOrganizationNotificationResponse], error)
+	// Get available notification types
+	GetNotificationTypes(context.Context, *connect.Request[v1.GetNotificationTypesRequest]) (*connect.Response[v1.GetNotificationTypesResponse], error)
+	// Get user's notification preferences
+	GetNotificationPreferences(context.Context, *connect.Request[v1.GetNotificationPreferencesRequest]) (*connect.Response[v1.GetNotificationPreferencesResponse], error)
+	// Update user's notification preferences
+	UpdateNotificationPreferences(context.Context, *connect.Request[v1.UpdateNotificationPreferencesRequest]) (*connect.Response[v1.UpdateNotificationPreferencesResponse], error)
 }
 
 // NewNotificationServiceClient constructs a client for the
@@ -151,6 +166,24 @@ func NewNotificationServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(notificationServiceMethods.ByName("CreateOrganizationNotification")),
 			connect.WithClientOptions(opts...),
 		),
+		getNotificationTypes: connect.NewClient[v1.GetNotificationTypesRequest, v1.GetNotificationTypesResponse](
+			httpClient,
+			baseURL+NotificationServiceGetNotificationTypesProcedure,
+			connect.WithSchema(notificationServiceMethods.ByName("GetNotificationTypes")),
+			connect.WithClientOptions(opts...),
+		),
+		getNotificationPreferences: connect.NewClient[v1.GetNotificationPreferencesRequest, v1.GetNotificationPreferencesResponse](
+			httpClient,
+			baseURL+NotificationServiceGetNotificationPreferencesProcedure,
+			connect.WithSchema(notificationServiceMethods.ByName("GetNotificationPreferences")),
+			connect.WithClientOptions(opts...),
+		),
+		updateNotificationPreferences: connect.NewClient[v1.UpdateNotificationPreferencesRequest, v1.UpdateNotificationPreferencesResponse](
+			httpClient,
+			baseURL+NotificationServiceUpdateNotificationPreferencesProcedure,
+			connect.WithSchema(notificationServiceMethods.ByName("UpdateNotificationPreferences")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -165,6 +198,9 @@ type notificationServiceClient struct {
 	getUnreadCount                 *connect.Client[v1.GetUnreadCountRequest, v1.GetUnreadCountResponse]
 	createNotification             *connect.Client[v1.CreateNotificationRequest, v1.CreateNotificationResponse]
 	createOrganizationNotification *connect.Client[v1.CreateOrganizationNotificationRequest, v1.CreateOrganizationNotificationResponse]
+	getNotificationTypes           *connect.Client[v1.GetNotificationTypesRequest, v1.GetNotificationTypesResponse]
+	getNotificationPreferences     *connect.Client[v1.GetNotificationPreferencesRequest, v1.GetNotificationPreferencesResponse]
+	updateNotificationPreferences  *connect.Client[v1.UpdateNotificationPreferencesRequest, v1.UpdateNotificationPreferencesResponse]
 }
 
 // ListNotifications calls obiente.cloud.notifications.v1.NotificationService.ListNotifications.
@@ -214,6 +250,24 @@ func (c *notificationServiceClient) CreateOrganizationNotification(ctx context.C
 	return c.createOrganizationNotification.CallUnary(ctx, req)
 }
 
+// GetNotificationTypes calls
+// obiente.cloud.notifications.v1.NotificationService.GetNotificationTypes.
+func (c *notificationServiceClient) GetNotificationTypes(ctx context.Context, req *connect.Request[v1.GetNotificationTypesRequest]) (*connect.Response[v1.GetNotificationTypesResponse], error) {
+	return c.getNotificationTypes.CallUnary(ctx, req)
+}
+
+// GetNotificationPreferences calls
+// obiente.cloud.notifications.v1.NotificationService.GetNotificationPreferences.
+func (c *notificationServiceClient) GetNotificationPreferences(ctx context.Context, req *connect.Request[v1.GetNotificationPreferencesRequest]) (*connect.Response[v1.GetNotificationPreferencesResponse], error) {
+	return c.getNotificationPreferences.CallUnary(ctx, req)
+}
+
+// UpdateNotificationPreferences calls
+// obiente.cloud.notifications.v1.NotificationService.UpdateNotificationPreferences.
+func (c *notificationServiceClient) UpdateNotificationPreferences(ctx context.Context, req *connect.Request[v1.UpdateNotificationPreferencesRequest]) (*connect.Response[v1.UpdateNotificationPreferencesResponse], error) {
+	return c.updateNotificationPreferences.CallUnary(ctx, req)
+}
+
 // NotificationServiceHandler is an implementation of the
 // obiente.cloud.notifications.v1.NotificationService service.
 type NotificationServiceHandler interface {
@@ -235,6 +289,12 @@ type NotificationServiceHandler interface {
 	CreateNotification(context.Context, *connect.Request[v1.CreateNotificationRequest]) (*connect.Response[v1.CreateNotificationResponse], error)
 	// Create notifications for organization members
 	CreateOrganizationNotification(context.Context, *connect.Request[v1.CreateOrganizationNotificationRequest]) (*connect.Response[v1.CreateOrganizationNotificationResponse], error)
+	// Get available notification types
+	GetNotificationTypes(context.Context, *connect.Request[v1.GetNotificationTypesRequest]) (*connect.Response[v1.GetNotificationTypesResponse], error)
+	// Get user's notification preferences
+	GetNotificationPreferences(context.Context, *connect.Request[v1.GetNotificationPreferencesRequest]) (*connect.Response[v1.GetNotificationPreferencesResponse], error)
+	// Update user's notification preferences
+	UpdateNotificationPreferences(context.Context, *connect.Request[v1.UpdateNotificationPreferencesRequest]) (*connect.Response[v1.UpdateNotificationPreferencesResponse], error)
 }
 
 // NewNotificationServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -298,6 +358,24 @@ func NewNotificationServiceHandler(svc NotificationServiceHandler, opts ...conne
 		connect.WithSchema(notificationServiceMethods.ByName("CreateOrganizationNotification")),
 		connect.WithHandlerOptions(opts...),
 	)
+	notificationServiceGetNotificationTypesHandler := connect.NewUnaryHandler(
+		NotificationServiceGetNotificationTypesProcedure,
+		svc.GetNotificationTypes,
+		connect.WithSchema(notificationServiceMethods.ByName("GetNotificationTypes")),
+		connect.WithHandlerOptions(opts...),
+	)
+	notificationServiceGetNotificationPreferencesHandler := connect.NewUnaryHandler(
+		NotificationServiceGetNotificationPreferencesProcedure,
+		svc.GetNotificationPreferences,
+		connect.WithSchema(notificationServiceMethods.ByName("GetNotificationPreferences")),
+		connect.WithHandlerOptions(opts...),
+	)
+	notificationServiceUpdateNotificationPreferencesHandler := connect.NewUnaryHandler(
+		NotificationServiceUpdateNotificationPreferencesProcedure,
+		svc.UpdateNotificationPreferences,
+		connect.WithSchema(notificationServiceMethods.ByName("UpdateNotificationPreferences")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.notifications.v1.NotificationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case NotificationServiceListNotificationsProcedure:
@@ -318,6 +396,12 @@ func NewNotificationServiceHandler(svc NotificationServiceHandler, opts ...conne
 			notificationServiceCreateNotificationHandler.ServeHTTP(w, r)
 		case NotificationServiceCreateOrganizationNotificationProcedure:
 			notificationServiceCreateOrganizationNotificationHandler.ServeHTTP(w, r)
+		case NotificationServiceGetNotificationTypesProcedure:
+			notificationServiceGetNotificationTypesHandler.ServeHTTP(w, r)
+		case NotificationServiceGetNotificationPreferencesProcedure:
+			notificationServiceGetNotificationPreferencesHandler.ServeHTTP(w, r)
+		case NotificationServiceUpdateNotificationPreferencesProcedure:
+			notificationServiceUpdateNotificationPreferencesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -361,4 +445,16 @@ func (UnimplementedNotificationServiceHandler) CreateNotification(context.Contex
 
 func (UnimplementedNotificationServiceHandler) CreateOrganizationNotification(context.Context, *connect.Request[v1.CreateOrganizationNotificationRequest]) (*connect.Response[v1.CreateOrganizationNotificationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.notifications.v1.NotificationService.CreateOrganizationNotification is not implemented"))
+}
+
+func (UnimplementedNotificationServiceHandler) GetNotificationTypes(context.Context, *connect.Request[v1.GetNotificationTypesRequest]) (*connect.Response[v1.GetNotificationTypesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.notifications.v1.NotificationService.GetNotificationTypes is not implemented"))
+}
+
+func (UnimplementedNotificationServiceHandler) GetNotificationPreferences(context.Context, *connect.Request[v1.GetNotificationPreferencesRequest]) (*connect.Response[v1.GetNotificationPreferencesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.notifications.v1.NotificationService.GetNotificationPreferences is not implemented"))
+}
+
+func (UnimplementedNotificationServiceHandler) UpdateNotificationPreferences(context.Context, *connect.Request[v1.UpdateNotificationPreferencesRequest]) (*connect.Response[v1.UpdateNotificationPreferencesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.notifications.v1.NotificationService.UpdateNotificationPreferences is not implemented"))
 }
