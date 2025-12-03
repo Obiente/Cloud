@@ -657,7 +657,7 @@ func sendNotificationEmailIfEnabled(ctx context.Context, userID string, notifica
 	
 	// If no preference found, use defaults based on notification type
 	emailEnabled := false
-	minSeverity := "LOW"
+	var minSeverity string
 	frequency := "immediate"
 	
 	if err == gorm.ErrRecordNotFound {
@@ -675,6 +675,10 @@ func sendNotificationEmailIfEnabled(ctx context.Context, userID string, notifica
 			notificationsv1.NotificationType_NOTIFICATION_TYPE_SUCCESS:
 			emailEnabled = false
 		}
+		
+		// Get type-specific default min severity (matching GetNotificationTypes defaults)
+		minSeverity = getDefaultMinSeverityForType(notificationType)
+		
 		logger.Info("[Notifications] No preference found for user %s, type %s, using default emailEnabled=%v, minSeverity=%s, frequency=%s", userID, notificationTypeStr, emailEnabled, minSeverity, frequency)
 	} else if err != nil {
 		logger.Warn("[Notifications] Error checking preferences for user %s, type %s: %v", userID, notificationTypeStr, err)
@@ -1095,6 +1099,27 @@ func stringToNotificationFrequency(s string) notificationsv1.NotificationFrequen
 		return notificationsv1.NotificationFrequency_NOTIFICATION_FREQUENCY_NEVER
 	default:
 		return notificationsv1.NotificationFrequency_NOTIFICATION_FREQUENCY_IMMEDIATE
+	}
+}
+
+// getDefaultMinSeverityForType returns the default minimum severity for a notification type
+// This matches the defaults defined in GetNotificationTypes
+func getDefaultMinSeverityForType(notificationType notificationsv1.NotificationType) string {
+	switch notificationType {
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_INFO,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_SUCCESS,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_INVITE:
+		return "LOW"
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_WARNING,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_DEPLOYMENT,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_BILLING,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_QUOTA:
+		return "MEDIUM"
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_ERROR,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_SYSTEM:
+		return "HIGH"
+	default:
+		return "LOW"
 	}
 }
 

@@ -12,6 +12,14 @@ const (
 	InternalServiceSecretHeader = "x-internal-service-secret"
 )
 
+// contextKey is a type for context keys to avoid collisions
+type contextKey string
+
+const (
+	// InternalServiceCallKey is the context key for marking internal service calls
+	InternalServiceCallKey contextKey = "internal_service_call"
+)
+
 // InternalServiceAuthInterceptor validates internal service-to-service calls
 // This allows services to call internal endpoints without user authentication
 type InternalServiceAuthInterceptor struct {
@@ -35,7 +43,7 @@ func (i *InternalServiceAuthInterceptor) WrapUnary(next connect.UnaryFunc) conne
 				return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid %s", InternalServiceSecretHeader))
 			}
 			// Valid internal service call - set a flag in context
-			ctx = context.WithValue(ctx, "internal_service_call", true)
+			ctx = context.WithValue(ctx, InternalServiceCallKey, true)
 		}
 		return next(ctx, req)
 	}
@@ -49,7 +57,7 @@ func (i *InternalServiceAuthInterceptor) WrapStreamingHandler(next connect.Strea
 			if secret != i.secret {
 				return connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("invalid %s", InternalServiceSecretHeader))
 			}
-			ctx = context.WithValue(ctx, "internal_service_call", true)
+			ctx = context.WithValue(ctx, InternalServiceCallKey, true)
 		}
 		return next(ctx, conn)
 	}
@@ -67,7 +75,11 @@ func (i *InternalServiceAuthInterceptor) WrapStreamingClient(next connect.Stream
 
 // IsInternalServiceCall checks if the context indicates an internal service call
 func IsInternalServiceCall(ctx context.Context) bool {
-	val := ctx.Value("internal_service_call")
-	return val != nil && val.(bool)
+	val := ctx.Value(InternalServiceCallKey)
+	if val == nil {
+		return false
+	}
+	b, ok := val.(bool)
+	return ok && b
 }
 
