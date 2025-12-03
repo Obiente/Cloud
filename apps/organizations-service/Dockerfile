@@ -46,10 +46,11 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
     -o /build/organizations-service .
 
 # Final stage
-FROM alpine:latest
+ARG TARGETPLATFORM
+FROM --platform=${TARGETPLATFORM} alpine:latest
 
 # Install CA certificates, curl, and netcat for health checks
-RUN apk --no-cache add ca-certificates curl netcat-openbsd
+RUN apk update && apk --no-cache add ca-certificates curl netcat-openbsd
 
 WORKDIR /app
 

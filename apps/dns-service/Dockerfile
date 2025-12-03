@@ -46,10 +46,11 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
     -o /build/dns-service .
 
 # Final stage
-FROM alpine:latest
+ARG TARGETPLATFORM
+FROM --platform=${TARGETPLATFORM} alpine:latest
 
 # Install CA certificates and curl for health checks
-RUN apk --no-cache add ca-certificates curl
+RUN apk update && apk --no-cache add ca-certificates curl
 
 WORKDIR /app
 

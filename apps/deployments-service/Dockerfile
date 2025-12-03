@@ -58,11 +58,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo install nixpacks --locked
 
 # Final stage
-FROM alpine:latest
-
-# Accept build arguments for multi-arch support
+ARG TARGETPLATFORM
 ARG TARGETARCH=amd64
 ARG TARGETOS=linux
+FROM --platform=${TARGETPLATFORM} alpine:latest
 
 # Install CA certificates for HTTPS requests
 # Install docker CLI and docker-compose for deployment management
@@ -70,7 +69,7 @@ ARG TARGETOS=linux
 # Install netcat-openbsd for health checks
 # Install bash and openssh-client for build scripts and SSH-based git operations
 # This layer will be cached unless package versions change
-RUN apk --no-cache add \
+RUN apk update && apk --no-cache add \
     ca-certificates \
     docker-cli \
     docker-compose \

@@ -32,10 +32,11 @@ WORKDIR /build/apps/vps-gateway
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -installsuffix cgo -o vps-gateway ./main.go
 
 # Final stage
-FROM alpine:latest
+ARG TARGETPLATFORM
+FROM --platform=${TARGETPLATFORM} alpine:latest
 
 # Install dnsmasq and required tools
-RUN apk add --no-cache \
+RUN apk update && apk add --no-cache \
     dnsmasq \
     ca-certificates \
     tzdata \

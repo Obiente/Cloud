@@ -54,11 +54,12 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
     -o /build/orchestrator-service .
 
 # Final stage
-FROM alpine:latest
+ARG TARGETPLATFORM
+FROM --platform=${TARGETPLATFORM} alpine:latest
 
 # Install CA certificates, curl, netcat for health checks, and Docker CLI
 # Docker CLI is needed for network operations and Traefik label updates
-RUN apk --no-cache add ca-certificates curl netcat-openbsd docker-cli
+RUN apk update && apk --no-cache add ca-certificates curl netcat-openbsd docker-cli
 
 WORKDIR /app
 
