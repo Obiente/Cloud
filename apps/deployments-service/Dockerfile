@@ -58,18 +58,18 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo install nixpacks --locked
 
 # Final stage
-ARG TARGETPLATFORM
 ARG TARGETARCH=amd64
 ARG TARGETOS=linux
-FROM --platform=${TARGETPLATFORM} alpine:latest
+FROM alpine:latest
 
 # Install CA certificates for HTTPS requests
 # Install docker CLI and docker-compose for deployment management
 # Install git and curl for repository cloning and downloading buildx
 # Install netcat-openbsd for health checks
 # Install bash and openssh-client for build scripts and SSH-based git operations
+# Disable triggers to avoid QEMU emulation issues with apk triggers
 # This layer will be cached unless package versions change
-RUN apk update && apk --no-cache add \
+RUN apk update && APK_NO_TRIGGERS=1 apk --no-cache add \
     ca-certificates \
     docker-cli \
     docker-compose \

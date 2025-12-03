@@ -46,11 +46,11 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
     -o /build/auth-service .
 
 # Final stage
-ARG TARGETPLATFORM
-FROM --platform=${TARGETPLATFORM} alpine:latest
+FROM alpine:latest
 
 # Install CA certificates, curl, and netcat for health checks
-RUN apk update && apk --no-cache add ca-certificates curl netcat-openbsd
+# Disable triggers to avoid QEMU emulation issues with apk triggers
+RUN apk update && APK_NO_TRIGGERS=1 apk --no-cache add ca-certificates curl netcat-openbsd
 
 WORKDIR /app
 

@@ -46,11 +46,11 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
     -o /build/dns-service .
 
 # Final stage
-ARG TARGETPLATFORM
-FROM --platform=${TARGETPLATFORM} alpine:latest
+FROM alpine:latest
 
 # Install CA certificates and curl for health checks
-RUN apk update && apk --no-cache add ca-certificates curl
+# Disable triggers to avoid QEMU emulation issues with apk triggers
+RUN apk update && APK_NO_TRIGGERS=1 apk --no-cache add ca-certificates curl
 
 WORKDIR /app
 
