@@ -148,6 +148,61 @@ func (NotificationSeverity) EnumDescriptor() ([]byte, []int) {
 	return file_obiente_cloud_notifications_v1_notification_service_proto_rawDescGZIP(), []int{1}
 }
 
+type NotificationFrequency int32
+
+const (
+	NotificationFrequency_NOTIFICATION_FREQUENCY_UNSPECIFIED NotificationFrequency = 0
+	NotificationFrequency_NOTIFICATION_FREQUENCY_IMMEDIATE   NotificationFrequency = 1
+	NotificationFrequency_NOTIFICATION_FREQUENCY_DAILY       NotificationFrequency = 2
+	NotificationFrequency_NOTIFICATION_FREQUENCY_WEEKLY      NotificationFrequency = 3
+	NotificationFrequency_NOTIFICATION_FREQUENCY_NEVER       NotificationFrequency = 4
+)
+
+// Enum value maps for NotificationFrequency.
+var (
+	NotificationFrequency_name = map[int32]string{
+		0: "NOTIFICATION_FREQUENCY_UNSPECIFIED",
+		1: "NOTIFICATION_FREQUENCY_IMMEDIATE",
+		2: "NOTIFICATION_FREQUENCY_DAILY",
+		3: "NOTIFICATION_FREQUENCY_WEEKLY",
+		4: "NOTIFICATION_FREQUENCY_NEVER",
+	}
+	NotificationFrequency_value = map[string]int32{
+		"NOTIFICATION_FREQUENCY_UNSPECIFIED": 0,
+		"NOTIFICATION_FREQUENCY_IMMEDIATE":   1,
+		"NOTIFICATION_FREQUENCY_DAILY":       2,
+		"NOTIFICATION_FREQUENCY_WEEKLY":      3,
+		"NOTIFICATION_FREQUENCY_NEVER":       4,
+	}
+)
+
+func (x NotificationFrequency) Enum() *NotificationFrequency {
+	p := new(NotificationFrequency)
+	*p = x
+	return p
+}
+
+func (x NotificationFrequency) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (NotificationFrequency) Descriptor() protoreflect.EnumDescriptor {
+	return file_obiente_cloud_notifications_v1_notification_service_proto_enumTypes[2].Descriptor()
+}
+
+func (NotificationFrequency) Type() protoreflect.EnumType {
+	return &file_obiente_cloud_notifications_v1_notification_service_proto_enumTypes[2]
+}
+
+func (x NotificationFrequency) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use NotificationFrequency.Descriptor instead.
+func (NotificationFrequency) EnumDescriptor() ([]byte, []int) {
+	return file_obiente_cloud_notifications_v1_notification_service_proto_rawDescGZIP(), []int{2}
+}
+
 type ListNotificationsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Optional filters
@@ -1302,6 +1357,414 @@ func (x *Notification) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+type GetNotificationTypesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNotificationTypesRequest) Reset() {
+	*x = GetNotificationTypesRequest{}
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNotificationTypesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNotificationTypesRequest) ProtoMessage() {}
+
+func (x *GetNotificationTypesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNotificationTypesRequest.ProtoReflect.Descriptor instead.
+func (*GetNotificationTypesRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_notifications_v1_notification_service_proto_rawDescGZIP(), []int{19}
+}
+
+type GetNotificationTypesResponse struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Types         []*NotificationTypeInfo `protobuf:"bytes,1,rep,name=types,proto3" json:"types,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNotificationTypesResponse) Reset() {
+	*x = GetNotificationTypesResponse{}
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNotificationTypesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNotificationTypesResponse) ProtoMessage() {}
+
+func (x *GetNotificationTypesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNotificationTypesResponse.ProtoReflect.Descriptor instead.
+func (*GetNotificationTypesResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_notifications_v1_notification_service_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *GetNotificationTypesResponse) GetTypes() []*NotificationTypeInfo {
+	if x != nil {
+		return x.Types
+	}
+	return nil
+}
+
+type NotificationTypeInfo struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Type                NotificationType       `protobuf:"varint,1,opt,name=type,proto3,enum=obiente.cloud.notifications.v1.NotificationType" json:"type,omitempty"`
+	Name                string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description         string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	DefaultEmailEnabled bool                   `protobuf:"varint,4,opt,name=default_email_enabled,json=defaultEmailEnabled,proto3" json:"default_email_enabled,omitempty"`
+	DefaultInAppEnabled bool                   `protobuf:"varint,5,opt,name=default_in_app_enabled,json=defaultInAppEnabled,proto3" json:"default_in_app_enabled,omitempty"`
+	DefaultMinSeverity  NotificationSeverity   `protobuf:"varint,6,opt,name=default_min_severity,json=defaultMinSeverity,proto3,enum=obiente.cloud.notifications.v1.NotificationSeverity" json:"default_min_severity,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *NotificationTypeInfo) Reset() {
+	*x = NotificationTypeInfo{}
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NotificationTypeInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NotificationTypeInfo) ProtoMessage() {}
+
+func (x *NotificationTypeInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NotificationTypeInfo.ProtoReflect.Descriptor instead.
+func (*NotificationTypeInfo) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_notifications_v1_notification_service_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *NotificationTypeInfo) GetType() NotificationType {
+	if x != nil {
+		return x.Type
+	}
+	return NotificationType_NOTIFICATION_TYPE_UNSPECIFIED
+}
+
+func (x *NotificationTypeInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *NotificationTypeInfo) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *NotificationTypeInfo) GetDefaultEmailEnabled() bool {
+	if x != nil {
+		return x.DefaultEmailEnabled
+	}
+	return false
+}
+
+func (x *NotificationTypeInfo) GetDefaultInAppEnabled() bool {
+	if x != nil {
+		return x.DefaultInAppEnabled
+	}
+	return false
+}
+
+func (x *NotificationTypeInfo) GetDefaultMinSeverity() NotificationSeverity {
+	if x != nil {
+		return x.DefaultMinSeverity
+	}
+	return NotificationSeverity_NOTIFICATION_SEVERITY_UNSPECIFIED
+}
+
+type GetNotificationPreferencesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNotificationPreferencesRequest) Reset() {
+	*x = GetNotificationPreferencesRequest{}
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNotificationPreferencesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNotificationPreferencesRequest) ProtoMessage() {}
+
+func (x *GetNotificationPreferencesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNotificationPreferencesRequest.ProtoReflect.Descriptor instead.
+func (*GetNotificationPreferencesRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_notifications_v1_notification_service_proto_rawDescGZIP(), []int{22}
+}
+
+type GetNotificationPreferencesResponse struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	Preferences   []*NotificationPreference `protobuf:"bytes,1,rep,name=preferences,proto3" json:"preferences,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNotificationPreferencesResponse) Reset() {
+	*x = GetNotificationPreferencesResponse{}
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNotificationPreferencesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNotificationPreferencesResponse) ProtoMessage() {}
+
+func (x *GetNotificationPreferencesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNotificationPreferencesResponse.ProtoReflect.Descriptor instead.
+func (*GetNotificationPreferencesResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_notifications_v1_notification_service_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *GetNotificationPreferencesResponse) GetPreferences() []*NotificationPreference {
+	if x != nil {
+		return x.Preferences
+	}
+	return nil
+}
+
+type UpdateNotificationPreferencesRequest struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	Preferences   []*NotificationPreference `protobuf:"bytes,1,rep,name=preferences,proto3" json:"preferences,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateNotificationPreferencesRequest) Reset() {
+	*x = UpdateNotificationPreferencesRequest{}
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateNotificationPreferencesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateNotificationPreferencesRequest) ProtoMessage() {}
+
+func (x *UpdateNotificationPreferencesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateNotificationPreferencesRequest.ProtoReflect.Descriptor instead.
+func (*UpdateNotificationPreferencesRequest) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_notifications_v1_notification_service_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *UpdateNotificationPreferencesRequest) GetPreferences() []*NotificationPreference {
+	if x != nil {
+		return x.Preferences
+	}
+	return nil
+}
+
+type UpdateNotificationPreferencesResponse struct {
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	Preferences   []*NotificationPreference `protobuf:"bytes,1,rep,name=preferences,proto3" json:"preferences,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateNotificationPreferencesResponse) Reset() {
+	*x = UpdateNotificationPreferencesResponse{}
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateNotificationPreferencesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateNotificationPreferencesResponse) ProtoMessage() {}
+
+func (x *UpdateNotificationPreferencesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateNotificationPreferencesResponse.ProtoReflect.Descriptor instead.
+func (*UpdateNotificationPreferencesResponse) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_notifications_v1_notification_service_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *UpdateNotificationPreferencesResponse) GetPreferences() []*NotificationPreference {
+	if x != nil {
+		return x.Preferences
+	}
+	return nil
+}
+
+type NotificationPreference struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	NotificationType NotificationType       `protobuf:"varint,1,opt,name=notification_type,json=notificationType,proto3,enum=obiente.cloud.notifications.v1.NotificationType" json:"notification_type,omitempty"`
+	EmailEnabled     bool                   `protobuf:"varint,2,opt,name=email_enabled,json=emailEnabled,proto3" json:"email_enabled,omitempty"`
+	InAppEnabled     bool                   `protobuf:"varint,3,opt,name=in_app_enabled,json=inAppEnabled,proto3" json:"in_app_enabled,omitempty"`
+	Frequency        NotificationFrequency  `protobuf:"varint,4,opt,name=frequency,proto3,enum=obiente.cloud.notifications.v1.NotificationFrequency" json:"frequency,omitempty"`
+	MinSeverity      NotificationSeverity   `protobuf:"varint,5,opt,name=min_severity,json=minSeverity,proto3,enum=obiente.cloud.notifications.v1.NotificationSeverity" json:"min_severity,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *NotificationPreference) Reset() {
+	*x = NotificationPreference{}
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NotificationPreference) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NotificationPreference) ProtoMessage() {}
+
+func (x *NotificationPreference) ProtoReflect() protoreflect.Message {
+	mi := &file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NotificationPreference.ProtoReflect.Descriptor instead.
+func (*NotificationPreference) Descriptor() ([]byte, []int) {
+	return file_obiente_cloud_notifications_v1_notification_service_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *NotificationPreference) GetNotificationType() NotificationType {
+	if x != nil {
+		return x.NotificationType
+	}
+	return NotificationType_NOTIFICATION_TYPE_UNSPECIFIED
+}
+
+func (x *NotificationPreference) GetEmailEnabled() bool {
+	if x != nil {
+		return x.EmailEnabled
+	}
+	return false
+}
+
+func (x *NotificationPreference) GetInAppEnabled() bool {
+	if x != nil {
+		return x.InAppEnabled
+	}
+	return false
+}
+
+func (x *NotificationPreference) GetFrequency() NotificationFrequency {
+	if x != nil {
+		return x.Frequency
+	}
+	return NotificationFrequency_NOTIFICATION_FREQUENCY_UNSPECIFIED
+}
+
+func (x *NotificationPreference) GetMinSeverity() NotificationSeverity {
+	if x != nil {
+		return x.MinSeverity
+	}
+	return NotificationSeverity_NOTIFICATION_SEVERITY_UNSPECIFIED
+}
+
 var File_obiente_cloud_notifications_v1_notification_service_proto protoreflect.FileDescriptor
 
 const file_obiente_cloud_notifications_v1_notification_service_proto_rawDesc = "" +
@@ -1422,7 +1885,30 @@ const file_obiente_cloud_notifications_v1_notification_service_proto_rawDesc = "
 	"\n" +
 	"\b_read_atB\r\n" +
 	"\v_action_urlB\x0f\n" +
-	"\r_action_label*\xc6\x02\n" +
+	"\r_action_label\"\x1d\n" +
+	"\x1bGetNotificationTypesRequest\"j\n" +
+	"\x1cGetNotificationTypesResponse\x12J\n" +
+	"\x05types\x18\x01 \x03(\v24.obiente.cloud.notifications.v1.NotificationTypeInfoR\x05types\"\xe3\x02\n" +
+	"\x14NotificationTypeInfo\x12D\n" +
+	"\x04type\x18\x01 \x01(\x0e20.obiente.cloud.notifications.v1.NotificationTypeR\x04type\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x122\n" +
+	"\x15default_email_enabled\x18\x04 \x01(\bR\x13defaultEmailEnabled\x123\n" +
+	"\x16default_in_app_enabled\x18\x05 \x01(\bR\x13defaultInAppEnabled\x12f\n" +
+	"\x14default_min_severity\x18\x06 \x01(\x0e24.obiente.cloud.notifications.v1.NotificationSeverityR\x12defaultMinSeverity\"#\n" +
+	"!GetNotificationPreferencesRequest\"~\n" +
+	"\"GetNotificationPreferencesResponse\x12X\n" +
+	"\vpreferences\x18\x01 \x03(\v26.obiente.cloud.notifications.v1.NotificationPreferenceR\vpreferences\"\x80\x01\n" +
+	"$UpdateNotificationPreferencesRequest\x12X\n" +
+	"\vpreferences\x18\x01 \x03(\v26.obiente.cloud.notifications.v1.NotificationPreferenceR\vpreferences\"\x81\x01\n" +
+	"%UpdateNotificationPreferencesResponse\x12X\n" +
+	"\vpreferences\x18\x01 \x03(\v26.obiente.cloud.notifications.v1.NotificationPreferenceR\vpreferences\"\xf0\x02\n" +
+	"\x16NotificationPreference\x12]\n" +
+	"\x11notification_type\x18\x01 \x01(\x0e20.obiente.cloud.notifications.v1.NotificationTypeR\x10notificationType\x12#\n" +
+	"\remail_enabled\x18\x02 \x01(\bR\femailEnabled\x12$\n" +
+	"\x0ein_app_enabled\x18\x03 \x01(\bR\finAppEnabled\x12S\n" +
+	"\tfrequency\x18\x04 \x01(\x0e25.obiente.cloud.notifications.v1.NotificationFrequencyR\tfrequency\x12W\n" +
+	"\fmin_severity\x18\x05 \x01(\x0e24.obiente.cloud.notifications.v1.NotificationSeverityR\vminSeverity*\xc6\x02\n" +
 	"\x10NotificationType\x12!\n" +
 	"\x1dNOTIFICATION_TYPE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16NOTIFICATION_TYPE_INFO\x10\x01\x12\x1d\n" +
@@ -1439,8 +1925,13 @@ const file_obiente_cloud_notifications_v1_notification_service_proto_rawDesc = "
 	"\x19NOTIFICATION_SEVERITY_LOW\x10\x01\x12 \n" +
 	"\x1cNOTIFICATION_SEVERITY_MEDIUM\x10\x02\x12\x1e\n" +
 	"\x1aNOTIFICATION_SEVERITY_HIGH\x10\x03\x12\"\n" +
-	"\x1eNOTIFICATION_SEVERITY_CRITICAL\x10\x042\x81\n" +
-	"\n" +
+	"\x1eNOTIFICATION_SEVERITY_CRITICAL\x10\x04*\xcc\x01\n" +
+	"\x15NotificationFrequency\x12&\n" +
+	"\"NOTIFICATION_FREQUENCY_UNSPECIFIED\x10\x00\x12$\n" +
+	" NOTIFICATION_FREQUENCY_IMMEDIATE\x10\x01\x12 \n" +
+	"\x1cNOTIFICATION_FREQUENCY_DAILY\x10\x02\x12!\n" +
+	"\x1dNOTIFICATION_FREQUENCY_WEEKLY\x10\x03\x12 \n" +
+	"\x1cNOTIFICATION_FREQUENCY_NEVER\x10\x042\xea\r\n" +
 	"\x13NotificationService\x12\x88\x01\n" +
 	"\x11ListNotifications\x128.obiente.cloud.notifications.v1.ListNotificationsRequest\x1a9.obiente.cloud.notifications.v1.ListNotificationsResponse\x12\x82\x01\n" +
 	"\x0fGetNotification\x126.obiente.cloud.notifications.v1.GetNotificationRequest\x1a7.obiente.cloud.notifications.v1.GetNotificationResponse\x12s\n" +
@@ -1451,7 +1942,10 @@ const file_obiente_cloud_notifications_v1_notification_service_proto_rawDesc = "
 	"\x16DeleteAllNotifications\x12=.obiente.cloud.notifications.v1.DeleteAllNotificationsRequest\x1a>.obiente.cloud.notifications.v1.DeleteAllNotificationsResponse\x12\x7f\n" +
 	"\x0eGetUnreadCount\x125.obiente.cloud.notifications.v1.GetUnreadCountRequest\x1a6.obiente.cloud.notifications.v1.GetUnreadCountResponse\x12\x8b\x01\n" +
 	"\x12CreateNotification\x129.obiente.cloud.notifications.v1.CreateNotificationRequest\x1a:.obiente.cloud.notifications.v1.CreateNotificationResponse\x12\xaf\x01\n" +
-	"\x1eCreateOrganizationNotification\x12E.obiente.cloud.notifications.v1.CreateOrganizationNotificationRequest\x1aF.obiente.cloud.notifications.v1.CreateOrganizationNotificationResponseB[ZYgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1;notificationsv1b\x06proto3"
+	"\x1eCreateOrganizationNotification\x12E.obiente.cloud.notifications.v1.CreateOrganizationNotificationRequest\x1aF.obiente.cloud.notifications.v1.CreateOrganizationNotificationResponse\x12\x91\x01\n" +
+	"\x14GetNotificationTypes\x12;.obiente.cloud.notifications.v1.GetNotificationTypesRequest\x1a<.obiente.cloud.notifications.v1.GetNotificationTypesResponse\x12\xa3\x01\n" +
+	"\x1aGetNotificationPreferences\x12A.obiente.cloud.notifications.v1.GetNotificationPreferencesRequest\x1aB.obiente.cloud.notifications.v1.GetNotificationPreferencesResponse\x12\xac\x01\n" +
+	"\x1dUpdateNotificationPreferences\x12D.obiente.cloud.notifications.v1.UpdateNotificationPreferencesRequest\x1aE.obiente.cloud.notifications.v1.UpdateNotificationPreferencesResponseB[ZYgithub.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1;notificationsv1b\x06proto3"
 
 var (
 	file_obiente_cloud_notifications_v1_notification_service_proto_rawDescOnce sync.Once
@@ -1465,43 +1959,52 @@ func file_obiente_cloud_notifications_v1_notification_service_proto_rawDescGZIP(
 	return file_obiente_cloud_notifications_v1_notification_service_proto_rawDescData
 }
 
-var file_obiente_cloud_notifications_v1_notification_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_obiente_cloud_notifications_v1_notification_service_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_obiente_cloud_notifications_v1_notification_service_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_obiente_cloud_notifications_v1_notification_service_proto_goTypes = []any{
 	(NotificationType)(0),                          // 0: obiente.cloud.notifications.v1.NotificationType
 	(NotificationSeverity)(0),                      // 1: obiente.cloud.notifications.v1.NotificationSeverity
-	(*ListNotificationsRequest)(nil),               // 2: obiente.cloud.notifications.v1.ListNotificationsRequest
-	(*ListNotificationsResponse)(nil),              // 3: obiente.cloud.notifications.v1.ListNotificationsResponse
-	(*GetNotificationRequest)(nil),                 // 4: obiente.cloud.notifications.v1.GetNotificationRequest
-	(*GetNotificationResponse)(nil),                // 5: obiente.cloud.notifications.v1.GetNotificationResponse
-	(*MarkAsReadRequest)(nil),                      // 6: obiente.cloud.notifications.v1.MarkAsReadRequest
-	(*MarkAsReadResponse)(nil),                     // 7: obiente.cloud.notifications.v1.MarkAsReadResponse
-	(*MarkAllAsReadRequest)(nil),                   // 8: obiente.cloud.notifications.v1.MarkAllAsReadRequest
-	(*MarkAllAsReadResponse)(nil),                  // 9: obiente.cloud.notifications.v1.MarkAllAsReadResponse
-	(*DeleteNotificationRequest)(nil),              // 10: obiente.cloud.notifications.v1.DeleteNotificationRequest
-	(*DeleteNotificationResponse)(nil),             // 11: obiente.cloud.notifications.v1.DeleteNotificationResponse
-	(*DeleteAllNotificationsRequest)(nil),          // 12: obiente.cloud.notifications.v1.DeleteAllNotificationsRequest
-	(*DeleteAllNotificationsResponse)(nil),         // 13: obiente.cloud.notifications.v1.DeleteAllNotificationsResponse
-	(*GetUnreadCountRequest)(nil),                  // 14: obiente.cloud.notifications.v1.GetUnreadCountRequest
-	(*GetUnreadCountResponse)(nil),                 // 15: obiente.cloud.notifications.v1.GetUnreadCountResponse
-	(*CreateNotificationRequest)(nil),              // 16: obiente.cloud.notifications.v1.CreateNotificationRequest
-	(*CreateNotificationResponse)(nil),             // 17: obiente.cloud.notifications.v1.CreateNotificationResponse
-	(*CreateOrganizationNotificationRequest)(nil),  // 18: obiente.cloud.notifications.v1.CreateOrganizationNotificationRequest
-	(*CreateOrganizationNotificationResponse)(nil), // 19: obiente.cloud.notifications.v1.CreateOrganizationNotificationResponse
-	(*Notification)(nil),                           // 20: obiente.cloud.notifications.v1.Notification
-	nil,                                            // 21: obiente.cloud.notifications.v1.CreateNotificationRequest.MetadataEntry
-	nil,                                            // 22: obiente.cloud.notifications.v1.CreateOrganizationNotificationRequest.MetadataEntry
-	nil,                                            // 23: obiente.cloud.notifications.v1.Notification.MetadataEntry
-	(*v1.Pagination)(nil),                          // 24: obiente.cloud.common.v1.Pagination
-	(*timestamppb.Timestamp)(nil),                  // 25: google.protobuf.Timestamp
+	(NotificationFrequency)(0),                     // 2: obiente.cloud.notifications.v1.NotificationFrequency
+	(*ListNotificationsRequest)(nil),               // 3: obiente.cloud.notifications.v1.ListNotificationsRequest
+	(*ListNotificationsResponse)(nil),              // 4: obiente.cloud.notifications.v1.ListNotificationsResponse
+	(*GetNotificationRequest)(nil),                 // 5: obiente.cloud.notifications.v1.GetNotificationRequest
+	(*GetNotificationResponse)(nil),                // 6: obiente.cloud.notifications.v1.GetNotificationResponse
+	(*MarkAsReadRequest)(nil),                      // 7: obiente.cloud.notifications.v1.MarkAsReadRequest
+	(*MarkAsReadResponse)(nil),                     // 8: obiente.cloud.notifications.v1.MarkAsReadResponse
+	(*MarkAllAsReadRequest)(nil),                   // 9: obiente.cloud.notifications.v1.MarkAllAsReadRequest
+	(*MarkAllAsReadResponse)(nil),                  // 10: obiente.cloud.notifications.v1.MarkAllAsReadResponse
+	(*DeleteNotificationRequest)(nil),              // 11: obiente.cloud.notifications.v1.DeleteNotificationRequest
+	(*DeleteNotificationResponse)(nil),             // 12: obiente.cloud.notifications.v1.DeleteNotificationResponse
+	(*DeleteAllNotificationsRequest)(nil),          // 13: obiente.cloud.notifications.v1.DeleteAllNotificationsRequest
+	(*DeleteAllNotificationsResponse)(nil),         // 14: obiente.cloud.notifications.v1.DeleteAllNotificationsResponse
+	(*GetUnreadCountRequest)(nil),                  // 15: obiente.cloud.notifications.v1.GetUnreadCountRequest
+	(*GetUnreadCountResponse)(nil),                 // 16: obiente.cloud.notifications.v1.GetUnreadCountResponse
+	(*CreateNotificationRequest)(nil),              // 17: obiente.cloud.notifications.v1.CreateNotificationRequest
+	(*CreateNotificationResponse)(nil),             // 18: obiente.cloud.notifications.v1.CreateNotificationResponse
+	(*CreateOrganizationNotificationRequest)(nil),  // 19: obiente.cloud.notifications.v1.CreateOrganizationNotificationRequest
+	(*CreateOrganizationNotificationResponse)(nil), // 20: obiente.cloud.notifications.v1.CreateOrganizationNotificationResponse
+	(*Notification)(nil),                           // 21: obiente.cloud.notifications.v1.Notification
+	(*GetNotificationTypesRequest)(nil),            // 22: obiente.cloud.notifications.v1.GetNotificationTypesRequest
+	(*GetNotificationTypesResponse)(nil),           // 23: obiente.cloud.notifications.v1.GetNotificationTypesResponse
+	(*NotificationTypeInfo)(nil),                   // 24: obiente.cloud.notifications.v1.NotificationTypeInfo
+	(*GetNotificationPreferencesRequest)(nil),      // 25: obiente.cloud.notifications.v1.GetNotificationPreferencesRequest
+	(*GetNotificationPreferencesResponse)(nil),     // 26: obiente.cloud.notifications.v1.GetNotificationPreferencesResponse
+	(*UpdateNotificationPreferencesRequest)(nil),   // 27: obiente.cloud.notifications.v1.UpdateNotificationPreferencesRequest
+	(*UpdateNotificationPreferencesResponse)(nil),  // 28: obiente.cloud.notifications.v1.UpdateNotificationPreferencesResponse
+	(*NotificationPreference)(nil),                 // 29: obiente.cloud.notifications.v1.NotificationPreference
+	nil,                                            // 30: obiente.cloud.notifications.v1.CreateNotificationRequest.MetadataEntry
+	nil,                                            // 31: obiente.cloud.notifications.v1.CreateOrganizationNotificationRequest.MetadataEntry
+	nil,                                            // 32: obiente.cloud.notifications.v1.Notification.MetadataEntry
+	(*v1.Pagination)(nil),                          // 33: obiente.cloud.common.v1.Pagination
+	(*timestamppb.Timestamp)(nil),                  // 34: google.protobuf.Timestamp
 }
 var file_obiente_cloud_notifications_v1_notification_service_proto_depIdxs = []int32{
 	0,  // 0: obiente.cloud.notifications.v1.ListNotificationsRequest.type:type_name -> obiente.cloud.notifications.v1.NotificationType
 	1,  // 1: obiente.cloud.notifications.v1.ListNotificationsRequest.severity:type_name -> obiente.cloud.notifications.v1.NotificationSeverity
-	20, // 2: obiente.cloud.notifications.v1.ListNotificationsResponse.notifications:type_name -> obiente.cloud.notifications.v1.Notification
-	24, // 3: obiente.cloud.notifications.v1.ListNotificationsResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
-	20, // 4: obiente.cloud.notifications.v1.GetNotificationResponse.notification:type_name -> obiente.cloud.notifications.v1.Notification
-	20, // 5: obiente.cloud.notifications.v1.MarkAsReadResponse.notification:type_name -> obiente.cloud.notifications.v1.Notification
+	21, // 2: obiente.cloud.notifications.v1.ListNotificationsResponse.notifications:type_name -> obiente.cloud.notifications.v1.Notification
+	33, // 3: obiente.cloud.notifications.v1.ListNotificationsResponse.pagination:type_name -> obiente.cloud.common.v1.Pagination
+	21, // 4: obiente.cloud.notifications.v1.GetNotificationResponse.notification:type_name -> obiente.cloud.notifications.v1.Notification
+	21, // 5: obiente.cloud.notifications.v1.MarkAsReadResponse.notification:type_name -> obiente.cloud.notifications.v1.Notification
 	0,  // 6: obiente.cloud.notifications.v1.MarkAllAsReadRequest.type:type_name -> obiente.cloud.notifications.v1.NotificationType
 	1,  // 7: obiente.cloud.notifications.v1.MarkAllAsReadRequest.severity:type_name -> obiente.cloud.notifications.v1.NotificationSeverity
 	0,  // 8: obiente.cloud.notifications.v1.DeleteAllNotificationsRequest.type:type_name -> obiente.cloud.notifications.v1.NotificationType
@@ -1509,41 +2012,56 @@ var file_obiente_cloud_notifications_v1_notification_service_proto_depIdxs = []i
 	1,  // 10: obiente.cloud.notifications.v1.GetUnreadCountRequest.min_severity:type_name -> obiente.cloud.notifications.v1.NotificationSeverity
 	0,  // 11: obiente.cloud.notifications.v1.CreateNotificationRequest.type:type_name -> obiente.cloud.notifications.v1.NotificationType
 	1,  // 12: obiente.cloud.notifications.v1.CreateNotificationRequest.severity:type_name -> obiente.cloud.notifications.v1.NotificationSeverity
-	21, // 13: obiente.cloud.notifications.v1.CreateNotificationRequest.metadata:type_name -> obiente.cloud.notifications.v1.CreateNotificationRequest.MetadataEntry
-	20, // 14: obiente.cloud.notifications.v1.CreateNotificationResponse.notification:type_name -> obiente.cloud.notifications.v1.Notification
+	30, // 13: obiente.cloud.notifications.v1.CreateNotificationRequest.metadata:type_name -> obiente.cloud.notifications.v1.CreateNotificationRequest.MetadataEntry
+	21, // 14: obiente.cloud.notifications.v1.CreateNotificationResponse.notification:type_name -> obiente.cloud.notifications.v1.Notification
 	0,  // 15: obiente.cloud.notifications.v1.CreateOrganizationNotificationRequest.type:type_name -> obiente.cloud.notifications.v1.NotificationType
 	1,  // 16: obiente.cloud.notifications.v1.CreateOrganizationNotificationRequest.severity:type_name -> obiente.cloud.notifications.v1.NotificationSeverity
-	22, // 17: obiente.cloud.notifications.v1.CreateOrganizationNotificationRequest.metadata:type_name -> obiente.cloud.notifications.v1.CreateOrganizationNotificationRequest.MetadataEntry
-	20, // 18: obiente.cloud.notifications.v1.CreateOrganizationNotificationResponse.notifications:type_name -> obiente.cloud.notifications.v1.Notification
+	31, // 17: obiente.cloud.notifications.v1.CreateOrganizationNotificationRequest.metadata:type_name -> obiente.cloud.notifications.v1.CreateOrganizationNotificationRequest.MetadataEntry
+	21, // 18: obiente.cloud.notifications.v1.CreateOrganizationNotificationResponse.notifications:type_name -> obiente.cloud.notifications.v1.Notification
 	0,  // 19: obiente.cloud.notifications.v1.Notification.type:type_name -> obiente.cloud.notifications.v1.NotificationType
 	1,  // 20: obiente.cloud.notifications.v1.Notification.severity:type_name -> obiente.cloud.notifications.v1.NotificationSeverity
-	25, // 21: obiente.cloud.notifications.v1.Notification.read_at:type_name -> google.protobuf.Timestamp
-	23, // 22: obiente.cloud.notifications.v1.Notification.metadata:type_name -> obiente.cloud.notifications.v1.Notification.MetadataEntry
-	25, // 23: obiente.cloud.notifications.v1.Notification.created_at:type_name -> google.protobuf.Timestamp
-	25, // 24: obiente.cloud.notifications.v1.Notification.updated_at:type_name -> google.protobuf.Timestamp
-	2,  // 25: obiente.cloud.notifications.v1.NotificationService.ListNotifications:input_type -> obiente.cloud.notifications.v1.ListNotificationsRequest
-	4,  // 26: obiente.cloud.notifications.v1.NotificationService.GetNotification:input_type -> obiente.cloud.notifications.v1.GetNotificationRequest
-	6,  // 27: obiente.cloud.notifications.v1.NotificationService.MarkAsRead:input_type -> obiente.cloud.notifications.v1.MarkAsReadRequest
-	8,  // 28: obiente.cloud.notifications.v1.NotificationService.MarkAllAsRead:input_type -> obiente.cloud.notifications.v1.MarkAllAsReadRequest
-	10, // 29: obiente.cloud.notifications.v1.NotificationService.DeleteNotification:input_type -> obiente.cloud.notifications.v1.DeleteNotificationRequest
-	12, // 30: obiente.cloud.notifications.v1.NotificationService.DeleteAllNotifications:input_type -> obiente.cloud.notifications.v1.DeleteAllNotificationsRequest
-	14, // 31: obiente.cloud.notifications.v1.NotificationService.GetUnreadCount:input_type -> obiente.cloud.notifications.v1.GetUnreadCountRequest
-	16, // 32: obiente.cloud.notifications.v1.NotificationService.CreateNotification:input_type -> obiente.cloud.notifications.v1.CreateNotificationRequest
-	18, // 33: obiente.cloud.notifications.v1.NotificationService.CreateOrganizationNotification:input_type -> obiente.cloud.notifications.v1.CreateOrganizationNotificationRequest
-	3,  // 34: obiente.cloud.notifications.v1.NotificationService.ListNotifications:output_type -> obiente.cloud.notifications.v1.ListNotificationsResponse
-	5,  // 35: obiente.cloud.notifications.v1.NotificationService.GetNotification:output_type -> obiente.cloud.notifications.v1.GetNotificationResponse
-	7,  // 36: obiente.cloud.notifications.v1.NotificationService.MarkAsRead:output_type -> obiente.cloud.notifications.v1.MarkAsReadResponse
-	9,  // 37: obiente.cloud.notifications.v1.NotificationService.MarkAllAsRead:output_type -> obiente.cloud.notifications.v1.MarkAllAsReadResponse
-	11, // 38: obiente.cloud.notifications.v1.NotificationService.DeleteNotification:output_type -> obiente.cloud.notifications.v1.DeleteNotificationResponse
-	13, // 39: obiente.cloud.notifications.v1.NotificationService.DeleteAllNotifications:output_type -> obiente.cloud.notifications.v1.DeleteAllNotificationsResponse
-	15, // 40: obiente.cloud.notifications.v1.NotificationService.GetUnreadCount:output_type -> obiente.cloud.notifications.v1.GetUnreadCountResponse
-	17, // 41: obiente.cloud.notifications.v1.NotificationService.CreateNotification:output_type -> obiente.cloud.notifications.v1.CreateNotificationResponse
-	19, // 42: obiente.cloud.notifications.v1.NotificationService.CreateOrganizationNotification:output_type -> obiente.cloud.notifications.v1.CreateOrganizationNotificationResponse
-	34, // [34:43] is the sub-list for method output_type
-	25, // [25:34] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	34, // 21: obiente.cloud.notifications.v1.Notification.read_at:type_name -> google.protobuf.Timestamp
+	32, // 22: obiente.cloud.notifications.v1.Notification.metadata:type_name -> obiente.cloud.notifications.v1.Notification.MetadataEntry
+	34, // 23: obiente.cloud.notifications.v1.Notification.created_at:type_name -> google.protobuf.Timestamp
+	34, // 24: obiente.cloud.notifications.v1.Notification.updated_at:type_name -> google.protobuf.Timestamp
+	24, // 25: obiente.cloud.notifications.v1.GetNotificationTypesResponse.types:type_name -> obiente.cloud.notifications.v1.NotificationTypeInfo
+	0,  // 26: obiente.cloud.notifications.v1.NotificationTypeInfo.type:type_name -> obiente.cloud.notifications.v1.NotificationType
+	1,  // 27: obiente.cloud.notifications.v1.NotificationTypeInfo.default_min_severity:type_name -> obiente.cloud.notifications.v1.NotificationSeverity
+	29, // 28: obiente.cloud.notifications.v1.GetNotificationPreferencesResponse.preferences:type_name -> obiente.cloud.notifications.v1.NotificationPreference
+	29, // 29: obiente.cloud.notifications.v1.UpdateNotificationPreferencesRequest.preferences:type_name -> obiente.cloud.notifications.v1.NotificationPreference
+	29, // 30: obiente.cloud.notifications.v1.UpdateNotificationPreferencesResponse.preferences:type_name -> obiente.cloud.notifications.v1.NotificationPreference
+	0,  // 31: obiente.cloud.notifications.v1.NotificationPreference.notification_type:type_name -> obiente.cloud.notifications.v1.NotificationType
+	2,  // 32: obiente.cloud.notifications.v1.NotificationPreference.frequency:type_name -> obiente.cloud.notifications.v1.NotificationFrequency
+	1,  // 33: obiente.cloud.notifications.v1.NotificationPreference.min_severity:type_name -> obiente.cloud.notifications.v1.NotificationSeverity
+	3,  // 34: obiente.cloud.notifications.v1.NotificationService.ListNotifications:input_type -> obiente.cloud.notifications.v1.ListNotificationsRequest
+	5,  // 35: obiente.cloud.notifications.v1.NotificationService.GetNotification:input_type -> obiente.cloud.notifications.v1.GetNotificationRequest
+	7,  // 36: obiente.cloud.notifications.v1.NotificationService.MarkAsRead:input_type -> obiente.cloud.notifications.v1.MarkAsReadRequest
+	9,  // 37: obiente.cloud.notifications.v1.NotificationService.MarkAllAsRead:input_type -> obiente.cloud.notifications.v1.MarkAllAsReadRequest
+	11, // 38: obiente.cloud.notifications.v1.NotificationService.DeleteNotification:input_type -> obiente.cloud.notifications.v1.DeleteNotificationRequest
+	13, // 39: obiente.cloud.notifications.v1.NotificationService.DeleteAllNotifications:input_type -> obiente.cloud.notifications.v1.DeleteAllNotificationsRequest
+	15, // 40: obiente.cloud.notifications.v1.NotificationService.GetUnreadCount:input_type -> obiente.cloud.notifications.v1.GetUnreadCountRequest
+	17, // 41: obiente.cloud.notifications.v1.NotificationService.CreateNotification:input_type -> obiente.cloud.notifications.v1.CreateNotificationRequest
+	19, // 42: obiente.cloud.notifications.v1.NotificationService.CreateOrganizationNotification:input_type -> obiente.cloud.notifications.v1.CreateOrganizationNotificationRequest
+	22, // 43: obiente.cloud.notifications.v1.NotificationService.GetNotificationTypes:input_type -> obiente.cloud.notifications.v1.GetNotificationTypesRequest
+	25, // 44: obiente.cloud.notifications.v1.NotificationService.GetNotificationPreferences:input_type -> obiente.cloud.notifications.v1.GetNotificationPreferencesRequest
+	27, // 45: obiente.cloud.notifications.v1.NotificationService.UpdateNotificationPreferences:input_type -> obiente.cloud.notifications.v1.UpdateNotificationPreferencesRequest
+	4,  // 46: obiente.cloud.notifications.v1.NotificationService.ListNotifications:output_type -> obiente.cloud.notifications.v1.ListNotificationsResponse
+	6,  // 47: obiente.cloud.notifications.v1.NotificationService.GetNotification:output_type -> obiente.cloud.notifications.v1.GetNotificationResponse
+	8,  // 48: obiente.cloud.notifications.v1.NotificationService.MarkAsRead:output_type -> obiente.cloud.notifications.v1.MarkAsReadResponse
+	10, // 49: obiente.cloud.notifications.v1.NotificationService.MarkAllAsRead:output_type -> obiente.cloud.notifications.v1.MarkAllAsReadResponse
+	12, // 50: obiente.cloud.notifications.v1.NotificationService.DeleteNotification:output_type -> obiente.cloud.notifications.v1.DeleteNotificationResponse
+	14, // 51: obiente.cloud.notifications.v1.NotificationService.DeleteAllNotifications:output_type -> obiente.cloud.notifications.v1.DeleteAllNotificationsResponse
+	16, // 52: obiente.cloud.notifications.v1.NotificationService.GetUnreadCount:output_type -> obiente.cloud.notifications.v1.GetUnreadCountResponse
+	18, // 53: obiente.cloud.notifications.v1.NotificationService.CreateNotification:output_type -> obiente.cloud.notifications.v1.CreateNotificationResponse
+	20, // 54: obiente.cloud.notifications.v1.NotificationService.CreateOrganizationNotification:output_type -> obiente.cloud.notifications.v1.CreateOrganizationNotificationResponse
+	23, // 55: obiente.cloud.notifications.v1.NotificationService.GetNotificationTypes:output_type -> obiente.cloud.notifications.v1.GetNotificationTypesResponse
+	26, // 56: obiente.cloud.notifications.v1.NotificationService.GetNotificationPreferences:output_type -> obiente.cloud.notifications.v1.GetNotificationPreferencesResponse
+	28, // 57: obiente.cloud.notifications.v1.NotificationService.UpdateNotificationPreferences:output_type -> obiente.cloud.notifications.v1.UpdateNotificationPreferencesResponse
+	46, // [46:58] is the sub-list for method output_type
+	34, // [34:46] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_obiente_cloud_notifications_v1_notification_service_proto_init() }
@@ -1563,8 +2081,8 @@ func file_obiente_cloud_notifications_v1_notification_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_obiente_cloud_notifications_v1_notification_service_proto_rawDesc), len(file_obiente_cloud_notifications_v1_notification_service_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   22,
+			NumEnums:      3,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

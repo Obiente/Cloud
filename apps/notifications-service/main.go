@@ -17,6 +17,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/middleware"
 
 	notificationsservice "notifications-service/internal/service"
+	notificationsauth "notifications-service/internal/auth"
 
 	notificationsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1/notificationsv1connect"
 
@@ -48,6 +49,7 @@ func main() {
 	database.RegisterModels(
 		&database.Organization{},
 		&database.OrganizationMember{},
+		&database.NotificationPreference{},
 	)
 
 	// Initialize database
@@ -68,14 +70,25 @@ func main() {
 	authConfig := auth.NewAuthConfig()
 	authInterceptor := auth.MiddlewareInterceptor(authConfig)
 
+	// Create internal service auth interceptor
+	internalServiceSecret := os.Getenv("INTERNAL_SERVICE_SECRET")
+	if internalServiceSecret == "" {
+		logger.Fatalf("INTERNAL_SERVICE_SECRET environment variable is required")
+	}
+	internalServiceAuthInterceptor := notificationsauth.NewInternalServiceAuthInterceptor(internalServiceSecret)
+
 	// Create audit interceptor
 	auditInterceptor := middleware.AuditLogInterceptor()
 
 	// Register notifications service
 	notificationsService := notificationsservice.NewService()
+	// Interceptors run in reverse order, so we want:
+	// 1. internalServiceAuthInterceptor (validates internal service secret)
+	// 2. authInterceptor (validates user token OR skips if internal service call)
+	// 3. auditInterceptor (logs requests)
 	notificationsPath, notificationsHandler := notificationsv1connect.NewNotificationServiceHandler(
 		notificationsService,
-		connect.WithInterceptors(auditInterceptor, authInterceptor),
+		connect.WithInterceptors(auditInterceptor, authInterceptor, internalServiceAuthInterceptor),
 	)
 	mux.Handle(notificationsPath, notificationsHandler)
 

@@ -4,15 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
+	"github.com/obiente/cloud/apps/shared/pkg/email"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
 
 	commonv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/common/v1"
 	notificationsv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1"
 	notificationsv1connect "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/notifications/v1/notificationsv1connect"
+
+	notificationsauth "notifications-service/internal/auth"
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -272,15 +278,28 @@ func (s *Service) GetUnreadCount(ctx context.Context, req *connect.Request[notif
 }
 
 func (s *Service) CreateNotification(ctx context.Context, req *connect.Request[notificationsv1.CreateNotificationRequest]) (*connect.Response[notificationsv1.CreateNotificationResponse], error) {
-	// This is an internal/admin endpoint - check for superadmin or internal service auth
+	// This is an internal/admin endpoint - require either:
+	// 1. Valid internal service secret (service-to-service call)
+	// 2. Superadmin user (admin UI call)
+	
+	// Check if this is an authenticated internal service call
+	internalAuth := notificationsauth.IsInternalServiceCall(ctx)
+	
+	// Check if user is authenticated
 	user, err := auth.GetUserFromContext(ctx)
-	if err == nil {
-		// If user is present, require superadmin
+	userAuthenticated := err == nil && user != nil
+	
+	// Require either internal service auth OR superadmin user
+	if !internalAuth && !userAuthenticated {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: internal service secret or user token"))
+	}
+	
+	if userAuthenticated && !internalAuth {
+		// User is present but not internal service call - require superadmin
 		if !auth.HasRole(user, auth.RoleSuperAdmin) {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 		}
 	}
-	// If no user (internal service call), allow it
 
 	notification := &database.Notification{
 		ID:             generateID("notif"),
@@ -321,15 +340,42 @@ func (s *Service) CreateNotification(ctx context.Context, req *connect.Request[n
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create notification: %w", err))
 	}
 
+	logger.Info("[Notifications] Created notification via RPC for user %s, type %s, severity %s: %s", req.Msg.GetUserId(), notificationTypeToString(req.Msg.GetType()), notificationSeverityToString(req.Msg.GetSeverity()), req.Msg.GetTitle())
+
+	// Check user preferences and send email if enabled
+	// Use background context to avoid cancellation when the original request completes
+	go func() {
+		emailCtx := context.Background()
+		logger.Info("[Notifications] Starting email check for user %s, type %s", req.Msg.GetUserId(), notificationTypeToString(req.Msg.GetType()))
+		if err := sendNotificationEmailIfEnabled(emailCtx, req.Msg.GetUserId(), req.Msg.GetType(), req.Msg.GetSeverity(), req.Msg.GetTitle(), req.Msg.GetMessage(), req.Msg.ActionUrl, req.Msg.ActionLabel); err != nil {
+			logger.Warn("[Notifications] Failed to send email notification for user %s: %v", req.Msg.GetUserId(), err)
+		}
+	}()
+
 	return connect.NewResponse(&notificationsv1.CreateNotificationResponse{
 		Notification: notificationToProto(notification),
 	}), nil
 }
 
 func (s *Service) CreateOrganizationNotification(ctx context.Context, req *connect.Request[notificationsv1.CreateOrganizationNotificationRequest]) (*connect.Response[notificationsv1.CreateOrganizationNotificationResponse], error) {
-	// This is an internal/admin endpoint
+	// This is an internal/admin endpoint - require either:
+	// 1. Valid internal service secret (service-to-service call)
+	// 2. Superadmin user (admin UI call)
+	
+	// Check if this is an authenticated internal service call
+	internalAuth := notificationsauth.IsInternalServiceCall(ctx)
+	
+	// Check if user is authenticated
 	user, err := auth.GetUserFromContext(ctx)
-	if err == nil {
+	userAuthenticated := err == nil && user != nil
+	
+	// Require either internal service auth OR superadmin user
+	if !internalAuth && !userAuthenticated {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("authentication required: internal service secret or user token"))
+	}
+	
+	if userAuthenticated && !internalAuth {
+		// User is present but not internal service call - require superadmin
 		if !auth.HasRole(user, auth.RoleSuperAdmin) {
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
 		}
@@ -402,6 +448,18 @@ func (s *Service) CreateOrganizationNotification(ctx context.Context, req *conne
 			logger.Warn("[Notifications] Failed to create notification for user %s: %v", member.UserID, err)
 			continue
 		}
+
+		logger.Info("[Notifications] Created notification for org member %s, type %s, severity %s: %s", member.UserID, notificationTypeToString(req.Msg.GetType()), notificationSeverityToString(req.Msg.GetSeverity()), req.Msg.GetTitle())
+
+		// Check user preferences and send email if enabled
+		// Use background context to avoid cancellation when the original request completes
+		go func(userID string, notifType notificationsv1.NotificationType, notifSeverity notificationsv1.NotificationSeverity, notifTitle, notifMessage string, notifActionURL, notifActionLabel *string) {
+			emailCtx := context.Background()
+			logger.Info("[Notifications] Starting email check for user %s, type %s", userID, notificationTypeToString(notifType))
+			if err := sendNotificationEmailIfEnabled(emailCtx, userID, notifType, notifSeverity, notifTitle, notifMessage, notifActionURL, notifActionLabel); err != nil {
+				logger.Warn("[Notifications] Failed to send email notification for user %s: %v", userID, err)
+			}
+		}(member.UserID, req.Msg.GetType(), req.Msg.GetSeverity(), req.Msg.GetTitle(), req.Msg.GetMessage(), req.Msg.ActionUrl, req.Msg.ActionLabel)
 
 		notifications = append(notifications, notificationToProto(notification))
 	}
@@ -572,6 +630,182 @@ func CreateNotificationForUser(ctx context.Context, userID string, orgID *string
 		return fmt.Errorf("create notification: %w", err)
 	}
 
+	logger.Info("[Notifications] Created notification for user %s, type %s, severity %s: %s", userID, notificationTypeToString(notificationType), notificationSeverityToString(severity), title)
+
+	// Check user preferences and send email if enabled
+	// Use background context to avoid cancellation when the original request completes
+	go func() {
+		emailCtx := context.Background()
+		logger.Info("[Notifications] Starting email check for user %s, type %s", userID, notificationTypeToString(notificationType))
+		if err := sendNotificationEmailIfEnabled(emailCtx, userID, notificationType, severity, title, message, actionURL, actionLabel); err != nil {
+			logger.Warn("[Notifications] Failed to send email notification for user %s: %v", userID, err)
+		}
+	}()
+
+	return nil
+}
+
+// sendNotificationEmailIfEnabled checks user preferences and sends email if enabled
+func sendNotificationEmailIfEnabled(ctx context.Context, userID string, notificationType notificationsv1.NotificationType, severity notificationsv1.NotificationSeverity, title, message string, actionURL, actionLabel *string) error {
+	notificationTypeStr := notificationTypeToString(notificationType)
+	
+	logger.Info("[Notifications] Checking email preferences for user %s, type %s, severity %s", userID, notificationTypeStr, notificationSeverityToString(severity))
+	
+	// Get user preference for this notification type
+	var preference database.NotificationPreference
+	err := database.DB.Where("user_id = ? AND notification_type = ?", userID, notificationTypeStr).First(&preference).Error
+	
+	// If no preference found, use defaults based on notification type
+	emailEnabled := false
+	var minSeverity string
+	frequency := "immediate"
+	
+	if err == gorm.ErrRecordNotFound {
+		// Use defaults based on notification type (matching GetNotificationTypes defaults)
+		switch notificationType {
+		case notificationsv1.NotificationType_NOTIFICATION_TYPE_WARNING,
+			notificationsv1.NotificationType_NOTIFICATION_TYPE_ERROR,
+			notificationsv1.NotificationType_NOTIFICATION_TYPE_DEPLOYMENT,
+			notificationsv1.NotificationType_NOTIFICATION_TYPE_BILLING,
+			notificationsv1.NotificationType_NOTIFICATION_TYPE_QUOTA,
+			notificationsv1.NotificationType_NOTIFICATION_TYPE_INVITE,
+			notificationsv1.NotificationType_NOTIFICATION_TYPE_SYSTEM:
+			emailEnabled = true
+		case notificationsv1.NotificationType_NOTIFICATION_TYPE_INFO,
+			notificationsv1.NotificationType_NOTIFICATION_TYPE_SUCCESS:
+			emailEnabled = false
+		}
+		
+		// Get type-specific default min severity (matching GetNotificationTypes defaults)
+		minSeverity = getDefaultMinSeverityForType(notificationType)
+		
+		logger.Info("[Notifications] No preference found for user %s, type %s, using default emailEnabled=%v, minSeverity=%s, frequency=%s", userID, notificationTypeStr, emailEnabled, minSeverity, frequency)
+	} else if err != nil {
+		logger.Warn("[Notifications] Error checking preferences for user %s, type %s: %v", userID, notificationTypeStr, err)
+		return fmt.Errorf("get preference: %w", err)
+	} else {
+		emailEnabled = preference.EmailEnabled
+		minSeverity = preference.MinSeverity
+		frequency = preference.Frequency
+		logger.Info("[Notifications] Found preference for user %s, type %s: emailEnabled=%v, frequency=%s, minSeverity=%s", userID, notificationTypeStr, emailEnabled, frequency, minSeverity)
+	}
+
+	// Check if email is enabled and frequency is not "never"
+	if !emailEnabled {
+		logger.Info("[Notifications] Email disabled for user %s, type %s (emailEnabled=false)", userID, notificationTypeStr)
+		return nil // Email not enabled for this user/type
+	}
+	
+	if frequency == "never" {
+		logger.Info("[Notifications] Email frequency is 'never' for user %s, type %s", userID, notificationTypeStr)
+		return nil // Email frequency set to never
+	}
+
+	// Check severity threshold
+	severityMap := map[string]int{
+		"LOW":      1,
+		"MEDIUM":   2,
+		"HIGH":     3,
+		"CRITICAL": 4,
+	}
+	notificationSeverityValue := severityMap[notificationSeverityToString(severity)]
+	minSeverityValue := severityMap[minSeverity]
+	if notificationSeverityValue < minSeverityValue {
+		logger.Info("[Notifications] Severity below threshold for user %s, type %s (notification=%d, min=%d)", userID, notificationTypeStr, notificationSeverityValue, minSeverityValue)
+		return nil // Severity below threshold
+	}
+
+	// Get user email from profile resolver
+	resolver := organizations.GetUserProfileResolver()
+	if resolver == nil || !resolver.IsConfigured() {
+		return fmt.Errorf("user profile resolver not configured")
+	}
+
+	userProfile, err := resolver.Resolve(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("resolve user profile: %w", err)
+	}
+
+	if userProfile.Email == "" {
+		return fmt.Errorf("user has no email address")
+	}
+
+	// Initialize email sender
+	mailer := email.NewSenderFromEnv()
+	if !mailer.Enabled() {
+		logger.Debug("[Notifications] Email sender not enabled (SMTP not configured)")
+		return nil // Email not configured, not an error
+	}
+
+	// Get console URL for action links
+	consoleURL := os.Getenv("DASHBOARD_URL")
+	if consoleURL == "" {
+		consoleURL = "https://cloud.obiente.com"
+	}
+
+	// Build action URL
+	actionLink := consoleURL
+	if actionURL != nil && *actionURL != "" {
+		if (*actionURL)[0] == '/' {
+			actionLink = consoleURL + *actionURL
+		} else {
+			actionLink = *actionURL
+		}
+	}
+
+	// Determine email category based on notification type
+	emailCategory := email.CategoryNotification
+	switch notificationType {
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_BILLING:
+		emailCategory = email.CategoryBilling
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_SYSTEM:
+		emailCategory = email.CategorySystem
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_INVITE:
+		emailCategory = email.CategoryInvite
+	}
+
+	// Build email template
+	greetingName := userProfile.Name
+	if greetingName == "" {
+		greetingName = userProfile.Email
+	}
+
+	template := email.TemplateData{
+		Subject:     title,
+		PreviewText: message,
+		Greeting:    fmt.Sprintf("Hi %s,", greetingName),
+		Heading:     title,
+		IntroLines:  []string{message},
+		Category:    emailCategory,
+		BaseURL:     consoleURL,
+		BrandURL:    consoleURL,
+		SupportEmail: os.Getenv("SUPPORT_EMAIL"),
+	}
+
+	if actionURL != nil && actionLabel != nil {
+		template.CTA = &email.CTA{
+			Label: *actionLabel,
+			URL:   actionLink,
+		}
+	} else if actionURL != nil {
+		template.CTA = &email.CTA{
+			Label: "View Details",
+			URL:   actionLink,
+		}
+	}
+
+	// Send email
+	emailMsg := &email.Message{
+		To:       []string{userProfile.Email},
+		Template: &template,
+		Category: emailCategory,
+	}
+
+	if err := mailer.Send(ctx, emailMsg); err != nil {
+		return fmt.Errorf("send email: %w", err)
+	}
+
+	logger.Info("[Notifications] Sent email notification to %s for notification type %s", userProfile.Email, notificationTypeToString(notificationType))
 	return nil
 }
 
@@ -604,5 +838,288 @@ func CreateNotificationForOrganization(ctx context.Context, orgID string, notifi
 	}
 
 	return nil
+}
+
+func (s *Service) GetNotificationTypes(ctx context.Context, req *connect.Request[notificationsv1.GetNotificationTypesRequest]) (*connect.Response[notificationsv1.GetNotificationTypesResponse], error) {
+	// Define notification types with their metadata
+	types := []*notificationsv1.NotificationTypeInfo{
+		{
+			Type:                notificationsv1.NotificationType_NOTIFICATION_TYPE_INFO,
+			Name:                "Info",
+			Description:         "General informational notifications",
+			DefaultEmailEnabled: false,
+			DefaultInAppEnabled: true,
+			DefaultMinSeverity:   notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_LOW,
+		},
+		{
+			Type:                notificationsv1.NotificationType_NOTIFICATION_TYPE_SUCCESS,
+			Name:                "Success",
+			Description:         "Success and completion notifications",
+			DefaultEmailEnabled: false,
+			DefaultInAppEnabled: true,
+			DefaultMinSeverity:   notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_LOW,
+		},
+		{
+			Type:                notificationsv1.NotificationType_NOTIFICATION_TYPE_WARNING,
+			Name:                "Warning",
+			Description:         "Warning notifications that may require attention",
+			DefaultEmailEnabled: true,
+			DefaultInAppEnabled: true,
+			DefaultMinSeverity:   notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_MEDIUM,
+		},
+		{
+			Type:                notificationsv1.NotificationType_NOTIFICATION_TYPE_ERROR,
+			Name:                "Error",
+			Description:         "Error notifications that require immediate attention",
+			DefaultEmailEnabled: true,
+			DefaultInAppEnabled: true,
+			DefaultMinSeverity:   notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_HIGH,
+		},
+		{
+			Type:                notificationsv1.NotificationType_NOTIFICATION_TYPE_DEPLOYMENT,
+			Name:                "Deployment",
+			Description:         "Deployment status and updates",
+			DefaultEmailEnabled: true,
+			DefaultInAppEnabled: true,
+			DefaultMinSeverity:   notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_MEDIUM,
+		},
+		{
+			Type:                notificationsv1.NotificationType_NOTIFICATION_TYPE_BILLING,
+			Name:                "Billing",
+			Description:         "Billing and payment notifications",
+			DefaultEmailEnabled: true,
+			DefaultInAppEnabled: true,
+			DefaultMinSeverity:   notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_MEDIUM,
+		},
+		{
+			Type:                notificationsv1.NotificationType_NOTIFICATION_TYPE_QUOTA,
+			Name:                "Quota",
+			Description:         "Resource quota and limit notifications",
+			DefaultEmailEnabled: true,
+			DefaultInAppEnabled: true,
+			DefaultMinSeverity:   notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_MEDIUM,
+		},
+		{
+			Type:                notificationsv1.NotificationType_NOTIFICATION_TYPE_INVITE,
+			Name:                "Invite",
+			Description:         "Organization invitation notifications",
+			DefaultEmailEnabled: true,
+			DefaultInAppEnabled: true,
+			DefaultMinSeverity:   notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_LOW,
+		},
+		{
+			Type:                notificationsv1.NotificationType_NOTIFICATION_TYPE_SYSTEM,
+			Name:                "System",
+			Description:         "System and maintenance notifications",
+			DefaultEmailEnabled: true,
+			DefaultInAppEnabled: true,
+			DefaultMinSeverity:   notificationsv1.NotificationSeverity_NOTIFICATION_SEVERITY_HIGH,
+		},
+	}
+
+	return connect.NewResponse(&notificationsv1.GetNotificationTypesResponse{
+		Types: types,
+	}), nil
+}
+
+func (s *Service) GetNotificationPreferences(ctx context.Context, req *connect.Request[notificationsv1.GetNotificationPreferencesRequest]) (*connect.Response[notificationsv1.GetNotificationPreferencesResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	var preferences []database.NotificationPreference
+	if err := database.DB.Where("user_id = ?", user.Id).Find(&preferences).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get preferences: %w", err))
+	}
+
+	protoPreferences := make([]*notificationsv1.NotificationPreference, 0, len(preferences))
+	for _, p := range preferences {
+		protoPreferences = append(protoPreferences, &notificationsv1.NotificationPreference{
+			NotificationType: stringToNotificationType(p.NotificationType),
+			EmailEnabled:     p.EmailEnabled,
+			InAppEnabled:     p.InAppEnabled,
+			Frequency:        stringToNotificationFrequency(p.Frequency),
+			MinSeverity:      stringToNotificationSeverity(p.MinSeverity),
+		})
+	}
+
+	return connect.NewResponse(&notificationsv1.GetNotificationPreferencesResponse{
+		Preferences: protoPreferences,
+	}), nil
+}
+
+func (s *Service) UpdateNotificationPreferences(ctx context.Context, req *connect.Request[notificationsv1.UpdateNotificationPreferencesRequest]) (*connect.Response[notificationsv1.UpdateNotificationPreferencesResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	// Process each preference update
+	updatedPreferences := make([]*notificationsv1.NotificationPreference, 0, len(req.Msg.Preferences))
+	for _, pref := range req.Msg.Preferences {
+		notificationTypeStr := notificationTypeToString(pref.NotificationType)
+		
+		// Use a transaction to make check-and-create/update atomic
+		var finalPreference database.NotificationPreference
+		err := database.DB.Transaction(func(tx *gorm.DB) error {
+			// Check if preference already exists
+			var existing database.NotificationPreference
+			err := tx.Where("user_id = ? AND notification_type = ?", user.Id, notificationTypeStr).First(&existing).Error
+			
+			if err == gorm.ErrRecordNotFound {
+				// Create new preference with generated ID
+				prefID := generateID("notif-pref")
+				if prefID == "" {
+					prefID = fmt.Sprintf("notif-pref-%d", time.Now().UnixNano())
+				}
+				preference := &database.NotificationPreference{
+					ID:             prefID,
+					UserID:         user.Id,
+					NotificationType: notificationTypeStr,
+					EmailEnabled:     pref.EmailEnabled,
+					InAppEnabled:     pref.InAppEnabled,
+					Frequency:        notificationFrequencyToString(pref.Frequency),
+					MinSeverity:      notificationSeverityToString(pref.MinSeverity),
+				}
+				// Double-check ID is set (BeforeCreate hook should also set it, but ensure it here)
+				if preference.ID == "" {
+					preference.ID = fmt.Sprintf("notif-pref-%d", time.Now().UnixNano())
+				}
+				logger.Debug("[Notifications] Creating new preference with ID=%s for user=%s, type=%s", preference.ID, user.Id, notificationTypeStr)
+				if err := tx.Create(preference).Error; err != nil {
+					errStr := err.Error()
+					// Check if it's a unique constraint violation (race condition)
+					// Check for various error message formats
+					isDuplicateKey := strings.Contains(errStr, "duplicate key") || 
+						strings.Contains(errStr, "unique constraint") || 
+						strings.Contains(errStr, "idx_user_type") ||
+						strings.Contains(errStr, "23505") || // PostgreSQL error code for unique violation
+						strings.Contains(errStr, "SQLSTATE 23505")
+					
+					if isDuplicateKey {
+						// Race condition: record was created between our check and create
+						// Try to update it instead
+						logger.Debug("[Notifications] Race condition detected (error: %s), updating existing preference for user=%s, type=%s", errStr, user.Id, notificationTypeStr)
+						var racePreference database.NotificationPreference
+						if err := tx.Where("user_id = ? AND notification_type = ?", user.Id, notificationTypeStr).First(&racePreference).Error; err != nil {
+							return fmt.Errorf("race condition: failed to find existing preference: %w", err)
+						}
+						updateData := map[string]interface{}{
+							"email_enabled": pref.EmailEnabled,
+							"in_app_enabled": pref.InAppEnabled,
+							"frequency":      notificationFrequencyToString(pref.Frequency),
+							"min_severity":    notificationSeverityToString(pref.MinSeverity),
+						}
+						if err := tx.Model(&database.NotificationPreference{}).
+							Where("user_id = ? AND notification_type = ?", user.Id, notificationTypeStr).
+							Updates(updateData).Error; err != nil {
+							return fmt.Errorf("update preference after race condition: %w", err)
+						}
+						// Reload to get updated timestamps
+						if err := tx.Where("user_id = ? AND notification_type = ?", user.Id, notificationTypeStr).First(&finalPreference).Error; err != nil {
+							return fmt.Errorf("get updated preference after race condition: %w", err)
+						}
+					} else {
+						logger.Error("[Notifications] Failed to create preference: ID=%s, user=%s, type=%s, error=%v", preference.ID, user.Id, notificationTypeStr, err)
+						return fmt.Errorf("create preference: %w", err)
+					}
+				} else {
+					// Reload to get all fields (timestamps, etc.)
+					if err := tx.Where("user_id = ? AND notification_type = ?", user.Id, notificationTypeStr).First(&finalPreference).Error; err != nil {
+						return fmt.Errorf("get created preference: %w", err)
+					}
+				}
+			} else if err != nil {
+				return fmt.Errorf("get preference: %w", err)
+			} else {
+				// Update existing preference
+				// Use Updates() with explicit WHERE to ensure it's an UPDATE, not INSERT
+				updateData := map[string]interface{}{
+					"email_enabled": pref.EmailEnabled,
+					"in_app_enabled": pref.InAppEnabled,
+					"frequency":      notificationFrequencyToString(pref.Frequency),
+					"min_severity":    notificationSeverityToString(pref.MinSeverity),
+				}
+				if err := tx.Model(&database.NotificationPreference{}).
+					Where("user_id = ? AND notification_type = ?", user.Id, notificationTypeStr).
+					Updates(updateData).Error; err != nil {
+					return fmt.Errorf("update preference: %w", err)
+				}
+				// Reload to get updated timestamps
+				if err := tx.Where("user_id = ? AND notification_type = ?", user.Id, notificationTypeStr).First(&finalPreference).Error; err != nil {
+					return fmt.Errorf("get updated preference: %w", err)
+				}
+			}
+			return nil
+		})
+		
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		
+		updatedPreferences = append(updatedPreferences, &notificationsv1.NotificationPreference{
+			NotificationType: pref.NotificationType,
+			EmailEnabled:     finalPreference.EmailEnabled,
+			InAppEnabled:     finalPreference.InAppEnabled,
+			Frequency:        stringToNotificationFrequency(finalPreference.Frequency),
+			MinSeverity:      stringToNotificationSeverity(finalPreference.MinSeverity),
+		})
+	}
+
+	return connect.NewResponse(&notificationsv1.UpdateNotificationPreferencesResponse{
+		Preferences: updatedPreferences,
+	}), nil
+}
+
+func notificationFrequencyToString(f notificationsv1.NotificationFrequency) string {
+	switch f {
+	case notificationsv1.NotificationFrequency_NOTIFICATION_FREQUENCY_IMMEDIATE:
+		return "immediate"
+	case notificationsv1.NotificationFrequency_NOTIFICATION_FREQUENCY_DAILY:
+		return "daily"
+	case notificationsv1.NotificationFrequency_NOTIFICATION_FREQUENCY_WEEKLY:
+		return "weekly"
+	case notificationsv1.NotificationFrequency_NOTIFICATION_FREQUENCY_NEVER:
+		return "never"
+	default:
+		return "immediate"
+	}
+}
+
+func stringToNotificationFrequency(s string) notificationsv1.NotificationFrequency {
+	switch s {
+	case "immediate":
+		return notificationsv1.NotificationFrequency_NOTIFICATION_FREQUENCY_IMMEDIATE
+	case "daily":
+		return notificationsv1.NotificationFrequency_NOTIFICATION_FREQUENCY_DAILY
+	case "weekly":
+		return notificationsv1.NotificationFrequency_NOTIFICATION_FREQUENCY_WEEKLY
+	case "never":
+		return notificationsv1.NotificationFrequency_NOTIFICATION_FREQUENCY_NEVER
+	default:
+		return notificationsv1.NotificationFrequency_NOTIFICATION_FREQUENCY_IMMEDIATE
+	}
+}
+
+// getDefaultMinSeverityForType returns the default minimum severity for a notification type
+// This matches the defaults defined in GetNotificationTypes
+func getDefaultMinSeverityForType(notificationType notificationsv1.NotificationType) string {
+	switch notificationType {
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_INFO,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_SUCCESS,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_INVITE:
+		return "LOW"
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_WARNING,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_DEPLOYMENT,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_BILLING,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_QUOTA:
+		return "MEDIUM"
+	case notificationsv1.NotificationType_NOTIFICATION_TYPE_ERROR,
+		notificationsv1.NotificationType_NOTIFICATION_TYPE_SYSTEM:
+		return "HIGH"
+	default:
+		return "LOW"
+	}
 }
 

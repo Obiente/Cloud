@@ -323,7 +323,7 @@ services:
       dockerfile: apps/organizations-service/Dockerfile
     environment:
       PORT: 3003
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard, *common-notifications]
     deploy:
       mode: replicated
       replicas: 1
@@ -371,7 +371,7 @@ services:
       dockerfile: apps/billing-service/Dockerfile
     environment:
       PORT: 3004
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-dashboard]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-dashboard, *common-notifications]
     deploy:
       mode: replicated
       replicas: 1
@@ -419,7 +419,7 @@ services:
       dockerfile: apps/deployments-service/Dockerfile
     environment:
       PORT: 3005
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-orchestrator, *common-dns-delegation]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-redis, *common-orchestrator, *common-dns-delegation, *common-notifications]
       ENABLE_SWARM: ${ENABLE_SWARM:-true}  # Override to enable Swarm mode (default: true for Swarm deployment)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -473,7 +473,7 @@ services:
       dockerfile: apps/gameservers-service/Dockerfile
     environment:
       PORT: 3006
-      <<: [*common-database, *common-metrics-db, *common-auth]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-notifications]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/obiente/volumes:/var/lib/obiente/volumes
@@ -524,7 +524,7 @@ services:
       dockerfile: apps/orchestrator-service/Dockerfile
     environment:
       PORT: 3007
-      <<: [*common-database, *common-metrics-db, *common-redis, *common-orchestrator, *common-vps, *common-dns-delegation]
+      <<: [*common-database, *common-metrics-db, *common-redis, *common-orchestrator, *common-vps, *common-dns-delegation, *common-notifications]
       ORCHESTRATOR_SYNC_INTERVAL: ${ORCHESTRATOR_SYNC_INTERVAL:-30s}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -575,7 +575,7 @@ services:
       dockerfile: apps/vps-service/Dockerfile
     environment:
       PORT: 3008
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-orchestrator, *common-vps]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-orchestrator, *common-vps, *common-notifications]
     deploy:
       mode: replicated
       replicas: 1
@@ -718,7 +718,7 @@ services:
       dockerfile: apps/notifications-service/Dockerfile
     environment:
       PORT: 3012
-      <<: [*common-database, *common-metrics-db, *common-auth]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-smtp, *common-dashboard, *common-notifications]
     deploy:
       mode: replicated
       replicas: 1
@@ -766,7 +766,7 @@ services:
       dockerfile: apps/superadmin-service/Dockerfile
     environment:
       PORT: 3011
-      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-orchestrator, *common-vps]
+      <<: [*common-database, *common-metrics-db, *common-auth, *common-stripe, *common-orchestrator, *common-vps, *common-notifications]
     deploy:
       mode: replicated
       replicas: 1

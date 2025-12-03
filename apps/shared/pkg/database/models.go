@@ -1,8 +1,10 @@
 package database
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	"gorm.io/gorm"
 )
 
@@ -737,5 +739,45 @@ func (n *Notification) BeforeUpdate(tx *gorm.DB) error {
 		now := time.Now()
 		n.ReadAt = &now
 	}
+	return nil
+}
+
+// NotificationPreference represents a user's notification preferences
+type NotificationPreference struct {
+	ID             string    `gorm:"primaryKey;column:id" json:"id"`
+	UserID         string    `gorm:"column:user_id;index;not null;uniqueIndex:idx_user_type" json:"user_id"`
+	NotificationType string  `gorm:"column:notification_type;not null;uniqueIndex:idx_user_type" json:"notification_type"` // INFO, SUCCESS, WARNING, ERROR, DEPLOYMENT, BILLING, QUOTA, INVITE, SYSTEM
+	EmailEnabled   bool      `gorm:"column:email_enabled;default:false" json:"email_enabled"`
+	InAppEnabled   bool      `gorm:"column:in_app_enabled;default:true" json:"in_app_enabled"`
+	Frequency      string    `gorm:"column:frequency;default:'immediate'" json:"frequency"` // immediate, daily, weekly, never
+	MinSeverity    string    `gorm:"column:min_severity;default:'LOW'" json:"min_severity"` // LOW, MEDIUM, HIGH, CRITICAL
+	CreatedAt      time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt      time.Time `gorm:"column:updated_at" json:"updated_at"`
+}
+
+func (NotificationPreference) TableName() string {
+	return "notification_preferences"
+}
+
+// BeforeCreate hook to set timestamps and generate ID if needed
+func (np *NotificationPreference) BeforeCreate(tx *gorm.DB) error {
+	// Generate ID if not set (this should never happen, but safety check)
+	if np.ID == "" {
+		np.ID = fmt.Sprintf("notif-pref-%d", time.Now().UnixNano())
+		logger.Warn("[NotificationPreference] ID was empty in BeforeCreate, generated: %s", np.ID)
+	}
+	now := time.Now()
+	if np.CreatedAt.IsZero() {
+		np.CreatedAt = now
+	}
+	if np.UpdatedAt.IsZero() {
+		np.UpdatedAt = now
+	}
+	return nil
+}
+
+// BeforeUpdate hook to set updated timestamp
+func (np *NotificationPreference) BeforeUpdate(tx *gorm.DB) error {
+	np.UpdatedAt = time.Now()
 	return nil
 }
