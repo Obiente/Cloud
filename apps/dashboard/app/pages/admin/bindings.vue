@@ -11,11 +11,19 @@
             </OuiStack>
             <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">Member</OuiText>
-              <OuiSelect v-model="userId" :items="memberItems" />
+              <OuiCombobox
+                v-model="userId"
+                :options="memberItems"
+                placeholder="Search for a member..."
+              />
             </OuiStack>
             <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">Role</OuiText>
-              <OuiSelect v-model="roleId" :items="roleItems" />
+              <OuiCombobox
+                v-model="roleId"
+                :options="roleItemsForCombobox"
+                placeholder="Search for a role..."
+              />
             </OuiStack>
             <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">
@@ -25,11 +33,11 @@
             </OuiStack>
             <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">Resource (optional)</OuiText>
-              <OuiSelect
+              <OuiCombobox
                 v-if="resourceType === 'deployment'"
-                multiple
-                v-model="resourceIds"
-                :items="deploymentItems"
+                v-model="deploymentId"
+                :options="deploymentItems"
+                placeholder="Search for a deployment..."
               />
               <OuiSelect
                 v-else-if="resourceType === 'environment'"
@@ -44,7 +52,7 @@
               />
             </OuiStack>
           </OuiGrid>
-          <OuiFlex mt="md" gap="md">
+          <OuiFlex class="mt-6" gap="md" justify="start">
             <OuiButton type="submit">Bind</OuiButton>
           </OuiFlex>
         </form>
@@ -86,6 +94,7 @@ import { useOrganizationsStore } from "~/stores/organizations";
 import { useOrganizationId } from "~/composables/useOrganizationId";
 import { OrganizationService, DeploymentService, AdminService } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
+import OuiCombobox from "~/components/oui/Combobox.vue";
 
 definePageMeta({ layout: "admin", middleware: "auth" });
 
@@ -97,6 +106,7 @@ const userId = ref("");
 const roleId = ref("");
 const resourceType = ref("");
 const resourceIds = ref<string[] | string>("");
+const deploymentId = ref("");
 
 // Computed property for OuiInput (string) binding
 const resourceIdsString = computed({
@@ -229,6 +239,13 @@ const memberItems = computed(() =>
   }))
 );
 
+const roleItemsForCombobox = computed(() =>
+  (roleOptionsData.value || []).map((r) => ({
+    label: r.name,
+    value: r.id,
+  }))
+);
+
 const { data: deploymentOptionsData, refresh: refreshDeploymentOptions } =
   await useClientFetch(
     () =>
@@ -254,6 +271,18 @@ const deploymentItems = computed(() =>
     value: d.id,
   }))
 );
+
+// Handle deployment selection
+watch(deploymentId, (val) => {
+  if (resourceType.value === 'deployment') {
+    resourceIds.value = val ? [val] : [];
+  }
+});
+
+watch(() => resourceType.value, () => {
+  deploymentId.value = "";
+  resourceIds.value = Array.isArray(resourceIds.value) ? [] : "";
+});
 
 const bindingItems = computed(() =>
   (bindings.value as any[]).map((b) => ({
@@ -281,20 +310,19 @@ watch(
     roleId.value = "";
     resourceType.value = "";
     resourceIds.value = "";
+    deploymentId.value = "";
     await refreshAll();
   },
   { immediate: true }
 );
 
-watch(resourceType, () => {
-  resourceIds.value = Array.isArray(resourceIds.value) ? [] : "";
-});
-
 async function create() {
   if (!selectedOrg.value || !userId.value || !roleId.value) return;
   const ids = Array.isArray(resourceIds.value)
     ? resourceIds.value
-    : [resourceIds.value || ""];
+    : resourceIds.value
+    ? [resourceIds.value]
+    : [""];
   for (const rid of ids) {
     await adminClient.createRoleBinding({
       organizationId: selectedOrg.value,
@@ -305,6 +333,12 @@ async function create() {
     });
   }
   await refreshBindings();
+  // Reset form
+  userId.value = "";
+  roleId.value = "";
+  resourceType.value = "";
+  resourceIds.value = "";
+  deploymentId.value = "";
 }
 
 async function refreshAll() {

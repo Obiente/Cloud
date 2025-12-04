@@ -11,18 +11,23 @@
         <form @submit.prevent="createBinding">
           <OuiGrid cols="1" colsMd="2" gap="md">
             <OuiStack gap="xs">
-              <OuiText size="sm" weight="medium">User ID</OuiText>
-              <OuiInput
+              <OuiText size="sm" weight="medium">User</OuiText>
+              <OuiCombobox
                 v-model="userId"
-                placeholder="Enter user ID"
+                :options="userOptions"
+                placeholder="Search for a user..."
               />
             </OuiStack>
             <OuiStack gap="xs">
               <OuiText size="sm" weight="medium">Role</OuiText>
-              <OuiSelect v-model="roleId" :items="roleItems" />
+              <OuiCombobox
+                v-model="roleId"
+                :options="roleItemsForCombobox"
+                placeholder="Search for a role..."
+              />
             </OuiStack>
           </OuiGrid>
-          <OuiFlex mt="md" gap="md" align="center">
+          <OuiFlex class="mt-6" gap="md" align="center" justify="start">
             <OuiButton type="submit" :loading="creating">Assign Role</OuiButton>
             <OuiText v-if="error" color="danger">{{ error }}</OuiText>
           </OuiFlex>
@@ -77,10 +82,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { SuperadminService } from "@obiente/proto";
 import { useConnectClient } from "~/lib/connect-client";
 import { useToast } from "~/composables/useToast";
+import OuiCombobox from "~/components/oui/Combobox.vue";
 
 definePageMeta({
   middleware: ["auth", "superadmin"],
@@ -90,6 +96,7 @@ const userId = ref("");
 const roleId = ref("");
 const error = ref("");
 const creating = ref(false);
+const loadingUsers = ref(false);
 
 const superadminClient = useConnectClient(SuperadminService);
 const { toast } = useToast();
@@ -103,7 +110,7 @@ const { data: roles, refresh: refreshRoles } = await useClientFetch(
   }
 );
 
-const roleItems = computed(() =>
+const roleItemsForCombobox = computed(() =>
   (roles.value || []).map((r) => ({ label: r.name, value: r.id }))
 );
 
@@ -112,6 +119,31 @@ const roleLabelMap = computed(() => {
   (roles.value || []).forEach((r) => map.set(r.id, r.name));
   return map;
 });
+
+// Load users for combobox (load all initially, combobox will filter client-side)
+const { data: usersData } = await useClientFetch(
+  "superadmin-users-for-bindings",
+  async () => {
+    loadingUsers.value = true;
+    try {
+      // Load first page of users (100 should be enough for most cases)
+      // The combobox will filter client-side
+      const res = await superadminClient.listUsers({
+        page: 1,
+        perPage: 100,
+      });
+      return (res.users || []).map((u) => ({
+        label: `${u.name || u.email || u.id}${u.email && u.name ? ` (${u.email})` : ""}`,
+        value: u.id,
+        email: u.email,
+      }));
+    } finally {
+      loadingUsers.value = false;
+    }
+  }
+);
+
+const userOptions = computed(() => usersData.value || []);
 
 // Load bindings
 const { data: bindings, refresh: refreshBindings } = await useClientFetch(
