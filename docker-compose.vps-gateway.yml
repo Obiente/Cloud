@@ -17,7 +17,14 @@ services:
       GATEWAY_DHCP_SUBNET_MASK: ${GATEWAY_DHCP_SUBNET_MASK:-255.255.255.0}
       GATEWAY_DHCP_GATEWAY: ${GATEWAY_DHCP_GATEWAY:-10.15.3.1}
       GATEWAY_DHCP_DNS: ${GATEWAY_DHCP_DNS:-1.1.1.1,1.0.0.1}
-      GATEWAY_DHCP_INTERFACE: ${GATEWAY_DHCP_INTERFACE:-eth0} # Interface on SDN VNet
+      GATEWAY_DHCP_INTERFACE: ${GATEWAY_DHCP_INTERFACE:-eth0} # Interface inside container (connected to OCvpsnet bridge on host). Default: eth0
+      GATEWAY_DHCP_LISTEN_IP: ${GATEWAY_DHCP_LISTEN_IP:-} # Optional: IP to listen on (for multi-node). Defaults to GATEWAY_DHCP_GATEWAY if not set
+      # Outbound IP Configuration (optional)
+      # If set, gateway will automatically configure iptables SNAT rules
+      # Allows isolation of VPS traffic from other infrastructure
+      # Each node's gateway can have a different outbound IP
+      GATEWAY_OUTBOUND_IP: ${GATEWAY_OUTBOUND_IP:-} # Optional: IP address for outbound SNAT
+      GATEWAY_OUTBOUND_INTERFACE: ${GATEWAY_OUTBOUND_INTERFACE:-} # Optional: outbound interface (auto-detected if not set)
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:

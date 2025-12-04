@@ -441,7 +441,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 	// If gateway is configured, use the SDN bridge (OCvpsnet by default)
 	// Otherwise, use the default bridge (vmbr0)
 	bridge := "vmbr0"
-	if os.Getenv("VPS_GATEWAY_URL") != "" || os.Getenv("VPS_GATEWAY_API_SECRET") != "" {
+	if os.Getenv("VPS_NODE_GATEWAY_ENDPOINTS") != "" || os.Getenv("VPS_GATEWAY_API_SECRET") != "" {
 		// Gateway manages DHCP on SDN bridge
 		gatewayBridge := os.Getenv("VPS_GATEWAY_BRIDGE")
 		if gatewayBridge == "" {

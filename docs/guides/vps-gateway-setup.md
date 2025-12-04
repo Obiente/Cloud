@@ -1,6 +1,6 @@
 # VPS Gateway Setup Guide
 
-This guide explains how to set up the vps-gateway service for centralized DHCP management and SSH proxying for VPS instances.
+This guide explains how to set up the vps-gateway service for per-node DHCP management and SSH proxying for VPS instances.
 
 ## Overview
 
@@ -9,7 +9,7 @@ The vps-gateway service provides:
 - **DHCP Management**: Automatically allocates and tracks IP addresses for VPS instances
 - **SSH Proxying**: Routes SSH connections to VPS instances without requiring SSH keys on the Proxmox node
 - **Network Isolation**: Gateway network can be isolated from the main Proxmox network
-- **Centralized Management**: Single service manages all VPS networking
+- **Per-Node Management**: Each Proxmox node has its own gateway service instance for optimal network routing
 
 ### Connection Architecture (Forward Connection Pattern)
 
@@ -19,7 +19,7 @@ The vps-gateway uses a **forward connection pattern** where:
 - Gateway is the server, API is the client
 - Port **1537** maps to "O 15 C 3 G" = "OCG" (Obiente Cloud Gateway), similar to how `10.15.3` maps to "O 15 C 3"
 
-When running multiple API instances (e.g., in Docker Swarm), each API instance connects to the gateway independently. The gateway can handle multiple concurrent connections from different API instances. For operations like IP allocation and SSH proxying, any API instance can communicate with the gateway directly.
+For multi-node deployments, each Proxmox node has its own gateway service instance. The API service automatically routes gateway requests to the gateway on the same node as each VPS, ensuring optimal network connectivity. Each gateway handles DHCP and SSH proxying for VPSs on its node, and routes outbound traffic through that node's network interface for low latency.
 
 This guide uses **Proxmox SDN (Software-Defined Networking)** for network topology management, while the vps-gateway service handles DHCP allocation and SSH proxying. SDN is recommended for **all deployments** (both single-node and multi-node clusters) because it provides:
 
@@ -187,10 +187,16 @@ LXC containers are more lightweight and native to Proxmox compared to VMs, makin
 3. **Configure Network**:
 
    - **Bridge**: `OCvpsnet` (your created VNet)
-   - **IPv4/CIDR**: `10.15.3.10/24`
-   - **Gateway**: `10.15.3.1` (VNet gateway)
+   - **IPv4/CIDR**: `10.15.3.10/24` (for Node 1 - use different IPs for other nodes)
+   - **Gateway**: `10.15.3.1` (VNet gateway - same for all nodes)
    - **IPv6**: `static` empty, (disabled)
    - **Firewall**: Enable if using Proxmox firewall
+   
+   **Important for Multi-Node**: Each node's gateway container needs a **unique IP** on the VXLAN:
+   - Node 1: `10.15.3.10`
+   - Node 2: `10.15.3.11`
+   - Node 3: `10.15.3.12`
+   - etc.
 
 4. **Start Container**:
 
@@ -205,12 +211,14 @@ On the gateway container:
 # Check interfaces
 ip addr show
 # Should show:
-# - eth0: 10.15.3.10/24
+# - eth0: 10.15.3.10/24 (connected to OCvpsnet bridge on host)
 
 # Test connectivity
 ping -c 3 8.8.8.8  # Should work via eth0
-ping -c 3 10.15.3.1  # Should work via eth1 (local)
+ping -c 3 10.15.3.1  # Should work via eth0 (local VXLAN gateway)
 ```
+
+**Important**: Inside the container/VM, the SDN bridge `OCvpsnet` appears as `eth0` (or `eth1` depending on configuration). The `GATEWAY_DHCP_INTERFACE` should be set to the interface name **inside the container** (e.g., `eth0`), not the bridge name on the host (`OCvpsnet`).
 
 ## Step 3: Install Prerequisites on Gateway Container
 
@@ -295,8 +303,7 @@ services:
     network_mode: host # Required for DHCP management
     privileged: true # Required for network management
     environment:
-      # API Connection
-      GATEWAY_API_URL: http://api:3001  # API URL for gateway to connect to
+      # API Connection (gateway connects to API)
       GATEWAY_API_SECRET: ${GATEWAY_API_SECRET:-change-me-in-production}
       # DHCP Configuration
       GATEWAY_DHCP_POOL_START: 10.15.3.20
@@ -306,7 +313,7 @@ services:
       GATEWAY_DHCP_GATEWAY: 10.15.3.1
       GATEWAY_DHCP_DNS: 1.1.1.1,1.0.0.1  # Upstream DNS servers
       GATEWAY_DHCP_DOMAIN: vps.local      # DNS domain for VPS hostname resolution (optional, defaults to vps.local)
-      GATEWAY_DHCP_INTERFACE: eth0 # Interface on SDN VNet
+      GATEWAY_DHCP_INTERFACE: eth0 # Interface inside container (connected to OCvpsnet bridge on host)
       LOG_LEVEL: info
     volumes:
       - /var/lib/obiente/vps-gateway:/var/lib/obiente/vps-gateway
@@ -322,13 +329,11 @@ services:
 
 ```bash
 cat > .env << EOF
-# API URL (gateway connects to API, not the other way around)
-GATEWAY_API_URL=http://api:3001
-# Or if API is on a different host:
-# GATEWAY_API_URL=http://your-api-host:3001
-
 # Shared secret (must match VPS_GATEWAY_API_SECRET in API service)
 GATEWAY_API_SECRET=your-secure-random-secret-here
+
+# Optional: Dedicated outbound IP for traffic isolation
+GATEWAY_OUTBOUND_IP=203.0.113.10
 EOF
 ```
 
@@ -356,7 +361,6 @@ The service is already configured in `docker-compose.swarm.yml`. Ensure:
 
 ```bash
 # API Connection
-export GATEWAY_API_URL=http://api:3001  # Or your API hostname/IP
 export GATEWAY_API_SECRET=$(openssl rand -hex 32)  # Must match VPS_GATEWAY_API_SECRET in API
 
 # DHCP Configuration
@@ -366,7 +370,7 @@ export GATEWAY_DHCP_SUBNET=10.15.3.0
 export GATEWAY_DHCP_SUBNET_MASK=255.255.255.0
 export GATEWAY_DHCP_GATEWAY=10.15.3.1
 export GATEWAY_DHCP_DNS=1.1.1.1,1.0.0.1
-export GATEWAY_DHCP_INTERFACE=eth0
+export GATEWAY_DHCP_INTERFACE=eth0  # Interface inside container (connected to OCvpsnet bridge)
 ```
 
 2. **Deploy Service**:
@@ -407,15 +411,14 @@ User=root
 ExecStart=/usr/local/bin/vps-gateway
 Restart=always
 RestartSec=5
-      Environment="GATEWAY_API_URL=http://api:3001"
-      Environment="GATEWAY_API_SECRET=your-secure-random-secret-here"
+Environment="GATEWAY_API_SECRET=your-secure-random-secret-here"
 Environment="GATEWAY_DHCP_POOL_START=10.15.3.10"
 Environment="GATEWAY_DHCP_POOL_END=10.15.3.254"
 Environment="GATEWAY_DHCP_SUBNET=10.15.3.0"
 Environment="GATEWAY_DHCP_SUBNET_MASK=255.255.255.0"
 Environment="GATEWAY_DHCP_GATEWAY=10.15.3.1"
 Environment="GATEWAY_DHCP_DNS=8.8.8.8,8.8.4.4"
-Environment="GATEWAY_DHCP_INTERFACE=eth1"
+Environment="GATEWAY_DHCP_INTERFACE=eth0"  # Interface inside container (connected to OCvpsnet bridge)
 Environment="LOG_LEVEL=info"
 
 [Install]
@@ -440,6 +443,9 @@ Configure the API service to connect to the gateway:
 Add to your API service configuration (`.env` or `docker-compose.yml`):
 
 ```bash
+# Map Proxmox node names to gateway URLs (required for multi-node)
+VPS_NODE_GATEWAY_ENDPOINTS="node1:http://gateway1:1537,node2:http://gateway2:1537"
+
 # API Secret (must match GATEWAY_API_SECRET in gateway service)
 VPS_GATEWAY_API_SECRET=your-secure-random-secret-here
 
@@ -458,6 +464,8 @@ If using Docker Compose, add to your `docker-compose.yml`:
 services:
   api:
     environment:
+      # Map Proxmox node names to gateway URLs (required for multi-node)
+      VPS_NODE_GATEWAY_ENDPOINTS: "node1:http://gateway1:1537,node2:http://gateway2:1537"
       # API Secret (must match GATEWAY_API_SECRET in gateway service)
       VPS_GATEWAY_API_SECRET: ${VPS_GATEWAY_API_SECRET}
       # SDN VNet bridge name
@@ -469,6 +477,8 @@ services:
 If using Docker Swarm, the environment variables are already configured in `docker-compose.swarm.yml`. Set them in your environment:
 
 ```bash
+# Map Proxmox node names to gateway URLs (required for multi-node)
+export VPS_NODE_GATEWAY_ENDPOINTS="node1:http://gateway1:1537,node2:http://gateway2:1537"
 # API Secret (must match GATEWAY_API_SECRET in gateway service)
 export VPS_GATEWAY_API_SECRET=your-secure-random-secret-here
 # SDN VNet bridge name
@@ -487,7 +497,7 @@ When running multiple API instances in Docker Swarm, it's important to understan
    - Gateway is accessible via public IP configured with DNAT
 
 2. **API Instances Connect to Gateway**: Each API instance connects to the gateway independently:
-   - API instances use `VPS_GATEWAY_URL` environment variable (e.g., `http://gateway-public-ip:1537`)
+   - API instances use `VPS_NODE_GATEWAY_ENDPOINTS` environment variable to map nodes to gateway URLs (e.g., `"node1:http://gateway1:1537,node2:http://gateway2:1537"`)
    - Each API instance maintains its own connection to the gateway
    - Multiple API instances can connect to the same gateway concurrently
 
@@ -501,11 +511,65 @@ When running multiple API instances in Docker Swarm, it's important to understan
    - Gateway's public IP should be accessible from API instances
    - Example: `iptables -t nat -A PREROUTING -p tcp --dport 1537 -j DNAT --to-destination <gateway-internal-ip>:1537`
 
-### Best Practices for Swarm Deployments
+### Multi-Node Gateway Configuration
 
-- **Gateway Discovery**: API instances discover gateway via `VPS_GATEWAY_URL` environment variable or node metadata
-- **Multiple Gateways**: If you have multiple gateways (e.g., one per Proxmox node), configure each API instance to connect to the appropriate gateway based on which node hosts the VPS
-- **High Availability**: If a gateway goes down, API instances will fail requests to that gateway. Consider implementing gateway health checks and failover
+For multi-node deployments, each Proxmox node should have its own gateway service instance. The API service automatically routes gateway requests to the gateway on the same node as each VPS.
+
+**Required Configuration:**
+
+1. **Deploy gateway on each node**: Each Proxmox node needs its own vps-gateway service instance
+2. **Configure VPS_NODE_GATEWAY_ENDPOINTS**: Map Proxmox node names to gateway URLs in the API service
+
+**Example API Service Configuration:**
+
+```bash
+# Map Proxmox node names to gateway URLs
+VPS_NODE_GATEWAY_ENDPOINTS="node1:http://gateway1.example.com:1537,node2:http://gateway2.example.com:1537,node3:http://gateway3.example.com:1537"
+VPS_GATEWAY_API_SECRET=your-shared-secret
+```
+
+**Gateway Service Configuration per Node:**
+
+Each gateway should be configured with:
+- **Unique listen IP** on the VXLAN (required for multi-node - each node needs different IP)
+- Node-specific outbound IP (optional but recommended for traffic isolation)
+- Correct network interface for the node
+- Same DHCP pool configuration (all gateways share the same VXLAN)
+
+**Example Gateway Configuration (Node 1):**
+
+```yaml
+GATEWAY_DHCP_LISTEN_IP: 10.15.3.10  # Node 1's unique IP on VXLAN
+GATEWAY_DHCP_GATEWAY: 10.15.3.1     # VXLAN gateway (same for all nodes)
+GATEWAY_DHCP_INTERFACE: eth0     # Interface inside container (connected to OCvpsnet bridge)
+GATEWAY_OUTBOUND_IP: 203.0.113.10  # Node 1's dedicated outbound IP
+GATEWAY_API_SECRET: your-shared-secret
+```
+
+**Example Gateway Configuration (Node 2):**
+
+```yaml
+GATEWAY_DHCP_LISTEN_IP: 10.15.3.11  # Node 2's unique IP on VXLAN (different!)
+GATEWAY_DHCP_GATEWAY: 10.15.3.1     # VXLAN gateway (same for all nodes)
+GATEWAY_DHCP_INTERFACE: eth0     # Interface inside container (connected to OCvpsnet bridge)
+GATEWAY_OUTBOUND_IP: 203.0.113.11  # Node 2's dedicated outbound IP
+GATEWAY_API_SECRET: your-shared-secret
+```
+
+**IP Allocation Recommendations:**
+
+- `10.15.3.1`: VXLAN Gateway/Router (Proxmox SDN)
+- `10.15.3.2-9`: Reserved for infrastructure
+- `10.15.3.10-19`: Gateway service IPs (one per node)
+- `10.15.3.20-254`: VPS IP pool (allocated by gateways)
+
+### Best Practices for Multi-Node Deployments
+
+- **Per-Node Gateways**: Each Proxmox node should have its own gateway service instance
+- **Node Mapping**: Configure `VPS_NODE_GATEWAY_ENDPOINTS` to map each node to its gateway URL
+- **Outbound IP Isolation**: Use `GATEWAY_OUTBOUND_IP` to isolate VPS traffic from other infrastructure
+- **Network Routing**: Ensure each gateway routes outbound traffic through its node's network interface
+- **High Availability**: If a gateway goes down, only VPSs on that node are affected
 - **DNAT Setup**: Configure DNAT rules to expose each gateway's port 1537 on a public IP accessible to API instances
 
 ## Step 7: Verify Setup
@@ -538,34 +602,33 @@ sudo journalctl -u vps-gateway -f
 docker service logs vps-gateway -f
 ```
 
-3. **Verify Gateway Connection to API**:
+3. **Verify Gateway is Listening**:
 
 ```bash
-# Check gateway logs for connection status
-docker compose logs vps-gateway | grep -i "connected\|registered\|error\|api"
+# Check gateway logs for startup
+docker compose logs vps-gateway | grep -i "listening\|started\|gRPC"
 
 # Should see messages like:
-# "[APIClient] Connecting to API at http://api:3001"
-# "[APIClient] Successfully registered with API"
+# "[GatewayServer] Starting gRPC server on :1537"
+# "[GatewayServer] Gateway server started"
 ```
 
-4. **Check API Logs for Gateway Registration**:
+4. **Verify API Can Connect to Gateway**:
 
 ```bash
-# Check API logs for gateway registration
-docker compose logs api | grep -i "gateway.*registered"
+# Check API logs for gateway connections
+docker compose logs api | grep -i "gateway.*node\|connected.*gateway"
 
-# Should see:
-# "[GatewayRegistry] Gateway <gateway-id> registered"
+# Should see successful gateway client creation for each node
 ```
 
-5. **Check Metrics via API**:
+5. **Check Gateway Metrics**:
 
 ```bash
-# Gateway metrics are forwarded to API's /metrics endpoint
-curl http://api:3001/metrics | grep -i "vps_gateway"
+# Gateway exposes metrics on port 9091 (if enabled)
+curl http://gateway-host:9091/metrics | grep -i "vps_gateway"
 
-# Should see gateway metrics with "# Gateway: <gateway-id>" comments
+# Should see gateway metrics
 ```
 
 ### Check DHCP Service
@@ -666,10 +729,10 @@ sudo firewall-cmd --reload
 
 2. **Common Issues**:
    - **"GATEWAY_API_SECRET not set"**: Ensure environment variable is set
-   - **"GATEWAY_API_URL not set"**: Ensure `GATEWAY_API_URL` points to your API service
-   - **"Failed to connect to API"**: Check that API is accessible from gateway container
    - **"Failed to initialize DHCP manager"**: Check network interface name (`GATEWAY_DHCP_INTERFACE`)
    - **"Permission denied"**: Ensure container has `privileged: true` or `network_mode: host`
+   - **"VPS_NODE_GATEWAY_ENDPOINTS not configured"**: Ensure node-to-gateway mapping is set in API service
+   - **"No gateway endpoint configured for node"**: Verify the node name matches the mapping in `VPS_NODE_GATEWAY_ENDPOINTS`
 
 ### DHCP Not Working
 
@@ -682,8 +745,9 @@ sudo firewall-cmd --reload
 2. **Check Interface**:
 
    ```bash
-   ip addr show eth1
-   # Should show 10.15.3.1/24
+   ip addr show eth0  # Inside container, OCvpsnet bridge appears as eth0
+   # Should show the gateway container's IP (e.g., 10.15.3.10/24 for Node 1)
+   # The IP depends on which node the gateway is on (10.15.3.10, 10.15.3.11, etc.)
    ```
 
 3. **Check dnsmasq Config**:
@@ -700,51 +764,48 @@ sudo firewall-cmd --reload
    sudo firewall-cmd --list-all
    ```
 
-### Gateway Can't Connect to API
+### API Can't Connect to Gateway
 
-**Note**: In Swarm deployments, the gateway connects to the API service name (e.g., `http://api:3001`), which is load-balanced by Docker Swarm DNS. The gateway will connect to one API instance and maintain that connection.
+**Note**: The API connects to gateways (forward connection pattern). Each API instance routes requests to the gateway on the same node as each VPS.
 
-1. **Test Connectivity**:
+1. **Check Node-to-Gateway Mapping**:
 
    ```bash
-   # From gateway container
-   curl http://api:3001/health
-   # Or test from gateway host
-   curl http://your-api-host:3001/health
+   # Verify VPS_NODE_GATEWAY_ENDPOINTS is configured
+   echo $VPS_NODE_GATEWAY_ENDPOINTS
+   # Should show: "node1:http://gateway1:1537,node2:http://gateway2:1537"
    ```
 
-2. **Check API URL**:
+2. **Verify Gateway URLs**:
 
-   - Ensure `GATEWAY_API_URL` points to the correct API hostname/IP
-   - In Swarm, use the service name: `http://api:3001` (resolves via Swarm DNS)
-   - Ensure API port (default: 3001) is accessible from gateway
-   - Check gateway logs: `docker compose logs vps-gateway` or `docker logs vps-gateway`
+   - Ensure each gateway URL in `VPS_NODE_GATEWAY_ENDPOINTS` is accessible from API instances
+   - Test connectivity: `curl http://gateway1:1537` (should connect)
+   - Check DNAT rules if gateways are behind NAT
 
 3. **Check API Secret**:
-   - Ensure `GATEWAY_API_SECRET` in gateway matches `VPS_GATEWAY_API_SECRET` in API service
+   - Ensure `VPS_GATEWAY_API_SECRET` in API matches `GATEWAY_API_SECRET` in gateway service
    - Both must be identical
 
-4. **Check Gateway Registration** (Swarm):
+4. **Check Gateway Status**:
 
-   In Swarm, check logs from all API instances:
-   
    ```bash
-   # Check all API instances for gateway connection
-   docker service logs obiente_api | grep -i "gateway\|register"
+   # Check gateway logs
+   docker compose logs vps-gateway | grep -i "listening\|started\|error"
    
-   # Check specific API instance
-   docker service ps obiente_api --format "{{.Name}}" | head -1 | xargs docker service logs
+   # Verify gateway is listening on port 1537
+   netstat -tlnp | grep 1537
+   # Or
+   ss -tlnp | grep 1537
    ```
-   
-   For Docker Compose:
-   
+
+5. **Check API Logs for Gateway Errors**:
+
    ```bash
-   docker compose logs api | grep -i "gateway\|register"
-   ```
+   # Check API logs for gateway connection errors
+   docker compose logs api | grep -i "gateway.*error\|failed.*gateway\|node.*gateway"
    
-   - Gateway should automatically register with API on startup
-   - Check API logs for "Gateway registered" messages
-   - If gateway disconnects, it will automatically reconnect to another instance
+   # Should see successful connections or specific error messages
+   ```
 
 ### VPS Not Getting IP Address
 
@@ -807,8 +868,8 @@ SDN Configuration:
   - SNAT: Enabled (automatic internet access - no manual NAT needed)
 
 Gateway Container:
-  - eth0 (vmbr0): 10.15.3.10
-  - eth1 (SDN VNet bridge): 10.15.3.1
+  - eth0 (connected to OCvpsnet bridge on host): 10.15.3.10
+  - Gateway IP: 10.15.3.1 (VXLAN gateway)
 
 VPS VMs:
   - Connected to SDN VNet bridge (OCvpsnet)
@@ -832,18 +893,131 @@ SDN Configuration (applied to all nodes):
   - Subnet: 10.15.3.0/24 (maps to "O 15 C 3" - Obiente Cloud, uses private IP space)
   - SNAT: Enabled (automatic routing)
 
-Gateway Container (on Node 1):
-  - eth0 (vmbr0): 10.15.3.10
-  - eth1 (SDN VNet): 10.15.3.1
+Gateway Containers:
+  - Node 1 Gateway: eth0 (connected to OCvpsnet bridge): 10.15.3.10
+  - Node 2 Gateway: eth0 (connected to OCvpsnet bridge): 10.15.3.11
+  - Node 3 Gateway: eth0 (connected to OCvpsnet bridge): 10.15.3.12
+  - Each gateway manages DHCP for VPSs on its node
+  - Each gateway routes outbound traffic through its node's network interface
 
 VPS VMs:
   - Can be created on any node
-  - All connected to same SDN VNet
-  - All receive IPs from gateway DHCP pool
+  - All connected to same SDN VNet (VXLAN)
+  - Each VPS uses the gateway on its node for DHCP and routing
   - Can communicate across nodes via SDN
+  - Outbound traffic routes through the gateway on the same node
 ```
 
-**Note**: With SDN, SNAT is handled automatically when enabled in the subnet configuration. You don't need to manually configure NAT on the gateway container unless you need custom routing rules.
+**Note**: With SDN, SNAT is handled automatically when enabled in the subnet configuration. However, for multi-node deployments, each gateway should route outbound traffic through its node's network interface, and optionally use a dedicated outbound IP for traffic isolation.
+
+## Multi-Node Network Routing
+
+### Critical Requirements
+
+For multi-node deployments, it's critical that:
+
+1. **Each node's gateway routes outbound traffic through that node's own network interface** (ensures low latency)
+2. **Each gateway can use a dedicated outbound IP for SNAT** (allows traffic isolation and prevents abuse/blocking from affecting other services)
+
+### VXLAN Architecture
+
+- All VPSs are on the same VXLAN (shared network segment)
+- VPSs can communicate with each other across nodes via VXLAN
+- Each node has its own gateway service instance
+- Each gateway handles DHCP and SSH proxying for VPSs on its node
+
+### Outbound Traffic Routing
+
+- VPSs on node1 must route outbound traffic through node1's network interface
+- VPSs on node2 must route outbound traffic through node2's network interface
+- This ensures traffic doesn't cross nodes unnecessarily, reducing latency
+
+### Outbound IP Configuration
+
+Each gateway can be configured with `GATEWAY_OUTBOUND_IP` environment variable:
+
+- This IP is used for SNAT on all outbound traffic from VPSs on that node
+- Allows isolation: VPS traffic uses dedicated IP, other infrastructure uses different IP
+- Prevents abuse/blocking on VPS traffic from affecting other services
+- Each node can have a different outbound IP
+
+**Configuration:**
+
+```yaml
+GATEWAY_OUTBOUND_IP: 203.0.113.10  # Dedicated IP for VPS traffic on this node
+```
+
+**Network Setup Requirements:**
+
+1. The outbound IP must be assigned to the gateway's network interface (or the host's primary interface)
+2. The gateway container runs with `network_mode: host` and `privileged: true` to allow iptables configuration
+3. **iptables SNAT rules are automatically configured** by the gateway service on startup
+4. Rules are automatically cleaned up on gateway shutdown
+
+**Automatic SNAT Configuration:**
+
+The gateway service automatically:
+- Detects the VPS subnet from DHCP configuration
+- Auto-detects the outbound interface (from default route) or uses `GATEWAY_OUTBOUND_INTERFACE` if set
+- Configures iptables SNAT rules on startup
+- Removes SNAT rules on shutdown
+
+**Manual Interface Selection (Optional):**
+
+If you need to specify a specific outbound interface, set `GATEWAY_OUTBOUND_INTERFACE`:
+
+```yaml
+GATEWAY_OUTBOUND_IP: 203.0.113.10
+GATEWAY_OUTBOUND_INTERFACE: eth0  # Optional: specify outbound interface manually (usually vmbr0, not OCvpsnet)
+```
+
+If not set, the gateway will auto-detect the interface from the default route.
+
+### Gateway Configuration per Node
+
+Each gateway service must be configured with:
+
+1. **Network Interface Binding**: Gateway should bind to the node's primary network interface
+2. **SNAT Configuration**: Gateway automatically configures iptables SNAT rules if `GATEWAY_OUTBOUND_IP` is set, otherwise uses node's default IP
+3. **DHCP Interface**: Gateway's DHCP should listen on the VXLAN interface
+4. **Outbound IP**: Configure specific IP address for outbound traffic (optional but recommended)
+
+**Example Configuration:**
+
+For Node 1:
+```yaml
+GATEWAY_DHCP_INTERFACE: eth0  # Interface inside container (connected to OCvpsnet bridge)
+GATEWAY_OUTBOUND_IP: 203.0.113.10  # Dedicated IP for VPS traffic
+# Gateway routes outbound through node1's network interface (eth0)
+# All outbound traffic from VPSs on node1 will use 203.0.113.10
+```
+
+For Node 2:
+```yaml
+GATEWAY_DHCP_INTERFACE: eth0  # Interface inside container (connected to OCvpsnet bridge)
+GATEWAY_OUTBOUND_IP: 203.0.113.11  # Different dedicated IP for VPS traffic
+# Gateway routes outbound through node2's network interface (eth0)
+# All outbound traffic from VPSs on node2 will use 203.0.113.11
+```
+
+### Network Interface Setup
+
+Each gateway container should:
+
+- Have access to the VXLAN interface (for DHCP and VPS communication)
+- Use the node's primary network interface for outbound routing (auto-detected or via `GATEWAY_OUTBOUND_INTERFACE`)
+- Automatically configure iptables SNAT rules if `GATEWAY_OUTBOUND_IP` is set
+- Ensure the outbound IP is assigned to the host's network interface (or gateway container's interface)
+
+### Verification
+
+To verify outbound routing and IP configuration:
+
+1. SSH into a VPS on node1
+2. Run: `curl ifconfig.me` (should show node1's outbound IP, or `GATEWAY_OUTBOUND_IP` if configured)
+3. SSH into a VPS on node2
+4. Run: `curl ifconfig.me` (should show node2's outbound IP, or `GATEWAY_OUTBOUND_IP` if configured)
+5. Verify that other infrastructure services use different IPs (not affected by VPS traffic)
 
 ### Finding SDN Bridge Names
 

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/obiente/cloud/apps/shared/pkg/database"
@@ -25,8 +26,9 @@ type LogWriter interface {
 
 // VPSManager manages the lifecycle of VPS instances via Proxmox
 type VPSManager struct {
-	dockerClient  client.APIClient
-	gatewayClient *VPSGatewayClient
+	dockerClient   client.APIClient
+	gatewayClient  *VPSGatewayClient // Deprecated - use GetGatewayClientForNode instead
+	gatewayClients sync.Map          // Cache of gateway clients per node (key: nodeName string, value: *VPSGatewayClient)
 }
 
 // GetProxmoxConfig gets Proxmox configuration from environment variables
@@ -114,18 +116,41 @@ func NewVPSManager() (*VPSManager, error) {
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
 
-	// Initialize gateway client (optional - will be nil if gateway is not configured)
-	// Uses VPS_GATEWAY_URL from environment or can be discovered from node metadata
-	gatewayClient, err := NewVPSGatewayClient("")
-	if err != nil {
-		logger.Warn("[VPSManager] Failed to initialize VPS gateway client (gateway may not be configured): %v", err)
-		gatewayClient = nil // Continue without gateway - IP allocation will be skipped
+	// Gateway clients are created on-demand per node
+	// No global gateway client - each node has its own gateway
+	return &VPSManager{
+		dockerClient:   cli,
+		gatewayClient:  nil,        // Deprecated - use GetGatewayClientForNode instead
+		gatewayClients: sync.Map{}, // Cache of gateway clients per node
+	}, nil
+}
+
+// GetGatewayClientForNode gets or creates a gateway client for a specific node
+// Clients are cached to avoid recreating for each request
+// Returns error if node mapping not found in VPS_NODE_GATEWAY_ENDPOINTS
+func (vm *VPSManager) GetGatewayClientForNode(nodeName string) (*VPSGatewayClient, error) {
+	if nodeName == "" {
+		return nil, fmt.Errorf("node name is required for gateway client")
 	}
 
-	return &VPSManager{
-		dockerClient:  cli,
-		gatewayClient: gatewayClient,
-	}, nil
+	// Check cache first
+	if cached, ok := vm.gatewayClients.Load(nodeName); ok {
+		if client, ok := cached.(*VPSGatewayClient); ok {
+			logger.Debug("[VPSManager] Using cached gateway client for node %s", nodeName)
+			return client, nil
+		}
+	}
+
+	// Create new client for this node
+	logger.Info("[VPSManager] Creating gateway client for node %s", nodeName)
+	client, err := NewVPSGatewayClientForNode(nodeName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gateway client for node %s: %w", nodeName, err)
+	}
+
+	// Cache the client
+	vm.gatewayClients.Store(nodeName, client)
+	return client, nil
 }
 
 // CreateVPS provisions a new VPS instance via Proxmox
@@ -133,14 +158,14 @@ func NewVPSManager() (*VPSManager, error) {
 // Returns: VPS instance, root password (one-time only, not stored), error
 func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWriter LogWriter) (*database.VPSInstance, string, error) {
 	logger.Info("[VPSManager] Creating VPS instance %s", config.VPSID)
-	
+
 	// Helper to write log lines
 	writeLog := func(line string, stderr bool) {
 		if logWriter != nil {
 			logWriter.WriteLine(line, stderr)
 		}
 	}
-	
+
 	writeLog("Starting server setup...", false)
 
 	// Get organization settings to check if inter-VM communication is allowed
@@ -177,7 +202,7 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 	}
 
 	writeLog("Setting up secure access...", false)
-	
+
 	// Generate bastion SSH key pair for this VPS (required for SSH access)
 	bastionKey, err := database.CreateVPSBastionKey(config.VPSID, config.OrganizationID)
 	if err != nil {
@@ -228,10 +253,10 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 		Metadata:       "{}",
-		IPv4Addresses: "[]",
-		IPv6Addresses: "[]",
+		IPv4Addresses:  "[]",
+		IPv6Addresses:  "[]",
 	}
-	
+
 	// Store metadata as JSON if provided
 	if len(config.Metadata) > 0 {
 		metadataJSON, err := json.Marshal(config.Metadata)
@@ -239,7 +264,7 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 			earlyVPSInstance.Metadata = string(metadataJSON)
 		}
 	}
-	
+
 	// Create the VPS record in database with CREATING status
 	// This allows the frontend to immediately show the VPS card with progress
 	if err := database.DB.Create(earlyVPSInstance).Error; err != nil {
@@ -247,10 +272,34 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 		logger.Warn("[VPSManager] VPS record %s already exists, will update it: %v", config.VPSID, err)
 	}
 
+	// Determine target node from region mapping (same logic as CreateVM)
+	// This allows us to use the correct gateway for IP allocation
+	targetNodeName := ""
+	if config.Region != "" {
+		regionNodeMap := parseRegionNodeMapping()
+		if mappedNode, ok := regionNodeMap[config.Region]; ok {
+			targetNodeName = mappedNode
+			logger.Info("[VPSManager] Using mapped node %s for region %s (for gateway selection)", targetNodeName, config.Region)
+		}
+	}
+
 	// Allocate IP address from gateway if available
+	// Use node-specific gateway if we know the target node
 	var allocatedIP string
 	var macAddress string
-	if vm.gatewayClient != nil {
+	var gatewayClientForNode *VPSGatewayClient
+
+	// Try to get gateway client for the target node
+	if targetNodeName != "" {
+		client, err := vm.GetGatewayClientForNode(targetNodeName)
+		if err != nil {
+			logger.Warn("[VPSManager] Failed to get gateway client for node %s: %v (will try after VM creation)", targetNodeName, err)
+		} else {
+			gatewayClientForNode = client
+		}
+	}
+
+	if gatewayClientForNode != nil {
 		writeLog("Assigning network address...", false)
 		// Generate MAC address for the VM (Proxmox will assign one, but we need it for DHCP)
 		// Format: 00:16:3e:XX:XX:XX (QEMU/KVM standard prefix)
@@ -260,20 +309,20 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 		// Use independent context to avoid HTTP request timeout issues
 		allocCtx, allocCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer allocCancel()
-		
-		logger.Info("[VPSManager] Requesting IP allocation from gateway for VPS %s (MAC: %s)", config.VPSID, macAddress)
-		allocResp, err := vm.gatewayClient.AllocateIP(allocCtx, config.VPSID, config.OrganizationID, macAddress)
+
+		logger.Info("[VPSManager] Requesting IP allocation from gateway for VPS %s (MAC: %s, node: %s)", config.VPSID, macAddress, targetNodeName)
+		allocResp, err := gatewayClientForNode.AllocateIP(allocCtx, config.VPSID, config.OrganizationID, macAddress)
 		if err != nil {
 			logger.Warn("[VPSManager] Failed to allocate IP from gateway for VPS %s: %v (continuing without gateway IP)", config.VPSID, err)
 			writeLog("Network address will be assigned automatically", false)
 			// Continue without gateway IP - VM will use DHCP or static IP from Proxmox
 		} else {
 			allocatedIP = allocResp.IpAddress
-			logger.Info("[VPSManager] Allocated IP %s for VPS %s from gateway", allocatedIP, config.VPSID)
+			logger.Info("[VPSManager] Allocated IP %s for VPS %s from gateway on node %s", allocatedIP, config.VPSID, targetNodeName)
 			writeLog(fmt.Sprintf("Network address assigned: %s", allocatedIP), false)
 		}
 	} else {
-		logger.Debug("[VPSManager] Gateway client not available, skipping IP allocation")
+		logger.Debug("[VPSManager] Gateway client not available for node %s, skipping IP allocation", targetNodeName)
 	}
 
 	// Provision VM via Proxmox API
@@ -288,11 +337,11 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 	if err != nil {
 		// If VM creation fails, update VPS status to FAILED and release the allocated IP
 		database.DB.Model(&database.VPSInstance{}).Where("id = ?", config.VPSID).Update("status", 7) // FAILED
-		if vm.gatewayClient != nil && allocatedIP != "" {
+		if gatewayClientForNode != nil && allocatedIP != "" {
 			// Use independent context for IP release
 			releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer releaseCancel()
-			if releaseErr := vm.gatewayClient.ReleaseIP(releaseCtx, config.VPSID); releaseErr != nil {
+			if releaseErr := gatewayClientForNode.ReleaseIP(releaseCtx, config.VPSID); releaseErr != nil {
 				logger.Warn("[VPSManager] Failed to release IP %s after VM creation failure: %v", allocatedIP, releaseErr)
 			}
 		}
@@ -302,7 +351,7 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 	vmID := createResult.VMID
 	rootPassword := createResult.Password
 	nodeName := createResult.NodeName
-	
+
 	logger.Info("[VPSManager] Received CreateVMResult: VMID=%s, Password length=%d, NodeName=%s", vmID, len(rootPassword), nodeName)
 
 	// Get actual VM status from Proxmox and map to our status enum
@@ -327,7 +376,7 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 	var proxmoxStatus string
 	maxRetries := 10
 	retryDelay := 500 * time.Millisecond
-	
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		status, statusErr := proxmoxClient.GetVMStatus(vmCtx, nodeName, vmIDInt)
 		if statusErr == nil {
@@ -335,7 +384,7 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 			proxmoxStatus = status
 			break
 		}
-		
+
 		errorMsg := statusErr.Error()
 		// If the error indicates the VM config doesn't exist, retry (Proxmox might still be creating it)
 		if strings.Contains(errorMsg, "does not exist") || strings.Contains(errorMsg, "Configuration file") {
@@ -349,18 +398,18 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 			// Last attempt failed - VM creation likely failed
 			return nil, "", fmt.Errorf("VM creation failed: VM %d does not exist in Proxmox after %d attempts. The VM may not have been created properly: %w", vmIDInt, maxRetries, statusErr)
 		}
-		
+
 		// For other errors, fail immediately (not a timing issue)
 		return nil, "", fmt.Errorf("failed to verify VM exists after creation: %w", statusErr)
 	}
-	
+
 	if proxmoxStatus == "" {
 		return nil, "", fmt.Errorf("failed to get VM status after %d attempts", maxRetries)
 	}
 
 	// Map Proxmox status to our VPSStatus enum
 	vpsStatus := mapProxmoxStatusToVPSStatus(proxmoxStatus)
-	
+
 	writeLog("Server setup complete!", false)
 
 	// Create VPS instance record in database
@@ -377,7 +426,7 @@ func (vm *VPSManager) CreateVPS(ctx context.Context, config *VPSConfig, logWrite
 		MemoryBytes:    config.MemoryBytes,
 		DiskBytes:      config.DiskBytes,
 		InstanceID:     &vmID,
-		NodeID:         nil, // Node ID not needed - any node can access Proxmox via API
+		NodeID:         &nodeName, // Store Proxmox node name for gateway routing
 		SSHKeyID:       config.SSHKeyID,
 		OrganizationID: config.OrganizationID,
 		CreatedBy:      config.CreatedBy,
@@ -818,16 +867,22 @@ func (vm *VPSManager) GetVPSIPAddresses(ctx context.Context, vpsID string) ([]st
 	}
 
 	// Guest agent not available or returned no IPs - fall back to gateway
-	if vm.gatewayClient != nil {
-		logger.Info("[VPSManager] Guest agent not available for VPS %s, falling back to gateway", vpsID)
-		allocations, err := vm.gatewayClient.ListIPs(ctx, vps.OrganizationID, vpsID)
-		if err == nil && len(allocations) > 0 {
-			// Return gateway-allocated IP as IPv4
-			gatewayIP := allocations[0].IpAddress
-			logger.Info("[VPSManager] Got IP %s from gateway for VPS %s", gatewayIP, vpsID)
-			return []string{gatewayIP}, []string{}, nil
-		} else if err != nil {
-			logger.Warn("[VPSManager] Failed to get IP from gateway for VPS %s: %v", vpsID, err)
+	// Get gateway client for the node where VPS is running
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		gatewayClient, err := vm.GetGatewayClientForNode(*vps.NodeID)
+		if err == nil {
+			logger.Info("[VPSManager] Guest agent not available for VPS %s, falling back to gateway on node %s", vpsID, *vps.NodeID)
+			allocations, err := gatewayClient.ListIPs(ctx, vps.OrganizationID, vpsID)
+			if err == nil && len(allocations) > 0 {
+				// Return gateway-allocated IP as IPv4
+				gatewayIP := allocations[0].IpAddress
+				logger.Info("[VPSManager] Got IP %s from gateway for VPS %s", gatewayIP, vpsID)
+				return []string{gatewayIP}, []string{}, nil
+			} else if err != nil {
+				logger.Warn("[VPSManager] Failed to get IP from gateway for VPS %s: %v", vpsID, err)
+			}
+		} else {
+			logger.Debug("[VPSManager] Failed to get gateway client for node %s: %v", *vps.NodeID, err)
 		}
 	}
 
@@ -872,12 +927,18 @@ func (vm *VPSManager) DeleteVPS(ctx context.Context, vpsID string) error {
 	}
 
 	// Release IP address from gateway if available
-	if vm.gatewayClient != nil {
-		if err := vm.gatewayClient.ReleaseIP(ctx, vpsID); err != nil {
-			logger.Warn("[VPSManager] Failed to release IP from gateway for VPS %s: %v (continuing with VM deletion)", vpsID, err)
-			// Continue with VM deletion even if IP release fails
+	// Get gateway client for the node where VPS is running
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		gatewayClient, err := vm.GetGatewayClientForNode(*vps.NodeID)
+		if err == nil {
+			if err := gatewayClient.ReleaseIP(ctx, vpsID); err != nil {
+				logger.Warn("[VPSManager] Failed to release IP from gateway for VPS %s: %v (continuing with VM deletion)", vpsID, err)
+				// Continue with VM deletion even if IP release fails
+			} else {
+				logger.Info("[VPSManager] Released IP from gateway for VPS %s", vpsID)
+			}
 		} else {
-			logger.Info("[VPSManager] Released IP from gateway for VPS %s", vpsID)
+			logger.Debug("[VPSManager] Failed to get gateway client for node %s: %v", *vps.NodeID, err)
 		}
 	}
 
@@ -921,7 +982,7 @@ func (vm *VPSManager) DeleteVPS(ctx context.Context, vpsID string) error {
 			}
 		}
 	}
-	
+
 	if err := proxmoxClient.DeleteVM(ctx, nodeName, vmIDInt, vpsID); err != nil {
 		// If deletion fails, try other nodes as fallback
 		if len(allNodes) > 1 {
@@ -938,7 +999,7 @@ func (vm *VPSManager) DeleteVPS(ctx context.Context, vpsID string) error {
 		}
 		return fmt.Errorf("failed to delete VM: %w", err)
 	}
-	
+
 deletionSuccess:
 
 	logger.Info("[VPSManager] Successfully deleted VPS %s (VM ID: %d)", vpsID, vmIDInt)
@@ -1093,16 +1154,35 @@ func (vm *VPSManager) ReinitializeVPS(ctx context.Context, vpsID string) (*datab
 	}
 
 	// Allocate IP address from gateway if available
+	// Determine target node from region mapping or use existing node
+	targetNodeName := ""
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		targetNodeName = *vps.NodeID
+	} else if vps.Region != "" {
+		regionNodeMap := parseRegionNodeMapping()
+		if mappedNode, ok := regionNodeMap[vps.Region]; ok {
+			targetNodeName = mappedNode
+		}
+	}
+
 	var allocatedIP string
 	var macAddress string
-	if vm.gatewayClient != nil {
-		macAddress = generateMACAddress()
-		allocResp, err := vm.gatewayClient.AllocateIP(ctx, vpsID, vps.OrganizationID, macAddress)
-		if err != nil {
-			logger.Warn("[VPSManager] Failed to allocate IP from gateway during reinitialization: %v (continuing without gateway IP)", err)
+	var gatewayClientForRecreate *VPSGatewayClient
+
+	if targetNodeName != "" {
+		client, err := vm.GetGatewayClientForNode(targetNodeName)
+		if err == nil {
+			gatewayClientForRecreate = client
+			macAddress = generateMACAddress()
+			allocResp, err := gatewayClientForRecreate.AllocateIP(ctx, vpsID, vps.OrganizationID, macAddress)
+			if err != nil {
+				logger.Warn("[VPSManager] Failed to allocate IP from gateway during reinitialization: %v (continuing without gateway IP)", err)
+			} else {
+				allocatedIP = allocResp.IpAddress
+				logger.Info("[VPSManager] Allocated IP %s for VPS %s from gateway on node %s during reinitialization", allocatedIP, vpsID, targetNodeName)
+			}
 		} else {
-			allocatedIP = allocResp.IpAddress
-			logger.Info("[VPSManager] Allocated IP %s for VPS %s from gateway during reinitialization", allocatedIP, vpsID)
+			logger.Debug("[VPSManager] Failed to get gateway client for node %s during reinitialization: %v", targetNodeName, err)
 		}
 	}
 
@@ -1110,8 +1190,8 @@ func (vm *VPSManager) ReinitializeVPS(ctx context.Context, vpsID string) (*datab
 	createResult, err := proxmoxClient.CreateVM(ctx, recreateConfig, org.AllowInterVMCommunication, nil)
 	if err != nil {
 		// If VM creation fails, release the allocated IP
-		if vm.gatewayClient != nil && allocatedIP != "" {
-			if releaseErr := vm.gatewayClient.ReleaseIP(ctx, vpsID); releaseErr != nil {
+		if gatewayClientForRecreate != nil && allocatedIP != "" {
+			if releaseErr := gatewayClientForRecreate.ReleaseIP(ctx, vpsID); releaseErr != nil {
 				logger.Warn("[VPSManager] Failed to release IP %s after VM recreation failure: %v", allocatedIP, releaseErr)
 			}
 		}
@@ -1736,7 +1816,7 @@ func (vm *VPSManager) ImportVPS(ctx context.Context, organizationID string) ([]I
 				}
 			}
 		}
-		
+
 		// If we couldn't determine from templates, try VM name as fallback
 		if image == 0 {
 			vmName := strings.ToLower(proxmoxVM.Name)
@@ -1760,7 +1840,7 @@ func (vm *VPSManager) ImportVPS(ctx context.Context, organizationID string) ([]I
 				logger.Info("[VPSManager] Matched VM name '%s' to ALMA_LINUX_9 for VM %d", proxmoxVM.Name, proxmoxVM.VMID)
 			}
 		}
-		
+
 		if image == 0 {
 			logger.Debug("[VPSManager] Could not determine image for VM %d (name: %s), leaving as UNSPECIFIED", proxmoxVM.VMID, proxmoxVM.Name)
 		}

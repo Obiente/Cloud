@@ -63,10 +63,10 @@ PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
 # SSH Proxy Configuration (optional)
 SSH_PROXY_PORT=2222
 
-# VPS Gateway Configuration (optional, for DHCP and SSH proxying)
-# If set, enables centralized DHCP management and SSH proxying via dedicated gateway service
+# VPS Gateway Configuration (required for multi-node deployments)
+# Maps Proxmox node names to gateway URLs
+VPS_NODE_GATEWAY_ENDPOINTS="node1:http://gateway1:1537,node2:http://gateway2:1537"  # Required for multi-node
 VPS_GATEWAY_API_SECRET=your-shared-secret  # Must match GATEWAY_API_SECRET in vps-gateway
-VPS_GATEWAY_URL=http://gateway-public-ip:1537  # Gateway gRPC server URL
 VPS_GATEWAY_BRIDGE=OCvpsnet  # SDN bridge name for gateway network
 ```
 
@@ -194,17 +194,28 @@ The VPS gateway provides centralized DHCP management and SSH proxying for VPS in
 
 2. **Configure Gateway Environment Variables**:
 
-   Add to your `docker-compose.yml` or environment:
+   **For multi-node deployments (required):**
+
+   Add to your API service `docker-compose.yml` or environment:
 
    ```bash
-   VPS_GATEWAY_URL=http://gateway-public-ip:1537  # Gateway gRPC server URL
+   # Map Proxmox node names to gateway URLs
+   VPS_NODE_GATEWAY_ENDPOINTS="node1:http://gateway1:1537,node2:http://gateway2:1537"
    VPS_GATEWAY_API_SECRET=your-shared-secret       # Must match GATEWAY_API_SECRET in gateway
    VPS_GATEWAY_BRIDGE=OCvpsnet                     # SDN bridge name for gateway network
    ```
 
+   **For each gateway service:**
+
+   ```bash
+   GATEWAY_API_SECRET=your-shared-secret           # Must match VPS_GATEWAY_API_SECRET in API
+   GATEWAY_OUTBOUND_IP=203.0.113.10                # Optional: Dedicated IP for outbound SNAT (per node)
+   GATEWAY_DHCP_INTERFACE=eth0                     # Interface inside container (connected to OCvpsnet bridge on host)
+   ```
+
 3. **Verify Gateway Connection**:
 
-   The API will automatically use the gateway for DHCP allocation and SSH proxying when `VPS_GATEWAY_URL` is configured.
+   The API will automatically route gateway requests to the gateway on the same node as each VPS when `VPS_NODE_GATEWAY_ENDPOINTS` is configured.
 
 **Note:** The gateway is optional. VPS instances can be created without it, but you'll need to configure networking manually.
 
@@ -874,7 +885,7 @@ VPS instances can be accessed via SSH without requiring a dedicated IP address. 
 - **"VPS IP address not available"**: 
   - Check gateway service is running and VPS has allocated IP
   - VPS may not have network configured or guest agent not ready. The proxy will attempt to connect using hostname directly.
-- **"failed to connect to gateway"**: Check `VPS_GATEWAY_API_SECRET` matches `GATEWAY_API_SECRET` in gateway service. Ensure gateway can reach API at `GATEWAY_API_URL`.
+- **"failed to connect to gateway"**: Check `VPS_GATEWAY_API_SECRET` matches `GATEWAY_API_SECRET` in gateway service. Verify `VPS_NODE_GATEWAY_ENDPOINTS` is correctly configured and gateway URLs are accessible from API instances.
 - **"failed to connect via gateway"**: Gateway not configured or unreachable (see "Configure VPS Gateway" section above)
 - **"Connection reset"**: Check if SSH proxy service is running and port 2222 is accessible
 
@@ -1027,7 +1038,7 @@ When using the vps-gateway service, VPS instances are connected to the SDN bridg
    - See the [VPS Gateway Setup Guide](vps-gateway-setup.md) for detailed deployment instructions
    - Configure DHCP pool, gateway IP, DNS servers
    - Set `GATEWAY_API_SECRET` to match `VPS_GATEWAY_API_SECRET` in the API
-   - Set `GATEWAY_API_URL` to point to your API service (e.g., `http://api:3001`)
+   - Configure `VPS_NODE_GATEWAY_ENDPOINTS` in API service to map nodes to gateway URLs
 
 3. **Configure API Environment Variables**:
    ```bash

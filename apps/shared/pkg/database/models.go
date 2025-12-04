@@ -448,7 +448,7 @@ type VPSInstance struct {
 	
 	// Infrastructure information
 	InstanceID *string `gorm:"column:instance_id;index" json:"instance_id"` // Internal instance ID
-	NodeID     *string `gorm:"column:node_id;index" json:"node_id"`          // Docker Swarm node ID where VPS is running
+	NodeID     *string `gorm:"column:node_id;index" json:"node_id"`         // Proxmox node name where VPS is running
 	
 	// SSH access
 	SSHKeyID       *string   `gorm:"column:ssh_key_id" json:"ssh_key_id"`

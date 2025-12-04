@@ -12,6 +12,7 @@ import (
 	"vps-gateway/internal/dhcp"
 	"vps-gateway/internal/logger"
 	"vps-gateway/internal/metrics"
+	"vps-gateway/internal/network"
 	"vps-gateway/internal/server"
 	"vps-gateway/internal/sshproxy"
 
@@ -43,10 +44,34 @@ func main() {
 		log.Fatal("GATEWAY_API_SECRET environment variable is required")
 	}
 
-	// Initialize DHCP manager
+	// Initialize DHCP manager first (needed for subnet info)
 	dhcpManager, err := dhcp.NewManager()
 	if err != nil {
 		log.Fatalf("Failed to initialize DHCP manager: %v", err)
+	}
+
+	// Get subnet configuration from DHCP manager
+	_, _, subnetMask, gatewayIP, _ := dhcpManager.GetConfig()
+
+	// Get outbound IP configuration (optional)
+	outboundIP := os.Getenv("GATEWAY_OUTBOUND_IP")
+	outboundIface := os.Getenv("GATEWAY_OUTBOUND_INTERFACE") // Optional: manual interface selection
+
+	// Initialize SNAT manager if outbound IP is configured
+	var snatManager *network.SNATManager
+	if outboundIP != "" {
+		logger.Info("GATEWAY_OUTBOUND_IP configured: %s", outboundIP)
+		snatManager, err = network.NewSNATManager(outboundIP, gatewayIP, subnetMask, outboundIface)
+		if err != nil {
+			log.Fatalf("Failed to initialize SNAT manager: %v", err)
+		}
+
+		// Configure SNAT rules
+		if err := snatManager.ConfigureSNAT(); err != nil {
+			log.Fatalf("Failed to configure SNAT: %v", err)
+		}
+	} else {
+		logger.Info("GATEWAY_OUTBOUND_IP not set, gateway will use node's default IP for SNAT")
 	}
 
 	// Initialize SSH proxy
@@ -98,6 +123,13 @@ func main() {
 
 	if err := sshProxy.Close(); err != nil {
 		logger.Error("Error closing SSH proxy: %v", err)
+	}
+
+	// Remove SNAT rules
+	if snatManager != nil {
+		if err := snatManager.RemoveSNAT(); err != nil {
+			logger.Error("Error removing SNAT rules: %v", err)
+		}
 	}
 
 	logger.Info("Shutdown complete")

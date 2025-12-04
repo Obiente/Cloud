@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,9 +29,97 @@ type VPSGatewayClient struct {
 	baseURL   string
 }
 
+// parseNodeGatewayMapping parses the VPS_NODE_GATEWAY_ENDPOINTS environment variable
+// Format: "node1:http://gateway1:1537,node2:http://gateway2:1537"
+// Returns a map of node name -> gateway URL
+func parseNodeGatewayMapping() (map[string]string, error) {
+	mapping := make(map[string]string)
+	envValue := os.Getenv("VPS_NODE_GATEWAY_ENDPOINTS")
+	if envValue == "" {
+		return mapping, nil
+	}
+
+	// Parse comma-separated node mappings
+	nodeStrings := strings.Split(envValue, ",")
+	for _, nodeStr := range nodeStrings {
+		nodeStr = strings.TrimSpace(nodeStr)
+		if nodeStr == "" {
+			continue
+		}
+
+		// Parse "nodeName:gatewayURL" format
+		// Gateway URL may contain colons (http://), so we need to split on first colon only
+		parts := strings.SplitN(nodeStr, ":", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid gateway mapping format: %s (expected 'nodeName:gatewayURL')", nodeStr)
+		}
+
+		nodeName := strings.TrimSpace(parts[0])
+		gatewayURL := strings.TrimSpace(parts[1])
+		if nodeName == "" || gatewayURL == "" {
+			return nil, fmt.Errorf("invalid gateway mapping: node name and URL cannot be empty in '%s'", nodeStr)
+		}
+
+		// Validate URL format (should start with http:// or https://)
+		if !strings.HasPrefix(gatewayURL, "http://") && !strings.HasPrefix(gatewayURL, "https://") {
+			return nil, fmt.Errorf("invalid gateway URL format in '%s': must start with http:// or https://", nodeStr)
+		}
+
+		mapping[nodeName] = gatewayURL
+	}
+
+	return mapping, nil
+}
+
+// resolveGatewayURLForNode resolves the gateway URL for a given node name
+// Uses VPS_NODE_GATEWAY_ENDPOINTS mapping
+// Returns error if node not found in mapping (no fallback)
+func resolveGatewayURLForNode(nodeName string) (string, error) {
+	if nodeName == "" {
+		return "", fmt.Errorf("node name is required")
+	}
+
+	mapping, err := parseNodeGatewayMapping()
+	if err != nil {
+		return "", fmt.Errorf("failed to parse gateway mapping: %w", err)
+	}
+
+	if len(mapping) == 0 {
+		return "", fmt.Errorf("VPS_NODE_GATEWAY_ENDPOINTS is not configured")
+	}
+
+	gatewayURL, ok := mapping[nodeName]
+	if !ok {
+		return "", fmt.Errorf("no gateway endpoint configured for node '%s'. Available nodes: %v", nodeName, getNodeNames(mapping))
+	}
+
+	return gatewayURL, nil
+}
+
+// getNodeNames extracts node names from mapping for error messages
+func getNodeNames(mapping map[string]string) []string {
+	nodes := make([]string, 0, len(mapping))
+	for node := range mapping {
+		nodes = append(nodes, node)
+	}
+	return nodes
+}
+
+// NewVPSGatewayClientForNode creates a new vps-gateway client for a specific node
+// Resolves gateway URL for the node from VPS_NODE_GATEWAY_ENDPOINTS
+// Returns error if node mapping not found
+func NewVPSGatewayClientForNode(nodeName string) (*VPSGatewayClient, error) {
+	gatewayURL, err := resolveGatewayURLForNode(nodeName)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewVPSGatewayClient(gatewayURL)
+}
+
 // NewVPSGatewayClient creates a new vps-gateway client
 // gatewayURL should be the full URL to the gateway (e.g., "http://gateway-ip:1537")
-// If gatewayURL is empty, uses VPS_GATEWAY_URL from environment
+// If gatewayURL is empty, uses VPS_GATEWAY_URL from environment (for backward compatibility during migration)
 func NewVPSGatewayClient(gatewayURL string) (*VPSGatewayClient, error) {
 	if gatewayURL == "" {
 		gatewayURL = os.Getenv("VPS_GATEWAY_URL")

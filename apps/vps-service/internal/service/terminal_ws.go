@@ -107,10 +107,10 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 	}
 	corsConfig := middleware.DefaultCORSConfig()
 	isWildcard := len(corsConfig.AllowedOrigins) == 1 && corsConfig.AllowedOrigins[0] == "*"
-	
-	log.Printf("[VPS Terminal WS] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s, host=%s", 
+
+	log.Printf("[VPS Terminal WS] CORS config: wildcard=%v, allowedOrigins=%v, origin=%s, host=%s",
 		isWildcard, corsConfig.AllowedOrigins, origin, r.Host)
-	
+
 	if isWildcard {
 		// Wildcard CORS configured - disable origin checking in WebSocket library
 		// Setting to nil completely disables origin validation (allows all origins)
@@ -123,7 +123,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		// even when the Host header doesn't match (e.g., when behind a gateway)
 		acceptOptions.OriginPatterns = make([]string, len(corsConfig.AllowedOrigins))
 		copy(acceptOptions.OriginPatterns, corsConfig.AllowedOrigins)
-		
+
 		// Also add the current origin if it's not already in the list
 		if origin != "" {
 			originInList := false
@@ -377,20 +377,26 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 		} else {
 			// No public IP from database, try multiple fallbacks
 			var vpsIP string
-			
+
 			// Fallback 1: Try gateway for allocated IP (most reliable if guest agent isn't working)
-			gatewayClient := vpsManager.GetGatewayClient()
-			if gatewayClient != nil {
-				log.Printf("[VPS Terminal WS] No public IP found, attempting to get IP from gateway")
-				allocations, err := gatewayClient.ListIPs(ctx, vps.OrganizationID, initMsg.VPSID)
-				if err == nil && len(allocations) > 0 {
-					vpsIP = allocations[0].IpAddress
-					log.Printf("[VPS Terminal WS] Found IP %s from gateway allocation", vpsIP)
-				} else if err != nil {
-					log.Printf("[VPS Terminal WS] Failed to get IP from gateway: %v", err)
+			if vps.NodeID != nil && *vps.NodeID != "" {
+				gatewayClient, err := vpsManager.GetGatewayClientForNode(*vps.NodeID)
+				if err == nil {
+					log.Printf("[VPS Terminal WS] No public IP found, attempting to get IP from gateway on node %s", *vps.NodeID)
+					allocations, err := gatewayClient.ListIPs(ctx, vps.OrganizationID, initMsg.VPSID)
+					if err == nil && len(allocations) > 0 {
+						vpsIP = allocations[0].IpAddress
+						log.Printf("[VPS Terminal WS] Found IP %s from gateway allocation", vpsIP)
+					} else if err != nil {
+						log.Printf("[VPS Terminal WS] Failed to get IP from gateway: %v", err)
+					}
+				} else {
+					log.Printf("[VPS Terminal WS] Failed to get gateway client for node %s: %v", *vps.NodeID, err)
 				}
+			} else {
+				log.Printf("[VPS Terminal WS] VPS has no node name, cannot get gateway client")
 			}
-			
+
 			// Fallback 2: Try Proxmox guest agent (requires qemu-guest-agent to be installed)
 			if vpsIP == "" {
 				log.Printf("[VPS Terminal WS] Attempting to get IP from Proxmox guest agent")
@@ -402,7 +408,7 @@ func (s *Service) HandleVPSTerminalWebSocket(w http.ResponseWriter, r *http.Requ
 					log.Printf("[VPS Terminal WS] Failed to get IP from Proxmox guest agent: %v", err)
 				}
 			}
-			
+
 			// Connect if we have an IP
 			if vpsIP != "" {
 				if terminalKey != nil {
@@ -614,12 +620,12 @@ func (s *Service) handleProxmoxTermProxy(
 
 	// Reuse the ProxmoxClient's HTTP client to preserve authentication state
 	baseHTTPClient := proxmoxClient.GetHTTPClient()
-	
+
 	// Create a new HTTP client with the same transport but our own cookie jar
 	jar := &cookieJar{
 		cookies: make(map[string]*http.Cookie),
 	}
-	
+
 	// Copy the transport from the base client
 	var tr *http.Transport
 	if baseHTTPClient.Transport != nil {
@@ -635,19 +641,19 @@ func (s *Service) handleProxmoxTermProxy(
 			},
 		}
 	}
-	
+
 	httpClient := &http.Client{
 		Transport: tr,
 		Timeout:   baseHTTPClient.Timeout,
 		Jar:       jar,
 	}
-	
+
 	// Proxmox WebSocket authentication per API documentation:
 	// The vncwebsocket endpoint (used by termproxy) requires:
 	// 1. A valid vncticket in the URL (from termproxy call)
 	// 2. Authentication for the WebSocket upgrade request itself
 	headers := make(http.Header)
-	
+
 	if proxmoxConfig.TokenID != "" && proxmoxConfig.Secret != "" {
 		// API token authentication - use Authorization header for WebSocket upgrade
 		authHeader := proxmoxClient.GetAuthHeader()
@@ -703,7 +709,7 @@ func (s *Service) handleProxmoxTermProxy(
 		authUser = authUser[:idx]
 		log.Printf("[VPS Terminal WS] Removed token ID from username for termproxy auth: %s -> %s", termProxyInfo.User, authUser)
 	}
-	
+
 	authMsg := fmt.Sprintf("%s:%s\n", authUser, termProxyInfo.Ticket)
 	ticketPreview := termProxyInfo.Ticket
 	if len(ticketPreview) > 20 {
@@ -716,7 +722,7 @@ func (s *Service) handleProxmoxTermProxy(
 		sendError(fmt.Sprintf("Failed to authenticate termproxy: %v", err))
 		return
 	}
-	
+
 	// Send connected message to client immediately after sending auth
 	// Proxmox termproxy will start sending data once authenticated
 	if err := writeJSON(vpsTerminalWSOutput{Type: "connected"}); err != nil {
@@ -747,7 +753,7 @@ func (s *Service) handleProxmoxTermProxy(
 		defer func() {
 			cancel() // Signal other goroutine to stop
 		}()
-		
+
 		// If we have initial data from auth check, send it first
 		if len(initialData) > 0 {
 			if err := writeBinary(initialData); err != nil {
@@ -756,7 +762,7 @@ func (s *Service) handleProxmoxTermProxy(
 				return
 			}
 		}
-		
+
 		for {
 			messageType, data, err := proxmoxConn.Read(ctx)
 			if err != nil {
@@ -853,15 +859,28 @@ func (s *Service) handleProxmoxTermProxy(
 
 // createSSHClientViaGateway creates an SSH client connection to a VPS via the gateway
 func (s *Service) createSSHClientViaGateway(ctx context.Context, vpsID, vpsIP string, sshConfig *ssh.ClientConfig) (*ssh.Client, error) {
+	// Get VPS to find node name for gateway selection
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		return nil, fmt.Errorf("failed to get VPS %s: %w", vpsID, err)
+	}
+
 	vpsManager, err := orchestrator.NewVPSManager()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create VPS manager: %w", err)
 	}
 	defer vpsManager.Close()
 
-	gatewayClient := vpsManager.GetGatewayClient()
-	if gatewayClient == nil {
-		return nil, fmt.Errorf("gateway client not available")
+	// Get gateway client for the node where VPS is running
+	var gatewayClient *orchestrator.VPSGatewayClient
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		client, err := vpsManager.GetGatewayClientForNode(*vps.NodeID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get gateway client for node %s: %w", *vps.NodeID, err)
+		}
+		gatewayClient = client
+	} else {
+		return nil, fmt.Errorf("VPS %s has no node name, cannot get gateway client", vpsID)
 	}
 
 	// Create TCP connection via gateway
@@ -1005,7 +1024,6 @@ func (s *Service) connectSSH(ctx context.Context, vpsID, vpsIP, rootPassword str
 		stderr:  stderr,
 	}, nil
 }
-
 
 // getVPSRootPassword retrieves the root password from Proxmox VM config
 func (s *Service) getVPSRootPassword(ctx context.Context, vpsID string) (string, error) {

@@ -22,6 +22,7 @@ type Manager struct {
 	poolEnd        net.IP
 	subnetMask     net.IPMask
 	gateway        net.IP
+	listenIP       net.IP // IP address to listen on (for multi-node support)
 	dnsServers     []net.IP
 	interfaceName  string
 	leasesFile     string
@@ -47,6 +48,7 @@ type Config struct {
 	PoolEnd       string
 	SubnetMask    string
 	Gateway       string
+	ListenIP      string // IP to listen on (optional, defaults to gateway IP)
 	DNSServers    string // Comma-separated
 	Interface     string
 	LeasesDir     string
@@ -59,6 +61,7 @@ func NewManager() (*Manager, error) {
 		PoolEnd:    os.Getenv("GATEWAY_DHCP_POOL_END"),
 		SubnetMask: os.Getenv("GATEWAY_DHCP_SUBNET_MASK"),
 		Gateway:    os.Getenv("GATEWAY_DHCP_GATEWAY"),
+		ListenIP:   os.Getenv("GATEWAY_DHCP_LISTEN_IP"), // Optional: IP to listen on (for multi-node)
 		DNSServers: os.Getenv("GATEWAY_DHCP_DNS"),
 		Interface:  os.Getenv("GATEWAY_DHCP_INTERFACE"),
 		LeasesDir:  os.Getenv("GATEWAY_DHCP_LEASES_DIR"),
@@ -85,6 +88,20 @@ func NewManager() (*Manager, error) {
 	poolStart := net.ParseIP(config.PoolStart)
 	poolEnd := net.ParseIP(config.PoolEnd)
 	gateway := net.ParseIP(config.Gateway)
+	
+	// Parse listen IP (optional, defaults to gateway IP for backward compatibility)
+	var listenIP net.IP
+	if config.ListenIP != "" {
+		listenIP = net.ParseIP(config.ListenIP)
+		if listenIP == nil || listenIP.To4() == nil {
+			return nil, fmt.Errorf("invalid listen IP address: %s", config.ListenIP)
+		}
+		logger.Info("Using custom listen IP: %s (gateway IP: %s)", listenIP.String(), gateway.String())
+	} else {
+		// Default to gateway IP for backward compatibility
+		listenIP = gateway
+		logger.Info("Using gateway IP as listen address: %s", listenIP.String())
+	}
 	
 	// Parse subnet mask - can be in CIDR notation (e.g., "24") or dotted decimal (e.g., "255.255.255.0")
 	var subnetMask net.IPMask
@@ -152,6 +169,7 @@ func NewManager() (*Manager, error) {
 		poolEnd:       poolEnd,
 		subnetMask:    subnetMask,
 		gateway:       gateway,
+		listenIP:      listenIP,
 		dnsServers:    dnsServers,
 		interfaceName: config.Interface,
 		hostsFile:     hostsFile,
@@ -327,7 +345,11 @@ func (m *Manager) GetConfig() (poolStart, poolEnd, subnetMask, gateway string, d
 		dnsStrs[i] = dns.String()
 	}
 
-	return m.poolStart.String(), m.poolEnd.String(), m.subnetMask.String(), m.gateway.String(), dnsStrs
+	// Convert subnet mask to dotted decimal format
+	maskIP := net.IP(m.subnetMask)
+	subnetMaskStr := maskIP.String()
+
+	return m.poolStart.String(), m.poolEnd.String(), subnetMaskStr, m.gateway.String(), dnsStrs
 }
 
 // GetStats returns DHCP statistics
@@ -547,9 +569,10 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 	
 	// Network interface and listen addresses
 	// Use listen-address instead of bind-interfaces to have more control
-	// Listen on the gateway IP (for DHCP) and 127.0.0.1 (for local DNS queries)
+	// Listen on the listen IP (for DHCP) and 127.0.0.1 (for local DNS queries)
+	// For multi-node deployments, each gateway should have its own listen IP
 	writer.WriteString(fmt.Sprintf("interface=%s\n", m.interfaceName))
-	writer.WriteString(fmt.Sprintf("listen-address=%s\n", m.gateway.String()))
+	writer.WriteString(fmt.Sprintf("listen-address=%s\n", m.listenIP.String()))
 	writer.WriteString("listen-address=127.0.0.1\n")
 	writer.WriteString("\n")
 	

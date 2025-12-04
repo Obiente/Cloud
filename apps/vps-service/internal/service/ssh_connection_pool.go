@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 	orchestrator "github.com/obiente/cloud/apps/vps-service/orchestrator"
 
@@ -19,24 +20,24 @@ import (
 
 // SSHConnectionPool manages persistent SSH connections to VPS instances
 type SSHConnectionPool struct {
-	connections map[string]*PooledSSHConnection // key: "vpsID:keyID" or "vpsID" if no key
-	mu          sync.RWMutex
+	connections   map[string]*PooledSSHConnection // key: "vpsID:keyID" or "vpsID" if no key
+	mu            sync.RWMutex
 	gatewayClient *orchestrator.VPSGatewayClient
 	idleTimeout   time.Duration
-	cleanupTicker  *time.Ticker
-	stopCleanup    chan struct{}
+	cleanupTicker *time.Ticker
+	stopCleanup   chan struct{}
 }
 
 // PooledSSHConnection represents a persistent SSH connection to a VPS
 type PooledSSHConnection struct {
-	vpsID      string
-	keyID      string // SSH key ID used for authentication (empty if using password)
-	sshClient  *ssh.Client
-	vpsIP      string
-	createdAt  time.Time
-	lastUsed   time.Time
-	channels   map[uint32]*ForwardedChannel
-	mu         sync.RWMutex
+	vpsID     string
+	keyID     string // SSH key ID used for authentication (empty if using password)
+	sshClient *ssh.Client
+	vpsIP     string
+	createdAt time.Time
+	lastUsed  time.Time
+	channels  map[uint32]*ForwardedChannel
+	mu        sync.RWMutex
 }
 
 // ForwardedChannel tracks a forwarded channel
@@ -52,7 +53,7 @@ func NewSSHConnectionPool(gatewayClient *orchestrator.VPSGatewayClient) *SSHConn
 		connections:   make(map[string]*PooledSSHConnection),
 		gatewayClient: gatewayClient,
 		idleTimeout:   5 * time.Minute,
-		cleanupTicker:  time.NewTicker(1 * time.Minute),
+		cleanupTicker: time.NewTicker(1 * time.Minute),
 		stopCleanup:   make(chan struct{}),
 	}
 
@@ -198,16 +199,41 @@ func (c *streamConn) SetWriteDeadline(t time.Time) error { return nil }
 
 // createSSHConnectionViaGateway creates an SSH client connection via the gateway
 func (p *SSHConnectionPool) createSSHConnectionViaGateway(ctx context.Context, vpsID, vpsIP string, sshSigner ssh.Signer) (*ssh.Client, error) {
-	if p.gatewayClient == nil {
-		return nil, fmt.Errorf("gateway client not available")
-	}
-
 	if sshSigner == nil {
 		return nil, fmt.Errorf("SSH signer required for authentication")
 	}
 
+	// Get VPS to find node name for gateway selection
+	var vps database.VPSInstance
+	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
+		return nil, fmt.Errorf("failed to get VPS %s: %w", vpsID, err)
+	}
+
+	// Get gateway client for the node where VPS is running
+	var gatewayClient *orchestrator.VPSGatewayClient
+	if vps.NodeID != nil && *vps.NodeID != "" {
+		vpsManager, err := orchestrator.NewVPSManager()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create VPS manager: %w", err)
+		}
+		defer vpsManager.Close()
+
+		client, err := vpsManager.GetGatewayClientForNode(*vps.NodeID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get gateway client for node %s: %w", *vps.NodeID, err)
+		}
+		gatewayClient = client
+	} else {
+		// Fallback to pool's gateway client if node not set (for backwards compatibility during migration)
+		if p.gatewayClient == nil {
+			return nil, fmt.Errorf("VPS %s has no node name and no gateway client available", vpsID)
+		}
+		gatewayClient = p.gatewayClient
+		logger.Warn("[SSHConnectionPool] VPS %s has no node name, using pool gateway client (should be migrated)", vpsID)
+	}
+
 	// Create ProxySSH stream
-	stream, err := p.gatewayClient.ProxySSH(ctx)
+	stream, err := gatewayClient.ProxySSH(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gateway stream: %w", err)
 	}
