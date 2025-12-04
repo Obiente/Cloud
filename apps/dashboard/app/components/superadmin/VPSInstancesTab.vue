@@ -476,12 +476,10 @@ const goToPage = (page: number) => {
 
 const openVPS = (row: any) => {
   const vpsId = row.vps?.id;
-  const organizationId = row.vps?.organizationId;
   
-  if (vpsId && organizationId) {
-    // Switch to the VPS's organization and navigate to the VPS detail page
-    organizationsStore.switchOrganization(organizationId);
-    router.push(`/vps/${vpsId}`);
+  if (vpsId) {
+    // Navigate to superadmin VPS detail page
+    router.push(`/superadmin/vps/${vpsId}`);
   }
 };
 
