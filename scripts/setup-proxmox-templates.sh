@@ -17,9 +17,8 @@
 #                                 (uses cached images if available, skips all confirmations)
 #   --help, -h                    Show help message
 #
-# IMPORTANT: Use directory-based storage (e.g., 'local') for templates, NOT lvmthin!
-# Templates on lvmthin may cause PARTUUID boot issues when cloned.
-# VMs can still be cloned TO lvmthin storage - Proxmox handles the conversion.
+# Note: Templates can be created on any storage type. When VMs are cloned to LVM thin storage,
+# the system automatically uses qemu-img convert to preserve partition table integrity.
 #
 # Examples:
 #   ./scripts/setup-proxmox-templates.sh              # Interactive mode
@@ -144,7 +143,6 @@ detect_storage_type() {
             echo "dir"
             ;;
         *lvmthin*)
-            # LVM thin-provisioning - NOT recommended for templates (PARTUUID issues)
             echo "lvmthin"
             ;;
         *lvm*)
@@ -170,10 +168,9 @@ detect_storage_type() {
     esac
 }
 
-# Fix boot configuration for lvmthin compatibility
-# Cloud images use PARTUUID which changes when cloned to lvmthin
-# This function modifies the disk to use /dev/sda1 instead
-fix_boot_config_for_lvmthin() {
+# Fix boot configuration to use device names instead of PARTUUID
+# Cloud images use PARTUUID which can cause boot issues
+fix_boot_config() {
     local vmid="$1"
     local storage_type="$2"
     local volume_id="$3"
@@ -388,7 +385,7 @@ fix_boot_config_for_lvmthin() {
     eval "$cleanup_cmd" 2>/dev/null || true
     
     if [ "$fixed_something" = true ]; then
-        print_success "Boot configuration fixed for lvmthin compatibility"
+        print_success "Boot configuration fixed"
     else
         print_info "No PARTUUID references found (already using device names or labels)"
     fi
@@ -404,48 +401,6 @@ get_volume_path() {
     else
         echo ""
     fi
-}
-
-# Ensure block-based storages (LVM/LVM-thin) have a valid GPT partition table
-ensure_partition_table() {
-    local storage_type="$1"
-    local volume_id="$2"
-
-    if [ "$storage_type" != "lvmthin" ] && [ "$storage_type" != "lvm" ]; then
-        return 0
-    fi
-
-    local disk_path
-    disk_path=$(get_volume_path "$volume_id")
-    if [ -z "$disk_path" ] || [ ! -b "$disk_path" ]; then
-        print_warning "Unable to resolve block device for volume '$volume_id'"
-        return 0
-    fi
-
-    # Check whether a partition entry already exists (skip protective MBR only disks)
-    local partition_lines
-    partition_lines=$(sgdisk -p "$disk_path" 2>/dev/null | grep -E "^\s+[0-9]+\s")
-    if [ -n "$partition_lines" ]; then
-        print_info "Disk $disk_path already has a GPT partition table"
-        return 0
-    fi
-
-    print_warning "Disk $disk_path is missing GPT partitions; recreating single root partition (1MiB-start)"
-
-    if ! sgdisk --zap-all "$disk_path" >/dev/null 2>&1; then
-        print_warning "Failed to wipe existing partition data on $disk_path"
-        return 0
-    fi
-
-    if ! sgdisk --new=1:1MiB:0 --typecode=1:8300 --change-name=1:cloudimg-rootfs "$disk_path" >/dev/null 2>&1; then
-        print_warning "Failed to create new partition on $disk_path"
-        return 0
-    fi
-
-    partprobe "$disk_path" 2>/dev/null || true
-    sleep 1
-    print_success "Recreated GPT with single root partition on $disk_path"
-    return 0
 }
 
 # Prompt for storage selection
@@ -519,11 +474,6 @@ prompt_storage() {
     if [ -n "$detected_storage" ]; then
         print_info "Auto-detected storage: $detected_storage (type: $detected_type)" >&2
         
-        # Warn about lvmthin
-        if [ "$detected_type" = "lvmthin" ]; then
-            print_warning "LVM-thin storage is NOT recommended for templates!" >&2
-            print_warning "Consider using 'local' (directory) storage instead." >&2
-        fi
         
         echo -n "Use detected storage? [Y/n]: " >&2
         # Read from terminal if available, otherwise stdin
@@ -565,25 +515,6 @@ prompt_storage() {
     local selected_storage="${storage_array[$((selection-1))]}"
     local selected_type=$(detect_storage_type "$selected_storage" "$node_name")
     
-    # Warn about lvmthin for templates
-    if [ "$selected_type" = "lvmthin" ]; then
-        print_warning "LVM-thin storage is NOT recommended for templates!" >&2
-        print_warning "VMs cloned from lvmthin templates may have boot issues (PARTUUID mismatch)." >&2
-        print_warning "Consider using directory storage (e.g., 'local') for templates instead." >&2
-        echo -n "Continue anyway? [y/N]: " >&2
-        local continue_anyway=""
-        if [ -t 0 ]; then
-            read -r continue_anyway || continue_anyway="N"
-        elif [ -c /dev/tty ]; then
-            read -r continue_anyway < /dev/tty || continue_anyway="N"
-        else
-            read -r continue_anyway || continue_anyway="N"
-        fi
-        if [[ ! "$continue_anyway" =~ ^[Yy]$ ]]; then
-            print_error "Aborted. Please select a different storage." >&2
-            exit 1
-        fi
-    fi
     
     # Output result to stdout
     echo "$selected_storage|$selected_type"
@@ -937,15 +868,9 @@ create_or_update_template() {
     print_success "Main disk: $scsi0_config"
     [ -n "$cloudinit_config" ] && print_success "Cloud-init: $cloudinit_config"
     
-    # Ensure GPT exists on block-based storage (lvm/lvmthin) before touching boot config
-    ensure_partition_table "$storage_type" "$imported_disk"
-    
-    # CRITICAL: Fix GRUB configuration to use /dev/sda1 instead of PARTUUID
-    # Cloud images use PARTUUID for root filesystem, but when cloned to lvmthin,
-    # the PARTUUID changes and the VM fails to boot. We fix this by modifying
-    # the disk image to use /dev/sda1 (which is stable across clones).
-    print_info "Fixing boot configuration for lvmthin compatibility..."
-    fix_boot_config_for_lvmthin "$vmid" "$storage_type" "$imported_disk"
+    # Fix boot configuration to use device names instead of PARTUUID
+    print_info "Fixing boot configuration..."
+    fix_boot_config "$vmid" "$storage_type" "$imported_disk"
     
     # Convert to template
     print_info "Converting VM to template..."
