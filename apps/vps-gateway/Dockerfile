@@ -7,7 +7,8 @@ ARG TARGETOS=linux
 WORKDIR /build
 
 # Install build dependencies
-RUN apk add --no-cache git make
+# Use --no-scripts to disable triggers and avoid QEMU emulation issues
+RUN apk add --no-cache --no-scripts git make
 
 # Copy go mod files for vps-gateway and shared (copy separately to improve cache hits)
 COPY apps/vps-gateway/go.mod apps/vps-gateway/go.sum ./apps/vps-gateway/

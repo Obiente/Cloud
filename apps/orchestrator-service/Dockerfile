@@ -6,7 +6,8 @@ ARG TARGETARCH=amd64
 ARG TARGETOS=linux
 
 # Install build dependencies
-RUN apk add --no-cache git make
+# Use --no-scripts to disable triggers and avoid QEMU emulation issues
+RUN apk add --no-cache --no-scripts git make
 
 # Set working directory
 WORKDIR /build
