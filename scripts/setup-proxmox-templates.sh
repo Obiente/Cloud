@@ -15,14 +15,32 @@
 # Options:
 #   --recreate-all, -y, --yes    Automatically recreate all templates without prompts
 #                                 (uses cached images if available, skips all confirmations)
+#   --node NODE_NAME              Specify which Proxmox node to create templates on
+#                                 (required for multi-node clusters, defaults to local node)
 #   --help, -h                    Show help message
 #
 # Note: Templates can be created on any storage type. When VMs are cloned to LVM thin storage,
 # the system automatically uses qemu-img convert to preserve partition table integrity.
 #
+# Multi-Node Clusters:
+#   IMPORTANT: Templates must exist on each node where VMs will be created. The VPS creation
+#   process only searches for templates on the selected node - it does not clone templates
+#   across nodes. Therefore, you must run this script on each node where you want templates.
+#
+#   Example for multi-node setup:
+#     # On first node:
+#     ssh root@node1 './setup-proxmox-templates.sh --node node1'
+#     
+#     # On second node:
+#     ssh root@node2 './setup-proxmox-templates.sh --node node2'
+#
+#   Note: The 'qm' command operates on the local node only, so you must run the script
+#   on each node separately, or use SSH to execute it remotely on each target node.
+#
 # Examples:
-#   ./scripts/setup-proxmox-templates.sh              # Interactive mode
+#   ./scripts/setup-proxmox-templates.sh              # Interactive mode (creates on local node)
 #   ./scripts/setup-proxmox-templates.sh --recreate-all # Auto-recreate all templates
+#   ./scripts/setup-proxmox-templates.sh --node node1  # Create templates on node 'node1' (must run on that node)
 
 set -e  # Exit on error
 
@@ -36,14 +54,31 @@ NC='\033[0m' # No Color
 # Template configurations
 # Using the same image URLs as Proxmox community helper scripts (tteck/community-scripts)
 # These are tested and known to work with UEFI boot
+# Base VM IDs (will be offset by node index for multi-node clusters)
 declare -A TEMPLATES=(
-    ["ubuntu-22.04-standard"]="9000|https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img|jammy-server-cloudimg-amd64.img"
-    ["ubuntu-24.04-standard"]="9001|https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img|noble-server-cloudimg-amd64.img"
-    ["debian-12-standard"]="9002|https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2|debian-12-genericcloud-amd64.qcow2"
-    ["debian-13-standard"]="9003|https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2|debian-13-genericcloud-amd64.qcow2"
-    ["rockylinux-9-standard"]="9004|https://download.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2|Rocky-9-GenericCloud-Base.latest.x86_64.qcow2"
-    ["almalinux-9-standard"]="9005|https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2|AlmaLinux-9-GenericCloud-latest.x86_64.qcow2"
+    ["ubuntu-22.04-standard"]="0|https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img|jammy-server-cloudimg-amd64.img"
+    ["ubuntu-24.04-standard"]="1|https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img|noble-server-cloudimg-amd64.img"
+    ["debian-12-standard"]="2|https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2|debian-12-genericcloud-amd64.qcow2"
+    ["debian-13-standard"]="3|https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2|debian-13-genericcloud-amd64.qcow2"
+    ["rockylinux-9-standard"]="4|https://download.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud-Base.latest.x86_64.qcow2|Rocky-9-GenericCloud-Base.latest.x86_64.qcow2"
+    ["almalinux-9-standard"]="5|https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2|AlmaLinux-9-GenericCloud-latest.x86_64.qcow2"
 )
+
+# Calculate template VMID based on node index
+# For multi-node clusters: node 0 = 9000-9005, node 1 = 9100-9105, node 2 = 9200-9205, etc.
+# For single node: uses 9000-9005
+get_template_vmid() {
+    local template_index="$1"  # 0-5 from TEMPLATES array
+    local node_index="$2"       # 0-based node index in cluster
+    
+    # Base ID: 9000
+    # Offset per node: 100 (node 0 = 9000, node 1 = 9100, node 2 = 9200, etc.)
+    local base_id=9000
+    local node_offset=$((node_index * 100))
+    local vmid=$((base_id + node_offset + template_index))
+    
+    echo "$vmid"
+}
 
 # Function to print colored output
 print_info() {
@@ -82,6 +117,84 @@ check_prerequisites() {
     fi
     
     print_success "All prerequisites met"
+}
+
+# List available nodes in cluster
+list_available_nodes() {
+    if command -v pvecm >/dev/null 2>&1; then
+        # pvecm nodes output format:
+        # Membership Information
+        # ----------------------
+        # Nodeid  Votes Name
+        #      1      1 node1
+        #      2      1 node2
+        # We need to skip header lines and extract the node name (last column)
+        # Filter out header lines and empty lines - only get lines that start with a number (Nodeid)
+        # Also filter out artifacts like "(local)" and trailing numbers/parentheses
+        pvecm nodes 2>/dev/null | awk 'NR>3 && NF>0 && $1 ~ /^[0-9]+$/ && $1 != "0" {
+            if ($1 == "0") next
+            node = $4
+            gsub(/[()]/, "", node)
+            gsub(/^[ \t]+|[ \t]+$/, "", node)
+            if (node != "" && node !~ /^[0-9]+$/ && node != "local" && node != "Qdevice" && node != "votes") {
+                print node
+            }
+        }' | grep -v '^$' | grep -vE '^[0-9]+$' | grep -v '^local$' | grep -v '^Qdevice$' | sort -u || echo ""
+    else
+        # Single node setup
+        local local_node=$(hostname -s 2>/dev/null || echo "localhost")
+        echo "$local_node"
+    fi
+}
+
+# Get node index in cluster (0-based)
+# Uses nodeid from pvecm for stable, unique indexing across all nodes
+# This ensures each node gets a unique VMID range even if node names differ
+get_node_index() {
+    local node_name="$1"
+    
+    if command -v pvecm >/dev/null 2>&1; then
+        # Use nodeid from pvecm nodes output for stable indexing
+        # Format: Nodeid  Votes Name (or Nodeid  Votes Qdevice Name with "(local)" marker)
+        # We'll use the nodeid (first column) minus 1 as the index
+        # This ensures each node gets a unique, stable index regardless of name
+        local nodeid=$(pvecm nodes 2>/dev/null | awk -v name="$node_name" 'NR>3 && NF>0 && $1 ~ /^[0-9]+$/ && $1 != "0" {
+            if ($1 == "0") next
+            node = $4
+            gsub(/[()]/, "", node)
+            gsub(/^[ \t]+|[ \t]+$/, "", node)
+            if (node == name && node != "" && node !~ /^[0-9]+$/ && node != "local" && node != "Qdevice" && node != "votes") {
+                print $1 - 1
+                exit
+            }
+        }')
+        
+        if [ -n "$nodeid" ] && [[ "$nodeid" =~ ^[0-9]+$ ]]; then
+            echo "$nodeid"
+            return 0
+        fi
+    fi
+    
+    # Fallback: use alphabetical order of nodes for consistent indexing
+    local nodes=$(list_available_nodes | sort)
+    local index=0
+    
+    for node in $nodes; do
+        # Filter out invalid entries
+        if [ -n "$node" ] && [ "$node" != "Membership" ] && [ "$node" != "Information" ] && [ "$node" != "----------------------" ] && [ "$node" != "Nodeid" ] && [ "$node" != "Votes" ] && [ "$node" != "Name" ] && [ "$node" != "local" ] && [ "$node" != "(local)" ] && ! [[ "$node" =~ ^[0-9]+$ ]]; then
+            if [ "$node" = "$node_name" ]; then
+                echo "$index"
+                return 0
+            fi
+            ((index++))
+        fi
+    done
+    
+    # Node not found - this shouldn't happen, but if it does, use 0
+    # This could cause VMID conflicts if multiple nodes aren't found
+    # Print warning to stderr so it doesn't interfere with the return value
+    print_warning "Node '$node_name' not found in cluster node list, using index 0 (may cause VMID conflicts with other nodes using index 0)" >&2
+    echo "0"
 }
 
 # Get available storage pools
@@ -236,9 +349,40 @@ fix_boot_config() {
             sleep 1
             partprobe "$loop_device" 2>/dev/null || true
             sleep 1
-            root_part="${loop_device}p1"
-            if [ ! -b "$root_part" ]; then
-                print_warning "Could not detect partition on $loop_device"
+            
+            # Try to find the root partition (usually the largest or the one with a filesystem)
+            root_part=""
+            local largest_size=0
+            for part in "${loop_device}"p*; do
+                if [ -b "$part" ]; then
+                    local part_size
+                    part_size=$(blockdev --getsize64 "$part" 2>/dev/null || echo "0")
+                    local part_fs
+                    part_fs=$(blkid -s TYPE -o value "$part" 2>/dev/null || echo "")
+                    
+                    # Skip boot/swap partitions
+                    if [ "$part_fs" = "swap" ] || [ "$part_fs" = "vfat" ] || [ "$part_fs" = "fat" ] || [ "$part_fs" = "fat32" ]; then
+                        continue
+                    fi
+                    
+                    # Prefer partitions with filesystems, and prefer larger ones
+                    if [ -n "$part_fs" ] && [ "$part_size" -gt "$largest_size" ]; then
+                        root_part="$part"
+                        largest_size=$part_size
+                    elif [ -z "$root_part" ] && [ "$part_size" -gt "$largest_size" ]; then
+                        root_part="$part"
+                        largest_size=$part_size
+                    fi
+                fi
+            done
+            
+            # Fallback to p1 if no partition found
+            if [ -z "$root_part" ] && [ -b "${loop_device}p1" ]; then
+                root_part="${loop_device}p1"
+            fi
+            
+            if [ -z "$root_part" ] || [ ! -b "$root_part" ]; then
+                print_warning "Could not detect root partition on $loop_device"
                 losetup -d "$loop_device" 2>/dev/null || true
                 return 0
             fi
@@ -285,13 +429,66 @@ fix_boot_config() {
     
     print_info "Found root partition: $root_part"
     
+    # Detect filesystem type
+    local fs_type
+    fs_type=$(blkid -s TYPE -o value "$root_part" 2>/dev/null || echo "")
+    
+    if [ -z "$fs_type" ]; then
+        # Try to detect from file command
+        local file_output
+        file_output=$(file -s "$root_part" 2>/dev/null || echo "")
+        if echo "$file_output" | grep -qi "ext4"; then
+            fs_type="ext4"
+        elif echo "$file_output" | grep -qi "ext3"; then
+            fs_type="ext3"
+        elif echo "$file_output" | grep -qi "xfs"; then
+            fs_type="xfs"
+        elif echo "$file_output" | grep -qi "btrfs"; then
+            fs_type="btrfs"
+        else
+            # Default to ext4 for most cloud images
+            fs_type="ext4"
+        fi
+    fi
+    
+    print_info "Detected filesystem type: $fs_type on $root_part"
+    
+    # Check if this is actually a mountable filesystem (not a boot partition or swap)
+    if [ "$fs_type" = "swap" ] || [ "$fs_type" = "vfat" ] || [ "$fs_type" = "fat" ] || [ "$fs_type" = "fat32" ]; then
+        print_info "Partition $root_part is $fs_type (likely boot/swap partition), skipping boot fix"
+        print_info "Template will work fine - modern cloud images handle boot configuration automatically"
+        eval "$cleanup_cmd" 2>/dev/null || true
+        return 0
+    fi
+    
     # Create mount point and mount
     mkdir -p "$mount_point"
     
     local mount_output
-    mount_output=$(mount "$root_part" "$mount_point" 2>&1)
-    if [ $? -ne 0 ]; then
-        print_warning "Failed to mount $root_part: $mount_output"
+    local mount_status=1
+    
+    # Try mounting read-only first (safer and works for most cases)
+    if [ -n "$fs_type" ] && [ "$fs_type" != "unknown" ]; then
+        mount_output=$(mount -t "$fs_type" -o ro "$root_part" "$mount_point" 2>&1)
+        mount_status=$?
+    fi
+    
+    # If that fails, try auto-detect with read-only
+    if [ $mount_status -ne 0 ]; then
+        mount_output=$(mount -o ro "$root_part" "$mount_point" 2>&1)
+        mount_status=$?
+    fi
+    
+    # If still fails, try read-write (some filesystems need it)
+    if [ $mount_status -ne 0 ]; then
+        mount_output=$(mount "$root_part" "$mount_point" 2>&1)
+        mount_status=$?
+    fi
+    
+    if [ $mount_status -ne 0 ]; then
+        print_info "Could not mount $root_part (fs: ${fs_type:-unknown})"
+        print_info "This is non-critical - modern cloud images handle boot configuration automatically"
+        print_info "Template will work correctly without manual boot fix"
         eval "$cleanup_cmd" 2>/dev/null || true
         rmdir "$mount_point" 2>/dev/null || true
         return 0
@@ -533,10 +730,97 @@ get_disk_path() {
     fi
 }
 
-# Check if template exists
+# Check if template exists (on any node in cluster)
 template_exists() {
     local template_name="$1"
-    qm list | grep -q "$template_name" 2>/dev/null
+    local node_name="${2:-}"
+    
+    # Search across all nodes in cluster
+    local nodes=$(list_available_nodes)
+    
+    # If no nodes found, check local node only
+    if [ -z "$nodes" ]; then
+        local local_node=$(hostname -s 2>/dev/null || echo "localhost")
+        nodes="$local_node"
+    fi
+    
+    # Check each node for the template
+    for node in $nodes; do
+        # Filter out invalid entries
+        if [ -z "$node" ] || [ "$node" = "Membership" ] || [ "$node" = "Information" ] || [ "$node" = "----------------------" ] || [ "$node" = "Nodeid" ] || [ "$node" = "Votes" ] || [ "$node" = "Name" ] || [ "$node" = "local" ] || [ "$node" = "(local)" ] || [[ "$node" =~ ^[0-9]+$ ]]; then
+            continue
+        fi
+        
+        # Check if template exists on this node by checking config files
+        # In Proxmox clusters, config files are at: /etc/pve/nodes/NODE/qemu-server/VMID.conf
+        # We need to search all VM configs on this node for the template name
+        if [ -d "/etc/pve/nodes/$node/qemu-server" ]; then
+            # Search all config files for the template name
+            for config_file in /etc/pve/nodes/$node/qemu-server/*.conf; do
+                if [ -f "$config_file" ]; then
+                    # Check if this is a template (has "template: 1" or name matches)
+                    if grep -q "^template:" "$config_file" 2>/dev/null; then
+                        local vm_name=$(grep "^name:" "$config_file" 2>/dev/null | cut -d' ' -f2- | tr -d '"' || echo "")
+                        if [ "$vm_name" = "$template_name" ]; then
+                            return 0  # Template found
+                        fi
+                    fi
+                fi
+            done
+        fi
+    done
+    
+    # Fallback: check local node using qm list
+    if qm list 2>/dev/null | grep -q "$template_name"; then
+        return 0
+    fi
+    
+    return 1  # Template not found
+}
+
+# Find which node a template exists on (searches across all cluster nodes)
+find_template_node() {
+    local template_name="$1"
+    local vmid="$2"
+    
+    # Get list of nodes from cluster
+    local nodes=$(list_available_nodes)
+    
+    # If no cluster nodes found, use local node
+    if [ -z "$nodes" ]; then
+        local local_node=$(hostname -s 2>/dev/null || echo "localhost")
+        nodes="$local_node"
+    fi
+    
+    # Check each node for the template
+    for node in $nodes; do
+        # Filter out invalid entries
+        if [ -z "$node" ] || [ "$node" = "Membership" ] || [ "$node" = "Information" ] || [ "$node" = "----------------------" ] || [ "$node" = "Nodeid" ] || [ "$node" = "Votes" ] || [ "$node" = "Name" ] || [ "$node" = "local" ] || [ "$node" = "(local)" ] || [[ "$node" =~ ^[0-9]+$ ]]; then
+            continue
+        fi
+        
+        # Check if VM exists on this node by checking config file
+        # Config files are at: /etc/pve/nodes/NODE/qemu-server/VMID.conf
+        if [ -f "/etc/pve/nodes/$node/qemu-server/$vmid.conf" ]; then
+            # Verify it's the right template by checking name and template flag
+            if grep -q "^template:" "/etc/pve/nodes/$node/qemu-server/$vmid.conf" 2>/dev/null; then
+                local vm_name=$(grep "^name:" "/etc/pve/nodes/$node/qemu-server/$vmid.conf" 2>/dev/null | cut -d' ' -f2- | tr -d '"' || echo "")
+                if [ "$vm_name" = "$template_name" ]; then
+                    echo "$node"
+                    return 0
+                fi
+            fi
+        fi
+    done
+    
+    # Fallback: check local node using qm
+    if qm list 2>/dev/null | grep -q "^[[:space:]]*$vmid[[:space:]]"; then
+        local local_node=$(hostname -s 2>/dev/null || echo "localhost")
+        echo "$local_node"
+        return 0
+    fi
+    
+    return 1
 }
 
 # Check if template has linked clones (VMs using the template's base volume)
@@ -661,19 +945,113 @@ create_or_update_template() {
     local image_filename="$4"
     local storage="$5"
     local storage_type="$6"
-    local skip_prompts="${7:-false}"  # Optional: skip all prompts (default: false)
+    local node_name="${7:-}"  # Node name to create template on
+    local skip_prompts="${8:-false}"  # Optional: skip all prompts (default: false)
     
-    print_info "Processing template: $template_name (VMID: $vmid)"
+    # If node_name not provided, use local node
+    if [ -z "$node_name" ]; then
+        node_name=$(hostname -s 2>/dev/null || echo "localhost")
+    fi
     
-    # Check if template already exists
+    print_info "Processing template: $template_name (VMID: $vmid) on node: $node_name"
+    
+    # Check if template already exists (search across all cluster nodes)
     local exists=false
     local existing_vmid=""
+    local existing_node=""
     
-    if template_exists "$template_name"; then
-        existing_vmid=$(qm list | grep "$template_name" | awk '{print $1}' | head -n1)
-        if [ -n "$existing_vmid" ]; then
+    # First, search for template by name across all nodes (to find any existing template with this name)
+    if template_exists "$template_name" "$node_name"; then
+        # Template exists somewhere - find which node and VMID
+        existing_node=$(find_template_node "$template_name" "$vmid")
+        
+        # If found by name but not by VMID, search for the actual VMID
+        if [ -z "$existing_node" ]; then
+            # Search all nodes for any template with this name
+            local nodes=$(list_available_nodes)
+            for node in $nodes; do
+                # Filter out invalid entries
+                if [ -z "$node" ] || [ "$node" = "Membership" ] || [ "$node" = "Information" ] || [ "$node" = "----------------------" ] || [ "$node" = "Nodeid" ] || [ "$node" = "Votes" ] || [ "$node" = "Name" ] || [ "$node" = "local" ] || [ "$node" = "(local)" ] || [[ "$node" =~ ^[0-9]+$ ]]; then
+                    continue
+                fi
+                
+                # Check all config files on this node
+                if [ -d "/etc/pve/nodes/$node/qemu-server" ]; then
+                    for config_file in /etc/pve/nodes/$node/qemu-server/*.conf; do
+                        if [ -f "$config_file" ]; then
+                            if grep -q "^template:" "$config_file" 2>/dev/null; then
+                                local vm_name=$(grep "^name:" "$config_file" 2>/dev/null | cut -d' ' -f2- | tr -d '"' || echo "")
+                                if [ "$vm_name" = "$template_name" ]; then
+                                    # Extract VMID from filename
+                                    local found_vmid=$(basename "$config_file" .conf)
+                                    if [[ "$found_vmid" =~ ^[0-9]+$ ]]; then
+                                        existing_vmid="$found_vmid"
+                                        existing_node="$node"
+                                        exists=true
+                                        break 2
+                                    fi
+                                fi
+                            fi
+                        fi
+                    done
+                fi
+            done
+        else
+            # Found by VMID
+            existing_vmid="$vmid"
             exists=true
-            print_warning "Template '$template_name' already exists (VMID: $existing_vmid)"
+        fi
+    fi
+    
+    # Also check if the specific VMID exists on any node (even if name doesn't match)
+    if [ "$exists" = false ]; then
+        local nodes=$(list_available_nodes)
+        for node in $nodes; do
+            # Filter out invalid entries
+            if [ -z "$node" ] || [ "$node" = "Membership" ] || [ "$node" = "Information" ] || [ "$node" = "----------------------" ] || [ "$node" = "Nodeid" ] || [ "$node" = "Votes" ] || [ "$node" = "Name" ] || [ "$node" = "local" ] || [ "$node" = "(local)" ] || [[ "$node" =~ ^[0-9]+$ ]]; then
+                continue
+            fi
+            
+            if [ -f "/etc/pve/nodes/$node/qemu-server/$vmid.conf" ]; then
+                existing_vmid="$vmid"
+                existing_node="$node"
+                exists=true
+                break
+            fi
+        done
+    fi
+    
+    if [ "$exists" = true ] && [ -n "$existing_vmid" ]; then
+        # Check if this is a VMID conflict (same VMID on different node) vs same name on different node
+        if [ "$existing_node" != "$node_name" ]; then
+            # Same VMID on different node = conflict (VMIDs must be unique cluster-wide)
+            if [ "$existing_vmid" = "$vmid" ]; then
+                print_error "VMID $vmid conflict: Template with VMID $existing_vmid already exists on node '$existing_node', but target node is '$node_name'"
+                print_error "VMIDs must be unique across the entire cluster. Cannot create template with VMID $vmid on '$node_name'."
+                print_info "Skipping template: $template_name"
+                return 1
+            else
+                # Same name but different VMID = OK (each node needs its own templates)
+                print_info "Template '$template_name' exists on node '$existing_node' (VMID: $existing_vmid), creating new template on '$node_name' (VMID: $vmid)"
+                # Continue with creation - this is expected for multi-node setups
+                exists=false
+                existing_vmid=""
+                existing_node=""
+            fi
+        else
+            # Same node - check if it's the same VMID (update) or different (shouldn't happen)
+            if [ "$existing_vmid" = "$vmid" ]; then
+                print_warning "Template '$template_name' already exists (VMID: $existing_vmid) on node '$node_name'"
+            else
+                print_warning "Template '$template_name' exists with different VMID ($existing_vmid) on node '$node_name', creating new template with VMID $vmid"
+                exists=false
+                existing_vmid=""
+            fi
+        fi
+    fi
+    
+    # Only proceed with update logic if template exists on same node with same VMID
+    if [ "$exists" = true ] && [ -n "$existing_vmid" ] && [ "$existing_vmid" = "$vmid" ] && [ "$existing_node" = "$node_name" ]; then
             
             if [ "$skip_prompts" = true ]; then
                 print_info "Auto-updating existing template (--recreate-all mode)"
@@ -754,7 +1132,8 @@ create_or_update_template() {
             fi
             
             # Delete existing template (only if no linked clones exist)
-            print_info "Deleting existing template..."
+            # Only delete if it's on the target node (which we already verified above)
+            print_info "Deleting existing template on node '$node_name'..."
             if qm destroy "$existing_vmid" --purge 2>/dev/null; then
                 print_success "Deleted existing template"
             else
@@ -762,7 +1141,6 @@ create_or_update_template() {
                 print_info "Skipping template: $template_name"
                 return 1
             fi
-        fi
     fi
     
     # Use cache directory for images (persists across runs)
@@ -775,28 +1153,38 @@ create_or_update_template() {
     
     # Check if image already exists in cache
     if [ -f "$image_path" ]; then
-        print_info "Found cached image: $image_filename ($(du -h "$image_path" | cut -f1))"
+        local image_size=$(stat -f%z "$image_path" 2>/dev/null || stat -c%s "$image_path" 2>/dev/null || echo "0")
+        local image_size_mb=$((image_size / 1024 / 1024))
         
-        if [ "$skip_prompts" = true ]; then
-            need_download=false
-            print_info "Using cached image (--recreate-all mode): $image_path"
+        # Check if image is corrupted or empty (less than 1MB is suspicious)
+        if [ "$image_size" -lt 1048576 ]; then
+            print_warning "Cached image appears to be corrupted or empty (size: ${image_size_mb}MB), will re-download"
+            rm -f "$image_path"
+            need_download=true
         else
-            echo -n "Use cached image? [Y/n]: " >&2
-            if [ -t 0 ]; then
-                read -r use_cached || use_cached="Y"
-            elif [ -c /dev/tty ]; then
-                read -r use_cached < /dev/tty || use_cached="Y"
-            else
-                read -r use_cached || use_cached="Y"
-            fi
-            use_cached=${use_cached:-Y}
+            print_info "Found cached image: $image_filename ($(du -h "$image_path" | cut -f1))"
             
-            if [[ "$use_cached" =~ ^[Yy]$ ]]; then
+            if [ "$skip_prompts" = true ]; then
                 need_download=false
-                print_info "Using cached image: $image_path"
+                print_info "Using cached image (--recreate-all mode): $image_path"
             else
-                print_info "Re-downloading image..."
-                rm -f "$image_path"
+                echo -n "Use cached image? [Y/n]: " >&2
+                if [ -t 0 ]; then
+                    read -r use_cached || use_cached="Y"
+                elif [ -c /dev/tty ]; then
+                    read -r use_cached < /dev/tty || use_cached="Y"
+                else
+                    read -r use_cached || use_cached="Y"
+                fi
+                use_cached=${use_cached:-Y}
+                
+                if [[ "$use_cached" =~ ^[Yy]$ ]]; then
+                    need_download=false
+                    print_info "Using cached image: $image_path"
+                else
+                    print_info "Re-downloading image..."
+                    rm -f "$image_path"
+                fi
             fi
         fi
     fi
@@ -806,8 +1194,27 @@ create_or_update_template() {
         print_info "Downloading cloud image from $image_url..."
         if ! wget -q --show-progress -O "$image_path" "$image_url"; then
             print_error "Failed to download image from $image_url"
+            rm -f "$image_path"
             return 1
         fi
+        
+        # Verify downloaded image is valid
+        local image_size=$(stat -f%z "$image_path" 2>/dev/null || stat -c%s "$image_path" 2>/dev/null || echo "0")
+        if [ "$image_size" -lt 1048576 ]; then
+            print_error "Downloaded image is too small (${image_size} bytes), likely corrupted"
+            rm -f "$image_path"
+            return 1
+        fi
+        
+        # Try to verify image format if qemu-img is available
+        if command -v qemu-img >/dev/null 2>&1; then
+            if ! qemu-img info "$image_path" >/dev/null 2>&1; then
+                print_error "Downloaded image appears to be corrupted (qemu-img cannot read it)"
+                rm -f "$image_path"
+                return 1
+            fi
+        fi
+        
         print_success "Downloaded and cached image: $image_filename ($(du -h "$image_path" | cut -f1))"
     fi
     
@@ -828,8 +1235,22 @@ create_or_update_template() {
     
     # Import the cloud image disk
     print_info "Importing disk to storage: $storage..."
-    if ! qm importdisk "$vmid" "$image_path" "$storage"; then
+    local import_output
+    import_output=$(qm importdisk "$vmid" "$image_path" "$storage" 2>&1)
+    local import_status=$?
+    
+    # Show import progress/output
+    echo "$import_output"
+    
+    if [ $import_status -ne 0 ]; then
         print_error "Failed to import disk"
+        
+        # Check if it's a corruption issue
+        if echo "$import_output" | grep -qiE "error|corrupt|invalid|format|not in.*format|I/O error"; then
+            print_warning "Image may be corrupted. Consider deleting cached image and re-downloading:"
+            print_warning "  rm -f $image_path"
+        fi
+        
         qm destroy "$vmid" --purge 2>/dev/null || true
         return 1
     fi
@@ -884,11 +1305,12 @@ create_or_update_template() {
     return 0
 }
 
-# Main function
+    # Main function
 main() {
     # Parse command-line arguments
     local recreate_all=false
     local skip_cache_prompt=false
+    local target_node=""
     
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -897,17 +1319,29 @@ main() {
                 skip_cache_prompt=true
                 shift
                 ;;
+            --node)
+                if [ -z "$2" ]; then
+                    print_error " --node requires a node name"
+                    exit 1
+                fi
+                target_node="$2"
+                shift 2
+                ;;
             --help|-h)
                 echo "Usage: $0 [OPTIONS]"
                 echo ""
                 echo "Options:"
                 echo "  --recreate-all, -y, --yes    Automatically recreate all templates without prompts"
                 echo "                                (uses cached images if available, skips all confirmations)"
+                echo "  --node NODE_NAME             Specify which Proxmox node to create templates on"
+                echo "                                (required for multi-node clusters, defaults to local node)"
                 echo "  --help, -h                    Show this help message"
                 echo ""
                 echo "Examples:"
                 echo "  $0                           Interactive mode (prompts for each template)"
                 echo "  $0 --recreate-all            Recreate all templates automatically"
+                echo "  $0 --node node1               Create templates on node 'node1'"
+                echo "  $0 --node node2 --recreate-all  Create all templates on node 'node2' without prompts"
                 exit 0
                 ;;
             *)
@@ -932,9 +1366,94 @@ main() {
     check_prerequisites
     
     # Get node name
-    local node_name=$(hostname -s 2>/dev/null || echo "localhost")
+    local node_name="$target_node"
+    if [ -z "$node_name" ]; then
+        node_name=$(hostname -s 2>/dev/null || echo "localhost")
+    fi
+    
+    # List available nodes (for multi-node clusters)
+    local available_nodes=$(list_available_nodes)
+    local node_count=$(echo "$available_nodes" | grep -v '^$' | wc -l)
+    
+    if [ -n "$available_nodes" ] && [ "$node_count" -gt 1 ]; then
+        print_info "Multi-node cluster detected. Available nodes:"
+        for node in $available_nodes; do
+            # Filter out empty lines and header artifacts
+            if [ -n "$node" ] && [ "$node" != "Membership" ] && [ "$node" != "Information" ] && [ "$node" != "----------------------" ] && [ "$node" != "Nodeid" ] && [ "$node" != "Votes" ] && [ "$node" != "Name" ]; then
+                local marker=""
+                if [ "$node" = "$node_name" ]; then
+                    marker=" (current)"
+                fi
+                echo "  - $node$marker"
+            fi
+        done
+        echo ""
+    fi
+    
+    # Verify node exists (for multi-node clusters)
+    if [ -n "$available_nodes" ] && [ "$node_count" -gt 1 ]; then
+        local node_exists=false
+        for node in $available_nodes; do
+            # Filter out empty lines and invalid entries
+            if [ -n "$node" ] && [ "$node" != "Membership" ] && [ "$node" != "Information" ] && [ "$node" != "----------------------" ] && [ "$node" != "Nodeid" ] && [ "$node" != "Votes" ] && [ "$node" != "Name" ] && [ "$node" != "local" ] && [ "$node" != "(local)" ]; then
+                if [ "$node" = "$node_name" ]; then
+                    node_exists=true
+                    break
+                fi
+            fi
+        done
+        
+        if [ "$node_exists" = false ] && [ "$node_name" != "localhost" ]; then
+            print_error "Node '$node_name' not found in cluster. Available nodes:"
+            for node in $available_nodes; do
+                if [ -n "$node" ] && [ "$node" != "Membership" ] && [ "$node" != "Information" ] && [ "$node" != "----------------------" ] && [ "$node" != "Nodeid" ] && [ "$node" != "Votes" ] && [ "$node" != "Name" ] && [ "$node" != "local" ] && [ "$node" != "(local)" ]; then
+                    echo "  - $node"
+                fi
+            done
+            echo ""
+            print_warning "Note: If you're running this on the local node, the script will use the local hostname."
+            print_info "For multi-node clusters, you must run this script on the target node."
+            print_info "Example: ssh root@target-node './setup-proxmox-templates.sh --node target-node'"
+            # Don't exit - allow it to continue with local node detection
+        fi
+    fi
+    
     print_info "Using node: $node_name"
     echo ""
+    
+    # Important note for multi-node clusters
+    local local_node=$(hostname -s 2>/dev/null || echo "localhost")
+    if [ "$node_name" != "$local_node" ] && [ "$local_node" != "localhost" ]; then
+        print_warning "Target node '$node_name' differs from local node '$local_node'"
+        print_warning "IMPORTANT: The 'qm' command operates on the local node where the script runs."
+        print_warning "Templates will be created on '$local_node', not '$node_name'."
+        print_warning ""
+        print_warning "For multi-node clusters, you have two options:"
+        print_warning "  1. Run this script on each node separately:"
+        print_warning "     ssh root@node1 './setup-proxmox-templates.sh --node node1'"
+        print_warning "     ssh root@node2 './setup-proxmox-templates.sh --node node2'"
+        print_warning "  2. Use the --node parameter only for validation (script must run on target node)"
+        echo ""
+        echo -n "Continue anyway? Templates will be created on '$local_node'. [y/N]: "
+        if [ -t 0 ]; then
+            read -r continue_anyway || continue_anyway="N"
+        elif [ -c /dev/tty ]; then
+            read -r continue_anyway < /dev/tty || continue_anyway="N"
+        else
+            read -r continue_anyway || continue_anyway="N"
+        fi
+        continue_anyway=${continue_anyway:-N}
+        
+        if [[ ! "$continue_anyway" =~ ^[Yy]$ ]]; then
+            print_info "Aborted by user"
+            exit 0
+        fi
+        
+        # Update node_name to match local node since that's where templates will be created
+        node_name="$local_node"
+        print_info "Creating templates on local node: $node_name"
+        echo ""
+    fi
     
     # Get available storages
     local storages=$(get_available_storages "$node_name")
@@ -981,6 +1500,11 @@ main() {
         echo ""
     fi
     
+    # Get node index for template ID calculation
+    local node_index=$(get_node_index "$node_name")
+    print_info "Node index for template IDs: $node_index (node: $node_name)"
+    echo ""
+    
     # Process each template
     local success_count=0
     local fail_count=0
@@ -990,17 +1514,20 @@ main() {
     
     for template_name in "${!TEMPLATES[@]}"; do
         local template_info="${TEMPLATES[$template_name]}"
-        local vmid=$(echo "$template_info" | cut -d'|' -f1)
+        local template_index=$(echo "$template_info" | cut -d'|' -f1)
         local image_url=$(echo "$template_info" | cut -d'|' -f2)
         local image_filename=$(echo "$template_info" | cut -d'|' -f3)
         
+        # Calculate VMID based on node index
+        local vmid=$(get_template_vmid "$template_index" "$node_index")
+        
         echo ""
         print_info "=========================================="
-        print_info "Processing: $template_name"
+        print_info "Processing: $template_name (VMID: $vmid)"
         print_info "=========================================="
         echo ""
         
-        if create_or_update_template "$template_name" "$vmid" "$image_url" "$image_filename" "$storage" "$storage_type" "$recreate_all"; then
+        if create_or_update_template "$template_name" "$vmid" "$image_url" "$image_filename" "$storage" "$storage_type" "$node_name" "$recreate_all"; then
             ((success_count++))
             print_success "Successfully processed: $template_name"
         else
