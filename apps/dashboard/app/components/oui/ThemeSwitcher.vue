@@ -7,18 +7,6 @@
     </template>
     <template #default>
       <OuiMenuItem
-        value="dark-purple"
-        @select="() => setTheme('dark-purple')"
-      >
-        <OuiFlex align="center" gap="sm" justify="between" class="w-full">
-          <OuiFlex align="center" gap="sm">
-            <div class="w-4 h-4 rounded border border-border-default" style="background: linear-gradient(135deg, #0f0e15 0%, #171521 50%, #8b5cf6 100%);" />
-            <OuiText size="sm">Dark Purple</OuiText>
-          </OuiFlex>
-          <CheckIcon v-if="currentTheme === 'dark-purple'" class="h-4 w-4 text-primary" />
-        </OuiFlex>
-      </OuiMenuItem>
-      <OuiMenuItem
         value="dark"
         @select="() => setTheme('dark')"
       >
@@ -40,6 +28,18 @@
             <OuiText size="sm">Extra Dark</OuiText>
           </OuiFlex>
           <CheckIcon v-if="currentTheme === 'extra-dark'" class="h-4 w-4 text-primary" />
+        </OuiFlex>
+      </OuiMenuItem>
+      <OuiMenuItem
+        value="dark-purple"
+        @select="() => setTheme('dark-purple')"
+      >
+        <OuiFlex align="center" gap="sm" justify="between" class="w-full">
+          <OuiFlex align="center" gap="sm">
+            <div class="w-4 h-4 rounded border border-border-default" style="background: linear-gradient(135deg, #0f0e15 0%, #171521 50%, #8b5cf6 100%);" />
+            <OuiText size="sm">Dark Purple</OuiText>
+          </OuiFlex>
+          <CheckIcon v-if="currentTheme === 'dark-purple'" class="h-4 w-4 text-primary" />
         </OuiFlex>
       </OuiMenuItem>
     </template>

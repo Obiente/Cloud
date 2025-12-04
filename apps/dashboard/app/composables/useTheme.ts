@@ -5,7 +5,7 @@ export type Theme = "dark" | "dark-purple" | "extra-dark";
 
 const THEME_COOKIE_KEY = "obiente_theme";
 const THEME_STORAGE_KEY = "obiente_theme";
-const DEFAULT_THEME: Theme = "dark-purple";
+const DEFAULT_THEME: Theme = "dark";
 
 /**
  * Composable for managing OUI theme switching
