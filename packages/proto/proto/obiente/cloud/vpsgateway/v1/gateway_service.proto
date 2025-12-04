@@ -17,8 +17,15 @@ service VPSGatewayService {
   // AllocateIP allocates a DHCP IP address for a VPS instance
   rpc AllocateIP(AllocateIPRequest) returns (AllocateIPResponse);
   
+  // AllocatePublicIP allocates a public IP address for a VPS with security measures
+  // This automatically applies firewall rules, ARP entries, and routing configuration
+  rpc AllocatePublicIP(AllocatePublicIPRequest) returns (AllocatePublicIPResponse);
+  
   // ReleaseIP releases a DHCP IP address for a VPS instance
   rpc ReleaseIP(ReleaseIPRequest) returns (ReleaseIPResponse);
+  
+  // ReleasePublicIP releases a public IP address and removes security measures
+  rpc ReleasePublicIP(ReleasePublicIPRequest) returns (ReleasePublicIPResponse);
   
   // ListIPs lists all allocated IP addresses
   rpc ListIPs(ListIPsRequest) returns (ListIPsResponse);
@@ -63,6 +70,45 @@ message AllocateIPResponse {
   google.protobuf.Timestamp lease_expires = 5;
 }
 
+// AllocatePublicIPRequest requests public IP allocation for a VPS
+message AllocatePublicIPRequest {
+  // VPS ID (e.g., "vps-123456789")
+  string vps_id = 1;
+  
+  // Organization ID (e.g., "org-123456789")
+  string organization_id = 2;
+  
+  // MAC address of the VPS network interface (required for security)
+  string mac_address = 3;
+  
+  // Public IP address to allocate (required)
+  string public_ip = 4;
+  
+  // Gateway IP for the public IP subnet (optional, auto-calculated if not provided)
+  string gateway = 5;
+  
+  // Netmask/CIDR for the public IP (optional, defaults to /24)
+  string netmask = 6;
+}
+
+// AllocatePublicIPResponse returns the allocated public IP with configuration
+message AllocatePublicIPResponse {
+  // Allocated public IP address
+  string ip_address = 1;
+  
+  // Gateway IP address
+  string gateway = 2;
+  
+  // Netmask/CIDR
+  string netmask = 3;
+  
+  // Success status
+  bool success = 4;
+  
+  // Message (optional)
+  string message = 5;
+}
+
 // ReleaseIPRequest requests IP release for a VPS
 message ReleaseIPRequest {
   // VPS ID
@@ -74,6 +120,27 @@ message ReleaseIPRequest {
 
 // ReleaseIPResponse confirms IP release
 message ReleaseIPResponse {
+  // Success status
+  bool success = 1;
+  
+  // Message (optional)
+  string message = 2;
+}
+
+// ReleasePublicIPRequest requests public IP release for a VPS
+message ReleasePublicIPRequest {
+  // VPS ID
+  string vps_id = 1;
+  
+  // Public IP address to release
+  string public_ip = 2;
+  
+  // MAC address (required for security cleanup)
+  string mac_address = 3;
+}
+
+// ReleasePublicIPResponse confirms public IP release
+message ReleasePublicIPResponse {
   // Success status
   bool success = 1;
   

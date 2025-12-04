@@ -206,7 +206,8 @@ func NewManager() (*Manager, error) {
 }
 
 // AllocateIP allocates an IP address for a VPS
-func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, preferredIP string) (*Allocation, error) {
+// If preferredIP is provided and allowPublicIP is true, it can allocate IPs outside the DHCP pool (for public IPs)
+func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, preferredIP string, allowPublicIP bool) (*Allocation, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -222,8 +223,8 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 		if ip == nil {
 			return nil, fmt.Errorf("invalid preferred IP address: %s", preferredIP)
 		}
-		// Check if IP is in pool
-		if !m.isIPInPool(ip) {
+		// Check if IP is in pool (unless allowPublicIP is true)
+		if !allowPublicIP && !m.isIPInPool(ip) {
 			return nil, fmt.Errorf("preferred IP %s is not in DHCP pool", preferredIP)
 		}
 		// Check if IP is already allocated
@@ -253,16 +254,22 @@ func (m *Manager) AllocateIP(ctx context.Context, vpsID, orgID, macAddress, pref
 
 	m.allocations[vpsID] = alloc
 
-	// Update dnsmasq hosts file
-	if err := m.updateHostsFile(); err != nil {
-		delete(m.allocations, vpsID)
-		return nil, fmt.Errorf("failed to update hosts file: %w", err)
-	}
+	// For public IPs (outside DHCP pool), skip dnsmasq configuration
+	// Public IPs are statically configured on the VPS, not via DHCP
+	if allowPublicIP && !m.isIPInPool(ip) {
+		logger.Info("Allocated public IP %s (outside DHCP pool) for VPS %s - skipping dnsmasq configuration", ip.String(), vpsID)
+	} else {
+		// Update dnsmasq hosts file (for DHCP pool IPs)
+		if err := m.updateHostsFile(); err != nil {
+			delete(m.allocations, vpsID)
+			return nil, fmt.Errorf("failed to update hosts file: %w", err)
+		}
 
-	// Reload dnsmasq
-	if err := m.reloadDNSMasq(); err != nil {
-		logger.Error("Failed to reload dnsmasq after allocation: %v", err)
-		// Continue anyway - allocation is saved
+		// Reload dnsmasq
+		if err := m.reloadDNSMasq(); err != nil {
+			logger.Error("Failed to reload dnsmasq after allocation: %v", err)
+			// Continue anyway - allocation is saved
+		}
 	}
 
 	// Persist allocation
@@ -594,6 +601,9 @@ func (m *Manager) generateDNSMasqConfig(configFile string) error {
 	writer.WriteString("\n")
 	
 	// DHCP configuration
+	// Enable authoritative mode to prevent unauthorized DHCP servers
+	// This ensures dnsmasq only responds to DHCP requests for known MAC addresses
+	writer.WriteString("dhcp-authoritative\n")
 	// dnsmasq dhcp-range format: start,end,netmask,lease-time
 	// The netmask should be in dotted decimal format (e.g., 255.255.255.0)
 	// Convert IPMask back to dotted decimal format

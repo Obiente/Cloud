@@ -39,9 +39,15 @@ const (
 	// VPSGatewayServiceAllocateIPProcedure is the fully-qualified name of the VPSGatewayService's
 	// AllocateIP RPC.
 	VPSGatewayServiceAllocateIPProcedure = "/obiente.cloud.vpsgateway.v1.VPSGatewayService/AllocateIP"
+	// VPSGatewayServiceAllocatePublicIPProcedure is the fully-qualified name of the VPSGatewayService's
+	// AllocatePublicIP RPC.
+	VPSGatewayServiceAllocatePublicIPProcedure = "/obiente.cloud.vpsgateway.v1.VPSGatewayService/AllocatePublicIP"
 	// VPSGatewayServiceReleaseIPProcedure is the fully-qualified name of the VPSGatewayService's
 	// ReleaseIP RPC.
 	VPSGatewayServiceReleaseIPProcedure = "/obiente.cloud.vpsgateway.v1.VPSGatewayService/ReleaseIP"
+	// VPSGatewayServiceReleasePublicIPProcedure is the fully-qualified name of the VPSGatewayService's
+	// ReleasePublicIP RPC.
+	VPSGatewayServiceReleasePublicIPProcedure = "/obiente.cloud.vpsgateway.v1.VPSGatewayService/ReleasePublicIP"
 	// VPSGatewayServiceListIPsProcedure is the fully-qualified name of the VPSGatewayService's ListIPs
 	// RPC.
 	VPSGatewayServiceListIPsProcedure = "/obiente.cloud.vpsgateway.v1.VPSGatewayService/ListIPs"
@@ -63,8 +69,13 @@ type VPSGatewayServiceClient interface {
 	RegisterGateway(context.Context) *connect.BidiStreamForClient[v1.GatewayMessage, v1.GatewayMessage]
 	// AllocateIP allocates a DHCP IP address for a VPS instance
 	AllocateIP(context.Context, *connect.Request[v1.AllocateIPRequest]) (*connect.Response[v1.AllocateIPResponse], error)
+	// AllocatePublicIP allocates a public IP address for a VPS with security measures
+	// This automatically applies firewall rules, ARP entries, and routing configuration
+	AllocatePublicIP(context.Context, *connect.Request[v1.AllocatePublicIPRequest]) (*connect.Response[v1.AllocatePublicIPResponse], error)
 	// ReleaseIP releases a DHCP IP address for a VPS instance
 	ReleaseIP(context.Context, *connect.Request[v1.ReleaseIPRequest]) (*connect.Response[v1.ReleaseIPResponse], error)
+	// ReleasePublicIP releases a public IP address and removes security measures
+	ReleasePublicIP(context.Context, *connect.Request[v1.ReleasePublicIPRequest]) (*connect.Response[v1.ReleasePublicIPResponse], error)
 	// ListIPs lists all allocated IP addresses
 	ListIPs(context.Context, *connect.Request[v1.ListIPsRequest]) (*connect.Response[v1.ListIPsResponse], error)
 	// ProxySSH proxies SSH connections to VPS instances via bidirectional stream
@@ -97,10 +108,22 @@ func NewVPSGatewayServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(vPSGatewayServiceMethods.ByName("AllocateIP")),
 			connect.WithClientOptions(opts...),
 		),
+		allocatePublicIP: connect.NewClient[v1.AllocatePublicIPRequest, v1.AllocatePublicIPResponse](
+			httpClient,
+			baseURL+VPSGatewayServiceAllocatePublicIPProcedure,
+			connect.WithSchema(vPSGatewayServiceMethods.ByName("AllocatePublicIP")),
+			connect.WithClientOptions(opts...),
+		),
 		releaseIP: connect.NewClient[v1.ReleaseIPRequest, v1.ReleaseIPResponse](
 			httpClient,
 			baseURL+VPSGatewayServiceReleaseIPProcedure,
 			connect.WithSchema(vPSGatewayServiceMethods.ByName("ReleaseIP")),
+			connect.WithClientOptions(opts...),
+		),
+		releasePublicIP: connect.NewClient[v1.ReleasePublicIPRequest, v1.ReleasePublicIPResponse](
+			httpClient,
+			baseURL+VPSGatewayServiceReleasePublicIPProcedure,
+			connect.WithSchema(vPSGatewayServiceMethods.ByName("ReleasePublicIP")),
 			connect.WithClientOptions(opts...),
 		),
 		listIPs: connect.NewClient[v1.ListIPsRequest, v1.ListIPsResponse](
@@ -126,12 +149,14 @@ func NewVPSGatewayServiceClient(httpClient connect.HTTPClient, baseURL string, o
 
 // vPSGatewayServiceClient implements VPSGatewayServiceClient.
 type vPSGatewayServiceClient struct {
-	registerGateway *connect.Client[v1.GatewayMessage, v1.GatewayMessage]
-	allocateIP      *connect.Client[v1.AllocateIPRequest, v1.AllocateIPResponse]
-	releaseIP       *connect.Client[v1.ReleaseIPRequest, v1.ReleaseIPResponse]
-	listIPs         *connect.Client[v1.ListIPsRequest, v1.ListIPsResponse]
-	proxySSH        *connect.Client[v1.ProxySSHRequest, v1.ProxySSHResponse]
-	getGatewayInfo  *connect.Client[v1.GetGatewayInfoRequest, v1.GetGatewayInfoResponse]
+	registerGateway  *connect.Client[v1.GatewayMessage, v1.GatewayMessage]
+	allocateIP       *connect.Client[v1.AllocateIPRequest, v1.AllocateIPResponse]
+	allocatePublicIP *connect.Client[v1.AllocatePublicIPRequest, v1.AllocatePublicIPResponse]
+	releaseIP        *connect.Client[v1.ReleaseIPRequest, v1.ReleaseIPResponse]
+	releasePublicIP  *connect.Client[v1.ReleasePublicIPRequest, v1.ReleasePublicIPResponse]
+	listIPs          *connect.Client[v1.ListIPsRequest, v1.ListIPsResponse]
+	proxySSH         *connect.Client[v1.ProxySSHRequest, v1.ProxySSHResponse]
+	getGatewayInfo   *connect.Client[v1.GetGatewayInfoRequest, v1.GetGatewayInfoResponse]
 }
 
 // RegisterGateway calls obiente.cloud.vpsgateway.v1.VPSGatewayService.RegisterGateway.
@@ -144,9 +169,19 @@ func (c *vPSGatewayServiceClient) AllocateIP(ctx context.Context, req *connect.R
 	return c.allocateIP.CallUnary(ctx, req)
 }
 
+// AllocatePublicIP calls obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocatePublicIP.
+func (c *vPSGatewayServiceClient) AllocatePublicIP(ctx context.Context, req *connect.Request[v1.AllocatePublicIPRequest]) (*connect.Response[v1.AllocatePublicIPResponse], error) {
+	return c.allocatePublicIP.CallUnary(ctx, req)
+}
+
 // ReleaseIP calls obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleaseIP.
 func (c *vPSGatewayServiceClient) ReleaseIP(ctx context.Context, req *connect.Request[v1.ReleaseIPRequest]) (*connect.Response[v1.ReleaseIPResponse], error) {
 	return c.releaseIP.CallUnary(ctx, req)
+}
+
+// ReleasePublicIP calls obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleasePublicIP.
+func (c *vPSGatewayServiceClient) ReleasePublicIP(ctx context.Context, req *connect.Request[v1.ReleasePublicIPRequest]) (*connect.Response[v1.ReleasePublicIPResponse], error) {
+	return c.releasePublicIP.CallUnary(ctx, req)
 }
 
 // ListIPs calls obiente.cloud.vpsgateway.v1.VPSGatewayService.ListIPs.
@@ -174,8 +209,13 @@ type VPSGatewayServiceHandler interface {
 	RegisterGateway(context.Context, *connect.BidiStream[v1.GatewayMessage, v1.GatewayMessage]) error
 	// AllocateIP allocates a DHCP IP address for a VPS instance
 	AllocateIP(context.Context, *connect.Request[v1.AllocateIPRequest]) (*connect.Response[v1.AllocateIPResponse], error)
+	// AllocatePublicIP allocates a public IP address for a VPS with security measures
+	// This automatically applies firewall rules, ARP entries, and routing configuration
+	AllocatePublicIP(context.Context, *connect.Request[v1.AllocatePublicIPRequest]) (*connect.Response[v1.AllocatePublicIPResponse], error)
 	// ReleaseIP releases a DHCP IP address for a VPS instance
 	ReleaseIP(context.Context, *connect.Request[v1.ReleaseIPRequest]) (*connect.Response[v1.ReleaseIPResponse], error)
+	// ReleasePublicIP releases a public IP address and removes security measures
+	ReleasePublicIP(context.Context, *connect.Request[v1.ReleasePublicIPRequest]) (*connect.Response[v1.ReleasePublicIPResponse], error)
 	// ListIPs lists all allocated IP addresses
 	ListIPs(context.Context, *connect.Request[v1.ListIPsRequest]) (*connect.Response[v1.ListIPsResponse], error)
 	// ProxySSH proxies SSH connections to VPS instances via bidirectional stream
@@ -203,10 +243,22 @@ func NewVPSGatewayServiceHandler(svc VPSGatewayServiceHandler, opts ...connect.H
 		connect.WithSchema(vPSGatewayServiceMethods.ByName("AllocateIP")),
 		connect.WithHandlerOptions(opts...),
 	)
+	vPSGatewayServiceAllocatePublicIPHandler := connect.NewUnaryHandler(
+		VPSGatewayServiceAllocatePublicIPProcedure,
+		svc.AllocatePublicIP,
+		connect.WithSchema(vPSGatewayServiceMethods.ByName("AllocatePublicIP")),
+		connect.WithHandlerOptions(opts...),
+	)
 	vPSGatewayServiceReleaseIPHandler := connect.NewUnaryHandler(
 		VPSGatewayServiceReleaseIPProcedure,
 		svc.ReleaseIP,
 		connect.WithSchema(vPSGatewayServiceMethods.ByName("ReleaseIP")),
+		connect.WithHandlerOptions(opts...),
+	)
+	vPSGatewayServiceReleasePublicIPHandler := connect.NewUnaryHandler(
+		VPSGatewayServiceReleasePublicIPProcedure,
+		svc.ReleasePublicIP,
+		connect.WithSchema(vPSGatewayServiceMethods.ByName("ReleasePublicIP")),
 		connect.WithHandlerOptions(opts...),
 	)
 	vPSGatewayServiceListIPsHandler := connect.NewUnaryHandler(
@@ -233,8 +285,12 @@ func NewVPSGatewayServiceHandler(svc VPSGatewayServiceHandler, opts ...connect.H
 			vPSGatewayServiceRegisterGatewayHandler.ServeHTTP(w, r)
 		case VPSGatewayServiceAllocateIPProcedure:
 			vPSGatewayServiceAllocateIPHandler.ServeHTTP(w, r)
+		case VPSGatewayServiceAllocatePublicIPProcedure:
+			vPSGatewayServiceAllocatePublicIPHandler.ServeHTTP(w, r)
 		case VPSGatewayServiceReleaseIPProcedure:
 			vPSGatewayServiceReleaseIPHandler.ServeHTTP(w, r)
+		case VPSGatewayServiceReleasePublicIPProcedure:
+			vPSGatewayServiceReleasePublicIPHandler.ServeHTTP(w, r)
 		case VPSGatewayServiceListIPsProcedure:
 			vPSGatewayServiceListIPsHandler.ServeHTTP(w, r)
 		case VPSGatewayServiceProxySSHProcedure:
@@ -258,8 +314,16 @@ func (UnimplementedVPSGatewayServiceHandler) AllocateIP(context.Context, *connec
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocateIP is not implemented"))
 }
 
+func (UnimplementedVPSGatewayServiceHandler) AllocatePublicIP(context.Context, *connect.Request[v1.AllocatePublicIPRequest]) (*connect.Response[v1.AllocatePublicIPResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocatePublicIP is not implemented"))
+}
+
 func (UnimplementedVPSGatewayServiceHandler) ReleaseIP(context.Context, *connect.Request[v1.ReleaseIPRequest]) (*connect.Response[v1.ReleaseIPResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleaseIP is not implemented"))
+}
+
+func (UnimplementedVPSGatewayServiceHandler) ReleasePublicIP(context.Context, *connect.Request[v1.ReleasePublicIPRequest]) (*connect.Response[v1.ReleasePublicIPResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleasePublicIP is not implemented"))
 }
 
 func (UnimplementedVPSGatewayServiceHandler) ListIPs(context.Context, *connect.Request[v1.ListIPsRequest]) (*connect.Response[v1.ListIPsResponse], error) {

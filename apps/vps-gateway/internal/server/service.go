@@ -11,6 +11,7 @@ import (
 	"vps-gateway/internal/dhcp"
 	"vps-gateway/internal/logger"
 	"vps-gateway/internal/metrics"
+	"vps-gateway/internal/security"
 	"vps-gateway/internal/sshproxy"
 
 	vpsgatewayv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/vpsgateway/v1"
@@ -23,18 +24,26 @@ import (
 // GatewayService implements the VPSGatewayService
 type GatewayService struct {
 	vpsgatewayv1connect.UnimplementedVPSGatewayServiceHandler
-	dhcpManager *dhcp.Manager
-	sshProxy    *sshproxy.Proxy
-	startTime   time.Time
+	dhcpManager   *dhcp.Manager
+	sshProxy      *sshproxy.Proxy
+	securityMgr   *security.Manager
+	startTime     time.Time
 }
 
 // NewGatewayService creates a new gateway service
-func NewGatewayService(dhcpManager *dhcp.Manager, sshProxy *sshproxy.Proxy) *GatewayService {
+func NewGatewayService(dhcpManager *dhcp.Manager, sshProxy *sshproxy.Proxy) (*GatewayService, error) {
+	// Initialize security manager
+	securityMgr, err := security.NewManager()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize security manager: %w", err)
+	}
+
 	return &GatewayService{
 		dhcpManager: dhcpManager,
 		sshProxy:    sshProxy,
+		securityMgr: securityMgr,
 		startTime:   time.Now(),
-	}
+	}, nil
 }
 
 // AllocateIP allocates a DHCP IP address for a VPS
@@ -48,6 +57,7 @@ func (s *GatewayService) AllocateIP(
 		req.Msg.OrganizationId,
 		req.Msg.MacAddress,
 		req.Msg.PreferredIp,
+		false, // allowPublicIP: false for regular DHCP allocations
 	)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to allocate IP: %w", err))
@@ -75,6 +85,107 @@ func (s *GatewayService) AllocateIP(
 		LeaseExpires: timestamppb.New(alloc.LeaseExpires),
 	}
 
+	return connect.NewResponse(resp), nil
+}
+
+// AllocatePublicIP allocates a public IP address for a VPS with security measures
+func (s *GatewayService) AllocatePublicIP(
+	ctx context.Context,
+	req *connect.Request[vpsgatewayv1.AllocatePublicIPRequest],
+) (*connect.Response[vpsgatewayv1.AllocatePublicIPResponse], error) {
+	publicIP := req.Msg.GetPublicIp()
+	macAddress := req.Msg.GetMacAddress()
+	vpsID := req.Msg.GetVpsId()
+	orgID := req.Msg.GetOrganizationId()
+
+	if publicIP == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("public_ip is required"))
+	}
+	if macAddress == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("mac_address is required for public IP security"))
+	}
+
+	// Allocate the public IP (outside DHCP pool)
+	_, err := s.dhcpManager.AllocateIP(
+		ctx,
+		vpsID,
+		orgID,
+		macAddress,
+		publicIP,
+		true, // allowPublicIP: true for public IPs
+	)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to allocate public IP: %w", err))
+	}
+
+	// Apply security measures (firewall rules, ARP entries)
+	if err := s.securityMgr.SecurePublicIP(ctx, publicIP, macAddress, vpsID); err != nil {
+		// If security setup fails, release the allocation
+		s.dhcpManager.ReleaseIP(ctx, vpsID, publicIP)
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to secure public IP: %w", err))
+	}
+
+	// Calculate gateway and netmask if not provided
+	gateway := req.Msg.GetGateway()
+	netmask := req.Msg.GetNetmask()
+	
+	if gateway == "" {
+		// Auto-calculate gateway (typically .1 in the subnet)
+		ip := net.ParseIP(publicIP)
+		if ip != nil && ip.To4() != nil {
+			ip4 := ip.To4()
+			ip4[3] = 1 // Set last octet to 1
+			gateway = ip4.String()
+		}
+	}
+	
+	if netmask == "" {
+		netmask = "24" // Default /24
+	}
+
+	resp := &vpsgatewayv1.AllocatePublicIPResponse{
+		IpAddress: publicIP,
+		Gateway:   gateway,
+		Netmask:   netmask,
+		Success:   true,
+		Message:   fmt.Sprintf("Public IP %s allocated and secured for VPS %s", publicIP, vpsID),
+	}
+
+	logger.Info("Allocated and secured public IP %s for VPS %s (org: %s)", publicIP, vpsID, orgID)
+	return connect.NewResponse(resp), nil
+}
+
+// ReleasePublicIP releases a public IP address and removes security measures
+func (s *GatewayService) ReleasePublicIP(
+	ctx context.Context,
+	req *connect.Request[vpsgatewayv1.ReleasePublicIPRequest],
+) (*connect.Response[vpsgatewayv1.ReleasePublicIPResponse], error) {
+	publicIP := req.Msg.GetPublicIp()
+	vpsID := req.Msg.GetVpsId()
+	macAddress := req.Msg.GetMacAddress()
+
+	if publicIP == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("public_ip is required"))
+	}
+
+	// Remove security measures first
+	if err := s.securityMgr.RemovePublicIPSecurity(ctx, publicIP, macAddress); err != nil {
+		logger.Warn("Failed to remove security for public IP %s: %v", publicIP, err)
+		// Continue - try to release anyway
+	}
+
+	// Release the IP allocation
+	err := s.dhcpManager.ReleaseIP(ctx, vpsID, publicIP)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("failed to release public IP: %w", err))
+	}
+
+	resp := &vpsgatewayv1.ReleasePublicIPResponse{
+		Success: true,
+		Message: fmt.Sprintf("Public IP %s released and security removed", publicIP),
+	}
+
+	logger.Info("Released public IP %s for VPS %s", publicIP, vpsID)
 	return connect.NewResponse(resp), nil
 }
 

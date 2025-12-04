@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file obiente/cloud/vpsgateway/v1/gateway_service.proto.
  */
 export const file_obiente_cloud_vpsgateway_v1_gateway_service: GenFile = /*@__PURE__*/
-  fileDesc("CjFvYmllbnRlL2Nsb3VkL3Zwc2dhdGV3YXkvdjEvZ2F0ZXdheV9zZXJ2aWNlLnByb3RvEhtvYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEiZwoRQWxsb2NhdGVJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCRIUCgxwcmVmZXJyZWRfaXAYBCABKAkilgEKEkFsbG9jYXRlSVBSZXNwb25zZRISCgppcF9hZGRyZXNzGAEgASgJEhMKC3N1Ym5ldF9tYXNrGAIgASgJEg8KB2dhdGV3YXkYAyABKAkSEwoLZG5zX3NlcnZlcnMYBCADKAkSMQoNbGVhc2VfZXhwaXJlcxgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiNgoQUmVsZWFzZUlQUmVxdWVzdBIOCgZ2cHNfaWQYASABKAkSEgoKaXBfYWRkcmVzcxgCIAEoCSI1ChFSZWxlYXNlSVBSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg8KB21lc3NhZ2UYAiABKAkiOQoOTGlzdElQc1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSLFAQoMSVBBbGxvY2F0aW9uEg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEgoKaXBfYWRkcmVzcxgDIAEoCRITCgttYWNfYWRkcmVzcxgEIAEoCRIwCgxhbGxvY2F0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjEKDWxlYXNlX2V4cGlyZXMYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlEKD0xpc3RJUHNSZXNwb25zZRI+CgthbGxvY2F0aW9ucxgBIAMoCzIpLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5JUEFsbG9jYXRpb24iegoPUHJveHlTU0hSZXF1ZXN0EhUKDWNvbm5lY3Rpb25faWQYASABKAkSDAoEdHlwZRgCIAEoCRIOCgZ0YXJnZXQYAyABKAkSDAoEcG9ydBgEIAEoBRIMCgRkYXRhGAUgASgMEhYKDnNzaF9wdWJsaWNfa2V5GAYgASgJIlQKEFByb3h5U1NIUmVzcG9uc2USFQoNY29ubmVjdGlvbl9pZBgBIAEoCRIMCgR0eXBlGAIgASgJEgwKBGRhdGEYAyABKAwSDQoFZXJyb3IYBCABKAkiFwoVR2V0R2F0ZXdheUluZm9SZXF1ZXN0IvABChZHZXRHYXRld2F5SW5mb1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFwoPZGhjcF9wb29sX3N0YXJ0GAIgASgJEhUKDWRoY3BfcG9vbF9lbmQYAyABKAkSEwoLc3VibmV0X21hc2sYBCABKAkSEgoKZ2F0ZXdheV9pcBgFIAEoCRITCgtkbnNfc2VydmVycxgGIAMoCRIRCgl0b3RhbF9pcHMYByABKAUSFQoNYWxsb2NhdGVkX2lwcxgIIAEoBRITCgtkaGNwX3N0YXR1cxgJIAEoCRIYChBzc2hfcHJveHlfc3RhdHVzGAogASgJIqQCCg5HYXRld2F5TWVzc2FnZRIMCgR0eXBlGAEgASgJEkYKDHJlZ2lzdHJhdGlvbhgCIAEoCzIwLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVnaXN0cmF0aW9uEg8KB21ldHJpY3MYAyABKAkSPAoHcmVxdWVzdBgEIAEoCzIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVxdWVzdBI+CghyZXNwb25zZRgFIAEoCzIsLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVzcG9uc2USLQoJaGVhcnRiZWF0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCKsAQoTR2F0ZXdheVJlZ2lzdHJhdGlvbhISCgpnYXRld2F5X2lkGAEgASgJEg8KB3ZlcnNpb24YAiABKAkSEgoKZ2F0ZXdheV9pcBgDIAEoCRIXCg9kaGNwX3Bvb2xfc3RhcnQYBCABKAkSFQoNZGhjcF9wb29sX2VuZBgFIAEoCRITCgtzdWJuZXRfbWFzaxgGIAEoCRIXCg9nYXRld2F5X2lwX2RoY3AYByABKAkiRQoOR2F0ZXdheVJlcXVlc3QSEgoKcmVxdWVzdF9pZBgBIAEoCRIOCgZtZXRob2QYAiABKAkSDwoHcGF5bG9hZBgDIAEoDCJWCg9HYXRld2F5UmVzcG9uc2USEgoKcmVxdWVzdF9pZBgBIAEoCRIPCgdzdWNjZXNzGAIgASgIEg8KB3BheWxvYWQYAyABKAwSDQoFZXJyb3IYBCABKAkyrQUKEVZQU0dhdGV3YXlTZXJ2aWNlEm8KD1JlZ2lzdGVyR2F0ZXdheRIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5TWVzc2FnZRorLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5TWVzc2FnZSgBMAESbQoKQWxsb2NhdGVJUBIuLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZUlQUmVxdWVzdBovLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZUlQUmVzcG9uc2USagoJUmVsZWFzZUlQEi0ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlJlbGVhc2VJUFJlcXVlc3QaLi5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUmVsZWFzZUlQUmVzcG9uc2USZAoHTGlzdElQcxIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5MaXN0SVBzUmVxdWVzdBosLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5MaXN0SVBzUmVzcG9uc2USawoIUHJveHlTU0gSLC5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUHJveHlTU0hSZXF1ZXN0Gi0ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlByb3h5U1NIUmVzcG9uc2UoATABEnkKDkdldEdhdGV3YXlJbmZvEjIub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdldEdhdGV3YXlJbmZvUmVxdWVzdBozLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HZXRHYXRld2F5SW5mb1Jlc3BvbnNlQlVaU2dpdGh1Yi5jb20vb2JpZW50ZS9jbG91ZC9hcHBzL3NoYXJlZC9wcm90by9vYmllbnRlL2Nsb3VkL3Zwc2dhdGV3YXkvdjE7dnBzZ2F0ZXdheXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("CjFvYmllbnRlL2Nsb3VkL3Zwc2dhdGV3YXkvdjEvZ2F0ZXdheV9zZXJ2aWNlLnByb3RvEhtvYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEiZwoRQWxsb2NhdGVJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhcKD29yZ2FuaXphdGlvbl9pZBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCRIUCgxwcmVmZXJyZWRfaXAYBCABKAkilgEKEkFsbG9jYXRlSVBSZXNwb25zZRISCgppcF9hZGRyZXNzGAEgASgJEhMKC3N1Ym5ldF9tYXNrGAIgASgJEg8KB2dhdGV3YXkYAyABKAkSEwoLZG5zX3NlcnZlcnMYBCADKAkSMQoNbGVhc2VfZXhwaXJlcxgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAijAEKF0FsbG9jYXRlUHVibGljSVBSZXF1ZXN0Eg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEwoLbWFjX2FkZHJlc3MYAyABKAkSEQoJcHVibGljX2lwGAQgASgJEg8KB2dhdGV3YXkYBSABKAkSDwoHbmV0bWFzaxgGIAEoCSJyChhBbGxvY2F0ZVB1YmxpY0lQUmVzcG9uc2USEgoKaXBfYWRkcmVzcxgBIAEoCRIPCgdnYXRld2F5GAIgASgJEg8KB25ldG1hc2sYAyABKAkSDwoHc3VjY2VzcxgEIAEoCBIPCgdtZXNzYWdlGAUgASgJIjYKEFJlbGVhc2VJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhIKCmlwX2FkZHJlc3MYAiABKAkiNQoRUmVsZWFzZUlQUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCBIPCgdtZXNzYWdlGAIgASgJIlAKFlJlbGVhc2VQdWJsaWNJUFJlcXVlc3QSDgoGdnBzX2lkGAEgASgJEhEKCXB1YmxpY19pcBgCIAEoCRITCgttYWNfYWRkcmVzcxgDIAEoCSI7ChdSZWxlYXNlUHVibGljSVBSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIEg8KB21lc3NhZ2UYAiABKAkiOQoOTGlzdElQc1JlcXVlc3QSFwoPb3JnYW5pemF0aW9uX2lkGAEgASgJEg4KBnZwc19pZBgCIAEoCSLFAQoMSVBBbGxvY2F0aW9uEg4KBnZwc19pZBgBIAEoCRIXCg9vcmdhbml6YXRpb25faWQYAiABKAkSEgoKaXBfYWRkcmVzcxgDIAEoCRITCgttYWNfYWRkcmVzcxgEIAEoCRIwCgxhbGxvY2F0ZWRfYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEjEKDWxlYXNlX2V4cGlyZXMYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlEKD0xpc3RJUHNSZXNwb25zZRI+CgthbGxvY2F0aW9ucxgBIAMoCzIpLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5JUEFsbG9jYXRpb24iegoPUHJveHlTU0hSZXF1ZXN0EhUKDWNvbm5lY3Rpb25faWQYASABKAkSDAoEdHlwZRgCIAEoCRIOCgZ0YXJnZXQYAyABKAkSDAoEcG9ydBgEIAEoBRIMCgRkYXRhGAUgASgMEhYKDnNzaF9wdWJsaWNfa2V5GAYgASgJIlQKEFByb3h5U1NIUmVzcG9uc2USFQoNY29ubmVjdGlvbl9pZBgBIAEoCRIMCgR0eXBlGAIgASgJEgwKBGRhdGEYAyABKAwSDQoFZXJyb3IYBCABKAkiFwoVR2V0R2F0ZXdheUluZm9SZXF1ZXN0IvABChZHZXRHYXRld2F5SW5mb1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFwoPZGhjcF9wb29sX3N0YXJ0GAIgASgJEhUKDWRoY3BfcG9vbF9lbmQYAyABKAkSEwoLc3VibmV0X21hc2sYBCABKAkSEgoKZ2F0ZXdheV9pcBgFIAEoCRITCgtkbnNfc2VydmVycxgGIAMoCRIRCgl0b3RhbF9pcHMYByABKAUSFQoNYWxsb2NhdGVkX2lwcxgIIAEoBRITCgtkaGNwX3N0YXR1cxgJIAEoCRIYChBzc2hfcHJveHlfc3RhdHVzGAogASgJIqQCCg5HYXRld2F5TWVzc2FnZRIMCgR0eXBlGAEgASgJEkYKDHJlZ2lzdHJhdGlvbhgCIAEoCzIwLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVnaXN0cmF0aW9uEg8KB21ldHJpY3MYAyABKAkSPAoHcmVxdWVzdBgEIAEoCzIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVxdWVzdBI+CghyZXNwb25zZRgFIAEoCzIsLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5UmVzcG9uc2USLQoJaGVhcnRiZWF0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCKsAQoTR2F0ZXdheVJlZ2lzdHJhdGlvbhISCgpnYXRld2F5X2lkGAEgASgJEg8KB3ZlcnNpb24YAiABKAkSEgoKZ2F0ZXdheV9pcBgDIAEoCRIXCg9kaGNwX3Bvb2xfc3RhcnQYBCABKAkSFQoNZGhjcF9wb29sX2VuZBgFIAEoCRITCgtzdWJuZXRfbWFzaxgGIAEoCRIXCg9nYXRld2F5X2lwX2RoY3AYByABKAkiRQoOR2F0ZXdheVJlcXVlc3QSEgoKcmVxdWVzdF9pZBgBIAEoCRIOCgZtZXRob2QYAiABKAkSDwoHcGF5bG9hZBgDIAEoDCJWCg9HYXRld2F5UmVzcG9uc2USEgoKcmVxdWVzdF9pZBgBIAEoCRIPCgdzdWNjZXNzGAIgASgIEg8KB3BheWxvYWQYAyABKAwSDQoFZXJyb3IYBCABKAkyrAcKEVZQU0dhdGV3YXlTZXJ2aWNlEm8KD1JlZ2lzdGVyR2F0ZXdheRIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5TWVzc2FnZRorLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HYXRld2F5TWVzc2FnZSgBMAESbQoKQWxsb2NhdGVJUBIuLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZUlQUmVxdWVzdBovLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZUlQUmVzcG9uc2USfwoQQWxsb2NhdGVQdWJsaWNJUBI0Lm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZVB1YmxpY0lQUmVxdWVzdBo1Lm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5BbGxvY2F0ZVB1YmxpY0lQUmVzcG9uc2USagoJUmVsZWFzZUlQEi0ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlJlbGVhc2VJUFJlcXVlc3QaLi5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUmVsZWFzZUlQUmVzcG9uc2USfAoPUmVsZWFzZVB1YmxpY0lQEjMub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlJlbGVhc2VQdWJsaWNJUFJlcXVlc3QaNC5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUmVsZWFzZVB1YmxpY0lQUmVzcG9uc2USZAoHTGlzdElQcxIrLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5MaXN0SVBzUmVxdWVzdBosLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5MaXN0SVBzUmVzcG9uc2USawoIUHJveHlTU0gSLC5vYmllbnRlLmNsb3VkLnZwc2dhdGV3YXkudjEuUHJveHlTU0hSZXF1ZXN0Gi0ub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLlByb3h5U1NIUmVzcG9uc2UoATABEnkKDkdldEdhdGV3YXlJbmZvEjIub2JpZW50ZS5jbG91ZC52cHNnYXRld2F5LnYxLkdldEdhdGV3YXlJbmZvUmVxdWVzdBozLm9iaWVudGUuY2xvdWQudnBzZ2F0ZXdheS52MS5HZXRHYXRld2F5SW5mb1Jlc3BvbnNlQlVaU2dpdGh1Yi5jb20vb2JpZW50ZS9jbG91ZC9hcHBzL3NoYXJlZC9wcm90by9vYmllbnRlL2Nsb3VkL3Zwc2dhdGV3YXkvdjE7dnBzZ2F0ZXdheXYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * AllocateIPRequest requests IP allocation for a VPS
@@ -106,6 +106,111 @@ export const AllocateIPResponseSchema: GenMessage<AllocateIPResponse> = /*@__PUR
   messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 1);
 
 /**
+ * AllocatePublicIPRequest requests public IP allocation for a VPS
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.AllocatePublicIPRequest
+ */
+export type AllocatePublicIPRequest = Message<"obiente.cloud.vpsgateway.v1.AllocatePublicIPRequest"> & {
+  /**
+   * VPS ID (e.g., "vps-123456789")
+   *
+   * @generated from field: string vps_id = 1;
+   */
+  vpsId: string;
+
+  /**
+   * Organization ID (e.g., "org-123456789")
+   *
+   * @generated from field: string organization_id = 2;
+   */
+  organizationId: string;
+
+  /**
+   * MAC address of the VPS network interface (required for security)
+   *
+   * @generated from field: string mac_address = 3;
+   */
+  macAddress: string;
+
+  /**
+   * Public IP address to allocate (required)
+   *
+   * @generated from field: string public_ip = 4;
+   */
+  publicIp: string;
+
+  /**
+   * Gateway IP for the public IP subnet (optional, auto-calculated if not provided)
+   *
+   * @generated from field: string gateway = 5;
+   */
+  gateway: string;
+
+  /**
+   * Netmask/CIDR for the public IP (optional, defaults to /24)
+   *
+   * @generated from field: string netmask = 6;
+   */
+  netmask: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.AllocatePublicIPRequest.
+ * Use `create(AllocatePublicIPRequestSchema)` to create a new message.
+ */
+export const AllocatePublicIPRequestSchema: GenMessage<AllocatePublicIPRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 2);
+
+/**
+ * AllocatePublicIPResponse returns the allocated public IP with configuration
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.AllocatePublicIPResponse
+ */
+export type AllocatePublicIPResponse = Message<"obiente.cloud.vpsgateway.v1.AllocatePublicIPResponse"> & {
+  /**
+   * Allocated public IP address
+   *
+   * @generated from field: string ip_address = 1;
+   */
+  ipAddress: string;
+
+  /**
+   * Gateway IP address
+   *
+   * @generated from field: string gateway = 2;
+   */
+  gateway: string;
+
+  /**
+   * Netmask/CIDR
+   *
+   * @generated from field: string netmask = 3;
+   */
+  netmask: string;
+
+  /**
+   * Success status
+   *
+   * @generated from field: bool success = 4;
+   */
+  success: boolean;
+
+  /**
+   * Message (optional)
+   *
+   * @generated from field: string message = 5;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.AllocatePublicIPResponse.
+ * Use `create(AllocatePublicIPResponseSchema)` to create a new message.
+ */
+export const AllocatePublicIPResponseSchema: GenMessage<AllocatePublicIPResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 3);
+
+/**
  * ReleaseIPRequest requests IP release for a VPS
  *
  * @generated from message obiente.cloud.vpsgateway.v1.ReleaseIPRequest
@@ -131,7 +236,7 @@ export type ReleaseIPRequest = Message<"obiente.cloud.vpsgateway.v1.ReleaseIPReq
  * Use `create(ReleaseIPRequestSchema)` to create a new message.
  */
 export const ReleaseIPRequestSchema: GenMessage<ReleaseIPRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 2);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 4);
 
 /**
  * ReleaseIPResponse confirms IP release
@@ -159,7 +264,70 @@ export type ReleaseIPResponse = Message<"obiente.cloud.vpsgateway.v1.ReleaseIPRe
  * Use `create(ReleaseIPResponseSchema)` to create a new message.
  */
 export const ReleaseIPResponseSchema: GenMessage<ReleaseIPResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 3);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 5);
+
+/**
+ * ReleasePublicIPRequest requests public IP release for a VPS
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.ReleasePublicIPRequest
+ */
+export type ReleasePublicIPRequest = Message<"obiente.cloud.vpsgateway.v1.ReleasePublicIPRequest"> & {
+  /**
+   * VPS ID
+   *
+   * @generated from field: string vps_id = 1;
+   */
+  vpsId: string;
+
+  /**
+   * Public IP address to release
+   *
+   * @generated from field: string public_ip = 2;
+   */
+  publicIp: string;
+
+  /**
+   * MAC address (required for security cleanup)
+   *
+   * @generated from field: string mac_address = 3;
+   */
+  macAddress: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.ReleasePublicIPRequest.
+ * Use `create(ReleasePublicIPRequestSchema)` to create a new message.
+ */
+export const ReleasePublicIPRequestSchema: GenMessage<ReleasePublicIPRequest> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 6);
+
+/**
+ * ReleasePublicIPResponse confirms public IP release
+ *
+ * @generated from message obiente.cloud.vpsgateway.v1.ReleasePublicIPResponse
+ */
+export type ReleasePublicIPResponse = Message<"obiente.cloud.vpsgateway.v1.ReleasePublicIPResponse"> & {
+  /**
+   * Success status
+   *
+   * @generated from field: bool success = 1;
+   */
+  success: boolean;
+
+  /**
+   * Message (optional)
+   *
+   * @generated from field: string message = 2;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message obiente.cloud.vpsgateway.v1.ReleasePublicIPResponse.
+ * Use `create(ReleasePublicIPResponseSchema)` to create a new message.
+ */
+export const ReleasePublicIPResponseSchema: GenMessage<ReleasePublicIPResponse> = /*@__PURE__*/
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 7);
 
 /**
  * ListIPsRequest requests list of allocated IPs
@@ -187,7 +355,7 @@ export type ListIPsRequest = Message<"obiente.cloud.vpsgateway.v1.ListIPsRequest
  * Use `create(ListIPsRequestSchema)` to create a new message.
  */
 export const ListIPsRequestSchema: GenMessage<ListIPsRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 4);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 8);
 
 /**
  * IPAllocation represents an allocated IP address
@@ -243,7 +411,7 @@ export type IPAllocation = Message<"obiente.cloud.vpsgateway.v1.IPAllocation"> &
  * Use `create(IPAllocationSchema)` to create a new message.
  */
 export const IPAllocationSchema: GenMessage<IPAllocation> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 5);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 9);
 
 /**
  * ListIPsResponse returns list of allocated IPs
@@ -264,7 +432,7 @@ export type ListIPsResponse = Message<"obiente.cloud.vpsgateway.v1.ListIPsRespon
  * Use `create(ListIPsResponseSchema)` to create a new message.
  */
 export const ListIPsResponseSchema: GenMessage<ListIPsResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 6);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 10);
 
 /**
  * ProxySSHRequest is a message in the SSH proxy stream
@@ -321,7 +489,7 @@ export type ProxySSHRequest = Message<"obiente.cloud.vpsgateway.v1.ProxySSHReque
  * Use `create(ProxySSHRequestSchema)` to create a new message.
  */
 export const ProxySSHRequestSchema: GenMessage<ProxySSHRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 7);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 11);
 
 /**
  * ProxySSHResponse is a response in the SSH proxy stream
@@ -363,7 +531,7 @@ export type ProxySSHResponse = Message<"obiente.cloud.vpsgateway.v1.ProxySSHResp
  * Use `create(ProxySSHResponseSchema)` to create a new message.
  */
 export const ProxySSHResponseSchema: GenMessage<ProxySSHResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 8);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 12);
 
 /**
  * GetGatewayInfoRequest requests gateway information
@@ -380,7 +548,7 @@ export type GetGatewayInfoRequest = Message<"obiente.cloud.vpsgateway.v1.GetGate
  * Use `create(GetGatewayInfoRequestSchema)` to create a new message.
  */
 export const GetGatewayInfoRequestSchema: GenMessage<GetGatewayInfoRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 9);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 13);
 
 /**
  * GetGatewayInfoResponse returns gateway status and configuration
@@ -464,7 +632,7 @@ export type GetGatewayInfoResponse = Message<"obiente.cloud.vpsgateway.v1.GetGat
  * Use `create(GetGatewayInfoResponseSchema)` to create a new message.
  */
 export const GetGatewayInfoResponseSchema: GenMessage<GetGatewayInfoResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 10);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 14);
 
 /**
  * GatewayMessage is used in the RegisterGateway bidirectional stream
@@ -521,7 +689,7 @@ export type GatewayMessage = Message<"obiente.cloud.vpsgateway.v1.GatewayMessage
  * Use `create(GatewayMessageSchema)` to create a new message.
  */
 export const GatewayMessageSchema: GenMessage<GatewayMessage> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 11);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 15);
 
 /**
  * GatewayRegistration contains gateway registration information
@@ -578,7 +746,7 @@ export type GatewayRegistration = Message<"obiente.cloud.vpsgateway.v1.GatewayRe
  * Use `create(GatewayRegistrationSchema)` to create a new message.
  */
 export const GatewayRegistrationSchema: GenMessage<GatewayRegistration> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 12);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 16);
 
 /**
  * GatewayRequest wraps an RPC request from API to Gateway
@@ -613,7 +781,7 @@ export type GatewayRequest = Message<"obiente.cloud.vpsgateway.v1.GatewayRequest
  * Use `create(GatewayRequestSchema)` to create a new message.
  */
 export const GatewayRequestSchema: GenMessage<GatewayRequest> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 13);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 17);
 
 /**
  * GatewayResponse wraps an RPC response from Gateway to API
@@ -655,7 +823,7 @@ export type GatewayResponse = Message<"obiente.cloud.vpsgateway.v1.GatewayRespon
  * Use `create(GatewayResponseSchema)` to create a new message.
  */
 export const GatewayResponseSchema: GenMessage<GatewayResponse> = /*@__PURE__*/
-  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 14);
+  messageDesc(file_obiente_cloud_vpsgateway_v1_gateway_service, 18);
 
 /**
  * VPSGatewayService provides DHCP management and SSH proxying for VPS instances
@@ -687,6 +855,17 @@ export const VPSGatewayService: GenService<{
     output: typeof AllocateIPResponseSchema;
   },
   /**
+   * AllocatePublicIP allocates a public IP address for a VPS with security measures
+   * This automatically applies firewall rules, ARP entries, and routing configuration
+   *
+   * @generated from rpc obiente.cloud.vpsgateway.v1.VPSGatewayService.AllocatePublicIP
+   */
+  allocatePublicIP: {
+    methodKind: "unary";
+    input: typeof AllocatePublicIPRequestSchema;
+    output: typeof AllocatePublicIPResponseSchema;
+  },
+  /**
    * ReleaseIP releases a DHCP IP address for a VPS instance
    *
    * @generated from rpc obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleaseIP
@@ -695,6 +874,16 @@ export const VPSGatewayService: GenService<{
     methodKind: "unary";
     input: typeof ReleaseIPRequestSchema;
     output: typeof ReleaseIPResponseSchema;
+  },
+  /**
+   * ReleasePublicIP releases a public IP address and removes security measures
+   *
+   * @generated from rpc obiente.cloud.vpsgateway.v1.VPSGatewayService.ReleasePublicIP
+   */
+  releasePublicIP: {
+    methodKind: "unary";
+    input: typeof ReleasePublicIPRequestSchema;
+    output: typeof ReleasePublicIPResponseSchema;
   },
   /**
    * ListIPs lists all allocated IP addresses

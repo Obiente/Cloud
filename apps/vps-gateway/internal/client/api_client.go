@@ -478,6 +478,7 @@ func (c *APIClient) handleRequest(
 				allocReq.OrganizationId,
 				allocReq.MacAddress,
 				allocReq.PreferredIp,
+				false, // allowPublicIP: false for regular DHCP allocations
 			)
 			if allocErr != nil {
 				resp = &vpsgatewayv1.AllocateIPResponse{}

@@ -1120,6 +1120,7 @@ This provides clear naming and easy identification in the Proxmox interface.
 ## Related Documentation
 
 - [VPS Provisioning Guide](vps-provisioning.md) - General VPS setup
+- [VPS IP Security](../reference/vps-ip-security.md) - Automatic IP hijacking prevention
 - [Environment Variables Reference](../reference/environment-variables.md) - Complete variable reference
 - [Monitoring Guide](monitoring.md) - Prometheus and Grafana setup
 - [Proxmox SDN Documentation](https://pve.proxmox.com/wiki/Software_Defined_Networking) - Official Proxmox SDN guide

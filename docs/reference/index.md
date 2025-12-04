@@ -6,6 +6,10 @@ Technical reference documentation for Obiente Cloud.
 
 - [Environment Variables](environment-variables.md) - Complete variable reference
 
+## VPS Features
+
+- [VPS IP Security](vps-ip-security.md) - Automatic IP hijacking prevention
+
 ## API Documentation
 
 - [API Reference](api.md) - ConnectRPC services (coming soon)

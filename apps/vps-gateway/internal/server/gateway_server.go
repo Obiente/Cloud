@@ -31,7 +31,10 @@ func NewGatewayServer(dhcpManager *dhcp.Manager, sshProxy *sshproxy.Proxy, port 
 		return nil, fmt.Errorf("GATEWAY_API_SECRET environment variable is required")
 	}
 
-	service := NewGatewayService(dhcpManager, sshProxy)
+	service, err := NewGatewayService(dhcpManager, sshProxy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gateway service: %w", err)
+	}
 
 	// Create auth interceptor
 	authInterceptor := newGatewayAuthInterceptor(apiSecret)
