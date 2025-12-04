@@ -34,13 +34,39 @@ PROXMOX_TOKEN_SECRET=your-token-secret
 # Optional: Storage pool (defaults to local-lvm)
 PROXMOX_STORAGE_POOL=local-lvm
 
+# Optional: Snippet storage pool (defaults to local)
+# Must be directory-type storage (dir, nfs, cifs) for cloud-init snippets
+PROXMOX_SNIPPET_STORAGE=local
+
+# Optional: Starting VM ID range
+PROXMOX_VM_ID_START=300
+
+# Optional: VLAN tag for network isolation
+PROXMOX_VLAN_ID=100
+
+# Optional: Region-to-node mapping (for multi-node clusters)
+# Format: "region1:node1;region2:node2"
+PROXMOX_REGION_NODES="us-east-1:main;us-west-1:node2"
+
+# Proxmox SSH Configuration (required for cloud-init snippet writing)
+# See Proxmox SSH User Setup Guide for detailed instructions
+# Single-node setup:
+PROXMOX_SSH_HOST=proxmox.example.com
+PROXMOX_SSH_USER=obiente-cloud
+PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
+
+# Multi-node setup (recommended for clusters):
+# PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:192.168.1.12"
+# PROXMOX_SSH_USER=obiente-cloud
+# PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
+
 # SSH Proxy Configuration (optional)
 SSH_PROXY_PORT=2222
-SSH_PROXY_HOST_KEY_PATH=/var/lib/obiente/ssh_proxy_host_key
 
 # VPS Gateway Configuration (optional, for DHCP and SSH proxying)
 # If set, enables centralized DHCP management and SSH proxying via dedicated gateway service
 VPS_GATEWAY_API_SECRET=your-shared-secret  # Must match GATEWAY_API_SECRET in vps-gateway
+VPS_GATEWAY_URL=http://gateway-public-ip:1537  # Gateway gRPC server URL
 VPS_GATEWAY_BRIDGE=OCvpsnet  # SDN bridge name for gateway network
 ```
 
@@ -114,16 +140,51 @@ For production with minimal permissions, grant only the required permissions at 
 
 **Note:** If you're using a non-root user, you may need to grant permissions on specific paths (nodes, storage pools) instead of the entire datacenter.
 
-### 4. Configure VPS Gateway (Required for SSH Proxy)
+### 4. Configure Proxmox SSH Access (Required for Cloud-Init Snippets)
 
-The SSH proxy allows users to connect to VPS instances even without public IP addresses. The gateway handles SSH proxying, eliminating the need for jump hosts.
+Cloud-init snippets are required for proper VPS configuration. The system needs SSH access to Proxmox nodes to write snippet files to directory-type storage.
+
+**Setup Steps:**
+
+1. **Set up SSH user on Proxmox node(s)**:
+   
+   Follow the [Proxmox SSH User Setup Guide](./proxmox-ssh-user-setup.md) to create the `obiente-cloud` user and configure SSH access.
+
+2. **Configure Environment Variables**:
+   
+   **For single-node setups:**
+   ```bash
+   PROXMOX_SSH_HOST=proxmox.example.com
+   PROXMOX_SSH_USER=obiente-cloud
+   PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
+   ```
+   
+   **For multi-node clusters (recommended):**
+   ```bash
+   # Map Proxmox node names to SSH endpoints
+   PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:192.168.1.12"
+   PROXMOX_SSH_USER=obiente-cloud
+   PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
+   ```
+   
+   See the [Proxmox SSH User Setup Guide](./proxmox-ssh-user-setup.md) for complete setup instructions.
 
 **Why This Is Needed:**
 
-- The SSH proxy allows users to connect to VPS instances even without public IP addresses
-- The gateway handles routing and proxying of SSH connections
-- No SSH keys or jump host configuration is required - the gateway manages connections automatically
-- The gateway provides better security and isolation than jump hosts
+- Cloud-init snippets must be written to directory-type storage (e.g., `local`)
+- SSH access allows the API to write snippet files directly to Proxmox storage
+- Multi-node clusters require node-to-endpoint mapping when node names aren't resolvable hostnames
+
+### 5. Configure VPS Gateway (Optional - For DHCP and SSH Proxying)
+
+The VPS gateway provides centralized DHCP management and SSH proxying for VPS instances. This is optional but recommended for production deployments.
+
+**Why This Is Needed:**
+
+- **Centralized IP Management**: Gateway allocates and tracks IP addresses for all VPS instances
+- **DHCP Automation**: VPS instances automatically receive IP addresses via DHCP
+- **SSH Proxying**: Gateway routes SSH connections without requiring SSH keys on Proxmox nodes
+- **Network Isolation**: Gateway network can be isolated from the main Proxmox network
 
 **Setup Steps:**
 
@@ -138,33 +199,16 @@ The SSH proxy allows users to connect to VPS instances even without public IP ad
    ```bash
    VPS_GATEWAY_URL=http://gateway-public-ip:1537  # Gateway gRPC server URL
    VPS_GATEWAY_API_SECRET=your-shared-secret       # Must match GATEWAY_API_SECRET in gateway
+   VPS_GATEWAY_BRIDGE=OCvpsnet                     # SDN bridge name for gateway network
    ```
 
 3. **Verify Gateway Connection**:
 
-   The API will automatically use the gateway for SSH proxying when `VPS_GATEWAY_URL` is configured. No additional SSH key setup is required.
+   The API will automatically use the gateway for DHCP allocation and SSH proxying when `VPS_GATEWAY_URL` is configured.
 
-**Verification:**
+**Note:** The gateway is optional. VPS instances can be created without it, but you'll need to configure networking manually.
 
-Test the SSH connection from the API container:
-
-Replace `your-proxmox-host` with your actual Proxmox hostname or IP address:
-
-```bash
-# If using SSH agent
-docker compose exec api ssh -o StrictHostKeyChecking=no root@your-proxmox-host "echo 'SSH connection successful'"
-
-# Or test from host
-ssh -o StrictHostKeyChecking=no root@your-proxmox-host "echo 'SSH connection successful'"
-```
-
-**Troubleshooting:**
-
-- **"unable to authenticate"**: SSH key is not properly configured or not accessible
-- **"Connection refused"**: Proxmox node SSH service is not running or firewall is blocking
-- **"Host key verification failed"**: Add Proxmox host to known_hosts or disable strict checking
-
-### 6. Download ISO Images for VPS Provisioning
+### 6. Download ISO Images for VPS Provisioning (Optional)
 
 For VPS provisioning, you need to download ISO images to Proxmox's ISO storage. The system will use these ISO files when templates are not available.
 
@@ -266,7 +310,7 @@ Repeat this process for all the ISO files listed above.
 
 ---
 
-### 7. Creating VM Templates (Optional - For Faster Provisioning)
+### 7. Creating VM Templates (Recommended - For Faster Provisioning)
 
 **Note:** This section is optional. If you only download ISO files (section 4), VPS provisioning will work but will be slower. Templates allow VMs to be provisioned in seconds rather than minutes.
 
@@ -286,6 +330,29 @@ Repeat this process for all the ISO files listed above.
 - `rockylinux-9-standard`
 - `almalinux-9-standard`
 
+**Multi-Node Clusters:**
+
+For multi-node Proxmox clusters, templates should be created on each node where VMs will be provisioned. The setup script automatically handles this by:
+
+- Calculating unique VMIDs per node (e.g., 9000-9005 on node 0, 9100-9105 on node 1)
+- Allowing templates with the same name on different nodes (as long as VMIDs are unique)
+- Detecting existing templates across all cluster nodes
+
+Run the setup script on each node:
+
+```bash
+# On node 1
+./scripts/setup-proxmox-templates.sh --node main
+
+# On node 2
+./scripts/setup-proxmox-templates.sh --node node2
+
+# On node 3
+./scripts/setup-proxmox-templates.sh --node node3
+```
+
+See the script's `--help` output for multi-node usage details.
+
 #### Quick Setup (Recommended)
 
 **Automated Template Setup Script:**
@@ -300,6 +367,7 @@ The easiest way to set up all templates is using the provided setup script. This
 - Access to Proxmox node (SSH or direct console)
 - `wget` installed
 - Storage pool configured in Proxmox
+- Root access (Proxmox doesn't include sudo by default)
 
 **Usage:**
 
@@ -308,7 +376,11 @@ The easiest way to set up all templates is using the provided setup script. This
 Run the script directly from GitHub without cloning the repository:
 
 ```bash
+# Single-node setup
 curl -fsSL https://raw.githubusercontent.com/obiente/cloud/main/scripts/setup-proxmox-templates.sh | bash
+
+# Multi-node setup (specify node name)
+curl -fsSL https://raw.githubusercontent.com/obiente/cloud/main/scripts/setup-proxmox-templates.sh | bash -s -- --node main
 ```
 
 This is the recommended method as it:
@@ -323,8 +395,27 @@ If you prefer to clone the repository first:
 ```bash
 git clone https://github.com/obiente/cloud.git
 cd cloud
+
+# Single-node setup
 ./scripts/setup-proxmox-templates.sh
+
+# Multi-node setup (specify node name)
+./scripts/setup-proxmox-templates.sh --node main
 ```
+
+**Multi-Node Clusters:**
+
+For multi-node clusters, run the script on each node where templates are needed:
+
+```bash
+# On each node, specify the node name
+./scripts/setup-proxmox-templates.sh --node <node-name>
+```
+
+The script will:
+- Calculate unique VMIDs per node to prevent conflicts
+- Detect existing templates across the cluster
+- Allow templates with the same name on different nodes (VMIDs must be unique cluster-wide)
 
 **After running the script:**
 
@@ -996,14 +1087,16 @@ Proxmox's `move_disk` operation can corrupt partition tables when moving disks t
 
 **Requirements:**
 
-- SSH access to the Proxmox node must be configured (`PROXMOX_SSH_HOST`, `PROXMOX_SSH_USER`, `PROXMOX_SSH_KEY_PATH` or `PROXMOX_SSH_KEY_DATA`)
+- SSH access to the Proxmox node must be configured (see [Proxmox SSH User Setup Guide](./proxmox-ssh-user-setup.md))
+- For multi-node clusters, configure `PROXMOX_NODE_SSH_ENDPOINTS` to map node names to SSH endpoints
 - The VM will be temporarily stopped during the disk move operation
 
 ## Related Documentation
 
-- [VPS Gateway Setup Guide](vps-gateway-setup.md) - Detailed guide for setting up the vps-gateway service
-- [VPS Configuration](vps-configuration.md) - Advanced configuration options
-- [Troubleshooting Guide](troubleshooting.md) - Common issues and solutions
+- [Proxmox SSH User Setup Guide](./proxmox-ssh-user-setup.md) - Configure SSH access for cloud-init snippet writing
+- [VPS Gateway Setup Guide](./vps-gateway-setup.md) - Detailed guide for setting up the vps-gateway service
+- [VPS Configuration](./vps-configuration.md) - Advanced configuration options
+- [Troubleshooting Guide](./troubleshooting.md) - Common issues and solutions
 - [Environment Variables](../reference/environment-variables.md) - Complete variable reference
 
 ---

@@ -35,6 +35,9 @@ Obiente Cloud is a **Platform-as-a-Service (PaaS)** that allows you to deploy an
 
 - [Authentication](guides/authentication.md) - Setting up authentication with Zitadel
 - [Routing & Domains](guides/routing.md) - Configuring domains and routing
+- [VPS Provisioning](guides/vps-provisioning.md) - Provision and manage VPS instances on Proxmox
+- [Proxmox SSH Setup](guides/proxmox-ssh-user-setup.md) - Configure SSH access for cloud-init snippets
+- [VPS Gateway Setup](guides/vps-gateway-setup.md) - Set up gateway service for DHCP and SSH proxying
 - [Monitoring](guides/monitoring.md) - Setting up monitoring and alerts (coming soon)
 - [Troubleshooting](guides/troubleshooting.md) - Common issues and solutions
 

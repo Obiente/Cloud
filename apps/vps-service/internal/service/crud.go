@@ -111,7 +111,7 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 
 	// Generate VPS ID
 	vpsID := fmt.Sprintf("vps-%d", time.Now().UnixNano())
-	
+
 	// Get or create log streamer for this VPS
 	logStreamer := GetVPSLogStreamer(vpsID)
 
@@ -129,35 +129,35 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 		CreatedBy:      userInfo.Id,
 		Metadata:       req.Msg.GetMetadata(),
 	}
-	
+
 	// Set creator name if available
 	if userInfo.Name != "" {
 		config.CreatorName = &userInfo.Name
 	}
-	
+
 	// Handle root password (custom or auto-generated)
 	if req.Msg.RootPassword != nil && req.Msg.GetRootPassword() != "" {
 		rootPass := req.Msg.GetRootPassword()
 		config.RootPassword = &rootPass
 	}
-	
+
 	// Convert cloud-init configuration from proto
 	if req.Msg.CloudInit != nil {
 		cloudInitProto := req.Msg.GetCloudInit()
 		cloudInit := &orchestrator.CloudInitConfig{
-			Users:            make([]orchestrator.CloudInitUser, 0, len(cloudInitProto.Users)),
-			Packages:         cloudInitProto.Packages,
-			Runcmd:           cloudInitProto.Runcmd,
-			WriteFiles:       make([]orchestrator.CloudInitWriteFile, 0, len(cloudInitProto.WriteFiles)),
+			Users:      make([]orchestrator.CloudInitUser, 0, len(cloudInitProto.Users)),
+			Packages:   cloudInitProto.Packages,
+			Runcmd:     cloudInitProto.Runcmd,
+			WriteFiles: make([]orchestrator.CloudInitWriteFile, 0, len(cloudInitProto.WriteFiles)),
 		}
-		
+
 		// Convert users
 		for _, userProto := range cloudInitProto.Users {
 			user := orchestrator.CloudInitUser{
 				Name:              userProto.GetName(),
 				SSHAuthorizedKeys: userProto.SshAuthorizedKeys,
 			}
-			
+
 			if userProto.Password != nil {
 				pass := userProto.GetPassword()
 				user.Password = &pass
@@ -183,10 +183,10 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 				user.Gecos = &gecos
 			}
 			user.Groups = userProto.Groups
-			
+
 			cloudInit.Users = append(cloudInit.Users, user)
 		}
-		
+
 		// Convert system configuration
 		if cloudInitProto.Hostname != nil {
 			hostname := cloudInitProto.GetHostname()
@@ -200,7 +200,7 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 			locale := cloudInitProto.GetLocale()
 			cloudInit.Locale = &locale
 		}
-		
+
 		// Convert package management
 		if cloudInitProto.PackageUpdate != nil {
 			packageUpdate := cloudInitProto.GetPackageUpdate()
@@ -210,7 +210,7 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 			packageUpgrade := cloudInitProto.GetPackageUpgrade()
 			cloudInit.PackageUpgrade = &packageUpgrade
 		}
-		
+
 		// Convert SSH configuration
 		if cloudInitProto.SshInstallServer != nil {
 			sshInstallServer := cloudInitProto.GetSshInstallServer()
@@ -220,14 +220,14 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 			sshAllowPW := cloudInitProto.GetSshAllowPw()
 			cloudInit.SSHAllowPW = &sshAllowPW
 		}
-		
+
 		// Convert write files
 		for _, fileProto := range cloudInitProto.WriteFiles {
 			file := orchestrator.CloudInitWriteFile{
 				Path:    fileProto.GetPath(),
 				Content: fileProto.GetContent(),
 			}
-			
+
 			if fileProto.Owner != nil {
 				owner := fileProto.GetOwner()
 				file.Owner = &owner
@@ -244,10 +244,10 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 				deferVal := fileProto.GetDefer()
 				file.Defer = &deferVal
 			}
-			
+
 			cloudInit.WriteFiles = append(cloudInit.WriteFiles, file)
 		}
-		
+
 		config.CloudInit = cloudInit
 	}
 
@@ -312,7 +312,7 @@ func (s *Service) CreateVPS(ctx context.Context, req *connect.Request[vpsv1.Crea
 	// Return response immediately to avoid context cancellation issues
 	// Send notification in background (non-blocking, uses independent context)
 	response := connect.NewResponse(responseVPS)
-	
+
 	// Send notification asynchronously with independent context to avoid blocking response
 	go func() {
 		// Use background context with timeout for notifications
@@ -376,34 +376,33 @@ func (s *Service) GetVPS(ctx context.Context, req *connect.Request[vpsv1.GetVPSR
 							}
 						}
 
-						// Try to get IP addresses from Proxmox (requires guest agent)
-						// Only update IP addresses if guest agent is available and returns valid IPs
-						ipv4, ipv6, err := proxmoxClient.GetVMIPAddresses(ctx, nodes[0], vmIDInt)
-						if err == nil && (len(ipv4) > 0 || len(ipv6) > 0) {
-							// Update database with IP addresses from guest agent
-							if len(ipv4) > 0 {
-								ipv4JSON, _ := json.Marshal(ipv4)
-								vps.IPv4Addresses = string(ipv4JSON)
+						// Try to get IP addresses from VPS manager (tries guest agent first, falls back to gateway)
+						vpsManager, err := orchestrator.NewVPSManager()
+						if err == nil {
+							defer vpsManager.Close()
+							ipv4, ipv6, err := vpsManager.GetVPSIPAddresses(ctx, vpsID)
+							if err == nil && (len(ipv4) > 0 || len(ipv6) > 0) {
+								// Update database with IP addresses (from guest agent or gateway)
+								if len(ipv4) > 0 {
+									ipv4JSON, _ := json.Marshal(ipv4)
+									vps.IPv4Addresses = string(ipv4JSON)
+								}
+								if len(ipv6) > 0 {
+									ipv6JSON, _ := json.Marshal(ipv6)
+									vps.IPv6Addresses = string(ipv6JSON)
+								}
+								if len(ipv4) > 0 || len(ipv6) > 0 {
+									database.DB.Model(&vps).Updates(map[string]interface{}{
+										"ipv4_addresses": vps.IPv4Addresses,
+										"ipv6_addresses": vps.IPv6Addresses,
+									})
+									logger.Info("[VPS Service] Updated IP addresses for VPS %s: IPv4=%v, IPv6=%v", vpsID, ipv4, ipv6)
+								}
+							} else if err != nil {
+								logger.Debug("[VPS Service] Failed to get IP addresses for VPS %s (guest agent and gateway both unavailable): %v", vpsID, err)
 							}
-							if len(ipv6) > 0 {
-								ipv6JSON, _ := json.Marshal(ipv6)
-								vps.IPv6Addresses = string(ipv6JSON)
-							}
-							if len(ipv4) > 0 || len(ipv6) > 0 {
-								database.DB.Model(&vps).Updates(map[string]interface{}{
-									"ipv4_addresses": vps.IPv4Addresses,
-									"ipv6_addresses": vps.IPv6Addresses,
-								})
-							}
-						} else if err != nil {
-							// Guest agent not available - clear IP addresses to avoid showing stale/incorrect IPs
-							logger.Info("[VPS Service] Guest agent not available for VPS %s, clearing IP addresses", vpsID)
-							vps.IPv4Addresses = "[]"
-							vps.IPv6Addresses = "[]"
-							database.DB.Model(&vps).Updates(map[string]interface{}{
-								"ipv4_addresses": vps.IPv4Addresses,
-								"ipv6_addresses": vps.IPv6Addresses,
-							})
+						} else {
+							logger.Warn("[VPS Service] Failed to create VPS manager for IP sync: %v", err)
 						}
 					}
 				}
@@ -514,7 +513,7 @@ func (s *Service) DeleteVPS(ctx context.Context, req *connect.Request[vpsv1.Dele
 					strings.Contains(errStr, "not found") ||
 					strings.Contains(errStr, "already deleted") ||
 					strings.Contains(errStr, "context canceled") // Context canceled often means VM doesn't exist
-				
+
 				creatingStatus := int32(vpsv1.VPSStatus_CREATING)
 				if vps.Status == creatingStatus || isVMNotFound {
 					if vps.Status == creatingStatus {

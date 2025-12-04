@@ -1,6 +1,8 @@
 # Proxmox SSH User Setup for Snippet Writing and Disk Operations
 
-This guide explains how to set up a dedicated SSH user (`obiente-cloud`) on your Proxmox node for writing cloud-init snippet files and performing disk operations (e.g., `qemu-img convert` for LVM thin storage).
+This guide explains how to set up a dedicated SSH user (`obiente-cloud`) on your Proxmox node(s) for writing cloud-init snippet files and performing disk operations (e.g., `qemu-img convert` for LVM thin storage).
+
+**For multi-node clusters**: Follow this guide for each Proxmox node, then configure `PROXMOX_NODE_SSH_ENDPOINTS` to map node names to their SSH endpoints (see Step 7).
 
 ## Why a Dedicated User?
 
@@ -13,7 +15,7 @@ Using a dedicated user with minimal permissions is a security best practice:
 
 ## Prerequisites
 
-- Root or sudo access to your Proxmox node
+- Root access to your Proxmox node
 - SSH access to the Proxmox node
 - A directory-type storage pool configured with snippets enabled (e.g., `local` storage)
 
@@ -23,12 +25,12 @@ Create a dedicated user for snippet writing:
 
 ```bash
 # Create the user with /bin/sh shell (non-interactive, allows command execution via SSH)
-sudo useradd -r -s /bin/sh -d /var/lib/obiente-cloud obiente-cloud
+useradd -r -s /bin/sh -d /var/lib/obiente-cloud obiente-cloud
 
 # Create home directory (optional, but useful for SSH key storage)
-sudo mkdir -p /var/lib/obiente-cloud/.ssh
-sudo chown obiente-cloud:obiente-cloud /var/lib/obiente-cloud/.ssh
-sudo chmod 700 /var/lib/obiente-cloud/.ssh
+mkdir -p /var/lib/obiente-cloud/.ssh
+chown obiente-cloud:obiente-cloud /var/lib/obiente-cloud/.ssh
+chmod 700 /var/lib/obiente-cloud/.ssh
 ```
 
 **Note**: The `-r` flag creates a system user (UID < 1000), and `-s /bin/sh` provides a non-interactive shell that allows command execution via SSH. This is secure because the user cannot log in interactively (no password set, key-based auth only) and can only execute commands via SSH with proper authentication.
@@ -59,13 +61,13 @@ Grant the `obiente-cloud` user write access to the snippets directory:
 SNIPPETS_DIR="/var/lib/vz/snippets"
 
 # Create directory if it doesn't exist
-sudo mkdir -p "$SNIPPETS_DIR"
+mkdir -p "$SNIPPETS_DIR"
 
 # Set ownership to obiente-cloud user
-sudo chown obiente-cloud:obiente-cloud "$SNIPPETS_DIR"
+chown obiente-cloud:obiente-cloud "$SNIPPETS_DIR"
 
 # Set permissions (755 allows read/execute for others, which Proxmox needs)
-sudo chmod 755 "$SNIPPETS_DIR"
+chmod 755 "$SNIPPETS_DIR"
 ```
 
 **Important**: The snippets directory must be readable by Proxmox (typically the `www-data` user or `root`), so we use `755` permissions. Files written to this directory will be created with `644` permissions (readable by all, writable by owner).
@@ -78,7 +80,7 @@ The `obiente-cloud` user needs permissions to execute `qemu-img convert` for dis
 
 **Option A: Add User to Disk Group and Configure Directory Access with ACLs**
 
-This is the recommended approach when sudo is not available. We use both group ownership and ACLs to ensure new files get correct permissions:
+This is the recommended approach. We use both group ownership and ACLs to ensure new files get correct permissions:
 
 ```bash
 # 1. Install ACL tools if not already installed (required for default permissions)
@@ -192,22 +194,26 @@ ssh-keygen -t ed25519 -f obiente-cloud-key -N "" -C "obiente-cloud-snippet-write
 
 Install the public key in the `obiente-cloud` user's authorized_keys:
 
+**For single-node setups**:
 ```bash
 # Copy public key to Proxmox node
 scp obiente-cloud-key.pub root@your-proxmox-node:/tmp/
 
 # On Proxmox node, install the key
-sudo mkdir -p /var/lib/obiente-cloud/.ssh
-sudo cp /tmp/obiente-cloud-key.pub /var/lib/obiente-cloud/.ssh/authorized_keys
-sudo chown -R obiente-cloud:obiente-cloud /var/lib/obiente-cloud/.ssh
-sudo chmod 700 /var/lib/obiente-cloud/.ssh
-sudo chmod 600 /var/lib/obiente-cloud/.ssh/authorized_keys
+mkdir -p /var/lib/obiente-cloud/.ssh
+cp /tmp/obiente-cloud-key.pub /var/lib/obiente-cloud/.ssh/authorized_keys
+chown -R obiente-cloud:obiente-cloud /var/lib/obiente-cloud/.ssh
+chmod 700 /var/lib/obiente-cloud/.ssh
+chmod 600 /var/lib/obiente-cloud/.ssh/authorized_keys
 ```
+
+**For multi-node clusters**: Repeat the above steps on **each Proxmox node**. The same SSH key can be used for all nodes, or you can use different keys per node (though the same key is simpler to manage).
 
 ## Step 6: Test SSH Connection
 
 Test that the SSH connection works:
 
+**For single-node setups**:
 ```bash
 # Test SSH connection (from your API server)
 ssh -i obiente-cloud-key obiente-cloud@your-proxmox-node "whoami"
@@ -226,6 +232,16 @@ ssh -i obiente-cloud-key obiente-cloud@your-proxmox-node "/usr/bin/qemu-img info
 # Should output a path like: /dev/pve/vm-100-disk-0 (or show permission error if not configured)
 ```
 
+**For multi-node clusters**: Test SSH connection to each node using its endpoint from `PROXMOX_NODE_SSH_ENDPOINTS`:
+```bash
+# Test each node (replace with actual endpoints from your configuration)
+ssh -i obiente-cloud-key obiente-cloud@192.168.1.10 "whoami"  # main node
+ssh -i obiente-cloud-key obiente-cloud@192.168.1.11 "whoami"  # node2
+ssh -i obiente-cloud-key obiente-cloud@192.168.1.12 "whoami"  # node3
+
+# All should output: obiente-cloud
+```
+
 ## Step 7: Configure Environment Variables
 
 Configure the following environment variables in your API service:
@@ -234,11 +250,19 @@ Configure the following environment variables in your API service:
 # Optional: SSH user (defaults to "obiente-cloud" if not set)
 PROXMOX_SSH_USER=obiente-cloud
 
-# Optional: SSH host (defaults to PROXMOX_API_URL host if not set)
+# For single-node setups: SSH host (defaults to PROXMOX_API_URL host if not set)
 # Automatically extracts hostname and removes http:///https:// prefixes and ports
 PROXMOX_SSH_HOST=your-proxmox-node.example.com
 # Or with custom port:
 # PROXMOX_SSH_HOST=your-proxmox-node.example.com:2222
+
+# For multi-node setups: Node-to-SSH-endpoint mapping (recommended)
+# Maps Proxmox node names to their SSH endpoints (IP addresses or hostnames)
+# Format: "node1:endpoint1,node2:endpoint2" (comma-separated)
+# Endpoints can be IP addresses or hostnames, optionally with ports
+PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:proxmox-node3.example.com:2222"
+# Or with hostnames:
+# PROXMOX_NODE_SSH_ENDPOINTS="main:proxmox-main.example.com,node2:proxmox-node2.example.com"
 
 # Required: SSH private key (choose one method)
 # Method 1: Path to private key file
@@ -250,6 +274,31 @@ PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
 # Base64-encoded key (useful for secrets managers):
 # PROXMOX_SSH_KEY_DATA="LS0tLS1CRUdJTiBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0K..."
 ```
+
+**Multi-Node Setup**:
+
+If you have multiple Proxmox nodes in a cluster, use `PROXMOX_NODE_SSH_ENDPOINTS` to map each node name to its SSH endpoint. This is especially important when:
+- Node names are not resolvable hostnames (e.g., `main`, `node2`)
+- Nodes have different IP addresses or hostnames
+- Nodes use different SSH ports
+
+The system will:
+1. First check `PROXMOX_NODE_SSH_ENDPOINTS` for a mapping
+2. Fall back to using the node name directly (if it's resolvable)
+3. Fall back to `PROXMOX_SSH_HOST` as a last resort
+
+**Example for 3-node cluster**:
+```bash
+# Node names in Proxmox: main, node2, node3
+# SSH endpoints: 192.168.1.10, 192.168.1.11, 192.168.1.12
+PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:192.168.1.12"
+
+# Same SSH key works for all nodes (configured once)
+PROXMOX_SSH_USER=obiente-cloud
+PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
+```
+
+**Note**: The same SSH key and user configuration applies to all nodes. Ensure the `obiente-cloud` user exists on all nodes with the same SSH key installed (see Step 5 for each node).
 
 **Security Recommendations**:
 - Use `PROXMOX_SSH_KEY_PATH` if the key file is stored securely on disk
@@ -283,7 +332,7 @@ After configuring the environment variables, restart your API service and verify
 **Solutions**:
 - Verify SSH host and port are correct
 - Check firewall rules allow SSH access from API server
-- Verify SSH service is running: `sudo systemctl status ssh`
+- Verify SSH service is running: `systemctl status ssh`
 - Test manual SSH connection: `ssh -i key obiente-cloud@host`
 
 ### Permission Denied
@@ -293,7 +342,7 @@ After configuring the environment variables, restart your API service and verify
 **Solutions**:
 - Verify `obiente-cloud` user owns the snippets directory: `ls -la /var/lib/vz/snippets`
 - Check directory permissions: `stat /var/lib/vz/snippets`
-- Ensure directory is writable: `sudo chmod 755 /var/lib/vz/snippets`
+- Ensure directory is writable: `chmod 755 /var/lib/vz/snippets`
 
 ### Disk Operation Permission Errors
 
@@ -339,14 +388,18 @@ After configuring the environment variables, restart your API service and verify
 
 ## Alternative: Using sudo (Not Recommended)
 
-If you prefer using sudo instead of direct file ownership, you can configure sudo rules:
+**Note**: Proxmox does not include sudo by default. If you install sudo separately, you can configure sudo rules:
 
 ```bash
+# Install sudo if not already installed
+apt-get update && apt-get install -y sudo
+
 # Allow obiente-cloud to write to snippets directory via sudo
-echo "obiente-cloud ALL=(ALL) NOPASSWD: /bin/mkdir -p /var/lib/vz/snippets, /bin/cat > /var/lib/vz/snippets/*, /bin/chmod 644 /var/lib/vz/snippets/*" | sudo tee /etc/sudoers.d/obiente-cloud
+echo "obiente-cloud ALL=(ALL) NOPASSWD: /bin/mkdir -p /var/lib/vz/snippets, /bin/cat > /var/lib/vz/snippets/*, /bin/chmod 644 /var/lib/vz/snippets/*" | tee /etc/sudoers.d/obiente-cloud
 ```
 
 However, this is **not recommended** because:
+- Requires installing sudo (not included with Proxmox by default)
 - Requires sudo access (broader permissions)
 - More complex to audit
 - Potential security risk if sudo rules are misconfigured

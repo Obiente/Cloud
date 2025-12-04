@@ -641,8 +641,10 @@ func (pc *ProxmoxClient) createCloudInitSnippet(ctx context.Context, nodeName st
 
 
 func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string, storage string, filename string, content string) (string, error) {
-	if pc.config.SSHHost == "" {
-		return "", fmt.Errorf("SSH host not configured (PROXMOX_SSH_HOST)")
+	// Check if we have a way to resolve SSH endpoint (either via mapping or fallback)
+	sshEndpoint := resolveSSHEndpoint(nodeName, pc.config)
+	if sshEndpoint == "" {
+		return "", fmt.Errorf("SSH endpoint not configured for node %s (set PROXMOX_NODE_SSH_ENDPOINTS or PROXMOX_SSH_HOST)", nodeName)
 	}
 	if pc.config.SSHUser == "" {
 		return "", fmt.Errorf("SSH user not configured (PROXMOX_SSH_USER)")
@@ -693,11 +695,17 @@ func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string
 	}
 
 	// Connect to Proxmox node via SSH
-	sshHost := pc.config.SSHHost
+	// Resolve SSH endpoint from node name using PROXMOX_NODE_SSH_ENDPOINTS mapping
+	// (sshEndpoint was already resolved at the start of the function)
+	if sshEndpoint == "" {
+		return "", fmt.Errorf("SSH endpoint not configured for node %s (PROXMOX_NODE_SSH_ENDPOINTS, PROXMOX_SSH_HOST, or resolvable nodeName required)", nodeName)
+	}
+	
+	sshHost := sshEndpoint
 	sshPort := "22"
-	if strings.Contains(sshHost, ":") {
-		// Port is included in host
-		parts := strings.Split(sshHost, ":")
+	if strings.Contains(sshEndpoint, ":") {
+		// Port is included in endpoint
+		parts := strings.Split(sshEndpoint, ":")
 		sshHost = parts[0]
 		sshPort = parts[1]
 	}
@@ -793,8 +801,10 @@ func (pc *ProxmoxClient) writeSnippetViaSSH(ctx context.Context, nodeName string
 
 
 func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName string, storage string, filename string) error {
-	if pc.config.SSHHost == "" {
-		return fmt.Errorf("SSH host not configured (PROXMOX_SSH_HOST)")
+	// Check if we have a way to resolve SSH endpoint (either via mapping or fallback)
+	sshEndpoint := resolveSSHEndpoint(nodeName, pc.config)
+	if sshEndpoint == "" {
+		return fmt.Errorf("SSH endpoint not configured for node %s (set PROXMOX_NODE_SSH_ENDPOINTS or PROXMOX_SSH_HOST)", nodeName)
 	}
 	if pc.config.SSHUser == "" {
 		return fmt.Errorf("SSH user not configured (PROXMOX_SSH_USER)")
@@ -840,12 +850,26 @@ func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName strin
 	}
 
 	// Connect to Proxmox node via SSH
-	sshHost := pc.config.SSHHost
+	// Use nodeName if available, otherwise fall back to configured SSH host
+	sshHost := nodeName
+	if sshHost == "" {
+		sshHost = pc.config.SSHHost
+	}
+	if sshHost == "" {
+		return fmt.Errorf("SSH host not configured and nodeName is empty (PROXMOX_SSH_HOST or nodeName required)")
+	}
+	
 	sshPort := "22"
 	if strings.Contains(sshHost, ":") {
 		parts := strings.Split(sshHost, ":")
 		sshHost = parts[0]
 		sshPort = parts[1]
+	} else if pc.config.SSHHost != "" && strings.Contains(pc.config.SSHHost, ":") {
+		// Use port from configured SSH host if nodeName doesn't have port
+		parts := strings.Split(pc.config.SSHHost, ":")
+		if len(parts) > 1 {
+			sshPort = parts[1]
+		}
 	}
 
 	conn, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", sshHost, sshPort), sshConfig)
@@ -897,8 +921,10 @@ func (pc *ProxmoxClient) deleteSnippetViaSSH(ctx context.Context, nodeName strin
 
 
 func (pc *ProxmoxClient) ReadSnippetViaSSH(ctx context.Context, nodeName string, storage string, filename string) (string, error) {
-	if pc.config.SSHHost == "" {
-		return "", fmt.Errorf("SSH host not configured (PROXMOX_SSH_HOST)")
+	// Check if we have a way to resolve SSH endpoint (either via mapping or fallback)
+	sshEndpoint := resolveSSHEndpoint(nodeName, pc.config)
+	if sshEndpoint == "" {
+		return "", fmt.Errorf("SSH endpoint not configured for node %s (set PROXMOX_NODE_SSH_ENDPOINTS or PROXMOX_SSH_HOST)", nodeName)
 	}
 	if pc.config.SSHUser == "" {
 		return "", fmt.Errorf("SSH user not configured (PROXMOX_SSH_USER)")
@@ -944,12 +970,26 @@ func (pc *ProxmoxClient) ReadSnippetViaSSH(ctx context.Context, nodeName string,
 	}
 
 	// Connect to Proxmox node via SSH
-	sshHost := pc.config.SSHHost
+	// Use nodeName if available, otherwise fall back to configured SSH host
+	sshHost := nodeName
+	if sshHost == "" {
+		sshHost = pc.config.SSHHost
+	}
+	if sshHost == "" {
+		return "", fmt.Errorf("SSH host not configured and nodeName is empty (PROXMOX_SSH_HOST or nodeName required)")
+	}
+	
 	sshPort := "22"
 	if strings.Contains(sshHost, ":") {
 		parts := strings.Split(sshHost, ":")
 		sshHost = parts[0]
 		sshPort = parts[1]
+	} else if pc.config.SSHHost != "" && strings.Contains(pc.config.SSHHost, ":") {
+		// Use port from configured SSH host if nodeName doesn't have port
+		parts := strings.Split(pc.config.SSHHost, ":")
+		if len(parts) > 1 {
+			sshPort = parts[1]
+		}
 	}
 
 	conn, err := ssh.Dial("tcp", fmt.Sprintf("%s:%s", sshHost, sshPort), sshConfig)

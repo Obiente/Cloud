@@ -22,9 +22,10 @@ Step-by-step guides for common tasks with Obiente Cloud.
 
 ## VPS Provisioning
 
-- [VPS Provisioning Guide](vps-provisioning.md) - Provision and manage VPS instances
+- [VPS Provisioning Guide](vps-provisioning.md) - Provision and manage VPS instances on Proxmox
+- [Proxmox SSH User Setup](proxmox-ssh-user-setup.md) - Configure SSH access for cloud-init snippet writing
 - [VPS Gateway Setup](vps-gateway-setup.md) - Set up the vps-gateway service for DHCP and SSH proxying
-- [VPS Configuration](vps-configuration.md) - Advanced VPS configuration options
+- [VPS Configuration](vps-configuration.md) - Advanced VPS configuration options (storage, networking, security)
 
 ## Additional Guides
 

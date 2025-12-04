@@ -778,6 +778,7 @@ func (vm *VPSManager) GetVPSStatus(ctx context.Context, vpsID string) (string, e
 }
 
 // GetVPSIPAddresses retrieves IP addresses of a VPS from Proxmox
+// Falls back to gateway if guest agent is not available
 func (vm *VPSManager) GetVPSIPAddresses(ctx context.Context, vpsID string) ([]string, []string, error) {
 	var vps database.VPSInstance
 	if err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&vps).Error; err != nil {
@@ -809,12 +810,32 @@ func (vm *VPSManager) GetVPSIPAddresses(ctx context.Context, vpsID string) ([]st
 		return nil, nil, fmt.Errorf("failed to find Proxmox node: %w", err)
 	}
 
+	// Try to get IPs from Proxmox guest agent first
 	ipv4, ipv6, err := proxmoxClient.GetVMIPAddresses(ctx, nodes[0], vmIDInt)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get VM IP addresses: %w", err)
+	if err == nil && (len(ipv4) > 0 || len(ipv6) > 0) {
+		// Successfully got IPs from guest agent
+		return ipv4, ipv6, nil
 	}
 
-	return ipv4, ipv6, nil
+	// Guest agent not available or returned no IPs - fall back to gateway
+	if vm.gatewayClient != nil {
+		logger.Info("[VPSManager] Guest agent not available for VPS %s, falling back to gateway", vpsID)
+		allocations, err := vm.gatewayClient.ListIPs(ctx, vps.OrganizationID, vpsID)
+		if err == nil && len(allocations) > 0 {
+			// Return gateway-allocated IP as IPv4
+			gatewayIP := allocations[0].IpAddress
+			logger.Info("[VPSManager] Got IP %s from gateway for VPS %s", gatewayIP, vpsID)
+			return []string{gatewayIP}, []string{}, nil
+		} else if err != nil {
+			logger.Warn("[VPSManager] Failed to get IP from gateway for VPS %s: %v", vpsID, err)
+		}
+	}
+
+	// Both guest agent and gateway failed
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get VM IP addresses from guest agent: %w", err)
+	}
+	return []string{}, []string{}, nil
 }
 
 // DeleteVPS deletes a VPS instance from Proxmox
@@ -1525,10 +1546,22 @@ func (vm *VPSManager) ImportVPS(ctx context.Context, organizationID string) ([]I
 		}
 
 		// Check if VPS already exists in database
+		// Skip VPSes that are soft-deleted, in DELETING status (8), or DELETED status (9)
 		var existingVPS database.VPSInstance
 		err := database.DB.Where("id = ? AND deleted_at IS NULL", vpsID).First(&existingVPS).Error
 		if err == nil {
-			// VPS already exists, skip
+			// VPS exists - check if it's in DELETING or DELETED status
+			if existingVPS.Status == 8 || existingVPS.Status == 9 {
+				// VPS is being deleted or already deleted, skip import
+				logger.Debug("[VPSManager] VPS %s is in DELETING/DELETED status (status: %d), skipping import", vpsID, existingVPS.Status)
+				results = append(results, ImportVPSResult{
+					VPS:     &existingVPS,
+					Skipped: true,
+				})
+				skippedCount++
+				continue
+			}
+			// VPS already exists and is not being deleted, skip
 			logger.Debug("[VPSManager] VPS %s already exists in database, skipping", vpsID)
 			results = append(results, ImportVPSResult{
 				VPS:     &existingVPS,

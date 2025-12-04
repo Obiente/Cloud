@@ -216,6 +216,59 @@ func getMapKeys(m map[string]interface{}) []string {
 	return keys
 }
 
+// parseNodeSSHMapping parses the PROXMOX_NODE_SSH_ENDPOINTS environment variable
+// Format: "node1:192.168.1.10,node2:192.168.1.11" or "node1:hostname1.example.com:22,node2:hostname2.example.com:2222"
+// Returns a map of node name -> SSH endpoint (hostname/IP, optionally with port)
+func parseNodeSSHMapping() map[string]string {
+	mapping := make(map[string]string)
+	envValue := os.Getenv("PROXMOX_NODE_SSH_ENDPOINTS")
+	if envValue == "" {
+		return mapping
+	}
+
+	// Parse comma-separated node mappings
+	nodeStrings := strings.Split(envValue, ",")
+	for _, nodeStr := range nodeStrings {
+		nodeStr = strings.TrimSpace(nodeStr)
+		if nodeStr == "" {
+			continue
+		}
+
+		// Parse "nodeName:endpoint" format (endpoint can be IP or hostname, optionally with port)
+		if strings.Contains(nodeStr, ":") {
+			// Split on first colon only (endpoint might contain port with colon)
+			parts := strings.SplitN(nodeStr, ":", 2)
+			if len(parts) == 2 {
+				nodeName := strings.TrimSpace(parts[0])
+				endpoint := strings.TrimSpace(parts[1])
+				if nodeName != "" && endpoint != "" {
+					mapping[nodeName] = endpoint
+				}
+			}
+		}
+	}
+
+	return mapping
+}
+
+// resolveSSHEndpoint resolves the SSH endpoint for a given node name
+// Uses PROXMOX_NODE_SSH_ENDPOINTS mapping if available, otherwise falls back to nodeName or config.SSHHost
+func resolveSSHEndpoint(nodeName string, config *ProxmoxConfig) string {
+	// First, check node-to-SSH-endpoint mapping
+	nodeSSHMap := parseNodeSSHMapping()
+	if endpoint, ok := nodeSSHMap[nodeName]; ok {
+		return endpoint
+	}
+
+	// Fall back to nodeName (if it's a resolvable hostname/IP)
+	if nodeName != "" {
+		return nodeName
+	}
+
+	// Last resort: use configured SSH host
+	return config.SSHHost
+}
+
 // parseRegionNodeMapping parses the PROXMOX_REGION_NODES environment variable
 // Format: "region1:node1;region2:node2" or "region1:node1,node2" (multiple nodes per region)
 // Returns a map of region -> preferred node name
@@ -1185,6 +1238,9 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 		// Specifying interface name can cause issues if the interface name doesn't match
 		vmConfig["ipconfig0"] = "ip=dhcp"
 		vmConfig["ciuser"] = "root"
+		// Disable package upgrades via Proxmox ciupgrade parameter
+		// This works in conjunction with package_update/package_upgrade in cloud-init userData
+		vmConfig["ciupgrade"] = "0"
 		// Note: ide2 (cloudinit disk) comes from template - no need to create it
 
 		// Root password: use custom if provided, otherwise auto-generate
@@ -1549,6 +1605,7 @@ func (pc *ProxmoxClient) CreateVM(ctx context.Context, config *VPSConfig, allowI
 			retryFormData := url.Values{}
 			retryFormData.Set("ipconfig0", "ip=dhcp")
 			retryFormData.Set("ciuser", "root")
+			retryFormData.Set("ciupgrade", "0")
 			// Safely get cipassword - it might not exist if using snippets
 			if cipasswordVal, ok := vmConfig["cipassword"]; ok && cipasswordVal != nil {
 				if cipasswordStr, ok := cipasswordVal.(string); ok && cipasswordStr != "" {
@@ -2379,10 +2436,17 @@ func (pc *ProxmoxClient) moveDiskWithQemuImgViaSSH(ctx context.Context, nodeName
 	}
 
 	// Connect to Proxmox node via SSH
-	sshHost := pc.config.SSHHost
+	// Resolve SSH endpoint from node name using PROXMOX_NODE_SSH_ENDPOINTS mapping
+	sshEndpoint := resolveSSHEndpoint(nodeName, pc.config)
+	if sshEndpoint == "" {
+		return fmt.Errorf("SSH endpoint not configured for node %s (PROXMOX_NODE_SSH_ENDPOINTS, PROXMOX_SSH_HOST, or resolvable nodeName required)", nodeName)
+	}
+	
+	sshHost := sshEndpoint
 	sshPort := "22"
-	if strings.Contains(sshHost, ":") {
-		parts := strings.Split(sshHost, ":")
+	if strings.Contains(sshEndpoint, ":") {
+		// Port is included in endpoint
+		parts := strings.Split(sshEndpoint, ":")
 		sshHost = parts[0]
 		sshPort = parts[1]
 	}

@@ -43,8 +43,11 @@ See the [VPS Provisioning Guide](./vps-provisioning.md#3-configure-api-token-per
 ### Storage Configuration
 
 ```bash
-# Default storage pool
+# Default storage pool for VM disks
 PROXMOX_STORAGE_POOL=local-lvm
+
+# Snippet storage pool (for cloud-init snippets, must be directory-type)
+PROXMOX_SNIPPET_STORAGE=local
 
 # Alternative storage pools
 PROXMOX_STORAGE_POOL=local-zfs    # ZFS storage
@@ -281,15 +284,44 @@ curl http://<VM2_IP>:<port>
 
 If you want VMs to be isolated, configure firewall rules as described above.
 
-## SSH Proxy Configuration
+## Proxmox SSH Configuration
 
-### Host Key
+### Single-Node Setup
 
-The SSH proxy generates a host key automatically. To use a custom key:
+For single-node Proxmox deployments:
 
 ```bash
-SSH_PROXY_HOST_KEY_PATH=/path/to/ssh_host_rsa_key
+PROXMOX_SSH_HOST=proxmox.example.com
+PROXMOX_SSH_USER=obiente-cloud
+PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
 ```
+
+### Multi-Node Setup
+
+For multi-node Proxmox clusters, use node-to-endpoint mapping:
+
+```bash
+# Map Proxmox node names to SSH endpoints
+PROXMOX_NODE_SSH_ENDPOINTS="main:192.168.1.10,node2:192.168.1.11,node3:192.168.1.12"
+PROXMOX_SSH_USER=obiente-cloud
+PROXMOX_SSH_KEY_PATH=/path/to/obiente-cloud-key
+```
+
+Endpoints can be IP addresses or hostnames, optionally with ports:
+
+```bash
+PROXMOX_NODE_SSH_ENDPOINTS="main:proxmox-main.example.com,node2:192.168.1.11:2222"
+```
+
+**Why This Is Needed:**
+
+- Cloud-init snippets must be written to directory-type storage
+- Multi-node clusters require node-to-endpoint mapping when node names aren't resolvable hostnames
+- SSH access allows the API to write snippet files directly to Proxmox storage
+
+See the [Proxmox SSH User Setup Guide](./proxmox-ssh-user-setup.md) for complete setup instructions.
+
+## SSH Proxy Configuration
 
 ### Port Configuration
 
@@ -303,10 +335,10 @@ Allow SSH proxy port in your firewall:
 
 ```bash
 # UFW
-sudo ufw allow 2222/tcp
+ufw allow 2222/tcp
 
 # iptables
-sudo iptables -A INPUT -p tcp --dport 2222 -j ACCEPT
+iptables -A INPUT -p tcp --dport 2222 -j ACCEPT
 ```
 
 ## VPS Size Catalog
@@ -361,15 +393,23 @@ INSERT INTO vps_region_catalog (
 
 ## Cloud-Init Configuration
 
-VPS instances use cloud-init for initial configuration. Customize via:
+VPS instances use cloud-init for initial configuration. The system automatically:
 
-1. **SSH Keys**: Add via `ssh_key_id` parameter
-2. **User Data**: Configured automatically
-3. **Network**: DHCP by default
+1. **Disables Package Updates**: Package updates are disabled by default to prevent boot hangs
+2. **Installs QEMU Guest Agent**: Required for IP address retrieval and VM management
+3. **Configures SSH**: Sets up SSH access with provided keys
+4. **Network Configuration**: DHCP by default (or via gateway if configured)
+
+### Cloud-Init Behavior
+
+- **Package Updates**: Disabled by default (`package_update: false`, `package_upgrade: false`)
+- **QEMU Guest Agent**: Automatically installed on first boot
+- **SSH Keys**: Added via `ssh_key_id` parameter when creating VPS
+- **Root Password**: Auto-generated and returned in VPS creation response
 
 ### Custom Cloud-Init
 
-To add custom cloud-init configuration, modify the `generateCloudInitUserData` function in `proxmox_client.go`.
+To add custom cloud-init configuration, modify the `generateCloudInitUserData` function in the VPS service codebase.
 
 ## Monitoring Configuration
 
@@ -517,9 +557,11 @@ PROXMOX_API_TIMEOUT=300  # 5 minutes
 
 ## Related Documentation
 
-- [VPS Provisioning Guide](vps-provisioning.md) - Getting started with VPS
+- [VPS Provisioning Guide](./vps-provisioning.md) - Getting started with VPS
+- [Proxmox SSH User Setup Guide](./proxmox-ssh-user-setup.md) - Configure SSH access for cloud-init snippets
+- [VPS Gateway Setup Guide](./vps-gateway-setup.md) - Set up gateway service for DHCP and SSH proxying
 - [Environment Variables](../reference/environment-variables.md) - Complete variable reference
-- [Troubleshooting Guide](troubleshooting.md) - Common issues
+- [Troubleshooting Guide](./troubleshooting.md) - Common issues
 
 ---
 
