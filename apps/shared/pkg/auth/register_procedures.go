@@ -399,6 +399,157 @@ func RegisterAdminServiceProcedures() {
 	}
 }
 
+// RegisterSuperadminServiceProcedures registers all SuperadminService procedures
+// All superadmin procedures are marked as superadmin-only and use hierarchical permission names
+func RegisterSuperadminServiceProcedures() {
+	registry := GetPermissionRegistry()
+	public := []string{
+		"/obiente.cloud.superadmin.v1.SuperadminService/GetPricing", // Public pricing endpoint
+	}
+
+	superadminProcedures := []struct {
+		procedure    string
+		permission   string
+		resourceType string
+		action       string
+		description  string
+	}{
+		// Overview
+		{"/obiente.cloud.superadmin.v1.SuperadminService/GetOverview", "superadmin.overview.read", "superadmin", "overview.read", "View system overview"},
+
+		// DNS management
+		{"/obiente.cloud.superadmin.v1.SuperadminService/QueryDNS", "superadmin.dns.read", "superadmin", "dns.read", "Query DNS records"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListDNSRecords", "superadmin.dns.read", "superadmin", "dns.read", "List DNS records"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/GetDNSConfig", "superadmin.dns.read", "superadmin", "dns.read", "View DNS configuration"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListDelegatedDNSRecords", "superadmin.dns.read", "superadmin", "dns.read", "List delegated DNS records"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/HasDelegatedDNS", "superadmin.dns.read", "superadmin", "dns.read", "Check delegated DNS status"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/CreateDNSDelegationAPIKey", "superadmin.dns.create", "superadmin", "dns.create", "Create DNS delegation API key"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListDNSDelegationAPIKeys", "superadmin.dns.read", "superadmin", "dns.read", "List DNS delegation API keys"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/RevokeDNSDelegationAPIKey", "superadmin.dns.delete", "superadmin", "dns.delete", "Revoke DNS delegation API key"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/RevokeDNSDelegationAPIKeyForOrganization", "superadmin.dns.delete", "superadmin", "dns.delete", "Revoke DNS delegation API key for organization"},
+
+		// Abuse detection
+		{"/obiente.cloud.superadmin.v1.SuperadminService/GetAbuseDetection", "superadmin.abuse.read", "superadmin", "abuse.read", "View abuse detection data"},
+
+		// Income and billing
+		{"/obiente.cloud.superadmin.v1.SuperadminService/GetIncomeOverview", "superadmin.income.read", "superadmin", "income.read", "View income overview"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListAllInvoices", "superadmin.invoices.read", "superadmin", "invoices.read", "List all invoices"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/SendInvoiceReminder", "superadmin.invoices.update", "superadmin", "invoices.update", "Send invoice reminder"},
+
+		// Plan management
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListPlans", "superadmin.plans.read", "superadmin", "plans.read", "List plans"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/CreatePlan", "superadmin.plans.create", "superadmin", "plans.create", "Create plan"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/UpdatePlan", "superadmin.plans.update", "superadmin", "plans.update", "Update plan"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/DeletePlan", "superadmin.plans.delete", "superadmin", "plans.delete", "Delete plan"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/AssignPlanToOrganization", "superadmin.plans.update", "superadmin", "plans.update", "Assign plan to organization"},
+
+		// User management
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListUsers", "superadmin.users.read", "superadmin", "users.read", "List all users"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/GetUser", "superadmin.users.read", "superadmin", "users.read", "View user details"},
+
+		// VPS management
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListAllVPS", "superadmin.vps.read", "superadmin", "vps.read", "List all VPS instances"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/SuperadminGetVPS", "superadmin.vps.read", "superadmin", "vps.read", "View VPS instance"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/SuperadminResizeVPS", "superadmin.vps.update", "superadmin", "vps.update", "Resize VPS instance"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/SuperadminSuspendVPS", "superadmin.vps.update", "superadmin", "vps.update", "Suspend VPS instance"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/SuperadminUnsuspendVPS", "superadmin.vps.update", "superadmin", "vps.update", "Unsuspend VPS instance"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/SuperadminUpdateVPSCloudInit", "superadmin.vps.update", "superadmin", "vps.update", "Update VPS cloud-init"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/SuperadminForceStopVPS", "superadmin.vps.update", "superadmin", "vps.update", "Force stop VPS instance"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/SuperadminForceDeleteVPS", "superadmin.vps.delete", "superadmin", "vps.delete", "Force delete VPS instance"},
+
+		// VPS size catalog
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListVPSSizes", "superadmin.vps_sizes.read", "superadmin", "vps_sizes.read", "List VPS sizes"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/CreateVPSSize", "superadmin.vps_sizes.create", "superadmin", "vps_sizes.create", "Create VPS size"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/UpdateVPSSize", "superadmin.vps_sizes.update", "superadmin", "vps_sizes.update", "Update VPS size"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/DeleteVPSSize", "superadmin.vps_sizes.delete", "superadmin", "vps_sizes.delete", "Delete VPS size"},
+
+		// VPS public IPs
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListVPSPublicIPs", "superadmin.vps_public_ips.read", "superadmin", "vps_public_ips.read", "List VPS public IPs"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/CreateVPSPublicIP", "superadmin.vps_public_ips.create", "superadmin", "vps_public_ips.create", "Create VPS public IP"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/UpdateVPSPublicIP", "superadmin.vps_public_ips.update", "superadmin", "vps_public_ips.update", "Update VPS public IP"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/DeleteVPSPublicIP", "superadmin.vps_public_ips.delete", "superadmin", "vps_public_ips.delete", "Delete VPS public IP"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/AssignVPSPublicIP", "superadmin.vps_public_ips.update", "superadmin", "vps_public_ips.update", "Assign VPS public IP"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/UnassignVPSPublicIP", "superadmin.vps_public_ips.update", "superadmin", "vps_public_ips.update", "Unassign VPS public IP"},
+
+		// Stripe webhook events
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListStripeWebhookEvents", "superadmin.webhooks.read", "superadmin", "webhooks.read", "List Stripe webhook events"},
+
+		// Node management
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListNodes", "superadmin.nodes.read", "superadmin", "nodes.read", "List nodes"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/GetNode", "superadmin.nodes.read", "superadmin", "nodes.read", "View node details"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/UpdateNodeConfig", "superadmin.nodes.update", "superadmin", "nodes.update", "Update node configuration"},
+
+		// Superadmin permissions catalog
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListSuperadminPermissions", "admin.permissions.read", "admin", "permissions.read", "View superadmin permissions"},
+
+		// Superadmin role management
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListSuperadminRoles", "admin.roles.read", "admin", "roles.read", "View superadmin roles"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/CreateSuperadminRole", "admin.roles.create", "admin", "roles.create", "Create superadmin role"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/UpdateSuperadminRole", "admin.roles.update", "admin", "roles.update", "Update superadmin role"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/DeleteSuperadminRole", "admin.roles.delete", "admin", "roles.delete", "Delete superadmin role"},
+
+		// Superadmin role bindings
+		{"/obiente.cloud.superadmin.v1.SuperadminService/ListSuperadminRoleBindings", "admin.bindings.read", "admin", "bindings.read", "View superadmin role bindings"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/CreateSuperadminRoleBinding", "admin.bindings.create", "admin", "bindings.create", "Create superadmin role binding"},
+		{"/obiente.cloud.superadmin.v1.SuperadminService/DeleteSuperadminRoleBinding", "admin.bindings.delete", "admin", "bindings.delete", "Delete superadmin role binding"},
+	}
+
+	// Register superadmin permissions for Support Service (all ticket access)
+	supportProcedures := []struct {
+		procedure    string
+		permission   string
+		resourceType string
+		action       string
+		description  string
+	}{
+		{"/obiente.cloud.support.v1.SupportService/ListTickets", "superadmin.support.read", "superadmin", "support.read", "View all support tickets"},
+		{"/obiente.cloud.support.v1.SupportService/GetTicket", "superadmin.support.read", "superadmin", "support.read", "View any support ticket"},
+		{"/obiente.cloud.support.v1.SupportService/UpdateTicket", "superadmin.support.update", "superadmin", "support.update", "Update any support ticket"},
+		{"/obiente.cloud.support.v1.SupportService/AddComment", "superadmin.support.update", "superadmin", "support.update", "Add comment to any ticket (including internal)"},
+		{"/obiente.cloud.support.v1.SupportService/ListComments", "superadmin.support.read", "superadmin", "support.read", "View all comments (including internal)"},
+	}
+
+	for _, proc := range supportProcedures {
+		// All superadmin support procedures are superadmin-only
+		registry.RegisterProcedureWithFlags(proc.procedure, proc.permission, proc.resourceType, proc.action, proc.description, false, true)
+	}
+
+	// Register superadmin permissions for Deployment Service (view all deployments)
+	deploymentProcedures := []struct {
+		procedure    string
+		permission   string
+		resourceType string
+		action       string
+		description  string
+	}{
+		{"/obiente.cloud.deployments.v1.DeploymentService/ListDeployments", "superadmin.deployments.read", "superadmin", "deployments.read", "View all deployments"},
+		{"/obiente.cloud.deployments.v1.DeploymentService/GetDeployment", "superadmin.deployments.read", "superadmin", "deployments.read", "View any deployment"},
+		{"/obiente.cloud.deployments.v1.DeploymentService/GetDeploymentLogs", "superadmin.deployments.read", "superadmin", "deployments.read", "View logs for any deployment"},
+		{"/obiente.cloud.deployments.v1.DeploymentService/StreamDeploymentLogs", "superadmin.deployments.read", "superadmin", "deployments.read", "Stream logs for any deployment"},
+		{"/obiente.cloud.deployments.v1.DeploymentService/GetBuildLogs", "superadmin.deployments.read", "superadmin", "deployments.read", "View build logs for any deployment"},
+		{"/obiente.cloud.deployments.v1.DeploymentService/GetDeploymentMetrics", "superadmin.deployments.read", "superadmin", "deployments.read", "View metrics for any deployment"},
+		{"/obiente.cloud.deployments.v1.DeploymentService/StreamDeploymentMetrics", "superadmin.deployments.read", "superadmin", "deployments.read", "Stream metrics for any deployment"},
+		{"/obiente.cloud.deployments.v1.DeploymentService/GetDeploymentUsage", "superadmin.deployments.read", "superadmin", "deployments.read", "View usage for any deployment"},
+	}
+
+	for _, proc := range deploymentProcedures {
+		// All superadmin deployment procedures are superadmin-only
+		registry.RegisterProcedureWithFlags(proc.procedure, proc.permission, proc.resourceType, proc.action, proc.description, false, true)
+	}
+
+	for _, proc := range superadminProcedures {
+		isPublic := false
+		for _, pub := range public {
+			if pub == proc.procedure {
+				isPublic = true
+				break
+			}
+		}
+		// All superadmin procedures are superadmin-only (except public ones)
+		registry.RegisterProcedureWithFlags(proc.procedure, proc.permission, proc.resourceType, proc.action, proc.description, isPublic, true)
+	}
+}
+
 // RegisterAllServices registers procedures for all services
 // This should be called at application startup
 func RegisterAllServices() {
@@ -410,4 +561,5 @@ func RegisterAllServices() {
 	RegisterSupportServiceProcedures()
 	RegisterNotificationServiceProcedures()
 	RegisterAdminServiceProcedures()
+	RegisterSuperadminServiceProcedures()
 }

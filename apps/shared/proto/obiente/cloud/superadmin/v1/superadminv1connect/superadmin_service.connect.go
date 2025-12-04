@@ -165,6 +165,33 @@ const (
 	// SuperadminServiceUpdateNodeConfigProcedure is the fully-qualified name of the SuperadminService's
 	// UpdateNodeConfig RPC.
 	SuperadminServiceUpdateNodeConfigProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/UpdateNodeConfig"
+	// SuperadminServiceListSuperadminPermissionsProcedure is the fully-qualified name of the
+	// SuperadminService's ListSuperadminPermissions RPC.
+	SuperadminServiceListSuperadminPermissionsProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListSuperadminPermissions"
+	// SuperadminServiceGetMySuperadminPermissionsProcedure is the fully-qualified name of the
+	// SuperadminService's GetMySuperadminPermissions RPC.
+	SuperadminServiceGetMySuperadminPermissionsProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/GetMySuperadminPermissions"
+	// SuperadminServiceListSuperadminRolesProcedure is the fully-qualified name of the
+	// SuperadminService's ListSuperadminRoles RPC.
+	SuperadminServiceListSuperadminRolesProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListSuperadminRoles"
+	// SuperadminServiceCreateSuperadminRoleProcedure is the fully-qualified name of the
+	// SuperadminService's CreateSuperadminRole RPC.
+	SuperadminServiceCreateSuperadminRoleProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/CreateSuperadminRole"
+	// SuperadminServiceUpdateSuperadminRoleProcedure is the fully-qualified name of the
+	// SuperadminService's UpdateSuperadminRole RPC.
+	SuperadminServiceUpdateSuperadminRoleProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/UpdateSuperadminRole"
+	// SuperadminServiceDeleteSuperadminRoleProcedure is the fully-qualified name of the
+	// SuperadminService's DeleteSuperadminRole RPC.
+	SuperadminServiceDeleteSuperadminRoleProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/DeleteSuperadminRole"
+	// SuperadminServiceListSuperadminRoleBindingsProcedure is the fully-qualified name of the
+	// SuperadminService's ListSuperadminRoleBindings RPC.
+	SuperadminServiceListSuperadminRoleBindingsProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/ListSuperadminRoleBindings"
+	// SuperadminServiceCreateSuperadminRoleBindingProcedure is the fully-qualified name of the
+	// SuperadminService's CreateSuperadminRoleBinding RPC.
+	SuperadminServiceCreateSuperadminRoleBindingProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/CreateSuperadminRoleBinding"
+	// SuperadminServiceDeleteSuperadminRoleBindingProcedure is the fully-qualified name of the
+	// SuperadminService's DeleteSuperadminRoleBinding RPC.
+	SuperadminServiceDeleteSuperadminRoleBindingProcedure = "/obiente.cloud.superadmin.v1.SuperadminService/DeleteSuperadminRoleBinding"
 )
 
 // SuperadminServiceClient is a client for the obiente.cloud.superadmin.v1.SuperadminService
@@ -228,6 +255,19 @@ type SuperadminServiceClient interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
 	GetNode(context.Context, *connect.Request[v1.GetNodeRequest]) (*connect.Response[v1.GetNodeResponse], error)
 	UpdateNodeConfig(context.Context, *connect.Request[v1.UpdateNodeConfigRequest]) (*connect.Response[v1.UpdateNodeConfigResponse], error)
+	// Superadmin permissions catalog (only superadmin-only permissions)
+	ListSuperadminPermissions(context.Context, *connect.Request[v1.ListSuperadminPermissionsRequest]) (*connect.Response[v1.ListSuperadminPermissionsResponse], error)
+	// Get current user's superadmin permissions (from their role bindings)
+	GetMySuperadminPermissions(context.Context, *connect.Request[v1.GetMySuperadminPermissionsRequest]) (*connect.Response[v1.GetMySuperadminPermissionsResponse], error)
+	// Superadmin role management endpoints (global roles, not organization-scoped)
+	ListSuperadminRoles(context.Context, *connect.Request[v1.ListSuperadminRolesRequest]) (*connect.Response[v1.ListSuperadminRolesResponse], error)
+	CreateSuperadminRole(context.Context, *connect.Request[v1.CreateSuperadminRoleRequest]) (*connect.Response[v1.CreateSuperadminRoleResponse], error)
+	UpdateSuperadminRole(context.Context, *connect.Request[v1.UpdateSuperadminRoleRequest]) (*connect.Response[v1.UpdateSuperadminRoleResponse], error)
+	DeleteSuperadminRole(context.Context, *connect.Request[v1.DeleteSuperadminRoleRequest]) (*connect.Response[v1.DeleteSuperadminRoleResponse], error)
+	// Superadmin role binding management endpoints
+	ListSuperadminRoleBindings(context.Context, *connect.Request[v1.ListSuperadminRoleBindingsRequest]) (*connect.Response[v1.ListSuperadminRoleBindingsResponse], error)
+	CreateSuperadminRoleBinding(context.Context, *connect.Request[v1.CreateSuperadminRoleBindingRequest]) (*connect.Response[v1.CreateSuperadminRoleBindingResponse], error)
+	DeleteSuperadminRoleBinding(context.Context, *connect.Request[v1.DeleteSuperadminRoleBindingRequest]) (*connect.Response[v1.DeleteSuperadminRoleBindingResponse], error)
 }
 
 // NewSuperadminServiceClient constructs a client for the
@@ -506,6 +546,60 @@ func NewSuperadminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(superadminServiceMethods.ByName("UpdateNodeConfig")),
 			connect.WithClientOptions(opts...),
 		),
+		listSuperadminPermissions: connect.NewClient[v1.ListSuperadminPermissionsRequest, v1.ListSuperadminPermissionsResponse](
+			httpClient,
+			baseURL+SuperadminServiceListSuperadminPermissionsProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListSuperadminPermissions")),
+			connect.WithClientOptions(opts...),
+		),
+		getMySuperadminPermissions: connect.NewClient[v1.GetMySuperadminPermissionsRequest, v1.GetMySuperadminPermissionsResponse](
+			httpClient,
+			baseURL+SuperadminServiceGetMySuperadminPermissionsProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("GetMySuperadminPermissions")),
+			connect.WithClientOptions(opts...),
+		),
+		listSuperadminRoles: connect.NewClient[v1.ListSuperadminRolesRequest, v1.ListSuperadminRolesResponse](
+			httpClient,
+			baseURL+SuperadminServiceListSuperadminRolesProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListSuperadminRoles")),
+			connect.WithClientOptions(opts...),
+		),
+		createSuperadminRole: connect.NewClient[v1.CreateSuperadminRoleRequest, v1.CreateSuperadminRoleResponse](
+			httpClient,
+			baseURL+SuperadminServiceCreateSuperadminRoleProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("CreateSuperadminRole")),
+			connect.WithClientOptions(opts...),
+		),
+		updateSuperadminRole: connect.NewClient[v1.UpdateSuperadminRoleRequest, v1.UpdateSuperadminRoleResponse](
+			httpClient,
+			baseURL+SuperadminServiceUpdateSuperadminRoleProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("UpdateSuperadminRole")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteSuperadminRole: connect.NewClient[v1.DeleteSuperadminRoleRequest, v1.DeleteSuperadminRoleResponse](
+			httpClient,
+			baseURL+SuperadminServiceDeleteSuperadminRoleProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("DeleteSuperadminRole")),
+			connect.WithClientOptions(opts...),
+		),
+		listSuperadminRoleBindings: connect.NewClient[v1.ListSuperadminRoleBindingsRequest, v1.ListSuperadminRoleBindingsResponse](
+			httpClient,
+			baseURL+SuperadminServiceListSuperadminRoleBindingsProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("ListSuperadminRoleBindings")),
+			connect.WithClientOptions(opts...),
+		),
+		createSuperadminRoleBinding: connect.NewClient[v1.CreateSuperadminRoleBindingRequest, v1.CreateSuperadminRoleBindingResponse](
+			httpClient,
+			baseURL+SuperadminServiceCreateSuperadminRoleBindingProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("CreateSuperadminRoleBinding")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteSuperadminRoleBinding: connect.NewClient[v1.DeleteSuperadminRoleBindingRequest, v1.DeleteSuperadminRoleBindingResponse](
+			httpClient,
+			baseURL+SuperadminServiceDeleteSuperadminRoleBindingProcedure,
+			connect.WithSchema(superadminServiceMethods.ByName("DeleteSuperadminRoleBinding")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -555,6 +649,15 @@ type superadminServiceClient struct {
 	listNodes                                *connect.Client[v1.ListNodesRequest, v1.ListNodesResponse]
 	getNode                                  *connect.Client[v1.GetNodeRequest, v1.GetNodeResponse]
 	updateNodeConfig                         *connect.Client[v1.UpdateNodeConfigRequest, v1.UpdateNodeConfigResponse]
+	listSuperadminPermissions                *connect.Client[v1.ListSuperadminPermissionsRequest, v1.ListSuperadminPermissionsResponse]
+	getMySuperadminPermissions               *connect.Client[v1.GetMySuperadminPermissionsRequest, v1.GetMySuperadminPermissionsResponse]
+	listSuperadminRoles                      *connect.Client[v1.ListSuperadminRolesRequest, v1.ListSuperadminRolesResponse]
+	createSuperadminRole                     *connect.Client[v1.CreateSuperadminRoleRequest, v1.CreateSuperadminRoleResponse]
+	updateSuperadminRole                     *connect.Client[v1.UpdateSuperadminRoleRequest, v1.UpdateSuperadminRoleResponse]
+	deleteSuperadminRole                     *connect.Client[v1.DeleteSuperadminRoleRequest, v1.DeleteSuperadminRoleResponse]
+	listSuperadminRoleBindings               *connect.Client[v1.ListSuperadminRoleBindingsRequest, v1.ListSuperadminRoleBindingsResponse]
+	createSuperadminRoleBinding              *connect.Client[v1.CreateSuperadminRoleBindingRequest, v1.CreateSuperadminRoleBindingResponse]
+	deleteSuperadminRoleBinding              *connect.Client[v1.DeleteSuperadminRoleBindingRequest, v1.DeleteSuperadminRoleBindingResponse]
 }
 
 // GetOverview calls obiente.cloud.superadmin.v1.SuperadminService.GetOverview.
@@ -788,6 +891,56 @@ func (c *superadminServiceClient) UpdateNodeConfig(ctx context.Context, req *con
 	return c.updateNodeConfig.CallUnary(ctx, req)
 }
 
+// ListSuperadminPermissions calls
+// obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminPermissions.
+func (c *superadminServiceClient) ListSuperadminPermissions(ctx context.Context, req *connect.Request[v1.ListSuperadminPermissionsRequest]) (*connect.Response[v1.ListSuperadminPermissionsResponse], error) {
+	return c.listSuperadminPermissions.CallUnary(ctx, req)
+}
+
+// GetMySuperadminPermissions calls
+// obiente.cloud.superadmin.v1.SuperadminService.GetMySuperadminPermissions.
+func (c *superadminServiceClient) GetMySuperadminPermissions(ctx context.Context, req *connect.Request[v1.GetMySuperadminPermissionsRequest]) (*connect.Response[v1.GetMySuperadminPermissionsResponse], error) {
+	return c.getMySuperadminPermissions.CallUnary(ctx, req)
+}
+
+// ListSuperadminRoles calls obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminRoles.
+func (c *superadminServiceClient) ListSuperadminRoles(ctx context.Context, req *connect.Request[v1.ListSuperadminRolesRequest]) (*connect.Response[v1.ListSuperadminRolesResponse], error) {
+	return c.listSuperadminRoles.CallUnary(ctx, req)
+}
+
+// CreateSuperadminRole calls obiente.cloud.superadmin.v1.SuperadminService.CreateSuperadminRole.
+func (c *superadminServiceClient) CreateSuperadminRole(ctx context.Context, req *connect.Request[v1.CreateSuperadminRoleRequest]) (*connect.Response[v1.CreateSuperadminRoleResponse], error) {
+	return c.createSuperadminRole.CallUnary(ctx, req)
+}
+
+// UpdateSuperadminRole calls obiente.cloud.superadmin.v1.SuperadminService.UpdateSuperadminRole.
+func (c *superadminServiceClient) UpdateSuperadminRole(ctx context.Context, req *connect.Request[v1.UpdateSuperadminRoleRequest]) (*connect.Response[v1.UpdateSuperadminRoleResponse], error) {
+	return c.updateSuperadminRole.CallUnary(ctx, req)
+}
+
+// DeleteSuperadminRole calls obiente.cloud.superadmin.v1.SuperadminService.DeleteSuperadminRole.
+func (c *superadminServiceClient) DeleteSuperadminRole(ctx context.Context, req *connect.Request[v1.DeleteSuperadminRoleRequest]) (*connect.Response[v1.DeleteSuperadminRoleResponse], error) {
+	return c.deleteSuperadminRole.CallUnary(ctx, req)
+}
+
+// ListSuperadminRoleBindings calls
+// obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminRoleBindings.
+func (c *superadminServiceClient) ListSuperadminRoleBindings(ctx context.Context, req *connect.Request[v1.ListSuperadminRoleBindingsRequest]) (*connect.Response[v1.ListSuperadminRoleBindingsResponse], error) {
+	return c.listSuperadminRoleBindings.CallUnary(ctx, req)
+}
+
+// CreateSuperadminRoleBinding calls
+// obiente.cloud.superadmin.v1.SuperadminService.CreateSuperadminRoleBinding.
+func (c *superadminServiceClient) CreateSuperadminRoleBinding(ctx context.Context, req *connect.Request[v1.CreateSuperadminRoleBindingRequest]) (*connect.Response[v1.CreateSuperadminRoleBindingResponse], error) {
+	return c.createSuperadminRoleBinding.CallUnary(ctx, req)
+}
+
+// DeleteSuperadminRoleBinding calls
+// obiente.cloud.superadmin.v1.SuperadminService.DeleteSuperadminRoleBinding.
+func (c *superadminServiceClient) DeleteSuperadminRoleBinding(ctx context.Context, req *connect.Request[v1.DeleteSuperadminRoleBindingRequest]) (*connect.Response[v1.DeleteSuperadminRoleBindingResponse], error) {
+	return c.deleteSuperadminRoleBinding.CallUnary(ctx, req)
+}
+
 // SuperadminServiceHandler is an implementation of the
 // obiente.cloud.superadmin.v1.SuperadminService service.
 type SuperadminServiceHandler interface {
@@ -849,6 +1002,19 @@ type SuperadminServiceHandler interface {
 	ListNodes(context.Context, *connect.Request[v1.ListNodesRequest]) (*connect.Response[v1.ListNodesResponse], error)
 	GetNode(context.Context, *connect.Request[v1.GetNodeRequest]) (*connect.Response[v1.GetNodeResponse], error)
 	UpdateNodeConfig(context.Context, *connect.Request[v1.UpdateNodeConfigRequest]) (*connect.Response[v1.UpdateNodeConfigResponse], error)
+	// Superadmin permissions catalog (only superadmin-only permissions)
+	ListSuperadminPermissions(context.Context, *connect.Request[v1.ListSuperadminPermissionsRequest]) (*connect.Response[v1.ListSuperadminPermissionsResponse], error)
+	// Get current user's superadmin permissions (from their role bindings)
+	GetMySuperadminPermissions(context.Context, *connect.Request[v1.GetMySuperadminPermissionsRequest]) (*connect.Response[v1.GetMySuperadminPermissionsResponse], error)
+	// Superadmin role management endpoints (global roles, not organization-scoped)
+	ListSuperadminRoles(context.Context, *connect.Request[v1.ListSuperadminRolesRequest]) (*connect.Response[v1.ListSuperadminRolesResponse], error)
+	CreateSuperadminRole(context.Context, *connect.Request[v1.CreateSuperadminRoleRequest]) (*connect.Response[v1.CreateSuperadminRoleResponse], error)
+	UpdateSuperadminRole(context.Context, *connect.Request[v1.UpdateSuperadminRoleRequest]) (*connect.Response[v1.UpdateSuperadminRoleResponse], error)
+	DeleteSuperadminRole(context.Context, *connect.Request[v1.DeleteSuperadminRoleRequest]) (*connect.Response[v1.DeleteSuperadminRoleResponse], error)
+	// Superadmin role binding management endpoints
+	ListSuperadminRoleBindings(context.Context, *connect.Request[v1.ListSuperadminRoleBindingsRequest]) (*connect.Response[v1.ListSuperadminRoleBindingsResponse], error)
+	CreateSuperadminRoleBinding(context.Context, *connect.Request[v1.CreateSuperadminRoleBindingRequest]) (*connect.Response[v1.CreateSuperadminRoleBindingResponse], error)
+	DeleteSuperadminRoleBinding(context.Context, *connect.Request[v1.DeleteSuperadminRoleBindingRequest]) (*connect.Response[v1.DeleteSuperadminRoleBindingResponse], error)
 }
 
 // NewSuperadminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -1122,6 +1288,60 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 		connect.WithSchema(superadminServiceMethods.ByName("UpdateNodeConfig")),
 		connect.WithHandlerOptions(opts...),
 	)
+	superadminServiceListSuperadminPermissionsHandler := connect.NewUnaryHandler(
+		SuperadminServiceListSuperadminPermissionsProcedure,
+		svc.ListSuperadminPermissions,
+		connect.WithSchema(superadminServiceMethods.ByName("ListSuperadminPermissions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceGetMySuperadminPermissionsHandler := connect.NewUnaryHandler(
+		SuperadminServiceGetMySuperadminPermissionsProcedure,
+		svc.GetMySuperadminPermissions,
+		connect.WithSchema(superadminServiceMethods.ByName("GetMySuperadminPermissions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceListSuperadminRolesHandler := connect.NewUnaryHandler(
+		SuperadminServiceListSuperadminRolesProcedure,
+		svc.ListSuperadminRoles,
+		connect.WithSchema(superadminServiceMethods.ByName("ListSuperadminRoles")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceCreateSuperadminRoleHandler := connect.NewUnaryHandler(
+		SuperadminServiceCreateSuperadminRoleProcedure,
+		svc.CreateSuperadminRole,
+		connect.WithSchema(superadminServiceMethods.ByName("CreateSuperadminRole")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceUpdateSuperadminRoleHandler := connect.NewUnaryHandler(
+		SuperadminServiceUpdateSuperadminRoleProcedure,
+		svc.UpdateSuperadminRole,
+		connect.WithSchema(superadminServiceMethods.ByName("UpdateSuperadminRole")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceDeleteSuperadminRoleHandler := connect.NewUnaryHandler(
+		SuperadminServiceDeleteSuperadminRoleProcedure,
+		svc.DeleteSuperadminRole,
+		connect.WithSchema(superadminServiceMethods.ByName("DeleteSuperadminRole")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceListSuperadminRoleBindingsHandler := connect.NewUnaryHandler(
+		SuperadminServiceListSuperadminRoleBindingsProcedure,
+		svc.ListSuperadminRoleBindings,
+		connect.WithSchema(superadminServiceMethods.ByName("ListSuperadminRoleBindings")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceCreateSuperadminRoleBindingHandler := connect.NewUnaryHandler(
+		SuperadminServiceCreateSuperadminRoleBindingProcedure,
+		svc.CreateSuperadminRoleBinding,
+		connect.WithSchema(superadminServiceMethods.ByName("CreateSuperadminRoleBinding")),
+		connect.WithHandlerOptions(opts...),
+	)
+	superadminServiceDeleteSuperadminRoleBindingHandler := connect.NewUnaryHandler(
+		SuperadminServiceDeleteSuperadminRoleBindingProcedure,
+		svc.DeleteSuperadminRoleBinding,
+		connect.WithSchema(superadminServiceMethods.ByName("DeleteSuperadminRoleBinding")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/obiente.cloud.superadmin.v1.SuperadminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case SuperadminServiceGetOverviewProcedure:
@@ -1212,6 +1432,24 @@ func NewSuperadminServiceHandler(svc SuperadminServiceHandler, opts ...connect.H
 			superadminServiceGetNodeHandler.ServeHTTP(w, r)
 		case SuperadminServiceUpdateNodeConfigProcedure:
 			superadminServiceUpdateNodeConfigHandler.ServeHTTP(w, r)
+		case SuperadminServiceListSuperadminPermissionsProcedure:
+			superadminServiceListSuperadminPermissionsHandler.ServeHTTP(w, r)
+		case SuperadminServiceGetMySuperadminPermissionsProcedure:
+			superadminServiceGetMySuperadminPermissionsHandler.ServeHTTP(w, r)
+		case SuperadminServiceListSuperadminRolesProcedure:
+			superadminServiceListSuperadminRolesHandler.ServeHTTP(w, r)
+		case SuperadminServiceCreateSuperadminRoleProcedure:
+			superadminServiceCreateSuperadminRoleHandler.ServeHTTP(w, r)
+		case SuperadminServiceUpdateSuperadminRoleProcedure:
+			superadminServiceUpdateSuperadminRoleHandler.ServeHTTP(w, r)
+		case SuperadminServiceDeleteSuperadminRoleProcedure:
+			superadminServiceDeleteSuperadminRoleHandler.ServeHTTP(w, r)
+		case SuperadminServiceListSuperadminRoleBindingsProcedure:
+			superadminServiceListSuperadminRoleBindingsHandler.ServeHTTP(w, r)
+		case SuperadminServiceCreateSuperadminRoleBindingProcedure:
+			superadminServiceCreateSuperadminRoleBindingHandler.ServeHTTP(w, r)
+		case SuperadminServiceDeleteSuperadminRoleBindingProcedure:
+			superadminServiceDeleteSuperadminRoleBindingHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1395,4 +1633,40 @@ func (UnimplementedSuperadminServiceHandler) GetNode(context.Context, *connect.R
 
 func (UnimplementedSuperadminServiceHandler) UpdateNodeConfig(context.Context, *connect.Request[v1.UpdateNodeConfigRequest]) (*connect.Response[v1.UpdateNodeConfigResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.UpdateNodeConfig is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListSuperadminPermissions(context.Context, *connect.Request[v1.ListSuperadminPermissionsRequest]) (*connect.Response[v1.ListSuperadminPermissionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminPermissions is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) GetMySuperadminPermissions(context.Context, *connect.Request[v1.GetMySuperadminPermissionsRequest]) (*connect.Response[v1.GetMySuperadminPermissionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.GetMySuperadminPermissions is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListSuperadminRoles(context.Context, *connect.Request[v1.ListSuperadminRolesRequest]) (*connect.Response[v1.ListSuperadminRolesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminRoles is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) CreateSuperadminRole(context.Context, *connect.Request[v1.CreateSuperadminRoleRequest]) (*connect.Response[v1.CreateSuperadminRoleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.CreateSuperadminRole is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) UpdateSuperadminRole(context.Context, *connect.Request[v1.UpdateSuperadminRoleRequest]) (*connect.Response[v1.UpdateSuperadminRoleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.UpdateSuperadminRole is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) DeleteSuperadminRole(context.Context, *connect.Request[v1.DeleteSuperadminRoleRequest]) (*connect.Response[v1.DeleteSuperadminRoleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.DeleteSuperadminRole is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) ListSuperadminRoleBindings(context.Context, *connect.Request[v1.ListSuperadminRoleBindingsRequest]) (*connect.Response[v1.ListSuperadminRoleBindingsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.ListSuperadminRoleBindings is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) CreateSuperadminRoleBinding(context.Context, *connect.Request[v1.CreateSuperadminRoleBindingRequest]) (*connect.Response[v1.CreateSuperadminRoleBindingResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.CreateSuperadminRoleBinding is not implemented"))
+}
+
+func (UnimplementedSuperadminServiceHandler) DeleteSuperadminRoleBinding(context.Context, *connect.Request[v1.DeleteSuperadminRoleBindingRequest]) (*connect.Response[v1.DeleteSuperadminRoleBindingResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("obiente.cloud.superadmin.v1.SuperadminService.DeleteSuperadminRoleBinding is not implemented"))
 }

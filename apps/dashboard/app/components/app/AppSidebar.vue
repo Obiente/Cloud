@@ -132,6 +132,7 @@
             </OuiText>
           </div>
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin')"
             to="/superadmin"
             label="Overview"
             :icon="ShieldCheckIcon"
@@ -139,81 +140,108 @@
             exact-match
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/audit-logs')"
             to="/superadmin/audit-logs"
             label="Global Audit Logs"
             :icon="ClipboardDocumentListIcon"
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/organizations')"
             to="/superadmin/organizations"
             label="Organizations"
             :icon="BuildingOfficeIcon"
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/plans')"
             to="/superadmin/plans"
             label="Plans"
             :icon="CubeIcon"
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/deployments')"
             to="/superadmin/deployments"
             label="Deployments"
             :icon="RocketLaunchIcon"
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/vps')"
             to="/superadmin/vps"
             label="VPS Instances"
             :icon="ServerIcon"
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/nodes')"
             to="/superadmin/nodes"
             label="Nodes"
             :icon="ServerIcon"
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/users')"
             to="/superadmin/users"
             label="Users"
             :icon="UsersIcon"
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/usage')"
             to="/superadmin/usage"
             label="Usage"
             :icon="ChartBarIcon"
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/dns')"
             to="/superadmin/dns"
             label="DNS"
             :icon="ServerIcon"
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/abuse')"
             to="/superadmin/abuse"
             label="Abuse Detection"
             :icon="ShieldExclamationIcon"
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/income')"
             to="/superadmin/income"
             label="Income Overview"
             :icon="CurrencyDollarIcon"
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/invoices')"
             to="/superadmin/invoices"
             label="Invoices"
             :icon="DocumentTextIcon"
             @navigate="handleNavigate"
           />
           <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/webhook-events')"
             to="/superadmin/webhook-events"
             label="Webhook Events"
             :icon="BoltIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/roles')"
+            to="/superadmin/roles"
+            label="Roles"
+            :icon="ShieldCheckIcon"
+            @navigate="handleNavigate"
+          />
+          <AppNavigationLink
+            v-if="hasPagePermission('/superadmin/role-bindings')"
+            to="/superadmin/role-bindings"
+            label="Role Bindings"
+            :icon="UserGroupIcon"
             @navigate="handleNavigate"
           />
         </template>
@@ -239,6 +267,7 @@ import {
   CreditCardIcon,
   Cog6ToothIcon,
   UsersIcon,
+  UserGroupIcon,
   ShieldCheckIcon,
   ShieldExclamationIcon,
   BuildingOfficeIcon,
@@ -284,6 +313,39 @@ const emit = defineEmits<{
 
 const config = useConfig();
 const billingEnabled = computed(() => config.billingEnabled.value === true);
+
+const superAdmin = useSuperAdmin();
+
+// Map pages to required permissions
+const pagePermissions: Record<string, string> = {
+  "/superadmin": "superadmin.overview.read",
+  "/superadmin/audit-logs": "superadmin.overview.read", // Audit logs are part of overview
+  "/superadmin/organizations": "superadmin.overview.read", // Organizations are part of overview
+  "/superadmin/plans": "superadmin.plans.read",
+  "/superadmin/deployments": "superadmin.deployments.read",
+  "/superadmin/vps": "superadmin.vps.read",
+  "/superadmin/nodes": "superadmin.nodes.read",
+  "/superadmin/users": "superadmin.users.read",
+  "/superadmin/usage": "superadmin.overview.read", // Usage is part of overview
+  "/superadmin/dns": "superadmin.dns.read",
+  "/superadmin/abuse": "superadmin.abuse.read",
+  "/superadmin/income": "superadmin.income.read",
+  "/superadmin/invoices": "superadmin.invoices.read",
+  "/superadmin/webhook-events": "superadmin.webhooks.read",
+  "/superadmin/roles": "admin.roles.read",
+  "/superadmin/role-bindings": "admin.bindings.read",
+};
+
+// Check if user has permission for a page
+const hasPagePermission = (path: string): boolean => {
+  if (!props.showSuperAdmin) return false;
+  if (superAdmin.isFullSuperadmin.value) return true;
+  
+  const requiredPerm = pagePermissions[path];
+  if (!requiredPerm) return false;
+  
+  return superAdmin.hasPermission(requiredPerm);
+};
 
 const handleNavigate = () => {
   emit("navigate");

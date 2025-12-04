@@ -2979,3 +2979,499 @@ func convertNodeToProto(node *database.NodeMetadata) *superadminv1.NodeInfo {
 	nodeInfo.Config = config
 	return nodeInfo
 }
+
+// generateID generates a unique ID with a prefix
+func generateID(prefix string) string {
+	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+}
+
+// ListSuperadminPermissions returns only superadmin-only permissions
+func (s *Service) ListSuperadminPermissions(ctx context.Context, req *connect.Request[superadminv1.ListSuperadminPermissionsRequest]) (*connect.Response[superadminv1.ListSuperadminPermissionsResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	// Only superadmins can view superadmin permissions
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	registry := auth.GetPermissionRegistry()
+
+	// Ensure registry is initialized
+	_ = registry.AutoDiscoverProcedures()
+
+	// Get all permissions without excluding superadmin ones
+	permDefs := registry.GetAllPermissions(false)
+
+	// Filter to only superadmin-only permissions
+	superadminPerms := make([]*auth.PermissionDefinition, 0)
+	for _, perm := range permDefs {
+		if registry.IsSuperadminOnly(perm.Permission) {
+			superadminPerms = append(superadminPerms, perm)
+		}
+	}
+
+	// Convert to proto format
+	permissions := make([]*superadminv1.SuperadminPermissionDefinition, 0, len(superadminPerms))
+	for _, perm := range superadminPerms {
+		// Get description with fallback
+		description := perm.Description
+		if description == "" {
+			// Check manual descriptions
+			if desc, ok := auth.ScopeDescriptions[perm.Permission]; ok && desc != "" {
+				description = desc
+			} else {
+				// Generate default description
+				parts := strings.Split(perm.Permission, ".")
+				if len(parts) >= 2 {
+					action := parts[len(parts)-1]
+					resourceType := strings.Join(parts[:len(parts)-1], ".")
+					description = fmt.Sprintf("%s %s", strings.Title(action), resourceType)
+				} else {
+					description = fmt.Sprintf("Permission: %s", perm.Permission)
+				}
+			}
+		}
+
+		permissions = append(permissions, &superadminv1.SuperadminPermissionDefinition{
+			Id:           perm.Permission,
+			Description:  description,
+			ResourceType: perm.ResourceType,
+		})
+	}
+
+	// Sort by resource type, then by permission ID
+	sort.Slice(permissions, func(i, j int) bool {
+		if permissions[i].ResourceType != permissions[j].ResourceType {
+			return permissions[i].ResourceType < permissions[j].ResourceType
+		}
+		return permissions[i].Id < permissions[j].Id
+	})
+
+	return connect.NewResponse(&superadminv1.ListSuperadminPermissionsResponse{
+		Permissions: permissions,
+	}), nil
+}
+
+// GetMySuperadminPermissions returns the current user's superadmin permissions
+// This endpoint is accessible to all authenticated users - it returns empty permissions if the user has no superadmin access
+func (s *Service) GetMySuperadminPermissions(ctx context.Context, req *connect.Request[superadminv1.GetMySuperadminPermissionsRequest]) (*connect.Response[superadminv1.GetMySuperadminPermissionsResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	// Check if user is a full superadmin (email-based)
+	isFullSuperadmin := auth.HasRole(user, auth.RoleSuperAdmin)
+	
+	// If full superadmin, return all superadmin permissions
+	if isFullSuperadmin {
+		registry := auth.GetPermissionRegistry()
+		_ = registry.AutoDiscoverProcedures()
+		
+		// Get all superadmin-only permissions
+		allPerms := registry.GetAllPermissions(false)
+		permissions := make([]string, 0)
+		for _, perm := range allPerms {
+			if registry.IsSuperadminOnly(perm.Permission) {
+				permissions = append(permissions, perm.Permission)
+			}
+		}
+		
+		return connect.NewResponse(&superadminv1.GetMySuperadminPermissionsResponse{
+			Permissions:      permissions,
+			IsFullSuperadmin: true,
+		}), nil
+	}
+
+	// Otherwise, get permissions from role bindings
+	var bindings []database.SuperadminRoleBinding
+	if err := database.DB.Where("user_id = ?", user.Id).Find(&bindings).Error; err != nil {
+		// No bindings = no permissions
+		return connect.NewResponse(&superadminv1.GetMySuperadminPermissionsResponse{
+			Permissions:      []string{},
+			IsFullSuperadmin: false,
+		}), nil
+	}
+
+	if len(bindings) == 0 {
+		return connect.NewResponse(&superadminv1.GetMySuperadminPermissionsResponse{
+			Permissions:      []string{},
+			IsFullSuperadmin: false,
+		}), nil
+	}
+
+	// Load roles
+	var roles []database.SuperadminRole
+	roleIDs := make([]string, 0, len(bindings))
+	for _, b := range bindings {
+		roleIDs = append(roleIDs, b.RoleID)
+	}
+	if err := database.DB.Where("id IN ?", roleIDs).Find(&roles).Error; err != nil {
+		return connect.NewResponse(&superadminv1.GetMySuperadminPermissionsResponse{
+			Permissions:      []string{},
+			IsFullSuperadmin: false,
+		}), nil
+	}
+
+	// Collect all unique permissions from all roles
+	permissionSet := make(map[string]bool)
+	for _, r := range roles {
+		var perms []string
+		if err := json.Unmarshal([]byte(r.Permissions), &perms); err != nil {
+			continue
+		}
+		for _, perm := range perms {
+			permissionSet[perm] = true
+		}
+	}
+
+	// Convert set to slice
+	permissions := make([]string, 0, len(permissionSet))
+	for perm := range permissionSet {
+		permissions = append(permissions, perm)
+	}
+
+	// Sort for consistency
+	sort.Strings(permissions)
+
+	return connect.NewResponse(&superadminv1.GetMySuperadminPermissionsResponse{
+		Permissions:      permissions,
+		IsFullSuperadmin: false,
+	}), nil
+}
+
+// ListSuperadminRoles returns all superadmin roles (global, not organization-scoped)
+func (s *Service) ListSuperadminRoles(ctx context.Context, req *connect.Request[superadminv1.ListSuperadminRolesRequest]) (*connect.Response[superadminv1.ListSuperadminRolesResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	// Only superadmins can manage superadmin roles
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	var roles []database.SuperadminRole
+	if err := database.DB.Find(&roles).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list superadmin roles: %w", err))
+	}
+
+	protoRoles := make([]*superadminv1.SuperadminRole, 0, len(roles))
+	for _, r := range roles {
+		protoRoles = append(protoRoles, &superadminv1.SuperadminRole{
+			Id:              r.ID,
+			Name:            r.Name,
+			Description:     r.Description,
+			PermissionsJson: r.Permissions,
+		})
+	}
+
+	return connect.NewResponse(&superadminv1.ListSuperadminRolesResponse{
+		Roles: protoRoles,
+	}), nil
+}
+
+// CreateSuperadminRole creates a new superadmin role
+func (s *Service) CreateSuperadminRole(ctx context.Context, req *connect.Request[superadminv1.CreateSuperadminRoleRequest]) (*connect.Response[superadminv1.CreateSuperadminRoleResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	// Only superadmins can manage superadmin roles
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	name := strings.TrimSpace(req.Msg.GetName())
+	if name == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("role name is required"))
+	}
+
+	permissionsJSON := strings.TrimSpace(req.Msg.GetPermissionsJson())
+	if permissionsJSON == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("permissions_json is required"))
+	}
+
+	// Validate JSON format
+	var perms []string
+	if err := json.Unmarshal([]byte(permissionsJSON), &perms); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid permissions_json: %w", err))
+	}
+
+	// Validate that all permissions are superadmin-only
+	registry := auth.GetPermissionRegistry()
+	for _, perm := range perms {
+		if !registry.IsSuperadminOnly(perm) {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("permission %s is not a superadmin-only permission", perm))
+		}
+	}
+
+	// Check if role name already exists
+	var existing database.SuperadminRole
+	if err := database.DB.Where("name = ?", name).First(&existing).Error; err == nil {
+		return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("role with name %s already exists", name))
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check existing role: %w", err))
+	}
+
+	role := &database.SuperadminRole{
+		ID:          generateID("sar"),
+		Name:        name,
+		Description: strings.TrimSpace(req.Msg.GetDescription()),
+		Permissions: permissionsJSON,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	if err := database.DB.Create(role).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create superadmin role: %w", err))
+	}
+
+	return connect.NewResponse(&superadminv1.CreateSuperadminRoleResponse{
+		Role: &superadminv1.SuperadminRole{
+			Id:              role.ID,
+			Name:            role.Name,
+			Description:     role.Description,
+			PermissionsJson: role.Permissions,
+		},
+	}), nil
+}
+
+// UpdateSuperadminRole updates an existing superadmin role
+func (s *Service) UpdateSuperadminRole(ctx context.Context, req *connect.Request[superadminv1.UpdateSuperadminRoleRequest]) (*connect.Response[superadminv1.UpdateSuperadminRoleResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	// Only superadmins can manage superadmin roles
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	roleID := strings.TrimSpace(req.Msg.GetId())
+	if roleID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("role id is required"))
+	}
+
+	var role database.SuperadminRole
+	if err := database.DB.First(&role, "id = ?", roleID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("role not found"))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get role: %w", err))
+	}
+
+	// Update name if provided
+	if name := strings.TrimSpace(req.Msg.GetName()); name != "" {
+		// Check if new name conflicts with existing role
+		var existing database.SuperadminRole
+		if err := database.DB.Where("name = ? AND id != ?", name, roleID).First(&existing).Error; err == nil {
+			return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("role with name %s already exists", name))
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check existing role: %w", err))
+		}
+		role.Name = name
+	}
+
+	// Update description if provided
+	if desc := strings.TrimSpace(req.Msg.GetDescription()); desc != "" {
+		role.Description = desc
+	}
+
+	// Update permissions if provided
+	if permissionsJSON := strings.TrimSpace(req.Msg.GetPermissionsJson()); permissionsJSON != "" {
+		// Validate JSON format
+		var perms []string
+		if err := json.Unmarshal([]byte(permissionsJSON), &perms); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid permissions_json: %w", err))
+		}
+
+		// Validate that all permissions are superadmin-only
+		registry := auth.GetPermissionRegistry()
+		for _, perm := range perms {
+			if !registry.IsSuperadminOnly(perm) {
+				return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("permission %s is not a superadmin-only permission", perm))
+			}
+		}
+
+		role.Permissions = permissionsJSON
+	}
+
+	role.UpdatedAt = time.Now()
+
+	if err := database.DB.Save(&role).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("update superadmin role: %w", err))
+	}
+
+	return connect.NewResponse(&superadminv1.UpdateSuperadminRoleResponse{
+		Role: &superadminv1.SuperadminRole{
+			Id:              role.ID,
+			Name:            role.Name,
+			Description:     role.Description,
+			PermissionsJson: role.Permissions,
+		},
+	}), nil
+}
+
+// DeleteSuperadminRole deletes a superadmin role
+func (s *Service) DeleteSuperadminRole(ctx context.Context, req *connect.Request[superadminv1.DeleteSuperadminRoleRequest]) (*connect.Response[superadminv1.DeleteSuperadminRoleResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	// Only superadmins can manage superadmin roles
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	roleID := strings.TrimSpace(req.Msg.GetId())
+	if roleID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("role id is required"))
+	}
+
+	// Check if role has any bindings
+	var bindingCount int64
+	if err := database.DB.Model(&database.SuperadminRoleBinding{}).Where("role_id = ?", roleID).Count(&bindingCount).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check role bindings: %w", err))
+	}
+	if bindingCount > 0 {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("cannot delete role: %d binding(s) still exist", bindingCount))
+	}
+
+	if err := database.DB.Delete(&database.SuperadminRole{}, "id = ?", roleID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("role not found"))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("delete role: %w", err))
+	}
+
+	return connect.NewResponse(&superadminv1.DeleteSuperadminRoleResponse{
+		Success: true,
+	}), nil
+}
+
+// ListSuperadminRoleBindings returns all superadmin role bindings
+func (s *Service) ListSuperadminRoleBindings(ctx context.Context, req *connect.Request[superadminv1.ListSuperadminRoleBindingsRequest]) (*connect.Response[superadminv1.ListSuperadminRoleBindingsResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	// Only superadmins can manage superadmin role bindings
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	var bindings []database.SuperadminRoleBinding
+	if err := database.DB.Find(&bindings).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("list superadmin role bindings: %w", err))
+	}
+
+	protoBindings := make([]*superadminv1.SuperadminRoleBinding, 0, len(bindings))
+	for _, b := range bindings {
+		protoBindings = append(protoBindings, &superadminv1.SuperadminRoleBinding{
+			Id:     b.ID,
+			UserId: b.UserID,
+			RoleId: b.RoleID,
+		})
+	}
+
+	return connect.NewResponse(&superadminv1.ListSuperadminRoleBindingsResponse{
+		Bindings: protoBindings,
+	}), nil
+}
+
+// CreateSuperadminRoleBinding creates a new superadmin role binding
+func (s *Service) CreateSuperadminRoleBinding(ctx context.Context, req *connect.Request[superadminv1.CreateSuperadminRoleBindingRequest]) (*connect.Response[superadminv1.CreateSuperadminRoleBindingResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	// Only superadmins can manage superadmin role bindings
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	userID := strings.TrimSpace(req.Msg.GetUserId())
+	if userID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("user_id is required"))
+	}
+
+	roleID := strings.TrimSpace(req.Msg.GetRoleId())
+	if roleID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("role_id is required"))
+	}
+
+	// Verify role exists
+	var role database.SuperadminRole
+	if err := database.DB.First(&role, "id = ?", roleID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("role not found"))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("get role: %w", err))
+	}
+
+	// Check if binding already exists
+	var existing database.SuperadminRoleBinding
+	if err := database.DB.Where("user_id = ? AND role_id = ?", userID, roleID).First(&existing).Error; err == nil {
+		return nil, connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("role binding already exists"))
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("check existing binding: %w", err))
+	}
+
+	binding := &database.SuperadminRoleBinding{
+		ID:        generateID("sarb"),
+		UserID:    userID,
+		RoleID:    roleID,
+		CreatedAt: time.Now(),
+	}
+
+	if err := database.DB.Create(binding).Error; err != nil {
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("create superadmin role binding: %w", err))
+	}
+
+	return connect.NewResponse(&superadminv1.CreateSuperadminRoleBindingResponse{
+		Binding: &superadminv1.SuperadminRoleBinding{
+			Id:     binding.ID,
+			UserId: binding.UserID,
+			RoleId: binding.RoleID,
+		},
+	}), nil
+}
+
+// DeleteSuperadminRoleBinding deletes a superadmin role binding
+func (s *Service) DeleteSuperadminRoleBinding(ctx context.Context, req *connect.Request[superadminv1.DeleteSuperadminRoleBindingRequest]) (*connect.Response[superadminv1.DeleteSuperadminRoleBindingResponse], error) {
+	user, err := auth.GetUserFromContext(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("unauthenticated"))
+	}
+
+	// Only superadmins can manage superadmin role bindings
+	if !auth.HasRole(user, auth.RoleSuperAdmin) {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("superadmin access required"))
+	}
+
+	bindingID := strings.TrimSpace(req.Msg.GetId())
+	if bindingID == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("binding id is required"))
+	}
+
+	if err := database.DB.Delete(&database.SuperadminRoleBinding{}, "id = ?", bindingID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("binding not found"))
+		}
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("delete binding: %w", err))
+	}
+
+	return connect.NewResponse(&superadminv1.DeleteSuperadminRoleBindingResponse{
+		Success: true,
+	}), nil
+}

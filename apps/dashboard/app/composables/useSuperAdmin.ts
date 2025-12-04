@@ -8,6 +8,8 @@ interface SuperAdminState {
   loading: boolean;
   initialized: boolean;
   allowed: boolean | null;
+  permissions: string[]; // List of permission IDs the user has
+  isFullSuperadmin: boolean; // true if user is a full superadmin (email-based)
   error: string | null;
 }
 
@@ -17,6 +19,8 @@ export const useSuperAdmin = () => {
     loading: false,
     initialized: false,
     allowed: null,
+    permissions: [],
+    isFullSuperadmin: false,
     error: null,
   }));
 
@@ -31,11 +35,50 @@ export const useSuperAdmin = () => {
     state.value.error = null;
 
     try {
-      const response = await client.getOverview({});
-      state.value.overview = response;
-      state.value.allowed = true;
+      // Fetch permissions first to determine access
+      const permsResponse = await client.getMySuperadminPermissions({});
+      state.value.permissions = permsResponse.permissions || [];
+      state.value.isFullSuperadmin = permsResponse.isFullSuperadmin || false;
+      
+      // Helper function to check permission (defined inline to avoid hoisting issues)
+      const checkPerm = (permission: string): boolean => {
+        if (state.value.isFullSuperadmin) {
+          return true;
+        }
+        const perms = state.value.permissions;
+        for (const perm of perms) {
+          if (perm === permission) {
+            return true;
+          }
+          if (perm.endsWith(".*")) {
+            const prefix = perm.slice(0, -2);
+            if (permission.startsWith(prefix + ".")) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
+      
+      // If user has any superadmin permissions, they're allowed
+      // Full superadmins are always allowed
+      if (state.value.isFullSuperadmin || state.value.permissions.length > 0) {
+        state.value.allowed = true;
+        
+        // Fetch overview if user has permission
+        if (state.value.isFullSuperadmin || checkPerm("superadmin.overview.read")) {
+          const response = await client.getOverview({});
+          state.value.overview = response;
+        } else {
+          state.value.overview = null;
+        }
+      } else {
+        state.value.allowed = false;
+        state.value.overview = null;
+      }
+      
       state.value.error = null;
-      return response;
+      return state.value.overview;
     } catch (err) {
       console.error("[SuperAdmin] Failed to fetch overview:", err);
       
@@ -68,6 +111,8 @@ export const useSuperAdmin = () => {
           if (!state.value.initialized) {
             // First time fetch failed with 500 - set allowed to false
             state.value.allowed = false;
+            state.value.permissions = [];
+            state.value.isFullSuperadmin = false;
           }
           // Otherwise, keep the existing allowed state (don't change it)
           state.value.error = err.message || "Internal server error";
@@ -77,6 +122,8 @@ export const useSuperAdmin = () => {
           if (!state.value.initialized) {
             // First time fetch failed - set allowed to false to prevent showing sidebar until verified
             state.value.allowed = false;
+            state.value.permissions = [];
+            state.value.isFullSuperadmin = false;
           }
           // Otherwise, keep the existing allowed state (don't change it)
           state.value.error = err.message || String(err);
@@ -88,6 +135,8 @@ export const useSuperAdmin = () => {
         if (!state.value.initialized) {
           // First time fetch failed - set allowed to false to prevent showing sidebar until verified
           state.value.allowed = false;
+          state.value.permissions = [];
+          state.value.isFullSuperadmin = false;
         }
         // Otherwise, keep the existing allowed state (don't change it)
         state.value.error = err instanceof Error ? err.message : String(err);
@@ -105,8 +154,40 @@ export const useSuperAdmin = () => {
       loading: false,
       initialized: false,
       allowed: null,
+      permissions: [],
+      isFullSuperadmin: false,
       error: null,
     };
+  };
+
+  // Check if user has a specific permission (supports wildcards)
+  const hasPermission = (permission: string): boolean => {
+    if (state.value.isFullSuperadmin) {
+      return true; // Full superadmins have all permissions
+    }
+    
+    const perms = state.value.permissions;
+    for (const perm of perms) {
+      // Exact match
+      if (perm === permission) {
+        return true;
+      }
+      // Wildcard match (e.g., "superadmin.vps.*" matches "superadmin.vps.read")
+      if (perm.endsWith(".*")) {
+        const prefix = perm.slice(0, -2); // Remove ".*"
+        if (permission.startsWith(prefix + ".")) {
+          return true;
+        }
+      }
+      // Reverse wildcard match (e.g., "superadmin.vps.read" matches "superadmin.vps.*")
+      if (permission.endsWith(".*")) {
+        const prefix = permission.slice(0, -2);
+        if (perm.startsWith(prefix + ".")) {
+          return true;
+        }
+      }
+    }
+    return false;
   };
 
   const counts = computed(() => state.value.overview?.counts);
@@ -178,11 +259,14 @@ export const useSuperAdmin = () => {
     overview: computed(() => state.value.overview),
     counts,
     allowed: computed(() => state.value.allowed),
+    permissions: computed(() => state.value.permissions),
+    isFullSuperadmin: computed(() => state.value.isFullSuperadmin),
     loading: computed(() => state.value.loading),
     initialized: computed(() => state.value.initialized),
     error: computed(() => state.value.error),
     fetchOverview,
     reset,
+    hasPermission,
     listNodes,
     getNode,
     updateNodeConfig,

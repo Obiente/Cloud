@@ -91,6 +91,10 @@ func (r *PermissionRegistry) IsSuperadminOnly(permission string) bool {
 	if strings.HasPrefix(permission, "organization.admin.") {
 		return true
 	}
+	// All superadmin.* permissions are superadmin-only
+	if strings.HasPrefix(permission, "superadmin.") {
+		return true
+	}
 
 	return false
 }

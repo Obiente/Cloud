@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
 
 	authv1 "github.com/obiente/cloud/apps/shared/proto/obiente/cloud/auth/v1"
@@ -316,10 +317,45 @@ func checkOrgPermission(ctx context.Context, user *authv1.User, orgID, permissio
 
 // checkGlobalPermission checks global permissions (for services without org context)
 func checkGlobalPermission(ctx context.Context, user *authv1.User, permission string) error {
-	// For now, only superadmins can access global permissions
-	// This can be extended later
+	// Superadmin email users bypass all checks
 	if HasRole(user, RoleSuperAdmin) {
 		return nil
+	}
+
+	// Check superadmin role bindings
+	var bindings []database.SuperadminRoleBinding
+	if err := database.DB.Where("user_id = ?", user.Id).Find(&bindings).Error; err != nil {
+		logger.Debug("[Permission] Failed to load superadmin role bindings for user %s: %v", user.Id, err)
+		return fmt.Errorf("permission denied: %s", permission)
+	}
+
+	if len(bindings) == 0 {
+		return fmt.Errorf("permission denied: %s", permission)
+	}
+
+	// Load roles
+	var roles []database.SuperadminRole
+	roleIDs := make([]string, 0, len(bindings))
+	for _, b := range bindings {
+		roleIDs = append(roleIDs, b.RoleID)
+	}
+	if err := database.DB.Where("id IN ?", roleIDs).Find(&roles).Error; err != nil {
+		logger.Debug("[Permission] Failed to load superadmin roles: %v", err)
+		return fmt.Errorf("permission denied: %s", permission)
+	}
+
+	// Check if any role has the required permission
+	for _, r := range roles {
+		var perms []string
+		if err := json.Unmarshal([]byte(r.Permissions), &perms); err != nil {
+			continue
+		}
+		for _, perm := range perms {
+			// Check exact match or wildcard match
+			if perm == permission || matchesPermission(perm, permission) {
+				return nil
+			}
+		}
 	}
 
 	return fmt.Errorf("permission denied: %s", permission)

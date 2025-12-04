@@ -56,6 +56,8 @@ func main() {
 		&database.TicketComment{},
 		&database.GameServer{},
 		&database.GitHubIntegration{},
+		&database.SuperadminRole{},
+		&database.SuperadminRoleBinding{},
 	)
 
 	// Initialize database
@@ -85,6 +87,9 @@ func main() {
 
 	// Create audit interceptor
 	auditInterceptor := middleware.AuditLogInterceptor()
+
+	// Register all service procedures for permission discovery
+	auth.RegisterAllServices()
 
 	// Register superadmin service
 	superadminService := superadminsvc.NewService()
