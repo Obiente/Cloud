@@ -16,10 +16,19 @@
           </OuiFlex>
           <OuiText color="muted">View detailed information and manage this VPS instance.</OuiText>
         </OuiStack>
+        <OuiFlex gap="sm" align="center">
+          <OuiButton
+            v-if="vps?.id"
+            variant="outline"
+            @click="goToVPSPage"
+          >
+            Open VPS Page
+          </OuiButton>
+        </OuiFlex>
       </OuiFlex>
 
-      <OuiGrid cols="1" colsLg="3" gap="lg">
-        <!-- VPS Info Card -->
+      <OuiGrid cols="1" colsLg="2" gap="lg">
+        <!-- VPS Info & Specifications Card -->
         <OuiCard class="border border-border-muted rounded-xl">
           <OuiCardHeader class="px-6 py-4 border-b border-border-muted">
             <OuiText tag="h2" size="lg" weight="bold">VPS Information</OuiText>
@@ -38,7 +47,7 @@
                 </OuiText>
               </OuiStack>
 
-              <OuiStack gap="md" class="border-t border-border-muted pt-4">
+              <OuiGrid cols="1" colsMd="2" gap="md" class="border-t border-border-muted pt-4">
                 <OuiStack gap="xs">
                   <OuiText size="sm" weight="medium" color="muted">Status</OuiText>
                   <SuperadminStatusBadge
@@ -55,6 +64,28 @@
                     class="font-medium text-text-primary hover:text-primary transition-colors"
                   >
                     {{ organizationName || vps.organizationId }}
+                  </NuxtLink>
+                  <OuiText v-else color="muted" size="sm">—</OuiText>
+                </OuiStack>
+
+                <OuiStack gap="xs" v-if="createdBy">
+                  <OuiText size="sm" weight="medium" color="muted">Created By</OuiText>
+                  <NuxtLink
+                    v-if="createdBy.id"
+                    :to="`/superadmin/users/${createdBy.id}`"
+                    class="font-medium text-text-primary hover:text-primary transition-colors"
+                  >
+                    <OuiFlex gap="sm" align="center">
+                      <OuiAvatar
+                        v-if="createdBy.avatarUrl"
+                        :name="createdBy.name || createdBy.email || createdBy.id"
+                        :src="createdBy.avatarUrl"
+                        size="sm"
+                      />
+                      <OuiText>
+                        {{ createdBy.name || createdBy.email || createdBy.preferredUsername || createdBy.id }}
+                      </OuiText>
+                    </OuiFlex>
                   </NuxtLink>
                   <OuiText v-else color="muted" size="sm">—</OuiText>
                 </OuiStack>
@@ -94,7 +125,7 @@
                     <OuiDate :value="vps.lastStartedAt" />
                   </OuiText>
                 </OuiStack>
-              </OuiStack>
+              </OuiGrid>
             </OuiStack>
           </OuiCardBody>
         </OuiCard>
@@ -105,7 +136,7 @@
             <OuiText tag="h2" size="lg" weight="bold">Specifications</OuiText>
           </OuiCardHeader>
           <OuiCardBody class="p-6">
-            <OuiStack gap="md">
+            <OuiGrid cols="1" colsMd="2" gap="md">
               <OuiStack gap="xs">
                 <OuiText size="sm" weight="medium" color="muted">Size</OuiText>
                 <OuiText>{{ vps?.size || "—" }}</OuiText>
@@ -126,21 +157,24 @@
                 <OuiText>{{ formatDisk(vps?.diskBytes) }}</OuiText>
               </OuiStack>
 
-              <OuiStack gap="xs">
+              <OuiStack gap="xs" class="col-span-1 md:col-span-2">
                 <OuiText size="sm" weight="medium" color="muted">Image</OuiText>
                 <OuiText>{{ formatImage(vps?.image, vps?.imageId) }}</OuiText>
               </OuiStack>
-            </OuiStack>
+            </OuiGrid>
           </OuiCardBody>
         </OuiCard>
+      </OuiGrid>
 
-        <!-- Network Card -->
+      <!-- Network & Actions Row -->
+      <OuiGrid cols="1" colsLg="2" gap="lg">
+        <!-- Network & SSH Card -->
         <OuiCard class="border border-border-muted rounded-xl">
           <OuiCardHeader class="px-6 py-4 border-b border-border-muted">
-            <OuiText tag="h2" size="lg" weight="bold">Network</OuiText>
+            <OuiText tag="h2" size="lg" weight="bold">Network & Access</OuiText>
           </OuiCardHeader>
           <OuiCardBody class="p-6">
-            <OuiStack gap="md">
+            <OuiGrid cols="1" colsMd="2" gap="md">
               <OuiStack gap="xs">
                 <OuiText size="sm" weight="medium" color="muted">IPv4 Addresses</OuiText>
                 <OuiStack gap="xs">
@@ -178,35 +212,52 @@
               <OuiStack gap="xs" v-if="vps?.sshAlias">
                 <OuiText size="sm" weight="medium" color="muted">SSH Alias</OuiText>
                 <OuiText class="font-mono">{{ vps.sshAlias }}</OuiText>
+                <OuiText size="xs" color="muted">
+                  Use this alias for SSH connections
+                </OuiText>
               </OuiStack>
 
               <OuiStack gap="xs" v-if="vps?.sshKeyId">
                 <OuiText size="sm" weight="medium" color="muted">SSH Key ID</OuiText>
                 <OuiText class="font-mono">{{ vps.sshKeyId }}</OuiText>
               </OuiStack>
-            </OuiStack>
+
+              <OuiStack gap="xs" v-if="hasMetadata" class="col-span-1 md:col-span-2">
+                <OuiText size="sm" weight="medium" color="muted">Metadata</OuiText>
+                <OuiGrid cols="1" colsMd="2" gap="xs">
+                  <OuiText
+                    v-for="(value, key) in parsedMetadata"
+                    :key="key"
+                    size="sm"
+                  >
+                    <span class="font-medium">{{ key }}:</span>
+                    <span class="ml-1">{{ value }}</span>
+                  </OuiText>
+                </OuiGrid>
+              </OuiStack>
+            </OuiGrid>
           </OuiCardBody>
         </OuiCard>
-      </OuiGrid>
 
-      <!-- Actions Card -->
-      <OuiCard class="border border-border-muted rounded-xl">
-        <OuiCardHeader class="px-6 py-4 border-b border-border-muted">
-          <OuiText tag="h2" size="lg" weight="bold">Superadmin Actions</OuiText>
-        </OuiCardHeader>
-        <OuiCardBody class="p-6">
-          <OuiStack gap="md">
-            <OuiText size="sm" color="muted">
-              Perform administrative actions on this VPS instance. Use with caution.
-            </OuiText>
-            <OuiFlex gap="sm" wrap="wrap">
-              <OuiButton
-                variant="outline"
-                @click="openResizeDialog"
-                :disabled="loading || !vps"
-              >
-                Resize VPS
-              </OuiButton>
+        <!-- Actions Card -->
+        <OuiCard class="border border-border-muted rounded-xl">
+          <OuiCardHeader class="px-6 py-4 border-b border-border-muted">
+            <OuiText tag="h2" size="lg" weight="bold">Superadmin Actions</OuiText>
+          </OuiCardHeader>
+          <OuiCardBody class="p-6">
+            <OuiStack gap="md">
+              <OuiText size="sm" color="muted">
+                Perform administrative actions on this VPS instance. Use with caution.
+              </OuiText>
+              <OuiFlex gap="sm" wrap="wrap">
+                <OuiButton
+                  variant="outline"
+                  color="primary"
+                  @click="openResizeDialog"
+                  :disabled="loading || !vps"
+                >
+                  Resize
+                </OuiButton>
               <OuiButton
                 v-if="vps?.status !== VPSStatus.SUSPENDED"
                 variant="outline"
@@ -252,6 +303,7 @@
           </OuiStack>
         </OuiCardBody>
       </OuiCard>
+      </OuiGrid>
     </OuiStack>
 
     <!-- Resize Dialog -->
@@ -263,19 +315,54 @@
         <OuiSelect
           v-model="resizeForm.newSize"
           label="New Size"
-          :items="sizeOptions"
+          :items="sizeOptionsWithCustom"
           :loading="loadingSizes"
           required
         >
           <template #item="{ item }">
             <OuiStack gap="xs">
               <OuiText weight="medium">{{ item.label }}</OuiText>
-              <OuiText size="xs" color="secondary">
+              <OuiText v-if="item.value !== 'custom'" size="xs" color="secondary">
                 {{ item.cpuCores }} CPU · {{ formatMemory(item.memoryBytes) }} RAM · {{ formatDisk(item.diskBytes) }} Storage
+              </OuiText>
+              <OuiText v-else size="xs" color="secondary">
+                Configure custom CPU, memory, and disk sizes
               </OuiText>
             </OuiStack>
           </template>
         </OuiSelect>
+        
+        <!-- Custom Size Inputs -->
+        <OuiStack v-if="resizeForm.newSize === 'custom'" gap="md" class="border border-border-muted rounded-lg p-4">
+          <OuiText size="sm" weight="medium">Custom Size Configuration</OuiText>
+          <OuiInput
+            v-model="resizeForm.customCpuCores"
+            type="number"
+            label="CPU Cores"
+            placeholder="e.g., 4"
+            :min="1"
+            :max="128"
+            required
+          />
+          <OuiInput
+            v-model="resizeForm.customMemoryGB"
+            type="number"
+            label="Memory (GB)"
+            placeholder="e.g., 8"
+            :min="0.5"
+            :step="0.5"
+            required
+          />
+          <OuiInput
+            v-model="resizeForm.customDiskGB"
+            type="number"
+            label="Disk (GB)"
+            placeholder="e.g., 100"
+            :min="1"
+            required
+          />
+        </OuiStack>
+        
         <OuiCheckbox v-model="resizeForm.growDisk" label="Grow disk to new size" />
         <OuiCheckbox v-model="resizeForm.applyCloudInit" label="Apply cloud-init for disk growth" />
       </OuiStack>
@@ -285,7 +372,7 @@
           <OuiButton 
             color="primary" 
             @click="handleResize"
-            :disabled="!resizeForm.newSize || isResizing"
+            :disabled="!canResize || isResizing"
           >
             {{ isResizing ? 'Resizing...' : 'Resize' }}
           </OuiButton>
@@ -409,6 +496,7 @@ const { toast } = useToast();
 const vpsId = computed(() => route.params.vpsId as string);
 const vps = ref<any>(null);
 const organizationName = ref<string>("");
+const createdBy = ref<any>(null);
 
 const vpsStatusMap: Record<number, { label: string; variant: BadgeVariant }> = {
   [VPSStatus.CREATING]: { label: "Creating", variant: "warning" },
@@ -440,10 +528,20 @@ const isForceDeleting = ref(false);
 const loadingSizes = ref(false);
 const sizeOptions = ref<any[]>([]);
 
-const resizeForm = ref({
+const resizeForm = ref<{
+  newSize: string;
+  growDisk: boolean;
+  applyCloudInit: boolean;
+  customCpuCores: string;
+  customMemoryGB: string;
+  customDiskGB: string;
+}>({
   newSize: "",
   growDisk: true,
   applyCloudInit: true,
+  customCpuCores: "1",
+  customMemoryGB: "1",
+  customDiskGB: "10",
 });
 
 const suspendForm = ref({
@@ -511,6 +609,23 @@ function formatImage(image: number | undefined, imageId?: string | null): string
   }
 }
 
+const parsedMetadata = computed(() => {
+  if (!vps.value?.metadata) return {};
+  try {
+    const meta = typeof vps.value.metadata === "string" 
+      ? JSON.parse(vps.value.metadata) 
+      : vps.value.metadata;
+    return meta && typeof meta === "object" ? meta : {};
+  } catch {
+    return {};
+  }
+});
+
+const hasMetadata = computed(() => {
+  const meta = parsedMetadata.value;
+  return meta && typeof meta === "object" && Object.keys(meta).length > 0;
+});
+
 async function loadVPS() {
   if (!vpsId.value) return null;
   try {
@@ -520,6 +635,7 @@ async function loadVPS() {
     return {
       vps: response.vps,
       organizationName: response.organizationName,
+      createdBy: response.createdBy,
     };
   } catch (error: any) {
     console.error("Failed to load VPS:", error);
@@ -539,6 +655,7 @@ watch(vpsData, (newData) => {
   if (newData) {
     vps.value = newData.vps;
     organizationName.value = newData.organizationName;
+    createdBy.value = newData.createdBy;
   }
 }, { immediate: true });
 
@@ -547,6 +664,16 @@ function openResizeDialog() {
   resizeForm.value.newSize = "";
   resizeForm.value.growDisk = true;
   resizeForm.value.applyCloudInit = true;
+  // Initialize custom values with current VPS values
+  if (vps.value) {
+    resizeForm.value.customCpuCores = String(vps.value.cpuCores || 1);
+    resizeForm.value.customMemoryGB = String(Math.round((Number(vps.value.memoryBytes || 0) / (1024 * 1024 * 1024)) * 10) / 10);
+    resizeForm.value.customDiskGB = String(Math.round(Number(vps.value.diskBytes || 0) / (1024 * 1024 * 1024)));
+  } else {
+    resizeForm.value.customCpuCores = "1";
+    resizeForm.value.customMemoryGB = "1";
+    resizeForm.value.customDiskGB = "10";
+  }
   loadSizes();
   resizeDialogOpen.value = true;
 }
@@ -588,16 +715,69 @@ async function loadSizes() {
   }
 }
 
+const sizeOptionsWithCustom = computed(() => {
+  const options = [...sizeOptions.value];
+  options.push({
+    label: "Custom",
+    value: "custom",
+    cpuCores: 0,
+    memoryBytes: 0,
+    diskBytes: 0,
+  });
+  return options;
+});
+
+const canResize = computed(() => {
+  if (!resizeForm.value.newSize) return false;
+  if (resizeForm.value.newSize === "custom") {
+    const cpuCores = Number(resizeForm.value.customCpuCores);
+    const memoryGB = Number(resizeForm.value.customMemoryGB);
+    const diskGB = Number(resizeForm.value.customDiskGB);
+    return (
+      !isNaN(cpuCores) && cpuCores > 0 &&
+      !isNaN(memoryGB) && memoryGB > 0 &&
+      !isNaN(diskGB) && diskGB > 0
+    );
+  }
+  return true;
+});
+
 async function handleResize() {
   if (!vps.value || !resizeForm.value.newSize) return;
   isResizing.value = true;
   try {
-    await client.superadminResizeVPS({
+    const request: any = {
       vpsId: vps.value.id,
       newSize: resizeForm.value.newSize,
       growDisk: resizeForm.value.growDisk,
       applyCloudinit: resizeForm.value.applyCloudInit,
-    });
+    };
+
+    // Add custom size parameters if using custom size
+    if (resizeForm.value.newSize === "custom") {
+      const cpuCores = Number(resizeForm.value.customCpuCores);
+      const memoryGB = Number(resizeForm.value.customMemoryGB);
+      const diskGB = Number(resizeForm.value.customDiskGB);
+      
+      if (isNaN(cpuCores) || cpuCores <= 0) {
+        toast.error("CPU cores must be a positive number");
+        return;
+      }
+      if (isNaN(memoryGB) || memoryGB <= 0) {
+        toast.error("Memory must be a positive number");
+        return;
+      }
+      if (isNaN(diskGB) || diskGB <= 0) {
+        toast.error("Disk size must be a positive number");
+        return;
+      }
+      
+      request.customCpuCores = cpuCores;
+      request.customMemoryBytes = BigInt(Math.round(memoryGB * 1024 * 1024 * 1024));
+      request.customDiskBytes = BigInt(Math.round(diskGB * 1024 * 1024 * 1024));
+    }
+
+    await client.superadminResizeVPS(request);
     toast.success("VPS resized successfully");
     resizeDialogOpen.value = false;
     await loadVPS(); // Refresh VPS data
@@ -689,6 +869,13 @@ async function handleForceDelete() {
   } finally {
     isForceDeleting.value = false;
   }
+}
+
+function goToVPSPage() {
+  if (!vps.value?.id) return;
+  // Navigate to the regular VPS page
+  // The regular VPS page will automatically switch to the correct organization if needed
+  router.push(`/vps/${vps.value.id}`);
 }
 
 await loadVPS();

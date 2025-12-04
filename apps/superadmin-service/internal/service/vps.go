@@ -12,6 +12,7 @@ import (
 	"github.com/obiente/cloud/apps/shared/pkg/auth"
 	"github.com/obiente/cloud/apps/shared/pkg/database"
 	"github.com/obiente/cloud/apps/shared/pkg/logger"
+	"github.com/obiente/cloud/apps/shared/pkg/services/organizations"
 	vpsorch "github.com/obiente/cloud/apps/vps-service/orchestrator"
 	vpsservice "github.com/obiente/cloud/apps/vps-service/pkg/service"
 
@@ -335,12 +336,45 @@ func (s *Service) SuperadminGetVPS(ctx context.Context, req *connect.Request[sup
 		orgName = org.Name
 	}
 
+	// Get creator user information
+	var createdByUser *superadminv1.UserInfo
+	if vps.CreatedBy != "" {
+		resolver := organizations.GetUserProfileResolver()
+		userInfo := &superadminv1.UserInfo{
+			Id: vps.CreatedBy,
+		}
+
+		// Try to resolve profile from Zitadel
+		if resolver != nil && resolver.IsConfigured() {
+			if profile, err := resolver.Resolve(ctx, vps.CreatedBy); err == nil && profile != nil {
+				userInfo.Id = profile.Id
+				userInfo.Email = profile.Email
+				userInfo.Name = profile.Name
+				userInfo.PreferredUsername = profile.PreferredUsername
+				userInfo.Locale = profile.Locale
+				userInfo.EmailVerified = profile.EmailVerified
+				if profile.AvatarUrl != "" {
+					userInfo.AvatarUrl = &profile.AvatarUrl
+				}
+				if profile.UpdatedAt != nil {
+					userInfo.UpdatedAt = profile.UpdatedAt
+				}
+				if profile.CreatedAt != nil {
+					userInfo.CreatedAt = profile.CreatedAt
+				}
+			}
+		}
+
+		createdByUser = userInfo
+	}
+
 	// Convert to proto
 	protoVPS := convertVPSInstanceToProto(&vps)
 
 	return connect.NewResponse(&superadminv1.SuperadminGetVPSResponse{
 		Vps:              protoVPS,
 		OrganizationName: orgName,
+		CreatedBy:        createdByUser,
 	}), nil
 }
 
@@ -362,9 +396,6 @@ func (s *Service) SuperadminResizeVPS(ctx context.Context, req *connect.Request[
 	if vpsID == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("vps_id is required"))
 	}
-	if newSize == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("new_size is required"))
-	}
 
 	// Get VPS instance
 	var vps database.VPSInstance
@@ -379,14 +410,52 @@ func (s *Service) SuperadminResizeVPS(ctx context.Context, req *connect.Request[
 		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("VPS has no instance ID (not provisioned yet)"))
 	}
 
-	// Get new size from catalog
-	newSizeCatalog, err := database.GetVPSSizeCatalog(newSize, vps.Region)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid VPS size: %w", err))
+	// Determine new size specifications
+	var newCPUCores int32
+	var newMemoryBytes int64
+	var newDiskBytes int64
+	var finalSizeID string
+
+	// Check if using custom size (access fields directly to check if they're set)
+	customCPUCoresPtr := req.Msg.CustomCpuCores
+	customMemoryBytesPtr := req.Msg.CustomMemoryBytes
+	customDiskBytesPtr := req.Msg.CustomDiskBytes
+
+	if newSize == "custom" || (newSize == "" && customCPUCoresPtr != nil) {
+		// Validate custom size parameters
+		if customCPUCoresPtr == nil || *customCPUCoresPtr <= 0 {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("custom_cpu_cores is required and must be greater than 0"))
+		}
+		if customMemoryBytesPtr == nil || *customMemoryBytesPtr <= 0 {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("custom_memory_bytes is required and must be greater than 0"))
+		}
+		if customDiskBytesPtr == nil || *customDiskBytesPtr <= 0 {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("custom_disk_bytes is required and must be greater than 0"))
+		}
+
+		newCPUCores = *customCPUCoresPtr
+		newMemoryBytes = *customMemoryBytesPtr
+		newDiskBytes = *customDiskBytesPtr
+		finalSizeID = "custom"
+	} else {
+		// Use predefined size from catalog
+		if newSize == "" {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("new_size is required"))
+		}
+
+		newSizeCatalog, err := database.GetVPSSizeCatalog(newSize, vps.Region)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid VPS size: %w", err))
+		}
+
+		newCPUCores = newSizeCatalog.CPUCores
+		newMemoryBytes = newSizeCatalog.MemoryBytes
+		newDiskBytes = newSizeCatalog.DiskBytes
+		finalSizeID = newSize
 	}
 
 	// Check if resize is needed
-	if vps.Size == newSize && vps.CPUCores == newSizeCatalog.CPUCores && vps.MemoryBytes == newSizeCatalog.MemoryBytes && vps.DiskBytes == newSizeCatalog.DiskBytes {
+	if vps.Size == finalSizeID && vps.CPUCores == newCPUCores && vps.MemoryBytes == newMemoryBytes && vps.DiskBytes == newDiskBytes {
 		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("VPS is already at the requested size"))
 	}
 
@@ -438,13 +507,13 @@ func (s *Service) SuperadminResizeVPS(ctx context.Context, req *connect.Request[
 
 	// Update CPU and memory
 	vmConfig := make(map[string]interface{})
-	if vps.CPUCores != newSizeCatalog.CPUCores {
-		vmConfig["cores"] = newSizeCatalog.CPUCores
-		logger.Info("[SuperAdmin] Resizing CPU from %d to %d cores", vps.CPUCores, newSizeCatalog.CPUCores)
+	if vps.CPUCores != newCPUCores {
+		vmConfig["cores"] = newCPUCores
+		logger.Info("[SuperAdmin] Resizing CPU from %d to %d cores", vps.CPUCores, newCPUCores)
 	}
-	if vps.MemoryBytes != newSizeCatalog.MemoryBytes {
-		vmConfig["memory"] = int(newSizeCatalog.MemoryBytes / (1024 * 1024)) // Convert to MB
-		logger.Info("[SuperAdmin] Resizing memory from %d to %d bytes", vps.MemoryBytes, newSizeCatalog.MemoryBytes)
+	if vps.MemoryBytes != newMemoryBytes {
+		vmConfig["memory"] = int(newMemoryBytes / (1024 * 1024)) // Convert to MB
+		logger.Info("[SuperAdmin] Resizing memory from %d to %d bytes", vps.MemoryBytes, newMemoryBytes)
 	}
 
 	if len(vmConfig) > 0 {
@@ -456,7 +525,7 @@ func (s *Service) SuperadminResizeVPS(ctx context.Context, req *connect.Request[
 	}
 
 	// Resize disk if needed and requested
-	if growDisk && vps.DiskBytes != newSizeCatalog.DiskBytes {
+	if growDisk && vps.DiskBytes != newDiskBytes {
 		// Find disk key
 		vmConfigAfter, err := proxmoxClient.GetVMConfig(ctx, nodeName, vmIDInt)
 		if err != nil {
@@ -476,7 +545,7 @@ func (s *Service) SuperadminResizeVPS(ctx context.Context, req *connect.Request[
 			return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("could not find disk to resize"))
 		}
 
-		newDiskSizeGB := newSizeCatalog.DiskBytes / (1024 * 1024 * 1024)
+		newDiskSizeGB := newDiskBytes / (1024 * 1024 * 1024)
 		logger.Info("[SuperAdmin] Resizing disk %s from %dGB to %dGB", diskKey, vps.DiskBytes/(1024*1024*1024), newDiskSizeGB)
 
 		// Resize disk via Proxmox API
@@ -534,11 +603,11 @@ func (s *Service) SuperadminResizeVPS(ctx context.Context, req *connect.Request[
 	}
 
 	// Update database
-	vps.Size = newSize
-	vps.CPUCores = newSizeCatalog.CPUCores
-	vps.MemoryBytes = newSizeCatalog.MemoryBytes
+	vps.Size = finalSizeID
+	vps.CPUCores = newCPUCores
+	vps.MemoryBytes = newMemoryBytes
 	if growDisk {
-		vps.DiskBytes = newSizeCatalog.DiskBytes
+		vps.DiskBytes = newDiskBytes
 	}
 	vps.UpdatedAt = time.Now()
 
@@ -555,9 +624,9 @@ func (s *Service) SuperadminResizeVPS(ctx context.Context, req *connect.Request[
 	}
 
 	message := fmt.Sprintf("VPS resized successfully. CPU: %d cores, Memory: %s, Disk: %s",
-		newSizeCatalog.CPUCores,
-		formatBytes(newSizeCatalog.MemoryBytes),
-		formatBytes(newSizeCatalog.DiskBytes))
+		newCPUCores,
+		formatBytes(newMemoryBytes),
+		formatBytes(newDiskBytes))
 	if growDisk && applyCloudInit {
 		message += " Disk will be grown on next boot via cloud-init."
 	}

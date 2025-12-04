@@ -804,14 +804,19 @@ message SuperadminGetVPSRequest {
 message SuperadminGetVPSResponse {
   obiente.cloud.vps.v1.VPSInstance vps = 1;
   string organization_name = 2; // Organization name (for display)
+  optional UserInfo created_by = 3; // User who created the VPS (if available)
 }
 
 // Superadmin Resize VPS Request
 message SuperadminResizeVPSRequest {
   string vps_id = 1; // VPS ID to resize
-  string new_size = 2; // New VPS size ID (e.g., "small", "medium", "large")
+  string new_size = 2; // New VPS size ID (e.g., "small", "medium", "large"). Use "custom" for custom sizing.
   bool grow_disk = 3; // Whether to grow the disk (default: true)
   bool apply_cloudinit = 4; // Whether to apply cloud-init for disk growth (default: true)
+  // Custom size options (used when new_size is "custom" or empty)
+  optional int32 custom_cpu_cores = 5; // Custom CPU cores (required if using custom size)
+  optional int64 custom_memory_bytes = 6; // Custom memory in bytes (required if using custom size)
+  optional int64 custom_disk_bytes = 7; // Custom disk in bytes (required if using custom size)
 }
 
 // Superadmin Resize VPS Response
