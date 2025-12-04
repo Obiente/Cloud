@@ -20,10 +20,8 @@ COPY apps/dashboard/package.json ./apps/dashboard/
 COPY tools ./tools
 
 # Install dependencies with aggressive caching
-# Use BuildKit cache mounts for pnpm store and Nx cache
-# Remove retry logic - if install fails, fail fast
+# Use BuildKit cache mounts for pnpm store
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    --mount=type=cache,id=nx-cache,target=/app/.nx/cache \
     pnpm install --frozen-lockfile --prefer-offline
 
 # Copy config files needed for builds
@@ -48,9 +46,7 @@ ENV NODE_OPTIONS="--max-old-space-size=8192 --no-warnings" \
 # Build workspace dependencies if needed
 # Skip build-deps if packages are already built (faster)
 # Only build if package.json files changed or if explicitly needed
-# Use Nx to check if dependencies need building (much faster than building everything)
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
-    --mount=type=cache,id=nx-cache,target=/app/.nx/cache \
     (pnpm --filter "@obiente/dashboard" build-deps 2>/dev/null || echo "build-deps skipped or not needed") || true
 
 # Build stage - reuse everything from deps
@@ -60,11 +56,9 @@ FROM deps AS builder
 # Use all available cache mounts for maximum speed
 # Skip nuxt prepare if .nuxt directory exists and is valid (faster)
 # Only run prepare if needed (when source files changed significantly)
-# Add verbose logging and timeout protection for server build
 RUN --mount=type=cache,id=nuxt-build,target=/app/apps/dashboard/.nuxt \
     --mount=type=cache,id=nuxt-nitro,target=/app/apps/dashboard/.nitro \
     --mount=type=cache,id=vite-cache,target=/app/apps/dashboard/node_modules/.vite \
-    --mount=type=cache,id=nx-cache,target=/app/.nx/cache \
     --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
     cd apps/dashboard && \
     (test -d .nuxt && test -f .nuxt/nuxt.d.ts && echo "Skipping nuxt prepare (cache hit)" || pnpm exec nuxt prepare) && \
@@ -72,7 +66,7 @@ RUN --mount=type=cache,id=nuxt-build,target=/app/apps/dashboard/.nuxt \
     NUXT_TELEMETRY_DISABLED=1 \
     NITRO_PRESET=node-server \
     NODE_OPTIONS="--max-old-space-size=8192" \
-    pnpm exec nx nuxt:build --verbose 2>&1 | tee /tmp/build.log || (echo "=== Build failed, last 100 lines ===" && tail -100 /tmp/build.log && echo "=== Full build log available at /tmp/build.log ===" && exit 1)
+    pnpm exec nuxt build
 
 # Production image - minimal runtime
 FROM node:20-alpine AS runner
