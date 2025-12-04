@@ -67,9 +67,9 @@ FROM alpine:latest
 # Install git and curl for repository cloning and downloading buildx
 # Install netcat-openbsd for health checks
 # Install bash and openssh-client for build scripts and SSH-based git operations
-# Disable triggers to avoid QEMU emulation issues with apk triggers
+# Use --no-scripts to disable triggers and avoid QEMU emulation issues
 # This layer will be cached unless package versions change
-RUN apk update && APK_NO_TRIGGERS=1 apk --no-cache add \
+RUN apk update && apk --no-cache --no-scripts add \
     ca-certificates \
     docker-cli \
     docker-compose \

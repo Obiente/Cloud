@@ -58,8 +58,8 @@ FROM alpine:latest
 
 # Install CA certificates, curl, netcat for health checks, and Docker CLI
 # Docker CLI is needed for network operations and Traefik label updates
-# Disable triggers to avoid QEMU emulation issues with apk triggers
-RUN apk update && APK_NO_TRIGGERS=1 apk --no-cache add ca-certificates curl netcat-openbsd docker-cli
+# Use --no-scripts to disable triggers and avoid QEMU emulation issues
+RUN apk update && apk --no-cache --no-scripts add ca-certificates curl netcat-openbsd docker-cli
 
 WORKDIR /app
 

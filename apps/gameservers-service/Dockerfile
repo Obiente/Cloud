@@ -49,8 +49,8 @@ RUN --mount=type=cache,target=/root/go/pkg/mod \
 FROM alpine:latest
 
 # Install CA certificates, curl, and netcat for health checks
-# Disable triggers to avoid QEMU emulation issues with apk triggers
-RUN apk update && APK_NO_TRIGGERS=1 apk --no-cache add ca-certificates curl netcat-openbsd
+# Use --no-scripts to disable triggers and avoid QEMU emulation issues
+RUN apk update && apk --no-cache --no-scripts add ca-certificates curl netcat-openbsd
 
 WORKDIR /app
 

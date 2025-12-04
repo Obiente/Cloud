@@ -35,8 +35,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -installsuff
 FROM alpine:latest
 
 # Install dnsmasq and required tools
-# Disable triggers to avoid QEMU emulation issues with apk triggers
-RUN apk update && APK_NO_TRIGGERS=1 apk add --no-cache \
+# Use --no-scripts to disable triggers and avoid QEMU emulation issues
+RUN apk update && apk add --no-cache --no-scripts \
     dnsmasq \
     ca-certificates \
     tzdata \
